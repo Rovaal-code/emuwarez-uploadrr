@@ -386,29 +386,39 @@ def cmd_logs(args) -> int:
 
 
 def cmd_web_contract() -> int:
-    print("""Contrato funcional preparado para la interfaz web:\n
-Dashboard:
-  - sync-library: emuwarez-uploadrr sync [--episodes]
-  - sync-requests: emuwarez-uploadrr requests sync
-  - recent-tasks: emuwarez-uploadrr tasks list
+    print("""eMuwarez Uploadrr — Contrato funcional UI/Backend (v1.0)
 
-Biblioteca:
-  - list: emuwarez-uploadrr library list
-  - detail: emuwarez-uploadrr library show <id>
-  - adaptar nomenclatura: emuwarez-uploadrr prepare <id>
-  - subir: emuwarez-uploadrr upload <id>
+Documentación completa:
+  docs/ui_backend_contract.md   — especificación detallada de UI, estados, API y flujo
+  docs/ui_backend_contract.json — contrato estructurado en JSON (validado)
 
-Faltantes:
-  - list: emuwarez-uploadrr missing list
-  - crear petición futura: emuwarez-uploadrr missing create-request <id>
+Secciones de la UI:
+  Dashboard · Biblioteca · Faltantes · Peticiones · Subidas · Tareas · Instancias · Logs · Configuración
 
-Peticiones:
-  - sync 1 vez/hora: emuwarez-uploadrr requests sync
-  - list: emuwarez-uploadrr requests list
-  - detail + motivos: emuwarez-uploadrr requests show <id>
+Estados definitivos:
+  LocalStatus:        available · missing · queued · downloading · pending_import
+                      import_error · search_error · uploading · uploaded · error · unknown
+  RequestStatus:      none · compatible · partial · not_compatible · filled · active_unmatched
+  NomenclatureStatus: correct · not_adapted · not_applicable
+  EmuExistenceStatus: not_checked · exists · not_exists · possible_duplicate · duplicate_confirmed
 
-Instancias:
-  - add/list/test/remove: emuwarez-uploadrr instances ...
+Equivalencia CLI ↔ UI:
+  sync                          → Dashboard: Sincronizar biblioteca
+  requests sync [--force]       → Dashboard: Sincronizar peticiones
+  library list/show             → Biblioteca
+  missing list                  → Faltantes
+  requests list/show/match      → Peticiones
+  instances add/list/test       → Instancias
+  prepare <id>                  → Adaptar nomenclatura
+  upload <id>                   → Subir
+  tasks list                    → Tareas
+
+Stubs activos (pendientes de implementación real):
+  requests create <id>                → endpoint POST de eMuwarez pendiente de capturar
+  missing create-request <id>         → mismo motivo
+
+Puerto web futuro: 9494
+Healthcheck: GET /api/health
 """)
     return 0
 

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from pathlib import Path
 from typing import Any, Iterable, Optional
@@ -10,12 +11,15 @@ from .constants import CONFIG_DIR
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 def db_path() -> Path:
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    return DB_FILE
+    """Return the active database path, respecting CONFIG_DIR env var at call time."""
+    env_config = os.environ.get("CONFIG_DIR")
+    base = Path(env_config) if env_config else CONFIG_DIR
+    base.mkdir(parents=True, exist_ok=True)
+    return base / "emuwarez_uploadrr.db"
 
 
 def connect(path: Optional[Path] = None) -> sqlite3.Connection:
@@ -24,6 +28,21 @@ def connect(path: Optional[Path] = None) -> sqlite3.Connection:
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
     return conn
+
+
+def _migrate_instances(conn: sqlite3.Connection) -> None:
+    """Add columns to instances that were not present in schema v2."""
+    new_cols = [
+        ("is_4k", "INTEGER NOT NULL DEFAULT 0"),
+        ("is_anime", "INTEGER NOT NULL DEFAULT 0"),
+        ("last_test_status", "TEXT"),
+        ("last_test_at", "TEXT"),
+    ]
+    for col, col_def in new_cols:
+        try:
+            conn.execute(f"ALTER TABLE instances ADD COLUMN {col} {col_def}")
+        except sqlite3.OperationalError:
+            pass  # column already exists
 
 
 def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
@@ -45,6 +64,10 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
                 url TEXT NOT NULL,
                 api_key TEXT NOT NULL,
                 enabled INTEGER NOT NULL DEFAULT 1,
+                is_4k INTEGER NOT NULL DEFAULT 0,
+                is_anime INTEGER NOT NULL DEFAULT 0,
+                last_test_status TEXT,
+                last_test_at TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(type, name)
@@ -145,8 +168,43 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
+
+            -- v3: web auth and settings tables
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'admin',
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                last_login_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS auth_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                token_hash TEXT UNIQUE NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                expires_at TEXT,
+                revoked_at TEXT,
+                user_agent TEXT,
+                ip_address TEXT
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_sessions_token ON auth_sessions(token_hash);
+            CREATE INDEX IF NOT EXISTS idx_sessions_user ON auth_sessions(user_id);
+
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                is_secret INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
             """
         )
+        _migrate_instances(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

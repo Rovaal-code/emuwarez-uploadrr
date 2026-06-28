@@ -128,6 +128,35 @@ Ejecutar tests:
 .venv/bin/pytest tests/ -q
 ```
 
+## Setup wizard y autenticación
+
+Setup desde CLI:
+
+```bash
+python3 emuwarez_uploader.py web setup-status
+python3 emuwarez_uploader.py web create-admin --username admin
+# o con contraseña en variable de entorno:
+EMUWAREZ_ADMIN_PASSWORD="MiPass1!segura" python3 emuwarez_uploader.py web create-admin --username admin
+```
+
+Flujo de setup vía API (requiere servidor arrancado):
+
+```
+POST /api/setup/admin      ← primer paso, sin auth
+POST /api/auth/login       ← obtener token
+POST /api/setup/base       ← nombre y zona horaria (requiere token)
+POST /api/setup/uploadrr   ← ruta de Uploadrr (requiere token)
+POST /api/setup/tmdb       ← API key TMDb (requiere token)
+POST /api/setup/emu        ← API key eMuwarez (requiere token)
+POST /api/setup/instances  ← añadir Radarr/Sonarr (requiere token)
+POST /api/setup/complete   ← finalizar (requiere token)
+```
+
+Todas las rutas sensibles de la API (dashboard, biblioteca, faltantes, peticiones,
+subidas, tareas, logs, config) requieren `Authorization: Bearer <token>`.
+
+Reglas de contraseña: mínimo 12 caracteres, al menos minúscula, mayúscula, dígito y símbolo.
+
 ## Estado de implementación
 
 Implementado:
@@ -147,8 +176,13 @@ Implementado:
 - Stubs seguros para crear peticiones EMU.
 - Backend FastAPI base (`emuwarez_uploadrr/web/`).
 - Endpoints: `/api/health`, `/api/runtime`, `/api/setup/status`, `/api/contract/json`.
-- Placeholders para todas las rutas futuras.
-- Suite de tests básica (`tests/test_web_app.py`).
+- Setup wizard completo: `POST /api/setup/admin`, `/base`, `/uploadrr`, `/tmdb`, `/emu`, `/instances`, `/complete`.
+- Autenticación local con tokens opacos: `POST /api/auth/login`, `GET /api/auth/me`, `POST /api/auth/logout`.
+- Todos los endpoints sensibles protegidos con `Authorization: Bearer <token>`.
+- Seguridad: PBKDF2-SHA256 (210k iteraciones), `hmac.compare_digest`, tokens solo como hash en BD.
+- Schema SQLite v3: tablas `users`, `auth_sessions`, `settings`.
+- Comandos CLI: `web setup-status`, `web create-admin`.
+- Suite de tests completa: `tests/test_web_app.py` (29 tests) + `tests/test_setup_auth.py` (40 tests).
 
 Pendiente para fases posteriores:
 

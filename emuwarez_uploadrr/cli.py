@@ -191,6 +191,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_serve.add_argument("--host", default="0.0.0.0", help="Host (default: 0.0.0.0)")
     p_serve.add_argument("--port", type=int, default=9494, help="Puerto (default: 9494)")
     p_serve.add_argument("--reload", action="store_true", help="Recarga automática (solo desarrollo)")
+    web_sub.add_parser("setup-status", help="Mostrar estado del asistente de configuración")
+    p_create_admin = web_sub.add_parser("create-admin", help="Crear usuario administrador web")
+    p_create_admin.add_argument("--username", required=True, help="Nombre de usuario admin")
 
     return parser
 
@@ -432,19 +435,107 @@ Healthcheck: GET /api/health
     return 0
 
 
+def cmd_web_setup_status() -> int:
+    try:
+        with connect(db_path()) as conn:
+            init_db(conn)
+            from .web.services.setup_service import get_setup_state, next_step
+            state = get_setup_state(conn)
+    except Exception as exc:
+        print(f"✗ No se pudo leer el estado del setup: {exc}")
+        return 1
+    flags = [
+        ("Admin configurado", state["admin_configured"]),
+        ("Base configurada", state["base_configured"]),
+        ("Uploadrr configurado", state["uploadrr_configured"]),
+        ("TMDb configurado", state["tmdb_configured"]),
+        ("eMuwarez configurado", state["emu_configured"]),
+        ("Instancias Radarr", state["radarr_instances"]),
+        ("Instancias Sonarr", state["sonarr_instances"]),
+        ("Inicializado", state["initialized"]),
+    ]
+    for label, value in flags:
+        mark = "✓" if value else "✗"
+        print(f"  {mark}  {label}: {value}")
+    ns = next_step(state)
+    print(f"\nSiguiente paso: {ns or 'ninguno (setup completo)'}")
+    return 0
+
+
+def cmd_web_create_admin(args) -> int:
+    import getpass
+    password = os.environ.get("EMUWAREZ_ADMIN_PASSWORD")
+    if not password:
+        try:
+            password = getpass.getpass("Contraseña para el admin: ")
+            if not password:
+                print("✗ La contraseña no puede estar vacía")
+                return 1
+            confirm = getpass.getpass("Confirmar contraseña: ")
+            if password != confirm:
+                print("✗ Las contraseñas no coinciden")
+                return 1
+        except (EOFError, KeyboardInterrupt):
+            print("\nCancelado.")
+            return 1
+    from .web.security import validate_password_strength
+    err = validate_password_strength(password)
+    if err:
+        print(f"✗ {err}")
+        return 1
+    try:
+        with connect(db_path()) as conn:
+            init_db(conn)
+            from .web.services.auth_service import admin_exists, create_user
+            if admin_exists(conn):
+                print("✗ Ya existe un usuario administrador.")
+                return 1
+            uid = create_user(conn, args.username, password, role="admin")
+            conn.commit()
+        print(f"✓ Usuario administrador '{args.username}' creado con ID {uid}")
+    except Exception as exc:
+        print(f"✗ {exc}")
+        return 1
+    return 0
+
+
 def cmd_web_info() -> int:
     print(
         "Backend: FastAPI\n"
         "App: eMuwarez Uploadrr\n"
         "Default URL: http://localhost:9494\n"
-        "Docs: http://localhost:9494/api/docs\n"
-        "Health: http://localhost:9494/api/health\n"
-        "Setup: http://localhost:9494/api/setup/status\n"
-        "Contract: http://localhost:9494/api/contract/json\n"
+        "\n"
+        "Endpoints de salud y runtime:\n"
+        "  GET  http://localhost:9494/api/health\n"
+        "  GET  http://localhost:9494/api/runtime\n"
+        "\n"
+        "Flujo de setup wizard:\n"
+        "  GET  http://localhost:9494/api/setup/status\n"
+        "  POST http://localhost:9494/api/setup/admin      (primer arranque, sin auth)\n"
+        "  POST http://localhost:9494/api/setup/base       (requiere Bearer token)\n"
+        "  POST http://localhost:9494/api/setup/uploadrr   (requiere Bearer token)\n"
+        "  POST http://localhost:9494/api/setup/tmdb       (requiere Bearer token)\n"
+        "  POST http://localhost:9494/api/setup/emu        (requiere Bearer token)\n"
+        "  POST http://localhost:9494/api/setup/instances  (requiere Bearer token)\n"
+        "  POST http://localhost:9494/api/setup/complete   (requiere Bearer token)\n"
+        "\n"
+        "Autenticación:\n"
+        "  POST http://localhost:9494/api/auth/login\n"
+        "  GET  http://localhost:9494/api/auth/me          (requiere Bearer token)\n"
+        "  POST http://localhost:9494/api/auth/logout      (requiere Bearer token)\n"
+        "\n"
+        "Documentación interactiva:\n"
+        "  http://localhost:9494/api/docs\n"
+        "  http://localhost:9494/api/redoc\n"
+        "  http://localhost:9494/api/openapi.json\n"
         "\n"
         "Para arrancar:\n"
         "  python3 emuwarez_uploader.py web serve [--port 9494]\n"
         "  uvicorn emuwarez_uploadrr.web.app:app --host 0.0.0.0 --port 9494\n"
+        "\n"
+        "Setup desde CLI:\n"
+        "  python3 emuwarez_uploader.py web setup-status\n"
+        "  python3 emuwarez_uploader.py web create-admin --username admin\n"
         "\n"
         "Instalar dependencias web:\n"
         "  pip install -e \".[web]\""
@@ -516,6 +607,10 @@ def modern_main(argv: Optional[list[str]] = None) -> int:
                 return cmd_web_info()
             if args.web_command == "serve":
                 return cmd_web_serve(args)
+            if args.web_command == "setup-status":
+                return cmd_web_setup_status()
+            if args.web_command == "create-admin":
+                return cmd_web_create_admin(args)
         parser.error("Comando no soportado")
         return 2
     except IntegrationError as exc:

@@ -1,9 +1,9 @@
-"""Basic tests for the FastAPI web backend (Phase 2).
+"""Tests for the FastAPI web backend — Phase 2 base + Phase 3 auth integration.
 
 Run with:
     .venv/bin/pytest -q
-    # or if pytest is installed system-wide:
-    pytest -q
+    # or a specific file:
+    .venv/bin/pytest tests/test_web_app.py -v
 """
 from __future__ import annotations
 
@@ -15,13 +15,12 @@ from fastapi.testclient import TestClient
 from emuwarez_uploadrr.web.app import create_app
 
 
-@pytest.fixture(scope="module")
-def client():
-    return TestClient(create_app())
+# conftest.py supplies `client` and `auth_headers` via shared fixtures.
+# The `isolated_db` autouse fixture ensures each test uses a fresh temp DB.
 
 
 # ---------------------------------------------------------------------------
-# Health
+# Health / Runtime — public, no auth
 # ---------------------------------------------------------------------------
 
 def test_health_endpoint(client):
@@ -47,7 +46,7 @@ def test_runtime_endpoint(client):
 
 
 # ---------------------------------------------------------------------------
-# Setup
+# Setup status — public, no auth
 # ---------------------------------------------------------------------------
 
 def test_setup_status_endpoint(client):
@@ -61,7 +60,7 @@ def test_setup_status_endpoint(client):
 
 
 # ---------------------------------------------------------------------------
-# Contract
+# Contract — public, no auth
 # ---------------------------------------------------------------------------
 
 def test_contract_summary_endpoint(client):
@@ -83,7 +82,7 @@ def test_contract_json_endpoint(client):
 
 
 # ---------------------------------------------------------------------------
-# Placeholders — all should return 200 with implemented=false
+# Protected placeholders — return 401 without token (Phase 3 behavior)
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("path", [
@@ -99,15 +98,37 @@ def test_contract_json_endpoint(client):
     "/api/auth/me",
     "/api/config",
 ])
-def test_placeholder_get_endpoints(client, path):
+def test_protected_placeholder_returns_401_without_auth(client, path):
     response = client.get(path)
+    assert response.status_code == 401
+
+
+@pytest.mark.parametrize("path", [
+    "/api/dashboard/summary",
+    "/api/dashboard/activity",
+    "/api/instances",
+    "/api/library",
+    "/api/missing",
+    "/api/requests",
+    "/api/uploads",
+    "/api/tasks",
+    "/api/logs",
+    "/api/config",
+])
+def test_protected_placeholder_returns_200_with_auth(client, auth_headers, path):
+    response = client.get(path, headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
     assert data["implemented"] is False
 
 
-def test_create_emu_request_stub(client):
+def test_create_emu_request_requires_auth(client):
     response = client.post("/api/missing/1/create-emu-request")
+    assert response.status_code == 401
+
+
+def test_create_emu_request_stub_with_auth(client, auth_headers):
+    response = client.post("/api/missing/1/create-emu-request", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
     assert data["implemented"] is False
@@ -116,7 +137,7 @@ def test_create_emu_request_stub(client):
 
 
 # ---------------------------------------------------------------------------
-# OpenAPI schema
+# OpenAPI schema — public, no auth
 # ---------------------------------------------------------------------------
 
 def test_openapi_schema(client):

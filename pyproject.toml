@@ -1,0 +1,9 @@
+[project]
+name = "emuwarez-uploadrr"
+version = "0.2.0"
+description = "CLI modular para eMuwarez Uploadrr, preparada para interfaz web"
+requires-python = ">=3.10"
+
+[project.scripts]
+emuwarez-uploadrr = "emuwarez_uploadrr.cli:main"
+emuwarez-uploader = "emuwarez_uploadrr.cli:main"

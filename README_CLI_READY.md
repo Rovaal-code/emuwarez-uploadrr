@@ -95,6 +95,39 @@ python3 emuwarez_uploader.py web-contract
 python3 emuwarez_uploader.py "/ruta/a/prueba.mkv" --dry-run
 ```
 
+## Backend web base
+
+Instalar dependencias web:
+
+```bash
+pip install -e ".[web]"
+# o con el venv del proyecto:
+.venv/bin/pip install -e ".[web]"
+```
+
+Arrancar servidor:
+
+```bash
+python3 emuwarez_uploader.py web serve --port 9494
+python3 emuwarez_uploader.py web info
+```
+
+URLs disponibles:
+
+```
+http://localhost:9494/api/health
+http://localhost:9494/api/setup/status
+http://localhost:9494/api/runtime
+http://localhost:9494/api/contract/json
+http://localhost:9494/api/docs
+```
+
+Ejecutar tests:
+
+```bash
+.venv/bin/pytest tests/ -q
+```
+
 ## Estado de implementación
 
 Implementado:
@@ -108,16 +141,21 @@ Implementado:
 - Faltantes.
 - Tareas.
 - Preparar/subir por ID usando el motor heredado.
-- Contrato funcional para web.
+- Contrato funcional para web (`docs/ui_backend_contract.md`).
 - Estructura para peticiones EMU y coincidencias.
 - Límite de 1 hora para refresco manual de peticiones.
 - Stubs seguros para crear peticiones EMU.
+- Backend FastAPI base (`emuwarez_uploadrr/web/`).
+- Endpoints: `/api/health`, `/api/runtime`, `/api/setup/status`, `/api/contract/json`.
+- Placeholders para todas las rutas futuras.
+- Suite de tests básica (`tests/test_web_app.py`).
 
 Pendiente para fases posteriores:
 
 - Capturar endpoint real de peticiones EMU.
 - Crear peticiones EMU desde la app.
 - Mejorar cruce por detalle TMDb/IMDb de la petición.
-- API web FastAPI.
-- Frontend.
+- Radarr/Sonarr sync real con queue/history.
+- Auth y setup wizard completos.
+- Frontend React.
 - Docker.

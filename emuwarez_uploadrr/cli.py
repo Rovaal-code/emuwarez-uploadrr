@@ -23,7 +23,7 @@ from .services import tasks as task_service
 MODERN_COMMANDS = {
     "configure", "doctor", "test-apis", "instances", "sync", "library",
     "requests", "missing", "prepare", "upload", "tasks", "logs", "legacy",
-    "web-contract", "db",
+    "web-contract", "db", "web",
 }
 
 
@@ -183,6 +183,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_legacy.add_argument("legacy_args", nargs=argparse.REMAINDER)
 
     sub.add_parser("web-contract", help="Mostrar contrato funcional para la futura interfaz")
+
+    p_web = sub.add_parser("web", help="Servidor web backend FastAPI")
+    web_sub = p_web.add_subparsers(dest="web_command", required=True)
+    web_sub.add_parser("info", help="Mostrar información del servidor web")
+    p_serve = web_sub.add_parser("serve", help="Arrancar servidor web")
+    p_serve.add_argument("--host", default="0.0.0.0", help="Host (default: 0.0.0.0)")
+    p_serve.add_argument("--port", type=int, default=9494, help="Puerto (default: 9494)")
+    p_serve.add_argument("--reload", action="store_true", help="Recarga automática (solo desarrollo)")
+
     return parser
 
 
@@ -423,6 +432,46 @@ Healthcheck: GET /api/health
     return 0
 
 
+def cmd_web_info() -> int:
+    print(
+        "Backend: FastAPI\n"
+        "App: eMuwarez Uploadrr\n"
+        "Default URL: http://localhost:9494\n"
+        "Docs: http://localhost:9494/api/docs\n"
+        "Health: http://localhost:9494/api/health\n"
+        "Setup: http://localhost:9494/api/setup/status\n"
+        "Contract: http://localhost:9494/api/contract/json\n"
+        "\n"
+        "Para arrancar:\n"
+        "  python3 emuwarez_uploader.py web serve [--port 9494]\n"
+        "  uvicorn emuwarez_uploadrr.web.app:app --host 0.0.0.0 --port 9494\n"
+        "\n"
+        "Instalar dependencias web:\n"
+        "  pip install -e \".[web]\""
+    )
+    return 0
+
+
+def cmd_web_serve(args) -> int:
+    try:
+        import uvicorn
+    except ImportError:
+        print(
+            "✗ Faltan dependencias web. Instala el proyecto con las dependencias web:\n"
+            "  pip install -e \".[web]\"\n"
+            "O instala uvicorn y fastapi directamente:\n"
+            "  pip install uvicorn fastapi pydantic"
+        )
+        return 1
+    uvicorn.run(
+        "emuwarez_uploadrr.web.app:app",
+        host=args.host,
+        port=args.port,
+        reload=args.reload,
+    )
+    return 0
+
+
 def modern_main(argv: Optional[list[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -462,6 +511,11 @@ def modern_main(argv: Optional[list[str]] = None) -> int:
             return legacy.main(args.legacy_args or [])
         if args.command == "web-contract":
             return cmd_web_contract()
+        if args.command == "web":
+            if args.web_command == "info":
+                return cmd_web_info()
+            if args.web_command == "serve":
+                return cmd_web_serve(args)
         parser.error("Comando no soportado")
         return 2
     except IntegrationError as exc:

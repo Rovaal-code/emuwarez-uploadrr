@@ -4,6 +4,17 @@ version = "0.2.0"
 description = "CLI modular para eMuwarez Uploadrr, preparada para interfaz web"
 requires-python = ">=3.10"
 
+[project.optional-dependencies]
+web = [
+    "fastapi>=0.111.0",
+    "uvicorn[standard]>=0.29.0",
+    "pydantic>=2.0.0",
+]
+dev = [
+    "pytest>=8.0.0",
+    "httpx>=0.27.0",
+]
+
 [project.scripts]
 emuwarez-uploadrr = "emuwarez_uploadrr.cli:main"
 emuwarez-uploader = "emuwarez_uploadrr.cli:main"

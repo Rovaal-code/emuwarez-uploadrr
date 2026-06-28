@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local runtime/config
+*.log
+logs/
+*.sqlite
+*.sqlite3
+*.db
+
+# Project local generated data
+data/
+tmp/
+.cache/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# External runtime dependency — do NOT track, mount as volume or external repo
+Uploadrr/

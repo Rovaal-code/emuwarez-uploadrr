@@ -128,6 +128,48 @@ Ejecutar tests:
 .venv/bin/pytest tests/ -q
 ```
 
+## Sincronización Radarr/Sonarr y biblioteca
+
+Añadir instancias y sincronizar biblioteca:
+
+```bash
+python3 emuwarez_uploader.py instances list
+python3 emuwarez_uploader.py instances add radarr --name "Radarr principal" --url http://radarr:7878 --api-key TU_KEY
+python3 emuwarez_uploader.py instances add sonarr --name "Sonarr principal" --url http://sonarr:8989 --api-key TU_KEY
+python3 emuwarez_uploader.py instances test
+python3 emuwarez_uploader.py sync --episodes
+python3 emuwarez_uploader.py library list
+python3 emuwarez_uploader.py library show 1
+python3 emuwarez_uploader.py missing list
+```
+
+Estados locales detectados automáticamente:
+
+```
+Disponible        — el archivo existe en Radarr/Sonarr
+Faltante          — no hay archivo
+En cola           — esperando en el cliente de descarga
+Descargando       — descarga activa
+Pendiente de importar — descarga completa, esperando importación
+Error de importación — falló la importación
+Error de búsqueda — Sonarr/Radarr no encontró fuentes
+```
+
+API web real (requiere Bearer token):
+
+```
+GET  /api/instances                    — listar instancias (sin API key completa)
+POST /api/instances                    — añadir instancia
+POST /api/instances/{id}/test         — test de conexión real
+POST /api/instances/{id}/sync         — sincronizar esa instancia
+POST /api/sync                        — sincronizar todas las instancias
+GET  /api/dashboard/summary           — contadores reales de biblioteca
+GET  /api/dashboard/activity          — últimas tareas ejecutadas
+GET  /api/library                     — biblioteca filtrada/paginada
+GET  /api/library/{id}                — detalle de ítem
+GET  /api/missing                     — faltantes/en cola/con error
+```
+
 ## Setup wizard y autenticación
 
 Setup desde CLI:
@@ -162,12 +204,14 @@ Reglas de contraseña: mínimo 12 caracteres, al menos minúscula, mayúscula, d
 Implementado:
 
 - CLI moderna con subcomandos.
-- SQLite y modelos internos.
-- Gestión de instancias Radarr/Sonarr.
-- Conectores básicos Radarr/Sonarr.
-- Sincronización de biblioteca.
-- Listado/detalle de biblioteca.
-- Faltantes.
+- SQLite y modelos internos (schema v3).
+- Gestión de instancias Radarr/Sonarr (add/list/test/sync/update).
+- Clientes reales Radarr/Sonarr con jerarquía de errores (`ArrClientError`, `ArrConnectionError`, `ArrAuthError`, `ArrApiError`).
+- Detección de estado por cola: descargando / en cola / pendiente de importar / error de importación.
+- Sincronización completa de biblioteca con queue maps.
+- Listado/detalle de biblioteca con filtros y paginación.
+- Faltantes (todos los estados no disponibles).
+- Dashboard: resumen de contadores + actividad reciente.
 - Tareas.
 - Preparar/subir por ID usando el motor heredado.
 - Contrato funcional para web (`docs/ui_backend_contract.md`).
@@ -182,14 +226,12 @@ Implementado:
 - Seguridad: PBKDF2-SHA256 (210k iteraciones), `hmac.compare_digest`, tokens solo como hash en BD.
 - Schema SQLite v3: tablas `users`, `auth_sessions`, `settings`.
 - Comandos CLI: `web setup-status`, `web create-admin`.
-- Suite de tests completa: `tests/test_web_app.py` (29 tests) + `tests/test_setup_auth.py` (40 tests).
+- Suite de tests completa: 140 tests (web_app, setup_auth, arr_integrations, library_sync, dashboard_library_api).
 
 Pendiente para fases posteriores:
 
 - Capturar endpoint real de peticiones EMU.
 - Crear peticiones EMU desde la app.
 - Mejorar cruce por detalle TMDb/IMDb de la petición.
-- Radarr/Sonarr sync real con queue/history.
-- Auth y setup wizard completos.
 - Frontend React.
 - Docker.

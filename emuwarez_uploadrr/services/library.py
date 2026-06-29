@@ -2,13 +2,17 @@
 from __future__ import annotations
 
 import sqlite3
-from typing import Iterable, Optional
+from typing import Optional
 
 from ..integrations import radarr, sonarr
 from ..models import InstanceConfig, LibraryItem, LocalStatus, NomenclatureStatus
 from .instances import list_instances
 from .tasks import start_task, finish_task
 
+
+# ---------------------------------------------------------------------------
+# Upsert
+# ---------------------------------------------------------------------------
 
 def upsert_library_item(conn: sqlite3.Connection, item: LibraryItem) -> int:
     data = item.to_dict()
@@ -52,59 +56,102 @@ def upsert_library_item(conn: sqlite3.Connection, item: LibraryItem) -> int:
     return int(row["id"])
 
 
-def sync_instance(conn: sqlite3.Connection, instance: InstanceConfig, *, include_episodes: bool = False) -> tuple[int, int]:
+# ---------------------------------------------------------------------------
+# Sync
+# ---------------------------------------------------------------------------
+
+def sync_instance(
+    conn: sqlite3.Connection,
+    instance: InstanceConfig,
+    *,
+    include_episodes: bool = False,
+) -> tuple[int, int]:
     imported = 0
     missing = 0
     if instance.type == "radarr":
+        queue_records = radarr.get_queue(instance.url, instance.api_key)
+        queue_map = radarr.build_queue_map(queue_records)
         for movie in radarr.get_movies(instance.url, instance.api_key):
-            item = radarr.movie_to_library_item(movie, instance_id=int(instance.id), instance_name=instance.name)
+            item = radarr.movie_to_library_item(
+                movie,
+                instance_id=int(instance.id),
+                instance_name=instance.name,
+                queue_map=queue_map,
+            )
             upsert_library_item(conn, item)
             imported += 1
-            if item.local_status == LocalStatus.MISSING.value:
+            if item.local_status != LocalStatus.AVAILABLE.value:
                 missing += 1
+
     elif instance.type == "sonarr":
+        queue_records = sonarr.get_queue(instance.url, instance.api_key)
+        series_queue = sonarr.build_series_queue_map(queue_records)
+        ep_queue = sonarr.build_episode_queue_map(queue_records)
         for series in sonarr.get_series(instance.url, instance.api_key):
-            series_item = sonarr.series_to_library_item(series, instance_id=int(instance.id), instance_name=instance.name)
+            series_item = sonarr.series_to_library_item(
+                series,
+                instance_id=int(instance.id),
+                instance_name=instance.name,
+                series_queue_map=series_queue,
+            )
             upsert_library_item(conn, series_item)
             imported += 1
-            if series_item.local_status == LocalStatus.MISSING.value:
+            if series_item.local_status != LocalStatus.AVAILABLE.value:
                 missing += 1
             if include_episodes and series.get("id"):
                 files = sonarr.get_episode_files(instance.url, instance.api_key, int(series["id"]))
                 files_by_id = {f.get("id"): f for f in files if f.get("id") is not None}
                 for episode in sonarr.get_episodes(instance.url, instance.api_key, int(series["id"])):
-                    ep_file = files_by_id.get(episode.get("episodeFileId")) if episode.get("episodeFileId") else None
+                    ep_file = (
+                        files_by_id.get(episode.get("episodeFileId"))
+                        if episode.get("episodeFileId")
+                        else None
+                    )
                     ep_item = sonarr.episode_to_library_item(
                         episode,
                         ep_file,
                         series,
                         instance_id=int(instance.id),
                         instance_name=instance.name,
+                        ep_queue_map=ep_queue,
                     )
                     upsert_library_item(conn, ep_item)
                     imported += 1
-                    if ep_item.local_status == LocalStatus.MISSING.value:
+                    if ep_item.local_status != LocalStatus.AVAILABLE.value:
                         missing += 1
     return imported, missing
 
 
-def sync_all(conn: sqlite3.Connection, *, include_episodes: bool = False) -> dict[str, int]:
+def sync_all(conn: sqlite3.Connection, *, include_episodes: bool = False) -> dict:
     task_id = start_task(conn, "sync-library", "Sincronizando Radarr/Sonarr")
     total = 0
     missing = 0
     details: list[str] = []
+    errors: list[str] = []
     try:
         for instance in list_instances(conn, enabled_only=True):
-            imported, miss = sync_instance(conn, instance, include_episodes=include_episodes)
-            total += imported
-            missing += miss
-            details.append(f"{instance.type}:{instance.name}: {imported} importados, {miss} faltantes")
-        summary = f"{total} elementos sincronizados; {missing} faltantes"
+            try:
+                imported, miss = sync_instance(conn, instance, include_episodes=include_episodes)
+                total += imported
+                missing += miss
+                details.append(f"{instance.type}:{instance.name}: {imported} importados, {miss} faltantes")
+            except Exception as exc:
+                err = f"{instance.type}:{instance.name}: {exc}"
+                errors.append(err)
+                details.append(f"ERROR — {err}")
+        summary = f"{total} elementos sincronizados; {missing} no disponibles"
         finish_task(conn, task_id, "completed", summary, "\n".join(details))
-        return {"imported": total, "missing": missing, "instances": len(details)}
+        return {"imported": total, "missing": missing, "instances": len(list_instances(conn)), "errors": errors}
     except Exception as exc:
         finish_task(conn, task_id, "failed", str(exc), "\n".join(details))
         raise
+
+
+# ---------------------------------------------------------------------------
+# Queries
+# ---------------------------------------------------------------------------
+
+_MISSING_STATUSES = LocalStatus.not_available()
 
 
 def list_library(
@@ -114,8 +161,10 @@ def list_library(
     request: Optional[str] = None,
     nomenclature: Optional[str] = None,
     item_type: Optional[str] = None,
+    origin: Optional[str] = None,
     search: Optional[str] = None,
     limit: int = 50,
+    offset: int = 0,
 ) -> list[dict]:
     where = []
     params: list = []
@@ -131,15 +180,43 @@ def list_library(
     if item_type:
         where.append("item_type = ?")
         params.append(item_type)
+    if origin:
+        where.append("instance_type = ?")
+        params.append(origin)
     if search:
         where.append("title LIKE ?")
         params.append(f"%{search}%")
     sql = "SELECT * FROM library_items"
     if where:
         sql += " WHERE " + " AND ".join(where)
-    sql += " ORDER BY updated_at DESC, title COLLATE NOCASE LIMIT ?"
-    params.append(limit)
+    sql += " ORDER BY updated_at DESC, title COLLATE NOCASE LIMIT ? OFFSET ?"
+    params.extend([limit, offset])
     return [dict(row) for row in conn.execute(sql, params).fetchall()]
+
+
+def count_library(
+    conn: sqlite3.Connection,
+    *,
+    status: Optional[str] = None,
+    item_type: Optional[str] = None,
+    search: Optional[str] = None,
+) -> int:
+    where = []
+    params: list = []
+    if status:
+        where.append("local_status = ?")
+        params.append(status)
+    if item_type:
+        where.append("item_type = ?")
+        params.append(item_type)
+    if search:
+        where.append("title LIKE ?")
+        params.append(f"%{search}%")
+    sql = "SELECT COUNT(*) FROM library_items"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    row = conn.execute(sql, params).fetchone()
+    return int(row[0]) if row else 0
 
 
 def get_library_item(conn: sqlite3.Connection, item_id: int) -> Optional[dict]:
@@ -147,11 +224,68 @@ def get_library_item(conn: sqlite3.Connection, item_id: int) -> Optional[dict]:
     return dict(row) if row else None
 
 
-def list_missing(conn: sqlite3.Connection, *, limit: int = 50) -> list[dict]:
-    return list_library(conn, status=LocalStatus.MISSING.value, limit=limit)
+def list_missing(conn: sqlite3.Connection, *, limit: int = 50, offset: int = 0) -> list[dict]:
+    placeholders = ", ".join(["?"] * len(_MISSING_STATUSES))
+    sql = (
+        f"SELECT * FROM library_items WHERE local_status IN ({placeholders})"
+        " ORDER BY updated_at DESC, title COLLATE NOCASE LIMIT ? OFFSET ?"
+    )
+    rows = conn.execute(sql, [*_MISSING_STATUSES, limit, offset]).fetchall()
+    return [dict(row) for row in rows]
 
 
-def update_request_status(conn: sqlite3.Connection, library_item_id: int, request_status: str, request_id: Optional[int] = None) -> None:
+def get_dashboard_summary(conn: sqlite3.Connection) -> dict:
+    """Return aggregated counts from library_items."""
+    row = conn.execute(
+        """
+        SELECT
+            COUNT(*) AS total,
+            SUM(CASE WHEN local_status = ? THEN 1 ELSE 0 END) AS available,
+            SUM(CASE WHEN local_status IN ({missing_ph}) THEN 1 ELSE 0 END) AS missing_count,
+            SUM(CASE WHEN local_status = ? THEN 1 ELSE 0 END) AS uploading,
+            SUM(CASE WHEN local_status = ? THEN 1 ELSE 0 END) AS uploaded,
+            SUM(CASE WHEN instance_type = 'radarr' THEN 1 ELSE 0 END) AS radarr_items,
+            SUM(CASE WHEN instance_type = 'sonarr' THEN 1 ELSE 0 END) AS sonarr_items
+        FROM library_items
+        """.format(missing_ph=", ".join(["?"] * len(_MISSING_STATUSES))),
+        [
+            LocalStatus.AVAILABLE.value,
+            *_MISSING_STATUSES,
+            LocalStatus.UPLOADING.value,
+            LocalStatus.UPLOADED.value,
+        ],
+    ).fetchone()
+
+    last_sync = conn.execute(
+        "SELECT started_at FROM task_runs WHERE name = 'sync-library' AND status = 'completed' ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+
+    return {
+        "library_total": int(row["total"] or 0),
+        "available": int(row["available"] or 0),
+        "missing": int(row["missing_count"] or 0),
+        "uploading": int(row["uploading"] or 0),
+        "completed": int(row["uploaded"] or 0),
+        "radarr_items": int(row["radarr_items"] or 0),
+        "sonarr_items": int(row["sonarr_items"] or 0),
+        "last_sync_at": last_sync["started_at"] if last_sync else None,
+    }
+
+
+def get_recent_activity(conn: sqlite3.Connection, *, limit: int = 20) -> list[dict]:
+    """Return recent task_runs as activity feed."""
+    rows = conn.execute(
+        "SELECT * FROM task_runs ORDER BY id DESC LIMIT ?", (limit,)
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def update_request_status(
+    conn: sqlite3.Connection,
+    library_item_id: int,
+    request_status: str,
+    request_id: Optional[int] = None,
+) -> None:
     conn.execute(
         "UPDATE library_items SET request_status = ?, request_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
         (request_status, request_id, library_item_id),

@@ -1,8 +1,8 @@
-"""Placeholder endpoints for future phases.
+"""Placeholder endpoints for phases still pending implementation.
 
-Every route returns a structured stub so the frontend can be wired up ahead
-of the real implementation. Protected endpoints require a valid Bearer token
-and return 401 without one.
+These all return structured stubs. Protected endpoints return 401 without
+a valid Bearer token. Phase 4 moved instances, dashboard, library, missing
+and sync to their own real routers; those are no longer stubs.
 """
 from __future__ import annotations
 
@@ -28,92 +28,31 @@ _EMU_REQUEST_STUB = {
 
 
 def _stub(endpoint: str, phase: str = "future") -> JSONResponse:
-    return JSONResponse({"implemented": False, "phase": phase, "message": _STUB["message"], "endpoint": endpoint})
+    return JSONResponse({
+        "implemented": False, "phase": phase,
+        "message": _STUB["message"], "endpoint": endpoint,
+    })
 
 
 # ---------------------------------------------------------------------------
-# Dashboard — protected
+# Dashboard extras — protected (real dashboard/summary and /activity are in dashboard.py)
 # ---------------------------------------------------------------------------
-
-@router.get("/dashboard/summary")
-def dashboard_summary(current_user: dict = Depends(require_auth)) -> JSONResponse:
-    return _stub("/api/dashboard/summary", "phase-4")
-
-@router.get("/dashboard/activity")
-def dashboard_activity(current_user: dict = Depends(require_auth)) -> JSONResponse:
-    return _stub("/api/dashboard/activity", "phase-4")
 
 @router.get("/dashboard/upload-activity")
 def dashboard_upload_activity(current_user: dict = Depends(require_auth)) -> JSONResponse:
     return _stub("/api/dashboard/upload-activity", "phase-8")
 
-@router.get("/dashboard/tasks")
-def dashboard_tasks(current_user: dict = Depends(require_auth)) -> JSONResponse:
-    return _stub("/api/dashboard/tasks", "phase-4")
-
 @router.get("/dashboard/events")
 def dashboard_events(current_user: dict = Depends(require_auth)) -> JSONResponse:
     return _stub("/api/dashboard/events", "phase-7")
 
-# ---------------------------------------------------------------------------
-# Instances — protected
-# ---------------------------------------------------------------------------
-
-@router.get("/instances")
-def instances_list(current_user: dict = Depends(require_auth)) -> JSONResponse:
-    return _stub("/api/instances", "phase-4")
-
-@router.post("/instances")
-def instances_create(current_user: dict = Depends(require_auth)) -> JSONResponse:
-    return _stub("POST /api/instances", "phase-4")
-
-@router.post("/instances/{instance_id}/test")
-def instances_test(instance_id: int, current_user: dict = Depends(require_auth)) -> JSONResponse:
-    return _stub(f"POST /api/instances/{instance_id}/test", "phase-4")
-
-@router.post("/instances/{instance_id}/sync")
-def instances_sync(instance_id: int, current_user: dict = Depends(require_auth)) -> JSONResponse:
-    return _stub(f"POST /api/instances/{instance_id}/sync", "phase-4")
+@router.get("/dashboard/tasks")
+def dashboard_tasks(current_user: dict = Depends(require_auth)) -> JSONResponse:
+    return _stub("/api/dashboard/tasks", "phase-4")
 
 # ---------------------------------------------------------------------------
-# Sync — protected
+# Missing extras — protected (real /missing list is in library.py)
 # ---------------------------------------------------------------------------
-
-@router.post("/sync/library")
-def sync_library(current_user: dict = Depends(require_auth)) -> JSONResponse:
-    return _stub("POST /api/sync/library", "phase-4")
-
-@router.post("/sync/requests")
-def sync_requests(current_user: dict = Depends(require_auth)) -> JSONResponse:
-    return _stub("POST /api/sync/requests", "phase-5")
-
-# ---------------------------------------------------------------------------
-# Library — protected
-# ---------------------------------------------------------------------------
-
-@router.get("/library")
-def library_list(current_user: dict = Depends(require_auth)) -> JSONResponse:
-    return _stub("/api/library", "phase-4")
-
-@router.get("/library/{item_id}")
-def library_detail(item_id: int, current_user: dict = Depends(require_auth)) -> JSONResponse:
-    return _stub(f"/api/library/{item_id}", "phase-4")
-
-@router.post("/library/{item_id}/adapt-nomenclature")
-def library_adapt_nomenclature(item_id: int, current_user: dict = Depends(require_auth)) -> JSONResponse:
-    return _stub(f"POST /api/library/{item_id}/adapt-nomenclature", "phase-8")
-
-@router.post("/library/{item_id}/upload")
-def library_upload(item_id: int, current_user: dict = Depends(require_auth)) -> JSONResponse:
-    return _stub(f"POST /api/library/{item_id}/upload", "phase-8")
-
-# ---------------------------------------------------------------------------
-# Missing — protected
-# ---------------------------------------------------------------------------
-
-@router.get("/missing")
-def missing_list(current_user: dict = Depends(require_auth)) -> JSONResponse:
-    return _stub("/api/missing", "phase-4")
 
 @router.post("/missing/{item_id}/check-emu")
 def missing_check_emu(item_id: int, current_user: dict = Depends(require_auth)) -> JSONResponse:
@@ -122,6 +61,18 @@ def missing_check_emu(item_id: int, current_user: dict = Depends(require_auth)) 
 @router.post("/missing/{item_id}/create-emu-request")
 def missing_create_emu_request(item_id: int, current_user: dict = Depends(require_auth)) -> JSONResponse:
     return JSONResponse({**_EMU_REQUEST_STUB, "endpoint": f"POST /api/missing/{item_id}/create-emu-request"})
+
+# ---------------------------------------------------------------------------
+# Library extras — protected (real /library list/detail are in library.py)
+# ---------------------------------------------------------------------------
+
+@router.post("/library/{item_id}/adapt-nomenclature")
+def library_adapt_nomenclature(item_id: int, current_user: dict = Depends(require_auth)) -> JSONResponse:
+    return _stub(f"POST /api/library/{item_id}/adapt-nomenclature", "phase-8")
+
+@router.post("/library/{item_id}/upload")
+def library_upload(item_id: int, current_user: dict = Depends(require_auth)) -> JSONResponse:
+    return _stub(f"POST /api/library/{item_id}/upload", "phase-8")
 
 # ---------------------------------------------------------------------------
 # Requests — protected

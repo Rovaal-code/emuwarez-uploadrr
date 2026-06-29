@@ -98,24 +98,33 @@ def test_contract_json_endpoint(client):
     "/api/auth/me",
     "/api/config",
 ])
-def test_protected_placeholder_returns_401_without_auth(client, path):
+def test_protected_endpoints_require_auth(client, path):
     response = client.get(path)
     assert response.status_code == 401
 
 
+# Phase 4: these are now real endpoints (no longer placeholders)
 @pytest.mark.parametrize("path", [
     "/api/dashboard/summary",
     "/api/dashboard/activity",
     "/api/instances",
     "/api/library",
     "/api/missing",
+])
+def test_real_endpoints_return_200_with_auth(client, auth_headers, path):
+    response = client.get(path, headers=auth_headers)
+    assert response.status_code == 200
+
+
+# Phase 3+ placeholders that still return implemented=False
+@pytest.mark.parametrize("path", [
     "/api/requests",
     "/api/uploads",
     "/api/tasks",
     "/api/logs",
     "/api/config",
 ])
-def test_protected_placeholder_returns_200_with_auth(client, auth_headers, path):
+def test_placeholder_returns_stub_with_auth(client, auth_headers, path):
     response = client.get(path, headers=auth_headers)
     assert response.status_code == 200
     data = response.json()

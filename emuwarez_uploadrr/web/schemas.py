@@ -219,6 +219,163 @@ class InstanceResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Instances
+# ---------------------------------------------------------------------------
+
+class InstanceSafeResponse(BaseModel):
+    id: int
+    type: str
+    name: str
+    url: str
+    api_key_masked: str
+    enabled: bool
+    is_4k: bool = False
+    is_anime: bool = False
+    last_test_status: Optional[str] = None
+    last_test_at: Optional[str] = None
+    created_at: str
+    updated_at: Optional[str] = None
+
+
+class InstanceTestResponse(BaseModel):
+    ok: bool
+    instance_id: Optional[int] = None
+    instance_name: Optional[str] = None
+    version: Optional[str] = None
+    error: Optional[str] = None
+
+
+class AddInstanceRequest(BaseModel):
+    type: str
+    name: str
+    url: str
+    api_key: str
+    is_4k: bool = False
+    is_anime: bool = False
+
+    @field_validator("type")
+    @classmethod
+    def valid_type(cls, v: str) -> str:
+        if v not in ("radarr", "sonarr"):
+            raise ValueError("El tipo debe ser 'radarr' o 'sonarr'")
+        return v
+
+    @field_validator("url")
+    @classmethod
+    def url_not_empty(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("La URL no puede estar vacía")
+        return v.strip()
+
+    @field_validator("api_key")
+    @classmethod
+    def api_key_not_empty(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("La API key no puede estar vacía")
+        return v.strip()
+
+
+# ---------------------------------------------------------------------------
+# Sync
+# ---------------------------------------------------------------------------
+
+class SyncRequest(BaseModel):
+    include_episodes: bool = True
+
+
+class SyncResponse(BaseModel):
+    ok: bool = True
+    imported: int = 0
+    missing: int = 0
+    instances: int = 0
+    errors: list[str] = []
+    message: str = ""
+
+
+# ---------------------------------------------------------------------------
+# Dashboard
+# ---------------------------------------------------------------------------
+
+class DashboardSummaryResponse(BaseModel):
+    library_total: int = 0
+    available: int = 0
+    missing: int = 0
+    uploading: int = 0
+    completed: int = 0
+    radarr_items: int = 0
+    sonarr_items: int = 0
+    last_sync_at: Optional[str] = None
+
+
+class DashboardActivityItem(BaseModel):
+    id: int
+    name: str
+    status: str
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
+    summary: Optional[str] = None
+
+
+class DashboardActivityResponse(BaseModel):
+    items: list[DashboardActivityItem] = []
+
+
+# ---------------------------------------------------------------------------
+# Library
+# ---------------------------------------------------------------------------
+
+class LibraryItemResponse(BaseModel):
+    id: int
+    item_type: str
+    title: str
+    year: Optional[int] = None
+    original_title: Optional[str] = None
+    instance_type: Optional[str] = None
+    instance_name: Optional[str] = None
+    external_id: Optional[str] = None
+    tmdb_id: Optional[str] = None
+    imdb_id: Optional[str] = None
+    tvdb_id: Optional[str] = None
+    path: Optional[str] = None
+    quality: Optional[str] = None
+    resolution: Optional[str] = None
+    source: Optional[str] = None
+    size_bytes: Optional[int] = None
+    local_status: str
+    request_status: str
+    nomenclature_status: str
+    updated_at: Optional[str] = None
+
+
+class LibraryListResponse(BaseModel):
+    items: list[LibraryItemResponse] = []
+    total: int = 0
+    limit: int = 50
+    offset: int = 0
+
+
+class MissingItemResponse(BaseModel):
+    id: int
+    item_type: str
+    title: str
+    year: Optional[int] = None
+    instance_type: Optional[str] = None
+    instance_name: Optional[str] = None
+    tmdb_id: Optional[str] = None
+    imdb_id: Optional[str] = None
+    local_status: str
+    request_status: str
+    updated_at: Optional[str] = None
+
+
+class MissingListResponse(BaseModel):
+    items: list[MissingItemResponse] = []
+    total: int = 0
+    limit: int = 50
+    offset: int = 0
+
+
+# ---------------------------------------------------------------------------
 # Generic
 # ---------------------------------------------------------------------------
 

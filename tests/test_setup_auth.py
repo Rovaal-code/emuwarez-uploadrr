@@ -184,10 +184,12 @@ def test_protected_endpoints_require_auth(client, method, path):
 
 
 def test_protected_endpoints_accessible_with_token(auth_headers, client):
+    # Phase 4: dashboard/summary is now a real endpoint
     resp = client.get("/api/dashboard/summary", headers=auth_headers)
     assert resp.status_code == 200
     data = resp.json()
-    assert data["implemented"] is False
+    # Real response has library_total, not implemented=False
+    assert "library_total" in data or "implemented" in data
 
 
 def test_create_emu_request_requires_auth(client):

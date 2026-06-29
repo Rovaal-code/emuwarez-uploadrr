@@ -227,6 +227,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_serve.add_argument("--port", type=int, default=9494, help="Puerto (default: 9494)")
     p_serve.add_argument("--reload", action="store_true", help="Recarga automática (solo desarrollo)")
     web_sub.add_parser("setup-status", help="Mostrar estado del asistente de configuración")
+    web_sub.add_parser("doctor", help="Diagnóstico del runtime de la aplicación")
     p_create_admin = web_sub.add_parser("create-admin", help="Crear usuario administrador web")
     p_create_admin.add_argument("--username", required=True, help="Nombre de usuario admin")
 
@@ -894,6 +895,30 @@ def cmd_web_info() -> int:
     return 0
 
 
+def cmd_web_doctor() -> int:
+    from emuwarez_uploadrr.services.runtime_diagnostics import get_runtime_diagnostics
+    result = get_runtime_diagnostics()
+    icons = {"ok": "✓", "warning": "⚠", "error": "✗", "unknown": "?"}
+    print("\nRuntime diagnostics\n")
+    for check in result["checks"]:
+        icon = icons.get(check["status"], "?")
+        label = check["name"].replace("_", " ").title()
+        print(f"{label}:")
+        print(f"  {icon} {check['message']}")
+        if check.get("details"):
+            for k, v in check["details"].items():
+                print(f"    {k}: {v}")
+    if result["warnings"]:
+        print(f"\nAdvertencias: {len(result['warnings'])}")
+    if result["errors"]:
+        print(f"\nErrores: {len(result['errors'])}")
+    if result["ok"]:
+        print("\n✓ Sistema listo")
+    else:
+        print("\n✗ Hay errores que resolver")
+    return 0 if result["ok"] else 1
+
+
 def cmd_web_serve(args) -> int:
     try:
         import uvicorn
@@ -962,6 +987,8 @@ def modern_main(argv: Optional[list[str]] = None) -> int:
                 return cmd_web_serve(args)
             if args.web_command == "setup-status":
                 return cmd_web_setup_status()
+            if args.web_command == "doctor":
+                return cmd_web_doctor()
             if args.web_command == "create-admin":
                 return cmd_web_create_admin(args)
         parser.error("Comando no soportado")

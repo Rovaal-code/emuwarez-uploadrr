@@ -425,3 +425,28 @@ docker compose -f docker-compose.example.yml down
 # Actualizar y relanzar
 docker compose -f docker-compose.example.yml up -d --build
 ```
+
+## Smoke test Docker y diagnóstico
+
+### Smoke test completo
+
+```bash
+bash scripts/docker-smoke-test.sh
+```
+
+Construye la imagen, arranca el contenedor con directorios temporales, valida
+todos los endpoints HTTP, verifica que Uploadrr no está dentro de la imagen
+y limpia automáticamente al terminar.
+
+### Diagnóstico de runtime
+
+```bash
+python3 emuwarez_uploader.py web doctor
+```
+
+Muestra el estado del CONFIG_DIR, base de datos, frontend, montaje de Uploadrr,
+`hardlink_base` y variables de entorno, sin mostrar secretos.
+
+### Guía de despliegue completa
+
+Ver: [docs/DEPLOYMENT_DOCKER.md](docs/DEPLOYMENT_DOCKER.md)

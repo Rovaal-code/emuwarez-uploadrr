@@ -14,6 +14,7 @@ from .requests import router as requests_router
 from .nomenclature import router as nomenclature_router
 from .uploads import router as uploads_router
 from .placeholders import router as placeholders_router
+from .diagnostics import router as diagnostics_router
 
 api_router = APIRouter(prefix="/api")
 
@@ -28,3 +29,4 @@ api_router.include_router(requests_router)
 api_router.include_router(nomenclature_router)
 api_router.include_router(uploads_router)
 api_router.include_router(placeholders_router)
+api_router.include_router(diagnostics_router)

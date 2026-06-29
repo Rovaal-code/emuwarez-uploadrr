@@ -187,6 +187,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_up_job = up_sub.add_parser("job", help="Ver detalle de un upload job/preflight")
     p_up_job.add_argument("id", type=int, help="ID del upload job")
     up_sub.add_parser("jobs", help="Listar upload jobs/preflights")
+    p_up_logs = up_sub.add_parser("logs", help="Ver logs de un upload job")
+    p_up_logs.add_argument("id", type=int, help="ID del upload job")
+    p_up_logs.add_argument("--limit", type=int, default=200, help="Número máximo de entradas")
+    p_up_start = up_sub.add_parser("start", help="Iniciar/previsualizar ejecución de Uploadrr")
+    p_up_start.add_argument("id", type=int, help="ID del upload job")
+    p_up_start.add_argument("--dry-run", action="store_true", default=True, help="Solo previsualización (por defecto)")
+    p_up_start.add_argument("--apply", action="store_true", dest="up_apply", help="Iniciar ejecución real")
+    p_up_start.add_argument("--confirm", metavar="TOKEN", dest="up_confirm", help=f"Token de confirmación: INICIAR_UPLOADRR")
+    p_up_cancel = up_sub.add_parser("cancel", help="Cancelar un upload job en ejecución")
+    p_up_cancel.add_argument("id", type=int, help="ID del upload job")
 
     p_tasks = sub.add_parser("tasks", help="Tareas ejecutadas")
     tasks_sub = p_tasks.add_subparsers(dest="tasks_command", required=True)
@@ -468,7 +478,11 @@ def cmd_nomenclature(args) -> int:
 
 def cmd_upload_modern(args) -> int:
     from .services.upload_preflight import (
-        build_upload_preflight, get_upload_job, list_upload_jobs
+        build_upload_preflight,
+    )
+    from .services.upload_execution import (
+        get_upload_job, list_upload_jobs, get_upload_job_logs,
+        start_upload_job, cancel_upload_job, CONFIRMATION_TOKEN,
     )
     with _open_conn(args) as conn:
         if args.upload_command == "preflight":
@@ -500,7 +514,7 @@ def cmd_upload_modern(args) -> int:
             if not job:
                 print(f"✗ Job {args.id} no encontrado")
                 return 1
-            for key in ["id", "library_item_id", "status", "stage", "title", "source_path", "error_message", "created_at"]:
+            for key in ["id", "library_item_id", "status", "stage", "title", "source_path", "prepared_path", "exit_code", "error_message", "started_at", "finished_at", "created_at"]:
                 print(f"{key:24} {job.get(key) or ''}")
             return 0
         if args.upload_command == "jobs":
@@ -513,6 +527,71 @@ def cmd_upload_modern(args) -> int:
                 [[j["id"], j.get("status"), j.get("stage"), j.get("title"), j.get("created_at")] for j in jobs],
             )
             return 0
+        if args.upload_command == "logs":
+            result = get_upload_job_logs(args.id, limit=args.limit, conn=conn)
+            logs = result.get("logs", [])
+            if not logs:
+                print(f"No hay logs para el job {args.id}.")
+                return 0
+            print(f"\n── Logs / Job {args.id} ({result['total']} entradas) ──────────")
+            for entry in logs:
+                ts = entry.get("created_at", "")[:19].replace("T", " ")
+                stream = entry.get("stream", "system")
+                level = entry.get("level", "info")
+                msg = entry.get("message", "")
+                print(f"[{ts}] [{stream}/{level}] {msg}")
+            return 0
+        if args.upload_command == "start":
+            do_apply = getattr(args, "up_apply", False)
+            confirmation = getattr(args, "up_confirm", None)
+            dry_run = not do_apply
+            result = start_upload_job(
+                args.id,
+                dry_run=dry_run,
+                start=do_apply,
+                confirmation=confirmation,
+                conn=conn,
+            )
+            action = result.get("action", "unknown")
+            if dry_run or action == "dry_run":
+                print(f"\n── Uploadrr / Start dry-run ─────────────────────────────")
+                print(f"\nJob:\n  {args.id}")
+                print(f"\nEstado:\n  {result.get('status', '–')}")
+                print(f"\nArchivo:\n  {result.get('command_preview', '–')}")
+                print(f"\nComando previsto:\n  {result.get('command_preview', '–')}")
+                if result.get("warnings"):
+                    print("\nAvisos:")
+                    for w in result["warnings"]:
+                        print(f"  - {w}")
+                if result.get("errors"):
+                    print("\nErrores:")
+                    for e in result["errors"]:
+                        print(f"  ✗ {e}")
+                print(f"\nAcción:\n  {result.get('message', 'No se ha ejecutado Uploadrr.')}")
+                return 0 if result.get("valid", True) else 1
+            if action == "blocked":
+                print(f"\n── Uploadrr / Bloqueado ─────────────────────────────")
+                for e in result.get("errors", []):
+                    print(f"  ✗ {e}")
+                return 1
+            if action == "started":
+                print(f"\n── Uploadrr / Ejecución ─────────────────────────────")
+                print(f"\nJob:\n  {args.id}")
+                print(f"\nEstado:\n  {result.get('status', '–')}")
+                print(f"\nSeguridad:")
+                print(f"  ✓ Se usa archivo preparado." if result.get("using_prepared_path") else "  ⚠ Se usa el archivo original.")
+                print(f"  ✓ No se modifica Uploadrr/.")
+                print(f"  ✓ No se ejecuta mkvpropedit.")
+                print(f"  ✓ Secretos ocultos en logs.")
+                print(f"\nMensaje:\n  {result.get('message', '–')}")
+                print(f"\nUsa 'upload logs {args.id}' para seguir el progreso.")
+                return 0
+            return 1
+        if args.upload_command == "cancel":
+            result = cancel_upload_job(args.id, conn=conn)
+            mark = "✓" if result.get("ok") else "✗"
+            print(f"{mark} {result.get('message', '')}")
+            return 0 if result.get("ok") else 1
     return 1
 
 

@@ -11,7 +11,7 @@ from .constants import CONFIG_DIR
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 def db_path() -> Path:
@@ -141,6 +141,35 @@ def _migrate_upload_jobs(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE upload_jobs ADD COLUMN {col} {col_def}")
         except sqlite3.OperationalError:
             pass
+
+
+def _migrate_upload_jobs_phase6c(conn: sqlite3.Connection) -> None:
+    """Add Phase 6C columns to upload_jobs."""
+    new_cols = [
+        ("exit_code", "INTEGER"),
+        ("process_id", "INTEGER"),
+    ]
+    for col, col_def in new_cols:
+        try:
+            conn.execute(f"ALTER TABLE upload_jobs ADD COLUMN {col} {col_def}")
+        except sqlite3.OperationalError:
+            pass
+
+
+def _migrate_upload_job_logs(conn: sqlite3.Connection) -> None:
+    """Create upload_job_logs table (Phase 6C)."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS upload_job_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            upload_job_id INTEGER NOT NULL,
+            level TEXT NOT NULL,
+            message TEXT NOT NULL,
+            stream TEXT,
+            created_at TEXT NOT NULL,
+            raw_json TEXT,
+            FOREIGN KEY (upload_job_id) REFERENCES upload_jobs(id)
+        )
+    """)
 
 
 def _migrate_requests(conn: sqlite3.Connection) -> None:
@@ -318,6 +347,8 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_requests(conn)
         _migrate_nomenclature(conn)
         _migrate_upload_jobs(conn)
+        _migrate_upload_jobs_phase6c(conn)
+        _migrate_upload_job_logs(conn)
         _migrate_filesystem_operations(conn)
         _migrate_library_items_phase6b(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))

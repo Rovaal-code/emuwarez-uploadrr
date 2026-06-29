@@ -147,6 +147,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_req_endpoint = req_sub.add_parser("set-endpoint", help="Guardar endpoint de lectura de peticiones EMU")
     p_req_endpoint.add_argument("url")
     req_sub.add_parser("match", help="Recalcular cruces petición/biblioteca")
+    p_req_reviewed = req_sub.add_parser("mark-reviewed", help="Marcar petición como revisada")
+    p_req_reviewed.add_argument("id", type=int)
     p_req_create = req_sub.add_parser("create", help="Preparado para futuro: crear petición EMU")
     p_req_create.add_argument("library_id", type=int)
     p_req_create.add_argument("--dry-run", action="store_true")
@@ -295,12 +297,18 @@ def cmd_requests(args) -> int:
             print("✓ Endpoint de peticiones guardado")
             return 0
         if args.requests_command == "sync":
-            result = request_service.sync_requests(conn, endpoint_url=args.endpoint_url, force=args.force)
+            ep = getattr(args, "endpoint_url", None)
+            if ep:
+                result = request_service.sync_requests(conn, endpoint_url=ep, force=args.force)
+            else:
+                result = request_service.sync_emu_requests(conn, force=args.force)
             if result.get("status") == "throttled":
                 wait = int(result["wait_seconds"])
                 print(f"⚠ Peticiones actualizadas hace menos de una hora. Disponible en {wait // 60} min {wait % 60} s.")
                 return 0
-            print(f"✓ Peticiones sincronizadas: {result['imported']}")
+            imported = result.get("imported", 0)
+            matched = result.get("matched", 0)
+            print(f"✓ Peticiones sincronizadas: {imported} importadas, {matched} cruces")
             return 0
         if args.requests_command == "list":
             rows = request_service.list_requests(conn, limit=args.limit, search=args.search)
@@ -327,9 +335,16 @@ def cmd_requests(args) -> int:
                         print(f"  - {line}")
             return 0
         if args.requests_command == "match":
-            count = request_service.match_requests(conn)
+            count = request_service.match_all_requests(conn)
             print(f"✓ Cruces recalculados: {count}")
             return 0
+        if args.requests_command == "mark-reviewed":
+            found = request_service.mark_request_reviewed(conn, args.id)
+            if found:
+                print(f"✓ Petición {args.id} marcada como revisada")
+            else:
+                print(f"✗ Petición {args.id} no encontrada")
+            return 0 if found else 1
         if args.requests_command == "create":
             print("⚠ Crear peticiones EMU está preparado, pero no activado todavía.")
             print("  Falta capturar la request real desde DevTools > Network en eMuwarez.")

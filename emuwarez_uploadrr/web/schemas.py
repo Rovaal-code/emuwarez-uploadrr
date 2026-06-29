@@ -305,6 +305,11 @@ class DashboardSummaryResponse(BaseModel):
     radarr_items: int = 0
     sonarr_items: int = 0
     last_sync_at: Optional[str] = None
+    # Phase 5B — EMU request stats (optional, default 0 if not yet synced)
+    requests_total: int = 0
+    requests_compatible: int = 0
+    requests_filled: int = 0
+    requests_last_sync_at: Optional[str] = None
 
 
 class DashboardActivityItem(BaseModel):
@@ -373,6 +378,83 @@ class MissingListResponse(BaseModel):
     total: int = 0
     limit: int = 50
     offset: int = 0
+
+
+# ---------------------------------------------------------------------------
+# Requests (Phase 5B)
+# ---------------------------------------------------------------------------
+
+class RequestMatchResponse(BaseModel):
+    id: int
+    library_item_id: Optional[int] = None
+    library_title: Optional[str] = None
+    local_status: Optional[str] = None
+    local_resolution: Optional[str] = None
+    local_source: Optional[str] = None
+    local_path: Optional[str] = None
+    nomenclature_status: Optional[str] = None
+    status: str
+    confidence: float
+    resolution_match: Optional[bool] = None
+    source_match: Optional[bool] = None
+    id_match: bool = False
+    reasons: list[str] = []
+
+
+class RequestItemResponse(BaseModel):
+    id: int
+    emu_id: str
+    title: str
+    category: Optional[str] = None
+    requested_source: Optional[str] = None
+    requested_resolution: Optional[str] = None
+    emu_status: Optional[str] = None
+    points: Optional[int] = None
+    comments: Optional[int] = None
+    created_at: Optional[str] = None
+    tmdb_id: Optional[str] = None
+    imdb_id: Optional[str] = None
+    url: Optional[str] = None
+    # author omitted — author_visible=0 by default
+    compatibility_status: Optional[str] = None
+    compatibility_confidence: Optional[float] = None
+    library_item_id: Optional[int] = None
+    library_title: Optional[str] = None
+    local_status: Optional[str] = None
+    reviewed_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class RequestDetailResponse(RequestItemResponse):
+    match: Optional[RequestMatchResponse] = None
+
+
+class RequestListResponse(BaseModel):
+    items: list[RequestItemResponse] = []
+    total: int = 0
+    limit: int = 50
+    offset: int = 0
+
+
+class RequestSyncStatusResponse(BaseModel):
+    last_sync_at: Optional[str] = None
+    next_sync_at: Optional[str] = None
+    can_sync: bool = True
+    wait_seconds: int = 0
+    min_interval_seconds: int = 3600
+
+
+class RequestSyncResponse(BaseModel):
+    ok: bool = True
+    status: str = "ok"
+    imported: int = 0
+    matched: int = 0
+    wait_seconds: int = 0
+    message: str = ""
+
+
+class RequestSyncBody(BaseModel):
+    force: bool = False
 
 
 # ---------------------------------------------------------------------------

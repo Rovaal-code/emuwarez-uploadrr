@@ -1,8 +1,7 @@
 """eMuwarez API connector.
 
-Only the validated API test endpoint is known for now.  Request listing and
-request creation are deliberately configurable/stubbed because the real HTTP
-request must be captured from eMuwarez before enabling it safely.
+eMuwarez runs on the UNIT3D platform (https://emuwarez.com).
+UNIT3D API authentication uses ?api_token=<key> as a query parameter.
 """
 from __future__ import annotations
 
@@ -11,10 +10,96 @@ import os
 import re
 from typing import Any, Iterable
 
-from .base import IntegrationError, request_json
+from .base import IntegrationError, build_url, request_json
 from ..legacy import EMU_TEST_URL
 from ..models import RequestItem
 
+EMU_BASE_URL = "https://emuwarez.com"
+
+
+# ---------------------------------------------------------------------------
+# UNIT3D-pattern functions (primary, api_token query param)
+# ---------------------------------------------------------------------------
+
+def emu_test_connection(api_key: str, base_url: str | None = None) -> dict[str, Any]:
+    """Test connectivity to eMuwarez using UNIT3D ?api_token= auth."""
+    base = (base_url or EMU_BASE_URL).rstrip("/")
+    url = build_url(base, "/api/torrents/filter", {"api_token": api_key, "perPage": "1"})
+    return request_json("GET", url)
+
+
+def emu_get_requests(
+    api_key: str,
+    base_url: str | None = None,
+    page: int = 1,
+    per_page: int = 100,
+) -> dict[str, Any]:
+    """Fetch paginated EMU request list (bounties / want list) via UNIT3D API.
+
+    Returns the full response dict — caller checks data[], meta.last_page, etc.
+    """
+    base = (base_url or EMU_BASE_URL).rstrip("/")
+    url = build_url(
+        base,
+        "/api/requests",
+        {"api_token": api_key, "page": str(page), "perPage": str(per_page)},
+    )
+    return request_json("GET", url)
+
+
+def emu_get_request_detail(
+    api_key: str,
+    request_id: int,
+    base_url: str | None = None,
+) -> dict[str, Any]:
+    """Fetch detail for a single EMU request by ID."""
+    base = (base_url or EMU_BASE_URL).rstrip("/")
+    url = build_url(base, f"/api/requests/{request_id}", {"api_token": api_key})
+    return request_json("GET", url)
+
+
+def emu_search_existing(
+    api_key: str,
+    query: str,
+    base_url: str | None = None,
+) -> dict[str, Any]:
+    """Search for existing torrents on eMuwarez matching a title query."""
+    base = (base_url or EMU_BASE_URL).rstrip("/")
+    url = build_url(
+        base,
+        "/api/torrents/filter",
+        {"api_token": api_key, "name": query, "perPage": "25"},
+    )
+    return request_json("GET", url)
+
+
+def emu_fetch_all_pages(api_key: str, base_url: str | None = None) -> list[dict[str, Any]]:
+    """Fetch all pages from the EMU requests endpoint and return flat list of raw items."""
+    all_items: list[dict[str, Any]] = []
+    page = 1
+    while True:
+        data = emu_get_requests(api_key, base_url=base_url, page=page, per_page=100)
+        if isinstance(data, list):
+            all_items.extend(data)
+            break
+        if not isinstance(data, dict):
+            break
+        page_items = data.get("data", [])
+        if not isinstance(page_items, list) or not page_items:
+            break
+        all_items.extend(page_items)
+        meta = data.get("meta", {})
+        current_page = int(meta.get("current_page", page))
+        last_page = int(meta.get("last_page", 1))
+        if current_page >= last_page:
+            break
+        page += 1
+    return all_items
+
+
+# ---------------------------------------------------------------------------
+# Legacy Bearer-header functions (kept for backward compatibility)
+# ---------------------------------------------------------------------------
 
 def test_connection(api_key: str) -> dict[str, Any]:
     headers = {"Authorization": f"Bearer {api_key}", "Accept": "application/json"}
@@ -47,6 +132,10 @@ def create_request(*_: Any, **__: Any) -> None:
     )
 
 
+# ---------------------------------------------------------------------------
+# Normalization helpers
+# ---------------------------------------------------------------------------
+
 def _first(data: dict[str, Any], *keys: str) -> Any:
     for key in keys:
         if key in data and data[key] not in (None, ""):
@@ -70,28 +159,53 @@ def _extract_imdb(value: Any) -> str | None:
     return match.group(0) if match else None
 
 
+def _flatten_unit3d(raw: dict[str, Any]) -> dict[str, Any]:
+    """If raw has nested UNIT3D 'attributes', merge them into a flat dict."""
+    if "attributes" not in raw:
+        return raw
+    flat = dict(raw)
+    attrs = raw["attributes"]
+    if isinstance(attrs, dict):
+        flat.update(attrs)
+    links = raw.get("links", {})
+    if isinstance(links, dict) and "self" in links and not flat.get("url"):
+        flat["url"] = links["self"]
+    return flat
+
+
 def normalize_request(raw: dict[str, Any]) -> RequestItem:
-    emu_id = str(_first(raw, "id", "request_id", "requestId", "uuid") or _first(raw, "url", "link") or hash(json.dumps(raw, sort_keys=True)))
-    title = str(_first(raw, "name", "title", "movie_title", "series_title") or "Sin título")
-    tmdb_id = _extract_id(_first(raw, "tmdb_id", "tmdbId", "tmdb", "tmdb_url", "tmdbUrl"))
-    imdb_id = _extract_imdb(_first(raw, "imdb_id", "imdbId", "imdb", "imdb_url", "imdbUrl"))
-    points = _first(raw, "points", "bonus", "bounty", "reward")
-    comments = _first(raw, "comments", "comment_count", "commentsCount")
+    flat = _flatten_unit3d(raw)
+    emu_id = str(
+        _first(flat, "id", "request_id", "requestId", "uuid")
+        or _first(flat, "url", "link")
+        or hash(json.dumps(raw, sort_keys=True))
+    )
+    title = str(_first(flat, "name", "title", "movie_title", "series_title") or "Sin título")
+    tmdb_id = _extract_id(_first(flat, "tmdb_id", "tmdbId", "tmdb", "tmdb_url", "tmdbUrl", "tmdb"))
+    imdb_id = _extract_imdb(_first(flat, "imdb_id", "imdbId", "imdb", "imdb_url", "imdbUrl", "imdb"))
+    points = _first(flat, "points", "bonus", "bounty", "reward")
+    comments = _first(flat, "comments", "comment_count", "commentsCount")
+    url = _first(flat, "url", "link", "request_url") or (
+        f"{EMU_BASE_URL}/requests/{emu_id}" if emu_id.isdigit() else None
+    )
+    # anon=true means author should stay hidden
+    anon = flat.get("anon", True)
+    author = _first(flat, "user", "username", "author") if not anon else None
     return RequestItem(
         id=None,
         emu_id=emu_id,
         title=title,
-        category=_first(raw, "category", "category_name", "cat"),
-        requested_source=_first(raw, "type", "source", "requested_source", "quality_type"),
-        requested_resolution=_first(raw, "resolution", "requested_resolution"),
-        emu_status=_first(raw, "status", "request_status", "filled", "filled_status"),
+        category=_first(flat, "category", "category_name", "cat"),
+        requested_source=_first(flat, "type", "source", "requested_source", "quality_type"),
+        requested_resolution=_first(flat, "resolution", "requested_resolution"),
+        emu_status=_first(flat, "status", "request_status", "filled", "filled_status"),
         points=int(points) if str(points).isdigit() else None,
         comments=int(comments) if str(comments).isdigit() else None,
-        created_at=_first(raw, "created_at", "createdAt", "date", "created"),
+        created_at=_first(flat, "created_at", "createdAt", "date", "created"),
         tmdb_id=tmdb_id,
         imdb_id=imdb_id,
-        url=_first(raw, "url", "link", "request_url"),
-        author=_first(raw, "author", "user", "username"),
+        url=url,
+        author=author,
         author_visible=False,
         raw_json=json.dumps(raw, ensure_ascii=False),
     )

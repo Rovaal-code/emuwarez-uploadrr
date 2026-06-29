@@ -74,29 +74,7 @@ def library_adapt_nomenclature(item_id: int, current_user: dict = Depends(requir
 def library_upload(item_id: int, current_user: dict = Depends(require_auth)) -> JSONResponse:
     return _stub(f"POST /api/library/{item_id}/upload", "phase-8")
 
-# ---------------------------------------------------------------------------
-# Requests — protected
-# ---------------------------------------------------------------------------
-
-@router.get("/requests")
-def requests_list(current_user: dict = Depends(require_auth)) -> JSONResponse:
-    return _stub("/api/requests", "phase-5")
-
-@router.post("/requests/sync")
-def requests_sync(current_user: dict = Depends(require_auth)) -> JSONResponse:
-    return _stub("POST /api/requests/sync", "phase-5")
-
-@router.get("/requests/{request_id}")
-def requests_detail(request_id: int, current_user: dict = Depends(require_auth)) -> JSONResponse:
-    return _stub(f"/api/requests/{request_id}", "phase-5")
-
-@router.post("/requests/{request_id}/match")
-def requests_match(request_id: int, current_user: dict = Depends(require_auth)) -> JSONResponse:
-    return _stub(f"POST /api/requests/{request_id}/match", "phase-6")
-
-@router.post("/requests/{request_id}/mark-reviewed")
-def requests_mark_reviewed(request_id: int, current_user: dict = Depends(require_auth)) -> JSONResponse:
-    return _stub(f"POST /api/requests/{request_id}/mark-reviewed", "phase-7")
+# Requests endpoints moved to web/api/requests.py (Phase 5B — real implementation)
 
 # ---------------------------------------------------------------------------
 # Uploads — protected

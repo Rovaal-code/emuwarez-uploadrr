@@ -45,6 +45,18 @@ def _migrate_instances(conn: sqlite3.Connection) -> None:
             pass  # column already exists
 
 
+def _migrate_requests(conn: sqlite3.Connection) -> None:
+    """Add Phase 5B columns to request_items and request_matches."""
+    for col, col_def in [
+        ("reviewed_at", "TEXT"),
+        ("last_sync_at", "TEXT"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE request_items ADD COLUMN {col} {col_def}")
+        except sqlite3.OperationalError:
+            pass
+
+
 def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
     own = conn is None
     conn = conn or connect()
@@ -205,6 +217,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
             """
         )
         _migrate_instances(conn)
+        _migrate_requests(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

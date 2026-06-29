@@ -64,25 +64,53 @@ Contiene tablas para:
 - `upload_jobs`
 - `app_state`
 
-## Peticiones EMU
+## Peticiones eMuwarez y compatibilidad
 
-El límite manual queda preparado a 1 vez por hora. Si intentas refrescar antes:
+eMuwarez usa la plataforma UNIT3D. Las peticiones (bounties/want list) se leen directamente:
+
+```bash
+python3 emuwarez_uploader.py requests sync             # sincronizar (máx 1 vez/hora)
+python3 emuwarez_uploader.py requests sync --force     # forzar sin límite de tiempo
+python3 emuwarez_uploader.py requests list             # listar peticiones
+python3 emuwarez_uploader.py requests list --search "título"
+python3 emuwarez_uploader.py requests show 42          # detalle + cruce con biblioteca
+python3 emuwarez_uploader.py requests match            # recalcular todos los cruces
+python3 emuwarez_uploader.py requests mark-reviewed 42 # marcar petición como revisada
+```
+
+El límite mínimo entre syncs es **1 hora**. Si intentas antes:
 
 ```text
 Peticiones actualizadas hace menos de una hora. Disponible en X min.
 ```
 
-La lectura real de peticiones EMU necesita capturar el endpoint. Mientras tanto puedes guardarlo cuando lo tengas:
+### Motor de compatibilidad
 
-```bash
-python3 emuwarez_uploader.py requests set-endpoint "https://..."
+Cada petición EMU se cruza automáticamente con la biblioteca local:
+
+| Estado | Condición |
+|--------|-----------|
+| Compatible | Resolución y source locales ≥ lo pedido (o sin restricción) |
+| Parcial | Solo uno de los dos criterios no cumple |
+| No compatible | Ambos criterios fallan |
+| Llena | La petición ya está satisfecha en eMuwarez |
+| Sin coincidencia | Ningún ítem local coincide con la petición |
+
+Prioridad de cruce: TMDb ID → IMDb ID → Título exacto → Similitud por palabras.
+
+### API web de peticiones
+
+```
+GET  /api/requests                       — lista paginada + estado de compatibilidad
+GET  /api/requests/sync-status           — estado de la última sync
+POST /api/requests/sync                  — sincronizar ({ force: bool })
+GET  /api/requests/{id}                  — detalle + mejor cruce con biblioteca
+POST /api/requests/{id}/match            — re-cruzar una petición concreta
+POST /api/requests/{id}/mark-reviewed    — marcar como revisada
+POST /api/missing/{id}/create-emu-request — BLOQUEADO (stub seguro)
 ```
 
-O usar variable de entorno:
-
-```bash
-EMUWAREZ_REQUESTS_URL="https://..." python3 emuwarez_uploader.py requests sync
-```
+El endpoint `create-emu-request` permanece bloqueado hasta capturar y validar el POST real desde DevTools → Network.
 
 ## Pruebas recomendadas
 
@@ -158,7 +186,7 @@ Dashboard      — tarjetas resumen + actividad reciente (datos reales de /api/d
 Biblioteca     — tabla filtrable y paginada desde /api/library
 Faltantes      — tabla desde /api/missing con estados de cola
 Instancias     — gestión con test y sync por instancia
-Peticiones     — placeholder profesional (pendiente endpoint EMU real)
+Peticiones     — tabla real con motor de compatibilidad, filtros y panel lateral de detalle
 Subidas/Tareas/Logs/Configuración — placeholders preparados
 ```
 
@@ -268,10 +296,20 @@ Implementado:
 - Comandos CLI: `web setup-status`, `web create-admin`.
 - Suite de tests completa: 140 tests (web_app, setup_auth, arr_integrations, library_sync, dashboard_library_api).
 
+Implementado en Fase 5B:
+
+- Motor de compatibilidad (`services/compatibility.py`): normalización, cruce por TMDb/IMDb/título, clasificación Compatible/Parcial/No compatible/Llena.
+- Cliente UNIT3D para eMuwarez: `emu_get_requests`, `emu_fetch_all_pages` con paginación automática, auth `?api_token=`.
+- Endpoints reales: `GET /api/requests`, `POST /api/requests/sync`, detalle, re-cruce, marcar revisada.
+- Pantalla Peticiones real en frontend con filtros, badges de compatibilidad y panel lateral.
+- CLI: `requests mark-reviewed <id>`.
+- Rate limit 1 hora con `--force` override.
+- Dashboard summary enriquecido con estadísticas EMU.
+
 Pendiente para fases posteriores:
 
-- Capturar endpoint real de peticiones EMU.
-- Crear peticiones EMU desde la app.
-- Mejorar cruce por detalle TMDb/IMDb de la petición.
-- Frontend React.
+- Crear peticiones EMU desde la app (requiere capturar POST real desde DevTools).
 - Docker.
+- SettingsPage con formularios de configuración real.
+- TasksPage con datos reales.
+- UploadsPage con flujo de subida.

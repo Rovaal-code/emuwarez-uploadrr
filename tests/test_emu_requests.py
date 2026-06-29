@@ -1,0 +1,225 @@
+"""Tests for emuwarez_uploadrr/integrations/emu.py — Phase 5B."""
+from __future__ import annotations
+
+import json
+import pytest
+
+from emuwarez_uploadrr.integrations import emu
+from emuwarez_uploadrr.integrations.emu import (
+    normalize_request,
+    normalize_requests,
+    _flatten_unit3d,
+    EMU_BASE_URL,
+)
+from emuwarez_uploadrr.models import RequestItem
+
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+def test_emu_base_url():
+    assert EMU_BASE_URL == "https://emuwarez.com"
+
+
+# ---------------------------------------------------------------------------
+# _flatten_unit3d
+# ---------------------------------------------------------------------------
+
+def test_flatten_unit3d_flat_passthrough():
+    raw = {"id": "1", "title": "Movie"}
+    assert _flatten_unit3d(raw) == raw
+
+
+def test_flatten_unit3d_nested():
+    raw = {
+        "id": 5,
+        "type": "requests",
+        "attributes": {
+            "name": "A Movie",
+            "resolution": "1080p",
+            "tmdb": "12345",
+            "anon": True,
+        },
+        "links": {"self": "https://emuwarez.com/requests/5"},
+    }
+    flat = _flatten_unit3d(raw)
+    assert flat["name"] == "A Movie"
+    assert flat["resolution"] == "1080p"
+    assert flat["tmdb"] == "12345"
+    assert flat["url"] == "https://emuwarez.com/requests/5"
+
+
+def test_flatten_unit3d_existing_url_preserved():
+    raw = {
+        "id": 1,
+        "url": "https://emuwarez.com/requests/1",
+        "attributes": {"name": "Foo"},
+        "links": {"self": "https://emuwarez.com/api/requests/1"},
+    }
+    flat = _flatten_unit3d(raw)
+    assert flat["url"] == "https://emuwarez.com/requests/1"
+
+
+# ---------------------------------------------------------------------------
+# normalize_request
+# ---------------------------------------------------------------------------
+
+def test_normalize_request_flat():
+    raw = {
+        "id": "42",
+        "title": "Some Movie",
+        "category": "Movies",
+        "type": "BluRay",
+        "resolution": "1080p",
+        "tmdb_id": "12345",
+        "imdb_id": "tt0000001",
+        "bounty": "500",
+        "comments": "3",
+        "filled": False,
+        "created_at": "2024-01-01T00:00:00Z",
+        "url": "https://emuwarez.com/requests/42",
+        "anon": True,
+    }
+    item = normalize_request(raw)
+    assert isinstance(item, RequestItem)
+    assert item.emu_id == "42"
+    assert item.title == "Some Movie"
+    assert item.category == "Movies"
+    assert item.requested_source == "BluRay"
+    assert item.requested_resolution == "1080p"
+    assert item.tmdb_id == "12345"
+    assert item.imdb_id == "tt0000001"
+    assert item.points == 500
+    assert item.comments == 3
+    assert item.url == "https://emuwarez.com/requests/42"
+    assert item.author is None  # anon=True
+    assert item.author_visible is False
+
+
+def test_normalize_request_unit3d_nested():
+    raw = {
+        "id": 7,
+        "type": "requests",
+        "attributes": {
+            "name": "Película de Prueba",
+            "resolution": "720p",
+            "type": "WEB-DL",
+            "tmdb": "99999",
+            "imdb": "tt1234567",
+            "bounty": 100,
+            "comments": 0,
+            "filled": False,
+            "anon": False,
+            "username": "usuario_emu",
+            "created_at": "2025-06-01T12:00:00Z",
+        },
+        "links": {"self": "https://emuwarez.com/requests/7"},
+    }
+    item = normalize_request(raw)
+    assert item.emu_id == "7"
+    assert item.title == "Película de Prueba"
+    assert item.requested_resolution == "720p"
+    assert item.requested_source == "WEB-DL"
+    assert item.tmdb_id == "99999"
+    assert item.imdb_id == "tt1234567"
+    assert item.url == "https://emuwarez.com/requests/7"
+    # anon=False, so author should be set
+    assert item.author == "usuario_emu"
+    assert item.author_visible is False  # always hidden by default
+
+
+def test_normalize_request_imdb_extraction():
+    raw = {"id": "1", "title": "Test", "imdb_url": "https://imdb.com/title/tt9876543/"}
+    item = normalize_request(raw)
+    assert item.imdb_id == "tt9876543"
+
+
+def test_normalize_request_auto_url():
+    raw = {"id": "15", "title": "Test Movie"}
+    item = normalize_request(raw)
+    assert item.url == f"{EMU_BASE_URL}/requests/15"
+
+
+def test_normalize_request_missing_title():
+    raw = {"id": "3"}
+    item = normalize_request(raw)
+    assert item.title == "Sin título"
+
+
+def test_normalize_request_raw_json_stored():
+    raw = {"id": "1", "title": "Movie", "extra_field": "value"}
+    item = normalize_request(raw)
+    stored = json.loads(item.raw_json)
+    assert stored["extra_field"] == "value"
+
+
+# ---------------------------------------------------------------------------
+# normalize_requests
+# ---------------------------------------------------------------------------
+
+def test_normalize_requests_filters_non_dicts():
+    raw = [
+        {"id": "1", "title": "Movie 1"},
+        "not a dict",
+        None,
+        {"id": "2", "title": "Movie 2"},
+    ]
+    items = normalize_requests(raw)
+    assert len(items) == 2
+    assert items[0].title == "Movie 1"
+    assert items[1].title == "Movie 2"
+
+
+def test_normalize_requests_empty():
+    assert normalize_requests([]) == []
+
+
+# ---------------------------------------------------------------------------
+# emu_fetch_all_pages (with monkeypatched emu_get_requests)
+# ---------------------------------------------------------------------------
+
+def test_emu_fetch_all_pages_single(monkeypatch):
+    page_data = {
+        "data": [{"id": 1, "title": "M1"}, {"id": 2, "title": "M2"}],
+        "meta": {"current_page": 1, "last_page": 1, "total": 2},
+    }
+    monkeypatch.setattr(emu, "emu_get_requests", lambda api_key, base_url=None, page=1, per_page=100: page_data)
+    items = emu.emu_fetch_all_pages("test-key")
+    assert len(items) == 2
+    assert items[0]["id"] == 1
+
+
+def test_emu_fetch_all_pages_multi(monkeypatch):
+    def fake_get(api_key, base_url=None, page=1, per_page=100):
+        pages = {
+            1: {"data": [{"id": 1}], "meta": {"current_page": 1, "last_page": 2}},
+            2: {"data": [{"id": 2}], "meta": {"current_page": 2, "last_page": 2}},
+        }
+        return pages.get(page, {"data": [], "meta": {"current_page": page, "last_page": 2}})
+    monkeypatch.setattr(emu, "emu_get_requests", fake_get)
+    items = emu.emu_fetch_all_pages("test-key")
+    assert len(items) == 2
+    assert {i["id"] for i in items} == {1, 2}
+
+
+def test_emu_fetch_all_pages_list_response(monkeypatch):
+    monkeypatch.setattr(emu, "emu_get_requests", lambda *a, **kw: [{"id": 1}, {"id": 2}])
+    items = emu.emu_fetch_all_pages("test-key")
+    assert len(items) == 2
+
+
+def test_emu_fetch_all_pages_empty(monkeypatch):
+    monkeypatch.setattr(emu, "emu_get_requests", lambda *a, **kw: {"data": [], "meta": {"current_page": 1, "last_page": 1}})
+    items = emu.emu_fetch_all_pages("test-key")
+    assert items == []
+
+
+# ---------------------------------------------------------------------------
+# create_request (should always raise)
+# ---------------------------------------------------------------------------
+
+def test_create_request_blocked():
+    from emuwarez_uploadrr.integrations.base import IntegrationError
+    with pytest.raises(IntegrationError):
+        emu.create_request(title="Test")

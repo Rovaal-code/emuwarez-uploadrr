@@ -22,6 +22,28 @@ def dashboard_summary(current_user: dict = Depends(require_auth)) -> DashboardSu
     from emuwarez_uploadrr.services.library import get_dashboard_summary
     with _get_conn() as conn:
         summary = get_dashboard_summary(conn)
+        try:
+            row = conn.execute(
+                """
+                SELECT
+                    COUNT(*) AS total,
+                    SUM(CASE WHEN LOWER(COALESCE(emu_status,'')) IN ('filled','llena','1') THEN 1 ELSE 0 END) AS filled
+                FROM request_items
+                """
+            ).fetchone()
+            summary["requests_total"] = int(row["total"] or 0) if row else 0
+            summary["requests_filled"] = int(row["filled"] or 0) if row else 0
+            compatible_row = conn.execute(
+                "SELECT COUNT(*) AS cnt FROM request_matches WHERE status = 'Compatible'"
+            ).fetchone()
+            summary["requests_compatible"] = int(compatible_row["cnt"] or 0) if compatible_row else 0
+            from emuwarez_uploadrr.database import get_state
+            summary["requests_last_sync_at"] = get_state(conn, "last_emu_requests_sync_utc")
+        except Exception:
+            summary.setdefault("requests_total", 0)
+            summary.setdefault("requests_filled", 0)
+            summary.setdefault("requests_compatible", 0)
+            summary.setdefault("requests_last_sync_at", None)
     return DashboardSummaryResponse(**summary)
 
 

@@ -1,4 +1,4 @@
-"""Real dashboard endpoints (Phase 4)."""
+"""Real dashboard endpoints (Phase 4 / Phase 6D)."""
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
@@ -8,6 +8,40 @@ from ..runtime import _db_path
 from ..schemas import DashboardActivityItem, DashboardActivityResponse, DashboardSummaryResponse
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+
+
+def _get_upload_counts(conn) -> dict:
+    """Return upload job status counts for the dashboard summary."""
+    try:
+        rows = conn.execute(
+            """
+            SELECT status, COUNT(*) AS cnt FROM upload_jobs GROUP BY status
+            """
+        ).fetchall()
+        counts: dict[str, int] = {}
+        for row in rows:
+            counts[row["status"]] = int(row["cnt"] or 0)
+
+        last_row = conn.execute(
+            "SELECT MAX(updated_at) AS last_at FROM upload_jobs"
+        ).fetchone()
+        last_at = last_row["last_at"] if last_row else None
+
+        return {
+            "uploads_ready": counts.get("ready", 0),
+            "uploads_running": counts.get("running", 0),
+            "uploads_completed": counts.get("completed", 0),
+            "uploads_failed": counts.get("failed", 0),
+            "last_upload_at": last_at,
+        }
+    except Exception:
+        return {
+            "uploads_ready": 0,
+            "uploads_running": 0,
+            "uploads_completed": 0,
+            "uploads_failed": 0,
+            "last_upload_at": None,
+        }
 
 
 def _get_conn():
@@ -44,6 +78,11 @@ def dashboard_summary(current_user: dict = Depends(require_auth)) -> DashboardSu
             summary.setdefault("requests_filled", 0)
             summary.setdefault("requests_compatible", 0)
             summary.setdefault("requests_last_sync_at", None)
+
+        # Phase 6D: upload counts
+        upload_counts = _get_upload_counts(conn)
+        summary.update(upload_counts)
+
     return DashboardSummaryResponse(**summary)
 
 

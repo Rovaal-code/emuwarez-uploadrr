@@ -186,7 +186,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_up_preflight.add_argument("--request-id", type=int, default=None, help="ID opcional de request_item vinculada")
     p_up_job = up_sub.add_parser("job", help="Ver detalle de un upload job/preflight")
     p_up_job.add_argument("id", type=int, help="ID del upload job")
-    up_sub.add_parser("jobs", help="Listar upload jobs/preflights")
+    p_up_jobs = up_sub.add_parser("jobs", help="Listar upload jobs/preflights")
+    p_up_jobs.add_argument("--status", default=None, help="Filtrar por estado (ready, running, completed, failed, cancelled)")
     p_up_logs = up_sub.add_parser("logs", help="Ver logs de un upload job")
     p_up_logs.add_argument("id", type=int, help="ID del upload job")
     p_up_logs.add_argument("--limit", type=int, default=200, help="Número máximo de entradas")
@@ -197,6 +198,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_up_start.add_argument("--confirm", metavar="TOKEN", dest="up_confirm", help=f"Token de confirmación: INICIAR_UPLOADRR")
     p_up_cancel = up_sub.add_parser("cancel", help="Cancelar un upload job en ejecución")
     p_up_cancel.add_argument("id", type=int, help="ID del upload job")
+    p_up_artifacts = up_sub.add_parser("artifacts", help="Ver artefactos de un upload job")
+    p_up_artifacts.add_argument("id", type=int, help="ID del upload job")
+    p_up_retry = up_sub.add_parser("retry", help="Reintentar un upload job failed/cancelled")
+    p_up_retry.add_argument("id", type=int, help="ID del upload job original")
+    p_up_retry.add_argument("--dry-run", action="store_true", default=True, help="Solo previsualización (por defecto)")
+    p_up_retry.add_argument("--apply", action="store_true", dest="up_apply", help="Crear job nuevo y ejecutar")
+    p_up_retry.add_argument("--confirm", metavar="TOKEN", dest="up_confirm", help="Token: INICIAR_UPLOADRR")
 
     p_tasks = sub.add_parser("tasks", help="Tareas ejecutadas")
     tasks_sub = p_tasks.add_subparsers(dest="tasks_command", required=True)
@@ -482,7 +490,8 @@ def cmd_upload_modern(args) -> int:
     )
     from .services.upload_execution import (
         get_upload_job, list_upload_jobs, get_upload_job_logs,
-        start_upload_job, cancel_upload_job, CONFIRMATION_TOKEN,
+        get_upload_job_artifacts, start_upload_job, cancel_upload_job,
+        retry_upload_job, CONFIRMATION_TOKEN,
     )
     with _open_conn(args) as conn:
         if args.upload_command == "preflight":
@@ -509,24 +518,51 @@ def cmd_upload_modern(args) -> int:
                     print(f"  ✗ {e}")
             print("\nNota: No se ha ejecutado Uploadrr ni subido ningún archivo.")
             return 0
+
         if args.upload_command == "job":
             job = get_upload_job(args.id, conn=conn)
             if not job:
                 print(f"✗ Job {args.id} no encontrado")
                 return 1
-            for key in ["id", "library_item_id", "status", "stage", "title", "source_path", "prepared_path", "exit_code", "error_message", "started_at", "finished_at", "created_at"]:
-                print(f"{key:24} {job.get(key) or ''}")
+            fields = [
+                "id", "library_item_id", "status", "stage", "title",
+                "source_path", "prepared_path", "exit_code", "duration_seconds",
+                "result_url", "result_torrent_id", "error_message",
+                "retry_count", "retry_of_job_id",
+                "started_at", "finished_at", "created_at",
+            ]
+            for key in fields:
+                val = job.get(key)
+                if val is not None:
+                    print(f"{key:28} {val}")
             return 0
+
         if args.upload_command == "jobs":
-            jobs = list_upload_jobs(conn=conn)
+            status_filter = getattr(args, "status", None)
+            filters = {"limit": 200}
+            if status_filter:
+                filters["status"] = status_filter
+            jobs = list_upload_jobs(filters=filters, conn=conn)
             if not jobs:
-                print("No hay preflights de subida registrados.")
+                msg = f"No hay jobs con estado '{status_filter}'." if status_filter else "No hay preflights de subida registrados."
+                print(msg)
                 return 0
             _print_table(
-                ["ID", "Estado", "Etapa", "Título", "Creado"],
-                [[j["id"], j.get("status"), j.get("stage"), j.get("title"), j.get("created_at")] for j in jobs],
+                ["ID", "Estado", "Duración", "Exit", "Resultado", "Título"],
+                [
+                    [
+                        j["id"],
+                        j.get("status"),
+                        f"{j['duration_seconds']}s" if j.get("duration_seconds") is not None else "–",
+                        j.get("exit_code") if j.get("exit_code") is not None else "–",
+                        j.get("result_url", "")[:40] if j.get("result_url") else "–",
+                        j.get("title"),
+                    ]
+                    for j in jobs
+                ],
             )
             return 0
+
         if args.upload_command == "logs":
             result = get_upload_job_logs(args.id, limit=args.limit, conn=conn)
             logs = result.get("logs", [])
@@ -541,6 +577,26 @@ def cmd_upload_modern(args) -> int:
                 msg = entry.get("message", "")
                 print(f"[{ts}] [{stream}/{level}] {msg}")
             return 0
+
+        if args.upload_command == "artifacts":
+            artifacts = get_upload_job_artifacts(args.id, conn=conn)
+            if not artifacts:
+                print(f"No hay artefactos para el job {args.id}.")
+                return 0
+            print(f"\n── Artefactos / Job {args.id} ─────────────────────────")
+            for a in artifacts:
+                parts = [f"[{a['artifact_type']}]"]
+                if a.get("name"):
+                    parts.append(a["name"])
+                if a.get("url"):
+                    parts.append(f"url={a['url']}")
+                if a.get("path"):
+                    parts.append(f"path={a['path']}")
+                if a.get("value"):
+                    parts.append(f"value={a['value']}")
+                print("  " + "  ".join(parts))
+            return 0
+
         if args.upload_command == "start":
             do_apply = getattr(args, "up_apply", False)
             confirmation = getattr(args, "up_confirm", None)
@@ -557,7 +613,6 @@ def cmd_upload_modern(args) -> int:
                 print(f"\n── Uploadrr / Start dry-run ─────────────────────────────")
                 print(f"\nJob:\n  {args.id}")
                 print(f"\nEstado:\n  {result.get('status', '–')}")
-                print(f"\nArchivo:\n  {result.get('command_preview', '–')}")
                 print(f"\nComando previsto:\n  {result.get('command_preview', '–')}")
                 if result.get("warnings"):
                     print("\nAvisos:")
@@ -587,6 +642,40 @@ def cmd_upload_modern(args) -> int:
                 print(f"\nUsa 'upload logs {args.id}' para seguir el progreso.")
                 return 0
             return 1
+
+        if args.upload_command == "retry":
+            do_apply = getattr(args, "up_apply", False)
+            confirmation = getattr(args, "up_confirm", None)
+            dry_run = not do_apply
+            result = retry_upload_job(
+                args.id,
+                dry_run=dry_run,
+                start=do_apply,
+                confirmation=confirmation,
+            )
+            if dry_run or result.get("action") == "dry_run":
+                print(f"\n── Retry dry-run ────────────────────")
+                original = get_upload_job(args.id, conn=conn)
+                orig_status = original.get("status", "–") if original else "–"
+                print(f"Job original: {args.id} ({orig_status})")
+                print(f"Job nuevo (simulado): no creado")
+                print(f"Reintentos previstos: {result.get('retry_count_would_be', '–')}")
+                if result.get("command_preview"):
+                    print(f"Comando previsto: {result['command_preview']}")
+                print(f"No se ha ejecutado Uploadrr.")
+                return 0
+            if result.get("error") in ("blocked", "confirmation_required", "invalid_status", "not_found"):
+                print(f"✗ {result.get('message', 'Bloqueado.')}")
+                return 1
+            print(f"\n── Retry iniciado ────────────────────")
+            new_job_id = result.get("new_job_id", "–")
+            print(f"Job nuevo: {new_job_id}")
+            print(f"Reintento: {result.get('retry_count', '–')}")
+            print(f"Estado: {result.get('status', '–')}")
+            print(f"Mensaje: {result.get('message', '–')}")
+            print(f"\nUsa 'upload logs {new_job_id}' para seguir el progreso.")
+            return 0
+
         if args.upload_command == "cancel":
             result = cancel_upload_job(args.id, conn=conn)
             mark = "✓" if result.get("ok") else "✗"

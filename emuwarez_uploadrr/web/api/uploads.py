@@ -1,7 +1,7 @@
-"""API endpoints for upload jobs, preflight, and controlled execution (Phase 6A/6C)."""
+"""API endpoints for upload jobs, preflight, and controlled execution (Phase 6A/6C/6D)."""
 from __future__ import annotations
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ...database import connect, init_db
 from ...services.upload_preflight import (
@@ -13,19 +13,24 @@ from ...services.upload_execution import (
     get_upload_job as exec_get_job,
     list_upload_jobs as exec_list_jobs,
     get_upload_job_logs,
+    get_upload_job_artifacts,
     start_upload_job,
     cancel_upload_job,
+    retry_upload_job,
 )
 from ..dependencies import require_auth
 from ..runtime import _db_path
 from ..schemas import (
     CommandPreviewResponse,
+    UploadArtifact,
+    UploadArtifactsResponse,
     UploadJobDetail,
     UploadJobLog,
     UploadJobLogsResponse,
     UploadJobResponse,
     UploadPreflightBody,
     UploadPreflightResponse,
+    UploadRetryRequest,
     UploadStartRequest,
     UploadStartResult,
 )
@@ -75,6 +80,18 @@ def _job_to_detail(j: dict) -> UploadJobDetail:
         finished_at=j.get("finished_at"),
         created_at=j.get("created_at"),
         updated_at=j.get("updated_at"),
+        # Phase 6D
+        result_url=j.get("result_url"),
+        result_torrent_id=j.get("result_torrent_id"),
+        result_tracker=j.get("result_tracker"),
+        result_category=j.get("result_category"),
+        duration_seconds=j.get("duration_seconds"),
+        retry_count=j.get("retry_count") or 0,
+        retry_of_job_id=j.get("retry_of_job_id"),
+        safe_command_json=j.get("safe_command_json"),
+        last_success_at=j.get("last_success_at"),
+        last_error_at=j.get("last_error_at"),
+        last_log_at=j.get("last_log_at"),
     )
 
 
@@ -116,9 +133,25 @@ def upload_preflight(
 
 
 @router.get("/uploads", response_model=list[UploadJobDetail])
-def get_uploads(current_user: dict = Depends(require_auth)):
+def get_uploads(
+    status: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    search: str | None = Query(default=None),
+    library_item_id: int | None = Query(default=None),
+    request_item_id: int | None = Query(default=None),
+    current_user: dict = Depends(require_auth),
+):
+    filters = {
+        "status": status,
+        "limit": limit,
+        "offset": offset,
+        "search": search,
+        "library_item_id": library_item_id,
+        "request_item_id": request_item_id,
+    }
     with _get_conn() as conn:
-        jobs = exec_list_jobs(conn=conn)
+        jobs = exec_list_jobs(filters=filters, conn=conn)
     return [_job_to_detail(j) for j in jobs]
 
 
@@ -164,6 +197,32 @@ def get_upload_logs(
     )
 
 
+@router.get("/uploads/{job_id}/artifacts", response_model=UploadArtifactsResponse)
+def get_upload_artifacts(job_id: int, current_user: dict = Depends(require_auth)):
+    with _get_conn() as conn:
+        job = exec_get_job(job_id, conn=conn)
+        if not job:
+            raise HTTPException(status_code=404, detail="Job no encontrado.")
+        artifacts = get_upload_job_artifacts(job_id, conn=conn)
+
+    return UploadArtifactsResponse(
+        job_id=job_id,
+        artifacts=[
+            UploadArtifact(
+                id=a.get("id"),
+                upload_job_id=a["upload_job_id"],
+                artifact_type=a["artifact_type"],
+                name=a.get("name"),
+                path=a.get("path"),
+                url=a.get("url"),
+                value=a.get("value"),
+                created_at=a["created_at"],
+            )
+            for a in artifacts
+        ],
+    )
+
+
 @router.post("/uploads/{job_id}/start", response_model=UploadStartResult)
 def start_upload(
     job_id: int,
@@ -191,6 +250,42 @@ def start_upload(
 
     return UploadStartResult(
         job_id=job_id,
+        action=result.get("action", "unknown"),
+        status=result.get("status", "unknown"),
+        stage=result.get("stage"),
+        dry_run=result.get("dry_run", True),
+        command_preview=result.get("command_preview"),
+        message=result.get("message"),
+        error=result.get("error"),
+    )
+
+
+@router.post("/uploads/{job_id}/retry", response_model=UploadStartResult)
+def retry_upload(
+    job_id: int,
+    body: UploadRetryRequest,
+    current_user: dict = Depends(require_auth),
+):
+    result = retry_upload_job(
+        job_id,
+        dry_run=body.dry_run,
+        start=body.start,
+        confirmation=body.confirmation,
+    )
+
+    if result.get("error") in ("confirmation_required", "validation_failed", "blocked", "invalid_status", "not_found"):
+        status_code = 404 if result.get("error") == "not_found" else 400
+        raise HTTPException(
+            status_code=status_code,
+            detail={
+                "message": result.get("message") or "Bloqueado",
+                "error": result.get("error"),
+            },
+        )
+
+    new_job_id = result.get("new_job_id") or job_id
+    return UploadStartResult(
+        job_id=new_job_id,
         action=result.get("action", "unknown"),
         status=result.get("status", "unknown"),
         stage=result.get("stage"),

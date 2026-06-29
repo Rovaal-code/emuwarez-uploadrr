@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from ..database import connect, init_db, row_to_dict, rows_to_dicts
+from .upload_result_parser import classify_upload_result, build_error_summary
 
 CONFIRMATION_TOKEN = "INICIAR_UPLOADRR"
 
@@ -95,11 +96,41 @@ def get_upload_job(job_id: int, conn=None) -> dict | None:
 
 
 def list_upload_jobs(filters: dict | None = None, conn=None) -> list[dict]:
+    """List upload jobs with optional filters: status, limit, offset, search."""
     own = conn is None
     conn = conn or _get_db_conn()
     try:
+        filters = filters or {}
+        conditions = []
+        params: list[Any] = []
+
+        status = filters.get("status")
+        if status:
+            conditions.append("status = ?")
+            params.append(status)
+
+        search = filters.get("search")
+        if search:
+            conditions.append("title LIKE ?")
+            params.append(f"%{search}%")
+
+        library_item_id = filters.get("library_item_id")
+        if library_item_id is not None:
+            conditions.append("library_item_id = ?")
+            params.append(library_item_id)
+
+        request_item_id = filters.get("request_item_id")
+        if request_item_id is not None:
+            conditions.append("request_item_id = ?")
+            params.append(request_item_id)
+
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        limit = int(filters.get("limit", 200))
+        offset = int(filters.get("offset", 0))
+
         rows = conn.execute(
-            "SELECT * FROM upload_jobs ORDER BY created_at DESC LIMIT 200"
+            f"SELECT * FROM upload_jobs {where} ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            params + [limit, offset],
         ).fetchall()
         return rows_to_dicts(rows)
     finally:
@@ -241,9 +272,17 @@ def append_upload_log(
     own = conn is None
     conn = conn or _get_db_conn()
     try:
+        # Get next sequence number
+        row = conn.execute(
+            "SELECT COALESCE(MAX(sequence), 0) + 1 FROM upload_job_logs WHERE upload_job_id = ?",
+            (job_id,),
+        ).fetchone()
+        seq = row[0] if row else 1
+
         conn.execute(
-            """INSERT INTO upload_job_logs (upload_job_id, level, message, stream, created_at, raw_json)
-               VALUES (?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO upload_job_logs
+               (upload_job_id, level, message, stream, created_at, raw_json, sequence, is_secret_redacted)
+               VALUES (?, ?, ?, ?, ?, ?, ?, 1)""",
             (
                 job_id,
                 level,
@@ -251,6 +290,7 @@ def append_upload_log(
                 stream,
                 _now(),
                 json.dumps(raw, ensure_ascii=False) if raw else None,
+                seq,
             ),
         )
         conn.commit()
@@ -283,6 +323,66 @@ def get_upload_job_logs(job_id: int, limit: int = 500, offset: int = 0, conn=Non
             conn.close()
 
 
+def create_upload_artifact(
+    job_id: int,
+    artifact_type: str,
+    *,
+    name: str | None = None,
+    path: str | None = None,
+    url: str | None = None,
+    value: str | None = None,
+    raw: dict | None = None,
+    conn=None,
+) -> dict:
+    own = conn is None
+    conn = conn or _get_db_conn()
+    try:
+        now = _now()
+        cur = conn.execute(
+            """INSERT INTO upload_artifacts
+               (upload_job_id, artifact_type, name, path, url, value, created_at, raw_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                job_id,
+                artifact_type,
+                name,
+                path,
+                url,
+                value,
+                now,
+                json.dumps(raw, ensure_ascii=False) if raw else None,
+            ),
+        )
+        conn.commit()
+        return {
+            "id": cur.lastrowid,
+            "upload_job_id": job_id,
+            "artifact_type": artifact_type,
+            "name": name,
+            "path": path,
+            "url": url,
+            "value": value,
+            "created_at": now,
+        }
+    finally:
+        if own:
+            conn.close()
+
+
+def get_upload_job_artifacts(job_id: int, conn=None) -> list[dict]:
+    own = conn is None
+    conn = conn or _get_db_conn()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM upload_artifacts WHERE upload_job_id = ? ORDER BY id ASC",
+            (job_id,),
+        ).fetchall()
+        return rows_to_dicts(rows)
+    finally:
+        if own:
+            conn.close()
+
+
 def _update_job_status(job_id: int, status: str, **kwargs) -> None:
     conn = _get_db_conn()
     try:
@@ -297,24 +397,47 @@ def _update_job_status(job_id: int, status: str, **kwargs) -> None:
 
 
 def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str]) -> None:
-    """Execute Uploadrr in a background thread. Updates job status and logs output."""
+    """Execute Uploadrr in a background thread. Updates job status, logs, and result artifacts."""
     executable = cmd["executable"]
     args = cmd["args"]
     cwd = cmd.get("cwd") or "."
+
+    # Build safe_command_json without secrets
+    safe_preview = redact_secrets(cmd.get("command_preview", ""), secrets)
+    safe_cmd_json = json.dumps({
+        "executable": "[python]",
+        "args_preview": safe_preview,
+        "cwd": cwd,
+        "using_prepared_path": cmd.get("using_prepared_path"),
+        "source_path": cmd.get("source_path"),
+    }, ensure_ascii=False)
+
+    started_dt = datetime.now(timezone.utc)
+    started_at = started_dt.isoformat()
 
     _update_job_status(
         job_id,
         "running",
         stage="running",
-        started_at=_now(),
+        started_at=started_at,
+        safe_command_json=safe_cmd_json,
+        last_log_at=_now(),
     )
     append_upload_log(job_id, "info", "Iniciando proceso Uploadrr…", stream="system")
     append_upload_log(
         job_id,
         "info",
-        f"Comando: {redact_secrets(cmd.get('command_preview', ''), secrets)}",
+        f"Comando: {safe_preview}",
         stream="system",
     )
+
+    # Save prepared file artifact if applicable
+    if cmd.get("using_prepared_path") and cmd.get("source_path"):
+        create_upload_artifact(
+            job_id, "prepared_file",
+            name="archivo preparado",
+            path=cmd["source_path"],
+        )
 
     try:
         env = {k: v for k, v in os.environ.items()}
@@ -341,8 +464,16 @@ def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str]) -> None
                 buf.append(safe_line)
                 append_upload_log(job_id, level, safe_line, stream=stream_name)
 
-        t_out = threading.Thread(target=_read_stream, args=(proc.stdout, "info", "stdout", stdout_lines), daemon=True)
-        t_err = threading.Thread(target=_read_stream, args=(proc.stderr, "warning", "stderr", stderr_lines), daemon=True)
+        t_out = threading.Thread(
+            target=_read_stream,
+            args=(proc.stdout, "info", "stdout", stdout_lines),
+            daemon=True,
+        )
+        t_err = threading.Thread(
+            target=_read_stream,
+            args=(proc.stderr, "warning", "stderr", stderr_lines),
+            daemon=True,
+        )
         t_out.start()
         t_err.start()
         t_out.join()
@@ -350,35 +481,83 @@ def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str]) -> None
 
         returncode = proc.wait()
 
+        finished_dt = datetime.now(timezone.utc)
+        finished_at = finished_dt.isoformat()
+        duration_seconds = int((finished_dt - started_dt).total_seconds())
+
+        stdout_text = "\n".join(stdout_lines)
+        stderr_text = "\n".join(stderr_lines)
+
+        result = classify_upload_result(stdout_text, stderr_text, returncode)
+
         if returncode == 0:
+            # Save URL artifact if found
+            if result["urls"]:
+                first_url = result["urls"][0]
+                create_upload_artifact(job_id, "uploaded_url", name="URL subida", url=first_url)
+
+            # Save torrent ID artifact if found
+            if result["torrent_ids"]:
+                first_id = result["torrent_ids"][0]
+                create_upload_artifact(job_id, "torrent_id", name="torrent_id", value=first_id)
+
             _update_job_status(
                 job_id, "completed",
                 stage="finished",
                 exit_code=0,
-                finished_at=_now(),
+                finished_at=finished_at,
+                duration_seconds=duration_seconds,
+                result_url=result["urls"][0] if result["urls"] else None,
+                result_torrent_id=result["torrent_ids"][0] if result["torrent_ids"] else None,
+                last_log_at=_now(),
+                last_success_at=finished_at,
             )
-            append_upload_log(job_id, "info", f"Proceso finalizado correctamente (exit code 0).", stream="system")
+            append_upload_log(
+                job_id, "info",
+                f"Proceso finalizado correctamente (exit code 0). Duración: {duration_seconds}s",
+                stream="system",
+            )
         else:
-            err_summary = redact_secrets(
-                "; ".join(stderr_lines[-5:]) if stderr_lines else f"exit code {returncode}",
-                secrets,
-            )
+            err_summary = build_error_summary(stderr_text, stdout_text, returncode)
+            safe_err = redact_secrets(err_summary or f"exit code {returncode}", secrets)
+
             _update_job_status(
                 job_id, "failed",
                 stage="failed",
                 exit_code=returncode,
-                finished_at=_now(),
-                error_message=err_summary[:2000],
+                finished_at=finished_at,
+                duration_seconds=duration_seconds,
+                error_message=safe_err[:2000],
+                last_log_at=_now(),
+                last_error_at=finished_at,
             )
-            append_upload_log(job_id, "error", f"Proceso fallido (exit code {returncode}).", stream="system")
+            append_upload_log(
+                job_id, "error",
+                f"Proceso fallido (exit code {returncode}). Duración: {duration_seconds}s",
+                stream="system",
+            )
 
     except FileNotFoundError as exc:
+        finished_at = _now()
         msg = f"Ejecutable no encontrado: {exc}"
-        _update_job_status(job_id, "failed", stage="failed", finished_at=_now(), error_message=msg[:2000])
+        _update_job_status(
+            job_id, "failed",
+            stage="failed",
+            finished_at=finished_at,
+            error_message=msg[:2000],
+            last_error_at=finished_at,
+        )
         append_upload_log(job_id, "error", msg, stream="system")
     except Exception as exc:
+        finished_at = _now()
         msg = redact_secrets(str(exc), secrets)
-        _update_job_status(job_id, "failed", stage="failed", finished_at=_now(), error_message=msg[:2000])
+        _update_job_status(
+            job_id, "failed",
+            stage="failed",
+            finished_at=finished_at,
+            error_message=msg[:2000],
+            last_error_at=finished_at,
+        )
         append_upload_log(job_id, "error", f"Excepción inesperada: {msg}", stream="system")
 
 
@@ -489,6 +668,133 @@ def start_upload_job(
             conn.close()
 
 
+def retry_upload_job(
+    job_id: int,
+    *,
+    dry_run: bool = True,
+    start: bool = False,
+    confirmation: str | None = None,
+) -> dict:
+    """Create a new upload_job as a retry of job_id.
+
+    Only allowed for failed/cancelled jobs.
+    Never mutates the original job.
+    """
+    conn = _get_db_conn()
+    try:
+        original = get_upload_job(job_id, conn=conn)
+        if not original:
+            return {
+                "ok": False,
+                "action": "blocked",
+                "error": "not_found",
+                "message": f"Job {job_id} no encontrado.",
+                "job_id": job_id,
+            }
+
+        status = original.get("status", "")
+        if status not in ("failed", "cancelled"):
+            return {
+                "ok": False,
+                "action": "blocked",
+                "error": "invalid_status",
+                "message": (
+                    f"Solo se puede reintentar un job en estado failed/cancelled. "
+                    f"Estado actual: {status}"
+                ),
+                "job_id": job_id,
+            }
+
+        # Build command preview from original job
+        cmd_preview: str | None = None
+        try:
+            cmd = build_uploadrr_execution_command(original, conn=conn)
+            cmd_preview = cmd.get("command_preview")
+        except Exception:
+            pass
+
+        if dry_run:
+            return {
+                "ok": True,
+                "action": "dry_run",
+                "dry_run": True,
+                "job_id": job_id,
+                "original_status": status,
+                "retry_count_would_be": (original.get("retry_count") or 0) + 1,
+                "command_preview": cmd_preview,
+                "message": "Dry-run: no se ha creado ni ejecutado ningún job nuevo.",
+                "error": None,
+            }
+
+        if not start:
+            return {
+                "ok": False,
+                "action": "blocked",
+                "dry_run": False,
+                "error": "blocked",
+                "job_id": job_id,
+                "message": "Se requiere start=true para reintentar.",
+            }
+
+        if confirmation != CONFIRMATION_TOKEN:
+            return {
+                "ok": False,
+                "action": "blocked",
+                "dry_run": False,
+                "error": "confirmation_required",
+                "job_id": job_id,
+                "message": f'Se requiere confirmación exacta: "{CONFIRMATION_TOKEN}".',
+            }
+
+        # Create new job
+        now = _now()
+        retry_count = (original.get("retry_count") or 0) + 1
+        cur = conn.execute(
+            """INSERT INTO upload_jobs
+               (library_item_id, request_item_id, title, path,
+                source_path, prepared_path, uploadrr_command_json,
+                status, stage, retry_of_job_id, retry_count,
+                created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, 'ready', 'preflight', ?, ?, ?, ?)""",
+            (
+                original.get("library_item_id"),
+                original.get("request_item_id"),
+                original.get("title", ""),
+                original.get("path", ""),
+                original.get("source_path"),
+                original.get("prepared_path"),
+                original.get("uploadrr_command_json"),
+                job_id,
+                retry_count,
+                now,
+                now,
+            ),
+        )
+        conn.commit()
+        new_job_id = cur.lastrowid
+
+        append_upload_log(
+            new_job_id, "info",
+            f"Retry del job {job_id} (intento {retry_count}).",
+            stream="system",
+        )
+
+        # Start the new job
+        result = start_upload_job(
+            new_job_id,
+            dry_run=False,
+            start=True,
+            confirmation=CONFIRMATION_TOKEN,
+            conn=conn,
+        )
+        result["retry_of_job_id"] = job_id
+        result["retry_count"] = retry_count
+        result["new_job_id"] = new_job_id
+        return result
+    finally:
+        conn.close()
+
+
 def cancel_upload_job(job_id: int, conn=None) -> dict:
     own = conn is None
     conn = conn or _get_db_conn()
@@ -511,16 +817,32 @@ def cancel_upload_job(job_id: int, conn=None) -> dict:
             try:
                 os.kill(pid, signal.SIGTERM)
                 cancelled = True
-                append_upload_log(job_id, "info", f"SIGTERM enviado al proceso {pid}.", stream="system", conn=conn)
+                append_upload_log(
+                    job_id, "info",
+                    f"SIGTERM enviado al proceso {pid}.",
+                    stream="system",
+                    conn=conn,
+                )
             except (ProcessLookupError, PermissionError) as exc:
-                append_upload_log(job_id, "warning", f"No se pudo enviar SIGTERM al PID {pid}: {exc}", stream="system", conn=conn)
+                append_upload_log(
+                    job_id, "warning",
+                    f"No se pudo enviar SIGTERM al PID {pid}: {exc}",
+                    stream="system",
+                    conn=conn,
+                )
 
-        _update_job_status(job_id, "cancelled", stage="cancelled", finished_at=_now())
+        _update_job_status(
+            job_id, "cancelled",
+            stage="cancelled",
+            finished_at=_now(),
+        )
         append_upload_log(job_id, "info", "Job marcado como cancelado.", stream="system")
 
         return {
             "ok": True,
-            "message": "Job cancelado." + (" Señal enviada al proceso." if cancelled else " El proceso puede no estar activo."),
+            "message": "Job cancelado." + (
+                " Señal enviada al proceso." if cancelled else " El proceso puede no estar activo."
+            ),
             "job_id": job_id,
         }
     finally:
@@ -536,7 +858,10 @@ __all__ = [
     "validate_upload_job_start",
     "build_uploadrr_execution_command",
     "start_upload_job",
+    "retry_upload_job",
     "append_upload_log",
     "get_upload_job_logs",
+    "create_upload_artifact",
+    "get_upload_job_artifacts",
     "cancel_upload_job",
 ]

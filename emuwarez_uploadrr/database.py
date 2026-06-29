@@ -11,7 +11,7 @@ from .constants import CONFIG_DIR
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 
 def db_path() -> Path:
@@ -157,7 +157,7 @@ def _migrate_upload_jobs_phase6c(conn: sqlite3.Connection) -> None:
 
 
 def _migrate_upload_job_logs(conn: sqlite3.Connection) -> None:
-    """Create upload_job_logs table (Phase 6C)."""
+    """Create upload_job_logs table (Phase 6C) and add Phase 6D columns."""
     conn.execute("""
         CREATE TABLE IF NOT EXISTS upload_job_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -165,6 +165,52 @@ def _migrate_upload_job_logs(conn: sqlite3.Connection) -> None:
             level TEXT NOT NULL,
             message TEXT NOT NULL,
             stream TEXT,
+            created_at TEXT NOT NULL,
+            raw_json TEXT,
+            FOREIGN KEY (upload_job_id) REFERENCES upload_jobs(id)
+        )
+    """)
+    # Phase 6D columns (idempotent)
+    for col, col_def in [
+        ("sequence", "INTEGER"),
+        ("is_secret_redacted", "INTEGER NOT NULL DEFAULT 1"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE upload_job_logs ADD COLUMN {col} {col_def}")
+        except sqlite3.OperationalError:
+            pass
+
+
+def _migrate_upload_jobs_phase6d(conn: sqlite3.Connection) -> None:
+    """Add Phase 6D columns to upload_jobs and create upload_artifacts table."""
+    new_cols = [
+        ("result_url", "TEXT"),
+        ("result_torrent_id", "TEXT"),
+        ("result_tracker", "TEXT"),
+        ("result_category", "TEXT"),
+        ("duration_seconds", "INTEGER"),
+        ("retry_of_job_id", "INTEGER"),
+        ("retry_count", "INTEGER NOT NULL DEFAULT 0"),
+        ("last_log_at", "TEXT"),
+        ("last_error_at", "TEXT"),
+        ("last_success_at", "TEXT"),
+        ("safe_command_json", "TEXT"),
+    ]
+    for col, col_def in new_cols:
+        try:
+            conn.execute(f"ALTER TABLE upload_jobs ADD COLUMN {col} {col_def}")
+        except sqlite3.OperationalError:
+            pass
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS upload_artifacts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            upload_job_id INTEGER NOT NULL,
+            artifact_type TEXT NOT NULL,
+            name TEXT,
+            path TEXT,
+            url TEXT,
+            value TEXT,
             created_at TEXT NOT NULL,
             raw_json TEXT,
             FOREIGN KEY (upload_job_id) REFERENCES upload_jobs(id)
@@ -351,6 +397,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_upload_job_logs(conn)
         _migrate_filesystem_operations(conn)
         _migrate_library_items_phase6b(conn)
+        _migrate_upload_jobs_phase6d(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

@@ -5,14 +5,22 @@ import type {
   UploadJobLogsResponse,
   UploadStartRequest,
   UploadStartResult,
+  UploadArtifactsResponse,
+  UploadRetryRequest,
 } from '../types/api'
 
 export async function uploadPreflight(itemId: number, requestId?: number): Promise<UploadPreflightResponse> {
   return api.post<UploadPreflightResponse>(`/library/${itemId}/upload/preflight`, { request_id: requestId ?? null })
 }
 
-export async function getUploads(): Promise<UploadJob[]> {
-  return api.get<UploadJob[]>('/uploads')
+export async function getUploads(params?: { status?: string; limit?: number; offset?: number; search?: string }): Promise<UploadJob[]> {
+  const qs = new URLSearchParams()
+  if (params?.status) qs.set('status', params.status)
+  if (params?.limit != null) qs.set('limit', String(params.limit))
+  if (params?.offset != null) qs.set('offset', String(params.offset))
+  if (params?.search) qs.set('search', params.search)
+  const query = qs.toString()
+  return api.get<UploadJob[]>(`/uploads${query ? `?${query}` : ''}`)
 }
 
 export async function getUploadJob(jobId: number): Promise<UploadJob> {
@@ -27,11 +35,22 @@ export async function getUploadJobLogs(
   return api.get<UploadJobLogsResponse>(`/uploads/${jobId}/logs?limit=${limit}&offset=${offset}`)
 }
 
+export async function getUploadJobArtifacts(jobId: number): Promise<UploadArtifactsResponse> {
+  return api.get<UploadArtifactsResponse>(`/uploads/${jobId}/artifacts`)
+}
+
 export async function startUploadJob(
   jobId: number,
   body: UploadStartRequest,
 ): Promise<UploadStartResult> {
   return api.post<UploadStartResult>(`/uploads/${jobId}/start`, body)
+}
+
+export async function retryUploadJob(
+  jobId: number,
+  body: UploadRetryRequest,
+): Promise<UploadStartResult> {
+  return api.post<UploadStartResult>(`/uploads/${jobId}/retry`, body)
 }
 
 export async function cancelUploadJob(jobId: number): Promise<unknown> {

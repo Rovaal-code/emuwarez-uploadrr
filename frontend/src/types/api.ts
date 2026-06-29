@@ -276,6 +276,42 @@ export interface UploadJob {
   finished_at?: string
   created_at?: string
   updated_at?: string
+  // Phase 6D
+  result_url?: string | null
+  result_torrent_id?: string | null
+  result_tracker?: string | null
+  result_category?: string | null
+  duration_seconds?: number | null
+  retry_count?: number
+  retry_of_job_id?: number | null
+  safe_command_json?: string | null
+  last_success_at?: string | null
+  last_error_at?: string | null
+  last_log_at?: string | null
+}
+
+// Phase 6D — Artifacts
+
+export interface UploadArtifact {
+  id?: number
+  upload_job_id: number
+  artifact_type: string
+  name: string | null
+  path: string | null
+  url: string | null
+  value: string | null
+  created_at: string
+}
+
+export interface UploadArtifactsResponse {
+  job_id: number
+  artifacts: UploadArtifact[]
+}
+
+export interface UploadRetryRequest {
+  dry_run: boolean
+  start: boolean
+  confirmation: string | null
 }
 
 // Phase 6C — Upload execution

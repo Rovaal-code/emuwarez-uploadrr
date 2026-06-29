@@ -376,7 +376,52 @@ Implementado en Fase 6C — Ejecución controlada de Uploadrr:
 Pendiente para fases posteriores:
 
 - Crear peticiones EMU desde la app (requiere capturar POST real desde DevTools).
-- Docker.
 - SettingsPage con formularios de configuración real (incluyendo `hardlink_base`, `uploadrr_path`, API keys).
 - TasksPage con datos reales.
 - Modificación de título interno MKV (`mkvpropedit`).
+
+## Docker / despliegue homelab
+
+### Inicio rápido
+
+```bash
+cp .env.example .env
+docker compose -f docker-compose.example.yml up -d --build
+```
+
+La interfaz web estará disponible en `http://localhost:9494`.
+
+### Volúmenes
+
+| Ruta en contenedor | Descripción |
+|---|---|
+| `/config` | Configuración persistente (SQLite, settings). Montar como volumen. |
+| `/opt/Uploadrr` | Directorio de Uploadrr externo (bind mount). **Nunca va dentro de la imagen.** |
+| `/data` | Raíz de datos (media + uploads). Usar raíz común para evitar EXDEV. |
+
+### Hardlinks y EXDEV
+
+Para que la creación de hardlinks funcione, el directorio fuente (`/data/media`) y
+el `hardlink_base` (`/data/uploads/emu`) deben estar en el **mismo filesystem**.
+
+Si montas media y uploads en dispositivos distintos, la creación de hardlinks fallará
+con error `EXDEV (cross-device link)`. Configura `hardlink_base` en el setup web
+apuntando dentro del mismo montaje que el media.
+
+### Configuración de Uploadrr
+
+Monta Uploadrr como bind mount externo en `/opt/Uploadrr` y configura la ruta
+desde el setup web o CLI tras el primer arranque. Uploadrr nunca se incluye en la imagen Docker.
+
+### Gestión del contenedor
+
+```bash
+# Ver logs
+docker compose -f docker-compose.example.yml logs -f
+
+# Parar
+docker compose -f docker-compose.example.yml down
+
+# Actualizar y relanzar
+docker compose -f docker-compose.example.yml up -d --build
+```

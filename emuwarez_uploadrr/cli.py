@@ -879,7 +879,17 @@ def cmd_web_info() -> int:
         "  python3 emuwarez_uploader.py web create-admin --username admin\n"
         "\n"
         "Instalar dependencias web:\n"
-        "  pip install -e \".[web]\""
+        "  pip install -e \".[web]\"\n"
+        "\n"
+        "── Docker ───────────────────────────────────────────\n"
+        "  Build:    docker build -t emuwarez-uploadrr:local .\n"
+        "  Compose:  docker compose -f docker-compose.example.yml up -d --build\n"
+        "  URL:      http://localhost:9494\n"
+        "  Config:   /config  (montar como volumen persistente)\n"
+        "  Uploadrr: /opt/Uploadrr  (bind mount externo, no incluido en imagen)\n"
+        "  Hardlink base recomendada: /data/uploads/emu\n"
+        "  Advertencia: media y hardlink_base deben estar en el mismo filesystem\n"
+        "               para evitar error EXDEV en creación de hardlinks."
     )
     return 0
 

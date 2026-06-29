@@ -1,0 +1,68 @@
+# docker-compose.example.yml — Ejemplo de despliegue homelab
+#
+# NOTAS IMPORTANTES:
+#
+# 1. Uploadrr debe montarse como directorio externo en /opt/Uploadrr.
+#    NUNCA se incluye dentro de la imagen Docker. Configura la ruta
+#    desde el setup web o CLI tras el primer arranque.
+#
+# 2. Hardlinks y EXDEV:
+#    Para que la creación de hardlinks funcione, el directorio fuente
+#    (media de Radarr/Sonarr) y el hardlink_base deben estar en el
+#    MISMO filesystem/dispositivo físico.
+#
+#    Ejemplo con raíz común /data para evitar EXDEV:
+#      /data/media        → fuente (Radarr/Sonarr)
+#      /data/uploads/emu  → hardlink_base (preparado para subida eMuwarez)
+#
+#    Si montas /media y /uploads en dispositivos o discos distintos,
+#    la creación de hardlinks fallará con error EXDEV (cross-device link).
+#    Usa siempre una raíz de datos compartida.
+#
+# 3. API keys: Configúralas desde el setup web (http://localhost:9494)
+#    o con: python3 emuwarez_uploader.py web create-admin
+#    No las pongas en este fichero ni en .env.
+
+services:
+  emuwarez-uploadrr:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: emuwarez-uploadrr:local
+    container_name: emuwarez-uploadrr
+    restart: unless-stopped
+
+    ports:
+      - "${EMUWAREZ_UPLOADRR_PORT:-9494}:9494"
+
+    # Ajusta PUID/PGID al UID/GID del usuario propietario de los archivos de media
+    user: "${PUID:-1000}:${PGID:-1000}"
+
+    environment:
+      TZ: ${TZ:-Europe/Madrid}
+      CONFIG_DIR: /config
+
+    volumes:
+      # Configuración persistente: base de datos SQLite y settings
+      - /srv/emuwarez-uploadrr/config:/config
+
+      # Uploadrr como bind mount externo — NUNCA va dentro de la imagen
+      # Después del primer arranque, configura la ruta /opt/Uploadrr
+      # en el setup web bajo "Ruta de Uploadrr".
+      - /srv/Uploadrr:/opt/Uploadrr:ro
+
+      # Raíz de datos compartida para media + uploads
+      # Usar una sola raíz garantiza que hardlinks funcionan sin EXDEV.
+      # Configura en el setup web:
+      #   Raíz media (Radarr/Sonarr): /data/media
+      #   hardlink_base:               /data/uploads/emu
+      - /srv/data:/data
+
+    # Red compartida con Radarr/Sonarr si corren en Docker.
+    # Descomenta y ajusta si usas red interna Docker:
+    # networks:
+    #   - media_net
+
+# networks:
+#   media_net:
+#     external: true

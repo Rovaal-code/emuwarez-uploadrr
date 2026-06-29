@@ -110,6 +110,62 @@ def check_environment() -> dict:
     return _check("environment", "ok", "Variables de entorno leídas", details)
 
 
+def check_required_secrets() -> dict:
+    """Verifica que los secretos obligatorios estén configurados (sin exponerlos)."""
+    try:
+        config_dir = os.environ.get("CONFIG_DIR", str(Path.home() / ".config" / "emuwarez-renamer"))
+        db_path = Path(config_dir) / "emuwarez_uploadrr.db"
+        if not db_path.exists():
+            return _check("required_secrets", "warning", "BD no existe aún, secretos sin verificar", {})
+        conn = sqlite3.connect(str(db_path))
+        rows = conn.execute("SELECT key, value FROM settings WHERE key IN ('tmdb_api_key','emu_api_key')").fetchall()
+        conn.close()
+        found = {k: bool(v) for k, v in rows}
+        tmdb_ok = found.get("tmdb_api_key", False)
+        emu_ok = found.get("emu_api_key", False)
+        if tmdb_ok and emu_ok:
+            return _check("required_secrets", "ok", "Secretos de TMDb y eMuwarez configurados", {
+                "tmdb": "configurado",
+                "emu": "configurado",
+            })
+        missing_count = (0 if tmdb_ok else 1) + (0 if emu_ok else 1)
+        services = []
+        if not tmdb_ok:
+            services.append("TMDb")
+        if not emu_ok:
+            services.append("eMuwarez")
+        label = " y ".join(services)
+        return _check("required_secrets", "warning", f"Secretos sin configurar: {label}", {
+            "missing_count": missing_count,
+            "tmdb": "configurado" if tmdb_ok else "no configurado",
+            "emu": "configurado" if emu_ok else "no configurado",
+        })
+    except Exception:
+        return _check("required_secrets", "warning", "No se pudieron verificar los secretos", {})
+
+
+def check_arr_instances_configuration() -> dict:
+    """Verifica que haya al menos una instancia de Radarr o Sonarr configurada."""
+    try:
+        config_dir = os.environ.get("CONFIG_DIR", str(Path.home() / ".config" / "emuwarez-renamer"))
+        db_path = Path(config_dir) / "emuwarez_uploadrr.db"
+        if not db_path.exists():
+            return _check("arr_instances", "warning", "BD no existe aún, instancias sin verificar", {})
+        conn = sqlite3.connect(str(db_path))
+        try:
+            row = conn.execute("SELECT COUNT(*) FROM arr_instances WHERE enabled=1").fetchone()
+            count = row[0] if row else 0
+        except Exception:
+            count = 0
+        finally:
+            conn.close()
+        if count > 0:
+            return _check("arr_instances", "ok", f"{count} instancia(s) Arr habilitada(s)", {"count": count})
+        return _check("arr_instances", "warning", "No hay instancias Radarr/Sonarr habilitadas", {"count": 0})
+    except Exception:
+        return _check("arr_instances", "warning", "No se pudieron verificar las instancias Arr", {})
+
+
 def get_runtime_diagnostics() -> dict:
     """Ejecuta todos los checks y devuelve diagnóstico completo."""
     checks = [
@@ -119,6 +175,8 @@ def get_runtime_diagnostics() -> dict:
         check_frontend_dist(),
         check_uploadrr_mount(),
         check_hardlink_base_setting(),
+        check_required_secrets(),
+        check_arr_instances_configuration(),
     ]
     warnings = [c["message"] for c in checks if c["status"] == "warning"]
     errors = [c["message"] for c in checks if c["status"] == "error"]

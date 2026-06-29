@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import type { UploadPreflightResponse } from '../types/api'
-import { uploadPreflight } from '../api/uploads'
+import type { UploadPreflightResponse, UploadStartResult } from '../types/api'
+import { uploadPreflight, startUploadJob } from '../api/uploads'
 
 interface Props {
   itemId: number
@@ -9,14 +9,23 @@ interface Props {
   onClose: () => void
 }
 
+const CONFIRMATION_TOKEN = 'INICIAR_UPLOADRR'
+
 export function UploadPreflightModal({ itemId, itemTitle, requestId, onClose }: Props) {
   const [result, setResult] = useState<UploadPreflightResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirmInput, setConfirmInput] = useState('')
+  const [startResult, setStartResult] = useState<UploadStartResult | null>(null)
+  const [startLoading, setStartLoading] = useState(false)
+  const [startError, setStartError] = useState<string | null>(null)
 
   const load = async () => {
     setLoading(true)
     setError(null)
+    setStartResult(null)
+    setStartError(null)
+    setConfirmInput('')
     try {
       const r = await uploadPreflight(itemId, requestId)
       setResult(r)
@@ -29,12 +38,49 @@ export function UploadPreflightModal({ itemId, itemTitle, requestId, onClose }: 
 
   useEffect(() => { load() }, [itemId])
 
+  const jobId = result?.job?.id
+
+  const handleDryRun = async () => {
+    if (!jobId) return
+    setStartLoading(true)
+    setStartError(null)
+    setStartResult(null)
+    try {
+      const r = await startUploadJob(jobId, { dry_run: true, start: false, confirmation: null })
+      setStartResult(r)
+    } catch (e: unknown) {
+      setStartError(e instanceof Error ? e.message : 'Error en dry-run.')
+    } finally {
+      setStartLoading(false)
+    }
+  }
+
+  const handleStart = async () => {
+    if (!jobId || confirmInput !== CONFIRMATION_TOKEN) return
+    setStartLoading(true)
+    setStartError(null)
+    setStartResult(null)
+    try {
+      const r = await startUploadJob(jobId, {
+        dry_run: false,
+        start: true,
+        confirmation: CONFIRMATION_TOKEN,
+      })
+      setStartResult(r)
+    } catch (e: unknown) {
+      setStartError(e instanceof Error ? e.message : 'Error al iniciar subida.')
+    } finally {
+      setStartLoading(false)
+    }
+  }
+
   const statusClass = result?.status === 'ready' ? 'badge req-compatible' : 'badge req-not-compatible'
   const statusLabel = result?.status === 'ready' ? 'Listo' : 'Bloqueado'
+  const canStart = result?.status === 'ready' && !!jobId
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 640 }}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 680 }}>
         <div className="modal-header">
           <h2 className="modal-title">Preflight Uploadrr</h2>
           <button className="btn-icon" onClick={onClose} title="Cerrar">✕</button>
@@ -73,20 +119,12 @@ export function UploadPreflightModal({ itemId, itemTitle, requestId, onClose }: 
                     <span style={{ wordBreak: 'break-all', fontSize: '0.8rem' }}>
                       {result.command_preview.source_path || '–'}
                       {result.command_preview.using_prepared_path && (
-                        <span
-                          className="badge req-filled"
-                          style={{ marginLeft: 6, fontSize: '0.7rem' }}
-                          title="Se usará el hardlink preparado (nomenclatura aplicada)"
-                        >
+                        <span className="badge req-filled" style={{ marginLeft: 6, fontSize: '0.7rem' }}>
                           preparado
                         </span>
                       )}
                       {result.command_preview.using_prepared_path === false && (
-                        <span
-                          className="badge req-partial"
-                          style={{ marginLeft: 6, fontSize: '0.7rem' }}
-                          title="Nomenclatura no aplicada: se usará el archivo original"
-                        >
+                        <span className="badge req-partial" style={{ marginLeft: 6, fontSize: '0.7rem' }}>
                           original
                         </span>
                       )}
@@ -123,17 +161,81 @@ export function UploadPreflightModal({ itemId, itemTitle, requestId, onClose }: 
             </>
           )}
 
+          {canStart && (
+            <div className="detail-panel__section" style={{ marginTop: 16, padding: '12px 14px', background: 'rgba(255,80,80,0.08)', borderRadius: 6, border: '1px solid rgba(255,80,80,0.2)' }}>
+              <div className="detail-panel__section-title" style={{ color: 'var(--color-error, #f87171)', marginBottom: 8 }}>
+                Advertencia de seguridad
+              </div>
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: '0.83rem', lineHeight: 1.6 }}>
+                <li>Esta acción ejecutará Uploadrr y puede publicar/subir contenido a eMuwarez.</li>
+                <li>No se crearán peticiones eMuwarez automáticamente.</li>
+                <li>No se modificará el archivo original.</li>
+                <li>No se modificará el título interno MKV.</li>
+              </ul>
+              <div style={{ marginTop: 12 }}>
+                <label style={{ display: 'block', marginBottom: 6, fontSize: '0.83rem' }}>
+                  Escribe <strong>{CONFIRMATION_TOKEN}</strong> para habilitar la subida:
+                </label>
+                <input
+                  type="text"
+                  value={confirmInput}
+                  onChange={e => setConfirmInput(e.target.value)}
+                  placeholder={CONFIRMATION_TOKEN}
+                  style={{
+                    width: '100%',
+                    padding: '6px 10px',
+                    background: 'rgba(255,255,255,0.08)',
+                    border: `1px solid ${confirmInput === CONFIRMATION_TOKEN ? 'var(--color-success, #4ade80)' : 'rgba(255,255,255,0.15)'}`,
+                    borderRadius: 4,
+                    color: 'inherit',
+                    fontFamily: 'monospace',
+                    fontSize: '0.9rem',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {startResult && (
+            <div className="detail-panel__section" style={{ marginTop: 12, padding: '10px 14px', background: 'rgba(0,200,100,0.06)', borderRadius: 6 }}>
+              <div className="detail-panel__section-title">Resultado</div>
+              <p style={{ margin: '4px 0', fontSize: '0.85rem' }}>
+                <strong>Acción:</strong> {startResult.action} &nbsp;
+                <strong>Estado:</strong> {startResult.status}
+              </p>
+              {startResult.message && <p style={{ margin: '4px 0', fontSize: '0.83rem' }}>{startResult.message}</p>}
+              {startResult.command_preview && (
+                <pre style={{ fontSize: '0.75rem', overflow: 'auto', padding: 8, background: 'rgba(0,0,0,0.2)', borderRadius: 4, marginTop: 8 }}>
+                  {startResult.command_preview}
+                </pre>
+              )}
+            </div>
+          )}
+          {startError && <p className="error-text" style={{ marginTop: 8 }}>{startError}</p>}
+
           <div className="detail-panel__section" style={{ marginTop: 16, padding: '8px 12px', background: 'rgba(255,200,0,0.08)', borderRadius: 6, fontSize: '0.85rem' }}>
-            Preflight seguro. No se ha ejecutado Uploadrr ni subido ningún archivo.
+            Preflight seguro. {canStart ? 'Usa dry-run para previsualizar o confirma para iniciar la subida real.' : 'No se ha ejecutado Uploadrr.'}
           </div>
         </div>
-        <div className="detail-panel__actions" style={{ padding: '12px 16px' }}>
+        <div className="detail-panel__actions" style={{ padding: '12px 16px', gap: 8, display: 'flex', flexWrap: 'wrap' }}>
+          {canStart && (
+            <button
+              className="btn btn-secondary"
+              onClick={handleDryRun}
+              disabled={startLoading}
+              title="Previsualizar el comando sin ejecutar Uploadrr"
+            >
+              {startLoading ? 'Procesando…' : 'Dry-run'}
+            </button>
+          )}
           <button
             className="btn btn-primary"
-            disabled
-            title="La ejecución real de Uploadrr se implementará en una fase posterior."
+            disabled={!canStart || confirmInput !== CONFIRMATION_TOKEN || startLoading}
+            onClick={handleStart}
+            title={canStart ? `Escribe ${CONFIRMATION_TOKEN} para habilitar` : 'El preflight no está listo'}
           >
-            Iniciar subida
+            {startLoading ? 'Iniciando…' : 'Iniciar subida'}
           </button>
           <button className="btn btn-secondary" onClick={onClose}>Cerrar</button>
         </div>

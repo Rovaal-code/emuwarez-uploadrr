@@ -580,3 +580,60 @@ class UploadPreflightResponse(BaseModel):
     command_preview: Optional[CommandPreviewResponse] = None
     warnings: list[str] = []
     errors: list[str] = []
+
+
+# ---------------------------------------------------------------------------
+# Upload execution (Phase 6C)
+# ---------------------------------------------------------------------------
+
+class UploadStartRequest(BaseModel):
+    dry_run: bool = True
+    start: bool = False
+    confirmation: Optional[str] = None
+
+
+class UploadJobDetail(BaseModel):
+    id: Optional[int] = None
+    library_item_id: Optional[int] = None
+    request_item_id: Optional[int] = None
+    status: str
+    stage: Optional[str] = None
+    title: Optional[str] = None
+    source_path: Optional[str] = None
+    prepared_path: Optional[str] = None
+    using_prepared_path: Optional[bool] = None
+    error_message: Optional[str] = None
+    exit_code: Optional[int] = None
+    process_id: Optional[int] = None
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class UploadJobLog(BaseModel):
+    id: Optional[int] = None
+    upload_job_id: int
+    level: str
+    message: str
+    stream: Optional[str] = None
+    created_at: str
+
+
+class UploadJobLogsResponse(BaseModel):
+    job_id: int
+    logs: list[UploadJobLog] = []
+    total: int = 0
+    limit: int = 500
+    offset: int = 0
+
+
+class UploadStartResult(BaseModel):
+    job_id: int
+    action: str
+    status: str
+    stage: Optional[str] = None
+    dry_run: bool
+    command_preview: Optional[str] = None
+    message: Optional[str] = None
+    error: Optional[str] = None

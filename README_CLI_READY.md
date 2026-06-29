@@ -306,6 +306,41 @@ Implementado en Fase 5B:
 - Rate limit 1 hora con `--force` override.
 - Dashboard summary enriquecido con estadísticas EMU.
 
+## Ejecución controlada de Uploadrr
+
+La ejecución real de Uploadrr requiere confirmación explícita. Por defecto siempre es dry-run.
+
+```bash
+# Ver todos los jobs de subida
+python3 emuwarez_uploader.py upload jobs
+
+# Ver detalle de un job
+python3 emuwarez_uploader.py upload job 1
+
+# Previsualizar el comando sin ejecutar nada
+python3 emuwarez_uploader.py upload start 1 --dry-run
+
+# Iniciar ejecución real (requiere confirmación exacta)
+python3 emuwarez_uploader.py upload start 1 --apply --confirm INICIAR_UPLOADRR
+
+# Ver logs de ejecución (sin secretos)
+python3 emuwarez_uploader.py upload logs 1
+
+# Cancelar un job en ejecución
+python3 emuwarez_uploader.py upload cancel 1
+```
+
+Advertencias de seguridad:
+
+```text
+- start sin --apply equivale a --dry-run (no ejecuta nada).
+- Se requiere --confirm INICIAR_UPLOADRR exacto para ejecución real.
+- Los logs nunca muestran API keys ni secrets.
+- No se crea ninguna petición EMU automáticamente.
+- No se modifica el archivo original ni el título MKV.
+- No se modifica nada dentro de Uploadrr/.
+```
+
 Implementado en Fase 6B — Aplicación segura de nomenclatura:
 
 - Servicio `filesystem_apply.py`: planificación y ejecución de hardlinks con contrato de seguridad estricto (sin modificación del archivo original, sin ejecución de Uploadrr/mkvpropedit, sin copia cross-device).
@@ -323,12 +358,25 @@ Implementado en Fase 6B — Aplicación segura de nomenclatura:
 - Frontend: NomenclatureModal con sección de confirmación y creación de hardlink. UploadPreflightModal con indicador "preparado"/"original".
 - 43 tests nuevos (filesystem_apply, nomenclature_apply, nomenclature_apply_api). Total: 329 tests.
 
+Implementado en Fase 6C — Ejecución controlada de Uploadrr:
+
+- Servicio `upload_execution.py` con contrato de seguridad estricto.
+- Ejecución de Uploadrr mediante `subprocess.Popen` sin `shell=True`.
+- Token de confirmación `INICIAR_UPLOADRR` requerido para ejecución real.
+- `dry_run=True` por defecto; siempre prevalece.
+- Tabla `upload_job_logs`: logs línea a línea con `stream` (stdout/stderr/system) y `level`.
+- Columnas nuevas en `upload_jobs`: `exit_code`, `process_id`. Schema SQLite v6.
+- Redacción de secretos antes de guardar en logs (`api_token`, `api_key`, `emu_api_key`, `tmdb_api_key`).
+- API: `GET /api/uploads`, `GET /api/uploads/{id}`, `GET /api/uploads/{id}/logs`, `POST /api/uploads/{id}/start`, `POST /api/uploads/{id}/cancel`. Todos protegidos con Bearer token.
+- CLI: `upload jobs`, `upload job <id>`, `upload logs <id>`, `upload start <id> [--dry-run|--apply --confirm INICIAR_UPLOADRR]`, `upload cancel <id>`.
+- Frontend: `UploadPreflightModal` con botón activo, input de confirmación y dry-run.
+- Frontend: `UploadsPage` con tabla completa, panel de logs y modal de inicio.
+- 43 tests nuevos (upload_execution, upload_execution_api, upload_logs_redaction). Total: 372 tests.
+
 Pendiente para fases posteriores:
 
 - Crear peticiones EMU desde la app (requiere capturar POST real desde DevTools).
 - Docker.
-- SettingsPage con formularios de configuración real (incluyendo `hardlink_base`).
+- SettingsPage con formularios de configuración real (incluyendo `hardlink_base`, `uploadrr_path`, API keys).
 - TasksPage con datos reales.
-- UploadsPage con flujo de subida.
-- Ejecución real de Uploadrr.
 - Modificación de título interno MKV (`mkvpropedit`).

@@ -267,9 +267,51 @@ export interface UploadJob {
   stage?: string
   title?: string
   source_path?: string
+  prepared_path?: string
+  using_prepared_path?: boolean
   error_message?: string
+  exit_code?: number
+  process_id?: number
+  started_at?: string
+  finished_at?: string
   created_at?: string
   updated_at?: string
+}
+
+// Phase 6C — Upload execution
+
+export interface UploadJobLog {
+  id?: number
+  upload_job_id: number
+  level: string
+  message: string
+  stream: string | null
+  created_at: string
+}
+
+export interface UploadJobLogsResponse {
+  job_id: number
+  logs: UploadJobLog[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface UploadStartRequest {
+  dry_run: boolean
+  start: boolean
+  confirmation: string | null
+}
+
+export interface UploadStartResult {
+  job_id: number
+  action: string
+  status: string
+  stage: string | null
+  dry_run: boolean
+  command_preview: string | null
+  message: string | null
+  error: string | null
 }
 
 // Phase 6B — Nomenclature apply result

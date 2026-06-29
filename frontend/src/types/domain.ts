@@ -1,0 +1,61 @@
+// Domain types and constants for the UI
+
+export type LocalStatus =
+  | 'Disponible'
+  | 'Faltante'
+  | 'En cola'
+  | 'Descargando'
+  | 'Pendiente de importar'
+  | 'Error de importación'
+  | 'Error de búsqueda'
+  | 'Subiendo'
+  | 'Subido'
+  | 'Error'
+  | 'Desconocido'
+
+export type RequestStatus =
+  | 'Sin petición'
+  | 'Compatible'
+  | 'Parcial'
+  | 'No compatible'
+  | 'Llena'
+  | 'Desconocida'
+
+export type NomenclatureStatus = 'Correcta' | 'No adaptada' | 'N/A' | 'Desconocida'
+
+export type InstanceType = 'radarr' | 'sonarr' | 'jellyfin' | 'seerr'
+
+export type ItemType = 'movie' | 'series' | 'season' | 'episode'
+
+// Sidebar navigation items
+export interface NavItem {
+  id: string
+  label: string
+  icon: string
+}
+
+export const NAV_ITEMS: NavItem[] = [
+  { id: 'dashboard', label: 'Dashboard', icon: 'grid' },
+  { id: 'library', label: 'Biblioteca', icon: 'library' },
+  { id: 'missing', label: 'Faltantes', icon: 'missing' },
+  { id: 'requests', label: 'Peticiones', icon: 'requests' },
+  { id: 'uploads', label: 'Subidas', icon: 'uploads' },
+  { id: 'tasks', label: 'Tareas', icon: 'tasks' },
+  { id: 'instances', label: 'Instancias', icon: 'instances' },
+  { id: 'logs', label: 'Logs', icon: 'logs' },
+  { id: 'settings', label: 'Configuración', icon: 'settings' },
+]
+
+// Setup wizard step IDs
+export const SETUP_STEPS = ['admin', 'base', 'uploadrr', 'tmdb', 'emu', 'instances', 'complete'] as const
+export type SetupStep = (typeof SETUP_STEPS)[number]
+
+export const SETUP_STEP_LABELS: Record<SetupStep, string> = {
+  admin: 'Crear admin',
+  base: 'Configuración general',
+  uploadrr: 'Uploadrr',
+  tmdb: 'TMDb',
+  emu: 'eMuwarez',
+  instances: 'Instancias',
+  complete: 'Completar',
+}

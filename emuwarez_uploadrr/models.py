@@ -27,10 +27,23 @@ class MediaKind(str, Enum):
 class LocalStatus(str, Enum):
     AVAILABLE = "Disponible"
     MISSING = "Faltante"
+    QUEUED = "En cola"
+    DOWNLOADING = "Descargando"
+    PENDING_IMPORT = "Pendiente de importar"
+    IMPORT_ERROR = "Error de importación"
+    SEARCH_ERROR = "Error de búsqueda"
     UPLOADING = "Subiendo"
     UPLOADED = "Subido"
     ERROR = "Error"
     UNKNOWN = "Desconocido"
+
+    @classmethod
+    def not_available(cls) -> tuple[str, ...]:
+        """Statuses that mean the content is not yet locally available."""
+        return (
+            cls.MISSING.value, cls.QUEUED.value, cls.DOWNLOADING.value,
+            cls.PENDING_IMPORT.value, cls.IMPORT_ERROR.value, cls.SEARCH_ERROR.value,
+        )
 
 
 class RequestStatus(str, Enum):

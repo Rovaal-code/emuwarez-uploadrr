@@ -23,7 +23,7 @@ from .services import tasks as task_service
 MODERN_COMMANDS = {
     "configure", "doctor", "test-apis", "instances", "sync", "library",
     "requests", "missing", "prepare", "upload", "tasks", "logs", "legacy",
-    "web-contract", "db",
+    "web-contract", "db", "web",
 }
 
 
@@ -147,6 +147,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_req_endpoint = req_sub.add_parser("set-endpoint", help="Guardar endpoint de lectura de peticiones EMU")
     p_req_endpoint.add_argument("url")
     req_sub.add_parser("match", help="Recalcular cruces petición/biblioteca")
+    p_req_reviewed = req_sub.add_parser("mark-reviewed", help="Marcar petición como revisada")
+    p_req_reviewed.add_argument("id", type=int)
     p_req_create = req_sub.add_parser("create", help="Preparado para futuro: crear petición EMU")
     p_req_create.add_argument("library_id", type=int)
     p_req_create.add_argument("--dry-run", action="store_true")
@@ -183,6 +185,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_legacy.add_argument("legacy_args", nargs=argparse.REMAINDER)
 
     sub.add_parser("web-contract", help="Mostrar contrato funcional para la futura interfaz")
+
+    p_web = sub.add_parser("web", help="Servidor web backend FastAPI")
+    web_sub = p_web.add_subparsers(dest="web_command", required=True)
+    web_sub.add_parser("info", help="Mostrar información del servidor web")
+    p_serve = web_sub.add_parser("serve", help="Arrancar servidor web")
+    p_serve.add_argument("--host", default="0.0.0.0", help="Host (default: 0.0.0.0)")
+    p_serve.add_argument("--port", type=int, default=9494, help="Puerto (default: 9494)")
+    p_serve.add_argument("--reload", action="store_true", help="Recarga automática (solo desarrollo)")
+    web_sub.add_parser("setup-status", help="Mostrar estado del asistente de configuración")
+    p_create_admin = web_sub.add_parser("create-admin", help="Crear usuario administrador web")
+    p_create_admin.add_argument("--username", required=True, help="Nombre de usuario admin")
+
     return parser
 
 
@@ -283,12 +297,18 @@ def cmd_requests(args) -> int:
             print("✓ Endpoint de peticiones guardado")
             return 0
         if args.requests_command == "sync":
-            result = request_service.sync_requests(conn, endpoint_url=args.endpoint_url, force=args.force)
+            ep = getattr(args, "endpoint_url", None)
+            if ep:
+                result = request_service.sync_requests(conn, endpoint_url=ep, force=args.force)
+            else:
+                result = request_service.sync_emu_requests(conn, force=args.force)
             if result.get("status") == "throttled":
                 wait = int(result["wait_seconds"])
                 print(f"⚠ Peticiones actualizadas hace menos de una hora. Disponible en {wait // 60} min {wait % 60} s.")
                 return 0
-            print(f"✓ Peticiones sincronizadas: {result['imported']}")
+            imported = result.get("imported", 0)
+            matched = result.get("matched", 0)
+            print(f"✓ Peticiones sincronizadas: {imported} importadas, {matched} cruces")
             return 0
         if args.requests_command == "list":
             rows = request_service.list_requests(conn, limit=args.limit, search=args.search)
@@ -315,9 +335,16 @@ def cmd_requests(args) -> int:
                         print(f"  - {line}")
             return 0
         if args.requests_command == "match":
-            count = request_service.match_requests(conn)
+            count = request_service.match_all_requests(conn)
             print(f"✓ Cruces recalculados: {count}")
             return 0
+        if args.requests_command == "mark-reviewed":
+            found = request_service.mark_request_reviewed(conn, args.id)
+            if found:
+                print(f"✓ Petición {args.id} marcada como revisada")
+            else:
+                print(f"✗ Petición {args.id} no encontrada")
+            return 0 if found else 1
         if args.requests_command == "create":
             print("⚠ Crear peticiones EMU está preparado, pero no activado todavía.")
             print("  Falta capturar la request real desde DevTools > Network en eMuwarez.")
@@ -386,30 +413,184 @@ def cmd_logs(args) -> int:
 
 
 def cmd_web_contract() -> int:
-    print("""Contrato funcional preparado para la interfaz web:\n
-Dashboard:
-  - sync-library: emuwarez-uploadrr sync [--episodes]
-  - sync-requests: emuwarez-uploadrr requests sync
-  - recent-tasks: emuwarez-uploadrr tasks list
+    print("""eMuwarez Uploadrr — Contrato funcional UI/Backend (v1.0)
 
-Biblioteca:
-  - list: emuwarez-uploadrr library list
-  - detail: emuwarez-uploadrr library show <id>
-  - adaptar nomenclatura: emuwarez-uploadrr prepare <id>
-  - subir: emuwarez-uploadrr upload <id>
+Documentación completa:
+  docs/ui_backend_contract.md   — especificación detallada de UI, estados, API y flujo
+  docs/ui_backend_contract.json — contrato estructurado en JSON (validado)
 
-Faltantes:
-  - list: emuwarez-uploadrr missing list
-  - crear petición futura: emuwarez-uploadrr missing create-request <id>
+Secciones de la UI:
+  Dashboard · Biblioteca · Faltantes · Peticiones · Subidas · Tareas · Instancias · Logs · Configuración
 
-Peticiones:
-  - sync 1 vez/hora: emuwarez-uploadrr requests sync
-  - list: emuwarez-uploadrr requests list
-  - detail + motivos: emuwarez-uploadrr requests show <id>
+Estados definitivos:
+  LocalStatus:        available · missing · queued · downloading · pending_import
+                      import_error · search_error · uploading · uploaded · error · unknown
+  RequestStatus:      none · compatible · partial · not_compatible · filled · active_unmatched
+  NomenclatureStatus: correct · not_adapted · not_applicable
+  EmuExistenceStatus: not_checked · exists · not_exists · possible_duplicate · duplicate_confirmed
 
-Instancias:
-  - add/list/test/remove: emuwarez-uploadrr instances ...
+Equivalencia CLI ↔ UI:
+  sync                          → Dashboard: Sincronizar biblioteca
+  requests sync [--force]       → Dashboard: Sincronizar peticiones
+  library list/show             → Biblioteca
+  missing list                  → Faltantes
+  requests list/show/match      → Peticiones
+  instances add/list/test       → Instancias
+  prepare <id>                  → Adaptar nomenclatura
+  upload <id>                   → Subir
+  tasks list                    → Tareas
+
+Stubs activos (pendientes de implementación real):
+  requests create <id>                → endpoint POST de eMuwarez pendiente de capturar
+  missing create-request <id>         → mismo motivo
+
+Puerto web futuro: 9494
+Healthcheck: GET /api/health
 """)
+    return 0
+
+
+def cmd_web_setup_status() -> int:
+    try:
+        with connect(db_path()) as conn:
+            init_db(conn)
+            from .web.services.setup_service import get_setup_state, next_step
+            state = get_setup_state(conn)
+    except Exception as exc:
+        print(f"✗ No se pudo leer el estado del setup: {exc}")
+        return 1
+    flags = [
+        ("Admin configurado", state["admin_configured"]),
+        ("Base configurada", state["base_configured"]),
+        ("Uploadrr configurado", state["uploadrr_configured"]),
+        ("TMDb configurado", state["tmdb_configured"]),
+        ("eMuwarez configurado", state["emu_configured"]),
+        ("Instancias Radarr", state["radarr_instances"]),
+        ("Instancias Sonarr", state["sonarr_instances"]),
+        ("Inicializado", state["initialized"]),
+    ]
+    for label, value in flags:
+        mark = "✓" if value else "✗"
+        print(f"  {mark}  {label}: {value}")
+    ns = next_step(state)
+    print(f"\nSiguiente paso: {ns or 'ninguno (setup completo)'}")
+    return 0
+
+
+def cmd_web_create_admin(args) -> int:
+    import getpass
+    password = os.environ.get("EMUWAREZ_ADMIN_PASSWORD")
+    if not password:
+        try:
+            password = getpass.getpass("Contraseña para el admin: ")
+            if not password:
+                print("✗ La contraseña no puede estar vacía")
+                return 1
+            confirm = getpass.getpass("Confirmar contraseña: ")
+            if password != confirm:
+                print("✗ Las contraseñas no coinciden")
+                return 1
+        except (EOFError, KeyboardInterrupt):
+            print("\nCancelado.")
+            return 1
+    from .web.security import validate_password_strength
+    err = validate_password_strength(password)
+    if err:
+        print(f"✗ {err}")
+        return 1
+    try:
+        with connect(db_path()) as conn:
+            init_db(conn)
+            from .web.services.auth_service import admin_exists, create_user
+            if admin_exists(conn):
+                print("✗ Ya existe un usuario administrador.")
+                return 1
+            uid = create_user(conn, args.username, password, role="admin")
+            conn.commit()
+        print(f"✓ Usuario administrador '{args.username}' creado con ID {uid}")
+    except Exception as exc:
+        print(f"✗ {exc}")
+        return 1
+    return 0
+
+
+def cmd_web_info() -> int:
+    print(
+        "Backend: FastAPI\n"
+        "App: eMuwarez Uploadrr\n"
+        "Backend URL:    http://localhost:9494\n"
+        "Frontend dev:   http://localhost:5173\n"
+        "\n"
+        "── Frontend ────────────────────────────────────────\n"
+        "  cd frontend && npm install\n"
+        "  npm run dev      # servidor de desarrollo (proxy → :9494)\n"
+        "  npm run build    # construir para producción en frontend/dist\n"
+        "  npm run preview  # previsualizar el build en :4173\n"
+        "\n"
+        "── Backend + Frontend producción ───────────────────\n"
+        "  npm run build    # (en frontend/)\n"
+        "  python3 emuwarez_uploader.py web serve --port 9494\n"
+        "  # Sirve API en /api/* y frontend en /* desde frontend/dist\n"
+        "\n"
+        "── Endpoints de salud y runtime ────────────────────\n"
+        "  GET  http://localhost:9494/api/health\n"
+        "  GET  http://localhost:9494/api/runtime\n"
+        "\n"
+        "── Setup wizard ─────────────────────────────────────\n"
+        "  GET  http://localhost:9494/api/setup/status\n"
+        "  POST http://localhost:9494/api/setup/admin      (primer arranque, sin auth)\n"
+        "  POST http://localhost:9494/api/setup/base       (requiere Bearer token)\n"
+        "  POST http://localhost:9494/api/setup/uploadrr   (requiere Bearer token)\n"
+        "  POST http://localhost:9494/api/setup/tmdb       (requiere Bearer token)\n"
+        "  POST http://localhost:9494/api/setup/emu        (requiere Bearer token)\n"
+        "  POST http://localhost:9494/api/setup/instances  (requiere Bearer token)\n"
+        "  POST http://localhost:9494/api/setup/complete   (requiere Bearer token)\n"
+        "\n"
+        "── Autenticación ────────────────────────────────────\n"
+        "  POST http://localhost:9494/api/auth/login\n"
+        "  GET  http://localhost:9494/api/auth/me          (requiere Bearer token)\n"
+        "  POST http://localhost:9494/api/auth/logout      (requiere Bearer token)\n"
+        "\n"
+        "── Biblioteca ───────────────────────────────────────\n"
+        "  POST http://localhost:9494/api/sync\n"
+        "  GET  http://localhost:9494/api/library\n"
+        "  GET  http://localhost:9494/api/library/{id}\n"
+        "  GET  http://localhost:9494/api/missing\n"
+        "  GET  http://localhost:9494/api/instances\n"
+        "  GET  http://localhost:9494/api/dashboard/summary\n"
+        "  GET  http://localhost:9494/api/dashboard/activity\n"
+        "\n"
+        "── Documentación interactiva ────────────────────────\n"
+        "  http://localhost:9494/api/docs\n"
+        "  http://localhost:9494/api/openapi.json\n"
+        "\n"
+        "── Setup desde CLI ──────────────────────────────────\n"
+        "  python3 emuwarez_uploader.py web setup-status\n"
+        "  python3 emuwarez_uploader.py web create-admin --username admin\n"
+        "\n"
+        "Instalar dependencias web:\n"
+        "  pip install -e \".[web]\""
+    )
+    return 0
+
+
+def cmd_web_serve(args) -> int:
+    try:
+        import uvicorn
+    except ImportError:
+        print(
+            "✗ Faltan dependencias web. Instala el proyecto con las dependencias web:\n"
+            "  pip install -e \".[web]\"\n"
+            "O instala uvicorn y fastapi directamente:\n"
+            "  pip install uvicorn fastapi pydantic"
+        )
+        return 1
+    uvicorn.run(
+        "emuwarez_uploadrr.web.app:app",
+        host=args.host,
+        port=args.port,
+        reload=args.reload,
+    )
     return 0
 
 
@@ -452,6 +633,15 @@ def modern_main(argv: Optional[list[str]] = None) -> int:
             return legacy.main(args.legacy_args or [])
         if args.command == "web-contract":
             return cmd_web_contract()
+        if args.command == "web":
+            if args.web_command == "info":
+                return cmd_web_info()
+            if args.web_command == "serve":
+                return cmd_web_serve(args)
+            if args.web_command == "setup-status":
+                return cmd_web_setup_status()
+            if args.web_command == "create-admin":
+                return cmd_web_create_admin(args)
         parser.error("Comando no soportado")
         return 2
     except IntegrationError as exc:

@@ -1,0 +1,169 @@
+"""Real library, missing, and sync endpoints (Phase 4)."""
+from __future__ import annotations
+
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from ..dependencies import require_auth
+from ..runtime import _db_path
+from ..schemas import (
+    LibraryItemResponse, LibraryListResponse,
+    MissingItemResponse, MissingListResponse,
+    OkResponse, SyncRequest, SyncResponse,
+)
+
+router = APIRouter(tags=["library"])
+
+
+def _get_conn():
+    from emuwarez_uploadrr.database import connect, init_db
+    conn = connect(_db_path())
+    init_db(conn)
+    return conn
+
+
+def _to_lib_response(row: dict) -> LibraryItemResponse:
+    return LibraryItemResponse(
+        id=row["id"],
+        item_type=row["item_type"],
+        title=row["title"],
+        year=row.get("year"),
+        original_title=row.get("original_title"),
+        instance_type=row.get("instance_type"),
+        instance_name=row.get("instance_name"),
+        external_id=row.get("external_id"),
+        tmdb_id=row.get("tmdb_id"),
+        imdb_id=row.get("imdb_id"),
+        tvdb_id=row.get("tvdb_id"),
+        path=row.get("path"),
+        quality=row.get("quality"),
+        resolution=row.get("resolution"),
+        source=row.get("source"),
+        size_bytes=row.get("size_bytes"),
+        local_status=row["local_status"],
+        request_status=row["request_status"],
+        nomenclature_status=row["nomenclature_status"],
+        updated_at=row.get("updated_at"),
+    )
+
+
+def _to_missing_response(row: dict) -> MissingItemResponse:
+    return MissingItemResponse(
+        id=row["id"],
+        item_type=row["item_type"],
+        title=row["title"],
+        year=row.get("year"),
+        instance_type=row.get("instance_type"),
+        instance_name=row.get("instance_name"),
+        tmdb_id=row.get("tmdb_id"),
+        imdb_id=row.get("imdb_id"),
+        local_status=row["local_status"],
+        request_status=row["request_status"],
+        updated_at=row.get("updated_at"),
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /api/sync — sync all instances
+# ---------------------------------------------------------------------------
+
+@router.post("/sync", response_model=SyncResponse)
+def sync_all(
+    body: Optional[SyncRequest] = None,
+    current_user: dict = Depends(require_auth),
+) -> SyncResponse:
+    from emuwarez_uploadrr.services.library import sync_all as _sync_all
+    include_episodes = body.include_episodes if body else True
+    with _get_conn() as conn:
+        try:
+            result = _sync_all(conn, include_episodes=include_episodes)
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Error en sync: {exc}")
+    return SyncResponse(
+        imported=result.get("imported", 0),
+        missing=result.get("missing", 0),
+        instances=result.get("instances", 0),
+        errors=result.get("errors", []),
+        message=(
+            f"Sincronizadas {result.get('instances', 0)} instancias: "
+            f"{result.get('imported', 0)} elementos, {result.get('missing', 0)} no disponibles"
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET /api/library
+# ---------------------------------------------------------------------------
+
+@router.get("/library", response_model=LibraryListResponse)
+def library_list(
+    current_user: dict = Depends(require_auth),
+    item_type: Optional[str] = Query(None, alias="type"),
+    origin: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    request_status: Optional[str] = Query(None, alias="request_status"),
+    nomenclature: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+) -> LibraryListResponse:
+    from emuwarez_uploadrr.services.library import list_library, count_library
+    with _get_conn() as conn:
+        rows = list_library(
+            conn,
+            status=status,
+            request=request_status,
+            nomenclature=nomenclature,
+            item_type=item_type,
+            origin=origin,
+            search=search,
+            limit=limit,
+            offset=offset,
+        )
+        total = count_library(conn, status=status, item_type=item_type, search=search)
+    return LibraryListResponse(
+        items=[_to_lib_response(r) for r in rows],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET /api/library/{item_id}
+# ---------------------------------------------------------------------------
+
+@router.get("/library/{item_id}", response_model=LibraryItemResponse)
+def library_detail(
+    item_id: int,
+    current_user: dict = Depends(require_auth),
+) -> LibraryItemResponse:
+    from emuwarez_uploadrr.services.library import get_library_item
+    with _get_conn() as conn:
+        row = get_library_item(conn, item_id)
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Item {item_id} no encontrado")
+    return _to_lib_response(row)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/missing
+# ---------------------------------------------------------------------------
+
+@router.get("/missing", response_model=MissingListResponse)
+def missing_list(
+    current_user: dict = Depends(require_auth),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+) -> MissingListResponse:
+    from emuwarez_uploadrr.services.library import list_missing, count_library
+    from emuwarez_uploadrr.models import LocalStatus
+    with _get_conn() as conn:
+        rows = list_missing(conn, limit=limit, offset=offset)
+    return MissingListResponse(
+        items=[_to_missing_response(r) for r in rows],
+        total=len(rows),
+        limit=limit,
+        offset=offset,
+    )

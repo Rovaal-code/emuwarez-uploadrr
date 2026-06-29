@@ -23,7 +23,7 @@ from .services import tasks as task_service
 MODERN_COMMANDS = {
     "configure", "doctor", "test-apis", "instances", "sync", "library",
     "requests", "missing", "prepare", "upload", "tasks", "logs", "legacy",
-    "web-contract", "db", "web", "nomenclature",
+    "web-contract", "db", "web", "nomenclature", "maintenance",
 }
 
 
@@ -230,6 +230,40 @@ def build_parser() -> argparse.ArgumentParser:
     web_sub.add_parser("doctor", help="Diagnóstico del runtime de la aplicación")
     p_create_admin = web_sub.add_parser("create-admin", help="Crear usuario administrador web")
     p_create_admin.add_argument("--username", required=True, help="Nombre de usuario admin")
+
+    p_maint = sub.add_parser("maintenance", help="Mantenimiento: backup, configuración, BD y logs")
+    maint_sub = p_maint.add_subparsers(dest="maintenance_command", required=True)
+
+    maint_sub.add_parser("status", help="Estado general: inventario config, BD y backups")
+
+    p_backup = maint_sub.add_parser("backup", help="Crear backup comprimido del directorio de configuración")
+    p_backup.add_argument("--include-secrets", action="store_true", help="Incluir secretos en el backup")
+    p_backup.add_argument("--confirm", metavar="TOKEN", dest="confirm", help="Token de confirmación para incluir secretos: RESTAURAR_CONFIG")
+
+    maint_sub.add_parser("list-backups", help="Listar backups existentes")
+
+    p_restore = maint_sub.add_parser("restore", help="Restaurar un backup")
+    p_restore.add_argument("backup_path", help="Ruta del archivo .tar.gz a restaurar")
+    p_restore.add_argument("--dry-run", action="store_true", default=True, help="Solo previsualización (por defecto)")
+    p_restore.add_argument("--apply", action="store_true", dest="maint_apply", help="Aplicar restauración real")
+    p_restore.add_argument("--confirm", metavar="TOKEN", dest="confirm", help="Token: RESTAURAR_CONFIG")
+
+    p_export = maint_sub.add_parser("export-settings", help="Exportar ajustes (secretos enmascarados por defecto)")
+    p_export.add_argument("--include-secrets", action="store_true", help="Incluir secretos sin enmascarar")
+    p_export.add_argument("--confirm", metavar="TOKEN", dest="confirm", help="Token para secretos: EXPORTAR_SECRETOS")
+
+    maint_sub.add_parser("db-integrity", help="PRAGMA integrity_check (solo lectura)")
+
+    p_vacuum = maint_sub.add_parser("db-vacuum", help="VACUUM en la BD SQLite")
+    p_vacuum.add_argument("--dry-run", action="store_true", default=True, help="Solo previsualización (por defecto)")
+    p_vacuum.add_argument("--apply", action="store_true", dest="maint_apply", help="Ejecutar VACUUM real")
+    p_vacuum.add_argument("--confirm", metavar="TOKEN", dest="confirm", help="Token: MANTENIMIENTO_DB")
+
+    p_cleanup = maint_sub.add_parser("cleanup-logs", help="Eliminar logs internos antiguos")
+    p_cleanup.add_argument("--days", type=int, default=30, help="Eliminar logs más antiguos de N días (default: 30)")
+    p_cleanup.add_argument("--dry-run", action="store_true", default=True, help="Solo previsualización (por defecto)")
+    p_cleanup.add_argument("--apply", action="store_true", dest="maint_apply", help="Ejecutar limpieza real")
+    p_cleanup.add_argument("--confirm", metavar="TOKEN", dest="confirm", help="Token: LIMPIAR_LOGS")
 
     return parser
 
@@ -895,6 +929,114 @@ def cmd_web_info() -> int:
     return 0
 
 
+def cmd_maintenance(args) -> int:
+    import json as _json
+    from emuwarez_uploadrr.services import backup_service, config_export, maintenance_service
+
+    cmd = args.maintenance_command
+
+    if cmd == "status":
+        inv = backup_service.get_config_inventory()
+        db_st = maintenance_service.get_database_maintenance_status()
+        bkps = backup_service.list_config_backups()
+        print(f"CONFIG_DIR:   {inv.get('config_dir')}")
+        print(f"Archivos:     {len(inv.get('files', []))}")
+        print(f"Tamaño total: {inv.get('total_size_bytes', 0):,} bytes")
+        if db_st.get("ok"):
+            print(f"\nBD: {db_st.get('size_bytes', 0):,} bytes  |  freelist: {db_st.get('freelist_count', 0)}")
+        else:
+            print(f"\nBD: {db_st.get('error')}")
+        print(f"\nBackups:      {len(bkps)}")
+        if bkps:
+            print(f"Último:       {bkps[0]['name']}  ({bkps[0]['size_bytes']:,} bytes)")
+        return 0
+
+    if cmd == "backup":
+        result = backup_service.create_config_backup(
+            include_secrets=getattr(args, "include_secrets", False),
+            confirmation=getattr(args, "confirm", None),
+        )
+        if result.get("ok"):
+            print(f"✓ Backup creado: {result['archive_path']}  ({result['size_bytes']:,} bytes)")
+        else:
+            print(f"✗ {result.get('error')}")
+        return 0 if result.get("ok") else 1
+
+    if cmd == "list-backups":
+        bkps = backup_service.list_config_backups()
+        if not bkps:
+            print("No hay backups.")
+            return 0
+        _print_table(
+            ["Nombre", "Tamaño", "Fecha"],
+            [[b["name"], f"{b['size_bytes']:,}", b["created_at"]] for b in bkps],
+        )
+        return 0
+
+    if cmd == "restore":
+        result = backup_service.restore_config_backup(
+            args.backup_path,
+            dry_run=not getattr(args, "maint_apply", False),
+            apply=getattr(args, "maint_apply", False),
+            confirmation=getattr(args, "confirm", None),
+        )
+        if result.get("ok"):
+            print(f"✓ {result.get('message') or result.get('action')}")
+            if result.get("dry_run"):
+                print(f"  Archivos en el backup: {result.get('files_in_archive', 0)}")
+        else:
+            print(f"✗ {result.get('error')}")
+        return 0 if result.get("ok") else 1
+
+    if cmd == "export-settings":
+        result = config_export.export_settings(
+            include_secrets=getattr(args, "include_secrets", False),
+            confirmation=getattr(args, "confirm", None),
+        )
+        if result.get("ok"):
+            print(_json.dumps(result.get("settings", {}), indent=2, ensure_ascii=False))
+            if result.get("secrets_masked"):
+                print("\n(Secretos enmascarados — usa --include-secrets --confirm EXPORTAR_SECRETOS para verlos)")
+        else:
+            print(f"✗ {result.get('error')}")
+        return 0 if result.get("ok") else 1
+
+    if cmd == "db-integrity":
+        result = maintenance_service.run_database_integrity_check()
+        icon = "✓" if result.get("ok") else "✗"
+        print(f"{icon} {result.get('message') or result.get('error')}")
+        return 0 if result.get("ok") else 1
+
+    if cmd == "db-vacuum":
+        result = maintenance_service.run_database_vacuum(
+            dry_run=not getattr(args, "maint_apply", False),
+            apply=getattr(args, "maint_apply", False),
+            confirmation=getattr(args, "confirm", None),
+        )
+        if result.get("ok"):
+            print(f"✓ {result.get('message')}")
+            if not result.get("dry_run"):
+                print(f"  Antes: {result.get('size_bytes_before', 0):,} bytes  →  Después: {result.get('size_bytes_after', 0):,} bytes")
+        else:
+            print(f"✗ {result.get('error')}")
+        return 0 if result.get("ok") else 1
+
+    if cmd == "cleanup-logs":
+        result = maintenance_service.cleanup_old_logs(
+            days=getattr(args, "days", 30),
+            dry_run=not getattr(args, "maint_apply", False),
+            apply=getattr(args, "maint_apply", False),
+            confirmation=getattr(args, "confirm", None),
+        )
+        if result.get("ok"):
+            print(f"✓ {result.get('message')}")
+        else:
+            print(f"✗ {result.get('error')}")
+        return 0 if result.get("ok") else 1
+
+    return 1
+
+
 def cmd_web_doctor() -> int:
     from emuwarez_uploadrr.services.runtime_diagnostics import get_runtime_diagnostics
     result = get_runtime_diagnostics()
@@ -991,6 +1133,8 @@ def modern_main(argv: Optional[list[str]] = None) -> int:
                 return cmd_web_doctor()
             if args.web_command == "create-admin":
                 return cmd_web_create_admin(args)
+        if args.command == "maintenance":
+            return cmd_maintenance(args)
         parser.error("Comando no soportado")
         return 2
     except IntegrationError as exc:

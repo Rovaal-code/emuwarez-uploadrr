@@ -703,3 +703,39 @@ class DashboardSummaryResponseV2(DashboardSummaryResponse):
     uploads_completed: int = 0
     uploads_failed: int = 0
     last_upload_at: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Phase 7C — Maintenance / Backup / Config Export
+# ---------------------------------------------------------------------------
+
+class BackupRequest(BaseModel):
+    include_secrets: bool = False
+    confirmation: Optional[str] = None
+
+
+class RestoreRequest(BaseModel):
+    backup_path: str
+    dry_run: bool = True
+    apply: bool = False
+    confirmation: Optional[str] = None
+
+
+class ImportSettingsRequest(BaseModel):
+    payload: dict[str, Any]
+    dry_run: bool = True
+    apply: bool = False
+    confirmation: Optional[str] = None
+
+
+class VacuumRequest(BaseModel):
+    dry_run: bool = True
+    apply: bool = False
+    confirmation: Optional[str] = None
+
+
+class CleanupLogsRequest(BaseModel):
+    days: int = 30
+    dry_run: bool = True
+    apply: bool = False
+    confirmation: Optional[str] = None

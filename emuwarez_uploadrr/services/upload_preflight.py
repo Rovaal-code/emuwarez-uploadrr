@@ -73,6 +73,12 @@ def validate_upload_preconditions(library_item: dict, proposal: dict | None = No
         if proposal and proposal.get("status") == "blocked":
             errors.append("Hay errores en la propuesta de nomenclatura que bloquean la subida.")
 
+        if not library_item.get("prepared_path"):
+            warnings.append(
+                "Nomenclatura no aplicada: se usaría el archivo original. "
+                "Considera aplicar la nomenclatura antes de subir."
+            )
+
         return {"ok": len(errors) == 0, "errors": errors, "warnings": warnings}
     finally:
         if own:
@@ -95,7 +101,9 @@ def build_uploadrr_command_preview(
         media_type = library_item.get("item_type") or "movie"
         tmdb_id = library_item.get("tmdb_id")
         resolution = (proposal or {}).get("resolution") or library_item.get("resolution") or ""
-        source_path = library_item.get("path") or ""
+        # Prefer prepared_path (nomenclature applied) over original path
+        has_prepared = bool(library_item.get("prepared_path"))
+        source_path = library_item.get("prepared_path") or library_item.get("path") or ""
 
         category = "tv" if media_type in ("tv", "series", "anime") else "movie"
         tracker = "EMU"
@@ -124,6 +132,7 @@ def build_uploadrr_command_preview(
             "tmdb_id": tmdb_id,
             "resolution": resolution,
             "source_path": source_path,
+            "using_prepared_path": has_prepared,
             "command_preview": command_str,
             "command_args": args,
             "note": "Esta es una previsualización. El comando NO ha sido ejecutado.",

@@ -272,6 +272,21 @@ export interface UploadJob {
   updated_at?: string
 }
 
+// Phase 6B — Nomenclature apply result
+
+export interface NomenclatureApplyResult {
+  dry_run: boolean
+  apply: boolean
+  status: string
+  source_path?: string
+  destination_path?: string
+  operation_id?: number
+  proposal?: NomenclatureProposal
+  warnings: string[]
+  errors: string[]
+  message?: string
+}
+
 export interface CommandPreview {
   uploadrr_path?: string
   tracker?: string
@@ -282,6 +297,7 @@ export interface CommandPreview {
   source_path?: string
   command_preview?: string
   note?: string
+  using_prepared_path?: boolean
 }
 
 export interface UploadPreflightResponse {

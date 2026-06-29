@@ -521,6 +521,22 @@ class NomenclaturePreviewBody(BaseModel):
 class AdaptNomenclatureBody(BaseModel):
     dry_run: bool = True
     apply: bool = False
+    confirmation: Optional[str] = None
+    overwrite: bool = False
+    proposal_id: Optional[int] = None
+
+
+class NomenclatureApplyResult(BaseModel):
+    dry_run: bool
+    apply: bool
+    status: str
+    source_path: Optional[str] = None
+    destination_path: Optional[str] = None
+    operation_id: Optional[int] = None
+    proposal: Optional["NomenclatureProposalResponse"] = None
+    warnings: list[str] = []
+    errors: list[str] = []
+    message: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -541,6 +557,7 @@ class CommandPreviewResponse(BaseModel):
     source_path: Optional[str] = None
     command_preview: Optional[str] = None
     note: Optional[str] = None
+    using_prepared_path: Optional[bool] = None
 
 
 class UploadJobResponse(BaseModel):

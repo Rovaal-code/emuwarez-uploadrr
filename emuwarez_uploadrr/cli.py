@@ -168,9 +168,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_nom_preview.add_argument("--force", action="store_true", help="Forzar regeneración aunque ya exista propuesta")
     p_nom_show = nom_sub.add_parser("show", help="Mostrar última propuesta de nomenclatura")
     p_nom_show.add_argument("id", type=int, help="ID del library_item")
-    p_nom_apply = nom_sub.add_parser("apply", help="[Sólo previsualización] Adaptar nomenclatura (requiere --dry-run en esta fase)")
+    p_nom_apply = nom_sub.add_parser("apply", help="Adaptar nomenclatura creando hardlink preparado")
     p_nom_apply.add_argument("id", type=int, help="ID del library_item")
-    p_nom_apply.add_argument("--dry-run", action="store_true", help="Modo previsualización (obligatorio en esta fase)")
+    p_nom_apply.add_argument("--dry-run", action="store_true", help="Solo previsualización (no escribe nada)")
+    p_nom_apply.add_argument("--apply", action="store_true", dest="nom_apply", help="Aplicar cambios reales")
+    p_nom_apply.add_argument("--confirm", metavar="TOKEN", dest="confirm_token", help="Token de confirmación: APLICAR_NOMENCLATURA")
 
     p_prepare = sub.add_parser("prepare", help="Adaptar nomenclatura / generar propuesta")
     p_prepare.add_argument("target", help="ID de biblioteca o ruta")
@@ -430,14 +432,36 @@ def cmd_nomenclature(args) -> int:
             _print_nomenclature_proposal(proposal)
             return 0
         if args.nomenclature_command == "apply":
-            if not getattr(args, "dry_run", False):
-                print("⚠ La aplicación real de nomenclatura queda pendiente de una fase posterior.")
-                print("  En esta fase solo se generan previsualizaciones seguras.")
-                print("  Usa: nomenclature apply <id> --dry-run  para ver la propuesta.")
-                return 0
-            proposal = build_nomenclature_proposal(args.id, force_refresh=False, conn=conn)
-            _print_nomenclature_proposal(proposal)
-            print("\nModo previsualización (--dry-run). No se ha modificado ningún archivo.")
+            from .services.nomenclature import apply_nomenclature_proposal, CONFIRMATION_TOKEN
+            do_apply = getattr(args, "nom_apply", False)
+            dry_run = getattr(args, "dry_run", False) or not do_apply
+            confirmation = getattr(args, "confirm_token", None)
+            result = apply_nomenclature_proposal(
+                args.id,
+                dry_run=dry_run,
+                apply=do_apply,
+                confirmation=confirmation,
+                conn=conn,
+            )
+            mode = "Previsualización" if result.get("dry_run") else "Aplicar"
+            print(f"\n── Nomenclatura / {mode} ─────────────────────────────")
+            print(f"\nArchivo original:\n  {result.get('source_path') or '–'}")
+            print(f"\nArchivo preparado:\n  {result.get('destination_path') or '–'}")
+            print(f"\nEstado:\n  {result.get('status', '–')}")
+            if result.get("warnings"):
+                print("\nAvisos:")
+                for w in result["warnings"]:
+                    print(f"  - {w}")
+            if result.get("errors"):
+                print("\nErrores:")
+                for e in result["errors"]:
+                    print(f"  ✗ {e}")
+            if result.get("message"):
+                print(f"\nMensaje:\n  {result['message']}")
+            print("\nSeguridad:")
+            print("  ✓ El archivo original no se ha renombrado.")
+            print("  ✓ Uploadrr no se ha ejecutado.")
+            print("  ✓ mkvpropedit no se ha ejecutado.")
             return 0
     return 1
 

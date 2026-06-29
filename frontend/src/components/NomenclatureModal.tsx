@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import type { NomenclatureProposal } from '../types/api'
-import { previewNomenclature } from '../api/nomenclature'
+import type { NomenclatureProposal, NomenclatureApplyResult } from '../types/api'
+import { previewNomenclature, adaptNomenclature } from '../api/nomenclature'
 
 interface Props {
   itemId: number
@@ -25,14 +25,25 @@ const STATUS_CLASS: Record<string, string> = {
   applied: 'badge req-filled',
 }
 
+const CONFIRMATION_TOKEN = 'APLICAR_NOMENCLATURA'
+
 export function NomenclatureModal({ itemId, itemTitle, onClose }: Props) {
   const [proposal, setProposal] = useState<NomenclatureProposal | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Apply section state
+  const [applyResult, setApplyResult] = useState<NomenclatureApplyResult | null>(null)
+  const [applyLoading, setApplyLoading] = useState(false)
+  const [applyError, setApplyError] = useState<string | null>(null)
+  const [confirmInput, setConfirmInput] = useState('')
+  const [showApplySection, setShowApplySection] = useState(false)
+
   const load = async (force = false) => {
     setLoading(true)
     setError(null)
+    setApplyResult(null)
+    setApplyError(null)
     try {
       const p = await previewNomenclature(itemId, force)
       setProposal(p)
@@ -45,8 +56,46 @@ export function NomenclatureModal({ itemId, itemTitle, onClose }: Props) {
 
   useEffect(() => { load(false) }, [itemId])
 
+  const handleDryRun = async () => {
+    setApplyLoading(true)
+    setApplyError(null)
+    setApplyResult(null)
+    try {
+      const r = await adaptNomenclature(itemId, { dryRun: true })
+      setApplyResult(r)
+    } catch (e: unknown) {
+      setApplyError(e instanceof Error ? e.message : 'Error al ejecutar dry-run.')
+    } finally {
+      setApplyLoading(false)
+    }
+  }
+
+  const handleApply = async () => {
+    if (confirmInput !== CONFIRMATION_TOKEN) {
+      setApplyError(`Escribe exactamente: ${CONFIRMATION_TOKEN}`)
+      return
+    }
+    setApplyLoading(true)
+    setApplyError(null)
+    setApplyResult(null)
+    try {
+      const r = await adaptNomenclature(itemId, {
+        dryRun: false,
+        apply: true,
+        confirmation: confirmInput,
+      })
+      setApplyResult(r)
+    } catch (e: unknown) {
+      setApplyError(e instanceof Error ? e.message : 'Error al aplicar nomenclatura.')
+    } finally {
+      setApplyLoading(false)
+    }
+  }
+
   const statusLabel = proposal ? (STATUS_LABELS[proposal.status] || proposal.status) : ''
   const statusClass = proposal ? (STATUS_CLASS[proposal.status] || 'badge req-unknown') : ''
+  const canApply = proposal && proposal.status !== 'blocked'
+  const alreadyApplied = applyResult?.status === 'applied'
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -120,23 +169,128 @@ export function NomenclatureModal({ itemId, itemTitle, onClose }: Props) {
                   </ul>
                 </div>
               )}
+
+              {/* Apply section */}
+              {canApply && (
+                <div
+                  className="detail-panel__section"
+                  style={{ marginTop: 16, padding: '12px', background: 'rgba(99,102,241,0.08)', borderRadius: 6 }}
+                >
+                  <div className="detail-panel__section-title" style={{ marginBottom: 8 }}>
+                    Crear hardlink preparado
+                  </div>
+                  {!showApplySection ? (
+                    <button className="btn btn-secondary" onClick={() => setShowApplySection(true)}>
+                      Mostrar opciones de aplicación
+                    </button>
+                  ) : (
+                    <>
+                      <p style={{ fontSize: '0.85rem', marginBottom: 8, color: 'var(--color-text-muted, #9ca3af)' }}>
+                        Se creará un hardlink del archivo original con el nombre propuesto.
+                        El archivo original no se modifica. Uploadrr no se ejecuta.
+                      </p>
+                      <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                        <button
+                          className="btn btn-secondary"
+                          onClick={handleDryRun}
+                          disabled={applyLoading}
+                        >
+                          Previsualizar
+                        </button>
+                      </div>
+                      {!alreadyApplied && (
+                        <>
+                          <div style={{ marginTop: 8, marginBottom: 4, fontSize: '0.85rem' }}>
+                            Para aplicar, escribe el token de confirmación:
+                          </div>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <input
+                              type="text"
+                              value={confirmInput}
+                              onChange={e => setConfirmInput(e.target.value)}
+                              placeholder={CONFIRMATION_TOKEN}
+                              style={{
+                                flex: 1,
+                                padding: '4px 8px',
+                                fontFamily: 'monospace',
+                                fontSize: '0.85rem',
+                                background: 'rgba(0,0,0,0.3)',
+                                border: '1px solid rgba(255,255,255,0.15)',
+                                borderRadius: 4,
+                                color: 'inherit',
+                              }}
+                            />
+                            <button
+                              className="btn btn-primary"
+                              onClick={handleApply}
+                              disabled={applyLoading || confirmInput !== CONFIRMATION_TOKEN}
+                            >
+                              Aplicar
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </>
+                  )}
+
+                  {applyLoading && <p style={{ marginTop: 8, fontSize: '0.85rem' }}>Procesando…</p>}
+                  {applyError && (
+                    <p style={{ marginTop: 8, fontSize: '0.85rem', color: 'var(--color-error, #f87171)' }}>
+                      {applyError}
+                    </p>
+                  )}
+                  {applyResult && (
+                    <div style={{ marginTop: 8 }}>
+                      <div style={{ marginBottom: 4 }}>
+                        <span
+                          className={applyResult.status === 'applied'
+                            ? 'badge req-filled'
+                            : applyResult.status === 'ready'
+                            ? 'badge req-compatible'
+                            : 'badge req-not-compatible'}
+                        >
+                          {applyResult.status === 'applied' ? 'Aplicado'
+                            : applyResult.status === 'ready' ? 'Previsualización OK'
+                            : applyResult.status}
+                        </span>
+                      </div>
+                      {applyResult.destination_path && (
+                        <div className="detail-row" style={{ fontSize: '0.8rem' }}>
+                          <span className="text-muted">Hardlink:</span>
+                          <span style={{ wordBreak: 'break-all' }}>{applyResult.destination_path}</span>
+                        </div>
+                      )}
+                      {applyResult.message && (
+                        <p style={{ fontSize: '0.8rem', marginTop: 4, color: 'var(--color-text-muted, #9ca3af)' }}>
+                          {applyResult.message}
+                        </p>
+                      )}
+                      {applyResult.warnings.length > 0 && (
+                        <ul className="detail-panel__reasons" style={{ marginTop: 4 }}>
+                          {applyResult.warnings.map((w, i) => <li key={i} style={{ fontSize: '0.8rem' }}>{w}</li>)}
+                        </ul>
+                      )}
+                      {applyResult.errors.length > 0 && (
+                        <ul className="detail-panel__reasons" style={{ marginTop: 4 }}>
+                          {applyResult.errors.map((e, i) => (
+                            <li key={i} style={{ fontSize: '0.8rem', color: 'var(--color-error, #f87171)' }}>{e}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
 
           <div className="detail-panel__section" style={{ marginTop: 16, padding: '8px 12px', background: 'rgba(255,200,0,0.08)', borderRadius: 6, fontSize: '0.85rem' }}>
-            Esto es una previsualización. No se ha renombrado, hardlinkeado ni subido nada.
+            Seguridad: el archivo original nunca se renombra. Uploadrr y mkvpropedit no se ejecutan.
           </div>
         </div>
         <div className="detail-panel__actions" style={{ padding: '12px 16px' }}>
           <button className="btn btn-secondary" onClick={() => load(true)} disabled={loading}>
             Generar de nuevo
-          </button>
-          <button
-            className="btn btn-primary"
-            disabled
-            title="Disponible en una fase posterior. Esta versión solo genera previsualización segura."
-          >
-            Aplicar cambios
           </button>
           <button className="btn btn-secondary" onClick={onClose}>Cerrar</button>
         </div>

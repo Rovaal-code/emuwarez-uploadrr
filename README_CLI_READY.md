@@ -306,10 +306,29 @@ Implementado en Fase 5B:
 - Rate limit 1 hora con `--force` override.
 - Dashboard summary enriquecido con estadísticas EMU.
 
+Implementado en Fase 6B — Aplicación segura de nomenclatura:
+
+- Servicio `filesystem_apply.py`: planificación y ejecución de hardlinks con contrato de seguridad estricto (sin modificación del archivo original, sin ejecución de Uploadrr/mkvpropedit, sin copia cross-device).
+- `build_safe_apply_plan()`: valida origen, destino, path traversal, EXDEV, sin symlinks como origen.
+- `apply_hardlink_plan()`: crea directorio padre + `os.link()` en modo real; solo previsualización en `dry_run=True`.
+- `apply_nomenclature_proposal()` con token de confirmación `APLICAR_NOMENCLATURA`: requiere `dry_run=False, apply=True, confirmation="APLICAR_NOMENCLATURA"` para writes reales.
+- `dry_run=True` siempre tiene precedencia sobre `apply=True`.
+- Tabla `filesystem_operations`: historial de operaciones con estado, rutas y resultado JSON.
+- Columnas nuevas: `nomenclature_proposals.(applied_path, applied_at, operation_id)`, `library_items.(prepared_path, nomenclature_applied_at)`.
+- Schema SQLite v5.
+- Endpoint `POST /api/library/{id}/adapt-nomenclature` actualizado con resultado real (`NomenclatureApplyResult`).
+- Endpoint `GET /api/library/{id}/nomenclature/operations`: historial de operaciones.
+- `upload_preflight`: prefiere `prepared_path` sobre `path`; avisa si no se ha aplicado nomenclatura; añade `using_prepared_path` al preview de comando.
+- CLI `nomenclature apply <id> [--dry-run] [--apply --confirm APLICAR_NOMENCLATURA]`.
+- Frontend: NomenclatureModal con sección de confirmación y creación de hardlink. UploadPreflightModal con indicador "preparado"/"original".
+- 43 tests nuevos (filesystem_apply, nomenclature_apply, nomenclature_apply_api). Total: 329 tests.
+
 Pendiente para fases posteriores:
 
 - Crear peticiones EMU desde la app (requiere capturar POST real desde DevTools).
 - Docker.
-- SettingsPage con formularios de configuración real.
+- SettingsPage con formularios de configuración real (incluyendo `hardlink_base`).
 - TasksPage con datos reales.
 - UploadsPage con flujo de subida.
+- Ejecución real de Uploadrr.
+- Modificación de título interno MKV (`mkvpropedit`).

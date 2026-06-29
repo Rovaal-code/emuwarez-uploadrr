@@ -1,4 +1,4 @@
-"""API endpoints for nomenclature proposals (Phase 6A)."""
+"""API endpoints for nomenclature proposals (Phases 6A + 6B)."""
 from __future__ import annotations
 
 import json
@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ...database import connect, init_db
 from ...services.nomenclature import (
+    apply_nomenclature_proposal,
     build_nomenclature_proposal,
     get_latest_nomenclature_proposal,
 )
@@ -14,6 +15,7 @@ from ..dependencies import require_auth
 from ..runtime import _db_path
 from ..schemas import (
     AdaptNomenclatureBody,
+    NomenclatureApplyResult,
     NomenclatureExistsResponse,
     NomenclaturePreviewBody,
     NomenclatureProposalResponse,
@@ -95,34 +97,78 @@ def preview_nomenclature(
     return _proposal_to_response(proposal)
 
 
-@router.post("/library/{item_id}/adapt-nomenclature")
+@router.post("/library/{item_id}/adapt-nomenclature", response_model=NomenclatureApplyResult)
 def adapt_nomenclature(
     item_id: int,
     body: AdaptNomenclatureBody,
     current_user: dict = Depends(require_auth),
 ):
     with _get_conn() as conn:
-        proposal = get_latest_nomenclature_proposal(item_id, conn=conn)
+        result = apply_nomenclature_proposal(
+            item_id,
+            proposal_id=body.proposal_id,
+            dry_run=body.dry_run,
+            apply=body.apply,
+            confirmation=body.confirmation,
+            overwrite=body.overwrite,
+            conn=conn,
+        )
 
-    if body.apply and not body.dry_run:
-        return {
-            "implemented": False,
-            "stub": True,
-            "blocked": True,
-            "message": (
-                "La aplicación real de nomenclatura queda pendiente de una fase posterior. "
-                "Esta fase solo genera previsualizaciones seguras."
-            ),
-            "proposal": _proposal_to_response(proposal) if proposal else None,
-        }
+    proposal = result.get("proposal")
+    proposal_resp = _proposal_to_response(proposal) if proposal else None
 
-    if not proposal:
-        with _get_conn() as conn:
-            proposal = build_nomenclature_proposal(item_id, force_refresh=False, conn=conn)
+    return NomenclatureApplyResult(
+        dry_run=result.get("dry_run", True),
+        apply=result.get("apply", False),
+        status=result.get("status", "blocked"),
+        source_path=result.get("source_path"),
+        destination_path=result.get("destination_path"),
+        operation_id=result.get("operation_id"),
+        proposal=proposal_resp,
+        warnings=result.get("warnings", []),
+        errors=result.get("errors", []),
+        message=result.get("message"),
+    )
 
-    return {
-        "dry_run": True,
-        "applied": False,
-        "message": "Modo previsualización. No se ha modificado ningún archivo.",
-        "proposal": _proposal_to_response(proposal) if proposal else None,
-    }
+
+@router.get("/library/{item_id}/nomenclature/operations")
+def get_nomenclature_operations(item_id: int, current_user: dict = Depends(require_auth)):
+    """Return filesystem operation history for a library item."""
+    with _get_conn() as conn:
+        rows = conn.execute(
+            """SELECT * FROM filesystem_operations
+               WHERE library_item_id = ? AND operation_type = 'nomenclature_hardlink'
+               ORDER BY created_at DESC LIMIT 20""",
+            (item_id,),
+        ).fetchall()
+    ops = []
+    for r in rows:
+        d = dict(r)
+        warnings: list[str] = []
+        errors: list[str] = []
+        try:
+            warnings = json.loads(d.get("warnings_json") or "[]")
+        except Exception:
+            pass
+        try:
+            errors = json.loads(d.get("errors_json") or "[]")
+        except Exception:
+            pass
+        ops.append(
+            {
+                "id": d.get("id"),
+                "operation_type": d.get("operation_type"),
+                "status": d.get("status"),
+                "library_item_id": d.get("library_item_id"),
+                "proposal_id": d.get("proposal_id"),
+                "source_path": d.get("source_path"),
+                "destination_path": d.get("destination_path"),
+                "base_path": d.get("base_path"),
+                "dry_run": bool(d.get("dry_run", 1)),
+                "warnings": warnings,
+                "errors": errors,
+                "created_at": d.get("created_at"),
+                "applied_at": d.get("applied_at"),
+            }
+        )
+    return ops

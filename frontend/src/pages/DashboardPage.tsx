@@ -142,14 +142,27 @@ export function DashboardPage() {
         <div>
           <div className="upload-panel">
             <div className="section-header">
-              <div className="section-title">Actividad de subida</div>
+              <div className="section-title">Subidas Uploadrr</div>
             </div>
-            <div className="upload-panel-body">
-              <EmptyState
-                icon="📤"
-                title="Sin subidas activas"
-                body="Los trabajos de subida aparecerán aquí cuando inicies una subida desde Biblioteca o Peticiones."
-              />
+            <div className="upload-panel-body" style={{ padding: '12px 16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                {[
+                  { label: 'Listos', value: (s as any).uploads_ready ?? 0, color: 'var(--color-available)' },
+                  { label: 'En curso', value: (s as any).uploads_running ?? 0, color: '#a78bfa' },
+                  { label: 'Completados', value: (s as any).uploads_completed ?? 0, color: 'var(--color-uploaded)' },
+                  { label: 'Fallidos', value: (s as any).uploads_failed ?? 0, color: 'var(--color-missing)' },
+                ].map(item => (
+                  <div key={item.label} style={{ padding: '8px 12px', background: 'rgba(255,255,255,0.04)', borderRadius: 6, borderLeft: `3px solid ${item.color}` }}>
+                    <div style={{ fontSize: '1.3rem', fontWeight: 600, color: item.color }}>{item.value}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.label}</div>
+                  </div>
+                ))}
+              </div>
+              {(s as any).last_upload_at && (
+                <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 10 }}>
+                  Última actualización: {formatDate((s as any).last_upload_at)}
+                </p>
+              )}
             </div>
           </div>
         </div>

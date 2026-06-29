@@ -310,6 +310,12 @@ class DashboardSummaryResponse(BaseModel):
     requests_compatible: int = 0
     requests_filled: int = 0
     requests_last_sync_at: Optional[str] = None
+    # Phase 6D — Upload job counts
+    uploads_ready: int = 0
+    uploads_running: int = 0
+    uploads_completed: int = 0
+    uploads_failed: int = 0
+    last_upload_at: Optional[str] = None
 
 
 class DashboardActivityItem(BaseModel):
@@ -609,6 +615,18 @@ class UploadJobDetail(BaseModel):
     finished_at: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
+    # Phase 6D fields
+    result_url: Optional[str] = None
+    result_torrent_id: Optional[str] = None
+    result_tracker: Optional[str] = None
+    result_category: Optional[str] = None
+    duration_seconds: Optional[int] = None
+    retry_count: int = 0
+    retry_of_job_id: Optional[int] = None
+    safe_command_json: Optional[str] = None
+    last_success_at: Optional[str] = None
+    last_error_at: Optional[str] = None
+    last_log_at: Optional[str] = None
 
 
 class UploadJobLog(BaseModel):
@@ -637,3 +655,37 @@ class UploadStartResult(BaseModel):
     command_preview: Optional[str] = None
     message: Optional[str] = None
     error: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Phase 6D — Artifacts and retry
+# ---------------------------------------------------------------------------
+
+class UploadArtifact(BaseModel):
+    id: Optional[int] = None
+    upload_job_id: int
+    artifact_type: str
+    name: Optional[str] = None
+    path: Optional[str] = None
+    url: Optional[str] = None
+    value: Optional[str] = None
+    created_at: str
+
+
+class UploadArtifactsResponse(BaseModel):
+    job_id: int
+    artifacts: list[UploadArtifact] = []
+
+
+class UploadRetryRequest(BaseModel):
+    dry_run: bool = True
+    start: bool = False
+    confirmation: Optional[str] = None
+
+
+class DashboardSummaryResponseV2(DashboardSummaryResponse):
+    uploads_ready: int = 0
+    uploads_running: int = 0
+    uploads_completed: int = 0
+    uploads_failed: int = 0
+    last_upload_at: Optional[str] = None

@@ -154,3 +154,22 @@ def test_openapi_schema(client):
     assert response.status_code == 200
     schema = response.json()
     assert schema["info"]["title"] == "eMuwarez Uploadrr"
+
+
+# ---------------------------------------------------------------------------
+# Phase 5A — static serving (backend works without frontend/dist)
+# ---------------------------------------------------------------------------
+
+def test_health_works_without_frontend_dist(isolated_db):
+    """create_app() must not fail if frontend/dist does not exist."""
+    import os
+    import tempfile
+    from emuwarez_uploadrr.web.app import create_app as _create_app
+    # Create app without touching FRONTEND_DIST — it may or may not exist
+    app = _create_app()
+    from fastapi.testclient import TestClient
+    os.environ["CONFIG_DIR"] = str(isolated_db)
+    c = TestClient(app)
+    resp = c.get("/api/health")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ok"

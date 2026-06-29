@@ -128,6 +128,46 @@ Ejecutar tests:
 .venv/bin/pytest tests/ -q
 ```
 
+## Frontend web
+
+Instalar y arrancar el frontend en desarrollo (proxy a `:9494`):
+
+```bash
+cd frontend
+npm install
+npm run dev
+# → http://localhost:5173
+```
+
+Construir para producción (sirve desde el backend en `:9494`):
+
+```bash
+cd frontend
+npm run build
+cd ..
+python3 emuwarez_uploader.py web serve --port 9494
+# → http://localhost:9494 sirve API + frontend
+```
+
+Páginas implementadas:
+
+```
+Login          — autenticación contra /api/auth/login
+Setup wizard   — asistente 7 pasos: admin → base → uploadrr → tmdb → emu → instancias → completar
+Dashboard      — tarjetas resumen + actividad reciente (datos reales de /api/dashboard/*)
+Biblioteca     — tabla filtrable y paginada desde /api/library
+Faltantes      — tabla desde /api/missing con estados de cola
+Instancias     — gestión con test y sync por instancia
+Peticiones     — placeholder profesional (pendiente endpoint EMU real)
+Subidas/Tareas/Logs/Configuración — placeholders preparados
+```
+
+Ver más comandos con:
+
+```bash
+python3 emuwarez_uploader.py web info
+```
+
 ## Sincronización Radarr/Sonarr y biblioteca
 
 Añadir instancias y sincronizar biblioteca:

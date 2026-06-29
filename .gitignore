@@ -34,3 +34,9 @@ Thumbs.db
 
 # External runtime dependency — do NOT track, mount as volume or external repo
 Uploadrr/
+
+# Frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/

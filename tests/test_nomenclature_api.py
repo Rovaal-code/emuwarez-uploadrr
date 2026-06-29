@@ -120,7 +120,8 @@ def test_adapt_nomenclature_apply_blocked(client, auth_headers, isolated_db):
     r = client.post(f"/api/library/{item_id}/adapt-nomenclature", json={"dry_run": False, "apply": True}, headers=auth_headers)
     assert r.status_code == 200
     data = r.json()
-    assert data.get("implemented") is False or data.get("blocked") is True
+    # Phase 6B: returns real NomenclatureApplyResult; blocked without confirmation
+    assert data.get("status") == "blocked"
 
 
 # ---------------------------------------------------------------------------

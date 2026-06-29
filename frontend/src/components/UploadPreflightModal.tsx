@@ -70,7 +70,27 @@ export function UploadPreflightModal({ itemId, itemTitle, requestId, onClose }: 
                   </div>
                   <div className="detail-row">
                     <span className="text-muted">Archivo origen:</span>
-                    <span style={{ wordBreak: 'break-all', fontSize: '0.8rem' }}>{result.command_preview.source_path || '–'}</span>
+                    <span style={{ wordBreak: 'break-all', fontSize: '0.8rem' }}>
+                      {result.command_preview.source_path || '–'}
+                      {result.command_preview.using_prepared_path && (
+                        <span
+                          className="badge req-filled"
+                          style={{ marginLeft: 6, fontSize: '0.7rem' }}
+                          title="Se usará el hardlink preparado (nomenclatura aplicada)"
+                        >
+                          preparado
+                        </span>
+                      )}
+                      {result.command_preview.using_prepared_path === false && (
+                        <span
+                          className="badge req-partial"
+                          style={{ marginLeft: 6, fontSize: '0.7rem' }}
+                          title="Nomenclatura no aplicada: se usará el archivo original"
+                        >
+                          original
+                        </span>
+                      )}
+                    </span>
                   </div>
                   {result.command_preview.command_preview && (
                     <div className="detail-panel__section" style={{ marginTop: 12 }}>

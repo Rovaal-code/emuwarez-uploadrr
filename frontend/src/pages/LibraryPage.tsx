@@ -6,6 +6,8 @@ import { ServiceLabel } from '../components/ServiceIcon'
 import { LoadingState } from '../components/LoadingState'
 import { ErrorState } from '../components/ErrorState'
 import { EmptyState } from '../components/EmptyState'
+import { NomenclatureModal } from '../components/NomenclatureModal'
+import { UploadPreflightModal } from '../components/UploadPreflightModal'
 import { formatBytes, formatDate, formatItemType } from '../utils/format'
 
 const PAGE_SIZE = 50
@@ -15,6 +17,8 @@ export function LibraryPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<LibraryItemResponse | null>(null)
+  const [nomenclatureItem, setNomenclatureItem] = useState<LibraryItemResponse | null>(null)
+  const [uploadItem, setUploadItem] = useState<LibraryItemResponse | null>(null)
 
   // Filters
   const [search, setSearch] = useState('')
@@ -149,8 +153,9 @@ export function LibraryPage() {
                     <td style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
                       {formatDate(item.updated_at)}
                     </td>
-                    <td className="col-actions" onClick={e => e.stopPropagation()}>
-                      <button className="btn btn-ghost btn-sm" disabled title="Pendiente">Subir</button>
+                    <td className="col-actions" onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 4 }}>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setNomenclatureItem(item)} title="Adaptar nomenclatura">Nomenclatura</button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setUploadItem(item)} title="Preflight Uploadrr">Subir</button>
                     </td>
                   </tr>
                 ))}
@@ -165,6 +170,24 @@ export function LibraryPage() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Nomenclature modal */}
+      {nomenclatureItem && (
+        <NomenclatureModal
+          itemId={nomenclatureItem.id}
+          itemTitle={nomenclatureItem.title}
+          onClose={() => setNomenclatureItem(null)}
+        />
+      )}
+
+      {/* Upload preflight modal */}
+      {uploadItem && (
+        <UploadPreflightModal
+          itemId={uploadItem.id}
+          itemTitle={uploadItem.title}
+          onClose={() => setUploadItem(null)}
+        />
       )}
 
       {/* Detail panel */}
@@ -186,6 +209,10 @@ export function LibraryPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
               <div style={{ fontWeight: 700, fontSize: 16 }}>{selected.title} {selected.year ? `(${selected.year})` : ''}</div>
               <button className="btn btn-ghost btn-sm" onClick={() => setSelected(null)}>✕</button>
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+              <button className="btn btn-secondary btn-sm" onClick={() => { setNomenclatureItem(selected); setSelected(null) }}>Adaptar nomenclatura</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => { setUploadItem(selected); setSelected(null) }}>Subir</button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 20px', fontSize: 13 }}>
               {[

@@ -23,7 +23,7 @@ from .services import tasks as task_service
 MODERN_COMMANDS = {
     "configure", "doctor", "test-apis", "instances", "sync", "library",
     "requests", "missing", "prepare", "upload", "tasks", "logs", "legacy",
-    "web-contract", "db", "web",
+    "web-contract", "db", "web", "nomenclature",
 }
 
 
@@ -161,17 +161,30 @@ def build_parser() -> argparse.ArgumentParser:
     p_missing_req.add_argument("library_id", type=int)
     p_missing_req.add_argument("--dry-run", action="store_true")
 
+    p_nomenclature = sub.add_parser("nomenclature", help="Previsualización de nomenclatura eMuwarez (no modifica archivos)")
+    nom_sub = p_nomenclature.add_subparsers(dest="nomenclature_command", required=True)
+    p_nom_preview = nom_sub.add_parser("preview", help="Generar propuesta de nomenclatura para un item")
+    p_nom_preview.add_argument("id", type=int, help="ID del library_item")
+    p_nom_preview.add_argument("--force", action="store_true", help="Forzar regeneración aunque ya exista propuesta")
+    p_nom_show = nom_sub.add_parser("show", help="Mostrar última propuesta de nomenclatura")
+    p_nom_show.add_argument("id", type=int, help="ID del library_item")
+    p_nom_apply = nom_sub.add_parser("apply", help="[Sólo previsualización] Adaptar nomenclatura (requiere --dry-run en esta fase)")
+    p_nom_apply.add_argument("id", type=int, help="ID del library_item")
+    p_nom_apply.add_argument("--dry-run", action="store_true", help="Modo previsualización (obligatorio en esta fase)")
+
     p_prepare = sub.add_parser("prepare", help="Adaptar nomenclatura / generar propuesta")
     p_prepare.add_argument("target", help="ID de biblioteca o ruta")
     p_prepare.add_argument("--apply", action="store_true", help="Aplicar preparación. Sin esto se usa dry-run")
     p_prepare.add_argument("legacy_args", nargs=argparse.REMAINDER, help="Argumentos extra para el uploader heredado")
 
-    p_upload = sub.add_parser("upload", help="Subir contenido usando el motor Uploadrr heredado")
-    p_upload.add_argument("target", help="ID de biblioteca o ruta")
-    p_upload.add_argument("--yes", action="store_true")
-    p_upload.add_argument("--dry-run", action="store_true")
-    p_upload.add_argument("--no-upload", action="store_true")
-    p_upload.add_argument("legacy_args", nargs=argparse.REMAINDER, help="Argumentos extra para el uploader heredado")
+    p_upload = sub.add_parser("upload", help="Subir contenido / preflight Uploadrr")
+    up_sub = p_upload.add_subparsers(dest="upload_command")
+    p_up_preflight = up_sub.add_parser("preflight", help="Validar precondiciones de subida (no ejecuta Uploadrr)")
+    p_up_preflight.add_argument("id", type=int, help="ID del library_item")
+    p_up_preflight.add_argument("--request-id", type=int, default=None, help="ID opcional de request_item vinculada")
+    p_up_job = up_sub.add_parser("job", help="Ver detalle de un upload job/preflight")
+    p_up_job.add_argument("id", type=int, help="ID del upload job")
+    up_sub.add_parser("jobs", help="Listar upload jobs/preflights")
 
     p_tasks = sub.add_parser("tasks", help="Tareas ejecutadas")
     tasks_sub = p_tasks.add_subparsers(dest="tasks_command", required=True)
@@ -368,6 +381,117 @@ def cmd_missing(args) -> int:
     return 1
 
 
+def _print_nomenclature_proposal(proposal: dict) -> None:
+    import json as _json
+    warnings = []
+    errors_list = []
+    try:
+        warnings = _json.loads(proposal.get("warnings_json") or "[]")
+    except Exception:
+        pass
+    try:
+        errors_list = _json.loads(proposal.get("errors_json") or "[]")
+    except Exception:
+        pass
+    print("\n── Nomenclatura / Propuesta ─────────────────────────────")
+    print(f"\nTítulo actual:     {proposal.get('current_name') or '–'}")
+    print(f"Título propuesto:  {proposal.get('proposed_title') or '–'}")
+    print(f"Archivo propuesto: {proposal.get('proposed_filename') or '–'}")
+    print(f"Carpeta propuesta: {proposal.get('proposed_folder') or '–'}")
+    print(f"Resolución:        {proposal.get('resolution') or '–'}")
+    print(f"Source:            {proposal.get('source') or '–'}")
+    print(f"Vídeo:             {proposal.get('video_codec') or '–'}")
+    print(f"\nEstado: {proposal.get('status', '–')}")
+    if warnings:
+        print("\nAvisos:")
+        for w in warnings:
+            print(f"  - {w}")
+    if errors_list:
+        print("\nErrores:")
+        for e in errors_list:
+            print(f"  ✗ {e}")
+    print("\nAcción: No se ha modificado ningún archivo.")
+
+
+def cmd_nomenclature(args) -> int:
+    from .services.nomenclature import (
+        build_nomenclature_proposal, get_latest_nomenclature_proposal
+    )
+    with _open_conn(args) as conn:
+        if args.nomenclature_command == "preview":
+            proposal = build_nomenclature_proposal(args.id, force_refresh=args.force, conn=conn)
+            _print_nomenclature_proposal(proposal)
+            return 0
+        if args.nomenclature_command == "show":
+            proposal = get_latest_nomenclature_proposal(args.id, conn=conn)
+            if not proposal:
+                print("No hay propuesta de nomenclatura generada. Usa 'nomenclature preview' para generar una.")
+                return 1
+            _print_nomenclature_proposal(proposal)
+            return 0
+        if args.nomenclature_command == "apply":
+            if not getattr(args, "dry_run", False):
+                print("⚠ La aplicación real de nomenclatura queda pendiente de una fase posterior.")
+                print("  En esta fase solo se generan previsualizaciones seguras.")
+                print("  Usa: nomenclature apply <id> --dry-run  para ver la propuesta.")
+                return 0
+            proposal = build_nomenclature_proposal(args.id, force_refresh=False, conn=conn)
+            _print_nomenclature_proposal(proposal)
+            print("\nModo previsualización (--dry-run). No se ha modificado ningún archivo.")
+            return 0
+    return 1
+
+
+def cmd_upload_modern(args) -> int:
+    from .services.upload_preflight import (
+        build_upload_preflight, get_upload_job, list_upload_jobs
+    )
+    with _open_conn(args) as conn:
+        if args.upload_command == "preflight":
+            result = build_upload_preflight(args.id, request_id=args.request_id, conn=conn)
+            print(f"\n── Upload Preflight (library_item {args.id}) ──────────────")
+            print(f"Estado: {result['status']}")
+            cmd = result.get("command_preview", {})
+            if cmd:
+                print(f"Tracker:    {cmd.get('tracker', '–')}")
+                print(f"Categoría:  {cmd.get('category', '–')}")
+                print(f"TMDb:       {cmd.get('tmdb_id', '–')}")
+                print(f"Resolución: {cmd.get('resolution', '–')}")
+                print(f"Origen:     {cmd.get('source_path', '–')}")
+                if cmd.get("command_preview"):
+                    print(f"\nComando previsto:")
+                    print(f"  {cmd['command_preview']}")
+            if result.get("warnings"):
+                print("\nAvisos:")
+                for w in result["warnings"]:
+                    print(f"  - {w}")
+            if result.get("errors"):
+                print("\nErrores:")
+                for e in result["errors"]:
+                    print(f"  ✗ {e}")
+            print("\nNota: No se ha ejecutado Uploadrr ni subido ningún archivo.")
+            return 0
+        if args.upload_command == "job":
+            job = get_upload_job(args.id, conn=conn)
+            if not job:
+                print(f"✗ Job {args.id} no encontrado")
+                return 1
+            for key in ["id", "library_item_id", "status", "stage", "title", "source_path", "error_message", "created_at"]:
+                print(f"{key:24} {job.get(key) or ''}")
+            return 0
+        if args.upload_command == "jobs":
+            jobs = list_upload_jobs(conn=conn)
+            if not jobs:
+                print("No hay preflights de subida registrados.")
+                return 0
+            _print_table(
+                ["ID", "Estado", "Etapa", "Título", "Creado"],
+                [[j["id"], j.get("status"), j.get("stage"), j.get("title"), j.get("created_at")] for j in jobs],
+            )
+            return 0
+    return 1
+
+
 def cmd_prepare(args) -> int:
     with _open_conn(args) as conn:
         path = _target_to_path(conn, args.target)
@@ -379,17 +503,11 @@ def cmd_prepare(args) -> int:
 
 
 def cmd_upload(args) -> int:
-    with _open_conn(args) as conn:
-        path = _target_to_path(conn, args.target)
-    legacy_args = [path]
-    if args.yes:
-        legacy_args.append("--yes")
-    if args.dry_run:
-        legacy_args.append("--dry-run")
-    if args.no_upload:
-        legacy_args.append("--no-upload")
-    legacy_args.extend(args.legacy_args or [])
-    return legacy.main(legacy_args)
+    if getattr(args, "upload_command", None):
+        return cmd_upload_modern(args)
+    # Legacy upload path (no subcommand) — not reachable with new parser structure
+    print("Usa: upload preflight <id> | upload job <id> | upload jobs")
+    return 1
 
 
 def cmd_tasks(args) -> int:
@@ -621,6 +739,8 @@ def modern_main(argv: Optional[list[str]] = None) -> int:
             return cmd_requests(args)
         if args.command == "missing":
             return cmd_missing(args)
+        if args.command == "nomenclature":
+            return cmd_nomenclature(args)
         if args.command == "prepare":
             return cmd_prepare(args)
         if args.command == "upload":

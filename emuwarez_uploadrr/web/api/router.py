@@ -11,6 +11,8 @@ from .instances import router as instances_router
 from .dashboard import router as dashboard_router
 from .library import router as library_router
 from .requests import router as requests_router
+from .nomenclature import router as nomenclature_router
+from .uploads import router as uploads_router
 from .placeholders import router as placeholders_router
 
 api_router = APIRouter(prefix="/api")
@@ -23,4 +25,6 @@ api_router.include_router(instances_router)
 api_router.include_router(dashboard_router)
 api_router.include_router(library_router)
 api_router.include_router(requests_router)
+api_router.include_router(nomenclature_router)
+api_router.include_router(uploads_router)
 api_router.include_router(placeholders_router)

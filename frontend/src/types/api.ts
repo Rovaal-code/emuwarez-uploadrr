@@ -223,3 +223,72 @@ export interface DashboardSummaryResponseV2 extends DashboardSummaryResponse {
   requests_filled: number
   requests_last_sync_at: string | null
 }
+
+// Phase 6A — Nomenclature
+
+export interface NomenclatureProposal {
+  id?: number
+  library_item_id: number
+  status: 'draft' | 'valid' | 'warning' | 'blocked' | 'applied' | 'expired'
+  current_name?: string
+  current_path?: string
+  proposed_title?: string
+  proposed_filename?: string
+  proposed_folder?: string
+  proposed_path?: string
+  media_type?: string
+  tmdb_id?: string
+  imdb_id?: string
+  resolution?: string
+  source?: string
+  video_codec?: string
+  audio_summary?: string
+  subtitle_summary?: string
+  release_tag?: string
+  warnings: string[]
+  errors: string[]
+  created_at?: string
+  updated_at?: string
+}
+
+export interface NomenclatureExistsResponse {
+  exists: boolean
+  message?: string
+  proposal?: NomenclatureProposal
+}
+
+// Phase 6A — Upload preflight
+
+export interface UploadJob {
+  id?: number
+  library_item_id?: number
+  request_item_id?: number
+  status: string
+  stage?: string
+  title?: string
+  source_path?: string
+  error_message?: string
+  created_at?: string
+  updated_at?: string
+}
+
+export interface CommandPreview {
+  uploadrr_path?: string
+  tracker?: string
+  category?: string
+  title?: string
+  tmdb_id?: string
+  resolution?: string
+  source_path?: string
+  command_preview?: string
+  note?: string
+}
+
+export interface UploadPreflightResponse {
+  status: string
+  job?: UploadJob
+  preflight: Record<string, unknown>
+  command_preview?: CommandPreview
+  warnings: string[]
+  errors: string[]
+}

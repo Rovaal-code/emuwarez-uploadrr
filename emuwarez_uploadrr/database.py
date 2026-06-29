@@ -11,7 +11,7 @@ from .constants import CONFIG_DIR
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 def db_path() -> Path:
@@ -43,6 +43,58 @@ def _migrate_instances(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE instances ADD COLUMN {col} {col_def}")
         except sqlite3.OperationalError:
             pass  # column already exists
+
+
+def _migrate_nomenclature(conn: sqlite3.Connection) -> None:
+    """Create nomenclature_proposals table (Phase 6A)."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS nomenclature_proposals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            library_item_id INTEGER NOT NULL,
+            status TEXT NOT NULL DEFAULT 'draft',
+            current_name TEXT,
+            current_path TEXT,
+            proposed_title TEXT,
+            proposed_filename TEXT,
+            proposed_folder TEXT,
+            proposed_path TEXT,
+            media_type TEXT,
+            tmdb_id TEXT,
+            imdb_id TEXT,
+            resolution TEXT,
+            source TEXT,
+            video_codec TEXT,
+            audio_summary TEXT,
+            subtitle_summary TEXT,
+            release_tag TEXT,
+            warnings_json TEXT,
+            errors_json TEXT,
+            raw_json TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+
+def _migrate_upload_jobs(conn: sqlite3.Connection) -> None:
+    """Add Phase 6A columns to upload_jobs."""
+    new_cols = [
+        ("request_item_id", "INTEGER"),
+        ("stage", "TEXT"),
+        ("source_path", "TEXT"),
+        ("prepared_path", "TEXT"),
+        ("uploadrr_command_json", "TEXT"),
+        ("preflight_json", "TEXT"),
+        ("progress_json", "TEXT"),
+        ("error_message", "TEXT"),
+        ("started_at", "TEXT"),
+        ("finished_at", "TEXT"),
+    ]
+    for col, col_def in new_cols:
+        try:
+            conn.execute(f"ALTER TABLE upload_jobs ADD COLUMN {col} {col_def}")
+        except sqlite3.OperationalError:
+            pass
 
 
 def _migrate_requests(conn: sqlite3.Connection) -> None:
@@ -218,6 +270,8 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         )
         _migrate_instances(conn)
         _migrate_requests(conn)
+        _migrate_nomenclature(conn)
+        _migrate_upload_jobs(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

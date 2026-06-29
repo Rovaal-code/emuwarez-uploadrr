@@ -477,3 +477,89 @@ class ErrorResponse(BaseModel):
 class OkResponse(BaseModel):
     ok: bool = True
     message: str
+
+
+# ---------------------------------------------------------------------------
+# Nomenclature (Phase 6A)
+# ---------------------------------------------------------------------------
+
+class NomenclatureProposalResponse(BaseModel):
+    id: Optional[int] = None
+    library_item_id: int
+    status: str
+    current_name: Optional[str] = None
+    current_path: Optional[str] = None
+    proposed_title: Optional[str] = None
+    proposed_filename: Optional[str] = None
+    proposed_folder: Optional[str] = None
+    proposed_path: Optional[str] = None
+    media_type: Optional[str] = None
+    tmdb_id: Optional[str] = None
+    imdb_id: Optional[str] = None
+    resolution: Optional[str] = None
+    source: Optional[str] = None
+    video_codec: Optional[str] = None
+    audio_summary: Optional[str] = None
+    subtitle_summary: Optional[str] = None
+    release_tag: Optional[str] = None
+    warnings: list[str] = []
+    errors: list[str] = []
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class NomenclatureExistsResponse(BaseModel):
+    exists: bool
+    message: Optional[str] = None
+    proposal: Optional[NomenclatureProposalResponse] = None
+
+
+class NomenclaturePreviewBody(BaseModel):
+    force_refresh: bool = False
+
+
+class AdaptNomenclatureBody(BaseModel):
+    dry_run: bool = True
+    apply: bool = False
+
+
+# ---------------------------------------------------------------------------
+# Upload preflight (Phase 6A)
+# ---------------------------------------------------------------------------
+
+class UploadPreflightBody(BaseModel):
+    request_id: Optional[int] = None
+
+
+class CommandPreviewResponse(BaseModel):
+    uploadrr_path: Optional[str] = None
+    tracker: Optional[str] = None
+    category: Optional[str] = None
+    title: Optional[str] = None
+    tmdb_id: Optional[str] = None
+    resolution: Optional[str] = None
+    source_path: Optional[str] = None
+    command_preview: Optional[str] = None
+    note: Optional[str] = None
+
+
+class UploadJobResponse(BaseModel):
+    id: Optional[int] = None
+    library_item_id: Optional[int] = None
+    request_item_id: Optional[int] = None
+    status: str
+    stage: Optional[str] = None
+    title: Optional[str] = None
+    source_path: Optional[str] = None
+    error_message: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class UploadPreflightResponse(BaseModel):
+    status: str
+    job: Optional[UploadJobResponse] = None
+    preflight: dict = {}
+    command_preview: Optional[CommandPreviewResponse] = None
+    warnings: list[str] = []
+    errors: list[str] = []

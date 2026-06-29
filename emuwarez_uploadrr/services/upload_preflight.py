@@ -1,0 +1,269 @@
+"""Upload preflight service.
+
+SAFETY CONTRACT: This module never executes Uploadrr, never creates torrents,
+never uploads files, and never modifies any filesystem paths.
+It only builds previews of what WOULD happen.
+"""
+from __future__ import annotations
+
+import json
+import os
+from datetime import datetime, timezone
+from typing import Any
+
+from ..database import connect, row_to_dict, rows_to_dicts, get_state
+from .filesystem_safety import safe_stat
+
+JOB_STATUS_DRAFT = "draft"
+JOB_STATUS_PREFLIGHT = "preflight"
+JOB_STATUS_READY = "ready"
+JOB_STATUS_BLOCKED = "blocked"
+
+
+def _get_setting(conn, key: str, default=None):
+    try:
+        row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+        if row:
+            return row["value"]
+    except Exception:
+        pass
+    try:
+        return get_state(conn, key, default)
+    except Exception:
+        return default
+
+
+def validate_upload_preconditions(library_item: dict, proposal: dict | None = None, conn=None) -> dict:
+    own = conn is None
+    conn = conn or connect()
+    errors = []
+    warnings = []
+
+    try:
+        if not library_item:
+            return {"ok": False, "errors": ["Item no encontrado."], "warnings": []}
+
+        local_status = library_item.get("local_status", "")
+        if local_status in ("Faltante", "Missing", "missing", "faltante"):
+            errors.append("El ítem no está disponible localmente.")
+
+        path = library_item.get("path")
+        if not path:
+            errors.append("El ítem no tiene ruta de archivo registrada.")
+        elif not safe_stat(path)["exists"]:
+            warnings.append(f"La ruta no existe actualmente en disco: {path}")
+
+        if not library_item.get("tmdb_id"):
+            warnings.append("No hay TMDb ID asociado. Se recomienda para la subida.")
+
+        uploadrr_path = _get_setting(conn, "uploadrr_path") or _get_setting(conn, "UPLOADRR_PATH")
+        if not uploadrr_path:
+            errors.append("Ruta de Uploadrr no configurada (uploadrr_path).")
+        elif not os.path.exists(uploadrr_path):
+            errors.append(f"Ruta de Uploadrr no existe: {uploadrr_path}")
+
+        emu_key = _get_setting(conn, "emu_api_key") or _get_setting(conn, "EMU_API_KEY")
+        if not emu_key:
+            errors.append("API key de eMuwarez no configurada.")
+
+        tmdb_key = _get_setting(conn, "tmdb_api_key") or _get_setting(conn, "TMDB_API_KEY")
+        if not tmdb_key:
+            errors.append("API key de TMDb no configurada.")
+
+        if proposal and proposal.get("status") == "blocked":
+            errors.append("Hay errores en la propuesta de nomenclatura que bloquean la subida.")
+
+        return {"ok": len(errors) == 0, "errors": errors, "warnings": warnings}
+    finally:
+        if own:
+            conn.close()
+
+
+def build_uploadrr_command_preview(
+    library_item: dict,
+    proposal: dict | None = None,
+    request_item: dict | None = None,
+    conn=None,
+) -> dict:
+    """Build a preview of what the Uploadrr command would look like. NEVER executes it."""
+    own = conn is None
+    conn = conn or connect()
+    try:
+        uploadrr_path = _get_setting(conn, "uploadrr_path") or "/path/to/Uploadrr"
+
+        title = (proposal or {}).get("proposed_title") or library_item.get("title") or "Sin título"
+        media_type = library_item.get("item_type") or "movie"
+        tmdb_id = library_item.get("tmdb_id")
+        resolution = (proposal or {}).get("resolution") or library_item.get("resolution") or ""
+        source_path = library_item.get("path") or ""
+
+        category = "tv" if media_type in ("tv", "series", "anime") else "movie"
+        tracker = "EMU"
+
+        args = [
+            f"python3 {uploadrr_path}/upload.py",
+            f"--tracker {tracker}",
+            f"--category {category}",
+        ]
+        if tmdb_id:
+            args.append(f"--tmdb {tmdb_id}")
+        if resolution:
+            args.append(f"--resolution {resolution}")
+        if source_path:
+            args.append(f'--source "{source_path}"')
+        if title:
+            args.append(f'--title "{title}"')
+
+        command_str = " \\\n  ".join(args)
+
+        return {
+            "uploadrr_path": uploadrr_path,
+            "tracker": tracker,
+            "category": category,
+            "title": title,
+            "tmdb_id": tmdb_id,
+            "resolution": resolution,
+            "source_path": source_path,
+            "command_preview": command_str,
+            "command_args": args,
+            "note": "Esta es una previsualización. El comando NO ha sido ejecutado.",
+        }
+    finally:
+        if own:
+            conn.close()
+
+
+def build_upload_preflight(item_id: int, *, request_id: int | None = None, conn=None) -> dict:
+    own = conn is None
+    conn = conn or connect()
+    try:
+        item = conn.execute("SELECT * FROM library_items WHERE id = ?", (item_id,)).fetchone()
+        library_item = row_to_dict(item)
+
+        if not library_item:
+            return {
+                "status": JOB_STATUS_BLOCKED,
+                "errors": ["Item no encontrado."],
+                "warnings": [],
+                "preflight": {},
+                "command_preview": {},
+                "job": None,
+            }
+
+        proposal_row = conn.execute(
+            "SELECT * FROM nomenclature_proposals "
+            "WHERE library_item_id = ? AND status != 'expired' "
+            "ORDER BY created_at DESC LIMIT 1",
+            (item_id,),
+        ).fetchone()
+        proposal = row_to_dict(proposal_row)
+
+        request_item = None
+        if request_id:
+            req_row = conn.execute("SELECT * FROM request_items WHERE id = ?", (request_id,)).fetchone()
+            request_item = row_to_dict(req_row)
+
+        preconditions = validate_upload_preconditions(library_item, proposal=proposal, conn=conn)
+        command_preview = build_uploadrr_command_preview(library_item, proposal, request_item, conn=conn)
+
+        status = JOB_STATUS_READY if preconditions["ok"] else JOB_STATUS_BLOCKED
+
+        preflight_data = {
+            "item_id": item_id,
+            "title": library_item.get("title"),
+            "local_status": library_item.get("local_status"),
+            "path": library_item.get("path"),
+            "tmdb_id": library_item.get("tmdb_id"),
+            "has_nomenclature_proposal": proposal is not None,
+            "nomenclature_status": proposal.get("status") if proposal else None,
+        }
+
+        job = save_upload_job_preflight(
+            {
+                "library_item_id": item_id,
+                "request_item_id": request_id,
+                "status": status,
+                "stage": "preflight",
+                "title": library_item.get("title") or "Sin título",
+                "source_path": library_item.get("path"),
+                "uploadrr_command_json": json.dumps(command_preview, ensure_ascii=False),
+                "preflight_json": json.dumps(preflight_data, ensure_ascii=False),
+                "error_message": "; ".join(preconditions["errors"]) if preconditions["errors"] else None,
+            },
+            conn=conn,
+        )
+
+        return {
+            "status": status,
+            "job": job,
+            "preflight": preflight_data,
+            "command_preview": command_preview,
+            "warnings": preconditions["warnings"],
+            "errors": preconditions["errors"],
+        }
+    finally:
+        if own:
+            conn.close()
+
+
+def save_upload_job_preflight(data: dict, conn=None) -> dict:
+    own = conn is None
+    conn = conn or connect()
+    try:
+        now = datetime.now(timezone.utc).isoformat()
+        # path is NOT NULL in original schema; use source_path or empty string
+        path_value = data.get("source_path") or data.get("path") or ""
+        cursor = conn.execute(
+            """
+            INSERT INTO upload_jobs (
+                library_item_id, request_item_id, status, stage, title,
+                path, source_path, uploadrr_command_json, preflight_json, error_message,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data.get("library_item_id"),
+                data.get("request_item_id"),
+                data.get("status", JOB_STATUS_PREFLIGHT),
+                data.get("stage", "preflight"),
+                data.get("title") or "Sin título",
+                path_value,
+                data.get("source_path"),
+                data.get("uploadrr_command_json"),
+                data.get("preflight_json"),
+                data.get("error_message"),
+                now, now,
+            ),
+        )
+        conn.commit()
+        data["id"] = cursor.lastrowid
+        data["created_at"] = now
+        data["updated_at"] = now
+        return data
+    finally:
+        if own:
+            conn.close()
+
+
+def get_upload_job(job_id: int, conn=None) -> dict | None:
+    own = conn is None
+    conn = conn or connect()
+    try:
+        row = conn.execute("SELECT * FROM upload_jobs WHERE id = ?", (job_id,)).fetchone()
+        return row_to_dict(row)
+    finally:
+        if own:
+            conn.close()
+
+
+def list_upload_jobs(filters: dict | None = None, conn=None) -> list[dict]:
+    own = conn is None
+    conn = conn or connect()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM upload_jobs ORDER BY created_at DESC LIMIT 100"
+        ).fetchall()
+        return rows_to_dicts(rows)
+    finally:
+        if own:
+            conn.close()

@@ -66,9 +66,8 @@ def missing_create_emu_request(item_id: int, current_user: dict = Depends(requir
 # Library extras — protected (real /library list/detail are in library.py)
 # ---------------------------------------------------------------------------
 
-@router.post("/library/{item_id}/adapt-nomenclature")
-def library_adapt_nomenclature(item_id: int, current_user: dict = Depends(require_auth)) -> JSONResponse:
-    return _stub(f"POST /api/library/{item_id}/adapt-nomenclature", "phase-8")
+# NOTE: adapt-nomenclature, nomenclature/preview, upload/preflight moved to
+# web/api/nomenclature.py and web/api/uploads.py (Phase 6A — real implementation)
 
 @router.post("/library/{item_id}/upload")
 def library_upload(item_id: int, current_user: dict = Depends(require_auth)) -> JSONResponse:
@@ -77,16 +76,8 @@ def library_upload(item_id: int, current_user: dict = Depends(require_auth)) -> 
 # Requests endpoints moved to web/api/requests.py (Phase 5B — real implementation)
 
 # ---------------------------------------------------------------------------
-# Uploads — protected
+# Uploads — protected (real GET /uploads, GET/POST /uploads/{id} in uploads.py)
 # ---------------------------------------------------------------------------
-
-@router.get("/uploads")
-def uploads_list(current_user: dict = Depends(require_auth)) -> JSONResponse:
-    return _stub("/api/uploads", "phase-8")
-
-@router.get("/uploads/{upload_id}")
-def uploads_detail(upload_id: int, current_user: dict = Depends(require_auth)) -> JSONResponse:
-    return _stub(f"/api/uploads/{upload_id}", "phase-8")
 
 @router.post("/uploads/{upload_id}/cancel")
 def uploads_cancel(upload_id: int, current_user: dict = Depends(require_auth)) -> JSONResponse:

@@ -103,7 +103,7 @@ def test_protected_endpoints_require_auth(client, path):
     assert response.status_code == 401
 
 
-# Phase 4+5B: these are now real endpoints (no longer placeholders)
+# Phase 4+5B+6A: these are now real endpoints (no longer placeholders)
 @pytest.mark.parametrize("path", [
     "/api/dashboard/summary",
     "/api/dashboard/activity",
@@ -111,6 +111,7 @@ def test_protected_endpoints_require_auth(client, path):
     "/api/library",
     "/api/missing",
     "/api/requests",
+    "/api/uploads",
 ])
 def test_real_endpoints_return_200_with_auth(client, auth_headers, path):
     response = client.get(path, headers=auth_headers)
@@ -119,7 +120,6 @@ def test_real_endpoints_return_200_with_auth(client, auth_headers, path):
 
 # Phase 3+ placeholders that still return implemented=False
 @pytest.mark.parametrize("path", [
-    "/api/uploads",
     "/api/tasks",
     "/api/logs",
     "/api/config",

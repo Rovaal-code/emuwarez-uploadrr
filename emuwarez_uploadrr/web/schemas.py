@@ -27,6 +27,20 @@ class RuntimeInfoResponse(BaseModel):
     uploadrr_runtime_present: bool
 
 
+class DiagnosticCheck(BaseModel):
+    name: str
+    status: str
+    message: str
+    details: dict = {}
+
+
+class RuntimeDiagnosticsResponse(BaseModel):
+    ok: bool
+    checks: list[DiagnosticCheck]
+    warnings: list[str]
+    errors: list[str]
+
+
 # ---------------------------------------------------------------------------
 # Setup status
 # ---------------------------------------------------------------------------

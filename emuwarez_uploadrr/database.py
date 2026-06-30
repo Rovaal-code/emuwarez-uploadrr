@@ -11,7 +11,7 @@ from .constants import CONFIG_DIR
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 
 def db_path() -> Path:
@@ -316,6 +316,61 @@ def _migrate_request_readiness_tables(conn: sqlite3.Connection) -> None:
     """)
 
 
+def _migrate_operational_queue_tables(conn: sqlite3.Connection) -> None:
+    """Create Phase 8C operational queue tables."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS operational_queue_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            queue_key TEXT NOT NULL UNIQUE,
+            item_type TEXT NOT NULL,
+            entity_type TEXT NOT NULL,
+            entity_id INTEGER,
+            request_item_id INTEGER,
+            library_item_id INTEGER,
+            upload_job_id INTEGER,
+            title TEXT,
+            subtitle TEXT,
+            status TEXT NOT NULL DEFAULT 'open',
+            action TEXT NOT NULL DEFAULT 'none',
+            priority_score INTEGER NOT NULL DEFAULT 0,
+            priority_bucket TEXT NOT NULL DEFAULT 'low',
+            blockers_json TEXT,
+            reasons_json TEXT,
+            context_json TEXT,
+            target_url TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            resolved_at TEXT
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_oq_queue_key ON operational_queue_items(queue_key)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_oq_status ON operational_queue_items(status)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_oq_action ON operational_queue_items(action)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_oq_bucket ON operational_queue_items(priority_bucket)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_oq_request ON operational_queue_items(request_item_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_oq_library ON operational_queue_items(library_item_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_oq_upload ON operational_queue_items(upload_job_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_oq_updated ON operational_queue_items(updated_at)")
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS operational_queue_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_type TEXT NOT NULL,
+            status TEXT NOT NULL,
+            items_built INTEGER NOT NULL DEFAULT 0,
+            items_open INTEGER NOT NULL DEFAULT 0,
+            items_ready INTEGER NOT NULL DEFAULT 0,
+            items_blocked INTEGER NOT NULL DEFAULT 0,
+            started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            finished_at TEXT,
+            summary_json TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+
 def _migrate_library_items_phase8a(conn: sqlite3.Connection) -> None:
     """Add Phase 8A diagnostic/filesystem columns to library_items."""
     new_cols = [
@@ -553,6 +608,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_diagnostic_tables(conn)
         _migrate_request_items_phase8b(conn)
         _migrate_request_readiness_tables(conn)
+        _migrate_operational_queue_tables(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

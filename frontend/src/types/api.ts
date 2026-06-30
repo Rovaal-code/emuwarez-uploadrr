@@ -309,6 +309,13 @@ export interface DashboardSummaryResponseV2 extends DashboardSummaryResponse {
   requests_waiting_download: number
   requests_blocked: number
   requests_high_priority: number
+  // Phase 8C
+  operational_queue_open: number
+  operational_queue_ready: number
+  operational_queue_waiting: number
+  operational_queue_blocked: number
+  operational_queue_critical: number
+  operational_queue_high: number
 }
 
 // Phase 6A — Nomenclature
@@ -472,4 +479,60 @@ export interface UploadPreflightResponse {
   command_preview?: CommandPreview
   warnings: string[]
   errors: string[]
+}
+
+// Phase 8C — Operational queue
+
+export interface OperationalQueueItem {
+  id: number
+  queue_key: string
+  item_type: string
+  entity_type: string
+  entity_id: number | null
+  request_item_id: number | null
+  library_item_id: number | null
+  upload_job_id: number | null
+  title: string | null
+  subtitle: string | null
+  status: string
+  action: string
+  priority_score: number
+  priority_bucket: string
+  blockers: string[]
+  reasons: string[]
+  context: Record<string, unknown>
+  target_url: string | null
+  created_at: string | null
+  updated_at: string | null
+  last_seen_at: string | null
+  resolved_at: string | null
+}
+
+export interface OperationalQueueListResponse {
+  items: OperationalQueueItem[]
+  total: number
+}
+
+export interface OperationalQueueSummary {
+  total: number
+  open: number
+  ready: number
+  waiting: number
+  blocked: number
+  running: number
+  critical: number
+  high: number
+}
+
+export interface OperationalQueueRefreshResponse {
+  ok: boolean
+  items_built: number
+  summary: OperationalQueueSummary
+}
+
+export interface OperationalQueueActionResponse {
+  ok: boolean
+  item_id: number
+  status: string
+  reason: string | null
 }

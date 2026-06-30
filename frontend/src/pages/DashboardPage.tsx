@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getDashboardSummary, getDashboardActivity } from '../api/dashboard'
 import { syncAll } from '../api/library'
-import type { DashboardSummaryResponse, DashboardActivityResponse } from '../types/api'
+import { listQueue, refreshQueue } from '../api/operationalQueue'
+import type { DashboardSummaryResponse, DashboardActivityResponse, OperationalQueueItem } from '../types/api'
 import { StatCard } from '../components/StatCard'
 import { EmptyState } from '../components/EmptyState'
 import { LoadingState } from '../components/LoadingState'
@@ -10,21 +11,46 @@ import { StatusBadge } from '../components/StatusBadge'
 import { ServiceLabel } from '../components/ServiceIcon'
 import { formatDate } from '../utils/format'
 
+const ACTION_SHORT: Record<string, string> = {
+  upload: 'Subir',
+  adapt_nomenclature: 'Nomenclatura',
+  run_preflight: 'Preflight',
+  wait_download: 'Descargando',
+  review_arr: 'Revisar ARR',
+  retry_upload: 'Reintentar',
+  verify_file: 'Verificar',
+}
+
+const BUCKET_COLOR: Record<string, string> = {
+  critical: '#ef4444',
+  high: '#f97316',
+  medium: '#f59e0b',
+  low: '#6b7280',
+  blocked: '#7f1d1d',
+}
+
 export function DashboardPage() {
   const [summary, setSummary] = useState<DashboardSummaryResponse | null>(null)
   const [activity, setActivity] = useState<DashboardActivityResponse | null>(null)
+  const [queueTop, setQueueTop] = useState<OperationalQueueItem[]>([])
   const [loadingData, setLoadingData] = useState(true)
   const [dataError, setDataError] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [syncMsg, setSyncMsg] = useState<string | null>(null)
+  const [queueRefreshing, setQueueRefreshing] = useState(false)
 
   const loadData = useCallback(async () => {
     setLoadingData(true)
     setDataError(null)
     try {
-      const [s, a] = await Promise.all([getDashboardSummary(), getDashboardActivity()])
-      setSummary(s)
-      setActivity(a)
+      const [s, a, q] = await Promise.allSettled([
+        getDashboardSummary(),
+        getDashboardActivity(),
+        listQueue({ limit: 5 }),
+      ])
+      if (s.status === 'fulfilled') setSummary(s.value)
+      if (a.status === 'fulfilled') setActivity(a.value)
+      if (q.status === 'fulfilled') setQueueTop(q.value.items)
     } catch {
       setDataError('No se pudieron cargar los datos del dashboard')
     } finally {
@@ -33,6 +59,17 @@ export function DashboardPage() {
   }, [])
 
   useEffect(() => { loadData() }, [loadData])
+
+  async function handleQueueRefresh() {
+    setQueueRefreshing(true)
+    try {
+      await refreshQueue()
+      const q = await listQueue({ limit: 5 })
+      setQueueTop(q.items)
+    } catch { /* ignore */ } finally {
+      setQueueRefreshing(false)
+    }
+  }
 
   async function handleSync() {
     setSyncing(true)
@@ -173,6 +210,55 @@ export function DashboardPage() {
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+
+          {/* Qué hacer ahora — Phase 8C */}
+          <div className="upload-panel">
+            <div className="section-header">
+              <div className="section-title">Qué hacer ahora</div>
+              <button
+                onClick={handleQueueRefresh}
+                disabled={queueRefreshing}
+                style={{
+                  background: 'none', border: 'none', color: '#3b82f6',
+                  cursor: queueRefreshing ? 'default' : 'pointer',
+                  fontSize: '0.75rem', padding: '2px 8px',
+                }}
+              >
+                {queueRefreshing ? '…' : 'Refrescar'}
+              </button>
+            </div>
+            <div className="upload-panel-body" style={{ padding: '10px 16px' }}>
+              {queueTop.length === 0 ? (
+                <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: 0 }}>
+                  Cola vacía. Pulsa Refrescar para construirla.
+                </p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {queueTop.map((item, idx) => {
+                    const color = BUCKET_COLOR[item.priority_bucket] ?? '#6b7280'
+                    return (
+                      <div key={item.id} style={{
+                        display: 'flex', gap: 8, alignItems: 'center',
+                        padding: '5px 8px',
+                        background: 'rgba(255,255,255,0.03)',
+                        borderRadius: 5,
+                        borderLeft: `2px solid ${color}`,
+                        fontSize: '0.8rem',
+                      }}>
+                        <span style={{ color: '#6b7280', minWidth: 14, fontWeight: 600 }}>{idx + 1}.</span>
+                        <span style={{ color, fontWeight: 600, minWidth: 80, fontSize: '0.72rem' }}>
+                          {ACTION_SHORT[item.action] ?? item.action}
+                        </span>
+                        <span style={{ color: '#d1d5db', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {item.title ?? '—'}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </div>
 

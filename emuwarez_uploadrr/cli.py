@@ -23,7 +23,7 @@ from .services import tasks as task_service
 MODERN_COMMANDS = {
     "configure", "doctor", "test-apis", "instances", "sync", "library",
     "requests", "missing", "prepare", "upload", "tasks", "logs", "legacy",
-    "web-contract", "db", "web", "nomenclature", "maintenance", "arr",
+    "web-contract", "db", "web", "nomenclature", "maintenance", "arr", "queue",
 }
 
 
@@ -192,6 +192,25 @@ def build_parser() -> argparse.ArgumentParser:
     p_arr_refresh.add_argument("--no-queue", action="store_true", help="Omitir lectura de queue")
     p_arr_refresh.add_argument("--no-history", action="store_true", help="Omitir lectura de historial")
     p_arr_refresh.add_argument("--history-size", type=int, default=100, help="Número de entradas de historial (default: 100)")
+
+    p_queue = sub.add_parser("queue", help="Cola operativa unificada de acciones")
+    queue_sub = p_queue.add_subparsers(dest="queue_command", required=True)
+    queue_sub.add_parser("summary", help="Resumen de la cola operativa")
+    p_queue_list = queue_sub.add_parser("list", help="Listar items de la cola")
+    p_queue_list.add_argument("--status", help="Filtrar por status (open/ready/waiting/blocked)")
+    p_queue_list.add_argument("--action", help="Filtrar por acción")
+    p_queue_list.add_argument("--bucket", help="Filtrar por priority_bucket (critical/high/medium/low/blocked)")
+    p_queue_list.add_argument("--type", dest="item_type", help="Filtrar por item_type")
+    p_queue_list.add_argument("--limit", type=int, default=50, help="Número máximo de items (default: 50)")
+    queue_sub.add_parser("refresh", help="Reconstruir cola desde todas las fuentes")
+    p_queue_show = queue_sub.add_parser("show", help="Detalle de un item de la cola")
+    p_queue_show.add_argument("id", type=int, help="ID del item de la cola")
+    p_queue_resolve = queue_sub.add_parser("resolve", help="Marcar item como resuelto")
+    p_queue_resolve.add_argument("id", type=int, help="ID del item de la cola")
+    p_queue_resolve.add_argument("--reason", help="Motivo opcional")
+    p_queue_ignore = queue_sub.add_parser("ignore", help="Ignorar item de la cola")
+    p_queue_ignore.add_argument("id", type=int, help="ID del item de la cola")
+    p_queue_ignore.add_argument("--reason", help="Motivo opcional")
 
     p_nomenclature = sub.add_parser("nomenclature", help="Previsualización de nomenclatura eMuwarez (no modifica archivos)")
     nom_sub = p_nomenclature.add_subparsers(dest="nomenclature_command", required=True)
@@ -721,6 +740,138 @@ def cmd_arr(args) -> int:
                         print(f"  ✗ {e.get('instance')}: {e.get('error')}")
             print("✓ Salud ARR actualizada")
             return 0
+    return 1
+
+
+_BUCKET_COLORS = {
+    "critical": "🔴",
+    "high":     "🟠",
+    "medium":   "🟡",
+    "low":      "⚪",
+    "blocked":  "⛔",
+}
+
+_STATUS_LABELS = {
+    "open":     "abierto",
+    "ready":    "listo",
+    "waiting":  "esperando",
+    "blocked":  "bloqueado",
+    "running":  "en curso",
+    "resolved": "resuelto",
+    "ignored":  "ignorado",
+    "completed": "completado",
+}
+
+
+def cmd_queue(args) -> int:
+    with _open_conn(args) as conn:
+        from .services.operational_queue import (
+            refresh_operational_queue,
+            list_operational_queue,
+            get_operational_queue_summary,
+            get_operational_queue_item,
+            mark_queue_item_resolved,
+            ignore_queue_item,
+        )
+
+        if args.queue_command == "summary":
+            summary = get_operational_queue_summary(conn)
+            print("\n── Cola operativa ──────────────────────────────────")
+            print(f"  Total: {summary.get('total', 0)}")
+            print(f"  Open:    {summary.get('open', 0)}   Ready:   {summary.get('ready', 0)}")
+            print(f"  Waiting: {summary.get('waiting', 0)}   Blocked: {summary.get('blocked', 0)}")
+            print(f"  Critical: {summary.get('critical', 0)}   High: {summary.get('high', 0)}")
+            if summary.get("total", 0) == 0:
+                print()
+                print("  Sin items. Ejecuta: python3 emuwarez_uploader.py queue refresh")
+            return 0
+
+        if args.queue_command == "refresh":
+            print("Reconstruyendo cola operativa...")
+            result = refresh_operational_queue(conn)
+            s = result.get("summary", {})
+            print(f"✓ Cola actualizada: {result.get('items_built', 0)} items")
+            print(f"  Listos: {s.get('ready', 0)}  Esperando: {s.get('waiting', 0)}  Bloqueados: {s.get('blocked', 0)}")
+            return 0
+
+        if args.queue_command == "list":
+            filters: dict = {}
+            if getattr(args, "status", None):
+                filters["status"] = args.status
+            if getattr(args, "action", None):
+                filters["action"] = args.action
+            if getattr(args, "item_type", None):
+                filters["item_type"] = args.item_type
+            if getattr(args, "bucket", None):
+                filters["priority_bucket"] = args.bucket
+            limit = getattr(args, "limit", 50)
+            items = list_operational_queue(conn, filters=filters, limit=limit)
+            if not items:
+                print("Sin items en la cola. Ejecuta: python3 emuwarez_uploader.py queue refresh")
+                return 0
+            rows = []
+            for item in items:
+                icon = _BUCKET_COLORS.get(item.get("priority_bucket", "low"), "")
+                status_label = _STATUS_LABELS.get(item.get("status", ""), item.get("status", ""))
+                rows.append([
+                    item["id"],
+                    f"{icon} {item.get('priority_bucket', '')}",
+                    status_label,
+                    item.get("action", ""),
+                    item.get("item_type", ""),
+                    (item.get("title") or "")[:50],
+                ])
+            _print_table(["ID", "Prioridad", "Estado", "Acción", "Tipo", "Título"], rows)
+            return 0
+
+        if args.queue_command == "show":
+            item = get_operational_queue_item(args.id, conn)
+            if not item:
+                print(f"✗ Item {args.id} no encontrado")
+                return 1
+            icon = _BUCKET_COLORS.get(item.get("priority_bucket", "low"), "")
+            print(f"\n── Item #{item['id']} ─────────────────────────────────")
+            print(f"  Clave:     {item.get('queue_key')}")
+            print(f"  Tipo:      {item.get('item_type')} / {item.get('entity_type')}")
+            print(f"  Título:    {item.get('title')}")
+            print(f"  Subtítulo: {item.get('subtitle')}")
+            print(f"  Estado:    {_STATUS_LABELS.get(item.get('status', ''), item.get('status', ''))}")
+            print(f"  Acción:    {item.get('action')}")
+            print(f"  Prioridad: {icon} {item.get('priority_bucket')} (score {item.get('priority_score', 0)})")
+            if item.get("blockers"):
+                print(f"  Bloqueado por:")
+                for b in item["blockers"]:
+                    print(f"    · {b}")
+            if item.get("reasons"):
+                print(f"  Razones:")
+                for r in item["reasons"]:
+                    print(f"    · {r}")
+            if item.get("request_item_id"):
+                print(f"  request_item_id: {item['request_item_id']}")
+            if item.get("library_item_id"):
+                print(f"  library_item_id: {item['library_item_id']}")
+            if item.get("upload_job_id"):
+                print(f"  upload_job_id:   {item['upload_job_id']}")
+            return 0
+
+        if args.queue_command == "resolve":
+            result = mark_queue_item_resolved(args.id, conn, reason=getattr(args, "reason", None))
+            if result.get("ok"):
+                print(f"✓ Item #{args.id} marcado como resuelto")
+            else:
+                print(f"✗ {result.get('error', 'Error desconocido')}")
+                return 1
+            return 0
+
+        if args.queue_command == "ignore":
+            result = ignore_queue_item(args.id, conn, reason=getattr(args, "reason", None))
+            if result.get("ok"):
+                print(f"✓ Item #{args.id} marcado como ignorado")
+            else:
+                print(f"✗ {result.get('error', 'Error desconocido')}")
+                return 1
+            return 0
+
     return 1
 
 
@@ -1425,6 +1576,8 @@ def modern_main(argv: Optional[list[str]] = None) -> int:
             return cmd_maintenance(args)
         if args.command == "arr":
             return cmd_arr(args)
+        if args.command == "queue":
+            return cmd_queue(args)
         parser.error("Comando no soportado")
         return 2
     except IntegrationError as exc:

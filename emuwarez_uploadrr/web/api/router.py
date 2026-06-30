@@ -18,6 +18,7 @@ from .diagnostics import router as diagnostics_router
 from .maintenance import router as maintenance_router
 from .arr_health import router as arr_health_router
 from .request_readiness import router as request_readiness_router
+from .operational_queue import router as operational_queue_router
 
 api_router = APIRouter(prefix="/api")
 
@@ -41,3 +42,4 @@ api_router.include_router(uploads_router)
 api_router.include_router(placeholders_router)
 api_router.include_router(diagnostics_router)
 api_router.include_router(maintenance_router)
+api_router.include_router(operational_queue_router)

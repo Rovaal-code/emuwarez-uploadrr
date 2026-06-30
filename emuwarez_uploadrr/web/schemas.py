@@ -346,6 +346,13 @@ class DashboardSummaryResponse(BaseModel):
     requests_waiting_download: int = 0
     requests_blocked: int = 0
     requests_high_priority: int = 0
+    # Phase 8C — operational queue counts
+    operational_queue_open: int = 0
+    operational_queue_ready: int = 0
+    operational_queue_waiting: int = 0
+    operational_queue_blocked: int = 0
+    operational_queue_critical: int = 0
+    operational_queue_high: int = 0
 
 
 class DashboardActivityItem(BaseModel):
@@ -849,3 +856,73 @@ class CleanupLogsRequest(BaseModel):
     dry_run: bool = True
     apply: bool = False
     confirmation: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Phase 8C — Operational queue
+# ---------------------------------------------------------------------------
+
+class OperationalQueueItem(BaseModel):
+    id: int
+    queue_key: str
+    item_type: str
+    entity_type: str
+    entity_id: Optional[int] = None
+    request_item_id: Optional[int] = None
+    library_item_id: Optional[int] = None
+    upload_job_id: Optional[int] = None
+    title: Optional[str] = None
+    subtitle: Optional[str] = None
+    status: str
+    action: str
+    priority_score: int = 0
+    priority_bucket: str = "low"
+    blockers: list[str] = []
+    reasons: list[str] = []
+    context: dict = {}
+    target_url: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    last_seen_at: Optional[str] = None
+    resolved_at: Optional[str] = None
+
+
+class OperationalQueueListResponse(BaseModel):
+    items: list[OperationalQueueItem]
+    total: int = 0
+
+
+class OperationalQueueSummary(BaseModel):
+    total: int = 0
+    open: int = 0
+    ready: int = 0
+    waiting: int = 0
+    blocked: int = 0
+    running: int = 0
+    critical: int = 0
+    high: int = 0
+
+
+class OperationalQueueRefreshBody(BaseModel):
+    limit: Optional[int] = None
+    include_requests: bool = True
+    include_library: bool = True
+    include_uploads: bool = True
+    include_arr: bool = True
+
+
+class OperationalQueueResolveBody(BaseModel):
+    reason: Optional[str] = None
+
+
+class OperationalQueueRefreshResponse(BaseModel):
+    ok: bool
+    items_built: int = 0
+    summary: OperationalQueueSummary = OperationalQueueSummary()
+
+
+class OperationalQueueActionResponse(BaseModel):
+    ok: bool
+    item_id: int
+    status: str
+    reason: Optional[str] = None

@@ -11,7 +11,7 @@ from .constants import CONFIG_DIR
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 
 def db_path() -> Path:
@@ -228,6 +228,92 @@ def _migrate_requests(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE request_items ADD COLUMN {col} {col_def}")
         except sqlite3.OperationalError:
             pass
+
+
+def _migrate_request_items_phase8b(conn: sqlite3.Connection) -> None:
+    """Add Phase 8B readiness columns to request_items."""
+    new_cols = [
+        ("readiness_status", "TEXT"),
+        ("readiness_action", "TEXT"),
+        ("readiness_priority_score", "INTEGER"),
+        ("readiness_priority_bucket", "TEXT"),
+        ("readiness_best_library_item_id", "INTEGER"),
+        ("readiness_updated_at", "TEXT"),
+    ]
+    for col, col_def in new_cols:
+        try:
+            conn.execute(f"ALTER TABLE request_items ADD COLUMN {col} {col_def}")
+        except sqlite3.OperationalError:
+            pass
+
+
+def _migrate_request_readiness_tables(conn: sqlite3.Connection) -> None:
+    """Create Phase 8B request readiness and candidates tables."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS request_readiness (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            request_item_id INTEGER NOT NULL UNIQUE,
+            best_library_item_id INTEGER,
+            status TEXT NOT NULL,
+            recommended_action TEXT,
+            priority_score INTEGER NOT NULL DEFAULT 0,
+            priority_bucket TEXT NOT NULL DEFAULT 'low',
+            compatibility_score REAL,
+            upload_readiness_score REAL,
+            blockers_json TEXT,
+            reasons_json TEXT,
+            candidate_summary_json TEXT,
+            last_evaluated_at TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_rr_request_item ON request_readiness(request_item_id)
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_rr_best_lib ON request_readiness(best_library_item_id)
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_rr_status ON request_readiness(status)
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_rr_action ON request_readiness(recommended_action)
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_rr_bucket ON request_readiness(priority_bucket)
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS request_candidates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            request_item_id INTEGER NOT NULL,
+            library_item_id INTEGER NOT NULL,
+            candidate_rank INTEGER NOT NULL,
+            match_status TEXT NOT NULL,
+            match_score REAL,
+            compatibility_status TEXT,
+            compatibility_score REAL,
+            readiness_status TEXT,
+            readiness_score REAL,
+            blockers_json TEXT,
+            reasons_json TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_rc_request ON request_candidates(request_item_id)
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_rc_library ON request_candidates(library_item_id)
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_rc_rank ON request_candidates(candidate_rank)
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_rc_readiness ON request_candidates(readiness_status)
+    """)
 
 
 def _migrate_library_items_phase8a(conn: sqlite3.Connection) -> None:
@@ -465,6 +551,8 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_upload_jobs_phase6d(conn)
         _migrate_library_items_phase8a(conn)
         _migrate_diagnostic_tables(conn)
+        _migrate_request_items_phase8b(conn)
+        _migrate_request_readiness_tables(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

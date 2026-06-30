@@ -204,6 +204,59 @@ export interface RequestItemResponse {
   local_status: string | null
   reviewed_at: string | null
   updated_at: string | null
+  // Phase 8B
+  readiness_status: string | null
+  readiness_action: string | null
+  readiness_priority_score: number | null
+  readiness_priority_bucket: string | null
+  readiness_best_library_item_id: number | null
+}
+
+// Phase 8B — Request Readiness
+
+export interface RequestReadinessResponse {
+  id: number
+  request_item_id: number
+  title: string | null
+  emu_id: string | null
+  best_library_item_id: number | null
+  status: string
+  recommended_action: string | null
+  priority_score: number
+  priority_bucket: string
+  compatibility_score: number | null
+  upload_readiness_score: number | null
+  blockers: string[]
+  reasons: string[]
+  candidate_summary: Array<{rank: number; library_item_id: number; compatibility_score: number; readiness_status: string}>
+  last_evaluated_at: string | null
+  updated_at: string | null
+}
+
+export interface RequestReadinessListResponse {
+  items: RequestReadinessResponse[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface RequestCandidateResponse {
+  id: number
+  request_item_id: number
+  library_item_id: number
+  candidate_rank: number
+  match_status: string
+  match_score: number | null
+  compatibility_status: string | null
+  compatibility_score: number | null
+  readiness_status: string | null
+  readiness_score: number | null
+  blockers: string[]
+  reasons: string[]
+  lib_title: string | null
+  local_status: string | null
+  resolution: string | null
+  source: string | null
 }
 
 export interface RequestDetailResponse extends RequestItemResponse {
@@ -250,6 +303,12 @@ export interface DashboardSummaryResponseV2 extends DashboardSummaryResponse {
   items_ready_for_upload: number
   items_waiting_download: number
   items_need_arr_review: number
+  // Phase 8B
+  requests_ready_to_upload: number
+  requests_need_nomenclature: number
+  requests_waiting_download: number
+  requests_blocked: number
+  requests_high_priority: number
 }
 
 // Phase 6A — Nomenclature

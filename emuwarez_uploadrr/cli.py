@@ -164,6 +164,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_req_create = req_sub.add_parser("create", help="Preparado para futuro: crear petición EMU")
     p_req_create.add_argument("library_id", type=int)
     p_req_create.add_argument("--dry-run", action="store_true")
+    # Phase 8B
+    p_req_readiness = req_sub.add_parser("readiness", help="Listar readiness de peticiones o detalle de una")
+    p_req_readiness.add_argument("id", type=int, nargs="?", default=None, help="ID de petición (opcional)")
+    p_req_readiness.add_argument("--limit", type=int, default=50)
+    req_sub.add_parser("readiness-refresh", help="Recalcular readiness para todas las peticiones")
+    p_req_candidates = req_sub.add_parser("candidates", help="Candidatos locales para una petición")
+    p_req_candidates.add_argument("id", type=int)
+    req_sub.add_parser("prioritized", help="Peticiones ordenadas por prioridad de readiness")
 
     p_missing = sub.add_parser("missing", help="Contenido faltante")
     missing_sub = p_missing.add_subparsers(dest="missing_command", required=True)
@@ -522,6 +530,96 @@ def cmd_requests(args) -> int:
         if args.requests_command == "create":
             print("⚠ Crear peticiones EMU está preparado, pero no activado todavía.")
             print("  Falta capturar la request real desde DevTools > Network en eMuwarez.")
+            return 0
+        # Phase 8B
+        if args.requests_command == "readiness-refresh":
+            from .services.request_readiness import refresh_request_readiness
+            result = refresh_request_readiness(conn)
+            print(f"✓ Readiness recalculado: {result['items_updated']} peticiones  |  errores: {result['errors']}")
+            return 0
+        if args.requests_command == "readiness":
+            from .services.request_readiness import list_request_readiness, get_request_readiness
+            req_id = getattr(args, "id", None)
+            if req_id:
+                data = get_request_readiness(req_id, conn)
+                if not data:
+                    print(f"Sin readiness para petición {req_id}. Ejecuta: python3 emuwarez_uploader.py requests readiness-refresh")
+                    return 1
+                print(f"Petición: {data.get('title')} (ID {req_id})")
+                print(f"  Estado readiness : {data['status']}")
+                print(f"  Acción           : {data.get('recommended_action') or '—'}")
+                print(f"  Prioridad        : {data.get('priority_bucket')} / score {data.get('priority_score')}")
+                print(f"  Compat. score    : {data.get('compatibility_score')}")
+                print(f"  Readiness score  : {data.get('upload_readiness_score')}")
+                print(f"  Candidato local  : #{data.get('best_library_item_id') or '—'}")
+                if data.get("blockers"):
+                    print("  Bloqueadores:")
+                    for b in data["blockers"]:
+                        print(f"    - {b}")
+                return 0
+            limit = getattr(args, "limit", 50)
+            rows = list_request_readiness(conn, limit=limit)
+            if not rows:
+                print("Sin readiness calculado. Ejecuta: python3 emuwarez_uploader.py requests readiness-refresh")
+                return 0
+            _print_table(
+                ["ID", "Título", "Estado", "Acción", "Prioridad", "Score", "Candidato"],
+                [
+                    [
+                        r["request_item_id"],
+                        (r.get("title") or "")[:40],
+                        r["status"],
+                        r.get("recommended_action") or "—",
+                        r.get("priority_bucket"),
+                        r.get("priority_score"),
+                        f"#{r.get('best_library_item_id')}" if r.get("best_library_item_id") else "—",
+                    ]
+                    for r in rows
+                ],
+            )
+            return 0
+        if args.requests_command == "candidates":
+            from .services.request_readiness import get_candidates_for_request
+            items = get_candidates_for_request(args.id, conn)
+            if not items:
+                print(f"Sin candidatos para petición {args.id}. Ejecuta: python3 emuwarez_uploader.py requests readiness-refresh")
+                return 0
+            _print_table(
+                ["Rank", "Lib ID", "Título", "Compat.", "Readiness", "Acción"],
+                [
+                    [
+                        c["candidate_rank"],
+                        c["library_item_id"],
+                        (c.get("lib_title") or "")[:35],
+                        f"{c.get('compatibility_score', 0):.0f}",
+                        c.get("readiness_status") or "—",
+                        c.get("recommended_action") or "—",
+                    ]
+                    for c in items
+                ],
+            )
+            return 0
+        if args.requests_command == "prioritized":
+            from .services.request_readiness import list_prioritized_requests
+            rows = list_prioritized_requests(conn, limit=50)
+            if not rows:
+                print("Sin readiness calculado. Ejecuta: python3 emuwarez_uploader.py requests readiness-refresh")
+                return 0
+            _print_table(
+                ["ID", "Título", "Estado", "Acción", "Prioridad", "Score", "Candidato"],
+                [
+                    [
+                        r["request_item_id"],
+                        (r.get("title") or "")[:38],
+                        r["status"],
+                        r.get("recommended_action") or "—",
+                        r.get("priority_bucket"),
+                        r.get("priority_score"),
+                        f"#{r.get('best_library_item_id')}" if r.get("best_library_item_id") else "—",
+                    ]
+                    for r in rows
+                ],
+            )
             return 0
     return 1
 

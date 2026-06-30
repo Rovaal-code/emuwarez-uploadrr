@@ -17,6 +17,7 @@ from .placeholders import router as placeholders_router
 from .diagnostics import router as diagnostics_router
 from .maintenance import router as maintenance_router
 from .arr_health import router as arr_health_router
+from .request_readiness import router as request_readiness_router
 
 api_router = APIRouter(prefix="/api")
 
@@ -30,6 +31,10 @@ api_router.include_router(dashboard_router)
 # and /library/recommendations/refresh don't get swallowed by /library/{item_id}
 api_router.include_router(arr_health_router)
 api_router.include_router(library_router)
+# request_readiness_router must come before requests_router so /requests/readiness,
+# /requests/prioritized and /requests/{id}/readiness|candidates don't collide with
+# the parameterized /requests/{request_id} route.
+api_router.include_router(request_readiness_router)
 api_router.include_router(requests_router)
 api_router.include_router(nomenclature_router)
 api_router.include_router(uploads_router)

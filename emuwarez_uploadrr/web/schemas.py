@@ -340,6 +340,12 @@ class DashboardSummaryResponse(BaseModel):
     items_ready_for_upload: int = 0
     items_waiting_download: int = 0
     items_need_arr_review: int = 0
+    # Phase 8B — request readiness counts
+    requests_ready_to_upload: int = 0
+    requests_need_nomenclature: int = 0
+    requests_waiting_download: int = 0
+    requests_blocked: int = 0
+    requests_high_priority: int = 0
 
 
 class DashboardActivityItem(BaseModel):
@@ -471,6 +477,12 @@ class RequestItemResponse(BaseModel):
     local_status: Optional[str] = None
     reviewed_at: Optional[str] = None
     updated_at: Optional[str] = None
+    # Phase 8B — readiness fields (optional, not populated if readiness not yet evaluated)
+    readiness_status: Optional[str] = None
+    readiness_action: Optional[str] = None
+    readiness_priority_score: Optional[int] = None
+    readiness_priority_bucket: Optional[str] = None
+    readiness_best_library_item_id: Optional[int] = None
 
 
 class RequestDetailResponse(RequestItemResponse):
@@ -482,6 +494,76 @@ class RequestListResponse(BaseModel):
     total: int = 0
     limit: int = 50
     offset: int = 0
+
+
+# ---------------------------------------------------------------------------
+# Phase 8B — Request Readiness
+# ---------------------------------------------------------------------------
+
+class RequestReadinessResponse(BaseModel):
+    id: int
+    request_item_id: int
+    title: Optional[str] = None
+    emu_id: Optional[str] = None
+    best_library_item_id: Optional[int] = None
+    status: str
+    recommended_action: Optional[str] = None
+    priority_score: int = 0
+    priority_bucket: str = "low"
+    compatibility_score: Optional[float] = None
+    upload_readiness_score: Optional[float] = None
+    blockers: list[str] = []
+    reasons: list[str] = []
+    candidate_summary: list[dict] = []
+    last_evaluated_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class RequestReadinessListResponse(BaseModel):
+    items: list[RequestReadinessResponse] = []
+    total: int = 0
+    limit: int = 100
+    offset: int = 0
+
+
+class RequestCandidateResponse(BaseModel):
+    id: int
+    request_item_id: int
+    library_item_id: int
+    candidate_rank: int
+    match_status: str
+    match_score: Optional[float] = None
+    compatibility_status: Optional[str] = None
+    compatibility_score: Optional[float] = None
+    readiness_status: Optional[str] = None
+    readiness_score: Optional[float] = None
+    blockers: list[str] = []
+    reasons: list[str] = []
+    lib_title: Optional[str] = None
+    local_status: Optional[str] = None
+    resolution: Optional[str] = None
+    source: Optional[str] = None
+
+
+class RequestReadinessRefreshBody(BaseModel):
+    limit: Optional[int] = None
+    force: bool = False
+
+
+class RequestReadinessEvaluateResponse(BaseModel):
+    ok: bool
+    request_item_id: int
+    title: Optional[str] = None
+    status: str
+    recommended_action: Optional[str] = None
+    priority_score: int = 0
+    priority_bucket: str = "low"
+    compatibility_score: Optional[float] = None
+    upload_readiness_score: Optional[float] = None
+    best_library_item_id: Optional[int] = None
+    blockers: list[str] = []
+    reasons: list[str] = []
+    candidates_count: int = 0
 
 
 class RequestSyncStatusResponse(BaseModel):

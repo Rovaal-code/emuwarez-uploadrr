@@ -318,7 +318,8 @@ else
 fi
 
 # CLI: mkv-title preview for demo item (expects blocked — no prepared_path in fresh demo)
-MKV_OUT=$(docker exec "$CONTAINER_NAME" python3 emuwarez_uploader.py mkv-title preview 1 2>&1)
+# Uses || true because mkv-title preview exits 1 when blocked (expected in demo)
+MKV_OUT=$(docker exec "$CONTAINER_NAME" python3 emuwarez_uploader.py mkv-title preview 1 2>&1 || true)
 if echo "$MKV_OUT" | grep -qE "blocked|Status"; then
     log_ok "mkv-title preview — responde correctamente (blocked sin prepared_path)"
     PASS=$((PASS + 1))

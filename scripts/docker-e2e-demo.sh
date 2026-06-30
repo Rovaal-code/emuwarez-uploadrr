@@ -284,47 +284,46 @@ else
     log_warn "GET /queue → HTTP $QUEUE_CODE"
 fi
 
-# ── 13. Phase 10A — Nomenclature sources/providers API ───────────────────────
-log_step "13. Phase 10A — Sources y Providers API"
-SOURCES_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-    -H "Authorization: Bearer $TOKEN" \
+# ── 13. Phase 10A — Nomenclature sources/providers (CLI + auth guard) ────────
+log_step "13. Phase 10A — Sources, Providers y MKV title"
+
+# CLI: nomenclature sources must list WEB-DL
+SOURCES_OUT=$(docker exec "$CONTAINER_NAME" python3 emuwarez_uploader.py nomenclature sources 2>&1)
+if echo "$SOURCES_OUT" | grep -q "WEB-DL"; then
+    log_ok "nomenclature sources — WEB-DL presente"
+    PASS=$((PASS + 1))
+else
+    log_fail "nomenclature sources — WEB-DL NO encontrado"
+    FAIL=$((FAIL + 1))
+fi
+
+# CLI: nomenclature providers must list AMZN
+PROVIDERS_OUT=$(docker exec "$CONTAINER_NAME" python3 emuwarez_uploader.py nomenclature providers 2>&1)
+if echo "$PROVIDERS_OUT" | grep -q "AMZN"; then
+    log_ok "nomenclature providers — AMZN presente"
+    PASS=$((PASS + 1))
+else
+    log_fail "nomenclature providers — AMZN NO encontrado"
+    FAIL=$((FAIL + 1))
+fi
+
+# API auth guard: sources endpoint must return 401 without token
+SOURCES_NO_AUTH=$(curl -s -o /dev/null -w "%{http_code}" \
     "http://localhost:${HOST_PORT}/api/nomenclature/sources")
-if [ "$SOURCES_CODE" = "200" ]; then
-    log_ok "GET /nomenclature/sources → 200"
+if [ "$SOURCES_NO_AUTH" = "401" ]; then
+    log_ok "GET /nomenclature/sources sin token → 401 (auth guard OK)"
     PASS=$((PASS + 1))
 else
-    log_warn "GET /nomenclature/sources → HTTP $SOURCES_CODE"
+    log_warn "GET /nomenclature/sources sin token → HTTP $SOURCES_NO_AUTH (esperado 401)"
 fi
 
-PROVIDERS_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-    -H "Authorization: Bearer $TOKEN" \
-    "http://localhost:${HOST_PORT}/api/nomenclature/providers")
-if [ "$PROVIDERS_CODE" = "200" ]; then
-    log_ok "GET /nomenclature/providers → 200"
+# CLI: mkv-title preview for demo item (expects blocked — no prepared_path in fresh demo)
+MKV_OUT=$(docker exec "$CONTAINER_NAME" python3 emuwarez_uploader.py mkv-title preview 1 2>&1)
+if echo "$MKV_OUT" | grep -qE "blocked|Status"; then
+    log_ok "mkv-title preview — responde correctamente (blocked sin prepared_path)"
     PASS=$((PASS + 1))
 else
-    log_warn "GET /nomenclature/providers → HTTP $PROVIDERS_CODE"
-fi
-
-# Verify sources includes WEB-DL
-SOURCES_BODY=$(curl -s -H "Authorization: Bearer $TOKEN" \
-    "http://localhost:${HOST_PORT}/api/nomenclature/sources")
-if echo "$SOURCES_BODY" | grep -q "WEB-DL"; then
-    log_ok "Sources contiene WEB-DL"
-    PASS=$((PASS + 1))
-else
-    log_warn "Sources no contiene WEB-DL"
-fi
-
-# MKV title preview for demo item (expects blocked since no prepared_path in fresh demo)
-MKV_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-    -H "Authorization: Bearer $TOKEN" \
-    "http://localhost:${HOST_PORT}/api/library/1/mkv-title/preview")
-if [ "$MKV_CODE" = "200" ]; then
-    log_ok "GET /library/1/mkv-title/preview → 200"
-    PASS=$((PASS + 1))
-else
-    log_warn "GET /library/1/mkv-title/preview → HTTP $MKV_CODE"
+    log_warn "mkv-title preview — respuesta inesperada"
 fi
 
 # ── 14. Security check: Uploadrr not in image ─────────────────────────────────

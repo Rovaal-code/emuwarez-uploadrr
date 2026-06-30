@@ -1,8 +1,14 @@
 # Phase 9A — Ejecución guiada desde la cola operativa
 
 **Rama:** `feature/ui-phase-09a-guided-queue-actions`
+**Commit:** `feffb4b`
 **Schema version:** 11 (anterior: 10)
 **Fecha:** 2026-06-30
+**Tests totales:** 681 passing (40 nuevos en esta fase)
+**Uploadrr/ tocado:** No
+**Jellyfin implementado:** No
+**Seerr implementado:** No
+**Push realizado:** No
 
 ---
 

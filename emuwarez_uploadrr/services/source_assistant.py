@@ -1,0 +1,374 @@
+"""Source/provider assistant for eMuwarez nomenclature (Phase 10A).
+
+SAFETY: Read-only service. Never modifies filesystem or calls external APIs
+directly — TMDb calls are delegated to integrations/tmdb.py.
+"""
+from __future__ import annotations
+
+import json
+from typing import Any
+
+from ..database import connect
+
+# --- Official EMU sources ---
+EMU_SOURCES: list[dict] = [
+    {"code": "Full BluRay", "label": "Full BluRay"},
+    {"code": "BDRemux",     "label": "BDRemux"},
+    {"code": "BluRay",      "label": "BluRay"},
+    {"code": "MHD",         "label": "MHD"},
+    {"code": "WEB-DL",      "label": "WEB-DL"},
+    {"code": "WEBRip",      "label": "WEBRip"},
+    {"code": "HDTV",        "label": "HDTV"},
+]
+
+# sources that accept a provider prefix
+PROVIDER_SOURCES: frozenset[str] = frozenset({"WEB-DL"})
+
+# --- Official EMU providers ---
+EMU_PROVIDERS: list[dict] = [
+    {"code": "AMZN",  "name": "Amazon"},
+    {"code": "ATVP",  "name": "AppleTVPlus"},
+    {"code": "DSNP",  "name": "DisneyPlus"},
+    {"code": "F1TV",  "name": "F1tv"},
+    {"code": "GLB",   "name": "Globoplay"},
+    {"code": "HS",    "name": "Hotstar"},
+    {"code": "HULU",  "name": "Hulu"},
+    {"code": "M+",    "name": "Movistar+"},
+    {"code": "IT",    "name": "iTunes"},
+    {"code": "MA",    "name": "MoviesAnywhere"},
+    {"code": "MAX",   "name": "HBO Max"},
+    {"code": "HMAX",  "name": "HBO Max"},
+    {"code": "SKY",   "name": "SkyShowtime"},
+    {"code": "PCOK",  "name": "Peacock"},
+    {"code": "PMTP",  "name": "ParamountPlus"},
+    {"code": "iP",    "name": "BBC iPlayer"},
+    {"code": "PLAY",  "name": "Google Play"},
+    {"code": "MUBI",  "name": "Mubi"},
+    {"code": "NF",    "name": "Netflix"},
+    {"code": "RKTN",  "name": "RakutenTV"},
+    {"code": "SL",    "name": "SonyLiv"},
+    {"code": "SNXT",  "name": "Sunnxt"},
+    {"code": "VIU",   "name": "Viu"},
+    {"code": "RTVE",  "name": "RTVE"},
+    {"code": "HBO",   "name": "HBO"},
+]
+
+# TMDb provider name → EMU provider code mapping
+_TMDB_PROVIDER_MAP: dict[str, str] = {
+    "amazon prime video": "AMZN",
+    "amazon video": "AMZN",
+    "netflix": "NF",
+    "disney plus": "DSNP",
+    "disney+": "DSNP",
+    "apple tv plus": "ATVP",
+    "apple tv+": "ATVP",
+    "apple tv": "ATVP",
+    "max": "MAX",
+    "hbo max": "MAX",
+    "movistar plus+": "M+",
+    "movistar+": "M+",
+    "itunes": "IT",
+    "movies anywhere": "MA",
+    "google play movies": "PLAY",
+    "rakuten tv": "RKTN",
+    "mubi": "MUBI",
+    "skyshowtime": "SKY",
+    "peacock": "PCOK",
+    "paramount plus": "PMTP",
+    "paramount+": "PMTP",
+    "rtve play": "RTVE",
+    "hbo": "HBO",
+    "f1 tv": "F1TV",
+    "globoplay": "GLB",
+    "hotstar": "HS",
+    "hulu": "HULU",
+    "bbc iplayer": "iP",
+    "sony liv": "SL",
+}
+
+
+def list_emu_sources() -> list[dict]:
+    return list(EMU_SOURCES)
+
+
+def list_emu_providers() -> list[dict]:
+    return list(EMU_PROVIDERS)
+
+
+def map_tmdb_provider_to_emu_provider(provider_name: str) -> str | None:
+    """Map a TMDb provider display name to an EMU provider code."""
+    if not provider_name:
+        return None
+    key = provider_name.strip().lower()
+    return _TMDB_PROVIDER_MAP.get(key)
+
+
+def _get_tmdb_available_providers_raw(tmdb_id: int, media_type: str, region: str = "ES") -> list[str]:
+    """Call TMDb Watch Providers API. Returns list of EMU provider codes. Never raises."""
+    try:
+        from ..integrations.tmdb import get_movie_watch_providers, get_tv_watch_providers
+        if media_type in ("movie",):
+            data = get_movie_watch_providers(tmdb_id, region=region)
+        else:
+            data = get_tv_watch_providers(tmdb_id, region=region)
+
+        result_codes: list[str] = []
+        region_data = data.get("results", {}).get(region, {})
+        for category in ("flatrate", "buy", "rent", "free", "ads"):
+            for provider in region_data.get(category, []):
+                name = (provider.get("provider_name") or "").strip()
+                code = map_tmdb_provider_to_emu_provider(name)
+                if code and code not in result_codes:
+                    result_codes.append(code)
+        return result_codes
+    except Exception:
+        return []
+
+
+def get_tmdb_available_providers(tmdb_id: int, media_type: str, region: str = "ES") -> list[str]:
+    """Return list of EMU provider codes available on TMDb for this item/region."""
+    return _get_tmdb_available_providers_raw(tmdb_id, media_type, region)
+
+
+def _get_provider_priority(conn) -> list[str]:
+    try:
+        row = conn.execute("SELECT value FROM settings WHERE key = 'provider_priority_order'").fetchone()
+        if row:
+            return json.loads(row["value"])
+    except Exception:
+        pass
+    return ["AMZN", "NF", "DSNP", "MAX", "ATVP"]
+
+
+def _get_tmdb_watch_region(conn) -> str:
+    try:
+        row = conn.execute("SELECT value FROM settings WHERE key = 'tmdb_watch_region'").fetchone()
+        if row and row["value"]:
+            return row["value"]
+    except Exception:
+        pass
+    return "ES"
+
+
+def _get_default_tag(conn) -> str:
+    try:
+        row = conn.execute("SELECT value FROM settings WHERE key = 'default_release_tag'").fetchone()
+        if row and row["value"]:
+            return row["value"]
+        row2 = conn.execute("SELECT value FROM app_state WHERE key = 'release_tag'").fetchone()
+        if row2 and row2["value"]:
+            return row2["value"]
+    except Exception:
+        pass
+    return "EMUWAREZ"
+
+
+def suggest_provider_for_item(library_item_id: int, conn=None) -> dict:
+    """Suggest the best EMU provider code for a library item using TMDb + priority config."""
+    own = conn is None
+    conn = conn or connect()
+    try:
+        item_row = conn.execute("SELECT * FROM library_items WHERE id = ?", (library_item_id,)).fetchone()
+        if not item_row:
+            return {"suggested": None, "tmdb_providers": [], "reason": "Item no encontrado"}
+        item = dict(item_row)
+
+        tmdb_id_raw = item.get("tmdb_id")
+        if not tmdb_id_raw:
+            return {"suggested": None, "tmdb_providers": [], "reason": "Sin TMDb ID"}
+
+        try:
+            tmdb_id = int(str(tmdb_id_raw).split("/")[-1].strip())
+        except (ValueError, TypeError):
+            return {"suggested": None, "tmdb_providers": [], "reason": "TMDb ID inválido"}
+
+        media_type = item.get("item_type") or "movie"
+        region = _get_tmdb_watch_region(conn)
+        priority = _get_provider_priority(conn)
+
+        available = get_tmdb_available_providers(tmdb_id, media_type, region)
+
+        if not available:
+            return {"suggested": None, "tmdb_providers": [], "reason": "Sin providers en TMDb"}
+
+        for code in priority:
+            if code in available:
+                return {
+                    "suggested": code,
+                    "tmdb_providers": available,
+                    "reason": f"Prioridad configurada: {code}",
+                }
+        return {
+            "suggested": available[0],
+            "tmdb_providers": available,
+            "reason": f"Primer disponible: {available[0]}",
+        }
+    finally:
+        if own:
+            conn.close()
+
+
+def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
+    """Build the editable field set for the nomenclature modal."""
+    own = conn is None
+    conn = conn or connect()
+    try:
+        from .nomenclature import (
+            get_library_item_for_nomenclature,
+            _infer_resolution_from_item,
+            _infer_source_from_item,
+            get_latest_nomenclature_proposal,
+        )
+
+        item = get_library_item_for_nomenclature(library_item_id, conn=conn)
+        if not item:
+            return {"error": "Item no encontrado"}
+
+        title = item.get("title") or ""
+        year = item.get("year")
+        media_type = item.get("item_type") or "movie"
+        resolution = _infer_resolution_from_item(item)
+        source = _infer_source_from_item(item)
+
+        proposal = get_latest_nomenclature_proposal(library_item_id, conn=conn)
+        if proposal:
+            resolution = resolution or proposal.get("resolution")
+            source = source or proposal.get("source")
+
+        tag = _get_default_tag(conn)
+
+        season_episode = None
+        if media_type in ("tv", "series", "anime", "season", "episode"):
+            season_episode = "S01"
+
+        tmdb_providers: list[str] = []
+        suggested_provider: str | None = None
+        if source and source.upper() == "WEB-DL":
+            suggestion = suggest_provider_for_item(library_item_id, conn=conn)
+            tmdb_providers = suggestion.get("tmdb_providers", [])
+            suggested_provider = suggestion.get("suggested")
+
+        tmdb_set = set(tmdb_providers)
+        provider_options = []
+        for p in EMU_PROVIDERS:
+            provider_options.append({
+                "code": p["code"],
+                "name": p["name"],
+                "label": f"{p['code']} ({p['name']})",
+                "tmdb_available": p["code"] in tmdb_set,
+            })
+
+        fields: dict[str, Any] = {
+            "title": title,
+            "complement": None,
+            "season_episode": season_episode,
+            "year": year,
+            "resolution": resolution,
+            "source": source,
+            "provider": suggested_provider,
+            "dynamic_range": None,
+            "video_codec": proposal.get("video_codec") if proposal else None,
+            "audio_summary": proposal.get("audio_summary") if proposal else None,
+            "subs": "SUBS",
+            "tag": tag,
+        }
+
+        preview = update_nomenclature_fields_preview(library_item_id, fields, conn=conn)
+
+        return {
+            "library_item_id": library_item_id,
+            "fields": fields,
+            "torrent_name": preview.get("torrent_name"),
+            "internal_mkv_title": preview.get("internal_mkv_title"),
+            "provider_options": provider_options,
+            "tmdb_available_providers": tmdb_providers,
+            "sources": list_emu_sources(),
+        }
+    finally:
+        if own:
+            conn.close()
+
+
+def update_nomenclature_fields_preview(library_item_id: int, fields: dict, conn=None) -> dict:
+    """Recalculate torrent_name and internal_mkv_title from editable fields."""
+    from .nomenclature import _normalize_title_for_emu
+
+    title = _normalize_title_for_emu(fields.get("title") or "")
+    complement = fields.get("complement")
+    season_episode = fields.get("season_episode")
+    year = fields.get("year")
+    resolution = fields.get("resolution")
+    source = fields.get("source")
+    provider = fields.get("provider")
+    dynamic_range = fields.get("dynamic_range")
+    video_codec = fields.get("video_codec")
+    audio_summary = fields.get("audio_summary")
+    subs = fields.get("subs")
+    tag = fields.get("tag")
+
+    parts: list[str] = []
+
+    title_part = title
+    if complement:
+        title_part = f"{title} - {complement}".strip(" -")
+    if title_part:
+        parts.append(title_part)
+
+    if season_episode:
+        parts.append(season_episode)
+
+    if year:
+        parts.append(str(year))
+
+    if resolution:
+        parts.append(resolution)
+
+    if resolution and "2160" in str(resolution):
+        if dynamic_range:
+            parts.append(dynamic_range)
+        elif not any("UHD" in p for p in parts):
+            parts.append("UHD")
+
+    source_str = _build_source_string(source, provider)
+    if source_str:
+        if dynamic_range and "2160" not in str(resolution or ""):
+            parts.append(dynamic_range)
+        parts.append(source_str)
+    elif dynamic_range:
+        parts.append(dynamic_range)
+
+    if video_codec:
+        parts.append(video_codec)
+
+    if audio_summary:
+        parts.append(audio_summary)
+
+    if subs:
+        parts.append(subs)
+
+    if tag:
+        parts.append(f"- {tag}")
+
+    torrent_name = " ".join(p for p in parts if p)
+    internal_mkv_title = _build_internal_mkv_title_from_name(torrent_name)
+
+    return {
+        "torrent_name": torrent_name,
+        "internal_mkv_title": internal_mkv_title,
+    }
+
+
+def _build_source_string(source: str | None, provider: str | None) -> str | None:
+    """Build the source segment: 'AMZN WEB-DL' or 'BluRay' etc."""
+    if not source:
+        return None
+    if source in PROVIDER_SOURCES and provider:
+        return f"{provider} {source}"
+    return source
+
+
+def _build_internal_mkv_title_from_name(torrent_name: str) -> str:
+    """Derive internal MKV title by replacing spaces with dots."""
+    if not torrent_name:
+        return ""
+    return torrent_name.replace(" ", ".")

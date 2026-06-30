@@ -284,8 +284,51 @@ else
     log_warn "GET /queue → HTTP $QUEUE_CODE"
 fi
 
-# ── 13. Security check: Uploadrr not in image ─────────────────────────────────
-log_step "13. Seguridad"
+# ── 13. Phase 10A — Nomenclature sources/providers API ───────────────────────
+log_step "13. Phase 10A — Sources y Providers API"
+SOURCES_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+    -H "Authorization: Bearer $TOKEN" \
+    "http://localhost:${HOST_PORT}/api/nomenclature/sources")
+if [ "$SOURCES_CODE" = "200" ]; then
+    log_ok "GET /nomenclature/sources → 200"
+    PASS=$((PASS + 1))
+else
+    log_warn "GET /nomenclature/sources → HTTP $SOURCES_CODE"
+fi
+
+PROVIDERS_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+    -H "Authorization: Bearer $TOKEN" \
+    "http://localhost:${HOST_PORT}/api/nomenclature/providers")
+if [ "$PROVIDERS_CODE" = "200" ]; then
+    log_ok "GET /nomenclature/providers → 200"
+    PASS=$((PASS + 1))
+else
+    log_warn "GET /nomenclature/providers → HTTP $PROVIDERS_CODE"
+fi
+
+# Verify sources includes WEB-DL
+SOURCES_BODY=$(curl -s -H "Authorization: Bearer $TOKEN" \
+    "http://localhost:${HOST_PORT}/api/nomenclature/sources")
+if echo "$SOURCES_BODY" | grep -q "WEB-DL"; then
+    log_ok "Sources contiene WEB-DL"
+    PASS=$((PASS + 1))
+else
+    log_warn "Sources no contiene WEB-DL"
+fi
+
+# MKV title preview for demo item (expects blocked since no prepared_path in fresh demo)
+MKV_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+    -H "Authorization: Bearer $TOKEN" \
+    "http://localhost:${HOST_PORT}/api/library/1/mkv-title/preview")
+if [ "$MKV_CODE" = "200" ]; then
+    log_ok "GET /library/1/mkv-title/preview → 200"
+    PASS=$((PASS + 1))
+else
+    log_warn "GET /library/1/mkv-title/preview → HTTP $MKV_CODE"
+fi
+
+# ── 14. Security check: Uploadrr not in image ─────────────────────────────────
+log_step "14. Seguridad"
 if docker exec "$CONTAINER_NAME" test -d /app/Uploadrr 2>/dev/null; then
     log_fail "Uploadrr/ encontrado DENTRO de la imagen — NO debe estar"
     FAIL=$((FAIL + 1))

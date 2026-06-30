@@ -755,3 +755,67 @@ Crea:
 - 1 `request_match` Compatible entre los anteriores
 
 El archivo simulado es un fichero de texto con extensión `.mkv`, suficiente para que los verificadores de existencia/extensión pasen. No es un vídeo real.
+
+---
+
+## Nomenclatura editable, Source Assistant y título MKV interno (Phase 10A)
+
+### Source Assistant
+
+Catálogos de fuentes y proveedores EMU disponibles en la API y CLI:
+
+```bash
+emuwarez nomenclature sources
+emuwarez nomenclature providers
+```
+
+Fórmula EMU: `[Título][Año][Resolución][Fuente][Códec][Audios+Canales][SUBS] - [Uploader]`
+
+Solo `WEB-DL` acepta prefijo de proveedor: `AMZN WEB-DL`, `NF WEB-DL`, `DSNP WEB-DL`…
+
+### Campos editables
+
+```bash
+# Ver campos actuales de un ítem
+emuwarez nomenclature fields 42
+
+# Previsualizar con campos modificados (sin guardar)
+emuwarez nomenclature preview-fields 42 \
+  --fields-json '{"title":"Dune","year":"2021","resolution":"1080p","source":"WEB-DL","provider":"AMZN","video_codec":"H.265","audio_summary":"DDP5.1","subs":"SPA","tag":"EMUWAREZ"}'
+```
+
+API equivalente:
+- `GET /api/library/{id}/nomenclature/fields`
+- `POST /api/library/{id}/nomenclature/preview-fields`
+- `POST /api/library/{id}/nomenclature/save-fields`
+
+### Título interno MKV
+
+Escribe el título interno al `.mkv` en `prepared_path` usando `mkvpropedit`. Requiere token de confirmación.
+
+```bash
+# Previsualizar sin modificar nada
+emuwarez mkv-title preview 42
+
+# Aplicar (dry-run por defecto)
+emuwarez mkv-title apply 42 --dry-run
+
+# Aplicar real (requiere token)
+emuwarez mkv-title apply 42 --apply --confirm APLICAR_TITULO_MKV
+```
+
+API equivalente:
+- `GET /api/library/{id}/mkv-title/preview`
+- `POST /api/library/{id}/mkv-title/apply` — body: `{dry_run, apply, confirmation}`
+
+Restricciones de seguridad:
+- `shell=False` en subprocess (sin interpolación de shell)
+- Solo aplica a ficheros `.mkv` en `prepared_path` (nunca `source_path`)
+- Token `APLICAR_TITULO_MKV` obligatorio para escritura real
+- `mkvpropedit` no disponible → aviso, sin bloqueo del flujo
+
+### Sugerencia de proveedor TMDb
+
+Al previsualizar campos con `source=WEB-DL`, la API devuelve los proveedores disponibles en TMDb
+para la región configurada (`tmdb_watch_region`, por defecto `ES`). Los proveedores disponibles
+se marcan con `★` en el desplegable del frontend. El proveedor final siempre es elección del usuario.

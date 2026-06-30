@@ -691,3 +691,67 @@ Cada fila de la cola muestra botón **Plan** que abre el `QueueActionPanel` con:
 - Historial de eventos colapsable
 
 El panel "Qué hacer ahora" del Dashboard incluye botón **Acción →** que navega a la Cola.
+
+---
+
+## E2E controlado en Docker (Phase 9B)
+
+Valida el flujo completo de la app en Docker con datos simulados, sin tocar servicios reales.
+
+### Uso
+
+```bash
+# E2E completo (construye imagen, arranca contenedor, siembra datos, valida flujo, limpia)
+bash scripts/docker-e2e-demo.sh
+
+# Mantener el contenedor y el tmpdir al terminar (para depuración)
+KEEP_CONTAINER=1 bash scripts/docker-e2e-demo.sh
+
+# Usar un puerto diferente
+PORT=9595 bash scripts/docker-e2e-demo.sh
+```
+
+### Qué valida
+
+- La imagen Docker construye correctamente
+- El contenedor arranca y responde en `/api/health`
+- `demo seed` crea biblioteca simulada y petición compatible
+- `library verify-files` y `library recommendations` funcionan
+- `requests readiness-refresh` y `requests prioritized` funcionan
+- `queue refresh`, `queue summary`, `queue list` funcionan
+- `queue action-plan 1` y `queue execute-safe 1` funcionan
+- `nomenclature preview 1` funciona
+- `upload preflight 1` (dry-run) funciona
+- El frontend devuelve HTML en `/`, `/dashboard`, `/queue`
+- Uploadrr/ NO está dentro de la imagen
+
+### Garantías de aislamiento
+
+- Todo escribe en un `tmpdir` temporal creado con `mktemp -d`, limpiado automáticamente al salir
+- No usa Radarr/Sonarr reales
+- No usa eMuwarez real
+- No ejecuta Uploadrr real
+- No sube contenido real
+- No modifica `Uploadrr/`
+- No expone API keys reales
+
+### Datos demo
+
+El comando `demo seed` siembra datos mínimos:
+
+```bash
+python3 emuwarez_uploader.py demo seed \
+    --media-root /data/media \
+    --prepared-root /data/uploads/emu \
+    --confirm DEMO_SEED
+
+python3 emuwarez_uploader.py demo reset --confirm DEMO_RESET
+```
+
+Crea:
+- 1 instancia Radarr fake (deshabilitada, api_key ficticia)
+- 1 `library_item` movie "Demo Movie (2024)" con archivo `.mkv` simulado
+- 1 `request_item` compatible con TMDb/IMDb demo
+- 1 `request_match` Compatible entre los anteriores
+
+El archivo simulado es un fichero de texto con extensión `.mkv`, suficiente para que los verificadores de existencia/extensión pasen. No es un vídeo real.

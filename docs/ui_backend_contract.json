@@ -4,13 +4,36 @@
     "version": "0.2.0",
     "description": "Aplicación web + CLI para cruzar biblioteca Radarr/Sonarr con peticiones eMuwarez, detectar compatibilidad, adaptar nomenclatura y subir con Uploadrr.",
     "integrations": {
-      "radarr": { "role": "primary_library_source", "required": true },
-      "sonarr": { "role": "primary_library_source", "required": true },
-      "tmdb": { "role": "enrichment_matching", "required": false, "recommended": true },
-      "emuwarez": { "role": "requests_source_and_upload_destination", "required": true },
-      "uploadrr": { "role": "upload_engine", "required": true, "external": true },
-      "jellyfin": { "role": "optional_verification", "required": false },
-      "seerr": { "role": "optional_context", "required": false }
+      "radarr": {
+        "role": "primary_library_source",
+        "required": true
+      },
+      "sonarr": {
+        "role": "primary_library_source",
+        "required": true
+      },
+      "tmdb": {
+        "role": "enrichment_matching",
+        "required": false,
+        "recommended": true
+      },
+      "emuwarez": {
+        "role": "requests_source_and_upload_destination",
+        "required": true
+      },
+      "uploadrr": {
+        "role": "upload_engine",
+        "required": true,
+        "external": true
+      },
+      "jellyfin": {
+        "role": "optional_verification",
+        "required": false
+      },
+      "seerr": {
+        "role": "optional_context",
+        "required": false
+      }
     }
   },
   "sections": [
@@ -18,106 +41,259 @@
       "id": "dashboard",
       "label": "Dashboard",
       "purpose": "Vista general del estado del sistema",
-      "cli_equivalent": ["sync", "tasks list", "requests sync"]
+      "cli_equivalent": [
+        "sync",
+        "tasks list",
+        "requests sync"
+      ]
     },
     {
       "id": "library",
       "label": "Biblioteca",
       "purpose": "Todo el contenido conocido desde Radarr/Sonarr",
-      "cli_equivalent": ["library list", "library show", "prepare", "upload"]
+      "cli_equivalent": [
+        "library list",
+        "library show",
+        "prepare",
+        "upload"
+      ]
     },
     {
       "id": "missing",
       "label": "Faltantes",
       "purpose": "Contenido monitorizado sin archivo local o con problemas. Origen: Radarr/Sonarr.",
-      "cli_equivalent": ["missing list", "missing create-request"]
+      "cli_equivalent": [
+        "missing list",
+        "missing create-request"
+      ]
     },
     {
       "id": "requests",
       "label": "Peticiones",
       "purpose": "Peticiones de eMuwarez ordenadas por capacidad de cubrirlas. Origen: eMuwarez.",
-      "cli_equivalent": ["requests list", "requests sync", "requests show", "requests match"]
+      "cli_equivalent": [
+        "requests list",
+        "requests sync",
+        "requests show",
+        "requests match"
+      ]
     },
     {
       "id": "uploads",
       "label": "Subidas",
       "purpose": "Jobs de subida activos e histórico",
-      "cli_equivalent": ["upload"]
+      "cli_equivalent": [
+        "upload"
+      ]
     },
     {
       "id": "tasks",
       "label": "Tareas",
       "purpose": "Historial de tareas ejecutadas",
-      "cli_equivalent": ["tasks list"]
+      "cli_equivalent": [
+        "tasks list"
+      ]
     },
     {
       "id": "instances",
       "label": "Instancias",
       "purpose": "Gestión de instancias Radarr/Sonarr/Jellyfin/Seerr",
-      "cli_equivalent": ["instances list", "instances add", "instances test", "instances remove"]
+      "cli_equivalent": [
+        "instances list",
+        "instances add",
+        "instances test",
+        "instances remove"
+      ]
     },
     {
       "id": "logs",
       "label": "Logs",
       "purpose": "Logs del sistema",
-      "cli_equivalent": ["logs"]
+      "cli_equivalent": [
+        "logs"
+      ]
     },
     {
       "id": "settings",
       "label": "Configuración",
       "purpose": "Configuración general, credenciales y opciones",
-      "cli_equivalent": ["configure"]
+      "cli_equivalent": [
+        "configure"
+      ]
     }
   ],
   "statuses": {
     "local_status": {
-      "available":       { "label": "Disponible",                "color": "green",  "phase": 0 },
-      "missing":         { "label": "Faltante",                  "color": "red",    "phase": 0 },
-      "queued":          { "label": "En cola",                   "color": "blue",   "phase": 4 },
-      "downloading":     { "label": "Descargando",               "color": "blue",   "phase": 4 },
-      "pending_import":  { "label": "Pendiente de importación",  "color": "yellow", "phase": 4 },
-      "import_error":    { "label": "Error de importación",      "color": "red",    "phase": 4 },
-      "search_error":    { "label": "Error de búsqueda",         "color": "red",    "phase": 4 },
-      "uploading":       { "label": "Subiendo",                  "color": "purple", "phase": 0 },
-      "uploaded":        { "label": "Subido",                    "color": "green",  "phase": 0 },
-      "error":           { "label": "Error",                     "color": "red",    "phase": 0 },
-      "unknown":         { "label": "Desconocido",               "color": "gray",   "phase": 0 }
+      "available": {
+        "label": "Disponible",
+        "color": "green",
+        "phase": 0
+      },
+      "missing": {
+        "label": "Faltante",
+        "color": "red",
+        "phase": 0
+      },
+      "queued": {
+        "label": "En cola",
+        "color": "blue",
+        "phase": 4
+      },
+      "downloading": {
+        "label": "Descargando",
+        "color": "blue",
+        "phase": 4
+      },
+      "pending_import": {
+        "label": "Pendiente de importación",
+        "color": "yellow",
+        "phase": 4
+      },
+      "import_error": {
+        "label": "Error de importación",
+        "color": "red",
+        "phase": 4
+      },
+      "search_error": {
+        "label": "Error de búsqueda",
+        "color": "red",
+        "phase": 4
+      },
+      "uploading": {
+        "label": "Subiendo",
+        "color": "purple",
+        "phase": 0
+      },
+      "uploaded": {
+        "label": "Subido",
+        "color": "green",
+        "phase": 0
+      },
+      "error": {
+        "label": "Error",
+        "color": "red",
+        "phase": 0
+      },
+      "unknown": {
+        "label": "Desconocido",
+        "color": "gray",
+        "phase": 0
+      }
     },
     "request_status": {
-      "none":             { "label": "Sin petición",                    "color": "gray"   },
-      "compatible":       { "label": "Compatible",                      "color": "green"  },
-      "partial":          { "label": "Parcial",                         "color": "yellow" },
-      "not_compatible":   { "label": "No compatible",                   "color": "orange" },
-      "filled":           { "label": "Llena",                           "color": "gray-light" },
-      "active_unmatched": { "label": "Petición activa sin coincidencia","color": "blue"   },
-      "unknown":          { "label": "Desconocida",                     "color": "gray"   }
+      "none": {
+        "label": "Sin petición",
+        "color": "gray"
+      },
+      "compatible": {
+        "label": "Compatible",
+        "color": "green"
+      },
+      "partial": {
+        "label": "Parcial",
+        "color": "yellow"
+      },
+      "not_compatible": {
+        "label": "No compatible",
+        "color": "orange"
+      },
+      "filled": {
+        "label": "Llena",
+        "color": "gray-light"
+      },
+      "active_unmatched": {
+        "label": "Petición activa sin coincidencia",
+        "color": "blue"
+      },
+      "unknown": {
+        "label": "Desconocida",
+        "color": "gray"
+      }
     },
     "nomenclature_status": {
-      "correct":         { "label": "Correcta",    "color": "green"  },
-      "not_adapted":     { "label": "No adaptada", "color": "yellow" },
-      "not_applicable":  { "label": "N/A",         "color": "gray"   },
-      "unknown":         { "label": "Desconocida", "color": "gray"   }
+      "correct": {
+        "label": "Correcta",
+        "color": "green"
+      },
+      "not_adapted": {
+        "label": "No adaptada",
+        "color": "yellow"
+      },
+      "not_applicable": {
+        "label": "N/A",
+        "color": "gray"
+      },
+      "unknown": {
+        "label": "Desconocida",
+        "color": "gray"
+      }
     },
     "emu_existence_status": {
-      "not_checked":          { "label": "No comprobado",        "color": "gray"   },
-      "exists":               { "label": "Existe en eMuwarez",   "color": "blue"   },
-      "not_exists":           { "label": "No existe en eMuwarez","color": "gray-light" },
-      "possible_duplicate":   { "label": "Posible duplicado",    "color": "yellow" },
-      "duplicate_confirmed":  { "label": "Duplicado confirmado", "color": "orange" },
-      "unknown":              { "label": "Desconocido",          "color": "gray"   }
+      "not_checked": {
+        "label": "No comprobado",
+        "color": "gray"
+      },
+      "exists": {
+        "label": "Existe en eMuwarez",
+        "color": "blue"
+      },
+      "not_exists": {
+        "label": "No existe en eMuwarez",
+        "color": "gray-light"
+      },
+      "possible_duplicate": {
+        "label": "Posible duplicado",
+        "color": "yellow"
+      },
+      "duplicate_confirmed": {
+        "label": "Duplicado confirmado",
+        "color": "orange"
+      },
+      "unknown": {
+        "label": "Desconocido",
+        "color": "gray"
+      }
     }
   },
   "recommended_actions": {
-    "none":               { "label": "Nada que hacer" },
-    "wait_download":      { "label": "Esperar descarga",            "condition": "local_status in [queued, downloading]" },
-    "review_arr":         { "label": "Revisar Radarr/Sonarr",       "condition": "local_status in [import_error, search_error]" },
-    "check_emu":          { "label": "Comprobar en EMU",            "condition": "local_status=missing, no queue, no error" },
-    "adapt_nomenclature": { "label": "Adaptar nomenclatura",        "condition": "available + compatible/partial + not_adapted" },
-    "upload":             { "label": "Subir",                       "condition": "available + compatible + correct" },
-    "create_emu_request": { "label": "Crear petición en eMuwarez",  "condition": "missing + no queue + not exists in emu", "stub": true },
-    "open_emu":           { "label": "Abrir en eMuwarez" },
-    "open_arr":           { "label": "Abrir en Radarr/Sonarr" },
-    "view_progress":      { "label": "Ver progreso",                "condition": "local_status=uploading" }
+    "none": {
+      "label": "Nada que hacer"
+    },
+    "wait_download": {
+      "label": "Esperar descarga",
+      "condition": "local_status in [queued, downloading]"
+    },
+    "review_arr": {
+      "label": "Revisar Radarr/Sonarr",
+      "condition": "local_status in [import_error, search_error]"
+    },
+    "check_emu": {
+      "label": "Comprobar en EMU",
+      "condition": "local_status=missing, no queue, no error"
+    },
+    "adapt_nomenclature": {
+      "label": "Adaptar nomenclatura",
+      "condition": "available + compatible/partial + not_adapted"
+    },
+    "upload": {
+      "label": "Subir",
+      "condition": "available + compatible + correct"
+    },
+    "create_emu_request": {
+      "label": "Crear petición en eMuwarez",
+      "condition": "missing + no queue + not exists in emu",
+      "stub": true
+    },
+    "open_emu": {
+      "label": "Abrir en eMuwarez"
+    },
+    "open_arr": {
+      "label": "Abrir en Radarr/Sonarr"
+    },
+    "view_progress": {
+      "label": "Ver progreso",
+      "condition": "local_status=uploading"
+    }
   },
   "compatibility_rules": {
     "matching_priority": [
@@ -129,74 +305,370 @@
       "title_normalized (no year)",
       "fuzzy_fallback (no auto-action)"
     ],
-    "result_values": ["compatible", "partial", "not_compatible", "filled"],
+    "result_values": [
+      "compatible",
+      "partial",
+      "not_compatible",
+      "filled"
+    ],
     "any_means_no_restriction": true,
     "filled_overrides_all": true
   },
   "api_endpoints": [
-    { "method": "GET",  "path": "/api/health",                          "phase": 2, "stub": false },
-    { "method": "GET",  "path": "/api/setup/status",                    "phase": 2, "stub": false },
-    { "method": "POST", "path": "/api/setup/admin",                     "phase": 3, "stub": false },
-    { "method": "POST", "path": "/api/setup/general",                   "phase": 3, "stub": false },
-    { "method": "POST", "path": "/api/setup/uploadrr",                  "phase": 3, "stub": false },
-    { "method": "POST", "path": "/api/setup/tmdb",                      "phase": 3, "stub": false },
-    { "method": "POST", "path": "/api/setup/emu",                       "phase": 3, "stub": false },
-    { "method": "POST", "path": "/api/setup/instances",                 "phase": 3, "stub": false },
-    { "method": "POST", "path": "/api/setup/instances/test",            "phase": 3, "stub": false },
-    { "method": "POST", "path": "/api/setup/complete",                  "phase": 3, "stub": false },
-    { "method": "POST", "path": "/api/auth/login",                      "phase": 3, "stub": false },
-    { "method": "POST", "path": "/api/auth/logout",                     "phase": 3, "stub": false },
-    { "method": "GET",  "path": "/api/auth/me",                         "phase": 3, "stub": false },
-    { "method": "GET",  "path": "/api/dashboard/summary",               "phase": 2, "stub": false },
-    { "method": "GET",  "path": "/api/dashboard/activity",              "phase": 4, "stub": false },
-    { "method": "GET",  "path": "/api/dashboard/upload-activity",       "phase": 8, "stub": false },
-    { "method": "GET",  "path": "/api/dashboard/tasks",                 "phase": 2, "stub": false },
-    { "method": "GET",  "path": "/api/dashboard/events",                "phase": 7, "stub": false },
-    { "method": "GET",  "path": "/api/instances",                       "phase": 2, "stub": false },
-    { "method": "POST", "path": "/api/instances",                       "phase": 2, "stub": false },
-    { "method": "PATCH","path": "/api/instances/{id}",                  "phase": 2, "stub": false },
-    { "method": "DELETE","path": "/api/instances/{id}",                 "phase": 2, "stub": false },
-    { "method": "POST", "path": "/api/instances/{id}/test",             "phase": 2, "stub": false },
-    { "method": "POST", "path": "/api/instances/{id}/sync",             "phase": 4, "stub": false },
-    { "method": "POST", "path": "/api/sync/library",                    "phase": 4, "stub": false },
-    { "method": "POST", "path": "/api/sync/requests",                   "phase": 5, "stub": false },
-    { "method": "GET",  "path": "/api/library",                         "phase": 4, "stub": false },
-    { "method": "GET",  "path": "/api/library/{id}",                    "phase": 4, "stub": false },
-    { "method": "POST", "path": "/api/library/{id}/adapt-nomenclature", "phase": 8, "stub": false },
-    { "method": "POST", "path": "/api/library/{id}/upload",             "phase": 8, "stub": false },
-    { "method": "GET",  "path": "/api/missing",                         "phase": 4, "stub": false },
-    { "method": "POST", "path": "/api/missing/{id}/check-emu",          "phase": 5, "stub": false },
-    { "method": "POST", "path": "/api/missing/{id}/create-emu-request", "phase": "final", "stub": true },
-    { "method": "GET",  "path": "/api/requests",                        "phase": 5, "stub": false },
-    { "method": "POST", "path": "/api/requests/sync",                   "phase": 5, "stub": false },
-    { "method": "GET",  "path": "/api/requests/{id}",                   "phase": 5, "stub": false },
-    { "method": "POST", "path": "/api/requests/{id}/match",             "phase": 6, "stub": false },
-    { "method": "POST", "path": "/api/requests/{id}/mark-reviewed",     "phase": 7, "stub": false },
-    { "method": "GET",  "path": "/api/uploads",                         "phase": 8, "stub": false },
-    { "method": "GET",  "path": "/api/uploads/{id}",                    "phase": 8, "stub": false },
-    { "method": "POST", "path": "/api/uploads/{id}/cancel",             "phase": 8, "stub": false },
-    { "method": "GET",  "path": "/api/uploads/{id}/stream",             "phase": 8, "stub": false, "type": "SSE" },
-    { "method": "GET",  "path": "/api/tasks",                           "phase": 2, "stub": false },
-    { "method": "POST", "path": "/api/tasks/{name}/run",                "phase": 4, "stub": false },
-    { "method": "GET",  "path": "/api/logs",                            "phase": 2, "stub": false },
-    { "method": "GET",  "path": "/api/config",                          "phase": 3, "stub": false },
-    { "method": "POST", "path": "/api/config/general",                  "phase": 3, "stub": false },
-    { "method": "POST", "path": "/api/config/tmdb",                     "phase": 3, "stub": false },
-    { "method": "POST", "path": "/api/config/emu",                      "phase": 3, "stub": false },
-    { "method": "POST", "path": "/api/config/uploadrr",                 "phase": 3, "stub": false },
-    { "method": "POST", "path": "/api/requests/readiness/refresh",       "phase": "8b", "stub": false, "auth": "bearer" },
-    { "method": "GET",  "path": "/api/requests/readiness",               "phase": "8b", "stub": false, "auth": "bearer" },
-    { "method": "GET",  "path": "/api/requests/prioritized",             "phase": "8b", "stub": false, "auth": "bearer" },
-    { "method": "GET",  "path": "/api/requests/{id}/readiness",          "phase": "8b", "stub": false, "auth": "bearer" },
-    { "method": "POST", "path": "/api/requests/{id}/readiness/evaluate", "phase": "8b", "stub": false, "auth": "bearer" },
-    { "method": "GET",  "path": "/api/requests/{id}/candidates",         "phase": "8b", "stub": false, "auth": "bearer" }
+    {
+      "method": "GET",
+      "path": "/api/health",
+      "phase": 2,
+      "stub": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/setup/status",
+      "phase": 2,
+      "stub": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/setup/admin",
+      "phase": 3,
+      "stub": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/setup/general",
+      "phase": 3,
+      "stub": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/setup/uploadrr",
+      "phase": 3,
+      "stub": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/setup/tmdb",
+      "phase": 3,
+      "stub": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/setup/emu",
+      "phase": 3,
+      "stub": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/setup/instances",
+      "phase": 3,
+      "stub": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/setup/instances/test",
+      "phase": 3,
+      "stub": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/setup/complete",
+      "phase": 3,
+      "stub": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "phase": 3,
+      "stub": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/logout",
+      "phase": 3,
+      "stub": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/me",
+      "phase": 3,
+      "stub": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/dashboard/summary",
+      "phase": 2,
+      "stub": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/dashboard/activity",
+      "phase": 4,
+      "stub": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/dashboard/upload-activity",
+      "phase": 8,
+      "stub": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/dashboard/tasks",
+      "phase": 2,
+      "stub": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/dashboard/events",
+      "phase": 7,
+      "stub": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/instances",
+      "phase": 2,
+      "stub": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/instances",
+      "phase": 2,
+      "stub": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/instances/{id}",
+      "phase": 2,
+      "stub": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/instances/{id}",
+      "phase": 2,
+      "stub": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/instances/{id}/test",
+      "phase": 2,
+      "stub": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/instances/{id}/sync",
+      "phase": 4,
+      "stub": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/sync/library",
+      "phase": 4,
+      "stub": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/sync/requests",
+      "phase": 5,
+      "stub": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/library",
+      "phase": 4,
+      "stub": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/library/{id}",
+      "phase": 4,
+      "stub": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/library/{id}/adapt-nomenclature",
+      "phase": 8,
+      "stub": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/library/{id}/upload",
+      "phase": 8,
+      "stub": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/missing",
+      "phase": 4,
+      "stub": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/missing/{id}/check-emu",
+      "phase": 5,
+      "stub": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/missing/{id}/create-emu-request",
+      "phase": "final",
+      "stub": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/requests",
+      "phase": 5,
+      "stub": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/requests/sync",
+      "phase": 5,
+      "stub": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/requests/{id}",
+      "phase": 5,
+      "stub": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/requests/{id}/match",
+      "phase": 6,
+      "stub": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/requests/{id}/mark-reviewed",
+      "phase": 7,
+      "stub": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/uploads",
+      "phase": 8,
+      "stub": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/uploads/{id}",
+      "phase": 8,
+      "stub": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/uploads/{id}/cancel",
+      "phase": 8,
+      "stub": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/uploads/{id}/stream",
+      "phase": 8,
+      "stub": false,
+      "type": "SSE"
+    },
+    {
+      "method": "GET",
+      "path": "/api/tasks",
+      "phase": 2,
+      "stub": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/{name}/run",
+      "phase": 4,
+      "stub": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/logs",
+      "phase": 2,
+      "stub": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/config",
+      "phase": 3,
+      "stub": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/config/general",
+      "phase": 3,
+      "stub": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/config/tmdb",
+      "phase": 3,
+      "stub": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/config/emu",
+      "phase": 3,
+      "stub": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/config/uploadrr",
+      "phase": 3,
+      "stub": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/requests/readiness/refresh",
+      "phase": "8b",
+      "stub": false,
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/requests/readiness",
+      "phase": "8b",
+      "stub": false,
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/requests/prioritized",
+      "phase": "8b",
+      "stub": false,
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/requests/{id}/readiness",
+      "phase": "8b",
+      "stub": false,
+      "auth": "bearer"
+    },
+    {
+      "method": "POST",
+      "path": "/api/requests/{id}/readiness/evaluate",
+      "phase": "8b",
+      "stub": false,
+      "auth": "bearer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/requests/{id}/candidates",
+      "phase": "8b",
+      "stub": false,
+      "auth": "bearer"
+    }
   ],
   "ui_style": {
     "theme": "dark",
     "background": "#0a0d14",
     "card_surface": "rgba(255,255,255,0.04)",
     "border": "1px solid rgba(59,130,246,0.15)",
-    "border_radius": { "card": "8px", "badge": "6px", "input": "4px" },
+    "border_radius": {
+      "card": "8px",
+      "badge": "6px",
+      "input": "4px"
+    },
     "typography": "Inter, system-ui, sans-serif",
     "colors": {
       "green": "#22c55e",
@@ -211,8 +683,20 @@
     "grid_columns": 12,
     "gap": "16px",
     "naming_rules": {
-      "use": ["Nomenclatura", "Adaptar nomenclatura", "Petición", "Compatible", "Parcial", "No compatible", "Llena", "Sin petición"],
-      "never_use": ["FormatoEMU", "Añadir formatoEMU"]
+      "use": [
+        "Nomenclatura",
+        "Adaptar nomenclatura",
+        "Petición",
+        "Compatible",
+        "Parcial",
+        "No compatible",
+        "Llena",
+        "Sin petición"
+      ],
+      "never_use": [
+        "FormatoEMU",
+        "Añadir formatoEMU"
+      ]
     },
     "icon_rule": "Radarr and Sonarr must always show icon + text, never text alone"
   },
@@ -247,5 +731,20 @@
       "reason": "Endpoint de búsqueda de eMuwarez pendiente de confirmar",
       "current_behavior": "emu_existence_status = not_checked"
     }
-  ]
+  ],
+  "phase_9b_e2e": {
+    "description": "Phase 9B adds a controlled Docker E2E demo. No new API endpoints.",
+    "new_endpoints": [],
+    "new_cli_commands": [
+      "demo seed --media-root <path> --prepared-root <path> --confirm DEMO_SEED",
+      "demo reset --confirm DEMO_RESET"
+    ],
+    "new_scripts": [
+      "scripts/docker-e2e-demo.sh"
+    ],
+    "new_services": [
+      "emuwarez_uploadrr/services/demo_seed.py"
+    ],
+    "isolation": "All demo data is seeded in a temporary CONFIG_DIR. No real APIs used."
+  }
 }

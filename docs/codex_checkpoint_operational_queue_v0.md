@@ -60,7 +60,19 @@
 
 ### Docker
 
-No disponible en este entorno (sin Dockerfile en el repositorio). No se ejecutó smoke test Docker.
+**Nota:** El checkpoint original indicó incorrectamente "sin Dockerfile en el repo". El error se debió a que el `find` de comprobación se ejecutó desde el subdirectorio `frontend/` en lugar del directorio raíz del proyecto.
+
+Los archivos Docker existen correctamente en `master` desde Phase 7A/7B. Verificación posterior (2026-06-30, ver `codex_fix_docker_support_after_8c.md`):
+
+| Validación | Resultado |
+|------------|-----------|
+| `Dockerfile` presente en master | ✓ |
+| `.dockerignore` presente en master | ✓ |
+| `docker-compose.example.yml` presente en master | ✓ |
+| `scripts/docker-smoke-test.sh` presente en master | ✓ |
+| `docker build -t emuwarez-uploadrr:docker-fix-check .` | ✓ OK |
+| `docker compose -f docker-compose.example.yml config` | ✓ OK |
+| `bash scripts/docker-smoke-test.sh` | **✓ 8/8 OK** |
 
 ---
 

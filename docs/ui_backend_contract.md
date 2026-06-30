@@ -1264,3 +1264,17 @@ services:
 - La base de datos SQLite se guarda en `/config/emuwarez_uploadrr.db` dentro del contenedor.
 - Recomendado: usuario no-root con PUID/PGID si el sistema lo soporta.
 - Healthcheck: `GET /api/health` devuelve `{"status": "ok"}`.
+
+---
+
+## Phase 9B — E2E controlado en Docker
+
+Esta fase no añade nuevos endpoints API. Añade:
+
+- `scripts/docker-e2e-demo.sh`: E2E controlado completo en Docker con datos simulados
+- `emuwarez_uploadrr/services/demo_seed.py`: servicio de seed seguro con token de confirmación
+- CLI: `demo seed --media-root <path> --prepared-root <path> --confirm DEMO_SEED`
+- CLI: `demo reset --confirm DEMO_RESET`
+- `tests/fixtures/fake_uploadrr.py`: fake Uploadrr para E2E sin ejecución real
+
+Garantías: sin servicios reales, sin Uploadrr real, sin subida real, sin API keys reales.

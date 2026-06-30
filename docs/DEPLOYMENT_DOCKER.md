@@ -393,3 +393,31 @@ Para verificar que la imagen arranca y todos los endpoints responden:
 ```bash
 bash scripts/docker-smoke-test.sh
 ```
+
+---
+
+## E2E controlado con datos simulados (Phase 9B)
+
+Valida el flujo completo end-to-end en Docker usando datos simulados (sin servicios reales):
+
+```bash
+# E2E completo
+bash scripts/docker-e2e-demo.sh
+
+# Mantener contenedor para depuración
+KEEP_CONTAINER=1 bash scripts/docker-e2e-demo.sh
+
+# Puerto alternativo
+PORT=9595 bash scripts/docker-e2e-demo.sh
+```
+
+El script:
+- Crea un `tmpdir` temporal con estructura de datos simulados
+- Construye la imagen Docker
+- Arranca el contenedor con volúmenes temporales
+- Siembra datos demo via `python3 emuwarez_uploader.py demo seed --confirm DEMO_SEED`
+- Valida el flujo: library verify, readiness, queue refresh, action-plan, nomenclature preview, upload preflight
+- Verifica que Uploadrr/ no está dentro de la imagen
+- Limpia el contenedor y el tmpdir al terminar (salvo `KEEP_CONTAINER=1`)
+
+**No usa Radarr/Sonarr reales. No usa eMuwarez real. No ejecuta Uploadrr real. No sube contenido real.**

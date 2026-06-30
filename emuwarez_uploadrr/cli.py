@@ -24,6 +24,7 @@ MODERN_COMMANDS = {
     "configure", "doctor", "test-apis", "instances", "sync", "library",
     "requests", "missing", "prepare", "upload", "tasks", "logs", "legacy",
     "web-contract", "db", "web", "nomenclature", "maintenance", "arr", "queue",
+    "demo",
 }
 
 
@@ -325,6 +326,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_cleanup.add_argument("--dry-run", action="store_true", default=True, help="Solo previsualización (por defecto)")
     p_cleanup.add_argument("--apply", action="store_true", dest="maint_apply", help="Ejecutar limpieza real")
     p_cleanup.add_argument("--confirm", metavar="TOKEN", dest="confirm", help="Token: LIMPIAR_LOGS")
+
+    # Phase 9B — Demo / E2E dev commands (clearly marked, require explicit confirmation)
+    p_demo = sub.add_parser("demo", help="[DEV] Datos demo para E2E controlado. Requiere confirmación explícita.")
+    demo_sub = p_demo.add_subparsers(dest="demo_command", required=True)
+    p_demo_seed = demo_sub.add_parser("seed", help="Sembrar datos demo en una BD temporal (requiere --confirm DEMO_SEED)")
+    p_demo_seed.add_argument("--media-root", required=True, help="Raíz de media simulada (ej: /data/media o tmpdir/data/media)")
+    p_demo_seed.add_argument("--prepared-root", required=True, help="Raíz de archivos preparados (ej: /data/uploads/emu)")
+    p_demo_seed.add_argument("--confirm", metavar="TOKEN", dest="confirm_token",
+                             required=True, help="Token de seguridad obligatorio: DEMO_SEED")
+    p_demo_reset = demo_sub.add_parser("reset", help="Eliminar datos demo de la BD (requiere --confirm DEMO_RESET)")
+    p_demo_reset.add_argument("--confirm", metavar="TOKEN", dest="confirm_token",
+                              required=True, help="Token de seguridad obligatorio: DEMO_RESET")
 
     return parser
 
@@ -1622,6 +1635,36 @@ def cmd_web_serve(args) -> int:
     return 0
 
 
+def cmd_demo(args) -> int:
+    from .services.demo_seed import seed_demo_data, reset_demo_data
+    with _open_conn(args) as conn:
+        if args.demo_command == "seed":
+            try:
+                result = seed_demo_data(
+                    conn,
+                    media_root=args.media_root,
+                    prepared_root=args.prepared_root,
+                    confirm_token=args.confirm_token,
+                )
+            except ValueError as exc:
+                print(f"✗ {exc}")
+                return 1
+            print(f"✓ Datos demo sembrados")
+            print(f"  library_item_id : {result['library_item_id']}")
+            print(f"  request_item_id : {result['request_item_id']}")
+            print(f"  archivo simulado: {result['media_file']}")
+            return 0
+        if args.demo_command == "reset":
+            try:
+                reset_demo_data(conn, confirm_token=args.confirm_token)
+            except ValueError as exc:
+                print(f"✗ {exc}")
+                return 1
+            print("✓ Datos demo eliminados de la BD")
+            return 0
+    return 1
+
+
 def modern_main(argv: Optional[list[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -1680,6 +1723,8 @@ def modern_main(argv: Optional[list[str]] = None) -> int:
             return cmd_arr(args)
         if args.command == "queue":
             return cmd_queue(args)
+        if args.command == "demo":
+            return cmd_demo(args)
         parser.error("Comando no soportado")
         return 2
     except IntegrationError as exc:

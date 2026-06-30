@@ -83,6 +83,14 @@ def dashboard_summary(current_user: dict = Depends(require_auth)) -> DashboardSu
         upload_counts = _get_upload_counts(conn)
         summary.update(upload_counts)
 
+        # Phase 8A: diagnostic counts
+        try:
+            from emuwarez_uploadrr.services.library import get_dashboard_diagnostics
+            diag_counts = get_dashboard_diagnostics(conn)
+            summary.update(diag_counts)
+        except Exception:
+            pass
+
     return DashboardSummaryResponse(**summary)
 
 

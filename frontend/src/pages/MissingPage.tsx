@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getMissing } from '../api/missing'
+import { refreshArrHealth, verifyLibraryFiles, refreshRecommendations } from '../api/diagnostics'
 import type { MissingListResponse } from '../types/api'
 import { StatusBadge } from '../components/StatusBadge'
 import { ServiceLabel } from '../components/ServiceIcon'
@@ -10,11 +11,32 @@ import { formatDate, formatItemType } from '../utils/format'
 
 const PAGE_SIZE = 50
 
+function _queueLabel(status: string | null | undefined): string {
+  if (!status) return '—'
+  const map: Record<string, string> = {
+    downloading: 'Descargando',
+    queued: 'En cola',
+    pending_import: 'Pend. importar',
+    import_error: 'Error importación',
+  }
+  return map[status] ?? status
+}
+
+function _queueColor(status: string | null | undefined): string {
+  if (!status) return 'var(--text-muted)'
+  if (status === 'downloading') return '#34d399'
+  if (status === 'queued') return '#60a5fa'
+  if (status === 'import_error') return 'var(--color-missing)'
+  return 'var(--text-secondary)'
+}
+
 export function MissingPage() {
   const [data, setData] = useState<MissingListResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [offset, setOffset] = useState(0)
+  const [actionMsg, setActionMsg] = useState<string | null>(null)
+  const [actionLoading, setActionLoading] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -31,6 +53,48 @@ export function MissingPage() {
 
   useEffect(() => { load() }, [load])
 
+  async function handleRefreshHealth() {
+    setActionLoading(true)
+    setActionMsg(null)
+    try {
+      await refreshArrHealth({ include_queue: true, include_history: true })
+      setActionMsg('Salud ARR actualizada')
+      await load()
+    } catch {
+      setActionMsg('Error al refrescar salud ARR')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  async function handleVerifyFiles() {
+    setActionLoading(true)
+    setActionMsg(null)
+    try {
+      const r = await verifyLibraryFiles()
+      setActionMsg(`Archivos verificados: ${r.items_checked} · Encontrados: ${r.files_found}`)
+      await load()
+    } catch {
+      setActionMsg('Error al verificar archivos')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  async function handleRefreshRecommendations() {
+    setActionLoading(true)
+    setActionMsg(null)
+    try {
+      const r = await refreshRecommendations()
+      setActionMsg(`Recomendaciones actualizadas: ${r.items_updated}`)
+      await load()
+    } catch {
+      setActionMsg('Error al recalcular recomendaciones')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
   const items = data?.items ?? []
   const total = data?.total ?? 0
 
@@ -43,6 +107,18 @@ export function MissingPage() {
             Contenido monitorizado en Radarr/Sonarr no disponible localmente
             {total > 0 ? ` · ${total} elementos` : ''}
           </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button className="btn btn-secondary btn-sm" onClick={handleRefreshHealth} disabled={actionLoading}>
+            Refrescar salud ARR
+          </button>
+          <button className="btn btn-secondary btn-sm" onClick={handleVerifyFiles} disabled={actionLoading}>
+            Verificar archivos
+          </button>
+          <button className="btn btn-secondary btn-sm" onClick={handleRefreshRecommendations} disabled={actionLoading}>
+            Recalcular recomendaciones
+          </button>
+          {actionMsg && <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{actionMsg}</span>}
         </div>
       </div>
 
@@ -66,9 +142,11 @@ export function MissingPage() {
                   <th>Tipo</th>
                   <th>Origen</th>
                   <th>Estado</th>
+                  <th>Queue ARR</th>
+                  <th>Diagnóstico</th>
+                  <th>Acción recomendada</th>
                   <th>Petición</th>
                   <th>Actualizado</th>
-                  <th className="col-actions">Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -85,21 +163,28 @@ export function MissingPage() {
                         : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                     </td>
                     <td><StatusBadge status={item.local_status} type="local" /></td>
+                    <td style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
+                      <span style={{ color: _queueColor(item.arr_queue_status) }}>
+                        {_queueLabel(item.arr_queue_status)}
+                      </span>
+                      {item.arr_queue_progress != null && (
+                        <span style={{ color: 'var(--text-muted)', marginLeft: 4 }}>{item.arr_queue_progress}%</span>
+                      )}
+                      {item.arr_queue_error && (
+                        <div style={{ fontSize: 10, color: 'var(--color-missing)', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis' }} title={item.arr_queue_error}>
+                          {item.arr_queue_error}
+                        </div>
+                      )}
+                    </td>
+                    <td style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                      {item.diagnostic_status ?? '—'}
+                    </td>
+                    <td style={{ fontSize: 11, color: '#a78bfa' }}>
+                      {item.recommended_action ?? '—'}
+                    </td>
                     <td><StatusBadge status={item.request_status} type="request" /></td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
                       {formatDate(item.updated_at)}
-                    </td>
-                    <td className="col-actions">
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                        <button className="btn btn-ghost btn-sm" disabled title="Pendiente de endpoint EMU">Comprobar en EMU</button>
-                        <button
-                          className="btn btn-ghost btn-sm"
-                          disabled
-                          title="Pendiente de capturar endpoint real de eMuwarez"
-                        >
-                          Crear petición
-                        </button>
-                      </div>
                     </td>
                   </tr>
                 ))}

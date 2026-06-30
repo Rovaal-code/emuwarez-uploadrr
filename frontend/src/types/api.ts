@@ -97,6 +97,14 @@ export interface LibraryItemResponse {
   request_status: string
   nomenclature_status: string
   updated_at: string | null
+  // Phase 8A
+  file_exists: boolean | null
+  file_verified_at: string | null
+  diagnostic_status: string | null
+  diagnostic_summary: string | null
+  recommended_action: string | null
+  arr_queue_status: string | null
+  arr_history_status: string | null
 }
 
 export interface LibraryListResponse {
@@ -118,6 +126,16 @@ export interface MissingItemResponse {
   local_status: string
   request_status: string
   updated_at: string | null
+  // Phase 8A
+  arr_queue_status: string | null
+  arr_queue_progress: number | null
+  arr_queue_timeleft: string | null
+  arr_queue_error: string | null
+  arr_history_error: string | null
+  file_exists: boolean | null
+  diagnostic_status: string | null
+  recommended_action: string | null
+  recommendation_reasons: string[] | null
 }
 
 export interface MissingListResponse {
@@ -222,6 +240,16 @@ export interface DashboardSummaryResponseV2 extends DashboardSummaryResponse {
   requests_compatible: number
   requests_filled: number
   requests_last_sync_at: string | null
+  // Phase 8A
+  arr_health_ok: number
+  arr_health_warning: number
+  arr_health_error: number
+  files_verified: number
+  files_missing_on_disk: number
+  items_ready_for_nomenclature: number
+  items_ready_for_upload: number
+  items_waiting_download: number
+  items_need_arr_review: number
 }
 
 // Phase 6A — Nomenclature

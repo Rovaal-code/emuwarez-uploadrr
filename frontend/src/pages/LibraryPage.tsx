@@ -7,6 +7,7 @@ import { LoadingState } from '../components/LoadingState'
 import { ErrorState } from '../components/ErrorState'
 import { EmptyState } from '../components/EmptyState'
 import { NomenclatureModal } from '../components/NomenclatureModal'
+import { NomenclatureFieldsModal } from '../components/NomenclatureFieldsModal'
 import { UploadPreflightModal } from '../components/UploadPreflightModal'
 import { formatBytes, formatDate, formatItemType } from '../utils/format'
 
@@ -18,6 +19,7 @@ export function LibraryPage() {
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<LibraryItemResponse | null>(null)
   const [nomenclatureItem, setNomenclatureItem] = useState<LibraryItemResponse | null>(null)
+  const [fieldsItem, setFieldsItem] = useState<LibraryItemResponse | null>(null)
   const [uploadItem, setUploadItem] = useState<LibraryItemResponse | null>(null)
 
   // Filters
@@ -167,6 +169,7 @@ export function LibraryPage() {
                     </td>
                     <td className="col-actions" onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 4 }}>
                       <button className="btn btn-ghost btn-sm" onClick={() => setNomenclatureItem(item)} title="Adaptar nomenclatura">Nomenclatura</button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setFieldsItem(item)} title="Editar campos de nomenclatura">Campos</button>
                       <button className="btn btn-ghost btn-sm" onClick={() => setUploadItem(item)} title="Preflight Uploadrr">Subir</button>
                     </td>
                   </tr>
@@ -190,6 +193,16 @@ export function LibraryPage() {
           itemId={nomenclatureItem.id}
           itemTitle={nomenclatureItem.title}
           onClose={() => setNomenclatureItem(null)}
+        />
+      )}
+
+      {/* Nomenclature fields modal (Phase 10A) */}
+      {fieldsItem && (
+        <NomenclatureFieldsModal
+          itemId={fieldsItem.id}
+          itemTitle={fieldsItem.title}
+          onClose={() => setFieldsItem(null)}
+          onSaved={load}
         />
       )}
 
@@ -222,8 +235,9 @@ export function LibraryPage() {
               <div style={{ fontWeight: 700, fontSize: 16 }}>{selected.title} {selected.year ? `(${selected.year})` : ''}</div>
               <button className="btn btn-ghost btn-sm" onClick={() => setSelected(null)}>✕</button>
             </div>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
               <button className="btn btn-secondary btn-sm" onClick={() => { setNomenclatureItem(selected); setSelected(null) }}>Adaptar nomenclatura</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => { setFieldsItem(selected); setSelected(null) }}>Editar campos</button>
               <button className="btn btn-secondary btn-sm" onClick={() => { setUploadItem(selected); setSelected(null) }}>Subir</button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 20px', fontSize: 13 }}>

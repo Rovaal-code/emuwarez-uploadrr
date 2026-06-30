@@ -146,6 +146,8 @@ class SetupUploadrrRequest(BaseModel):
 
 class SetupTmdbRequest(BaseModel):
     api_key: str
+    language: Optional[str] = "es-ES"
+    region: Optional[str] = "ES"
 
     @field_validator("api_key")
     @classmethod

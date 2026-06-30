@@ -79,10 +79,19 @@ def setup_uploadrr(conn: sqlite3.Connection, uploadrr_path: str) -> None:
     set_setting(conn, "uploadrr.path", path)
 
 
-def setup_tmdb(conn: sqlite3.Connection, api_key: str) -> None:
+def setup_tmdb(
+    conn: sqlite3.Connection,
+    api_key: str,
+    language: str = "es-ES",
+    region: str = "ES",
+) -> None:
     if not api_key.strip():
         raise SetupError("La API key de TMDb no puede estar vacía")
     set_setting(conn, "tmdb.api_key", api_key.strip())
+    if language and language.strip():
+        set_setting(conn, "tmdb_language", language.strip())
+    if region and region.strip():
+        set_setting(conn, "tmdb_watch_region", region.strip())
 
 
 def setup_emu(

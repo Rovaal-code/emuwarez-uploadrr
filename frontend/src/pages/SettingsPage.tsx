@@ -11,6 +11,7 @@ import {
   type MaintenanceStatus,
   type BackupInfo,
 } from '../api/maintenance'
+import { fetchSettings, updateSettings, type SettingsData } from '../api/settings'
 
 type Tab = 'config' | 'diagnostics' | 'backup' | 'maintenance'
 
@@ -20,27 +21,133 @@ function formatBytes(n: number) {
   return `${(n / 1024 / 1024).toFixed(2)} MB`
 }
 
-// ---------- Config tab (placeholder — settings edit via setup wizard) ----------
+// ---------- Config tab ----------
 function ConfigTab() {
+  const [settings, setSettings] = useState<SettingsData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  // Form state
+  const [tag, setTag] = useState('')
+  const [priorityRaw, setPriorityRaw] = useState('')
+  const [region, setRegion] = useState('')
+  const [language, setLanguage] = useState('')
+  const [newKey, setNewKey] = useState('')
+
+  useEffect(() => {
+    fetchSettings()
+      .then(s => {
+        setSettings(s)
+        setTag(s.default_release_tag)
+        setPriorityRaw(s.provider_priority_order.join(','))
+        setRegion(s.tmdb_watch_region)
+        setLanguage(s.tmdb_language)
+      })
+      .catch(() => setMsg({ ok: false, text: 'Error cargando configuración' }))
+      .finally(() => setLoading(false))
+  }, [])
+
+  async function handleSave() {
+    setSaving(true)
+    setMsg(null)
+    try {
+      const priority = priorityRaw.split(',').map(s => s.trim()).filter(Boolean)
+      const payload: Parameters<typeof updateSettings>[0] = {
+        default_release_tag: tag.trim(),
+        provider_priority_order: priority,
+        tmdb_watch_region: region.trim(),
+        tmdb_language: language.trim(),
+      }
+      if (newKey.trim()) payload.tmdb_api_key = newKey.trim()
+      const updated = await updateSettings(payload)
+      setSettings(updated)
+      setTag(updated.default_release_tag)
+      setPriorityRaw(updated.provider_priority_order.join(','))
+      setRegion(updated.tmdb_watch_region)
+      setLanguage(updated.tmdb_language)
+      setNewKey('')
+      setMsg({ ok: true, text: '✓ Configuración guardada' })
+    } catch (e: unknown) {
+      setMsg({ ok: false, text: `✗ ${e instanceof Error ? e.message : String(e)}` })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) return <p style={{ padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>Cargando…</p>
+
   return (
-    <div className="placeholder-page">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 640 }}>
+      {msg && (
+        <div style={{
+          padding: '10px 14px', borderRadius: 6, fontSize: 13,
+          background: msg.ok ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)',
+          border: `1px solid ${msg.ok ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)'}`,
+          color: msg.ok ? '#86efac' : '#fca5a5',
+        }}>
+          {msg.text}
+        </div>
+      )}
+
       <div className="placeholder-card">
-        <div className="placeholder-tag">Exportar / Importar ajustes</div>
-        <p style={{ color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.7 }}>
-          Usa la pestaña <strong>Backup</strong> para exportar ajustes sin secretos.<br />
-          Para modificar la configuración avanzada (API keys, rutas) usa el asistente de configuración
-          o la CLI: <code>maintenance export-settings</code>.
-        </p>
+        <h3 style={{ marginTop: 0, marginBottom: 14 }}>TMDb</h3>
+        <div className="form-group" style={{ marginBottom: 12 }}>
+          <label className="form-label">Estado de la API key</label>
+          <div style={{ fontSize: 13 }}>
+            {settings?.tmdb_api_key_configured
+              ? <><span style={{ color: '#22c55e' }}>✓ Configurada</span>{settings.tmdb_api_key_masked && <code style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>{settings.tmdb_api_key_masked}</code>}</>
+              : <span style={{ color: '#ef4444' }}>✗ No configurada</span>}
+          </div>
+        </div>
+        <div className="form-group" style={{ marginBottom: 12 }}>
+          <label className="form-label">Nueva API key <span className="form-hint">(dejar vacío para mantener la actual)</span></label>
+          <input
+            type="password"
+            className="form-input"
+            value={newKey}
+            onChange={e => setNewKey(e.target.value)}
+            placeholder="sk-…"
+            autoComplete="new-password"
+          />
+          <span className="form-hint">Usada para marcar providers disponibles en TMDb.</span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="form-group">
+            <label className="form-label">Región</label>
+            <input className="form-input" value={region} onChange={e => setRegion(e.target.value)} placeholder="ES" />
+            <span className="form-hint">Código ISO de país para filtrar providers.</span>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Idioma</label>
+            <input className="form-input" value={language} onChange={e => setLanguage(e.target.value)} placeholder="es-ES" />
+          </div>
+        </div>
       </div>
+
       <div className="placeholder-card">
-        <h3>Secciones</h3>
-        <ol>
-          <li>General — nombre, zona horaria</li>
-          <li>TMDb — API key, idioma, región</li>
-          <li>eMuwarez — API key, endpoint, intervalo</li>
-          <li>Uploadrr — ruta</li>
-          <li>Seguridad — cambiar contraseña</li>
-        </ol>
+        <h3 style={{ marginTop: 0, marginBottom: 14 }}>Nomenclatura</h3>
+        <div className="form-group" style={{ marginBottom: 12 }}>
+          <label className="form-label">Default release tag</label>
+          <input className="form-input" value={tag} onChange={e => setTag(e.target.value)} placeholder="EMUWAREZ" />
+          <span className="form-hint">Propuesta por defecto al generar el torrent name.</span>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Orden de providers (separados por coma)</label>
+          <input
+            className="form-input"
+            value={priorityRaw}
+            onChange={e => setPriorityRaw(e.target.value)}
+            placeholder="AMZN,NF,DSNP,MAX,ATVP"
+          />
+          <span className="form-hint">Se usa para elegir automáticamente el provider cuando TMDb devuelve varios. Códigos válidos: AMZN, NF, DSNP, MAX, ATVP, HMAX, PCOK, MUBI, SKY…</span>
+        </div>
+      </div>
+
+      <div>
+        <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+          {saving ? 'Guardando…' : 'Guardar configuración'}
+        </button>
       </div>
     </div>
   )

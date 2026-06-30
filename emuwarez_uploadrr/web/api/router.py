@@ -21,6 +21,7 @@ from .request_readiness import router as request_readiness_router
 from .operational_queue import router as operational_queue_router
 from .operational_actions import router as operational_actions_router
 from .settings import router as settings_router
+from .integration_tests import router as integration_tests_router
 
 api_router = APIRouter(prefix="/api")
 
@@ -49,3 +50,4 @@ api_router.include_router(operational_queue_router)
 # Must come after operational_queue_router to avoid parameterized collisions.
 api_router.include_router(operational_actions_router)
 api_router.include_router(settings_router)
+api_router.include_router(integration_tests_router)

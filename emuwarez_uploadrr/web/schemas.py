@@ -946,3 +946,32 @@ class MkvTitleApplyBody(BaseModel):
     dry_run: bool = True
     apply: bool = False
     confirmation: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Phase 10C — External API connection tests
+# ---------------------------------------------------------------------------
+
+class TestTmdbRequest(BaseModel):
+    api_key: Optional[str] = None
+    language: Optional[str] = None
+    region: Optional[str] = None
+
+
+class TestEmuwarezRequest(BaseModel):
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+
+
+class TestArrRequest(BaseModel):
+    kind: str
+    base_url: str
+    api_key: str
+
+
+class IntegrationTestResult(BaseModel):
+    ok: bool
+    service: str
+    status: str
+    message: str
+    details: dict = {}

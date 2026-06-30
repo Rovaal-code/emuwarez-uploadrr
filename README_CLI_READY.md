@@ -572,3 +572,61 @@ ID    Título              Estado readiness   Acción              Prioridad   S
 | GET | `/api/requests/{id}/candidates` | Candidatos locales para una petición |
 
 Todos requieren Bearer token. Sin token: 401.
+
+---
+
+## Cola operativa unificada (Phase 8C)
+
+Fase 8C añade una cola operativa que responde a: **¿Qué hago ahora?** La cola agrega items de readiness, biblioteca, subidas ARR y jobs de upload en una única vista priorizada.
+
+**La cola NO ejecuta acciones. NO sube contenido. NO crea peticiones. Es read-only sobre todas las fuentes.**
+
+Prioridades: `critical` > `high` > `medium` > `low` > `blocked`
+
+```bash
+# Refrescar la cola desde todas las fuentes
+python3 emuwarez_uploader.py queue refresh
+
+# Ver resumen de la cola
+python3 emuwarez_uploader.py queue summary
+
+# Listar items pendientes (por defecto excluye resolved/ignored)
+python3 emuwarez_uploader.py queue list
+python3 emuwarez_uploader.py queue list --bucket critical
+python3 emuwarez_uploader.py queue list --status ready
+
+# Ver detalle de un item
+python3 emuwarez_uploader.py queue show <id>
+
+# Marcar item como resuelto manualmente
+python3 emuwarez_uploader.py queue resolve <id>
+
+# Ignorar item
+python3 emuwarez_uploader.py queue ignore <id>
+```
+
+Salida ejemplo (`queue list`):
+
+```
+#   Prioridad   Estado    Acción           Tipo                 Título
+1   CRITICAL    ready     upload           request_readiness    Movie A
+2   HIGH        ready     adapt_nomenclature request_readiness  Serie B S01
+3   MEDIUM      waiting   wait_download    request_readiness    Movie C
+4   MEDIUM      open      run_preflight    upload_job           Movie D
+5   BLOCKED     blocked   review_arr       arr_issue            Movie E
+```
+
+### Endpoints API (Phase 8C)
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| POST | `/api/operational-queue/refresh` | Reconstruir cola desde todas las fuentes |
+| GET | `/api/operational-queue` | Listar items con filtros |
+| GET | `/api/operational-queue/summary` | Resumen por estado y bucket |
+| GET | `/api/operational-queue/{id}` | Detalle de un item |
+| POST | `/api/operational-queue/{id}/resolve` | Marcar como resuelto |
+| POST | `/api/operational-queue/{id}/ignore` | Ignorar item |
+
+Todos requieren Bearer token. Sin token: 401.
+
+El dashboard incluye un panel "Qué hacer ahora" con los 5 items más urgentes de la cola.

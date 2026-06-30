@@ -279,6 +279,14 @@ GET  /api/requests/prioritized
 GET  /api/requests/{id}/readiness
 POST /api/requests/{id}/readiness/evaluate
 GET  /api/requests/{id}/candidates
+
+# Phase 8C — Cola operativa unificada
+POST /api/operational-queue/refresh
+GET  /api/operational-queue
+GET  /api/operational-queue/summary
+GET  /api/operational-queue/{id}
+POST /api/operational-queue/{id}/resolve
+POST /api/operational-queue/{id}/ignore
 ```
 
 **Equivalente CLI:**
@@ -293,6 +301,14 @@ emuwarez-uploadrr requests readiness-refresh
 emuwarez-uploadrr requests readiness [<id>]
 emuwarez-uploadrr requests prioritized
 emuwarez-uploadrr requests candidates <id>
+
+# Phase 8C
+emuwarez-uploadrr queue refresh
+emuwarez-uploadrr queue summary
+emuwarez-uploadrr queue list [--bucket critical|high|medium|low|blocked] [--status ready|waiting|blocked|open]
+emuwarez-uploadrr queue show <id>
+emuwarez-uploadrr queue resolve <id>
+emuwarez-uploadrr queue ignore <id>
 ```
 
 ---

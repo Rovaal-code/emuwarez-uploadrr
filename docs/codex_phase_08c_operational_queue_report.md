@@ -2,6 +2,7 @@
 
 **Fecha:** 2026-06-30
 **Rama:** `feature/ui-phase-08c-unified-operational-queue`
+**Commit:** `dcf074b`
 **Schema SQLite:** versión 10 (SCHEMA_VERSION = 10)
 **Tests:** 641 passed (12 servicio + 17 API + 7 CLI + ~605 previos)
 

@@ -309,7 +309,7 @@ fi
 
 # API auth guard: sources endpoint must return 401 without token
 SOURCES_NO_AUTH=$(curl -s -o /dev/null -w "%{http_code}" \
-    "http://localhost:${HOST_PORT}/api/nomenclature/sources")
+    "${BASE_URL}/api/nomenclature/sources")
 if [ "$SOURCES_NO_AUTH" = "401" ]; then
     log_ok "GET /nomenclature/sources sin token → 401 (auth guard OK)"
     PASS=$((PASS + 1))

@@ -127,7 +127,7 @@ def setup_tmdb(
     from ..services.setup_service import SetupError, setup_tmdb as _setup_tmdb
     with _get_conn() as conn:
         try:
-            _setup_tmdb(conn, body.api_key)
+            _setup_tmdb(conn, body.api_key, body.language or "es-ES", body.region or "ES")
             conn.commit()
         except SetupError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))

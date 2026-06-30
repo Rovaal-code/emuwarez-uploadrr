@@ -28,7 +28,7 @@ export class ApiClientError extends Error {
 }
 
 interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   body?: unknown
   skipAuth?: boolean
 }
@@ -84,6 +84,8 @@ export const api = {
     request<T>(path, { ...opts, method: 'POST', body }),
   patch: <T>(path: string, body?: unknown, opts?: Omit<RequestOptions, 'method'>) =>
     request<T>(path, { ...opts, method: 'PATCH', body }),
+  put: <T>(path: string, body?: unknown, opts?: Omit<RequestOptions, 'method'>) =>
+    request<T>(path, { ...opts, method: 'PUT', body }),
   delete: <T>(path: string, opts?: Omit<RequestOptions, 'method' | 'body'>) =>
     request<T>(path, { ...opts, method: 'DELETE' }),
 }

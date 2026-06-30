@@ -1,10 +1,19 @@
 import { useState, useEffect, useCallback } from 'react'
-import { listQueue, getQueueSummary, refreshQueue, resolveQueueItem, ignoreQueueItem } from '../api/operationalQueue'
-import type { OperationalQueueItem, OperationalQueueSummary } from '../types/api'
+import { listQueue, getQueueSummary, refreshQueue, resolveQueueItem, ignoreQueueItem, getQueueItemActions, getQueueActionPlan } from '../api/operationalQueue'
+import type { OperationalQueueItem, OperationalQueueSummary, QueueActionPlan, QueueAvailableAction } from '../types/api'
 import { LoadingState } from '../components/LoadingState'
 import { ErrorState } from '../components/ErrorState'
 import { EmptyState } from '../components/EmptyState'
+import { QueueActionPanel } from '../components/QueueActionPanel'
 import { formatDate } from '../utils/format'
+
+const ROUTE_TO_PAGE: Record<string, string> = {
+  '/library': 'library',
+  '/uploads': 'uploads',
+  '/missing': 'missing',
+  '/instances': 'instances',
+  '/queue': 'queue',
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -169,7 +178,11 @@ function DetailPanel({ item, onClose, onResolve, onIgnore }: {
 // Main page
 // ---------------------------------------------------------------------------
 
-export function QueuePage() {
+interface QueuePageProps {
+  onNavigate?: (page: string) => void
+}
+
+export function QueuePage({ onNavigate }: QueuePageProps = {}) {
   const [items, setItems] = useState<OperationalQueueItem[]>([])
   const [summary, setSummary] = useState<OperationalQueueSummary | null>(null)
   const [loading, setLoading] = useState(true)
@@ -177,6 +190,12 @@ export function QueuePage() {
   const [refreshing, setRefreshing] = useState(false)
   const [refreshMsg, setRefreshMsg] = useState<string | null>(null)
   const [selected, setSelected] = useState<OperationalQueueItem | null>(null)
+
+  // Action plan panel
+  const [planItemId, setPlanItemId] = useState<number | null>(null)
+  const [planData, setPlanData] = useState<QueueActionPlan | null>(null)
+  const [planActions, setPlanActions] = useState<QueueAvailableAction[]>([])
+  const [planLoading, setPlanLoading] = useState(false)
 
   // Filters
   const [filterBucket, setFilterBucket] = useState('')
@@ -220,10 +239,37 @@ export function QueuePage() {
     }
   }
 
+  async function handleOpenPlan(id: number) {
+    if (planItemId === id) {
+      setPlanItemId(null)
+      setPlanData(null)
+      setPlanActions([])
+      return
+    }
+    setPlanItemId(id)
+    setPlanLoading(true)
+    try {
+      const [planRes, actionsRes] = await Promise.allSettled([
+        getQueueActionPlan(id),
+        getQueueItemActions(id),
+      ])
+      if (planRes.status === 'fulfilled') setPlanData(planRes.value.plan)
+      if (actionsRes.status === 'fulfilled') setPlanActions(actionsRes.value.actions)
+    } catch { /* ignore */ } finally {
+      setPlanLoading(false)
+    }
+  }
+
+  function handlePlanNavigate(route: string) {
+    const page = ROUTE_TO_PAGE[route] ?? route.replace(/^\//, '')
+    onNavigate?.(page)
+  }
+
   async function handleResolve(id: number) {
     try {
       await resolveQueueItem(id)
       setSelected(null)
+      if (planItemId === id) { setPlanItemId(null); setPlanData(null); setPlanActions([]) }
       await loadData()
     } catch { /* ignore */ }
   }
@@ -232,6 +278,7 @@ export function QueuePage() {
     try {
       await ignoreQueueItem(id)
       setSelected(null)
+      if (planItemId === id) { setPlanItemId(null); setPlanData(null); setPlanActions([]) }
       await loadData()
     } catch { /* ignore */ }
   }
@@ -335,6 +382,25 @@ export function QueuePage() {
         />
       )}
 
+      {/* Action plan panel */}
+      {planItemId !== null && (
+        <div style={{ marginBottom: 16 }}>
+          {planLoading ? (
+            <div style={{ padding: '12px 16px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, color: '#9ca3af', fontSize: '0.82rem' }}>
+              Cargando plan de acción…
+            </div>
+          ) : (
+            <QueueActionPanel
+              itemId={planItemId}
+              plan={planData}
+              actions={planActions}
+              onNavigate={onNavigate ? handlePlanNavigate : undefined}
+              onClose={() => { setPlanItemId(null); setPlanData(null); setPlanActions([]) }}
+            />
+          )}
+        </div>
+      )}
+
       {/* Table */}
       {items.length === 0 ? (
         <EmptyState
@@ -346,7 +412,7 @@ export function QueuePage() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', color: '#6b7280', textAlign: 'left' }}>
-                {['Prioridad', 'Estado', 'Acción', 'Tipo', 'Título', 'Motivo', 'Actualizado', ''].map(h => (
+                {['Prioridad', 'Estado', 'Acción', 'Tipo', 'Título', 'Motivo', 'Actualizado', '', ''].map(h => (
                   <th key={h} style={{ padding: '8px 10px', fontWeight: 500, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
                 ))}
               </tr>
@@ -374,6 +440,18 @@ export function QueuePage() {
                   </td>
                   <td style={{ padding: '8px 10px', color: '#6b7280', fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
                     {item.updated_at ? formatDate(item.updated_at) : '—'}
+                  </td>
+                  <td style={{ padding: '8px 10px' }}>
+                    <button
+                      onClick={e => { e.stopPropagation(); handleOpenPlan(item.id) }}
+                      style={{
+                        background: planItemId === item.id ? 'rgba(59,130,246,0.2)' : 'none',
+                        border: '1px solid rgba(59,130,246,0.3)', color: '#93c5fd',
+                        borderRadius: 4, padding: '2px 8px', cursor: 'pointer', fontSize: '0.72rem',
+                      }}
+                    >
+                      Plan
+                    </button>
                   </td>
                   <td style={{ padding: '8px 10px' }}>
                     <button

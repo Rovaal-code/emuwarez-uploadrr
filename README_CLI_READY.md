@@ -630,3 +630,64 @@ Salida ejemplo (`queue list`):
 Todos requieren Bearer token. Sin token: 401.
 
 El dashboard incluye un panel "Qué hacer ahora" con los 5 items más urgentes de la cola.
+
+---
+
+## Ejecución guiada desde la cola (Phase 9A)
+
+Fase 9A añade ejecución guiada por item de la cola. Cada item de la cola expone un plan de acción que indica exactamente **dónde y cómo** ejecutar la acción correspondiente, sin ejecutar nada automáticamente ni sin confirmación.
+
+### Contrato de seguridad
+
+- `execute_safe_queue_action` solo ejecuta: `verify_file`, `refresh_queue_item`, `view_plan`.
+- Nunca ejecuta Uploadrr, aplica nomenclatura, crea hardlinks, crea peticiones eMuwarez ni modifica Radarr/Sonarr.
+- Las acciones bloqueadas devuelven `409 Conflict` con la ruta exacta del flujo guiado donde ejecutarlas.
+
+### CLI — queue actions
+
+```bash
+# Listar acciones disponibles para un item
+python3 emuwarez_uploader.py queue actions <id>
+
+# Ver plan de acción completo
+python3 emuwarez_uploader.py queue action-plan <id>
+
+# Ejecutar acción segura (verify_file, view_plan)
+python3 emuwarez_uploader.py queue execute-safe <id> [--action verify_file]
+
+# Ver historial de eventos de un item
+python3 emuwarez_uploader.py queue events <id> [--limit 20]
+```
+
+Ejemplo (`queue action-plan 3`):
+
+```
+Item #3 — Plan de acción
+  Action : upload
+  Flow   : upload_execution
+  Route  : /uploads  →  modal: upload_confirmation
+  Token  : INICIAR_UPLOADRR  (requiere confirmación)
+  Bucket : HIGH
+  Estado : ready
+```
+
+### Endpoints API (Phase 9A)
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/api/operational-queue/{id}/actions` | Listar acciones disponibles |
+| GET | `/api/operational-queue/{id}/action-plan` | Plan completo de acción guiada |
+| POST | `/api/operational-queue/{id}/execute-safe-action` | Ejecutar acción segura (body: `{"action": str}`) |
+| GET | `/api/operational-queue/{id}/action-events` | Historial de eventos del item |
+
+Todos requieren Bearer token. Sin token: 401. Acción bloqueada: 409.
+
+### UI — QueuePage
+
+Cada fila de la cola muestra botón **Plan** que abre el `QueueActionPanel` con:
+- Resumen del plan (acción, flow, prioridad, estado)
+- Ruta UI donde ejecutar la acción y, si aplica, modal y token de confirmación
+- Botones de acción segura inline (verde) — solo `verify_file` y `view_plan`
+- Historial de eventos colapsable
+
+El panel "Qué hacer ahora" del Dashboard incluye botón **Acción →** que navega a la Cola.

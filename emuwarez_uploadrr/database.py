@@ -11,7 +11,7 @@ from .constants import CONFIG_DIR
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 
 def db_path() -> Path:
@@ -371,6 +371,39 @@ def _migrate_operational_queue_tables(conn: sqlite3.Connection) -> None:
     """)
 
 
+def _migrate_operational_actions_tables(conn: sqlite3.Connection) -> None:
+    """Create Phase 9A operational action events table and add action tracking columns."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS operational_action_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            queue_item_id INTEGER NOT NULL,
+            action TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            status TEXT NOT NULL,
+            message TEXT,
+            details_json TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_oae_queue_item ON operational_action_events(queue_item_id)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_oae_created ON operational_action_events(created_at)"
+    )
+    for col, col_type in [
+        ("last_action_at", "TEXT"),
+        ("last_action_status", "TEXT"),
+        ("last_action_message", "TEXT"),
+    ]:
+        try:
+            conn.execute(
+                f"ALTER TABLE operational_queue_items ADD COLUMN {col} {col_type}"
+            )
+        except Exception:
+            pass
+
+
 def _migrate_library_items_phase8a(conn: sqlite3.Connection) -> None:
     """Add Phase 8A diagnostic/filesystem columns to library_items."""
     new_cols = [
@@ -609,6 +642,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_request_items_phase8b(conn)
         _migrate_request_readiness_tables(conn)
         _migrate_operational_queue_tables(conn)
+        _migrate_operational_actions_tables(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

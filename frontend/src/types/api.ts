@@ -536,3 +536,85 @@ export interface OperationalQueueActionResponse {
   status: string
   reason: string | null
 }
+
+// Phase 9A — Guided queue actions
+export interface QueueActionUI {
+  route: string
+  modal: string | null
+  label: string
+}
+
+export interface QueueActionTarget {
+  library_item_id?: number
+  upload_job_id?: number
+  request_item_id?: number
+}
+
+export interface QueueActionPlan {
+  queue_item_id: number
+  queue_key: string | null
+  action: string
+  flow: string
+  target: QueueActionTarget
+  ui: QueueActionUI
+  requires_confirmation: boolean
+  confirmation_token: string | null
+  safe_to_execute_inline: boolean
+  guided_flow: boolean
+  blockers: string[]
+  reasons: string[]
+  priority_bucket: string
+  priority_score: number
+  title: string | null
+  status: string
+  item_type: string | null
+}
+
+export interface QueueActionPlanResponse {
+  ok: boolean
+  plan: QueueActionPlan
+}
+
+export interface QueueAvailableAction {
+  action: string
+  label: string
+  flow: string
+  safe_to_execute_inline: boolean
+  requires_confirmation: boolean
+  confirmation_token: string | null
+  primary: boolean
+}
+
+export interface QueueActionsResponse {
+  item_id: number
+  actions: QueueAvailableAction[]
+}
+
+export interface QueueActionEvent {
+  id: number
+  queue_item_id: number
+  action: string
+  event_type: string
+  status: string
+  message: string | null
+  details_json: string | null
+  created_at: string
+}
+
+export interface QueueActionEventsResponse {
+  item_id: number
+  events: QueueActionEvent[]
+  total: number
+}
+
+export interface ExecuteSafeActionResponse {
+  ok: boolean
+  action?: string
+  blocked?: boolean
+  message?: string
+  guided_flow?: string
+  ui_route?: string
+  confirmation_token?: string | null
+  result?: Record<string, unknown>
+  error?: string
+}

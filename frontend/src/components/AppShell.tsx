@@ -33,10 +33,10 @@ const PAGE_TITLE: Record<string, string> = {
   settings:   'Configuración',
 }
 
-function PageContent({ page }: { page: string }) {
+function PageContent({ page, onNavigate }: { page: string; onNavigate: (p: string) => void }) {
   switch (page) {
-    case 'dashboard':  return <DashboardPage />
-    case 'queue':      return <QueuePage />
+    case 'dashboard':  return <DashboardPage onNavigate={onNavigate} />
+    case 'queue':      return <QueuePage onNavigate={onNavigate} />
     case 'library':    return <LibraryPage />
     case 'missing':    return <MissingPage />
     case 'requests':   return <RequestsPage />
@@ -62,7 +62,7 @@ export function AppShell({ user, onLogout }: AppShellProps) {
           onLogout={onLogout}
         />
         <main className="page-container">
-          <PageContent page={activePage} />
+          <PageContent page={activePage} onNavigate={setActivePage} />
         </main>
       </div>
     </div>

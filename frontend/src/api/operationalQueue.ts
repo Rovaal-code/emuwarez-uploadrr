@@ -5,6 +5,10 @@ import type {
   OperationalQueueRefreshResponse,
   OperationalQueueItem,
   OperationalQueueActionResponse,
+  QueueActionPlanResponse,
+  QueueActionsResponse,
+  QueueActionEventsResponse,
+  ExecuteSafeActionResponse,
 } from '../types/api'
 
 export async function listQueue(params?: {
@@ -52,4 +56,22 @@ export async function resolveQueueItem(id: number, reason?: string): Promise<Ope
 
 export async function ignoreQueueItem(id: number, reason?: string): Promise<OperationalQueueActionResponse> {
   return api.post<OperationalQueueActionResponse>(`/operational-queue/${id}/ignore`, { reason: reason ?? null })
+}
+
+// Phase 9A — Guided queue actions
+export async function getQueueItemActions(id: number): Promise<QueueActionsResponse> {
+  return api.get<QueueActionsResponse>(`/operational-queue/${id}/actions`)
+}
+
+export async function getQueueActionPlan(id: number): Promise<QueueActionPlanResponse> {
+  return api.get<QueueActionPlanResponse>(`/operational-queue/${id}/action-plan`)
+}
+
+export async function executeSafeAction(id: number, action?: string): Promise<ExecuteSafeActionResponse> {
+  return api.post<ExecuteSafeActionResponse>(`/operational-queue/${id}/execute-safe-action`, { action: action ?? null })
+}
+
+export async function getQueueActionEvents(id: number, limit?: number): Promise<QueueActionEventsResponse> {
+  const qs = limit ? `?limit=${limit}` : ''
+  return api.get<QueueActionEventsResponse>(`/operational-queue/${id}/action-events${qs}`)
 }

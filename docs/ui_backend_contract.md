@@ -287,6 +287,12 @@ GET  /api/operational-queue/summary
 GET  /api/operational-queue/{id}
 POST /api/operational-queue/{id}/resolve
 POST /api/operational-queue/{id}/ignore
+
+# Phase 9A — Ejecución guiada desde la cola
+GET  /api/operational-queue/{id}/actions
+GET  /api/operational-queue/{id}/action-plan
+POST /api/operational-queue/{id}/execute-safe-action   body: {"action": str|null}
+GET  /api/operational-queue/{id}/action-events         ?limit=50
 ```
 
 **Equivalente CLI:**
@@ -309,6 +315,12 @@ emuwarez-uploadrr queue list [--bucket critical|high|medium|low|blocked] [--stat
 emuwarez-uploadrr queue show <id>
 emuwarez-uploadrr queue resolve <id>
 emuwarez-uploadrr queue ignore <id>
+
+# Phase 9A
+emuwarez-uploadrr queue actions <id>
+emuwarez-uploadrr queue action-plan <id>
+emuwarez-uploadrr queue execute-safe <id> [--action verify_file|view_plan|refresh_queue_item]
+emuwarez-uploadrr queue events <id> [--limit 20]
 ```
 
 ---

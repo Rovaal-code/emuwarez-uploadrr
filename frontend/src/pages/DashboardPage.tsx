@@ -29,7 +29,11 @@ const BUCKET_COLOR: Record<string, string> = {
   blocked: '#7f1d1d',
 }
 
-export function DashboardPage() {
+interface DashboardPageProps {
+  onNavigate?: (page: string) => void
+}
+
+export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   const [summary, setSummary] = useState<DashboardSummaryResponse | null>(null)
   const [activity, setActivity] = useState<DashboardActivityResponse | null>(null)
   const [queueTop, setQueueTop] = useState<OperationalQueueItem[]>([])
@@ -251,9 +255,21 @@ export function DashboardPage() {
                         <span style={{ color, fontWeight: 600, minWidth: 80, fontSize: '0.72rem' }}>
                           {ACTION_SHORT[item.action] ?? item.action}
                         </span>
-                        <span style={{ color: '#d1d5db', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <span style={{ color: '#d1d5db', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
                           {item.title ?? '—'}
                         </span>
+                        {onNavigate && (
+                          <button
+                            onClick={() => onNavigate('queue')}
+                            style={{
+                              background: 'none', border: '1px solid rgba(59,130,246,0.3)',
+                              color: '#93c5fd', borderRadius: 4, padding: '1px 6px',
+                              cursor: 'pointer', fontSize: '0.7rem', flexShrink: 0,
+                            }}
+                          >
+                            Acción →
+                          </button>
+                        )}
                       </div>
                     )
                   })}

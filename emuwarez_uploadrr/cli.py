@@ -211,6 +211,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_queue_ignore = queue_sub.add_parser("ignore", help="Ignorar item de la cola")
     p_queue_ignore.add_argument("id", type=int, help="ID del item de la cola")
     p_queue_ignore.add_argument("--reason", help="Motivo opcional")
+    p_queue_actions = queue_sub.add_parser("actions", help="Listar acciones disponibles para un item")
+    p_queue_actions.add_argument("id", type=int, help="ID del item de la cola")
+    p_queue_plan = queue_sub.add_parser("action-plan", help="Ver plan de acción guiada para un item")
+    p_queue_plan.add_argument("id", type=int, help="ID del item de la cola")
+    p_queue_exec = queue_sub.add_parser("execute-safe", help="Ejecutar acción segura (solo read-only/local)")
+    p_queue_exec.add_argument("id", type=int, help="ID del item de la cola")
+    p_queue_exec.add_argument("--action", default=None, help="Acción: verify_file, refresh_queue_item, view_plan")
+    p_queue_events = queue_sub.add_parser("events", help="Ver historial de eventos de acción de un item")
+    p_queue_events.add_argument("id", type=int, help="ID del item de la cola")
+    p_queue_events.add_argument("--limit", type=int, default=20, help="Número máximo de eventos")
 
     p_nomenclature = sub.add_parser("nomenclature", help="Previsualización de nomenclatura eMuwarez (no modifica archivos)")
     nom_sub = p_nomenclature.add_subparsers(dest="nomenclature_command", required=True)
@@ -870,6 +880,98 @@ def cmd_queue(args) -> int:
             else:
                 print(f"✗ {result.get('error', 'Error desconocido')}")
                 return 1
+            return 0
+
+        if args.queue_command == "actions":
+            from .services.operational_actions import list_available_queue_actions
+            actions = list_available_queue_actions(args.id, conn)
+            if not actions:
+                print(f"✗ Item {args.id} no encontrado")
+                return 1
+            print(f"\n── Acciones disponibles para item #{args.id} ──────────────")
+            for a in actions:
+                inline = "✓ inline" if a.get("safe_to_execute_inline") else "⚠ requiere flujo guiado"
+                token = f"  token: {a['confirmation_token']}" if a.get("confirmation_token") else ""
+                primary = " [PRINCIPAL]" if a.get("primary") else ""
+                print(f"  {a['action']:<25} {inline}{primary}")
+                print(f"    → {a['label']}  |  flow: {a['flow']}{token}")
+            return 0
+
+        if args.queue_command == "action-plan":
+            from .services.operational_actions import get_queue_action_plan
+            result = get_queue_action_plan(args.id, conn)
+            if not result.get("ok"):
+                print(f"✗ {result.get('error', 'Item no encontrado')}")
+                return 1
+            plan = result["plan"]
+            print(f"\n── Plan de acción para item #{args.id} ─────────────────────")
+            print(f"  Acción:       {plan['action']}")
+            print(f"  Flow:         {plan['flow']}")
+            print(f"  Título:       {plan.get('title') or '–'}")
+            print(f"  Tipo:         {plan.get('item_type') or '–'}")
+            print(f"  Prioridad:    {plan.get('priority_bucket')} (score {plan.get('priority_score', 0)})")
+            print(f"  Estado:       {plan.get('status')}")
+            ui = plan.get("ui", {})
+            print(f"  UI:           {ui.get('route', '–')}  modal: {ui.get('modal') or '–'}")
+            print(f"  Label:        {ui.get('label', '–')}")
+            inline = plan.get("safe_to_execute_inline", False)
+            print(f"  Inline:       {'✓ sí (safe)' if inline else '✗ no — flujo guiado requerido'}")
+            if plan.get("requires_confirmation"):
+                print(f"  Confirmación: sí  |  token: {plan.get('confirmation_token')}")
+            else:
+                print(f"  Confirmación: no")
+            if plan.get("blockers"):
+                print(f"  Bloqueado por:")
+                for b in plan["blockers"]:
+                    print(f"    · {b}")
+            if plan.get("reasons"):
+                print(f"  Razones:")
+                for r in plan["reasons"]:
+                    print(f"    · {r}")
+            target = plan.get("target", {})
+            if target:
+                print(f"  Target:       {target}")
+            return 0
+
+        if args.queue_command == "execute-safe":
+            from .services.operational_actions import execute_safe_queue_action
+            action_req = getattr(args, "action", None)
+            result = execute_safe_queue_action(args.id, conn, action=action_req)
+            if result.get("blocked"):
+                print(f"✗ Bloqueado: {result.get('message', '')}")
+                print(f"  Flujo guiado requerido: {result.get('guided_flow', '–')}")
+                ui_route = result.get("ui_route")
+                if ui_route:
+                    print(f"  Ruta UI: {ui_route}")
+                token = result.get("confirmation_token")
+                if token:
+                    print(f"  Token de confirmación: {token}")
+                return 1
+            if not result.get("ok"):
+                print(f"✗ {result.get('error', 'Error desconocido')}")
+                return 1
+            print(f"✓ Acción '{result.get('action')}' ejecutada")
+            if result.get("result"):
+                r = result["result"]
+                if "file_exists" in r:
+                    found = r.get("file_exists")
+                    print(f"  Archivo: {'encontrado' if found else 'NO encontrado'}")
+                    if r.get("file_size_on_disk"):
+                        size = r["file_size_on_disk"]
+                        print(f"  Tamaño: {size:,} bytes ({size // 1024 // 1024:.1f} MB)" if size >= 1024*1024 else f"  Tamaño: {size:,} bytes")
+            return 0
+
+        if args.queue_command == "events":
+            from .services.operational_actions import get_queue_action_events
+            limit = getattr(args, "limit", 20)
+            events = get_queue_action_events(args.id, conn, limit=limit)
+            if not events:
+                print(f"Sin eventos registrados para item #{args.id}")
+                return 0
+            print(f"\n── Eventos de acción para item #{args.id} ──────────────────")
+            for ev in events:
+                status_icon = "✓" if ev.get("status") == "ok" else ("⚠" if ev.get("status") == "warning" else "✗")
+                print(f"  {status_icon} [{ev.get('created_at', '')[:19]}] {ev.get('event_type')} — {ev.get('message') or '–'}")
             return 0
 
     return 1

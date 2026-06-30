@@ -519,3 +519,56 @@ python3 emuwarez_uploader.py missing diagnostics
 | GET | `/api/missing/diagnostics` | Faltantes enriquecidos |
 
 Todos requieren Bearer token.
+
+---
+
+## Readiness y priorización de peticiones eMuwarez
+
+Fase 8B añade un motor de readiness por petición que responde:
+- ¿Tengo algo local que sirva para esta petición?
+- ¿Está disponible en disco?
+- ¿Cumple calidad/source/resolución?
+- ¿Necesita nomenclatura? ¿Preflight? ¿Listo para subir?
+- ¿Cuál es la acción recomendada? ¿Y la prioridad?
+
+**Readiness no crea peticiones. Readiness no sube contenido automáticamente. Solo calcula la mejor acción recomendada usando datos locales, ARR y eMuwarez read-only.**
+
+```bash
+# Recalcular readiness para todas las peticiones
+python3 emuwarez_uploader.py requests readiness-refresh
+
+# Ver lista de readiness ordenada por prioridad
+python3 emuwarez_uploader.py requests readiness
+
+# Ver readiness de una petición concreta
+python3 emuwarez_uploader.py requests readiness 31
+
+# Ver peticiones priorizadas (high > medium > low > blocked)
+python3 emuwarez_uploader.py requests prioritized
+
+# Ver candidatos locales para una petición
+python3 emuwarez_uploader.py requests candidates 31
+```
+
+Salida ejemplo:
+
+```
+ID    Título              Estado readiness   Acción              Prioridad   Score
+31    Movie A             ready_to_upload    upload              high        91
+32    Serie B S01          needs_nomenclature adapt_nomenclature  high        84
+33    Movie C             downloading        wait_download       medium      61
+34    Movie D             import_error       review_arr          blocked     0
+```
+
+### Endpoints API (Phase 8B)
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| POST | `/api/requests/readiness/refresh` | Recalcular readiness (todas las peticiones) |
+| GET | `/api/requests/readiness` | Listar readiness con filtros |
+| GET | `/api/requests/prioritized` | Peticiones ordenadas por prioridad |
+| GET | `/api/requests/{id}/readiness` | Readiness de una petición |
+| POST | `/api/requests/{id}/readiness/evaluate` | Evaluar readiness de una petición |
+| GET | `/api/requests/{id}/candidates` | Candidatos locales para una petición |
+
+Todos requieren Bearer token. Sin token: 401.

@@ -48,6 +48,12 @@ def _row_to_item(r: dict) -> RequestItemResponse:
         local_status=r.get("local_status"),
         reviewed_at=r.get("reviewed_at"),
         updated_at=r.get("updated_at"),
+        # Phase 8B readiness fields
+        readiness_status=r.get("readiness_status"),
+        readiness_action=r.get("readiness_action"),
+        readiness_priority_score=r.get("readiness_priority_score"),
+        readiness_priority_bucket=r.get("readiness_priority_bucket"),
+        readiness_best_library_item_id=r.get("readiness_best_library_item_id"),
     )
 
 

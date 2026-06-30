@@ -91,6 +91,14 @@ def dashboard_summary(current_user: dict = Depends(require_auth)) -> DashboardSu
         except Exception:
             pass
 
+        # Phase 8B: request readiness counts
+        try:
+            from emuwarez_uploadrr.services.request_readiness import get_dashboard_readiness_counts
+            readiness_counts = get_dashboard_readiness_counts(conn)
+            summary.update(readiness_counts)
+        except Exception:
+            pass
+
     return DashboardSummaryResponse(**summary)
 
 

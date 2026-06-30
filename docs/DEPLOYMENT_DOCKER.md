@@ -159,6 +159,30 @@ docker exec emuwarez-uploadrr python3 emuwarez_uploader.py requests sync
 
 ---
 
+## 13b. Evaluar readiness de peticiones (Phase 8B)
+
+Tras sincronizar peticiones, puedes evaluar cuáles están listas para subir:
+
+```bash
+# Recalcular readiness de todas las peticiones
+docker exec emuwarez-uploadrr python3 emuwarez_uploader.py requests readiness-refresh
+
+# Ver peticiones priorizadas (high → medium → low → blocked)
+docker exec emuwarez-uploadrr python3 emuwarez_uploader.py requests prioritized
+
+# Ver readiness de una petición concreta
+docker exec emuwarez-uploadrr python3 emuwarez_uploader.py requests readiness <id>
+
+# Ver candidatos locales para una petición
+docker exec emuwarez-uploadrr python3 emuwarez_uploader.py requests candidates <id>
+```
+
+Desde la UI, en **Peticiones**, aparecen las columnas Readiness, Acción, Prioridad y Candidato, así como el panel "Peticiones accionables" en el Dashboard.
+
+**Garantías de seguridad**: el cálculo de readiness es de solo lectura. No modifica eMuwarez, Radarr, Sonarr ni el filesystem. No ejecuta Uploadrr. Solo escribe en tablas locales de la base de datos.
+
+---
+
 ## 14. Generar nomenclatura
 
 Desde la UI, en la sección **Biblioteca**, selecciona un ítem y pulsa **Adaptar nomenclatura** para ver la propuesta de nombre conforme a eMuwarez.

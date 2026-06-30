@@ -271,6 +271,14 @@ POST /api/requests/sync
 GET  /api/requests/{id}
 POST /api/requests/{id}/match
 POST /api/requests/{id}/mark-reviewed
+
+# Phase 8B — Readiness y priorización
+POST /api/requests/readiness/refresh
+GET  /api/requests/readiness
+GET  /api/requests/prioritized
+GET  /api/requests/{id}/readiness
+POST /api/requests/{id}/readiness/evaluate
+GET  /api/requests/{id}/candidates
 ```
 
 **Equivalente CLI:**
@@ -279,6 +287,12 @@ emuwarez-uploadrr requests list [--search]
 emuwarez-uploadrr requests sync [--force]
 emuwarez-uploadrr requests show <id>
 emuwarez-uploadrr requests match
+
+# Phase 8B
+emuwarez-uploadrr requests readiness-refresh
+emuwarez-uploadrr requests readiness [<id>]
+emuwarez-uploadrr requests prioritized
+emuwarez-uploadrr requests candidates <id>
 ```
 
 ---

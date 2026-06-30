@@ -176,6 +176,32 @@ export function DashboardPage() {
             </div>
           </div>
 
+          {/* Request readiness panel (Phase 8B) */}
+          <div className="upload-panel">
+            <div className="section-header">
+              <div className="section-title">Peticiones accionables</div>
+            </div>
+            <div className="upload-panel-body" style={{ padding: '12px 16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: '0.78rem' }}>
+                {[
+                  { label: 'Listas para subir', value: (s as any).requests_ready_to_upload ?? 0, color: 'var(--color-available)' },
+                  { label: 'Prioridad alta', value: (s as any).requests_high_priority ?? 0, color: '#34d399' },
+                  { label: 'Necesitan nomenclatura', value: (s as any).requests_need_nomenclature ?? 0, color: '#f59e0b' },
+                  { label: 'Esperando descarga', value: (s as any).requests_waiting_download ?? 0, color: '#818cf8' },
+                  { label: 'Bloqueadas', value: (s as any).requests_blocked ?? 0, color: 'var(--color-missing)' },
+                ].map(item => (
+                  <div key={item.label} style={{ color: 'var(--text-secondary)' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>{item.label}: </span>
+                    <strong style={{ color: item.color }}>{item.value}</strong>
+                  </div>
+                ))}
+              </div>
+              <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 8 }}>
+                Ejecuta "Recalcular readiness" en Peticiones para actualizar.
+              </p>
+            </div>
+          </div>
+
           {/* Upload activity panel */}
           <div className="upload-panel">
             <div className="section-header">

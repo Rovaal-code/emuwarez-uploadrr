@@ -183,7 +183,13 @@
     { "method": "POST", "path": "/api/config/general",                  "phase": 3, "stub": false },
     { "method": "POST", "path": "/api/config/tmdb",                     "phase": 3, "stub": false },
     { "method": "POST", "path": "/api/config/emu",                      "phase": 3, "stub": false },
-    { "method": "POST", "path": "/api/config/uploadrr",                 "phase": 3, "stub": false }
+    { "method": "POST", "path": "/api/config/uploadrr",                 "phase": 3, "stub": false },
+    { "method": "POST", "path": "/api/requests/readiness/refresh",       "phase": "8b", "stub": false, "auth": "bearer" },
+    { "method": "GET",  "path": "/api/requests/readiness",               "phase": "8b", "stub": false, "auth": "bearer" },
+    { "method": "GET",  "path": "/api/requests/prioritized",             "phase": "8b", "stub": false, "auth": "bearer" },
+    { "method": "GET",  "path": "/api/requests/{id}/readiness",          "phase": "8b", "stub": false, "auth": "bearer" },
+    { "method": "POST", "path": "/api/requests/{id}/readiness/evaluate", "phase": "8b", "stub": false, "auth": "bearer" },
+    { "method": "GET",  "path": "/api/requests/{id}/candidates",         "phase": "8b", "stub": false, "auth": "bearer" }
   ],
   "ui_style": {
     "theme": "dark",

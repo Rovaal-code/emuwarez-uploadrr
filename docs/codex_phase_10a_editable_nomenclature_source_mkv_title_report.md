@@ -110,3 +110,27 @@ Nuevas entradas en `settings`:
 | `tests/test_nomenclature_fields_api.py` | 10 tests — endpoints API fields |
 | `tests/test_mkv_title_api.py` | 10 tests — endpoints API mkv-title |
 | `tests/test_nomenclature_cli.py` | 10 tests — subcomandos CLI |
+
+---
+
+## Metadatos de la fase
+
+- **Rama:** `feature/ui-phase-10a-editable-nomenclature-source-mkv-title`
+- **Commit:** `34d85ac feat: add editable nomenclature source assistant and MKV title control`
+- **Tests:** 783 passed, 0 failed
+- **py_compile:** OK (todos los módulos)
+- **npm run build:** OK
+- **SCHEMA_VERSION:** 12
+
+---
+
+## Confirmaciones de seguridad
+
+- `Uploadrr/` no fue modificado
+- No se ejecutó ninguna subida real
+- Jellyfin no fue implementado
+- Seerr no fue implementado
+- No se creó ninguna petición automática en eMuwarez
+- `source_path` original queda protegido (mkvpropedit solo actúa sobre `prepared_path`/`applied_path`)
+- `mkvpropedit` solo puede ejecutarse con confirmación explícita `APLICAR_TITULO_MKV`
+- No se hizo push al repositorio remoto

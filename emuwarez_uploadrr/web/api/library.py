@@ -24,6 +24,7 @@ def _get_conn():
 
 
 def _to_lib_response(row: dict) -> LibraryItemResponse:
+    file_exists_raw = row.get("file_exists")
     return LibraryItemResponse(
         id=row["id"],
         item_type=row["item_type"],
@@ -45,10 +46,23 @@ def _to_lib_response(row: dict) -> LibraryItemResponse:
         request_status=row["request_status"],
         nomenclature_status=row["nomenclature_status"],
         updated_at=row.get("updated_at"),
+        file_exists=bool(file_exists_raw) if file_exists_raw is not None else None,
+        file_verified_at=row.get("file_verified_at"),
+        diagnostic_status=row.get("diagnostic_status"),
+        diagnostic_summary=row.get("diagnostic_summary"),
+        recommended_action=row.get("recommended_action"),
+        arr_queue_status=row.get("arr_queue_status"),
+        arr_history_status=row.get("arr_history_status"),
     )
 
 
 def _to_missing_response(row: dict) -> MissingItemResponse:
+    file_exists_raw = row.get("file_exists")
+    import json as _json
+    try:
+        rec_reasons = _json.loads(row.get("recommendation_reasons_json") or "[]")
+    except Exception:
+        rec_reasons = []
     return MissingItemResponse(
         id=row["id"],
         item_type=row["item_type"],
@@ -61,6 +75,15 @@ def _to_missing_response(row: dict) -> MissingItemResponse:
         local_status=row["local_status"],
         request_status=row["request_status"],
         updated_at=row.get("updated_at"),
+        arr_queue_status=row.get("arr_queue_status"),
+        arr_queue_progress=row.get("arr_queue_progress"),
+        arr_queue_timeleft=row.get("arr_queue_timeleft"),
+        arr_queue_error=row.get("arr_queue_error"),
+        arr_history_error=row.get("arr_history_error"),
+        file_exists=bool(file_exists_raw) if file_exists_raw is not None else None,
+        diagnostic_status=row.get("diagnostic_status"),
+        recommended_action=row.get("recommended_action"),
+        recommendation_reasons=rec_reasons,
     )
 
 

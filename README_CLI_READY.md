@@ -450,3 +450,72 @@ Muestra el estado del CONFIG_DIR, base de datos, frontend, montaje de Uploadrr,
 ### Guía de despliegue completa
 
 Ver: [docs/DEPLOYMENT_DOCKER.md](docs/DEPLOYMENT_DOCKER.md)
+
+---
+
+## Diagnóstico Radarr/Sonarr y verificación filesystem
+
+> Radarr/Sonarr son la fuente principal de biblioteca.
+> Jellyfin no es necesario para determinar qué contenido está disponible para el flujo de subida.
+> La verificación filesystem solo comprueba que el archivo exista y sea utilizable; no modifica archivos.
+
+### ARR health
+
+```bash
+# Mostrar estado de instancias ARR (solo lectura)
+python3 emuwarez_uploader.py arr health
+
+# Refrescar queue e historial ARR y actualizar diagnósticos en BD
+python3 emuwarez_uploader.py arr refresh-health
+python3 emuwarez_uploader.py arr refresh-health --no-history   # sin historial
+python3 emuwarez_uploader.py arr refresh-health --history-size 200
+```
+
+### Verificación de archivos
+
+```bash
+# Verificar todos los archivos en disco (solo lectura, no modifica nada)
+python3 emuwarez_uploader.py library verify-files
+
+# Verificar con filtros
+python3 emuwarez_uploader.py library verify-files --status Disponible --limit 100
+
+# Verificar un archivo concreto
+python3 emuwarez_uploader.py library verify-file 42
+```
+
+### Recomendaciones
+
+```bash
+# Recalcular recomendaciones para toda la biblioteca
+python3 emuwarez_uploader.py library recommendations
+
+# Ver recomendación de un item concreto
+python3 emuwarez_uploader.py library recommendation 42
+```
+
+### Diagnósticos
+
+```bash
+# Ver diagnósticos de biblioteca (estado, archivo, queue, acción recomendada)
+python3 emuwarez_uploader.py library diagnostics
+python3 emuwarez_uploader.py library diagnostics --status Disponible --limit 100
+
+# Faltantes enriquecidos con queue/history/recomendación
+python3 emuwarez_uploader.py missing diagnostics
+```
+
+### Endpoints API (Phase 8A)
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/api/arr/health` | Salud de instancias ARR |
+| POST | `/api/arr/health/refresh` | Refrescar queue e historial ARR |
+| POST | `/api/library/verify-files` | Verificar archivos en disco |
+| POST | `/api/library/{id}/verify-file` | Verificar archivo de un item |
+| POST | `/api/library/recommendations/refresh` | Recalcular recomendaciones |
+| GET | `/api/library/{id}/recommendation` | Recomendación de un item |
+| GET | `/api/library/diagnostics` | Diagnósticos de biblioteca |
+| GET | `/api/missing/diagnostics` | Faltantes enriquecidos |
+
+Todos requieren Bearer token.

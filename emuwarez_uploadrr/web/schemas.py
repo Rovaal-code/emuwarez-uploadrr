@@ -330,6 +330,16 @@ class DashboardSummaryResponse(BaseModel):
     uploads_completed: int = 0
     uploads_failed: int = 0
     last_upload_at: Optional[str] = None
+    # Phase 8A — ARR health and filesystem diagnostics
+    arr_health_ok: int = 0
+    arr_health_warning: int = 0
+    arr_health_error: int = 0
+    files_verified: int = 0
+    files_missing_on_disk: int = 0
+    items_ready_for_nomenclature: int = 0
+    items_ready_for_upload: int = 0
+    items_waiting_download: int = 0
+    items_need_arr_review: int = 0
 
 
 class DashboardActivityItem(BaseModel):
@@ -370,6 +380,14 @@ class LibraryItemResponse(BaseModel):
     request_status: str
     nomenclature_status: str
     updated_at: Optional[str] = None
+    # Phase 8A fields (optional — may not be populated yet)
+    file_exists: Optional[bool] = None
+    file_verified_at: Optional[str] = None
+    diagnostic_status: Optional[str] = None
+    diagnostic_summary: Optional[str] = None
+    recommended_action: Optional[str] = None
+    arr_queue_status: Optional[str] = None
+    arr_history_status: Optional[str] = None
 
 
 class LibraryListResponse(BaseModel):
@@ -391,6 +409,16 @@ class MissingItemResponse(BaseModel):
     local_status: str
     request_status: str
     updated_at: Optional[str] = None
+    # Phase 8A fields (optional)
+    arr_queue_status: Optional[str] = None
+    arr_queue_progress: Optional[float] = None
+    arr_queue_timeleft: Optional[str] = None
+    arr_queue_error: Optional[str] = None
+    arr_history_error: Optional[str] = None
+    file_exists: Optional[bool] = None
+    diagnostic_status: Optional[str] = None
+    recommended_action: Optional[str] = None
+    recommendation_reasons: Optional[list] = None
 
 
 class MissingListResponse(BaseModel):

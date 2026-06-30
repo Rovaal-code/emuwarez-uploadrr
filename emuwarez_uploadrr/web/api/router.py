@@ -16,6 +16,7 @@ from .uploads import router as uploads_router
 from .placeholders import router as placeholders_router
 from .diagnostics import router as diagnostics_router
 from .maintenance import router as maintenance_router
+from .arr_health import router as arr_health_router
 
 api_router = APIRouter(prefix="/api")
 
@@ -25,6 +26,9 @@ api_router.include_router(auth_router)
 api_router.include_router(contract_router)
 api_router.include_router(instances_router)
 api_router.include_router(dashboard_router)
+# arr_health_router must come before library_router so /library/diagnostics
+# and /library/recommendations/refresh don't get swallowed by /library/{item_id}
+api_router.include_router(arr_health_router)
 api_router.include_router(library_router)
 api_router.include_router(requests_router)
 api_router.include_router(nomenclature_router)

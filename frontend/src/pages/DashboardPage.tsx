@@ -138,8 +138,45 @@ export function DashboardPage() {
           </div>
         </div>
 
-        {/* Right — upload activity panel */}
-        <div>
+        {/* Right — panels column */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* ARR Health panel (Phase 8A) */}
+          <div className="upload-panel">
+            <div className="section-header">
+              <div className="section-title">Salud Radarr/Sonarr</div>
+            </div>
+            <div className="upload-panel-body" style={{ padding: '12px 16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 10 }}>
+                {[
+                  { label: 'OK', value: (s as any).arr_health_ok ?? 0, color: 'var(--color-available)' },
+                  { label: 'Aviso', value: (s as any).arr_health_warning ?? 0, color: '#f59e0b' },
+                  { label: 'Error', value: (s as any).arr_health_error ?? 0, color: 'var(--color-missing)' },
+                ].map(item => (
+                  <div key={item.label} style={{ padding: '8px 10px', background: 'rgba(255,255,255,0.04)', borderRadius: 6, borderLeft: `3px solid ${item.color}` }}>
+                    <div style={{ fontSize: '1.2rem', fontWeight: 600, color: item.color }}>{item.value}</div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{item.label}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: '0.78rem' }}>
+                {[
+                  { label: 'Archivos OK en disco', value: (s as any).files_verified ?? 0 },
+                  { label: 'Path roto', value: (s as any).files_missing_on_disk ?? 0 },
+                  { label: 'Listos nomenclatura', value: (s as any).items_ready_for_nomenclature ?? 0 },
+                  { label: 'Listos para subir', value: (s as any).items_ready_for_upload ?? 0 },
+                  { label: 'Esperando descarga', value: (s as any).items_waiting_download ?? 0 },
+                  { label: 'Revisar ARR', value: (s as any).items_need_arr_review ?? 0 },
+                ].map(item => (
+                  <div key={item.label} style={{ color: 'var(--text-secondary)' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>{item.label}: </span>
+                    <strong>{item.value}</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Upload activity panel */}
           <div className="upload-panel">
             <div className="section-header">
               <div className="section-title">Subidas Uploadrr</div>

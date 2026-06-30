@@ -11,7 +11,7 @@ from .constants import CONFIG_DIR
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 
 def db_path() -> Path:
@@ -230,6 +230,71 @@ def _migrate_requests(conn: sqlite3.Connection) -> None:
             pass
 
 
+def _migrate_library_items_phase8a(conn: sqlite3.Connection) -> None:
+    """Add Phase 8A diagnostic/filesystem columns to library_items."""
+    new_cols = [
+        ("file_exists", "INTEGER"),
+        ("file_is_video", "INTEGER"),
+        ("file_size_on_disk", "INTEGER"),
+        ("file_verified_at", "TEXT"),
+        ("file_verification_error", "TEXT"),
+        ("arr_queue_status", "TEXT"),
+        ("arr_queue_title", "TEXT"),
+        ("arr_queue_progress", "REAL"),
+        ("arr_queue_timeleft", "TEXT"),
+        ("arr_queue_error", "TEXT"),
+        ("arr_queue_raw_json", "TEXT"),
+        ("arr_history_status", "TEXT"),
+        ("arr_history_event_type", "TEXT"),
+        ("arr_history_error", "TEXT"),
+        ("arr_history_source_title", "TEXT"),
+        ("arr_history_raw_json", "TEXT"),
+        ("diagnostic_status", "TEXT"),
+        ("diagnostic_summary", "TEXT"),
+        ("diagnostic_reasons_json", "TEXT"),
+        ("recommended_action", "TEXT"),
+        ("recommendation_reasons_json", "TEXT"),
+        ("recommendation_updated_at", "TEXT"),
+    ]
+    for col, col_def in new_cols:
+        try:
+            conn.execute(f"ALTER TABLE library_items ADD COLUMN {col} {col_def}")
+        except sqlite3.OperationalError:
+            pass
+
+
+def _migrate_diagnostic_tables(conn: sqlite3.Connection) -> None:
+    """Create Phase 8A diagnostic run and item diagnostic tables."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS library_diagnostic_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_type TEXT NOT NULL,
+            status TEXT NOT NULL,
+            items_checked INTEGER NOT NULL DEFAULT 0,
+            items_updated INTEGER NOT NULL DEFAULT 0,
+            warnings_count INTEGER NOT NULL DEFAULT 0,
+            errors_count INTEGER NOT NULL DEFAULT 0,
+            started_at TEXT NOT NULL,
+            finished_at TEXT,
+            summary_json TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS library_item_diagnostics (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            library_item_id INTEGER NOT NULL,
+            run_id INTEGER,
+            severity TEXT NOT NULL,
+            code TEXT NOT NULL,
+            message TEXT NOT NULL,
+            details_json TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+
 def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
     own = conn is None
     conn = conn or connect()
@@ -398,6 +463,8 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_filesystem_operations(conn)
         _migrate_library_items_phase6b(conn)
         _migrate_upload_jobs_phase6d(conn)
+        _migrate_library_items_phase8a(conn)
+        _migrate_diagnostic_tables(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

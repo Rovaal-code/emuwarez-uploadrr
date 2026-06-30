@@ -23,7 +23,7 @@ from .services import tasks as task_service
 MODERN_COMMANDS = {
     "configure", "doctor", "test-apis", "instances", "sync", "library",
     "requests", "missing", "prepare", "upload", "tasks", "logs", "legacy",
-    "web-contract", "db", "web", "nomenclature", "maintenance",
+    "web-contract", "db", "web", "nomenclature", "maintenance", "arr",
 }
 
 
@@ -133,6 +133,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_lib_list.add_argument("--limit", type=int, default=50)
     p_lib_show = lib_sub.add_parser("show", help="Ver detalle de item")
     p_lib_show.add_argument("id", type=int)
+    # Phase 8A
+    p_lib_verify = lib_sub.add_parser("verify-files", help="Verificar existencia de archivos en disco (solo lectura)")
+    p_lib_verify.add_argument("--limit", type=int, default=None, help="Máximo de items a verificar")
+    p_lib_verify.add_argument("--status", default=None, help="Filtrar por estado (ej: Disponible)")
+    p_lib_vfile = lib_sub.add_parser("verify-file", help="Verificar un archivo concreto")
+    p_lib_vfile.add_argument("id", type=int)
+    lib_sub.add_parser("recommendations", help="Recalcular recomendaciones para toda la biblioteca")
+    p_lib_rec = lib_sub.add_parser("recommendation", help="Ver recomendación de un item")
+    p_lib_rec.add_argument("id", type=int)
+    p_lib_diag = lib_sub.add_parser("diagnostics", help="Listar diagnósticos de biblioteca")
+    p_lib_diag.add_argument("--limit", type=int, default=50)
+    p_lib_diag.add_argument("--status", default=None)
 
     p_req = sub.add_parser("requests", help="Peticiones EMU")
     req_sub = p_req.add_subparsers(dest="requests_command", required=True)
@@ -160,6 +172,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_missing_req = missing_sub.add_parser("create-request", help="Preparado para futuro: crear petición EMU desde faltante")
     p_missing_req.add_argument("library_id", type=int)
     p_missing_req.add_argument("--dry-run", action="store_true")
+    # Phase 8A
+    p_missing_diag = missing_sub.add_parser("diagnostics", help="Faltantes enriquecidos con queue/history/recomendación")
+    p_missing_diag.add_argument("--limit", type=int, default=50)
+
+    # Phase 8A — ARR health
+    p_arr = sub.add_parser("arr", help="Diagnóstico avanzado Radarr/Sonarr")
+    arr_sub = p_arr.add_subparsers(dest="arr_command", required=True)
+    arr_sub.add_parser("health", help="Mostrar salud de instancias ARR")
+    p_arr_refresh = arr_sub.add_parser("refresh-health", help="Refrescar queue e historial ARR y actualizar diagnósticos")
+    p_arr_refresh.add_argument("--no-queue", action="store_true", help="Omitir lectura de queue")
+    p_arr_refresh.add_argument("--no-history", action="store_true", help="Omitir lectura de historial")
+    p_arr_refresh.add_argument("--history-size", type=int, default=100, help="Número de entradas de historial (default: 100)")
 
     p_nomenclature = sub.add_parser("nomenclature", help="Previsualización de nomenclatura eMuwarez (no modifica archivos)")
     nom_sub = p_nomenclature.add_subparsers(dest="nomenclature_command", required=True)
@@ -352,8 +376,90 @@ def cmd_library(args) -> int:
             for key in [
                 "id", "title", "item_type", "year", "instance_name", "local_status", "request_status",
                 "nomenclature_status", "tmdb_id", "imdb_id", "quality", "resolution", "source", "path",
+                "file_exists", "file_verified_at", "arr_queue_status", "recommended_action", "diagnostic_summary",
             ]:
-                print(f"{key:22} {item.get(key) or ''}")
+                print(f"{key:26} {item.get(key) if item.get(key) is not None else ''}")
+            return 0
+        if args.library_command == "verify-files":
+            from .services.library_verification import verify_library_files
+            filters: dict = {}
+            if getattr(args, "status", None):
+                filters["status"] = args.status
+            result = verify_library_files(conn, filters=filters, limit=getattr(args, "limit", None))
+            print(f"✓ Verificados: {result['items_checked']}  |  Encontrados: {result['files_found']}  |  Errores: {result['errors']}  |  Advertencias: {result['warnings']}")
+            return 0
+        if args.library_command == "verify-file":
+            from .services.library_verification import verify_library_item_file
+            result = verify_library_item_file(args.id, conn)
+            if result.get("error"):
+                print(f"✗ {result['error']}")
+                return 1
+            print(f"ID {args.id}: {result.get('title')}")
+            print(f"  path:       {result.get('path') or '–'}")
+            print(f"  existe:     {'sí' if result.get('file_exists') else 'no'}")
+            print(f"  es vídeo:   {'sí' if result.get('file_is_video') else 'no'}")
+            print(f"  tamaño:     {result.get('file_size_on_disk') or '–'} bytes")
+            if result.get("file_verification_error"):
+                print(f"  error:      {result['file_verification_error']}")
+            return 0
+        if args.library_command == "recommendations":
+            from .services.recommendations import refresh_recommendations
+            result = refresh_recommendations(conn)
+            print(f"✓ Recomendaciones recalculadas: {result['items_updated']}  |  Errores: {result['errors']}")
+            return 0
+        if args.library_command == "recommendation":
+            from .services.recommendations import get_recommendation_for_item
+            rec = get_recommendation_for_item(args.id, conn)
+            if not rec:
+                print("No encontrado")
+                return 1
+            print(f"ID {args.id}: {rec.get('title')}")
+            print(f"  diagnóstico:       {rec.get('diagnostic_status') or '–'}")
+            print(f"  resumen:           {rec.get('diagnostic_summary') or '–'}")
+            print(f"  acción recomend.:  {rec.get('recommended_action') or '–'}")
+            reasons = rec.get("recommendation_reasons") or []
+            if reasons:
+                print("  razones:")
+                for r in reasons:
+                    print(f"    - {r}")
+            return 0
+        if args.library_command == "diagnostics":
+            limit = getattr(args, "limit", 50)
+            status_filter = getattr(args, "status", None)
+            where = ""
+            params: list = []
+            if status_filter:
+                where = "WHERE local_status = ?"
+                params.append(status_filter)
+            rows = conn.execute(
+                f"""
+                SELECT id, title, local_status, file_exists, arr_queue_status,
+                       diagnostic_status, recommended_action
+                FROM library_items {where} ORDER BY updated_at DESC LIMIT ?
+                """,
+                params + [limit],
+            ).fetchall()
+            if not rows:
+                if not conn.execute("SELECT COUNT(*) FROM library_items").fetchone()[0]:
+                    print("Biblioteca vacía. Ejecuta: python3 emuwarez_uploader.py sync")
+                else:
+                    print("Sin resultados con ese filtro.")
+                return 0
+            _print_table(
+                ["ID", "Estado", "Archivo", "Queue", "Diagnóstico", "Acción recomendada", "Título"],
+                [
+                    [
+                        r["id"],
+                        r["local_status"],
+                        "OK" if r["file_exists"] else ("–" if r["file_exists"] is None else "NO"),
+                        r["arr_queue_status"] or "–",
+                        r["diagnostic_status"] or "–",
+                        r["recommended_action"] or "–",
+                        r["title"],
+                    ]
+                    for r in rows
+                ],
+            )
             return 0
     return 1
 
@@ -432,6 +538,90 @@ def cmd_missing(args) -> int:
         if args.missing_command == "create-request":
             print("⚠ Crear peticiones EMU está preparado, pero no activado todavía.")
             print("  Cuando capturemos el POST real, este comando usará el LibraryItem indicado.")
+            return 0
+        if args.missing_command == "diagnostics":
+            from .models import LocalStatus
+            limit = getattr(args, "limit", 50)
+            missing_statuses = list(LocalStatus.not_available())
+            placeholders = ",".join("?" * len(missing_statuses))
+            rows = conn.execute(
+                f"""
+                SELECT id, title, local_status, arr_queue_status, arr_queue_progress,
+                       arr_queue_error, arr_history_error, diagnostic_status, recommended_action
+                FROM library_items WHERE local_status IN ({placeholders})
+                ORDER BY updated_at DESC LIMIT ?
+                """,
+                missing_statuses + [limit],
+            ).fetchall()
+            if not rows:
+                print("Sin faltantes en biblioteca. Ejecuta: python3 emuwarez_uploader.py sync")
+                return 0
+            _print_table(
+                ["ID", "Estado local", "Queue", "Diagnóstico", "Acción recomendada", "Título"],
+                [
+                    [
+                        r["id"],
+                        r["local_status"],
+                        r["arr_queue_status"] or "–",
+                        r["diagnostic_status"] or "–",
+                        r["recommended_action"] or "–",
+                        r["title"],
+                    ]
+                    for r in rows
+                ],
+            )
+            return 0
+    return 1
+
+
+def cmd_arr(args) -> int:
+    with _open_conn(args) as conn:
+        instances = instance_service.list_instances(conn, enabled_only=True)
+        if not instances:
+            print("⚠ Sin instancias Radarr/Sonarr habilitadas. Añade una con:")
+            print("  python3 emuwarez_uploader.py instances add radarr --name ... --url ... --api-key ...")
+            return 0
+
+        if args.arr_command == "health":
+            from .services.arr_health import collect_arr_health
+            result = collect_arr_health(conn)
+            summary = result.get("summary", {})
+            print(f"\n── Salud Radarr/Sonarr ──────────────────────────────────")
+            print(f"  Radarr: {summary.get('radarr', 0)} instancias  |  Sonarr: {summary.get('sonarr', 0)} instancias")
+            print(f"  OK: {summary.get('ok', 0)}  |  Warning: {summary.get('warning', 0)}  |  Error: {summary.get('error', 0)}")
+            print()
+            for inst in result.get("instances", []):
+                mark = "✓" if inst.get("ok") else "✗"
+                status = inst.get("health_status", "error")
+                version = inst.get("version") or ""
+                err = inst.get("error") or ""
+                print(f"  {mark} [{inst.get('instance_type', '?')}] {inst.get('instance_name', '?')}  {version}  {err}")
+            return 0
+
+        if args.arr_command == "refresh-health":
+            from .services.arr_health import collect_arr_health, refresh_arr_queue_diagnostics, refresh_arr_history_diagnostics
+            include_queue = not getattr(args, "no_queue", False)
+            include_history = not getattr(args, "no_history", False)
+            history_size = getattr(args, "history_size", 100)
+            print("Comprobando salud ARR...")
+            health = collect_arr_health(conn)
+            s = health.get("summary", {})
+            print(f"  OK: {s.get('ok', 0)}  Warning: {s.get('warning', 0)}  Error: {s.get('error', 0)}")
+            if include_queue:
+                print("Actualizando diagnósticos de queue...")
+                qr = refresh_arr_queue_diagnostics(conn)
+                print(f"  Items actualizados: {qr.get('library_items_updated', 0)}  (queue encontrada: {qr.get('queue_items_found', 0)})")
+                if qr.get("errors"):
+                    for e in qr["errors"]:
+                        print(f"  ✗ {e.get('instance')}: {e.get('error')}")
+            if include_history:
+                print("Actualizando diagnósticos de historial...")
+                hr = refresh_arr_history_diagnostics(conn, page_size=history_size)
+                print(f"  Items actualizados: {hr.get('library_items_updated', 0)}  (historial leído: {hr.get('history_items_found', 0)})")
+                if hr.get("errors"):
+                    for e in hr["errors"]:
+                        print(f"  ✗ {e.get('instance')}: {e.get('error')}")
+            print("✓ Salud ARR actualizada")
             return 0
     return 1
 
@@ -1135,6 +1325,8 @@ def modern_main(argv: Optional[list[str]] = None) -> int:
                 return cmd_web_create_admin(args)
         if args.command == "maintenance":
             return cmd_maintenance(args)
+        if args.command == "arr":
+            return cmd_arr(args)
         parser.error("Comando no soportado")
         return 2
     except IntegrationError as exc:

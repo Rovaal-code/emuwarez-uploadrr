@@ -166,6 +166,68 @@ def check_arr_instances_configuration() -> dict:
         return _check("arr_instances", "warning", "No se pudieron verificar las instancias Arr", {})
 
 
+def check_arr_health_configuration() -> dict:
+    """Devuelve resumen de instancias Radarr/Sonarr: count, enabled, last_sync, last_diagnostics."""
+    try:
+        config_dir = os.environ.get("CONFIG_DIR", str(Path.home() / ".config" / "emuwarez-renamer"))
+        db_path = Path(config_dir) / "emuwarez_uploadrr.db"
+        if not db_path.exists():
+            return _check("arr_health_config", "warning", "BD no existe, configuración ARR sin verificar", {})
+        conn = sqlite3.connect(str(db_path))
+        try:
+            rows = conn.execute(
+                "SELECT type, COUNT(*) AS cnt, SUM(enabled) AS enabled_cnt FROM instances GROUP BY type"
+            ).fetchall()
+            radarr_total = 0
+            radarr_enabled = 0
+            sonarr_total = 0
+            sonarr_enabled = 0
+            for r in rows:
+                if r[0] == "radarr":
+                    radarr_total = r[1]
+                    radarr_enabled = int(r[2] or 0)
+                elif r[0] == "sonarr":
+                    sonarr_total = r[1]
+                    sonarr_enabled = int(r[2] or 0)
+
+            last_sync_row = conn.execute(
+                "SELECT started_at FROM task_runs WHERE name='sync-library' AND status='completed' ORDER BY id DESC LIMIT 1"
+            ).fetchone()
+            last_sync = last_sync_row[0] if last_sync_row else None
+
+            last_diag_row = conn.execute(
+                "SELECT started_at FROM library_diagnostic_runs ORDER BY id DESC LIMIT 1"
+            ).fetchone() if _table_exists(conn, "library_diagnostic_runs") else None
+            last_diag = last_diag_row[0] if last_diag_row else None
+        finally:
+            conn.close()
+
+        total_enabled = radarr_enabled + sonarr_enabled
+        status = "ok" if total_enabled > 0 else "warning"
+        return _check(
+            "arr_health_config",
+            status,
+            f"Radarr: {radarr_enabled}/{radarr_total} habilitadas, Sonarr: {sonarr_enabled}/{sonarr_total} habilitadas",
+            {
+                "radarr_total": radarr_total,
+                "radarr_enabled": radarr_enabled,
+                "sonarr_total": sonarr_total,
+                "sonarr_enabled": sonarr_enabled,
+                "last_sync": last_sync,
+                "last_diagnostics_run": last_diag,
+            },
+        )
+    except Exception as exc:
+        return _check("arr_health_config", "warning", f"No se pudo verificar configuración ARR: {exc}", {})
+
+
+def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
+    row = conn.execute(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", (table,)
+    ).fetchone()
+    return bool(row and row[0])
+
+
 def get_runtime_diagnostics() -> dict:
     """Ejecuta todos los checks y devuelve diagnóstico completo."""
     checks = [
@@ -177,6 +239,7 @@ def get_runtime_diagnostics() -> dict:
         check_hardlink_base_setting(),
         check_required_secrets(),
         check_arr_instances_configuration(),
+        check_arr_health_configuration(),
     ]
     warnings = [c["message"] for c in checks if c["status"] == "warning"]
     errors = [c["message"] for c in checks if c["status"] == "error"]

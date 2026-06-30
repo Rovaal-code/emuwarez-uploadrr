@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getInstances, addInstance, testInstance, syncInstance } from '../api/instances'
+import { refreshArrHealth } from '../api/diagnostics'
 import type { InstanceSafeResponse } from '../types/api'
 import { ServiceIcon, ServiceLabel } from '../components/ServiceIcon'
 import { LoadingState } from '../components/LoadingState'
@@ -33,6 +34,8 @@ export function InstancesPage() {
   const [testingId, setTestingId] = useState<number | null>(null)
   const [syncingId, setSyncingId] = useState<number | null>(null)
   const [syncResults, setSyncResults] = useState<Record<number, string>>({})
+  const [healthMsg, setHealthMsg] = useState<string | null>(null)
+  const [healthLoading, setHealthLoading] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -97,6 +100,20 @@ export function InstancesPage() {
     }
   }
 
+  async function handleRefreshHealth() {
+    setHealthLoading(true)
+    setHealthMsg(null)
+    try {
+      const r = await refreshArrHealth({ include_queue: true, include_history: false })
+      const s = r.health?.summary
+      setHealthMsg(s ? `Salud: OK=${s.ok} Aviso=${s.warning} Error=${s.error}` : 'Salud actualizada')
+    } catch {
+      setHealthMsg('Error al refrescar salud ARR')
+    } finally {
+      setHealthLoading(false)
+    }
+  }
+
   return (
     <div>
       <div className="page-header">
@@ -104,9 +121,15 @@ export function InstancesPage() {
           <div className="page-title">Instancias</div>
           <div className="page-subtitle">Gestiona tus instancias Radarr y Sonarr</div>
         </div>
-        <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(!showAdd)}>
-          {showAdd ? 'Cancelar' : '+ Añadir instancia'}
-        </button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button className="btn btn-secondary btn-sm" onClick={handleRefreshHealth} disabled={healthLoading}>
+            {healthLoading ? 'Actualizando…' : 'Refrescar salud ARR'}
+          </button>
+          {healthMsg && <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{healthMsg}</span>}
+          <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(!showAdd)}>
+            {showAdd ? 'Cancelar' : '+ Añadir instancia'}
+          </button>
+        </div>
       </div>
 
       {/* Add form */}

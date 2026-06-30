@@ -120,10 +120,12 @@ export function LibraryPage() {
                   <th>Tipo</th>
                   <th>Origen</th>
                   <th>Estado</th>
+                  <th>Archivo</th>
                   <th>Petición</th>
                   <th>Nomenclatura</th>
+                  <th>Diagnóstico</th>
+                  <th>Acción</th>
                   <th>Calidad</th>
-                  <th>Tamaño</th>
                   <th>Actualizado</th>
                   <th className="col-actions">Acciones</th>
                 </tr>
@@ -142,13 +144,23 @@ export function LibraryPage() {
                         : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                     </td>
                     <td><StatusBadge status={item.local_status} type="local" /></td>
+                    <td style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
+                      {item.file_exists === null
+                        ? <span style={{ color: 'var(--text-muted)' }}>—</span>
+                        : item.file_exists
+                          ? <span style={{ color: 'var(--color-available)' }}>OK</span>
+                          : <span style={{ color: 'var(--color-missing)' }}>NO</span>}
+                    </td>
                     <td><StatusBadge status={item.request_status} type="request" /></td>
                     <td><StatusBadge status={item.nomenclature_status} type="nomenclature" /></td>
+                    <td style={{ fontSize: 11, color: 'var(--text-secondary)', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {item.diagnostic_summary ?? '—'}
+                    </td>
+                    <td style={{ fontSize: 11, color: '#a78bfa', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {item.recommended_action ?? '—'}
+                    </td>
                     <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                       {[item.resolution, item.source].filter(Boolean).join(' · ') || '—'}
-                    </td>
-                    <td style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                      {formatBytes(item.size_bytes)}
                     </td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
                       {formatDate(item.updated_at)}
@@ -238,6 +250,40 @@ export function LibraryPage() {
                 </div>
               ))}
             </div>
+            {/* Phase 8A — diagnostic fields */}
+            {(selected.file_exists !== null || selected.diagnostic_status || selected.recommended_action) && (
+              <div style={{ marginTop: 16, padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>Diagnóstico (Fase 8A)</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px', fontSize: 12 }}>
+                  {selected.file_exists !== null && (
+                    <div>
+                      <span style={{ color: 'var(--text-muted)' }}>Archivo en disco: </span>
+                      <span style={{ color: selected.file_exists ? 'var(--color-available)' : 'var(--color-missing)', fontWeight: 600 }}>
+                        {selected.file_exists ? 'Sí' : 'No'}
+                      </span>
+                    </div>
+                  )}
+                  {selected.file_verified_at && (
+                    <div><span style={{ color: 'var(--text-muted)' }}>Verificado: </span>{formatDate(selected.file_verified_at)}</div>
+                  )}
+                  {selected.arr_queue_status && (
+                    <div><span style={{ color: 'var(--text-muted)' }}>Queue ARR: </span><strong>{selected.arr_queue_status}</strong></div>
+                  )}
+                  {selected.arr_history_status && (
+                    <div><span style={{ color: 'var(--text-muted)' }}>Historial ARR: </span>{selected.arr_history_status}</div>
+                  )}
+                  {selected.diagnostic_summary && (
+                    <div style={{ gridColumn: '1 / -1' }}><span style={{ color: 'var(--text-muted)' }}>Diagnóstico: </span>{selected.diagnostic_summary}</div>
+                  )}
+                  {selected.recommended_action && (
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>Acción recomendada: </span>
+                      <span style={{ color: '#a78bfa', fontWeight: 600 }}>{selected.recommended_action}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

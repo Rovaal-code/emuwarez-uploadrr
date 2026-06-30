@@ -272,6 +272,42 @@ def get_dashboard_summary(conn: sqlite3.Connection) -> dict:
     }
 
 
+def get_dashboard_diagnostics(conn: sqlite3.Connection) -> dict:
+    """Return Phase 8A diagnostic counts for the dashboard."""
+    try:
+        row = conn.execute(
+            """
+            SELECT
+                SUM(CASE WHEN file_exists = 1 THEN 1 ELSE 0 END) AS files_verified,
+                SUM(CASE WHEN local_status = 'Disponible' AND file_exists = 0 AND file_verified_at IS NOT NULL THEN 1 ELSE 0 END) AS files_missing_on_disk,
+                SUM(CASE WHEN recommended_action = 'adapt_nomenclature' THEN 1 ELSE 0 END) AS items_ready_for_nomenclature,
+                SUM(CASE WHEN recommended_action IN ('upload', 'run_preflight') THEN 1 ELSE 0 END) AS items_ready_for_upload,
+                SUM(CASE WHEN arr_queue_status IN ('downloading', 'queued') THEN 1 ELSE 0 END) AS items_waiting_download,
+                SUM(CASE WHEN recommended_action = 'review_arr' THEN 1 ELSE 0 END) AS items_need_arr_review
+            FROM library_items
+            """
+        ).fetchone()
+        if row:
+            return {
+                "files_verified": int(row["files_verified"] or 0),
+                "files_missing_on_disk": int(row["files_missing_on_disk"] or 0),
+                "items_ready_for_nomenclature": int(row["items_ready_for_nomenclature"] or 0),
+                "items_ready_for_upload": int(row["items_ready_for_upload"] or 0),
+                "items_waiting_download": int(row["items_waiting_download"] or 0),
+                "items_need_arr_review": int(row["items_need_arr_review"] or 0),
+            }
+    except Exception:
+        pass
+    return {
+        "files_verified": 0,
+        "files_missing_on_disk": 0,
+        "items_ready_for_nomenclature": 0,
+        "items_ready_for_upload": 0,
+        "items_waiting_download": 0,
+        "items_need_arr_review": 0,
+    }
+
+
 def get_recent_activity(conn: sqlite3.Connection, *, limit: int = 20) -> list[dict]:
     """Return recent task_runs as activity feed."""
     rows = conn.execute(

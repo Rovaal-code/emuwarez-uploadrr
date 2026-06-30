@@ -112,14 +112,21 @@ def _infer_source_from_item(item: dict) -> str | None:
     return None
 
 
-def _get_release_tag(conn=None) -> str | None:
+def _get_release_tag(conn=None) -> str:
     own = conn is None
     _conn = conn or connect()
     try:
+        # Phase 10A: prefer settings table
+        try:
+            row = _conn.execute("SELECT value FROM settings WHERE key = 'default_release_tag'").fetchone()
+            if row and row["value"]:
+                return row["value"]
+        except Exception:
+            pass
         tag = get_state(_conn, "release_tag") or get_state(_conn, "default_release_tag")
-        return tag
+        return tag or "EMUWAREZ"
     except Exception:
-        return None
+        return "EMUWAREZ"
     finally:
         if own:
             _conn.close()

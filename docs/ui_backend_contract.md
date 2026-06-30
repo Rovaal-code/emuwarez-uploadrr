@@ -1278,3 +1278,78 @@ Esta fase no añade nuevos endpoints API. Añade:
 - `tests/fixtures/fake_uploadrr.py`: fake Uploadrr para E2E sin ejecución real
 
 Garantías: sin servicios reales, sin Uploadrr real, sin subida real, sin API keys reales.
+
+---
+
+## Phase 10A — Nomenclatura editable, Source Assistant y título MKV interno
+
+### Nuevos endpoints
+
+#### Catálogos
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| GET | `/api/nomenclature/sources` | Bearer | Lista de fuentes EMU (`code`, `label`) |
+| GET | `/api/nomenclature/providers` | Bearer | Lista de proveedores EMU (`code`, `name`) |
+
+#### Campos editables
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| GET | `/api/library/{id}/nomenclature/fields` | Bearer | Campos editables actuales del ítem |
+| POST | `/api/library/{id}/nomenclature/preview-fields` | Bearer | Preview con campos modificados (sin guardar) |
+| POST | `/api/library/{id}/nomenclature/save-fields` | Bearer | Guarda campos y crea propuesta de nomenclatura |
+
+Body de `preview-fields` y `save-fields`:
+```json
+{
+  "fields": {
+    "title": "Dune",
+    "year": "2021",
+    "resolution": "1080p",
+    "source": "WEB-DL",
+    "provider": "AMZN",
+    "video_codec": "H.265",
+    "audio_summary": "DDP5.1",
+    "subs": "SPA",
+    "tag": "EMUWAREZ"
+  }
+}
+```
+
+Respuesta de `preview-fields`:
+```json
+{
+  "torrent_name": "Dune 2021 1080p AMZN WEB-DL H.265 DDP5.1 SPA - EMUWAREZ",
+  "internal_mkv_title": "Dune.2021.1080p.AMZN.WEB-DL.H.265.DDP5.1.SPA.-.EMUWAREZ",
+  "fields": { "..." : "..." },
+  "provider_options": [
+    { "code": "AMZN", "name": "Amazon Prime Video", "label": "AMZN (Amazon Prime Video)", "tmdb_available": true }
+  ]
+}
+```
+
+#### Título MKV interno
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| GET | `/api/library/{id}/mkv-title/preview` | Bearer | Preview del título a aplicar vía mkvpropedit |
+| POST | `/api/library/{id}/mkv-title/apply` | Bearer | Aplica título (requiere token `APLICAR_TITULO_MKV`) |
+
+Body de `mkv-title/apply`:
+```json
+{
+  "dry_run": true,
+  "apply": false,
+  "confirmation": null
+}
+```
+
+Para escritura real: `{"dry_run": false, "apply": true, "confirmation": "APLICAR_TITULO_MKV"}`.
+
+### Reglas de negocio
+
+- Solo `WEB-DL` acepta prefijo de proveedor: `AMZN WEB-DL`, `NF WEB-DL`, etc.
+- `mkvpropedit` usa `shell=False`; solo aplica a `.mkv` en `prepared_path`
+- TMDb Watch Providers es opcional, nunca bloquea el flujo
+- `SCHEMA_VERSION = 12`: 9 columnas nuevas en `nomenclature_proposals`, 3 entradas nuevas en `settings`

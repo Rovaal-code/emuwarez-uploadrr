@@ -15,8 +15,11 @@ from ..dependencies import require_auth
 from ..runtime import _db_path
 from ..schemas import (
     AdaptNomenclatureBody,
+    MkvTitleApplyBody,
     NomenclatureApplyResult,
     NomenclatureExistsResponse,
+    NomenclatureFieldsPreviewBody,
+    NomenclatureFieldsSaveBody,
     NomenclaturePreviewBody,
     NomenclatureProposalResponse,
 )
@@ -172,3 +175,151 @@ def get_nomenclature_operations(item_id: int, current_user: dict = Depends(requi
             }
         )
     return ops
+
+
+# ---------------------------------------------------------------------------
+# Phase 10A — Editable nomenclature fields, source assistant, MKV title
+# ---------------------------------------------------------------------------
+
+from ...services.source_assistant import (  # noqa: E402
+    list_emu_sources,
+    list_emu_providers,
+    build_editable_nomenclature_fields,
+    update_nomenclature_fields_preview,
+    get_tmdb_available_providers,
+    PROVIDER_SOURCES,
+)
+from ...services.mkv_title import (  # noqa: E402
+    preview_internal_title_update,
+    apply_internal_title_update,
+)
+
+
+@router.get("/nomenclature/sources")
+def get_sources(current_user: dict = Depends(require_auth)):
+    return {"sources": list_emu_sources()}
+
+
+@router.get("/nomenclature/providers")
+def get_providers(current_user: dict = Depends(require_auth)):
+    return {"providers": list_emu_providers()}
+
+
+@router.get("/library/{item_id}/nomenclature/fields")
+def get_nomenclature_fields(item_id: int, current_user: dict = Depends(require_auth)):
+    with _get_conn() as conn:
+        result = build_editable_nomenclature_fields(item_id, conn=conn)
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+    return result
+
+
+@router.post("/library/{item_id}/nomenclature/preview-fields")
+def preview_nomenclature_fields(
+    item_id: int,
+    body: NomenclatureFieldsPreviewBody,
+    current_user: dict = Depends(require_auth),
+):
+    with _get_conn() as conn:
+        preview = update_nomenclature_fields_preview(item_id, body.fields, conn=conn)
+        provider_options = []
+        source = body.fields.get("source")
+        if source in PROVIDER_SOURCES:
+            item_row = conn.execute(
+                "SELECT tmdb_id, item_type FROM library_items WHERE id = ?", (item_id,)
+            ).fetchone()
+            tmdb_codes: list[str] = []
+            if item_row and item_row["tmdb_id"]:
+                try:
+                    tmdb_id = int(str(item_row["tmdb_id"]).split("/")[-1].strip())
+                    region_row = conn.execute(
+                        "SELECT value FROM settings WHERE key='tmdb_watch_region'"
+                    ).fetchone()
+                    region = region_row["value"] if region_row else "ES"
+                    tmdb_codes = get_tmdb_available_providers(
+                        tmdb_id, item_row["item_type"] or "movie", region=region
+                    )
+                except Exception:
+                    pass
+            tmdb_set = set(tmdb_codes)
+            for p in list_emu_providers():
+                provider_options.append({
+                    "code": p["code"],
+                    "name": p["name"],
+                    "label": f"{p['code']} ({p['name']})",
+                    "tmdb_available": p["code"] in tmdb_set,
+                })
+    return {
+        "torrent_name": preview.get("torrent_name"),
+        "internal_mkv_title": preview.get("internal_mkv_title"),
+        "fields": body.fields,
+        "provider_options": provider_options,
+    }
+
+
+@router.post("/library/{item_id}/nomenclature/save-fields")
+def save_nomenclature_fields(
+    item_id: int,
+    body: NomenclatureFieldsSaveBody,
+    current_user: dict = Depends(require_auth),
+):
+    """Save editable fields and recalculate proposed_filename."""
+    import json as _json
+    from datetime import datetime, timezone
+    with _get_conn() as conn:
+        preview = update_nomenclature_fields_preview(item_id, body.fields, conn=conn)
+        torrent_name = preview.get("torrent_name") or ""
+        internal_mkv_title = preview.get("internal_mkv_title") or ""
+        now = datetime.now(timezone.utc).isoformat()
+        conn.execute(
+            "UPDATE nomenclature_proposals SET status='expired', updated_at=? "
+            "WHERE library_item_id=? AND status NOT IN ('applied','expired')",
+            (now, item_id),
+        )
+        conn.execute(
+            """INSERT INTO nomenclature_proposals
+               (library_item_id, status, proposed_filename, proposed_title,
+                fields_json, source_final, provider_final,
+                internal_mkv_title, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            (
+                item_id, "valid", torrent_name,
+                body.fields.get("title"),
+                _json.dumps(body.fields, ensure_ascii=False),
+                body.fields.get("source"),
+                body.fields.get("provider"),
+                internal_mkv_title,
+                now, now,
+            ),
+        )
+        conn.commit()
+    return {
+        "ok": True,
+        "torrent_name": torrent_name,
+        "internal_mkv_title": internal_mkv_title,
+        "fields": body.fields,
+    }
+
+
+@router.get("/library/{item_id}/mkv-title/preview")
+def preview_mkv_title(item_id: int, current_user: dict = Depends(require_auth)):
+    with _get_conn() as conn:
+        result = preview_internal_title_update(item_id, conn=conn)
+    return result
+
+
+@router.post("/library/{item_id}/mkv-title/apply")
+def apply_mkv_title(
+    item_id: int,
+    body: MkvTitleApplyBody,
+    current_user: dict = Depends(require_auth),
+):
+    with _get_conn() as conn:
+        result = apply_internal_title_update(
+            item_id,
+            dry_run=body.dry_run,
+            apply=body.apply,
+            confirmation=body.confirmation,
+            conn=conn,
+        )
+    return result

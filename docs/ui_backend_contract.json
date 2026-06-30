@@ -746,5 +746,37 @@
       "emuwarez_uploadrr/services/demo_seed.py"
     ],
     "isolation": "All demo data is seeded in a temporary CONFIG_DIR. No real APIs used."
+  },
+  "phase_10a_editable_nomenclature": {
+    "description": "Phase 10A adds editable nomenclature fields, source/provider assistant and internal MKV title control.",
+    "schema_version": 12,
+    "provider_sources": ["WEB-DL"],
+    "mkv_confirmation_token": "APLICAR_TITULO_MKV",
+    "new_endpoints": [
+      { "method": "GET", "path": "/api/nomenclature/sources", "auth": true, "description": "List EMU sources" },
+      { "method": "GET", "path": "/api/nomenclature/providers", "auth": true, "description": "List EMU providers" },
+      { "method": "GET", "path": "/api/library/{id}/nomenclature/fields", "auth": true, "description": "Get editable fields for item" },
+      { "method": "POST", "path": "/api/library/{id}/nomenclature/preview-fields", "auth": true, "description": "Preview with edited fields" },
+      { "method": "POST", "path": "/api/library/{id}/nomenclature/save-fields", "auth": true, "description": "Save fields and create proposal" },
+      { "method": "GET", "path": "/api/library/{id}/mkv-title/preview", "auth": true, "description": "Preview MKV title to apply" },
+      { "method": "POST", "path": "/api/library/{id}/mkv-title/apply", "auth": true, "description": "Apply MKV title (requires confirmation token)" }
+    ],
+    "new_cli_commands": [
+      "nomenclature sources",
+      "nomenclature providers",
+      "nomenclature fields <id>",
+      "nomenclature preview-fields <id> --fields-json <json>",
+      "mkv-title preview <id>",
+      "mkv-title apply <id> [--apply --confirm APLICAR_TITULO_MKV]"
+    ],
+    "new_frontend_components": [
+      "frontend/src/components/NomenclatureFieldsModal.tsx"
+    ],
+    "new_services": [
+      "emuwarez_uploadrr/services/source_assistant.py",
+      "emuwarez_uploadrr/services/mkv_title.py",
+      "emuwarez_uploadrr/integrations/tmdb.py"
+    ],
+    "isolation": "mkvpropedit not called without token. TMDb non-blocking. No Uploadrr execution."
   }
 }

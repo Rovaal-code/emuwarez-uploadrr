@@ -1,0 +1,45 @@
+"""TMDb integration — watch providers and metadata helpers (Phase 10A).
+
+Uses the urllib-based HTTP helper from base.py to avoid new dependencies.
+"""
+from __future__ import annotations
+
+from .base import request_json, IntegrationError
+
+_TMDB_BASE = "https://api.themoviedb.org/3"
+
+
+def _get_tmdb_api_key(conn=None) -> str | None:
+    try:
+        from ..database import connect
+        _conn = conn or connect()
+        row = _conn.execute("SELECT value FROM settings WHERE key = 'tmdb_api_key'").fetchone()
+        if row:
+            return row["value"]
+    except Exception:
+        pass
+    return None
+
+
+def get_movie_watch_providers(tmdb_id: int, *, region: str = "ES", api_key: str | None = None, conn=None) -> dict:
+    """Fetch /movie/{id}/watch/providers from TMDb. Returns full response dict."""
+    _key = api_key or _get_tmdb_api_key(conn)
+    if not _key:
+        raise IntegrationError("TMDb API key no configurada")
+    url = f"{_TMDB_BASE}/movie/{tmdb_id}/watch/providers?api_key={_key}"
+    return request_json("GET", url)
+
+
+def get_tv_watch_providers(tmdb_id: int, *, region: str = "ES", api_key: str | None = None, conn=None) -> dict:
+    """Fetch /tv/{id}/watch/providers from TMDb."""
+    _key = api_key or _get_tmdb_api_key(conn)
+    if not _key:
+        raise IntegrationError("TMDb API key no configurada")
+    url = f"{_TMDB_BASE}/tv/{tmdb_id}/watch/providers?api_key={_key}"
+    return request_json("GET", url)
+
+
+def map_tmdb_provider_to_emu_provider(provider_name: str) -> str | None:
+    """Convenience wrapper — delegates to source_assistant."""
+    from ..services.source_assistant import map_tmdb_provider_to_emu_provider as _map
+    return _map(provider_name)

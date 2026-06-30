@@ -24,7 +24,7 @@ MODERN_COMMANDS = {
     "configure", "doctor", "test-apis", "instances", "sync", "library",
     "requests", "missing", "prepare", "upload", "tasks", "logs", "legacy",
     "web-contract", "db", "web", "nomenclature", "maintenance", "arr", "queue",
-    "demo",
+    "demo", "mkv-title",
 }
 
 
@@ -235,6 +235,26 @@ def build_parser() -> argparse.ArgumentParser:
     p_nom_apply.add_argument("--dry-run", action="store_true", help="Solo previsualización (no escribe nada)")
     p_nom_apply.add_argument("--apply", action="store_true", dest="nom_apply", help="Aplicar cambios reales")
     p_nom_apply.add_argument("--confirm", metavar="TOKEN", dest="confirm_token", help="Token de confirmación: APLICAR_NOMENCLATURA")
+    # Phase 10A subcommands
+    nom_sub.add_parser("sources", help="Listar sources eMuwarez disponibles")
+    nom_sub.add_parser("providers", help="Listar providers eMuwarez disponibles")
+    p_nom_fields = nom_sub.add_parser("fields", help="Ver campos editables de nomenclatura para un item")
+    p_nom_fields.add_argument("id", type=int)
+    p_nom_pfields = nom_sub.add_parser("preview-fields", help="Previsualizar nombre con campos dados (JSON)")
+    p_nom_pfields.add_argument("id", type=int)
+    p_nom_pfields.add_argument("--fields-json", dest="fields_json", help="JSON de campos editables")
+
+    # Phase 10A — mkv-title command
+    p_mkv = sub.add_parser("mkv-title", help="Título interno MKV (Phase 10A)")
+    mkv_sub = p_mkv.add_subparsers(dest="mkv_command", required=True)
+    p_mkv_prev = mkv_sub.add_parser("preview", help="Previsualizar título interno MKV sin modificar nada")
+    p_mkv_prev.add_argument("id", type=int, help="ID del library_item")
+    p_mkv_apply = mkv_sub.add_parser("apply", help="Aplicar título interno MKV a prepared_path")
+    p_mkv_apply.add_argument("id", type=int, help="ID del library_item")
+    p_mkv_apply.add_argument("--dry-run", action="store_true", default=True)
+    p_mkv_apply.add_argument("--apply", action="store_true", dest="mkv_apply")
+    p_mkv_apply.add_argument("--confirm", metavar="TOKEN", dest="mkv_confirm",
+                             help="Token de confirmación: APLICAR_TITULO_MKV")
 
     p_prepare = sub.add_parser("prepare", help="Adaptar nomenclatura / generar propuesta")
     p_prepare.add_argument("target", help="ID de biblioteca o ruta")
@@ -1070,6 +1090,104 @@ def cmd_nomenclature(args) -> int:
             print("  ✓ Uploadrr no se ha ejecutado.")
             print("  ✓ mkvpropedit no se ha ejecutado.")
             return 0
+
+        # Phase 10A subcommands
+        if args.nomenclature_command == "sources":
+            from .services.source_assistant import list_emu_sources
+            sources = list_emu_sources()
+            _print_table(["Código", "Label"], [[s["code"], s["label"]] for s in sources])
+            return 0
+
+        if args.nomenclature_command == "providers":
+            from .services.source_assistant import list_emu_providers
+            providers = list_emu_providers()
+            _print_table(["Código", "Nombre"], [[p["code"], p["name"]] for p in providers])
+            return 0
+
+        if args.nomenclature_command == "fields":
+            from .services.source_assistant import build_editable_nomenclature_fields
+            result = build_editable_nomenclature_fields(args.id, conn=conn)
+            if "error" in result:
+                print(f"✗ {result['error']}")
+                return 1
+            fields = result.get("fields", {})
+            print(f"Título:           {fields.get('title')}")
+            print(f"Año:              {fields.get('year')}")
+            print(f"Resolución:       {fields.get('resolution')}")
+            print(f"Source:           {fields.get('source')}")
+            print(f"Provider:         {fields.get('provider')}")
+            print(f"Códec:            {fields.get('video_codec')}")
+            print(f"Audio:            {fields.get('audio_summary')}")
+            print(f"Subs:             {fields.get('subs')}")
+            print(f"Tag:              {fields.get('tag')}")
+            print(f"Torrent name:     {result.get('torrent_name')}")
+            print(f"MKV title:        {result.get('internal_mkv_title')}")
+            tmdb_avail = result.get("tmdb_available_providers", [])
+            if tmdb_avail:
+                print(f"Providers TMDb:   {', '.join(tmdb_avail)}")
+            return 0
+
+        if args.nomenclature_command == "preview-fields":
+            from .services.source_assistant import update_nomenclature_fields_preview
+            import json as _json
+            fields_json = getattr(args, "fields_json", None) or "{}"
+            try:
+                fields = _json.loads(fields_json)
+            except Exception:
+                print("✗ JSON de campos inválido")
+                return 1
+            result = update_nomenclature_fields_preview(args.id, fields, conn=conn)
+            print(f"Torrent name:  {result.get('torrent_name')}")
+            print(f"MKV title:     {result.get('internal_mkv_title')}")
+            return 0
+
+    return 1
+
+
+def cmd_mkv_title(args) -> int:
+    from .services.mkv_title import (
+        preview_internal_title_update,
+        apply_internal_title_update,
+        MKV_CONFIRMATION_TOKEN,
+    )
+    with _open_conn(args) as conn:
+        if args.mkv_command == "preview":
+            result = preview_internal_title_update(args.id, conn=conn)
+            print(f"Status:         {result.get('status')}")
+            print(f"Prepared path:  {result.get('prepared_path')}")
+            print(f"Torrent name:   {result.get('torrent_name')}")
+            print(f"Internal title: {result.get('internal_mkv_title')}")
+            print(f"mkvpropedit:    {'disponible' if result.get('mkvpropedit_available') else 'no instalado'}")
+            if result.get("command_preview"):
+                print(f"Comando:        {result['command_preview']}")
+            for e in result.get("errors", []):
+                print(f"  ✗ {e}")
+            for w in result.get("warnings", []):
+                print(f"  ⚠ {w}")
+            return 0 if result.get("status") != "blocked" else 1
+
+        if args.mkv_command == "apply":
+            do_apply = getattr(args, "mkv_apply", False)
+            dry_run = not do_apply
+            confirm = getattr(args, "mkv_confirm", None)
+            result = apply_internal_title_update(
+                args.id,
+                dry_run=dry_run,
+                apply=do_apply,
+                confirmation=confirm,
+                conn=conn,
+            )
+            print(f"Status: {result.get('status')}")
+            if result.get("status") == "applied":
+                print(f"  ✓ Título MKV aplicado: {result.get('internal_mkv_title')}")
+            elif dry_run:
+                print(f"  [dry-run] Se aplicaría: {result.get('internal_mkv_title')}")
+                print(f"  Comando: {result.get('command_preview')}")
+            for e in result.get("errors", []):
+                print(f"  ✗ {e}")
+            if not do_apply:
+                print(f"  ✓ mkvpropedit no se ha ejecutado (dry-run).")
+            return 0 if result.get("status") not in ("blocked", "error") else 1
     return 1
 
 
@@ -1725,6 +1843,8 @@ def modern_main(argv: Optional[list[str]] = None) -> int:
             return cmd_queue(args)
         if args.command == "demo":
             return cmd_demo(args)
+        if args.command == "mkv-title":
+            return cmd_mkv_title(args)
         parser.error("Comando no soportado")
         return 2
     except IntegrationError as exc:

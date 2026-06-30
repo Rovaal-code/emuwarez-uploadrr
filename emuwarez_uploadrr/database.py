@@ -11,7 +11,7 @@ from .constants import CONFIG_DIR
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 
 
 def db_path() -> Path:
@@ -437,6 +437,41 @@ def _migrate_library_items_phase8a(conn: sqlite3.Connection) -> None:
             pass
 
 
+def _migrate_nomenclature_phase10a(conn: sqlite3.Connection) -> None:
+    """Add Phase 10A editable fields and MKV title columns to nomenclature_proposals."""
+    new_cols = [
+        ("fields_json",                   "TEXT"),
+        ("source_final",                  "TEXT"),
+        ("provider_final",                "TEXT"),
+        ("provider_options_json",         "TEXT"),
+        ("tmdb_available_providers_json", "TEXT"),
+        ("internal_mkv_title",            "TEXT"),
+        ("internal_title_status",         "TEXT"),
+        ("internal_title_applied_at",     "TEXT"),
+        ("internal_title_error",          "TEXT"),
+    ]
+    for col, col_def in new_cols:
+        try:
+            conn.execute(f"ALTER TABLE nomenclature_proposals ADD COLUMN {col} {col_def}")
+        except sqlite3.OperationalError:
+            pass
+
+
+def _migrate_settings_phase10a(conn: sqlite3.Connection) -> None:
+    """Insert default Phase 10A settings if not already present."""
+    defaults = [
+        ("default_release_tag",      "EMUWAREZ",                              0),
+        ("provider_priority_order",  '["AMZN","NF","DSNP","MAX","ATVP"]',     0),
+        ("tmdb_watch_region",        "ES",                                     0),
+    ]
+    for key, value, is_secret in defaults:
+        conn.execute(
+            """INSERT OR IGNORE INTO settings (key, value, is_secret)
+               VALUES (?, ?, ?)""",
+            (key, value, is_secret),
+        )
+
+
 def _migrate_diagnostic_tables(conn: sqlite3.Connection) -> None:
     """Create Phase 8A diagnostic run and item diagnostic tables."""
     conn.execute("""
@@ -643,6 +678,8 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_request_readiness_tables(conn)
         _migrate_operational_queue_tables(conn)
         _migrate_operational_actions_tables(conn)
+        _migrate_nomenclature_phase10a(conn)
+        _migrate_settings_phase10a(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

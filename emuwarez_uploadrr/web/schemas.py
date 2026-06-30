@@ -926,3 +926,21 @@ class OperationalQueueActionResponse(BaseModel):
     item_id: int
     status: str
     reason: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Phase 10A — Nomenclature fields, Source Assistant, MKV title
+# ---------------------------------------------------------------------------
+
+class NomenclatureFieldsPreviewBody(BaseModel):
+    fields: dict[str, Any]
+
+
+class NomenclatureFieldsSaveBody(BaseModel):
+    fields: dict[str, Any]
+
+
+class MkvTitleApplyBody(BaseModel):
+    dry_run: bool = True
+    apply: bool = False
+    confirmation: Optional[str] = None

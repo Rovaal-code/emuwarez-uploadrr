@@ -13,7 +13,7 @@ Safety guarantees (see services/integration_tests.py):
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from ..dependencies import require_auth
 from ..runtime import _db_path
@@ -25,6 +25,8 @@ from ..schemas import (
 )
 
 router = APIRouter(prefix="/integrations", tags=["integrations"])
+
+_VALID_ARR_KINDS = {"radarr", "sonarr"}
 
 
 def _get_conn():
@@ -72,8 +74,20 @@ def test_arr(
     body: TestArrRequest,
     current_user: dict = Depends(require_auth),
 ) -> IntegrationTestResult:
-    """Probe Radarr/Sonarr with unsaved credentials. Never stores credentials."""
+    """Probe Radarr/Sonarr, either a saved instance (instance_id) or unsaved
+    credentials (kind/base_url/api_key). Never stores credentials."""
     from emuwarez_uploadrr.services.integration_tests import test_arr_connection
+
+    if body.instance_id is not None:
+        with _get_conn() as conn:
+            result = test_arr_connection(instance_id=body.instance_id, conn=conn)
+        return IntegrationTestResult(**result)
+
+    if not body.kind or body.kind not in _VALID_ARR_KINDS:
+        raise HTTPException(status_code=422, detail="kind debe ser 'radarr' o 'sonarr'")
+    if not body.base_url or not body.api_key:
+        raise HTTPException(status_code=422, detail="base_url y api_key son obligatorios si no se especifica instance_id")
+
     result = test_arr_connection(
         kind=body.kind,
         base_url=body.base_url,

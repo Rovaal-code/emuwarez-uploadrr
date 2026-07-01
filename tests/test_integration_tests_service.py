@@ -263,3 +263,32 @@ class TestArrConnection:
         # Will be a failure (no real server) but key must not appear in result
         serialised = json.dumps(result)
         assert secret not in serialised
+
+    def test_instance_id_without_conn_fails(self):
+        result = svc_test_arr(instance_id=1)
+        assert result["ok"] is False
+        assert result["status"] == "unexpected_error"
+
+    def test_instance_id_not_found(self, isolated_db):
+        from emuwarez_uploadrr.database import connect, init_db
+        conn = connect(isolated_db / "emuwarez_uploadrr.db")
+        init_db(conn)
+        result = svc_test_arr(instance_id=999, conn=conn)
+        assert result["ok"] is False
+        assert result["status"] == "not_configured"
+
+    @patch("emuwarez_uploadrr.integrations.arr_base.arr_request")
+    def test_instance_id_uses_saved_instance(self, mock_req, isolated_db):
+        from emuwarez_uploadrr.database import connect, init_db
+        from emuwarez_uploadrr.services.instances import add_instance
+
+        conn = connect(isolated_db / "emuwarez_uploadrr.db")
+        init_db(conn)
+        instance_id = add_instance(conn, "radarr", "Radarr saved", "http://localhost:7878", "saved-key")
+
+        mock_req.return_value = {"version": "5.3.6"}
+        result = svc_test_arr(instance_id=instance_id, conn=conn)
+        assert result["ok"] is True
+        assert result["service"] == "radarr"
+        assert result["details"]["version"] == "5.3.6"
+        assert result["details"]["instance_id"] == instance_id

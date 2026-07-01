@@ -110,6 +110,24 @@ OK — todos los .py compilaron sin errores
 - `Uploadrr/` no fue modificado
 - No se ejecutó ninguna subida real
 - No se ejecutó mkvpropedit real
-- No se hizo push al remoto
+- No se hizo push al remoto (no hay remoto configurado)
 - No se ejecutaron llamadas HTTP reales en los tests (todo mockeado)
-- Git status al finalizar: pendiente de commit
+- Git status al finalizar: limpio, mergeado a `master`
+
+## Fixes post-review (antes de mergear a master)
+
+Revisión posterior encontró 3 desviaciones del encargo original, corregidas antes del merge:
+
+1. **`POST /api/integrations/test/arr` no soportaba `instance_id`** pese a que el servicio
+   `test_arr_connection` ya tenía la lógica de lookup. Se añadió `instance_id` a
+   `TestArrRequest`, se conectó en el router (con `conn` de BD) y se añadieron tests de
+   servicio y de API (instancia guardada encontrada / no encontrada).
+2. **`kind` inválido devolvía 200 con `status=invalid_kind`** en vez de `422` como pedía el
+   spec. El router ahora valida `kind`/`base_url`/`api_key` antes de llamar al servicio y
+   lanza `HTTPException(422)` cuando `kind` no es `radarr`/`sonarr`, o cuando faltan
+   `base_url`/`api_key` sin `instance_id`.
+3. **Documentación no actualizada**: se añadieron secciones Phase 10C a
+   `docs/ui_backend_contract.md`, `docs/ui_backend_contract.json` y `README_CLI_READY.md`,
+   y notas de troubleshooting en `docs/DEPLOYMENT_DOCKER.md`.
+
+Tras los fixes: **851 tests pasan** (845 + 6 nuevos de `instance_id`/422), `npm run build` sigue en 0 errores.

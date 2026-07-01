@@ -190,6 +190,56 @@ def test_arr_connection_error(client, auth_headers):
     assert resp.json()["ok"] is False
 
 
+def test_arr_invalid_kind_returns_422(client, auth_headers):
+    resp = client.post(
+        "/api/integrations/test/arr",
+        json={"kind": "jellyfin", "base_url": "http://x", "api_key": "k"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 422
+
+
+def test_arr_missing_credentials_without_instance_id_returns_422(client, auth_headers):
+    resp = client.post(
+        "/api/integrations/test/arr",
+        json={"kind": "radarr"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 422
+
+
+def test_arr_by_instance_id_uses_saved_instance(client, auth_headers):
+    add_resp = client.post(
+        "/api/instances",
+        json={"type": "radarr", "name": "Radarr saved", "url": "http://radarr:7878", "api_key": "saved-key"},
+        headers=auth_headers,
+    )
+    assert add_resp.status_code == 201
+    instance_id = client.get("/api/instances", headers=auth_headers).json()[0]["id"]
+
+    with patch("emuwarez_uploadrr.services.integration_tests.test_arr_connection") as mock_svc:
+        mock_svc.return_value = {"ok": True, "service": "radarr", "status": "connected", "message": "OK", "details": {"version": "5.3.6"}}
+        resp = client.post(
+            "/api/integrations/test/arr",
+            json={"instance_id": instance_id},
+            headers=auth_headers,
+        )
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is True
+    _, kwargs = mock_svc.call_args
+    assert kwargs["instance_id"] == instance_id
+
+
+def test_arr_by_instance_id_not_found(client, auth_headers):
+    resp = client.post(
+        "/api/integrations/test/arr",
+        json={"instance_id": 999},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "not_configured"
+
+
 def test_arr_response_never_contains_raw_key(client, auth_headers):
     secret = "arr_secret_api_key_abcdef"
     with patch("emuwarez_uploadrr.services.integration_tests.test_arr_connection") as mock_svc:

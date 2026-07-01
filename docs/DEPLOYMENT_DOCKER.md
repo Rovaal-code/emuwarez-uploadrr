@@ -342,6 +342,9 @@ Usa el setup web (`http://localhost:9494`) o:
 docker exec emuwarez-uploadrr python3 emuwarez_uploader.py web setup-status
 ```
 
+En Settings (TMDb) y en el setup wizard (TMDb, eMuwarez) puedes usar "Probar conexión" para
+validar una key antes de guardarla (Phase 10C).
+
 ---
 
 ### Radarr/Sonarr no conectan
@@ -349,6 +352,8 @@ docker exec emuwarez-uploadrr python3 emuwarez_uploader.py web setup-status
 - Verifica que la URL es accesible desde dentro del contenedor
 - Si Radarr/Sonarr también corren en Docker, usa el nombre de servicio y la red compartida
 - Comprueba la API key en la interfaz de Radarr/Sonarr
+- Usa el botón "Probar conexión" en Settings/Instancias/setup wizard (Phase 10C) antes de
+  guardar: prueba la URL/API key escrita en el formulario sin necesidad de guardarla primero
 
 ---
 

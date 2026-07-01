@@ -964,9 +964,10 @@ class TestEmuwarezRequest(BaseModel):
 
 
 class TestArrRequest(BaseModel):
-    kind: str
-    base_url: str
-    api_key: str
+    instance_id: Optional[int] = None
+    kind: Optional[str] = None
+    base_url: Optional[str] = None
+    api_key: Optional[str] = None
 
 
 class IntegrationTestResult(BaseModel):

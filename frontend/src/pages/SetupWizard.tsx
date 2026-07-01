@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { setupAdmin, setupBase, setupUploadrr, setupTmdb, setupEmu, setupInstances, setupComplete } from '../api/setup'
 import { login } from '../api/auth'
 import { ApiClientError } from '../api/client'
+import { testTmdbConnection, testEmuwarezConnection, testArrConnection, type IntegrationTestResult } from '../api/integrationTests'
 import { ServiceIcon } from '../components/ServiceIcon'
 import { SETUP_STEPS, SETUP_STEP_LABELS } from '../types/domain'
 import type { SetupStep } from '../types/domain'
@@ -73,6 +74,14 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   const [instDraft, setInstDraft] = useState<Partial<InstanceDraft>>({ type: 'radarr', is_4k: false, is_anime: false })
   const [instError, setInstError] = useState<string | null>(null)
 
+  // Connection test state
+  const [tmdbTestResult, setTmdbTestResult] = useState<IntegrationTestResult | null>(null)
+  const [tmdbTesting, setTmdbTesting] = useState(false)
+  const [emuTestResult, setEmuTestResult] = useState<IntegrationTestResult | null>(null)
+  const [emuTesting, setEmuTesting] = useState(false)
+  const [instTestResult, setInstTestResult] = useState<IntegrationTestResult | null>(null)
+  const [instTesting, setInstTesting] = useState(false)
+
   function wrap(fn: () => Promise<void>) {
     return async () => {
       setError(null)
@@ -84,6 +93,53 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
       } finally {
         setLoading(false)
       }
+    }
+  }
+
+  async function handleTestTmdb() {
+    setTmdbTesting(true)
+    setTmdbTestResult(null)
+    try {
+      const r = await testTmdbConnection({ api_key: tmdbKey || undefined, language: tmdbLang || undefined, region: tmdbRegion || undefined })
+      setTmdbTestResult(r)
+    } catch {
+      setTmdbTestResult({ ok: false, service: 'tmdb', status: 'connection_error', message: 'Error al contactar con el servidor' })
+    } finally {
+      setTmdbTesting(false)
+    }
+  }
+
+  async function handleTestEmu() {
+    setEmuTesting(true)
+    setEmuTestResult(null)
+    try {
+      const r = await testEmuwarezConnection({ api_key: emuKey || undefined, base_url: emuEndpoint || undefined })
+      setEmuTestResult(r)
+    } catch {
+      setEmuTestResult({ ok: false, service: 'emuwarez', status: 'connection_error', message: 'Error al contactar con el servidor' })
+    } finally {
+      setEmuTesting(false)
+    }
+  }
+
+  async function handleTestInst() {
+    if (!instDraft.url?.trim() || !instDraft.api_key?.trim()) {
+      setInstTestResult({ ok: false, service: 'arr', status: 'not_configured', message: 'Introduce URL y API key antes de probar' })
+      return
+    }
+    setInstTesting(true)
+    setInstTestResult(null)
+    try {
+      const r = await testArrConnection({
+        kind: instDraft.type ?? 'radarr',
+        base_url: instDraft.url!.trim(),
+        api_key: instDraft.api_key!.trim(),
+      })
+      setInstTestResult(r)
+    } catch {
+      setInstTestResult({ ok: false, service: instDraft.type ?? 'arr', status: 'connection_error', message: 'Error al contactar con el servidor' })
+    } finally {
+      setInstTesting(false)
     }
   }
 
@@ -260,6 +316,16 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 </div>
               </div>
               {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, marginBottom: 4 }}>
+                <button className="btn btn-secondary btn-sm" onClick={handleTestTmdb} disabled={tmdbTesting || loading} type="button">
+                  {tmdbTesting ? 'Probando…' : 'Probar conexión'}
+                </button>
+                {tmdbTestResult && (
+                  <span style={{ fontSize: 12, color: tmdbTestResult.ok ? '#22c55e' : tmdbTestResult.status === 'not_configured' ? '#f59e0b' : '#ef4444' }}>
+                    {tmdbTestResult.ok ? '✓ Conectado' : tmdbTestResult.status === 'not_configured' ? '⚠ Sin configurar' : tmdbTestResult.status === 'invalid_key' ? '✗ API key inválida' : `✗ ${tmdbTestResult.message}`}
+                  </span>
+                )}
+              </div>
               <div className="wizard-actions">
                 <span />
                 <button className="btn btn-primary" onClick={handleTmdb} disabled={loading}>
@@ -289,6 +355,16 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 </div>
               </div>
               {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, marginBottom: 4 }}>
+                <button className="btn btn-secondary btn-sm" onClick={handleTestEmu} disabled={emuTesting || loading} type="button">
+                  {emuTesting ? 'Probando…' : 'Probar conexión'}
+                </button>
+                {emuTestResult && (
+                  <span style={{ fontSize: 12, color: emuTestResult.ok ? '#22c55e' : emuTestResult.status === 'not_configured' ? '#f59e0b' : '#ef4444' }}>
+                    {emuTestResult.ok ? '✓ Conectado' : emuTestResult.status === 'not_configured' ? '⚠ Sin configurar' : emuTestResult.status === 'invalid_key' ? '✗ API key inválida' : emuTestResult.status === 'invalid_url' ? '✗ URL inválida' : `✗ ${emuTestResult.message}`}
+                  </span>
+                )}
+              </div>
               <div className="wizard-actions">
                 <span />
                 <button className="btn btn-primary" onClick={handleEmu} disabled={loading}>
@@ -355,9 +431,19 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   </label>
                 </div>
                 {instError && <div className="form-error" style={{ marginTop: 8 }}>{instError}</div>}
-                <button className="btn btn-secondary btn-sm" style={{ marginTop: 10 }} onClick={addInstance}>
-                  + Añadir instancia
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+                  <button className="btn btn-secondary btn-sm" onClick={addInstance} type="button">
+                    + Añadir instancia
+                  </button>
+                  <button className="btn btn-secondary btn-sm" onClick={handleTestInst} disabled={instTesting} type="button">
+                    {instTesting ? 'Probando…' : 'Probar conexión'}
+                  </button>
+                  {instTestResult && (
+                    <span style={{ fontSize: 12, color: instTestResult.ok ? '#22c55e' : instTestResult.status === 'not_configured' ? '#f59e0b' : '#ef4444' }}>
+                      {instTestResult.ok ? `✓ Conectado${instTestResult.details?.version ? ` (v${instTestResult.details.version})` : ''}` : instTestResult.status === 'not_configured' ? '⚠ Sin configurar' : instTestResult.status === 'invalid_key' ? '✗ API key inválida' : `✗ ${instTestResult.message}`}
+                    </span>
+                  )}
+                </div>
               </div>
               {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
               <div className="wizard-actions">

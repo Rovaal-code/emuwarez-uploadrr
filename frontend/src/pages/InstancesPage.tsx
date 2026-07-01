@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getInstances, addInstance, testInstance, syncInstance } from '../api/instances'
 import { refreshArrHealth } from '../api/diagnostics'
+import { testArrConnection, type IntegrationTestResult } from '../api/integrationTests'
 import type { InstanceSafeResponse } from '../types/api'
 import { ServiceIcon, ServiceLabel } from '../components/ServiceIcon'
 import { LoadingState } from '../components/LoadingState'
@@ -30,6 +31,8 @@ export function InstancesPage() {
   const [form, setForm] = useState<AddForm>(defaultForm())
   const [addError, setAddError] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
+  const [addTestResult, setAddTestResult] = useState<IntegrationTestResult | null>(null)
+  const [addTesting, setAddTesting] = useState(false)
   const [testResults, setTestResults] = useState<Record<number, string>>({})
   const [testingId, setTestingId] = useState<number | null>(null)
   const [syncingId, setSyncingId] = useState<number | null>(null)
@@ -68,6 +71,23 @@ export function InstancesPage() {
       setAddError(err instanceof ApiClientError ? err.message : 'Error al añadir instancia')
     } finally {
       setAdding(false)
+    }
+  }
+
+  async function handleAddTest() {
+    if (!form.url.trim() || !form.api_key.trim()) {
+      setAddTestResult({ ok: false, service: form.type, status: 'not_configured', message: 'Introduce URL y API key antes de probar' })
+      return
+    }
+    setAddTesting(true)
+    setAddTestResult(null)
+    try {
+      const r = await testArrConnection({ kind: form.type, base_url: form.url.trim(), api_key: form.api_key.trim() })
+      setAddTestResult(r)
+    } catch {
+      setAddTestResult({ ok: false, service: form.type, status: 'connection_error', message: 'Error al contactar con el servidor' })
+    } finally {
+      setAddTesting(false)
     }
   }
 
@@ -163,9 +183,23 @@ export function InstancesPage() {
               <label className="checkbox-label"><input type="checkbox" checked={form.is_anime} onChange={e => setForm(p => ({ ...p, is_anime: e.target.checked }))} /> Anime</label>
             </div>
             {addError && <div className="alert alert-error" style={{ marginBottom: 12 }}>{addError}</div>}
-            <button type="submit" className="btn btn-primary btn-sm" disabled={adding}>
-              {adding ? 'Añadiendo…' : 'Añadir'}
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <button type="submit" className="btn btn-primary btn-sm" disabled={adding}>
+                {adding ? 'Añadiendo…' : 'Añadir'}
+              </button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={handleAddTest} disabled={addTesting}>
+                {addTesting ? 'Probando…' : 'Probar conexión'}
+              </button>
+              {addTestResult && (
+                <span style={{ fontSize: 12, color: addTestResult.ok ? '#22c55e' : addTestResult.status === 'not_configured' ? '#f59e0b' : '#ef4444' }}>
+                  {addTestResult.ok
+                    ? `✓ Conectado${addTestResult.details?.version ? ` (v${addTestResult.details.version})` : ''}`
+                    : addTestResult.status === 'not_configured' ? '⚠ Sin configurar'
+                    : addTestResult.status === 'invalid_key' ? '✗ API key inválida'
+                    : `✗ ${addTestResult.message}`}
+                </span>
+              )}
+            </div>
           </form>
         </div>
       )}

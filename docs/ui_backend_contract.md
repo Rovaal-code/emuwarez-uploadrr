@@ -1353,3 +1353,53 @@ Para escritura real: `{"dry_run": false, "apply": true, "confirmation": "APLICAR
 - `mkvpropedit` usa `shell=False`; solo aplica a `.mkv` en `prepared_path`
 - TMDb Watch Providers es opcional, nunca bloquea el flujo
 - `SCHEMA_VERSION = 12`: 9 columnas nuevas en `nomenclature_proposals`, 3 entradas nuevas en `settings`
+
+---
+
+## Phase 10C — Test de conexión para APIs externas
+
+Botones "Probar conexión" para TMDb, eMuwarez, Radarr y Sonarr, sin guardar credenciales. Uploadrr queda fuera de esta fase.
+
+### Nuevos endpoints
+
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| POST | `/api/integrations/test/tmdb` | Bearer | Prueba una API key de TMDb (enviada o guardada) |
+| POST | `/api/integrations/test/emuwarez` | Bearer | Prueba credenciales de eMuwarez (enviadas o guardadas) |
+| POST | `/api/integrations/test/arr` | Bearer | Prueba Radarr/Sonarr: instancia guardada (`instance_id`) o credenciales sin guardar (`kind`/`base_url`/`api_key`) |
+
+Body de `test/tmdb` (todos opcionales; si se omite `api_key` usa la guardada):
+```json
+{ "api_key": "opcional", "language": "es-ES", "region": "ES" }
+```
+
+Body de `test/emuwarez` (todos opcionales; si se omiten usa los guardados):
+```json
+{ "api_key": "opcional", "base_url": "opcional" }
+```
+
+Body de `test/arr` — instancia guardada:
+```json
+{ "instance_id": 1 }
+```
+
+Body de `test/arr` — credenciales sin guardar:
+```json
+{ "kind": "radarr", "base_url": "http://192.168.1.10:7878", "api_key": "..." }
+```
+
+`kind` inválido (distinto de `radarr`/`sonarr`) o falta de `base_url`/`api_key` sin `instance_id` → `422`.
+
+Respuesta común (`IntegrationTestResult`):
+```json
+{ "ok": true, "service": "radarr", "status": "connected", "message": "Conexión correcta", "details": {"version": "5.3.6"} }
+```
+
+`status` posibles: `connected`, `not_configured`, `invalid_key`, `connection_error`, `timeout`, `invalid_url`, `invalid_kind`, `unexpected_error`.
+
+### Reglas de negocio
+
+- Todas las pruebas son de solo lectura (TMDb `/configuration`, eMuwarez `/api/torrents/filter?perPage=1`, Arr `/api/v3/system/status`).
+- Probar una credencial nunca la guarda.
+- Ninguna respuesta ni log contiene la API key completa.
+- Uploadrr no tiene código ni endpoint de test en esta fase.

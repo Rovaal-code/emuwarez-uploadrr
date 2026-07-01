@@ -819,3 +819,22 @@ Restricciones de seguridad:
 Al previsualizar campos con `source=WEB-DL`, la API devuelve los proveedores disponibles en TMDb
 para la región configurada (`tmdb_watch_region`, por defecto `ES`). Los proveedores disponibles
 se marcan con `★` en el desplegable del frontend. El proveedor final siempre es elección del usuario.
+
+## Test de conexión para APIs externas (Phase 10C)
+
+Botones "Probar conexión" para TMDb, eMuwarez, Radarr y Sonarr en Settings, el wizard de setup
+y la página de Instancias. Permiten validar una API key/URL ya guardada o escrita en el
+formulario todavía sin guardar — probar nunca guarda la credencial automáticamente.
+
+### Endpoints API (Phase 10C)
+
+```
+POST /api/integrations/test/tmdb      { api_key?, language?, region? }
+POST /api/integrations/test/emuwarez  { api_key?, base_url? }
+POST /api/integrations/test/arr       { instance_id } | { kind, base_url, api_key }
+```
+
+Todos son de solo lectura (TMDb `/configuration`, eMuwarez `/api/torrents/filter?perPage=1`,
+Arr `/api/v3/system/status`), requieren Bearer auth y nunca devuelven ni loggean la API key
+completa. Uploadrr queda fuera de esta fase (se tratará en una fase separada por tener un
+flujo/fork propio).

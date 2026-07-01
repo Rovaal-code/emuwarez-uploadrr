@@ -12,6 +12,7 @@ import {
   type BackupInfo,
 } from '../api/maintenance'
 import { fetchSettings, updateSettings, type SettingsData } from '../api/settings'
+import { testTmdbConnection, type IntegrationTestResult } from '../api/integrationTests'
 
 type Tab = 'config' | 'diagnostics' | 'backup' | 'maintenance'
 
@@ -27,6 +28,8 @@ function ConfigTab() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [testingTmdb, setTestingTmdb] = useState(false)
+  const [tmdbTestResult, setTmdbTestResult] = useState<IntegrationTestResult | null>(null)
 
   // Form state
   const [tag, setTag] = useState('')
@@ -47,6 +50,23 @@ function ConfigTab() {
       .catch(() => setMsg({ ok: false, text: 'Error cargando configuración' }))
       .finally(() => setLoading(false))
   }, [])
+
+  async function handleTestTmdb() {
+    setTestingTmdb(true)
+    setTmdbTestResult(null)
+    try {
+      const params: { api_key?: string; language?: string; region?: string } = {}
+      if (newKey.trim()) params.api_key = newKey.trim()
+      if (language.trim()) params.language = language.trim()
+      if (region.trim()) params.region = region.trim()
+      const r = await testTmdbConnection(params)
+      setTmdbTestResult(r)
+    } catch {
+      setTmdbTestResult({ ok: false, service: 'tmdb', status: 'connection_error', message: 'Error al contactar con el servidor' })
+    } finally {
+      setTestingTmdb(false)
+    }
+  }
 
   async function handleSave() {
     setSaving(true)
@@ -111,6 +131,30 @@ function ConfigTab() {
             autoComplete="new-password"
           />
           <span className="form-hint">Usada para marcar providers disponibles en TMDb.</span>
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={handleTestTmdb}
+            disabled={testingTmdb}
+            type="button"
+          >
+            {testingTmdb ? 'Probando…' : 'Probar conexión'}
+          </button>
+          {tmdbTestResult && (
+            <span style={{
+              marginLeft: 10, fontSize: 12,
+              color: tmdbTestResult.ok ? '#22c55e'
+                : tmdbTestResult.status === 'not_configured' ? '#f59e0b'
+                : '#ef4444',
+            }}>
+              {tmdbTestResult.ok ? '✓ Conectado'
+                : tmdbTestResult.status === 'not_configured' ? '⚠ Sin configurar'
+                : tmdbTestResult.status === 'invalid_key' ? '✗ API key inválida'
+                : tmdbTestResult.status === 'timeout' ? '✗ Timeout'
+                : `✗ ${tmdbTestResult.message}`}
+            </span>
+          )}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div className="form-group">

@@ -750,16 +750,53 @@
   "phase_10a_editable_nomenclature": {
     "description": "Phase 10A adds editable nomenclature fields, source/provider assistant and internal MKV title control.",
     "schema_version": 12,
-    "provider_sources": ["WEB-DL"],
+    "provider_sources": [
+      "WEB-DL"
+    ],
     "mkv_confirmation_token": "APLICAR_TITULO_MKV",
     "new_endpoints": [
-      { "method": "GET", "path": "/api/nomenclature/sources", "auth": true, "description": "List EMU sources" },
-      { "method": "GET", "path": "/api/nomenclature/providers", "auth": true, "description": "List EMU providers" },
-      { "method": "GET", "path": "/api/library/{id}/nomenclature/fields", "auth": true, "description": "Get editable fields for item" },
-      { "method": "POST", "path": "/api/library/{id}/nomenclature/preview-fields", "auth": true, "description": "Preview with edited fields" },
-      { "method": "POST", "path": "/api/library/{id}/nomenclature/save-fields", "auth": true, "description": "Save fields and create proposal" },
-      { "method": "GET", "path": "/api/library/{id}/mkv-title/preview", "auth": true, "description": "Preview MKV title to apply" },
-      { "method": "POST", "path": "/api/library/{id}/mkv-title/apply", "auth": true, "description": "Apply MKV title (requires confirmation token)" }
+      {
+        "method": "GET",
+        "path": "/api/nomenclature/sources",
+        "auth": true,
+        "description": "List EMU sources"
+      },
+      {
+        "method": "GET",
+        "path": "/api/nomenclature/providers",
+        "auth": true,
+        "description": "List EMU providers"
+      },
+      {
+        "method": "GET",
+        "path": "/api/library/{id}/nomenclature/fields",
+        "auth": true,
+        "description": "Get editable fields for item"
+      },
+      {
+        "method": "POST",
+        "path": "/api/library/{id}/nomenclature/preview-fields",
+        "auth": true,
+        "description": "Preview with edited fields"
+      },
+      {
+        "method": "POST",
+        "path": "/api/library/{id}/nomenclature/save-fields",
+        "auth": true,
+        "description": "Save fields and create proposal"
+      },
+      {
+        "method": "GET",
+        "path": "/api/library/{id}/mkv-title/preview",
+        "auth": true,
+        "description": "Preview MKV title to apply"
+      },
+      {
+        "method": "POST",
+        "path": "/api/library/{id}/mkv-title/apply",
+        "auth": true,
+        "description": "Apply MKV title (requires confirmation token)"
+      }
     ],
     "new_cli_commands": [
       "nomenclature sources",
@@ -778,5 +815,55 @@
       "emuwarez_uploadrr/integrations/tmdb.py"
     ],
     "isolation": "mkvpropedit not called without token. TMDb non-blocking. No Uploadrr execution."
+  },
+  "phase_10c_integration_tests": {
+    "description": "Phase 10C adds read-only connection test buttons for TMDb, eMuwarez, Radarr and Sonarr. Uploadrr is explicitly excluded.",
+    "excluded_services": [
+      "uploadrr"
+    ],
+    "new_endpoints": [
+      {
+        "method": "POST",
+        "path": "/api/integrations/test/tmdb",
+        "auth": true,
+        "description": "Test a TMDb API key (provided or stored), read-only"
+      },
+      {
+        "method": "POST",
+        "path": "/api/integrations/test/emuwarez",
+        "auth": true,
+        "description": "Test eMuwarez credentials (provided or stored), read-only"
+      },
+      {
+        "method": "POST",
+        "path": "/api/integrations/test/arr",
+        "auth": true,
+        "description": "Test Radarr/Sonarr via saved instance_id or unsaved kind/base_url/api_key, read-only"
+      }
+    ],
+    "result_shape": {
+      "ok": "bool",
+      "service": "string",
+      "status": "string",
+      "message": "string",
+      "details": "object"
+    },
+    "statuses": [
+      "connected",
+      "not_configured",
+      "invalid_key",
+      "connection_error",
+      "timeout",
+      "invalid_url",
+      "invalid_kind",
+      "unexpected_error"
+    ],
+    "safety_guarantees": [
+      "Read-only operations only",
+      "Credentials sent for testing are never persisted",
+      "API keys never returned or logged in full",
+      "No eMuwarez requests created, no torrents uploaded",
+      "Uploadrr has no code or endpoint in this module"
+    ]
   }
 }

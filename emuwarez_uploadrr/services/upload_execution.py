@@ -22,8 +22,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from ..database import connect, init_db, row_to_dict, rows_to_dicts
+from ..database import connect, init_db, row_to_dict, rows_to_dicts, get_setting_canonical
 from .upload_result_parser import classify_upload_result, build_error_summary
+from .uploadrr_contract import (
+    RUNTIME_EMU,
+    build_uploadrr_emu_command,
+    get_runtime_settings,
+    render_command_preview,
+)
 
 CONFIRMATION_TOKEN = "INICIAR_UPLOADRR"
 
@@ -77,8 +83,8 @@ def _get_setting(conn, key: str, default=None):
 
 def _collect_secrets(conn) -> list[str]:
     secrets = []
-    for key in ("emu_api_key", "EMU_API_KEY", "tmdb_api_key", "TMDB_API_KEY"):
-        val = _get_setting(conn, key)
+    for key in ("emu.api_key", "tmdb.api_key"):
+        val = get_setting_canonical(conn, key)
         if val:
             secrets.append(val)
     return secrets
@@ -178,19 +184,19 @@ def validate_upload_job_start(job_id: int, conn=None) -> dict:
             elif p.suffix.lower() not in VIDEO_EXTENSIONS:
                 warnings.append(f"El archivo no tiene extensión de vídeo reconocida: {p.suffix}")
 
-        uploadrr_path = _get_setting(conn, "uploadrr_path") or _get_setting(conn, "UPLOADRR_PATH")
+        uploadrr_path = get_setting_canonical(conn, "uploadrr.path")
         if not uploadrr_path:
-            errors.append("Ruta de Uploadrr no configurada (uploadrr_path).")
+            errors.append("Ruta de Uploadrr no configurada (uploadrr.path).")
         else:
             script = Path(uploadrr_path) / "upload.py"
             if not script.exists():
                 errors.append(f"Script de Uploadrr no encontrado: {script}")
 
-        emu_key = _get_setting(conn, "emu_api_key") or _get_setting(conn, "EMU_API_KEY")
+        emu_key = get_setting_canonical(conn, "emu.api_key")
         if not emu_key:
             errors.append("API key de eMuwarez no configurada.")
 
-        tmdb_key = _get_setting(conn, "tmdb_api_key") or _get_setting(conn, "TMDB_API_KEY")
+        tmdb_key = get_setting_canonical(conn, "tmdb.api_key")
         if not tmdb_key:
             warnings.append("API key de TMDb no configurada.")
 
@@ -208,14 +214,19 @@ def validate_upload_job_start(job_id: int, conn=None) -> dict:
 def build_uploadrr_execution_command(job: dict, conn=None) -> dict:
     """Build the actual command list for subprocess. Resolves paths from settings at runtime.
 
-    Returns {"executable": str, "args": list[str], "cwd": str, "command_preview": str}.
-    Does NOT include secrets in the returned dict.
+    Returns {"executable": str, "args": list[str], "cwd": str, "command_preview": str,
+    "timeout": int, "runtime_type": str}. Does NOT include secrets in the returned dict.
+
+    For runtime_type=uploadrr_emu (the default), builds the real Uploadrr-EMU
+    argv (-tk/-mt/-tmdb/-ua/-c/-res) via uploadrr_contract.py, using only
+    prepared_path/applied_path — never the raw job "source_path" field name.
     """
     own = conn is None
     conn = conn or _get_db_conn()
     try:
-        uploadrr_path = _get_setting(conn, "uploadrr_path") or _get_setting(conn, "UPLOADRR_PATH") or ""
-        script = str(Path(uploadrr_path) / "upload.py")
+        runtime = get_runtime_settings(conn)
+        uploadrr_path = runtime["uploadrr_path"]
+        script = str(Path(uploadrr_path) / "upload.py") if uploadrr_path else ""
 
         prepared = job.get("prepared_path")
         source = job.get("source_path") or job.get("path") or ""
@@ -230,23 +241,38 @@ def build_uploadrr_execution_command(job: dict, conn=None) -> dict:
             except Exception:
                 pass
 
-        tracker = cmd_data.get("tracker") or "EMU"
         category = cmd_data.get("category") or "movie"
         tmdb_id = cmd_data.get("tmdb_id") or job.get("tmdb_id")
         resolution = cmd_data.get("resolution") or ""
+        title = cmd_data.get("title") or job.get("title") or "Sin título"
+        season = cmd_data.get("season")
+        episode = cmd_data.get("episode")
 
-        executable = sys.executable
-        args = [script, active_path, "--tracker", tracker, "--category", category]
-        if tmdb_id:
-            args += ["--tmdb", str(tmdb_id)]
-        if resolution:
-            args += ["--resolution", resolution]
+        if runtime["runtime_type"] == RUNTIME_EMU:
+            python_path = runtime["python_path"] or sys.executable
+            full_argv = build_uploadrr_emu_command(
+                python_path=python_path,
+                uploadrr_script_path=script,
+                prepared_path=active_path,
+                torrent_name=title,
+                tmdb_id=tmdb_id,
+                category=category,
+                resolution=resolution,
+                season=season,
+                episode=episode,
+            )
+            executable = full_argv[0]
+            args = full_argv[1:]
+        else:
+            tracker = cmd_data.get("tracker") or "EMU"
+            executable = sys.executable
+            args = [script, active_path, "--tracker", tracker, "--category", category]
+            if tmdb_id:
+                args += ["--tmdb", str(tmdb_id)]
+            if resolution:
+                args += ["--resolution", resolution]
 
-        safe_args = list(args)
-        preview = " ".join(
-            f'"{a}"' if " " in a else a
-            for a in [executable] + safe_args
-        )
+        preview = render_command_preview([executable] + args)
 
         return {
             "executable": executable,
@@ -255,6 +281,8 @@ def build_uploadrr_execution_command(job: dict, conn=None) -> dict:
             "command_preview": preview,
             "using_prepared_path": using_prepared,
             "source_path": active_path,
+            "timeout": runtime["timeout"],
+            "runtime_type": runtime["runtime_type"],
         }
     finally:
         if own:
@@ -439,6 +467,8 @@ def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str]) -> None
             path=cmd["source_path"],
         )
 
+    timeout = cmd.get("timeout") or None
+
     try:
         env = {k: v for k, v in os.environ.items()}
 
@@ -446,6 +476,7 @@ def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str]) -> None
             [executable] + args,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            stdin=subprocess.DEVNULL,
             text=True,
             cwd=cwd if os.path.isdir(cwd) else None,
             env=env,
@@ -476,8 +507,38 @@ def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str]) -> None
         )
         t_out.start()
         t_err.start()
-        t_out.join()
-        t_err.join()
+        t_out.join(timeout=timeout)
+        t_err.join(timeout=timeout)
+
+        timed_out = t_out.is_alive() or t_err.is_alive()
+        if timed_out:
+            try:
+                proc.kill()
+            except (ProcessLookupError, OSError):
+                pass
+            t_out.join()
+            t_err.join()
+            try:
+                returncode = proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                returncode = -1
+
+            finished_dt = datetime.now(timezone.utc)
+            finished_at = finished_dt.isoformat()
+            duration_seconds = int((finished_dt - started_dt).total_seconds())
+            msg = f"Proceso cancelado por timeout ({timeout}s)."
+            _update_job_status(
+                job_id, "failed",
+                stage="timeout",
+                exit_code=returncode,
+                finished_at=finished_at,
+                duration_seconds=duration_seconds,
+                error_message=msg,
+                last_log_at=_now(),
+                last_error_at=finished_at,
+            )
+            append_upload_log(job_id, "error", msg, stream="system")
+            return
 
         returncode = proc.wait()
 

@@ -352,8 +352,21 @@ Publicado en EMU
 GET  /api/uploads
 GET  /api/uploads/{id}
 POST /api/uploads/{id}/cancel
-GET  /api/uploads/{id}/stream   ← SSE para progreso en tiempo real
+GET  /api/uploads/{id}/stream   ← SSE para progreso en tiempo real (no implementado; hoy GET /api/uploads/{id}/logs es fetch puntual, sin streaming)
 ```
+
+**Fase 10E — Contrato Uploadrr-EMU en `command_preview` (`POST /api/library/{id}/upload/preflight`):**
+```text
+runtime_type          "uploadrr_emu" | "uploadrr_generic"
+command_args          list[str] — argv real: [-tk, EMU, -mt, <título>, -tmdb, <id>, -ua, -c, movie|tv, -res, <resolución>, ...]
+contract_valid        bool — resultado de validate_uploadrr_emu_contract (allowed_roots, python_path, script)
+contract_errors       list[str]
+contract_warnings     list[str]
+can_execute           bool — siempre false en Fase 10E (ejecución real = Fase 10F)
+requires_confirmation "INICIAR_UPLOADRR"
+safe_to_execute       bool — siempre false en Fase 10E
+```
+Ver `docs/codex_phase_10e_uploadrr_emu_contract_fix_report.md` para el detalle completo.
 
 ---
 

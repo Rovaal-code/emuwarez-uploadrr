@@ -9,28 +9,25 @@ from __future__ import annotations
 import json
 import os
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
-from ..database import connect, row_to_dict, rows_to_dicts, get_state
+from ..database import connect, row_to_dict, rows_to_dicts, get_setting_canonical
 from .filesystem_safety import safe_stat
+from .uploadrr_contract import (
+    RUNTIME_EMU,
+    RUNTIME_GENERIC,
+    build_uploadrr_emu_command,
+    get_runtime_settings,
+    render_command_preview,
+    validate_uploadrr_emu_contract,
+)
+from .upload_execution import CONFIRMATION_TOKEN
 
 JOB_STATUS_DRAFT = "draft"
 JOB_STATUS_PREFLIGHT = "preflight"
 JOB_STATUS_READY = "ready"
 JOB_STATUS_BLOCKED = "blocked"
-
-
-def _get_setting(conn, key: str, default=None):
-    try:
-        row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
-        if row:
-            return row["value"]
-    except Exception:
-        pass
-    try:
-        return get_state(conn, key, default)
-    except Exception:
-        return default
 
 
 def validate_upload_preconditions(library_item: dict, proposal: dict | None = None, conn=None) -> dict:
@@ -56,17 +53,17 @@ def validate_upload_preconditions(library_item: dict, proposal: dict | None = No
         if not library_item.get("tmdb_id"):
             warnings.append("No hay TMDb ID asociado. Se recomienda para la subida.")
 
-        uploadrr_path = _get_setting(conn, "uploadrr_path") or _get_setting(conn, "UPLOADRR_PATH")
+        uploadrr_path = get_setting_canonical(conn, "uploadrr.path")
         if not uploadrr_path:
-            errors.append("Ruta de Uploadrr no configurada (uploadrr_path).")
+            errors.append("Ruta de Uploadrr no configurada (uploadrr.path).")
         elif not os.path.exists(uploadrr_path):
             errors.append(f"Ruta de Uploadrr no existe: {uploadrr_path}")
 
-        emu_key = _get_setting(conn, "emu_api_key") or _get_setting(conn, "EMU_API_KEY")
+        emu_key = get_setting_canonical(conn, "emu.api_key")
         if not emu_key:
             errors.append("API key de eMuwarez no configurada.")
 
-        tmdb_key = _get_setting(conn, "tmdb_api_key") or _get_setting(conn, "TMDB_API_KEY")
+        tmdb_key = get_setting_canonical(conn, "tmdb.api_key")
         if not tmdb_key:
             errors.append("API key de TMDb no configurada.")
 
@@ -91,11 +88,19 @@ def build_uploadrr_command_preview(
     request_item: dict | None = None,
     conn=None,
 ) -> dict:
-    """Build a preview of what the Uploadrr command would look like. NEVER executes it."""
+    """Build a preview of what the Uploadrr command would look like. NEVER executes it.
+
+    For runtime_type=uploadrr_emu (the default), builds the real Uploadrr-EMU
+    argv (-tk/-mt/-tmdb/-ua/-c/-res) via uploadrr_contract.py and validates it
+    against the contract (allowed_roots, python_path, script path). The
+    result always has can_execute=False / safe_to_execute=False in this
+    phase — real execution is Phase 10F.
+    """
     own = conn is None
     conn = conn or connect()
     try:
-        uploadrr_path = _get_setting(conn, "uploadrr_path") or "/path/to/Uploadrr"
+        runtime = get_runtime_settings(conn)
+        runtime_type = runtime["runtime_type"]
 
         title = (proposal or {}).get("proposed_title") or library_item.get("title") or "Sin título"
         media_type = library_item.get("item_type") or "movie"
@@ -103,11 +108,68 @@ def build_uploadrr_command_preview(
         resolution = (proposal or {}).get("resolution") or library_item.get("resolution") or ""
         # Prefer prepared_path (nomenclature applied) over original path
         has_prepared = bool(library_item.get("prepared_path"))
-        source_path = library_item.get("prepared_path") or library_item.get("path") or ""
+        prepared_path = library_item.get("prepared_path") or ""
+        active_path = prepared_path or library_item.get("path") or ""
+        season = (proposal or {}).get("season") or library_item.get("season")
+        episode = (proposal or {}).get("episode") or library_item.get("episode")
 
         category = "tv" if media_type in ("tv", "series", "anime") else "movie"
-        tracker = "EMU"
 
+        if runtime_type == RUNTIME_EMU:
+            uploadrr_path = runtime["uploadrr_path"] or "/path/to/Uploadrr"
+            script_path = str(Path(uploadrr_path) / "upload.py")
+            python_path = runtime["python_path"] or "python"
+
+            contract = validate_uploadrr_emu_contract(
+                prepared_path=active_path,
+                torrent_name=title,
+                tmdb_id=tmdb_id,
+                category=category,
+                resolution=resolution,
+                allowed_roots=runtime["allowed_roots"],
+                python_path=runtime["python_path"],
+                uploadrr_script_path=str(Path(runtime["uploadrr_path"]) / "upload.py") if runtime["uploadrr_path"] else "",
+            )
+
+            command_args = build_uploadrr_emu_command(
+                python_path=python_path,
+                uploadrr_script_path=script_path,
+                prepared_path=active_path,
+                torrent_name=title,
+                tmdb_id=tmdb_id,
+                category=category,
+                resolution=resolution,
+                season=season,
+                episode=episode,
+            )
+            command_preview = render_command_preview(command_args)
+
+            return {
+                "runtime_type": RUNTIME_EMU,
+                "uploadrr_path": uploadrr_path,
+                "tracker": "EMU",
+                "category": category,
+                "title": title,
+                "tmdb_id": tmdb_id,
+                "resolution": resolution,
+                "source_path": active_path,
+                "using_prepared_path": has_prepared,
+                "command_preview": command_preview,
+                "command_args": command_args,
+                "contract_valid": contract["valid"],
+                "contract_errors": contract["errors"],
+                "contract_warnings": contract["warnings"],
+                "can_execute": False,
+                "requires_confirmation": CONFIRMATION_TOKEN,
+                "safe_to_execute": False,
+                "note": "Esta es una previsualización. El comando NO ha sido ejecutado.",
+            }
+
+        # runtime_type == uploadrr_generic: best-effort legacy preview for
+        # forks whose exact flag mapping is unknown. Not validated against a
+        # real contract — kept only for forward compatibility.
+        uploadrr_path = runtime["uploadrr_path"] or "/path/to/Uploadrr"
+        tracker = "EMU"
         args = [
             f"python3 {uploadrr_path}/upload.py",
             f"--tracker {tracker}",
@@ -117,24 +179,28 @@ def build_uploadrr_command_preview(
             args.append(f"--tmdb {tmdb_id}")
         if resolution:
             args.append(f"--resolution {resolution}")
-        if source_path:
-            args.append(f'--source "{source_path}"')
+        if active_path:
+            args.append(f'--source "{active_path}"')
         if title:
             args.append(f'--title "{title}"')
 
         command_str = " \\\n  ".join(args)
 
         return {
+            "runtime_type": RUNTIME_GENERIC,
             "uploadrr_path": uploadrr_path,
             "tracker": tracker,
             "category": category,
             "title": title,
             "tmdb_id": tmdb_id,
             "resolution": resolution,
-            "source_path": source_path,
+            "source_path": active_path,
             "using_prepared_path": has_prepared,
             "command_preview": command_str,
             "command_args": args,
+            "can_execute": False,
+            "requires_confirmation": CONFIRMATION_TOKEN,
+            "safe_to_execute": False,
             "note": "Esta es una previsualización. El comando NO ha sido ejecutado.",
         }
     finally:

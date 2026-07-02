@@ -38,6 +38,12 @@ export interface DashboardSummaryResponse {
   radarr_items: number
   sonarr_items: number
   last_sync_at: string | null
+  // Phase 8B — request readiness (used by "Peticiones accionables")
+  requests_ready_to_upload?: number
+  requests_high_priority?: number
+  requests_need_nomenclature?: number
+  requests_waiting_download?: number
+  requests_blocked?: number
 }
 
 export interface DashboardActivityItem {
@@ -288,37 +294,6 @@ export interface RequestSyncResponse {
   matched: number
   wait_seconds: number
   message: string
-}
-
-// Updated DashboardSummaryResponse with EMU fields
-export interface DashboardSummaryResponseV2 extends DashboardSummaryResponse {
-  requests_total: number
-  requests_compatible: number
-  requests_filled: number
-  requests_last_sync_at: string | null
-  // Phase 8A
-  arr_health_ok: number
-  arr_health_warning: number
-  arr_health_error: number
-  files_verified: number
-  files_missing_on_disk: number
-  items_ready_for_nomenclature: number
-  items_ready_for_upload: number
-  items_waiting_download: number
-  items_need_arr_review: number
-  // Phase 8B
-  requests_ready_to_upload: number
-  requests_need_nomenclature: number
-  requests_waiting_download: number
-  requests_blocked: number
-  requests_high_priority: number
-  // Phase 8C
-  operational_queue_open: number
-  operational_queue_ready: number
-  operational_queue_waiting: number
-  operational_queue_blocked: number
-  operational_queue_critical: number
-  operational_queue_high: number
 }
 
 // Phase 6A — Nomenclature

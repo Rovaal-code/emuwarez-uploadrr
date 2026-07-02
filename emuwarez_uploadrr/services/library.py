@@ -318,6 +318,31 @@ def get_recent_activity(conn: sqlite3.Connection, *, limit: int = 20) -> list[di
     return [dict(row) for row in rows]
 
 
+# Phase 11F — dashboard "Actividad reciente" priority: items with a filled
+# (satisfied) EMU request first, then compatible/partial candidates, then
+# everything else; ties broken by most-recently-updated (a deterministic,
+# honest stand-in for "then random" — re-shuffling on every dashboard load
+# would be noisy, not more useful).
+_REQUEST_PRIORITY_SQL = """
+    CASE request_status
+        WHEN 'Llena' THEN 0
+        WHEN 'Compatible' THEN 1
+        WHEN 'Parcial' THEN 2
+        WHEN 'No compatible' THEN 3
+        WHEN 'Desconocida' THEN 4
+        ELSE 5
+    END
+"""
+
+
+def get_dashboard_library_activity(conn: sqlite3.Connection, *, limit: int = 10) -> list[dict]:
+    rows = conn.execute(
+        f"SELECT * FROM library_items ORDER BY {_REQUEST_PRIORITY_SQL}, updated_at DESC LIMIT ?",
+        (limit,),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def update_request_status(
     conn: sqlite3.Connection,
     library_item_id: int,

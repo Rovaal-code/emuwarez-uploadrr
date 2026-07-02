@@ -41,12 +41,23 @@ class SettingsResponse(BaseModel):
     tmdb_language: str
     tmdb_api_key_configured: bool
     tmdb_api_key_masked: Optional[str] = None
+    # Phase 11A: Emuwarez API key, editable from Settings (not just setup wizard).
+    emu_api_key_configured: bool = False
+    emu_api_key_masked: Optional[str] = None
     # Phase 10F: Uploadrr runtime settings (no secrets involved here).
     uploadrr_path: Optional[str] = None
     uploadrr_runtime_type: str = RUNTIME_EMU
     uploadrr_python_path: Optional[str] = None
     uploadrr_timeout: int = DEFAULT_TIMEOUT_SECONDS
     uploadrr_allowed_roots: list[str] = []
+    # Phase 11A: notification providers (Discord webhook / Telegram bot).
+    notify_discord_enabled: bool = False
+    notify_discord_webhook_configured: bool = False
+    notify_discord_webhook_masked: Optional[str] = None
+    notify_telegram_enabled: bool = False
+    notify_telegram_bot_token_configured: bool = False
+    notify_telegram_bot_token_masked: Optional[str] = None
+    notify_telegram_chat_id: Optional[str] = None
 
 
 class SettingsUpdateRequest(BaseModel):
@@ -55,6 +66,8 @@ class SettingsUpdateRequest(BaseModel):
     tmdb_watch_region: Optional[str] = None
     tmdb_language: Optional[str] = None
     tmdb_api_key: Optional[str] = None
+    # Phase 11A
+    emu_api_key: Optional[str] = None
     # Phase 10F
     uploadrr_path: Optional[str] = None
     uploadrr_runtime_type: Optional[str] = None
@@ -63,6 +76,12 @@ class SettingsUpdateRequest(BaseModel):
     # Accepts either a list of strings or a single CSV string (frontend may
     # submit either a textarea/CSV field or a parsed list).
     uploadrr_allowed_roots: Optional[list[str] | str] = None
+    # Phase 11A: notifications
+    notify_discord_enabled: Optional[bool] = None
+    notify_discord_webhook_url: Optional[str] = None
+    notify_telegram_enabled: Optional[bool] = None
+    notify_telegram_bot_token: Optional[str] = None
+    notify_telegram_chat_id: Optional[str] = None
 
 
 def _normalize_allowed_roots(value: list[str] | str) -> list[str]:
@@ -91,6 +110,15 @@ def _build_response(conn) -> SettingsResponse:
     configured = bool(tmdb_key and tmdb_key.strip())
     masked = mask_secret(tmdb_key) if configured else None
 
+    emu_key = get_setting_canonical(conn, "emu.api_key")
+    emu_configured = bool(emu_key and emu_key.strip())
+    emu_masked = mask_secret(emu_key) if emu_configured else None
+
+    discord_webhook = get_setting_canonical(conn, "notify.discord.webhook_url")
+    discord_webhook_configured = bool(discord_webhook and discord_webhook.strip())
+    telegram_token = get_setting_canonical(conn, "notify.telegram.bot_token")
+    telegram_token_configured = bool(telegram_token and telegram_token.strip())
+
     raw_roots = get_setting_canonical(conn, "uploadrr.allowed_roots")
     try:
         allowed_roots = json.loads(raw_roots) if raw_roots else []
@@ -117,6 +145,15 @@ def _build_response(conn) -> SettingsResponse:
         uploadrr_python_path=get_setting_canonical(conn, "uploadrr.python_path"),
         uploadrr_timeout=timeout,
         uploadrr_allowed_roots=allowed_roots,
+        emu_api_key_configured=emu_configured,
+        emu_api_key_masked=emu_masked,
+        notify_discord_enabled=(get_setting_canonical(conn, "notify.discord.enabled") or "") == "true",
+        notify_discord_webhook_configured=discord_webhook_configured,
+        notify_discord_webhook_masked=mask_secret(discord_webhook) if discord_webhook_configured else None,
+        notify_telegram_enabled=(get_setting_canonical(conn, "notify.telegram.enabled") or "") == "true",
+        notify_telegram_bot_token_configured=telegram_token_configured,
+        notify_telegram_bot_token_masked=mask_secret(telegram_token) if telegram_token_configured else None,
+        notify_telegram_chat_id=get_setting_canonical(conn, "notify.telegram.chat_id"),
     )
 
 
@@ -178,6 +215,9 @@ def update_settings(
         if body.tmdb_api_key is not None and body.tmdb_api_key.strip():
             set_setting(conn, "tmdb.api_key", body.tmdb_api_key.strip())
 
+        if body.emu_api_key is not None and body.emu_api_key.strip():
+            set_setting(conn, "emu.api_key", body.emu_api_key.strip())
+
         if body.uploadrr_path is not None:
             set_setting(conn, "uploadrr.path", body.uploadrr_path.strip())
 
@@ -193,6 +233,21 @@ def update_settings(
         if body.uploadrr_allowed_roots is not None:
             normalized = _normalize_allowed_roots(body.uploadrr_allowed_roots)
             set_setting(conn, "uploadrr.allowed_roots", json.dumps(normalized, ensure_ascii=False))
+
+        if body.notify_discord_enabled is not None:
+            set_setting(conn, "notify.discord.enabled", "true" if body.notify_discord_enabled else "false")
+
+        if body.notify_discord_webhook_url is not None and body.notify_discord_webhook_url.strip():
+            set_setting(conn, "notify.discord.webhook_url", body.notify_discord_webhook_url.strip())
+
+        if body.notify_telegram_enabled is not None:
+            set_setting(conn, "notify.telegram.enabled", "true" if body.notify_telegram_enabled else "false")
+
+        if body.notify_telegram_bot_token is not None and body.notify_telegram_bot_token.strip():
+            set_setting(conn, "notify.telegram.bot_token", body.notify_telegram_bot_token.strip())
+
+        if body.notify_telegram_chat_id is not None:
+            set_setting(conn, "notify.telegram.chat_id", body.notify_telegram_chat_id.strip())
 
         conn.commit()
         return _build_response(conn)

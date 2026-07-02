@@ -9,11 +9,20 @@ export interface SettingsData {
   tmdb_language: string
   tmdb_api_key_configured: boolean
   tmdb_api_key_masked: string | null
+  emu_api_key_configured: boolean
+  emu_api_key_masked: string | null
   uploadrr_path: string | null
   uploadrr_runtime_type: UploadrrRuntimeType
   uploadrr_python_path: string | null
   uploadrr_timeout: number
   uploadrr_allowed_roots: string[]
+  notify_discord_enabled: boolean
+  notify_discord_webhook_configured: boolean
+  notify_discord_webhook_masked: string | null
+  notify_telegram_enabled: boolean
+  notify_telegram_bot_token_configured: boolean
+  notify_telegram_bot_token_masked: string | null
+  notify_telegram_chat_id: string | null
 }
 
 export interface SettingsUpdatePayload {
@@ -22,11 +31,17 @@ export interface SettingsUpdatePayload {
   tmdb_watch_region?: string
   tmdb_language?: string
   tmdb_api_key?: string
+  emu_api_key?: string
   uploadrr_path?: string
   uploadrr_runtime_type?: UploadrrRuntimeType
   uploadrr_python_path?: string
   uploadrr_timeout?: number
   uploadrr_allowed_roots?: string[] | string
+  notify_discord_enabled?: boolean
+  notify_discord_webhook_url?: string
+  notify_telegram_enabled?: boolean
+  notify_telegram_bot_token?: string
+  notify_telegram_chat_id?: string
 }
 
 export function fetchSettings(): Promise<SettingsData> {

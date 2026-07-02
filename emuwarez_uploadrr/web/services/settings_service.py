@@ -12,7 +12,10 @@ from typing import Optional
 from ...database import get_setting_canonical as _get_setting_canonical
 
 _SECRET_KEYS: frozenset[str] = frozenset(
-    ["tmdb.api_key", "emu.api_key", "emu.endpoint_url"]
+    [
+        "tmdb.api_key", "emu.api_key", "emu.endpoint_url",
+        "notify.discord.webhook_url", "notify.telegram.bot_token",
+    ]
 )
 
 

@@ -22,6 +22,7 @@ from .operational_queue import router as operational_queue_router
 from .operational_actions import router as operational_actions_router
 from .settings import router as settings_router
 from .integration_tests import router as integration_tests_router
+from .notifications import router as notifications_router
 
 api_router = APIRouter(prefix="/api")
 
@@ -51,3 +52,4 @@ api_router.include_router(operational_queue_router)
 api_router.include_router(operational_actions_router)
 api_router.include_router(settings_router)
 api_router.include_router(integration_tests_router)
+api_router.include_router(notifications_router)

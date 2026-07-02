@@ -12,9 +12,12 @@ import {
   type BackupInfo,
 } from '../api/maintenance'
 import { fetchSettings, updateSettings, type SettingsData, type UploadrrRuntimeType } from '../api/settings'
-import { testTmdbConnection, testUploadrrConnection, type IntegrationTestResult } from '../api/integrationTests'
+import { testTmdbConnection, testEmuwarezConnection, testUploadrrConnection, type IntegrationTestResult } from '../api/integrationTests'
+import { testDiscordNotification, testTelegramNotification } from '../api/notifications'
+import { ProviderPriorityPicker } from '../components/ProviderPriorityPicker'
+import { REGION_OPTIONS, LANGUAGE_OPTIONS } from '../constants/regionLanguage'
 
-type Tab = 'config' | 'diagnostics' | 'backup' | 'maintenance'
+type Tab = 'config' | 'notifications' | 'diagnostics' | 'backup' | 'maintenance'
 
 function formatBytes(n: number) {
   if (n < 1024) return `${n} B`
@@ -30,13 +33,16 @@ function ConfigTab() {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [testingTmdb, setTestingTmdb] = useState(false)
   const [tmdbTestResult, setTmdbTestResult] = useState<IntegrationTestResult | null>(null)
+  const [testingEmu, setTestingEmu] = useState(false)
+  const [emuTestResult, setEmuTestResult] = useState<IntegrationTestResult | null>(null)
 
   // Form state
   const [tag, setTag] = useState('')
-  const [priorityRaw, setPriorityRaw] = useState('')
+  const [providerOrder, setProviderOrder] = useState<string[]>([])
   const [region, setRegion] = useState('')
   const [language, setLanguage] = useState('')
   const [newKey, setNewKey] = useState('')
+  const [newEmuKey, setNewEmuKey] = useState('')
 
   // Uploadrr runtime form state (Phase 10F)
   const [uploadrrPath, setUploadrrPath] = useState('')
@@ -52,7 +58,7 @@ function ConfigTab() {
       .then(s => {
         setSettings(s)
         setTag(s.default_release_tag)
-        setPriorityRaw(s.provider_priority_order.join(','))
+        setProviderOrder(s.provider_priority_order)
         setRegion(s.tmdb_watch_region)
         setLanguage(s.tmdb_language)
         setUploadrrPath(s.uploadrr_path ?? '')
@@ -98,14 +104,28 @@ function ConfigTab() {
     }
   }
 
+  async function handleTestEmu() {
+    setTestingEmu(true)
+    setEmuTestResult(null)
+    try {
+      const params: { api_key?: string } = {}
+      if (newEmuKey.trim()) params.api_key = newEmuKey.trim()
+      const r = await testEmuwarezConnection(params)
+      setEmuTestResult(r)
+    } catch {
+      setEmuTestResult({ ok: false, service: 'emuwarez', status: 'connection_error', message: 'Error al contactar con el servidor' })
+    } finally {
+      setTestingEmu(false)
+    }
+  }
+
   async function handleSave() {
     setSaving(true)
     setMsg(null)
     try {
-      const priority = priorityRaw.split(',').map(s => s.trim()).filter(Boolean)
       const payload: Parameters<typeof updateSettings>[0] = {
         default_release_tag: tag.trim(),
-        provider_priority_order: priority,
+        provider_priority_order: providerOrder,
         tmdb_watch_region: region.trim(),
         tmdb_language: language.trim(),
         uploadrr_path: uploadrrPath.trim(),
@@ -115,13 +135,15 @@ function ConfigTab() {
         uploadrr_allowed_roots: uploadrrAllowedRootsRaw,
       }
       if (newKey.trim()) payload.tmdb_api_key = newKey.trim()
+      if (newEmuKey.trim()) payload.emu_api_key = newEmuKey.trim()
       const updated = await updateSettings(payload)
       setSettings(updated)
       setTag(updated.default_release_tag)
-      setPriorityRaw(updated.provider_priority_order.join(','))
+      setProviderOrder(updated.provider_priority_order)
       setRegion(updated.tmdb_watch_region)
       setLanguage(updated.tmdb_language)
       setNewKey('')
+      setNewEmuKey('')
       setUploadrrPath(updated.uploadrr_path ?? '')
       setUploadrrRuntimeType(updated.uploadrr_runtime_type)
       setUploadrrPythonPath(updated.uploadrr_python_path ?? '')
@@ -167,7 +189,7 @@ function ConfigTab() {
             className="form-input"
             value={newKey}
             onChange={e => setNewKey(e.target.value)}
-            placeholder="sk-…"
+            placeholder="API key de TMDb"
             autoComplete="new-password"
           />
           <span className="form-hint">Usada para marcar providers disponibles en TMDb.</span>
@@ -199,13 +221,69 @@ function ConfigTab() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div className="form-group">
             <label className="form-label">Región</label>
-            <input className="form-input" value={region} onChange={e => setRegion(e.target.value)} placeholder="ES" />
-            <span className="form-hint">Código ISO de país para filtrar providers.</span>
+            <select className="form-input form-select" value={region} onChange={e => setRegion(e.target.value)}>
+              {REGION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label} ({o.value})</option>)}
+            </select>
+            <span className="form-hint">País para filtrar providers.</span>
           </div>
           <div className="form-group">
             <label className="form-label">Idioma</label>
-            <input className="form-input" value={language} onChange={e => setLanguage(e.target.value)} placeholder="es-ES" />
+            <select className="form-input form-select" value={language} onChange={e => setLanguage(e.target.value)}>
+              {LANGUAGE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
           </div>
+        </div>
+      </div>
+
+      <div className="placeholder-card">
+        <h3 style={{ marginTop: 0, marginBottom: 14 }}>Emuwarez</h3>
+        <div className="form-group" style={{ marginBottom: 12 }}>
+          <label className="form-label">Estado de la API key</label>
+          <div style={{ fontSize: 13 }}>
+            {settings?.emu_api_key_configured
+              ? <><span style={{ color: '#22c55e' }}>✓ Configurada</span>{settings.emu_api_key_masked && <code style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>{settings.emu_api_key_masked}</code>}</>
+              : <span style={{ color: '#ef4444' }}>✗ No configurada</span>}
+          </div>
+        </div>
+        <div className="form-group" style={{ marginBottom: 12 }}>
+          <label className="form-label">Nueva API key / token <span className="form-hint">(dejar vacío para mantener la actual)</span></label>
+          <input
+            type="password"
+            className="form-input"
+            value={newEmuKey}
+            onChange={e => setNewEmuKey(e.target.value)}
+            placeholder="API key de Emuwarez"
+            autoComplete="new-password"
+          />
+          <span className="form-hint">Usada para leer peticiones y (en el futuro) subir contenido a Emuwarez.</span>
+        </div>
+        <div>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={handleTestEmu}
+            disabled={testingEmu}
+            type="button"
+          >
+            {testingEmu ? 'Probando…' : 'Probar conexión'}
+          </button>
+          {emuTestResult && (
+            <span style={{
+              marginLeft: 10, fontSize: 12,
+              color: emuTestResult.ok ? '#22c55e'
+                : emuTestResult.status === 'not_configured' ? '#f59e0b'
+                : '#ef4444',
+            }}>
+              {emuTestResult.ok ? '✓ Conectado'
+                : emuTestResult.status === 'not_configured' ? '⚠ Sin configurar'
+                : emuTestResult.status === 'invalid_key' ? '✗ API key inválida'
+                : emuTestResult.status === 'timeout' ? '✗ Timeout'
+                : `✗ ${emuTestResult.message}`}
+            </span>
+          )}
+          <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8, marginBottom: 0 }}>
+            Nota: la API de Emuwarez no expone un endpoint de cuenta/perfil propio conocido — el test de
+            conexión solo confirma que la key es válida, no muestra el nombre de usuario detectado.
+          </p>
         </div>
       </div>
 
@@ -217,14 +295,9 @@ function ConfigTab() {
           <span className="form-hint">Propuesta por defecto al generar el torrent name.</span>
         </div>
         <div className="form-group">
-          <label className="form-label">Orden de providers (separados por coma)</label>
-          <input
-            className="form-input"
-            value={priorityRaw}
-            onChange={e => setPriorityRaw(e.target.value)}
-            placeholder="AMZN,NF,DSNP,MAX,ATVP"
-          />
-          <span className="form-hint">Se usa para elegir automáticamente el provider cuando TMDb devuelve varios. Códigos válidos: AMZN, NF, DSNP, MAX, ATVP, HMAX, PCOK, MUBI, SKY…</span>
+          <label className="form-label">Prioridad de providers</label>
+          <ProviderPriorityPicker order={providerOrder} onChange={setProviderOrder} />
+          <span className="form-hint">Se usa para elegir automáticamente el provider cuando TMDb devuelve varios. Arrastra para reordenar.</span>
         </div>
       </div>
 
@@ -612,6 +685,187 @@ function MaintenanceTab() {
   )
 }
 
+// ---------- Notifications tab ----------
+function NotificationsTab() {
+  const [settings, setSettings] = useState<SettingsData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  const [discordEnabled, setDiscordEnabled] = useState(false)
+  const [discordWebhook, setDiscordWebhook] = useState('')
+  const [testingDiscord, setTestingDiscord] = useState(false)
+  const [discordResult, setDiscordResult] = useState<IntegrationTestResult | null>(null)
+
+  const [telegramEnabled, setTelegramEnabled] = useState(false)
+  const [telegramToken, setTelegramToken] = useState('')
+  const [telegramChatId, setTelegramChatId] = useState('')
+  const [testingTelegram, setTestingTelegram] = useState(false)
+  const [telegramResult, setTelegramResult] = useState<IntegrationTestResult | null>(null)
+
+  useEffect(() => {
+    fetchSettings()
+      .then(s => {
+        setSettings(s)
+        setDiscordEnabled(s.notify_discord_enabled)
+        setTelegramEnabled(s.notify_telegram_enabled)
+        setTelegramChatId(s.notify_telegram_chat_id ?? '')
+      })
+      .catch(() => setMsg({ ok: false, text: 'Error cargando configuración' }))
+      .finally(() => setLoading(false))
+  }, [])
+
+  async function handleSave() {
+    setSaving(true)
+    setMsg(null)
+    try {
+      const payload: Parameters<typeof updateSettings>[0] = {
+        notify_discord_enabled: discordEnabled,
+        notify_telegram_enabled: telegramEnabled,
+        notify_telegram_chat_id: telegramChatId.trim(),
+      }
+      if (discordWebhook.trim()) payload.notify_discord_webhook_url = discordWebhook.trim()
+      if (telegramToken.trim()) payload.notify_telegram_bot_token = telegramToken.trim()
+      const updated = await updateSettings(payload)
+      setSettings(updated)
+      setDiscordWebhook('')
+      setTelegramToken('')
+      setMsg({ ok: true, text: '✓ Notificaciones guardadas' })
+    } catch (e: unknown) {
+      setMsg({ ok: false, text: `✗ ${e instanceof Error ? e.message : String(e)}` })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleTestDiscord() {
+    setTestingDiscord(true)
+    setDiscordResult(null)
+    try {
+      const params: { webhook_url?: string } = {}
+      if (discordWebhook.trim()) params.webhook_url = discordWebhook.trim()
+      setDiscordResult(await testDiscordNotification(params))
+    } catch {
+      setDiscordResult({ ok: false, service: 'discord', status: 'connection_error', message: 'Error al contactar con el servidor' })
+    } finally {
+      setTestingDiscord(false)
+    }
+  }
+
+  async function handleTestTelegram() {
+    setTestingTelegram(true)
+    setTelegramResult(null)
+    try {
+      const params: { bot_token?: string; chat_id?: string } = {}
+      if (telegramToken.trim()) params.bot_token = telegramToken.trim()
+      if (telegramChatId.trim()) params.chat_id = telegramChatId.trim()
+      setTelegramResult(await testTelegramNotification(params))
+    } catch {
+      setTelegramResult({ ok: false, service: 'telegram', status: 'connection_error', message: 'Error al contactar con el servidor' })
+    } finally {
+      setTestingTelegram(false)
+    }
+  }
+
+  function renderResult(result: IntegrationTestResult | null) {
+    if (!result) return null
+    return (
+      <span style={{
+        marginLeft: 10, fontSize: 12,
+        color: result.ok ? '#22c55e' : result.status === 'not_configured' ? '#f59e0b' : '#ef4444',
+      }}>
+        {result.ok ? '✓ Enviada'
+          : result.status === 'not_configured' ? '⚠ Sin configurar'
+          : result.status === 'invalid_key' ? '✗ Credenciales inválidas'
+          : result.status === 'invalid_chat_id' ? '✗ Chat ID inválido'
+          : result.status === 'timeout' ? '✗ Timeout'
+          : `✗ ${result.message}`}
+      </span>
+    )
+  }
+
+  if (loading) return <p style={{ padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>Cargando…</p>
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 640 }}>
+      {msg && (
+        <div style={{
+          padding: '10px 14px', borderRadius: 6, fontSize: 13,
+          background: msg.ok ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)',
+          border: `1px solid ${msg.ok ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)'}`,
+          color: msg.ok ? '#86efac' : '#fca5a5',
+        }}>
+          {msg.text}
+        </div>
+      )}
+
+      <div className="placeholder-card">
+        <h3 style={{ marginTop: 0, marginBottom: 14 }}>Discord</h3>
+        <label className="checkbox-label" style={{ marginBottom: 12, display: 'block' }}>
+          <input type="checkbox" checked={discordEnabled} onChange={e => setDiscordEnabled(e.target.checked)} /> Activar notificaciones por Discord
+        </label>
+        <div className="form-group" style={{ marginBottom: 12 }}>
+          <label className="form-label">Webhook URL</label>
+          <div style={{ fontSize: 13, marginBottom: 6 }}>
+            {settings?.notify_discord_webhook_configured
+              ? <><span style={{ color: '#22c55e' }}>✓ Configurado</span>{settings.notify_discord_webhook_masked && <code style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>{settings.notify_discord_webhook_masked}</code>}</>
+              : <span style={{ color: '#ef4444' }}>✗ No configurado</span>}
+          </div>
+          <input
+            type="password"
+            className="form-input"
+            value={discordWebhook}
+            onChange={e => setDiscordWebhook(e.target.value)}
+            placeholder="https://discord.com/api/webhooks/… (dejar vacío para mantener el actual)"
+            autoComplete="new-password"
+          />
+        </div>
+        <button className="btn btn-secondary btn-sm" onClick={handleTestDiscord} disabled={testingDiscord} type="button">
+          {testingDiscord ? 'Enviando…' : 'Probar notificación'}
+        </button>
+        {renderResult(discordResult)}
+      </div>
+
+      <div className="placeholder-card">
+        <h3 style={{ marginTop: 0, marginBottom: 14 }}>Telegram</h3>
+        <label className="checkbox-label" style={{ marginBottom: 12, display: 'block' }}>
+          <input type="checkbox" checked={telegramEnabled} onChange={e => setTelegramEnabled(e.target.checked)} /> Activar notificaciones por Telegram
+        </label>
+        <div className="form-group" style={{ marginBottom: 12 }}>
+          <label className="form-label">Bot token</label>
+          <div style={{ fontSize: 13, marginBottom: 6 }}>
+            {settings?.notify_telegram_bot_token_configured
+              ? <><span style={{ color: '#22c55e' }}>✓ Configurado</span>{settings.notify_telegram_bot_token_masked && <code style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>{settings.notify_telegram_bot_token_masked}</code>}</>
+              : <span style={{ color: '#ef4444' }}>✗ No configurado</span>}
+          </div>
+          <input
+            type="password"
+            className="form-input"
+            value={telegramToken}
+            onChange={e => setTelegramToken(e.target.value)}
+            placeholder="123456:ABC-DEF… (dejar vacío para mantener el actual)"
+            autoComplete="new-password"
+          />
+        </div>
+        <div className="form-group" style={{ marginBottom: 12 }}>
+          <label className="form-label">Chat ID</label>
+          <input className="form-input" value={telegramChatId} onChange={e => setTelegramChatId(e.target.value)} placeholder="-100123456789" />
+        </div>
+        <button className="btn btn-secondary btn-sm" onClick={handleTestTelegram} disabled={testingTelegram} type="button">
+          {testingTelegram ? 'Enviando…' : 'Probar notificación'}
+        </button>
+        {renderResult(telegramResult)}
+      </div>
+
+      <div>
+        <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+          {saving ? 'Guardando…' : 'Guardar notificaciones'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ---------- Main page ----------
 export function SettingsPage() {
   const [tab, setTab] = useState<Tab>('config')
@@ -631,6 +885,7 @@ export function SettingsPage() {
 
   const tabs: { key: Tab; label: string }[] = [
     { key: 'config', label: 'Configuración' },
+    { key: 'notifications', label: 'Notificaciones' },
     { key: 'diagnostics', label: 'Diagnóstico' },
     { key: 'backup', label: 'Backup' },
     { key: 'maintenance', label: 'Mantenimiento' },
@@ -673,6 +928,7 @@ export function SettingsPage() {
       </div>
 
       {tab === 'config' && <ConfigTab />}
+      {tab === 'notifications' && <NotificationsTab />}
       {tab === 'diagnostics' && <DiagnosticsTab status={status} />}
       {tab === 'backup' && <BackupTab status={status} onRefresh={loadStatus} />}
       {tab === 'maintenance' && <MaintenanceTab />}

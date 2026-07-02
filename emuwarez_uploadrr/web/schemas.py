@@ -994,3 +994,18 @@ class IntegrationTestResult(BaseModel):
     status: str
     message: str
     details: dict = {}
+
+
+# ---------------------------------------------------------------------------
+# Phase 11A — Notifications (Discord webhook / Telegram bot) test-send
+# ---------------------------------------------------------------------------
+
+class TestDiscordRequest(BaseModel):
+    """If webhook_url is omitted, the stored notify.discord.webhook_url is used."""
+    webhook_url: Optional[str] = None
+
+
+class TestTelegramRequest(BaseModel):
+    """If bot_token/chat_id are omitted, the stored values are used."""
+    bot_token: Optional[str] = None
+    chat_id: Optional[str] = None

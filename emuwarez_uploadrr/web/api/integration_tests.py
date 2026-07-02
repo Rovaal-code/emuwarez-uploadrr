@@ -21,6 +21,7 @@ from ..schemas import (
     IntegrationTestResult,
     TestArrRequest,
     TestEmuwarezRequest,
+    TestSeerrRequest,
     TestTmdbRequest,
     TestUploadrrRequest,
 )
@@ -94,6 +95,26 @@ def test_arr(
         base_url=body.base_url,
         api_key=body.api_key,
     )
+    return IntegrationTestResult(**result)
+
+
+@router.post("/test/seerr", response_model=IntegrationTestResult)
+def test_seerr(
+    body: TestSeerrRequest,
+    current_user: dict = Depends(require_auth),
+) -> IntegrationTestResult:
+    """Probe a Seerr (Overseerr/Jellyseerr) instance, saved or unsaved. Never stores credentials."""
+    from emuwarez_uploadrr.services.integration_tests import test_seerr_connection
+
+    if body.instance_id is not None:
+        with _get_conn() as conn:
+            result = test_seerr_connection(instance_id=body.instance_id, conn=conn)
+        return IntegrationTestResult(**result)
+
+    if not body.base_url or not body.api_key:
+        raise HTTPException(status_code=422, detail="base_url y api_key son obligatorios si no se especifica instance_id")
+
+    result = test_seerr_connection(base_url=body.base_url, api_key=body.api_key)
     return IntegrationTestResult(**result)
 
 

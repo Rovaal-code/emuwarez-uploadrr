@@ -73,6 +73,7 @@ export interface InstanceTestResponse {
   instance_id: number | null
   instance_name: string | null
   version: string | null
+  username: string | null
   error: string | null
 }
 

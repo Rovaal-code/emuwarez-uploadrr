@@ -15,6 +15,7 @@ from .legacy import AppConfig, MediaInfoData, FilePlan, RunPlan
 class InstanceType(str, Enum):
     RADARR = "radarr"
     SONARR = "sonarr"
+    SEERR = "seerr"  # Phase 11B — Overseerr/Jellyseerr-compatible request instance
 
 
 class MediaKind(str, Enum):

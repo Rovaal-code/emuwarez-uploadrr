@@ -37,3 +37,11 @@ export function testUploadrrConnection(params: {
 } = {}): Promise<IntegrationTestResult> {
   return api.post<IntegrationTestResult>('/integrations/test/uploadrr', params)
 }
+
+export function testSeerrConnection(params: {
+  instance_id?: number
+  base_url?: string
+  api_key?: string
+} = {}): Promise<IntegrationTestResult> {
+  return api.post<IntegrationTestResult>('/integrations/test/seerr', params)
+}

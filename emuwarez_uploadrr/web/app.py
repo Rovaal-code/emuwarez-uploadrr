@@ -1,6 +1,9 @@
 """FastAPI application factory for eMuwarez Uploadrr web backend."""
 from __future__ import annotations
 
+import asyncio
+import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -10,6 +13,39 @@ from fastapi.staticfiles import StaticFiles
 from .api.router import api_router
 from .errors import AppError, app_error_handler, generic_error_handler
 from .runtime import get_app_version
+
+# Phase 11D — automatic tasks scheduler tick interval (seconds). Checking
+# every 60s is cheap (a couple of SQLite reads) regardless of how long the
+# configured task intervals are (minimum 15 minutes).
+_SCHEDULER_TICK_SECONDS = 60
+
+
+async def _scheduler_loop() -> None:
+    from ..services.scheduler import tick_due_tasks
+    while True:
+        try:
+            await asyncio.to_thread(tick_due_tasks)
+        except Exception:
+            # A scheduler tick must never crash the app — errors from
+            # individual tasks are already captured per-task by
+            # run_scheduled_task(); this is a last-resort guard.
+            pass
+        await asyncio.sleep(_SCHEDULER_TICK_SECONDS)
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    scheduler_task = None
+    # EMUWAREZ_DISABLE_SCHEDULER=1 — escape hatch for scripted Docker
+    # smoke/E2E runs that don't want a background scheduler tick firing
+    # mid-demo. Off (scheduler enabled) by default.
+    if os.environ.get("EMUWAREZ_DISABLE_SCHEDULER") != "1":
+        scheduler_task = asyncio.create_task(_scheduler_loop())
+    try:
+        yield
+    finally:
+        if scheduler_task is not None:
+            scheduler_task.cancel()
 
 _DESCRIPTION = """
 **eMuwarez Uploadrr** — backend web para cruzar biblioteca Radarr/Sonarr con
@@ -42,6 +78,7 @@ def create_app() -> FastAPI:
         docs_url="/api/docs",
         redoc_url="/api/redoc",
         openapi_url="/api/openapi.json",
+        lifespan=_lifespan,
     )
 
     app.add_exception_handler(AppError, app_error_handler)

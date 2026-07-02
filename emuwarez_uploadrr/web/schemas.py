@@ -1089,3 +1089,47 @@ class TestTelegramRequest(BaseModel):
     """If bot_token/chat_id are omitted, the stored values are used."""
     bot_token: Optional[str] = None
     chat_id: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Phase 11D — Automatic tasks scheduler
+# ---------------------------------------------------------------------------
+
+class ScheduledTaskResponse(BaseModel):
+    task_key: str
+    name: str
+    description: str
+    interval_minutes: int
+    min_interval_minutes: int
+    manual_allowed: bool
+    enabled: bool
+    last_run_at: Optional[str] = None
+    last_status: Optional[str] = None
+    last_summary: Optional[str] = None
+    next_run_at: Optional[str] = None
+
+
+class UpdateScheduledTaskRequest(BaseModel):
+    interval_minutes: int
+
+
+class RunScheduledTaskResponse(BaseModel):
+    task_key: str
+    status: str
+    summary: str
+    next_run_at: Optional[str] = None
+
+
+class TaskRunLogEntry(BaseModel):
+    id: int
+    name: str
+    status: str
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
+    summary: Optional[str] = None
+    details: Optional[str] = None
+
+
+class TaskRunLogsResponse(BaseModel):
+    task_key: str
+    logs: list[TaskRunLogEntry] = []

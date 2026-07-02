@@ -11,7 +11,7 @@ from .constants import CONFIG_DIR
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -591,6 +591,33 @@ def _migrate_diagnostic_tables(conn: sqlite3.Connection) -> None:
     """)
 
 
+def _migrate_scheduled_tasks_table(conn: sqlite3.Connection) -> None:
+    """Create the scheduled_tasks table (Phase 11D — automatic tasks).
+
+    Bookkeeping only (interval, last/next run, last status/summary) — the
+    actual run history/logs reuse the pre-existing task_runs table (see
+    services/tasks.py), keyed by task_key == task_runs.name.
+    """
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS scheduled_tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_key TEXT NOT NULL UNIQUE,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL,
+            interval_minutes INTEGER NOT NULL,
+            min_interval_minutes INTEGER NOT NULL,
+            manual_allowed INTEGER NOT NULL DEFAULT 1,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            last_run_at TEXT,
+            last_status TEXT,
+            last_summary TEXT,
+            next_run_at TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+
 def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
     own = conn is None
     conn = conn or connect()
@@ -769,6 +796,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_nomenclature_phase10a(conn)
         _migrate_settings_phase10a(conn)
         _migrate_settings_phase10e(conn)
+        _migrate_scheduled_tasks_table(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

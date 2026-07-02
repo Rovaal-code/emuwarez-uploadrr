@@ -1,0 +1,215 @@
+"""Unit tests for emuwarez_uploadrr/services/scheduler.py (Phase 11D).
+
+All actual sync work (library/eMuwarez/network) is mocked — these tests
+only exercise the scheduler's own bookkeeping (interval enforcement,
+claim/due logic, status recording), never real Radarr/Sonarr/eMuwarez
+traffic.
+"""
+from __future__ import annotations
+
+from unittest.mock import patch
+
+import pytest
+
+from emuwarez_uploadrr.database import connect, db_path, init_db
+from emuwarez_uploadrr.services.scheduler import (
+    TASK_EMU_SYNC,
+    TASK_LIBRARY_SYNC,
+    TASK_SEERR_SYNC,
+    claim_due_tasks,
+    get_scheduled_task,
+    list_scheduled_tasks,
+    run_scheduled_task,
+    set_task_interval,
+    tick_due_tasks,
+)
+
+
+@pytest.fixture
+def db_conn(isolated_db):
+    conn = connect(db_path())
+    init_db(conn)
+    yield conn
+    conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Defaults
+# ---------------------------------------------------------------------------
+
+def test_default_tasks_seeded_with_correct_intervals(db_conn):
+    tasks = {t["task_key"]: t for t in list_scheduled_tasks(db_conn)}
+    assert tasks[TASK_LIBRARY_SYNC]["interval_minutes"] == 30
+    assert tasks[TASK_LIBRARY_SYNC]["min_interval_minutes"] == 15
+    assert tasks[TASK_LIBRARY_SYNC]["manual_allowed"] == 1
+
+    assert tasks[TASK_SEERR_SYNC]["interval_minutes"] == 30
+    assert tasks[TASK_SEERR_SYNC]["min_interval_minutes"] == 15
+    assert tasks[TASK_SEERR_SYNC]["manual_allowed"] == 1
+
+    assert tasks[TASK_EMU_SYNC]["interval_minutes"] == 60
+    assert tasks[TASK_EMU_SYNC]["min_interval_minutes"] == 60
+    assert tasks[TASK_EMU_SYNC]["manual_allowed"] == 0
+
+
+def test_list_scheduled_tasks_idempotent(db_conn):
+    first = list_scheduled_tasks(db_conn)
+    second = list_scheduled_tasks(db_conn)
+    assert len(first) == len(second) == 3
+
+
+# ---------------------------------------------------------------------------
+# set_task_interval — minimum enforcement
+# ---------------------------------------------------------------------------
+
+def test_set_interval_below_minimum_rejected(db_conn):
+    with pytest.raises(ValueError, match="mínimo"):
+        set_task_interval(db_conn, TASK_LIBRARY_SYNC, 5)
+
+
+def test_set_interval_at_minimum_allowed(db_conn):
+    task = set_task_interval(db_conn, TASK_LIBRARY_SYNC, 15)
+    assert task["interval_minutes"] == 15
+
+
+def test_set_interval_above_minimum_allowed(db_conn):
+    task = set_task_interval(db_conn, TASK_LIBRARY_SYNC, 120)
+    assert task["interval_minutes"] == 120
+
+
+def test_set_interval_emu_below_60_rejected(db_conn):
+    with pytest.raises(ValueError, match="mínimo"):
+        set_task_interval(db_conn, TASK_EMU_SYNC, 30)
+
+
+def test_set_interval_unknown_task_raises(db_conn):
+    with pytest.raises(ValueError, match="desconocida"):
+        set_task_interval(db_conn, "not-a-real-task", 30)
+
+
+# ---------------------------------------------------------------------------
+# run_scheduled_task
+# ---------------------------------------------------------------------------
+
+def test_run_library_sync_updates_bookkeeping(db_conn):
+    with patch("emuwarez_uploadrr.services.library.sync_all") as mock_sync:
+        mock_sync.return_value = {"imported": 5, "missing": 1, "instances": 1, "errors": []}
+        result = run_scheduled_task(db_conn, TASK_LIBRARY_SYNC, manual=True)
+
+    assert result["status"] == "completed"
+    assert "5" in result["summary"]
+    task = get_scheduled_task(db_conn, TASK_LIBRARY_SYNC)
+    assert task["last_status"] == "completed"
+    assert task["last_run_at"] is not None
+    assert task["next_run_at"] is not None
+
+
+def test_run_library_sync_failure_recorded_not_raised(db_conn):
+    with patch("emuwarez_uploadrr.services.library.sync_all", side_effect=RuntimeError("boom")):
+        result = run_scheduled_task(db_conn, TASK_LIBRARY_SYNC, manual=True)
+
+    assert result["status"] == "failed"
+    assert "boom" in result["summary"]
+    task = get_scheduled_task(db_conn, TASK_LIBRARY_SYNC)
+    assert task["last_status"] == "failed"
+
+
+def test_run_emu_sync_manual_blocked(db_conn):
+    with pytest.raises(ValueError, match="no admite ejecución manual"):
+        run_scheduled_task(db_conn, TASK_EMU_SYNC, manual=True)
+
+
+def test_run_emu_sync_automatic_allowed(db_conn):
+    with patch("emuwarez_uploadrr.services.requests.sync_emu_requests") as mock_sync:
+        mock_sync.return_value = {"status": "ok", "imported": 3, "matched": 2}
+        result = run_scheduled_task(db_conn, TASK_EMU_SYNC, manual=False)
+
+    assert result["status"] == "completed"
+    assert "3" in result["summary"]
+
+
+def test_run_emu_sync_throttled_reports_skipped(db_conn):
+    with patch("emuwarez_uploadrr.services.requests.sync_emu_requests") as mock_sync:
+        mock_sync.return_value = {"status": "throttled", "wait_seconds": 1800, "imported": 0, "matched": 0}
+        result = run_scheduled_task(db_conn, TASK_EMU_SYNC, manual=False)
+
+    assert result["status"] == "skipped"
+    assert "1800" in result["summary"]
+
+
+def test_run_seerr_sync_without_instances(db_conn):
+    result = run_scheduled_task(db_conn, TASK_SEERR_SYNC, manual=True)
+    assert result["status"] == "skipped"
+    assert "Sin instancias Seerr" in result["summary"]
+
+
+def test_run_seerr_sync_with_instance_reports_not_implemented(db_conn):
+    from emuwarez_uploadrr.services.instances import add_instance
+    add_instance(db_conn, "seerr", "Seerr Test", "http://seerr:5055", "key")
+    result = run_scheduled_task(db_conn, TASK_SEERR_SYNC, manual=True)
+    assert result["status"] == "skipped"
+    assert "no está implementada" in result["summary"]
+
+
+def test_run_unknown_task_raises(db_conn):
+    with pytest.raises(ValueError, match="desconocida"):
+        run_scheduled_task(db_conn, "not-a-real-task", manual=False)
+
+
+def test_run_seerr_sync_never_calls_real_network(db_conn):
+    """Guard: seerr sync must never attempt any HTTP call — it only counts
+    configured instances, it never calls seerr_test_connection or similar."""
+    with patch("emuwarez_uploadrr.integrations.seerr.seerr_test_connection") as mock_call:
+        run_scheduled_task(db_conn, TASK_SEERR_SYNC, manual=True)
+        mock_call.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# claim_due_tasks
+# ---------------------------------------------------------------------------
+
+def test_claim_due_tasks_all_due_initially(db_conn):
+    claimed = claim_due_tasks(db_conn)
+    assert set(claimed) == {TASK_LIBRARY_SYNC, TASK_SEERR_SYNC, TASK_EMU_SYNC}
+
+
+def test_claim_due_tasks_does_not_reclaim_immediately(db_conn):
+    first = claim_due_tasks(db_conn)
+    assert len(first) == 3
+    second = claim_due_tasks(db_conn)
+    assert second == []  # grace window pushed next_run_at forward
+
+
+def test_claim_due_tasks_respects_disabled_flag(db_conn):
+    list_scheduled_tasks(db_conn)  # seeds the default rows first
+    db_conn.execute("UPDATE scheduled_tasks SET enabled = 0 WHERE task_key = ?", (TASK_LIBRARY_SYNC,))
+    db_conn.commit()
+    claimed = claim_due_tasks(db_conn)
+    assert TASK_LIBRARY_SYNC not in claimed
+
+
+# ---------------------------------------------------------------------------
+# tick_due_tasks — full loop, still all mocked
+# ---------------------------------------------------------------------------
+
+def test_tick_due_tasks_runs_all_three_on_first_tick(isolated_db):
+    with patch("emuwarez_uploadrr.services.library.sync_all") as mock_lib, \
+         patch("emuwarez_uploadrr.services.requests.sync_emu_requests") as mock_emu:
+        mock_lib.return_value = {"imported": 0, "missing": 0, "instances": 0, "errors": []}
+        mock_emu.return_value = {"status": "ok", "imported": 0, "matched": 0}
+        results = tick_due_tasks()
+
+    task_keys = {r["task_key"] for r in results}
+    assert task_keys == {TASK_LIBRARY_SYNC, TASK_SEERR_SYNC, TASK_EMU_SYNC}
+    assert all(r["status"] in ("completed", "skipped") for r in results)
+
+
+def test_tick_due_tasks_second_tick_runs_nothing(isolated_db):
+    with patch("emuwarez_uploadrr.services.library.sync_all") as mock_lib, \
+         patch("emuwarez_uploadrr.services.requests.sync_emu_requests") as mock_emu:
+        mock_lib.return_value = {"imported": 0, "missing": 0, "instances": 0, "errors": []}
+        mock_emu.return_value = {"status": "ok", "imported": 0, "matched": 0}
+        tick_due_tasks()
+        second_results = tick_due_tasks()
+
+    assert second_results == []

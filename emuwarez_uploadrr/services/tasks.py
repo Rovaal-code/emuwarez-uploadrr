@@ -32,3 +32,12 @@ def list_tasks(conn: sqlite3.Connection, limit: int = 20) -> list[dict]:
         (limit,),
     ).fetchall()
     return [dict(row) for row in rows]
+
+
+def list_tasks_by_name(conn: sqlite3.Connection, name: str, limit: int = 20) -> list[dict]:
+    """Phase 11D — run history/logs for one scheduled task (task_key == name)."""
+    rows = conn.execute(
+        "SELECT * FROM task_runs WHERE name = ? ORDER BY id DESC LIMIT ?",
+        (name, limit),
+    ).fetchall()
+    return [dict(row) for row in rows]

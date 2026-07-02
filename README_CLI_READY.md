@@ -385,14 +385,28 @@ Implementado en Fase 10E — Corrección del contrato Uploadrr-EMU y preflight s
 - **No se ejecutó Uploadrr real, no se subió ningún torrent, no se tocó `Uploadrr/`.** 59 tests nuevos (`test_uploadrr_contract`, `test_uploadrr_settings_namespace`, `test_uploadrr_emu_preflight`, `test_uploadrr_config_staging`). Total: 911 tests.
 - Detalle completo: `docs/codex_phase_10e_uploadrr_emu_contract_fix_report.md`.
 
+Implementado en Fase 10F — Ejecución controlada de Uploadrr-EMU, settings de runtime y UI de progreso:
+
+- **Settings UI**: `SettingsPage` (pestaña Configuración) expone una tarjeta "Uploadrr" editable — `uploadrr.path`, `uploadrr.runtime_type` (`uploadrr_emu`/`uploadrr_generic`), `uploadrr.python_path`, `uploadrr.timeout`, `uploadrr.allowed_roots` (CSV) — con botón **Probar configuración** (`POST /api/integrations/test/uploadrr`, solo filesystem, nunca ejecuta Uploadrr-EMU).
+- **Ejecución controlada real** (solo `runtime_type=uploadrr_emu`): `start_upload_job` bloquea el inicio real si el runtime activo no es `uploadrr_emu` (`error=unsupported_runtime`). Sigue exigiendo `apply=true`, `dry_run=false` y confirmación exacta `INICIAR_UPLOADRR`; `subprocess.Popen` con `shell=False` y argv como lista, como en fases anteriores.
+- **Config staging conectado**: antes de cada ejecución real se hace backup de `data/config.yaml` y se stagean `DEFAULT.tmdb`/`TRACKERS.EMU.api_key` (usando `uploadrr_config_staging.py`, ya implementado en 10E pero sin conectar); al terminar — éxito, fallo, timeout **o cancelación** — se restaura siempre el `config.yaml` original desde el backup, vía un único `finally` que envuelve toda la ejecución.
+- **Progreso/logs**: nuevo `compute_progress_phase()` mapea `(status, stage)` a una fase aproximada (`queued`/`preflight`/`config_staging`/`running`/`finalizing`/`succeeded`/`failed`/`cancelled`/`timeout`) — nunca un porcentaje inventado. `UploadJobDetail` expone `progress_phase`, `runtime_type` y `command_preview` (redactado). `UploadsPage` hace polling cada 2.5s mientras hay un job `running`; `LogsPanel` hace lo mismo mientras el job abierto está `running`.
+- **Cancelación robusta bajo concurrencia**: `_finalize_job_status()` usa un único `UPDATE ... WHERE status != 'cancelled'` atómico (no un read-then-write) para que el hilo en segundo plano nunca sobreescriba un job recién cancelado con `failed`/`completed` — probado con un runner fake real (no mockeado) que se cancela a mitad de ejecución.
+- **Fake Uploadrr-EMU** (`tests/fixtures/fake_uploadrr_emu.py`): CLI de test que acepta el contrato de flags real (`-tk/-mt/-tmdb/-ua/-c/-res/-season/-episode`), imprime logs deterministas, soporta `--fake-fail`/`--fake-sleep` (o `FAKE_UPLOADRR_FAIL`/`FAKE_UPLOADRR_SLEEP`) para forzar fallo/lentitud, y nunca toca red, config.yaml real ni sube nada. Usado en tests backend y en `docker-e2e-demo.sh`.
+- **Docker**: `data/` y `tmp/` de Uploadrr-EMU ahora se montan por separado en `rw` (ver sección "Configuración de Uploadrr" más abajo); el código sigue en `:ro`. Uploadrr-EMU sigue sin vendorizarse en la imagen.
+- **CLI**: nuevo alias `upload status <job_id>` (equivalente a `upload job <job_id>`). El resto de subcomandos (`preflight`/`start --dry-run|--apply --confirm`/`logs`/`cancel`/`retry`) ya existían y ahora usan el runner fake en tests.
+- **No se ejecutó Uploadrr real en ningún momento, no se subió ningún torrent real, no se tocó `Uploadrr/`.** 64 tests nuevos (58 en `test_uploadrr_emu_execution`/`test_uploadrr_emu_fake_runner`/`test_uploadrr_runtime_settings_api`/`test_uploadrr_config_staging_execution`/`test_uploadrr_progress_logs`/`test_uploadrr_cli_execution` + 6 ampliando `test_docker_e2e_script.py`). Total: 975 tests.
+- Detalle completo: `docs/codex_phase_10f_controlled_uploadrr_emu_execution_report.md`.
+
 Pendiente para fases posteriores:
 
-- Ejecución real controlada de Uploadrr-EMU (Fase 10F): validar contra un proceso real, ajustar el mount Docker (`tmp/` de Uploadrr necesita ser escribible; hoy el compose de ejemplo lo monta `:ro`).
-- Exponer `uploadrr.runtime_type`/`uploadrr.python_path`/`uploadrr.timeout`/`uploadrr.allowed_roots` en `SettingsPage` (hoy solo se configuran vía API/CLI o el setup wizard para `uploadrr.path`).
-- Progreso/timeline de subida en tiempo real (hoy `LogsPanel` hace un único fetch al abrir el modal, sin polling).
+- Prueba manual contra una instalación real de Uploadrr-EMU en servidor (esta fase solo valida con el runner fake).
+- Progreso más granular vía parsing específico de los logs reales de Uploadrr-EMU (hoy la fase es aproximada, basada en `status`/`stage`, no en el contenido de los logs).
+- Config staging cubre solo `DEFAULT.tmdb`/`TRACKERS.EMU.api_key`/`anon` — el resto de `config.yaml` (trackers adicionales, clientes de torrent, hosts de capturas) sigue siendo responsabilidad del operador, por diseño.
 - Crear peticiones EMU desde la app (requiere capturar POST real desde DevTools).
 - TasksPage con datos reales.
 - Modificación de título interno MKV (`mkvpropedit`).
+- Integración con publicación final real: queda bajo confirmación manual explícita del usuario en un servidor real, no automatizable desde esta fase.
 
 ## Docker / despliegue homelab
 
@@ -424,8 +438,20 @@ apuntando dentro del mismo montaje que el media.
 
 ### Configuración de Uploadrr
 
-Monta Uploadrr como bind mount externo en `/opt/Uploadrr` y configura la ruta
-desde el setup web o CLI tras el primer arranque. Uploadrr nunca se incluye en la imagen Docker.
+Monta Uploadrr-EMU como bind mount externo — nunca se incluye ni se vendoriza
+en la imagen Docker. Desde la Fase 10F, la ejecución controlada real stagea/
+restaura `data/config.yaml` y el fork escribe temporales en `tmp/`, así que
+el código puede ir `:ro` pero `data/` y `tmp/` necesitan `rw`:
+
+```yaml
+- ${UPLOADRR_PATH:-/srv/Uploadrr}:/opt/Uploadrr:ro
+- ${UPLOADRR_DATA_PATH:-/srv/emuwarez-uploadrr/uploadrr-data}:/opt/Uploadrr/data:rw
+- ${UPLOADRR_TMP_PATH:-/srv/emuwarez-uploadrr/uploadrr-tmp}:/opt/Uploadrr/tmp:rw
+```
+
+Configura la ruta (`/opt/Uploadrr`) y el resto de settings de runtime desde
+el setup web, o desde **Configuración → Uploadrr** en la UI, tras el primer
+arranque. Ver `docs/DEPLOYMENT_DOCKER.md` sección 7b para el detalle completo.
 
 ### Gestión del contenedor
 

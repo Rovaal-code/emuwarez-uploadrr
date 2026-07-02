@@ -11,8 +11,8 @@ import {
   type MaintenanceStatus,
   type BackupInfo,
 } from '../api/maintenance'
-import { fetchSettings, updateSettings, type SettingsData } from '../api/settings'
-import { testTmdbConnection, type IntegrationTestResult } from '../api/integrationTests'
+import { fetchSettings, updateSettings, type SettingsData, type UploadrrRuntimeType } from '../api/settings'
+import { testTmdbConnection, testUploadrrConnection, type IntegrationTestResult } from '../api/integrationTests'
 
 type Tab = 'config' | 'diagnostics' | 'backup' | 'maintenance'
 
@@ -38,6 +38,15 @@ function ConfigTab() {
   const [language, setLanguage] = useState('')
   const [newKey, setNewKey] = useState('')
 
+  // Uploadrr runtime form state (Phase 10F)
+  const [uploadrrPath, setUploadrrPath] = useState('')
+  const [uploadrrRuntimeType, setUploadrrRuntimeType] = useState<UploadrrRuntimeType>('uploadrr_emu')
+  const [uploadrrPythonPath, setUploadrrPythonPath] = useState('')
+  const [uploadrrTimeout, setUploadrrTimeout] = useState(7200)
+  const [uploadrrAllowedRootsRaw, setUploadrrAllowedRootsRaw] = useState('')
+  const [testingUploadrr, setTestingUploadrr] = useState(false)
+  const [uploadrrTestResult, setUploadrrTestResult] = useState<IntegrationTestResult | null>(null)
+
   useEffect(() => {
     fetchSettings()
       .then(s => {
@@ -46,10 +55,31 @@ function ConfigTab() {
         setPriorityRaw(s.provider_priority_order.join(','))
         setRegion(s.tmdb_watch_region)
         setLanguage(s.tmdb_language)
+        setUploadrrPath(s.uploadrr_path ?? '')
+        setUploadrrRuntimeType(s.uploadrr_runtime_type)
+        setUploadrrPythonPath(s.uploadrr_python_path ?? '')
+        setUploadrrTimeout(s.uploadrr_timeout)
+        setUploadrrAllowedRootsRaw((s.uploadrr_allowed_roots ?? []).join(','))
       })
       .catch(() => setMsg({ ok: false, text: 'Error cargando configuración' }))
       .finally(() => setLoading(false))
   }, [])
+
+  async function handleTestUploadrr() {
+    setTestingUploadrr(true)
+    setUploadrrTestResult(null)
+    try {
+      const params: { path?: string; python_path?: string } = {}
+      if (uploadrrPath.trim()) params.path = uploadrrPath.trim()
+      if (uploadrrPythonPath.trim()) params.python_path = uploadrrPythonPath.trim()
+      const r = await testUploadrrConnection(params)
+      setUploadrrTestResult(r)
+    } catch {
+      setUploadrrTestResult({ ok: false, service: 'uploadrr', status: 'connection_error', message: 'Error al contactar con el servidor' })
+    } finally {
+      setTestingUploadrr(false)
+    }
+  }
 
   async function handleTestTmdb() {
     setTestingTmdb(true)
@@ -78,6 +108,11 @@ function ConfigTab() {
         provider_priority_order: priority,
         tmdb_watch_region: region.trim(),
         tmdb_language: language.trim(),
+        uploadrr_path: uploadrrPath.trim(),
+        uploadrr_runtime_type: uploadrrRuntimeType,
+        uploadrr_python_path: uploadrrPythonPath.trim(),
+        uploadrr_timeout: uploadrrTimeout,
+        uploadrr_allowed_roots: uploadrrAllowedRootsRaw,
       }
       if (newKey.trim()) payload.tmdb_api_key = newKey.trim()
       const updated = await updateSettings(payload)
@@ -87,6 +122,11 @@ function ConfigTab() {
       setRegion(updated.tmdb_watch_region)
       setLanguage(updated.tmdb_language)
       setNewKey('')
+      setUploadrrPath(updated.uploadrr_path ?? '')
+      setUploadrrRuntimeType(updated.uploadrr_runtime_type)
+      setUploadrrPythonPath(updated.uploadrr_python_path ?? '')
+      setUploadrrTimeout(updated.uploadrr_timeout)
+      setUploadrrAllowedRootsRaw((updated.uploadrr_allowed_roots ?? []).join(','))
       setMsg({ ok: true, text: '✓ Configuración guardada' })
     } catch (e: unknown) {
       setMsg({ ok: false, text: `✗ ${e instanceof Error ? e.message : String(e)}` })
@@ -185,6 +225,77 @@ function ConfigTab() {
             placeholder="AMZN,NF,DSNP,MAX,ATVP"
           />
           <span className="form-hint">Se usa para elegir automáticamente el provider cuando TMDb devuelve varios. Códigos válidos: AMZN, NF, DSNP, MAX, ATVP, HMAX, PCOK, MUBI, SKY…</span>
+        </div>
+      </div>
+
+      <div className="placeholder-card">
+        <h3 style={{ marginTop: 0, marginBottom: 14 }}>Uploadrr</h3>
+        <div className="form-group" style={{ marginBottom: 12 }}>
+          <label className="form-label">Ruta Uploadrr</label>
+          <input className="form-input" value={uploadrrPath} onChange={e => setUploadrrPath(e.target.value)} placeholder="/opt/Uploadrr" />
+          <span className="form-hint">Directorio que contiene upload.py (nunca se incluye dentro de la imagen Docker).</span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="form-group">
+            <label className="form-label">Runtime</label>
+            <select
+              className="form-input"
+              value={uploadrrRuntimeType}
+              onChange={e => setUploadrrRuntimeType(e.target.value as UploadrrRuntimeType)}
+            >
+              <option value="uploadrr_emu">uploadrr_emu (recomendado)</option>
+              <option value="uploadrr_generic">uploadrr_generic</option>
+            </select>
+            <span className="form-hint">La ejecución controlada real solo está soportada para uploadrr_emu.</span>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Timeout (segundos)</label>
+            <input
+              type="number"
+              min={1}
+              className="form-input"
+              value={uploadrrTimeout}
+              onChange={e => setUploadrrTimeout(Number(e.target.value))}
+            />
+          </div>
+        </div>
+        <div className="form-group" style={{ marginBottom: 12 }}>
+          <label className="form-label">Python</label>
+          <input className="form-input" value={uploadrrPythonPath} onChange={e => setUploadrrPythonPath(e.target.value)} placeholder="/usr/local/bin/python" />
+          <span className="form-hint">Intérprete usado para ejecutar Uploadrr-EMU. En Docker: /usr/local/bin/python. En host: la ruta del venv de Uploadrr-EMU.</span>
+        </div>
+        <div className="form-group" style={{ marginBottom: 12 }}>
+          <label className="form-label">Allowed roots</label>
+          <textarea
+            className="form-input"
+            rows={2}
+            value={uploadrrAllowedRootsRaw}
+            onChange={e => setUploadrrAllowedRootsRaw(e.target.value)}
+            placeholder="/data/uploads/emu,/data/media"
+          />
+          <span className="form-hint">Rutas (separadas por coma) donde debe estar el archivo preparado antes de ejecutar Uploadrr-EMU. Vacío = usa hardlink_base.</span>
+        </div>
+        <div>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={handleTestUploadrr}
+            disabled={testingUploadrr}
+            type="button"
+          >
+            {testingUploadrr ? 'Probando…' : 'Probar configuración'}
+          </button>
+          {uploadrrTestResult && (
+            <span style={{
+              marginLeft: 10, fontSize: 12,
+              color: uploadrrTestResult.ok ? '#22c55e'
+                : uploadrrTestResult.status === 'not_configured' ? '#f59e0b'
+                : '#ef4444',
+            }}>
+              {uploadrrTestResult.ok
+                ? (uploadrrTestResult.status === 'connected_no_config' ? '⚠ Ruta OK, sin config.yaml todavía' : '✓ Ruta y script encontrados')
+                : `✗ ${uploadrrTestResult.message}`}
+            </span>
+          )}
         </div>
       </div>
 

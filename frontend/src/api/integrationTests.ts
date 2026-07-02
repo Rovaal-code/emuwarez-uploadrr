@@ -30,3 +30,10 @@ export function testArrConnection(params: {
 }): Promise<IntegrationTestResult> {
   return api.post<IntegrationTestResult>('/integrations/test/arr', params)
 }
+
+export function testUploadrrConnection(params: {
+  path?: string
+  python_path?: string
+} = {}): Promise<IntegrationTestResult> {
+  return api.post<IntegrationTestResult>('/integrations/test/uploadrr', params)
+}

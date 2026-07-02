@@ -14,8 +14,12 @@ from pydantic import BaseModel
 from ..dependencies import require_auth
 from ..runtime import _db_path
 from ..services.settings_service import get_setting, mask_secret, set_setting
+from ...services.uploadrr_contract import RUNTIME_EMU, RUNTIME_GENERIC, DEFAULT_TIMEOUT_SECONDS
+from ...database import get_setting_canonical
 
 router = APIRouter(tags=["settings"])
+
+_VALID_RUNTIME_TYPES: frozenset[str] = frozenset({RUNTIME_EMU, RUNTIME_GENERIC})
 
 # Provider codes that are valid in provider_priority_order
 _VALID_PROVIDER_CODES: frozenset[str] = frozenset({
@@ -37,6 +41,12 @@ class SettingsResponse(BaseModel):
     tmdb_language: str
     tmdb_api_key_configured: bool
     tmdb_api_key_masked: Optional[str] = None
+    # Phase 10F: Uploadrr runtime settings (no secrets involved here).
+    uploadrr_path: Optional[str] = None
+    uploadrr_runtime_type: str = RUNTIME_EMU
+    uploadrr_python_path: Optional[str] = None
+    uploadrr_timeout: int = DEFAULT_TIMEOUT_SECONDS
+    uploadrr_allowed_roots: list[str] = []
 
 
 class SettingsUpdateRequest(BaseModel):
@@ -45,6 +55,22 @@ class SettingsUpdateRequest(BaseModel):
     tmdb_watch_region: Optional[str] = None
     tmdb_language: Optional[str] = None
     tmdb_api_key: Optional[str] = None
+    # Phase 10F
+    uploadrr_path: Optional[str] = None
+    uploadrr_runtime_type: Optional[str] = None
+    uploadrr_python_path: Optional[str] = None
+    uploadrr_timeout: Optional[int] = None
+    # Accepts either a list of strings or a single CSV string (frontend may
+    # submit either a textarea/CSV field or a parsed list).
+    uploadrr_allowed_roots: Optional[list[str] | str] = None
+
+
+def _normalize_allowed_roots(value: list[str] | str) -> list[str]:
+    if isinstance(value, str):
+        parts = value.split(",")
+    else:
+        parts = value
+    return [p.strip() for p in parts if p and p.strip()]
 
 
 def _get_conn():
@@ -65,6 +91,20 @@ def _build_response(conn) -> SettingsResponse:
     configured = bool(tmdb_key and tmdb_key.strip())
     masked = mask_secret(tmdb_key) if configured else None
 
+    raw_roots = get_setting_canonical(conn, "uploadrr.allowed_roots")
+    try:
+        allowed_roots = json.loads(raw_roots) if raw_roots else []
+        if not isinstance(allowed_roots, list):
+            allowed_roots = []
+    except Exception:
+        allowed_roots = []
+
+    raw_timeout = get_setting_canonical(conn, "uploadrr.timeout")
+    try:
+        timeout = int(raw_timeout) if raw_timeout else DEFAULT_TIMEOUT_SECONDS
+    except (TypeError, ValueError):
+        timeout = DEFAULT_TIMEOUT_SECONDS
+
     return SettingsResponse(
         default_release_tag=get_setting(conn, "default_release_tag") or _DEFAULT_TAG,
         provider_priority_order=priority,
@@ -72,6 +112,11 @@ def _build_response(conn) -> SettingsResponse:
         tmdb_language=get_setting(conn, "tmdb_language") or _DEFAULT_LANGUAGE,
         tmdb_api_key_configured=configured,
         tmdb_api_key_masked=masked,
+        uploadrr_path=get_setting_canonical(conn, "uploadrr.path"),
+        uploadrr_runtime_type=get_setting_canonical(conn, "uploadrr.runtime_type") or RUNTIME_EMU,
+        uploadrr_python_path=get_setting_canonical(conn, "uploadrr.python_path"),
+        uploadrr_timeout=timeout,
+        uploadrr_allowed_roots=allowed_roots,
     )
 
 
@@ -101,6 +146,15 @@ def update_settings(
         if len(codes) != len(set(codes)):
             errors.append("provider_priority_order contiene duplicados")
 
+    if body.uploadrr_runtime_type is not None and body.uploadrr_runtime_type not in _VALID_RUNTIME_TYPES:
+        errors.append(
+            f"uploadrr_runtime_type inválido: '{body.uploadrr_runtime_type}'. "
+            f"Debe ser uno de: {', '.join(sorted(_VALID_RUNTIME_TYPES))}"
+        )
+
+    if body.uploadrr_timeout is not None and body.uploadrr_timeout <= 0:
+        errors.append("uploadrr_timeout debe ser un entero positivo")
+
     if errors:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -123,6 +177,22 @@ def update_settings(
 
         if body.tmdb_api_key is not None and body.tmdb_api_key.strip():
             set_setting(conn, "tmdb.api_key", body.tmdb_api_key.strip())
+
+        if body.uploadrr_path is not None:
+            set_setting(conn, "uploadrr.path", body.uploadrr_path.strip())
+
+        if body.uploadrr_runtime_type is not None:
+            set_setting(conn, "uploadrr.runtime_type", body.uploadrr_runtime_type)
+
+        if body.uploadrr_python_path is not None:
+            set_setting(conn, "uploadrr.python_path", body.uploadrr_python_path.strip())
+
+        if body.uploadrr_timeout is not None:
+            set_setting(conn, "uploadrr.timeout", str(body.uploadrr_timeout))
+
+        if body.uploadrr_allowed_roots is not None:
+            normalized = _normalize_allowed_roots(body.uploadrr_allowed_roots)
+            set_setting(conn, "uploadrr.allowed_roots", json.dumps(normalized, ensure_ascii=False))
 
         conn.commit()
         return _build_response(conn)

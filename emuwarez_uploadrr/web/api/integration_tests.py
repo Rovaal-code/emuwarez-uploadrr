@@ -22,6 +22,7 @@ from ..schemas import (
     TestArrRequest,
     TestEmuwarezRequest,
     TestTmdbRequest,
+    TestUploadrrRequest,
 )
 
 router = APIRouter(prefix="/integrations", tags=["integrations"])
@@ -93,4 +94,20 @@ def test_arr(
         base_url=body.base_url,
         api_key=body.api_key,
     )
+    return IntegrationTestResult(**result)
+
+
+@router.post("/test/uploadrr", response_model=IntegrationTestResult)
+def test_uploadrr(
+    body: TestUploadrrRequest,
+    current_user: dict = Depends(require_auth),
+) -> IntegrationTestResult:
+    """Check Uploadrr-EMU runtime paths (filesystem only). Never executes Uploadrr."""
+    from emuwarez_uploadrr.services.integration_tests import test_uploadrr_connection
+    with _get_conn() as conn:
+        result = test_uploadrr_connection(
+            path=body.path or None,
+            python_path=body.python_path or None,
+            conn=conn,
+        )
     return IntegrationTestResult(**result)

@@ -768,6 +768,10 @@ class UploadJobDetail(BaseModel):
     last_success_at: Optional[str] = None
     last_error_at: Optional[str] = None
     last_log_at: Optional[str] = None
+    # Phase 10F: progress/runtime surfaced for the UI.
+    runtime_type: Optional[str] = None
+    command_preview: Optional[str] = None
+    progress_phase: Optional[str] = None
 
 
 class UploadJobLog(BaseModel):
@@ -976,6 +980,12 @@ class TestArrRequest(BaseModel):
     kind: Optional[str] = None
     base_url: Optional[str] = None
     api_key: Optional[str] = None
+
+
+class TestUploadrrRequest(BaseModel):
+    """Phase 10F — filesystem-only check, never executes Uploadrr."""
+    path: Optional[str] = None
+    python_path: Optional[str] = None
 
 
 class IntegrationTestResult(BaseModel):

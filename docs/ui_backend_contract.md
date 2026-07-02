@@ -351,8 +351,10 @@ Publicado en EMU
 ```text
 GET  /api/uploads
 GET  /api/uploads/{id}
+POST /api/uploads/{id}/start    ← dry_run|apply+INICIAR_UPLOADRR, runtime_type=uploadrr_emu obligatorio para apply real
 POST /api/uploads/{id}/cancel
-GET  /api/uploads/{id}/stream   ← SSE para progreso en tiempo real (no implementado; hoy GET /api/uploads/{id}/logs es fetch puntual, sin streaming)
+GET  /api/uploads/{id}/logs     ← la UI hace polling cada ~2.5s mientras el job está running (Fase 10F, no SSE)
+GET  /api/uploads/{id}/stream   ← SSE para progreso en tiempo real (no implementado; se usa polling en su lugar)
 ```
 
 **Fase 10E — Contrato Uploadrr-EMU en `command_preview` (`POST /api/library/{id}/upload/preflight`):**
@@ -367,6 +369,16 @@ requires_confirmation "INICIAR_UPLOADRR"
 safe_to_execute       bool — siempre false en Fase 10E
 ```
 Ver `docs/codex_phase_10e_uploadrr_emu_contract_fix_report.md` para el detalle completo.
+
+**Fase 10F — Ejecución controlada y progreso, campos nuevos en `UploadJobDetail` (`GET /api/uploads/{id}` y `GET /api/uploads`):**
+```text
+runtime_type    str | null   — runtime_type resuelto en el momento del preflight de este job
+command_preview str | null   — comando redactado (prioriza el capturado en ejecución real sobre el de preflight)
+progress_phase  str          — "queued"|"preflight"|"config_staging"|"running"|"finalizing"|"succeeded"|"failed"|"cancelled"|"timeout"
+                                (mapeo aproximado de status/stage — nunca un porcentaje inventado)
+```
+`POST /api/uploads/{id}/start` con `apply=true` bloquea con `error="unsupported_runtime"` (HTTP 400) si `uploadrr.runtime_type != "uploadrr_emu"`.
+Ver `docs/codex_phase_10f_controlled_uploadrr_emu_execution_report.md` para el detalle completo.
 
 ---
 
@@ -1415,4 +1427,55 @@ Respuesta común (`IntegrationTestResult`):
 - Todas las pruebas son de solo lectura (TMDb `/configuration`, eMuwarez `/api/torrents/filter?perPage=1`, Arr `/api/v3/system/status`).
 - Probar una credencial nunca la guarda.
 - Ninguna respuesta ni log contiene la API key completa.
-- Uploadrr no tiene código ni endpoint de test en esta fase.
+- Uploadrr no tiene código ni endpoint de test en esta fase — ver Fase 10F.
+
+---
+
+## Phase 10F — Ejecución controlada Uploadrr-EMU, settings de runtime y UI de progreso
+
+### Settings de runtime Uploadrr (`GET`/`PUT /api/settings`)
+
+Campos nuevos en `SettingsResponse`/`SettingsUpdateRequest` (sin secretos):
+```json
+{
+  "uploadrr_path": "/opt/Uploadrr",
+  "uploadrr_runtime_type": "uploadrr_emu",
+  "uploadrr_python_path": "/usr/local/bin/python",
+  "uploadrr_timeout": 7200,
+  "uploadrr_allowed_roots": ["/data/uploads/emu", "/data/media"]
+}
+```
+Reglas:
+- `uploadrr_runtime_type` solo acepta `uploadrr_emu`/`uploadrr_generic` → `422` si es otro valor.
+- `uploadrr_timeout` debe ser entero positivo → `422` si es `<= 0`.
+- `uploadrr_allowed_roots` acepta `list[str]` o un string CSV (`"a,b,c"`); siempre se normaliza y se devuelve como `list[str]`.
+- Las claves se escriben en su forma dotted canónica (`uploadrr.path`, etc.) — la forma legacy con guion bajo sigue funcionando solo como fallback de lectura.
+
+### Test de conexión Uploadrr (`POST /api/integrations/test/uploadrr`)
+
+Solo comprobaciones de filesystem — **nunca ejecuta `upload.py`, nunca lee secretos de `config.yaml`, nunca abre un subproceso**.
+
+Body (todo opcional; si se omite usa lo guardado):
+```json
+{ "path": "opcional", "python_path": "opcional" }
+```
+Respuesta (`IntegrationTestResult`), `status` posibles: `not_configured`, `not_found`, `script_missing`, `python_missing`, `connected_no_config` (ok=true, falta `data/config.yaml`), `connected` (ok=true, todo encontrado).
+
+### Ejecución controlada (`POST /api/uploads/{id}/start`)
+
+Sin cambios de contrato respecto a Fase 6C/6D salvo una regla nueva: con `apply=true` (`dry_run=false`, `start=true`, `confirmation=INICIAR_UPLOADRR`), si `uploadrr.runtime_type != "uploadrr_emu"` la respuesta es `400` con `error="unsupported_runtime"` — la ejecución controlada real de esta fase solo cubre el runtime `uploadrr_emu`.
+
+Antes de invocar el subproceso se stagea `DEFAULT.tmdb`/`TRACKERS.EMU.api_key` en `data/config.yaml` (backup automático); al terminar —éxito, fallo, timeout o cancelación— se restaura siempre el original.
+
+### Progreso (`GET /api/uploads`, `GET /api/uploads/{id}`)
+
+Ver el bloque `UploadJobDetail` documentado en la sección "Subidas" más arriba (`runtime_type`, `command_preview`, `progress_phase`). La UI usa polling (~2.5s), no SSE.
+
+### Reglas de seguridad
+
+- `subprocess.Popen` con `shell=False`, argv siempre `list[str]`.
+- Nunca se ejecuta un Uploadrr-EMU real en tests/E2E — se usa `tests/fixtures/fake_uploadrr_emu.py`.
+- `Uploadrr/` nunca se modifica ni se vendoriza en la imagen.
+- Secretos nunca aparecen en `command_preview`, logs o `safe_command_json`.
+
+Ver `docs/codex_phase_10f_controlled_uploadrr_emu_execution_report.md` para el detalle completo.

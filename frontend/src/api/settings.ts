@@ -1,5 +1,7 @@
 import { api } from './client'
 
+export type UploadrrRuntimeType = 'uploadrr_emu' | 'uploadrr_generic'
+
 export interface SettingsData {
   default_release_tag: string
   provider_priority_order: string[]
@@ -7,6 +9,11 @@ export interface SettingsData {
   tmdb_language: string
   tmdb_api_key_configured: boolean
   tmdb_api_key_masked: string | null
+  uploadrr_path: string | null
+  uploadrr_runtime_type: UploadrrRuntimeType
+  uploadrr_python_path: string | null
+  uploadrr_timeout: number
+  uploadrr_allowed_roots: string[]
 }
 
 export interface SettingsUpdatePayload {
@@ -15,6 +22,11 @@ export interface SettingsUpdatePayload {
   tmdb_watch_region?: string
   tmdb_language?: string
   tmdb_api_key?: string
+  uploadrr_path?: string
+  uploadrr_runtime_type?: UploadrrRuntimeType
+  uploadrr_python_path?: string
+  uploadrr_timeout?: number
+  uploadrr_allowed_roots?: string[] | string
 }
 
 export function fetchSettings(): Promise<SettingsData> {

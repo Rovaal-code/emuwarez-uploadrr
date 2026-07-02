@@ -45,11 +45,37 @@ mkdir -p \
     "$E2E_TMPDIR/config" \
     "$E2E_TMPDIR/data/media/movies/Demo Movie (2024)" \
     "$E2E_TMPDIR/data/uploads/emu" \
-    "$E2E_TMPDIR/uploadrr-mount"
+    "$E2E_TMPDIR/uploadrr-mount" \
+    "$E2E_TMPDIR/uploadrr-data" \
+    "$E2E_TMPDIR/uploadrr-tmp"
 
 # Fake .mkv file — text content, .mkv extension (verifiers check existence/extension/size)
 echo "FAKE MKV DEMO — eMuwarez Uploadrr E2E test fixture" \
     > "$E2E_TMPDIR/data/media/movies/Demo Movie (2024)/Demo Movie (2024) WEBDL-1080p.mkv"
+
+# Phase 10F — fake Uploadrr-EMU: never the real fork, never touches eMuwarez.
+# Code (upload.py) goes in the :ro mount; data/config.yaml goes in the
+# separate rw mount, mirroring the documented Docker mount strategy.
+#
+# The empty data/ and tmp/ mountpoint directories must already exist INSIDE
+# uploadrr-mount (the :ro source) before Docker starts — nested bind mounts
+# under a read-only parent fail with "Read-only file system" if the target
+# directory doesn't already exist, since the container can't mkdir it at
+# mount time. A real Uploadrr-EMU checkout already ships these directories;
+# this fake fixture has to create them explicitly.
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+mkdir -p "$E2E_TMPDIR/uploadrr-mount/data" "$E2E_TMPDIR/uploadrr-mount/tmp"
+cp "$REPO_ROOT/tests/fixtures/fake_uploadrr_emu.py" "$E2E_TMPDIR/uploadrr-mount/upload.py"
+cat > "$E2E_TMPDIR/uploadrr-data/config.yaml" <<'YAML'
+DEFAULT:
+  tmdb: PLACEHOLDER_TMDB_KEY
+  default_torrent_client: qbit
+
+TRACKERS:
+  EMU:
+    api_key: PLACEHOLDER_EMU_SECRET
+    anon: false
+YAML
 
 cleanup() {
     if [ "${KEEP_CONTAINER:-0}" = "0" ]; then
@@ -166,6 +192,8 @@ docker run -d \
     -v "${E2E_TMPDIR}/config:/config" \
     -v "${E2E_TMPDIR}/data:/data" \
     -v "${E2E_TMPDIR}/uploadrr-mount:/opt/Uploadrr:ro" \
+    -v "${E2E_TMPDIR}/uploadrr-data:/opt/Uploadrr/data:rw" \
+    -v "${E2E_TMPDIR}/uploadrr-tmp:/opt/Uploadrr/tmp:rw" \
     "$IMAGE_NAME" >/dev/null
 
 log_ok "Contenedor arrancado: $CONTAINER_NAME"
@@ -327,8 +355,92 @@ else
     log_warn "mkv-title preview — respuesta inesperada"
 fi
 
-# ── 14. Security check: Uploadrr not in image ─────────────────────────────────
-log_step "14. Seguridad"
+# ── 14. Phase 10F — controlled Uploadrr-EMU execution (fake runner only) ────
+log_step "14. Phase 10F — Ejecución controlada Uploadrr-EMU (fake runner)"
+
+# Configure Uploadrr runtime settings pointing at the fake runner mounted
+# above, then run a real preflight + apply cycle. Never touches a real
+# Uploadrr-EMU installation or eMuwarez.
+E2E_FAKE_RUN_OUT=$(docker exec -i "$CONTAINER_NAME" python3 - <<'PYEOF' 2>&1
+import time
+from emuwarez_uploadrr.database import connect, init_db, db_path
+from emuwarez_uploadrr.web.services.settings_service import set_setting
+from emuwarez_uploadrr.services.upload_preflight import build_upload_preflight
+from emuwarez_uploadrr.services.upload_execution import (
+    start_upload_job, get_upload_job, CONFIRMATION_TOKEN,
+)
+
+conn = connect(db_path())
+init_db(conn)
+set_setting(conn, "uploadrr.path", "/opt/Uploadrr")
+set_setting(conn, "uploadrr.python_path", "/usr/local/bin/python")
+set_setting(conn, "uploadrr.runtime_type", "uploadrr_emu")
+set_setting(conn, "tmdb.api_key", "e2e_fake_tmdb_key")
+set_setting(conn, "emu.api_key", "e2e_fake_emu_key")
+conn.commit()
+
+result = build_upload_preflight(1, conn=conn)
+job = result.get("job")
+print(f"PREFLIGHT_STATUS={result.get('status')}")
+cmd_preview = (result.get("command_preview") or {}).get("command_preview")
+print(f"COMMAND_PREVIEW={cmd_preview}")
+if not job:
+    print("RESULT=no_job")
+    raise SystemExit(0)
+
+job_id = job["id"]
+start = start_upload_job(job_id, dry_run=False, start=True, confirmation=CONFIRMATION_TOKEN, conn=conn)
+print(f"START_ACTION={start.get('action')}")
+print(f"START_ERROR={start.get('error')}")
+
+deadline = time.monotonic() + 15
+final = None
+while time.monotonic() < deadline:
+    final = get_upload_job(job_id, conn=conn)
+    if final["status"] in ("completed", "failed", "cancelled"):
+        break
+    time.sleep(0.2)
+time.sleep(0.3)
+print(f"FINAL_STATUS={final['status'] if final else 'unknown'}")
+print(f"FINAL_EXIT_CODE={final.get('exit_code') if final else None}")
+print(f"FINAL_RESULT_URL={final.get('result_url') if final else None}")
+PYEOF
+)
+echo "$E2E_FAKE_RUN_OUT"
+
+check_ok "Fase 10F — settings runtime Uploadrr configuradas" \
+    grep -q 'PREFLIGHT_STATUS=ready' <<< "$E2E_FAKE_RUN_OUT"
+check_ok "Fase 10F — command_preview usa flags reales (-tk/-mt/-ua)" \
+    grep -E 'COMMAND_PREVIEW=.*-tk.*-mt.*-ua' <<< "$E2E_FAKE_RUN_OUT"
+check_ok "Fase 10F — job fake arranca (action=started)" \
+    grep -q 'START_ACTION=started' <<< "$E2E_FAKE_RUN_OUT"
+check_ok "Fase 10F — job fake termina en completed" \
+    grep -q 'FINAL_STATUS=completed' <<< "$E2E_FAKE_RUN_OUT"
+check_ok "Fase 10F — exit_code 0" \
+    grep -q 'FINAL_EXIT_CODE=0' <<< "$E2E_FAKE_RUN_OUT"
+check_ok "Fase 10F — URL fake capturada como resultado" \
+    grep -q 'FINAL_RESULT_URL=https://fake-emu.invalid.test' <<< "$E2E_FAKE_RUN_OUT"
+
+# Logs must show the fake runner's deterministic output, never a real eMuwarez call.
+FAKE_JOB_LOGS=$(docker exec "$CONTAINER_NAME" python3 -c "
+from emuwarez_uploadrr.database import connect, init_db, db_path
+from emuwarez_uploadrr.services.upload_execution import list_upload_jobs, get_upload_job_logs
+conn = connect(db_path()); init_db(conn)
+jobs = list_upload_jobs(conn=conn)
+if jobs:
+    logs = get_upload_job_logs(jobs[0]['id'], conn=conn)
+    for entry in logs['logs']:
+        print(entry['message'])
+" 2>&1)
+check_ok "Fase 10F — logs capturados del fake runner" \
+    grep -q 'Torrent creado correctamente' <<< "$FAKE_JOB_LOGS"
+# config.yaml is staged with the fake tmdb/emu keys during execution and
+# must be restored back to its original placeholder content afterwards.
+check_ok "Fase 10F — config.yaml restaurado al placeholder original" \
+    grep -q 'PLACEHOLDER_TMDB_KEY' "${E2E_TMPDIR}/uploadrr-data/config.yaml"
+
+# ── 15. Security check: Uploadrr not in image ─────────────────────────────────
+log_step "15. Seguridad"
 if docker exec "$CONTAINER_NAME" test -d /app/Uploadrr 2>/dev/null; then
     log_fail "Uploadrr/ encontrado DENTRO de la imagen — NO debe estar"
     FAIL=$((FAIL + 1))

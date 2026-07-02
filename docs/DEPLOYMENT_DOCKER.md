@@ -105,30 +105,58 @@ Ajusta `/srv/Uploadrr` a la ruta real de tu instalación de Uploadrr en el host.
 
 ---
 
-## 7b. Configurar el runtime Uploadrr-EMU (Fase 10E)
+## 7b. Configurar el runtime Uploadrr-EMU (Fases 10E/10F)
 
-Desde la Fase 10E, el comando real que se construiría para Uploadrr-EMU
+El comando real que se construye para Uploadrr-EMU
 (`-tk EMU -mt <título> -tmdb <id> -ua -c movie|tv -res <resolución>`) depende
-de estos settings adicionales (todos con valores por defecto seguros, ver
-`docs/codex_phase_10e_uploadrr_emu_contract_fix_report.md` para el detalle):
+de estos settings, editables desde **Configuración → Uploadrr** en la UI (o
+por API/CLI):
 
 | Setting | Valor por defecto | Notas |
 |---|---|---|
-| `uploadrr.runtime_type` | `uploadrr_emu` | Perfil de flags a usar. El otro valor soportado es `uploadrr_generic` (mapeo best-effort, sin validar contra un contrato real). |
-| `uploadrr.python_path` | `/usr/local/bin/python` | Asume la imagen base Python del contenedor. Uploadrr-EMU necesita su **propio venv** con sus dependencias (`requirements.txt` del fork) — instálalo en un volumen propio y ajusta este setting a `<venv>/bin/python`. **Nunca reutilices el intérprete del backend** (`sys.executable`): es el bug que corrige esta fase. |
+| `uploadrr.path` | _(sin valor)_ | Ruta dentro del contenedor al directorio de Uploadrr-EMU, p.ej. `/opt/Uploadrr`. |
+| `uploadrr.runtime_type` | `uploadrr_emu` | Perfil de flags a usar. El único runtime con ejecución controlada real soportada en la Fase 10F es `uploadrr_emu`; `uploadrr_generic` solo genera una previsualización best-effort y bloquea el inicio real. |
+| `uploadrr.python_path` | `/usr/local/bin/python` | Asume la imagen base Python del contenedor. Uploadrr-EMU necesita su **propio venv** con sus dependencias (`requirements.txt` del fork) — instálalo en un volumen propio y ajusta este setting a `<venv>/bin/python`. **Nunca reutilices el intérprete del backend** (`sys.executable`). |
 | `uploadrr.timeout` | `7200` (segundos) | Timeout del subproceso de subida. Si se excede, el job pasa a `failed`/`stage=timeout` y el proceso recibe `SIGKILL`. |
-| `uploadrr.allowed_roots` | `[]` (JSON) | Rutas permitidas para `prepared_path`. Vacío → usa `hardlink_base` como raíz permitida. |
+| `uploadrr.allowed_roots` | `[]` (JSON, editable como CSV en la UI) | Rutas permitidas para `prepared_path`. Vacío → usa `hardlink_base` como raíz permitida. |
+
+Usa el botón **Probar configuración** en Settings para verificar (solo
+filesystem, nunca ejecuta Uploadrr-EMU) que la ruta, el script `upload.py` y
+`data/config.yaml` existen antes de intentar una subida real.
 
 Estos settings se leen con fallback automático a la forma legacy sin punto
 (`uploadrr_path`, etc.) pero solo el setup wizard/API escriben la forma con
 punto — no hace falta migrar nada manualmente.
 
-**Pendiente para Fase 10F (no implementado todavía):** la ejecución real de
-Uploadrr-EMU escribe en `<uploadrr_dir>/tmp/<uuid>/` (torrents, capturas,
-descripciones). El mount de ejemplo de este documento (`:ro`) es correcto
-para preflight/preview, pero **bloquearía una ejecución real** — habrá que
-montar `tmp/` aparte en `rw`, o el árbol completo en `rw`, antes de habilitar
-la Fase 10F.
+### Mounts necesarios (Fase 10F)
+
+Antes de ejecutar una subida real, Uploadrr-EMU necesita:
+
+1. **Código** (`/opt/Uploadrr`): puede ser `:ro`, no se modifica en ejecución.
+2. **`data/`** (`/opt/Uploadrr/data`): debe ser **`rw`** — antes de cada
+   ejecución se hace backup de `data/config.yaml` y se stagean ahí
+   `DEFAULT.tmdb` y `TRACKERS.EMU.api_key`/`anon`; al terminar (éxito, fallo,
+   timeout o cancelación) se **restaura siempre** el `config.yaml` original.
+3. **`tmp/`** (`/opt/Uploadrr/tmp`): debe ser **`rw`** — el fork escribe ahí
+   temporales (torrents, capturas, descripciones) durante la subida.
+
+Ver `docker-compose.example.yml` para el mount de ejemplo (variables
+`UPLOADRR_PATH` / `UPLOADRR_DATA_PATH` / `UPLOADRR_TMP_PATH` en `.env`). Si tu
+fork de Uploadrr-EMU necesita otros directorios escribibles, documéntalos y
+añade mounts específicos siguiendo el mismo patrón — nunca montes el árbol
+completo en `rw` si el código en sí no necesita escribirse.
+
+> **Importante**: `data/` y `tmp/` deben existir ya como directorios dentro
+> de `$UPLOADRR_PATH` (el checkout de Uploadrr-EMU en el host) **antes** de
+> arrancar el contenedor. Un mount anidado en `rw` dentro de un mount padre
+> `:ro` falla con `Read-only file system` si Docker tiene que crear el
+> directorio destino en el momento del montaje — solo puede montarse sobre
+> un directorio que ya existe. Git no trackea directorios vacíos, así que si
+> tu checkout de Uploadrr-EMU tiene un `tmp/` vacío (a diferencia de `data/`,
+> que normalmente ya contiene `config.yaml`), créalo a mano una vez:
+> `mkdir -p $UPLOADRR_PATH/tmp`.
+
+**Nunca se vendoriza Uploadrr-EMU dentro de la imagen principal.**
 
 ---
 
@@ -240,19 +268,29 @@ Desde la UI en **Subidas**, confirma la ejecución introduciendo el token exacto
 docker exec emuwarez-uploadrr python3 emuwarez_uploader.py upload start <job_id> --apply --confirm INICIAR_UPLOADRR
 ```
 
-> Desde la Fase 10E el comando construido usa el contrato real de
-> Uploadrr-EMU (ver [7b](#7b-configurar-el-runtime-uploadrr-emu-fase-10e)).
-> Aun así, esta fase **no ha validado la ejecución contra un proceso real de
-> Uploadrr-EMU** (eso es la Fase 10F) — revisa el mount de `tmp/` antes de
-> confiar en una subida real en producción.
+El comando usa el contrato real de Uploadrr-EMU (ver
+[7b](#7b-configurar-el-runtime-uploadrr-emu-fases-10e10f)): `shell=False`,
+argv como lista, `config.yaml` stageado/restaurado automáticamente, logs y
+`command_preview` con secretos redactados. La UI muestra el progreso
+(`Subidas` hace polling cada ~2.5s mientras el job está `running`), los logs
+recientes y el resultado (URL/torrent ID) al terminar.
+
+> La ejecución controlada real se ha validado exhaustivamente en tests y en
+> el E2E Docker usando un **Uploadrr-EMU fake** (`tests/fixtures/fake_uploadrr_emu.py`)
+> — nunca un fork real. La primera ejecución contra tu instalación real de
+> Uploadrr-EMU sigue siendo responsabilidad del operador; usa **Probar
+> configuración** en Settings y revisa los mounts de `data/`/`tmp/` (sección
+> 7b) antes de confiar en una subida real en producción.
 
 ---
 
 ## 18. Ver logs y resultados
 
 ```bash
+docker exec emuwarez-uploadrr python3 emuwarez_uploader.py upload status <job_id>   # alias de 'upload job'
 docker exec emuwarez-uploadrr python3 emuwarez_uploader.py upload logs <job_id>
 docker exec emuwarez-uploadrr python3 emuwarez_uploader.py upload artifacts <job_id>
+docker exec emuwarez-uploadrr python3 emuwarez_uploader.py upload cancel <job_id>    # cancela un job en ejecución
 ```
 
 ---
@@ -330,16 +368,20 @@ PGID=1001
 
 ### Uploadrr no está montado
 
-Verifica el bind mount en el compose:
+Verifica los bind mounts en el compose (código `:ro`, `data/` y `tmp/` en `rw`):
 
 ```yaml
-- /ruta/real/a/Uploadrr:/opt/Uploadrr
+- ${UPLOADRR_PATH:-/srv/Uploadrr}:/opt/Uploadrr:ro
+- ${UPLOADRR_DATA_PATH:-/srv/emuwarez-uploadrr/uploadrr-data}:/opt/Uploadrr/data:rw
+- ${UPLOADRR_TMP_PATH:-/srv/emuwarez-uploadrr/uploadrr-tmp}:/opt/Uploadrr/tmp:rw
 ```
 
-Comprueba que `/ruta/real/a/Uploadrr` existe en el host:
+Comprueba que las rutas existen en el host:
 
 ```bash
 ls /srv/Uploadrr
+ls /srv/emuwarez-uploadrr/uploadrr-data
+ls /srv/emuwarez-uploadrr/uploadrr-tmp
 ```
 
 El diagnóstico lo detecta:

@@ -865,5 +865,73 @@
       "No eMuwarez requests created, no torrents uploaded",
       "Uploadrr has no code or endpoint in this module"
     ]
+  },
+  "phase_10e_uploadrr_emu_contract_fix": {
+    "description": "Phase 10E fixes the Uploadrr-EMU CLI contract and the settings namespace mismatch. No real Uploadrr execution, no torrent uploads, Uploadrr/ untouched.",
+    "settings_namespace_fix": {
+      "canonical_keys": [
+        "uploadrr.path",
+        "uploadrr.python_path",
+        "uploadrr.runtime_type",
+        "uploadrr.timeout",
+        "uploadrr.allowed_roots",
+        "tmdb.api_key",
+        "emu.api_key"
+      ],
+      "legacy_fallback_keys": [
+        "uploadrr_path",
+        "uploadrr_python_path",
+        "uploadrr_runtime_type",
+        "uploadrr_timeout",
+        "uploadrr_allowed_roots",
+        "tmdb_api_key",
+        "emu_api_key"
+      ],
+      "resolution_order": "dotted key wins if present; falls back to legacy underscore key; both may coexist"
+    },
+    "new_settings_defaults": {
+      "uploadrr.runtime_type": "uploadrr_emu",
+      "uploadrr.python_path": "/usr/local/bin/python",
+      "uploadrr.timeout": 7200,
+      "uploadrr.allowed_roots": []
+    },
+    "command_preview_new_fields": {
+      "runtime_type": "string: uploadrr_emu | uploadrr_generic",
+      "command_args": "list[str]: real argv, e.g. [-tk, EMU, -mt, <title>, -tmdb, <id>, -ua, -c, movie|tv, -res, <resolution>]",
+      "contract_valid": "bool",
+      "contract_errors": "list[str]",
+      "contract_warnings": "list[str]",
+      "can_execute": "bool, always false in Phase 10E",
+      "requires_confirmation": "string: INICIAR_UPLOADRR",
+      "safe_to_execute": "bool, always false in Phase 10E"
+    },
+    "real_uploadrr_emu_flags": [
+      "-tk EMU",
+      "-mt <title>",
+      "-tmdb <id>",
+      "-ua",
+      "-c movie|tv",
+      "-res <resolution>",
+      "-season Sxx (optional)",
+      "-episode Exx (optional)"
+    ],
+    "removed_broken_flags_for_uploadrr_emu": [
+      "--tracker",
+      "--category",
+      "--resolution"
+    ],
+    "new_services": [
+      "emuwarez_uploadrr/services/uploadrr_contract.py",
+      "emuwarez_uploadrr/services/uploadrr_config_staging.py"
+    ],
+    "safety_guarantees": [
+      "No Uploadrr execution during this phase",
+      "No torrent uploads",
+      "Uploadrr/ never touched (does not exist in this repo, intentionally external)",
+      "prepared_path/applied_path only — command builder has no source_path parameter",
+      "shell=False always; stdin=DEVNULL fixed explicitly",
+      "Configurable subprocess timeout (uploadrr.timeout), job marked failed/stage=timeout on expiry"
+    ],
+    "next_phase": "Phase 10F — controlled real Uploadrr-EMU execution, requires adjusting the Docker :ro mount for tmp/ writability"
   }
 }

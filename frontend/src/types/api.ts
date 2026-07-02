@@ -470,6 +470,14 @@ export interface CommandPreview {
   command_preview?: string
   note?: string
   using_prepared_path?: boolean
+  // Phase 10E: Uploadrr-EMU contract fields.
+  runtime_type?: string
+  contract_valid?: boolean
+  contract_errors?: string[]
+  contract_warnings?: string[]
+  can_execute?: boolean
+  requires_confirmation?: string
+  safe_to_execute?: boolean
 }
 
 export interface UploadPreflightResponse {

@@ -373,10 +373,24 @@ Implementado en Fase 6C — Ejecución controlada de Uploadrr:
 - Frontend: `UploadsPage` con tabla completa, panel de logs y modal de inicio.
 - 43 tests nuevos (upload_execution, upload_execution_api, upload_logs_redaction). Total: 372 tests.
 
+Implementado en Fase 10E — Corrección del contrato Uploadrr-EMU y preflight seguro:
+
+- **Namespace de settings unificado**: `database.get_setting_canonical()` resuelve claves dotted (`uploadrr.path`, `tmdb.api_key`, `emu.api_key`, escritas por el setup wizard/UI) con fallback automático a las claves legacy con guion bajo (`uploadrr_path`, `tmdb_api_key`, `emu_api_key`). La clave dotted siempre gana si ambas existen. Corrige un bug activo: antes del fix, el pipeline de subida (`upload_preflight.py`/`upload_execution.py`) leía únicamente las claves con guion bajo y nunca veía lo que el setup wizard real escribía.
+- Nuevos settings con defaults idempotentes: `uploadrr.runtime_type` (`uploadrr_emu`/`uploadrr_generic`, por defecto `uploadrr_emu`), `uploadrr.python_path` (por defecto `/usr/local/bin/python`, pensado para la imagen Docker — hay que sobrescribirlo en despliegues host/manual con la ruta al venv real de Uploadrr-EMU), `uploadrr.timeout` (7200s), `uploadrr.allowed_roots` (lista JSON, vacía por defecto → usa `hardlink_base` como fallback).
+- Nuevo servicio `services/uploadrr_contract.py`: construye el comando real de Uploadrr-EMU (`-tk EMU -mt <título> -tmdb <id> -ua -c movie|tv -res <resolución> [-season/-episode]`), sustituyendo los flags largos incorrectos (`--tracker`/`--category`/`--tmdb`/`--resolution`) que nunca habrían funcionado contra el CLI real. Incluye validación de contrato (`validate_uploadrr_emu_contract`) y comprobación de `allowed_roots` (`path_within_allowed_roots`, con protección de path traversal).
+- Nuevo servicio `services/uploadrr_config_staging.py`: staging en memoria de `Uploadrr/data/config.yaml` (`DEFAULT.tmdb`, `TRACKERS.EMU.api_key/anon`) con backup/restore y diff/preview con secretos redactados. Reutiliza los helpers puros ya existentes en `legacy.py` (`set_block_key`, `set_emu_config`, etc.) — nunca toca una instalación real de Uploadrr/.
+- `upload_preflight.py`/`upload_execution.py` actualizados: mismo namespace canónico, `build_uploadrr_execution_command` construye el comando correcto según `runtime_type`, timeout configurable aplicado al subprocess (con corte explícito y estado `stage=timeout` si se excede), `stdin=subprocess.DEVNULL` fijado explícitamente.
+- Preflight expone campos nuevos: `runtime_type`, `contract_valid`, `contract_errors`, `contract_warnings`, `can_execute` (siempre `false` en esta fase), `requires_confirmation`, `safe_to_execute` (siempre `false` en esta fase — la ejecución real queda para la Fase 10F).
+- Frontend: `UploadPreflightModal` muestra el runtime activo y, si el contrato Uploadrr-EMU no es válido, la lista de errores/avisos específicos (p. ej. `python_path` o script no encontrados, ruta fuera de `allowed_roots`).
+- **No se ejecutó Uploadrr real, no se subió ningún torrent, no se tocó `Uploadrr/`.** 59 tests nuevos (`test_uploadrr_contract`, `test_uploadrr_settings_namespace`, `test_uploadrr_emu_preflight`, `test_uploadrr_config_staging`). Total: 911 tests.
+- Detalle completo: `docs/codex_phase_10e_uploadrr_emu_contract_fix_report.md`.
+
 Pendiente para fases posteriores:
 
+- Ejecución real controlada de Uploadrr-EMU (Fase 10F): validar contra un proceso real, ajustar el mount Docker (`tmp/` de Uploadrr necesita ser escribible; hoy el compose de ejemplo lo monta `:ro`).
+- Exponer `uploadrr.runtime_type`/`uploadrr.python_path`/`uploadrr.timeout`/`uploadrr.allowed_roots` en `SettingsPage` (hoy solo se configuran vía API/CLI o el setup wizard para `uploadrr.path`).
+- Progreso/timeline de subida en tiempo real (hoy `LogsPanel` hace un único fetch al abrir el modal, sin polling).
 - Crear peticiones EMU desde la app (requiere capturar POST real desde DevTools).
-- SettingsPage con formularios de configuración real (incluyendo `hardlink_base`, `uploadrr_path`, API keys).
 - TasksPage con datos reales.
 - Modificación de título interno MKV (`mkvpropedit`).
 

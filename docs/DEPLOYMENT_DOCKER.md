@@ -105,6 +105,33 @@ Ajusta `/srv/Uploadrr` a la ruta real de tu instalación de Uploadrr en el host.
 
 ---
 
+## 7b. Configurar el runtime Uploadrr-EMU (Fase 10E)
+
+Desde la Fase 10E, el comando real que se construiría para Uploadrr-EMU
+(`-tk EMU -mt <título> -tmdb <id> -ua -c movie|tv -res <resolución>`) depende
+de estos settings adicionales (todos con valores por defecto seguros, ver
+`docs/codex_phase_10e_uploadrr_emu_contract_fix_report.md` para el detalle):
+
+| Setting | Valor por defecto | Notas |
+|---|---|---|
+| `uploadrr.runtime_type` | `uploadrr_emu` | Perfil de flags a usar. El otro valor soportado es `uploadrr_generic` (mapeo best-effort, sin validar contra un contrato real). |
+| `uploadrr.python_path` | `/usr/local/bin/python` | Asume la imagen base Python del contenedor. Uploadrr-EMU necesita su **propio venv** con sus dependencias (`requirements.txt` del fork) — instálalo en un volumen propio y ajusta este setting a `<venv>/bin/python`. **Nunca reutilices el intérprete del backend** (`sys.executable`): es el bug que corrige esta fase. |
+| `uploadrr.timeout` | `7200` (segundos) | Timeout del subproceso de subida. Si se excede, el job pasa a `failed`/`stage=timeout` y el proceso recibe `SIGKILL`. |
+| `uploadrr.allowed_roots` | `[]` (JSON) | Rutas permitidas para `prepared_path`. Vacío → usa `hardlink_base` como raíz permitida. |
+
+Estos settings se leen con fallback automático a la forma legacy sin punto
+(`uploadrr_path`, etc.) pero solo el setup wizard/API escriben la forma con
+punto — no hace falta migrar nada manualmente.
+
+**Pendiente para Fase 10F (no implementado todavía):** la ejecución real de
+Uploadrr-EMU escribe en `<uploadrr_dir>/tmp/<uuid>/` (torrents, capturas,
+descripciones). El mount de ejemplo de este documento (`:ro`) es correcto
+para preflight/preview, pero **bloquearía una ejecución real** — habrá que
+montar `tmp/` aparte en `rw`, o el árbol completo en `rw`, antes de habilitar
+la Fase 10F.
+
+---
+
 ## 8. Configurar hardlink_base
 
 En el setup web, en la sección **Base**, indica el directorio donde se crearán los hardlinks preparados para subida:
@@ -212,6 +239,12 @@ Desde la UI en **Subidas**, confirma la ejecución introduciendo el token exacto
 ```bash
 docker exec emuwarez-uploadrr python3 emuwarez_uploader.py upload start <job_id> --apply --confirm INICIAR_UPLOADRR
 ```
+
+> Desde la Fase 10E el comando construido usa el contrato real de
+> Uploadrr-EMU (ver [7b](#7b-configurar-el-runtime-uploadrr-emu-fase-10e)).
+> Aun así, esta fase **no ha validado la ejecución contra un proceso real de
+> Uploadrr-EMU** (eso es la Fase 10F) — revisa el mount de `tmp/` antes de
+> confiar en una subida real en producción.
 
 ---
 

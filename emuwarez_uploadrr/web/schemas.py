@@ -697,6 +697,14 @@ class CommandPreviewResponse(BaseModel):
     command_preview: Optional[str] = None
     note: Optional[str] = None
     using_prepared_path: Optional[bool] = None
+    # Phase 10E: Uploadrr-EMU contract fields.
+    runtime_type: Optional[str] = None
+    contract_valid: Optional[bool] = None
+    contract_errors: Optional[list[str]] = None
+    contract_warnings: Optional[list[str]] = None
+    can_execute: Optional[bool] = None
+    requires_confirmation: Optional[str] = None
+    safe_to_execute: Optional[bool] = None
 
 
 class UploadJobResponse(BaseModel):

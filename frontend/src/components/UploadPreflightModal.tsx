@@ -99,6 +99,22 @@ export function UploadPreflightModal({ itemId, itemTitle, requestId, onClose }: 
               {result.command_preview && (
                 <>
                   <div className="detail-row">
+                    <span className="text-muted">Runtime:</span>
+                    <span>
+                      {result.command_preview.runtime_type || '–'}
+                      {result.command_preview.contract_valid === false && (
+                        <span className="badge req-not-compatible" style={{ marginLeft: 6, fontSize: '0.7rem' }}>
+                          contrato inválido
+                        </span>
+                      )}
+                      {result.command_preview.contract_valid === true && (
+                        <span className="badge req-compatible" style={{ marginLeft: 6, fontSize: '0.7rem' }}>
+                          contrato válido
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="detail-row">
                     <span className="text-muted">Tracker:</span>
                     <span>{result.command_preview.tracker || '–'}</span>
                   </div>
@@ -136,6 +152,24 @@ export function UploadPreflightModal({ itemId, itemTitle, requestId, onClose }: 
                       <pre style={{ fontSize: '0.75rem', overflow: 'auto', padding: 8, background: 'rgba(0,0,0,0.2)', borderRadius: 4 }}>
                         {result.command_preview.command_preview}
                       </pre>
+                    </div>
+                  )}
+                  {(result.command_preview.contract_errors?.length ?? 0) > 0 && (
+                    <div className="detail-panel__section" style={{ marginTop: 8 }}>
+                      <div className="detail-panel__section-title">Errores de contrato Uploadrr-EMU</div>
+                      <ul className="detail-panel__reasons">
+                        {result.command_preview.contract_errors!.map((err, i) => (
+                          <li key={i} style={{ color: 'var(--color-error, #f87171)' }}>{err}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {(result.command_preview.contract_warnings?.length ?? 0) > 0 && (
+                    <div className="detail-panel__section" style={{ marginTop: 8 }}>
+                      <div className="detail-panel__section-title">Avisos de contrato Uploadrr-EMU</div>
+                      <ul className="detail-panel__reasons">
+                        {result.command_preview.contract_warnings!.map((w, i) => <li key={i}>{w}</li>)}
+                      </ul>
                     </div>
                   )}
                 </>

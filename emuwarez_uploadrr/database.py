@@ -11,7 +11,24 @@ from .constants import CONFIG_DIR
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
+
+# Phase 10E: canonical settings namespace fix.
+#
+# The setup wizard / UI (web/services/setup_service.py) writes dotted keys
+# (uploadrr.path, tmdb.api_key, emu.api_key). Older code paths (and several
+# existing test fixtures) read/write the legacy underscore form
+# (uploadrr_path, tmdb_api_key, emu_api_key). Both forms can coexist in the
+# `settings` table; the dotted key always wins when both are present.
+CANONICAL_SETTING_ALIASES: dict[str, str] = {
+    "uploadrr.path": "uploadrr_path",
+    "uploadrr.python_path": "uploadrr_python_path",
+    "uploadrr.runtime_type": "uploadrr_runtime_type",
+    "uploadrr.timeout": "uploadrr_timeout",
+    "uploadrr.allowed_roots": "uploadrr_allowed_roots",
+    "tmdb.api_key": "tmdb_api_key",
+    "emu.api_key": "emu_api_key",
+}
 
 
 def db_path() -> Path:
@@ -472,6 +489,29 @@ def _migrate_settings_phase10a(conn: sqlite3.Connection) -> None:
         )
 
 
+def _migrate_settings_phase10e(conn: sqlite3.Connection) -> None:
+    """Insert default Phase 10E Uploadrr-EMU runtime settings if not already present.
+
+    Defaults are conservative and require operator review: python_path
+    assumes the Docker image layout (/usr/local/bin/python); host/manual
+    deployments must override it with the path to Uploadrr-EMU's own venv.
+    allowed_roots starts empty, which means "fall back to hardlink_base"
+    (see services/uploadrr_contract.py::get_allowed_roots).
+    """
+    defaults = [
+        ("uploadrr.runtime_type", "uploadrr_emu", 0),
+        ("uploadrr.python_path", "/usr/local/bin/python", 0),
+        ("uploadrr.timeout", "7200", 0),
+        ("uploadrr.allowed_roots", "[]", 0),
+    ]
+    for key, value, is_secret in defaults:
+        conn.execute(
+            """INSERT OR IGNORE INTO settings (key, value, is_secret)
+               VALUES (?, ?, ?)""",
+            (key, value, is_secret),
+        )
+
+
 def _migrate_diagnostic_tables(conn: sqlite3.Connection) -> None:
     """Create Phase 8A diagnostic run and item diagnostic tables."""
     conn.execute("""
@@ -680,6 +720,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_operational_actions_tables(conn)
         _migrate_nomenclature_phase10a(conn)
         _migrate_settings_phase10a(conn)
+        _migrate_settings_phase10e(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:
@@ -698,6 +739,29 @@ def rows_to_dicts(rows: Iterable[sqlite3.Row]) -> list[dict[str, Any]]:
 def get_state(conn: sqlite3.Connection, key: str, default: Optional[str] = None) -> Optional[str]:
     row = conn.execute("SELECT value FROM app_state WHERE key = ?", (key,)).fetchone()
     return row["value"] if row else default
+
+
+def get_setting_canonical(
+    conn: sqlite3.Connection, dotted_key: str, default: Optional[str] = None
+) -> Optional[str]:
+    """Read a `settings` value by its canonical dotted key.
+
+    Falls back to the legacy underscore alias (see CANONICAL_SETTING_ALIASES)
+    when the dotted key is unset or empty. The dotted key always wins when
+    both are present, since setup/UI only ever write the dotted form.
+    """
+    try:
+        row = conn.execute("SELECT value FROM settings WHERE key = ?", (dotted_key,)).fetchone()
+        if row and row["value"] not in (None, ""):
+            return row["value"]
+        legacy_key = CANONICAL_SETTING_ALIASES.get(dotted_key)
+        if legacy_key:
+            row = conn.execute("SELECT value FROM settings WHERE key = ?", (legacy_key,)).fetchone()
+            if row and row["value"] not in (None, ""):
+                return row["value"]
+    except sqlite3.OperationalError:
+        pass
+    return default
 
 
 def set_state(conn: sqlite3.Connection, key: str, value: str) -> None:
@@ -729,4 +793,5 @@ __all__ = [
     "DB_FILE", "SCHEMA_VERSION", "db_path", "connect", "init_db",
     "row_to_dict", "rows_to_dicts", "get_state", "set_state",
     "get_json_state", "set_json_state",
+    "CANONICAL_SETTING_ALIASES", "get_setting_canonical",
 ]

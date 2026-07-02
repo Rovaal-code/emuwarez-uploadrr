@@ -120,6 +120,13 @@ def upload_preflight(
             command_preview=cmd.get("command_preview"),
             note=cmd.get("note"),
             using_prepared_path=cmd.get("using_prepared_path"),
+            runtime_type=cmd.get("runtime_type"),
+            contract_valid=cmd.get("contract_valid"),
+            contract_errors=cmd.get("contract_errors"),
+            contract_warnings=cmd.get("contract_warnings"),
+            can_execute=cmd.get("can_execute"),
+            requires_confirmation=cmd.get("requires_confirmation"),
+            safe_to_execute=cmd.get("safe_to_execute"),
         )
 
     return UploadPreflightResponse(

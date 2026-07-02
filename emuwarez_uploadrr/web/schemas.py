@@ -258,7 +258,13 @@ class InstanceTestResponse(BaseModel):
     instance_id: Optional[int] = None
     instance_name: Optional[str] = None
     version: Optional[str] = None
+    # Phase 11B: Seerr's /auth/me exposes the authenticated account —
+    # radarr/sonarr leave this None (no equivalent concept there).
+    username: Optional[str] = None
     error: Optional[str] = None
+
+
+_VALID_INSTANCE_TYPES = ("radarr", "sonarr", "seerr")
 
 
 class AddInstanceRequest(BaseModel):
@@ -272,8 +278,8 @@ class AddInstanceRequest(BaseModel):
     @field_validator("type")
     @classmethod
     def valid_type(cls, v: str) -> str:
-        if v not in ("radarr", "sonarr"):
-            raise ValueError("El tipo debe ser 'radarr' o 'sonarr'")
+        if v not in _VALID_INSTANCE_TYPES:
+            raise ValueError(f"El tipo debe ser uno de: {', '.join(_VALID_INSTANCE_TYPES)}")
         return v
 
     @field_validator("url")
@@ -289,6 +295,38 @@ class AddInstanceRequest(BaseModel):
         if not v.strip():
             raise ValueError("La API key no puede estar vacía")
         return v.strip()
+
+
+class UpdateInstanceRequest(BaseModel):
+    """Phase 11B — partial update; only provided fields are changed.
+    Mirrors services/instances.py::update_instance's signature."""
+    name: Optional[str] = None
+    url: Optional[str] = None
+    api_key: Optional[str] = None
+    enabled: Optional[bool] = None
+    is_4k: Optional[bool] = None
+    is_anime: Optional[bool] = None
+
+    @field_validator("name")
+    @classmethod
+    def name_not_blank(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and not v.strip():
+            raise ValueError("El nombre no puede estar vacío")
+        return v
+
+    @field_validator("url")
+    @classmethod
+    def url_not_blank(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and not v.strip():
+            raise ValueError("La URL no puede estar vacía")
+        return v
+
+    @field_validator("api_key")
+    @classmethod
+    def api_key_not_blank(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and not v.strip():
+            raise ValueError("La API key no puede estar vacía")
+        return v
 
 
 # ---------------------------------------------------------------------------
@@ -978,6 +1016,13 @@ class TestEmuwarezRequest(BaseModel):
 class TestArrRequest(BaseModel):
     instance_id: Optional[int] = None
     kind: Optional[str] = None
+    base_url: Optional[str] = None
+    api_key: Optional[str] = None
+
+
+class TestSeerrRequest(BaseModel):
+    """Phase 11B — test an unsaved or saved Seerr (Overseerr/Jellyseerr) instance."""
+    instance_id: Optional[int] = None
     base_url: Optional[str] = None
     api_key: Optional[str] = None
 

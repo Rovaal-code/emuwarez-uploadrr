@@ -11,7 +11,7 @@ from .constants import CONFIG_DIR
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -60,6 +60,53 @@ def _migrate_instances(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE instances ADD COLUMN {col} {col_def}")
         except sqlite3.OperationalError:
             pass  # column already exists
+
+
+def _migrate_instances_widen_type_check(conn: sqlite3.Connection) -> None:
+    """Widen instances.type CHECK to include 'seerr' (Phase 11B).
+
+    SQLite cannot ALTER a CHECK constraint directly — this is the first
+    table-rebuild migration in the project: create a new table with the
+    wider constraint, copy all rows over an explicit column list (never
+    `SELECT *`, to stay correct regardless of physical column order after
+    years of ALTER TABLE ADD COLUMN), drop the old table, rename. Idempotent:
+    skipped if the constraint already includes 'seerr'. No FK/index cleanup
+    needed — `instances` has no FKs pointing to it and its only index is the
+    UNIQUE(type, name) constraint, recreated verbatim on the new table.
+    """
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'instances'"
+    ).fetchone()
+    if not row or not row["sql"] or "'seerr'" in row["sql"]:
+        return
+
+    conn.executescript("""
+        CREATE TABLE instances_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type TEXT NOT NULL CHECK(type IN ('radarr','sonarr','seerr')),
+            name TEXT NOT NULL,
+            url TEXT NOT NULL,
+            api_key TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            is_4k INTEGER NOT NULL DEFAULT 0,
+            is_anime INTEGER NOT NULL DEFAULT 0,
+            last_test_status TEXT,
+            last_test_at TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(type, name)
+        );
+        INSERT INTO instances_new (
+            id, type, name, url, api_key, enabled, is_4k, is_anime,
+            last_test_status, last_test_at, created_at, updated_at
+        )
+        SELECT
+            id, type, name, url, api_key, enabled, is_4k, is_anime,
+            last_test_status, last_test_at, created_at, updated_at
+        FROM instances;
+        DROP TABLE instances;
+        ALTER TABLE instances_new RENAME TO instances;
+    """)
 
 
 def _migrate_nomenclature(conn: sqlite3.Connection) -> None:
@@ -704,6 +751,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
             """
         )
         _migrate_instances(conn)
+        _migrate_instances_widen_type_check(conn)
         _migrate_requests(conn)
         _migrate_nomenclature(conn)
         _migrate_upload_jobs(conn)

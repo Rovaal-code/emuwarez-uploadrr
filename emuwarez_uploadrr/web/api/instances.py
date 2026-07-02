@@ -7,6 +7,7 @@ from ..dependencies import require_auth
 from ..runtime import _db_path
 from ..schemas import (
     AddInstanceRequest, InstanceSafeResponse, InstanceTestResponse, OkResponse, SyncResponse,
+    UpdateInstanceRequest,
 )
 
 router = APIRouter(prefix="/instances", tags=["instances"])
@@ -64,6 +65,34 @@ def create_instance(
     return OkResponse(message=f"Instancia '{body.name}' ({body.type}) creada con ID {iid}")
 
 
+@router.put("/{instance_id}", response_model=InstanceSafeResponse)
+def update_instance_endpoint(
+    instance_id: int,
+    body: UpdateInstanceRequest,
+    current_user: dict = Depends(require_auth),
+) -> InstanceSafeResponse:
+    """Phase 11B — edit an existing instance in place (keeps its ID/history).
+    Leaving api_key blank keeps the currently stored key, same convention
+    as the Settings API keys."""
+    from emuwarez_uploadrr.services.instances import get_instance, update_instance
+    with _get_conn() as conn:
+        inst = get_instance(conn, instance_id)
+        if not inst:
+            raise HTTPException(status_code=404, detail="Instancia no encontrada")
+        update_instance(
+            conn,
+            instance_id,
+            name=body.name,
+            url=body.url,
+            api_key=body.api_key,
+            enabled=body.enabled,
+            is_4k=body.is_4k,
+            is_anime=body.is_anime,
+        )
+        row = conn.execute("SELECT * FROM instances WHERE id = ?", (instance_id,)).fetchone()
+    return _row_to_safe(dict(row))
+
+
 @router.post("/{instance_id}/test", response_model=InstanceTestResponse)
 def test_instance(
     instance_id: int,
@@ -81,6 +110,7 @@ def test_instance(
         instance_id=instance_id,
         instance_name=inst.name,
         version=result.get("version"),
+        username=result.get("username"),
         error=result.get("error"),
     )
 
@@ -96,6 +126,11 @@ def sync_instance(
         inst = get_instance(conn, instance_id)
         if not inst:
             raise HTTPException(status_code=404, detail="Instancia no encontrada")
+        if inst.type not in ("radarr", "sonarr"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Sincronización de biblioteca no soportada para el tipo '{inst.type}'.",
+            )
         try:
             imported, missing = _sync(conn, inst, include_episodes=True)
         except Exception as exc:

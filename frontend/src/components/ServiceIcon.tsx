@@ -1,8 +1,15 @@
-// ServiceIcon — SVG icons for Radarr, Sonarr, EMU, Uploadrr
-// Must appear next to any Radarr/Sonarr text in tables or summaries
+// ServiceIcon — SVG icons for Radarr, Sonarr, Seerr, EMU, Uploadrr
+// Must appear next to any Radarr/Sonarr/Seerr text in tables or summaries.
+//
+// Not exact trademarked logo traces (no network/image access to fetch the
+// official assets) — redesigned to match each project's real badge shape
+// and brand color family so they read as "that service" at a glance:
+//   Radarr = amber/gold circular radar-sweep badge (official Radarr color)
+//   Sonarr = blue rounded-screen badge with broadcast/sonar waves
+//   Seerr  = indigo/purple circular badge with an eye/lens (Overseerr/Jellyseerr)
 
 interface ServiceIconProps {
-  type: 'radarr' | 'sonarr' | 'emu' | 'uploadrr'
+  type: 'radarr' | 'sonarr' | 'seerr' | 'emu' | 'uploadrr'
   size?: number
 }
 
@@ -10,26 +17,42 @@ export function ServiceIcon({ type, size = 16 }: ServiceIconProps) {
   const s = size
 
   if (type === 'radarr') {
-    // Radar/sonar circles — orange
+    // Amber circular badge with a radar sweep + radiating blips.
     return (
       <svg width={s} height={s} viewBox="0 0 24 24" fill="none" aria-label="Radarr">
-        <circle cx="12" cy="12" r="2.5" fill="#f97316" />
-        <circle cx="12" cy="12" r="6" stroke="#f97316" strokeWidth="1.5" strokeOpacity="0.6" fill="none" />
-        <circle cx="12" cy="12" r="10" stroke="#f97316" strokeWidth="1" strokeOpacity="0.3" fill="none" />
-        <line x1="12" y1="12" x2="18" y2="6" stroke="#f97316" strokeWidth="1.5" strokeLinecap="round" opacity="0.8" />
+        <circle cx="12" cy="12" r="10" fill="#f2a900" opacity="0.16" />
+        <circle cx="12" cy="12" r="10" stroke="#f2a900" strokeWidth="1.2" opacity="0.5" fill="none" />
+        <circle cx="12" cy="12" r="6.5" stroke="#f2a900" strokeWidth="1.2" opacity="0.7" fill="none" />
+        <circle cx="12" cy="12" r="2.4" fill="#ffc230" />
+        <path d="M12 12 L18 5.5" stroke="#ffc230" strokeWidth="1.6" strokeLinecap="round" />
+        <circle cx="16.2" cy="8.8" r="1" fill="#ffc230" opacity="0.85" />
       </svg>
     )
   }
 
   if (type === 'sonarr') {
-    // Antenna/broadcast waves — blue
+    // Blue rounded-screen badge with broadcast/sonar waves.
     return (
       <svg width={s} height={s} viewBox="0 0 24 24" fill="none" aria-label="Sonarr">
-        <circle cx="12" cy="14" r="2" fill="#3b82f6" />
-        <path d="M8 10.5a5.5 5.5 0 0 1 8 0" stroke="#3b82f6" strokeWidth="1.5" strokeLinecap="round" fill="none" opacity="0.7" />
-        <path d="M5.5 7.5a9 9 0 0 1 13 0" stroke="#3b82f6" strokeWidth="1.5" strokeLinecap="round" fill="none" opacity="0.4" />
-        <line x1="12" y1="16" x2="12" y2="20" stroke="#3b82f6" strokeWidth="1.5" strokeLinecap="round" />
-        <line x1="9" y1="20" x2="15" y2="20" stroke="#3b82f6" strokeWidth="1.5" strokeLinecap="round" />
+        <rect x="3" y="3" width="18" height="18" rx="6" fill="#1f6fd6" opacity="0.14" />
+        <rect x="3" y="3" width="18" height="18" rx="6" stroke="#1f6fd6" strokeWidth="1.2" opacity="0.5" fill="none" />
+        <circle cx="12" cy="14.5" r="1.8" fill="#35a7f4" />
+        <path d="M8.3 11a5.2 5.2 0 0 1 7.4 0" stroke="#35a7f4" strokeWidth="1.6" strokeLinecap="round" fill="none" opacity="0.85" />
+        <path d="M6 8.3a8.5 8.5 0 0 1 12 0" stroke="#35a7f4" strokeWidth="1.6" strokeLinecap="round" fill="none" opacity="0.5" />
+      </svg>
+    )
+  }
+
+  if (type === 'seerr') {
+    // Overseerr/Jellyseerr-compatible request instance — indigo eye/lens badge.
+    return (
+      <svg width={s} height={s} viewBox="0 0 24 24" fill="none" aria-label="Seerr">
+        <circle cx="12" cy="12" r="10" fill="#6d5bd0" opacity="0.16" />
+        <circle cx="12" cy="12" r="10" stroke="#6d5bd0" strokeWidth="1.2" opacity="0.5" fill="none" />
+        <path d="M4.5 12c2-3.2 5-4.8 7.5-4.8s5.5 1.6 7.5 4.8c-2 3.2-5 4.8-7.5 4.8S6.5 15.2 4.5 12Z"
+          stroke="#8b7bf0" strokeWidth="1.4" fill="none" strokeLinejoin="round" />
+        <circle cx="12" cy="12" r="2.6" fill="#8b7bf0" />
+        <circle cx="12" cy="12" r="1" fill="#1a1424" />
       </svg>
     )
   }
@@ -55,15 +78,15 @@ export function ServiceIcon({ type, size = 16 }: ServiceIconProps) {
 
 // Inline helper: icon + text
 interface ServiceLabelProps {
-  type: 'radarr' | 'sonarr' | 'emu' | 'uploadrr' | string
+  type: 'radarr' | 'sonarr' | 'seerr' | 'emu' | 'uploadrr' | string
   label?: string
   size?: number
 }
 
 export function ServiceLabel({ type, label, size = 14 }: ServiceLabelProps) {
-  const iconType = (['radarr', 'sonarr', 'emu', 'uploadrr'].includes(type)
+  const iconType = (['radarr', 'sonarr', 'seerr', 'emu', 'uploadrr'].includes(type)
     ? type
-    : null) as 'radarr' | 'sonarr' | 'emu' | 'uploadrr' | null
+    : null) as 'radarr' | 'sonarr' | 'seerr' | 'emu' | 'uploadrr' | null
 
   return (
     <span className="service-inline">

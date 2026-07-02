@@ -370,3 +370,70 @@ def test_missing_after_sync(client, auth_headers):
     assert "Have It" not in titles
     assert "Want It" in titles
     assert "Downloading It" in titles
+
+
+# ---------------------------------------------------------------------------
+# GET /api/dashboard/library-activity (Phase 11F)
+# ---------------------------------------------------------------------------
+
+def test_dashboard_library_activity_requires_auth(client):
+    resp = client.get("/api/dashboard/library-activity")
+    assert resp.status_code == 401
+
+
+def test_dashboard_library_activity_empty(client, auth_headers):
+    resp = client.get("/api/dashboard/library-activity", headers=auth_headers)
+    assert resp.status_code == 200
+    assert resp.json()["items"] == []
+
+
+def test_dashboard_library_activity_prioritizes_filled_requests(client, auth_headers):
+    from emuwarez_uploadrr.database import connect, db_path, init_db
+    from emuwarez_uploadrr.services.library import update_request_status
+
+    movies = [
+        {"id": 1, "title": "No Request", "year": 2020, "tmdbId": 1,
+         "movieFile": {"id": 10, "path": "/m/a.mkv", "size": 1000}},
+        {"id": 2, "title": "Compatible Match", "year": 2020, "tmdbId": 2,
+         "movieFile": {"id": 20, "path": "/m/b.mkv", "size": 1000}},
+        {"id": 3, "title": "Filled Request", "year": 2020, "tmdbId": 3,
+         "movieFile": {"id": 30, "path": "/m/c.mkv", "size": 1000}},
+    ]
+    client.post(
+        "/api/instances", json={"type": "radarr", "name": "R", "url": "http://r:7878", "api_key": "k"},
+        headers=auth_headers,
+    )
+    with (
+        patch("emuwarez_uploadrr.integrations.radarr.get_movies", return_value=movies),
+        patch("emuwarez_uploadrr.integrations.radarr.get_queue", return_value=[]),
+    ):
+        client.post("/api/sync", json={"include_episodes": False}, headers=auth_headers)
+
+    conn = connect(db_path())
+    init_db(conn)
+    rows = {r["title"]: r["id"] for r in conn.execute("SELECT id, title FROM library_items").fetchall()}
+    update_request_status(conn, rows["Compatible Match"], "Compatible")
+    update_request_status(conn, rows["Filled Request"], "Llena")
+    conn.close()
+
+    resp = client.get("/api/dashboard/library-activity", headers=auth_headers)
+    titles = [i["title"] for i in resp.json()["items"]]
+    assert titles[0] == "Filled Request"
+    assert titles[1] == "Compatible Match"
+    assert titles[2] == "No Request"
+
+
+def test_dashboard_library_activity_respects_limit(client, auth_headers):
+    client.post(
+        "/api/instances", json={"type": "radarr", "name": "R", "url": "http://r:7878", "api_key": "k"},
+        headers=auth_headers,
+    )
+    movies = [{"id": i, "title": f"Movie {i}", "year": 2020, "tmdbId": i} for i in range(1, 6)]
+    with (
+        patch("emuwarez_uploadrr.integrations.radarr.get_movies", return_value=movies),
+        patch("emuwarez_uploadrr.integrations.radarr.get_queue", return_value=[]),
+    ):
+        client.post("/api/sync", json={"include_episodes": False}, headers=auth_headers)
+
+    resp = client.get("/api/dashboard/library-activity?limit=2", headers=auth_headers)
+    assert len(resp.json()["items"]) == 2

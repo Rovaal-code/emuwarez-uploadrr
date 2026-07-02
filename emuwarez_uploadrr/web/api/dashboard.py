@@ -1,11 +1,14 @@
 """Real dashboard endpoints (Phase 4 / Phase 6D)."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from ..dependencies import require_auth
 from ..runtime import _db_path
-from ..schemas import DashboardActivityItem, DashboardActivityResponse, DashboardSummaryResponse
+from ..schemas import (
+    DashboardActivityItem, DashboardActivityResponse, DashboardSummaryResponse,
+    LibraryListResponse,
+)
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -117,4 +120,25 @@ def dashboard_activity(current_user: dict = Depends(require_auth)) -> DashboardA
         items = get_recent_activity(conn, limit=20)
     return DashboardActivityResponse(
         items=[DashboardActivityItem(**{k: i.get(k) for k in DashboardActivityItem.model_fields}) for i in items]
+    )
+
+
+@router.get("/library-activity", response_model=LibraryListResponse)
+def dashboard_library_activity(
+    limit: int = Query(default=10, ge=1, le=50),
+    current_user: dict = Depends(require_auth),
+) -> LibraryListResponse:
+    """Phase 11F — 'Actividad reciente': library items prioritized by EMU
+    request satisfaction (filled > compatible/partial > everything else),
+    replacing the old task_runs feed of the same name (that data is still
+    available, unchanged, at GET /dashboard/activity)."""
+    from emuwarez_uploadrr.services.library import get_dashboard_library_activity
+    from .library import _to_lib_response
+    with _get_conn() as conn:
+        rows = get_dashboard_library_activity(conn, limit=limit)
+    return LibraryListResponse(
+        items=[_to_lib_response(row) for row in rows],
+        total=len(rows),
+        limit=limit,
+        offset=0,
     )

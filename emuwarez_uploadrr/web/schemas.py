@@ -476,6 +476,8 @@ class LibraryItemResponse(BaseModel):
     recommended_action: Optional[str] = None
     arr_queue_status: Optional[str] = None
     arr_history_status: Optional[str] = None
+    # Phase 11E — poster extracted from Radarr/Sonarr's raw images[] at sync time
+    poster_url: Optional[str] = None
 
 
 class LibraryListResponse(BaseModel):

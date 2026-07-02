@@ -8,7 +8,7 @@ from .arr_base import (
     ArrClientError, ArrConnectionError, ArrAuthError,
     arr_request, join_api_path, safe_api_key,
 )
-from .base import build_url, request_json
+from .base import build_url, extract_poster_url, request_json
 from ..models import LibraryItem, LocalStatus, MediaKind, NomenclatureStatus
 from ..legacy import DEFAULT_TAG
 
@@ -262,6 +262,7 @@ def series_to_library_item(
         local_status=local_status,
         nomenclature_status=NomenclatureStatus.NA.value,
         raw_json=json.dumps(series, ensure_ascii=False),
+        poster_url=extract_poster_url(series.get("images")),
     )
 
 
@@ -324,4 +325,5 @@ def episode_to_library_item(
             {"series": series, "episode": episode, "episodeFile": episode_file},
             ensure_ascii=False,
         ),
+        poster_url=extract_poster_url(series.get("images")),
     )

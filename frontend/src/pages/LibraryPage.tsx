@@ -12,6 +12,52 @@ import { UploadPreflightModal } from '../components/UploadPreflightModal'
 import { formatBytes, formatDate, formatItemType } from '../utils/format'
 
 const PAGE_SIZE = 50
+const VIEW_MODE_STORAGE_KEY = 'emuwarez_uploadrr_library_view'
+
+type ViewMode = 'grid' | 'list'
+
+function loadViewMode(): ViewMode {
+  const stored = localStorage.getItem(VIEW_MODE_STORAGE_KEY)
+  return stored === 'list' ? 'list' : 'grid'
+}
+
+function PosterCard({ item, onClick }: { item: LibraryItemResponse; onClick: () => void }) {
+  return (
+    <div
+      className="clickable"
+      onClick={onClick}
+      style={{
+        display: 'flex', flexDirection: 'column', borderRadius: 8, overflow: 'hidden',
+        background: 'var(--bg-surface)', border: '1px solid var(--border)', cursor: 'pointer',
+      }}
+    >
+      <div style={{ position: 'relative', width: '100%', aspectRatio: '2 / 3', background: 'rgba(255,255,255,0.04)' }}>
+        {item.poster_url ? (
+          <img
+            src={item.poster_url}
+            alt={item.title}
+            loading="lazy"
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+          />
+        ) : (
+          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36, opacity: 0.35 }}>
+            {item.item_type === 'series' || item.item_type === 'episode' ? '📺' : '🎬'}
+          </div>
+        )}
+        <div style={{ position: 'absolute', top: 6, right: 6 }}>
+          <StatusBadge status={item.local_status} type="local" />
+        </div>
+      </div>
+      <div style={{ padding: '8px 10px' }}>
+        <div style={{ fontSize: 12.5, fontWeight: 500, lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+          {item.title}
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{item.year ?? '—'}</div>
+      </div>
+    </div>
+  )
+}
 
 export function LibraryPage() {
   const [data, setData] = useState<LibraryListResponse | null>(null)
@@ -21,6 +67,9 @@ export function LibraryPage() {
   const [nomenclatureItem, setNomenclatureItem] = useState<LibraryItemResponse | null>(null)
   const [fieldsItem, setFieldsItem] = useState<LibraryItemResponse | null>(null)
   const [uploadItem, setUploadItem] = useState<LibraryItemResponse | null>(null)
+  const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode)
+
+  useEffect(() => { localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode) }, [viewMode])
 
   // Filters
   const [search, setSearch] = useState('')
@@ -68,6 +117,22 @@ export function LibraryPage() {
             {total > 0 ? `${total} elementos sincronizados` : 'Sin elementos'}
           </div>
         </div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          <button
+            className={`btn btn-sm ${viewMode === 'grid' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setViewMode('grid')}
+            title="Vista de pósters"
+          >
+            ▦ Pósters
+          </button>
+          <button
+            className={`btn btn-sm ${viewMode === 'list' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setViewMode('list')}
+            title="Vista de lista"
+          >
+            ☰ Lista
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -112,6 +177,21 @@ export function LibraryPage() {
           title="Biblioteca vacía"
           body="Añade instancias Radarr/Sonarr en la sección Instancias y sincroniza para ver el contenido aquí."
         />
+      ) : viewMode === 'grid' ? (
+        <div className="activity-section" style={{ padding: 20 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 16 }}>
+            {items.map(item => (
+              <PosterCard key={item.id} item={item} onClick={() => setSelected(item)} />
+            ))}
+          </div>
+          {total > PAGE_SIZE && (
+            <div style={{ padding: '16px 0 0', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary btn-sm" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>← Anterior</button>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', alignSelf: 'center' }}>{Math.floor(offset / PAGE_SIZE) + 1} / {Math.ceil(total / PAGE_SIZE)}</span>
+              <button className="btn btn-secondary btn-sm" disabled={offset + PAGE_SIZE >= total} onClick={() => setOffset(offset + PAGE_SIZE)}>Siguiente →</button>
+            </div>
+          )}
+        </div>
       ) : (
         <div className="activity-section">
           <div style={{ overflowX: 'auto' }}>
@@ -231,8 +311,18 @@ export function LibraryPage() {
             }}
             onClick={e => e.stopPropagation()}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
-              <div style={{ fontWeight: 700, fontSize: 16 }}>{selected.title} {selected.year ? `(${selected.year})` : ''}</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20, gap: 16 }}>
+              <div style={{ display: 'flex', gap: 14 }}>
+                {selected.poster_url && (
+                  <img
+                    src={selected.poster_url}
+                    alt={selected.title}
+                    style={{ width: 64, height: 96, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }}
+                    onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                  />
+                )}
+                <div style={{ fontWeight: 700, fontSize: 16 }}>{selected.title} {selected.year ? `(${selected.year})` : ''}</div>
+              </div>
               <button className="btn btn-ghost btn-sm" onClick={() => setSelected(null)}>✕</button>
             </div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>

@@ -21,6 +21,7 @@ def upsert_library_item(conn: sqlite3.Connection, item: LibraryItem) -> int:
         "instance_name", "external_id", "tmdb_id", "imdb_id", "tvdb_id", "path",
         "quality", "resolution", "source", "size_bytes", "local_status",
         "request_status", "nomenclature_status", "request_id", "added_at", "raw_json",
+        "poster_url",
     ]
     values = [data.get(col) for col in columns]
     conn.execute(
@@ -44,6 +45,7 @@ def upsert_library_item(conn: sqlite3.Connection, item: LibraryItem) -> int:
             local_status = excluded.local_status,
             nomenclature_status = excluded.nomenclature_status,
             raw_json = excluded.raw_json,
+            poster_url = excluded.poster_url,
             updated_at = CURRENT_TIMESTAMP
         """,
         values,

@@ -53,6 +53,7 @@ def _to_lib_response(row: dict) -> LibraryItemResponse:
         recommended_action=row.get("recommended_action"),
         arr_queue_status=row.get("arr_queue_status"),
         arr_history_status=row.get("arr_history_status"),
+        poster_url=row.get("poster_url"),
     )
 
 

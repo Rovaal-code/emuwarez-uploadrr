@@ -11,7 +11,7 @@ from .constants import CONFIG_DIR
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = 16
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -501,6 +501,14 @@ def _migrate_library_items_phase8a(conn: sqlite3.Connection) -> None:
             pass
 
 
+def _migrate_library_items_phase11e(conn: sqlite3.Connection) -> None:
+    """Add poster_url to library_items (Phase 11E — grid/poster view)."""
+    try:
+        conn.execute("ALTER TABLE library_items ADD COLUMN poster_url TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+
 def _migrate_nomenclature_phase10a(conn: sqlite3.Connection) -> None:
     """Add Phase 10A editable fields and MKV title columns to nomenclature_proposals."""
     new_cols = [
@@ -797,6 +805,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_settings_phase10a(conn)
         _migrate_settings_phase10e(conn)
         _migrate_scheduled_tasks_table(conn)
+        _migrate_library_items_phase11e(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

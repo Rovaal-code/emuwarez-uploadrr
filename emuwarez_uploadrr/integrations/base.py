@@ -13,6 +13,26 @@ class IntegrationError(RuntimeError):
     pass
 
 
+def extract_poster_url(images: Any) -> Optional[str]:
+    """Pick a poster URL out of a Radarr/Sonarr `images` array (Phase 11E).
+
+    Each entry looks like {"coverType": "poster", "url": "/MediaCover/...",
+    "remoteUrl": "https://..."}. `remoteUrl` is preferred — it's a fully
+    qualified, publicly loadable URL, unlike the relative `url` field, which
+    normally requires the instance's own API key/session to load through
+    `/MediaCover/...`. Returns None if there's no poster entry or no
+    remoteUrl on it (never raises — this is best-effort metadata, not
+    something sync should ever fail over)."""
+    if not isinstance(images, list):
+        return None
+    for image in images:
+        if isinstance(image, dict) and image.get("coverType") == "poster":
+            remote_url = image.get("remoteUrl")
+            if isinstance(remote_url, str) and remote_url.strip():
+                return remote_url.strip()
+    return None
+
+
 def normalize_base_url(url: str) -> str:
     url = (url or "").strip().rstrip("/")
     if not url:

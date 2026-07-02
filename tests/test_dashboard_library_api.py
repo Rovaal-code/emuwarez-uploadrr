@@ -256,6 +256,30 @@ def test_library_after_sync(client, auth_headers):
     assert item["source"] == "BluRay"
 
 
+def test_library_after_sync_includes_poster_url(client, auth_headers):
+    """Phase 11E — poster_url extracted from Radarr's images[] at sync time."""
+    client.post(
+        "/api/instances",
+        json={"type": "radarr", "name": "R", "url": "http://r:7878", "api_key": "k"},
+        headers=auth_headers,
+    )
+    movies = [
+        {"id": 1, "title": "Annihilation", "year": 2018, "tmdbId": 300804,
+         "movieFile": {"id": 10, "path": "/m/a.mkv", "size": 8000000000,
+                       "quality": {"quality": {"name": "Bluray-1080p"}}},
+         "images": [{"coverType": "poster", "remoteUrl": "https://example.com/annihilation.jpg"}]},
+    ]
+    with (
+        patch("emuwarez_uploadrr.integrations.radarr.get_movies", return_value=movies),
+        patch("emuwarez_uploadrr.integrations.radarr.get_queue", return_value=[]),
+    ):
+        client.post("/api/sync", json={"include_episodes": False}, headers=auth_headers)
+
+    resp = client.get("/api/library", headers=auth_headers)
+    item = resp.json()["items"][0]
+    assert item["poster_url"] == "https://example.com/annihilation.jpg"
+
+
 def test_library_filter_by_type(client, auth_headers):
     client.post(
         "/api/instances",

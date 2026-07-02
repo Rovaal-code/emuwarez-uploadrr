@@ -106,6 +106,8 @@ export interface LibraryItemResponse {
   recommended_action: string | null
   arr_queue_status: string | null
   arr_history_status: string | null
+  // Phase 11E
+  poster_url: string | null
 }
 
 export interface LibraryListResponse {

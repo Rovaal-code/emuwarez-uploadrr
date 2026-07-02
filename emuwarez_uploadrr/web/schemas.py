@@ -199,6 +199,41 @@ class SetupInstanceRequest(BaseModel):
         return v.strip()
 
 
+class SetupSeerrRequest(BaseModel):
+    """Phase 11C — optional/skippable request-service instance step."""
+    name: str = "Seerr"
+    url: str
+    api_key: str
+
+    @field_validator("url")
+    @classmethod
+    def url_not_empty(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("La URL no puede estar vacía")
+        return v.strip()
+
+    @field_validator("api_key")
+    @classmethod
+    def api_key_not_empty(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("La API key no puede estar vacía")
+        return v.strip()
+
+
+class SetupNomenclatureRequest(BaseModel):
+    """Phase 11C — upload tag + hardlink strategy step.
+
+    use_hardlinks=False requires the exact confirmation token
+    (NOMENCLATURE_DISABLE_HARDLINKS_TOKEN = 'DESACTIVAR_HARDLINKS') — the
+    endpoint validates this, not this schema, so the error message can
+    reference the constant directly.
+    """
+    default_release_tag: str = "EMUWAREZ"
+    hardlink_base: Optional[str] = None
+    use_hardlinks: bool = True
+    confirmation: Optional[str] = None
+
+
 # ---------------------------------------------------------------------------
 # Settings / secrets
 # ---------------------------------------------------------------------------

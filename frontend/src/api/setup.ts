@@ -25,8 +25,38 @@ export async function setupEmu(api_key: string, endpoint_url: string | null = nu
   return api.post<OkResponse>('/setup/emu', { api_key, endpoint_url })
 }
 
-export async function setupInstances(instances: unknown[]): Promise<OkResponse> {
-  return api.post<OkResponse>('/setup/instances', { instances })
+export interface SetupInstancePayload {
+  type: string
+  name: string
+  url: string
+  api_key: string
+  is_4k?: boolean
+  is_anime?: boolean
+}
+
+// POST /setup/instances takes ONE flat instance per call (not an array) —
+// this loops so the wizard can still let the user add several before
+// continuing. (Phase 11C fix: this used to POST { instances: [...] } as a
+// single wrapped body, which the endpoint always rejected with 422.)
+export async function setupInstances(instances: SetupInstancePayload[]): Promise<OkResponse[]> {
+  const results: OkResponse[] = []
+  for (const inst of instances) {
+    results.push(await api.post<OkResponse>('/setup/instances', inst))
+  }
+  return results
+}
+
+export async function setupSeerr(name: string, url: string, api_key: string): Promise<OkResponse> {
+  return api.post<OkResponse>('/setup/seerr', { name, url, api_key })
+}
+
+export async function setupNomenclature(params: {
+  default_release_tag: string
+  hardlink_base?: string
+  use_hardlinks: boolean
+  confirmation?: string
+}): Promise<OkResponse> {
+  return api.post<OkResponse>('/setup/nomenclature', params)
 }
 
 export async function setupComplete(): Promise<OkResponse> {

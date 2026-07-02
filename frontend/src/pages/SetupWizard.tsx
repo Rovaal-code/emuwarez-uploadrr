@@ -1,12 +1,18 @@
 import { useState } from 'react'
-import { setupAdmin, setupBase, setupUploadrr, setupTmdb, setupEmu, setupInstances, setupComplete } from '../api/setup'
+import {
+  setupAdmin, setupBase, setupUploadrr, setupTmdb, setupEmu, setupInstances,
+  setupSeerr, setupNomenclature, setupComplete,
+} from '../api/setup'
 import { login } from '../api/auth'
 import { ApiClientError } from '../api/client'
-import { testTmdbConnection, testEmuwarezConnection, testArrConnection, type IntegrationTestResult } from '../api/integrationTests'
+import { testTmdbConnection, testEmuwarezConnection, testArrConnection, testSeerrConnection, type IntegrationTestResult } from '../api/integrationTests'
 import { ServiceIcon } from '../components/ServiceIcon'
+import { REGION_OPTIONS, LANGUAGE_OPTIONS } from '../constants/regionLanguage'
 import { SETUP_STEPS, SETUP_STEP_LABELS } from '../types/domain'
 import type { SetupStep } from '../types/domain'
 import type { SetupStatusResponse } from '../types/api'
+
+const DISABLE_HARDLINKS_TOKEN = 'DESACTIVAR_HARDLINKS'
 
 interface SetupWizardProps {
   setupStatus: SetupStatusResponse
@@ -40,7 +46,7 @@ function StepsBar({ current, steps }: { current: string; steps: readonly string[
 
 export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   const initialStep: SetupStep = !setupStatus.admin_configured
-    ? 'admin'
+    ? 'welcome'
     : (setupStatus.next_step as SetupStep) ?? 'complete'
 
   const [step, setStep] = useState<SetupStep>(initialStep)
@@ -68,11 +74,25 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   // EMU step state
   const [emuKey, setEmuKey] = useState('')
   const [emuEndpoint, setEmuEndpoint] = useState('')
+  const [emuAckSkip, setEmuAckSkip] = useState(false)
 
   // Instances step state
   const [instances, setInstances] = useState<InstanceDraft[]>([])
   const [instDraft, setInstDraft] = useState<Partial<InstanceDraft>>({ type: 'radarr', is_4k: false, is_anime: false })
   const [instError, setInstError] = useState<string | null>(null)
+
+  // Seerr step state (Phase 11C — optional)
+  const [seerrName, setSeerrName] = useState('Seerr')
+  const [seerrUrl, setSeerrUrl] = useState('')
+  const [seerrKey, setSeerrKey] = useState('')
+  const [seerrTestResult, setSeerrTestResult] = useState<IntegrationTestResult | null>(null)
+  const [seerrTesting, setSeerrTesting] = useState(false)
+
+  // Nomenclature step state (Phase 11C)
+  const [nomTag, setNomTag] = useState('EMUWAREZ')
+  const [nomHardlinkBase, setNomHardlinkBase] = useState('')
+  const [noHardlinks, setNoHardlinks] = useState(false)
+  const [hardlinksConfirm, setHardlinksConfirm] = useState('')
 
   // Connection test state
   const [tmdbTestResult, setTmdbTestResult] = useState<IntegrationTestResult | null>(null)
@@ -115,6 +135,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
     try {
       const r = await testEmuwarezConnection({ api_key: emuKey || undefined, base_url: emuEndpoint || undefined })
       setEmuTestResult(r)
+      if (r.ok) setEmuAckSkip(false)
     } catch {
       setEmuTestResult({ ok: false, service: 'emuwarez', status: 'connection_error', message: 'Error al contactar con el servidor' })
     } finally {
@@ -143,6 +164,23 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
     }
   }
 
+  async function handleTestSeerr() {
+    if (!seerrUrl.trim() || !seerrKey.trim()) {
+      setSeerrTestResult({ ok: false, service: 'seerr', status: 'not_configured', message: 'Introduce URL y API key antes de probar' })
+      return
+    }
+    setSeerrTesting(true)
+    setSeerrTestResult(null)
+    try {
+      const r = await testSeerrConnection({ base_url: seerrUrl.trim(), api_key: seerrKey.trim() })
+      setSeerrTestResult(r)
+    } catch {
+      setSeerrTestResult({ ok: false, service: 'seerr', status: 'connection_error', message: 'Error al contactar con el servidor' })
+    } finally {
+      setSeerrTesting(false)
+    }
+  }
+
   const handleAdmin = wrap(async () => {
     if (adminPass !== adminPass2) throw new Error('Las contraseñas no coinciden')
     await setupAdmin(adminUser.trim(), adminPass)
@@ -154,16 +192,6 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
 
   const handleBase = wrap(async () => {
     await setupBase(appName, timezone)
-    setStep('uploadrr')
-  })
-
-  const handleUploadrr = wrap(async () => {
-    await setupUploadrr(uploadrrPath)
-    setStep('tmdb')
-  })
-
-  const handleTmdb = wrap(async () => {
-    await setupTmdb(tmdbKey, tmdbLang, tmdbRegion)
     setStep('emu')
   })
 
@@ -194,6 +222,38 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
       type: i.type, name: i.name, url: i.url, api_key: i.api_key,
       is_4k: i.is_4k, is_anime: i.is_anime,
     })))
+    setStep('seerr')
+  })
+
+  const handleSeerr = wrap(async () => {
+    if (seerrUrl.trim() && seerrKey.trim()) {
+      await setupSeerr(seerrName.trim() || 'Seerr', seerrUrl.trim(), seerrKey.trim())
+    }
+    setStep('tmdb')
+  })
+
+  function handleSkipSeerr() {
+    setError(null)
+    setStep('tmdb')
+  }
+
+  const handleTmdb = wrap(async () => {
+    await setupTmdb(tmdbKey, tmdbLang, tmdbRegion)
+    setStep('uploadrr')
+  })
+
+  const handleUploadrr = wrap(async () => {
+    await setupUploadrr(uploadrrPath)
+    setStep('nomenclature')
+  })
+
+  const handleNomenclature = wrap(async () => {
+    await setupNomenclature({
+      default_release_tag: nomTag,
+      hardlink_base: nomHardlinkBase.trim() || undefined,
+      use_hardlinks: !noHardlinks,
+      confirmation: noHardlinks ? hardlinksConfirm : undefined,
+    })
     setStep('complete')
   })
 
@@ -203,6 +263,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   })
 
   const stepIdx = SETUP_STEPS.indexOf(step)
+  const emuCanContinue = Boolean(emuTestResult?.ok) || emuAckSkip
 
   return (
     <div className="setup-wizard-wrap">
@@ -219,6 +280,28 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
           <div className="wizard-step-title">
             {stepIdx + 1}. {SETUP_STEP_LABELS[step]}
           </div>
+
+          {/* Welcome step */}
+          {step === 'welcome' && (
+            <>
+              <div className="wizard-step-desc" style={{ marginBottom: 4 }}>
+                eMuwarez Uploadrr es una aplicación autoalojada que:
+              </div>
+              <ul style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.8, paddingLeft: 20, marginTop: 8 }}>
+                <li>Gestiona y sincroniza tus bibliotecas de Radarr y Sonarr.</li>
+                <li>Se conecta con Emuwarez para leer tus peticiones.</li>
+                <li>Detecta qué peticiones ya puedes satisfacer con tu biblioteca local.</li>
+                <li>Prepara y sube contenido siguiendo la nomenclatura de Emuwarez.</li>
+                <li>Opcionalmente usa hardlinks para no renombrar los archivos originales de tu biblioteca.</li>
+              </ul>
+              <div className="wizard-actions">
+                <span />
+                <button className="btn btn-primary" onClick={() => setStep('admin')}>
+                  Empezar
+                </button>
+              </div>
+            </>
+          )}
 
           {/* Admin step */}
           {step === 'admin' && (
@@ -276,65 +359,6 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
             </>
           )}
 
-          {/* Uploadrr step */}
-          {step === 'uploadrr' && (
-            <>
-              <div className="wizard-step-desc">Indica la ruta del directorio Uploadrr (motor de subida).</div>
-              <div className="wizard-fields">
-                <div className="form-group">
-                  <label className="form-label">Ruta Uploadrr</label>
-                  <input className="form-input" value={uploadrrPath} onChange={e => setUploadrrPath(e.target.value)} placeholder="./Uploadrr" />
-                  <span className="form-hint">Ruta al directorio que contiene upload.py</span>
-                </div>
-              </div>
-              {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
-              <div className="wizard-actions">
-                <span />
-                <button className="btn btn-primary" onClick={handleUploadrr} disabled={loading}>
-                  {loading ? 'Guardando…' : 'Continuar'}
-                </button>
-              </div>
-            </>
-          )}
-
-          {/* TMDb step */}
-          {step === 'tmdb' && (
-            <>
-              <div className="wizard-step-desc">API key de TMDb para enriquecimiento de metadatos (título en español, pósters).</div>
-              <div className="wizard-fields">
-                <div className="form-group">
-                  <label className="form-label">API key TMDb</label>
-                  <input className="form-input" value={tmdbKey} onChange={e => setTmdbKey(e.target.value)} placeholder="Tu API key de TMDb" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Idioma</label>
-                  <input className="form-input" value={tmdbLang} onChange={e => setTmdbLang(e.target.value)} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Región</label>
-                  <input className="form-input" value={tmdbRegion} onChange={e => setTmdbRegion(e.target.value)} />
-                </div>
-              </div>
-              {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, marginBottom: 4 }}>
-                <button className="btn btn-secondary btn-sm" onClick={handleTestTmdb} disabled={tmdbTesting || loading} type="button">
-                  {tmdbTesting ? 'Probando…' : 'Probar conexión'}
-                </button>
-                {tmdbTestResult && (
-                  <span style={{ fontSize: 12, color: tmdbTestResult.ok ? '#22c55e' : tmdbTestResult.status === 'not_configured' ? '#f59e0b' : '#ef4444' }}>
-                    {tmdbTestResult.ok ? '✓ Conectado' : tmdbTestResult.status === 'not_configured' ? '⚠ Sin configurar' : tmdbTestResult.status === 'invalid_key' ? '✗ API key inválida' : `✗ ${tmdbTestResult.message}`}
-                  </span>
-                )}
-              </div>
-              <div className="wizard-actions">
-                <span />
-                <button className="btn btn-primary" onClick={handleTmdb} disabled={loading}>
-                  {loading ? 'Guardando…' : 'Continuar'}
-                </button>
-              </div>
-            </>
-          )}
-
           {/* EMU step */}
           {step === 'emu' && (
             <>
@@ -346,7 +370,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               <div className="wizard-fields">
                 <div className="form-group">
                   <label className="form-label">API key eMuwarez</label>
-                  <input className="form-input" value={emuKey} onChange={e => setEmuKey(e.target.value)} placeholder="Tu API key de eMuwarez" />
+                  <input className="form-input" value={emuKey} onChange={e => { setEmuKey(e.target.value); setEmuAckSkip(false) }} placeholder="Tu API key de eMuwarez" />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Endpoint peticiones (opcional)</label>
@@ -365,9 +389,18 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   </span>
                 )}
               </div>
+              {!emuCanContinue && (
+                <div className="alert alert-error" style={{ marginTop: 10 }}>
+                  Todavía no has probado la key (o la prueba ha fallado). Si continúas sin verificarla,
+                  las funciones que dependen de eMuwarez no funcionarán hasta que la corrijas más tarde en Configuración.
+                  <label className="checkbox-label" style={{ display: 'block', marginTop: 8 }}>
+                    <input type="checkbox" checked={emuAckSkip} onChange={e => setEmuAckSkip(e.target.checked)} /> Entiendo, continuar sin verificar
+                  </label>
+                </div>
+              )}
               <div className="wizard-actions">
                 <span />
-                <button className="btn btn-primary" onClick={handleEmu} disabled={loading}>
+                <button className="btn btn-primary" onClick={handleEmu} disabled={loading || !emuCanContinue}>
                   {loading ? 'Guardando…' : 'Continuar'}
                 </button>
               </div>
@@ -449,6 +482,169 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               <div className="wizard-actions">
                 <span />
                 <button className="btn btn-primary" onClick={handleInstances} disabled={loading}>
+                  {loading ? 'Guardando…' : 'Continuar'}
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* Seerr step (Phase 11C — optional) */}
+          {step === 'seerr' && (
+            <>
+              <div className="wizard-step-desc">
+                Opcional. Añade tu instancia de Overseerr o Jellyseerr para preparar la sincronización de
+                peticiones (todavía no implementada — esto solo deja la instancia configurada y probada).
+              </div>
+              <div className="wizard-fields">
+                <div className="form-group">
+                  <label className="form-label">Nombre</label>
+                  <input className="form-input" value={seerrName} onChange={e => setSeerrName(e.target.value)} placeholder="Seerr" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">URL</label>
+                  <input className="form-input" value={seerrUrl} onChange={e => setSeerrUrl(e.target.value)} placeholder="http://192.168.1.100:5055" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">API key</label>
+                  <input className="form-input" type="password" value={seerrKey} onChange={e => setSeerrKey(e.target.value)} placeholder="API key" />
+                </div>
+              </div>
+              {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, marginBottom: 4 }}>
+                <button className="btn btn-secondary btn-sm" onClick={handleTestSeerr} disabled={seerrTesting || loading} type="button">
+                  {seerrTesting ? 'Probando…' : 'Probar conexión'}
+                </button>
+                {seerrTestResult && (
+                  <span style={{ fontSize: 12, color: seerrTestResult.ok ? '#22c55e' : seerrTestResult.status === 'not_configured' ? '#f59e0b' : '#ef4444' }}>
+                    {seerrTestResult.ok
+                      ? `✓ Conectado${seerrTestResult.details?.username ? ` — ${seerrTestResult.details.username}` : ''}`
+                      : seerrTestResult.status === 'not_configured' ? '⚠ Sin configurar' : seerrTestResult.status === 'invalid_key' ? '✗ API key inválida' : `✗ ${seerrTestResult.message}`}
+                  </span>
+                )}
+              </div>
+              <div className="wizard-actions">
+                <button className="btn btn-secondary" onClick={handleSkipSeerr} disabled={loading} type="button">
+                  Omitir
+                </button>
+                <button className="btn btn-primary" onClick={handleSeerr} disabled={loading}>
+                  {loading ? 'Guardando…' : 'Continuar'}
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* TMDb step */}
+          {step === 'tmdb' && (
+            <>
+              <div className="wizard-step-desc">API key de TMDb para enriquecimiento de metadatos (título en español, pósters).</div>
+              <div className="wizard-fields">
+                <div className="form-group">
+                  <label className="form-label">API key TMDb</label>
+                  <input className="form-input" value={tmdbKey} onChange={e => setTmdbKey(e.target.value)} placeholder="API key de TMDb" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Idioma</label>
+                  <select className="form-input form-select" value={tmdbLang} onChange={e => setTmdbLang(e.target.value)}>
+                    {LANGUAGE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Región</label>
+                  <select className="form-input form-select" value={tmdbRegion} onChange={e => setTmdbRegion(e.target.value)}>
+                    {REGION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label} ({o.value})</option>)}
+                  </select>
+                </div>
+              </div>
+              {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, marginBottom: 4 }}>
+                <button className="btn btn-secondary btn-sm" onClick={handleTestTmdb} disabled={tmdbTesting || loading} type="button">
+                  {tmdbTesting ? 'Probando…' : 'Probar conexión'}
+                </button>
+                {tmdbTestResult && (
+                  <span style={{ fontSize: 12, color: tmdbTestResult.ok ? '#22c55e' : tmdbTestResult.status === 'not_configured' ? '#f59e0b' : '#ef4444' }}>
+                    {tmdbTestResult.ok ? '✓ Conectado' : tmdbTestResult.status === 'not_configured' ? '⚠ Sin configurar' : tmdbTestResult.status === 'invalid_key' ? '✗ API key inválida' : `✗ ${tmdbTestResult.message}`}
+                  </span>
+                )}
+              </div>
+              <div className="wizard-actions">
+                <span />
+                <button className="btn btn-primary" onClick={handleTmdb} disabled={loading}>
+                  {loading ? 'Guardando…' : 'Continuar'}
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* Uploadrr step */}
+          {step === 'uploadrr' && (
+            <>
+              <div className="wizard-step-desc">Indica la ruta del directorio Uploadrr (motor de subida).</div>
+              <div className="wizard-fields">
+                <div className="form-group">
+                  <label className="form-label">Ruta Uploadrr</label>
+                  <input className="form-input" value={uploadrrPath} onChange={e => setUploadrrPath(e.target.value)} placeholder="./Uploadrr" />
+                  <span className="form-hint">Ruta al directorio que contiene upload.py</span>
+                </div>
+              </div>
+              {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
+              <div className="wizard-actions">
+                <span />
+                <button className="btn btn-primary" onClick={handleUploadrr} disabled={loading}>
+                  {loading ? 'Guardando…' : 'Continuar'}
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* Nomenclature + hardlink strategy step (Phase 11C) */}
+          {step === 'nomenclature' && (
+            <>
+              <div className="wizard-step-desc">
+                El directorio de hardlinks se usa para crear archivos listos para subir con la nomenclatura
+                de Emuwarez, sin renombrar los archivos originales de tu biblioteca.
+              </div>
+              <div className="wizard-fields">
+                <div className="form-group">
+                  <label className="form-label">Etiqueta de subida</label>
+                  <input className="form-input" value={nomTag} onChange={e => setNomTag(e.target.value)} placeholder="EMUWAREZ" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Directorio de hardlinks</label>
+                  <input
+                    className="form-input"
+                    value={nomHardlinkBase}
+                    onChange={e => setNomHardlinkBase(e.target.value)}
+                    placeholder="/data/uploads/emu"
+                    disabled={noHardlinks}
+                  />
+                  <span className="form-hint">Debe estar en el mismo filesystem que tu biblioteca, para evitar errores EXDEV.</span>
+                </div>
+              </div>
+              <label className="checkbox-label" style={{ display: 'block', marginTop: 14 }}>
+                <input type="checkbox" checked={noHardlinks} onChange={e => { setNoHardlinks(e.target.checked); setHardlinksConfirm('') }} /> No usar hardlinks
+              </label>
+              {noHardlinks && (
+                <div className="alert alert-error" style={{ marginTop: 10 }}>
+                  Sin hardlinks, la aplicación puede renombrar el archivo original de tu biblioteca usando la
+                  nomenclatura de Emuwarez, en vez de crear una copia preparada aparte. Escribe{' '}
+                  <strong>{DISABLE_HARDLINKS_TOKEN}</strong> para confirmar que entiendes esto:
+                  <input
+                    className="form-input"
+                    style={{ marginTop: 8 }}
+                    value={hardlinksConfirm}
+                    onChange={e => setHardlinksConfirm(e.target.value)}
+                    placeholder={DISABLE_HARDLINKS_TOKEN}
+                  />
+                </div>
+              )}
+              {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
+              <div className="wizard-actions">
+                <span />
+                <button
+                  className="btn btn-primary"
+                  onClick={handleNomenclature}
+                  disabled={loading || (noHardlinks && hardlinksConfirm !== DISABLE_HARDLINKS_TOKEN)}
+                >
                   {loading ? 'Guardando…' : 'Continuar'}
                 </button>
               </div>

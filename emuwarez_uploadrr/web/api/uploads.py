@@ -1,5 +1,7 @@
-"""API endpoints for upload jobs, preflight, and controlled execution (Phase 6A/6C/6D)."""
+"""API endpoints for upload jobs, preflight, and controlled execution (Phase 6A/6C/6D/10F)."""
 from __future__ import annotations
+
+import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -17,6 +19,7 @@ from ...services.upload_execution import (
     start_upload_job,
     cancel_upload_job,
     retry_upload_job,
+    compute_progress_phase,
 )
 from ..dependencies import require_auth
 from ..runtime import _db_path
@@ -59,6 +62,36 @@ def _job_to_response(j: dict) -> UploadJobResponse:
     )
 
 
+def _extract_runtime_type(j: dict) -> str | None:
+    raw = j.get("uploadrr_command_json")
+    if not raw:
+        return None
+    try:
+        return json.loads(raw).get("runtime_type")
+    except Exception:
+        return None
+
+
+def _extract_command_preview(j: dict) -> str | None:
+    """Prefer the safe (redacted) preview captured at execution start; fall
+    back to the preflight preview (never contains secrets either way)."""
+    safe_raw = j.get("safe_command_json")
+    if safe_raw:
+        try:
+            preview = json.loads(safe_raw).get("args_preview")
+            if preview:
+                return preview
+        except Exception:
+            pass
+    preflight_raw = j.get("uploadrr_command_json")
+    if preflight_raw:
+        try:
+            return json.loads(preflight_raw).get("command_preview")
+        except Exception:
+            return None
+    return None
+
+
 def _job_to_detail(j: dict) -> UploadJobDetail:
     prepared = j.get("prepared_path")
     source = j.get("source_path") or j.get("path")
@@ -92,6 +125,9 @@ def _job_to_detail(j: dict) -> UploadJobDetail:
         last_success_at=j.get("last_success_at"),
         last_error_at=j.get("last_error_at"),
         last_log_at=j.get("last_log_at"),
+        runtime_type=_extract_runtime_type(j),
+        command_preview=_extract_command_preview(j),
+        progress_phase=compute_progress_phase(j.get("status", ""), j.get("stage")),
     )
 
 
@@ -245,7 +281,7 @@ def start_upload(
             conn=conn,
         )
 
-    if result.get("error") in ("confirmation_required", "validation_failed", "blocked"):
+    if result.get("error") in ("confirmation_required", "validation_failed", "blocked", "unsupported_runtime"):
         raise HTTPException(
             status_code=400,
             detail={

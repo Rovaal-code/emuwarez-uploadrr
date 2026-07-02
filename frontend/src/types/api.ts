@@ -382,6 +382,10 @@ export interface UploadJob {
   last_success_at?: string | null
   last_error_at?: string | null
   last_log_at?: string | null
+  // Phase 10F
+  runtime_type?: string | null
+  command_preview?: string | null
+  progress_phase?: string | null
 }
 
 // Phase 6D — Artifacts

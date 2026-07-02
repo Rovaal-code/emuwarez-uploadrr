@@ -6,7 +6,9 @@ Safety rules:
 - No writes to TMDb, eMuwarez, Radarr or Sonarr.
 - No eMuwarez request creation.
 - No torrent uploads.
-- Uploadrr is explicitly excluded from this module.
+- test_uploadrr_connection() (Phase 10F) only checks filesystem paths — it
+  never executes Uploadrr-EMU, never reads config.yaml secrets, and never
+  spawns a subprocess.
 """
 from __future__ import annotations
 
@@ -14,6 +16,7 @@ import socket
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 from typing import Any, Optional
 
 _TIMEOUT = 10  # seconds — short timeout for connection probes
@@ -194,3 +197,71 @@ def test_arr_connection(
         return _fail(kind, "connection_error", str(exc))
     except Exception as exc:
         return _fail(kind, "unexpected_error", f"Error inesperado: {type(exc).__name__}")
+
+
+# ---------------------------------------------------------------------------
+# Uploadrr runtime (Phase 10F)
+# ---------------------------------------------------------------------------
+
+def test_uploadrr_connection(
+    *,
+    path: Optional[str] = None,
+    python_path: Optional[str] = None,
+    conn=None,
+) -> dict:
+    """Check that the configured Uploadrr runtime paths look usable.
+
+    Read-only filesystem checks only: never executes upload.py, never
+    reads Uploadrr's own config.yaml or its secrets, never spawns a
+    subprocess. If path/python_path are None, reads the stored settings
+    (uploadrr.path / uploadrr.python_path) from conn.
+    """
+    from .uploadrr_config_staging import default_uploadrr_config_path
+
+    _path = path
+    _python = python_path
+
+    if conn is not None:
+        from ..database import get_setting_canonical
+        if not _path:
+            _path = get_setting_canonical(conn, "uploadrr.path")
+        if not _python:
+            _python = get_setting_canonical(conn, "uploadrr.python_path")
+
+    if not _path or not _path.strip():
+        return _fail("uploadrr", "not_configured", "Ruta de Uploadrr (uploadrr.path) no configurada")
+
+    uploadrr_dir = Path(_path.strip())
+    if not uploadrr_dir.exists() or not uploadrr_dir.is_dir():
+        return _fail("uploadrr", "not_found", f"Ruta de Uploadrr no existe o no es un directorio: {uploadrr_dir}")
+
+    script = uploadrr_dir / "upload.py"
+    if not script.exists():
+        return _fail("uploadrr", "script_missing", f"Script upload.py no encontrado en {uploadrr_dir}")
+
+    details: dict[str, Any] = {"uploadrr_path": str(uploadrr_dir), "script_found": True}
+
+    config_path = default_uploadrr_config_path(str(uploadrr_dir))
+    details["config_yaml_found"] = config_path.exists()
+
+    if _python and _python.strip():
+        python_ok = Path(_python.strip()).exists()
+        details["python_path"] = _python.strip()
+        details["python_path_found"] = python_ok
+        if not python_ok:
+            return _fail(
+                "uploadrr", "python_missing",
+                f"uploadrr.python_path no existe: {_python.strip()}",
+                details=details,
+            )
+    else:
+        details["python_path_found"] = None
+
+    if not details["config_yaml_found"]:
+        return _ok(
+            "uploadrr", status="connected_no_config",
+            message="Ruta y script de Uploadrr-EMU encontrados, pero config.yaml no existe todavía",
+            details=details,
+        )
+
+    return _ok("uploadrr", message="Ruta, script y config.yaml de Uploadrr-EMU encontrados", details=details)

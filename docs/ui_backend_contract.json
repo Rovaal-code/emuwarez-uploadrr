@@ -933,5 +933,69 @@
       "Configurable subprocess timeout (uploadrr.timeout), job marked failed/stage=timeout on expiry"
     ],
     "next_phase": "Phase 10F — controlled real Uploadrr-EMU execution, requires adjusting the Docker :ro mount for tmp/ writability"
+  },
+  "phase_10f_controlled_uploadrr_emu_execution": {
+    "description": "Phase 10F connects controlled Uploadrr-EMU execution (runtime_type=uploadrr_emu only), exposes Uploadrr runtime settings in the UI, stages/restores config.yaml around execution, and adds coarse progress phases. Tested exclusively against a fake Uploadrr-EMU runner (tests/fixtures/fake_uploadrr_emu.py) — no real Uploadrr-EMU execution, no real uploads, Uploadrr/ untouched.",
+    "settings_response_new_fields": {
+      "uploadrr_path": "string | null",
+      "uploadrr_runtime_type": "string: uploadrr_emu | uploadrr_generic (default uploadrr_emu)",
+      "uploadrr_python_path": "string | null",
+      "uploadrr_timeout": "int, default 7200",
+      "uploadrr_allowed_roots": "list[str]"
+    },
+    "settings_update_validation": [
+      "uploadrr_runtime_type must be uploadrr_emu or uploadrr_generic, else 422",
+      "uploadrr_timeout must be a positive integer, else 422",
+      "uploadrr_allowed_roots accepts list[str] or a CSV string, always normalized to list[str] in the response",
+      "dotted settings keys are canonical; underscore legacy keys remain a read-only fallback"
+    ],
+    "new_endpoint": {
+      "method": "POST",
+      "path": "/api/integrations/test/uploadrr",
+      "auth": "Bearer",
+      "body": {"path": "optional", "python_path": "optional"},
+      "behavior": "filesystem-only checks (path exists, upload.py exists, python_path exists, data/config.yaml exists) — never executes upload.py, never spawns a subprocess, never reads config.yaml secrets",
+      "statuses": ["not_configured", "not_found", "script_missing", "python_missing", "connected_no_config", "connected"]
+    },
+    "upload_start_new_rule": "POST /api/uploads/{id}/start with apply=true is blocked (400, error=unsupported_runtime) unless uploadrr.runtime_type == uploadrr_emu",
+    "upload_job_detail_new_fields": {
+      "runtime_type": "string | null — resolved at preflight time",
+      "command_preview": "string | null — redacted; prefers the real-execution safe preview over the preflight one",
+      "progress_phase": "string — one of queued|preflight|config_staging|running|finalizing|succeeded|failed|cancelled|timeout"
+    },
+    "config_staging_execution": {
+      "staged_fields": ["DEFAULT.tmdb", "TRACKERS.EMU.api_key"],
+      "lifecycle": "backup config.yaml -> stage -> run subprocess -> always restore from backup (success, failure, timeout, or cancellation) via a single finally block",
+      "skipped_when": "data/config.yaml does not exist yet under uploadrr.path (logged as a warning, execution still proceeds)"
+    },
+    "cancellation_race_fix": "_finalize_job_status() uses a single atomic 'UPDATE ... WHERE status != cancelled' instead of read-then-write, so the background execution thread can never overwrite a concurrently cancelled job with failed/completed",
+    "fake_uploadrr_emu_fixture": {
+      "path": "tests/fixtures/fake_uploadrr_emu.py",
+      "accepts_real_flags": ["-tk", "-mt", "-tmdb", "-ua", "-c", "-res", "-season", "-episode"],
+      "simulation_flags": ["--fake-fail (or FAKE_UPLOADRR_FAIL=1)", "--fake-sleep SECONDS (or FAKE_UPLOADRR_SLEEP=N)"],
+      "safety": "never touches the network, never reads real secrets, never uploads anything real — only prints logs and returns an exit code"
+    },
+    "docker_mount_strategy": {
+      "code": "/opt/Uploadrr mounted :ro",
+      "data": "/opt/Uploadrr/data mounted rw (config.yaml staged/restored)",
+      "tmp": "/opt/Uploadrr/tmp mounted rw (Uploadrr-EMU writes temporaries here)",
+      "env_vars": ["UPLOADRR_PATH", "UPLOADRR_DATA_PATH", "UPLOADRR_TMP_PATH"],
+      "vendoring": "Uploadrr-EMU is never vendored inside the main image"
+    },
+    "cli_new_subcommand": "upload status <job_id> — alias of the existing 'upload job <job_id>'",
+    "safety_guarantees": [
+      "No real Uploadrr-EMU execution in tests/E2E — fake runner only",
+      "No real torrent uploads",
+      "No calls to eMuwarez",
+      "Uploadrr/ never touched",
+      "subprocess.Popen with shell=False, argv as list[str]",
+      "Real apply requires apply=true, dry_run=false, and confirmation=INICIAR_UPLOADRR",
+      "Secrets never appear in command_preview, logs, or safe_command_json"
+    ],
+    "remaining_gaps": [
+      "Manual test against a real Uploadrr-EMU installation on a real server (out of scope for this phase)",
+      "Finer-grained progress via parsing Uploadrr-EMU's actual log output (today progress_phase is a coarse status/stage mapping)",
+      "Config staging covers only DEFAULT.tmdb/TRACKERS.EMU.api_key/anon — the rest of config.yaml remains the operator's responsibility by design"
+    ]
   }
 }

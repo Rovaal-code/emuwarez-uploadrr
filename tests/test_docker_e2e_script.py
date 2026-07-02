@@ -93,6 +93,43 @@ def test_e2e_script_runs_upload_preflight():
 
 
 # ---------------------------------------------------------------------------
+# docker-e2e-demo.sh — Phase 10F additions (fake Uploadrr-EMU execution)
+# ---------------------------------------------------------------------------
+
+def test_e2e_script_uses_fake_uploadrr_emu_fixture():
+    content = E2E_SCRIPT.read_text()
+    assert "fake_uploadrr_emu.py" in content, "E2E must use the Phase 10F fake Uploadrr-EMU fixture"
+
+
+def test_e2e_script_mounts_uploadrr_data_and_tmp_writable():
+    content = E2E_SCRIPT.read_text()
+    assert "/opt/Uploadrr/data:rw" in content
+    assert "/opt/Uploadrr/tmp:rw" in content
+
+
+def test_e2e_script_requires_confirmation_token_for_real_start():
+    content = E2E_SCRIPT.read_text()
+    assert "CONFIRMATION_TOKEN" in content
+
+
+def test_e2e_script_checks_config_restored_after_execution():
+    content = E2E_SCRIPT.read_text()
+    assert "PLACEHOLDER_TMDB_KEY" in content
+    assert "restaurado" in content.lower()
+
+
+def test_e2e_script_checks_job_reaches_completed():
+    content = E2E_SCRIPT.read_text()
+    assert "FINAL_STATUS=completed" in content
+
+
+def test_e2e_script_never_uses_real_uploadrr_fork_path():
+    content = E2E_SCRIPT.read_text()
+    for suspicious in ["codeberg.org", "github.com/", "Uploadrr-EMU.git"]:
+        assert suspicious not in content, f"E2E script must not reference a real Uploadrr fork: {suspicious}"
+
+
+# ---------------------------------------------------------------------------
 # fake_uploadrr.py — existence and output safety
 # ---------------------------------------------------------------------------
 

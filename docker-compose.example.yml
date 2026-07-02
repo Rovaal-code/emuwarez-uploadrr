@@ -2,9 +2,20 @@
 #
 # NOTAS IMPORTANTES:
 #
-# 1. Uploadrr debe montarse como directorio externo en /opt/Uploadrr.
-#    NUNCA se incluye dentro de la imagen Docker. Configura la ruta
-#    desde el setup web o CLI tras el primer arranque.
+# 1. Uploadrr-EMU debe montarse como directorio externo bajo /opt/Uploadrr.
+#    NUNCA se incluye ni se vendoriza dentro de la imagen Docker.
+#
+#    Desde la Fase 10F, Uploadrr-EMU necesita escribir en su propio
+#    directorio (config.yaml se stagea/restaura antes/después de cada
+#    ejecución, y el fork escribe temporales en tmp/) — por eso el código
+#    de Uploadrr-EMU se monta :ro, pero data/ y tmp/ se montan aparte en rw:
+#
+#      /opt/Uploadrr       → código de Uploadrr-EMU (:ro)
+#      /opt/Uploadrr/data   → data/config.yaml, staged/restored (rw)
+#      /opt/Uploadrr/tmp    → temporales de Uploadrr-EMU (torrents, capturas, descripciones) (rw)
+#
+#    Configura la ruta /opt/Uploadrr desde el setup web o CLI tras el
+#    primer arranque (setting uploadrr.path).
 #
 # 2. Hardlinks y EXDEV:
 #    Para que la creación de hardlinks funcione, el directorio fuente
@@ -46,10 +57,13 @@ services:
       # Configuración persistente: base de datos SQLite y settings
       - /srv/emuwarez-uploadrr/config:/config
 
-      # Uploadrr como bind mount externo — NUNCA va dentro de la imagen
+      # Uploadrr-EMU como bind mount externo — NUNCA va dentro de la imagen.
+      # Código en :ro; data/ y tmp/ montados aparte en rw (ver notas arriba).
       # Después del primer arranque, configura la ruta /opt/Uploadrr
-      # en el setup web bajo "Ruta de Uploadrr".
-      - /srv/Uploadrr:/opt/Uploadrr:ro
+      # en el setup web bajo "Ruta de Uploadrr" (uploadrr.path).
+      - ${UPLOADRR_PATH:-/srv/Uploadrr}:/opt/Uploadrr:ro
+      - ${UPLOADRR_DATA_PATH:-/srv/emuwarez-uploadrr/uploadrr-data}:/opt/Uploadrr/data:rw
+      - ${UPLOADRR_TMP_PATH:-/srv/emuwarez-uploadrr/uploadrr-tmp}:/opt/Uploadrr/tmp:rw
 
       # Raíz de datos compartida para media + uploads
       # Usar una sola raíz garantiza que hardlinks funcionan sin EXDEV.

@@ -39,6 +39,14 @@ _SECRET_LINE_PATTERNS = [
 ]
 
 
+def default_uploadrr_config_path(uploadrr_dir: str) -> Path:
+    """Return the conventional Uploadrr-EMU config.yaml path under uploadrr_dir/data.
+
+    Pure path arithmetic — does not check existence or touch the filesystem.
+    """
+    return Path(uploadrr_dir) / "data" / "config.yaml"
+
+
 def read_config_lines(config_path: Path) -> list[str]:
     """Read config.yaml lines from an explicit path. Returns [] if missing."""
     if not config_path.exists():
@@ -138,6 +146,7 @@ def diff_staged_changes(old_lines: list[str], new_lines: list[str]) -> list[str]
 
 
 __all__ = [
+    "default_uploadrr_config_path",
     "read_config_lines",
     "backup_config",
     "restore_config_from_backup",

@@ -22,7 +22,7 @@ const STATUS_CLASS: Record<string, string> = {
 
 const STATUS_OPTIONS = ['', 'ready', 'running', 'completed', 'failed', 'cancelled', 'queued', 'blocked']
 
-function LogsPanel({ jobId, onClose }: { jobId: number; onClose: () => void }) {
+function LogsPanel({ jobId, onClose, autoRefresh }: { jobId: number; onClose: () => void; autoRefresh?: boolean }) {
   const [logs, setLogs] = useState<UploadJobLog[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -37,6 +37,13 @@ function LogsPanel({ jobId, onClose }: { jobId: number; onClose: () => void }) {
   }
 
   useEffect(() => { load() }, [jobId])
+
+  useEffect(() => {
+    if (!autoRefresh) return
+    const timer = setInterval(load, 2500)
+    return () => clearInterval(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobId, autoRefresh])
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -241,16 +248,25 @@ export function UploadsPage() {
   const [startJob, setStartJob] = useState<UploadJob | null>(null)
   const [retryJob, setRetryJob] = useState<UploadJob | null>(null)
 
-  const load = async () => {
-    setLoading(true); setError(null)
+  const load = async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) { setLoading(true); setError(null) }
     try {
       const data = await getUploads(statusFilter ? { status: statusFilter } : undefined)
       setJobs(data)
-    } catch { setError('Error al cargar los trabajos de subida.') }
-    finally { setLoading(false) }
+    } catch { if (!opts?.silent) setError('Error al cargar los trabajos de subida.') }
+    finally { if (!opts?.silent) setLoading(false) }
   }
 
   useEffect(() => { load() }, [statusFilter])
+
+  // Poll every 2.5s while at least one job is running, so status/progress/logs update live.
+  const hasRunningJob = jobs.some(j => j.status === 'running')
+  useEffect(() => {
+    if (!hasRunningJob) return
+    const timer = setInterval(() => load({ silent: true }), 2500)
+    return () => clearInterval(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasRunningJob, statusFilter])
 
   const handleCancel = async (jobId: number) => {
     try { await cancelUploadJob(jobId); await load() } catch { /* ignore */ }
@@ -258,7 +274,13 @@ export function UploadsPage() {
 
   return (
     <div>
-      {logsJob !== null && <LogsPanel jobId={logsJob} onClose={() => setLogsJob(null)} />}
+      {logsJob !== null && (
+        <LogsPanel
+          jobId={logsJob}
+          onClose={() => setLogsJob(null)}
+          autoRefresh={jobs.find(j => j.id === logsJob)?.status === 'running'}
+        />
+      )}
       {artifactsJob !== null && <ArtifactsPanel jobId={artifactsJob} onClose={() => setArtifactsJob(null)} />}
       {startJob && <StartModal job={startJob} onClose={() => setStartJob(null)} onDone={() => { setStartJob(null); load() }} />}
       {retryJob && <RetryModal job={retryJob} onClose={() => setRetryJob(null)} onDone={() => { setRetryJob(null); load() }} />}
@@ -273,7 +295,8 @@ export function UploadsPage() {
             style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 4, color: 'inherit', padding: '4px 8px', fontSize: '0.85rem' }}>
             {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s || 'Todos los estados'}</option>)}
           </select>
-          <button className="btn btn-secondary btn-sm" onClick={load} disabled={loading}>Actualizar</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => load()} disabled={loading}>Actualizar</button>
+          {hasRunningJob && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>● actualizando en vivo</span>}
         </div>
       </div>
 
@@ -292,6 +315,7 @@ export function UploadsPage() {
                   <th>ID</th>
                   <th>Título</th>
                   <th>Estado</th>
+                  <th>Progreso</th>
                   <th>Duración</th>
                   <th>Exit</th>
                   <th>Resultado</th>
@@ -307,7 +331,15 @@ export function UploadsPage() {
                   <tr key={job.id}>
                     <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{job.id}</td>
                     <td style={{ fontWeight: 500, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{job.title || '–'}</td>
-                    <td><span className={STATUS_CLASS[job.status] || 'badge req-unknown'}>{job.status}</span></td>
+                    <td>
+                      <span className={STATUS_CLASS[job.status] || 'badge req-unknown'} title={job.command_preview || undefined}>
+                        {job.status}
+                      </span>
+                    </td>
+                    <td style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                      {job.status === 'running' && <span style={{ marginRight: 4 }}>⏳</span>}
+                      {job.progress_phase || '–'}
+                    </td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                       {job.duration_seconds != null ? `${job.duration_seconds}s` : '–'}
                     </td>

@@ -268,6 +268,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_up_preflight.add_argument("--request-id", type=int, default=None, help="ID opcional de request_item vinculada")
     p_up_job = up_sub.add_parser("job", help="Ver detalle de un upload job/preflight")
     p_up_job.add_argument("id", type=int, help="ID del upload job")
+    p_up_status = up_sub.add_parser("status", help="Alias de 'job': ver detalle/estado de un upload job")
+    p_up_status.add_argument("id", type=int, help="ID del upload job")
     p_up_jobs = up_sub.add_parser("jobs", help="Listar upload jobs/preflights")
     p_up_jobs.add_argument("--status", default=None, help="Filtrar por estado (ready, running, completed, failed, cancelled)")
     p_up_logs = up_sub.add_parser("logs", help="Ver logs de un upload job")
@@ -1226,7 +1228,7 @@ def cmd_upload_modern(args) -> int:
             print("\nNota: No se ha ejecutado Uploadrr ni subido ningún archivo.")
             return 0
 
-        if args.upload_command == "job":
+        if args.upload_command in ("job", "status"):
             job = get_upload_job(args.id, conn=conn)
             if not job:
                 print(f"✗ Job {args.id} no encontrado")

@@ -30,8 +30,48 @@ from .uploadrr_contract import (
     get_runtime_settings,
     render_command_preview,
 )
+from .uploadrr_config_staging import (
+    default_uploadrr_config_path,
+    read_config_lines,
+    restore_config_from_backup,
+    stage_emu_config,
+    stage_tmdb_key,
+    write_staged_config,
+)
 
 CONFIRMATION_TOKEN = "INICIAR_UPLOADRR"
+
+# Phase 10F: approximate progress phases surfaced to the UI. Uploadrr-EMU
+# does not emit structured progress, so this is a coarse stage mapping, never
+# a fabricated percentage.
+PROGRESS_PHASES = (
+    "queued", "preflight", "config_staging", "running",
+    "finalizing", "succeeded", "failed", "cancelled", "timeout",
+)
+
+
+def compute_progress_phase(status: str, stage: str | None) -> str:
+    """Map (status, stage) to one of PROGRESS_PHASES for display purposes only."""
+    stage = stage or ""
+    if status == "cancelled":
+        return "cancelled"
+    if status == "failed" and stage == "timeout":
+        return "timeout"
+    if status == "failed":
+        return "failed"
+    if status == "completed":
+        return "succeeded"
+    if status == "running":
+        if stage == "config_staging":
+            return "config_staging"
+        if stage == "finalizing":
+            return "finalizing"
+        return "running"
+    if status == "ready":
+        return "preflight"
+    if status in ("draft", "preflight"):
+        return "preflight"
+    return "queued"
 
 VIDEO_EXTENSIONS = {
     ".mkv", ".mp4", ".avi", ".mov", ".ts", ".m2ts",
@@ -424,6 +464,115 @@ def _update_job_status(job_id: int, status: str, **kwargs) -> None:
         conn.close()
 
 
+def _finalize_job_status(job_id: int, desired_status: str, **kwargs) -> None:
+    """Atomically set the terminal status of a job, unless it was already
+    cancelled — as a single conditional UPDATE, not a read-then-write, so
+    there is no race window with cancel_upload_job() running concurrently
+    on another connection/thread.
+
+    cancel_upload_job() sends SIGTERM and unconditionally writes status
+    "cancelled" while the subprocess is still running. When that subprocess
+    then exits (killed by the signal), this function tries to record
+    "failed"/"completed" — but only if the row is not already "cancelled".
+    SQLite serializes writers, so this single UPDATE either lands before or
+    after cancel_upload_job()'s UPDATE, never interleaved with it: if it
+    lands first, cancel_upload_job()'s later unconditional write still wins
+    (status ends as "cancelled" either way); if it lands after, the WHERE
+    clause here blocks clobbering an already-cancelled job, and only the
+    non-status bookkeeping fields (exit_code/finished_at/duration) are kept.
+    """
+    conn = _get_db_conn()
+    try:
+        updates = {"status": desired_status, "updated_at": _now()}
+        updates.update(kwargs)
+        set_clauses = ", ".join(f"{k} = ?" for k in updates)
+        values = list(updates.values()) + [job_id]
+        cur = conn.execute(
+            f"UPDATE upload_jobs SET {set_clauses} WHERE id = ? AND status != 'cancelled'",
+            values,
+        )
+        conn.commit()
+        if cur.rowcount == 0:
+            # Already cancelled — keep status/stage, but still record the
+            # bookkeeping fields (exit_code, finished_at, duration_seconds…)
+            # for observability.
+            extra = {k: v for k, v in kwargs.items() if k != "stage"}
+            if extra:
+                extra["updated_at"] = _now()
+                set_clauses2 = ", ".join(f"{k} = ?" for k in extra)
+                values2 = list(extra.values()) + [job_id]
+                conn.execute(f"UPDATE upload_jobs SET {set_clauses2} WHERE id = ?", values2)
+                conn.commit()
+    finally:
+        conn.close()
+
+
+def _stage_uploadrr_config(job_id: int, cwd: str) -> Path | None:
+    """Best-effort staging of DEFAULT.tmdb / TRACKERS.EMU.api_key into config.yaml.
+
+    Returns the config_path if staging happened (so the caller knows to
+    restore it later), or None if there was nothing to stage (config.yaml
+    missing, or no secrets configured) — in that case there is nothing to
+    restore either. Never raises: staging failures are logged as warnings
+    and execution proceeds without a staged config.
+    """
+    config_path = default_uploadrr_config_path(cwd)
+    if not config_path.exists():
+        append_upload_log(
+            job_id, "warning",
+            f"config.yaml no encontrado en {config_path}; no se stagean credenciales.",
+            stream="system",
+        )
+        return None
+
+    conn = _get_db_conn()
+    try:
+        tmdb_key = get_setting_canonical(conn, "tmdb.api_key")
+        emu_key = get_setting_canonical(conn, "emu.api_key")
+    finally:
+        conn.close()
+
+    try:
+        lines = read_config_lines(config_path)
+        changed = False
+        if tmdb_key:
+            lines, _msg = stage_tmdb_key(lines, tmdb_key)
+            changed = True
+        if emu_key:
+            lines, _msg = stage_emu_config(lines, api_key=emu_key)
+            changed = True
+        if not changed:
+            append_upload_log(
+                job_id, "warning",
+                "Sin tmdb.api_key/emu.api_key configuradas; config.yaml no se modifica.",
+                stream="system",
+            )
+            return None
+        write_staged_config(config_path, lines)
+        append_upload_log(
+            job_id, "info",
+            "config.yaml stageado (DEFAULT.tmdb / TRACKERS.EMU.api_key). Backup creado.",
+            stream="system",
+        )
+        return config_path
+    except Exception as exc:
+        append_upload_log(job_id, "warning", f"No se pudo stagear config.yaml: {exc}", stream="system")
+        return None
+
+
+def _restore_uploadrr_config(job_id: int, config_path: Path | None) -> None:
+    if config_path is None:
+        return
+    try:
+        restored = restore_config_from_backup(config_path)
+        if restored:
+            append_upload_log(job_id, "info", "config.yaml restaurado desde backup.", stream="system")
+        else:
+            append_upload_log(job_id, "warning", "No había backup de config.yaml que restaurar.", stream="system")
+    except Exception as exc:
+        append_upload_log(job_id, "error", f"Fallo al restaurar config.yaml: {exc}", stream="system")
+
+
 def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str]) -> None:
     """Execute Uploadrr in a background thread. Updates job status, logs, and result artifacts."""
     executable = cmd["executable"]
@@ -468,6 +617,15 @@ def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str]) -> None
         )
 
     timeout = cmd.get("timeout") or None
+
+    # Phase 10F: stage DEFAULT.tmdb / TRACKERS.EMU.api_key into Uploadrr-EMU's
+    # own config.yaml before running, and always restore it afterwards
+    # (success, failure, timeout, or cancellation) via the finally block.
+    staged_config_path: Path | None = None
+    if cmd.get("runtime_type") == RUNTIME_EMU and os.path.isdir(cwd):
+        _update_job_status(job_id, "running", stage="config_staging")
+        staged_config_path = _stage_uploadrr_config(job_id, cwd)
+        _update_job_status(job_id, "running", stage="running")
 
     try:
         env = {k: v for k, v in os.environ.items()}
@@ -527,7 +685,7 @@ def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str]) -> None
             finished_at = finished_dt.isoformat()
             duration_seconds = int((finished_dt - started_dt).total_seconds())
             msg = f"Proceso cancelado por timeout ({timeout}s)."
-            _update_job_status(
+            _finalize_job_status(
                 job_id, "failed",
                 stage="timeout",
                 exit_code=returncode,
@@ -541,6 +699,20 @@ def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str]) -> None
             return
 
         returncode = proc.wait()
+
+        # Transient progress marker only, applied atomically and only while
+        # still "running" — must never clobber a "cancelled" status that
+        # cancel_upload_job() may have set concurrently while this process
+        # was still exiting after SIGTERM.
+        conn = _get_db_conn()
+        try:
+            conn.execute(
+                "UPDATE upload_jobs SET stage = 'finalizing', updated_at = ? WHERE id = ? AND status = 'running'",
+                (_now(), job_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
         finished_dt = datetime.now(timezone.utc)
         finished_at = finished_dt.isoformat()
@@ -562,7 +734,7 @@ def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str]) -> None
                 first_id = result["torrent_ids"][0]
                 create_upload_artifact(job_id, "torrent_id", name="torrent_id", value=first_id)
 
-            _update_job_status(
+            _finalize_job_status(
                 job_id, "completed",
                 stage="finished",
                 exit_code=0,
@@ -582,7 +754,7 @@ def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str]) -> None
             err_summary = build_error_summary(stderr_text, stdout_text, returncode)
             safe_err = redact_secrets(err_summary or f"exit code {returncode}", secrets)
 
-            _update_job_status(
+            _finalize_job_status(
                 job_id, "failed",
                 stage="failed",
                 exit_code=returncode,
@@ -601,7 +773,7 @@ def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str]) -> None
     except FileNotFoundError as exc:
         finished_at = _now()
         msg = f"Ejecutable no encontrado: {exc}"
-        _update_job_status(
+        _finalize_job_status(
             job_id, "failed",
             stage="failed",
             finished_at=finished_at,
@@ -612,7 +784,7 @@ def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str]) -> None
     except Exception as exc:
         finished_at = _now()
         msg = redact_secrets(str(exc), secrets)
-        _update_job_status(
+        _finalize_job_status(
             job_id, "failed",
             stage="failed",
             finished_at=finished_at,
@@ -620,6 +792,8 @@ def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str]) -> None
             last_error_at=finished_at,
         )
         append_upload_log(job_id, "error", f"Excepción inesperada: {msg}", stream="system")
+    finally:
+        _restore_uploadrr_config(job_id, staged_config_path)
 
 
 def start_upload_job(
@@ -699,6 +873,24 @@ def start_upload_job(
                 "command_preview": None,
                 "message": None,
                 "error": "validation_failed",
+            }
+
+        runtime = get_runtime_settings(conn)
+        if runtime["runtime_type"] != RUNTIME_EMU:
+            return {
+                "job_id": job_id,
+                "action": "blocked",
+                "status": "blocked",
+                "stage": None,
+                "dry_run": False,
+                "errors": [
+                    f"Ejecución controlada solo soportada para runtime_type={RUNTIME_EMU} "
+                    f"(actual: {runtime['runtime_type']})."
+                ],
+                "warnings": [],
+                "command_preview": None,
+                "message": None,
+                "error": "unsupported_runtime",
             }
 
         cmd = build_uploadrr_execution_command(job, conn=conn)
@@ -913,6 +1105,8 @@ def cancel_upload_job(job_id: int, conn=None) -> dict:
 
 __all__ = [
     "CONFIRMATION_TOKEN",
+    "PROGRESS_PHASES",
+    "compute_progress_phase",
     "redact_secrets",
     "get_upload_job",
     "list_upload_jobs",

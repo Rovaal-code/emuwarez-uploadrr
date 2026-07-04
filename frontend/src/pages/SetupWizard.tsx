@@ -253,10 +253,11 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               </div>
               <ul style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.8, paddingLeft: 20, marginTop: 8 }}>
                 <li>Gestiona y sincroniza tus bibliotecas de Radarr y Sonarr.</li>
-                <li>Se conecta con Emuwarez para leer tus peticiones.</li>
+                <li>Se conecta con eMuwarez para leer tus peticiones activas.</li>
                 <li>Detecta qué peticiones ya puedes satisfacer con tu biblioteca local.</li>
-                <li>Prepara y sube contenido siguiendo la nomenclatura de Emuwarez.</li>
+                <li>Prepara y sube contenido siguiendo la nomenclatura de eMuwarez.</li>
                 <li>Opcionalmente usa hardlinks para no renombrar los archivos originales de tu biblioteca.</li>
+                <li style={{ color: 'var(--text-muted)' }}>(Próximamente: crear y gestionar peticiones en eMuwarez, y sugerir peticiones nuevas para contenido que te falte en la biblioteca.)</li>
               </ul>
               <div className="wizard-actions">
                 <span />

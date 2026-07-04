@@ -17,9 +17,6 @@ Reuses existing sync functions/logging wherever they already exist:
 - eMuwarez request sync reuses services.requests.sync_emu_requests()
   (already logs to task_runs under "sync-emu-requests", and already
   enforces the 1-hour minimum via can_sync_requests()).
-- Seerr request sync has no underlying implementation yet (out of scope,
-  see Phase 11B/11C reports) — this only reports that clearly, it never
-  pretends to sync something that doesn't exist.
 """
 from __future__ import annotations
 
@@ -27,11 +24,8 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from .tasks import finish_task, start_task
-
 TASK_LIBRARY_SYNC = "sync-library"
 TASK_EMU_SYNC = "sync-emu-requests"
-TASK_SEERR_SYNC = "seerr_requests_sync"
 
 # task_key, name, description, default_interval_minutes, min_interval_minutes, manual_allowed
 DEFAULT_TASKS: list[tuple[str, str, str, int, int, int]] = [
@@ -39,12 +33,6 @@ DEFAULT_TASKS: list[tuple[str, str, str, int, int, int]] = [
         TASK_LIBRARY_SYNC,
         "Sincronizar bibliotecas",
         "Sincroniza las bibliotecas desde las instancias Radarr/Sonarr configuradas.",
-        30, 15, 1,
-    ),
-    (
-        TASK_SEERR_SYNC,
-        "Sincronizar peticiones Seerr",
-        "Sincroniza peticiones desde las instancias Seerr (Overseerr/Jellyseerr) configuradas.",
         30, 15, 1,
     ),
     (
@@ -121,26 +109,9 @@ def _run_emu_sync(conn: sqlite3.Connection) -> tuple[str, str]:
     return "completed", f"{result.get('imported', 0)} peticiones importadas, {result.get('matched', 0)} cruces"
 
 
-def _run_seerr_sync(conn: sqlite3.Connection) -> tuple[str, str]:
-    """No Seerr request-sync implementation exists yet (Phase 11B/11C
-    deliberately left it out of scope) — this reports that honestly
-    instead of pretending to sync anything."""
-    run_id = start_task(conn, TASK_SEERR_SYNC, "Sincronización de peticiones Seerr")
-    row = conn.execute(
-        "SELECT COUNT(*) AS c FROM instances WHERE type = 'seerr' AND enabled = 1"
-    ).fetchone()
-    if row and row["c"]:
-        summary = "Instancia(s) Seerr configurada(s), pero la sincronización de peticiones todavía no está implementada."
-    else:
-        summary = "Sin instancias Seerr configuradas."
-    finish_task(conn, run_id, "skipped", summary)
-    return "skipped", summary
-
-
 _EXECUTORS = {
     TASK_LIBRARY_SYNC: _run_library_sync,
     TASK_EMU_SYNC: _run_emu_sync,
-    TASK_SEERR_SYNC: _run_seerr_sync,
 }
 
 
@@ -224,7 +195,7 @@ def tick_due_tasks() -> list[dict]:
 
 
 __all__ = [
-    "TASK_LIBRARY_SYNC", "TASK_EMU_SYNC", "TASK_SEERR_SYNC", "DEFAULT_TASKS",
+    "TASK_LIBRARY_SYNC", "TASK_EMU_SYNC", "DEFAULT_TASKS",
     "ensure_default_tasks", "list_scheduled_tasks", "get_scheduled_task",
     "set_task_interval", "run_scheduled_task", "claim_due_tasks", "tick_due_tasks",
 ]

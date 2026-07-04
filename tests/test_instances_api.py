@@ -1,9 +1,11 @@
-"""API tests for /api/instances — Phase 11B: edit endpoint, Seerr instance
-type, and the instances.type CHECK-constraint widening migration.
+"""API tests for /api/instances — Phase 11B: edit endpoint, and the
+instances.type CHECK-constraint migrations.
 
-Real *arr/Seerr HTTP calls are always mocked — never real network traffic.
+Real *arr HTTP calls are always mocked — never real network traffic.
 """
 from __future__ import annotations
+
+import sqlite3
 
 from unittest.mock import patch
 
@@ -31,16 +33,6 @@ def test_list_requires_auth(client):
 
 def test_update_requires_auth(client):
     assert client.put("/api/instances/1", json={"name": "x"}).status_code == 401
-
-
-# ---------------------------------------------------------------------------
-# Seerr as a valid instance type (CHECK constraint widened)
-# ---------------------------------------------------------------------------
-
-def test_create_seerr_instance(client, auth_headers):
-    inst = _add_instance(client, auth_headers, type="seerr", name="Seerr", url="http://seerr:5055", api_key="seerrkey")
-    assert inst["type"] == "seerr"
-    assert inst["api_key_masked"] != "seerrkey"
 
 
 def test_create_radarr_and_sonarr_still_work_after_migration(client, auth_headers):
@@ -133,49 +125,30 @@ def test_update_instance_after_edit_can_be_tested_again(client, auth_headers):
 
 
 # ---------------------------------------------------------------------------
-# Seerr test-connection through the instance-level /test route + username
+# instances.type CHECK-constraint migrations (widen for Seerr in 11B, then
+# narrow back to radarr/sonarr once Seerr was removed — never had a working
+# request sync, see removal notes for this phase)
 # ---------------------------------------------------------------------------
 
-def test_instance_test_seerr_returns_username(client, auth_headers):
-    inst = _add_instance(client, auth_headers, type="seerr", name="Seerr Test")
-    with patch("emuwarez_uploadrr.services.instances.seerr.seerr_test_connection") as mock_test:
-        mock_test.return_value = {"ok": True, "version": "1.33.2", "username": "Alvaro"}
-        resp = client.post(f"/api/instances/{inst['id']}/test", headers=auth_headers)
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["ok"] is True
-    assert data["username"] == "Alvaro"
-
-
-# ---------------------------------------------------------------------------
-# Sync is not supported for Seerr yet (explicit 400, not a crash)
-# ---------------------------------------------------------------------------
-
-def test_sync_seerr_instance_returns_400(client, auth_headers):
-    inst = _add_instance(client, auth_headers, type="seerr", name="Seerr NoSync")
-    resp = client.post(f"/api/instances/{inst['id']}/sync", headers=auth_headers)
-    assert resp.status_code == 400
-
-
-# ---------------------------------------------------------------------------
-# instances.type CHECK-constraint widening migration
-# ---------------------------------------------------------------------------
-
-def test_migration_widens_type_check_and_is_idempotent(isolated_db):
+def test_migration_narrows_type_check_and_is_idempotent(isolated_db):
     conn = connect(db_path())
-    init_db(conn)  # first run performs the rebuild
+    init_db(conn)  # first run performs both rebuilds (widen, then narrow)
     init_db(conn)  # second run must be a no-op, not an error
 
     row = conn.execute(
         "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'instances'"
     ).fetchone()
-    assert "'seerr'" in row["sql"]
+    assert "'seerr'" not in row["sql"]
 
-    # A seerr row can now be inserted directly without violating the CHECK constraint.
-    conn.execute(
-        "INSERT INTO instances (type, name, url, api_key) VALUES ('seerr', 'x', 'http://x', 'k')"
-    )
-    conn.commit()
+    # A seerr row can no longer be inserted — CHECK constraint rejects it.
+    try:
+        conn.execute(
+            "INSERT INTO instances (type, name, url, api_key) VALUES ('seerr', 'x', 'http://x', 'k')"
+        )
+        conn.commit()
+        assert False, "expected CHECK constraint violation"
+    except sqlite3.IntegrityError:
+        pass
     conn.close()
 
 

@@ -1,6 +1,6 @@
 """Tests for Phase 11C onboarding wizard additions:
 new step order (admin -> base -> emu -> instances -> tmdb -> uploadrr ->
-complete), the Seerr step, and the nomenclature/hardlink-strategy step.
+complete), and the nomenclature/hardlink-strategy step.
 """
 from __future__ import annotations
 
@@ -46,56 +46,6 @@ def test_next_step_order_after_tmdb(client, auth_headers):
     resp = client.get("/api/setup/status")
     assert resp.json()["next_step"] == "uploadrr"
 
-
-# ---------------------------------------------------------------------------
-# POST /api/setup/seerr — optional/skippable
-# ---------------------------------------------------------------------------
-
-def test_setup_seerr_requires_auth(client):
-    resp = client.post("/api/setup/seerr", json={"url": "http://x", "api_key": "k"})
-    assert resp.status_code == 401
-
-
-def test_setup_seerr_success_reflected_in_status(client, auth_headers):
-    resp = client.post(
-        "/api/setup/seerr",
-        json={"name": "My Seerr", "url": "http://seerr:5055", "api_key": "seerrkey"},
-        headers=auth_headers,
-    )
-    assert resp.status_code == 201
-
-    status_resp = client.get("/api/setup/status")
-    assert status_resp.json()["seerr_configured"] is True
-
-
-def test_setup_seerr_does_not_gate_next_step(client, auth_headers):
-    """Seerr is optional — skipping it must not block resuming at 'tmdb'."""
-    client.post("/api/setup/base", json={"app_name": "X", "timezone": "UTC"}, headers=auth_headers)
-    client.post("/api/setup/emu", json={"api_key": "emukey"}, headers=auth_headers)
-    client.post(
-        "/api/setup/instances",
-        json={"type": "radarr", "name": "R1", "url": "http://r:7878", "api_key": "k"},
-        headers=auth_headers,
-    )
-    # No seerr instance added at all.
-    resp = client.get("/api/setup/status")
-    assert resp.json()["next_step"] == "tmdb"
-    assert resp.json()["seerr_configured"] is False
-
-
-def test_setup_seerr_does_not_gate_complete(client, auth_headers):
-    """setup_complete() must succeed without ever configuring Seerr."""
-    client.post("/api/setup/base", json={"app_name": "X", "timezone": "UTC"}, headers=auth_headers)
-    client.post("/api/setup/uploadrr", json={"uploadrr_path": "/srv/Uploadrr"}, headers=auth_headers)
-    client.post("/api/setup/tmdb", json={"api_key": "tmdbkey"}, headers=auth_headers)
-    client.post("/api/setup/emu", json={"api_key": "emukey"}, headers=auth_headers)
-    client.post(
-        "/api/setup/instances",
-        json={"type": "radarr", "name": "R1", "url": "http://r:7878", "api_key": "k"},
-        headers=auth_headers,
-    )
-    resp = client.post("/api/setup/complete", headers=auth_headers)
-    assert resp.status_code == 200
 
 
 # ---------------------------------------------------------------------------
@@ -167,17 +117,12 @@ def test_setup_nomenclature_persists_hardlink_base_setting(client, auth_headers)
 # Full flow — new step order end to end, including optional steps
 # ---------------------------------------------------------------------------
 
-def test_full_setup_flow_new_order_with_seerr_and_nomenclature(client, auth_headers):
+def test_full_setup_flow_new_order_with_nomenclature(client, auth_headers):
     client.post("/api/setup/base", json={"app_name": "E2E", "timezone": "UTC"}, headers=auth_headers)
     client.post("/api/setup/emu", json={"api_key": "emu_key_e2e"}, headers=auth_headers)
     client.post(
         "/api/setup/instances",
         json={"type": "radarr", "name": "Radarr E2E", "url": "http://radarr:7878", "api_key": "r"},
-        headers=auth_headers,
-    )
-    client.post(
-        "/api/setup/seerr",
-        json={"name": "Seerr E2E", "url": "http://seerr:5055", "api_key": "s"},
         headers=auth_headers,
     )
     client.post("/api/setup/tmdb", json={"api_key": "tmdb_key_e2e"}, headers=auth_headers)
@@ -195,4 +140,3 @@ def test_full_setup_flow_new_order_with_seerr_and_nomenclature(client, auth_head
     data = status_resp.json()
     assert data["initialized"] is True
     assert data["next_step"] is None
-    assert data["seerr_configured"] is True

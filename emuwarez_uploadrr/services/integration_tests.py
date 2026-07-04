@@ -200,55 +200,6 @@ def test_arr_connection(
 
 
 # ---------------------------------------------------------------------------
-# Seerr (Overseerr/Jellyseerr-compatible) — Phase 11B
-# ---------------------------------------------------------------------------
-
-def test_seerr_connection(
-    *,
-    base_url: Optional[str] = None,
-    api_key: Optional[str] = None,
-    instance_id: Optional[int] = None,
-    conn=None,
-) -> dict:
-    """Probe a Seerr (Overseerr/Jellyseerr) instance using GET /api/v1/auth/me
-    (read-only). Accepts either instance_id+conn (saved instance) or
-    base_url+api_key (unsaved credentials, e.g. from the "Add instance" form)."""
-    from ..integrations.seerr import seerr_test_connection
-
-    if instance_id is not None:
-        if conn is None:
-            return _fail("seerr", "unexpected_error", "Se requiere conexión a BD para probar instancia guardada")
-        row = conn.execute(
-            "SELECT url, api_key FROM instances WHERE id = ? AND type = 'seerr' AND enabled = 1", (instance_id,)
-        ).fetchone()
-        if not row:
-            return _fail("seerr", "not_configured", f"Instancia {instance_id} no encontrada o deshabilitada")
-        base_url = row["url"]
-        api_key = row["api_key"]
-
-    if not base_url or not base_url.strip():
-        return _fail("seerr", "not_configured", "URL de la instancia no configurada")
-    if not api_key or not api_key.strip():
-        return _fail("seerr", "not_configured", "API key de la instancia no configurada")
-
-    result = seerr_test_connection({"url": base_url.strip(), "api_key": api_key.strip()})
-    if result.get("ok"):
-        return _ok("seerr", details={
-            "version": result.get("version"),
-            "username": result.get("username"),
-            "instance_id": instance_id,
-        })
-
-    error = result.get("error") or "Error desconocido"
-    status_key = "connection_error"
-    if "incorrecta" in error.lower() or "permisos" in error.lower():
-        status_key = "invalid_key"
-    elif "no se pudo conectar" in error.lower():
-        status_key = "connection_error"
-    return _fail("seerr", status_key, error)
-
-
-# ---------------------------------------------------------------------------
 # Uploadrr runtime (Phase 10F)
 # ---------------------------------------------------------------------------
 

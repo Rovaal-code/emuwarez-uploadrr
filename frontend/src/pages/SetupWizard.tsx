@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import {
   setupAdmin, setupBase, setupUploadrr, setupTmdb, setupEmu, setupInstances,
-  setupSeerr, setupNomenclature, setupComplete,
+  setupNomenclature, setupComplete,
 } from '../api/setup'
 import { login } from '../api/auth'
 import { ApiClientError } from '../api/client'
-import { testTmdbConnection, testEmuwarezConnection, testArrConnection, testSeerrConnection, type IntegrationTestResult } from '../api/integrationTests'
+import { testTmdbConnection, testEmuwarezConnection, testArrConnection, type IntegrationTestResult } from '../api/integrationTests'
 import { ServiceIcon } from '../components/ServiceIcon'
 import { REGION_OPTIONS, LANGUAGE_OPTIONS } from '../constants/regionLanguage'
 import { SETUP_STEPS, SETUP_STEP_LABELS } from '../types/domain'
@@ -80,13 +80,6 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   const [instances, setInstances] = useState<InstanceDraft[]>([])
   const [instDraft, setInstDraft] = useState<Partial<InstanceDraft>>({ type: 'radarr', is_4k: false, is_anime: false })
   const [instError, setInstError] = useState<string | null>(null)
-
-  // Seerr step state (Phase 11C — optional)
-  const [seerrName, setSeerrName] = useState('Seerr')
-  const [seerrUrl, setSeerrUrl] = useState('')
-  const [seerrKey, setSeerrKey] = useState('')
-  const [seerrTestResult, setSeerrTestResult] = useState<IntegrationTestResult | null>(null)
-  const [seerrTesting, setSeerrTesting] = useState(false)
 
   // Nomenclature step state (Phase 11C)
   const [nomTag, setNomTag] = useState('EMUWAREZ')
@@ -164,23 +157,6 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
     }
   }
 
-  async function handleTestSeerr() {
-    if (!seerrUrl.trim() || !seerrKey.trim()) {
-      setSeerrTestResult({ ok: false, service: 'seerr', status: 'not_configured', message: 'Introduce URL y API key antes de probar' })
-      return
-    }
-    setSeerrTesting(true)
-    setSeerrTestResult(null)
-    try {
-      const r = await testSeerrConnection({ base_url: seerrUrl.trim(), api_key: seerrKey.trim() })
-      setSeerrTestResult(r)
-    } catch {
-      setSeerrTestResult({ ok: false, service: 'seerr', status: 'connection_error', message: 'Error al contactar con el servidor' })
-    } finally {
-      setSeerrTesting(false)
-    }
-  }
-
   const handleAdmin = wrap(async () => {
     if (adminPass !== adminPass2) throw new Error('Las contraseñas no coinciden')
     await setupAdmin(adminUser.trim(), adminPass)
@@ -222,20 +198,8 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
       type: i.type, name: i.name, url: i.url, api_key: i.api_key,
       is_4k: i.is_4k, is_anime: i.is_anime,
     })))
-    setStep('seerr')
-  })
-
-  const handleSeerr = wrap(async () => {
-    if (seerrUrl.trim() && seerrKey.trim()) {
-      await setupSeerr(seerrName.trim() || 'Seerr', seerrUrl.trim(), seerrKey.trim())
-    }
     setStep('tmdb')
   })
-
-  function handleSkipSeerr() {
-    setError(null)
-    setStep('tmdb')
-  }
 
   const handleTmdb = wrap(async () => {
     await setupTmdb(tmdbKey, tmdbLang, tmdbRegion)
@@ -482,51 +446,6 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               <div className="wizard-actions">
                 <span />
                 <button className="btn btn-primary" onClick={handleInstances} disabled={loading}>
-                  {loading ? 'Guardando…' : 'Continuar'}
-                </button>
-              </div>
-            </>
-          )}
-
-          {/* Seerr step (Phase 11C — optional) */}
-          {step === 'seerr' && (
-            <>
-              <div className="wizard-step-desc">
-                Opcional. Añade tu instancia de Overseerr o Jellyseerr para preparar la sincronización de
-                peticiones (todavía no implementada — esto solo deja la instancia configurada y probada).
-              </div>
-              <div className="wizard-fields">
-                <div className="form-group">
-                  <label className="form-label">Nombre</label>
-                  <input className="form-input" value={seerrName} onChange={e => setSeerrName(e.target.value)} placeholder="Seerr" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">URL</label>
-                  <input className="form-input" value={seerrUrl} onChange={e => setSeerrUrl(e.target.value)} placeholder="http://192.168.1.100:5055" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">API key</label>
-                  <input className="form-input" type="password" value={seerrKey} onChange={e => setSeerrKey(e.target.value)} placeholder="API key" />
-                </div>
-              </div>
-              {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, marginBottom: 4 }}>
-                <button className="btn btn-secondary btn-sm" onClick={handleTestSeerr} disabled={seerrTesting || loading} type="button">
-                  {seerrTesting ? 'Probando…' : 'Probar conexión'}
-                </button>
-                {seerrTestResult && (
-                  <span style={{ fontSize: 12, color: seerrTestResult.ok ? '#22c55e' : seerrTestResult.status === 'not_configured' ? '#f59e0b' : '#ef4444' }}>
-                    {seerrTestResult.ok
-                      ? `✓ Conectado${seerrTestResult.details?.username ? ` — ${seerrTestResult.details.username}` : ''}`
-                      : seerrTestResult.status === 'not_configured' ? '⚠ Sin configurar' : seerrTestResult.status === 'invalid_key' ? '✗ API key inválida' : `✗ ${seerrTestResult.message}`}
-                  </span>
-                )}
-              </div>
-              <div className="wizard-actions">
-                <button className="btn btn-secondary" onClick={handleSkipSeerr} disabled={loading} type="button">
-                  Omitir
-                </button>
-                <button className="btn btn-primary" onClick={handleSeerr} disabled={loading}>
                   {loading ? 'Guardando…' : 'Continuar'}
                 </button>
               </div>

@@ -1,15 +1,14 @@
-// ServiceIcon — SVG icons for Radarr, Sonarr, Seerr, EMU, Uploadrr
-// Must appear next to any Radarr/Sonarr/Seerr text in tables or summaries.
+// ServiceIcon — SVG icons for Radarr, Sonarr, EMU, Uploadrr
+// Must appear next to any Radarr/Sonarr text in tables or summaries.
 //
 // Not exact trademarked logo traces (no network/image access to fetch the
 // official assets) — redesigned to match each project's real badge shape
 // and brand color family so they read as "that service" at a glance:
 //   Radarr = amber/gold circular radar-sweep badge (official Radarr color)
 //   Sonarr = blue rounded-screen badge with broadcast/sonar waves
-//   Seerr  = indigo/purple circular badge with an eye/lens (Overseerr/Jellyseerr)
 
 interface ServiceIconProps {
-  type: 'radarr' | 'sonarr' | 'seerr' | 'emu' | 'uploadrr'
+  type: 'radarr' | 'sonarr' | 'emu' | 'uploadrr'
   size?: number
 }
 
@@ -43,20 +42,6 @@ export function ServiceIcon({ type, size = 16 }: ServiceIconProps) {
     )
   }
 
-  if (type === 'seerr') {
-    // Overseerr/Jellyseerr-compatible request instance — indigo eye/lens badge.
-    return (
-      <svg width={s} height={s} viewBox="0 0 24 24" fill="none" aria-label="Seerr">
-        <circle cx="12" cy="12" r="10" fill="#6d5bd0" opacity="0.16" />
-        <circle cx="12" cy="12" r="10" stroke="#6d5bd0" strokeWidth="1.2" opacity="0.5" fill="none" />
-        <path d="M4.5 12c2-3.2 5-4.8 7.5-4.8s5.5 1.6 7.5 4.8c-2 3.2-5 4.8-7.5 4.8S6.5 15.2 4.5 12Z"
-          stroke="#8b7bf0" strokeWidth="1.4" fill="none" strokeLinejoin="round" />
-        <circle cx="12" cy="12" r="2.6" fill="#8b7bf0" />
-        <circle cx="12" cy="12" r="1" fill="#1a1424" />
-      </svg>
-    )
-  }
-
   if (type === 'emu') {
     // Stylized E — purple/blue
     return (
@@ -78,15 +63,15 @@ export function ServiceIcon({ type, size = 16 }: ServiceIconProps) {
 
 // Inline helper: icon + text
 interface ServiceLabelProps {
-  type: 'radarr' | 'sonarr' | 'seerr' | 'emu' | 'uploadrr' | string
+  type: 'radarr' | 'sonarr' | 'emu' | 'uploadrr' | string
   label?: string
   size?: number
 }
 
 export function ServiceLabel({ type, label, size = 14 }: ServiceLabelProps) {
-  const iconType = (['radarr', 'sonarr', 'seerr', 'emu', 'uploadrr'].includes(type)
+  const iconType = (['radarr', 'sonarr', 'emu', 'uploadrr'].includes(type)
     ? type
-    : null) as 'radarr' | 'sonarr' | 'seerr' | 'emu' | 'uploadrr' | null
+    : null) as 'radarr' | 'sonarr' | 'emu' | 'uploadrr' | null
 
   return (
     <span className="service-inline">

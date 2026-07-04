@@ -10,7 +10,6 @@ export interface SetupStatusResponse {
   radarr_instances: number
   sonarr_instances: number
   jellyfin_configured: boolean
-  seerr_configured: boolean
   next_step: string | null
 }
 

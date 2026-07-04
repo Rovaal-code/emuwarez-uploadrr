@@ -55,7 +55,6 @@ class SetupStatusResponse(BaseModel):
     radarr_instances: int
     sonarr_instances: int
     jellyfin_configured: bool
-    seerr_configured: bool
     next_step: Optional[str] = None
 
 
@@ -199,27 +198,6 @@ class SetupInstanceRequest(BaseModel):
         return v.strip()
 
 
-class SetupSeerrRequest(BaseModel):
-    """Phase 11C — optional/skippable request-service instance step."""
-    name: str = "Seerr"
-    url: str
-    api_key: str
-
-    @field_validator("url")
-    @classmethod
-    def url_not_empty(cls, v: str) -> str:
-        if not v.strip():
-            raise ValueError("La URL no puede estar vacía")
-        return v.strip()
-
-    @field_validator("api_key")
-    @classmethod
-    def api_key_not_empty(cls, v: str) -> str:
-        if not v.strip():
-            raise ValueError("La API key no puede estar vacía")
-        return v.strip()
-
-
 class SetupNomenclatureRequest(BaseModel):
     """Phase 11C — upload tag + hardlink strategy step.
 
@@ -293,13 +271,11 @@ class InstanceTestResponse(BaseModel):
     instance_id: Optional[int] = None
     instance_name: Optional[str] = None
     version: Optional[str] = None
-    # Phase 11B: Seerr's /auth/me exposes the authenticated account —
-    # radarr/sonarr leave this None (no equivalent concept there).
     username: Optional[str] = None
     error: Optional[str] = None
 
 
-_VALID_INSTANCE_TYPES = ("radarr", "sonarr", "seerr")
+_VALID_INSTANCE_TYPES = ("radarr", "sonarr")
 
 
 class AddInstanceRequest(BaseModel):
@@ -1053,13 +1029,6 @@ class TestEmuwarezRequest(BaseModel):
 class TestArrRequest(BaseModel):
     instance_id: Optional[int] = None
     kind: Optional[str] = None
-    base_url: Optional[str] = None
-    api_key: Optional[str] = None
-
-
-class TestSeerrRequest(BaseModel):
-    """Phase 11B — test an unsaved or saved Seerr (Overseerr/Jellyseerr) instance."""
-    instance_id: Optional[int] = None
     base_url: Optional[str] = None
     api_key: Optional[str] = None
 

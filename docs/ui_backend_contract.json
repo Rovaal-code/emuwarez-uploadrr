@@ -29,10 +29,6 @@
       "jellyfin": {
         "role": "optional_verification",
         "required": false
-      },
-      "seerr": {
-        "role": "optional_context",
-        "required": false
       }
     }
   },
@@ -97,7 +93,7 @@
     {
       "id": "instances",
       "label": "Instancias",
-      "purpose": "Gestión de instancias Radarr/Sonarr/Jellyfin/Seerr",
+      "purpose": "Gestión de instancias Radarr/Sonarr/Jellyfin",
       "cli_equivalent": [
         "instances list",
         "instances add",

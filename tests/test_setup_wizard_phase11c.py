@@ -1,5 +1,5 @@
 """Tests for Phase 11C onboarding wizard additions:
-new step order (admin -> base -> emu -> instances -> tmdb -> uploadrr ->
+new step order (admin -> emu -> instances -> tmdb -> uploadrr ->
 complete), and the nomenclature/hardlink-strategy step.
 """
 from __future__ import annotations
@@ -9,21 +9,18 @@ from __future__ import annotations
 # next_step() reordering
 # ---------------------------------------------------------------------------
 
-def test_next_step_order_after_admin_and_base(client, auth_headers):
-    client.post("/api/setup/base", json={"app_name": "X", "timezone": "UTC"}, headers=auth_headers)
+def test_next_step_order_after_admin(client, auth_headers):
     resp = client.get("/api/setup/status")
     assert resp.json()["next_step"] == "emu"
 
 
 def test_next_step_order_after_emu(client, auth_headers):
-    client.post("/api/setup/base", json={"app_name": "X", "timezone": "UTC"}, headers=auth_headers)
     client.post("/api/setup/emu", json={"api_key": "emukey"}, headers=auth_headers)
     resp = client.get("/api/setup/status")
     assert resp.json()["next_step"] == "instances"
 
 
 def test_next_step_order_after_instances(client, auth_headers):
-    client.post("/api/setup/base", json={"app_name": "X", "timezone": "UTC"}, headers=auth_headers)
     client.post("/api/setup/emu", json={"api_key": "emukey"}, headers=auth_headers)
     client.post(
         "/api/setup/instances",
@@ -35,7 +32,6 @@ def test_next_step_order_after_instances(client, auth_headers):
 
 
 def test_next_step_order_after_tmdb(client, auth_headers):
-    client.post("/api/setup/base", json={"app_name": "X", "timezone": "UTC"}, headers=auth_headers)
     client.post("/api/setup/emu", json={"api_key": "emukey"}, headers=auth_headers)
     client.post(
         "/api/setup/instances",
@@ -118,7 +114,6 @@ def test_setup_nomenclature_persists_hardlink_base_setting(client, auth_headers)
 # ---------------------------------------------------------------------------
 
 def test_full_setup_flow_new_order_with_nomenclature(client, auth_headers):
-    client.post("/api/setup/base", json={"app_name": "E2E", "timezone": "UTC"}, headers=auth_headers)
     client.post("/api/setup/emu", json={"api_key": "emu_key_e2e"}, headers=auth_headers)
     client.post(
         "/api/setup/instances",

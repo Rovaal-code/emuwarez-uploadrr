@@ -2,7 +2,6 @@
 
 GET  /api/setup/status         — current wizard state (public)
 POST /api/setup/admin          — create first admin user (public — only before admin exists)
-POST /api/setup/base           — base app settings (requires auth)
 POST /api/setup/uploadrr       — Uploadrr path (requires auth)
 POST /api/setup/tmdb           — TMDb API key (requires auth)
 POST /api/setup/emu            — eMuwarez API key + optional endpoint (requires auth)
@@ -21,7 +20,6 @@ from ..schemas import (
     CreateAdminRequest,
     InstanceResponse,
     OkResponse,
-    SetupBaseRequest,
     SetupEmuRequest,
     SetupInstanceRequest,
     SetupNomenclatureRequest,
@@ -52,7 +50,7 @@ def setup_status() -> SetupStatusResponse:
             state = get_setup_state(conn)
     except Exception:
         state = {
-            "initialized": False, "admin_configured": False, "base_configured": False,
+            "initialized": False, "admin_configured": False,
             "uploadrr_configured": False, "tmdb_configured": False, "emu_configured": False,
             "radarr_instances": 0, "sonarr_instances": 0,
             "jellyfin_configured": False,
@@ -81,21 +79,6 @@ def setup_admin(body: CreateAdminRequest) -> OkResponse:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     return OkResponse(message=f"Usuario administrador '{body.username}' creado correctamente")
 
-
-# ---------------------------------------------------------------------------
-# POST /api/setup/base — requires auth
-# ---------------------------------------------------------------------------
-
-@router.post("/setup/base", response_model=OkResponse)
-def setup_base(
-    body: SetupBaseRequest,
-    current_user: dict = Depends(require_auth),
-) -> OkResponse:
-    from ..services.setup_service import setup_base as _setup_base
-    with _get_conn() as conn:
-        _setup_base(conn, body.app_name, body.timezone)
-        conn.commit()
-    return OkResponse(message="Configuración base guardada correctamente")
 
 
 # ---------------------------------------------------------------------------

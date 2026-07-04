@@ -9,10 +9,6 @@ export async function setupAdmin(username: string, password: string): Promise<Ok
   return api.post<OkResponse>('/setup/admin', { username, password }, { skipAuth: true })
 }
 
-export async function setupBase(app_name: string, timezone: string): Promise<OkResponse> {
-  return api.post<OkResponse>('/setup/base', { app_name, timezone })
-}
-
 export async function setupUploadrr(uploadrr_path: string): Promise<OkResponse> {
   return api.post<OkResponse>('/setup/uploadrr', { uploadrr_path })
 }

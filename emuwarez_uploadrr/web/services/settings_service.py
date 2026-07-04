@@ -98,6 +98,4 @@ def get_settings_status(conn: sqlite3.Connection) -> dict:
         "uploadrr_runtime_type": _entry("uploadrr.runtime_type"),
         "uploadrr_timeout": _entry("uploadrr.timeout"),
         "uploadrr_allowed_roots": _entry("uploadrr.allowed_roots"),
-        "app_name": _entry("app.name"),
-        "timezone": _entry("app.timezone"),
     }

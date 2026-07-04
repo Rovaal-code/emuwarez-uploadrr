@@ -97,7 +97,7 @@ def test_setup_status_after_admin(client):
     resp = client.get("/api/setup/status")
     data = resp.json()
     assert data["admin_configured"] is True
-    assert data["next_step"] == "base"
+    assert data["next_step"] == "emu"
 
 
 # ---------------------------------------------------------------------------
@@ -209,22 +209,6 @@ def test_create_emu_request_stub_with_auth(client, auth_headers):
 # Setup steps (requires auth)
 # ---------------------------------------------------------------------------
 
-def test_setup_base_requires_auth(client):
-    resp = client.post("/api/setup/base", json={"app_name": "Test", "timezone": "UTC"})
-    assert resp.status_code == 401
-
-
-def test_setup_base_success(client, auth_headers):
-    resp = client.post(
-        "/api/setup/base",
-        json={"app_name": "eMuwarez Test", "timezone": "Europe/Madrid"},
-        headers=auth_headers,
-    )
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["ok"] is True
-
-
 def test_setup_uploadrr_requires_auth(client):
     resp = client.post("/api/setup/uploadrr", json={"uploadrr_path": "/path/to/Uploadrr"})
     assert resp.status_code == 401
@@ -297,8 +281,6 @@ def test_setup_complete_missing_steps(client, auth_headers):
 
 def test_full_setup_flow(client, auth_headers):
     """Complete the entire setup wizard end to end."""
-    client.post("/api/setup/base",
-                json={"app_name": "E2E Test", "timezone": "UTC"}, headers=auth_headers)
     client.post("/api/setup/uploadrr",
                 json={"uploadrr_path": "/srv/Uploadrr"}, headers=auth_headers)
     client.post("/api/setup/tmdb",

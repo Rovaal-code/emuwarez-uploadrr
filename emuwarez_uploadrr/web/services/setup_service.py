@@ -28,7 +28,6 @@ def get_setup_state(conn: sqlite3.Connection) -> dict:
     return {
         "initialized": get_state(conn, "initialized") == "true",
         "admin_configured": admin_exists(conn),
-        "base_configured": get_configured(conn, "app.name"),
         "uploadrr_configured": get_configured(conn, "uploadrr.path"),
         "tmdb_configured": get_configured(conn, "tmdb.api_key"),
         "emu_configured": get_configured(conn, "emu.api_key"),
@@ -39,15 +38,13 @@ def get_setup_state(conn: sqlite3.Connection) -> dict:
 
 
 def next_step(state: dict) -> Optional[str]:
-    """Resume order (Phase 11C): admin -> base -> emu -> instances -> tmdb ->
-    uploadrr -> complete. 'welcome' is frontend-only (shown once before an
-    admin exists). 'nomenclature' is an optional/skippable step — it is not
-    a gating condition here, same treatment as the pre-existing
+    """Resume order: admin -> emu -> instances -> tmdb -> uploadrr ->
+    complete. 'welcome' is frontend-only (shown once before an admin
+    exists). 'nomenclature' is an optional/skippable step — it is not a
+    gating condition here, same treatment as the pre-existing
     optional-count-only gating on 'instances'."""
     if not state["admin_configured"]:
         return "admin"
-    if not state["base_configured"]:
-        return "base"
     if not state["emu_configured"]:
         return "emu"
     if state["radarr_instances"] == 0 and state["sonarr_instances"] == 0:
@@ -67,12 +64,6 @@ def setup_admin(conn: sqlite3.Connection, username: str, password: str) -> int:
         raise SetupError("Ya existe un usuario administrador")
     user_id = create_user(conn, username, password, role="admin")
     return user_id
-
-
-def setup_base(conn: sqlite3.Connection, app_name: str, timezone: str) -> None:
-    """Persist base application settings."""
-    set_setting(conn, "app.name", app_name.strip())
-    set_setting(conn, "app.timezone", timezone.strip())
 
 
 def setup_uploadrr(conn: sqlite3.Connection, uploadrr_path: str) -> None:

@@ -1480,7 +1480,6 @@ def cmd_web_setup_status() -> int:
         return 1
     flags = [
         ("Admin configurado", state["admin_configured"]),
-        ("Base configurada", state["base_configured"]),
         ("Uploadrr configurado", state["uploadrr_configured"]),
         ("TMDb configurado", state["tmdb_configured"]),
         ("eMuwarez configurado", state["emu_configured"]),
@@ -1558,7 +1557,6 @@ def cmd_web_info() -> int:
         "── Setup wizard ─────────────────────────────────────\n"
         "  GET  http://localhost:9494/api/setup/status\n"
         "  POST http://localhost:9494/api/setup/admin      (primer arranque, sin auth)\n"
-        "  POST http://localhost:9494/api/setup/base       (requiere Bearer token)\n"
         "  POST http://localhost:9494/api/setup/uploadrr   (requiere Bearer token)\n"
         "  POST http://localhost:9494/api/setup/tmdb       (requiere Bearer token)\n"
         "  POST http://localhost:9494/api/setup/emu        (requiere Bearer token)\n"

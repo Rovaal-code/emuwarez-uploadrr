@@ -1,10 +1,9 @@
 import { useState } from 'react'
 import {
-  setupAdmin, setupBase, setupUploadrr, setupTmdb, setupEmu, setupInstances,
+  setupAdmin, setupUploadrr, setupTmdb, setupEmu, setupInstances,
   setupNomenclature, setupComplete,
 } from '../api/setup'
 import { login } from '../api/auth'
-import { ApiClientError } from '../api/client'
 import { testTmdbConnection, testEmuwarezConnection, testArrConnection, type IntegrationTestResult } from '../api/integrationTests'
 import { ServiceIcon } from '../components/ServiceIcon'
 import { REGION_OPTIONS, LANGUAGE_OPTIONS } from '../constants/regionLanguage'
@@ -59,10 +58,6 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   const [adminPass, setAdminPass] = useState('')
   const [adminPass2, setAdminPass2] = useState('')
 
-  // Base step state
-  const [appName, setAppName] = useState('eMuwarez Uploadrr')
-  const [timezone, setTimezone] = useState('Europe/Madrid')
-
   // Uploadrr step state
   const [uploadrrPath, setUploadrrPath] = useState('./Uploadrr')
 
@@ -73,7 +68,6 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
 
   // EMU step state
   const [emuKey, setEmuKey] = useState('')
-  const [emuEndpoint, setEmuEndpoint] = useState('')
   const [emuAckSkip, setEmuAckSkip] = useState(false)
 
   // Instances step state
@@ -102,7 +96,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
       try {
         await fn()
       } catch (err) {
-        setError(err instanceof ApiClientError ? err.message : 'Error inesperado')
+        setError(err instanceof Error ? err.message : 'Error inesperado')
       } finally {
         setLoading(false)
       }
@@ -126,7 +120,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
     setEmuTesting(true)
     setEmuTestResult(null)
     try {
-      const r = await testEmuwarezConnection({ api_key: emuKey || undefined, base_url: emuEndpoint || undefined })
+      const r = await testEmuwarezConnection({ api_key: emuKey || undefined })
       setEmuTestResult(r)
       if (r.ok) setEmuAckSkip(false)
     } catch {
@@ -163,16 +157,11 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
     // Auto-login after admin creation
     await login(adminUser.trim(), adminPass)
     setAdminCreated(true)
-    setStep('base')
-  })
-
-  const handleBase = wrap(async () => {
-    await setupBase(appName, timezone)
     setStep('emu')
   })
 
   const handleEmu = wrap(async () => {
-    await setupEmu(emuKey, emuEndpoint || null)
+    await setupEmu(emuKey)
     setStep('instances')
   })
 
@@ -300,30 +289,6 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
             </>
           )}
 
-          {/* Base step */}
-          {step === 'base' && (
-            <>
-              <div className="wizard-step-desc">Configura el nombre y zona horaria de la aplicación.</div>
-              <div className="wizard-fields">
-                <div className="form-group">
-                  <label className="form-label">Nombre de la aplicación</label>
-                  <input className="form-input" value={appName} onChange={e => setAppName(e.target.value)} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Zona horaria</label>
-                  <input className="form-input" value={timezone} onChange={e => setTimezone(e.target.value)} placeholder="Europe/Madrid" />
-                </div>
-              </div>
-              {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
-              <div className="wizard-actions">
-                <span />
-                <button className="btn btn-primary" onClick={handleBase} disabled={loading}>
-                  {loading ? 'Guardando…' : 'Continuar'}
-                </button>
-              </div>
-            </>
-          )}
-
           {/* EMU step */}
           {step === 'emu' && (
             <>
@@ -336,11 +301,6 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 <div className="form-group">
                   <label className="form-label">API key eMuwarez</label>
                   <input className="form-input" value={emuKey} onChange={e => { setEmuKey(e.target.value); setEmuAckSkip(false) }} placeholder="Tu API key de eMuwarez" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Endpoint peticiones (opcional)</label>
-                  <input className="form-input" value={emuEndpoint} onChange={e => setEmuEndpoint(e.target.value)} placeholder="https://emuwarez.com/api/..." />
-                  <span className="form-hint">Puedes configurarlo más adelante cuando captures el endpoint real.</span>
                 </div>
               </div>
               {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}

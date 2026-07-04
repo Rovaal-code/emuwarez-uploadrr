@@ -47,17 +47,16 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'settings', label: 'Configuración', icon: 'settings' },
 ]
 
-// Setup wizard step IDs (order: welcome -> admin -> base -> emu ->
+// Setup wizard step IDs (order: welcome -> admin -> emu ->
 // instances -> tmdb -> uploadrr -> nomenclature -> complete)
 export const SETUP_STEPS = [
-  'welcome', 'admin', 'base', 'emu', 'instances', 'tmdb', 'uploadrr', 'nomenclature', 'complete',
+  'welcome', 'admin', 'emu', 'instances', 'tmdb', 'uploadrr', 'nomenclature', 'complete',
 ] as const
 export type SetupStep = (typeof SETUP_STEPS)[number]
 
 export const SETUP_STEP_LABELS: Record<SetupStep, string> = {
   welcome: 'Bienvenida',
   admin: 'Crear admin',
-  base: 'Configuración general',
   emu: 'eMuwarez',
   instances: 'Instancias',
   tmdb: 'TMDb',

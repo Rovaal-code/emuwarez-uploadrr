@@ -48,7 +48,6 @@ class RuntimeDiagnosticsResponse(BaseModel):
 class SetupStatusResponse(BaseModel):
     initialized: bool
     admin_configured: bool
-    base_configured: bool = False
     tmdb_configured: bool
     emu_configured: bool
     uploadrr_configured: bool
@@ -125,11 +124,6 @@ class LogoutResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # Setup POST requests
 # ---------------------------------------------------------------------------
-
-class SetupBaseRequest(BaseModel):
-    app_name: str = "eMuwarez Uploadrr"
-    timezone: str = "Europe/Madrid"
-
 
 class SetupUploadrrRequest(BaseModel):
     uploadrr_path: str
@@ -226,8 +220,6 @@ class SettingsStatusResponse(BaseModel):
     emu_api_key: SecretStatusField
     emu_endpoint: SecretStatusField
     uploadrr_path: SecretStatusField
-    app_name: SecretStatusField
-    timezone: SecretStatusField
 
 
 # ---------------------------------------------------------------------------

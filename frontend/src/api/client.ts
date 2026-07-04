@@ -27,6 +27,26 @@ export class ApiClientError extends Error {
   }
 }
 
+// FastAPI's `detail` is a plain string for hand-raised HTTPExceptions, but a
+// list of Pydantic error objects ({loc, msg, type, ...}) for 422 validation
+// failures — stringifying that list directly renders as "[object Object]".
+function extractErrorDetail(data: unknown, fallback: string): string {
+  if (typeof data !== 'object' || data === null || !('detail' in data)) return fallback
+  const detail = (data as { detail: unknown }).detail
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map(item => (item && typeof item === 'object' && 'msg' in item) ? String((item as { msg: unknown }).msg) : null)
+      .filter((m): m is string => Boolean(m))
+      // Pydantic prefixes messages raised via `raise ValueError(...)` in a
+      // field_validator with "Value error, " — strip it, our own messages
+      // are already written to stand on their own.
+      .map(m => m.replace(/^Value error,\s*/, ''))
+    if (messages.length) return messages.join('; ')
+  }
+  return fallback
+}
+
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   body?: unknown
@@ -67,11 +87,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   if (!resp.ok) {
-    const detail =
-      typeof data === 'object' && data !== null && 'detail' in data
-        ? String((data as { detail: unknown }).detail)
-        : resp.statusText
-    throw new ApiClientError(detail, resp.status, data)
+    throw new ApiClientError(extractErrorDetail(data, resp.statusText), resp.status, data)
   }
 
   return data as T

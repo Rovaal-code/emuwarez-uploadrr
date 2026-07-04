@@ -3,7 +3,6 @@
 export interface SetupStatusResponse {
   initialized: boolean
   admin_configured: boolean
-  base_configured: boolean
   tmdb_configured: boolean
   emu_configured: boolean
   uploadrr_configured: boolean

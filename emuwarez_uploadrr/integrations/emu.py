@@ -60,16 +60,30 @@ def emu_get_request_detail(
 
 def emu_search_existing(
     api_key: str,
-    query: str,
+    query: str | None = None,
     base_url: str | None = None,
+    tmdb_id: str | None = None,
+    category: str | None = None,
 ) -> dict[str, Any]:
-    """Search for existing torrents on eMuwarez matching a title query."""
+    """Search for existing torrents on eMuwarez's real catalog (/api/torrents/filter).
+
+    Mirrors the dupe-check Uploadrr-EMU itself performs before uploading
+    (Uploadrr/src/trackers/UNIT3D.py::search_existing): when `tmdb_id` is
+    given it is the authoritative filter (same param name, `tmdbId`, that
+    the real UNIT3D tracker API expects). `query` (free-text `name`) is kept
+    as a fallback for callers that don't have a tmdb_id yet — title-only
+    search is inherently fuzzier and matches Uploadrr-EMU's own behavior
+    only when it lacks a tmdb_id either.
+    """
     base = (base_url or EMU_BASE_URL).rstrip("/")
-    url = build_url(
-        base,
-        "/api/torrents/filter",
-        {"api_token": api_key, "name": query, "perPage": "25"},
-    )
+    params: dict[str, str] = {"api_token": api_key, "perPage": "25"}
+    if tmdb_id:
+        params["tmdbId"] = str(tmdb_id)
+    if query:
+        params["name"] = query
+    if category:
+        params["categories[]"] = category
+    url = build_url(base, "/api/torrents/filter", params)
     return request_json("GET", url)
 
 

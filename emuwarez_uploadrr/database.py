@@ -11,7 +11,7 @@ from .constants import CONFIG_DIR
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 17
+SCHEMA_VERSION = 18
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -374,6 +374,24 @@ def _migrate_request_items_phase8b(conn: sqlite3.Connection) -> None:
         ("readiness_priority_bucket", "TEXT"),
         ("readiness_best_library_item_id", "INTEGER"),
         ("readiness_updated_at", "TEXT"),
+    ]
+    for col, col_def in new_cols:
+        try:
+            conn.execute(f"ALTER TABLE request_items ADD COLUMN {col} {col_def}")
+        except sqlite3.OperationalError:
+            pass
+
+
+def _migrate_request_items_emu_catalog_check(conn: sqlite3.Connection) -> None:
+    """Add columns to cache a direct eMuwarez catalog (torrents/filter) duplicate check.
+
+    This is independent from request_matches (library vs request matching):
+    it records whether eMuwarez's own torrent catalog already has content for
+    this request's tmdb_id, queried directly via emu_search_existing().
+    """
+    new_cols = [
+        ("emu_catalog_checked_at", "TEXT"),
+        ("emu_catalog_result", "TEXT"),
     ]
     for col, col_def in new_cols:
         try:
@@ -878,6 +896,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_scheduled_tasks_table(conn)
         _migrate_library_items_phase11e(conn)
         _migrate_instances_narrow_type_check(conn)
+        _migrate_request_items_emu_catalog_check(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

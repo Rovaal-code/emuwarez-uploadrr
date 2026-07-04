@@ -10,6 +10,7 @@ import { REGION_OPTIONS, LANGUAGE_OPTIONS } from '../constants/regionLanguage'
 import { SETUP_STEPS, SETUP_STEP_LABELS } from '../types/domain'
 import type { SetupStep } from '../types/domain'
 import type { SetupStatusResponse } from '../types/api'
+import { testResultLabel, testResultColor } from '../utils/integrationResult'
 
 const DISABLE_HARDLINKS_TOKEN = 'DESACTIVAR_HARDLINKS'
 
@@ -347,8 +348,8 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   {emuTesting ? 'Probando…' : 'Probar conexión'}
                 </button>
                 {emuTestResult && (
-                  <span style={{ fontSize: 12, color: emuTestResult.ok ? '#22c55e' : emuTestResult.status === 'not_configured' ? '#f59e0b' : '#ef4444' }}>
-                    {emuTestResult.ok ? '✓ Conectado' : emuTestResult.status === 'not_configured' ? '⚠ Sin configurar' : emuTestResult.status === 'invalid_key' ? '✗ API key inválida' : emuTestResult.status === 'invalid_url' ? '✗ URL inválida' : `✗ ${emuTestResult.message}`}
+                  <span style={{ fontSize: 12, color: testResultColor(emuTestResult) }}>
+                    {testResultLabel(emuTestResult)}
                   </span>
                 )}
               </div>
@@ -448,8 +449,8 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                     {instTesting ? 'Probando…' : 'Probar conexión'}
                   </button>
                   {instTestResult && (
-                    <span style={{ fontSize: 12, color: instTestResult.ok ? '#22c55e' : instTestResult.status === 'not_configured' ? '#f59e0b' : '#ef4444' }}>
-                      {instTestResult.ok ? `✓ Conectado${instTestResult.details?.version ? ` (v${instTestResult.details.version})` : ''}` : instTestResult.status === 'not_configured' ? '⚠ Sin configurar' : instTestResult.status === 'invalid_key' ? '✗ API key inválida' : `✗ ${instTestResult.message}`}
+                    <span style={{ fontSize: 12, color: testResultColor(instTestResult) }}>
+                      {testResultLabel(instTestResult)}
                     </span>
                   )}
                 </div>
@@ -501,8 +502,8 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   {tmdbTesting ? 'Probando…' : 'Probar conexión'}
                 </button>
                 {tmdbTestResult && (
-                  <span style={{ fontSize: 12, color: tmdbTestResult.ok ? '#22c55e' : tmdbTestResult.status === 'not_configured' ? '#f59e0b' : '#ef4444' }}>
-                    {tmdbTestResult.ok ? '✓ Conectado' : tmdbTestResult.status === 'not_configured' ? '⚠ Sin configurar' : tmdbTestResult.status === 'invalid_key' ? '✗ API key inválida' : `✗ ${tmdbTestResult.message}`}
+                  <span style={{ fontSize: 12, color: testResultColor(tmdbTestResult) }}>
+                    {testResultLabel(tmdbTestResult)}
                   </span>
                 )}
               </div>

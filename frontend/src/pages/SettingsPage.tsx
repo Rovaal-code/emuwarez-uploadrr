@@ -16,6 +16,7 @@ import { testTmdbConnection, testEmuwarezConnection, type IntegrationTestResult 
 import { testDiscordNotification, testTelegramNotification } from '../api/notifications'
 import { ProviderPriorityPicker } from '../components/ProviderPriorityPicker'
 import { REGION_OPTIONS, LANGUAGE_OPTIONS } from '../constants/regionLanguage'
+import { testResultLabel, testResultColor } from '../utils/integrationResult'
 
 type Tab = 'config' | 'notifications' | 'diagnostics' | 'backup' | 'maintenance'
 
@@ -164,17 +165,8 @@ function ConfigTab() {
             {testingTmdb ? 'Probando…' : 'Probar conexión'}
           </button>
           {tmdbTestResult && (
-            <span style={{
-              marginLeft: 10, fontSize: 12,
-              color: tmdbTestResult.ok ? '#22c55e'
-                : tmdbTestResult.status === 'not_configured' ? '#f59e0b'
-                : '#ef4444',
-            }}>
-              {tmdbTestResult.ok ? '✓ Conectado'
-                : tmdbTestResult.status === 'not_configured' ? '⚠ Sin configurar'
-                : tmdbTestResult.status === 'invalid_key' ? '✗ API key inválida'
-                : tmdbTestResult.status === 'timeout' ? '✗ Timeout'
-                : `✗ ${tmdbTestResult.message}`}
+            <span style={{ marginLeft: 10, fontSize: 12, color: testResultColor(tmdbTestResult) }}>
+              {testResultLabel(tmdbTestResult)}
             </span>
           )}
         </div>
@@ -227,17 +219,8 @@ function ConfigTab() {
             {testingEmu ? 'Probando…' : 'Probar conexión'}
           </button>
           {emuTestResult && (
-            <span style={{
-              marginLeft: 10, fontSize: 12,
-              color: emuTestResult.ok ? '#22c55e'
-                : emuTestResult.status === 'not_configured' ? '#f59e0b'
-                : '#ef4444',
-            }}>
-              {emuTestResult.ok ? '✓ Conectado'
-                : emuTestResult.status === 'not_configured' ? '⚠ Sin configurar'
-                : emuTestResult.status === 'invalid_key' ? '✗ API key inválida'
-                : emuTestResult.status === 'timeout' ? '✗ Timeout'
-                : `✗ ${emuTestResult.message}`}
+            <span style={{ marginLeft: 10, fontSize: 12, color: testResultColor(emuTestResult) }}>
+              {testResultLabel(emuTestResult)}
             </span>
           )}
           <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8, marginBottom: 0 }}>
@@ -291,7 +274,7 @@ function DiagnosticsTab({ status }: { status: MaintenanceStatus | null }) {
                 ['Freelist', db.freelist_count],
                 ['Fragmentación', `${db.fragmentation_pct ?? 0} %`],
               ].map(([k, v]) => (
-                <tr key={String(k)} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                <tr key={String(k)} style={{ borderBottom: '1px solid var(--border)' }}>
                   <td style={{ padding: '6px 8px', color: 'var(--text-secondary)', width: 130 }}>{k}</td>
                   <td style={{ padding: '6px 8px' }}>{String(v ?? '–')}</td>
                 </tr>
@@ -396,13 +379,13 @@ function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | null; on
             <thead>
               <tr>
                 {['Nombre', 'Tamaño', 'Fecha'].map(h => (
-                  <th key={h} style={{ textAlign: 'left', padding: '4px 8px', borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>{h}</th>
+                  <th key={h} style={{ textAlign: 'left', padding: '4px 8px', borderBottom: '1px solid var(--border)', color: 'var(--text-secondary)' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {backups.map(b => (
-                <tr key={b.path} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                <tr key={b.path} style={{ borderBottom: '1px solid var(--border)' }}>
                   <td style={{ padding: '5px 8px' }}>{b.name}</td>
                   <td style={{ padding: '5px 8px' }}>{formatBytes(b.size_bytes)}</td>
                   <td style={{ padding: '5px 8px' }}>{b.created_at.slice(0, 16).replace('T', ' ')}</td>
@@ -795,7 +778,7 @@ export function SettingsPage() {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 2, marginBottom: 20, borderBottom: '1px solid var(--border-color)' }}>
+      <div style={{ display: 'flex', gap: 2, marginBottom: 20, borderBottom: '1px solid var(--border)' }}>
         {tabs.map(t => (
           <button
             key={t.key}

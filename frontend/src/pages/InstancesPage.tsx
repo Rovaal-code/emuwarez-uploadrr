@@ -9,6 +9,7 @@ import { ErrorState } from '../components/ErrorState'
 import { EmptyState } from '../components/EmptyState'
 import { ApiClientError } from '../api/client'
 import { formatDate } from '../utils/format'
+import { testResultLabel, testResultColor } from '../utils/integrationResult'
 
 type InstanceKind = 'radarr' | 'sonarr'
 
@@ -38,12 +39,6 @@ function editFormFrom(inst: InstanceSafeResponse): EditForm {
   return { name: inst.name, url: inst.url, api_key: '', is_4k: inst.is_4k, is_anime: inst.is_anime, enabled: inst.enabled }
 }
 
-function resultLabel(r: IntegrationTestResult) {
-  if (r.ok) return `✓ Conectado${r.details?.version ? ` (v${r.details.version})` : ''}${r.details?.username ? ` — ${r.details.username}` : ''}`
-  if (r.status === 'not_configured') return '⚠ Sin configurar'
-  if (r.status === 'invalid_key') return '✗ API key inválida'
-  return `✗ ${r.message}`
-}
 
 export function InstancesPage() {
   const [instances, setInstances] = useState<InstanceSafeResponse[]>([])
@@ -286,8 +281,8 @@ export function InstancesPage() {
                 {addTesting ? 'Probando…' : 'Probar conexión'}
               </button>
               {addTestResult && (
-                <span style={{ fontSize: 12, color: addTestResult.ok ? '#22c55e' : addTestResult.status === 'not_configured' ? '#f59e0b' : '#ef4444' }}>
-                  {resultLabel(addTestResult)}
+                <span style={{ fontSize: 12, color: testResultColor(addTestResult) }}>
+                  {testResultLabel(addTestResult)}
                 </span>
               )}
             </div>
@@ -342,8 +337,8 @@ export function InstancesPage() {
                     </button>
                     <button className="btn btn-secondary btn-sm" onClick={cancelEdit}>Cancelar</button>
                     {editTestResult && (
-                      <span style={{ fontSize: 12, color: editTestResult.ok ? '#22c55e' : editTestResult.status === 'not_configured' ? '#f59e0b' : '#ef4444' }}>
-                        {resultLabel(editTestResult)}
+                      <span style={{ fontSize: 12, color: testResultColor(editTestResult) }}>
+                        {testResultLabel(editTestResult)}
                       </span>
                     )}
                   </div>

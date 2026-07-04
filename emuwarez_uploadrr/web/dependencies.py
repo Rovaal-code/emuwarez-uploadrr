@@ -1,11 +1,14 @@
 """FastAPI dependency injection for authentication."""
 from __future__ import annotations
 
+import logging
 from typing import Annotated, Optional
 
 from fastapi import Header, HTTPException, status
 
 from .runtime import _db_path
+
+logger = logging.getLogger(__name__)
 
 
 def _resolve_token(authorization: Optional[str]) -> Optional[str]:
@@ -52,6 +55,13 @@ def require_auth(
             init_db(conn)
             user = get_user_by_token(conn, token)
     except Exception:
+        # A DB error here (e.g. a locked/corrupt file) must not surface as
+        # a 500 for every endpoint — but silently downgrading it to "no
+        # user found" previously masked a real concurrency bug (concurrent
+        # requests racing a table-rebuild migration), which looked to the
+        # frontend like a spuriously invalid token and wiped the session.
+        # Log it so a genuine DB problem is visible instead of invisible.
+        logger.exception("require_auth: token lookup failed unexpectedly")
         user = None
     if not user:
         raise HTTPException(

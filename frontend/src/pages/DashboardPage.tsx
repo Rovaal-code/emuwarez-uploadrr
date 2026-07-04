@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { getDashboardSummary, getDashboardActivity, getDashboardLibraryActivity } from '../api/dashboard'
 import { getUploads } from '../api/uploads'
 import { syncAll } from '../api/library'
@@ -57,22 +57,20 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
   const loadData = useCallback(async () => {
     setLoadingData(true)
     setDataError(null)
-    try {
-      const [s, a, la, up] = await Promise.allSettled([
-        getDashboardSummary(),
-        getDashboardActivity(),
-        getDashboardLibraryActivity(10),
-        getUploads({ status: 'running', limit: 5 }),
-      ])
-      if (s.status === 'fulfilled') setSummary(s.value)
-      if (a.status === 'fulfilled') setTaskActivity(a.value)
-      if (la.status === 'fulfilled') setLibraryActivity(la.value.items)
-      if (up.status === 'fulfilled') setActiveUploads(up.value)
-    } catch {
-      setDataError('No se pudieron cargar los datos del dashboard')
-    } finally {
-      setLoadingData(false)
-    }
+    // Promise.allSettled never rejects — each branch's own status carries
+    // its outcome, so failures are handled per-item below, not via catch.
+    const [s, a, la, up] = await Promise.allSettled([
+      getDashboardSummary(),
+      getDashboardActivity(),
+      getDashboardLibraryActivity(10),
+      getUploads({ status: 'running', limit: 5 }),
+    ])
+    if (s.status === 'fulfilled') setSummary(s.value)
+    else setDataError('No se pudieron cargar los datos del dashboard')
+    if (a.status === 'fulfilled') setTaskActivity(a.value)
+    if (la.status === 'fulfilled') setLibraryActivity(la.value.items)
+    if (up.status === 'fulfilled') setActiveUploads(up.value)
+    setLoadingData(false)
   }, [])
 
   useEffect(() => { loadData() }, [loadData])
@@ -98,10 +96,24 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
     }
   }
 
-  if (loadingData && !summary) return <LoadingState label="Cargando dashboard…" />
-  if (dataError && !summary) return <ErrorState message={dataError} onRetry={loadData} />
+  // First-ever visit to the dashboard (last_sync_at is null): the setup
+  // wizard's completion screen promises "la primera sincronización se
+  // ejecutará desde el dashboard" — this is what actually keeps that
+  // promise, since nothing triggered it automatically before. Guarded by
+  // a ref so it only fires once per page load, not on every 15s poll.
+  const autoSyncTriggered = useRef(false)
+  useEffect(() => {
+    if (summary && summary.last_sync_at === null && !autoSyncTriggered.current) {
+      autoSyncTriggered.current = true
+      handleSync()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [summary])
 
-  const s = summary!
+  if (loadingData && !summary) return <LoadingState label="Cargando dashboard…" />
+  if (!summary) return <ErrorState message={dataError ?? 'No se pudieron cargar los datos del dashboard'} onRetry={loadData} />
+
+  const s = summary
   const taskRuns = taskActivity?.items ?? []
 
   return (
@@ -207,8 +219,30 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
                     {libraryActivity.map(item => (
                       <tr key={item.id}>
                         <td>
-                          <div style={{ fontWeight: 500 }}>{item.title}</div>
-                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{formatItemType(item.item_type)}{item.year ? ` · ${item.year}` : ''}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div style={{
+                              flexShrink: 0, width: 28, height: 42, borderRadius: 4, overflow: 'hidden',
+                              background: 'rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}>
+                              {item.poster_url ? (
+                                <img
+                                  src={item.poster_url}
+                                  alt=""
+                                  loading="lazy"
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                                />
+                              ) : (
+                                <span style={{ fontSize: 14, opacity: 0.35 }}>
+                                  {item.item_type === 'series' || item.item_type === 'episode' ? '📺' : '🎬'}
+                                </span>
+                              )}
+                            </div>
+                            <div>
+                              <div style={{ fontWeight: 500 }}>{item.title}</div>
+                              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{formatItemType(item.item_type)}{item.year ? ` · ${item.year}` : ''}</div>
+                            </div>
+                          </div>
                         </td>
                         <td>
                           {item.instance_type

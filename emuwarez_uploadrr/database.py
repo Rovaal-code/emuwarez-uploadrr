@@ -44,6 +44,12 @@ def connect(path: Optional[Path] = None) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
+    # Concurrent requests each open their own connection (see require_auth,
+    # every endpoint's _get_conn()). Without this, two connections racing to
+    # write at the same moment (e.g. a table-rebuild migration) get an
+    # immediate "database is locked"/"table already exists" error instead of
+    # one simply waiting its turn.
+    conn.execute("PRAGMA busy_timeout = 5000")
     return conn
 
 
@@ -62,6 +68,43 @@ def _migrate_instances(conn: sqlite3.Connection) -> None:
             pass  # column already exists
 
 
+def _rebuild_instances_table(conn: sqlite3.Connection, type_check_values: str) -> None:
+    """Shared table-rebuild step for the widen/narrow migrations below.
+    Caller is responsible for the transaction (BEGIN/COMMIT/ROLLBACK) and
+    the idempotency guard — this just issues the DDL/DML statements one at
+    a time (never `executescript()`, which issues its own implicit commit
+    and would break a caller-managed transaction)."""
+    conn.execute(f"""
+        CREATE TABLE instances_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type TEXT NOT NULL CHECK(type IN ({type_check_values})),
+            name TEXT NOT NULL,
+            url TEXT NOT NULL,
+            api_key TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            is_4k INTEGER NOT NULL DEFAULT 0,
+            is_anime INTEGER NOT NULL DEFAULT 0,
+            last_test_status TEXT,
+            last_test_at TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(type, name)
+        )
+    """)
+    conn.execute("""
+        INSERT INTO instances_new (
+            id, type, name, url, api_key, enabled, is_4k, is_anime,
+            last_test_status, last_test_at, created_at, updated_at
+        )
+        SELECT
+            id, type, name, url, api_key, enabled, is_4k, is_anime,
+            last_test_status, last_test_at, created_at, updated_at
+        FROM instances
+    """)
+    conn.execute("DROP TABLE instances")
+    conn.execute("ALTER TABLE instances_new RENAME TO instances")
+
+
 def _migrate_instances_widen_type_check(conn: sqlite3.Connection) -> None:
     """Widen instances.type CHECK to include 'seerr' (Phase 11B).
 
@@ -73,40 +116,34 @@ def _migrate_instances_widen_type_check(conn: sqlite3.Connection) -> None:
     skipped if the constraint already includes 'seerr'. No FK/index cleanup
     needed — `instances` has no FKs pointing to it and its only index is the
     UNIQUE(type, name) constraint, recreated verbatim on the new table.
-    """
-    row = conn.execute(
-        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'instances'"
-    ).fetchone()
-    if not row or not row["sql"] or "'seerr'" in row["sql"]:
-        return
 
-    conn.executescript("""
-        CREATE TABLE instances_new (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            type TEXT NOT NULL CHECK(type IN ('radarr','sonarr','seerr')),
-            name TEXT NOT NULL,
-            url TEXT NOT NULL,
-            api_key TEXT NOT NULL,
-            enabled INTEGER NOT NULL DEFAULT 1,
-            is_4k INTEGER NOT NULL DEFAULT 0,
-            is_anime INTEGER NOT NULL DEFAULT 0,
-            last_test_status TEXT,
-            last_test_at TEXT,
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(type, name)
-        );
-        INSERT INTO instances_new (
-            id, type, name, url, api_key, enabled, is_4k, is_anime,
-            last_test_status, last_test_at, created_at, updated_at
-        )
-        SELECT
-            id, type, name, url, api_key, enabled, is_4k, is_anime,
-            last_test_status, last_test_at, created_at, updated_at
-        FROM instances;
-        DROP TABLE instances;
-        ALTER TABLE instances_new RENAME TO instances;
-    """)
+    Concurrency: every request opens its own connection (require_auth, each
+    endpoint's _get_conn()), and this runs on every one of them via
+    init_db(). Without an explicit lock, two connections can both pass the
+    guard check before either finishes rebuilding, and the second's
+    `CREATE TABLE instances_new` fails with "table already exists" — caught
+    nowhere, which for require_auth meant a live 401 on a perfectly valid
+    token. BEGIN IMMEDIATE + the busy_timeout set in connect() serialize
+    this: the second caller waits for the lock, then re-checks the guard
+    (already migrated) and no-ops.
+    """
+    prior_isolation = conn.isolation_level
+    conn.isolation_level = None
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'instances'"
+        ).fetchone()
+        if not row or not row["sql"] or "'seerr'" in row["sql"]:
+            conn.execute("COMMIT")
+            return
+        _rebuild_instances_table(conn, "'radarr','sonarr','seerr'")
+        conn.execute("COMMIT")
+    except BaseException:
+        conn.execute("ROLLBACK")
+        raise
+    finally:
+        conn.isolation_level = prior_isolation
 
 
 def _migrate_instances_narrow_type_check(conn: sqlite3.Connection) -> None:
@@ -117,45 +154,30 @@ def _migrate_instances_narrow_type_check(conn: sqlite3.Connection) -> None:
     Deletes any existing 'seerr' rows first (their request-sync was never
     implemented, so there is no real data to preserve) and the now-orphaned
     scheduled task row, then rebuilds the table with the narrower CHECK —
-    same table-rebuild pattern as `_migrate_instances_widen_type_check`.
-    Idempotent: skipped if the constraint no longer contains 'seerr'.
+    same table-rebuild pattern as `_migrate_instances_widen_type_check`,
+    including the same BEGIN IMMEDIATE locking for the same concurrency
+    reason (see that function's docstring). Idempotent: skipped if the
+    constraint no longer contains 'seerr'.
     """
-    row = conn.execute(
-        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'instances'"
-    ).fetchone()
-    if not row or not row["sql"] or "'seerr'" not in row["sql"]:
-        return
-
-    conn.execute("DELETE FROM instances WHERE type = 'seerr'")
-    conn.execute("DELETE FROM scheduled_tasks WHERE task_key = 'seerr_requests_sync'")
-
-    conn.executescript("""
-        CREATE TABLE instances_new (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            type TEXT NOT NULL CHECK(type IN ('radarr','sonarr')),
-            name TEXT NOT NULL,
-            url TEXT NOT NULL,
-            api_key TEXT NOT NULL,
-            enabled INTEGER NOT NULL DEFAULT 1,
-            is_4k INTEGER NOT NULL DEFAULT 0,
-            is_anime INTEGER NOT NULL DEFAULT 0,
-            last_test_status TEXT,
-            last_test_at TEXT,
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(type, name)
-        );
-        INSERT INTO instances_new (
-            id, type, name, url, api_key, enabled, is_4k, is_anime,
-            last_test_status, last_test_at, created_at, updated_at
-        )
-        SELECT
-            id, type, name, url, api_key, enabled, is_4k, is_anime,
-            last_test_status, last_test_at, created_at, updated_at
-        FROM instances;
-        DROP TABLE instances;
-        ALTER TABLE instances_new RENAME TO instances;
-    """)
+    prior_isolation = conn.isolation_level
+    conn.isolation_level = None
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'instances'"
+        ).fetchone()
+        if not row or not row["sql"] or "'seerr'" not in row["sql"]:
+            conn.execute("COMMIT")
+            return
+        conn.execute("DELETE FROM instances WHERE type = 'seerr'")
+        conn.execute("DELETE FROM scheduled_tasks WHERE task_key = 'seerr_requests_sync'")
+        _rebuild_instances_table(conn, "'radarr','sonarr'")
+        conn.execute("COMMIT")
+    except BaseException:
+        conn.execute("ROLLBACK")
+        raise
+    finally:
+        conn.isolation_level = prior_isolation
 
 
 def _migrate_nomenclature(conn: sqlite3.Connection) -> None:

@@ -50,7 +50,6 @@ class SetupStatusResponse(BaseModel):
     admin_configured: bool
     tmdb_configured: bool
     emu_configured: bool
-    uploadrr_configured: bool
     radarr_instances: int
     sonarr_instances: int
     jellyfin_configured: bool
@@ -124,18 +123,6 @@ class LogoutResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # Setup POST requests
 # ---------------------------------------------------------------------------
-
-class SetupUploadrrRequest(BaseModel):
-    uploadrr_path: str
-
-    @field_validator("uploadrr_path")
-    @classmethod
-    def not_empty(cls, v: str) -> str:
-        v = v.strip()
-        if not v:
-            raise ValueError("La ruta de Uploadrr no puede estar vacía")
-        return v
-
 
 class SetupTmdbRequest(BaseModel):
     api_key: str

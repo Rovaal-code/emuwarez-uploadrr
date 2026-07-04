@@ -9,10 +9,6 @@ export async function setupAdmin(username: string, password: string): Promise<Ok
   return api.post<OkResponse>('/setup/admin', { username, password }, { skipAuth: true })
 }
 
-export async function setupUploadrr(uploadrr_path: string): Promise<OkResponse> {
-  return api.post<OkResponse>('/setup/uploadrr', { uploadrr_path })
-}
-
 export async function setupTmdb(api_key: string, language = 'es-ES', region = 'ES'): Promise<OkResponse> {
   return api.post<OkResponse>('/setup/tmdb', { api_key, language, region })
 }

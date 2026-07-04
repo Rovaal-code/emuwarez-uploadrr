@@ -12,8 +12,8 @@ import pytest
 from emuwarez_uploadrr.database import connect, get_setting_canonical, init_db
 from emuwarez_uploadrr.services.upload_execution import validate_upload_job_start
 from emuwarez_uploadrr.services.upload_preflight import validate_upload_preconditions
-from emuwarez_uploadrr.web.services.setup_service import setup_emu, setup_tmdb, setup_uploadrr
-from emuwarez_uploadrr.web.services.settings_service import get_configured
+from emuwarez_uploadrr.web.services.setup_service import setup_emu, setup_tmdb
+from emuwarez_uploadrr.web.services.settings_service import get_configured, set_setting
 
 
 @pytest.fixture
@@ -60,7 +60,7 @@ def test_setup_writes_uploadrr_path_and_pipeline_reads_it(db_conn, tmp_path):
     uploadrr_dir = tmp_path / "Uploadrr"
     uploadrr_dir.mkdir()
     (uploadrr_dir / "upload.py").write_text("# fake")
-    setup_uploadrr(db_conn, str(uploadrr_dir))
+    set_setting(db_conn, "uploadrr.path", str(uploadrr_dir))
     db_conn.commit()
 
     item = {"title": "T", "local_status": "Disponible", "path": "/fake/movie.mkv", "tmdb_id": "1"}
@@ -91,7 +91,7 @@ def test_job_start_validation_reads_dotted_settings(db_conn, tmp_path):
     src = tmp_path / "movie.mkv"
     src.write_bytes(b"\x00" * 10)
 
-    setup_uploadrr(db_conn, str(uploadrr_dir))
+    set_setting(db_conn, "uploadrr.path", str(uploadrr_dir))
     setup_emu(db_conn, api_key="emukey12345")
     setup_tmdb(db_conn, api_key="tmdbkey12345")
     db_conn.commit()

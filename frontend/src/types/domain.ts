@@ -48,9 +48,11 @@ export const NAV_ITEMS: NavItem[] = [
 ]
 
 // Setup wizard step IDs (order: welcome -> admin -> emu ->
-// instances -> tmdb -> uploadrr -> nomenclature -> complete)
+// instances -> tmdb -> nomenclature -> complete). No dedicated Uploadrr
+// step — the service already ships with sensible runtime defaults;
+// configurable later from Settings if needed.
 export const SETUP_STEPS = [
-  'welcome', 'admin', 'emu', 'instances', 'tmdb', 'uploadrr', 'nomenclature', 'complete',
+  'welcome', 'admin', 'emu', 'instances', 'tmdb', 'nomenclature', 'complete',
 ] as const
 export type SetupStep = (typeof SETUP_STEPS)[number]
 
@@ -60,7 +62,6 @@ export const SETUP_STEP_LABELS: Record<SetupStep, string> = {
   emu: 'eMuwarez',
   instances: 'Instancias',
   tmdb: 'TMDb',
-  uploadrr: 'Uploadrr',
   nomenclature: 'Nomenclatura y hardlinks',
   complete: 'Completar',
 }

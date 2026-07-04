@@ -5,7 +5,6 @@ export interface SetupStatusResponse {
   admin_configured: boolean
   tmdb_configured: boolean
   emu_configured: boolean
-  uploadrr_configured: boolean
   radarr_instances: number
   sonarr_instances: number
   jellyfin_configured: boolean

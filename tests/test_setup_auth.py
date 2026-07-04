@@ -209,21 +209,6 @@ def test_create_emu_request_stub_with_auth(client, auth_headers):
 # Setup steps (requires auth)
 # ---------------------------------------------------------------------------
 
-def test_setup_uploadrr_requires_auth(client):
-    resp = client.post("/api/setup/uploadrr", json={"uploadrr_path": "/path/to/Uploadrr"})
-    assert resp.status_code == 401
-
-
-def test_setup_uploadrr_success(client, auth_headers):
-    resp = client.post(
-        "/api/setup/uploadrr",
-        json={"uploadrr_path": "/srv/Uploadrr"},
-        headers=auth_headers,
-    )
-    assert resp.status_code == 200
-    assert resp.json()["ok"] is True
-
-
 def test_setup_tmdb_success(client, auth_headers):
     resp = client.post(
         "/api/setup/tmdb",
@@ -272,17 +257,15 @@ def test_setup_instance_invalid_type(client, auth_headers):
     assert resp.status_code == 422
 
 
-def test_setup_complete_missing_steps(client, auth_headers):
-    # Try to complete without TMDb/EMU configured
+def test_setup_complete_succeeds_without_tmdb_or_emu(client, auth_headers):
+    # Every step besides admin is skippable — completing without TMDb/EMU/
+    # instances/Uploadrr configured must succeed, not block with 400.
     resp = client.post("/api/setup/complete", headers=auth_headers)
-    assert resp.status_code == 400
-    assert "tmdb" in resp.json()["detail"].lower() or "pendientes" in resp.json()["detail"].lower()
+    assert resp.status_code == 200
 
 
 def test_full_setup_flow(client, auth_headers):
     """Complete the entire setup wizard end to end."""
-    client.post("/api/setup/uploadrr",
-                json={"uploadrr_path": "/srv/Uploadrr"}, headers=auth_headers)
     client.post("/api/setup/tmdb",
                 json={"api_key": "tmdb_key_e2e"}, headers=auth_headers)
     client.post("/api/setup/emu",

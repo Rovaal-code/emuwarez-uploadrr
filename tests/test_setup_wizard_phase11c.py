@@ -1,6 +1,7 @@
 """Tests for Phase 11C onboarding wizard additions:
-new step order (admin -> emu -> instances -> tmdb -> uploadrr ->
-complete), and the nomenclature/hardlink-strategy step.
+new step order (admin -> emu -> instances -> tmdb -> complete), and the
+nomenclature/hardlink-strategy step. No dedicated Uploadrr step (removed —
+configurable later from Settings, service ships with sensible defaults).
 """
 from __future__ import annotations
 
@@ -12,6 +13,20 @@ from __future__ import annotations
 def test_next_step_order_after_admin(client, auth_headers):
     resp = client.get("/api/setup/status")
     assert resp.json()["next_step"] == "emu"
+
+
+def test_complete_succeeds_with_nothing_else_configured(client, auth_headers):
+    """Every step besides creating the admin is skippable — completing
+    setup right after admin creation, with eMuwarez/instances/TMDb/Uploadrr
+    all left unconfigured, must succeed rather than block with 'Pasos
+    pendientes'."""
+    resp = client.post("/api/setup/complete", headers=auth_headers)
+    assert resp.status_code == 200
+
+    status_resp = client.get("/api/setup/status")
+    data = status_resp.json()
+    assert data["initialized"] is True
+    assert data["next_step"] is None
 
 
 def test_next_step_order_after_emu(client, auth_headers):
@@ -40,7 +55,7 @@ def test_next_step_order_after_tmdb(client, auth_headers):
     )
     client.post("/api/setup/tmdb", json={"api_key": "tmdbkey"}, headers=auth_headers)
     resp = client.get("/api/setup/status")
-    assert resp.json()["next_step"] == "uploadrr"
+    assert resp.json()["next_step"] == "complete"
 
 
 
@@ -121,7 +136,6 @@ def test_full_setup_flow_new_order_with_nomenclature(client, auth_headers):
         headers=auth_headers,
     )
     client.post("/api/setup/tmdb", json={"api_key": "tmdb_key_e2e"}, headers=auth_headers)
-    client.post("/api/setup/uploadrr", json={"uploadrr_path": "/srv/Uploadrr"}, headers=auth_headers)
     client.post(
         "/api/setup/nomenclature",
         json={"default_release_tag": "EMUWAREZ", "hardlink_base": "/data/uploads/emu"},

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import {
-  setupAdmin, setupUploadrr, setupTmdb, setupEmu, setupInstances,
+  setupAdmin, setupTmdb, setupEmu, setupInstances,
   setupNomenclature, setupComplete,
 } from '../api/setup'
 import { login } from '../api/auth'
@@ -84,13 +84,11 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   const [adminPass, setAdminPass] = useState('')
   const [adminPass2, setAdminPass2] = useState('')
 
-  // Uploadrr step state
-  const [uploadrrPath, setUploadrrPath] = useState('./Uploadrr')
-
   // TMDb step state
   const [tmdbKey, setTmdbKey] = useState('')
   const [tmdbLang, setTmdbLang] = useState('es-ES')
   const [tmdbRegion, setTmdbRegion] = useState('ES')
+  const [tmdbAckSkip, setTmdbAckSkip] = useState(false)
 
   // EMU step state
   const [emuKey, setEmuKey] = useState('')
@@ -100,6 +98,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   const [instances, setInstances] = useState<InstanceDraft[]>([])
   const [instDraft, setInstDraft] = useState<Partial<InstanceDraft>>({ type: 'radarr', is_4k: false, is_anime: false })
   const [instError, setInstError] = useState<string | null>(null)
+  const [instAckSkip, setInstAckSkip] = useState(false)
 
   // Nomenclature step state (Phase 11C)
   const [nomTag, setNomTag] = useState('EMUWAREZ')
@@ -135,6 +134,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
     try {
       const r = await testTmdbConnection({ api_key: tmdbKey || undefined, language: tmdbLang || undefined, region: tmdbRegion || undefined })
       setTmdbTestResult(r)
+      if (r.ok) setTmdbAckSkip(false)
     } catch {
       setTmdbTestResult({ ok: false, service: 'tmdb', status: 'connection_error', message: 'Error al contactar con el servidor' })
     } finally {
@@ -222,12 +222,10 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   })
 
   const handleTmdb = wrap(async () => {
-    await setupTmdb(tmdbKey, tmdbLang, tmdbRegion)
-    setStep('uploadrr')
-  })
-
-  const handleUploadrr = wrap(async () => {
-    await setupUploadrr(uploadrrPath)
+    // Same as eMuwarez: an empty key + explicit skip just moves on, no call.
+    if (tmdbKey.trim()) {
+      await setupTmdb(tmdbKey, tmdbLang, tmdbRegion)
+    }
     setStep('nomenclature')
   })
 
@@ -249,6 +247,8 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   const stepIdx = SETUP_STEPS.indexOf(step)
   const adminPasswordValid = PASSWORD_RULES.every(rule => rule.test(adminPass))
   const emuCanContinue = Boolean(emuTestResult?.ok) || emuAckSkip
+  const instancesCanContinue = instances.length > 0 || instAckSkip
+  const tmdbCanContinue = Boolean(tmdbTestResult?.ok) || tmdbAckSkip
 
   return (
     <div className="setup-wizard-wrap">
@@ -397,14 +397,27 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--text-muted)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   Añadir instancia
                 </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+                  {(['radarr', 'sonarr'] as const).map(t => (
+                    <div
+                      key={t}
+                      onClick={() => setInstDraft(p => ({ ...p, type: t }))}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+                        border: `1.5px solid ${instDraft.type === t ? 'var(--text-accent)' : 'var(--border-input)'}`,
+                        borderRadius: 8, padding: '10px 12px',
+                        background: instDraft.type === t ? 'var(--bg-card-hover)' : 'var(--bg-input)',
+                      }}
+                    >
+                      <ServiceIcon type={t} size={24} />
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>{t === 'radarr' ? 'Radarr' : 'Sonarr'}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t === 'radarr' ? 'Películas' : 'Series'}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <div className="form-group">
-                    <label className="form-label">Tipo</label>
-                    <select className="form-input form-select" value={instDraft.type} onChange={e => setInstDraft(p => ({ ...p, type: e.target.value as 'radarr' | 'sonarr' }))}>
-                      <option value="radarr">Radarr</option>
-                      <option value="sonarr">Sonarr</option>
-                    </select>
-                  </div>
                   <div className="form-group">
                     <label className="form-label">Nombre</label>
                     <input className="form-input" placeholder="Radarr principal" value={instDraft.name ?? ''} onChange={e => setInstDraft(p => ({ ...p, name: e.target.value }))} />
@@ -442,9 +455,18 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 </div>
               </div>
               {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
+              {!instancesCanContinue && (
+                <div className="alert alert-error" style={{ marginTop: 10 }}>
+                  Todavía no has añadido ninguna instancia. Si continúas sin añadir ninguna, la biblioteca
+                  no tendrá contenido que cruzar hasta que la corrijas más tarde en Configuración.
+                  <label className="checkbox-label" style={{ display: 'block', marginTop: 8 }}>
+                    <input type="checkbox" checked={instAckSkip} onChange={e => setInstAckSkip(e.target.checked)} /> Entiendo, continuar sin añadir instancias
+                  </label>
+                </div>
+              )}
               <div className="wizard-actions">
                 <span />
-                <button className="btn btn-primary" onClick={handleInstances} disabled={loading}>
+                <button className="btn btn-primary" onClick={handleInstances} disabled={loading || !instancesCanContinue}>
                   {loading ? 'Guardando…' : 'Continuar'}
                 </button>
               </div>
@@ -458,7 +480,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               <div className="wizard-fields">
                 <div className="form-group">
                   <label className="form-label">API key TMDb</label>
-                  <input className="form-input" value={tmdbKey} onChange={e => setTmdbKey(e.target.value)} placeholder="API key de TMDb" />
+                  <input className="form-input" value={tmdbKey} onChange={e => { setTmdbKey(e.target.value); setTmdbAckSkip(false) }} placeholder="API key de TMDb" />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Idioma</label>
@@ -484,30 +506,18 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   </span>
                 )}
               </div>
-              <div className="wizard-actions">
-                <span />
-                <button className="btn btn-primary" onClick={handleTmdb} disabled={loading}>
-                  {loading ? 'Guardando…' : 'Continuar'}
-                </button>
-              </div>
-            </>
-          )}
-
-          {/* Uploadrr step */}
-          {step === 'uploadrr' && (
-            <>
-              <div className="wizard-step-desc">Indica la ruta del directorio Uploadrr (motor de subida).</div>
-              <div className="wizard-fields">
-                <div className="form-group">
-                  <label className="form-label">Ruta Uploadrr</label>
-                  <input className="form-input" value={uploadrrPath} onChange={e => setUploadrrPath(e.target.value)} placeholder="./Uploadrr" />
-                  <span className="form-hint">Ruta al directorio que contiene upload.py</span>
+              {!tmdbCanContinue && (
+                <div className="alert alert-error" style={{ marginTop: 10 }}>
+                  Todavía no has probado la key (o la prueba ha fallado). Si continúas sin verificarla,
+                  el enriquecimiento de metadatos no funcionará hasta que la corrijas más tarde en Configuración.
+                  <label className="checkbox-label" style={{ display: 'block', marginTop: 8 }}>
+                    <input type="checkbox" checked={tmdbAckSkip} onChange={e => setTmdbAckSkip(e.target.checked)} /> Entiendo, continuar sin verificar
+                  </label>
                 </div>
-              </div>
-              {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
+              )}
               <div className="wizard-actions">
                 <span />
-                <button className="btn btn-primary" onClick={handleUploadrr} disabled={loading}>
+                <button className="btn btn-primary" onClick={handleTmdb} disabled={loading || !tmdbCanContinue}>
                   {loading ? 'Guardando…' : 'Continuar'}
                 </button>
               </div>
@@ -573,10 +583,12 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
           {step === 'complete' && (
             <>
               <div className="wizard-step-desc">
-                Todo está configurado. Haz clic en Completar para inicializar la aplicación y entrar al dashboard.
+                Haz clic en Completar para inicializar la aplicación y entrar al dashboard.
               </div>
               <div className="alert alert-info">
-                Si has añadido instancias Radarr/Sonarr, la primera sincronización se ejecutará desde el dashboard.
+                Cualquier paso que hayas saltado (eMuwarez, instancias, TMDb) se puede configurar más tarde
+                desde Configuración. Si has añadido instancias Radarr/Sonarr, la primera sincronización se
+                ejecutará desde el dashboard.
               </div>
               {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
               <div className="wizard-actions">

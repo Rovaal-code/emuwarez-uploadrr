@@ -28,7 +28,6 @@ def get_setup_state(conn: sqlite3.Connection) -> dict:
     return {
         "initialized": get_state(conn, "initialized") == "true",
         "admin_configured": admin_exists(conn),
-        "uploadrr_configured": get_configured(conn, "uploadrr.path"),
         "tmdb_configured": get_configured(conn, "tmdb.api_key"),
         "emu_configured": get_configured(conn, "emu.api_key"),
         "radarr_instances": radarr,
@@ -38,24 +37,31 @@ def get_setup_state(conn: sqlite3.Connection) -> dict:
 
 
 def next_step(state: dict) -> Optional[str]:
-    """Resume order: admin -> emu -> instances -> tmdb -> uploadrr ->
-    complete. 'welcome' is frontend-only (shown once before an admin
-    exists). 'nomenclature' is an optional/skippable step — it is not a
-    gating condition here, same treatment as the pre-existing
-    optional-count-only gating on 'instances'."""
+    """Resume order: admin -> emu -> instances -> tmdb -> complete.
+    'welcome' is frontend-only (shown once before an admin exists).
+    eMuwarez/instances/TMDb/nomenclature are all skippable steps (each has
+    its own skip control in the UI) — none of them, nor Uploadrr (no
+    dedicated wizard step; configurable later from Settings), block
+    completing setup. This resume order only decides which unconfigured
+    step to land on if the wizard is reopened mid-flow.
+
+    `initialized` is checked right after `admin_configured` (not last) —
+    once setup has actually been completed, it must never route back into
+    the wizard just because some skippable step (e.g. eMuwarez) was never
+    configured; otherwise a skipped step would forever short-circuit this
+    chain and make next_step() claim the wizard isn't done.
+    """
     if not state["admin_configured"]:
         return "admin"
+    if state["initialized"]:
+        return None
     if not state["emu_configured"]:
         return "emu"
     if state["radarr_instances"] == 0 and state["sonarr_instances"] == 0:
         return "instances"
     if not state["tmdb_configured"]:
         return "tmdb"
-    if not state["uploadrr_configured"]:
-        return "uploadrr"
-    if not state["initialized"]:
-        return "complete"
-    return None
+    return "complete"
 
 
 def setup_admin(conn: sqlite3.Connection, username: str, password: str) -> int:
@@ -64,14 +70,6 @@ def setup_admin(conn: sqlite3.Connection, username: str, password: str) -> int:
         raise SetupError("Ya existe un usuario administrador")
     user_id = create_user(conn, username, password, role="admin")
     return user_id
-
-
-def setup_uploadrr(conn: sqlite3.Connection, uploadrr_path: str) -> None:
-    """Persist the path to the Uploadrr runtime directory."""
-    path = uploadrr_path.strip()
-    if not path:
-        raise SetupError("La ruta de Uploadrr no puede estar vacía")
-    set_setting(conn, "uploadrr.path", path)
 
 
 def setup_tmdb(
@@ -150,19 +148,11 @@ def setup_nomenclature(
 
 
 def setup_complete(conn: sqlite3.Connection) -> None:
-    """Mark setup as complete. Raises SetupError if required steps are missing."""
+    """Mark setup as complete. The admin account is the only hard
+    requirement — every other step (eMuwarez, instances, TMDb, Uploadrr,
+    nomenclature) is optional/skippable and has its own skip control in
+    the wizard UI, so none of them block finishing setup."""
     state = get_setup_state(conn)
-    missing = []
     if not state["admin_configured"]:
-        missing.append("admin")
-    if not state["uploadrr_configured"]:
-        missing.append("uploadrr")
-    if not state["tmdb_configured"]:
-        missing.append("tmdb")
-    if not state["emu_configured"]:
-        missing.append("emu")
-    if state["radarr_instances"] == 0 and state["sonarr_instances"] == 0:
-        missing.append("instances")
-    if missing:
-        raise SetupError(f"Pasos pendientes: {', '.join(missing)}")
+        raise SetupError("Pasos pendientes: admin")
     set_state(conn, "initialized", "true")

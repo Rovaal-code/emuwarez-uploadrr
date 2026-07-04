@@ -2,7 +2,6 @@
 
 GET  /api/setup/status         — current wizard state (public)
 POST /api/setup/admin          — create first admin user (public — only before admin exists)
-POST /api/setup/uploadrr       — Uploadrr path (requires auth)
 POST /api/setup/tmdb           — TMDb API key (requires auth)
 POST /api/setup/emu            — eMuwarez API key + optional endpoint (requires auth)
 POST /api/setup/instances      — add Radarr/Sonarr instance (requires auth)
@@ -25,7 +24,6 @@ from ..schemas import (
     SetupNomenclatureRequest,
     SetupStatusResponse,
     SetupTmdbRequest,
-    SetupUploadrrRequest,
 )
 
 router = APIRouter(tags=["setup"])
@@ -51,7 +49,7 @@ def setup_status() -> SetupStatusResponse:
     except Exception:
         state = {
             "initialized": False, "admin_configured": False,
-            "uploadrr_configured": False, "tmdb_configured": False, "emu_configured": False,
+            "tmdb_configured": False, "emu_configured": False,
             "radarr_instances": 0, "sonarr_instances": 0,
             "jellyfin_configured": False,
         }
@@ -79,25 +77,6 @@ def setup_admin(body: CreateAdminRequest) -> OkResponse:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     return OkResponse(message=f"Usuario administrador '{body.username}' creado correctamente")
 
-
-
-# ---------------------------------------------------------------------------
-# POST /api/setup/uploadrr — requires auth
-# ---------------------------------------------------------------------------
-
-@router.post("/setup/uploadrr", response_model=OkResponse)
-def setup_uploadrr(
-    body: SetupUploadrrRequest,
-    current_user: dict = Depends(require_auth),
-) -> OkResponse:
-    from ..services.setup_service import SetupError, setup_uploadrr as _setup_uploadrr
-    with _get_conn() as conn:
-        try:
-            _setup_uploadrr(conn, body.uploadrr_path)
-            conn.commit()
-        except SetupError as exc:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-    return OkResponse(message="Ruta de Uploadrr guardada correctamente")
 
 
 # ---------------------------------------------------------------------------

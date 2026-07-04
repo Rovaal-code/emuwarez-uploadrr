@@ -13,6 +13,32 @@ import type { SetupStatusResponse } from '../types/api'
 
 const DISABLE_HARDLINKS_TOKEN = 'DESACTIVAR_HARDLINKS'
 
+// Mirrors validate_password_strength() in web/security.py exactly (same
+// regexes) so the checklist never drifts from what the backend enforces.
+const PASSWORD_RULES: { label: string; test: (p: string) => boolean }[] = [
+  { label: 'Al menos 12 caracteres', test: p => p.length >= 12 },
+  { label: 'Una letra minúscula', test: p => /[a-z]/.test(p) },
+  { label: 'Una letra mayúscula', test: p => /[A-Z]/.test(p) },
+  { label: 'Un número', test: p => /\d/.test(p) },
+  { label: 'Un símbolo (no alfanumérico)', test: p => /[^a-zA-Z0-9]/.test(p) },
+]
+
+function PasswordChecklist({ password }: { password: string }) {
+  return (
+    <ul style={{ listStyle: 'none', padding: 0, margin: '8px 0 0', display: 'grid', gap: 4 }}>
+      {PASSWORD_RULES.map(rule => {
+        const ok = rule.test(password)
+        return (
+          <li key={rule.label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: ok ? '#22c55e' : 'var(--text-muted)' }}>
+            <span>{ok ? '✓' : '○'}</span>
+            <span>{rule.label}</span>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
 interface SetupWizardProps {
   setupStatus: SetupStatusResponse
   onComplete: () => void
@@ -216,6 +242,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   })
 
   const stepIdx = SETUP_STEPS.indexOf(step)
+  const adminPasswordValid = PASSWORD_RULES.every(rule => rule.test(adminPass))
   const emuCanContinue = Boolean(emuTestResult?.ok) || emuAckSkip
 
   return (
@@ -273,16 +300,22 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 <div className="form-group">
                   <label className="form-label">Contraseña</label>
                   <input className="form-input" type="password" placeholder="Mínimo 12 caracteres" value={adminPass} onChange={e => setAdminPass(e.target.value)} />
+                  <PasswordChecklist password={adminPass} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Confirmar contraseña</label>
                   <input className="form-input" type="password" placeholder="Repite la contraseña" value={adminPass2} onChange={e => setAdminPass2(e.target.value)} />
+                  {adminPass2 && (
+                    <span style={{ fontSize: 12.5, color: adminPass === adminPass2 ? '#22c55e' : '#ef4444', marginTop: 6, display: 'inline-block' }}>
+                      {adminPass === adminPass2 ? '✓ Las contraseñas coinciden' : '✗ Las contraseñas no coinciden'}
+                    </span>
+                  )}
                 </div>
               </div>
               {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
               <div className="wizard-actions">
                 <span />
-                <button className="btn btn-primary" onClick={handleAdmin} disabled={loading || !adminUser || !adminPass || !adminPass2}>
+                <button className="btn btn-primary" onClick={handleAdmin} disabled={loading || !adminUser || !adminPasswordValid || adminPass !== adminPass2}>
                   {loading ? 'Creando…' : 'Crear admin'}
                 </button>
               </div>

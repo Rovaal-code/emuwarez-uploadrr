@@ -46,10 +46,6 @@ export async function setupInstances(instances: SetupInstancePayload[]): Promise
   return results
 }
 
-export async function setupSeerr(name: string, url: string, api_key: string): Promise<OkResponse> {
-  return api.post<OkResponse>('/setup/seerr', { name, url, api_key })
-}
-
 export async function setupNomenclature(params: {
   default_release_tag: string
   hardlink_base?: string

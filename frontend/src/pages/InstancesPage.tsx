@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getInstances, addInstance, updateInstance, testInstance, syncInstance } from '../api/instances'
 import { refreshArrHealth } from '../api/diagnostics'
-import { testArrConnection, testSeerrConnection, type IntegrationTestResult } from '../api/integrationTests'
+import { testArrConnection, type IntegrationTestResult } from '../api/integrationTests'
 import type { InstanceSafeResponse } from '../types/api'
 import { ServiceIcon, ServiceLabel } from '../components/ServiceIcon'
 import { LoadingState } from '../components/LoadingState'
@@ -10,7 +10,7 @@ import { EmptyState } from '../components/EmptyState'
 import { ApiClientError } from '../api/client'
 import { formatDate } from '../utils/format'
 
-type InstanceKind = 'radarr' | 'sonarr' | 'seerr'
+type InstanceKind = 'radarr' | 'sonarr'
 
 interface AddForm {
   type: InstanceKind
@@ -95,8 +95,8 @@ export function InstancesPage() {
     try {
       await addInstance({
         type: form.type, name: form.name.trim(), url: form.url.trim(), api_key: form.api_key.trim(),
-        is_4k: form.type !== 'seerr' && form.is_4k,
-        is_anime: form.type !== 'seerr' && form.is_anime,
+        is_4k: form.is_4k,
+        is_anime: form.is_anime,
       })
       setForm(defaultForm())
       setShowAdd(false)
@@ -117,9 +117,7 @@ export function InstancesPage() {
     setAddTesting(true)
     setAddTestResult(null)
     try {
-      const r = form.type === 'seerr'
-        ? await testSeerrConnection({ base_url: form.url.trim(), api_key: form.api_key.trim() })
-        : await testArrConnection({ kind: form.type, base_url: form.url.trim(), api_key: form.api_key.trim() })
+      const r = await testArrConnection({ kind: form.type, base_url: form.url.trim(), api_key: form.api_key.trim() })
       setAddTestResult(r)
     } catch {
       setAddTestResult({ ok: false, service: form.type, status: 'connection_error', message: 'Error al contactar con el servidor' })
@@ -200,8 +198,8 @@ export function InstancesPage() {
         url: editForm.url.trim(),
         api_key: editForm.api_key.trim() || undefined,
         enabled: editForm.enabled,
-        is_4k: inst.type !== 'seerr' ? editForm.is_4k : undefined,
-        is_anime: inst.type !== 'seerr' ? editForm.is_anime : undefined,
+        is_4k: editForm.is_4k,
+        is_anime: editForm.is_anime,
       })
       cancelEdit()
       await load()
@@ -221,12 +219,8 @@ export function InstancesPage() {
       const key = editForm.api_key.trim()
       // If the key was left blank (keep current), fall back to testing the saved instance.
       const r = key
-        ? (inst.type === 'seerr'
-          ? await testSeerrConnection({ base_url: url, api_key: key })
-          : await testArrConnection({ kind: inst.type as 'radarr' | 'sonarr', base_url: url, api_key: key }))
-        : (inst.type === 'seerr'
-          ? await testSeerrConnection({ instance_id: inst.id })
-          : await testInstance(inst.id).then(r2 => ({ ok: r2.ok, service: inst.type, status: r2.ok ? 'connected' : 'connection_error', message: r2.error ?? 'OK', details: { version: r2.version, username: r2.username } } as IntegrationTestResult)))
+        ? await testArrConnection({ kind: inst.type as 'radarr' | 'sonarr', base_url: url, api_key: key })
+        : await testInstance(inst.id).then(r2 => ({ ok: r2.ok, service: inst.type, status: r2.ok ? 'connected' : 'connection_error', message: r2.error ?? 'OK', details: { version: r2.version, username: r2.username } } as IntegrationTestResult))
       setEditTestResult(r)
     } catch {
       setEditTestResult({ ok: false, service: inst.type, status: 'connection_error', message: 'Error al contactar con el servidor' })
@@ -240,7 +234,7 @@ export function InstancesPage() {
       <div className="page-header">
         <div>
           <div className="page-title">Instancias</div>
-          <div className="page-subtitle">Gestiona tus instancias Radarr, Sonarr y Seerr</div>
+          <div className="page-subtitle">Gestiona tus instancias Radarr y Sonarr</div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button className="btn btn-secondary btn-sm" onClick={handleRefreshHealth} disabled={healthLoading}>
@@ -264,7 +258,6 @@ export function InstancesPage() {
                 <select className="form-input form-select" value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value as InstanceKind }))}>
                   <option value="radarr">Radarr</option>
                   <option value="sonarr">Sonarr</option>
-                  <option value="seerr">Seerr (Overseerr/Jellyseerr)</option>
                 </select>
               </div>
               <div className="form-group">
@@ -280,18 +273,10 @@ export function InstancesPage() {
                 <input className="form-input" type="password" placeholder="API key" value={form.api_key} onChange={e => setForm(p => ({ ...p, api_key: e.target.value }))} required />
               </div>
             </div>
-            {form.type !== 'seerr' && (
-              <div style={{ display: 'flex', gap: 16, marginBottom: 14 }}>
-                <label className="checkbox-label"><input type="checkbox" checked={form.is_4k} onChange={e => setForm(p => ({ ...p, is_4k: e.target.checked }))} /> 4K</label>
-                <label className="checkbox-label"><input type="checkbox" checked={form.is_anime} onChange={e => setForm(p => ({ ...p, is_anime: e.target.checked }))} /> Anime</label>
-              </div>
-            )}
-            {form.type === 'seerr' && (
-              <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 14px' }}>
-                La sincronización de peticiones desde Seerr no está implementada todavía — esta instancia queda
-                configurada y probada, lista para cuando se implemente.
-              </p>
-            )}
+            <div style={{ display: 'flex', gap: 16, marginBottom: 14 }}>
+              <label className="checkbox-label"><input type="checkbox" checked={form.is_4k} onChange={e => setForm(p => ({ ...p, is_4k: e.target.checked }))} /> 4K</label>
+              <label className="checkbox-label"><input type="checkbox" checked={form.is_anime} onChange={e => setForm(p => ({ ...p, is_anime: e.target.checked }))} /> Anime</label>
+            </div>
             {addError && <div className="alert alert-error" style={{ marginBottom: 12 }}>{addError}</div>}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <button type="submit" className="btn btn-primary btn-sm" disabled={adding}>
@@ -319,7 +304,7 @@ export function InstancesPage() {
         <EmptyState
           icon="🔌"
           title="Sin instancias configuradas"
-          body="Añade una instancia Radarr, Sonarr o Seerr para empezar."
+          body="Añade una instancia Radarr o Sonarr para empezar."
           action={<button className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>+ Añadir instancia</button>}
         />
       ) : (
@@ -343,12 +328,8 @@ export function InstancesPage() {
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 16, marginBottom: 10, alignItems: 'center' }}>
-                    {inst.type !== 'seerr' && (
-                      <>
-                        <label className="checkbox-label"><input type="checkbox" checked={editForm.is_4k} onChange={e => setEditForm(p => p && ({ ...p, is_4k: e.target.checked }))} /> 4K</label>
-                        <label className="checkbox-label"><input type="checkbox" checked={editForm.is_anime} onChange={e => setEditForm(p => p && ({ ...p, is_anime: e.target.checked }))} /> Anime</label>
-                      </>
-                    )}
+                    <label className="checkbox-label"><input type="checkbox" checked={editForm.is_4k} onChange={e => setEditForm(p => p && ({ ...p, is_4k: e.target.checked }))} /> 4K</label>
+                    <label className="checkbox-label"><input type="checkbox" checked={editForm.is_anime} onChange={e => setEditForm(p => p && ({ ...p, is_anime: e.target.checked }))} /> Anime</label>
                     <label className="checkbox-label"><input type="checkbox" checked={editForm.enabled} onChange={e => setEditForm(p => p && ({ ...p, enabled: e.target.checked }))} /> Activada</label>
                   </div>
                   {editError && <div className="alert alert-error" style={{ marginBottom: 10 }}>{editError}</div>}
@@ -370,7 +351,7 @@ export function InstancesPage() {
               ) : (
                 <>
                   <div className="instance-card-info">
-                    <ServiceIcon type={inst.type as 'radarr' | 'sonarr' | 'seerr'} size={28} />
+                    <ServiceIcon type={inst.type as 'radarr' | 'sonarr'} size={28} />
                     <div className="instance-card-meta">
                       <div className="instance-card-name">
                         <ServiceLabel type={inst.type} label={inst.name} size={14} />
@@ -399,15 +380,13 @@ export function InstancesPage() {
                     >
                       {testingId === inst.id ? 'Probando…' : 'Probar conexión'}
                     </button>
-                    {inst.type !== 'seerr' && (
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        disabled={syncingId === inst.id}
-                        onClick={() => handleSync(inst.id)}
-                      >
-                        {syncingId === inst.id ? 'Sincronizando…' : '↻ Sincronizar'}
-                      </button>
-                    )}
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      disabled={syncingId === inst.id}
+                      onClick={() => handleSync(inst.id)}
+                    >
+                      {syncingId === inst.id ? 'Sincronizando…' : '↻ Sincronizar'}
+                    </button>
                     <button className="btn btn-secondary btn-sm" onClick={() => startEdit(inst)}>
                       Editar
                     </button>

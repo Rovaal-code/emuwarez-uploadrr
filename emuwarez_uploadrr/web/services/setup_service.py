@@ -25,7 +25,6 @@ def get_setup_state(conn: sqlite3.Connection) -> dict:
     instances = list_instances(conn)
     radarr = sum(1 for i in instances if i.type == "radarr")
     sonarr = sum(1 for i in instances if i.type == "sonarr")
-    seerr = sum(1 for i in instances if i.type == "seerr")
     return {
         "initialized": get_state(conn, "initialized") == "true",
         "admin_configured": admin_exists(conn),
@@ -36,15 +35,14 @@ def get_setup_state(conn: sqlite3.Connection) -> dict:
         "radarr_instances": radarr,
         "sonarr_instances": sonarr,
         "jellyfin_configured": False,  # Jellyfin is explicitly out of scope
-        "seerr_configured": seerr > 0,  # Phase 11C — real value (was always False)
     }
 
 
 def next_step(state: dict) -> Optional[str]:
     """Resume order (Phase 11C): admin -> base -> emu -> instances -> tmdb ->
     uploadrr -> complete. 'welcome' is frontend-only (shown once before an
-    admin exists). 'seerr' and 'nomenclature' are optional/skippable steps —
-    they are not gating conditions here, same treatment as the pre-existing
+    admin exists). 'nomenclature' is an optional/skippable step — it is not
+    a gating condition here, same treatment as the pre-existing
     optional-count-only gating on 'instances'."""
     if not state["admin_configured"]:
         return "admin"
@@ -136,14 +134,6 @@ def setup_add_instance(
             (int(is_4k), int(is_anime), instance_id),
         )
     return instance_id
-
-
-def setup_seerr(conn: sqlite3.Connection, name: str, url: str, api_key: str) -> int:
-    """Add a Seerr (Overseerr/Jellyseerr-compatible) instance during setup.
-    Optional/skippable step — request sync is not implemented yet (Phase
-    11B); this only prepares the instance for when it is."""
-    from emuwarez_uploadrr.services.instances import add_instance
-    return add_instance(conn, "seerr", name or "Seerr", url, api_key)
 
 
 NOMENCLATURE_DISABLE_HARDLINKS_TOKEN = "DESACTIVAR_HARDLINKS"

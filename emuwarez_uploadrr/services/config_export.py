@@ -21,7 +21,6 @@ SETTINGS_SCHEMA: dict[str, dict] = {
     "emu_api_key": {"secret": True},
     "emu_requests_min_interval_minutes": {"secret": False},
     "jellyfin_enabled": {"secret": False},
-    "seerr_enabled": {"secret": False},
 }
 
 _MASKED = "***MASKED***"

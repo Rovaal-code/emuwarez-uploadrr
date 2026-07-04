@@ -7,7 +7,6 @@ POST /api/setup/uploadrr       — Uploadrr path (requires auth)
 POST /api/setup/tmdb           — TMDb API key (requires auth)
 POST /api/setup/emu            — eMuwarez API key + optional endpoint (requires auth)
 POST /api/setup/instances      — add Radarr/Sonarr instance (requires auth)
-POST /api/setup/seerr          — add Seerr instance, optional/skippable (requires auth) [Phase 11C]
 POST /api/setup/nomenclature   — upload tag + hardlink strategy, optional/skippable (requires auth) [Phase 11C]
 POST /api/setup/complete       — finalize setup (requires auth)
 """
@@ -26,7 +25,6 @@ from ..schemas import (
     SetupEmuRequest,
     SetupInstanceRequest,
     SetupNomenclatureRequest,
-    SetupSeerrRequest,
     SetupStatusResponse,
     SetupTmdbRequest,
     SetupUploadrrRequest,
@@ -57,7 +55,7 @@ def setup_status() -> SetupStatusResponse:
             "initialized": False, "admin_configured": False, "base_configured": False,
             "uploadrr_configured": False, "tmdb_configured": False, "emu_configured": False,
             "radarr_instances": 0, "sonarr_instances": 0,
-            "jellyfin_configured": False, "seerr_configured": False,
+            "jellyfin_configured": False,
         }
     return SetupStatusResponse(**state, next_step=next_step(state))
 
@@ -184,27 +182,6 @@ def setup_instances(
     return OkResponse(
         message=f"Instancia {body.type.capitalize()} '{body.name}' añadida con ID {instance_id}"
     )
-
-
-# ---------------------------------------------------------------------------
-# POST /api/setup/seerr — requires auth — Phase 11C, optional/skippable
-# ---------------------------------------------------------------------------
-
-@router.post("/setup/seerr", response_model=OkResponse, status_code=201)
-def setup_seerr(
-    body: SetupSeerrRequest,
-    current_user: dict = Depends(require_auth),
-) -> OkResponse:
-    """Add a Seerr (Overseerr/Jellyseerr) instance. Optional step — request
-    sync is not implemented yet, this only prepares the instance."""
-    from ..services.setup_service import setup_seerr as _setup_seerr
-    with _get_conn() as conn:
-        try:
-            instance_id = _setup_seerr(conn, body.name, body.url, body.api_key)
-            conn.commit()
-        except Exception as exc:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-    return OkResponse(message=f"Instancia Seerr '{body.name}' añadida con ID {instance_id}")
 
 
 # ---------------------------------------------------------------------------

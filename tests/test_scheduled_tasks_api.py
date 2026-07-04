@@ -24,12 +24,12 @@ def test_logs_requires_auth(client):
     assert client.get("/api/tasks/scheduled/sync-library/logs").status_code == 401
 
 
-def test_list_returns_three_default_tasks(client, auth_headers):
+def test_list_returns_default_tasks(client, auth_headers):
     resp = client.get("/api/tasks/scheduled", headers=auth_headers)
     assert resp.status_code == 200
     data = resp.json()
     keys = {t["task_key"] for t in data}
-    assert keys == {"sync-library", "seerr_requests_sync", "sync-emu-requests"}
+    assert keys == {"sync-library", "sync-emu-requests"}
 
 
 def test_emu_task_has_manual_allowed_false(client, auth_headers):

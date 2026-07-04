@@ -11,7 +11,7 @@ from .constants import CONFIG_DIR
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 16
+SCHEMA_VERSION = 17
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -84,6 +84,55 @@ def _migrate_instances_widen_type_check(conn: sqlite3.Connection) -> None:
         CREATE TABLE instances_new (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             type TEXT NOT NULL CHECK(type IN ('radarr','sonarr','seerr')),
+            name TEXT NOT NULL,
+            url TEXT NOT NULL,
+            api_key TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            is_4k INTEGER NOT NULL DEFAULT 0,
+            is_anime INTEGER NOT NULL DEFAULT 0,
+            last_test_status TEXT,
+            last_test_at TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(type, name)
+        );
+        INSERT INTO instances_new (
+            id, type, name, url, api_key, enabled, is_4k, is_anime,
+            last_test_status, last_test_at, created_at, updated_at
+        )
+        SELECT
+            id, type, name, url, api_key, enabled, is_4k, is_anime,
+            last_test_status, last_test_at, created_at, updated_at
+        FROM instances;
+        DROP TABLE instances;
+        ALTER TABLE instances_new RENAME TO instances;
+    """)
+
+
+def _migrate_instances_narrow_type_check(conn: sqlite3.Connection) -> None:
+    """Narrow instances.type CHECK back to ('radarr','sonarr'), removing
+    'seerr' (Seerr integration removed — it never had a working request
+    sync, see removal notes for this phase).
+
+    Deletes any existing 'seerr' rows first (their request-sync was never
+    implemented, so there is no real data to preserve) and the now-orphaned
+    scheduled task row, then rebuilds the table with the narrower CHECK —
+    same table-rebuild pattern as `_migrate_instances_widen_type_check`.
+    Idempotent: skipped if the constraint no longer contains 'seerr'.
+    """
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'instances'"
+    ).fetchone()
+    if not row or not row["sql"] or "'seerr'" not in row["sql"]:
+        return
+
+    conn.execute("DELETE FROM instances WHERE type = 'seerr'")
+    conn.execute("DELETE FROM scheduled_tasks WHERE task_key = 'seerr_requests_sync'")
+
+    conn.executescript("""
+        CREATE TABLE instances_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type TEXT NOT NULL CHECK(type IN ('radarr','sonarr')),
             name TEXT NOT NULL,
             url TEXT NOT NULL,
             api_key TEXT NOT NULL,
@@ -806,6 +855,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_settings_phase10e(conn)
         _migrate_scheduled_tasks_table(conn)
         _migrate_library_items_phase11e(conn)
+        _migrate_instances_narrow_type_check(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

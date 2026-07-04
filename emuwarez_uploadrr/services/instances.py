@@ -1,15 +1,15 @@
-"""Instance management for Radarr/Sonarr/Seerr."""
+"""Instance management for Radarr/Sonarr."""
 from __future__ import annotations
 
 import sqlite3
 from typing import Optional
 
-from ..integrations import radarr, seerr, sonarr
+from ..integrations import radarr, sonarr
 from ..integrations.arr_base import ArrClientError, safe_api_key
 from ..integrations.base import IntegrationError, normalize_base_url
 from ..models import InstanceConfig, InstanceType
 
-_VALID_INSTANCE_TYPES = (InstanceType.RADARR.value, InstanceType.SONARR.value, InstanceType.SEERR.value)
+_VALID_INSTANCE_TYPES = (InstanceType.RADARR.value, InstanceType.SONARR.value)
 
 
 def add_instance(
@@ -22,7 +22,7 @@ def add_instance(
 ) -> int:
     instance_type = instance_type.lower().strip()
     if instance_type not in _VALID_INSTANCE_TYPES:
-        raise ValueError("Tipo de instancia inválido. Usa radarr, sonarr o seerr.")
+        raise ValueError("Tipo de instancia inválido. Usa radarr o sonarr.")
     url = normalize_base_url(url)
     cur = conn.execute(
         """
@@ -151,8 +151,6 @@ def test_instance_safe(instance: InstanceConfig) -> dict:
             result = radarr.radarr_test_connection(inst_dict)
         elif instance.type == InstanceType.SONARR.value:
             result = sonarr.sonarr_test_connection(inst_dict)
-        elif instance.type == InstanceType.SEERR.value:
-            result = seerr.seerr_test_connection(inst_dict)
         else:
             result = {"ok": False, "error": f"Tipo desconocido: {instance.type}"}
     except Exception as exc:

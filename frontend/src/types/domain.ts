@@ -23,7 +23,7 @@ export type RequestStatus =
 
 export type NomenclatureStatus = 'Correcta' | 'No adaptada' | 'N/A' | 'Desconocida'
 
-export type InstanceType = 'radarr' | 'sonarr' | 'jellyfin' | 'seerr'
+export type InstanceType = 'radarr' | 'sonarr' | 'jellyfin'
 
 export type ItemType = 'movie' | 'series' | 'season' | 'episode'
 
@@ -47,10 +47,10 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'settings', label: 'Configuración', icon: 'settings' },
 ]
 
-// Setup wizard step IDs (Phase 11C order: welcome -> admin -> base -> emu ->
-// instances -> seerr -> tmdb -> uploadrr -> nomenclature -> complete)
+// Setup wizard step IDs (order: welcome -> admin -> base -> emu ->
+// instances -> tmdb -> uploadrr -> nomenclature -> complete)
 export const SETUP_STEPS = [
-  'welcome', 'admin', 'base', 'emu', 'instances', 'seerr', 'tmdb', 'uploadrr', 'nomenclature', 'complete',
+  'welcome', 'admin', 'base', 'emu', 'instances', 'tmdb', 'uploadrr', 'nomenclature', 'complete',
 ] as const
 export type SetupStep = (typeof SETUP_STEPS)[number]
 
@@ -60,7 +60,6 @@ export const SETUP_STEP_LABELS: Record<SetupStep, string> = {
   base: 'Configuración general',
   emu: 'eMuwarez',
   instances: 'Instancias',
-  seerr: 'Seerr (opcional)',
   tmdb: 'TMDb',
   uploadrr: 'Uploadrr',
   nomenclature: 'Nomenclatura y hardlinks',

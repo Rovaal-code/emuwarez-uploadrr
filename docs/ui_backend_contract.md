@@ -28,7 +28,6 @@
 | **eMuwarez** | Fuente de peticiones + destino de subida | Obligatoria |
 | **Uploadrr** | Motor de subida (proceso externo en `./Uploadrr/`) | Obligatoria |
 | **Jellyfin** | Verificación opcional de disponibilidad local | Opcional |
-| **Seerr** | Contexto de peticiones de usuarios | Opcional |
 
 ### Principio arquitectónico
 
@@ -406,7 +405,7 @@ emuwarez-uploadrr tasks list
 
 ### Instancias
 
-**Propósito:** Gestionar instancias Radarr/Sonarr (y futuras Jellyfin/Seerr).
+**Propósito:** Gestionar instancias Radarr/Sonarr (y futura Jellyfin).
 
 **Datos:** Nombre, tipo, URL, estado de conexión, última sincronización.
 
@@ -912,17 +911,7 @@ Bibliotecas a verificar
 
 Endpoint: `POST /api/setup/instances` (tipo jellyfin)
 
-#### Paso 9 — Seerr (opcional)
-
-```text
-[Saltar este paso]
-URL
-API key
-```
-
-Endpoint: `POST /api/setup/instances` (tipo seerr)
-
-#### Paso 10 — Resumen y primera sincronización
+#### Paso 9 — Resumen y primera sincronización
 
 ```text
 Resumen de lo configurado
@@ -969,7 +958,7 @@ POST /api/setup/emu
   Body: { "api_key": str, "requests_endpoint": str|null, "anon": bool, "refresh_minutes": int }
 
 POST /api/setup/instances
-  Body: { "type": "radarr"|"sonarr"|"jellyfin"|"seerr", "name": str, "url": str, "api_key": str, ... }
+  Body: { "type": "radarr"|"sonarr"|"jellyfin", "name": str, "url": str, "api_key": str, ... }
 
 POST /api/setup/instances/test
   Body: { "type": str, "url": str, "api_key": str }

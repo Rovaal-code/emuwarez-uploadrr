@@ -187,7 +187,12 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   })
 
   const handleEmu = wrap(async () => {
-    await setupEmu(emuKey)
+    // Empty key + explicit skip: nothing to persist, just move on. Only
+    // call the API when there's actually a key to save (setup_emu rejects
+    // an empty string, which would otherwise block skipping entirely).
+    if (emuKey.trim()) {
+      await setupEmu(emuKey)
+    }
     setStep('instances')
   })
 

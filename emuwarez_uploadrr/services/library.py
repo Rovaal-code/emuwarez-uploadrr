@@ -18,7 +18,8 @@ def upsert_library_item(conn: sqlite3.Connection, item: LibraryItem) -> int:
     data = item.to_dict()
     columns = [
         "item_type", "title", "year", "original_title", "instance_id", "instance_type",
-        "instance_name", "external_id", "tmdb_id", "imdb_id", "tvdb_id", "title_slug", "path",
+        "instance_name", "external_id", "tmdb_id", "imdb_id", "tvdb_id", "title_slug",
+        "season_number", "episode_number", "parent_id", "path",
         "quality", "resolution", "source", "video_codec", "audio_codec", "audio_languages",
         "subtitle_languages", "size_bytes", "local_status",
         "request_status", "nomenclature_status", "request_id", "added_at", "raw_json",
@@ -39,6 +40,9 @@ def upsert_library_item(conn: sqlite3.Connection, item: LibraryItem) -> int:
             imdb_id = excluded.imdb_id,
             tvdb_id = excluded.tvdb_id,
             title_slug = excluded.title_slug,
+            season_number = excluded.season_number,
+            episode_number = excluded.episode_number,
+            parent_id = excluded.parent_id,
             path = excluded.path,
             quality = excluded.quality,
             resolution = excluded.resolution,

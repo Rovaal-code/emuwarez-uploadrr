@@ -36,6 +36,11 @@ class LocalStatus(str, Enum):
     UPLOADED = "Subido"
     ERROR = "Error"
     UNKNOWN = "Desconocido"
+    # Rollup-only status for series/season rows (never a movie/episode leaf
+    # row) — some but not all children are locally available. Deliberately
+    # NOT included in not_available(): partial content is available in
+    # part, not "not yet available".
+    PARTIAL = "Parcial"
 
     @classmethod
     def not_available(cls) -> tuple[str, ...]:
@@ -109,6 +114,13 @@ class LibraryItem:
     imdb_id: Optional[str] = None
     tvdb_id: Optional[str] = None
     title_slug: Optional[str] = None
+    # Series/Season/Episode hierarchy — parent_id points at the containing
+    # row's id (episode -> its season, season -> its series); NULL for
+    # movies/series (top-level). season_number/episode_number are real
+    # columns instead of only being baked into the display title string.
+    season_number: Optional[int] = None
+    episode_number: Optional[int] = None
+    parent_id: Optional[int] = None
     path: Optional[str] = None
     quality: Optional[str] = None
     resolution: Optional[str] = None

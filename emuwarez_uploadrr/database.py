@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 22
+SCHEMA_VERSION = 23
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -716,6 +716,26 @@ def _migrate_library_items_media_info(conn: sqlite3.Connection) -> None:
             pass
 
 
+def _migrate_library_items_hierarchy(conn: sqlite3.Connection) -> None:
+    """Add parent_id/season_number/episode_number to library_items — lets
+    episodes point at their season row and seasons at their series row
+    (adjacency list, one column reused at both levels), and gives
+    season/episode numbers real queryable columns instead of only being
+    baked into the display title string. Purely additive."""
+    new_cols = [
+        ("parent_id", "INTEGER"),
+        ("season_number", "INTEGER"),
+        ("episode_number", "INTEGER"),
+    ]
+    for col, col_type in new_cols:
+        try:
+            conn.execute(f"ALTER TABLE library_items ADD COLUMN {col} {col_type}")
+        except sqlite3.OperationalError:
+            pass
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_library_parent ON library_items(parent_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_library_tvdb ON library_items(tvdb_id)")
+
+
 def _migrate_nomenclature_phase10a(conn: sqlite3.Connection) -> None:
     """Add Phase 10A editable fields and MKV title columns to nomenclature_proposals."""
     new_cols = [
@@ -1020,6 +1040,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_drop_priority_columns(conn)
         _migrate_instances_unique_name(conn)
         _migrate_library_items_media_info(conn)
+        _migrate_library_items_hierarchy(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

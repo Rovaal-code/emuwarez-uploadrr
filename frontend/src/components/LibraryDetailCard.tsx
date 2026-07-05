@@ -20,7 +20,7 @@ export function LibraryDetailCard({ item, instances, onClose, onSelect, onAction
   const deepLink = buildDeepLink(item, instances)
   const mismatched = titleMismatchesFilename(item)
   const isRollup = item.item_type === 'series' || item.item_type === 'season'
-  const actionTitle = isRollup ? 'Acción por lotes disponible próximamente' : undefined
+  const actionTitle = isRollup ? 'Ver season pack' : undefined
 
   return (
     <div
@@ -76,9 +76,9 @@ export function LibraryDetailCard({ item, instances, onClose, onSelect, onAction
             </div>
 
             <div style={{ display: 'flex', gap: 8, margin: '16px 0', flexWrap: 'wrap' }}>
-              <button className="btn btn-secondary btn-sm" disabled={isRollup} title={actionTitle} onClick={() => onAction('nomenclature', item)}>Adaptar nomenclatura</button>
-              <button className="btn btn-secondary btn-sm" disabled={isRollup} title={actionTitle} onClick={() => onAction('fields', item)}>Editar campos</button>
-              <button className="btn btn-secondary btn-sm" disabled={isRollup} title={actionTitle} onClick={() => onAction('upload', item)}>Subir</button>
+              <button className="btn btn-secondary btn-sm" title={actionTitle} onClick={() => onAction('nomenclature', item)}>Adaptar nomenclatura</button>
+              <button className="btn btn-secondary btn-sm" title={actionTitle} onClick={() => onAction('fields', item)}>Editar campos</button>
+              <button className="btn btn-secondary btn-sm" title={actionTitle} onClick={() => onAction('upload', item)}>Subir</button>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 24px', fontSize: 13 }}>

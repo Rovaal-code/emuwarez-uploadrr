@@ -145,24 +145,21 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction }: L
           <button
             className="btn btn-ghost btn-sm"
             onClick={() => onAction('nomenclature', item)}
-            disabled={isRollup}
-            title={isRollup ? 'Acción por lotes disponible próximamente' : 'Adaptar nomenclatura'}
+            title={isRollup ? 'Ver season pack' : 'Adaptar nomenclatura'}
           >
             Nomenclatura
           </button>
           <button
             className="btn btn-ghost btn-sm"
             onClick={() => onAction('fields', item)}
-            disabled={isRollup}
-            title={isRollup ? 'Acción por lotes disponible próximamente' : 'Editar campos de nomenclatura'}
+            title={isRollup ? 'Ver season pack' : 'Editar campos de nomenclatura'}
           >
             Campos
           </button>
           <button
             className="btn btn-ghost btn-sm"
             onClick={() => onAction('upload', item)}
-            disabled={isRollup}
-            title={isRollup ? 'Acción por lotes disponible próximamente' : 'Preflight Uploadrr'}
+            title={isRollup ? 'Ver season pack' : 'Preflight Uploadrr'}
           >
             Subir
           </button>

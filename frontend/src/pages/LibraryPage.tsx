@@ -14,6 +14,7 @@ import { LibraryTreeRow, type LibraryActionKind } from '../components/LibraryTre
 import { SeriesSeasonsSection } from '../components/SeriesSeasonsSection'
 import { LargePosterCard } from '../components/LargePosterCard'
 import { LibraryDetailCard } from '../components/LibraryDetailCard'
+import { SeasonPackModal } from '../components/SeasonPackModal'
 import { formatBytes, formatDate, formatItemType } from '../utils/format'
 import { titleMismatchesFilename, buildDeepLink } from '../utils/libraryItem'
 
@@ -104,10 +105,28 @@ export function LibraryPage() {
   const [fieldsItem, setFieldsItem] = useState<LibraryItemResponse | null>(null)
   const [uploadItem, setUploadItem] = useState<LibraryItemResponse | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode)
+  // Season pack modal — opened for a single Season row, or for a whole
+  // Series row (its seasons resolved first, then all listed/applied here).
+  const [packSeasons, setPackSeasons] = useState<LibraryItemResponse[] | null>(null)
 
-  // Movie/episode leaf rows only — series/season rows show these same 3
-  // buttons disabled (LibraryTreeRow), real batch wiring lands in Phase 6.
-  function handleTreeAction(kind: LibraryActionKind, item: LibraryItemResponse) {
+  // Movie/episode leaf rows: open the existing single-item modals as
+  // before. Season/Series rows: all 3 buttons open the same season-pack
+  // modal (its per-episode filenames are already computed automatically —
+  // no separate manual field-editing step for "Campos" in this version).
+  async function handleTreeAction(kind: LibraryActionKind, item: LibraryItemResponse) {
+    if (item.item_type === 'season') {
+      setPackSeasons([item])
+      return
+    }
+    if (item.item_type === 'series') {
+      try {
+        const result = await getLibrary({ parent_id: item.id, type: 'season', limit: 500 })
+        setPackSeasons(result.items)
+      } catch {
+        setPackSeasons([])
+      }
+      return
+    }
     if (kind === 'nomenclature') setNomenclatureItem(item)
     else if (kind === 'fields') setFieldsItem(item)
     else setUploadItem(item)
@@ -395,6 +414,11 @@ export function LibraryPage() {
         </div>
       )}
 
+      {/* Season pack modal — one Season row, or a whole Series' seasons */}
+      {packSeasons && packSeasons.length > 0 && (
+        <SeasonPackModal seasons={packSeasons} onClose={() => { setPackSeasons(null); load() }} />
+      )}
+
       {/* Nomenclature modal */}
       {nomenclatureItem && (
         <NomenclatureModal
@@ -487,12 +511,12 @@ export function LibraryPage() {
             <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
               {(() => {
                 const isRollup = selected.item_type === 'series' || selected.item_type === 'season'
-                const title = isRollup ? 'Acción por lotes disponible próximamente' : undefined
+                const title = isRollup ? 'Ver season pack' : undefined
                 return (
                   <>
-                    <button className="btn btn-secondary btn-sm" disabled={isRollup} title={title} onClick={() => { setNomenclatureItem(selected); setSelected(null) }}>Adaptar nomenclatura</button>
-                    <button className="btn btn-secondary btn-sm" disabled={isRollup} title={title} onClick={() => { setFieldsItem(selected); setSelected(null) }}>Editar campos</button>
-                    <button className="btn btn-secondary btn-sm" disabled={isRollup} title={title} onClick={() => { setUploadItem(selected); setSelected(null) }}>Subir</button>
+                    <button className="btn btn-secondary btn-sm" title={title} onClick={() => { handleTreeAction('nomenclature', selected); setSelected(null) }}>Adaptar nomenclatura</button>
+                    <button className="btn btn-secondary btn-sm" title={title} onClick={() => { handleTreeAction('fields', selected); setSelected(null) }}>Editar campos</button>
+                    <button className="btn btn-secondary btn-sm" title={title} onClick={() => { handleTreeAction('upload', selected); setSelected(null) }}>Subir</button>
                   </>
                 )
               })()}

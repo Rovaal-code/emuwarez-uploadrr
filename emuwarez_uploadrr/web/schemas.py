@@ -711,9 +711,61 @@ class NomenclatureApplyResult(BaseModel):
     destination_path: Optional[str] = None
     operation_id: Optional[int] = None
     proposal: Optional["NomenclatureProposalResponse"] = None
+    # Pre-existing gap: apply_nomenclature_proposal() has always returned
+    # these two keys, but this schema never declared them, so they were
+    # silently stripped from the response.
     warnings: list[str] = []
     errors: list[str] = []
+
+
+# Phase 6 (Series/Season/Episode hierarchy) — season pack: one release for
+# a whole Temporada, not N independent per-episode jobs.
+
+class SeasonPackEpisodePlan(BaseModel):
+    episode_id: int
+    title: Optional[str] = None
+    episode_number: Optional[int] = None
+    source_path: Optional[str] = None
+    destination_path: Optional[str] = None
+    proposed_filename: Optional[str] = None
+
+
+class SeasonPackPlanResponse(BaseModel):
+    status: str
+    errors: list[str] = []
+    warnings: list[str] = []
+    season_pack_title: Optional[str] = None
+    hardlink_base: Optional[str] = None
+    hardlink_folder: Optional[str] = None
+    episodes: list[SeasonPackEpisodePlan] = []
+
+
+class AdaptSeasonPackBody(BaseModel):
+    dry_run: bool = True
+    apply: bool = False
+    confirmation: Optional[str] = None
+
+
+class SeasonPackEpisodeResult(BaseModel):
+    episode_id: int
+    title: Optional[str] = None
+    destination_path: Optional[str] = None
+    status: str
     message: Optional[str] = None
+    errors: list[str] = []
+
+
+class SeasonPackApplyResult(BaseModel):
+    dry_run: bool
+    apply: bool
+    status: str
+    message: Optional[str] = None
+    season_pack_title: Optional[str] = None
+    hardlink_folder: Optional[str] = None
+    warnings: list[str] = []
+    errors: list[str] = []
+    episodes: list[SeasonPackEpisodeResult] = []
+    upload_job_id: Optional[int] = None
 
 
 # ---------------------------------------------------------------------------

@@ -336,6 +336,49 @@ export interface NomenclatureExistsResponse {
   proposal?: NomenclatureProposal
 }
 
+// Phase 6 (Series/Season/Episode hierarchy) — season pack: one release for
+// a whole Temporada, not N independent per-episode jobs.
+
+export interface SeasonPackEpisodePlan {
+  episode_id: number
+  title?: string
+  episode_number?: number
+  source_path?: string
+  destination_path?: string
+  proposed_filename?: string
+}
+
+export interface SeasonPackPlanResponse {
+  status: 'valid' | 'warning' | 'blocked'
+  errors: string[]
+  warnings: string[]
+  season_pack_title?: string
+  hardlink_base?: string
+  hardlink_folder?: string
+  episodes: SeasonPackEpisodePlan[]
+}
+
+export interface SeasonPackEpisodeResult {
+  episode_id: number
+  title?: string
+  destination_path?: string
+  status: string
+  message?: string
+  errors: string[]
+}
+
+export interface SeasonPackApplyResult {
+  dry_run: boolean
+  apply: boolean
+  status: 'ready' | 'blocked' | 'applied' | 'failed'
+  message?: string
+  season_pack_title?: string
+  hardlink_folder?: string
+  warnings: string[]
+  errors: string[]
+  episodes: SeasonPackEpisodeResult[]
+}
+
 // Phase 6A — Upload preflight
 
 export interface UploadJob {

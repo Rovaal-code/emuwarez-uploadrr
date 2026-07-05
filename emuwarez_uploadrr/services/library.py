@@ -106,18 +106,86 @@ def sync_instance(
                 instance_name=instance.name,
                 series_queue_map=series_queue,
             )
-            upsert_library_item(conn, series_item)
+            series_row_id = upsert_library_item(conn, series_item)
             imported += 1
-            if series_item.local_status != LocalStatus.AVAILABLE.value:
+            if series_item.local_status in LocalStatus.not_available():
                 missing += 1
             if include_episodes and series.get("id"):
                 files = sonarr.get_episode_files(instance.url, instance.api_key, int(series["id"]))
                 files_by_id = {f.get("id"): f for f in files if f.get("id") is not None}
-                for episode in sonarr.get_episodes(instance.url, instance.api_key, int(series["id"])):
+                episodes = sonarr.get_episodes(instance.url, instance.api_key, int(series["id"]))
+
+                # Group episodes by season to (a) resolve each episode's
+                # parent season row id, and (b) compute a bottom-up
+                # episode/file count fallback for seasons whose Sonarr
+                # `statistics` block is missing/empty.
+                episodes_by_season: dict[int, list[dict]] = {}
+                for ep in episodes:
+                    season_num = ep.get("seasonNumber")
+                    if season_num is None:
+                        continue
+                    episodes_by_season.setdefault(int(season_num), []).append(ep)
+
+                def _file_count(season_eps: list[dict]) -> int:
+                    return sum(
+                        1 for ep in season_eps
+                        if ep.get("episodeFileId") and files_by_id.get(ep.get("episodeFileId"))
+                    )
+
+                season_row_id_by_number: dict[int, int] = {}
+                seen_season_numbers: set[int] = set()
+                for season_entry in series.get("seasons") or []:
+                    season_num = season_entry.get("seasonNumber")
+                    if season_num is None:
+                        continue
+                    season_num = int(season_num)
+                    seen_season_numbers.add(season_num)
+                    season_eps = episodes_by_season.get(season_num, [])
+                    stats_present = bool(season_entry.get("statistics"))
+                    season_item = sonarr.season_to_library_item(
+                        series, season_entry,
+                        instance_id=int(instance.id),
+                        instance_name=instance.name,
+                        parent_id=series_row_id,
+                        episode_count_override=None if stats_present else len(season_eps),
+                        file_count_override=None if stats_present else _file_count(season_eps),
+                    )
+                    season_row_id_by_number[season_num] = upsert_library_item(conn, season_item)
+                    imported += 1
+                    if season_item.local_status in LocalStatus.not_available():
+                        missing += 1
+
+                # Defensive fallback: series["seasons"] was empty/missing a
+                # season that episodes actually reference — synthesize that
+                # season row purely bottom-up so no episode is ever left
+                # without a parent.
+                for season_num, season_eps in episodes_by_season.items():
+                    if season_num in seen_season_numbers:
+                        continue
+                    synthetic_entry = {"seasonNumber": season_num, "statistics": {}}
+                    season_item = sonarr.season_to_library_item(
+                        series, synthetic_entry,
+                        instance_id=int(instance.id),
+                        instance_name=instance.name,
+                        parent_id=series_row_id,
+                        episode_count_override=len(season_eps),
+                        file_count_override=_file_count(season_eps),
+                    )
+                    season_row_id_by_number[season_num] = upsert_library_item(conn, season_item)
+                    imported += 1
+                    if season_item.local_status in LocalStatus.not_available():
+                        missing += 1
+
+                for episode in episodes:
                     ep_file = (
                         files_by_id.get(episode.get("episodeFileId"))
                         if episode.get("episodeFileId")
                         else None
+                    )
+                    season_num = episode.get("seasonNumber")
+                    parent_season_id = (
+                        season_row_id_by_number.get(int(season_num))
+                        if season_num is not None else None
                     )
                     ep_item = sonarr.episode_to_library_item(
                         episode,
@@ -126,6 +194,7 @@ def sync_instance(
                         instance_id=int(instance.id),
                         instance_name=instance.name,
                         ep_queue_map=ep_queue,
+                        parent_id=parent_season_id,
                     )
                     upsert_library_item(conn, ep_item)
                     imported += 1
@@ -173,6 +242,12 @@ _MISSING_STATUSES = LocalStatus.not_available()
 # combined view from Biblioteca's own status filter.
 NOT_AVAILABLE_STATUS_FILTER = "__not_available__"
 
+# Sentinel parent_id value meaning "top level only" (WHERE parent_id IS
+# NULL) — 0 is never a real row id (AUTOINCREMENT starts at 1), so it's
+# safe to use as a sentinel. Must be checked with `is not None`, never a
+# bare `if parent_id:`, since 0 would otherwise be mistaken for "no filter".
+TOP_LEVEL_PARENT_FILTER = 0
+
 
 def _build_library_filter(
     *,
@@ -182,6 +257,7 @@ def _build_library_filter(
     item_type: Optional[str] = None,
     origin: Optional[str] = None,
     instance_id: Optional[int] = None,
+    parent_id: Optional[int] = None,
     search: Optional[str] = None,
 ) -> tuple[list[str], list]:
     """Shared WHERE-clause builder for list_library()/count_library() — used
@@ -212,6 +288,12 @@ def _build_library_filter(
     if instance_id:
         where.append("instance_id = ?")
         params.append(instance_id)
+    if parent_id is not None:
+        if parent_id == TOP_LEVEL_PARENT_FILTER:
+            where.append("parent_id IS NULL")
+        else:
+            where.append("parent_id = ?")
+            params.append(parent_id)
     if search:
         where.append("title LIKE ?")
         params.append(f"%{search}%")
@@ -227,13 +309,15 @@ def list_library(
     item_type: Optional[str] = None,
     origin: Optional[str] = None,
     instance_id: Optional[int] = None,
+    parent_id: Optional[int] = None,
     search: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
 ) -> list[dict]:
     where, params = _build_library_filter(
         status=status, request=request, nomenclature=nomenclature,
-        item_type=item_type, origin=origin, instance_id=instance_id, search=search,
+        item_type=item_type, origin=origin, instance_id=instance_id,
+        parent_id=parent_id, search=search,
     )
     sql = "SELECT * FROM library_items"
     if where:
@@ -252,11 +336,13 @@ def count_library(
     item_type: Optional[str] = None,
     origin: Optional[str] = None,
     instance_id: Optional[int] = None,
+    parent_id: Optional[int] = None,
     search: Optional[str] = None,
 ) -> int:
     where, params = _build_library_filter(
         status=status, request=request, nomenclature=nomenclature,
-        item_type=item_type, origin=origin, instance_id=instance_id, search=search,
+        item_type=item_type, origin=origin, instance_id=instance_id,
+        parent_id=parent_id, search=search,
     )
     sql = "SELECT COUNT(*) FROM library_items"
     if where:
@@ -281,7 +367,12 @@ def list_missing(conn: sqlite3.Connection, *, limit: int = 50, offset: int = 0) 
 
 
 def get_dashboard_summary(conn: sqlite3.Connection) -> dict:
-    """Return aggregated counts from library_items."""
+    """Return aggregated counts from library_items.
+
+    Restricted to item_type IN ('movie','episode') — real content units —
+    so series/season rollup rows (organizational, not real content) never
+    double-count against these totals (a series with 10 episodes must
+    contribute 10, not 11 by also counting the series row itself)."""
     row = conn.execute(
         """
         SELECT
@@ -293,6 +384,7 @@ def get_dashboard_summary(conn: sqlite3.Connection) -> dict:
             SUM(CASE WHEN instance_type = 'radarr' THEN 1 ELSE 0 END) AS radarr_items,
             SUM(CASE WHEN instance_type = 'sonarr' THEN 1 ELSE 0 END) AS sonarr_items
         FROM library_items
+        WHERE item_type IN ('movie', 'episode')
         """.format(missing_ph=", ".join(["?"] * len(_MISSING_STATUSES))),
         [
             LocalStatus.AVAILABLE.value,
@@ -380,8 +472,11 @@ _REQUEST_PRIORITY_SQL = """
 
 
 def get_dashboard_library_activity(conn: sqlite3.Connection, *, limit: int = 10) -> list[dict]:
+    """Top-level items only (parent_id IS NULL) — movies and series, never
+    raw episode/season rows flooding the 'Actividad reciente' feed."""
     rows = conn.execute(
-        f"SELECT * FROM library_items ORDER BY {_REQUEST_PRIORITY_SQL}, updated_at DESC LIMIT ?",
+        f"SELECT * FROM library_items WHERE parent_id IS NULL "
+        f"ORDER BY {_REQUEST_PRIORITY_SQL}, updated_at DESC LIMIT ?",
         (limit,),
     ).fetchall()
     return [dict(row) for row in rows]

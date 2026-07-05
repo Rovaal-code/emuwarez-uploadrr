@@ -106,3 +106,56 @@ def test_count_matches_list_length_with_combined_filters(db_conn):
     total = count_library(db_conn, item_type="movie", nomenclature="No adaptada", origin="radarr")
     assert len(items) == 1
     assert total == 1
+
+
+def _insert_with_parent(conn, title, item_type, parent_id=None):
+    cur = conn.execute(
+        """INSERT INTO library_items
+           (item_type, title, local_status, request_status, nomenclature_status, parent_id, updated_at)
+           VALUES (?,?,?,?,?,?,CURRENT_TIMESTAMP)""",
+        (item_type, title, "Disponible", "Sin petición", "N/A", parent_id),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def test_parent_id_top_level_sentinel_excludes_children(db_conn):
+    from emuwarez_uploadrr.services.library import list_library, count_library, TOP_LEVEL_PARENT_FILTER
+    _insert_with_parent(db_conn, "Movie", "movie")
+    series_id = _insert_with_parent(db_conn, "Series", "series")
+    _insert_with_parent(db_conn, "Season 1", "season", parent_id=series_id)
+
+    items = list_library(db_conn, parent_id=TOP_LEVEL_PARENT_FILTER)
+    total = count_library(db_conn, parent_id=TOP_LEVEL_PARENT_FILTER)
+    titles = {i["title"] for i in items}
+    assert titles == {"Movie", "Series"}
+    assert total == 2
+
+
+def test_parent_id_zero_sentinel_is_not_treated_as_no_filter(db_conn):
+    """Regression guard: parent_id=0 must mean 'top level only', never
+    'no filter at all' (which a bare `if parent_id:` check would wrongly
+    do, since 0 is falsy in Python)."""
+    from emuwarez_uploadrr.services.library import count_library, TOP_LEVEL_PARENT_FILTER
+    _insert_with_parent(db_conn, "Movie", "movie")
+    series_id = _insert_with_parent(db_conn, "Series", "series")
+    _insert_with_parent(db_conn, "Season 1", "season", parent_id=series_id)
+
+    total_no_filter = count_library(db_conn)
+    total_top_level = count_library(db_conn, parent_id=TOP_LEVEL_PARENT_FILTER)
+    assert total_no_filter == 3
+    assert total_top_level == 2
+
+
+def test_parent_id_filter_returns_only_children(db_conn):
+    from emuwarez_uploadrr.services.library import list_library, count_library
+    series_id = _insert_with_parent(db_conn, "Series", "series")
+    season_id = _insert_with_parent(db_conn, "Season 1", "season", parent_id=series_id)
+    _insert_with_parent(db_conn, "Episode 1", "episode", parent_id=season_id)
+    _insert_with_parent(db_conn, "Episode 2", "episode", parent_id=season_id)
+
+    seasons = list_library(db_conn, parent_id=series_id)
+    episodes = list_library(db_conn, parent_id=season_id)
+    assert len(seasons) == 1 and seasons[0]["title"] == "Season 1"
+    assert len(episodes) == 2
+    assert count_library(db_conn, parent_id=season_id) == 2

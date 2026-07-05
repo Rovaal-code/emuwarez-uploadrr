@@ -275,12 +275,87 @@ def test_sync_sonarr_with_episodes(sonarr_conn):
     ):
         imported, missing = sync_instance(sonarr_conn, instance, include_episodes=True)
 
-    # 1 series + 2 episodes
-    assert imported == 3
-    rows = sonarr_conn.execute("SELECT item_type, local_status FROM library_items ORDER BY id").fetchall()
+    # 1 series + 1 season (materialized bottom-up from the episodes, since
+    # this fixture's series has no "seasons" array) + 2 episodes
+    assert imported == 4
+    rows = sonarr_conn.execute("SELECT id, item_type, local_status, parent_id FROM library_items ORDER BY id").fetchall()
     types = [r["item_type"] for r in rows]
     assert "series" in types
+    assert "season" in types
     assert "episode" in types
+    series_row = next(r for r in rows if r["item_type"] == "series")
+    season_row = next(r for r in rows if r["item_type"] == "season")
+    episode_rows = [r for r in rows if r["item_type"] == "episode"]
+    assert season_row["parent_id"] == series_row["id"]
+    for ep in episode_rows:
+        assert ep["parent_id"] == season_row["id"]
+
+
+def test_sync_sonarr_creates_season_rows_from_seasons_array(sonarr_conn):
+    """When Sonarr's own series["seasons"] carries per-season statistics,
+    trust them directly instead of the bottom-up fallback."""
+    from emuwarez_uploadrr.services.library import sync_instance
+    from emuwarez_uploadrr.services.instances import list_instances
+    instance = list_instances(sonarr_conn)[0]
+
+    series_data = _fake_series(21, "Full Statistics Show", has_episodes=True)
+    series_data["seasons"] = [
+        {"seasonNumber": 1, "statistics": {"episodeCount": 2, "episodeFileCount": 2}},
+    ]
+    episodes = [_fake_episode(1, 21, has_file=True), _fake_episode(2, 21, has_file=True)]
+    ep_files = [_fake_ep_file(1), _fake_ep_file(2)]
+
+    with (
+        patch("emuwarez_uploadrr.integrations.sonarr.get_series", return_value=[series_data]),
+        patch("emuwarez_uploadrr.integrations.sonarr.get_queue", return_value=[]),
+        patch("emuwarez_uploadrr.integrations.sonarr.get_episodes", return_value=episodes),
+        patch("emuwarez_uploadrr.integrations.sonarr.get_episode_files", return_value=ep_files),
+    ):
+        imported, missing = sync_instance(sonarr_conn, instance, include_episodes=True)
+
+    assert imported == 4  # 1 series + 1 season + 2 episodes
+    season_row = sonarr_conn.execute(
+        "SELECT * FROM library_items WHERE item_type = 'season'"
+    ).fetchone()
+    assert season_row["local_status"] == LocalStatus.AVAILABLE.value
+    assert season_row["season_number"] == 1
+    for row in sonarr_conn.execute("SELECT * FROM library_items WHERE item_type = 'episode'").fetchall():
+        assert row["season_number"] == 1
+        assert row["episode_number"] in (1, 2)
+
+
+def test_sync_sonarr_partial_series_and_season(sonarr_conn):
+    """A series/season with some but not all episode files must be Parcial,
+    not squeezed into the old binary Disponible/Faltante rollup."""
+    from emuwarez_uploadrr.services.library import sync_instance
+    from emuwarez_uploadrr.services.instances import list_instances
+    instance = list_instances(sonarr_conn)[0]
+
+    series_data = _fake_series(22, "Partial Show", has_episodes=True)
+    series_data["statistics"] = {"episodeCount": 2, "episodeFileCount": 1}
+    episodes = [_fake_episode(1, 22, has_file=True), _fake_episode(2, 22, has_file=False)]
+    ep_files = [_fake_ep_file(1)]
+
+    with (
+        patch("emuwarez_uploadrr.integrations.sonarr.get_series", return_value=[series_data]),
+        patch("emuwarez_uploadrr.integrations.sonarr.get_queue", return_value=[]),
+        patch("emuwarez_uploadrr.integrations.sonarr.get_episodes", return_value=episodes),
+        patch("emuwarez_uploadrr.integrations.sonarr.get_episode_files", return_value=ep_files),
+    ):
+        imported, missing = sync_instance(sonarr_conn, instance, include_episodes=True)
+
+    series_row = sonarr_conn.execute(
+        "SELECT * FROM library_items WHERE item_type = 'series'"
+    ).fetchone()
+    season_row = sonarr_conn.execute(
+        "SELECT * FROM library_items WHERE item_type = 'season'"
+    ).fetchone()
+    assert series_row["local_status"] == LocalStatus.PARTIAL.value
+    assert season_row["local_status"] == LocalStatus.PARTIAL.value
+    # Parcial must NOT inflate the "missing" sync summary tally — it's
+    # available in part, not "not yet available". Only the one truly
+    # missing episode counts here.
+    assert missing == 1
 
 
 # ---------------------------------------------------------------------------

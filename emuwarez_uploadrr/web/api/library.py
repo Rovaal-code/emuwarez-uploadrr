@@ -39,6 +39,9 @@ def _to_lib_response(row: dict) -> LibraryItemResponse:
         imdb_id=row.get("imdb_id"),
         tvdb_id=row.get("tvdb_id"),
         title_slug=row.get("title_slug"),
+        season_number=row.get("season_number"),
+        episode_number=row.get("episode_number"),
+        parent_id=row.get("parent_id"),
         path=row.get("path"),
         quality=row.get("quality"),
         resolution=row.get("resolution"),
@@ -128,6 +131,7 @@ def library_list(
     item_type: Optional[str] = Query(None, alias="type"),
     origin: Optional[str] = Query(None),
     instance_id: Optional[int] = Query(None),
+    parent_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
     request_status: Optional[str] = Query(None, alias="request_status"),
     nomenclature: Optional[str] = Query(None),
@@ -145,6 +149,7 @@ def library_list(
             item_type=item_type,
             origin=origin,
             instance_id=instance_id,
+            parent_id=parent_id,
             search=search,
             limit=limit,
             offset=offset,
@@ -157,6 +162,7 @@ def library_list(
             item_type=item_type,
             origin=origin,
             instance_id=instance_id,
+            parent_id=parent_id,
             search=search,
         )
     return LibraryListResponse(

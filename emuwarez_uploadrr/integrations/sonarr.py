@@ -233,11 +233,15 @@ def series_to_library_item(
     stats = series.get("statistics") or {}
     episode_count = int(stats.get("episodeCount") or 0)
     file_count = int(stats.get("episodeFileCount") or 0)
-    has_files = episode_count > 0 and file_count >= episode_count
+    has_all_files = episode_count > 0 and file_count >= episode_count
     series_id = series.get("id")
 
-    if has_files:
+    if has_all_files:
         local_status = LocalStatus.AVAILABLE.value
+    elif file_count > 0:
+        # Some but not all episodes available — a real 3rd state, not
+        # squeezed into a binary Disponible/Faltante rollup.
+        local_status = LocalStatus.PARTIAL.value
     elif series_queue_map and series_id and int(series_id) in series_queue_map:
         local_status = series_queue_map[int(series_id)]
     else:
@@ -267,6 +271,76 @@ def series_to_library_item(
     )
 
 
+def season_to_library_item(
+    series: dict[str, Any],
+    season_entry: dict[str, Any],
+    *,
+    instance_id: int,
+    instance_name: str,
+    parent_id: int,
+    episode_count_override: Optional[int] = None,
+    file_count_override: Optional[int] = None,
+) -> LibraryItem:
+    """Build a Season-level rollup row (item_type='season', the
+    MediaKind.SEASON value that existed in the enum but was never
+    instantiated until now). Mirrors series_to_library_item()'s own
+    Disponible/Parcial/Faltante 3-state rollup, but reads the per-season
+    statistics Sonarr already includes on each series' `seasons[]` entry
+    instead of the series-wide statistics block.
+
+    `episode_count_override`/`file_count_override` let sync_instance() feed
+    a bottom-up count computed from the episodes it already fetched, for
+    the defensive fallback when `season_entry["statistics"]` is missing or
+    empty in practice."""
+    season_number = season_entry.get("seasonNumber")
+    stats = season_entry.get("statistics") or {}
+    episode_count = int(
+        episode_count_override if episode_count_override is not None
+        else (stats.get("episodeCount") or stats.get("totalEpisodeCount") or 0)
+    )
+    file_count = int(
+        file_count_override if file_count_override is not None
+        else (stats.get("episodeFileCount") or 0)
+    )
+    has_all_files = episode_count > 0 and file_count >= episode_count
+
+    if has_all_files:
+        local_status = LocalStatus.AVAILABLE.value
+    elif file_count > 0:
+        local_status = LocalStatus.PARTIAL.value
+    else:
+        local_status = LocalStatus.MISSING.value
+
+    series_title = series.get("title") or series.get("sortTitle") or "Serie"
+    season_label = "Especiales" if season_number == 0 else f"Temporada {season_number}"
+    series_id = series.get("id")
+
+    return LibraryItem(
+        id=None,
+        item_type=MediaKind.SEASON.value,
+        title=f"{series_title} - {season_label}",
+        year=series.get("year"),
+        original_title=series.get("originalTitle"),
+        instance_id=instance_id,
+        instance_type="sonarr",
+        instance_name=instance_name,
+        external_id=f"season:{series_id}:{season_number}",
+        tvdb_id=str(series.get("tvdbId")) if series.get("tvdbId") else None,
+        title_slug=series.get("titleSlug"),
+        imdb_id=series.get("imdbId"),
+        season_number=season_number,
+        parent_id=parent_id,
+        path=None,
+        quality=None,
+        resolution=None,
+        source=None,
+        local_status=local_status,
+        nomenclature_status=NomenclatureStatus.NA.value,
+        raw_json=json.dumps({"series_id": series_id, "season": season_entry}, ensure_ascii=False),
+        poster_url=extract_poster_url(series.get("images")),
+    )
+
+
 def episode_to_library_item(
     episode: dict[str, Any],
     episode_file: dict[str, Any] | None,
@@ -275,6 +349,7 @@ def episode_to_library_item(
     instance_id: int,
     instance_name: str,
     ep_queue_map: Optional[dict[int, str]] = None,
+    parent_id: Optional[int] = None,
 ) -> LibraryItem:
     quality_name = None
     path = None
@@ -317,6 +392,9 @@ def episode_to_library_item(
         tvdb_id=str(series.get("tvdbId")) if series.get("tvdbId") else None,
         title_slug=series.get("titleSlug"),
         imdb_id=series.get("imdbId"),
+        season_number=season,
+        episode_number=number,
+        parent_id=parent_id,
         path=path,
         quality=quality_name,
         resolution=_resolution_from_quality(quality_name),

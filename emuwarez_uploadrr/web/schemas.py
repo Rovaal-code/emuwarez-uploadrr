@@ -418,6 +418,11 @@ class LibraryItemResponse(BaseModel):
     imdb_id: Optional[str] = None
     tvdb_id: Optional[str] = None
     title_slug: Optional[str] = None
+    # Series/Season/Episode hierarchy — parent_id points at the containing
+    # row's id (episode -> season, season -> series); None for movies/series.
+    season_number: Optional[int] = None
+    episode_number: Optional[int] = None
+    parent_id: Optional[int] = None
     path: Optional[str] = None
     quality: Optional[str] = None
     resolution: Optional[str] = None

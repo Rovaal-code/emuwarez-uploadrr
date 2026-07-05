@@ -465,3 +465,30 @@ def test_dashboard_library_activity_respects_limit(client, auth_headers):
 
     resp = client.get("/api/dashboard/library-activity?limit=2", headers=auth_headers)
     assert len(resp.json()["items"]) == 2
+
+
+def test_dashboard_library_activity_excludes_episodes_and_seasons(client, auth_headers):
+    client.post(
+        "/api/instances", json={"type": "sonarr", "name": "S", "url": "http://s:8989", "api_key": "k"},
+        headers=auth_headers,
+    )
+    series = [{
+        "id": 1, "title": "A Show", "year": 2021, "tvdbId": 100, "titleSlug": "a-show",
+        "statistics": {"episodeCount": 1, "episodeFileCount": 1},
+    }]
+    episodes = [{"id": 1, "seriesId": 1, "seasonNumber": 1, "episodeNumber": 1,
+                 "title": "Pilot", "hasFile": True, "episodeFileId": 10}]
+    ep_files = [{"id": 10, "path": "/tv/A Show/S01E01.mkv", "size": 500}]
+    with (
+        patch("emuwarez_uploadrr.integrations.sonarr.get_series", return_value=series),
+        patch("emuwarez_uploadrr.integrations.sonarr.get_queue", return_value=[]),
+        patch("emuwarez_uploadrr.integrations.sonarr.get_episodes", return_value=episodes),
+        patch("emuwarez_uploadrr.integrations.sonarr.get_episode_files", return_value=ep_files),
+    ):
+        client.post("/api/sync", json={"include_episodes": True}, headers=auth_headers)
+
+    resp = client.get("/api/dashboard/library-activity", headers=auth_headers)
+    items = resp.json()["items"]
+    assert len(items) == 1
+    assert items[0]["title"] == "A Show"
+    assert items[0]["item_type"] == "series"

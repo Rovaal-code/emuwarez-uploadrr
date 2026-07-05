@@ -6,7 +6,6 @@ import type { CurrentUserResponse } from '../types/api'
 // Pages
 import { DashboardPage } from '../pages/DashboardPage'
 import { LibraryPage } from '../pages/LibraryPage'
-import { MissingPage } from '../pages/MissingPage'
 import { RequestsPage } from '../pages/RequestsPage'
 import { UploadsPage } from '../pages/UploadsPage'
 import { TasksPage } from '../pages/TasksPage'
@@ -24,7 +23,6 @@ const PAGE_TITLE: Record<string, string> = {
   dashboard:  'Dashboard',
   queue:      'Cola operativa',
   library:    'Biblioteca',
-  missing:    'Faltantes',
   requests:   'Peticiones',
   uploads:    'Subidas',
   tasks:      'Tareas',
@@ -38,7 +36,6 @@ function PageContent({ page, onNavigate }: { page: string; onNavigate: (p: strin
     case 'dashboard':  return <DashboardPage onNavigate={onNavigate} />
     case 'queue':      return <QueuePage onNavigate={onNavigate} />
     case 'library':    return <LibraryPage />
-    case 'missing':    return <MissingPage />
     case 'requests':   return <RequestsPage />
     case 'uploads':    return <UploadsPage />
     case 'tasks':      return <TasksPage />

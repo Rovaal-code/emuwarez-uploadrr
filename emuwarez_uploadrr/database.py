@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sqlite3
 from pathlib import Path
@@ -9,9 +10,11 @@ from typing import Any, Iterable, Optional
 
 from .constants import CONFIG_DIR
 
+logger = logging.getLogger(__name__)
+
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 19
+SCHEMA_VERSION = 21
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -68,11 +71,13 @@ def _migrate_instances(conn: sqlite3.Connection) -> None:
             pass  # column already exists
 
 
-def _rebuild_instances_table(conn: sqlite3.Connection, type_check_values: str) -> None:
-    """Shared table-rebuild step for the widen/narrow migrations below.
-    Caller is responsible for the transaction (BEGIN/COMMIT/ROLLBACK) and
-    the idempotency guard — this just issues the DDL/DML statements one at
-    a time (never `executescript()`, which issues its own implicit commit
+def _rebuild_instances_table(
+    conn: sqlite3.Connection, type_check_values: str, unique_clause: str = "UNIQUE(type, name)"
+) -> None:
+    """Shared table-rebuild step for the widen/narrow/unique-name migrations
+    below. Caller is responsible for the transaction (BEGIN/COMMIT/ROLLBACK)
+    and the idempotency guard — this just issues the DDL/DML statements one
+    at a time (never `executescript()`, which issues its own implicit commit
     and would break a caller-managed transaction)."""
     conn.execute(f"""
         CREATE TABLE instances_new (
@@ -88,7 +93,7 @@ def _rebuild_instances_table(conn: sqlite3.Connection, type_check_values: str) -
             last_test_at TEXT,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(type, name)
+            {unique_clause}
         )
     """)
     conn.execute("""
@@ -172,6 +177,65 @@ def _migrate_instances_narrow_type_check(conn: sqlite3.Connection) -> None:
         conn.execute("DELETE FROM instances WHERE type = 'seerr'")
         conn.execute("DELETE FROM scheduled_tasks WHERE task_key = 'seerr_requests_sync'")
         _rebuild_instances_table(conn, "'radarr','sonarr'")
+        conn.execute("COMMIT")
+    except BaseException:
+        conn.execute("ROLLBACK")
+        raise
+    finally:
+        conn.isolation_level = prior_isolation
+
+
+def _migrate_instances_unique_name(conn: sqlite3.Connection) -> None:
+    """Make instances.name globally unique (was UNIQUE(type, name) — two
+    instances of different types could share a name, e.g. a Radarr and a
+    Sonarr both named "Main"). Requested so the Biblioteca origin filter and
+    Radarr/Sonarr deep links can identify an instance by name unambiguously.
+
+    Same BEGIN IMMEDIATE + table-rebuild pattern as
+    _migrate_instances_widen_type_check/_migrate_instances_narrow_type_check
+    (SQLite can't ALTER a table-level UNIQUE constraint directly).
+
+    Nothing before this migration stopped two different-typed instances
+    from sharing a name, so real conflicts must be resolved before the
+    rebuild, not just prevented going forward — `init_db()` must always
+    converge, never fail startup over pre-existing data:
+      1. Keep the lowest-id (earliest-created) row's name unchanged.
+      2. Every other row sharing that name is renamed to "{name} ({type})".
+      3. If that disambiguated name is itself already taken (pathological
+         case — matches an already-decided name), append " #{id}" as a
+         final, deterministic tie-breaker (id is unique by construction).
+    Every rename is logged so an operator can see what happened.
+    """
+    prior_isolation = conn.isolation_level
+    conn.isolation_level = None
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'instances'"
+        ).fetchone()
+        if not row or not row["sql"] or "UNIQUE(name)" in row["sql"]:
+            conn.execute("COMMIT")
+            return
+
+        rows = conn.execute("SELECT id, type, name FROM instances ORDER BY id").fetchall()
+        claimed: dict[str, int] = {}
+        for r in rows:
+            name = r["name"]
+            if name not in claimed:
+                claimed[name] = r["id"]
+                continue
+            new_name = f"{name} ({r['type']})"
+            if new_name in claimed:
+                new_name = f"{new_name} #{r['id']}"
+            claimed[new_name] = r["id"]
+            conn.execute("UPDATE instances SET name = ? WHERE id = ?", (new_name, r["id"]))
+            logger.warning(
+                "Migración de nombre único: renombrada instancia #%s (%s) de '%s' a '%s' "
+                "por conflicto con otra instancia de distinto tipo.",
+                r["id"], r["type"], name, new_name,
+            )
+
+        _rebuild_instances_table(conn, "'radarr','sonarr'", unique_clause="UNIQUE(name)")
         conn.execute("COMMIT")
     except BaseException:
         conn.execute("ROLLBACK")
@@ -621,6 +685,18 @@ def _migrate_library_items_phase11e(conn: sqlite3.Connection) -> None:
         pass
 
 
+def _migrate_library_items_title_slug(conn: sqlite3.Connection) -> None:
+    """Add title_slug to library_items — Sonarr's own web UI deep-link
+    convention is /series/{titleSlug} (Radarr's is /movie/{tmdbId}, which
+    tmdb_id already covers). Sonarr's raw API response already includes
+    titleSlug (saved whole into raw_json since day one), this just gives it
+    a dedicated, queryable column like tmdb_id/imdb_id/tvdb_id already have."""
+    try:
+        conn.execute("ALTER TABLE library_items ADD COLUMN title_slug TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+
 def _migrate_nomenclature_phase10a(conn: sqlite3.Connection) -> None:
     """Add Phase 10A editable fields and MKV title columns to nomenclature_proposals."""
     new_cols = [
@@ -779,6 +855,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
                 tmdb_id TEXT,
                 imdb_id TEXT,
                 tvdb_id TEXT,
+                title_slug TEXT,
                 path TEXT,
                 quality TEXT,
                 resolution TEXT,
@@ -918,9 +995,11 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_settings_phase10e(conn)
         _migrate_scheduled_tasks_table(conn)
         _migrate_library_items_phase11e(conn)
+        _migrate_library_items_title_slug(conn)
         _migrate_instances_narrow_type_check(conn)
         _migrate_request_items_emu_catalog_check(conn)
         _migrate_drop_priority_columns(conn)
+        _migrate_instances_unique_name(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

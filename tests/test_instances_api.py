@@ -52,6 +52,45 @@ def test_create_invalid_type_rejected(client, auth_headers):
 
 
 # ---------------------------------------------------------------------------
+# Global unique instance name (Phase 4B of the 12-part batch) — a name
+# already used by *any* instance, regardless of type, is a clean 400, not
+# a silent overwrite of the other instance.
+# ---------------------------------------------------------------------------
+
+def test_create_rejects_name_already_used_by_different_type(client, auth_headers):
+    _add_instance(client, auth_headers, type="radarr", name="Shared Name")
+    resp = client.post(
+        "/api/instances",
+        json={"type": "sonarr", "name": "Shared Name", "url": "http://y:8989", "api_key": "k2"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 400
+    assert "Shared Name" in resp.json()["detail"]
+
+
+def test_update_rejects_rename_to_name_used_by_different_type(client, auth_headers):
+    _add_instance(client, auth_headers, type="radarr", name="Radarr Name")
+    sonarr = _add_instance(client, auth_headers, type="sonarr", name="Sonarr Name")
+    resp = client.put(
+        f"/api/instances/{sonarr['id']}",
+        json={"name": "Radarr Name"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 400
+    assert "Radarr Name" in resp.json()["detail"]
+
+
+def test_update_allows_keeping_its_own_current_name(client, auth_headers):
+    inst = _add_instance(client, auth_headers, type="radarr", name="Keep Me")
+    resp = client.put(
+        f"/api/instances/{inst['id']}",
+        json={"name": "Keep Me", "url": "http://new:7878"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
 # PUT /api/instances/{id} — edit (Phase 11B)
 # ---------------------------------------------------------------------------
 

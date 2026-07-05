@@ -79,16 +79,19 @@ def update_instance_endpoint(
         inst = get_instance(conn, instance_id)
         if not inst:
             raise HTTPException(status_code=404, detail="Instancia no encontrada")
-        update_instance(
-            conn,
-            instance_id,
-            name=body.name,
-            url=body.url,
-            api_key=body.api_key,
-            enabled=body.enabled,
-            is_4k=body.is_4k,
-            is_anime=body.is_anime,
-        )
+        try:
+            update_instance(
+                conn,
+                instance_id,
+                name=body.name,
+                url=body.url,
+                api_key=body.api_key,
+                enabled=body.enabled,
+                is_4k=body.is_4k,
+                is_anime=body.is_anime,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
         row = conn.execute("SELECT * FROM instances WHERE id = ?", (instance_id,)).fetchone()
     return _row_to_safe(dict(row))
 

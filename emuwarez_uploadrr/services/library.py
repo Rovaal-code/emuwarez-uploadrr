@@ -18,7 +18,7 @@ def upsert_library_item(conn: sqlite3.Connection, item: LibraryItem) -> int:
     data = item.to_dict()
     columns = [
         "item_type", "title", "year", "original_title", "instance_id", "instance_type",
-        "instance_name", "external_id", "tmdb_id", "imdb_id", "tvdb_id", "path",
+        "instance_name", "external_id", "tmdb_id", "imdb_id", "tvdb_id", "title_slug", "path",
         "quality", "resolution", "source", "size_bytes", "local_status",
         "request_status", "nomenclature_status", "request_id", "added_at", "raw_json",
         "poster_url",
@@ -37,6 +37,7 @@ def upsert_library_item(conn: sqlite3.Connection, item: LibraryItem) -> int:
             tmdb_id = excluded.tmdb_id,
             imdb_id = excluded.imdb_id,
             tvdb_id = excluded.tvdb_id,
+            title_slug = excluded.title_slug,
             path = excluded.path,
             quality = excluded.quality,
             resolution = excluded.resolution,
@@ -156,21 +157,35 @@ def sync_all(conn: sqlite3.Connection, *, include_episodes: bool = False) -> dic
 _MISSING_STATUSES = LocalStatus.not_available()
 
 
-def list_library(
-    conn: sqlite3.Connection,
+# Sentinel status value the Biblioteca filter uses for "todos los no
+# disponibles" — expands to the same LocalStatus.not_available() set that
+# list_missing()/the dashboard's `missing` count already use, so removing
+# the standalone Faltantes tab doesn't lose the ability to see this
+# combined view from Biblioteca's own status filter.
+NOT_AVAILABLE_STATUS_FILTER = "__not_available__"
+
+
+def _build_library_filter(
     *,
     status: Optional[str] = None,
     request: Optional[str] = None,
     nomenclature: Optional[str] = None,
     item_type: Optional[str] = None,
     origin: Optional[str] = None,
+    instance_id: Optional[int] = None,
     search: Optional[str] = None,
-    limit: int = 50,
-    offset: int = 0,
-) -> list[dict]:
+) -> tuple[list[str], list]:
+    """Shared WHERE-clause builder for list_library()/count_library() — used
+    to be duplicated (and count_library() silently dropped request/
+    nomenclature/origin, making its `total` wrong once those filters were
+    used), now both always apply the exact same filters."""
     where = []
     params: list = []
-    if status:
+    if status == NOT_AVAILABLE_STATUS_FILTER:
+        placeholders = ",".join("?" * len(_MISSING_STATUSES))
+        where.append(f"local_status IN ({placeholders})")
+        params.extend(_MISSING_STATUSES)
+    elif status:
         where.append("local_status = ?")
         params.append(status)
     if request:
@@ -185,9 +200,32 @@ def list_library(
     if origin:
         where.append("instance_type = ?")
         params.append(origin)
+    if instance_id:
+        where.append("instance_id = ?")
+        params.append(instance_id)
     if search:
         where.append("title LIKE ?")
         params.append(f"%{search}%")
+    return where, params
+
+
+def list_library(
+    conn: sqlite3.Connection,
+    *,
+    status: Optional[str] = None,
+    request: Optional[str] = None,
+    nomenclature: Optional[str] = None,
+    item_type: Optional[str] = None,
+    origin: Optional[str] = None,
+    instance_id: Optional[int] = None,
+    search: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[dict]:
+    where, params = _build_library_filter(
+        status=status, request=request, nomenclature=nomenclature,
+        item_type=item_type, origin=origin, instance_id=instance_id, search=search,
+    )
     sql = "SELECT * FROM library_items"
     if where:
         sql += " WHERE " + " AND ".join(where)
@@ -200,20 +238,17 @@ def count_library(
     conn: sqlite3.Connection,
     *,
     status: Optional[str] = None,
+    request: Optional[str] = None,
+    nomenclature: Optional[str] = None,
     item_type: Optional[str] = None,
+    origin: Optional[str] = None,
+    instance_id: Optional[int] = None,
     search: Optional[str] = None,
 ) -> int:
-    where = []
-    params: list = []
-    if status:
-        where.append("local_status = ?")
-        params.append(status)
-    if item_type:
-        where.append("item_type = ?")
-        params.append(item_type)
-    if search:
-        where.append("title LIKE ?")
-        params.append(f"%{search}%")
+    where, params = _build_library_filter(
+        status=status, request=request, nomenclature=nomenclature,
+        item_type=item_type, origin=origin, instance_id=instance_id, search=search,
+    )
     sql = "SELECT COUNT(*) FROM library_items"
     if where:
         sql += " WHERE " + " AND ".join(where)

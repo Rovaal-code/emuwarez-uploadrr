@@ -33,10 +33,12 @@ def _to_lib_response(row: dict) -> LibraryItemResponse:
         original_title=row.get("original_title"),
         instance_type=row.get("instance_type"),
         instance_name=row.get("instance_name"),
+        instance_id=row.get("instance_id"),
         external_id=row.get("external_id"),
         tmdb_id=row.get("tmdb_id"),
         imdb_id=row.get("imdb_id"),
         tvdb_id=row.get("tvdb_id"),
+        title_slug=row.get("title_slug"),
         path=row.get("path"),
         quality=row.get("quality"),
         resolution=row.get("resolution"),
@@ -125,6 +127,7 @@ def library_list(
     current_user: dict = Depends(require_auth),
     item_type: Optional[str] = Query(None, alias="type"),
     origin: Optional[str] = Query(None),
+    instance_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
     request_status: Optional[str] = Query(None, alias="request_status"),
     nomenclature: Optional[str] = Query(None),
@@ -141,11 +144,21 @@ def library_list(
             nomenclature=nomenclature,
             item_type=item_type,
             origin=origin,
+            instance_id=instance_id,
             search=search,
             limit=limit,
             offset=offset,
         )
-        total = count_library(conn, status=status, item_type=item_type, search=search)
+        total = count_library(
+            conn,
+            status=status,
+            request=request_status,
+            nomenclature=nomenclature,
+            item_type=item_type,
+            origin=origin,
+            instance_id=instance_id,
+            search=search,
+        )
     return LibraryListResponse(
         items=[_to_lib_response(r) for r in rows],
         total=total,

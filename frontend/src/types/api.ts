@@ -87,10 +87,12 @@ export interface LibraryItemResponse {
   original_title: string | null
   instance_type: string | null
   instance_name: string | null
+  instance_id: number | null
   external_id: string | null
   tmdb_id: string | null
   imdb_id: string | null
   tvdb_id: string | null
+  title_slug: string | null
   path: string | null
   quality: string | null
   resolution: string | null

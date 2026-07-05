@@ -411,10 +411,12 @@ class LibraryItemResponse(BaseModel):
     original_title: Optional[str] = None
     instance_type: Optional[str] = None
     instance_name: Optional[str] = None
+    instance_id: Optional[int] = None
     external_id: Optional[str] = None
     tmdb_id: Optional[str] = None
     imdb_id: Optional[str] = None
     tvdb_id: Optional[str] = None
+    title_slug: Optional[str] = None
     path: Optional[str] = None
     quality: Optional[str] = None
     resolution: Optional[str] = None

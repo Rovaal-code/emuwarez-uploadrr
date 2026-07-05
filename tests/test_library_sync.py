@@ -78,6 +78,7 @@ def _fake_movie(movie_id: int, title: str, has_file: bool = True) -> dict:
 def _fake_series(series_id: int, title: str, has_episodes: bool = True) -> dict:
     return {
         "id": series_id, "title": title, "year": 2021, "tvdbId": series_id + 20000,
+        "titleSlug": title.lower().replace(" ", "-"),
         "statistics": {
             "episodeCount": 10,
             "episodeFileCount": 10 if has_episodes else 0,
@@ -236,6 +237,7 @@ def test_sync_sonarr_available_series(sonarr_conn):
     row = sonarr_conn.execute("SELECT * FROM library_items").fetchone()
     assert row["local_status"] == LocalStatus.AVAILABLE.value
     assert row["item_type"] == "series"
+    assert row["title_slug"] == "peaky-blinders"
 
 
 def test_sync_sonarr_missing_series(sonarr_conn):

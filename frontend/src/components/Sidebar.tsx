@@ -25,11 +25,6 @@ function NavIcon({ id }: { id: string }) {
         <path d="M4 19h16" /><path d="M8 7h8M8 11h5" />
       </svg>
     ),
-    missing: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-        <circle cx="12" cy="12" r="9" /><path d="M12 8v4M12 16h.01" />
-      </svg>
-    ),
     requests: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
         <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />

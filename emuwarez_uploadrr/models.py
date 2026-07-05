@@ -108,6 +108,7 @@ class LibraryItem:
     tmdb_id: Optional[str] = None
     imdb_id: Optional[str] = None
     tvdb_id: Optional[str] = None
+    title_slug: Optional[str] = None
     path: Optional[str] = None
     quality: Optional[str] = None
     resolution: Optional[str] = None

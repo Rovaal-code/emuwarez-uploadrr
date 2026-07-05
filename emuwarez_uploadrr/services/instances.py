@@ -20,28 +20,29 @@ def add_instance(
     api_key: str,
     enabled: bool = True,
 ) -> int:
+    """Instance names are globally unique (not just per type, see the
+    _migrate_instances_unique_name migration) — a name already in use by
+    *any* instance, regardless of type, is now a real rejection (400),
+    not a silent upsert. The old ON CONFLICT(type, name) DO UPDATE
+    behavior predates that constraint and would silently overwrite an
+    unrelated instance's URL/key if two different types shared a name."""
     instance_type = instance_type.lower().strip()
     if instance_type not in _VALID_INSTANCE_TYPES:
         raise ValueError("Tipo de instancia inválido. Usa radarr o sonarr.")
+    name = name.strip()
+    existing = conn.execute("SELECT id FROM instances WHERE name = ?", (name,)).fetchone()
+    if existing:
+        raise ValueError(f"Ya existe una instancia con el nombre '{name}'.")
     url = normalize_base_url(url)
     cur = conn.execute(
         """
         INSERT INTO instances(type, name, url, api_key, enabled)
         VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(type, name) DO UPDATE SET
-            url = excluded.url,
-            api_key = excluded.api_key,
-            enabled = excluded.enabled,
-            updated_at = CURRENT_TIMESTAMP
         """,
-        (instance_type, name.strip(), url, api_key.strip(), 1 if enabled else 0),
+        (instance_type, name, url, api_key.strip(), 1 if enabled else 0),
     )
     conn.commit()
-    row = conn.execute(
-        "SELECT id FROM instances WHERE type = ? AND name = ?",
-        (instance_type, name.strip()),
-    ).fetchone()
-    return int(row["id"] if row else cur.lastrowid)
+    return int(cur.lastrowid)
 
 
 def update_instance(
@@ -64,8 +65,14 @@ def update_instance(
         sets.append("api_key = ?")
         params.append(api_key.strip())
     if name is not None:
+        name = name.strip()
+        conflict = conn.execute(
+            "SELECT id FROM instances WHERE name = ? AND id != ?", (name, instance_id)
+        ).fetchone()
+        if conflict:
+            raise ValueError(f"Ya existe una instancia con el nombre '{name}'.")
         sets.append("name = ?")
-        params.append(name.strip())
+        params.append(name)
     if enabled is not None:
         sets.append("enabled = ?")
         params.append(1 if enabled else 0)

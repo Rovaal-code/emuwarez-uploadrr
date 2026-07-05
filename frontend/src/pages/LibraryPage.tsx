@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getLibrary } from '../api/library'
-import type { LibraryItemResponse, LibraryListResponse } from '../types/api'
+import { getInstances } from '../api/instances'
+import { refreshArrHealth, verifyLibraryFiles, refreshRecommendations } from '../api/diagnostics'
+import type { LibraryItemResponse, LibraryListResponse, InstanceSafeResponse } from '../types/api'
 import { StatusBadge } from '../components/StatusBadge'
 import { ServiceLabel } from '../components/ServiceIcon'
 import { LoadingState } from '../components/LoadingState'
@@ -13,6 +15,30 @@ import { formatBytes, formatDate, formatItemType } from '../utils/format'
 
 const PAGE_SIZE = 50
 const VIEW_MODE_STORAGE_KEY = 'emuwarez_uploadrr_library_view'
+// Sentinel matching the backend's NOT_AVAILABLE_STATUS_FILTER
+// (services/library.py) — expands server-side to the same LocalStatus
+// "not available" set the old standalone Faltantes tab used, so removing
+// that tab doesn't lose the combined view.
+const NOT_AVAILABLE_STATUS_FILTER = '__not_available__'
+
+function titleMismatchesFilename(item: LibraryItemResponse): boolean {
+  if (!item.original_title) return false
+  const norm = (s: string) => s.trim().toLowerCase()
+  return norm(item.title) !== norm(item.original_title)
+}
+
+function buildDeepLink(item: LibraryItemResponse, instances: InstanceSafeResponse[]): string | null {
+  if (!item.instance_id) return null
+  const instance = instances.find(i => i.id === item.instance_id)
+  if (!instance) return null
+  if (item.instance_type === 'radarr' && item.tmdb_id) {
+    return `${instance.url}/movie/${item.tmdb_id}`
+  }
+  if (item.instance_type === 'sonarr' && item.title_slug) {
+    return `${instance.url}/series/${item.title_slug}`
+  }
+  return null
+}
 
 type ViewMode = 'grid' | 'list'
 
@@ -21,7 +47,9 @@ function loadViewMode(): ViewMode {
   return stored === 'list' ? 'list' : 'grid'
 }
 
-function PosterCard({ item, onClick }: { item: LibraryItemResponse; onClick: () => void }) {
+function PosterCard({ item, instances, onClick }: { item: LibraryItemResponse; instances: InstanceSafeResponse[]; onClick: () => void }) {
+  const deepLink = buildDeepLink(item, instances)
+  const mismatched = titleMismatchesFilename(item)
   return (
     <div
       className="clickable"
@@ -48,12 +76,33 @@ function PosterCard({ item, onClick }: { item: LibraryItemResponse; onClick: () 
         <div style={{ position: 'absolute', top: 6, right: 6 }}>
           <StatusBadge status={item.local_status} type="local" />
         </div>
+        {deepLink && (
+          <a
+            href={deepLink}
+            target="_blank"
+            rel="noreferrer"
+            onClick={e => e.stopPropagation()}
+            title={`Ver en ${item.instance_name ?? item.instance_type}`}
+            style={{
+              position: 'absolute', top: 6, left: 6, width: 22, height: 22, borderRadius: 5,
+              background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 12, textDecoration: 'none',
+            }}
+          >
+            🔗
+          </a>
+        )}
       </div>
       <div style={{ padding: '8px 10px' }}>
         <div style={{ fontSize: 12.5, fontWeight: 500, lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
           {item.title}
         </div>
         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{item.year ?? '—'}</div>
+        {mismatched && (
+          <div style={{ fontSize: 10, color: 'var(--color-missing, #ef4444)', marginTop: 2 }} title={`Título original: ${item.original_title}`}>
+            ⚠ Título distinto al archivo
+          </div>
+        )}
       </div>
     </div>
   )
@@ -71,11 +120,65 @@ export function LibraryPage() {
 
   useEffect(() => { localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode) }, [viewMode])
 
+  const [instances, setInstances] = useState<InstanceSafeResponse[]>([])
+  useEffect(() => { getInstances().then(setInstances).catch(() => {}) }, [])
+
+  // Diagnostic actions — relocated here from the removed standalone
+  // Faltantes tab (its own filtered view of Biblioteca now covers what it
+  // used to show; these 3 buttons were the only functionality that didn't
+  // already exist elsewhere).
+  const [diagActionMsg, setDiagActionMsg] = useState<string | null>(null)
+  const [diagActionLoading, setDiagActionLoading] = useState(false)
+
+  async function handleRefreshHealth() {
+    setDiagActionLoading(true)
+    setDiagActionMsg(null)
+    try {
+      await refreshArrHealth({ include_queue: true, include_history: true })
+      setDiagActionMsg('Salud ARR actualizada')
+      await load()
+    } catch {
+      setDiagActionMsg('Error al refrescar salud ARR')
+    } finally {
+      setDiagActionLoading(false)
+    }
+  }
+
+  async function handleVerifyFiles() {
+    setDiagActionLoading(true)
+    setDiagActionMsg(null)
+    try {
+      const r = await verifyLibraryFiles()
+      setDiagActionMsg(`Archivos verificados: ${r.items_checked} · Encontrados: ${r.files_found}`)
+      await load()
+    } catch {
+      setDiagActionMsg('Error al verificar archivos')
+    } finally {
+      setDiagActionLoading(false)
+    }
+  }
+
+  async function handleRefreshRecommendations() {
+    setDiagActionLoading(true)
+    setDiagActionMsg(null)
+    try {
+      const r = await refreshRecommendations()
+      setDiagActionMsg(`Recomendaciones actualizadas: ${r.items_updated}`)
+      await load()
+    } catch {
+      setDiagActionMsg('Error al recalcular recomendaciones')
+    } finally {
+      setDiagActionLoading(false)
+    }
+  }
+
   // Filters
   const [search, setSearch] = useState('')
   const [filterType, setFilterType] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
-  const [filterOrigin, setFilterOrigin] = useState('')
+  const [filterInstanceId, setFilterInstanceId] = useState('')
+  const [filterNomenclature, setFilterNomenclature] = useState('')
+  const [filterRequest, setFilterRequest] = useState('')
   const [offset, setOffset] = useState(0)
 
   const load = useCallback(async () => {
@@ -86,7 +189,9 @@ export function LibraryPage() {
         search: search || undefined,
         type: filterType || undefined,
         status: filterStatus || undefined,
-        origin: filterOrigin || undefined,
+        instance_id: filterInstanceId ? Number(filterInstanceId) : undefined,
+        nomenclature: filterNomenclature || undefined,
+        request_status: filterRequest || undefined,
         limit: PAGE_SIZE,
         offset,
       })
@@ -96,7 +201,7 @@ export function LibraryPage() {
     } finally {
       setLoading(false)
     }
-  }, [search, filterType, filterStatus, filterOrigin, offset])
+  }, [search, filterType, filterStatus, filterInstanceId, filterNomenclature, filterRequest, offset])
 
   useEffect(() => { load() }, [load])
 
@@ -135,6 +240,20 @@ export function LibraryPage() {
         </div>
       </div>
 
+      {/* Diagnostic toolbar — relocated from the removed Faltantes tab */}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
+        <button className="btn btn-secondary btn-sm" onClick={handleRefreshHealth} disabled={diagActionLoading}>
+          Refrescar salud ARR
+        </button>
+        <button className="btn btn-secondary btn-sm" onClick={handleVerifyFiles} disabled={diagActionLoading}>
+          Verificar archivos
+        </button>
+        <button className="btn btn-secondary btn-sm" onClick={handleRefreshRecommendations} disabled={diagActionLoading}>
+          Recalcular recomendaciones
+        </button>
+        {diagActionMsg && <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{diagActionMsg}</span>}
+      </div>
+
       {/* Filters */}
       <div className="filters-bar">
         <input
@@ -151,18 +270,36 @@ export function LibraryPage() {
           <option value="series">Serie</option>
           <option value="episode">Episodio</option>
         </select>
-        <select className="form-input form-select" value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setOffset(0) }} style={{ width: 160 }}>
+        <select className="form-input form-select" value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setOffset(0) }} style={{ width: 190 }}>
           <option value="">Estado: Todos</option>
           <option value="Disponible">Disponible</option>
+          <option value={NOT_AVAILABLE_STATUS_FILTER}>Todos los no disponibles</option>
           <option value="Faltante">Faltante</option>
           <option value="En cola">En cola</option>
           <option value="Descargando">Descargando</option>
+          <option value="Pendiente de importar">Pendiente de importar</option>
           <option value="Error de importación">Error de importación</option>
+          <option value="Error de búsqueda">Error de búsqueda</option>
         </select>
-        <select className="form-input form-select" value={filterOrigin} onChange={e => { setFilterOrigin(e.target.value); setOffset(0) }} style={{ width: 140 }}>
+        <select className="form-input form-select" value={filterInstanceId} onChange={e => { setFilterInstanceId(e.target.value); setOffset(0) }} style={{ width: 170 }}>
           <option value="">Origen: Todos</option>
-          <option value="radarr">Radarr</option>
-          <option value="sonarr">Sonarr</option>
+          {instances.map(inst => (
+            <option key={inst.id} value={inst.id}>{inst.type === 'radarr' ? 'Radarr' : 'Sonarr'} — {inst.name}</option>
+          ))}
+        </select>
+        <select className="form-input form-select" value={filterNomenclature} onChange={e => { setFilterNomenclature(e.target.value); setOffset(0) }} style={{ width: 160 }}>
+          <option value="">Nomenclatura: Todas</option>
+          <option value="Correcta">Correcta</option>
+          <option value="No adaptada">No adaptada</option>
+          <option value="N/A">N/A</option>
+        </select>
+        <select className="form-input form-select" value={filterRequest} onChange={e => { setFilterRequest(e.target.value); setOffset(0) }} style={{ width: 160 }}>
+          <option value="">Petición: Todas</option>
+          <option value="Sin petición">Sin petición</option>
+          <option value="Compatible">Compatible</option>
+          <option value="Parcial">Parcial</option>
+          <option value="No compatible">No compatible</option>
+          <option value="Llena">Llena</option>
         </select>
         <button className="btn btn-secondary btn-sm" onClick={applyFilters}>Filtrar</button>
       </div>
@@ -181,7 +318,7 @@ export function LibraryPage() {
         <div className="activity-section" style={{ padding: 20 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 16 }}>
             {items.map(item => (
-              <PosterCard key={item.id} item={item} onClick={() => setSelected(item)} />
+              <PosterCard key={item.id} item={item} instances={instances} onClick={() => setSelected(item)} />
             ))}
           </div>
           {total > PAGE_SIZE && (
@@ -213,10 +350,30 @@ export function LibraryPage() {
                 </tr>
               </thead>
               <tbody>
-                {items.map(item => (
+                {items.map(item => {
+                  const deepLink = buildDeepLink(item, instances)
+                  const mismatched = titleMismatchesFilename(item)
+                  return (
                   <tr key={item.id} className="clickable" onClick={() => setSelected(item)}>
                     <td>
-                      <div style={{ fontWeight: 500 }}>{item.title}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ fontWeight: 500 }}>{item.title}</div>
+                        {deepLink && (
+                          <a
+                            href={deepLink}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            title={`Ver en ${item.instance_name ?? item.instance_type}`}
+                            style={{ fontSize: 11, textDecoration: 'none' }}
+                          >
+                            🔗
+                          </a>
+                        )}
+                        {mismatched && (
+                          <span style={{ fontSize: 11, color: 'var(--color-missing)' }} title={`Título original: ${item.original_title}`}>⚠</span>
+                        )}
+                      </div>
                       {item.year && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.year}</div>}
                     </td>
                     <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{formatItemType(item.item_type)}</td>
@@ -253,7 +410,8 @@ export function LibraryPage() {
                       <button className="btn btn-ghost btn-sm" onClick={() => setUploadItem(item)} title="Preflight Uploadrr">Subir</button>
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -321,7 +479,27 @@ export function LibraryPage() {
                     onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
                   />
                 )}
-                <div style={{ fontWeight: 700, fontSize: 16 }}>{selected.title} {selected.year ? `(${selected.year})` : ''}</div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {selected.title} {selected.year ? `(${selected.year})` : ''}
+                    {buildDeepLink(selected, instances) && (
+                      <a
+                        href={buildDeepLink(selected, instances)!}
+                        target="_blank"
+                        rel="noreferrer"
+                        title={`Ver en ${selected.instance_name ?? selected.instance_type}`}
+                        style={{ fontSize: 13, textDecoration: 'none' }}
+                      >
+                        🔗
+                      </a>
+                    )}
+                  </div>
+                  {titleMismatchesFilename(selected) && (
+                    <div style={{ fontSize: 11, color: 'var(--color-missing)', marginTop: 2 }}>
+                      ⚠ Título distinto al del archivo original ({selected.original_title})
+                    </div>
+                  )}
+                </div>
               </div>
               <button className="btn btn-ghost btn-sm" onClick={() => setSelected(null)}>✕</button>
             </div>

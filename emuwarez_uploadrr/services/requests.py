@@ -24,6 +24,14 @@ from .compatibility import (
 SYNC_STATE_KEY = "last_emu_requests_sync_utc"
 MIN_SYNC_SECONDS = 3600
 
+# How long a "does this already exist on eMuwarez's own torrent catalog?"
+# check stays cached before it's worth re-querying the real API again. A
+# request's status on eMuwarez's catalog doesn't change minute to minute,
+# and this is a live network call (unlike the rest of matching, which is
+# pure in-memory comparison against already-synced local data) — so this
+# is deliberately much coarser than MIN_SYNC_SECONDS.
+EMU_CATALOG_CHECK_TTL_SECONDS = 24 * 3600
+
 
 def _utcnow() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc)
@@ -134,7 +142,7 @@ def sync_emu_requests(
             upsert_request(conn, item)
         set_state(conn, SYNC_STATE_KEY, _utcnow().isoformat())
         conn.commit()
-        matched = match_all_requests(conn)
+        matched = match_all_requests(conn, emu_api_key=cfg.emu_api_key)
         summary = f"{len(items)} peticiones importadas, {matched} cruces"
         finish_task(conn, task_id, TaskStatus.COMPLETED.value, summary)
         return {"status": "ok", "imported": len(items), "matched": matched}
@@ -186,14 +194,67 @@ def sync_requests(
 # Matching
 # ---------------------------------------------------------------------------
 
-def match_all_requests(conn: sqlite3.Connection) -> int:
-    """Re-run compatibility matching for all request items. Returns updated count."""
+def _should_check_emu_catalog(req: dict, *, status: Optional[str]) -> bool:
+    """Decide whether a request is worth an extra live check against
+    eMuwarez's real torrent catalog (/api/torrents/filter by tmdbId).
+
+    Only triggers for the cases that were flagged as likely false negatives:
+    no library candidate at all, or the internal matcher classified it as
+    "No compatible". Anything already Compatible/Parcial/Llena skips this —
+    those already have a usable answer, so spending a network call (and
+    eMuwarez API quota) on them would be waste, not signal.
+    """
+    if status not in (None, "No compatible"):
+        return False
+    if not req.get("tmdb_id"):
+        # Without a tmdb_id this would fall back to free-text `name` search,
+        # which has the exact same fuzziness problem this check exists to
+        # avoid — not worth the network call.
+        return False
+    checked_at = _parse_iso(req.get("emu_catalog_checked_at"))
+    if checked_at and (_utcnow() - checked_at).total_seconds() < EMU_CATALOG_CHECK_TTL_SECONDS:
+        return False
+    return True
+
+
+def _check_emu_catalog_duplicate(conn: sqlite3.Connection, req: dict, emu_api_key: str) -> None:
+    """Query eMuwarez's own torrent catalog directly by tmdb_id.
+
+    Never raises: a network failure here must not break the rest of a
+    sync/match run, so any error just gets cached as "error" (and will be
+    retried after the TTL) instead of propagating.
+    """
+    try:
+        response = emu.emu_search_existing(emu_api_key, tmdb_id=req.get("tmdb_id"))
+        data = response.get("data") if isinstance(response, dict) else None
+        result = "found" if isinstance(data, list) and data else "not_found"
+    except Exception:
+        result = "error"
+    conn.execute(
+        "UPDATE request_items SET emu_catalog_checked_at = ?, emu_catalog_result = ? WHERE id = ?",
+        (_utcnow().isoformat(), result, req["id"]),
+    )
+
+
+def match_all_requests(conn: sqlite3.Connection, *, emu_api_key: Optional[str] = None) -> int:
+    """Re-run compatibility matching for all request items. Returns updated count.
+
+    `emu_api_key`: reuse an already-loaded key (e.g. from sync_emu_requests)
+    when available; falls back to loading config independently so this can
+    still be called standalone (CLI, "recompute matches" endpoint, etc.).
+    """
+    if emu_api_key is None:
+        cfg = load_app_config()
+        emu_api_key = getattr(cfg, "emu_api_key", None) if cfg else None
+
     requests = [dict(r) for r in conn.execute("SELECT * FROM request_items").fetchall()]
     library = [dict(r) for r in conn.execute("SELECT * FROM library_items").fetchall()]
     updated = 0
     for req in requests:
         candidates = match_request_to_library(req, library)
         if not candidates:
+            if emu_api_key and _should_check_emu_catalog(req, status=None):
+                _check_emu_catalog_duplicate(conn, req, emu_api_key)
             continue
         best = candidates[0]
         classification = classify_request_match(
@@ -232,6 +293,8 @@ def match_all_requests(conn: sqlite3.Connection) -> int:
             ),
         )
         update_request_status(conn, int(best["item"]["id"]), classification["status"], int(req["id"]))
+        if emu_api_key and _should_check_emu_catalog(req, status=classification["status"]):
+            _check_emu_catalog_duplicate(conn, req, emu_api_key)
         updated += 1
     conn.commit()
     return updated
@@ -242,15 +305,23 @@ def match_requests(conn: sqlite3.Connection) -> int:
     return match_all_requests(conn)
 
 
-def match_single_request(conn: sqlite3.Connection, request_id: int) -> Optional[dict]:
+def match_single_request(
+    conn: sqlite3.Connection, request_id: int, *, emu_api_key: Optional[str] = None
+) -> Optional[dict]:
     """Re-match a single request against library. Returns best match dict or None."""
     req_row = conn.execute("SELECT * FROM request_items WHERE id = ?", (request_id,)).fetchone()
     if not req_row:
         return None
     req = dict(req_row)
+    if emu_api_key is None:
+        cfg = load_app_config()
+        emu_api_key = getattr(cfg, "emu_api_key", None) if cfg else None
     library = [dict(r) for r in conn.execute("SELECT * FROM library_items").fetchall()]
     candidates = match_request_to_library(req, library)
     if not candidates:
+        if emu_api_key and _should_check_emu_catalog(req, status=None):
+            _check_emu_catalog_duplicate(conn, req, emu_api_key)
+            conn.commit()
         return None
     best = candidates[0]
     classification = classify_request_match(
@@ -288,6 +359,8 @@ def match_single_request(conn: sqlite3.Connection, request_id: int) -> Optional[
         ),
     )
     update_request_status(conn, int(best["item"]["id"]), classification["status"], int(req["id"]))
+    if emu_api_key and _should_check_emu_catalog(req, status=classification["status"]):
+        _check_emu_catalog_duplicate(conn, req, emu_api_key)
     conn.commit()
     return {
         "library_item_id": best["item"]["id"],

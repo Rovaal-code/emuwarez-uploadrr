@@ -9,6 +9,7 @@ from emuwarez_uploadrr.services.nomenclature import (
     validate_nomenclature_preconditions,
     get_latest_nomenclature_proposal,
     mark_nomenclature_status,
+    _infer_provider_from_item,
 )
 
 
@@ -106,6 +107,53 @@ def test_build_proposal_no_mediainfo_warning(db_conn):
     result = build_nomenclature_proposal(item_id, conn=db_conn)
     warnings = json.loads(result.get("warnings_json", "[]"))
     assert any("mediainfo" in w.lower() or "codec" in w.lower() for w in warnings)
+
+
+def test_infer_provider_prefers_hmax_over_max_substring():
+    item = {"path": "/movies/Show.2020.1080p.HMAX.WEB-DL.mkv"}
+    assert _infer_provider_from_item(item, "WEB-DL") == "HMAX"
+
+
+def test_infer_provider_none_without_provider_carrying_source():
+    item = {"path": "/movies/Show.2020.1080p.AMZN.WEB-DL.mkv"}
+    assert _infer_provider_from_item(item, "BluRay") is None
+    assert _infer_provider_from_item(item, None) is None
+
+
+def test_infer_provider_none_without_match():
+    item = {"path": "/movies/Show.2020.1080p.WEB-DL.mkv"}
+    assert _infer_provider_from_item(item, "WEB-DL") is None
+
+
+def test_build_proposal_detects_provider_in_web_dl_filename(db_conn):
+    """Phase 6E — a provider code already present in the current filename
+    (AMZN, in this case) must survive into the proposal and the filename,
+    but only when the source is a provider-carrying one (WEB-DL)."""
+    cursor = db_conn.execute(
+        """INSERT INTO library_items (item_type, title, local_status, request_status, path, quality)
+           VALUES ('movie', 'Ad Astra', 'Disponible', 'Sin petición',
+                   '/movies/Ad Astra/Ad Astra.2019.1080p.AMZN.WEB-DL.mkv', 'WEBDL-1080p')""",
+    )
+    db_conn.commit()
+    item_id = cursor.lastrowid
+    result = build_nomenclature_proposal(item_id, conn=db_conn)
+    assert result.get("provider_final") == "AMZN"
+    assert "AMZN" in result.get("proposed_filename", "")
+
+
+def test_build_proposal_ignores_provider_like_tokens_on_non_streaming_source(db_conn):
+    """A BluRay/HDTV/DVD release was never provider-tagged — even if a
+    provider-looking token appears somewhere in the path, it must not be
+    reported as a detected provider (avoids false positives from short,
+    generic codes like IT/HS/SL)."""
+    cursor = db_conn.execute(
+        """INSERT INTO library_items (item_type, title, local_status, request_status, path, quality)
+           VALUES ('movie', 'IT', 'Disponible', 'Sin petición', '/movies/IT.2017.1080p.BluRay.mkv', 'Bluray-1080p')""",
+    )
+    db_conn.commit()
+    item_id = cursor.lastrowid
+    result = build_nomenclature_proposal(item_id, conn=db_conn)
+    assert result.get("provider_final") is None
 
 
 def test_build_proposal_uses_real_media_info_columns(db_conn):

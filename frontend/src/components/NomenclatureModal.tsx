@@ -141,6 +141,12 @@ export function NomenclatureModal({ itemId, itemTitle, onClose }: Props) {
                 <span className="text-muted">Source:</span>
                 <span>{proposal.source || '–'}</span>
               </div>
+              {proposal.provider && (
+                <div className="detail-row">
+                  <span className="text-muted">Provider:</span>
+                  <span>{proposal.provider}</span>
+                </div>
+              )}
               <div className="detail-row">
                 <span className="text-muted">Vídeo:</span>
                 <span>{proposal.video_codec || '–'}</span>

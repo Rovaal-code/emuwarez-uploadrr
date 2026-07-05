@@ -665,6 +665,7 @@ class NomenclatureProposalResponse(BaseModel):
     imdb_id: Optional[str] = None
     resolution: Optional[str] = None
     source: Optional[str] = None
+    provider: Optional[str] = None
     video_codec: Optional[str] = None
     audio_summary: Optional[str] = None
     subtitle_summary: Optional[str] = None

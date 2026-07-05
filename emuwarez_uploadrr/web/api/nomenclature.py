@@ -62,6 +62,7 @@ def _proposal_to_response(p: dict, *, conn=None) -> NomenclatureProposalResponse
         imdb_id=p.get("imdb_id"),
         resolution=p.get("resolution"),
         source=p.get("source"),
+        provider=p.get("provider_final"),
         video_codec=p.get("video_codec"),
         audio_summary=p.get("audio_summary"),
         subtitle_summary=p.get("subtitle_summary"),

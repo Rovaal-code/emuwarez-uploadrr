@@ -14,6 +14,7 @@ from typing import Any
 
 from ..database import connect, row_to_dict, get_state
 from .filesystem_safety import safe_stat
+from .source_assistant import EMU_PROVIDERS, PROVIDER_SOURCES
 
 STATUS_DRAFT = "draft"
 STATUS_VALID = "valid"
@@ -54,6 +55,7 @@ def _build_proposed_filename(
     media_type: str,
     season: int | None = None,
     episode: int | None = None,
+    provider: str | None = None,
 ) -> str:
     parts = [_normalize_title_for_emu(title)]
     if year:
@@ -67,6 +69,8 @@ def _build_proposed_filename(
         parts.append(resolution)
     if source:
         parts.append(source)
+    if provider:
+        parts.append(provider)
     if video_codec:
         parts.append(video_codec)
     if audio_summary:
@@ -76,6 +80,39 @@ def _build_proposed_filename(
     if release_tag:
         parts.append(f"- {release_tag}")
     return " ".join(p for p in parts if p)
+
+
+# Phase 6E — provider codes ordered longest-first so a substring match never
+# picks a shorter code contained in a longer one first (e.g. "MAX" inside
+# "HMAX") when scanning the current filename/path token by token.
+_PROVIDER_CODES_BY_LENGTH: list[str] = sorted(
+    (p["code"] for p in EMU_PROVIDERS), key=len, reverse=True
+)
+
+
+def _infer_provider_from_item(item: dict, source: str | None) -> str | None:
+    """Detect an EMU provider code (AMZN, NF, DSNP...) already present in the
+    item's current filename/path — e.g. a file already named
+    '...WEB-DL AMZN x265...' keeps that same AMZN tag in the proposal,
+    instead of the proposed filename silently dropping it. Read-only,
+    string-matching only: no TMDb call, no re-recommendation (that's a
+    separate, not-yet-built feature — see 'editar campos' for the
+    TMDb-driven suggestion flow).
+
+    Only attempted when `source` is a provider-carrying source (WEB-DL,
+    same PROVIDER_SOURCES gate source_assistant.py already uses) — several
+    EMU_PROVIDERS codes are short/generic (IT, HS, SL, M+) and would
+    false-positive far too easily against an arbitrary BluRay/HDTV/DVD
+    filename that was never tagged with a streaming provider at all."""
+    if source not in PROVIDER_SOURCES:
+        return None
+    haystack = f"{item.get('path') or ''}"
+    if not haystack:
+        return None
+    for code in _PROVIDER_CODES_BY_LENGTH:
+        if re.search(rf"(?<![A-Za-z0-9]){re.escape(code)}(?![A-Za-z0-9])", haystack):
+            return code
+    return None
 
 
 def _infer_resolution_from_item(item: dict) -> str | None:
@@ -219,6 +256,11 @@ def build_nomenclature_proposal(item_id: int, *, force_refresh: bool = False, co
         audio_summary = " ".join(p for p in (audio_codec, audio_languages) if p) or None
         subtitle_summary = item.get("subtitle_languages")
 
+        # Phase 6E — provider (AMZN/NF/DSNP...) already present in the
+        # current filename, kept in the proposal instead of silently
+        # dropped. Detection only, no TMDb re-recommendation here.
+        provider = _infer_provider_from_item(item, source)
+
         proposed_filename = _build_proposed_filename(
             title=title,
             year=year,
@@ -229,6 +271,7 @@ def build_nomenclature_proposal(item_id: int, *, force_refresh: bool = False, co
             subtitle_summary=subtitle_summary,
             release_tag=release_tag,
             media_type=media_type,
+            provider=provider,
         )
 
         proposed_folder = proposed_filename
@@ -259,6 +302,10 @@ def build_nomenclature_proposal(item_id: int, *, force_refresh: bool = False, co
             "imdb_id": imdb_id,
             "resolution": resolution,
             "source": source,
+            # Stored under the same provider_final column name the 'editar
+            # campos' flow already uses (web/api/nomenclature.py's
+            # save-fields endpoint) — same underlying table, same meaning.
+            "provider_final": provider,
             "video_codec": video_codec,
             "audio_summary": audio_summary,
             "subtitle_summary": subtitle_summary,
@@ -289,10 +336,10 @@ def save_nomenclature_proposal(proposal: dict, conn=None) -> dict:
             INSERT INTO nomenclature_proposals (
                 library_item_id, status, current_name, current_path,
                 proposed_title, proposed_filename, proposed_folder, proposed_path,
-                media_type, tmdb_id, imdb_id, resolution, source,
+                media_type, tmdb_id, imdb_id, resolution, source, provider_final,
                 video_codec, audio_summary, subtitle_summary, release_tag,
                 warnings_json, errors_json, raw_json, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 proposal["library_item_id"],
@@ -308,6 +355,7 @@ def save_nomenclature_proposal(proposal: dict, conn=None) -> dict:
                 proposal.get("imdb_id"),
                 proposal.get("resolution"),
                 proposal.get("source"),
+                proposal.get("provider_final"),
                 proposal.get("video_codec"),
                 proposal.get("audio_summary"),
                 proposal.get("subtitle_summary"),

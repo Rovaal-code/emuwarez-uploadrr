@@ -313,6 +313,7 @@ export interface NomenclatureProposal {
   imdb_id?: string
   resolution?: string
   source?: string
+  provider?: string
   video_codec?: string
   audio_summary?: string
   subtitle_summary?: string

@@ -290,7 +290,6 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 <li>Detecta qué peticiones ya puedes satisfacer con tu biblioteca local.</li>
                 <li>Prepara y sube contenido siguiendo la nomenclatura de eMuwarez.</li>
                 <li>Opcionalmente usa hardlinks para no renombrar los archivos originales de tu biblioteca.</li>
-                <li style={{ color: 'var(--text-muted)' }}>(Próximamente: crear y gestionar peticiones en eMuwarez, y sugerir peticiones nuevas para contenido que te falte en la biblioteca.)</li>
               </ul>
               <div className="wizard-actions">
                 <span />

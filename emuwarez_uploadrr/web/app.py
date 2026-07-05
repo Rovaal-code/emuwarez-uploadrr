@@ -92,6 +92,15 @@ def create_app() -> FastAPI:
         if _assets.exists():
             app.mount("/assets", StaticFiles(directory=str(_assets)), name="assets")
 
+        _favicon = _FRONTEND_DIST / "favicon.svg"
+        if _favicon.exists():
+            # Registered before spa_fallback below — without this, /favicon.svg
+            # falls through the catch-all and gets index.html (text/html) back,
+            # which browsers reject as a tab icon.
+            @app.get("/favicon.svg", include_in_schema=False)
+            async def favicon() -> FileResponse:
+                return FileResponse(str(_favicon), media_type="image/svg+xml")
+
         @app.get("/{full_path:path}", include_in_schema=False)
         async def spa_fallback(full_path: str) -> FileResponse:
             # Never intercept /api/* routes (already handled above)

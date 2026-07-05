@@ -15,6 +15,7 @@ import { fetchSettings, updateSettings, type SettingsData } from '../api/setting
 import { testTmdbConnection, testEmuwarezConnection, type IntegrationTestResult } from '../api/integrationTests'
 import { testDiscordNotification, testTelegramNotification } from '../api/notifications'
 import { ProviderPriorityPicker } from '../components/ProviderPriorityPicker'
+import { ServiceIcon } from '../components/ServiceIcon'
 import { REGION_OPTIONS, LANGUAGE_OPTIONS } from '../constants/regionLanguage'
 import { testResultLabel, testResultColor } from '../utils/integrationResult'
 
@@ -672,7 +673,9 @@ function NotificationsTab() {
       )}
 
       <div className="placeholder-card">
-        <h3 style={{ marginTop: 0, marginBottom: 14 }}>Discord</h3>
+        <h3 style={{ marginTop: 0, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <ServiceIcon type="discord" size={20} /> Discord
+        </h3>
         <label className="checkbox-label" style={{ marginBottom: 12, display: 'block' }}>
           <input type="checkbox" checked={discordEnabled} onChange={e => setDiscordEnabled(e.target.checked)} /> Activar notificaciones por Discord
         </label>
@@ -699,7 +702,9 @@ function NotificationsTab() {
       </div>
 
       <div className="placeholder-card">
-        <h3 style={{ marginTop: 0, marginBottom: 14 }}>Telegram</h3>
+        <h3 style={{ marginTop: 0, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <ServiceIcon type="telegram" size={20} /> Telegram
+        </h3>
         <label className="checkbox-label" style={{ marginBottom: 12, display: 'block' }}>
           <input type="checkbox" checked={telegramEnabled} onChange={e => setTelegramEnabled(e.target.checked)} /> Activar notificaciones por Telegram
         </label>

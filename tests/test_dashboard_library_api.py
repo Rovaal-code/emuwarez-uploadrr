@@ -192,6 +192,34 @@ def test_dashboard_summary_after_sync(client, auth_headers):
     assert data["radarr_items"] == 2
 
 
+def test_dashboard_summary_requests_mine_counts_only_visible_matching_author(client, auth_headers):
+    from emuwarez_uploadrr.database import connect, db_path, init_db
+    conn = connect(db_path())
+    init_db(conn)
+    conn.execute(
+        "INSERT INTO request_items (emu_id, title, author, author_visible, updated_at) "
+        "VALUES ('e1', 'Mine visible', 'myuser', 1, CURRENT_TIMESTAMP)"
+    )
+    conn.execute(
+        "INSERT INTO request_items (emu_id, title, author, author_visible, updated_at) "
+        "VALUES ('e2', 'Mine but hidden', 'myuser', 0, CURRENT_TIMESTAMP)"
+    )
+    conn.execute(
+        "INSERT INTO request_items (emu_id, title, author, author_visible, updated_at) "
+        "VALUES ('e3', 'Someone else', 'otheruser', 1, CURRENT_TIMESTAMP)"
+    )
+    conn.commit()
+    conn.close()
+
+    # Before configuring emu.username, requests_mine must be 0 (no false positives).
+    resp = client.get("/api/dashboard/summary", headers=auth_headers)
+    assert resp.json()["requests_mine"] == 0
+
+    client.put("/api/settings", json={"emu_username": "myuser"}, headers=auth_headers)
+    resp = client.get("/api/dashboard/summary", headers=auth_headers)
+    assert resp.json()["requests_mine"] == 1
+
+
 def test_dashboard_activity_empty(client, auth_headers):
     resp = client.get("/api/dashboard/activity", headers=auth_headers)
     assert resp.status_code == 200

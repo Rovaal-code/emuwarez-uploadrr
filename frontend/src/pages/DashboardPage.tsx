@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { getDashboardSummary, getDashboardActivity, getDashboardLibraryActivity } from '../api/dashboard'
 import { getUploads } from '../api/uploads'
 import { syncAll } from '../api/library'
-import type { DashboardSummaryResponse, DashboardActivityResponse, LibraryItemResponse, UploadJob } from '../types/api'
+import { getSyncStatus, syncRequests } from '../api/requests'
+import type { DashboardSummaryResponse, DashboardActivityResponse, LibraryItemResponse, UploadJob, RequestSyncStatusResponse } from '../types/api'
 import { StatCard } from '../components/StatCard'
 import { EmptyState } from '../components/EmptyState'
 import { LoadingState } from '../components/LoadingState'
@@ -10,6 +11,7 @@ import { ErrorState } from '../components/ErrorState'
 import { StatusBadge } from '../components/StatusBadge'
 import { ServiceLabel } from '../components/ServiceIcon'
 import { UploadPreflightModal } from '../components/UploadPreflightModal'
+import { SyncInfo } from '../components/SyncInfo'
 import { formatBytes, formatDate, formatItemType } from '../utils/format'
 
 // Phase 11F — the four sub-phases a *running* upload job can be in, in
@@ -48,6 +50,14 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
   const [syncMsg, setSyncMsg] = useState<string | null>(null)
   const [uploadItem, setUploadItem] = useState<LibraryItemResponse | null>(null)
   const [now, setNow] = useState(Date.now())
+
+  // eMuwarez requests sync — deliberately separate from library sync
+  // (different throttle: 1h vs none) and from readiness recalculation
+  // (kept as its own manual action on Peticiones, since it may later get
+  // its own independent scheduled cadence).
+  const [emuSyncStatus, setEmuSyncStatus] = useState<RequestSyncStatusResponse | null>(null)
+  const [emuSyncing, setEmuSyncing] = useState(false)
+  const [emuSyncMsg, setEmuSyncMsg] = useState<string | null>(null)
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000)
@@ -96,6 +106,32 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
     }
   }
 
+  const loadEmuSyncStatus = useCallback(async () => {
+    try {
+      const s = await getSyncStatus()
+      setEmuSyncStatus(s)
+    } catch { /* optional */ }
+  }, [])
+
+  useEffect(() => { loadEmuSyncStatus() }, [loadEmuSyncStatus])
+
+  async function handleEmuSync(force: boolean) {
+    setEmuSyncing(true)
+    setEmuSyncMsg(null)
+    try {
+      const res = await syncRequests(force)
+      setEmuSyncMsg(res.message)
+      if (res.ok) {
+        await loadData()
+        await loadEmuSyncStatus()
+      }
+    } catch (e: unknown) {
+      setEmuSyncMsg(e instanceof Error ? e.message : 'Error al sincronizar')
+    } finally {
+      setEmuSyncing(false)
+    }
+  }
+
   if (loadingData && !summary) return <LoadingState label="Cargando dashboard…" />
   if (!summary) return <ErrorState message={dataError ?? 'No se pudieron cargar los datos del dashboard'} onRetry={loadData} />
 
@@ -123,13 +159,13 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
           </div>
         </StatCard>
 
+        <StatCard label="Disponibles" value={s.available} accentColor="var(--color-available)" />
+
         <StatCard label="Faltantes" value={s.missing} accentColor="var(--color-missing)">
           <div className="stat-card-sub-row" style={{ color: 'var(--text-muted)', fontSize: 12 }}>
             {s.last_sync_at ? `Última sync: ${formatDate(s.last_sync_at)}` : 'Sin sincronizar'}
           </div>
         </StatCard>
-
-        <StatCard label="Disponibles" value={s.available} accentColor="var(--color-available)" />
 
         <StatCard label="Subiendo" value={s.uploading} accentColor="var(--color-uploading)" />
 
@@ -146,28 +182,21 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
         )}
       </div>
 
-      {/* Peticiones accionables — right under the sync bar, Phase 8B */}
-      <div className="activity-section" style={{ marginBottom: 20 }}>
-        <div className="section-header">
-          <div className="section-title">Peticiones accionables</div>
+      {/* Peticiones eMuwarez — right under the library sync bar */}
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+          <div className="section-title">Peticiones eMuwarez</div>
+          <SyncInfo syncStatus={emuSyncStatus} onSync={handleEmuSync} syncing={emuSyncing} />
         </div>
-        <div style={{ padding: '12px 20px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
-            {[
-              { label: 'Listas para subir', value: s.requests_ready_to_upload ?? 0, color: 'var(--color-available)' },
-              { label: 'Necesitan nomenclatura', value: s.requests_need_nomenclature ?? 0, color: '#f59e0b' },
-              { label: 'Esperando descarga', value: s.requests_waiting_download ?? 0, color: '#818cf8' },
-              { label: 'Bloqueadas', value: s.requests_blocked ?? 0, color: 'var(--color-missing)' },
-            ].map(item => (
-              <div key={item.label} style={{ padding: '8px 12px', background: 'rgba(255,255,255,0.04)', borderRadius: 6, borderLeft: `3px solid ${item.color}` }}>
-                <div style={{ fontSize: '1.2rem', fontWeight: 600, color: item.color }}>{item.value}</div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{item.label}</div>
-              </div>
-            ))}
-          </div>
-          <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 10, marginBottom: 0 }}>
-            Ejecuta "Recalcular readiness" en Peticiones para actualizar.
-          </p>
+        {emuSyncMsg && (
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>{emuSyncMsg}</div>
+        )}
+        <div className="stat-cards-row">
+          <StatCard label="Peticiones eMuwarez" value={s.requests_total ?? 0} />
+          <StatCard label="Lista para subir" value={s.requests_ready_to_upload ?? 0} accentColor="var(--color-available)" />
+          <StatCard label="Compatibles" value={s.requests_need_nomenclature ?? 0} accentColor="#f59e0b" />
+          <StatCard label="Mis peticiones" value={s.requests_mine ?? 0} accentColor="#818cf8" />
+          <StatCard label="Completadas" value={s.requests_filled ?? 0} accentColor="var(--color-uploaded)" />
         </div>
       </div>
 

@@ -357,6 +357,7 @@ class DashboardSummaryResponse(BaseModel):
     requests_total: int = 0
     requests_compatible: int = 0
     requests_filled: int = 0
+    requests_mine: int = 0
     requests_last_sync_at: Optional[str] = None
     # Phase 6D — Upload job counts
     uploads_ready: int = 0

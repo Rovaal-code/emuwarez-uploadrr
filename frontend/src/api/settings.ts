@@ -11,6 +11,7 @@ export interface SettingsData {
   tmdb_api_key_masked: string | null
   emu_api_key_configured: boolean
   emu_api_key_masked: string | null
+  emu_username: string | null
   uploadrr_path: string | null
   uploadrr_runtime_type: UploadrrRuntimeType
   uploadrr_python_path: string | null
@@ -32,6 +33,7 @@ export interface SettingsUpdatePayload {
   tmdb_language?: string
   tmdb_api_key?: string
   emu_api_key?: string
+  emu_username?: string
   uploadrr_path?: string
   uploadrr_runtime_type?: UploadrrRuntimeType
   uploadrr_python_path?: string

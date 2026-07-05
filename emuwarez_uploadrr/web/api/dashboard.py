@@ -76,11 +76,33 @@ def dashboard_summary(current_user: dict = Depends(require_auth)) -> DashboardSu
             summary["requests_compatible"] = int(compatible_row["cnt"] or 0) if compatible_row else 0
             from emuwarez_uploadrr.database import get_state
             summary["requests_last_sync_at"] = get_state(conn, "last_emu_requests_sync_utc")
+
         except Exception:
             summary.setdefault("requests_total", 0)
             summary.setdefault("requests_filled", 0)
             summary.setdefault("requests_compatible", 0)
             summary.setdefault("requests_last_sync_at", None)
+
+        # "Mis peticiones" (Phase 5 of the 12-part batch) — requests authored
+        # by the user's own eMuwarez account (new emu.username setting, no
+        # migration needed since `settings` is already a flexible key-value
+        # table). author_visible gates whether `author` is meaningfully
+        # populated at all (same convention services/requests.py already
+        # uses when exposing it in API responses) — an invisible-author row
+        # never counts as "mine" even if it happens to match by coincidence.
+        try:
+            from emuwarez_uploadrr.web.services.settings_service import get_setting
+            my_username = get_setting(conn, "emu.username")
+            if my_username:
+                mine_row = conn.execute(
+                    "SELECT COUNT(*) AS cnt FROM request_items WHERE author_visible = 1 AND author = ?",
+                    (my_username,),
+                ).fetchone()
+                summary["requests_mine"] = int(mine_row["cnt"] or 0) if mine_row else 0
+            else:
+                summary["requests_mine"] = 0
+        except Exception:
+            summary["requests_mine"] = 0
 
         # Phase 6D: upload counts
         upload_counts = _get_upload_counts(conn)

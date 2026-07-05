@@ -44,6 +44,9 @@ class SettingsResponse(BaseModel):
     # Phase 11A: Emuwarez API key, editable from Settings (not just setup wizard).
     emu_api_key_configured: bool = False
     emu_api_key_masked: Optional[str] = None
+    # Phase 5 (12-part batch): the user's own eMuwarez username, used by the
+    # Dashboard's "Mis peticiones" card to filter request_items.author.
+    emu_username: Optional[str] = None
     # Phase 10F: Uploadrr runtime settings (no secrets involved here).
     uploadrr_path: Optional[str] = None
     uploadrr_runtime_type: str = RUNTIME_EMU
@@ -68,6 +71,7 @@ class SettingsUpdateRequest(BaseModel):
     tmdb_api_key: Optional[str] = None
     # Phase 11A
     emu_api_key: Optional[str] = None
+    emu_username: Optional[str] = None
     # Phase 10F
     uploadrr_path: Optional[str] = None
     uploadrr_runtime_type: Optional[str] = None
@@ -147,6 +151,7 @@ def _build_response(conn) -> SettingsResponse:
         uploadrr_allowed_roots=allowed_roots,
         emu_api_key_configured=emu_configured,
         emu_api_key_masked=emu_masked,
+        emu_username=get_setting(conn, "emu.username"),
         notify_discord_enabled=(get_setting_canonical(conn, "notify.discord.enabled") or "") == "true",
         notify_discord_webhook_configured=discord_webhook_configured,
         notify_discord_webhook_masked=mask_secret(discord_webhook) if discord_webhook_configured else None,
@@ -217,6 +222,9 @@ def update_settings(
 
         if body.emu_api_key is not None and body.emu_api_key.strip():
             set_setting(conn, "emu.api_key", body.emu_api_key.strip())
+
+        if body.emu_username is not None:
+            set_setting(conn, "emu.username", body.emu_username.strip())
 
         if body.uploadrr_path is not None:
             set_setting(conn, "uploadrr.path", body.uploadrr_path.strip())

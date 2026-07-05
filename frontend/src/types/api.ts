@@ -35,11 +35,17 @@ export interface DashboardSummaryResponse {
   radarr_items: number
   sonarr_items: number
   last_sync_at: string | null
-  // Phase 8B — request readiness (used by "Peticiones accionables")
+  // Phase 8B — request readiness (used by "Peticiones eMuwarez")
   requests_ready_to_upload?: number
   requests_need_nomenclature?: number
   requests_waiting_download?: number
   requests_blocked?: number
+  // Phase 5B — already computed backend-side, just missing from the type
+  requests_total?: number
+  requests_compatible?: number
+  requests_filled?: number
+  requests_mine?: number
+  requests_last_sync_at?: string | null
 }
 
 export interface DashboardActivityItem {

@@ -14,6 +14,7 @@ import type {
 import { LoadingState } from '../components/LoadingState'
 import { ErrorState } from '../components/ErrorState'
 import { EmptyState } from '../components/EmptyState'
+import { SyncInfo } from '../components/SyncInfo'
 
 const COMPATIBILITY_STATUSES = [
   { value: '', label: 'Todos' },
@@ -56,36 +57,6 @@ function ReadinessBadge({ status }: { status: string | null | undefined }) {
     status.includes('error') || status.includes('missing') || status === 'blocked' ? 'var(--color-missing)' :
     'var(--text-secondary)'
   return <span style={{ fontSize: 11, color, fontWeight: 500 }}>{status}</span>
-}
-
-function SyncInfo({ syncStatus, onSync, syncing }: {
-  syncStatus: RequestSyncStatusResponse | null
-  onSync: (force: boolean) => void
-  syncing: boolean
-}) {
-  if (!syncStatus) return null
-  const { can_sync, wait_seconds, last_sync_at } = syncStatus
-  const mins = Math.ceil(wait_seconds / 60)
-  return (
-    <div className="sync-info">
-      {last_sync_at && (
-        <span className="sync-info__last">
-          Última sync: {new Date(last_sync_at).toLocaleString('es-ES')}
-        </span>
-      )}
-      {!can_sync && (
-        <span className="sync-info__throttle">Disponible en {mins} min</span>
-      )}
-      <button className="btn btn-primary btn-sm" onClick={() => onSync(false)} disabled={syncing || !can_sync}>
-        {syncing ? 'Sincronizando…' : 'Sincronizar'}
-      </button>
-      {!can_sync && (
-        <button className="btn btn-secondary btn-sm" onClick={() => onSync(true)} disabled={syncing} title="Forzar sync">
-          Forzar
-        </button>
-      )}
-    </div>
-  )
 }
 
 function CandidatesPanel({ requestId, onClose }: { requestId: number; onClose: () => void }) {

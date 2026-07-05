@@ -45,6 +45,7 @@ function ConfigTab() {
   const [language, setLanguage] = useState('')
   const [newKey, setNewKey] = useState('')
   const [newEmuKey, setNewEmuKey] = useState('')
+  const [emuUsername, setEmuUsername] = useState('')
 
   useEffect(() => {
     fetchSettings()
@@ -54,6 +55,7 @@ function ConfigTab() {
         setProviderOrder(s.provider_priority_order)
         setRegion(s.tmdb_watch_region)
         setLanguage(s.tmdb_language)
+        setEmuUsername(s.emu_username ?? '')
       })
       .catch(() => setMsg({ ok: false, text: 'Error cargando configuración' }))
       .finally(() => setLoading(false))
@@ -100,6 +102,7 @@ function ConfigTab() {
         provider_priority_order: providerOrder,
         tmdb_watch_region: region.trim(),
         tmdb_language: language.trim(),
+        emu_username: emuUsername.trim(),
       }
       if (newKey.trim()) payload.tmdb_api_key = newKey.trim()
       if (newEmuKey.trim()) payload.emu_api_key = newEmuKey.trim()
@@ -109,6 +112,7 @@ function ConfigTab() {
       setProviderOrder(updated.provider_priority_order)
       setRegion(updated.tmdb_watch_region)
       setLanguage(updated.tmdb_language)
+      setEmuUsername(updated.emu_username ?? '')
       setNewKey('')
       setNewEmuKey('')
       setMsg({ ok: true, text: '✓ Configuración guardada' })
@@ -228,6 +232,19 @@ function ConfigTab() {
             Nota: la API de Emuwarez no expone un endpoint de cuenta/perfil propio conocido — el test de
             conexión solo confirma que la key es válida, no muestra el nombre de usuario detectado.
           </p>
+        </div>
+        <div className="form-group" style={{ marginTop: 14 }}>
+          <label className="form-label">Mi usuario de eMuwarez</label>
+          <input
+            className="form-input"
+            value={emuUsername}
+            onChange={e => setEmuUsername(e.target.value)}
+            placeholder="Tu nombre de usuario en eMuwarez"
+          />
+          <span className="form-hint">
+            Como eMuwarez no expone tu usuario automáticamente, escríbelo aquí para que el Dashboard pueda
+            mostrar cuántas peticiones son tuyas ("Mis peticiones").
+          </span>
         </div>
       </div>
 

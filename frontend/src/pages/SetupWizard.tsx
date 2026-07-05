@@ -421,11 +421,11 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   <div className="form-group">
                     <label className="form-label">Nombre</label>
-                    <input className="form-input" placeholder="Radarr principal" value={instDraft.name ?? ''} onChange={e => setInstDraft(p => ({ ...p, name: e.target.value }))} />
+                    <input className="form-input" placeholder={instDraft.type === 'sonarr' ? 'Sonarr principal' : 'Radarr principal'} value={instDraft.name ?? ''} onChange={e => setInstDraft(p => ({ ...p, name: e.target.value }))} />
                   </div>
                   <div className="form-group">
                     <label className="form-label">URL</label>
-                    <input className="form-input" placeholder="http://192.168.1.100:7878" value={instDraft.url ?? ''} onChange={e => setInstDraft(p => ({ ...p, url: e.target.value }))} />
+                    <input className="form-input" placeholder={instDraft.type === 'sonarr' ? 'http://192.168.1.100:8989' : 'http://192.168.1.100:7878'} value={instDraft.url ?? ''} onChange={e => setInstDraft(p => ({ ...p, url: e.target.value }))} />
                   </div>
                   <div className="form-group">
                     <label className="form-label">API key</label>

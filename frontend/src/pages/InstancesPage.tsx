@@ -257,11 +257,11 @@ export function InstancesPage() {
               </div>
               <div className="form-group">
                 <label className="form-label">Nombre</label>
-                <input className="form-input" placeholder="Radarr principal" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} required />
+                <input className="form-input" placeholder={form.type === 'sonarr' ? 'Sonarr principal' : 'Radarr principal'} value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} required />
               </div>
               <div className="form-group">
                 <label className="form-label">URL</label>
-                <input className="form-input" placeholder="http://192.168.1.100:7878" value={form.url} onChange={e => setForm(p => ({ ...p, url: e.target.value }))} required />
+                <input className="form-input" placeholder={form.type === 'sonarr' ? 'http://192.168.1.100:8989' : 'http://192.168.1.100:7878'} value={form.url} onChange={e => setForm(p => ({ ...p, url: e.target.value }))} required />
               </div>
               <div className="form-group">
                 <label className="form-label">API key</label>

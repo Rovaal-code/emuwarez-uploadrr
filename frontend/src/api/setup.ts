@@ -43,6 +43,7 @@ export async function setupNomenclature(params: {
   hardlink_base?: string
   use_hardlinks: boolean
   confirmation?: string
+  provider_priority_order?: string[]
 }): Promise<OkResponse> {
   return api.post<OkResponse>('/setup/nomenclature', params)
 }

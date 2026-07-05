@@ -124,6 +124,64 @@ def test_setup_nomenclature_persists_hardlink_base_setting(client, auth_headers)
     conn.close()
 
 
+def test_setup_nomenclature_persists_provider_priority_order(client, auth_headers):
+    import json as _json
+    from emuwarez_uploadrr.database import connect, db_path, init_db
+    resp = client.post(
+        "/api/setup/nomenclature",
+        json={"default_release_tag": "TAG", "provider_priority_order": ["NF", "AMZN", "DSNP"]},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    conn = connect(db_path())
+    init_db(conn)
+    row = conn.execute("SELECT value FROM settings WHERE key = 'provider_priority_order'").fetchone()
+    assert _json.loads(row["value"]) == ["NF", "AMZN", "DSNP"]
+    conn.close()
+
+    settings_resp = client.get("/api/settings", headers=auth_headers)
+    assert settings_resp.json()["provider_priority_order"] == ["NF", "AMZN", "DSNP"]
+
+
+def test_setup_nomenclature_rejects_invalid_provider_code(client, auth_headers):
+    resp = client.post(
+        "/api/setup/nomenclature",
+        json={"default_release_tag": "TAG", "provider_priority_order": ["NOT_A_CODE"]},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 400
+    assert "NOT_A_CODE" in resp.json()["detail"]
+
+
+def test_setup_nomenclature_rejects_duplicate_provider_codes(client, auth_headers):
+    resp = client.post(
+        "/api/setup/nomenclature",
+        json={"default_release_tag": "TAG", "provider_priority_order": ["AMZN", "AMZN"]},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 400
+    assert "duplicados" in resp.json()["detail"]
+
+
+def test_setup_nomenclature_without_provider_priority_leaves_setting_untouched(client, auth_headers):
+    from emuwarez_uploadrr.database import connect, db_path, init_db
+    resp = client.post(
+        "/api/setup/nomenclature",
+        json={"default_release_tag": "TAG"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    conn = connect(db_path())
+    init_db(conn)
+    row = conn.execute("SELECT value FROM settings WHERE key = 'provider_priority_order'").fetchone()
+    conn.close()
+    # Untouched means either absent, or (if a prior test in this session set
+    # it) not overwritten by this call — either way this call must not have
+    # written an empty/garbage value.
+    if row is not None:
+        assert row["value"]
+
+
 # ---------------------------------------------------------------------------
 # Full flow — new step order end to end, including optional steps
 # ---------------------------------------------------------------------------

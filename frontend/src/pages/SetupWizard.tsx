@@ -7,6 +7,7 @@ import { login } from '../api/auth'
 import { syncAll } from '../api/library'
 import { testTmdbConnection, testEmuwarezConnection, testArrConnection, type IntegrationTestResult } from '../api/integrationTests'
 import { ServiceIcon } from '../components/ServiceIcon'
+import { ProviderPriorityPicker } from '../components/ProviderPriorityPicker'
 import { REGION_OPTIONS, LANGUAGE_OPTIONS } from '../constants/regionLanguage'
 import { SETUP_STEPS, SETUP_STEP_LABELS } from '../types/domain'
 import type { SetupStep } from '../types/domain'
@@ -107,6 +108,10 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   const [nomHardlinkBase, setNomHardlinkBase] = useState('')
   const [noHardlinks, setNoHardlinks] = useState(false)
   const [hardlinksConfirm, setHardlinksConfirm] = useState('')
+  // Same default as the backend's provider_priority_order setting
+  // (web/api/settings.py::_DEFAULT_PRIORITY) — offered here too so it's
+  // configured from the start instead of only reachable via Settings later.
+  const [nomProviderOrder, setNomProviderOrder] = useState<string[]>(['AMZN', 'NF', 'DSNP', 'MAX', 'ATVP'])
 
   // Connection test state
   const [tmdbTestResult, setTmdbTestResult] = useState<IntegrationTestResult | null>(null)
@@ -237,6 +242,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
       hardlink_base: nomHardlinkBase.trim() || undefined,
       use_hardlinks: !noHardlinks,
       confirmation: noHardlinks ? hardlinksConfirm : undefined,
+      provider_priority_order: nomProviderOrder,
     })
     setStep('complete')
   })
@@ -576,6 +582,15 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   />
                 </div>
               )}
+              <div className="form-group" style={{ marginTop: 18 }}>
+                <label className="form-label">Prioridad de providers</label>
+                <p className="form-hint" style={{ marginBottom: 8 }}>
+                  Cuando el mismo contenido está disponible en varias plataformas de streaming (Amazon,
+                  Netflix, Disney+...), esta prioridad decide cuál recomendar automáticamente para la subida.
+                  Arrastra para reordenar — los de arriba tienen preferencia.
+                </p>
+                <ProviderPriorityPicker order={nomProviderOrder} onChange={setNomProviderOrder} />
+              </div>
               {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
               <div className="wizard-actions">
                 <span />

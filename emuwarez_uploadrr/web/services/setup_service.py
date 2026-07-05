@@ -6,6 +6,7 @@ and do NOT commit — the caller commits.
 """
 from __future__ import annotations
 
+import json
 import sqlite3
 from typing import Optional
 
@@ -133,18 +134,24 @@ def setup_nomenclature(
     default_release_tag: str,
     hardlink_base: Optional[str] = None,
     use_hardlinks: bool = True,
+    provider_priority_order: Optional[list[str]] = None,
 ) -> None:
     """Persist the upload tag and hardlink strategy. Optional/skippable step.
 
     Callers MUST have already validated the confirmation token when
     use_hardlinks=False (see web/api/setup.py) — this function only persists
     the already-validated decision, it does not re-check the token.
+    Provider codes in provider_priority_order must already be validated by the
+    caller too (same _VALID_PROVIDER_CODES check as web/api/settings.py).
     """
     if default_release_tag and default_release_tag.strip():
         set_setting(conn, "default_release_tag", default_release_tag.strip())
     if hardlink_base and hardlink_base.strip():
         set_setting(conn, "hardlink_base", hardlink_base.strip())
     set_setting(conn, "nomenclature.use_hardlinks", "true" if use_hardlinks else "false")
+    if provider_priority_order is not None:
+        codes = [c.strip() for c in provider_priority_order]
+        set_setting(conn, "provider_priority_order", json.dumps(codes, ensure_ascii=False))
 
 
 def setup_complete(conn: sqlite3.Connection) -> None:

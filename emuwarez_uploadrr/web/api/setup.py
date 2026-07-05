@@ -155,18 +155,35 @@ def setup_nomenclature(
     body: SetupNomenclatureRequest,
     current_user: dict = Depends(require_auth),
 ) -> OkResponse:
-    """Upload tag + hardlink strategy. Disabling hardlinks (use_hardlinks=False)
-    means the app may rename the original library file using Emuwarez
-    nomenclature instead of creating a hardlink — requires the exact
-    confirmation token."""
+    """Upload tag + hardlink strategy + optional provider priority. Disabling
+    hardlinks (use_hardlinks=False) means the app may rename the original
+    library file using Emuwarez nomenclature instead of creating a hardlink —
+    requires the exact confirmation token."""
+    from .settings import _VALID_PROVIDER_CODES
     from ..services.setup_service import NOMENCLATURE_DISABLE_HARDLINKS_TOKEN, setup_nomenclature as _setup_nomenclature
     if not body.use_hardlinks and body.confirmation != NOMENCLATURE_DISABLE_HARDLINKS_TOKEN:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f'Para desactivar los hardlinks se requiere confirmación exacta: "{NOMENCLATURE_DISABLE_HARDLINKS_TOKEN}".',
         )
+    if body.provider_priority_order is not None:
+        codes = [c.strip() for c in body.provider_priority_order]
+        invalid = [c for c in codes if c not in _VALID_PROVIDER_CODES]
+        if invalid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Códigos de provider inválidos: {', '.join(invalid)}",
+            )
+        if len(codes) != len(set(codes)):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="provider_priority_order contiene duplicados",
+            )
     with _get_conn() as conn:
-        _setup_nomenclature(conn, body.default_release_tag, body.hardlink_base, body.use_hardlinks)
+        _setup_nomenclature(
+            conn, body.default_release_tag, body.hardlink_base, body.use_hardlinks,
+            provider_priority_order=body.provider_priority_order,
+        )
         conn.commit()
     return OkResponse(message="Preferencias de nomenclatura guardadas correctamente")
 

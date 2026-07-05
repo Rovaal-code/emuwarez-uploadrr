@@ -191,6 +191,10 @@ class SetupNomenclatureRequest(BaseModel):
     hardlink_base: Optional[str] = None
     use_hardlinks: bool = True
     confirmation: Optional[str] = None
+    # Optional — same setting as Settings > Nomenclatura, offered during setup
+    # too (Phase 2 of the 12-part batch). Validated in web/api/setup.py against
+    # the same _VALID_PROVIDER_CODES used by web/api/settings.py.
+    provider_priority_order: Optional[list[str]] = None
 
 
 # ---------------------------------------------------------------------------

@@ -30,10 +30,6 @@ def _now_utc() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _bucket_rank(bucket: str) -> int:
-    return {"critical": 0, "high": 1, "medium": 2, "low": 3, "blocked": 4}.get(bucket, 5)
-
-
 def _loads(s: Any) -> Any:
     if not s:
         return []
@@ -44,23 +40,8 @@ def _loads(s: Any) -> Any:
 
 
 # ---------------------------------------------------------------------------
-# Priority mapping helpers
+# Status/action mapping helpers
 # ---------------------------------------------------------------------------
-
-_READINESS_STATUS_TO_BUCKET = {
-    "ready_to_upload":   "high",
-    "needs_nomenclature": "high",
-    "preflight_needed":  "medium",
-    "downloading":       "medium",
-    "uploading":         "medium",
-    "pending_import":    "blocked",
-    "import_error":      "blocked",
-    "file_missing":      "blocked",
-    "already_exists":    "blocked",
-    "upload_error":      "blocked",
-    "uploaded":          "blocked",
-    "no_local_match":    "low",
-}
 
 _READINESS_STATUS_TO_ACTION = {
     "ready_to_upload":   "upload",
@@ -92,18 +73,6 @@ _READINESS_STATUS_TO_STATUS = {
     "no_local_match":    "open",
 }
 
-_REC_ACTION_TO_BUCKET = {
-    "upload":             "high",
-    "adapt_nomenclature": "high",
-    "run_preflight":      "medium",
-    "wait_download":      "medium",
-    "review_arr":         "blocked",
-    "verify_file":        "blocked",
-    "fix_path":           "blocked",
-    "check_emu":          "low",
-    "none":               "low",
-}
-
 _REC_ACTION_TO_STATUS = {
     "upload":             "ready",
     "adapt_nomenclature": "ready",
@@ -114,15 +83,6 @@ _REC_ACTION_TO_STATUS = {
     "fix_path":           "blocked",
     "check_emu":          "open",
     "none":               "open",
-}
-
-_UPLOAD_STATUS_TO_BUCKET = {
-    "ready":     "high",
-    "running":   "medium",
-    "failed":    "high",
-    "cancelled": "medium",
-    "completed": "low",
-    "pending":   "medium",
 }
 
 _UPLOAD_STATUS_TO_ACTION = {
@@ -163,7 +123,6 @@ def upsert_queue_item(item: dict, conn: sqlite3.Connection) -> dict:
                 item_type = ?, entity_type = ?, entity_id = ?,
                 request_item_id = ?, library_item_id = ?, upload_job_id = ?,
                 title = ?, subtitle = ?, status = ?, action = ?,
-                priority_score = ?, priority_bucket = ?,
                 blockers_json = ?, reasons_json = ?, context_json = ?,
                 target_url = ?, updated_at = ?, last_seen_at = ?,
                 resolved_at = NULL
@@ -180,8 +139,6 @@ def upsert_queue_item(item: dict, conn: sqlite3.Connection) -> dict:
                 item.get("subtitle"),
                 item.get("status", "open"),
                 item.get("action", "none"),
-                item.get("priority_score", 0),
-                item.get("priority_bucket", "low"),
                 json.dumps(item.get("blockers") or [], ensure_ascii=False),
                 json.dumps(item.get("reasons") or [], ensure_ascii=False),
                 json.dumps(item.get("context") or {}, ensure_ascii=False),
@@ -202,10 +159,9 @@ def upsert_queue_item(item: dict, conn: sqlite3.Connection) -> dict:
             (queue_key, item_type, entity_type, entity_id,
              request_item_id, library_item_id, upload_job_id,
              title, subtitle, status, action,
-             priority_score, priority_bucket,
              blockers_json, reasons_json, context_json,
              target_url, created_at, updated_at, last_seen_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 item["queue_key"],
@@ -219,8 +175,6 @@ def upsert_queue_item(item: dict, conn: sqlite3.Connection) -> dict:
                 item.get("subtitle"),
                 item.get("status", "open"),
                 item.get("action", "none"),
-                item.get("priority_score", 0),
-                item.get("priority_bucket", "low"),
                 json.dumps(item.get("blockers") or [], ensure_ascii=False),
                 json.dumps(item.get("reasons") or [], ensure_ascii=False),
                 json.dumps(item.get("context") or {}, ensure_ascii=False),
@@ -256,7 +210,7 @@ def build_items_from_request_readiness(
         return []
     q = """
         SELECT rr.id AS rr_id, rr.request_item_id, rr.status AS rr_status,
-               rr.recommended_action, rr.priority_score, rr.priority_bucket,
+               rr.recommended_action,
                rr.blockers_json, rr.reasons_json,
                ri.title, ri.emu_id
         FROM request_readiness rr
@@ -272,12 +226,6 @@ def build_items_from_request_readiness(
         rr_status = rd.get("rr_status", "no_local_match")
         action = _READINESS_STATUS_TO_ACTION.get(rr_status, "manual_review")
         status = _READINESS_STATUS_TO_STATUS.get(rr_status, "open")
-        bucket = rd.get("priority_bucket") or _READINESS_STATUS_TO_BUCKET.get(rr_status, "low")
-
-        # boost critical
-        score = rd.get("priority_score", 0) or 0
-        if rr_status == "ready_to_upload" and score >= 90:
-            bucket = "critical"
 
         items.append({
             "queue_key": f"request:{rd['request_item_id']}:readiness",
@@ -291,8 +239,6 @@ def build_items_from_request_readiness(
             "subtitle": f"EMU: {rd.get('emu_id', '')}",
             "status": status,
             "action": action,
-            "priority_score": score,
-            "priority_bucket": bucket,
             "blockers": _loads(rd.get("blockers_json")),
             "reasons": _loads(rd.get("reasons_json")),
             "context": {"rr_status": rr_status, "emu_id": rd.get("emu_id")},
@@ -331,9 +277,7 @@ def build_items_from_library_recommendations(
             continue
 
         action = rd.get("recommended_action", "none")
-        bucket = _REC_ACTION_TO_BUCKET.get(action, "low")
         status = _REC_ACTION_TO_STATUS.get(action, "open")
-        score = 50 if bucket in ("high", "critical") else (30 if bucket == "medium" else 10)
 
         reasons = _loads(rd.get("recommendation_reasons_json"))
         items.append({
@@ -348,8 +292,6 @@ def build_items_from_library_recommendations(
             "subtitle": rd.get("diagnostic_summary") or rd.get("local_status", ""),
             "status": status,
             "action": action,
-            "priority_score": score,
-            "priority_bucket": bucket,
             "blockers": [],
             "reasons": reasons,
             "context": {
@@ -382,9 +324,7 @@ def build_items_from_upload_jobs(
         job_id = rd["id"]
         job_status = rd.get("status", "pending")
         action = _UPLOAD_STATUS_TO_ACTION.get(job_status, "view_upload")
-        bucket = _UPLOAD_STATUS_TO_BUCKET.get(job_status, "low")
         q_status = _UPLOAD_STATUS_TO_QUEUE_STATUS.get(job_status, "open")
-        score = 80 if job_status == "failed" else (70 if job_status == "ready" else 40)
         items.append({
             "queue_key": f"upload:{job_id}:status",
             "item_type": "upload_job",
@@ -397,8 +337,6 @@ def build_items_from_upload_jobs(
             "subtitle": f"Job #{job_id} · {job_status}",
             "status": q_status,
             "action": action,
-            "priority_score": score,
-            "priority_bucket": bucket,
             "blockers": ["Upload falló — revisar logs"] if job_status == "failed" else [],
             "reasons": [f"Upload job en estado {job_status}"],
             "context": {"job_status": job_status, "path": rd.get("path")},
@@ -447,8 +385,6 @@ def build_items_from_arr_diagnostics(
             "subtitle": f"ARR: {arr_qs or arr_hs}",
             "status": "blocked",
             "action": "review_arr",
-            "priority_score": 30,
-            "priority_bucket": "blocked",
             "blockers": [
                 rd.get("arr_queue_error") or rd.get("arr_history_error") or "Error ARR"
             ],
@@ -562,7 +498,7 @@ def list_operational_queue(
     limit: int = 200,
     offset: int = 0,
 ) -> list[dict]:
-    """List queue items, ordered by priority."""
+    """List queue items, most recently updated first."""
     f = filters or {}
     conditions = ["status NOT IN ('resolved', 'ignored', 'completed')"]
     params: list[Any] = []
@@ -573,9 +509,6 @@ def list_operational_queue(
     if f.get("action"):
         conditions.append("action = ?")
         params.append(f["action"])
-    if f.get("priority_bucket"):
-        conditions.append("priority_bucket = ?")
-        params.append(f["priority_bucket"])
     if f.get("item_type"):
         conditions.append("item_type = ?")
         params.append(f["item_type"])
@@ -587,12 +520,11 @@ def list_operational_queue(
         params.append(f"%{f['search']}%")
 
     where = " AND ".join(conditions)
-    bucket_order = "CASE priority_bucket WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END"
     rows = conn.execute(
         f"""
         SELECT * FROM operational_queue_items
         WHERE {where}
-        ORDER BY {bucket_order} ASC, priority_score DESC, updated_at DESC
+        ORDER BY updated_at DESC
         LIMIT ? OFFSET ?
         """,
         params + [limit, offset],
@@ -601,7 +533,8 @@ def list_operational_queue(
 
 
 def get_operational_queue_summary(conn: sqlite3.Connection) -> dict:
-    """Return aggregate counts for the operational queue."""
+    """Return aggregate counts for the operational queue. 'blocked' is (and
+    always was) status-based, not priority-based."""
     row = conn.execute(
         """
         SELECT
@@ -610,9 +543,7 @@ def get_operational_queue_summary(conn: sqlite3.Connection) -> dict:
             SUM(CASE WHEN status = 'ready' THEN 1 ELSE 0 END) AS ready,
             SUM(CASE WHEN status = 'waiting' THEN 1 ELSE 0 END) AS waiting,
             SUM(CASE WHEN status = 'blocked' THEN 1 ELSE 0 END) AS blocked,
-            SUM(CASE WHEN status = 'running' THEN 1 ELSE 0 END) AS running,
-            SUM(CASE WHEN priority_bucket = 'critical' AND status NOT IN ('resolved','ignored','completed') THEN 1 ELSE 0 END) AS critical,
-            SUM(CASE WHEN priority_bucket = 'high'     AND status NOT IN ('resolved','ignored','completed') THEN 1 ELSE 0 END) AS high
+            SUM(CASE WHEN status = 'running' THEN 1 ELSE 0 END) AS running
         FROM operational_queue_items
         WHERE status NOT IN ('resolved', 'ignored', 'completed')
         """
@@ -626,10 +557,8 @@ def get_operational_queue_summary(conn: sqlite3.Connection) -> dict:
             "waiting": d.get("waiting") or 0,
             "blocked": d.get("blocked") or 0,
             "running": d.get("running") or 0,
-            "critical": d.get("critical") or 0,
-            "high": d.get("high") or 0,
         }
-    return {"total": 0, "open": 0, "ready": 0, "waiting": 0, "blocked": 0, "running": 0, "critical": 0, "high": 0}
+    return {"total": 0, "open": 0, "ready": 0, "waiting": 0, "blocked": 0, "running": 0}
 
 
 def get_operational_queue_item(item_id: int, conn: sqlite3.Connection) -> Optional[dict]:
@@ -690,8 +619,6 @@ def get_dashboard_queue_counts(conn: sqlite3.Connection) -> dict:
             "operational_queue_ready": summary.get("ready", 0),
             "operational_queue_waiting": summary.get("waiting", 0),
             "operational_queue_blocked": summary.get("blocked", 0),
-            "operational_queue_critical": summary.get("critical", 0),
-            "operational_queue_high": summary.get("high", 0),
         }
     except Exception:
         return {
@@ -699,6 +626,4 @@ def get_dashboard_queue_counts(conn: sqlite3.Connection) -> dict:
             "operational_queue_ready": 0,
             "operational_queue_waiting": 0,
             "operational_queue_blocked": 0,
-            "operational_queue_critical": 0,
-            "operational_queue_high": 0,
         }

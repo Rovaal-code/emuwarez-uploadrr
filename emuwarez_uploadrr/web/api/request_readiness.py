@@ -33,8 +33,6 @@ def _rr_to_response(r: dict) -> RequestReadinessResponse:
         best_library_item_id=r.get("best_library_item_id"),
         status=r["status"],
         recommended_action=r.get("recommended_action"),
-        priority_score=r.get("priority_score", 0),
-        priority_bucket=r.get("priority_bucket", "low"),
         compatibility_score=r.get("compatibility_score"),
         upload_readiness_score=r.get("upload_readiness_score"),
         blockers=r.get("blockers") or [],
@@ -92,7 +90,6 @@ def refresh_readiness(
 def list_readiness(
     status: str | None = Query(None),
     action: str | None = Query(None),
-    priority_bucket: str | None = Query(None),
     search: str | None = Query(None),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
@@ -100,8 +97,7 @@ def list_readiness(
 ) -> RequestReadinessListResponse:
     from emuwarez_uploadrr.services.request_readiness import list_request_readiness
     filters = {k: v for k, v in {
-        "status": status, "action": action,
-        "priority_bucket": priority_bucket, "search": search,
+        "status": status, "action": action, "search": search,
     }.items() if v is not None}
     with _get_conn() as conn:
         items = list_request_readiness(conn, filters=filters, limit=limit, offset=offset)
@@ -110,26 +106,6 @@ def list_readiness(
         total=len(items),
         limit=limit,
         offset=offset,
-    )
-
-
-# ---------------------------------------------------------------------------
-# GET /api/requests/prioritized
-# ---------------------------------------------------------------------------
-
-@router.get("/requests/prioritized", response_model=RequestReadinessListResponse)
-def list_prioritized(
-    limit: int = Query(200, ge=1, le=500),
-    current_user: dict = Depends(require_auth),
-) -> RequestReadinessListResponse:
-    from emuwarez_uploadrr.services.request_readiness import list_prioritized_requests
-    with _get_conn() as conn:
-        items = list_prioritized_requests(conn, limit=limit)
-    return RequestReadinessListResponse(
-        items=[_rr_to_response(i) for i in items],
-        total=len(items),
-        limit=limit,
-        offset=0,
     )
 
 
@@ -170,8 +146,6 @@ def evaluate_readiness(
         title=result.get("title"),
         status=result["status"],
         recommended_action=result.get("recommended_action"),
-        priority_score=result.get("priority_score", 0),
-        priority_bucket=result.get("priority_bucket", "low"),
         compatibility_score=result.get("compatibility_score"),
         upload_readiness_score=result.get("upload_readiness_score"),
         best_library_item_id=result.get("best_library_item_id"),

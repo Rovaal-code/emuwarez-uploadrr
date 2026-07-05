@@ -379,14 +379,11 @@ class DashboardSummaryResponse(BaseModel):
     requests_need_nomenclature: int = 0
     requests_waiting_download: int = 0
     requests_blocked: int = 0
-    requests_high_priority: int = 0
     # Phase 8C — operational queue counts
     operational_queue_open: int = 0
     operational_queue_ready: int = 0
     operational_queue_waiting: int = 0
     operational_queue_blocked: int = 0
-    operational_queue_critical: int = 0
-    operational_queue_high: int = 0
 
 
 class DashboardActivityItem(BaseModel):
@@ -523,8 +520,6 @@ class RequestItemResponse(BaseModel):
     # Phase 8B — readiness fields (optional, not populated if readiness not yet evaluated)
     readiness_status: Optional[str] = None
     readiness_action: Optional[str] = None
-    readiness_priority_score: Optional[int] = None
-    readiness_priority_bucket: Optional[str] = None
     readiness_best_library_item_id: Optional[int] = None
 
 
@@ -551,8 +546,6 @@ class RequestReadinessResponse(BaseModel):
     best_library_item_id: Optional[int] = None
     status: str
     recommended_action: Optional[str] = None
-    priority_score: int = 0
-    priority_bucket: str = "low"
     compatibility_score: Optional[float] = None
     upload_readiness_score: Optional[float] = None
     blockers: list[str] = []
@@ -599,8 +592,6 @@ class RequestReadinessEvaluateResponse(BaseModel):
     title: Optional[str] = None
     status: str
     recommended_action: Optional[str] = None
-    priority_score: int = 0
-    priority_bucket: str = "low"
     compatibility_score: Optional[float] = None
     upload_readiness_score: Optional[float] = None
     best_library_item_id: Optional[int] = None
@@ -923,8 +914,6 @@ class OperationalQueueItem(BaseModel):
     subtitle: Optional[str] = None
     status: str
     action: str
-    priority_score: int = 0
-    priority_bucket: str = "low"
     blockers: list[str] = []
     reasons: list[str] = []
     context: dict = {}
@@ -947,8 +936,6 @@ class OperationalQueueSummary(BaseModel):
     waiting: int = 0
     blocked: int = 0
     running: int = 0
-    critical: int = 0
-    high: int = 0
 
 
 class OperationalQueueRefreshBody(BaseModel):

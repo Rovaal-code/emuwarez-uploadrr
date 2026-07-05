@@ -197,29 +197,37 @@ def _compute_upload_readiness_score(lib: dict) -> tuple[float, list[str]]:
     return round(min(100.0, score), 1), reasons
 
 
-def _compute_request_urgency_score(req: dict) -> float:
-    compat = req.get("compatibility_status") or ""
-    if compat == "Compatible":
-        return 10.0
-    if compat == "Parcial":
-        return 5.0
-    return 0.0
-
-
 # ---------------------------------------------------------------------------
 # Readiness rules
 # ---------------------------------------------------------------------------
 
+# Fixed ranking of real readiness statuses, most-actionable first. Used only
+# internally by select_best_candidate() to break ties between several
+# library-item candidates for the SAME request — this is match quality, not
+# a user-facing "priority" ranking (the numeric priority_score/priority_bucket
+# system was removed at the user's request; 'blocked'-style statuses like
+# file_missing/import_error/already_exists still exist as real `status`
+# values, just without a derived priority label on top).
+_STATUS_RANK: dict[str, int] = {
+    "ready_to_upload": 0,
+    "preflight_needed": 1,
+    "needs_nomenclature": 2,
+    "downloading": 3,
+    "pending_import": 4,
+    "uploading": 5,
+    "no_local_match": 6,
+    "file_missing": 7,
+    "import_error": 8,
+    "already_exists": 9,
+    "uploaded": 10,
+}
+
 def _evaluate_readiness(
-    req: dict,
     lib: Optional[dict],
-    compat_score: float,
-    compat_status: str,
-    readiness_score: float,
     compat_reasons: list[str],
     readiness_reasons: list[str],
 ) -> dict:
-    """Apply readiness rules. Returns status, action, blockers, bucket, priority."""
+    """Apply readiness rules. Returns status, action, blockers, reasons."""
     blockers: list[str] = []
     reasons: list[str] = list(compat_reasons) + list(readiness_reasons)
 
@@ -229,7 +237,6 @@ def _evaluate_readiness(
             "status": "no_local_match",
             "action": "review_arr",
             "blockers": ["sin candidato local"],
-            "bucket": "low",
             "reasons": reasons,
         }
 
@@ -247,65 +254,60 @@ def _evaluate_readiness(
 
     # Already uploaded/uploading
     if upload_status in ("Subiendo", "uploading"):
-        return {"status": "uploading", "action": "view_upload", "blockers": [], "bucket": "medium", "reasons": reasons}
+        return {"status": "uploading", "action": "view_upload", "blockers": [], "reasons": reasons}
     if upload_status in ("Subido", "uploaded"):
-        return {"status": "uploaded", "action": "view_upload", "blockers": [], "bucket": "blocked", "reasons": reasons}
+        return {"status": "uploaded", "action": "view_upload", "blockers": [], "reasons": reasons}
 
     # Exists in eMuwarez
     if emu_exist in ("exists", "duplicate_confirmed"):
         blockers.append("ya existe en eMuwarez")
-        return {"status": "already_exists", "action": "ignore_already_exists", "blockers": blockers, "bucket": "blocked", "reasons": reasons}
+        return {"status": "already_exists", "action": "ignore_already_exists", "blockers": blockers, "reasons": reasons}
 
     # Queue states
     if queue_status == "downloading":
-        bucket = "medium" if compat_score >= 60 else "low"
-        return {"status": "downloading", "action": "wait_download", "blockers": [], "bucket": bucket, "reasons": reasons}
+        return {"status": "downloading", "action": "wait_download", "blockers": [], "reasons": reasons}
     if queue_status == "queued":
-        bucket = "medium" if compat_score >= 60 else "low"
-        return {"status": "downloading", "action": "wait_download", "blockers": [], "bucket": bucket, "reasons": reasons}
+        return {"status": "downloading", "action": "wait_download", "blockers": [], "reasons": reasons}
     if queue_status == "pending_import":
         blockers.append("pendiente de importación ARR")
-        return {"status": "pending_import", "action": "review_arr", "blockers": blockers, "bucket": "blocked", "reasons": reasons}
+        return {"status": "pending_import", "action": "review_arr", "blockers": blockers, "reasons": reasons}
     if queue_status == "import_error":
         blockers.append("error de importación ARR")
-        return {"status": "import_error", "action": "review_arr", "blockers": blockers, "bucket": "blocked", "reasons": reasons}
+        return {"status": "import_error", "action": "review_arr", "blockers": blockers, "reasons": reasons}
 
     # File missing
     if local_status == "Disponible" and (file_exists is False or file_exists == 0):
         blockers.append("archivo no encontrado en disco")
-        return {"status": "file_missing", "action": "verify_file", "blockers": blockers, "bucket": "blocked", "reasons": reasons}
+        return {"status": "file_missing", "action": "verify_file", "blockers": blockers, "reasons": reasons}
 
     # History error + not available
     if has_history_error and local_status != "Disponible":
         blockers.append(f"error historial ARR: {history_error or history_event}")
-        return {"status": "import_error", "action": "review_arr", "blockers": blockers, "bucket": "blocked", "reasons": reasons}
+        return {"status": "import_error", "action": "review_arr", "blockers": blockers, "reasons": reasons}
 
     # Not locally available
     if local_status != "Disponible":
-        return {"status": "no_local_match", "action": "review_arr", "blockers": [f"local_status={local_status}"], "bucket": "low", "reasons": reasons}
+        return {"status": "no_local_match", "action": "review_arr", "blockers": [f"local_status={local_status}"], "reasons": reasons}
 
     # Available from here — file must exist or be unverified
     if file_exists is False or file_exists == 0:
         blockers.append("archivo no encontrado en disco")
-        return {"status": "file_missing", "action": "verify_file", "blockers": blockers, "bucket": "blocked", "reasons": reasons}
+        return {"status": "file_missing", "action": "verify_file", "blockers": blockers, "reasons": reasons}
 
     # Nomenclature
     if nomenclature in ("No adaptada", "not_adapted"):
-        bucket = "high" if compat_score >= 70 else "medium"
-        return {"status": "needs_nomenclature", "action": "adapt_nomenclature", "blockers": [], "bucket": bucket, "reasons": reasons}
+        return {"status": "needs_nomenclature", "action": "adapt_nomenclature", "blockers": [], "reasons": reasons}
 
     # Preflight needed
     if nomenclature in ("Correcta", "correct") and not prepared_path:
-        bucket = "high" if compat_score >= 70 else "medium"
-        return {"status": "preflight_needed", "action": "run_preflight", "blockers": [], "bucket": bucket, "reasons": reasons}
+        return {"status": "preflight_needed", "action": "run_preflight", "blockers": [], "reasons": reasons}
 
     # Ready to upload
     if prepared_path:
-        return {"status": "ready_to_upload", "action": "upload", "blockers": [], "bucket": "high", "reasons": reasons}
+        return {"status": "ready_to_upload", "action": "upload", "blockers": [], "reasons": reasons}
 
     # Fallback available
-    bucket = "medium" if compat_score >= 50 else "low"
-    return {"status": "preflight_needed", "action": "run_preflight", "blockers": [], "bucket": bucket, "reasons": reasons}
+    return {"status": "preflight_needed", "action": "run_preflight", "blockers": [], "reasons": reasons}
 
 
 # ---------------------------------------------------------------------------
@@ -317,15 +319,7 @@ def score_request_candidate(req: dict, lib: dict) -> dict:
     compat_score, compat_status, compat_reasons = _compute_compatibility_score(req, lib)
     readiness_score, readiness_reasons = _compute_upload_readiness_score(lib)
 
-    readiness_result = _evaluate_readiness(
-        req, lib, compat_score, compat_status,
-        readiness_score, compat_reasons, readiness_reasons,
-    )
-
-    urgency = _compute_request_urgency_score(req)
-    priority_score = int(round(compat_score * 0.45 + readiness_score * 0.45 + urgency * 0.10))
-    if readiness_result["blockers"]:
-        priority_score = min(priority_score, 30)
+    readiness_result = _evaluate_readiness(lib, compat_reasons, readiness_reasons)
 
     return {
         "library_item_id": lib.get("id"),
@@ -338,19 +332,19 @@ def score_request_candidate(req: dict, lib: dict) -> dict:
         "blockers": readiness_result["blockers"],
         "reasons": readiness_result["reasons"],
         "recommended_action": readiness_result["action"],
-        "priority_bucket": readiness_result["bucket"],
-        "priority_score": priority_score,
     }
 
 
 def select_best_candidate(candidates: list[dict]) -> Optional[dict]:
-    """Pick the best candidate from a scored list."""
+    """Pick the best candidate from a scored list — ties broken by real
+    readiness status (most-actionable first, see _STATUS_RANK) then by
+    match quality (compatibility_score). This is candidate matching, not a
+    "priority" ranking — no numeric priority score/bucket involved."""
     if not candidates:
         return None
-    bucket_order = {"high": 0, "medium": 1, "low": 2, "blocked": 3}
     return sorted(
         candidates,
-        key=lambda c: (bucket_order.get(c["priority_bucket"], 4), -c["priority_score"]),
+        key=lambda c: (_STATUS_RANK.get(c["readiness_status"], 99), -c["compatibility_score"]),
     )[0]
 
 
@@ -408,8 +402,6 @@ def evaluate_request_readiness(request_item_id: int, conn: sqlite3.Connection) -
         best_lib_id = best["library_item_id"]
         status = best["readiness_status"]
         action = best["recommended_action"]
-        priority_score = best["priority_score"]
-        priority_bucket = best["priority_bucket"]
         compat_score = best["compatibility_score"]
         readiness_score = best["readiness_score"]
         blockers = best["blockers"]
@@ -418,8 +410,6 @@ def evaluate_request_readiness(request_item_id: int, conn: sqlite3.Connection) -
         best_lib_id = None
         status = "no_local_match"
         action = "review_arr"
-        priority_score = 0
-        priority_bucket = "low"
         compat_score = 0.0
         readiness_score = 0.0
         blockers = ["sin candidato local"]
@@ -444,13 +434,13 @@ def evaluate_request_readiness(request_item_id: int, conn: sqlite3.Connection) -
             """
             UPDATE request_readiness SET
                 best_library_item_id = ?, status = ?, recommended_action = ?,
-                priority_score = ?, priority_bucket = ?, compatibility_score = ?,
-                upload_readiness_score = ?, blockers_json = ?, reasons_json = ?,
+                compatibility_score = ?, upload_readiness_score = ?,
+                blockers_json = ?, reasons_json = ?,
                 candidate_summary_json = ?, last_evaluated_at = ?, updated_at = ?
             WHERE request_item_id = ?
             """,
             (
-                best_lib_id, status, action, priority_score, priority_bucket,
+                best_lib_id, status, action,
                 compat_score, readiness_score,
                 json.dumps(blockers, ensure_ascii=False),
                 json.dumps(reasons, ensure_ascii=False),
@@ -463,14 +453,14 @@ def evaluate_request_readiness(request_item_id: int, conn: sqlite3.Connection) -
             """
             INSERT INTO request_readiness
             (request_item_id, best_library_item_id, status, recommended_action,
-             priority_score, priority_bucket, compatibility_score, upload_readiness_score,
+             compatibility_score, upload_readiness_score,
              blockers_json, reasons_json, candidate_summary_json, last_evaluated_at,
              created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 request_item_id, best_lib_id, status, action,
-                priority_score, priority_bucket, compat_score, readiness_score,
+                compat_score, readiness_score,
                 json.dumps(blockers, ensure_ascii=False),
                 json.dumps(reasons, ensure_ascii=False),
                 json.dumps(candidate_summary, ensure_ascii=False),
@@ -506,12 +496,11 @@ def evaluate_request_readiness(request_item_id: int, conn: sqlite3.Connection) -
         """
         UPDATE request_items SET
             readiness_status = ?, readiness_action = ?,
-            readiness_priority_score = ?, readiness_priority_bucket = ?,
             readiness_best_library_item_id = ?, readiness_updated_at = ?,
             updated_at = ?
         WHERE id = ?
         """,
-        (status, action, priority_score, priority_bucket, best_lib_id, now, now, request_item_id),
+        (status, action, best_lib_id, now, now, request_item_id),
     )
     conn.commit()
 
@@ -521,8 +510,6 @@ def evaluate_request_readiness(request_item_id: int, conn: sqlite3.Connection) -
         "title": req.get("title"),
         "status": status,
         "recommended_action": action,
-        "priority_score": priority_score,
-        "priority_bucket": priority_bucket,
         "compatibility_score": compat_score,
         "upload_readiness_score": readiness_score,
         "best_library_item_id": best_lib_id,
@@ -600,14 +587,13 @@ def list_request_readiness(
     if filters.get("action"):
         clauses.append("rr.recommended_action = ?")
         params.append(filters["action"])
-    if filters.get("priority_bucket"):
-        clauses.append("rr.priority_bucket = ?")
-        params.append(filters["priority_bucket"])
     if filters.get("search"):
         clauses.append("ri.title LIKE ?")
         params.append(f"%{filters['search']}%")
 
     where = " WHERE " + " AND ".join(clauses) if clauses else ""
+    # Order by real readiness status (most-actionable first, same ranking as
+    # _STATUS_RANK) — no numeric priority score/bucket involved anymore.
     sql = f"""
         SELECT rr.*, ri.title, ri.emu_id, ri.category, ri.points,
                ri.requested_resolution, ri.requested_source
@@ -615,8 +601,20 @@ def list_request_readiness(
         JOIN request_items ri ON ri.id = rr.request_item_id
         {where}
         ORDER BY
-            CASE rr.priority_bucket WHEN 'high' THEN 0 WHEN 'medium' THEN 1 WHEN 'low' THEN 2 ELSE 3 END,
-            rr.priority_score DESC,
+            CASE rr.status
+                WHEN 'ready_to_upload' THEN 0
+                WHEN 'preflight_needed' THEN 1
+                WHEN 'needs_nomenclature' THEN 2
+                WHEN 'downloading' THEN 3
+                WHEN 'pending_import' THEN 4
+                WHEN 'uploading' THEN 5
+                WHEN 'no_local_match' THEN 6
+                WHEN 'file_missing' THEN 7
+                WHEN 'import_error' THEN 8
+                WHEN 'already_exists' THEN 9
+                WHEN 'uploaded' THEN 10
+                ELSE 99
+            END,
             rr.last_evaluated_at DESC
         LIMIT ? OFFSET ?
     """
@@ -633,11 +631,6 @@ def list_request_readiness(
                 r[field.replace("_json", "")] = []
         results.append(r)
     return results
-
-
-def list_prioritized_requests(conn: sqlite3.Connection, limit: int = 200) -> list[dict[str, Any]]:
-    """Return requests ordered by priority: high > medium > low > blocked."""
-    return list_request_readiness(conn, limit=limit)
 
 
 def get_candidates_for_request(request_item_id: int, conn: sqlite3.Connection) -> list[dict[str, Any]]:
@@ -665,7 +658,9 @@ def get_candidates_for_request(request_item_id: int, conn: sqlite3.Connection) -
 
 
 def get_dashboard_readiness_counts(conn: sqlite3.Connection) -> dict[str, int]:
-    """Aggregate readiness counts for the dashboard."""
+    """Aggregate readiness counts for the dashboard. requests_blocked is
+    (and always was) status-based, not priority-based — removing the
+    priority ranking system doesn't affect it."""
     try:
         row = conn.execute(
             """
@@ -673,8 +668,7 @@ def get_dashboard_readiness_counts(conn: sqlite3.Connection) -> dict[str, int]:
                 SUM(CASE WHEN status = 'ready_to_upload' THEN 1 ELSE 0 END) AS requests_ready_to_upload,
                 SUM(CASE WHEN status = 'needs_nomenclature' THEN 1 ELSE 0 END) AS requests_need_nomenclature,
                 SUM(CASE WHEN status IN ('downloading', 'pending_import') THEN 1 ELSE 0 END) AS requests_waiting_download,
-                SUM(CASE WHEN status IN ('no_local_match', 'file_missing', 'import_error') THEN 1 ELSE 0 END) AS requests_blocked,
-                SUM(CASE WHEN priority_bucket = 'high' THEN 1 ELSE 0 END) AS requests_high_priority
+                SUM(CASE WHEN status IN ('no_local_match', 'file_missing', 'import_error') THEN 1 ELSE 0 END) AS requests_blocked
             FROM request_readiness
             """
         ).fetchone()
@@ -687,7 +681,6 @@ def get_dashboard_readiness_counts(conn: sqlite3.Connection) -> dict[str, int]:
         "requests_need_nomenclature": 0,
         "requests_waiting_download": 0,
         "requests_blocked": 0,
-        "requests_high_priority": 0,
     }
 
 
@@ -696,7 +689,6 @@ __all__ = [
     "refresh_request_readiness",
     "get_request_readiness",
     "list_request_readiness",
-    "list_prioritized_requests",
     "build_request_candidates",
     "score_request_candidate",
     "select_best_candidate",

@@ -30,12 +30,12 @@ const ROUTE_LABELS: Record<string, string> = {
   '/queue': 'Cola',
 }
 
-const BUCKET_COLORS: Record<string, string> = {
-  critical: '#ef4444',
-  high: '#f97316',
-  medium: '#f59e0b',
-  low: '#6b7280',
-  blocked: '#7f1d1d',
+const STATUS_COLORS: Record<string, string> = {
+  ready: '#22c55e',
+  waiting: '#f59e0b',
+  running: '#3b82f6',
+  blocked: '#ef4444',
+  open: '#6b7280',
 }
 
 export function QueueActionPanel({ itemId, plan, actions, onNavigate, onClose }: Props) {
@@ -77,14 +77,14 @@ export function QueueActionPanel({ itemId, plan, actions, onNavigate, onClose }:
 
   if (!plan) return null
 
-  const bucketColor = BUCKET_COLORS[plan.priority_bucket] ?? '#6b7280'
+  const statusColor = STATUS_COLORS[plan.status] ?? '#6b7280'
   const routeLabel = ROUTE_LABELS[plan.ui.route] ?? plan.ui.route
 
   return (
     <div style={{
       background: 'rgba(17,24,39,0.98)',
       border: '1px solid rgba(255,255,255,0.12)',
-      borderLeft: `3px solid ${bucketColor}`,
+      borderLeft: `3px solid ${statusColor}`,
       borderRadius: 8,
       padding: '14px 16px',
       fontSize: '0.82rem',
@@ -110,12 +110,8 @@ export function QueueActionPanel({ itemId, plan, actions, onNavigate, onClose }:
           <span style={{ color: '#e5e7eb' }}>{FLOW_LABELS[plan.flow] ?? plan.flow}</span>
         </div>
         <div>
-          <span style={{ color: '#9ca3af' }}>Prioridad: </span>
-          <span style={{ color: bucketColor, fontWeight: 600 }}>{plan.priority_bucket.toUpperCase()}</span>
-        </div>
-        <div>
           <span style={{ color: '#9ca3af' }}>Estado: </span>
-          <span style={{ color: '#e5e7eb' }}>{plan.status}</span>
+          <span style={{ color: statusColor, fontWeight: 600 }}>{plan.status}</span>
         </div>
       </div>
 

@@ -28,11 +28,11 @@ def _insert_queue_item(patched_db, action="upload", title="CLI Test") -> int:
     conn.execute(
         """INSERT INTO operational_queue_items
            (queue_key, item_type, entity_type, entity_id, title, status, action,
-            priority_score, priority_bucket, blockers_json, reasons_json,
+            blockers_json, reasons_json,
             created_at, updated_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)""",
+           VALUES (?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)""",
         (f"key-cli-{action}", "upload_ready", "library", 1, title, "ready", action,
-         80, "high", "[]", "[]"),
+         "[]", "[]"),
     )
     conn.commit()
     row = conn.execute(

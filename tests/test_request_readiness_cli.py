@@ -1,4 +1,4 @@
-"""Tests for Phase 8B CLI commands (requests readiness/prioritized/candidates)."""
+"""Tests for Phase 8B CLI commands (requests readiness/candidates)."""
 from __future__ import annotations
 
 import subprocess
@@ -75,29 +75,6 @@ def test_cli_readiness_refresh_with_data(isolated_env, tmp_path):
     result = _run(["requests", "readiness-refresh"], env=isolated_env)
     assert result.returncode == 0
     assert "1" in result.stdout  # 1 item updated
-
-
-# ---------------------------------------------------------------------------
-# requests prioritized (empty)
-# ---------------------------------------------------------------------------
-
-def test_cli_prioritized_empty(isolated_env):
-    _run(["db", "init"], env=isolated_env)
-    result = _run(["requests", "prioritized"], env=isolated_env)
-    assert result.returncode == 0
-    assert "readiness-refresh" in result.stdout or "Sin readiness" in result.stdout or "Readiness" in result.stdout
-
-
-# ---------------------------------------------------------------------------
-# requests prioritized with data
-# ---------------------------------------------------------------------------
-
-def test_cli_prioritized_with_data(isolated_env, tmp_path):
-    isolated_env["CONFIG_DIR"] = str(tmp_path)
-    _insert_request(tmp_path, "cli-prio-1", "Prio Movie A")
-    _run(["requests", "readiness-refresh"], env=isolated_env)
-    result = _run(["requests", "prioritized"], env=isolated_env)
-    assert result.returncode == 0
 
 
 # ---------------------------------------------------------------------------

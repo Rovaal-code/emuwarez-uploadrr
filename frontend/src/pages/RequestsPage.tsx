@@ -6,7 +6,7 @@ import {
   getRequestDetail,
   markRequestReviewed,
 } from '../api/requests'
-import { refreshReadiness, listPrioritized, getCandidates } from '../api/requestReadiness'
+import { refreshReadiness, getCandidates } from '../api/requestReadiness'
 import type {
   RequestItemResponse, RequestDetailResponse, RequestSyncStatusResponse,
   RequestReadinessResponse, RequestCandidateResponse,
@@ -56,20 +56,6 @@ function ReadinessBadge({ status }: { status: string | null | undefined }) {
     status.includes('error') || status.includes('missing') || status === 'blocked' ? 'var(--color-missing)' :
     'var(--text-secondary)'
   return <span style={{ fontSize: 11, color, fontWeight: 500 }}>{status}</span>
-}
-
-function PriorityBadge({ bucket, score }: { bucket: string | null | undefined; score: number | null | undefined }) {
-  if (!bucket) return <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>—</span>
-  const color =
-    bucket === 'high' ? '#34d399' :
-    bucket === 'medium' ? '#f59e0b' :
-    bucket === 'blocked' ? 'var(--color-missing)' :
-    'var(--text-secondary)'
-  return (
-    <span style={{ fontSize: 11, color }}>
-      {bucket}{score != null ? ` (${score})` : ''}
-    </span>
-  )
 }
 
 function SyncInfo({ syncStatus, onSync, syncing }: {
@@ -183,7 +169,6 @@ function DetailPanel({ item, readiness, onClose, onReviewed, onShowCandidates }:
           <div className="detail-panel__section-title">Readiness (Fase 8B)</div>
           <div className="detail-row"><span>Estado</span><ReadinessBadge status={readiness.status} /></div>
           <div className="detail-row"><span>Acción</span><span style={{ fontSize: 12, color: '#a78bfa' }}>{readiness.recommended_action || '—'}</span></div>
-          <div className="detail-row"><span>Prioridad</span><PriorityBadge bucket={readiness.priority_bucket} score={readiness.priority_score} /></div>
           <div className="detail-row"><span>Compat. score</span><span>{readiness.compatibility_score?.toFixed(0) ?? '—'}/100</span></div>
           <div className="detail-row"><span>Readiness score</span><span>{readiness.upload_readiness_score?.toFixed(0) ?? '—'}/100</span></div>
           {readiness.best_library_item_id && (
@@ -265,8 +250,6 @@ export function RequestsPage() {
   const [showCandidates, setShowCandidates] = useState(false)
   const [refreshingReadiness, setRefreshingReadiness] = useState(false)
   const [readinessMsg, setReadinessMsg] = useState<string | null>(null)
-  const [showPrioritized, setShowPrioritized] = useState(false)
-  const [prioritized, setPrioritized] = useState<RequestReadinessResponse[]>([])
 
   const loadItems = useCallback(async (off = 0, q = search, st = statusFilter) => {
     setLoading(true)
@@ -369,27 +352,7 @@ export function RequestsPage() {
     }
   }
 
-  const handleShowPrioritized = async () => {
-    if (showPrioritized) { setShowPrioritized(false); return }
-    try {
-      const r = await listPrioritized(100)
-      setPrioritized(r.items)
-      setShowPrioritized(true)
-    } catch { /* silent */ }
-  }
-
-  const displayItems = showPrioritized
-    ? items.filter(i => prioritized.some(p => p.request_item_id === i.id))
-        .sort((a, b) => {
-          const pa = prioritized.find(p => p.request_item_id === a.id)
-          const pb = prioritized.find(p => p.request_item_id === b.id)
-          const bucketOrder: Record<string, number> = { high: 0, medium: 1, low: 2, blocked: 3 }
-          const ba = bucketOrder[pa?.priority_bucket ?? 'low'] ?? 3
-          const bb = bucketOrder[pb?.priority_bucket ?? 'low'] ?? 3
-          if (ba !== bb) return ba - bb
-          return (pb?.priority_score ?? 0) - (pa?.priority_score ?? 0)
-        })
-    : items
+  const displayItems = items
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1
@@ -407,12 +370,6 @@ export function RequestsPage() {
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <button className="btn btn-secondary btn-sm" onClick={handleRefreshReadiness} disabled={refreshingReadiness}>
               {refreshingReadiness ? 'Calculando…' : 'Recalcular readiness'}
-            </button>
-            <button
-              className={`btn btn-sm ${showPrioritized ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={handleShowPrioritized}
-            >
-              {showPrioritized ? 'Mostrar todos' : 'Ver priorizados'}
             </button>
             <SyncInfo syncStatus={syncStatus} onSync={handleSync} syncing={syncing} />
           </div>
@@ -475,7 +432,6 @@ export function RequestsPage() {
                     <th>Compatibilidad</th>
                     <th>Readiness</th>
                     <th>Acción</th>
-                    <th>Prioridad</th>
                     <th>Candidato</th>
                     <th>Estado EMU</th>
                   </tr>
@@ -484,7 +440,6 @@ export function RequestsPage() {
                   {displayItems
                     .filter(item => !readinessFilter || item.readiness_status === readinessFilter)
                     .map(item => {
-                    const prio = prioritized.find(p => p.request_item_id === item.id)
                     return (
                       <tr
                         key={item.id}
@@ -502,12 +457,6 @@ export function RequestsPage() {
                         <td><CompatibilityBadge status={item.compatibility_status} /></td>
                         <td><ReadinessBadge status={item.readiness_status} /></td>
                         <td style={{ fontSize: 11, color: '#a78bfa' }}>{item.readiness_action || '—'}</td>
-                        <td>
-                          <PriorityBadge
-                            bucket={item.readiness_priority_bucket ?? prio?.priority_bucket}
-                            score={item.readiness_priority_score ?? prio?.priority_score}
-                          />
-                        </td>
                         <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                           {item.readiness_best_library_item_id ? `#${item.readiness_best_library_item_id}` : '—'}
                         </td>
@@ -519,7 +468,7 @@ export function RequestsPage() {
               </table>
             </div>
 
-            {!showPrioritized && totalPages > 1 && (
+            {totalPages > 1 && (
               <div className="pagination" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
                 <button className="btn btn-secondary btn-sm" disabled={offset === 0} onClick={() => loadItems(offset - PAGE_SIZE)}>Anterior</button>
                 <span style={{ fontSize: 13, color: 'var(--text-secondary)', alignSelf: 'center' }}>{currentPage} / {totalPages}</span>

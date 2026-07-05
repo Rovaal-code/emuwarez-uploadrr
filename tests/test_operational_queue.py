@@ -53,13 +53,13 @@ def _insert_upload_job(conn, title="Upload Movie", status="ready") -> int:
     return conn.execute("SELECT id FROM upload_jobs ORDER BY id DESC LIMIT 1").fetchone()["id"]
 
 
-def _seed_request_readiness(conn, req_id, status="no_local_match", bucket="low", score=10):
+def _seed_request_readiness(conn, req_id, status="no_local_match"):
     conn.execute(
         """INSERT OR REPLACE INTO request_readiness
-           (request_item_id, status, recommended_action, priority_score, priority_bucket,
+           (request_item_id, status, recommended_action,
             last_evaluated_at, created_at, updated_at)
-           VALUES (?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)""",
-        (req_id, status, "review_arr", score, bucket),
+           VALUES (?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)""",
+        (req_id, status, "review_arr"),
     )
     conn.commit()
 
@@ -71,7 +71,7 @@ def _seed_request_readiness(conn, req_id, status="no_local_match", bucket="low",
 def test_refresh_creates_items_from_request_readiness(db_conn):
     from emuwarez_uploadrr.services.operational_queue import refresh_operational_queue, list_operational_queue
     req_id = _insert_request(db_conn, "emu-rr", "Readiness Movie")
-    _seed_request_readiness(db_conn, req_id, status="ready_to_upload", bucket="high", score=80)
+    _seed_request_readiness(db_conn, req_id, status="ready_to_upload")
     result = refresh_operational_queue(db_conn)
     assert result["ok"] is True
     assert result["items_built"] >= 1
@@ -177,22 +177,6 @@ def test_queue_key_is_deterministic(db_conn):
     r2 = upsert_queue_item(item, db_conn)
     assert r1["id"] == r2["id"]
     assert r1["queue_key"] == r2["queue_key"]
-
-
-# ---------------------------------------------------------------------------
-# Priority buckets correct
-# ---------------------------------------------------------------------------
-
-def test_priority_buckets_correct(db_conn):
-    from emuwarez_uploadrr.services.operational_queue import refresh_operational_queue, list_operational_queue
-    req_id = _insert_request(db_conn, "emu-critical", "Critical Movie")
-    _seed_request_readiness(db_conn, req_id, status="ready_to_upload", bucket="high", score=95)
-    refresh_operational_queue(db_conn)
-    items = list_operational_queue(db_conn)
-    rr_items = [i for i in items if i["queue_key"] == f"request:{req_id}:readiness"]
-    assert len(rr_items) == 1
-    # score >= 90 → critical
-    assert rr_items[0]["priority_bucket"] == "critical"
 
 
 # ---------------------------------------------------------------------------

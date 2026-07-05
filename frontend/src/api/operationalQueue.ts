@@ -14,7 +14,6 @@ import type {
 export async function listQueue(params?: {
   status?: string
   action?: string
-  priority_bucket?: string
   item_type?: string
   search?: string
   limit?: number
@@ -23,7 +22,6 @@ export async function listQueue(params?: {
   const q = new URLSearchParams()
   if (params?.status) q.set('status', params.status)
   if (params?.action) q.set('action', params.action)
-  if (params?.priority_bucket) q.set('priority_bucket', params.priority_bucket)
   if (params?.item_type) q.set('item_type', params.item_type)
   if (params?.search) q.set('search', params.search)
   if (params?.limit) q.set('limit', String(params.limit))

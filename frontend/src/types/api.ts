@@ -37,7 +37,6 @@ export interface DashboardSummaryResponse {
   last_sync_at: string | null
   // Phase 8B — request readiness (used by "Peticiones accionables")
   requests_ready_to_upload?: number
-  requests_high_priority?: number
   requests_need_nomenclature?: number
   requests_waiting_download?: number
   requests_blocked?: number
@@ -213,8 +212,6 @@ export interface RequestItemResponse {
   // Phase 8B
   readiness_status: string | null
   readiness_action: string | null
-  readiness_priority_score: number | null
-  readiness_priority_bucket: string | null
   readiness_best_library_item_id: number | null
 }
 
@@ -228,8 +225,6 @@ export interface RequestReadinessResponse {
   best_library_item_id: number | null
   status: string
   recommended_action: string | null
-  priority_score: number
-  priority_bucket: string
   compatibility_score: number | null
   upload_readiness_score: number | null
   blockers: string[]
@@ -483,8 +478,6 @@ export interface OperationalQueueItem {
   subtitle: string | null
   status: string
   action: string
-  priority_score: number
-  priority_bucket: string
   blockers: string[]
   reasons: string[]
   context: Record<string, unknown>
@@ -507,8 +500,6 @@ export interface OperationalQueueSummary {
   waiting: number
   blocked: number
   running: number
-  critical: number
-  high: number
 }
 
 export interface OperationalQueueRefreshResponse {
@@ -550,8 +541,6 @@ export interface QueueActionPlan {
   guided_flow: boolean
   blockers: string[]
   reasons: string[]
-  priority_bucket: string
-  priority_score: number
   title: string | null
   status: string
   item_type: string | null

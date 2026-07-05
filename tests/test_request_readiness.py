@@ -160,7 +160,6 @@ def test_pending_import_blocked(db_conn):
     result = evaluate_request_readiness(req_id, db_conn)
     assert result["status"] == "pending_import"
     assert result["recommended_action"] == "review_arr"
-    assert result["priority_bucket"] == "blocked"
 
 
 # ---------------------------------------------------------------------------
@@ -175,7 +174,6 @@ def test_import_error_blocked(db_conn):
     req_id = _insert_request(db_conn, emu_id="emu-err", title="Error Movie", tmdb_id="err1")
     result = evaluate_request_readiness(req_id, db_conn)
     assert result["status"] == "import_error"
-    assert result["priority_bucket"] == "blocked"
 
 
 # ---------------------------------------------------------------------------
@@ -189,7 +187,6 @@ def test_file_missing_blocked(db_conn):
     req_id = _insert_request(db_conn, emu_id="emu-fg", title="File Gone", tmdb_id="fg1")
     result = evaluate_request_readiness(req_id, db_conn)
     assert result["status"] == "file_missing"
-    assert result["priority_bucket"] == "blocked"
 
 
 # ---------------------------------------------------------------------------
@@ -221,7 +218,6 @@ def test_ready_to_upload(db_conn):
     result = evaluate_request_readiness(req_id, db_conn)
     assert result["status"] == "ready_to_upload"
     assert result["recommended_action"] == "upload"
-    assert result["priority_bucket"] == "high"
 
 
 # ---------------------------------------------------------------------------
@@ -258,12 +254,12 @@ def test_scoring_is_deterministic(db_conn):
            "emu_existence_status": None}
     r1 = score_request_candidate(req, lib)
     r2 = score_request_candidate(req, lib)
-    assert r1["priority_score"] == r2["priority_score"]
+    assert r1["readiness_status"] == r2["readiness_status"]
     assert r1["compatibility_score"] == r2["compatibility_score"]
 
 
 # ---------------------------------------------------------------------------
-# Blockers force bucket=blocked
+# Blockers correlate with a blocked status
 # ---------------------------------------------------------------------------
 
 def test_blockers_force_blocked_bucket(db_conn):
@@ -273,7 +269,7 @@ def test_blockers_force_blocked_bucket(db_conn):
                     nomenclature_status="Correcta")
     req_id = _insert_request(db_conn, emu_id="emu-blk", title="Blocked Movie", tmdb_id="blk1")
     result = evaluate_request_readiness(req_id, db_conn)
-    assert result["priority_bucket"] == "blocked"
+    assert result["status"] == "file_missing"
     assert len(result["blockers"]) > 0
 
 
@@ -283,23 +279,31 @@ def test_blockers_force_blocked_bucket(db_conn):
 
 def test_prioritized_ordering(db_conn):
     from emuwarez_uploadrr.services.request_readiness import (
-        evaluate_request_readiness, list_prioritized_requests,
+        evaluate_request_readiness, list_request_readiness,
     )
-    # Request 1: ready_to_upload → high
+    # Request 1: ready_to_upload → most actionable
     _insert_library(db_conn, title="Movie High", tmdb_id="h1",
                     local_status="Disponible", file_exists=1,
                     nomenclature_status="Correcta",
                     prepared_path="/data/prep.mkv")
     rq1 = _insert_request(db_conn, emu_id="emu-h1", title="Movie High", tmdb_id="h1")
-    # Request 2: no_local_match → low
+    # Request 2: no_local_match → least actionable
     rq2 = _insert_request(db_conn, emu_id="emu-l1", title="Unknown Film", tmdb_id="xyz999")
     evaluate_request_readiness(rq1, db_conn)
     evaluate_request_readiness(rq2, db_conn)
 
-    items = list_prioritized_requests(db_conn)
-    bucket_order = {"high": 0, "medium": 1, "low": 2, "blocked": 3}
-    buckets = [bucket_order[i["priority_bucket"]] for i in items]
-    assert buckets == sorted(buckets)
+    # list_request_readiness() orders by real readiness status (most
+    # actionable first) by default — no separate "prioritized" endpoint
+    # needed since it always returns this order now.
+    items = list_request_readiness(db_conn)
+    status_order = {
+        "ready_to_upload": 0, "preflight_needed": 1, "needs_nomenclature": 2,
+        "downloading": 3, "pending_import": 4, "uploading": 5,
+        "no_local_match": 6, "file_missing": 7, "import_error": 8,
+        "already_exists": 9, "uploaded": 10,
+    }
+    ranks = [status_order.get(i["status"], 99) for i in items]
+    assert ranks == sorted(ranks)
 
 
 # ---------------------------------------------------------------------------

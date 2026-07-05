@@ -40,8 +40,6 @@ def _item_to_response(item: dict) -> OperationalQueueItem:
         subtitle=item.get("subtitle"),
         status=item["status"],
         action=item["action"],
-        priority_score=item.get("priority_score", 0),
-        priority_bucket=item.get("priority_bucket", "low"),
         blockers=item.get("blockers") or [],
         reasons=item.get("reasons") or [],
         context=item.get("context") or {},
@@ -88,7 +86,6 @@ def refresh_queue(
 def list_queue(
     status: str = Query(None),
     action: str = Query(None),
-    priority_bucket: str = Query(None),
     item_type: str = Query(None),
     entity_type: str = Query(None),
     search: str = Query(None),
@@ -102,8 +99,6 @@ def list_queue(
         filters["status"] = status
     if action:
         filters["action"] = action
-    if priority_bucket:
-        filters["priority_bucket"] = priority_bucket
     if item_type:
         filters["item_type"] = item_type
     if entity_type:

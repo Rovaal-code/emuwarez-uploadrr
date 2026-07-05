@@ -65,22 +65,6 @@ def test_list_readiness_after_refresh(client, auth_headers):
 
 
 # ---------------------------------------------------------------------------
-# GET /api/requests/prioritized
-# ---------------------------------------------------------------------------
-
-def test_prioritized_requires_auth(client):
-    resp = client.get("/api/requests/prioritized")
-    assert resp.status_code == 401
-
-
-def test_prioritized_ok_empty(client, auth_headers):
-    resp = client.get("/api/requests/prioritized", headers=auth_headers)
-    assert resp.status_code == 200
-    data = resp.json()
-    assert "items" in data
-
-
-# ---------------------------------------------------------------------------
 # GET /api/requests/{id}/readiness
 # ---------------------------------------------------------------------------
 
@@ -103,7 +87,6 @@ def test_get_readiness_ok_after_evaluate(client, auth_headers):
     data = resp.json()
     assert data["request_item_id"] == req_id
     assert "status" in data
-    assert "priority_bucket" in data
 
 
 # ---------------------------------------------------------------------------
@@ -160,7 +143,7 @@ def test_dashboard_includes_readiness_counts(client, auth_headers):
     assert resp.status_code == 200
     data = resp.json()
     for key in ("requests_ready_to_upload", "requests_need_nomenclature",
-                "requests_waiting_download", "requests_blocked", "requests_high_priority"):
+                "requests_waiting_download", "requests_blocked"):
         assert key in data, f"Missing dashboard key: {key}"
         assert isinstance(data[key], int)
 
@@ -179,6 +162,4 @@ def test_requests_list_includes_readiness_fields(client, auth_headers):
     # Phase 8B fields must be present (may be null)
     assert "readiness_status" in item
     assert "readiness_action" in item
-    assert "readiness_priority_score" in item
-    assert "readiness_priority_bucket" in item
     assert "readiness_best_library_item_id" in item

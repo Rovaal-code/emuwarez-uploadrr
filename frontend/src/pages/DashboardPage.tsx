@@ -155,7 +155,6 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
             {[
               { label: 'Listas para subir', value: s.requests_ready_to_upload ?? 0, color: 'var(--color-available)' },
-              { label: 'Prioridad alta', value: s.requests_high_priority ?? 0, color: '#34d399' },
               { label: 'Necesitan nomenclatura', value: s.requests_need_nomenclature ?? 0, color: '#f59e0b' },
               { label: 'Esperando descarga', value: s.requests_waiting_download ?? 0, color: '#818cf8' },
               { label: 'Bloqueadas', value: s.requests_blocked ?? 0, color: 'var(--color-missing)' },

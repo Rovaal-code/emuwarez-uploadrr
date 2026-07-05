@@ -19,14 +19,6 @@ const ROUTE_TO_PAGE: Record<string, string> = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-const BUCKET_COLORS: Record<string, string> = {
-  critical: '#ef4444',
-  high:     '#f97316',
-  medium:   '#f59e0b',
-  low:      '#6b7280',
-  blocked:  '#7f1d1d',
-}
-
 const STATUS_LABELS: Record<string, string> = {
   open:      'Abierto',
   ready:     'Listo',
@@ -51,25 +43,6 @@ const ACTION_LABELS: Record<string, string> = {
   check_emu:          'Comprobar EMU',
   manual_review:      'Revisión manual',
   none:               '—',
-}
-
-function PriorityBadge({ bucket }: { bucket: string }) {
-  const color = BUCKET_COLORS[bucket] ?? '#6b7280'
-  return (
-    <span style={{
-      background: color + '22',
-      color,
-      border: `1px solid ${color}44`,
-      borderRadius: 4,
-      padding: '2px 7px',
-      fontSize: '0.72rem',
-      fontWeight: 600,
-      textTransform: 'uppercase',
-      letterSpacing: '0.03em',
-    }}>
-      {bucket}
-    </span>
-  )
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -119,9 +92,7 @@ function DetailPanel({ item, onClose, onResolve, onIgnore }: {
         <div><span style={{ color: '#6b7280' }}>Clave: </span>{item.queue_key}</div>
         <div><span style={{ color: '#6b7280' }}>Tipo: </span>{item.item_type}</div>
         <div><span style={{ color: '#6b7280' }}>Estado: </span><StatusBadge status={item.status} /></div>
-        <div><span style={{ color: '#6b7280' }}>Prioridad: </span><PriorityBadge bucket={item.priority_bucket} /></div>
         <div><span style={{ color: '#6b7280' }}>Acción: </span>{ACTION_LABELS[item.action] ?? item.action}</div>
-        <div><span style={{ color: '#6b7280' }}>Score: </span>{item.priority_score}</div>
         {item.request_item_id && <div><span style={{ color: '#6b7280' }}>Request ID: </span>{item.request_item_id}</div>}
         {item.library_item_id && <div><span style={{ color: '#6b7280' }}>Library ID: </span>{item.library_item_id}</div>}
         {item.upload_job_id && <div><span style={{ color: '#6b7280' }}>Upload Job: </span>{item.upload_job_id}</div>}
@@ -198,7 +169,6 @@ export function QueuePage({ onNavigate }: QueuePageProps = {}) {
   const [planLoading, setPlanLoading] = useState(false)
 
   // Filters
-  const [filterBucket, setFilterBucket] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [filterAction, setFilterAction] = useState('')
 
@@ -207,7 +177,6 @@ export function QueuePage({ onNavigate }: QueuePageProps = {}) {
     setError(null)
     try {
       const params: Record<string, string> = {}
-      if (filterBucket) params.priority_bucket = filterBucket
       if (filterStatus) params.status = filterStatus
       if (filterAction) params.action = filterAction
       const [list, sum] = await Promise.allSettled([
@@ -221,7 +190,7 @@ export function QueuePage({ onNavigate }: QueuePageProps = {}) {
     } finally {
       setLoading(false)
     }
-  }, [filterBucket, filterStatus, filterAction])
+  }, [filterStatus, filterAction])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -300,8 +269,6 @@ export function QueuePage({ onNavigate }: QueuePageProps = {}) {
             { label: 'Esperando', value: summary.waiting, color: '#a78bfa' },
             { label: 'Abiertos', value: summary.open, color: '#3b82f6' },
             { label: 'Bloqueados', value: summary.blocked, color: '#ef4444' },
-            { label: 'Críticos', value: summary.critical, color: '#dc2626' },
-            { label: 'Alta prio.', value: summary.high, color: '#f97316' },
           ].map(c => (
             <div key={c.label} style={{ minWidth: 80, textAlign: 'center' }}>
               <div style={{ fontSize: '1.5rem', fontWeight: 700, color: c.color }}>{c.value}</div>
@@ -313,18 +280,6 @@ export function QueuePage({ onNavigate }: QueuePageProps = {}) {
 
       {/* Toolbar */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
-        <select
-          value={filterBucket}
-          onChange={e => setFilterBucket(e.target.value)}
-          style={{ background: '#1e2332', color: '#d1d5db', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 5, padding: '5px 10px', fontSize: '0.82rem' }}
-        >
-          <option value="">Todas las prioridades</option>
-          <option value="critical">Crítico</option>
-          <option value="high">Alta</option>
-          <option value="medium">Media</option>
-          <option value="low">Baja</option>
-          <option value="blocked">Bloqueado</option>
-        </select>
         <select
           value={filterStatus}
           onChange={e => setFilterStatus(e.target.value)}
@@ -412,7 +367,7 @@ export function QueuePage({ onNavigate }: QueuePageProps = {}) {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', color: '#6b7280', textAlign: 'left' }}>
-                {['Prioridad', 'Estado', 'Acción', 'Tipo', 'Título', 'Motivo', 'Actualizado', '', ''].map(h => (
+                {['Estado', 'Acción', 'Tipo', 'Título', 'Motivo', 'Actualizado', '', ''].map(h => (
                   <th key={h} style={{ padding: '8px 10px', fontWeight: 500, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
                 ))}
               </tr>
@@ -428,7 +383,6 @@ export function QueuePage({ onNavigate }: QueuePageProps = {}) {
                   }}
                   onClick={() => setSelected(selected?.id === item.id ? null : item)}
                 >
-                  <td style={{ padding: '8px 10px' }}><PriorityBadge bucket={item.priority_bucket} /></td>
                   <td style={{ padding: '8px 10px' }}><StatusBadge status={item.status} /></td>
                   <td style={{ padding: '8px 10px', color: '#d1d5db' }}>{ACTION_LABELS[item.action] ?? item.action}</td>
                   <td style={{ padding: '8px 10px', color: '#9ca3af', fontSize: '0.75rem' }}>{item.item_type}</td>

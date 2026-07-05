@@ -172,7 +172,6 @@ def build_parser() -> argparse.ArgumentParser:
     req_sub.add_parser("readiness-refresh", help="Recalcular readiness para todas las peticiones")
     p_req_candidates = req_sub.add_parser("candidates", help="Candidatos locales para una petición")
     p_req_candidates.add_argument("id", type=int)
-    req_sub.add_parser("prioritized", help="Peticiones ordenadas por prioridad de readiness")
 
     p_missing = sub.add_parser("missing", help="Contenido faltante")
     missing_sub = p_missing.add_subparsers(dest="missing_command", required=True)
@@ -200,7 +199,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_queue_list = queue_sub.add_parser("list", help="Listar items de la cola")
     p_queue_list.add_argument("--status", help="Filtrar por status (open/ready/waiting/blocked)")
     p_queue_list.add_argument("--action", help="Filtrar por acción")
-    p_queue_list.add_argument("--bucket", help="Filtrar por priority_bucket (critical/high/medium/low/blocked)")
     p_queue_list.add_argument("--type", dest="item_type", help="Filtrar por item_type")
     p_queue_list.add_argument("--limit", type=int, default=50, help="Número máximo de items (default: 50)")
     queue_sub.add_parser("refresh", help="Reconstruir cola desde todas las fuentes")
@@ -612,7 +610,6 @@ def cmd_requests(args) -> int:
                 print(f"Petición: {data.get('title')} (ID {req_id})")
                 print(f"  Estado readiness : {data['status']}")
                 print(f"  Acción           : {data.get('recommended_action') or '—'}")
-                print(f"  Prioridad        : {data.get('priority_bucket')} / score {data.get('priority_score')}")
                 print(f"  Compat. score    : {data.get('compatibility_score')}")
                 print(f"  Readiness score  : {data.get('upload_readiness_score')}")
                 print(f"  Candidato local  : #{data.get('best_library_item_id') or '—'}")
@@ -627,15 +624,13 @@ def cmd_requests(args) -> int:
                 print("Sin readiness calculado. Ejecuta: python3 emuwarez_uploader.py requests readiness-refresh")
                 return 0
             _print_table(
-                ["ID", "Título", "Estado", "Acción", "Prioridad", "Score", "Candidato"],
+                ["ID", "Título", "Estado", "Acción", "Candidato"],
                 [
                     [
                         r["request_item_id"],
                         (r.get("title") or "")[:40],
                         r["status"],
                         r.get("recommended_action") or "—",
-                        r.get("priority_bucket"),
-                        r.get("priority_score"),
                         f"#{r.get('best_library_item_id')}" if r.get("best_library_item_id") else "—",
                     ]
                     for r in rows
@@ -660,28 +655,6 @@ def cmd_requests(args) -> int:
                         c.get("recommended_action") or "—",
                     ]
                     for c in items
-                ],
-            )
-            return 0
-        if args.requests_command == "prioritized":
-            from .services.request_readiness import list_prioritized_requests
-            rows = list_prioritized_requests(conn, limit=50)
-            if not rows:
-                print("Sin readiness calculado. Ejecuta: python3 emuwarez_uploader.py requests readiness-refresh")
-                return 0
-            _print_table(
-                ["ID", "Título", "Estado", "Acción", "Prioridad", "Score", "Candidato"],
-                [
-                    [
-                        r["request_item_id"],
-                        (r.get("title") or "")[:38],
-                        r["status"],
-                        r.get("recommended_action") or "—",
-                        r.get("priority_bucket"),
-                        r.get("priority_score"),
-                        f"#{r.get('best_library_item_id')}" if r.get("best_library_item_id") else "—",
-                    ]
-                    for r in rows
                 ],
             )
             return 0
@@ -788,14 +761,6 @@ def cmd_arr(args) -> int:
     return 1
 
 
-_BUCKET_COLORS = {
-    "critical": "🔴",
-    "high":     "🟠",
-    "medium":   "🟡",
-    "low":      "⚪",
-    "blocked":  "⛔",
-}
-
 _STATUS_LABELS = {
     "open":     "abierto",
     "ready":    "listo",
@@ -825,7 +790,6 @@ def cmd_queue(args) -> int:
             print(f"  Total: {summary.get('total', 0)}")
             print(f"  Open:    {summary.get('open', 0)}   Ready:   {summary.get('ready', 0)}")
             print(f"  Waiting: {summary.get('waiting', 0)}   Blocked: {summary.get('blocked', 0)}")
-            print(f"  Critical: {summary.get('critical', 0)}   High: {summary.get('high', 0)}")
             if summary.get("total", 0) == 0:
                 print()
                 print("  Sin items. Ejecuta: python3 emuwarez_uploader.py queue refresh")
@@ -847,8 +811,6 @@ def cmd_queue(args) -> int:
                 filters["action"] = args.action
             if getattr(args, "item_type", None):
                 filters["item_type"] = args.item_type
-            if getattr(args, "bucket", None):
-                filters["priority_bucket"] = args.bucket
             limit = getattr(args, "limit", 50)
             items = list_operational_queue(conn, filters=filters, limit=limit)
             if not items:
@@ -856,17 +818,15 @@ def cmd_queue(args) -> int:
                 return 0
             rows = []
             for item in items:
-                icon = _BUCKET_COLORS.get(item.get("priority_bucket", "low"), "")
                 status_label = _STATUS_LABELS.get(item.get("status", ""), item.get("status", ""))
                 rows.append([
                     item["id"],
-                    f"{icon} {item.get('priority_bucket', '')}",
                     status_label,
                     item.get("action", ""),
                     item.get("item_type", ""),
                     (item.get("title") or "")[:50],
                 ])
-            _print_table(["ID", "Prioridad", "Estado", "Acción", "Tipo", "Título"], rows)
+            _print_table(["ID", "Estado", "Acción", "Tipo", "Título"], rows)
             return 0
 
         if args.queue_command == "show":
@@ -874,7 +834,6 @@ def cmd_queue(args) -> int:
             if not item:
                 print(f"✗ Item {args.id} no encontrado")
                 return 1
-            icon = _BUCKET_COLORS.get(item.get("priority_bucket", "low"), "")
             print(f"\n── Item #{item['id']} ─────────────────────────────────")
             print(f"  Clave:     {item.get('queue_key')}")
             print(f"  Tipo:      {item.get('item_type')} / {item.get('entity_type')}")
@@ -882,7 +841,6 @@ def cmd_queue(args) -> int:
             print(f"  Subtítulo: {item.get('subtitle')}")
             print(f"  Estado:    {_STATUS_LABELS.get(item.get('status', ''), item.get('status', ''))}")
             print(f"  Acción:    {item.get('action')}")
-            print(f"  Prioridad: {icon} {item.get('priority_bucket')} (score {item.get('priority_score', 0)})")
             if item.get("blockers"):
                 print(f"  Bloqueado por:")
                 for b in item["blockers"]:
@@ -944,7 +902,6 @@ def cmd_queue(args) -> int:
             print(f"  Flow:         {plan['flow']}")
             print(f"  Título:       {plan.get('title') or '–'}")
             print(f"  Tipo:         {plan.get('item_type') or '–'}")
-            print(f"  Prioridad:    {plan.get('priority_bucket')} (score {plan.get('priority_score', 0)})")
             print(f"  Estado:       {plan.get('status')}")
             ui = plan.get("ui", {})
             print(f"  UI:           {ui.get('route', '–')}  modal: {ui.get('modal') or '–'}")

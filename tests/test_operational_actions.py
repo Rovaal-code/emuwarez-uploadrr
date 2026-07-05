@@ -25,17 +25,17 @@ def _insert_library(conn, title="Test Movie", file_exists=1) -> int:
     return conn.execute("SELECT id FROM library_items ORDER BY id DESC LIMIT 1").fetchone()["id"]
 
 
-def _insert_queue_item(conn, action="upload", status="ready", bucket="high",
+def _insert_queue_item(conn, action="upload", status="ready",
                        library_item_id=None, upload_job_id=None,
                        request_item_id=None, title="Test Item") -> int:
     conn.execute(
         """INSERT INTO operational_queue_items
            (queue_key, item_type, entity_type, entity_id, title, status, action,
-            priority_score, priority_bucket, blockers_json, reasons_json,
+            blockers_json, reasons_json,
             library_item_id, upload_job_id, request_item_id, created_at, updated_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)""",
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)""",
         (f"key-{action}-{title}", "upload_ready", "library", 1, title, status, action,
-         80, bucket, "[]", '["Listo para subir"]',
+         "[]", '["Listo para subir"]',
          library_item_id, upload_job_id, request_item_id),
     )
     conn.commit()
@@ -86,14 +86,6 @@ def test_plan_verify_file_safe(db_conn):
     plan = result["plan"]
     assert plan["safe_to_execute_inline"] is True
     assert plan["requires_confirmation"] is False
-
-
-def test_plan_includes_priority(db_conn):
-    from emuwarez_uploadrr.services.operational_actions import get_queue_action_plan
-    iid = _insert_queue_item(db_conn, action="upload", bucket="critical")
-    plan = get_queue_action_plan(iid, db_conn)["plan"]
-    assert plan["priority_bucket"] == "critical"
-    assert isinstance(plan["priority_score"], int)
 
 
 def test_plan_target_includes_library_item_id(db_conn):

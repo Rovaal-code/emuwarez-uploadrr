@@ -11,7 +11,7 @@ from .constants import CONFIG_DIR
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 18
+SCHEMA_VERSION = 19
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -370,8 +370,6 @@ def _migrate_request_items_phase8b(conn: sqlite3.Connection) -> None:
     new_cols = [
         ("readiness_status", "TEXT"),
         ("readiness_action", "TEXT"),
-        ("readiness_priority_score", "INTEGER"),
-        ("readiness_priority_bucket", "TEXT"),
         ("readiness_best_library_item_id", "INTEGER"),
         ("readiness_updated_at", "TEXT"),
     ]
@@ -400,6 +398,39 @@ def _migrate_request_items_emu_catalog_check(conn: sqlite3.Connection) -> None:
             pass
 
 
+def _migrate_drop_priority_columns(conn: sqlite3.Connection) -> None:
+    """Remove the numeric "priority" ranking system (score + high/medium/low
+    bucket) from request_readiness/operational_queue_items/request_items —
+    the user explicitly asked for no "priority" concept anywhere in
+    requests/queue. The 'blocked' classification is KEPT, but it already
+    lives on the independent `status` column (e.g. status='file_missing' or
+    'import_error' both already imply blocked) — priority_bucket was always a
+    redundant derived label on top of that, never the source of truth.
+
+    Plain ALTER TABLE DROP COLUMN (SQLite >= 3.35, confirmed available here)
+    is enough — unlike the instances.type migrations, these columns carry no
+    CHECK/UNIQUE constraint, so no table-rebuild is needed. SQLite refuses to
+    drop a column that still has an index on it, so idx_rr_bucket/idx_oq_bucket
+    must be dropped first. Idempotent: DROP INDEX/DROP COLUMN both raise
+    OperationalError if already gone, caught and ignored.
+    """
+    for index_name in ("idx_rr_bucket", "idx_oq_bucket"):
+        try:
+            conn.execute(f"DROP INDEX {index_name}")
+        except sqlite3.OperationalError:
+            pass
+    for table, columns in (
+        ("request_readiness", ("priority_score", "priority_bucket")),
+        ("operational_queue_items", ("priority_score", "priority_bucket")),
+        ("request_items", ("readiness_priority_score", "readiness_priority_bucket")),
+    ):
+        for col in columns:
+            try:
+                conn.execute(f"ALTER TABLE {table} DROP COLUMN {col}")
+            except sqlite3.OperationalError:
+                pass
+
+
 def _migrate_request_readiness_tables(conn: sqlite3.Connection) -> None:
     """Create Phase 8B request readiness and candidates tables."""
     conn.execute("""
@@ -409,8 +440,6 @@ def _migrate_request_readiness_tables(conn: sqlite3.Connection) -> None:
             best_library_item_id INTEGER,
             status TEXT NOT NULL,
             recommended_action TEXT,
-            priority_score INTEGER NOT NULL DEFAULT 0,
-            priority_bucket TEXT NOT NULL DEFAULT 'low',
             compatibility_score REAL,
             upload_readiness_score REAL,
             blockers_json TEXT,
@@ -432,9 +461,6 @@ def _migrate_request_readiness_tables(conn: sqlite3.Connection) -> None:
     """)
     conn.execute("""
         CREATE INDEX IF NOT EXISTS idx_rr_action ON request_readiness(recommended_action)
-    """)
-    conn.execute("""
-        CREATE INDEX IF NOT EXISTS idx_rr_bucket ON request_readiness(priority_bucket)
     """)
 
     conn.execute("""
@@ -485,8 +511,6 @@ def _migrate_operational_queue_tables(conn: sqlite3.Connection) -> None:
             subtitle TEXT,
             status TEXT NOT NULL DEFAULT 'open',
             action TEXT NOT NULL DEFAULT 'none',
-            priority_score INTEGER NOT NULL DEFAULT 0,
-            priority_bucket TEXT NOT NULL DEFAULT 'low',
             blockers_json TEXT,
             reasons_json TEXT,
             context_json TEXT,
@@ -500,7 +524,6 @@ def _migrate_operational_queue_tables(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_oq_queue_key ON operational_queue_items(queue_key)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_oq_status ON operational_queue_items(status)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_oq_action ON operational_queue_items(action)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_oq_bucket ON operational_queue_items(priority_bucket)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_oq_request ON operational_queue_items(request_item_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_oq_library ON operational_queue_items(library_item_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_oq_upload ON operational_queue_items(upload_job_id)")
@@ -897,6 +920,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_library_items_phase11e(conn)
         _migrate_instances_narrow_type_check(conn)
         _migrate_request_items_emu_catalog_check(conn)
+        _migrate_drop_priority_columns(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

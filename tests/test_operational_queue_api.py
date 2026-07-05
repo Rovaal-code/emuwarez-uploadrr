@@ -123,8 +123,8 @@ def test_resolve_ok(client, auth_headers):
     conn = connect(db_path())
     init_db(conn)
     conn.execute(
-        "INSERT INTO operational_queue_items (queue_key, item_type, entity_type, status, action, priority_score, priority_bucket) VALUES (?,?,?,?,?,?,?)",
-        ("api-test:resolve", "x", "y", "open", "none", 0, "low"),
+        "INSERT INTO operational_queue_items (queue_key, item_type, entity_type, status, action) VALUES (?,?,?,?,?)",
+        ("api-test:resolve", "x", "y", "open", "none"),
     )
     conn.commit()
     item_id = conn.execute(
@@ -148,8 +148,8 @@ def test_ignore_ok(client, auth_headers):
     conn = connect(db_path())
     init_db(conn)
     conn.execute(
-        "INSERT INTO operational_queue_items (queue_key, item_type, entity_type, status, action, priority_score, priority_bucket) VALUES (?,?,?,?,?,?,?)",
-        ("api-test:ignore", "x", "y", "open", "none", 0, "low"),
+        "INSERT INTO operational_queue_items (queue_key, item_type, entity_type, status, action) VALUES (?,?,?,?,?)",
+        ("api-test:ignore", "x", "y", "open", "none"),
     )
     conn.commit()
     item_id = conn.execute(
@@ -174,7 +174,5 @@ def test_dashboard_includes_phase8c_counts(client, auth_headers):
     data = r.json()
     assert "operational_queue_open" in data
     assert "operational_queue_ready" in data
-    assert "operational_queue_critical" in data
     assert "operational_queue_blocked" in data
     assert "operational_queue_waiting" in data
-    assert "operational_queue_high" in data

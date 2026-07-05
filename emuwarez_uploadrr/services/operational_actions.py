@@ -204,8 +204,6 @@ def _build_action_plan(item: dict) -> dict:
         "guided_flow": flow_info.get("guided_flow", False),
         "blockers": blockers,
         "reasons": reasons,
-        "priority_bucket": item.get("priority_bucket", "low"),
-        "priority_score": item.get("priority_score", 0),
         "title": item.get("title"),
         "status": item.get("status", "open"),
         "item_type": item.get("item_type"),

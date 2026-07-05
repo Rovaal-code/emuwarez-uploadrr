@@ -314,5 +314,21 @@ def test_rank_compatible_available_correct_nomenclature_first():
     assert ranked[0]["library_item"]["nomenclature_status"] == "Correcta"
 
 
+def test_rank_local_status_parcial_ranks_between_available_and_missing():
+    """A Parcial (series/season rollup) local candidate must rank worse
+    than a fully Disponible one but better than an unlisted/Faltante one
+    isn't guaranteed by this ranking alone — this just documents Parcial
+    has its own explicit rank entry instead of an unexplained gap."""
+    matches = [
+        {"compatibility_status": "Compatible", "compatibility_confidence": 0.9,
+         "library_item": {"local_status": "Parcial", "nomenclature_status": "N/A"}},
+        {"compatibility_status": "Compatible", "compatibility_confidence": 0.9,
+         "library_item": {"local_status": "Disponible", "nomenclature_status": "N/A"}},
+    ]
+    ranked = rank_request_matches(matches)
+    assert ranked[0]["library_item"]["local_status"] == "Disponible"
+    assert ranked[1]["library_item"]["local_status"] == "Parcial"
+
+
 def test_rank_empty():
     assert rank_request_matches([]) == []

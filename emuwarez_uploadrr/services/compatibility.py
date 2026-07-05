@@ -290,7 +290,11 @@ def rank_request_matches(matches: list[dict]) -> list[dict]:
     Each dict must have: compatibility_status, library_item (optional).
     """
     _STATUS = {"Compatible": 0, "Parcial": 2, "No compatible": 3, "Llena": 4}
-    _LOCAL = {"Disponible": 0, "Subido": 1}
+    # "Parcial" here is a series/season rollup local_status (some but not
+    # all children available) — explicit entry documenting it ranks at the
+    # same default as everything else not fully available/uploaded, rather
+    # than leaving it an unexplained gap.
+    _LOCAL = {"Disponible": 0, "Subido": 1, "Parcial": 2}
     _NOMEN = {"Correcta": 0, "No adaptada": 1, "N/A": 2}
 
     def _key(m: dict) -> tuple:

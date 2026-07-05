@@ -53,6 +53,8 @@ def _status_arg(value: Optional[str]) -> Optional[str]:
         "uploaded": LocalStatus.UPLOADED.value,
         "subido": LocalStatus.UPLOADED.value,
         "error": LocalStatus.ERROR.value,
+        "partial": LocalStatus.PARTIAL.value,
+        "parcial": LocalStatus.PARTIAL.value,
     }
     return lookup.get(value.lower(), value)
 

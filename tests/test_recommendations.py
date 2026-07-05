@@ -183,3 +183,34 @@ def test_refresh_recommendations_returns_counts(db_conn):
     assert result["ok"] is True
     assert result["items_updated"] == 2
     assert result["errors"] == 0
+
+
+def test_build_recommendation_for_series_row_is_not_applicable(db_conn):
+    """Series/season rollup rows have no file of their own — no per-file
+    diagnostic should ever be computed/persisted for them."""
+    from emuwarez_uploadrr.services.recommendations import build_recommendation_for_item
+    item_id = _insert_item(db_conn, item_type="series", local_status="Parcial")
+    result = build_recommendation_for_item(item_id, db_conn)
+    assert result["ok"] is True
+    assert result["diagnostic_status"] == "not_applicable"
+    assert result["recommended_action"] == "none"
+
+    row = db_conn.execute(
+        "SELECT diagnostic_status, recommended_action FROM library_items WHERE id = ?", (item_id,)
+    ).fetchone()
+    assert row["diagnostic_status"] == "not_applicable"
+    assert row["recommended_action"] == "none"
+
+
+def test_refresh_recommendations_skips_series_and_season_rows(db_conn):
+    from emuwarez_uploadrr.services.recommendations import refresh_recommendations
+    _insert_item(db_conn, local_status="Disponible", file_exists=1, nomenclature_status="No adaptada")
+    _insert_item(db_conn, item_type="series", local_status="Parcial")
+    _insert_item(db_conn, item_type="season", local_status="Parcial")
+
+    result = refresh_recommendations(db_conn)
+
+    assert result["items_updated"] == 1
+    for row in db_conn.execute("SELECT item_type, recommended_action FROM library_items").fetchall():
+        if row["item_type"] in ("series", "season"):
+            assert row["recommended_action"] is None

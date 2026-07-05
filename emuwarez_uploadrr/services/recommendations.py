@@ -29,7 +29,7 @@ def build_recommendation_for_item(item_id: int, conn: sqlite3.Connection) -> dic
     """Compute and persist recommendation for a single library item."""
     row = conn.execute(
         """
-        SELECT id, title, local_status, file_exists, nomenclature_status,
+        SELECT id, title, item_type, local_status, file_exists, nomenclature_status,
                request_status, prepared_path, arr_queue_status, arr_history_status,
                arr_history_event_type, arr_history_error, arr_queue_error,
                arr_queue_progress, diagnostic_status
@@ -41,7 +41,17 @@ def build_recommendation_for_item(item_id: int, conn: sqlite3.Connection) -> dic
         return {"ok": False, "error": f"Item {item_id} no encontrado"}
 
     item = _row_to_item(row)
-    action, reasons, diag_status, diag_summary = _compute_recommendation(item)
+    if item.get("item_type") in ("series", "season"):
+        # Rollup rows have no file of their own — file_exists/nomenclature/
+        # preflight diagnostics only make sense for the movie/episode rows
+        # underneath them. Still persisted (not just returned) so a stale
+        # diagnostic from before this row became a rollup never lingers.
+        action = "none"
+        reasons = ["rollup row (series/season) — sin diagnóstico propio"]
+        diag_status = "not_applicable"
+        diag_summary = "N/A (agregado de serie/temporada)"
+    else:
+        action, reasons, diag_status, diag_summary = _compute_recommendation(item)
 
     conn.execute(
         """
@@ -171,7 +181,9 @@ def refresh_recommendations(
 ) -> dict[str, Any]:
     """Recalculate recommendations for multiple items."""
     filters = filters or {}
-    where_clauses = []
+    # Series/season are organizational rollup rows with no file of their
+    # own — always excluded, regardless of other filters.
+    where_clauses = ["item_type IN ('movie', 'episode')"]
     params: list[Any] = []
 
     status_filter = filters.get("status")

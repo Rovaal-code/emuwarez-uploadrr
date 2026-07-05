@@ -132,6 +132,19 @@ def test_no_library_match_returns_no_local_match(db_conn):
     assert result["recommended_action"] == "review_arr"
 
 
+def test_partial_series_not_treated_as_no_local_match(db_conn):
+    """A Parcial (some but not all episodes available) series row must be
+    distinguished from a true no-match — it has a real local candidate,
+    just an incomplete one."""
+    from emuwarez_uploadrr.services.request_readiness import evaluate_request_readiness
+    _insert_library(db_conn, title="Partial Show", tmdb_id="ps1",
+                     item_type="series", local_status="Parcial", file_exists=None)
+    req_id = _insert_request(db_conn, emu_id="emu-ps", title="Partial Show", tmdb_id="ps1")
+    result = evaluate_request_readiness(req_id, db_conn)
+    assert result["status"] == "partially_available"
+    assert result["status"] != "no_local_match"
+
+
 # ---------------------------------------------------------------------------
 # downloading / queued → wait_download
 # ---------------------------------------------------------------------------

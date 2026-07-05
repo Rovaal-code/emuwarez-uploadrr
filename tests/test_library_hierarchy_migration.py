@@ -47,3 +47,9 @@ def test_local_status_partial_value():
 
 def test_partial_not_in_not_available():
     assert LocalStatus.PARTIAL.value not in LocalStatus.not_available()
+
+
+def test_cli_status_arg_accepts_partial_alias():
+    from emuwarez_uploadrr.cli import _status_arg
+    assert _status_arg("parcial") == LocalStatus.PARTIAL.value
+    assert _status_arg("partial") == LocalStatus.PARTIAL.value

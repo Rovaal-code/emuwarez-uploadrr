@@ -18,6 +18,7 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+from ..models import LocalStatus
 from .compatibility import (
     match_request_to_library,
     classify_request_match,
@@ -215,11 +216,12 @@ _STATUS_RANK: dict[str, int] = {
     "downloading": 3,
     "pending_import": 4,
     "uploading": 5,
-    "no_local_match": 6,
-    "file_missing": 7,
-    "import_error": 8,
-    "already_exists": 9,
-    "uploaded": 10,
+    "partially_available": 6,
+    "no_local_match": 7,
+    "file_missing": 8,
+    "import_error": 9,
+    "already_exists": 10,
+    "uploaded": 11,
 }
 
 def _evaluate_readiness(
@@ -284,6 +286,13 @@ def _evaluate_readiness(
     if has_history_error and local_status != "Disponible":
         blockers.append(f"error historial ARR: {history_error or history_event}")
         return {"status": "import_error", "action": "review_arr", "blockers": blockers, "reasons": reasons}
+
+    # Partially available (some but not all children present, series/season
+    # rollup only) — distinct from a true no-match: a real local candidate
+    # exists, it's just incomplete.
+    if local_status == LocalStatus.PARTIAL.value:
+        blockers.append("serie/temporada parcialmente disponible")
+        return {"status": "partially_available", "action": "review_arr", "blockers": blockers, "reasons": reasons}
 
     # Not locally available
     if local_status != "Disponible":

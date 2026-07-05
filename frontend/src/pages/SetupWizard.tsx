@@ -4,6 +4,7 @@ import {
   setupNomenclature, setupComplete,
 } from '../api/setup'
 import { login } from '../api/auth'
+import { syncAll } from '../api/library'
 import { testTmdbConnection, testEmuwarezConnection, testArrConnection, type IntegrationTestResult } from '../api/integrationTests'
 import { ServiceIcon } from '../components/ServiceIcon'
 import { REGION_OPTIONS, LANGUAGE_OPTIONS } from '../constants/regionLanguage'
@@ -242,6 +243,16 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
 
   const handleComplete = wrap(async () => {
     await setupComplete()
+    if (instances.length > 0) {
+      // Best-effort: the Dashboard shows the real state either way (and has
+      // its own manual "Sincronizar biblioteca" button), so a failure here
+      // shouldn't block finishing setup. Deliberately NOT gated on
+      // last_sync_at/summary state — the scheduler (Phase 11D) can run its
+      // own sync-library tick before the user even finishes this wizard,
+      // which would make any "has it ever synced" check for the Dashboard's
+      // own sake constantly self-report success with an empty library.
+      try { await syncAll(true) } catch { /* dashboard will show the real state */ }
+    }
     onComplete()
   })
 

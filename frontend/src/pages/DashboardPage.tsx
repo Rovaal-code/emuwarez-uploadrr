@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { getDashboardSummary, getDashboardActivity, getDashboardLibraryActivity } from '../api/dashboard'
 import { getUploads } from '../api/uploads'
 import { syncAll } from '../api/library'
@@ -95,20 +95,6 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
       setSyncing(false)
     }
   }
-
-  // First-ever visit to the dashboard (last_sync_at is null): the setup
-  // wizard's completion screen promises "la primera sincronización se
-  // ejecutará desde el dashboard" — this is what actually keeps that
-  // promise, since nothing triggered it automatically before. Guarded by
-  // a ref so it only fires once per page load, not on every 15s poll.
-  const autoSyncTriggered = useRef(false)
-  useEffect(() => {
-    if (summary && summary.last_sync_at === null && !autoSyncTriggered.current) {
-      autoSyncTriggered.current = true
-      handleSync()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [summary])
 
   if (loadingData && !summary) return <LoadingState label="Cargando dashboard…" />
   if (!summary) return <ErrorState message={dataError ?? 'No se pudieron cargar los datos del dashboard'} onRetry={loadData} />

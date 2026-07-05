@@ -205,6 +205,36 @@ def test_movie_missing():
     assert item.local_status == LocalStatus.MISSING.value
 
 
+def test_movie_parses_media_info():
+    movie = {
+        "id": 4, "title": "Ad Astra", "year": 2019, "tmdbId": 419704,
+        "movieFile": {
+            "id": 40, "path": "/movies/Ad Astra/Ad Astra.mkv", "size": 20000,
+            "quality": {"quality": {"name": "WEBDL-1080p"}},
+            "mediaInfo": {
+                "videoCodec": "x265", "audioCodec": "EAC3",
+                "audioLanguages": "eng / spa", "subtitles": "eng / spa",
+            },
+        },
+    }
+    item = radarr.movie_to_library_item(movie, instance_id=1, instance_name="Radarr")
+    assert item.video_codec == "x265"
+    assert item.audio_codec == "EAC3"
+    assert item.audio_languages == "eng / spa"
+    assert item.subtitle_languages == "eng / spa"
+
+
+def test_movie_without_media_info_leaves_fields_none():
+    movie = {
+        "id": 5, "title": "No MediaInfo", "year": 2020, "tmdbId": 1,
+        "movieFile": {"id": 50, "path": "/movies/x.mkv", "size": 100,
+                      "quality": {"quality": {"name": "Bluray-1080p"}}},
+    }
+    item = radarr.movie_to_library_item(movie, instance_id=1, instance_name="Radarr")
+    assert item.video_codec is None
+    assert item.audio_codec is None
+
+
 def test_movie_queued_via_queue_map():
     movie = {"id": 3, "title": "Queued Film", "year": 2023}
     q_map = {3: LocalStatus.DOWNLOADING.value}
@@ -239,3 +269,49 @@ def test_episode_missing():
     episode = {"id": 200, "seasonNumber": 2, "episodeNumber": 3, "title": "Ghosts"}
     item = sonarr.episode_to_library_item(episode, None, series, instance_id=2, instance_name="Sonarr")
     assert item.local_status == LocalStatus.MISSING.value
+
+
+def test_episode_parses_media_info():
+    series = {"id": 1, "title": "The Wire", "year": 2002, "tvdbId": 79126}
+    episode = {"id": 101, "seasonNumber": 1, "episodeNumber": 2, "title": "The Detail",
+                "hasFile": True, "episodeFileId": 51}
+    ep_file = {
+        "id": 51, "path": "/shows/The Wire/S01E02.mkv", "size": 5000,
+        "quality": {"quality": {"name": "WEBRip-1080p"}},
+        "mediaInfo": {"videoCodec": "h264", "audioCodec": "AAC", "audioLanguages": "eng"},
+    }
+    item = sonarr.episode_to_library_item(episode, ep_file, series, instance_id=2, instance_name="Sonarr")
+    assert item.video_codec == "h264"
+    assert item.audio_codec == "AAC"
+    assert item.audio_languages == "eng"
+
+
+# ---------------------------------------------------------------------------
+# extract_media_info
+# ---------------------------------------------------------------------------
+
+def test_extract_media_info_full():
+    from emuwarez_uploadrr.integrations.base import extract_media_info
+    file_entry = {"mediaInfo": {
+        "videoCodec": "HEVC", "audioCodec": "DTS",
+        "audioLanguages": "eng / spa", "subtitles": "eng",
+    }}
+    result = extract_media_info(file_entry)
+    assert result == {
+        "video_codec": "HEVC", "audio_codec": "DTS",
+        "audio_languages": "eng / spa", "subtitle_languages": "eng",
+    }
+
+
+def test_extract_media_info_missing_key():
+    from emuwarez_uploadrr.integrations.base import extract_media_info
+    result = extract_media_info({"path": "/x.mkv"})
+    assert result == {
+        "video_codec": None, "audio_codec": None,
+        "audio_languages": None, "subtitle_languages": None,
+    }
+
+
+def test_extract_media_info_none_input():
+    from emuwarez_uploadrr.integrations.base import extract_media_info
+    assert extract_media_info(None)["video_codec"] is None

@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import pytest
 from pathlib import Path
+from unittest.mock import patch
 
 from emuwarez_uploadrr.database import init_db, connect
 from emuwarez_uploadrr.services.nomenclature import (
@@ -250,3 +251,62 @@ def test_filesystem_operation_saved_on_dry_run(isolated_db, tmp_path):
 
 def test_confirmation_token_value():
     assert CONFIRMATION_TOKEN == "APLICAR_NOMENCLATURA"
+
+
+# ---------------------------------------------------------------------------
+# Phase 6B — real MediaInfo invocation at apply time (mocked, no real
+# mediainfo binary in this sandbox)
+# ---------------------------------------------------------------------------
+
+def test_apply_plan_prefers_real_media_info_over_synced_values(isolated_db, tmp_path):
+    src = tmp_path / "movie.mkv"
+    src.write_bytes(b"video")
+    prepared = tmp_path / "prepared"
+    prepared.mkdir()
+    conn = _open(isolated_db)
+    item_id = _insert_item(conn, title="Ad Astra", path=str(src))
+    _set_hardlink_base(conn, prepared)
+    # Simulate stale/guessed values from an old sync (Phase 6A columns).
+    conn.execute(
+        "UPDATE library_items SET video_codec = 'AVC', audio_codec = 'AAC', tmdb_id = '1', year = 2019 WHERE id = ?",
+        (item_id,),
+    )
+    conn.commit()
+
+    real_media_info = {
+        "video_codec": "HEVC", "audio_codec": "DD+",
+        "audio_languages": "ING / ESP", "subtitle_languages": "ING / ESP",
+    }
+    with patch(
+        "emuwarez_uploadrr.services.media_info_service.read_media_info_summary",
+        return_value=real_media_info,
+    ):
+        plan = build_nomenclature_apply_plan(item_id, conn=conn)
+
+    assert plan["proposal"]["video_codec"] == "HEVC"
+    row = conn.execute("SELECT video_codec, audio_codec FROM library_items WHERE id = ?", (item_id,)).fetchone()
+    assert row["video_codec"] == "HEVC"
+    assert row["audio_codec"] == "DD+"
+    conn.close()
+
+
+def test_apply_plan_falls_back_when_mediainfo_unavailable(isolated_db, tmp_path):
+    src = tmp_path / "movie.mkv"
+    src.write_bytes(b"video")
+    prepared = tmp_path / "prepared"
+    prepared.mkdir()
+    conn = _open(isolated_db)
+    item_id = _insert_item(conn, title="Some Movie", path=str(src))
+    _set_hardlink_base(conn, prepared)
+    conn.execute("UPDATE library_items SET video_codec = 'AVC', tmdb_id = '1', year = 2019 WHERE id = ?", (item_id,))
+    conn.commit()
+
+    with patch(
+        "emuwarez_uploadrr.services.media_info_service.read_media_info_summary",
+        return_value=None,
+    ):
+        plan = build_nomenclature_apply_plan(item_id, conn=conn)
+
+    # No mediainfo available — the Phase 6A synced value must survive untouched.
+    assert plan["proposal"]["video_codec"] == "AVC"
+    conn.close()

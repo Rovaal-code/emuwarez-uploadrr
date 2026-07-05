@@ -199,14 +199,25 @@ def build_nomenclature_proposal(item_id: int, *, force_refresh: bool = False, co
         stat_info = safe_stat(path) if path else {}
         current_name = stat_info.get("name") or (path.split("/")[-1] if path else None)
 
-        quality = item.get("quality") or ""
-        video_codec = None
-        for codec in ("HEVC", "H.265", "x265", "AVC", "H.264", "x264", "AV1", "VP9"):
-            if codec.lower() in quality.lower():
-                video_codec = codec
-                break
+        # Phase 6A: real values parsed from Radarr/Sonarr's own movieFile/
+        # episodeFile mediaInfo at sync time (integrations/base.py::
+        # extract_media_info), not a guess against the quality profile NAME.
+        # Falls back to the old substring guess only for rows synced before
+        # this column existed (video_codec is NULL, not just falsy-empty).
+        video_codec = item.get("video_codec")
+        if video_codec is None:
+            quality = item.get("quality") or ""
+            for codec in ("HEVC", "H.265", "x265", "AVC", "H.264", "x264", "AV1", "VP9"):
+                if codec.lower() in quality.lower():
+                    video_codec = codec
+                    break
         if not video_codec:
-            warnings.append("Codec de vídeo no detectado desde metadatos disponibles. MediaInfo no fue invocado.")
+            warnings.append("Codec de vídeo no detectado. Sincroniza de nuevo la biblioteca o invoca MediaInfo desde 'Adaptar nomenclatura'.")
+
+        audio_codec = item.get("audio_codec")
+        audio_languages = item.get("audio_languages")
+        audio_summary = " ".join(p for p in (audio_codec, audio_languages) if p) or None
+        subtitle_summary = item.get("subtitle_languages")
 
         proposed_filename = _build_proposed_filename(
             title=title,
@@ -214,8 +225,8 @@ def build_nomenclature_proposal(item_id: int, *, force_refresh: bool = False, co
             resolution=resolution,
             source=source,
             video_codec=video_codec,
-            audio_summary=None,
-            subtitle_summary=None,
+            audio_summary=audio_summary,
+            subtitle_summary=subtitle_summary,
             release_tag=release_tag,
             media_type=media_type,
         )
@@ -249,8 +260,8 @@ def build_nomenclature_proposal(item_id: int, *, force_refresh: bool = False, co
             "resolution": resolution,
             "source": source,
             "video_codec": video_codec,
-            "audio_summary": None,
-            "subtitle_summary": None,
+            "audio_summary": audio_summary,
+            "subtitle_summary": subtitle_summary,
             "release_tag": release_tag,
             "warnings_json": json.dumps(warnings, ensure_ascii=False),
             "errors_json": json.dumps(errors, ensure_ascii=False),
@@ -382,6 +393,37 @@ def _get_hardlink_base(conn=None) -> str | None:
             _conn.close()
 
 
+def _refresh_media_info_from_real_file(item: dict, *, conn) -> None:
+    """Phase 6B: overwrite library_items' video_codec/audio_codec/
+    audio_languages/subtitle_languages with a real MediaInfo read of the
+    actual file, when it disagrees with what's there (usually Radarr/
+    Sonarr's own sync-time mediaInfo, or nothing at all for older rows).
+    Silently does nothing if MediaInfo is unavailable/fails — the existing
+    Phase 6A values (or lack thereof) are always a safe fallback."""
+    from .media_info_service import read_media_info_summary
+
+    path = item.get("path")
+    if not path:
+        return
+    real = read_media_info_summary(path)
+    if not real:
+        return
+
+    changed = any(item.get(k) != real.get(k) for k in real)
+    if not changed:
+        return
+
+    conn.execute(
+        """UPDATE library_items SET video_codec = ?, audio_codec = ?,
+           audio_languages = ?, subtitle_languages = ?, updated_at = CURRENT_TIMESTAMP
+           WHERE id = ?""",
+        (real.get("video_codec"), real.get("audio_codec"),
+         real.get("audio_languages"), real.get("subtitle_languages"), item.get("id")),
+    )
+    conn.commit()
+    build_nomenclature_proposal(item.get("id"), force_refresh=True, conn=conn)
+
+
 def build_nomenclature_apply_plan(
     item_id: int,
     *,
@@ -411,6 +453,14 @@ def build_nomenclature_apply_plan(
             ).fetchone()
             proposal = row_to_dict(row)
         else:
+            # Phase 6B: invoke real MediaInfo against the actual file at
+            # apply time (never during the cheap 6A preview) — its result
+            # wins over Radarr/Sonarr's own mediaInfo when it disagrees,
+            # since it inspects the file directly rather than trusting
+            # whatever the *arr app reported at sync time. Best-effort: a
+            # missing `mediainfo` binary or a parse failure just leaves the
+            # Phase 6A values in place, it never blocks the apply flow.
+            _refresh_media_info_from_real_file(item, conn=conn)
             proposal = get_latest_nomenclature_proposal(item_id, conn=conn)
 
         if not proposal:

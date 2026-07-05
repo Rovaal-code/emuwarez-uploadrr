@@ -108,6 +108,28 @@ def test_build_proposal_no_mediainfo_warning(db_conn):
     assert any("mediainfo" in w.lower() or "codec" in w.lower() for w in warnings)
 
 
+def test_build_proposal_uses_real_media_info_columns(db_conn):
+    """Phase 6A — video_codec/audio_codec/audio_languages parsed at sync
+    time from Radarr/Sonarr's own mediaInfo must be used verbatim, not
+    re-guessed from the quality profile name, and must silence the
+    'codec not detected' warning."""
+    cursor = db_conn.execute(
+        """INSERT INTO library_items
+           (item_type, title, local_status, request_status, path, quality,
+            video_codec, audio_codec, audio_languages, subtitle_languages)
+           VALUES ('movie', 'Ad Astra', 'Disponible', 'Sin petición', '/fake/Ad Astra.mkv',
+                   'WEBDL-1080p', 'x265', 'EAC3', 'eng / spa', 'eng / spa')""",
+    )
+    db_conn.commit()
+    item_id = cursor.lastrowid
+    result = build_nomenclature_proposal(item_id, conn=db_conn)
+    assert result.get("video_codec") == "x265"
+    assert result.get("audio_summary") == "EAC3 eng / spa"
+    assert result.get("subtitle_summary") == "eng / spa"
+    warnings = json.loads(result.get("warnings_json", "[]"))
+    assert not any("codec" in w.lower() for w in warnings)
+
+
 def test_get_latest_proposal(db_conn):
     item_id = _insert_item(db_conn, local_status="Disponible")
     build_nomenclature_proposal(item_id, conn=db_conn)

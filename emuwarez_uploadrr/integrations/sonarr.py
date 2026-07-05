@@ -8,7 +8,7 @@ from .arr_base import (
     ArrClientError, ArrConnectionError, ArrAuthError,
     arr_request, join_api_path, safe_api_key,
 )
-from .base import build_url, extract_poster_url, request_json
+from .base import build_url, extract_media_info, extract_poster_url, request_json
 from ..models import LibraryItem, LocalStatus, MediaKind, NomenclatureStatus
 from ..legacy import DEFAULT_TAG
 
@@ -283,6 +283,7 @@ def episode_to_library_item(
         quality_name = (((episode_file.get("quality") or {}).get("quality") or {}).get("name"))
         path = episode_file.get("path")
         size = episode_file.get("size")
+    media_info = extract_media_info(episode_file)
     season = episode.get("seasonNumber")
     number = episode.get("episodeNumber")
     series_title = series.get("title") or "Serie"
@@ -320,6 +321,10 @@ def episode_to_library_item(
         quality=quality_name,
         resolution=_resolution_from_quality(quality_name),
         source=_source_from_quality(quality_name),
+        video_codec=media_info.get("video_codec"),
+        audio_codec=media_info.get("audio_codec"),
+        audio_languages=media_info.get("audio_languages"),
+        subtitle_languages=media_info.get("subtitle_languages"),
         size_bytes=size,
         local_status=local_status,
         nomenclature_status=_nomenclature(path, has_file),

@@ -94,7 +94,7 @@ export function NomenclatureModal({ itemId, itemTitle, onClose }: Props) {
 
   const statusLabel = proposal ? (STATUS_LABELS[proposal.status] || proposal.status) : ''
   const statusClass = proposal ? (STATUS_CLASS[proposal.status] || 'badge req-unknown') : ''
-  const canApply = proposal && proposal.status !== 'blocked'
+  const canApply = proposal && proposal.status !== 'blocked' && proposal.hardlink_configured
   const alreadyApplied = applyResult?.status === 'applied'
 
   return (
@@ -128,8 +128,10 @@ export function NomenclatureModal({ itemId, itemTitle, onClose }: Props) {
                 <span style={{ wordBreak: 'break-all' }}>{proposal.proposed_filename || '–'}</span>
               </div>
               <div className="detail-row">
-                <span className="text-muted">Carpeta propuesta:</span>
-                <span style={{ wordBreak: 'break-all' }}>{proposal.proposed_folder || '–'}</span>
+                <span className="text-muted">Carpeta actual:</span>
+                <span style={{ wordBreak: 'break-all' }}>
+                  {proposal.current_path ? proposal.current_path.substring(0, proposal.current_path.lastIndexOf('/')) || '/' : '–'}
+                </span>
               </div>
               <div className="detail-row">
                 <span className="text-muted">Resolución:</span>
@@ -168,6 +170,12 @@ export function NomenclatureModal({ itemId, itemTitle, onClose }: Props) {
                     ))}
                   </ul>
                 </div>
+              )}
+
+              {proposal.status !== 'blocked' && !proposal.hardlink_configured && (
+                <p style={{ fontSize: '0.8rem', marginTop: 12, color: 'var(--color-text-muted, #9ca3af)' }}>
+                  La ruta de hardlinks no está configurada — configúrala en Ajustes para poder aplicar esta nomenclatura.
+                </p>
               )}
 
               {/* Apply section */}

@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 21
+SCHEMA_VERSION = 22
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -697,6 +697,25 @@ def _migrate_library_items_title_slug(conn: sqlite3.Connection) -> None:
         pass
 
 
+def _migrate_library_items_media_info(conn: sqlite3.Connection) -> None:
+    """Add video_codec/audio_codec/audio_languages/subtitle_languages to
+    library_items — parsed from Radarr/Sonarr's own movieFile/episodeFile
+    `mediaInfo` sub-object (Phase 6A of the nomenclature/MediaInfo batch),
+    replacing the old crude guess of video_codec from a substring match
+    against the quality profile NAME."""
+    new_cols = [
+        ("video_codec", "TEXT"),
+        ("audio_codec", "TEXT"),
+        ("audio_languages", "TEXT"),
+        ("subtitle_languages", "TEXT"),
+    ]
+    for col, col_type in new_cols:
+        try:
+            conn.execute(f"ALTER TABLE library_items ADD COLUMN {col} {col_type}")
+        except sqlite3.OperationalError:
+            pass
+
+
 def _migrate_nomenclature_phase10a(conn: sqlite3.Connection) -> None:
     """Add Phase 10A editable fields and MKV title columns to nomenclature_proposals."""
     new_cols = [
@@ -1000,6 +1019,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_request_items_emu_catalog_check(conn)
         _migrate_drop_priority_columns(conn)
         _migrate_instances_unique_name(conn)
+        _migrate_library_items_media_info(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

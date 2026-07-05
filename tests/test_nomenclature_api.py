@@ -78,6 +78,24 @@ def test_preview_nomenclature_faltante_item(client, auth_headers, isolated_db):
     assert len(data["errors"]) > 0
 
 
+def test_preview_nomenclature_hardlink_configured_false_by_default(client, auth_headers, isolated_db):
+    item_id = _insert_item(isolated_db)
+    r = client.post(f"/api/library/{item_id}/nomenclature/preview", json={"force_refresh": False}, headers=auth_headers)
+    assert r.json()["hardlink_configured"] is False
+
+
+def test_preview_nomenclature_hardlink_configured_true_when_set(client, auth_headers, isolated_db):
+    from emuwarez_uploadrr.database import connect
+    conn = connect(isolated_db / "emuwarez_uploadrr.db")
+    conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('hardlink_base', '/prepared')")
+    conn.commit()
+    conn.close()
+
+    item_id = _insert_item(isolated_db)
+    r = client.post(f"/api/library/{item_id}/nomenclature/preview", json={"force_refresh": False}, headers=auth_headers)
+    assert r.json()["hardlink_configured"] is True
+
+
 def test_preview_nomenclature_force_refresh(client, auth_headers, isolated_db):
     item_id = _insert_item(isolated_db)
     r1 = client.post(f"/api/library/{item_id}/nomenclature/preview", json={"force_refresh": False}, headers=auth_headers)

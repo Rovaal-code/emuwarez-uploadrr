@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ...database import connect, init_db
 from ...services.nomenclature import (
+    _get_hardlink_base,
     apply_nomenclature_proposal,
     build_nomenclature_proposal,
     get_latest_nomenclature_proposal,
@@ -33,7 +34,7 @@ def _get_conn():
     return conn
 
 
-def _proposal_to_response(p: dict) -> NomenclatureProposalResponse:
+def _proposal_to_response(p: dict, *, conn=None) -> NomenclatureProposalResponse:
     warnings: list[str] = []
     errors: list[str] = []
     try:
@@ -69,6 +70,7 @@ def _proposal_to_response(p: dict) -> NomenclatureProposalResponse:
         errors=errors,
         created_at=p.get("created_at"),
         updated_at=p.get("updated_at"),
+        hardlink_configured=bool(_get_hardlink_base(conn=conn)),
     )
 
 
@@ -76,15 +78,15 @@ def _proposal_to_response(p: dict) -> NomenclatureProposalResponse:
 def get_nomenclature(item_id: int, current_user: dict = Depends(require_auth)):
     with _get_conn() as conn:
         proposal = get_latest_nomenclature_proposal(item_id, conn=conn)
-    if not proposal:
+        if not proposal:
+            return NomenclatureExistsResponse(
+                exists=False,
+                message="No hay propuesta de nomenclatura generada todavía.",
+            )
         return NomenclatureExistsResponse(
-            exists=False,
-            message="No hay propuesta de nomenclatura generada todavía.",
+            exists=True,
+            proposal=_proposal_to_response(proposal, conn=conn),
         )
-    return NomenclatureExistsResponse(
-        exists=True,
-        proposal=_proposal_to_response(proposal),
-    )
 
 
 @router.post("/library/{item_id}/nomenclature/preview", response_model=NomenclatureProposalResponse)
@@ -95,9 +97,9 @@ def preview_nomenclature(
 ):
     with _get_conn() as conn:
         proposal = build_nomenclature_proposal(item_id, force_refresh=body.force_refresh, conn=conn)
-    if not proposal.get("library_item_id"):
-        raise HTTPException(status_code=404, detail="Item no encontrado.")
-    return _proposal_to_response(proposal)
+        if not proposal.get("library_item_id"):
+            raise HTTPException(status_code=404, detail="Item no encontrado.")
+        return _proposal_to_response(proposal, conn=conn)
 
 
 @router.post("/library/{item_id}/adapt-nomenclature", response_model=NomenclatureApplyResult)

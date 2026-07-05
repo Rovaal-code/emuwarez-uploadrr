@@ -33,6 +33,39 @@ def extract_poster_url(images: Any) -> Optional[str]:
     return None
 
 
+class MediaInfoSummary(dict):
+    """video_codec/audio_codec/audio_languages/subtitle_languages, all
+    Optional[str] — a plain dict subclass just for a descriptive type name."""
+
+
+def extract_media_info(file_entry: Any) -> MediaInfoSummary:
+    """Pull codec/audio/subtitle info out of Radarr's `movieFile` or Sonarr's
+    `episodeFile` — both come from the same underlying *arr `mediaInfo`
+    sub-object shape (`/api/v3/moviefile`, `/api/v3/episodefile`). This is
+    already present in the API response Radarr/Sonarr send for every
+    synced item (no extra HTTP call), it was just never parsed — the app
+    used to guess video_codec from a substring match against the quality
+    profile NAME (e.g. "Bluray-1080p"), which has nothing to do with the
+    actual codec and silently failed for exactly the common case where the
+    quality name doesn't happen to mention it.
+
+    Never raises — always returns a dict with every key present (None if
+    absent), so callers can rely on `.get(...)` without checking shape."""
+    result = MediaInfoSummary(video_codec=None, audio_codec=None, audio_languages=None, subtitle_languages=None)
+    if not isinstance(file_entry, dict):
+        return result
+    media_info = file_entry.get("mediaInfo")
+    if not isinstance(media_info, dict):
+        return result
+    result["video_codec"] = media_info.get("videoCodec") or None
+    result["audio_codec"] = media_info.get("audioCodec") or None
+    # audioLanguages/subtitles come back as a single string, e.g. "eng / spa"
+    # — kept as-is (already human-readable), not split into a list.
+    result["audio_languages"] = media_info.get("audioLanguages") or None
+    result["subtitle_languages"] = media_info.get("subtitles") or None
+    return result
+
+
 def normalize_base_url(url: str) -> str:
     url = (url or "").strip().rstrip("/")
     if not url:

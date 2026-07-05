@@ -113,6 +113,10 @@ class LibraryItem:
     quality: Optional[str] = None
     resolution: Optional[str] = None
     source: Optional[str] = None
+    video_codec: Optional[str] = None
+    audio_codec: Optional[str] = None
+    audio_languages: Optional[str] = None
+    subtitle_languages: Optional[str] = None
     size_bytes: Optional[int] = None
     local_status: str = LocalStatus.UNKNOWN.value
     request_status: str = RequestStatus.NONE.value

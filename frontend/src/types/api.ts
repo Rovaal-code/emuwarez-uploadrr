@@ -321,6 +321,7 @@ export interface NomenclatureProposal {
   errors: string[]
   created_at?: string
   updated_at?: string
+  hardlink_configured?: boolean
 }
 
 export interface NomenclatureExistsResponse {

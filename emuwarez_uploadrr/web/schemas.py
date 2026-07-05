@@ -673,6 +673,10 @@ class NomenclatureProposalResponse(BaseModel):
     errors: list[str] = []
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
+    # Phase 6D — lets the frontend skip a wasted preview round-trip: hide
+    # the hardlink section outright when hardlink_base isn't configured,
+    # instead of only finding out after clicking "Previsualizar".
+    hardlink_configured: bool = False
 
 
 class NomenclatureExistsResponse(BaseModel):

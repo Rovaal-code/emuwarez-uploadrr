@@ -5,6 +5,11 @@ export interface LibraryQueryParams {
   type?: string
   origin?: string
   instance_id?: number
+  // Series/Season/Episode hierarchy — omit for "no filter" (CLI-style
+  // callers), pass 0 (TOP_LEVEL_PARENT_FILTER, matches the backend
+  // sentinel) for "top level only", or a real id to fetch that row's
+  // direct children.
+  parent_id?: number
   status?: string
   request_status?: string
   nomenclature?: string
@@ -18,6 +23,7 @@ export async function getLibrary(params: LibraryQueryParams = {}): Promise<Libra
   if (params.type) qs.set('type', params.type)
   if (params.origin) qs.set('origin', params.origin)
   if (params.instance_id !== undefined) qs.set('instance_id', String(params.instance_id))
+  if (params.parent_id !== undefined) qs.set('parent_id', String(params.parent_id))
   if (params.status) qs.set('status', params.status)
   if (params.request_status) qs.set('request_status', params.request_status)
   if (params.nomenclature) qs.set('nomenclature', params.nomenclature)
@@ -27,6 +33,9 @@ export async function getLibrary(params: LibraryQueryParams = {}): Promise<Libra
   const query = qs.toString()
   return api.get<LibraryListResponse>(`/library${query ? `?${query}` : ''}`)
 }
+
+// Matches the backend's services/library.py::TOP_LEVEL_PARENT_FILTER.
+export const TOP_LEVEL_PARENT_FILTER = 0
 
 export async function getLibraryItem(id: number): Promise<LibraryItemResponse> {
   return api.get<LibraryItemResponse>(`/library/${id}`)

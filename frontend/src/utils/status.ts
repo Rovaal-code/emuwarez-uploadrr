@@ -8,6 +8,8 @@ export interface StatusInfo {
 
 const LOCAL_STATUS_MAP: Record<string, StatusInfo> = {
   'Disponible':              { label: 'Disponible',              color: '#22c55e', cssClass: 'status-available' },
+  // Rollup-only (series/season) — some but not all children available.
+  'Parcial':                 { label: 'Parcial',                 color: '#f59e0b', cssClass: 'status-partial' },
   'Faltante':                { label: 'Faltante',                color: '#ef4444', cssClass: 'status-missing' },
   'En cola':                 { label: 'En cola',                 color: '#3b82f6', cssClass: 'status-queued' },
   'Descargando':             { label: 'Descargando',             color: '#818cf8', cssClass: 'status-downloading' },

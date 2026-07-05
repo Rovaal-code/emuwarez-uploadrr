@@ -99,6 +99,11 @@ export interface LibraryItemResponse {
   imdb_id: string | null
   tvdb_id: string | null
   title_slug: string | null
+  // Series/Season/Episode hierarchy — parent_id points at the containing
+  // row's id (episode -> season, season -> series); null for movies/series.
+  season_number: number | null
+  episode_number: number | null
+  parent_id: number | null
   path: string | null
   quality: string | null
   resolution: string | null

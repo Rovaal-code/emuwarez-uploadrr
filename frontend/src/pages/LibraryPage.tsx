@@ -1,17 +1,18 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getLibrary } from '../api/library'
+import { getLibrary, TOP_LEVEL_PARENT_FILTER } from '../api/library'
 import { getInstances } from '../api/instances'
 import { refreshArrHealth, verifyLibraryFiles, refreshRecommendations } from '../api/diagnostics'
 import type { LibraryItemResponse, LibraryListResponse, InstanceSafeResponse } from '../types/api'
 import { StatusBadge } from '../components/StatusBadge'
-import { ServiceLabel } from '../components/ServiceIcon'
 import { LoadingState } from '../components/LoadingState'
 import { ErrorState } from '../components/ErrorState'
 import { EmptyState } from '../components/EmptyState'
 import { NomenclatureModal } from '../components/NomenclatureModal'
 import { NomenclatureFieldsModal } from '../components/NomenclatureFieldsModal'
 import { UploadPreflightModal } from '../components/UploadPreflightModal'
+import { LibraryTreeRow, type LibraryActionKind } from '../components/LibraryTreeRow'
 import { formatBytes, formatDate, formatItemType } from '../utils/format'
+import { titleMismatchesFilename, buildDeepLink } from '../utils/libraryItem'
 
 const PAGE_SIZE = 50
 const VIEW_MODE_STORAGE_KEY = 'emuwarez_uploadrr_library_view'
@@ -20,25 +21,6 @@ const VIEW_MODE_STORAGE_KEY = 'emuwarez_uploadrr_library_view'
 // "not available" set the old standalone Faltantes tab used, so removing
 // that tab doesn't lose the combined view.
 const NOT_AVAILABLE_STATUS_FILTER = '__not_available__'
-
-function titleMismatchesFilename(item: LibraryItemResponse): boolean {
-  if (!item.original_title) return false
-  const norm = (s: string) => s.trim().toLowerCase()
-  return norm(item.title) !== norm(item.original_title)
-}
-
-function buildDeepLink(item: LibraryItemResponse, instances: InstanceSafeResponse[]): string | null {
-  if (!item.instance_id) return null
-  const instance = instances.find(i => i.id === item.instance_id)
-  if (!instance) return null
-  if (item.instance_type === 'radarr' && item.tmdb_id) {
-    return `${instance.url}/movie/${item.tmdb_id}`
-  }
-  if (item.instance_type === 'sonarr' && item.title_slug) {
-    return `${instance.url}/series/${item.title_slug}`
-  }
-  return null
-}
 
 type ViewMode = 'grid' | 'list'
 
@@ -118,6 +100,14 @@ export function LibraryPage() {
   const [uploadItem, setUploadItem] = useState<LibraryItemResponse | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode)
 
+  // Movie/episode leaf rows only — series/season rows show these same 3
+  // buttons disabled (LibraryTreeRow), real batch wiring lands in Phase 6.
+  function handleTreeAction(kind: LibraryActionKind, item: LibraryItemResponse) {
+    if (kind === 'nomenclature') setNomenclatureItem(item)
+    else if (kind === 'fields') setFieldsItem(item)
+    else setUploadItem(item)
+  }
+
   useEffect(() => { localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode) }, [viewMode])
 
   const [instances, setInstances] = useState<InstanceSafeResponse[]>([])
@@ -192,6 +182,10 @@ export function LibraryPage() {
         instance_id: filterInstanceId ? Number(filterInstanceId) : undefined,
         nomenclature: filterNomenclature || undefined,
         request_status: filterRequest || undefined,
+        // Top level only — series/season/episode hierarchy is browsed by
+        // expanding LibraryTreeRow, never flooding this list with raw
+        // episodes/seasons.
+        parent_id: TOP_LEVEL_PARENT_FILTER,
         limit: PAGE_SIZE,
         offset,
       })
@@ -273,6 +267,7 @@ export function LibraryPage() {
         <select className="form-input form-select" value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setOffset(0) }} style={{ width: 190 }}>
           <option value="">Estado: Todos</option>
           <option value="Disponible">Disponible</option>
+          <option value="Parcial">Parcial</option>
           <option value={NOT_AVAILABLE_STATUS_FILTER}>Todos los no disponibles</option>
           <option value="Faltante">Faltante</option>
           <option value="En cola">En cola</option>
@@ -350,68 +345,16 @@ export function LibraryPage() {
                 </tr>
               </thead>
               <tbody>
-                {items.map(item => {
-                  const deepLink = buildDeepLink(item, instances)
-                  const mismatched = titleMismatchesFilename(item)
-                  return (
-                  <tr key={item.id} className="clickable" onClick={() => setSelected(item)}>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <div style={{ fontWeight: 500 }}>{item.title}</div>
-                        {deepLink && (
-                          <a
-                            href={deepLink}
-                            target="_blank"
-                            rel="noreferrer"
-                            onClick={e => e.stopPropagation()}
-                            title={`Ver en ${item.instance_name ?? item.instance_type}`}
-                            style={{ fontSize: 11, textDecoration: 'none' }}
-                          >
-                            🔗
-                          </a>
-                        )}
-                        {mismatched && (
-                          <span style={{ fontSize: 11, color: 'var(--color-missing)' }} title={`Título original: ${item.original_title}`}>⚠</span>
-                        )}
-                      </div>
-                      {item.year && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.year}</div>}
-                    </td>
-                    <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{formatItemType(item.item_type)}</td>
-                    <td>
-                      {item.instance_type
-                        ? <ServiceLabel type={item.instance_type} label={item.instance_name ?? item.instance_type} size={13} />
-                        : <span style={{ color: 'var(--text-muted)' }}>—</span>}
-                    </td>
-                    <td><StatusBadge status={item.local_status} type="local" /></td>
-                    <td style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
-                      {item.file_exists === null
-                        ? <span style={{ color: 'var(--text-muted)' }}>—</span>
-                        : item.file_exists
-                          ? <span style={{ color: 'var(--color-available)' }}>OK</span>
-                          : <span style={{ color: 'var(--color-missing)' }}>NO</span>}
-                    </td>
-                    <td><StatusBadge status={item.request_status} type="request" /></td>
-                    <td><StatusBadge status={item.nomenclature_status} type="nomenclature" /></td>
-                    <td style={{ fontSize: 11, color: 'var(--text-secondary)', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {item.diagnostic_summary ?? '—'}
-                    </td>
-                    <td style={{ fontSize: 11, color: '#a78bfa', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {item.recommended_action ?? '—'}
-                    </td>
-                    <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                      {[item.resolution, item.source].filter(Boolean).join(' · ') || '—'}
-                    </td>
-                    <td style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                      {formatDate(item.updated_at)}
-                    </td>
-                    <td className="col-actions" onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 4 }}>
-                      <button className="btn btn-ghost btn-sm" onClick={() => setNomenclatureItem(item)} title="Adaptar nomenclatura">Nomenclatura</button>
-                      <button className="btn btn-ghost btn-sm" onClick={() => setFieldsItem(item)} title="Editar campos de nomenclatura">Campos</button>
-                      <button className="btn btn-ghost btn-sm" onClick={() => setUploadItem(item)} title="Preflight Uploadrr">Subir</button>
-                    </td>
-                  </tr>
-                  )
-                })}
+                {items.map(item => (
+                  <LibraryTreeRow
+                    key={item.id}
+                    item={item}
+                    depth={0}
+                    instances={instances}
+                    onSelect={setSelected}
+                    onAction={handleTreeAction}
+                  />
+                ))}
               </tbody>
             </table>
           </div>
@@ -504,9 +447,17 @@ export function LibraryPage() {
               <button className="btn btn-ghost btn-sm" onClick={() => setSelected(null)}>✕</button>
             </div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-              <button className="btn btn-secondary btn-sm" onClick={() => { setNomenclatureItem(selected); setSelected(null) }}>Adaptar nomenclatura</button>
-              <button className="btn btn-secondary btn-sm" onClick={() => { setFieldsItem(selected); setSelected(null) }}>Editar campos</button>
-              <button className="btn btn-secondary btn-sm" onClick={() => { setUploadItem(selected); setSelected(null) }}>Subir</button>
+              {(() => {
+                const isRollup = selected.item_type === 'series' || selected.item_type === 'season'
+                const title = isRollup ? 'Acción por lotes disponible próximamente' : undefined
+                return (
+                  <>
+                    <button className="btn btn-secondary btn-sm" disabled={isRollup} title={title} onClick={() => { setNomenclatureItem(selected); setSelected(null) }}>Adaptar nomenclatura</button>
+                    <button className="btn btn-secondary btn-sm" disabled={isRollup} title={title} onClick={() => { setFieldsItem(selected); setSelected(null) }}>Editar campos</button>
+                    <button className="btn btn-secondary btn-sm" disabled={isRollup} title={title} onClick={() => { setUploadItem(selected); setSelected(null) }}>Subir</button>
+                  </>
+                )
+              })()}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 20px', fontSize: 13 }}>
               {[
@@ -566,8 +517,53 @@ export function LibraryPage() {
                 </div>
               </div>
             )}
+            {selected.item_type === 'series' && (
+              <SeriesSeasonsSection seriesId={selected.id} instances={instances} onSelect={setSelected} onAction={handleTreeAction} />
+            )}
           </div>
         </div>
+      )}
+    </div>
+  )
+}
+
+// Seasons (→ episodes, expandable) of a selected Series, shown below its
+// detail panel — reuses LibraryTreeRow unchanged, just seeded with the
+// series' direct children instead of a top-level list.
+function SeriesSeasonsSection({ seriesId, instances, onSelect, onAction }: {
+  seriesId: number
+  instances: InstanceSafeResponse[]
+  onSelect: (item: LibraryItemResponse) => void
+  onAction: (kind: LibraryActionKind, item: LibraryItemResponse) => void
+}) {
+  const [seasons, setSeasons] = useState<LibraryItemResponse[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    setLoading(true)
+    getLibrary({ parent_id: seriesId, type: 'season', limit: 500 })
+      .then(r => setSeasons(r.items))
+      .catch(() => setSeasons([]))
+      .finally(() => setLoading(false))
+  }, [seriesId])
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>
+        Temporadas
+      </div>
+      {loading ? (
+        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Cargando…</div>
+      ) : seasons.length === 0 ? (
+        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Sin temporadas</div>
+      ) : (
+        <table className="data-table">
+          <tbody>
+            {seasons.map(season => (
+              <LibraryTreeRow key={season.id} item={season} depth={0} instances={instances} onSelect={onSelect} onAction={onAction} />
+            ))}
+          </tbody>
+        </table>
       )}
     </div>
   )

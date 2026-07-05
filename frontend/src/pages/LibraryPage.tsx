@@ -11,6 +11,9 @@ import { NomenclatureModal } from '../components/NomenclatureModal'
 import { NomenclatureFieldsModal } from '../components/NomenclatureFieldsModal'
 import { UploadPreflightModal } from '../components/UploadPreflightModal'
 import { LibraryTreeRow, type LibraryActionKind } from '../components/LibraryTreeRow'
+import { SeriesSeasonsSection } from '../components/SeriesSeasonsSection'
+import { LargePosterCard } from '../components/LargePosterCard'
+import { LibraryDetailCard } from '../components/LibraryDetailCard'
 import { formatBytes, formatDate, formatItemType } from '../utils/format'
 import { titleMismatchesFilename, buildDeepLink } from '../utils/libraryItem'
 
@@ -22,11 +25,11 @@ const VIEW_MODE_STORAGE_KEY = 'emuwarez_uploadrr_library_view'
 // that tab doesn't lose the combined view.
 const NOT_AVAILABLE_STATUS_FILTER = '__not_available__'
 
-type ViewMode = 'grid' | 'list'
+type ViewMode = 'grid' | 'grid-lg' | 'list'
 
 function loadViewMode(): ViewMode {
   const stored = localStorage.getItem(VIEW_MODE_STORAGE_KEY)
-  return stored === 'list' ? 'list' : 'grid'
+  return stored === 'list' || stored === 'grid-lg' ? stored : 'grid'
 }
 
 function PosterCard({ item, instances, onClick }: { item: LibraryItemResponse; instances: InstanceSafeResponse[]; onClick: () => void }) {
@@ -95,6 +98,8 @@ export function LibraryPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<LibraryItemResponse | null>(null)
+  // Only opened from the "Pósters grandes" view — the small modal (grid/list) stays as-is.
+  const [largeDetailItem, setLargeDetailItem] = useState<LibraryItemResponse | null>(null)
   const [nomenclatureItem, setNomenclatureItem] = useState<LibraryItemResponse | null>(null)
   const [fieldsItem, setFieldsItem] = useState<LibraryItemResponse | null>(null)
   const [uploadItem, setUploadItem] = useState<LibraryItemResponse | null>(null)
@@ -225,6 +230,13 @@ export function LibraryPage() {
             ▦ Pósters
           </button>
           <button
+            className={`btn btn-sm ${viewMode === 'grid-lg' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setViewMode('grid-lg')}
+            title="Vista de pósters grandes"
+          >
+            ▦▦ Pósters grandes
+          </button>
+          <button
             className={`btn btn-sm ${viewMode === 'list' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setViewMode('list')}
             title="Vista de lista"
@@ -324,6 +336,21 @@ export function LibraryPage() {
             </div>
           )}
         </div>
+      ) : viewMode === 'grid-lg' ? (
+        <div className="activity-section" style={{ padding: 20 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 20 }}>
+            {items.map(item => (
+              <LargePosterCard key={item.id} item={item} instances={instances} onClick={() => setLargeDetailItem(item)} />
+            ))}
+          </div>
+          {total > PAGE_SIZE && (
+            <div style={{ padding: '16px 0 0', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary btn-sm" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>← Anterior</button>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', alignSelf: 'center' }}>{Math.floor(offset / PAGE_SIZE) + 1} / {Math.ceil(total / PAGE_SIZE)}</span>
+              <button className="btn btn-secondary btn-sm" disabled={offset + PAGE_SIZE >= total} onClick={() => setOffset(offset + PAGE_SIZE)}>Siguiente →</button>
+            </div>
+          )}
+        </div>
       ) : (
         <div className="activity-section">
           <div style={{ overflowX: 'auto' }}>
@@ -393,6 +420,17 @@ export function LibraryPage() {
           itemId={uploadItem.id}
           itemTitle={uploadItem.title}
           onClose={() => setUploadItem(null)}
+        />
+      )}
+
+      {/* Large "Serr-style" detail card — Pósters grandes view only */}
+      {largeDetailItem && (
+        <LibraryDetailCard
+          item={largeDetailItem}
+          instances={instances}
+          onClose={() => setLargeDetailItem(null)}
+          onSelect={setLargeDetailItem}
+          onAction={handleTreeAction}
         />
       )}
 
@@ -522,48 +560,6 @@ export function LibraryPage() {
             )}
           </div>
         </div>
-      )}
-    </div>
-  )
-}
-
-// Seasons (→ episodes, expandable) of a selected Series, shown below its
-// detail panel — reuses LibraryTreeRow unchanged, just seeded with the
-// series' direct children instead of a top-level list.
-function SeriesSeasonsSection({ seriesId, instances, onSelect, onAction }: {
-  seriesId: number
-  instances: InstanceSafeResponse[]
-  onSelect: (item: LibraryItemResponse) => void
-  onAction: (kind: LibraryActionKind, item: LibraryItemResponse) => void
-}) {
-  const [seasons, setSeasons] = useState<LibraryItemResponse[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    setLoading(true)
-    getLibrary({ parent_id: seriesId, type: 'season', limit: 500 })
-      .then(r => setSeasons(r.items))
-      .catch(() => setSeasons([]))
-      .finally(() => setLoading(false))
-  }, [seriesId])
-
-  return (
-    <div style={{ marginTop: 16 }}>
-      <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>
-        Temporadas
-      </div>
-      {loading ? (
-        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Cargando…</div>
-      ) : seasons.length === 0 ? (
-        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Sin temporadas</div>
-      ) : (
-        <table className="data-table">
-          <tbody>
-            {seasons.map(season => (
-              <LibraryTreeRow key={season.id} item={season} depth={0} instances={instances} onSelect={onSelect} onAction={onAction} />
-            ))}
-          </tbody>
-        </table>
       )}
     </div>
   )

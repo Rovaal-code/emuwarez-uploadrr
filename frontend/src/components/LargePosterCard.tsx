@@ -1,0 +1,82 @@
+import type { LibraryItemResponse, InstanceSafeResponse } from '../types/api'
+import { StatusBadge } from './StatusBadge'
+import { formatItemType } from '../utils/format'
+import { titleMismatchesFilename, buildDeepLink } from '../utils/libraryItem'
+
+// Bigger, Overseerr/Jellyseerr-style poster card for the "Pósters grandes"
+// view — additive alongside the existing small grid, not a replacement.
+export function LargePosterCard({ item, instances, onClick }: {
+  item: LibraryItemResponse
+  instances: InstanceSafeResponse[]
+  onClick: () => void
+}) {
+  const deepLink = buildDeepLink(item, instances)
+  const mismatched = titleMismatchesFilename(item)
+
+  return (
+    <div
+      className="clickable"
+      onClick={onClick}
+      style={{
+        display: 'flex', flexDirection: 'column', borderRadius: 12, overflow: 'hidden',
+        background: 'var(--bg-surface)', border: '1px solid var(--border)', cursor: 'pointer',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+      }}
+    >
+      <div style={{ position: 'relative', width: '100%', aspectRatio: '2 / 3', background: 'rgba(255,255,255,0.04)' }}>
+        {item.poster_url ? (
+          <img
+            src={item.poster_url}
+            alt={item.title}
+            loading="lazy"
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+          />
+        ) : (
+          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 64, opacity: 0.35 }}>
+            {item.item_type === 'series' || item.item_type === 'episode' ? '📺' : '🎬'}
+          </div>
+        )}
+        <div style={{ position: 'absolute', top: 10, right: 10 }}>
+          <StatusBadge status={item.local_status} type="local" />
+        </div>
+        {deepLink && (
+          <a
+            href={deepLink}
+            target="_blank"
+            rel="noreferrer"
+            onClick={e => e.stopPropagation()}
+            title={`Ver en ${item.instance_name ?? item.instance_type}`}
+            style={{
+              position: 'absolute', top: 10, left: 10, width: 28, height: 28, borderRadius: 6,
+              background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 15, textDecoration: 'none',
+            }}
+          >
+            🔗
+          </a>
+        )}
+        <div style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0, padding: '20px 12px 10px',
+          background: 'linear-gradient(to top, rgba(0,0,0,0.85), transparent)',
+        }}>
+          <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.3, color: '#fff' }}>{item.title}</div>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 2 }}>
+            {item.year ?? '—'} · {formatItemType(item.item_type)}
+          </div>
+        </div>
+      </div>
+      <div style={{ padding: '10px 12px' }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <StatusBadge status={item.request_status} type="request" />
+          <StatusBadge status={item.nomenclature_status} type="nomenclature" />
+        </div>
+        {mismatched && (
+          <div style={{ fontSize: 11, color: 'var(--color-missing, #ef4444)', marginTop: 6 }} title={`Título original: ${item.original_title}`}>
+            ⚠ Título distinto al archivo
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

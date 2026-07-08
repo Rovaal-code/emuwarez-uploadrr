@@ -85,7 +85,7 @@ export function Sidebar({ active, onNavigate }: SidebarProps) {
           </div>
         ))}
       </nav>
-      <div className="sidebar-footer">v0.5 · Fase 5A</div>
+      <div className="sidebar-footer">v0.1 · Fase 5A</div>
     </aside>
   )
 }

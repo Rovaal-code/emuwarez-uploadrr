@@ -1,6 +1,6 @@
 [project]
 name = "emuwarez-uploadrr"
-version = "0.5.0"
+version = "0.1.0"
 description = "CLI modular para eMuwarez Uploadrr, preparada para interfaz web"
 requires-python = ">=3.10"
 

@@ -80,6 +80,35 @@ def test_command_uses_res_resolution():
     assert cmd[cmd.index("-res") + 1] == "2160p"
 
 
+def _res_value(**overrides):
+    cmd = _build(**overrides)
+    return cmd[cmd.index("-res") + 1] if "-res" in cmd else None
+
+
+def test_res_normalizes_uppercase_p_to_valid_choice():
+    # Uploadrr lowercases internally, but we must never emit an out-of-choices
+    # token; "1080P" -> "1080p".
+    assert _res_value(resolution="1080P") == "1080p"
+
+
+def test_res_unrecognized_value_collapses_to_other():
+    # legacy.py::uploadrr_resolution behavior: anything not matching \d+p in the
+    # choice set becomes "other" instead of crashing upload.py's argparse.
+    for bad in ("1920x1080", "4K", "FHD", "1080"):
+        assert _res_value(resolution=bad) == "other", bad
+
+
+def test_res_omitted_when_empty():
+    # Empty resolution must drop -res entirely (Uploadrr then auto-detects),
+    # never emit `-res ""`.
+    assert "-res" not in _build(resolution="")
+
+
+def test_res_valid_choice_passthrough():
+    for good in ("2160p", "1080i", "720p", "480i", "other"):
+        assert _res_value(resolution=good) == good, good
+
+
 def test_season_added_when_int():
     cmd = _build(season=2)
     assert "-season" in cmd

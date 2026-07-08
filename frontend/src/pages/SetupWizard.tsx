@@ -12,7 +12,8 @@ import { REGION_OPTIONS, LANGUAGE_OPTIONS } from '../constants/regionLanguage'
 import { SETUP_STEPS, SETUP_STEP_LABELS } from '../types/domain'
 import type { SetupStep } from '../types/domain'
 import type { SetupStatusResponse } from '../types/api'
-import { testResultLabel, testResultColor } from '../utils/integrationResult'
+import { testResultLabel, testResultColor, emuTestCooldownSeconds } from '../utils/integrationResult'
+import { useCooldown } from '../hooks/useCooldown'
 
 const DISABLE_HARDLINKS_TOKEN = 'DESACTIVAR_HARDLINKS'
 
@@ -118,6 +119,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   const [tmdbTesting, setTmdbTesting] = useState(false)
   const [emuTestResult, setEmuTestResult] = useState<IntegrationTestResult | null>(null)
   const [emuTesting, setEmuTesting] = useState(false)
+  const emuCooldown = useCooldown()
   const [instTestResult, setInstTestResult] = useState<IntegrationTestResult | null>(null)
   const [instTesting, setInstTesting] = useState(false)
 
@@ -150,14 +152,17 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   }
 
   async function handleTestEmu() {
+    if (emuCooldown.active) return
     setEmuTesting(true)
     setEmuTestResult(null)
     try {
       const r = await testEmuwarezConnection({ api_key: emuKey || undefined })
       setEmuTestResult(r)
+      emuCooldown.start(emuTestCooldownSeconds(r))
       if (r.ok) setEmuAckSkip(false)
     } catch {
       setEmuTestResult({ ok: false, service: 'emuwarez', status: 'connection_error', message: 'Error al contactar con el servidor' })
+      emuCooldown.start(60)
     } finally {
       setEmuTesting(false)
     }
@@ -194,10 +199,12 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   })
 
   const handleEmu = wrap(async () => {
-    // Empty key + explicit skip: nothing to persist, just move on. Only
-    // call the API when there's actually a key to save (setup_emu rejects
-    // an empty string, which would otherwise block skipping entirely).
-    if (emuKey.trim()) {
+    // Persist the key only when there's text AND the user is NOT explicitly
+    // skipping. Ticking "continuar sin verificar" means "I'm not really
+    // configuring this now", so whatever was typed must be discarded — it
+    // must not show up as configured later in Settings. (setup_emu also
+    // rejects an empty string, which would block skipping entirely.)
+    if (emuKey.trim() && !emuAckSkip) {
       await setupEmu(emuKey)
     }
     setStep('instances')
@@ -229,8 +236,10 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   })
 
   const handleTmdb = wrap(async () => {
-    // Same as eMuwarez: an empty key + explicit skip just moves on, no call.
-    if (tmdbKey.trim()) {
+    // Same as eMuwarez: persist only when there's text AND the user is not
+    // explicitly skipping. Text + "continuar sin verificar" must be discarded
+    // so it never shows as configured in Settings afterwards.
+    if (tmdbKey.trim() && !tmdbAckSkip) {
       await setupTmdb(tmdbKey, tmdbLang, tmdbRegion)
     }
     setStep('nomenclature')
@@ -292,10 +301,9 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               </div>
               <ul style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.8, paddingLeft: 20, marginTop: 8 }}>
                 <li>Gestiona y sincroniza tus bibliotecas de Radarr y Sonarr.</li>
+                <li>Prepara y sube contenido siguiendo la nomenclatura de eMuwarez.</li>
                 <li>Se conecta con eMuwarez para leer tus peticiones activas.</li>
                 <li>Detecta qué peticiones ya puedes satisfacer con tu biblioteca local.</li>
-                <li>Prepara y sube contenido siguiendo la nomenclatura de eMuwarez.</li>
-                <li>Opcionalmente usa hardlinks para no renombrar los archivos originales de tu biblioteca.</li>
               </ul>
               <div className="wizard-actions">
                 <span />
@@ -360,8 +368,8 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               </div>
               {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, marginBottom: 4 }}>
-                <button className="btn btn-secondary btn-sm" onClick={handleTestEmu} disabled={emuTesting || loading} type="button">
-                  {emuTesting ? 'Probando…' : 'Probar conexión'}
+                <button className="btn btn-secondary btn-sm" onClick={handleTestEmu} disabled={emuTesting || loading || emuCooldown.active} type="button">
+                  {emuTesting ? 'Probando…' : emuCooldown.active ? `Espera ${emuCooldown.remaining}s` : 'Probar conexión'}
                 </button>
                 {emuTestResult && (
                   <span style={{ fontSize: 12, color: testResultColor(emuTestResult) }}>

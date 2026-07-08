@@ -12,6 +12,7 @@ Safety rules:
 """
 from __future__ import annotations
 
+import datetime as dt
 import socket
 import urllib.error
 import urllib.parse
@@ -20,6 +21,28 @@ from pathlib import Path
 from typing import Any, Optional
 
 _TIMEOUT = 10  # seconds — short timeout for connection probes
+
+# Rate-limit the live eMuwarez connection probe so the "Probar conexión" button
+# cannot hammer the real server. Mirrors the sync throttle pattern in
+# services/requests.py (state timestamp in app_state + wait_seconds), but at a
+# much finer 1/minute granularity since a connectivity check is cheap and a
+# user may legitimately re-test after fixing a key.
+EMU_TEST_STATE_KEY = "last_emu_test_utc"
+MIN_EMU_TEST_SECONDS = 60
+
+
+def _emu_test_wait_seconds(conn) -> int:
+    """Seconds remaining before another live eMuwarez probe is allowed (0 = now)."""
+    from emuwarez_uploadrr.database import get_state
+    last_str = get_state(conn, EMU_TEST_STATE_KEY)
+    if not last_str:
+        return 0
+    try:
+        last = dt.datetime.fromisoformat(last_str)
+    except ValueError:
+        return 0
+    elapsed = (dt.datetime.now(dt.timezone.utc) - last).total_seconds()
+    return max(0, int(MIN_EMU_TEST_SECONDS - elapsed))
 
 
 def _ok(service: str, status: str = "connected", message: str = "Conexión correcta", details: Optional[dict] = None) -> dict:
@@ -108,6 +131,23 @@ def test_emuwarez_connection(
     # Validate URL shape before hitting network
     if not _base.startswith(("http://", "https://")):
         return _fail("emuwarez", "invalid_url", f"URL de eMuwarez inválida: {_base}")
+
+    # Rate-limit: at most one live probe per minute, to avoid saturating the
+    # real eMuwarez server from the "Probar conexión" button. Only enforced
+    # when we have a DB connection to persist the timestamp; the early
+    # not_configured/invalid_url returns above never reach the network and are
+    # deliberately not throttled.
+    if conn is not None:
+        wait = _emu_test_wait_seconds(conn)
+        if wait > 0:
+            return _fail(
+                "emuwarez",
+                "rate_limited",
+                f"Espera {wait}s antes de volver a probar la conexión con eMuwarez.",
+                details={"wait_seconds": wait, "min_interval_seconds": MIN_EMU_TEST_SECONDS},
+            )
+        from emuwarez_uploadrr.database import set_state
+        set_state(conn, EMU_TEST_STATE_KEY, dt.datetime.now(dt.timezone.utc).isoformat())
 
     url = f"{_base}/api/torrents/filter?api_token={urllib.parse.quote(_key)}&perPage=1"
     req = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": "emuwarez-uploadrr/3"})

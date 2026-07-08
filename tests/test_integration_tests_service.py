@@ -181,6 +181,59 @@ class TestEmuwarezConnection:
         serialised = json.dumps(result)
         assert secret not in serialised
 
+    @patch("urllib.request.urlopen")
+    def test_rate_limited_second_call_within_a_minute(self, mock_open, tmp_path):
+        """A second live probe within 60s is throttled without hitting the network."""
+        from emuwarez_uploadrr.database import connect, init_db
+        conn = connect(tmp_path / "test.db")
+        init_db(conn)
+        mock_open.return_value = _mock_response(200)
+
+        first = svc_test_emu(api_key="key123", base_url="https://emuwarez.com", conn=conn)
+        assert first["ok"] is True
+        assert mock_open.call_count == 1
+
+        second = svc_test_emu(api_key="key123", base_url="https://emuwarez.com", conn=conn)
+        assert second["ok"] is False
+        assert second["status"] == "rate_limited"
+        assert second["details"]["wait_seconds"] > 0
+        # crucially, the throttled call never reached the network
+        assert mock_open.call_count == 1
+
+    @patch("urllib.request.urlopen")
+    def test_rate_limit_allows_again_after_interval(self, mock_open, tmp_path):
+        """Once the interval has elapsed, a new probe is allowed again."""
+        import datetime as dt
+        from emuwarez_uploadrr.database import connect, init_db, set_state
+        from emuwarez_uploadrr.services.integration_tests import (
+            EMU_TEST_STATE_KEY,
+            MIN_EMU_TEST_SECONDS,
+        )
+        conn = connect(tmp_path / "test.db")
+        init_db(conn)
+        mock_open.return_value = _mock_response(200)
+
+        stale = dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=MIN_EMU_TEST_SECONDS + 1)
+        set_state(conn, EMU_TEST_STATE_KEY, stale.isoformat())
+
+        result = svc_test_emu(api_key="key123", base_url="https://emuwarez.com", conn=conn)
+        assert result["ok"] is True
+        assert mock_open.call_count == 1
+
+    @patch("urllib.request.urlopen")
+    def test_not_configured_is_not_throttled(self, mock_open, tmp_path):
+        """Pre-network failures (no key) must never consume/trigger the rate limit."""
+        from emuwarez_uploadrr.database import connect, init_db, get_state
+        from emuwarez_uploadrr.services.integration_tests import EMU_TEST_STATE_KEY
+        conn = connect(tmp_path / "test.db")
+        init_db(conn)
+
+        result = svc_test_emu(api_key=None, base_url="https://emuwarez.com", conn=conn)
+        assert result["status"] == "not_configured"
+        # no timestamp recorded, no network call
+        assert get_state(conn, EMU_TEST_STATE_KEY) is None
+        assert mock_open.call_count == 0
+
 
 # ---------------------------------------------------------------------------
 # svc_test_arr

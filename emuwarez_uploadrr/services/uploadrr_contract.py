@@ -21,6 +21,7 @@ pipeline) in emuwarez_uploadrr/legacy.py::build_uploadrr_command.
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from pathlib import Path
 from typing import Optional
@@ -108,6 +109,35 @@ def _format_episode(value) -> str:
     return str(value)
 
 
+# Uploadrr's `-res` argument is an argparse `choices=[...]` field: any value
+# outside that set makes upload.py abort before it starts. legacy.py guarded
+# against this with uploadrr_resolution() (regex → `\d+p` or "other"); we
+# replicate that here so the contract is robust by construction, not just by
+# convention on whatever upstream stored in proposal.resolution.
+_UPLOADRR_RES_CHOICES = {
+    "2160p", "1080p", "1080i", "720p", "576p", "576i",
+    "480p", "480i", "8640p", "4320p", "other",
+}
+
+
+def _normalize_resolution(value: str) -> str:
+    """Coerce an arbitrary resolution string into a value Uploadrr `-res` accepts.
+
+    Returns "" when there is no resolution to pass (caller then omits `-res`
+    entirely and lets Uploadrr auto-detect). A non-empty but unrecognized
+    value collapses to "other" — matching legacy.py::uploadrr_resolution.
+    """
+    if not value:
+        return ""
+    text = str(value).strip().lower()
+    if text in _UPLOADRR_RES_CHOICES:
+        return text
+    m = re.match(r"(\d+p)", text)
+    if m and m.group(1) in _UPLOADRR_RES_CHOICES:
+        return m.group(1)
+    return "other"
+
+
 def build_uploadrr_emu_command(
     *,
     python_path: str,
@@ -136,6 +166,7 @@ def build_uploadrr_emu_command(
     if tmdb_id:
         cmd += ["-tmdb", str(tmdb_id)]
     cmd += ["-ua", "-c", "tv" if category == "tv" else "movie"]
+    resolution = _normalize_resolution(resolution)
     if resolution:
         cmd += ["-res", resolution]
     if season:

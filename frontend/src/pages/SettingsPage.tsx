@@ -13,11 +13,12 @@ import {
 } from '../api/maintenance'
 import { fetchSettings, updateSettings, type SettingsData } from '../api/settings'
 import { testTmdbConnection, testEmuwarezConnection, type IntegrationTestResult } from '../api/integrationTests'
+import { useCooldown } from '../hooks/useCooldown'
 import { testDiscordNotification, testTelegramNotification } from '../api/notifications'
 import { ProviderPriorityPicker } from '../components/ProviderPriorityPicker'
 import { ServiceIcon } from '../components/ServiceIcon'
 import { REGION_OPTIONS, LANGUAGE_OPTIONS } from '../constants/regionLanguage'
-import { testResultLabel, testResultColor } from '../utils/integrationResult'
+import { testResultLabel, testResultColor, emuTestCooldownSeconds } from '../utils/integrationResult'
 
 type Tab = 'config' | 'notifications' | 'diagnostics' | 'backup' | 'maintenance'
 
@@ -37,6 +38,7 @@ function ConfigTab() {
   const [tmdbTestResult, setTmdbTestResult] = useState<IntegrationTestResult | null>(null)
   const [testingEmu, setTestingEmu] = useState(false)
   const [emuTestResult, setEmuTestResult] = useState<IntegrationTestResult | null>(null)
+  const emuCooldown = useCooldown()
 
   // Form state
   const [tag, setTag] = useState('')
@@ -79,6 +81,7 @@ function ConfigTab() {
   }
 
   async function handleTestEmu() {
+    if (emuCooldown.active) return
     setTestingEmu(true)
     setEmuTestResult(null)
     try {
@@ -86,8 +89,10 @@ function ConfigTab() {
       if (newEmuKey.trim()) params.api_key = newEmuKey.trim()
       const r = await testEmuwarezConnection(params)
       setEmuTestResult(r)
+      emuCooldown.start(emuTestCooldownSeconds(r))
     } catch {
       setEmuTestResult({ ok: false, service: 'emuwarez', status: 'connection_error', message: 'Error al contactar con el servidor' })
+      emuCooldown.start(60)
     } finally {
       setTestingEmu(false)
     }
@@ -218,10 +223,10 @@ function ConfigTab() {
           <button
             className="btn btn-secondary btn-sm"
             onClick={handleTestEmu}
-            disabled={testingEmu}
+            disabled={testingEmu || emuCooldown.active}
             type="button"
           >
-            {testingEmu ? 'Probando…' : 'Probar conexión'}
+            {testingEmu ? 'Probando…' : emuCooldown.active ? `Espera ${emuCooldown.remaining}s` : 'Probar conexión'}
           </button>
           {emuTestResult && (
             <span style={{ marginLeft: 10, fontSize: 12, color: testResultColor(emuTestResult) }}>

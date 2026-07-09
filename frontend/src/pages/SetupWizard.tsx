@@ -103,6 +103,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   const [instDraft, setInstDraft] = useState<Partial<InstanceDraft>>({ type: 'radarr', is_4k: false, is_anime: false })
   const [instError, setInstError] = useState<string | null>(null)
   const [instAckSkip, setInstAckSkip] = useState(false)
+  const [instPathAckSkip, setInstPathAckSkip] = useState(false)
 
   // Nomenclature step state (Phase 11C)
   const [nomTag, setNomTag] = useState('EMUWAREZ')
@@ -302,8 +303,10 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               <ul style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.8, paddingLeft: 20, marginTop: 8 }}>
                 <li>Gestiona y sincroniza tus bibliotecas de Radarr y Sonarr.</li>
                 <li>Prepara y sube contenido siguiendo la nomenclatura de eMuwarez.</li>
-                <li>Se conecta con eMuwarez para leer tus peticiones activas.</li>
-                <li>Detecta qué peticiones ya puedes satisfacer con tu biblioteca local.</li>
+                <li>Se conecta con eMuwarez para listar las peticiones actuales.</li>
+                <li>Permite crear o modificar peticiones en eMuwarez.</li>
+                <li>Si tienes contenido compatible con una petición existente en eMuwarez, te recomienda subirlo a la plataforma.</li>
+                <li>Te recomienda crear una petición si tienes contenido faltante en tu biblioteca.</li>
               </ul>
               <div className="wizard-actions">
                 <span />
@@ -478,6 +481,26 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                     </span>
                   )}
                 </div>
+                {instTestResult?.ok && instTestResult.details?.content_visible === false && (
+                  <div className="alert alert-error" style={{ marginTop: 10 }}>
+                    ⚠ La conexión funciona, pero eMuwarez Uploadrr <strong>no puede ver el contenido</strong> de
+                    esta instancia: sus carpetas raíz no están accesibles desde aquí (probablemente el volumen de
+                    medios no está montado igual que en Radarr/Sonarr).
+                    {Array.isArray(instTestResult.details?.root_folders) && (
+                      <ul style={{ margin: '6px 0 0 18px', fontSize: 12 }}>
+                        {(instTestResult.details.root_folders as { path: string; exists: boolean }[]).map((r, i) => (
+                          <li key={i} style={{ color: r.exists ? 'var(--color-available)' : 'var(--color-missing)' }}>
+                            {r.exists ? '✓' : '✗'} {r.path}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <div style={{ marginTop: 6 }}>Sin acceso a los ficheros no se podrá leer el mediainfo ni subir.</div>
+                    <label className="checkbox-label" style={{ display: 'block', marginTop: 8 }}>
+                      <input type="checkbox" checked={instPathAckSkip} onChange={e => setInstPathAckSkip(e.target.checked)} /> Entiendo, continuar igualmente
+                    </label>
+                  </div>
+                )}
               </div>
               {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
               {!instancesCanContinue && (

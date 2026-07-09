@@ -71,6 +71,13 @@ _FRONTEND_DIST = _REPO_ROOT / "frontend" / "dist"
 
 
 def create_app() -> FastAPI:
+    import logging
+    import time
+    from .logging_setup import setup_app_logging
+
+    setup_app_logging()
+    _req_log = logging.getLogger("emuwarez.request")
+
     app = FastAPI(
         title="eMuwarez Uploadrr",
         version=get_app_version(),
@@ -80,6 +87,22 @@ def create_app() -> FastAPI:
         openapi_url="/api/openapi.json",
         lifespan=_lifespan,
     )
+
+    # Log every HTTP request the app handles — part of "log everything".
+    @app.middleware("http")
+    async def _log_requests(request, call_next):
+        start = time.time()
+        try:
+            response = await call_next(request)
+        except Exception:
+            _req_log.exception("%s %s → EXCEPCIÓN", request.method, request.url.path)
+            raise
+        dur_ms = (time.time() - start) * 1000
+        path = request.url.path
+        # Skip the noisy polling of the logs endpoint itself.
+        if path != "/api/logs":
+            _req_log.info("%s %s → %s (%.0f ms)", request.method, path, response.status_code, dur_ms)
+        return response
 
     app.add_exception_handler(AppError, app_error_handler)
     app.add_exception_handler(Exception, generic_error_handler)

@@ -427,6 +427,11 @@ class LibraryItemResponse(BaseModel):
     quality: Optional[str] = None
     resolution: Optional[str] = None
     source: Optional[str] = None
+    provider: Optional[str] = None
+    video_codec: Optional[str] = None
+    audio_codec: Optional[str] = None
+    audio_languages: Optional[str] = None
+    subtitle_languages: Optional[str] = None
     size_bytes: Optional[int] = None
     local_status: str
     request_status: str

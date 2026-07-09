@@ -1,7 +1,8 @@
 import type { LibraryItemResponse, InstanceSafeResponse } from '../types/api'
 import { StatusBadge } from './StatusBadge'
+import { PosterStatusIcon } from './PosterStatusIcon'
 import { formatItemType } from '../utils/format'
-import { titleMismatchesFilename, buildDeepLink } from '../utils/libraryItem'
+import { buildDeepLink } from '../utils/libraryItem'
 
 // Bigger, Overseerr/Jellyseerr-style poster card for the "Pósters grandes"
 // view — additive alongside the existing small grid, not a replacement.
@@ -11,7 +12,6 @@ export function LargePosterCard({ item, instances, onClick }: {
   onClick: () => void
 }) {
   const deepLink = buildDeepLink(item, instances)
-  const mismatched = titleMismatchesFilename(item)
 
   return (
     <div
@@ -38,7 +38,7 @@ export function LargePosterCard({ item, instances, onClick }: {
           </div>
         )}
         <div style={{ position: 'absolute', top: 10, right: 10 }}>
-          <StatusBadge status={item.local_status} type="local" />
+          <PosterStatusIcon status={item.local_status} />
         </div>
         {deepLink && (
           <a
@@ -71,11 +71,6 @@ export function LargePosterCard({ item, instances, onClick }: {
           <StatusBadge status={item.request_status} type="request" />
           <StatusBadge status={item.nomenclature_status} type="nomenclature" />
         </div>
-        {mismatched && (
-          <div style={{ fontSize: 11, color: 'var(--color-missing, #ef4444)', marginTop: 6 }} title={`Título original: ${item.original_title}`}>
-            ⚠ Título distinto al archivo
-          </div>
-        )}
       </div>
     </div>
   )

@@ -38,6 +38,15 @@ const NOMENCLATURE_STATUS_MAP: Record<string, StatusInfo> = {
   'Desconocida':  { label: 'Desconocida',  color: '#6b7280', cssClass: 'nom-unknown' },
 }
 
+// task_runs.status values written by the backend (services/tasks.py):
+// 'running' | 'completed' | 'failed'. Keyed by the raw backend value so the
+// dashboard no longer collapses everything to "Desconocido".
+const TASK_STATUS_MAP: Record<string, StatusInfo> = {
+  'running':    { label: 'Ejecutando',  color: '#3b82f6', cssClass: 'status-queued' },
+  'completed':  { label: 'Completado',  color: '#22c55e', cssClass: 'status-available' },
+  'failed':     { label: 'Error',       color: '#ef4444', cssClass: 'status-error' },
+}
+
 export function getLocalStatusInfo(status: string): StatusInfo {
   return LOCAL_STATUS_MAP[status] ?? { label: status, color: '#6b7280', cssClass: 'status-unknown' }
 }
@@ -48,4 +57,9 @@ export function getRequestStatusInfo(status: string): StatusInfo {
 
 export function getNomenclatureStatusInfo(status: string): StatusInfo {
   return NOMENCLATURE_STATUS_MAP[status] ?? { label: status, color: '#6b7280', cssClass: 'nom-unknown' }
+}
+
+export function getTaskStatusInfo(status: string | null): StatusInfo {
+  if (!status) return { label: 'Desconocido', color: '#6b7280', cssClass: 'status-unknown' }
+  return TASK_STATUS_MAP[status] ?? { label: status, color: '#6b7280', cssClass: 'status-unknown' }
 }

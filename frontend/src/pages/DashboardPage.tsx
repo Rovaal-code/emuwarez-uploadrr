@@ -182,12 +182,8 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
         )}
       </div>
 
-      {/* Peticiones eMuwarez — right under the library sync bar */}
+      {/* eMuwarez requests — cards + a "Sincronizar peticiones" button below */}
       <div style={{ marginBottom: 20 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
-          <div className="section-title">Peticiones eMuwarez</div>
-          <SyncInfo syncStatus={emuSyncStatus} onSync={handleEmuSync} syncing={emuSyncing} />
-        </div>
         {emuSyncMsg && (
           <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>{emuSyncMsg}</div>
         )}
@@ -197,6 +193,9 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
           <StatCard label="Compatibles" value={s.requests_need_nomenclature ?? 0} accentColor="#f59e0b" />
           <StatCard label="Mis peticiones" value={s.requests_mine ?? 0} accentColor="#818cf8" />
           <StatCard label="Completadas" value={s.requests_filled ?? 0} accentColor="var(--color-uploaded)" />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+          <SyncInfo syncStatus={emuSyncStatus} onSync={handleEmuSync} syncing={emuSyncing} label="Sincronizar peticiones" allowForce={false} />
         </div>
       </div>
 
@@ -353,10 +352,7 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
                   <tr key={item.id}>
                     <td>{item.name}</td>
                     <td>
-                      <StatusBadge
-                        status={item.status === 'ok' ? 'Disponible' : item.status === 'error' ? 'Error' : 'Desconocido'}
-                        type="local"
-                      />
+                      <StatusBadge status={item.status ?? ''} type="task" />
                     </td>
                     <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{item.summary ?? '—'}</td>
                     <td style={{ color: 'var(--text-muted)', fontSize: 12, whiteSpace: 'nowrap' }}>{formatDate(item.started_at)}</td>

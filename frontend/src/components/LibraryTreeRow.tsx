@@ -3,15 +3,16 @@ import { getLibrary } from '../api/library'
 import type { LibraryItemResponse, InstanceSafeResponse } from '../types/api'
 import { StatusBadge } from './StatusBadge'
 import { ServiceLabel } from './ServiceIcon'
-import { formatDate, formatItemType } from '../utils/format'
-import { titleMismatchesFilename, buildDeepLink } from '../utils/libraryItem'
+import { formatDate, formatItemType, formatBytes } from '../utils/format'
+import { buildDeepLink } from '../utils/libraryItem'
+import { LibraryActionButtons } from './LibraryActionButtons'
 
 const NESTED_PAGE_SIZE = 25
 // Seasons per series — well under the API's max limit=500 (a season list
 // is never paginated, unlike episodes), but still bounded defensively.
 const MAX_SEASONS_PER_SERIES = 500
 
-export type LibraryActionKind = 'nomenclature' | 'fields' | 'upload'
+export type LibraryActionKind = 'nomenclature' | 'fields' | 'upload' | 'request'
 
 interface LibraryTreeRowProps {
   item: LibraryItemResponse
@@ -37,8 +38,9 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction }: L
 
   const isSeries = item.item_type === 'series'
   const isSeason = item.item_type === 'season'
-  const expandable = isSeries || isSeason
-  const isRollup = isSeries || isSeason
+  const isEpisode = item.item_type === 'episode'
+  const expandable = isSeries || isSeason              // has children to load
+  const canExpand = expandable || isEpisode            // clicking toggles inline
   const childType = isSeries ? 'season' : 'episode'
 
   const loadChildren = useCallback(async (off: number) => {
@@ -67,20 +69,21 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction }: L
       return
     }
     setExpanded(true)
-    if (children.length === 0) loadChildren(0)
+    // Only series/season load child rows; an episode just reveals its own
+    // inline detail panel (no children to fetch).
+    if (expandable && children.length === 0) loadChildren(0)
   }
 
   const deepLink = buildDeepLink(item, instances)
-  const mismatched = titleMismatchesFilename(item)
   const indent = depth * 20
   const colSpan = 12
 
   return (
     <>
-      <tr className="clickable" onClick={() => onSelect(item)}>
+      <tr className="clickable" onClick={() => canExpand ? toggle() : onSelect(item)}>
         <td>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingLeft: indent }}>
-            {expandable && (
+            {canExpand && (
               <button
                 className="btn btn-ghost btn-sm"
                 onClick={e => { e.stopPropagation(); toggle() }}
@@ -102,9 +105,6 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction }: L
               >
                 🔗
               </a>
-            )}
-            {mismatched && (
-              <span style={{ fontSize: 11, color: 'var(--color-missing)' }} title={`Título original: ${item.original_title}`}>⚠</span>
             )}
           </div>
           {item.year && (
@@ -142,29 +142,38 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction }: L
           {formatDate(item.updated_at)}
         </td>
         <td className="col-actions" onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 4 }}>
-          <button
-            className="btn btn-ghost btn-sm"
-            onClick={() => onAction('nomenclature', item)}
-            title={isRollup ? 'Ver season pack' : 'Adaptar nomenclatura'}
-          >
-            Nomenclatura
-          </button>
-          <button
-            className="btn btn-ghost btn-sm"
-            onClick={() => onAction('fields', item)}
-            title={isRollup ? 'Ver season pack' : 'Editar campos de nomenclatura'}
-          >
-            Campos
-          </button>
-          <button
-            className="btn btn-ghost btn-sm"
-            onClick={() => onAction('upload', item)}
-            title={isRollup ? 'Ver season pack' : 'Preflight Uploadrr'}
-          >
-            Subir
-          </button>
+          <LibraryActionButtons item={item} onAction={onAction} />
         </td>
       </tr>
+      {expanded && isEpisode && (
+        <tr>
+          <td colSpan={colSpan} style={{ padding: 0 }}>
+            <div style={{ padding: '12px 16px', paddingLeft: indent + 44, background: 'rgba(255,255,255,0.02)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px 20px', fontSize: 12.5 }}>
+                {([
+                  ['Resolución', item.resolution],
+                  ['Source', item.source],
+                  ['Provider', item.provider],
+                  ['Códec de vídeo', item.video_codec],
+                  ['Códec de audio', item.audio_codec],
+                  ['Idiomas de audio', item.audio_languages],
+                  ['Subtítulos', item.subtitle_languages],
+                  ['Tamaño', formatBytes(item.size_bytes)],
+                ] as [string, string | null][]).map(([k, v]) => (
+                  <div key={k}>
+                    <div style={{ fontSize: 10.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{k}</div>
+                    <div>{v || '–'}</div>
+                  </div>
+                ))}
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <div style={{ fontSize: 10.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Ruta</div>
+                  <div style={{ wordBreak: 'break-all' }}>{item.path || '–'}</div>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
       {expanded && loadingChildren && (
         <tr>
           <td colSpan={colSpan} style={{ textAlign: 'center', padding: 10, color: 'var(--text-muted)', fontSize: 12 }}>

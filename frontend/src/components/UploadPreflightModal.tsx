@@ -146,14 +146,6 @@ export function UploadPreflightModal({ itemId, itemTitle, requestId, onClose }: 
                       )}
                     </span>
                   </div>
-                  {result.command_preview.command_preview && (
-                    <div className="detail-panel__section" style={{ marginTop: 12 }}>
-                      <div className="detail-panel__section-title">Comando previsto</div>
-                      <pre style={{ fontSize: '0.75rem', overflow: 'auto', padding: 8, background: 'rgba(0,0,0,0.2)', borderRadius: 4 }}>
-                        {result.command_preview.command_preview}
-                      </pre>
-                    </div>
-                  )}
                   {(result.command_preview.contract_errors?.length ?? 0) > 0 && (
                     <div className="detail-panel__section" style={{ marginTop: 8 }}>
                       <div className="detail-panel__section-title">Errores de contrato Uploadrr-EMU</div>
@@ -239,11 +231,6 @@ export function UploadPreflightModal({ itemId, itemTitle, requestId, onClose }: 
                 <strong>Estado:</strong> {startResult.status}
               </p>
               {startResult.message && <p style={{ margin: '4px 0', fontSize: '0.83rem' }}>{startResult.message}</p>}
-              {startResult.command_preview && (
-                <pre style={{ fontSize: '0.75rem', overflow: 'auto', padding: 8, background: 'rgba(0,0,0,0.2)', borderRadius: 4, marginTop: 8 }}>
-                  {startResult.command_preview}
-                </pre>
-              )}
             </div>
           )}
           {startError && <p className="error-text" style={{ marginTop: 8 }}>{startError}</p>}

@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..dependencies import require_auth
 from ..runtime import _db_path
+from emuwarez_uploadrr.services.nomenclature import infer_provider_from_item
 from ..schemas import (
     LibraryItemResponse, LibraryListResponse,
     MissingItemResponse, MissingListResponse,
@@ -46,6 +47,11 @@ def _to_lib_response(row: dict) -> LibraryItemResponse:
         quality=row.get("quality"),
         resolution=row.get("resolution"),
         source=row.get("source"),
+        provider=infer_provider_from_item(row),
+        video_codec=row.get("video_codec"),
+        audio_codec=row.get("audio_codec"),
+        audio_languages=row.get("audio_languages"),
+        subtitle_languages=row.get("subtitle_languages"),
         size_bytes=row.get("size_bytes"),
         local_status=row["local_status"],
         request_status=row["request_status"],
@@ -136,7 +142,7 @@ def library_list(
     request_status: Optional[str] = Query(None, alias="request_status"),
     nomenclature: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
-    limit: int = Query(50, ge=1, le=500),
+    limit: int = Query(50, ge=1, le=20000),
     offset: int = Query(0, ge=0),
 ) -> LibraryListResponse:
     from emuwarez_uploadrr.services.library import list_library, count_library
@@ -197,7 +203,7 @@ def library_detail(
 @router.get("/missing", response_model=MissingListResponse)
 def missing_list(
     current_user: dict = Depends(require_auth),
-    limit: int = Query(50, ge=1, le=500),
+    limit: int = Query(50, ge=1, le=20000),
     offset: int = Query(0, ge=0),
 ) -> MissingListResponse:
     from emuwarez_uploadrr.services.library import list_missing, count_library

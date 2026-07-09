@@ -208,6 +208,26 @@ def suggest_provider_for_item(library_item_id: int, conn=None) -> dict:
             conn.close()
 
 
+def _resolve_series_title(item: dict, conn) -> str | None:
+    """Walk parent_id up from an episode/season row to the series row and
+    return its (clean) title, so episode nomenclature uses the series name
+    instead of the per-episode "Serie S01E01 - Nombre" title."""
+    seen: set[int] = set()
+    pid = item.get("parent_id")
+    while pid and pid not in seen:
+        seen.add(pid)
+        row = conn.execute(
+            "SELECT title, item_type, parent_id FROM library_items WHERE id = ?", (pid,)
+        ).fetchone()
+        if not row:
+            break
+        row = dict(row)
+        if row.get("item_type") == "series":
+            return row.get("title")
+        pid = row.get("parent_id")
+    return None
+
+
 def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
     """Build the editable field set for the nomenclature modal."""
     own = conn is None
@@ -218,17 +238,48 @@ def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
             _infer_resolution_from_item,
             _infer_source_from_item,
             get_latest_nomenclature_proposal,
+            infer_provider_from_item,
+            _refresh_media_info_from_real_file,
         )
 
         item = get_library_item_for_nomenclature(library_item_id, conn=conn)
         if not item:
             return {"error": "Item no encontrado"}
 
+        # Run a real MediaInfo read of the actual file so the technical fields
+        # (codec/audio/subtitles) come from mediainfo — not just Radarr/Sonarr's
+        # sync-time metadata. Silently keeps the sync values when the file or the
+        # `mediainfo` binary isn't available (e.g. outside the homelab).
+        try:
+            _refresh_media_info_from_real_file(item, conn=conn)
+            item = get_library_item_for_nomenclature(library_item_id, conn=conn) or item
+        except Exception:
+            pass
+
         title = item.get("title") or ""
         year = item.get("year")
         media_type = item.get("item_type") or "movie"
         resolution = _infer_resolution_from_item(item)
         source = _infer_source_from_item(item)
+
+        # For episodes/seasons the eMuwarez title must be the SERIES name (not
+        # the per-episode title like "Serie S01E01 - Nombre"), with the
+        # season/episode carried separately. Resolve the series title by
+        # walking up parent_id to the series row.
+        season_num = item.get("season_number")
+        episode_num = item.get("episode_number")
+        if media_type in ("season", "episode"):
+            series_title = _resolve_series_title(item, conn)
+            if series_title:
+                title = series_title
+
+        def _se_token() -> str | None:
+            if season_num is None:
+                return "S01"
+            token = f"S{int(season_num):02d}"
+            if media_type == "episode" and episode_num is not None:
+                token += f"E{int(episode_num):02d}"
+            return token
 
         proposal = get_latest_nomenclature_proposal(library_item_id, conn=conn)
         if proposal:
@@ -238,7 +289,9 @@ def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
         tag = _get_default_tag(conn)
 
         season_episode = None
-        if media_type in ("tv", "series", "anime", "season", "episode"):
+        if media_type in ("season", "episode"):
+            season_episode = _se_token()
+        elif media_type in ("tv", "series", "anime"):
             season_episode = "S01"
 
         tmdb_providers: list[str] = []
@@ -258,6 +311,15 @@ def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
                 "tmdb_available": p["code"] in tmdb_set,
             })
 
+        # Auto-fill per the wizard spec: Source/Provider come from the filename,
+        # everything else from mediainfo. Fall back to the item's stored
+        # mediainfo columns when there's no prior proposal, and to filename
+        # provider detection when TMDb didn't suggest one — otherwise a WEB-DL
+        # release already tagged (e.g. DSNP) would show empty here.
+        item_audio_summary = " ".join(
+            p for p in (item.get("audio_codec"), item.get("audio_languages")) if p
+        ) or None
+
         fields: dict[str, Any] = {
             "title": title,
             "complement": None,
@@ -265,10 +327,10 @@ def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
             "year": year,
             "resolution": resolution,
             "source": source,
-            "provider": suggested_provider,
+            "provider": suggested_provider or infer_provider_from_item(item),
             "dynamic_range": None,
-            "video_codec": proposal.get("video_codec") if proposal else None,
-            "audio_summary": proposal.get("audio_summary") if proposal else None,
+            "video_codec": (proposal.get("video_codec") if proposal else None) or item.get("video_codec"),
+            "audio_summary": (proposal.get("audio_summary") if proposal else None) or item_audio_summary,
             "subs": "SUBS",
             "tag": tag,
         }

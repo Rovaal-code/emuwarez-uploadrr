@@ -115,6 +115,13 @@ def _infer_provider_from_item(item: dict, source: str | None) -> str | None:
     return None
 
 
+def infer_provider_from_item(item: dict) -> str | None:
+    """Public: detect the EMU provider code (AMZN/NF/DSNP…) from an item's
+    filename, inferring the source first (provider is only meaningful for
+    provider-carrying sources like WEB-DL). Returns None when not detectable."""
+    return _infer_provider_from_item(item, _infer_source_from_item(item))
+
+
 def _infer_resolution_from_item(item: dict) -> str | None:
     res = item.get("resolution")
     if res:

@@ -21,10 +21,19 @@ pipeline) in emuwarez_uploadrr/legacy.py::build_uploadrr_command.
 from __future__ import annotations
 
 import json
+import os
 import re
 import sqlite3
+import sys
 from pathlib import Path
 from typing import Optional
+
+# Uploadrr-EMU is bundled inside the Docker image as an internal dependency
+# (like mediainfo/ffmpeg) — the user configures nothing. These defaults point
+# at the in-image location and interpreter; both can still be overridden by a
+# setting or an env var for local development.
+DEFAULT_UPLOADRR_PATH = os.environ.get("UPLOADRR_PATH", "/opt/Uploadrr")
+DEFAULT_UPLOADRR_PYTHON = os.environ.get("UPLOADRR_PYTHON", sys.executable)
 
 from ..database import get_setting_canonical, get_state
 from .filesystem_apply import ensure_path_under_base
@@ -47,8 +56,8 @@ def get_runtime_settings(conn: sqlite3.Connection) -> dict:
         timeout = DEFAULT_TIMEOUT_SECONDS
 
     return {
-        "uploadrr_path": get_setting_canonical(conn, "uploadrr.path") or "",
-        "python_path": get_setting_canonical(conn, "uploadrr.python_path") or "",
+        "uploadrr_path": get_setting_canonical(conn, "uploadrr.path") or DEFAULT_UPLOADRR_PATH,
+        "python_path": get_setting_canonical(conn, "uploadrr.python_path") or DEFAULT_UPLOADRR_PYTHON,
         "runtime_type": get_setting_canonical(conn, "uploadrr.runtime_type") or DEFAULT_RUNTIME_TYPE,
         "timeout": timeout,
         "allowed_roots": get_allowed_roots(conn),

@@ -13,6 +13,7 @@ Safety rules:
 from __future__ import annotations
 
 import datetime as dt
+import os
 import socket
 import urllib.error
 import urllib.parse
@@ -174,6 +175,28 @@ def test_emuwarez_connection(
 _VALID_ARR_KINDS = frozenset({"radarr", "sonarr"})
 
 
+def _arr_content_visibility(kind: str, base_url: str, api_key: str) -> dict:
+    """Check whether the ARR's root folders are visible on THIS app's filesystem
+    (i.e. the media volume is mounted into the container the same way). Returns
+    {visible: bool|None, roots: [{path, exists}]}. visible=None means it
+    couldn't be determined (root folders unreadable)."""
+    try:
+        if kind == "radarr":
+            from ..integrations.radarr import get_root_folders
+        else:
+            from ..integrations.sonarr import get_root_folders
+        folders = get_root_folders(base_url, api_key)
+    except Exception:
+        return {"visible": None, "roots": []}
+    roots = []
+    for f in folders or []:
+        p = f.get("path") if isinstance(f, dict) else None
+        if p:
+            roots.append({"path": p, "exists": os.path.isdir(p)})
+    visible = any(r["exists"] for r in roots) if roots else None
+    return {"visible": visible, "roots": roots}
+
+
 def test_arr_connection(
     *,
     kind: Optional[str] = None,
@@ -225,7 +248,13 @@ def test_arr_connection(
         url = join_api_path(base_url, "system/status")
         data: Any = arr_request("GET", url, api_key)
         version = data.get("version") if isinstance(data, dict) else None
-        return _ok(kind, details={"version": version, "instance_id": instance_id})
+        vis = _arr_content_visibility(kind, base_url, api_key)
+        return _ok(kind, details={
+            "version": version,
+            "instance_id": instance_id,
+            "content_visible": vis["visible"],
+            "root_folders": vis["roots"],
+        })
     except ArrAuthError:
         return _fail(kind, "invalid_key", f"API key de {kind.capitalize()} inválida o permisos insuficientes")
     except ArrConnectionError as exc:

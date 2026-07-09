@@ -15,10 +15,26 @@ FROM python:3.12-slim AS runtime
 LABEL org.opencontainers.image.title="eMuwarez Uploadrr"
 LABEL org.opencontainers.image.description="Upload manager for eMuwarez with Radarr/Sonarr integration"
 
+# System dependencies. mediainfo/ffmpeg/mktorrent are needed by the bundled
+# Uploadrr-EMU (mediainfo also by our own nomenclature); git is used to fetch
+# the Uploadrr-EMU fork at build time.
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    mediainfo ffmpeg mktorrent git \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+
+# Bundle Uploadrr-EMU (the user's fork) as an internal dependency — like
+# mediainfo/ffmpeg, the user configures nothing. Installed under /opt (NOT
+# /app, or setuptools' flat-layout discovery would clash with our own package).
+# uploadrr.path defaults to /opt/Uploadrr (services/uploadrr_contract.py).
+# setuptools is pinned <80 because pyrobase's setup.py still imports the
+# pkg_resources module that newer setuptools dropped.
+RUN git clone --depth 1 https://codeberg.org/ccx94/Uploadrr-EMU.git /opt/Uploadrr \
+    && pip install --no-cache-dir "setuptools<80" wheel \
+    && pip install --no-cache-dir --no-build-isolation -r /opt/Uploadrr/requirements.txt \
+    && pip install --no-cache-dir tmdbsimple \
+    && rm -rf /opt/Uploadrr/.git
 
 # Install Python dependencies first (better layer caching)
 COPY pyproject.toml ./

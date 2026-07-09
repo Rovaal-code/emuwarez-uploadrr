@@ -3,22 +3,22 @@ import { getLibrary, TOP_LEVEL_PARENT_FILTER } from '../api/library'
 import { getInstances } from '../api/instances'
 import { refreshArrHealth, verifyLibraryFiles, refreshRecommendations } from '../api/diagnostics'
 import type { LibraryItemResponse, LibraryListResponse, InstanceSafeResponse } from '../types/api'
-import { StatusBadge } from '../components/StatusBadge'
+import { PosterStatusIcon } from '../components/PosterStatusIcon'
 import { LoadingState } from '../components/LoadingState'
 import { ErrorState } from '../components/ErrorState'
 import { EmptyState } from '../components/EmptyState'
 import { NomenclatureModal } from '../components/NomenclatureModal'
 import { NomenclatureFieldsModal } from '../components/NomenclatureFieldsModal'
 import { UploadPreflightModal } from '../components/UploadPreflightModal'
+import { UploadWizardModal } from '../components/UploadWizardModal'
+import { RequestFormModal } from '../components/RequestFormModal'
 import { LibraryTreeRow, type LibraryActionKind } from '../components/LibraryTreeRow'
-import { SeriesSeasonsSection } from '../components/SeriesSeasonsSection'
 import { LargePosterCard } from '../components/LargePosterCard'
-import { LibraryDetailCard } from '../components/LibraryDetailCard'
+import { LibraryDetailPage } from '../components/LibraryDetailPage'
 import { SeasonPackModal } from '../components/SeasonPackModal'
-import { formatBytes, formatDate, formatItemType } from '../utils/format'
-import { titleMismatchesFilename, buildDeepLink } from '../utils/libraryItem'
+import { buildDeepLink } from '../utils/libraryItem'
 
-const PAGE_SIZE = 50
+const LOAD_LIMIT = 20000  // show everything in one container (no pagination); backend caps here
 const VIEW_MODE_STORAGE_KEY = 'emuwarez_uploadrr_library_view'
 // Sentinel matching the backend's NOT_AVAILABLE_STATUS_FILTER
 // (services/library.py) — expands server-side to the same LocalStatus
@@ -35,7 +35,6 @@ function loadViewMode(): ViewMode {
 
 function PosterCard({ item, instances, onClick }: { item: LibraryItemResponse; instances: InstanceSafeResponse[]; onClick: () => void }) {
   const deepLink = buildDeepLink(item, instances)
-  const mismatched = titleMismatchesFilename(item)
   return (
     <div
       className="clickable"
@@ -60,7 +59,7 @@ function PosterCard({ item, instances, onClick }: { item: LibraryItemResponse; i
           </div>
         )}
         <div style={{ position: 'absolute', top: 6, right: 6 }}>
-          <StatusBadge status={item.local_status} type="local" />
+          <PosterStatusIcon status={item.local_status} />
         </div>
         {deepLink && (
           <a
@@ -84,11 +83,6 @@ function PosterCard({ item, instances, onClick }: { item: LibraryItemResponse; i
           {item.title}
         </div>
         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{item.year ?? '—'}</div>
-        {mismatched && (
-          <div style={{ fontSize: 10, color: 'var(--color-missing, #ef4444)', marginTop: 2 }} title={`Título original: ${item.original_title}`}>
-            ⚠ Título distinto al archivo
-          </div>
-        )}
       </div>
     </div>
   )
@@ -100,10 +94,11 @@ export function LibraryPage() {
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<LibraryItemResponse | null>(null)
   // Only opened from the "Pósters grandes" view — the small modal (grid/list) stays as-is.
-  const [largeDetailItem, setLargeDetailItem] = useState<LibraryItemResponse | null>(null)
   const [nomenclatureItem, setNomenclatureItem] = useState<LibraryItemResponse | null>(null)
   const [fieldsItem, setFieldsItem] = useState<LibraryItemResponse | null>(null)
   const [uploadItem, setUploadItem] = useState<LibraryItemResponse | null>(null)
+  const [wizardItem, setWizardItem] = useState<LibraryItemResponse | null>(null)
+  const [requestItem, setRequestItem] = useState<LibraryItemResponse | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode)
   // Season pack modal — opened for a single Season row, or for a whole
   // Series row (its seasons resolved first, then all listed/applied here).
@@ -114,22 +109,12 @@ export function LibraryPage() {
   // modal (its per-episode filenames are already computed automatically —
   // no separate manual field-editing step for "Campos" in this version).
   async function handleTreeAction(kind: LibraryActionKind, item: LibraryItemResponse) {
-    if (item.item_type === 'season') {
-      setPackSeasons([item])
-      return
-    }
-    if (item.item_type === 'series') {
-      try {
-        const result = await getLibrary({ parent_id: item.id, type: 'season', limit: 500 })
-        setPackSeasons(result.items)
-      } catch {
-        setPackSeasons([])
-      }
-      return
-    }
-    if (kind === 'nomenclature') setNomenclatureItem(item)
-    else if (kind === 'fields') setFieldsItem(item)
-    else setUploadItem(item)
+    if (kind === 'nomenclature') { setNomenclatureItem(item); return }
+    if (kind === 'fields') { setFieldsItem(item); return }
+    if (kind === 'request') { setRequestItem(item); return }
+    // 'upload' → unified Subir wizard. For a series/season the wizard itself
+    // asks which season/episode (or the whole season) to target.
+    setWizardItem(item)
   }
 
   useEffect(() => { localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode) }, [viewMode])
@@ -210,7 +195,7 @@ export function LibraryPage() {
         // expanding LibraryTreeRow, never flooding this list with raw
         // episodes/seasons.
         parent_id: TOP_LEVEL_PARENT_FILTER,
-        limit: PAGE_SIZE,
+        limit: LOAD_LIMIT,
         offset,
       })
       setData(result)
@@ -230,6 +215,49 @@ export function LibraryPage() {
 
   const items = data?.items ?? []
   const total = data?.total ?? 0
+
+  // Modals/overlays, shared by the list view and the detail page so an action
+  // triggered from the detail page (Subir/Petición) shows its window without
+  // having to go back to the library first.
+  const modals = (
+    <>
+      {packSeasons && packSeasons.length > 0 && (
+        <SeasonPackModal seasons={packSeasons} onClose={() => { setPackSeasons(null); load() }} />
+      )}
+      {nomenclatureItem && (
+        <NomenclatureModal itemId={nomenclatureItem.id} itemTitle={nomenclatureItem.title} onClose={() => setNomenclatureItem(null)} />
+      )}
+      {fieldsItem && (
+        <NomenclatureFieldsModal itemId={fieldsItem.id} itemTitle={fieldsItem.title} onClose={() => setFieldsItem(null)} onSaved={load} />
+      )}
+      {uploadItem && (
+        <UploadPreflightModal itemId={uploadItem.id} itemTitle={uploadItem.title} onClose={() => setUploadItem(null)} />
+      )}
+      {wizardItem && (
+        <UploadWizardModal item={wizardItem} onClose={() => setWizardItem(null)} onDone={() => { load() }} />
+      )}
+      {requestItem && (
+        <RequestFormModal item={requestItem} onClose={() => setRequestItem(null)} />
+      )}
+    </>
+  )
+
+  // Dedicated detail page (Radarr/Sonarr-style) — shown in place of the list
+  // when an item is selected, instead of a modal/card.
+  if (selected) {
+    return (
+      <div>
+        <LibraryDetailPage
+          item={selected}
+          instances={instances}
+          onBack={() => setSelected(null)}
+          onSelect={setSelected}
+          onAction={handleTreeAction}
+        />
+        {modals}
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -347,28 +375,14 @@ export function LibraryPage() {
               <PosterCard key={item.id} item={item} instances={instances} onClick={() => setSelected(item)} />
             ))}
           </div>
-          {total > PAGE_SIZE && (
-            <div style={{ padding: '16px 0 0', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button className="btn btn-secondary btn-sm" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>← Anterior</button>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)', alignSelf: 'center' }}>{Math.floor(offset / PAGE_SIZE) + 1} / {Math.ceil(total / PAGE_SIZE)}</span>
-              <button className="btn btn-secondary btn-sm" disabled={offset + PAGE_SIZE >= total} onClick={() => setOffset(offset + PAGE_SIZE)}>Siguiente →</button>
-            </div>
-          )}
         </div>
       ) : viewMode === 'grid-lg' ? (
         <div className="activity-section" style={{ padding: 20 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 20 }}>
             {items.map(item => (
-              <LargePosterCard key={item.id} item={item} instances={instances} onClick={() => setLargeDetailItem(item)} />
+              <LargePosterCard key={item.id} item={item} instances={instances} onClick={() => setSelected(item)} />
             ))}
           </div>
-          {total > PAGE_SIZE && (
-            <div style={{ padding: '16px 0 0', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button className="btn btn-secondary btn-sm" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>← Anterior</button>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)', alignSelf: 'center' }}>{Math.floor(offset / PAGE_SIZE) + 1} / {Math.ceil(total / PAGE_SIZE)}</span>
-              <button className="btn btn-secondary btn-sm" disabled={offset + PAGE_SIZE >= total} onClick={() => setOffset(offset + PAGE_SIZE)}>Siguiente →</button>
-            </div>
-          )}
         </div>
       ) : (
         <div className="activity-section">
@@ -404,187 +418,10 @@ export function LibraryPage() {
               </tbody>
             </table>
           </div>
-          {total > PAGE_SIZE && (
-            <div style={{ padding: '12px 20px', display: 'flex', gap: 8, justifyContent: 'flex-end', borderTop: '1px solid var(--border)' }}>
-              <button className="btn btn-secondary btn-sm" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>← Anterior</button>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)', alignSelf: 'center' }}>{Math.floor(offset / PAGE_SIZE) + 1} / {Math.ceil(total / PAGE_SIZE)}</span>
-              <button className="btn btn-secondary btn-sm" disabled={offset + PAGE_SIZE >= total} onClick={() => setOffset(offset + PAGE_SIZE)}>Siguiente →</button>
-            </div>
-          )}
         </div>
       )}
 
-      {/* Season pack modal — one Season row, or a whole Series' seasons */}
-      {packSeasons && packSeasons.length > 0 && (
-        <SeasonPackModal seasons={packSeasons} onClose={() => { setPackSeasons(null); load() }} />
-      )}
-
-      {/* Nomenclature modal */}
-      {nomenclatureItem && (
-        <NomenclatureModal
-          itemId={nomenclatureItem.id}
-          itemTitle={nomenclatureItem.title}
-          onClose={() => setNomenclatureItem(null)}
-        />
-      )}
-
-      {/* Nomenclature fields modal (Phase 10A) */}
-      {fieldsItem && (
-        <NomenclatureFieldsModal
-          itemId={fieldsItem.id}
-          itemTitle={fieldsItem.title}
-          onClose={() => setFieldsItem(null)}
-          onSaved={load}
-        />
-      )}
-
-      {/* Upload preflight modal */}
-      {uploadItem && (
-        <UploadPreflightModal
-          itemId={uploadItem.id}
-          itemTitle={uploadItem.title}
-          onClose={() => setUploadItem(null)}
-        />
-      )}
-
-      {/* Large "Serr-style" detail card — Pósters grandes view only */}
-      {largeDetailItem && (
-        <LibraryDetailCard
-          item={largeDetailItem}
-          instances={instances}
-          onClose={() => setLargeDetailItem(null)}
-          onSelect={setLargeDetailItem}
-          onAction={handleTreeAction}
-        />
-      )}
-
-      {/* Detail panel */}
-      {selected && (
-        <div
-          style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex',
-            alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20,
-          }}
-          onClick={() => setSelected(null)}
-        >
-          <div
-            style={{
-              background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 12,
-              padding: 28, maxWidth: 560, width: '100%', maxHeight: '80vh', overflowY: 'auto',
-            }}
-            onClick={e => e.stopPropagation()}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20, gap: 16 }}>
-              <div style={{ display: 'flex', gap: 14 }}>
-                {selected.poster_url && (
-                  <img
-                    src={selected.poster_url}
-                    alt={selected.title}
-                    style={{ width: 64, height: 96, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }}
-                    onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
-                  />
-                )}
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {selected.title} {selected.year ? `(${selected.year})` : ''}
-                    {buildDeepLink(selected, instances) && (
-                      <a
-                        href={buildDeepLink(selected, instances)!}
-                        target="_blank"
-                        rel="noreferrer"
-                        title={`Ver en ${selected.instance_name ?? selected.instance_type}`}
-                        style={{ fontSize: 13, textDecoration: 'none' }}
-                      >
-                        🔗
-                      </a>
-                    )}
-                  </div>
-                  {titleMismatchesFilename(selected) && (
-                    <div style={{ fontSize: 11, color: 'var(--color-missing)', marginTop: 2 }}>
-                      ⚠ Título distinto al del archivo original ({selected.original_title})
-                    </div>
-                  )}
-                </div>
-              </div>
-              <button className="btn btn-ghost btn-sm" onClick={() => setSelected(null)}>✕</button>
-            </div>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-              {(() => {
-                const isRollup = selected.item_type === 'series' || selected.item_type === 'season'
-                const title = isRollup ? 'Ver season pack' : undefined
-                return (
-                  <>
-                    <button className="btn btn-secondary btn-sm" title={title} onClick={() => { handleTreeAction('nomenclature', selected); setSelected(null) }}>Adaptar nomenclatura</button>
-                    <button className="btn btn-secondary btn-sm" title={title} onClick={() => { handleTreeAction('fields', selected); setSelected(null) }}>Editar campos</button>
-                    <button className="btn btn-secondary btn-sm" title={title} onClick={() => { handleTreeAction('upload', selected); setSelected(null) }}>Subir</button>
-                  </>
-                )
-              })()}
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 20px', fontSize: 13 }}>
-              {[
-                ['Tipo', formatItemType(selected.item_type)],
-                ['Origen', selected.instance_name ?? '—'],
-                ['Estado', null],
-                ['Petición', null],
-                ['Nomenclatura', null],
-                ['Resolución', selected.resolution ?? '—'],
-                ['Source', selected.source ?? '—'],
-                ['Calidad', selected.quality ?? '—'],
-                ['Tamaño', formatBytes(selected.size_bytes)],
-                ['TMDb', selected.tmdb_id ?? '—'],
-                ['IMDb', selected.imdb_id ?? '—'],
-                ['Ruta', selected.path ?? '—'],
-              ].map(([key, val]) => (
-                <div key={String(key)}>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 2 }}>{key}</div>
-                  {key === 'Estado' ? <StatusBadge status={selected.local_status} type="local" />
-                   : key === 'Petición' ? <StatusBadge status={selected.request_status} type="request" />
-                   : key === 'Nomenclatura' ? <StatusBadge status={selected.nomenclature_status} type="nomenclature" />
-                   : <div style={{ color: 'var(--text-primary)', wordBreak: 'break-all' }}>{val}</div>}
-                </div>
-              ))}
-            </div>
-            {/* Phase 8A — diagnostic fields */}
-            {(selected.file_exists !== null || selected.diagnostic_status || selected.recommended_action) && (
-              <div style={{ marginTop: 16, padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>Diagnóstico (Fase 8A)</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px', fontSize: 12 }}>
-                  {selected.file_exists !== null && (
-                    <div>
-                      <span style={{ color: 'var(--text-muted)' }}>Archivo en disco: </span>
-                      <span style={{ color: selected.file_exists ? 'var(--color-available)' : 'var(--color-missing)', fontWeight: 600 }}>
-                        {selected.file_exists ? 'Sí' : 'No'}
-                      </span>
-                    </div>
-                  )}
-                  {selected.file_verified_at && (
-                    <div><span style={{ color: 'var(--text-muted)' }}>Verificado: </span>{formatDate(selected.file_verified_at)}</div>
-                  )}
-                  {selected.arr_queue_status && (
-                    <div><span style={{ color: 'var(--text-muted)' }}>Queue ARR: </span><strong>{selected.arr_queue_status}</strong></div>
-                  )}
-                  {selected.arr_history_status && (
-                    <div><span style={{ color: 'var(--text-muted)' }}>Historial ARR: </span>{selected.arr_history_status}</div>
-                  )}
-                  {selected.diagnostic_summary && (
-                    <div style={{ gridColumn: '1 / -1' }}><span style={{ color: 'var(--text-muted)' }}>Diagnóstico: </span>{selected.diagnostic_summary}</div>
-                  )}
-                  {selected.recommended_action && (
-                    <div style={{ gridColumn: '1 / -1' }}>
-                      <span style={{ color: 'var(--text-muted)' }}>Acción recomendada: </span>
-                      <span style={{ color: '#a78bfa', fontWeight: 600 }}>{selected.recommended_action}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-            {selected.item_type === 'series' && (
-              <SeriesSeasonsSection seriesId={selected.id} instances={instances} onSelect={setSelected} onAction={handleTreeAction} />
-            )}
-          </div>
-        </div>
-      )}
+      {modals}
     </div>
   )
 }

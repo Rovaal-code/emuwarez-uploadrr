@@ -108,6 +108,11 @@ export interface LibraryItemResponse {
   quality: string | null
   resolution: string | null
   source: string | null
+  provider: string | null
+  video_codec: string | null
+  audio_codec: string | null
+  audio_languages: string | null
+  subtitle_languages: string | null
   size_bytes: number | null
   local_status: string
   request_status: string

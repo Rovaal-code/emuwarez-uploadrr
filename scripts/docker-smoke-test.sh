@@ -99,7 +99,6 @@ docker run -d \
     -v "${TMPDIR_SMOKE}/config:/config" \
     -v "${TMPDIR_SMOKE}/data:/data" \
     -v "${TMPDIR_SMOKE}/uploads:/uploads" \
-    -v "${TMPDIR_SMOKE}/uploadrr-mount:/opt/Uploadrr:ro" \
     "$IMAGE_NAME" >/dev/null
 
 log_ok "Contenedor arrancado"
@@ -181,15 +180,15 @@ else
     FAIL=$((FAIL + 1))
 fi
 
-# 7. Seguridad: Uploadrr/ no debe estar en la imagen
+# 7. Uploadrr-EMU bundled as an internal dependency (must be in the image)
 echo ""
-echo "Seguridad:"
-if docker exec "$CONTAINER_NAME" test -d /app/Uploadrr 2>/dev/null; then
-    log_fail "Uploadrr/ encontrado DENTRO de la imagen (no debe estar)"
-    FAIL=$((FAIL + 1))
-else
-    log_ok "Uploadrr/ no está dentro de la imagen"
+echo "Uploadrr-EMU (dependencia interna):"
+if docker exec "$CONTAINER_NAME" test -f /opt/Uploadrr/upload.py 2>/dev/null; then
+    log_ok "Uploadrr-EMU está bundleado en /opt/Uploadrr"
     PASS=$((PASS + 1))
+else
+    log_fail "Uploadrr-EMU NO está en la imagen (/opt/Uploadrr/upload.py falta)"
+    FAIL=$((FAIL + 1))
 fi
 
 # 8. Resumen

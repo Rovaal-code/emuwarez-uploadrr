@@ -23,8 +23,9 @@ import { posterUrl } from '../utils/libraryItem'
 // percentage (Uploadrr-EMU doesn't report one) — this is a discrete-step
 // bar, not a fabricated percentage.
 // Fixed height for the "Actividad reciente" / "Actividad de subida" panels so
-// they always match, whether the library is populated or empty.
-const ACTIVITY_PANEL_HEIGHT = 460
+// they always match, whether the library is populated or empty. 50% of the
+// viewport height, with internal scroll when the content overflows.
+const ACTIVITY_PANEL_HEIGHT = '50vh'
 
 const RUNNING_PHASES = ['preflight', 'config_staging', 'running', 'finalizing'] as const
 const PHASE_LABEL: Record<string, string> = {

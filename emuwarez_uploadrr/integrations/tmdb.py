@@ -10,15 +10,18 @@ _TMDB_BASE = "https://api.themoviedb.org/3"
 
 
 def _get_tmdb_api_key(conn=None) -> str | None:
+    _conn = None
     try:
-        from ..database import connect
+        from ..database import connect, get_setting_canonical
         _conn = conn or connect()
-        row = _conn.execute("SELECT value FROM settings WHERE key = 'tmdb_api_key'").fetchone()
-        if row:
-            return row["value"]
+        # Settings are written under the canonical dotted key (tmdb.api_key);
+        # resolve both that and the legacy underscore alias (tmdb_api_key).
+        return get_setting_canonical(_conn, "tmdb.api_key")
     except Exception:
-        pass
-    return None
+        return None
+    finally:
+        if _conn is not None and conn is None:
+            _conn.close()
 
 
 def get_movie_watch_providers(tmdb_id: int, *, region: str = "ES", api_key: str | None = None, conn=None) -> dict:

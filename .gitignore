@@ -44,3 +44,4 @@ frontend/.vite/
 # Local API key files (never commit — secrets)
 radarr_apikey
 sonarr_apikey
+TMDB_api

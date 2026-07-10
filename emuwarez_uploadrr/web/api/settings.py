@@ -26,6 +26,7 @@ _VALID_PROVIDER_CODES: frozenset[str] = frozenset({
     "AMZN", "ATVP", "DSNP", "F1TV", "GLB", "HS", "HULU", "M+", "IT",
     "MA", "MAX", "HMAX", "SKY", "PCOK", "PMTP", "iP", "PLAY", "MUBI",
     "NF", "RKTN", "SL", "SNXT", "VIU", "RTVE", "HBO",
+    "CR", "ADN", "HIDIVE", "VRV", "BILI",
 })
 
 _DEFAULT_PRIORITY: list[str] = ["AMZN", "NF", "DSNP", "MAX", "ATVP"]

@@ -24,8 +24,51 @@ def _get_conn():
     return conn
 
 
-def _to_lib_response(row: dict) -> LibraryItemResponse:
+def _nomenclature_rollup(conn, item_id: int, item_type: str) -> Optional[str]:
+    """Aggregate the nomenclature status of a Season (from its episodes) or a
+    Series (from all its episodes). Only counts episodes that have a real
+    nomenclature state (Correcta / No adaptada) — missing episodes (N/A) are
+    ignored. Returns:
+      - 'Correcta'    when every counted episode is adapted,
+      - 'No adaptada' when none is,
+      - 'Parcial'     when some are and some aren't,
+      - None          when there's nothing to aggregate (keep the row's own).
+    """
+    if conn is None:
+        return None
+    if item_type == "season":
+        sql = (
+            "SELECT nomenclature_status AS s, COUNT(*) AS c FROM library_items "
+            "WHERE parent_id = ? AND item_type = 'episode' GROUP BY nomenclature_status"
+        )
+    elif item_type == "series":
+        sql = (
+            "SELECT e.nomenclature_status AS s, COUNT(*) AS c FROM library_items e "
+            "JOIN library_items se ON e.parent_id = se.id "
+            "WHERE se.parent_id = ? AND e.item_type = 'episode' GROUP BY e.nomenclature_status"
+        )
+    else:
+        return None
+    counts = {r["s"]: r["c"] for r in conn.execute(sql, (item_id,)).fetchall()}
+    correct = counts.get("Correcta", 0)
+    not_adapted = counts.get("No adaptada", 0)
+    relevant = correct + not_adapted
+    if relevant == 0:
+        return None
+    if not_adapted == 0:
+        return "Correcta"
+    if correct == 0:
+        return "No adaptada"
+    return "Parcial"
+
+
+def _to_lib_response(row: dict, conn=None) -> LibraryItemResponse:
     file_exists_raw = row.get("file_exists")
+    nomenclature_status = row["nomenclature_status"]
+    if row["item_type"] in ("season", "series"):
+        rollup = _nomenclature_rollup(conn, row["id"], row["item_type"])
+        if rollup is not None:
+            nomenclature_status = rollup
     return LibraryItemResponse(
         id=row["id"],
         item_type=row["item_type"],
@@ -55,7 +98,7 @@ def _to_lib_response(row: dict) -> LibraryItemResponse:
         size_bytes=row.get("size_bytes"),
         local_status=row["local_status"],
         request_status=row["request_status"],
-        nomenclature_status=row["nomenclature_status"],
+        nomenclature_status=nomenclature_status,
         updated_at=row.get("updated_at"),
         file_exists=bool(file_exists_raw) if file_exists_raw is not None else None,
         file_verified_at=row.get("file_verified_at"),
@@ -171,8 +214,9 @@ def library_list(
             parent_id=parent_id,
             search=search,
         )
+        items = [_to_lib_response(r, conn) for r in rows]
     return LibraryListResponse(
-        items=[_to_lib_response(r) for r in rows],
+        items=items,
         total=total,
         limit=limit,
         offset=offset,
@@ -191,9 +235,9 @@ def library_detail(
     from emuwarez_uploadrr.services.library import get_library_item
     with _get_conn() as conn:
         row = get_library_item(conn, item_id)
-    if not row:
-        raise HTTPException(status_code=404, detail=f"Item {item_id} no encontrado")
-    return _to_lib_response(row)
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Item {item_id} no encontrado")
+        return _to_lib_response(row, conn)
 
 
 # ---------------------------------------------------------------------------

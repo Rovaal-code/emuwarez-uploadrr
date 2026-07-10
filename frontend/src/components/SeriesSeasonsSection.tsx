@@ -34,13 +34,31 @@ export function SeriesSeasonsSection({ seriesId, instances, onSelect, onAction }
       ) : seasons.length === 0 ? (
         <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Sin temporadas</div>
       ) : (
-        <table className="data-table">
-          <tbody>
-            {seasons.map(season => (
-              <LibraryTreeRow key={season.id} item={season} depth={0} instances={instances} onSelect={onSelect} onAction={onAction} />
-            ))}
-          </tbody>
-        </table>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Título</th>
+                <th>Tipo</th>
+                <th>Origen</th>
+                <th>Estado</th>
+                <th>Archivo</th>
+                <th>Petición</th>
+                <th>Nomenclatura</th>
+                <th>Diagnóstico</th>
+                <th>Acción</th>
+                <th>Calidad</th>
+                <th>Actualizado</th>
+                <th className="col-actions">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {seasons.map(season => (
+                <LibraryTreeRow key={season.id} item={season} depth={0} instances={instances} onSelect={onSelect} onAction={onAction} />
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   )

@@ -20,6 +20,23 @@ const STATUS_CLASS: Record<string, string> = {
   cancelled: 'badge req-unknown',
 }
 
+const STATUS_LABEL: Record<string, string> = {
+  ready: 'Listo',
+  preflight: 'Verificación',
+  config_staging: 'Preparando',
+  blocked: 'Bloqueado',
+  draft: 'Borrador',
+  queued: 'En cola',
+  running: 'Subiendo',
+  completed: 'Completado',
+  failed: 'Fallido',
+  cancelled: 'Cancelado',
+}
+
+function statusLabel(status: string): string {
+  return STATUS_LABEL[status] || (status ? status.charAt(0).toUpperCase() + status.slice(1) : '–')
+}
+
 const STATUS_OPTIONS = ['', 'ready', 'running', 'completed', 'failed', 'cancelled', 'queued', 'blocked']
 
 function LogsPanel({ jobId, onClose, autoRefresh }: { jobId: number; onClose: () => void; autoRefresh?: boolean }) {
@@ -220,7 +237,7 @@ function RetryModal({ job, onClose, onDone }: { job: UploadJob; onClose: () => v
           <button className="btn-icon" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body">
-          <p style={{ marginBottom: 8 }}><strong>{job.title || '–'}</strong> — {job.status}</p>
+          <p style={{ marginBottom: 8 }}><strong>{job.title || '–'}</strong> — {statusLabel(job.status)}</p>
           <p style={{ fontSize: '0.83rem', color: 'var(--text-muted)', marginBottom: 12 }}>Se creará un nuevo job. El job original no se modifica.</p>
           <label style={{ display: 'block', marginBottom: 6, fontSize: '0.83rem' }}>Escribe <strong>{CONFIRMATION_TOKEN}</strong> para confirmar:</label>
           <input type="text" value={confirm} onChange={e => setConfirm(e.target.value)} placeholder={CONFIRMATION_TOKEN}
@@ -293,7 +310,7 @@ export function UploadsPage() {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
             style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 4, color: 'inherit', padding: '4px 8px', fontSize: '0.85rem' }}>
-            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s || 'Todos los estados'}</option>)}
+            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s ? statusLabel(s) : 'Todos los estados'}</option>)}
           </select>
           <button className="btn btn-secondary btn-sm" onClick={() => load()} disabled={loading}>Actualizar</button>
           {hasRunningJob && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>● actualizando en vivo</span>}
@@ -332,8 +349,8 @@ export function UploadsPage() {
                     <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{job.id}</td>
                     <td style={{ fontWeight: 500, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{job.title || '–'}</td>
                     <td>
-                      <span className={STATUS_CLASS[job.status] || 'badge req-unknown'} title={job.command_preview || undefined}>
-                        {job.status}
+                      <span className={STATUS_CLASS[job.status] || 'badge req-unknown'}>
+                        {statusLabel(job.status)}
                       </span>
                     </td>
                     <td style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>

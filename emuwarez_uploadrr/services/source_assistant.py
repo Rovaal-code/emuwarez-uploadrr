@@ -51,6 +51,11 @@ EMU_PROVIDERS: list[dict] = [
     {"code": "VIU",   "name": "Viu"},
     {"code": "RTVE",  "name": "RTVE"},
     {"code": "HBO",   "name": "HBO"},
+    {"code": "CR",     "name": "Crunchyroll"},
+    {"code": "ADN",    "name": "AnimeDigitalNetwork"},
+    {"code": "HIDIVE", "name": "HIDIVE"},
+    {"code": "VRV",    "name": "VRV"},
+    {"code": "BILI",   "name": "Bilibili"},
 ]
 
 # TMDb provider name → EMU provider code mapping
@@ -84,6 +89,12 @@ _TMDB_PROVIDER_MAP: dict[str, str] = {
     "hulu": "HULU",
     "bbc iplayer": "iP",
     "sony liv": "SL",
+    "crunchyroll": "CR",
+    "adn": "ADN",
+    "anime digital network": "ADN",
+    "hidive": "HIDIVE",
+    "vrv": "VRV",
+    "bilibili": "BILI",
 }
 
 
@@ -92,7 +103,8 @@ def list_emu_sources() -> list[dict]:
 
 
 def list_emu_providers() -> list[dict]:
-    return list(EMU_PROVIDERS)
+    # Alphabetical by code so the dropdowns are ordered.
+    return sorted(EMU_PROVIDERS, key=lambda p: p["code"].lower())
 
 
 def map_tmdb_provider_to_emu_provider(provider_name: str) -> str | None:
@@ -303,7 +315,7 @@ def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
 
         tmdb_set = set(tmdb_providers)
         provider_options = []
-        for p in EMU_PROVIDERS:
+        for p in list_emu_providers():
             provider_options.append({
                 "code": p["code"],
                 "name": p["name"],
@@ -408,10 +420,10 @@ def update_nomenclature_fields_preview(library_item_id: int, fields: dict, conn=
     if subs:
         parts.append(subs)
 
-    if tag:
-        parts.append(f"- {tag}")
-
     torrent_name = " ".join(p for p in parts if p)
+    if tag:
+        # Tag attaches to the hyphen with no surrounding spaces: "…SUBS-EMUWAREZ".
+        torrent_name = f"{torrent_name}-{tag}"
     internal_mkv_title = _build_internal_mkv_title_from_name(torrent_name)
 
     return {

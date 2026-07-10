@@ -4,7 +4,7 @@ import { SeriesSeasonsSection } from './SeriesSeasonsSection'
 import { LibraryActionButtons } from './LibraryActionButtons'
 import type { LibraryActionKind } from './LibraryTreeRow'
 import { formatBytes, formatItemType } from '../utils/format'
-import { buildDeepLink } from '../utils/libraryItem'
+import { buildDeepLink, posterUrl } from '../utils/libraryItem'
 
 // Full dedicated detail page (Radarr/Sonarr-style) — replaces the old small
 // modal and the large card. Rendered in place of the library list, with a
@@ -29,7 +29,7 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
   const isRollup = item.item_type === 'series' || item.item_type === 'season'
 
   return (
-    <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+    <div style={{ width: '100%' }}>
       <button className="btn btn-ghost btn-sm" onClick={onBack} style={{ marginBottom: 16 }}>← Volver a la biblioteca</button>
 
       <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap' }}>
@@ -37,7 +37,7 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
           <div style={{ width: '100%', aspectRatio: '2 / 3', borderRadius: 12, overflow: 'hidden', background: 'rgba(255,255,255,0.04)' }}>
             {item.poster_url ? (
               <img
-                src={item.poster_url}
+                src={posterUrl(item.poster_url, 'w500')}
                 alt={item.title}
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}

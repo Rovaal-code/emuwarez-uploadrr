@@ -63,6 +63,7 @@ class RequestStatus(str, Enum):
 class NomenclatureStatus(str, Enum):
     CORRECT = "Correcta"
     NOT_ADAPTED = "No adaptada"
+    PARTIAL = "Parcial"  # rollup only (season/series with some episodes adapted)
     NA = "N/A"
 
 

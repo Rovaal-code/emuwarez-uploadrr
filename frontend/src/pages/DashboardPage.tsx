@@ -10,9 +10,13 @@ import { LoadingState } from '../components/LoadingState'
 import { ErrorState } from '../components/ErrorState'
 import { StatusBadge } from '../components/StatusBadge'
 import { ServiceLabel } from '../components/ServiceIcon'
-import { UploadPreflightModal } from '../components/UploadPreflightModal'
+import { UploadWizardModal } from '../components/UploadWizardModal'
+import { RequestFormModal } from '../components/RequestFormModal'
+import { LibraryActionButtons } from '../components/LibraryActionButtons'
+import type { LibraryActionKind } from '../components/LibraryTreeRow'
 import { SyncInfo } from '../components/SyncInfo'
 import { formatBytes, formatDate, formatItemType } from '../utils/format'
+import { posterUrl } from '../utils/libraryItem'
 
 // Phase 11F — the four sub-phases a *running* upload job can be in, in
 // order. compute_progress_phase() on the backend never emits a numeric
@@ -48,7 +52,13 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
   const [dataError, setDataError] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [syncMsg, setSyncMsg] = useState<string | null>(null)
-  const [uploadItem, setUploadItem] = useState<LibraryItemResponse | null>(null)
+  const [wizardItem, setWizardItem] = useState<LibraryItemResponse | null>(null)
+  const [requestItem, setRequestItem] = useState<LibraryItemResponse | null>(null)
+
+  function handleActivityAction(kind: LibraryActionKind, item: LibraryItemResponse) {
+    if (kind === 'request') setRequestItem(item)
+    else setWizardItem(item)  // 'upload' → wizard
+  }
   const [now, setNow] = useState(Date.now())
 
   // eMuwarez requests sync — deliberately separate from library sync
@@ -140,12 +150,11 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
 
   return (
     <div>
-      {uploadItem && (
-        <UploadPreflightModal
-          itemId={uploadItem.id}
-          itemTitle={uploadItem.title}
-          onClose={() => setUploadItem(null)}
-        />
+      {wizardItem && (
+        <UploadWizardModal item={wizardItem} onClose={() => setWizardItem(null)} onDone={loadData} />
+      )}
+      {requestItem && (
+        <RequestFormModal item={requestItem} onClose={() => setRequestItem(null)} />
       )}
 
       {/* Stat cards */}
@@ -239,7 +248,7 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
                             }}>
                               {item.poster_url ? (
                                 <img
-                                  src={item.poster_url}
+                                  src={posterUrl(item.poster_url, 'w154')}
                                   alt=""
                                   loading="lazy"
                                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
@@ -268,7 +277,9 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
                         <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{formatBytes(item.size_bytes)}</td>
                         <td style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{formatDate(item.updated_at)}</td>
                         <td className="col-actions">
-                          <button className="btn btn-ghost btn-sm" onClick={() => setUploadItem(item)}>Subir</button>
+                          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-start', alignItems: 'center' }}>
+                            <LibraryActionButtons item={item} onAction={handleActivityAction} />
+                          </div>
                         </td>
                       </tr>
                     ))}

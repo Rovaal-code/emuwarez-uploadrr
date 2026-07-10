@@ -77,9 +77,12 @@ def _build_proposed_filename(
         parts.append(audio_summary)
     if subtitle_summary:
         parts.append(subtitle_summary)
+    name = " ".join(p for p in parts if p)
     if release_tag:
-        parts.append(f"- {release_tag}")
-    return " ".join(p for p in parts if p)
+        # Tag attaches to the hyphen with no surrounding spaces, e.g.
+        # "... SUBS-EMUWAREZ" (matches legacy.py::build_emu_title).
+        name = f"{name}-{release_tag}"
+    return name
 
 
 # Phase 6E — provider codes ordered longest-first so a substring match never

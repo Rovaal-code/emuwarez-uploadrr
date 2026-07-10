@@ -33,6 +33,7 @@ const REQUEST_STATUS_MAP: Record<string, StatusInfo> = {
 
 const NOMENCLATURE_STATUS_MAP: Record<string, StatusInfo> = {
   'Correcta':     { label: 'Correcta',     color: '#22c55e', cssClass: 'nom-correct' },
+  'Parcial':      { label: 'Parcial',      color: '#f59e0b', cssClass: 'nom-not-adapted' },
   'No adaptada':  { label: 'No adaptada',  color: '#f59e0b', cssClass: 'nom-not-adapted' },
   'N/A':          { label: 'N/A',          color: '#6b7280', cssClass: 'nom-na' },
   'Desconocida':  { label: 'Desconocida',  color: '#6b7280', cssClass: 'nom-unknown' },

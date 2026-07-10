@@ -12,7 +12,6 @@ import { TasksPage } from '../pages/TasksPage'
 import { InstancesPage } from '../pages/InstancesPage'
 import { LogsPage } from '../pages/LogsPage'
 import { SettingsPage } from '../pages/SettingsPage'
-import { QueuePage } from '../pages/QueuePage'
 
 interface AppShellProps {
   user: CurrentUserResponse | null
@@ -21,7 +20,6 @@ interface AppShellProps {
 
 const PAGE_TITLE: Record<string, string> = {
   dashboard:  'Dashboard',
-  queue:      'Cola operativa',
   library:    'Biblioteca',
   requests:   'Peticiones',
   uploads:    'Subidas',
@@ -34,7 +32,6 @@ const PAGE_TITLE: Record<string, string> = {
 function PageContent({ page, onNavigate }: { page: string; onNavigate: (p: string) => void }) {
   switch (page) {
     case 'dashboard':  return <DashboardPage onNavigate={onNavigate} />
-    case 'queue':      return <QueuePage onNavigate={onNavigate} />
     case 'library':    return <LibraryPage />
     case 'requests':   return <RequestsPage />
     case 'uploads':    return <UploadsPage />

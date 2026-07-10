@@ -158,8 +158,9 @@ def dashboard_library_activity(
     from .library import _to_lib_response
     with _get_conn() as conn:
         rows = get_dashboard_library_activity(conn, limit=limit)
+        items = [_to_lib_response(row, conn) for row in rows]
     return LibraryListResponse(
-        items=[_to_lib_response(row) for row in rows],
+        items=items,
         total=len(rows),
         limit=limit,
         offset=0,

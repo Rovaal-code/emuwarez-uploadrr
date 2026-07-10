@@ -1,8 +1,6 @@
 import type { LibraryItemResponse, InstanceSafeResponse } from '../types/api'
-import { StatusBadge } from './StatusBadge'
 import { PosterStatusIcon } from './PosterStatusIcon'
-import { formatItemType } from '../utils/format'
-import { buildDeepLink } from '../utils/libraryItem'
+import { buildDeepLink, posterUrl } from '../utils/libraryItem'
 
 // Bigger, Overseerr/Jellyseerr-style poster card for the "Pósters grandes"
 // view — additive alongside the existing small grid, not a replacement.
@@ -26,7 +24,7 @@ export function LargePosterCard({ item, instances, onClick }: {
       <div style={{ position: 'relative', width: '100%', aspectRatio: '2 / 3', background: 'rgba(255,255,255,0.04)' }}>
         {item.poster_url ? (
           <img
-            src={item.poster_url}
+            src={posterUrl(item.poster_url, 'w342')}
             alt={item.title}
             loading="lazy"
             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
@@ -62,14 +60,8 @@ export function LargePosterCard({ item, instances, onClick }: {
         }}>
           <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.3, color: '#fff' }}>{item.title}</div>
           <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 2 }}>
-            {item.year ?? '—'} · {formatItemType(item.item_type)}
+            {item.year ?? '—'}
           </div>
-        </div>
-      </div>
-      <div style={{ padding: '10px 12px' }}>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <StatusBadge status={item.request_status} type="request" />
-          <StatusBadge status={item.nomenclature_status} type="nomenclature" />
         </div>
       </div>
     </div>

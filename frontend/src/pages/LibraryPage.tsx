@@ -16,7 +16,7 @@ import { LibraryTreeRow, type LibraryActionKind } from '../components/LibraryTre
 import { LargePosterCard } from '../components/LargePosterCard'
 import { LibraryDetailPage } from '../components/LibraryDetailPage'
 import { SeasonPackModal } from '../components/SeasonPackModal'
-import { buildDeepLink } from '../utils/libraryItem'
+import { buildDeepLink, posterUrl } from '../utils/libraryItem'
 
 const LOAD_LIMIT = 20000  // show everything in one container (no pagination); backend caps here
 const VIEW_MODE_STORAGE_KEY = 'emuwarez_uploadrr_library_view'
@@ -47,7 +47,7 @@ function PosterCard({ item, instances, onClick }: { item: LibraryItemResponse; i
       <div style={{ position: 'relative', width: '100%', aspectRatio: '2 / 3', background: 'rgba(255,255,255,0.04)' }}>
         {item.poster_url ? (
           <img
-            src={item.poster_url}
+            src={posterUrl(item.poster_url, 'w342')}
             alt={item.title}
             loading="lazy"
             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
@@ -77,12 +77,6 @@ function PosterCard({ item, instances, onClick }: { item: LibraryItemResponse; i
             🔗
           </a>
         )}
-      </div>
-      <div style={{ padding: '8px 10px' }}>
-        <div style={{ fontSize: 12.5, fontWeight: 500, lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-          {item.title}
-        </div>
-        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{item.year ?? '—'}</div>
       </div>
     </div>
   )

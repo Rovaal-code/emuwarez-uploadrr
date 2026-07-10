@@ -4,7 +4,7 @@ import type { LibraryItemResponse, InstanceSafeResponse } from '../types/api'
 import { StatusBadge } from './StatusBadge'
 import { ServiceLabel } from './ServiceIcon'
 import { formatDate, formatItemType, formatBytes } from '../utils/format'
-import { buildDeepLink } from '../utils/libraryItem'
+import { buildDeepLink, posterUrl } from '../utils/libraryItem'
 import { LibraryActionButtons } from './LibraryActionButtons'
 
 const NESTED_PAGE_SIZE = 25
@@ -82,7 +82,7 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction }: L
     <>
       <tr className="clickable" onClick={() => canExpand ? toggle() : onSelect(item)}>
         <td>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingLeft: indent }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: indent }}>
             {canExpand && (
               <button
                 className="btn btn-ghost btn-sm"
@@ -93,6 +93,21 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction }: L
                 {expanded ? '▼' : '▶'}
               </button>
             )}
+            <div style={{ flexShrink: 0, width: 28, height: 42, borderRadius: 4, overflow: 'hidden', background: 'rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {item.poster_url ? (
+                <img
+                  src={posterUrl(item.poster_url, 'w154')}
+                  alt=""
+                  loading="lazy"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                />
+              ) : (
+                <span style={{ fontSize: 14, opacity: 0.35 }}>
+                  {item.item_type === 'series' || item.item_type === 'episode' ? '📺' : '🎬'}
+                </span>
+              )}
+            </div>
             <div style={{ fontWeight: 500 }}>{item.title}</div>
             {deepLink && (
               <a
@@ -141,8 +156,10 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction }: L
         <td style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
           {formatDate(item.updated_at)}
         </td>
-        <td className="col-actions" onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 4 }}>
-          <LibraryActionButtons item={item} onAction={onAction} />
+        <td className="col-actions" onClick={e => e.stopPropagation()}>
+          <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-start', alignItems: 'center' }}>
+            <LibraryActionButtons item={item} onAction={onAction} />
+          </div>
         </td>
       </tr>
       {expanded && isEpisode && (

@@ -297,8 +297,13 @@
 }
 
 .data-table .col-actions {
-  text-align: right;
+  text-align: left;
   white-space: nowrap;
+}
+
+/* Column headers are always left-aligned, including "Acciones". */
+.data-table th.col-actions {
+  text-align: left;
 }
 
 /* Service icons inline */

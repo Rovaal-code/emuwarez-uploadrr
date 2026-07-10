@@ -18,3 +18,13 @@ export function buildDeepLink(item: LibraryItemResponse, instances: InstanceSafe
   }
   return null
 }
+
+// TMDB serves resized posters via a size segment in the path
+// (…/t/p/w185/…). Items are stored with the full-size "original" URL, which is
+// multiple MB each and painfully slow to load in a grid. Rewrite to a small
+// size per view: thumbnails (w92/w154), grid cards (w342), detail (w500).
+export type PosterSize = 'w92' | 'w154' | 'w185' | 'w342' | 'w500'
+export function posterUrl(url: string | null | undefined, size: PosterSize = 'w342'): string | undefined {
+  if (!url) return undefined
+  return url.replace(/\/t\/p\/(original|w\d+)\//, `/t/p/${size}/`)
+}

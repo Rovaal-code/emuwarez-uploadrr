@@ -15,19 +15,17 @@ from ..dependencies import require_auth
 from ..runtime import _db_path
 from ..services.settings_service import get_setting, mask_secret, set_setting
 from ...services.uploadrr_contract import RUNTIME_EMU, RUNTIME_GENERIC, DEFAULT_TIMEOUT_SECONDS
+from ...services.source_assistant import EMU_PROVIDERS
 from ...database import get_setting_canonical
 
 router = APIRouter(tags=["settings"])
 
 _VALID_RUNTIME_TYPES: frozenset[str] = frozenset({RUNTIME_EMU, RUNTIME_GENERIC})
 
-# Provider codes that are valid in provider_priority_order
-_VALID_PROVIDER_CODES: frozenset[str] = frozenset({
-    "AMZN", "ATVP", "DSNP", "F1TV", "GLB", "HS", "HULU", "M+", "IT",
-    "MA", "MAX", "HMAX", "SKY", "PCOK", "PMTP", "iP", "PLAY", "MUBI",
-    "NF", "RKTN", "SL", "SNXT", "VIU", "RTVE", "HBO",
-    "CR", "ADN", "HIDIVE", "VRV", "BILI",
-})
+# Provider codes that are valid in provider_priority_order. Derived from the
+# single canonical list (services/source_assistant.EMU_PROVIDERS) so the setup
+# wizard, the upload wizard and this validation never drift apart.
+_VALID_PROVIDER_CODES: frozenset[str] = frozenset(p["code"] for p in EMU_PROVIDERS)
 
 _DEFAULT_PRIORITY: list[str] = ["AMZN", "NF", "DSNP", "MAX", "ATVP"]
 _DEFAULT_REGION = "ES"

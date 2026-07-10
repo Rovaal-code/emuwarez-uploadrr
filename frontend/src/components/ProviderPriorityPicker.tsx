@@ -1,39 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { getEmuProviders } from '../api/nomenclature'
 
-// Same codes as backend's _VALID_PROVIDER_CODES (web/api/settings.py) —
-// keep in sync if the backend list changes.
 export interface ProviderOption {
   code: string
   label: string
 }
-
-export const PROVIDER_OPTIONS: ProviderOption[] = [
-  { code: 'AMZN', label: 'Amazon Prime Video' },
-  { code: 'NF', label: 'Netflix' },
-  { code: 'DSNP', label: 'Disney+' },
-  { code: 'MAX', label: 'Max' },
-  { code: 'ATVP', label: 'Apple TV+' },
-  { code: 'HMAX', label: 'HBO Max (legacy)' },
-  { code: 'MA', label: 'MA' },
-  { code: 'PCOK', label: 'Peacock' },
-  { code: 'PMTP', label: 'Paramount+' },
-  { code: 'iP', label: 'BBC iPlayer' },
-  { code: 'PLAY', label: 'Google Play' },
-  { code: 'MUBI', label: 'MUBI' },
-  { code: 'RKTN', label: 'Rakuten TV' },
-  { code: 'SL', label: 'SkyShowtime' },
-  { code: 'SNXT', label: 'Starzplay' },
-  { code: 'VIU', label: 'Viu' },
-  { code: 'RTVE', label: 'RTVE Play' },
-  { code: 'HBO', label: 'HBO' },
-  { code: 'F1TV', label: 'F1 TV' },
-  { code: 'GLB', label: 'Globoplay' },
-  { code: 'HS', label: 'Star+' },
-  { code: 'HULU', label: 'Hulu' },
-  { code: 'M+', label: 'Movistar Plus+' },
-  { code: 'IT', label: 'iTunes' },
-  { code: 'SKY', label: 'Sky' },
-]
 
 interface ProviderPriorityPickerProps {
   order: string[]
@@ -42,8 +13,24 @@ interface ProviderPriorityPickerProps {
 
 // Checkbox (enable/disable) + native HTML5 drag-and-drop reorder — no new
 // dependency (frontend has no drag-and-drop library today).
+//
+// The provider list comes from the same backend source as the upload wizard
+// (GET /nomenclature/providers → services/source_assistant.EMU_PROVIDERS,
+// already returned sorted), so Crunchyroll and the rest stay in sync and are
+// shown alphabetically everywhere.
 export function ProviderPriorityPicker({ order, onChange }: ProviderPriorityPickerProps) {
   const [dragIndex, setDragIndex] = useState<number | null>(null)
+  const [options, setOptions] = useState<ProviderOption[]>([])
+
+  useEffect(() => {
+    getEmuProviders()
+      .then(r => setOptions(
+        r.providers
+          .map(p => ({ code: p.code, label: p.name }))
+          .sort((a, b) => a.code.localeCompare(b.code, undefined, { sensitivity: 'base' })),
+      ))
+      .catch(() => setOptions([]))
+  }, [])
 
   function enable(code: string) {
     if (!order.includes(code)) onChange([...order, code])
@@ -62,7 +49,7 @@ export function ProviderPriorityPicker({ order, onChange }: ProviderPriorityPick
     setDragIndex(null)
   }
 
-  const available = PROVIDER_OPTIONS.filter(p => !order.includes(p.code))
+  const available = options.filter(p => !order.includes(p.code))
 
   return (
     <div>
@@ -74,7 +61,7 @@ export function ProviderPriorityPicker({ order, onChange }: ProviderPriorityPick
       {order.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10 }}>
           {order.map((code, idx) => {
-            const opt = PROVIDER_OPTIONS.find(p => p.code === code)
+            const opt = options.find(p => p.code === code)
             return (
               <div
                 key={code}

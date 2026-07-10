@@ -95,6 +95,15 @@ _TMDB_PROVIDER_MAP: dict[str, str] = {
     "hidive": "HIDIVE",
     "vrv": "VRV",
     "bilibili": "BILI",
+    # Ad-supported / sub-brand / "via Amazon Channel" variants of platforms we
+    # already map — same underlying source, so same EMU code (found by auditing
+    # the WEB-DL library against TMDb watch providers, region ES).
+    "amazon prime video with ads": "AMZN",
+    "netflix standard with ads": "NF",
+    "movistar plus+ ficción total": "M+",
+    "hbo max amazon channel": "MAX",
+    "crunchyroll amazon channel": "CR",
+    "rtve": "RTVE",
 }
 
 
@@ -126,7 +135,10 @@ def _get_tmdb_available_providers_raw(tmdb_id: int, media_type: str, region: str
 
         result_codes: list[str] = []
         region_data = data.get("results", {}).get(region, {})
-        for category in ("flatrate", "buy", "rent", "free", "ads"):
+        # Only "flatrate" (subscription streaming) — a WEB-DL comes from a
+        # streaming platform, not from a transactional rent/buy listing. Using
+        # buy/rent would e.g. pick Amazon (rental) over the real Disney+ source.
+        for category in ("flatrate",):
             for provider in region_data.get(category, []):
                 name = (provider.get("provider_name") or "").strip()
                 code = map_tmdb_provider_to_emu_provider(name)

@@ -354,13 +354,14 @@ export function RequestsPage() {
         )}
 
         <div className="filters-row" style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-          <form onSubmit={handleSearchSubmit} style={{ flex: 1, minWidth: 180 }}>
+          <form onSubmit={handleSearchSubmit} style={{ flex: 1, minWidth: 220 }}>
             <input
-              className="input"
+              className="form-input"
               type="search"
               placeholder="Buscar por título…"
               value={search}
               onChange={e => setSearch(e.target.value)}
+              style={{ width: '100%' }}
             />
           </form>
           <select className="select" value={statusFilter} onChange={handleStatusChange}>

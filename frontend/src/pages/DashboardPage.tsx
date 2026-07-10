@@ -236,10 +236,10 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
 
       {/* Main grid */}
       <div className="dashboard-grid">
-        {/* Left — Actividad reciente: library items prioritized by EMU request
-            satisfaction. Fixed height (whether populated or empty) so the
-            upload panel beside it always matches. */}
-        <div>
+        {/* Left column — "Actividad reciente" (50vh) with "Últimas tareas
+            ejecutadas" (25vh) stacked under it, so tasks sits parallel to the
+            "Conexiones" card in the right column. */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="activity-section" style={{ height: ACTIVITY_PANEL_HEIGHT, display: 'flex', flexDirection: 'column' }}>
             <div className="section-header">
               <div className="section-title">Actividad reciente</div>
@@ -316,6 +316,47 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
               </div>
             )}
           </div>
+
+          {/* Últimas tareas ejecutadas — parallel to "Conexiones" on the right. */}
+          <div className="activity-section" style={{ height: TASKS_PANEL_HEIGHT, display: 'flex', flexDirection: 'column' }}>
+            <div className="section-header">
+              <div className="section-title">Últimas tareas ejecutadas</div>
+            </div>
+            {taskRuns.length === 0 ? (
+              <EmptyState
+                icon="🗒️"
+                title="No hay tareas ejecutadas todavía"
+                body="Las sincronizaciones automáticas y manuales aparecerán aquí."
+              />
+            ) : (
+              <div style={{ overflowX: 'auto', overflowY: 'auto', flex: 1 }}>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Tarea</th>
+                      <th>Estado</th>
+                      <th>Resumen</th>
+                      <th>Iniciada</th>
+                      <th>Finalizada</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {taskRuns.map(item => (
+                      <tr key={item.id}>
+                        <td>{item.name}</td>
+                        <td>
+                          <StatusBadge status={item.status ?? ''} type="task" />
+                        </td>
+                        <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{item.summary ?? '—'}</td>
+                        <td style={{ color: 'var(--text-muted)', fontSize: 12, whiteSpace: 'nowrap' }}>{formatDate(item.started_at)}</td>
+                        <td style={{ color: 'var(--text-muted)', fontSize: 12, whiteSpace: 'nowrap' }}>{formatDate(item.finished_at)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Right — Actividad de subida: real running upload jobs, honest data only.
@@ -374,51 +415,6 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
               <ConnRow icon={<ServiceIcon type="telegram" size={16} />} label="Bot de Telegram" ok={!!connSettings?.notify_telegram_bot_token_configured} />
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Últimas tareas ejecutadas — task_runs history. Wrapped in the same
-          grid as above so it lines up with (and matches the width of)
-          "Actividad reciente" in the left column. */}
-      <div className="dashboard-grid" style={{ marginTop: 20 }}>
-        <div className="activity-section" style={{ height: TASKS_PANEL_HEIGHT, display: 'flex', flexDirection: 'column' }}>
-        <div className="section-header">
-          <div className="section-title">Últimas tareas ejecutadas</div>
-        </div>
-        {taskRuns.length === 0 ? (
-          <EmptyState
-            icon="🗒️"
-            title="No hay tareas ejecutadas todavía"
-            body="Las sincronizaciones automáticas y manuales aparecerán aquí."
-          />
-        ) : (
-          <div style={{ overflowX: 'auto', overflowY: 'auto', flex: 1 }}>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Tarea</th>
-                  <th>Estado</th>
-                  <th>Resumen</th>
-                  <th>Iniciada</th>
-                  <th>Finalizada</th>
-                </tr>
-              </thead>
-              <tbody>
-                {taskRuns.map(item => (
-                  <tr key={item.id}>
-                    <td>{item.name}</td>
-                    <td>
-                      <StatusBadge status={item.status ?? ''} type="task" />
-                    </td>
-                    <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{item.summary ?? '—'}</td>
-                    <td style={{ color: 'var(--text-muted)', fontSize: 12, whiteSpace: 'nowrap' }}>{formatDate(item.started_at)}</td>
-                    <td style={{ color: 'var(--text-muted)', fontSize: 12, whiteSpace: 'nowrap' }}>{formatDate(item.finished_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
         </div>
       </div>
     </div>

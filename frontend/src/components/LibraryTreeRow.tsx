@@ -76,7 +76,7 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction }: L
 
   const deepLink = buildDeepLink(item, instances)
   const indent = depth * 20
-  const colSpan = 12
+  const colSpan = 10
 
   return (
     <>
@@ -135,20 +135,10 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction }: L
             : <span style={{ color: 'var(--text-muted)' }}>—</span>}
         </td>
         <td><StatusBadge status={item.local_status} type="local" /></td>
-        <td style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
-          {item.file_exists === null || item.file_exists === undefined
-            ? <span style={{ color: 'var(--text-muted)' }}>—</span>
-            : item.file_exists
-              ? <span style={{ color: 'var(--color-available)' }}>OK</span>
-              : <span style={{ color: 'var(--color-missing)' }}>NO</span>}
-        </td>
         <td><StatusBadge status={item.request_status} type="request" /></td>
         <td><StatusBadge status={item.nomenclature_status} type="nomenclature" /></td>
-        <td style={{ fontSize: 11, color: 'var(--text-secondary)', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {item.diagnostic_summary ?? '—'}
-        </td>
-        <td style={{ fontSize: 11, color: '#a78bfa', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {item.recommended_action ?? '—'}
+        <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+          {formatBytes(item.size_bytes)}
         </td>
         <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
           {[item.resolution, item.source].filter(Boolean).join(' · ') || '—'}

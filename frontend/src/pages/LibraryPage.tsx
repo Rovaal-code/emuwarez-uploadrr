@@ -388,11 +388,9 @@ export function LibraryPage() {
                   <th>Tipo</th>
                   <th>Origen</th>
                   <th>Estado</th>
-                  <th>Archivo</th>
                   <th>Petición</th>
                   <th>Nomenclatura</th>
-                  <th>Diagnóstico</th>
-                  <th>Acción</th>
+                  <th>Tamaño</th>
                   <th>Calidad</th>
                   <th>Actualizado</th>
                   <th className="col-actions">Acciones</th>

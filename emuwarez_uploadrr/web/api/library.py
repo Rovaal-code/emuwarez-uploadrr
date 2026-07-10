@@ -90,14 +90,42 @@ def _local_status_rollup(conn, item_id: int) -> Optional[str]:
     return "Parcial"
 
 
+def _size_rollup(conn, item_id: int, item_type: str) -> Optional[int]:
+    """Total size of a Season/Series as the sum of its episodes' file sizes —
+    season/series rows have no file of their own, so their size only makes
+    sense as the aggregate of the episodes below them."""
+    if conn is None:
+        return None
+    if item_type == "season":
+        r = conn.execute(
+            "SELECT SUM(size_bytes) AS s FROM library_items "
+            "WHERE parent_id = ? AND item_type = 'episode'",
+            (item_id,),
+        ).fetchone()
+    elif item_type == "series":
+        r = conn.execute(
+            "SELECT SUM(e.size_bytes) AS s FROM library_items e "
+            "JOIN library_items se ON e.parent_id = se.id "
+            "WHERE se.parent_id = ? AND e.item_type = 'episode'",
+            (item_id,),
+        ).fetchone()
+    else:
+        return None
+    return int(r["s"]) if r and r["s"] is not None else None
+
+
 def _to_lib_response(row: dict, conn=None) -> LibraryItemResponse:
     file_exists_raw = row.get("file_exists")
     nomenclature_status = row["nomenclature_status"]
     local_status = row["local_status"]
+    size_bytes = row.get("size_bytes")
     if row["item_type"] in ("season", "series"):
         rollup = _nomenclature_rollup(conn, row["id"], row["item_type"])
         if rollup is not None:
             nomenclature_status = rollup
+        rolled_size = _size_rollup(conn, row["id"], row["item_type"])
+        if rolled_size is not None:
+            size_bytes = rolled_size
     if row["item_type"] == "series":
         loc = _local_status_rollup(conn, row["id"])
         if loc is not None:
@@ -128,7 +156,7 @@ def _to_lib_response(row: dict, conn=None) -> LibraryItemResponse:
         audio_codec=row.get("audio_codec"),
         audio_languages=row.get("audio_languages"),
         subtitle_languages=row.get("subtitle_languages"),
-        size_bytes=row.get("size_bytes"),
+        size_bytes=size_bytes,
         local_status=local_status,
         request_status=row["request_status"],
         nomenclature_status=nomenclature_status,

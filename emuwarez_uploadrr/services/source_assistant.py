@@ -103,6 +103,8 @@ _TMDB_PROVIDER_MAP: dict[str, str] = {
     "movistar plus+ ficción total": "M+",
     "hbo max amazon channel": "MAX",
     "crunchyroll amazon channel": "CR",
+    "apple tv amazon channel": "ATVP",  # Apple TV+ delivered via Amazon Channel
+    "apple tv store": "IT",             # transactional Apple = iTunes (rent/buy)
     "rtve": "RTVE",
 }
 
@@ -133,18 +135,24 @@ def _get_tmdb_available_providers_raw(tmdb_id: int, media_type: str, region: str
         else:
             data = get_tv_watch_providers(tmdb_id, region=region)
 
-        result_codes: list[str] = []
         region_data = data.get("results", {}).get(region, {})
-        # Only "flatrate" (subscription streaming) — a WEB-DL comes from a
-        # streaming platform, not from a transactional rent/buy listing. Using
-        # buy/rent would e.g. pick Amazon (rental) over the real Disney+ source.
-        for category in ("flatrate",):
-            for provider in region_data.get(category, []):
-                name = (provider.get("provider_name") or "").strip()
-                code = map_tmdb_provider_to_emu_provider(name)
-                if code and code not in result_codes:
-                    result_codes.append(code)
-        return result_codes
+
+        def _codes_for(categories: tuple[str, ...]) -> list[str]:
+            codes: list[str] = []
+            for category in categories:
+                for provider in region_data.get(category, []):
+                    name = (provider.get("provider_name") or "").strip()
+                    code = map_tmdb_provider_to_emu_provider(name)
+                    if code and code not in codes:
+                        codes.append(code)
+            return codes
+
+        # Two tiers: subscription streaming takes priority (a WEB-DL is most
+        # likely ripped from the platform it streams on, so Disney+ must beat an
+        # Amazon *rental* of the same title). Only when there's no subscription
+        # source do we fall back to transactional/free listings — a title only
+        # available to rent/buy can still have been sourced from there.
+        return _codes_for(("flatrate",)) or _codes_for(("free", "ads", "rent", "buy"))
     except Exception:
         return []
 

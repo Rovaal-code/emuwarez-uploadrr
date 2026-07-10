@@ -525,6 +525,9 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
           {step === 'tmdb' && (
             <>
               <div className="wizard-step-desc">API key de TMDb para enriquecimiento de metadatos (título en español, pósters).</div>
+              <div className="alert" style={{ marginBottom: 14, background: 'rgba(59,130,246,0.08)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', fontSize: 12.5, color: 'var(--text-secondary)' }}>
+                ℹ️ También se usa para <strong>detectar el provider</strong> al subir: cuando el Source es <strong>WEB-DL</strong> y no se detecta ningún provider en el nombre del archivo, la app consulta los <em>watch providers</em> de TMDb (para la región elegida abajo) y propone el provider de mayor prioridad. Sin esta key, ese campo se quedará en «Sin provider».
+              </div>
               <div className="wizard-fields">
                 <div className="form-group">
                   <label className="form-label">API key TMDb</label>
@@ -541,6 +544,9 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   <select className="form-input form-select" value={tmdbRegion} onChange={e => setTmdbRegion(e.target.value)}>
                     {REGION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label} ({o.value})</option>)}
                   </select>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                    Región usada para detectar en qué plataforma (provider) está disponible cada título.
+                  </div>
                 </div>
               </div>
               {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}

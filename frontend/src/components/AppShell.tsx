@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Sidebar } from './Sidebar'
 import { Topbar } from './Topbar'
 import type { CurrentUserResponse } from '../types/api'
@@ -43,12 +43,37 @@ function PageContent({ page, onNavigate }: { page: string; onNavigate: (p: strin
   }
 }
 
+// Tabs that map to a URL path, so the address bar reflects the current tab
+// (bookmarkable / reloadable). The backend already serves index.html for any
+// non-/api path (SPA fallback), so a deep link like /library works on reload.
+const VALID_PAGES = ['dashboard', 'library', 'uploads', 'requests', 'tasks', 'instances', 'logs', 'settings']
+
+function pageFromPath(): string {
+  const seg = window.location.pathname.replace(/^\/+/, '').split('/')[0]
+  return VALID_PAGES.includes(seg) ? seg : 'dashboard'
+}
+
 export function AppShell({ user, onLogout }: AppShellProps) {
-  const [activePage, setActivePage] = useState<string>('dashboard')
+  const [activePage, setActivePage] = useState<string>(pageFromPath)
+
+  const navigate = useCallback((page: string) => {
+    setActivePage(page)
+    const path = page === 'dashboard' ? '/' : `/${page}`
+    if (window.location.pathname !== path) {
+      window.history.pushState({}, '', path)
+    }
+  }, [])
+
+  // Keep the tab in sync with browser back/forward.
+  useEffect(() => {
+    const onPop = () => setActivePage(pageFromPath())
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
 
   return (
     <div className="app-shell">
-      <Sidebar active={activePage} onNavigate={setActivePage} />
+      <Sidebar active={activePage} onNavigate={navigate} />
       <div className="main-content">
         <Topbar
           user={user}
@@ -56,7 +81,7 @@ export function AppShell({ user, onLogout }: AppShellProps) {
           onLogout={onLogout}
         />
         <main className="page-container">
-          <PageContent page={activePage} onNavigate={setActivePage} />
+          <PageContent page={activePage} onNavigate={navigate} />
         </main>
       </div>
     </div>

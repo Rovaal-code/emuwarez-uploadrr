@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import type { EmuSource, EmuProvider, NomenclatureFields, FieldsPreviewResult } from '../api/nomenclature'
 import {
   getEmuSources,
@@ -9,7 +9,7 @@ import {
   adaptNomenclature,
 } from '../api/nomenclature'
 import { uploadPreflight, startUploadJob } from '../api/uploads'
-import { getLibrary, getMediaInfoReport } from '../api/library'
+import { getLibrary, getMediaInfoReport, suggestProvider } from '../api/library'
 import type { MediaInfoReport } from '../api/library'
 import type { UploadPreflightResponse, LibraryItemResponse } from '../types/api'
 
@@ -65,6 +65,12 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
   const [miReport, setMiReport] = useState<MediaInfoReport | null>(null)
   const [miLoading, setMiLoading] = useState(false)
   const [miError, setMiError] = useState<string | null>(null)
+
+  // Step 1 — automatic TMDB provider detection for WEB-DL with no provider.
+  const [detectingProvider, setDetectingProvider] = useState(false)
+  // Which target we've already fired the TMDB detection for — guarantees at
+  // most ONE TMDB call per resolved item while this wizard stays open.
+  const detectedTargetRef = useRef<number | null>(null)
 
   // Step 2 — apply + preflight + upload
   const [applyError, setApplyError] = useState<string | null>(null)
@@ -139,6 +145,26 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
 
   // Reset the MediaInfo report whenever the resolved target changes.
   useEffect(() => { setMiReport(null); setMiError(null) }, [targetId])
+
+  // Auto-detect the provider via TMDB when Source is WEB-DL and none was
+  // detected from the filename. Debounced 500ms and fired at most once per
+  // resolved target, so clicking "Subir" never triggers a burst of TMDB calls.
+  useEffect(() => {
+    if (targetId == null || loading) return
+    if (!PROVIDER_SOURCES.has(fields.source || '')) return
+    if (fields.provider) return                       // already have one
+    if (detectedTargetRef.current === targetId) return // already tried this item
+    const t = setTimeout(async () => {
+      detectedTargetRef.current = targetId            // lock before the call
+      setDetectingProvider(true)
+      try {
+        const res = await suggestProvider(targetId)
+        if (res.suggested) setField('provider', res.suggested)
+      } catch { /* non-blocking — leave "Sin provider" */ }
+      finally { setDetectingProvider(false) }
+    }, 500)
+    return () => clearTimeout(t)
+  }, [targetId, loading, fields.source, fields.provider])
 
   const runMediaInfo = async () => {
     if (targetId == null) return
@@ -233,10 +259,16 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
         </label>
         {sourceRequiresProvider && (
           <label><span style={labelStyle}>Provider</span>
-            <select className="form-input" value={fields.provider || ''} onChange={e => setField('provider', e.target.value || null)}>
-              <option value="">— Sin provider —</option>
-              {providers.map(p => <option key={p.code} value={p.code}>{p.code} ({p.name})</option>)}
-            </select>
+            {detectingProvider ? (
+              <div className="form-input" style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-muted)' }}>
+                <span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Detectando…
+              </div>
+            ) : (
+              <select className="form-input" value={fields.provider || ''} onChange={e => setField('provider', e.target.value || null)}>
+                <option value="">— Sin provider —</option>
+                {providers.map(p => <option key={p.code} value={p.code}>{p.code} ({p.name})</option>)}
+              </select>
+            )}
           </label>
         )}
         <label><span style={labelStyle}>Códec de vídeo</span>

@@ -291,6 +291,27 @@ def library_mediainfo(
     return build_mediainfo_report(path)
 
 
+@router.get("/library/{item_id}/suggest-provider")
+def library_suggest_provider(
+    item_id: int,
+    current_user: dict = Depends(require_auth),
+) -> dict:
+    """Suggest the EMU provider for a WEB-DL item via TMDb watch providers +
+    the configured priority. This is the on-demand call the upload wizard makes
+    when Source=WEB-DL and no provider was detected from the filename.
+
+    Returns {suggested, tmdb_providers, reason}. Never raises on TMDb issues —
+    a missing/invalid TMDb key just yields suggested=None."""
+    from emuwarez_uploadrr.services.library import get_library_item
+    from emuwarez_uploadrr.services.source_assistant import suggest_provider_for_item
+
+    with _get_conn() as conn:
+        row = get_library_item(conn, item_id)
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Item {item_id} no encontrado")
+        return suggest_provider_for_item(item_id, conn=conn)
+
+
 # ---------------------------------------------------------------------------
 # GET /api/missing
 # ---------------------------------------------------------------------------

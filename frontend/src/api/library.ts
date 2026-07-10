@@ -58,6 +58,16 @@ export async function getMediaInfoReport(id: number): Promise<MediaInfoReport> {
   return api.get<MediaInfoReport>(`/library/${id}/mediainfo`)
 }
 
+export interface ProviderSuggestion {
+  suggested: string | null
+  tmdb_providers: string[]
+  reason: string
+}
+
+export async function suggestProvider(id: number): Promise<ProviderSuggestion> {
+  return api.get<ProviderSuggestion>(`/library/${id}/suggest-provider`)
+}
+
 export async function syncAll(include_episodes = true): Promise<SyncResponse> {
   return api.post<SyncResponse>('/sync', { include_episodes })
 }

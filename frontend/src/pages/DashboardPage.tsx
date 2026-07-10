@@ -290,13 +290,14 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
           </div>
         </div>
 
-        {/* Right — Actividad de subida: real running upload jobs, honest data only */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div className="upload-panel">
+        {/* Right — Actividad de subida: real running upload jobs, honest data only.
+            Stretches to the full height of "Actividad reciente" on its left. */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%' }}>
+          <div className="upload-panel" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
             <div className="section-header">
               <div className="section-title">Actividad de subida</div>
             </div>
-            <div className="upload-panel-body" style={{ padding: '12px 16px', display: 'block', minHeight: 'auto' }}>
+            <div className="upload-panel-body" style={{ padding: '12px 16px', display: 'block', minHeight: 'auto', flex: 1 }}>
               {activeUploads.length === 0 ? (
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>
                   No hay subidas en curso ahora mismo.
@@ -335,8 +336,11 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
         </div>
       </div>
 
-      {/* Últimas tareas ejecutadas — task_runs history (previously mislabeled "Actividad reciente") */}
-      <div className="activity-section" style={{ marginTop: 20 }}>
+      {/* Últimas tareas ejecutadas — task_runs history. Wrapped in the same
+          grid as above so it lines up with (and matches the width of)
+          "Actividad reciente" in the left column. */}
+      <div className="dashboard-grid" style={{ marginTop: 20 }}>
+        <div className="activity-section">
         <div className="section-header">
           <div className="section-title">Últimas tareas ejecutadas</div>
         </div>
@@ -374,6 +378,7 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
             </table>
           </div>
         )}
+        </div>
       </div>
     </div>
   )

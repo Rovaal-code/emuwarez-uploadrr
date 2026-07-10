@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import logging
 import re
 import sqlite3
 import unicodedata
@@ -247,6 +248,10 @@ def match_all_requests(conn: sqlite3.Connection, *, emu_api_key: Optional[str] =
         cfg = load_app_config()
         emu_api_key = getattr(cfg, "emu_api_key", None) if cfg else None
 
+    # Snapshot which requests already had compatible content, so afterwards we
+    # only notify about the ones that *newly* became satisfiable this run.
+    before_compatible = _compatible_request_ids(conn)
+
     requests = [dict(r) for r in conn.execute("SELECT * FROM request_items").fetchall()]
     library = [dict(r) for r in conn.execute("SELECT * FROM library_items").fetchall()]
     updated = 0
@@ -297,7 +302,44 @@ def match_all_requests(conn: sqlite3.Connection, *, emu_api_key: Optional[str] =
             _check_emu_catalog_duplicate(conn, req, emu_api_key)
         updated += 1
     conn.commit()
+    _notify_new_compatible_matches(conn, before_compatible)
     return updated
+
+
+def _compatible_request_ids(conn: sqlite3.Connection) -> set[int]:
+    """request_item_ids that currently have at least one 'Compatible' match."""
+    rows = conn.execute(
+        "SELECT DISTINCT request_item_id FROM request_matches WHERE status = 'Compatible'"
+    ).fetchall()
+    return {int(r[0]) for r in rows}
+
+
+def _notify_new_compatible_matches(conn: sqlite3.Connection, before_ids: set[int]) -> None:
+    """Emit one notification per request that became satisfiable this run.
+    Best-effort: never lets a notification failure break matching."""
+    try:
+        new_ids = _compatible_request_ids(conn) - before_ids
+        if not new_ids:
+            return
+        from .notification_center import emit
+        for rid in new_ids:
+            row = conn.execute(
+                "SELECT title, url FROM request_items WHERE id = ?", (rid,)
+            ).fetchone()
+            title = (row["title"] if row else None) or f"Petición #{rid}"
+            emit(
+                conn, "request_match_found",
+                "Contenido compatible con una petición",
+                f"Tienes contenido compatible con la petición «{title}».",
+                link=(row["url"] if row and row["url"] else "/requests"),
+                level="info",
+                entity_type="request_item",
+                entity_id=rid,
+            )
+    except Exception:
+        logging.getLogger("emuwarez.notifications").exception(
+            "No se pudieron emitir notificaciones de peticiones compatibles"
+        )
 
 
 # Keep old name as alias for backward compat

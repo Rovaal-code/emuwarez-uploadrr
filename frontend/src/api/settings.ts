@@ -24,6 +24,9 @@ export interface SettingsData {
   notify_telegram_bot_token_configured: boolean
   notify_telegram_bot_token_masked: string | null
   notify_telegram_chat_id: string | null
+  notify_event_types: { code: string; label: string }[]
+  notify_discord_events: string[]
+  notify_telegram_events: string[]
 }
 
 export interface SettingsUpdatePayload {
@@ -44,6 +47,8 @@ export interface SettingsUpdatePayload {
   notify_telegram_enabled?: boolean
   notify_telegram_bot_token?: string
   notify_telegram_chat_id?: string
+  notify_discord_events?: string[]
+  notify_telegram_events?: string[]
 }
 
 export function fetchSettings(): Promise<SettingsData> {

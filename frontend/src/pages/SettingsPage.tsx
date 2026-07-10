@@ -580,6 +580,34 @@ function MaintenanceTab() {
   )
 }
 
+// Per-channel checkbox list: which event types this channel forwards.
+function EventPicker({ title, eventTypes, selected, disabled, onToggle }: {
+  title: string
+  eventTypes: { code: string; label: string }[]
+  selected: string[]
+  disabled: boolean
+  onToggle: (code: string, checked: boolean) => void
+}) {
+  if (eventTypes.length === 0) return null
+  return (
+    <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border)', opacity: disabled ? 0.5 : 1 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{title}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {eventTypes.map(ev => (
+          <label key={ev.code} className="checkbox-label" style={{ fontSize: 13, display: 'block' }}>
+            <input
+              type="checkbox"
+              checked={selected.includes(ev.code)}
+              disabled={disabled}
+              onChange={e => onToggle(ev.code, e.target.checked)}
+            /> {ev.label}
+          </label>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ---------- Notifications tab ----------
 function NotificationsTab() {
   const [settings, setSettings] = useState<SettingsData | null>(null)
@@ -598,6 +626,10 @@ function NotificationsTab() {
   const [testingTelegram, setTestingTelegram] = useState(false)
   const [telegramResult, setTelegramResult] = useState<IntegrationTestResult | null>(null)
 
+  const [eventTypes, setEventTypes] = useState<{ code: string; label: string }[]>([])
+  const [discordEvents, setDiscordEvents] = useState<string[]>([])
+  const [telegramEvents, setTelegramEvents] = useState<string[]>([])
+
   useEffect(() => {
     fetchSettings()
       .then(s => {
@@ -605,10 +637,17 @@ function NotificationsTab() {
         setDiscordEnabled(s.notify_discord_enabled)
         setTelegramEnabled(s.notify_telegram_enabled)
         setTelegramChatId(s.notify_telegram_chat_id ?? '')
+        setEventTypes(s.notify_event_types ?? [])
+        setDiscordEvents(s.notify_discord_events ?? [])
+        setTelegramEvents(s.notify_telegram_events ?? [])
       })
       .catch(() => setMsg({ ok: false, text: 'Error cargando configuración' }))
       .finally(() => setLoading(false))
   }, [])
+
+  function toggleEvent(setter: React.Dispatch<React.SetStateAction<string[]>>, code: string, checked: boolean) {
+    setter(prev => (checked ? [...new Set([...prev, code])] : prev.filter(c => c !== code)))
+  }
 
   async function handleSave() {
     setSaving(true)
@@ -618,11 +657,15 @@ function NotificationsTab() {
         notify_discord_enabled: discordEnabled,
         notify_telegram_enabled: telegramEnabled,
         notify_telegram_chat_id: telegramChatId.trim(),
+        notify_discord_events: discordEvents,
+        notify_telegram_events: telegramEvents,
       }
       if (discordWebhook.trim()) payload.notify_discord_webhook_url = discordWebhook.trim()
       if (telegramToken.trim()) payload.notify_telegram_bot_token = telegramToken.trim()
       const updated = await updateSettings(payload)
       setSettings(updated)
+      setDiscordEvents(updated.notify_discord_events ?? [])
+      setTelegramEvents(updated.notify_telegram_events ?? [])
       setDiscordWebhook('')
       setTelegramToken('')
       setMsg({ ok: true, text: '✓ Notificaciones guardadas' })
@@ -721,6 +764,13 @@ function NotificationsTab() {
           {testingDiscord ? 'Enviando…' : 'Probar notificación'}
         </button>
         {renderResult(discordResult)}
+        <EventPicker
+          title="Qué notificar por Discord"
+          eventTypes={eventTypes}
+          selected={discordEvents}
+          disabled={!discordEnabled}
+          onToggle={(code, checked) => toggleEvent(setDiscordEvents, code, checked)}
+        />
       </div>
 
       <div className="placeholder-card">
@@ -754,6 +804,13 @@ function NotificationsTab() {
           {testingTelegram ? 'Enviando…' : 'Probar notificación'}
         </button>
         {renderResult(telegramResult)}
+        <EventPicker
+          title="Qué notificar por Telegram"
+          eventTypes={eventTypes}
+          selected={telegramEvents}
+          disabled={!telegramEnabled}
+          onToggle={(code, checked) => toggleEvent(setTelegramEvents, code, checked)}
+        />
       </div>
 
       <div>

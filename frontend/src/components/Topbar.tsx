@@ -1,5 +1,6 @@
 import { logout } from '../api/auth'
 import type { CurrentUserResponse } from '../types/api'
+import { NotificationBell } from './NotificationBell'
 
 interface TopbarProps {
   user: CurrentUserResponse | null
@@ -22,13 +23,8 @@ export function Topbar({ user, pageTitle, onLogout }: TopbarProps) {
         <span className="topbar-title">{pageTitle}</span>
       </div>
       <div className="topbar-right">
-        {/* Bell icon */}
-        <button className="topbar-btn" title="Notificaciones" aria-label="Notificaciones">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-          </svg>
-        </button>
+        {/* Notifications */}
+        <NotificationBell />
         {/* User info */}
         {user && (
           <div className="topbar-user">

@@ -740,6 +740,28 @@ def _migrate_library_items_hierarchy(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_library_tvdb ON library_items(tvdb_id)")
 
 
+def _migrate_notifications_table(conn: sqlite3.Connection) -> None:
+    """In-app notification feed backing the topbar bell. Each row is one event
+    (request published, upload completed, request match found, …). read_at is
+    NULL until the user opens/reads it. Purely additive."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_type TEXT NOT NULL,
+            title TEXT NOT NULL,
+            body TEXT,
+            link TEXT,
+            level TEXT NOT NULL DEFAULT 'info',
+            entity_type TEXT,
+            entity_id INTEGER,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+            read_at TEXT
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at DESC)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(read_at)")
+
+
 def _migrate_nomenclature_phase10a(conn: sqlite3.Connection) -> None:
     """Add Phase 10A editable fields and MKV title columns to nomenclature_proposals."""
     new_cols = [
@@ -1045,6 +1067,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_instances_unique_name(conn)
         _migrate_library_items_media_info(conn)
         _migrate_library_items_hierarchy(conn)
+        _migrate_notifications_table(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

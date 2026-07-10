@@ -29,8 +29,9 @@ def _fail(service: str, status: str, message: str) -> dict:
     return {"ok": False, "service": service, "status": status, "message": message, "details": {}}
 
 
-def send_discord_test(webhook_url: Optional[str]) -> dict:
-    """Send a test message to a Discord webhook. Read-only w.r.t. app data."""
+def send_discord(webhook_url: Optional[str], message: str) -> dict:
+    """Send an arbitrary message to a Discord webhook. Read-only w.r.t. app
+    data — the caller supplies the already-formatted text."""
     if not webhook_url or not webhook_url.strip():
         return _fail("discord", "not_configured", "Webhook de Discord no configurado")
 
@@ -38,7 +39,7 @@ def send_discord_test(webhook_url: Optional[str]) -> dict:
     if not url.startswith(("http://", "https://")):
         return _fail("discord", "invalid_url", "URL de webhook de Discord inválida")
 
-    payload = json.dumps({"content": _TEST_MESSAGE}).encode("utf-8")
+    payload = json.dumps({"content": message}).encode("utf-8")
     req = urllib.request.Request(
         url, data=payload, method="POST",
         headers={"Content-Type": "application/json", "User-Agent": "emuwarez-uploadrr/3"},
@@ -61,8 +62,8 @@ def send_discord_test(webhook_url: Optional[str]) -> dict:
         return _fail("discord", "unexpected_error", f"Error inesperado: {type(exc).__name__}")
 
 
-def send_telegram_test(bot_token: Optional[str], chat_id: Optional[str]) -> dict:
-    """Send a test message via a Telegram bot. Read-only w.r.t. app data."""
+def send_telegram(bot_token: Optional[str], chat_id: Optional[str], message: str) -> dict:
+    """Send an arbitrary message via a Telegram bot. Read-only w.r.t. app data."""
     if not bot_token or not bot_token.strip():
         return _fail("telegram", "not_configured", "Bot token de Telegram no configurado")
     if not chat_id or not chat_id.strip():
@@ -70,7 +71,7 @@ def send_telegram_test(bot_token: Optional[str], chat_id: Optional[str]) -> dict
 
     token = bot_token.strip()
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = json.dumps({"chat_id": chat_id.strip(), "text": _TEST_MESSAGE}).encode("utf-8")
+    payload = json.dumps({"chat_id": chat_id.strip(), "text": message}).encode("utf-8")
     req = urllib.request.Request(
         url, data=payload, method="POST",
         headers={"Content-Type": "application/json", "User-Agent": "emuwarez-uploadrr/3"},
@@ -96,4 +97,17 @@ def send_telegram_test(bot_token: Optional[str], chat_id: Optional[str]) -> dict
         return _fail("telegram", "unexpected_error", f"Error inesperado: {type(exc).__name__}")
 
 
-__all__ = ["send_discord_test", "send_telegram_test"]
+def send_discord_test(webhook_url: Optional[str]) -> dict:
+    """Send the fixed test message to a Discord webhook (Ajustes → Probar)."""
+    return send_discord(webhook_url, _TEST_MESSAGE)
+
+
+def send_telegram_test(bot_token: Optional[str], chat_id: Optional[str]) -> dict:
+    """Send the fixed test message via a Telegram bot (Ajustes → Probar)."""
+    return send_telegram(bot_token, chat_id, _TEST_MESSAGE)
+
+
+__all__ = [
+    "send_discord", "send_telegram",
+    "send_discord_test", "send_telegram_test",
+]

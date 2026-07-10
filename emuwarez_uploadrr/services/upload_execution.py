@@ -12,6 +12,7 @@ SAFETY CONTRACT:
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import signal
@@ -507,6 +508,32 @@ def _finalize_job_status(job_id: int, desired_status: str, **kwargs) -> None:
         conn.close()
 
 
+def _notify_upload_completed(job_id: int, result_url: str | None) -> None:
+    """Emit a 'subida completada' notification. Best-effort: never lets a
+    notification failure affect the upload result."""
+    try:
+        from .notification_center import emit
+        conn = _get_db_conn()
+        try:
+            job = get_upload_job(job_id, conn=conn)
+            title = (job or {}).get("title") or "Subida"
+            emit(
+                conn, "upload_completed",
+                "Subida completada",
+                f"«{title}» se ha subido a eMuwarez correctamente.",
+                link=result_url,
+                level="success",
+                entity_type="upload_job",
+                entity_id=job_id,
+            )
+        finally:
+            conn.close()
+    except Exception:
+        logging.getLogger("emuwarez.notifications").exception(
+            "No se pudo emitir la notificación de subida completada (job %s)", job_id
+        )
+
+
 def _stage_uploadrr_config(job_id: int, cwd: str) -> Path | None:
     """Best-effort staging of DEFAULT.tmdb / TRACKERS.EMU.api_key into config.yaml.
 
@@ -750,6 +777,7 @@ def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str]) -> None
                 f"Proceso finalizado correctamente (exit code 0). Duración: {duration_seconds}s",
                 stream="system",
             )
+            _notify_upload_completed(job_id, result["urls"][0] if result["urls"] else None)
         else:
             err_summary = build_error_summary(stderr_text, stdout_text, returncode)
             safe_err = redact_secrets(err_summary or f"exit code {returncode}", secrets)

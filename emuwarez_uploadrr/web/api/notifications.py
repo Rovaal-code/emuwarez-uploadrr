@@ -62,3 +62,49 @@ def test_telegram(
 
     result = send_telegram_test(bot_token, chat_id)
     return IntegrationTestResult(**result)
+
+
+# ---------------------------------------------------------------------------
+# In-app notification feed (topbar bell)
+# ---------------------------------------------------------------------------
+
+@router.get("")
+def list_feed(
+    limit: int = 30,
+    unread_only: bool = False,
+    current_user: dict = Depends(require_auth),
+) -> dict:
+    """Return the latest notifications plus the unread count for the bell."""
+    from emuwarez_uploadrr.services import notification_center as nc
+
+    limit = max(1, min(limit, 100))
+    with _get_conn() as conn:
+        return {
+            "notifications": nc.list_notifications(conn, limit=limit, unread_only=unread_only),
+            "unread_count": nc.unread_count(conn),
+        }
+
+
+@router.post("/{notification_id}/read")
+def mark_one_read(
+    notification_id: int,
+    current_user: dict = Depends(require_auth),
+) -> dict:
+    from emuwarez_uploadrr.services import notification_center as nc
+
+    with _get_conn() as conn:
+        nc.mark_read(conn, notification_id)
+        conn.commit()
+        return {"ok": True, "unread_count": nc.unread_count(conn)}
+
+
+@router.post("/read-all")
+def mark_all_read(
+    current_user: dict = Depends(require_auth),
+) -> dict:
+    from emuwarez_uploadrr.services import notification_center as nc
+
+    with _get_conn() as conn:
+        nc.mark_all_read(conn)
+        conn.commit()
+        return {"ok": True, "unread_count": 0}

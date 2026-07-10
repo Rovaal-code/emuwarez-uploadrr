@@ -16,6 +16,7 @@ from ..runtime import _db_path
 from ..services.settings_service import get_setting, mask_secret, set_setting
 from ...services.uploadrr_contract import RUNTIME_EMU, RUNTIME_GENERIC, DEFAULT_TIMEOUT_SECONDS
 from ...services.source_assistant import EMU_PROVIDERS
+from ...services.notification_center import EVENT_TYPES, channel_events
 from ...database import get_setting_canonical
 
 router = APIRouter(tags=["settings"])
@@ -60,6 +61,10 @@ class SettingsResponse(BaseModel):
     notify_telegram_bot_token_configured: bool = False
     notify_telegram_bot_token_masked: Optional[str] = None
     notify_telegram_chat_id: Optional[str] = None
+    # Per-channel event-type selection + the catalog of available event types.
+    notify_event_types: list[dict] = []
+    notify_discord_events: list[str] = []
+    notify_telegram_events: list[str] = []
 
 
 class SettingsUpdateRequest(BaseModel):
@@ -85,6 +90,8 @@ class SettingsUpdateRequest(BaseModel):
     notify_telegram_enabled: Optional[bool] = None
     notify_telegram_bot_token: Optional[str] = None
     notify_telegram_chat_id: Optional[str] = None
+    notify_discord_events: Optional[list[str]] = None
+    notify_telegram_events: Optional[list[str]] = None
 
 
 def _normalize_allowed_roots(value: list[str] | str) -> list[str]:
@@ -93,6 +100,14 @@ def _normalize_allowed_roots(value: list[str] | str) -> list[str]:
     else:
         parts = value
     return [p.strip() for p in parts if p and p.strip()]
+
+
+def _clean_event_csv(codes: list[str]) -> str:
+    """Keep only known event codes, dedup, and store as a CSV. An empty
+    selection is stored as "" (i.e. the channel receives no events) — which is
+    distinct from the setting never having been saved (→ all events)."""
+    seen = [c for c in dict.fromkeys(codes) if c in EVENT_TYPES]
+    return ",".join(seen)
 
 
 def _get_conn():
@@ -158,6 +173,9 @@ def _build_response(conn) -> SettingsResponse:
         notify_telegram_bot_token_configured=telegram_token_configured,
         notify_telegram_bot_token_masked=mask_secret(telegram_token) if telegram_token_configured else None,
         notify_telegram_chat_id=get_setting_canonical(conn, "notify.telegram.chat_id"),
+        notify_event_types=[{"code": c, "label": l} for c, l in EVENT_TYPES.items()],
+        notify_discord_events=sorted(channel_events(conn, "discord")),
+        notify_telegram_events=sorted(channel_events(conn, "telegram")),
     )
 
 
@@ -255,6 +273,12 @@ def update_settings(
 
         if body.notify_telegram_chat_id is not None:
             set_setting(conn, "notify.telegram.chat_id", body.notify_telegram_chat_id.strip())
+
+        if body.notify_discord_events is not None:
+            set_setting(conn, "notify.discord.events", _clean_event_csv(body.notify_discord_events))
+
+        if body.notify_telegram_events is not None:
+            set_setting(conn, "notify.telegram.events", _clean_event_csv(body.notify_telegram_events))
 
         conn.commit()
         return _build_response(conn)

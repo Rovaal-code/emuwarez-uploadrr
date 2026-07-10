@@ -92,3 +92,71 @@ def test_discord_response_never_contains_full_secret(client, auth_headers):
             headers=auth_headers,
         )
     assert "SUPER_SECRET_PART" not in resp.text
+
+
+# ---------------------------------------------------------------------------
+# In-app notification feed (topbar bell)
+# ---------------------------------------------------------------------------
+
+def test_feed_requires_auth(client):
+    assert client.get("/api/notifications").status_code == 401
+
+
+def test_feed_empty_by_default(client, auth_headers):
+    resp = client.get("/api/notifications", headers=auth_headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["notifications"] == []
+    assert data["unread_count"] == 0
+
+
+def _emit(event_type="upload_completed", title="Subida completada", body="x"):
+    """Store a notification directly via the service (no external dispatch)."""
+    from emuwarez_uploadrr.database import connect, init_db
+    from emuwarez_uploadrr.web.runtime import _db_path
+    from emuwarez_uploadrr.services import notification_center as nc
+    conn = connect(_db_path())
+    init_db(conn)
+    try:
+        return nc.emit(conn, event_type, title, body, dispatch=False)
+    finally:
+        conn.close()
+
+
+def test_feed_lists_and_marks_read(client, auth_headers):
+    nid = _emit()
+    resp = client.get("/api/notifications", headers=auth_headers)
+    data = resp.json()
+    assert data["unread_count"] == 1
+    assert data["notifications"][0]["title"] == "Subida completada"
+    assert data["notifications"][0]["read"] is False
+
+    r2 = client.post(f"/api/notifications/{nid}/read", headers=auth_headers)
+    assert r2.status_code == 200
+    assert r2.json()["unread_count"] == 0
+
+    assert client.get("/api/notifications", headers=auth_headers).json()["unread_count"] == 0
+
+
+def test_feed_mark_all_read(client, auth_headers):
+    _emit()
+    _emit(title="Otra")
+    assert client.get("/api/notifications", headers=auth_headers).json()["unread_count"] == 2
+    r = client.post("/api/notifications/read-all", headers=auth_headers)
+    assert r.status_code == 200 and r.json()["unread_count"] == 0
+
+
+def test_settings_expose_event_types_and_default_all_enabled(client, auth_headers):
+    s = client.get("/api/settings", headers=auth_headers).json()
+    codes = {e["code"] for e in s["notify_event_types"]}
+    assert {"upload_completed", "request_match_found"} <= codes
+    # Unset → every event enabled by default for each channel.
+    assert set(s["notify_discord_events"]) == codes
+    assert set(s["notify_telegram_events"]) == codes
+
+
+def test_settings_save_event_selection(client, auth_headers):
+    client.put("/api/settings", json={"notify_discord_events": ["upload_completed", "bogus"]}, headers=auth_headers)
+    s = client.get("/api/settings", headers=auth_headers).json()
+    # bogus dropped, only the known code kept.
+    assert s["notify_discord_events"] == ["upload_completed"]

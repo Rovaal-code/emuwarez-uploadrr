@@ -56,6 +56,17 @@ EMU_PROVIDERS: list[dict] = [
     {"code": "HIDIVE", "name": "HIDIVE"},
     {"code": "VRV",    "name": "VRV"},
     {"code": "BILI",   "name": "Bilibili"},
+    # Added from auditing eMuwarez's real torrent catalog (11k torrents): these
+    # provider codes are already in active use on the tracker but were missing
+    # from our list. Codes are the exact tokens used in the tracker's names.
+    {"code": "ANIMEBOX", "name": "Animebox"},
+    {"code": "A3P",      "name": "Atresplayer"},
+    {"code": "FLMN",     "name": "Filmin"},
+    {"code": "FLIXOLE",  "name": "FlixOlé"},
+    {"code": "MGMP",     "name": "MGM+"},
+    {"code": "STRP",     "name": "Star+"},
+    {"code": "STZ",      "name": "Starz"},
+    {"code": "CNLP",     "name": "Canal+"},
 ]
 
 # TMDb provider name → EMU provider code mapping
@@ -77,10 +88,23 @@ _TMDB_PROVIDER_MAP: dict[str, str] = {
     "google play movies": "PLAY",
     "rakuten tv": "RKTN",
     "mubi": "MUBI",
-    "skyshowtime": "SKY",
     "peacock": "PCOK",
     "paramount plus": "PMTP",
     "paramount+": "PMTP",
+    "skyshowtime": "SKY",  # TODO: tracker uses both SKY(50) and SKST(29) — confirm canonical
+    "atresplayer": "A3P",
+    "atres player": "A3P",
+    "filmin": "FLMN",
+    "flixolé": "FLIXOLE",
+    "flixole": "FLIXOLE",
+    "mgm plus": "MGMP",
+    "mgm+": "MGMP",
+    "animebox": "ANIMEBOX",
+    "star plus": "STRP",
+    "star+": "STRP",
+    "starz": "STZ",
+    "canal+": "CNLP",
+    "canal plus": "CNLP",
     "rtve play": "RTVE",
     "hbo": "HBO",
     "f1 tv": "F1TV",

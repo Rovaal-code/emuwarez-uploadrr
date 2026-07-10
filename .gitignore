@@ -45,3 +45,6 @@ frontend/.vite/
 radarr_apikey
 sonarr_apikey
 TMDB_api
+EMU_api
+emu_torrents*.json
+emu_names.txt

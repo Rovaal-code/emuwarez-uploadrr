@@ -347,7 +347,7 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
           grid as above so it lines up with (and matches the width of)
           "Actividad reciente" in the left column. */}
       <div className="dashboard-grid" style={{ marginTop: 20 }}>
-        <div className="activity-section">
+        <div className="activity-section" style={{ height: ACTIVITY_PANEL_HEIGHT, display: 'flex', flexDirection: 'column' }}>
         <div className="section-header">
           <div className="section-title">Últimas tareas ejecutadas</div>
         </div>
@@ -358,7 +358,7 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
             body="Las sincronizaciones automáticas y manuales aparecerán aquí."
           />
         ) : (
-          <div style={{ overflowX: 'auto' }}>
+          <div style={{ overflowX: 'auto', overflowY: 'auto', flex: 1 }}>
             <table className="data-table">
               <thead>
                 <tr>

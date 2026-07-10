@@ -166,7 +166,9 @@
   max-height: 460px;
   display: flex;
   flex-direction: column;
-  background: var(--bg-card);
+  /* Opaque surface — --bg-card is nearly transparent, which would let the
+     page show through the floating panel. */
+  background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: 10px;
   box-shadow: var(--shadow-card, 0 8px 30px rgba(0, 0, 0, 0.35));

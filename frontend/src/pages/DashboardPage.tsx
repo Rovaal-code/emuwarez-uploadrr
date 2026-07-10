@@ -22,6 +22,10 @@ import { posterUrl } from '../utils/libraryItem'
 // order. compute_progress_phase() on the backend never emits a numeric
 // percentage (Uploadrr-EMU doesn't report one) — this is a discrete-step
 // bar, not a fabricated percentage.
+// Fixed height for the "Actividad reciente" / "Actividad de subida" panels so
+// they always match, whether the library is populated or empty.
+const ACTIVITY_PANEL_HEIGHT = 460
+
 const RUNNING_PHASES = ['preflight', 'config_staging', 'running', 'finalizing'] as const
 const PHASE_LABEL: Record<string, string> = {
   preflight: 'Preflight',
@@ -210,9 +214,11 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
 
       {/* Main grid */}
       <div className="dashboard-grid">
-        {/* Left — Actividad reciente: library items prioritized by EMU request satisfaction */}
+        {/* Left — Actividad reciente: library items prioritized by EMU request
+            satisfaction. Fixed height (whether populated or empty) so the
+            upload panel beside it always matches. */}
         <div>
-          <div className="activity-section">
+          <div className="activity-section" style={{ height: ACTIVITY_PANEL_HEIGHT, display: 'flex', flexDirection: 'column' }}>
             <div className="section-header">
               <div className="section-title">Actividad reciente</div>
             </div>
@@ -223,7 +229,7 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
                 body="Ejecuta una sincronización desde el botón superior o desde la sección Instancias."
               />
             ) : (
-              <div style={{ overflowX: 'auto' }}>
+              <div style={{ overflowX: 'auto', overflowY: 'auto', flex: 1 }}>
                 <table className="data-table">
                   <thead>
                     <tr>
@@ -292,12 +298,12 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
 
         {/* Right — Actividad de subida: real running upload jobs, honest data only.
             Stretches to the full height of "Actividad reciente" on its left. */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%' }}>
-          <div className="upload-panel" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className="upload-panel" style={{ height: ACTIVITY_PANEL_HEIGHT, display: 'flex', flexDirection: 'column' }}>
             <div className="section-header">
               <div className="section-title">Actividad de subida</div>
             </div>
-            <div className="upload-panel-body" style={{ padding: '12px 16px', display: 'block', minHeight: 'auto', flex: 1 }}>
+            <div className="upload-panel-body" style={{ padding: '12px 16px', display: 'block', minHeight: 'auto', flex: 1, overflowY: 'auto' }}>
               {activeUploads.length === 0 ? (
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>
                   No hay subidas en curso ahora mismo.

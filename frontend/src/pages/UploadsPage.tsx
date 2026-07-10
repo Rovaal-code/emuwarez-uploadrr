@@ -402,11 +402,6 @@ export function UploadsPage() {
           </div>
         </div>
       )}
-
-      <div style={{ marginTop: 16, padding: '10px 16px', background: 'rgba(255,200,0,0.06)', borderRadius: 8, fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-        La ejecución real de Uploadrr requiere confirmación explícita <strong>INICIAR_UPLOADRR</strong>.
-        No se crean peticiones eMuwarez automáticamente. No se modifican archivos originales ni títulos MKV.
-      </div>
     </div>
   )
 }

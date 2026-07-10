@@ -21,6 +21,20 @@ function statusColor(status: string | null): string {
   return STATUS_COLOR[status] ?? '#6b7280'
 }
 
+const STATUS_LABEL: Record<string, string> = {
+  completed: 'Completado',
+  failed: 'Error',
+  skipped: 'Omitido',
+  running: 'Ejecutando',
+  queued: 'En cola',
+  pending: 'Pendiente',
+}
+
+function statusLabel(status: string | null): string {
+  if (!status) return '—'
+  return STATUS_LABEL[status] ?? (status.charAt(0).toUpperCase() + status.slice(1))
+}
+
 function formatCountdown(targetIso: string | null, now: number): string {
   if (!targetIso) return '—'
   const target = new Date(targetIso).getTime()
@@ -66,10 +80,14 @@ function LogsModal({ taskKey, taskName, onClose }: { taskKey: string; taskName: 
               <tbody>
                 {logs.map(log => (
                   <tr key={log.id}>
-                    <td><span style={{ color: statusColor(log.status), fontSize: 12, fontWeight: 600 }}>{log.status}</span></td>
+                    <td><span style={{ color: statusColor(log.status), fontSize: 12, fontWeight: 600 }}>{statusLabel(log.status)}</span></td>
                     <td style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{formatDate(log.started_at)}</td>
                     <td style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{formatDate(log.finished_at)}</td>
-                    <td style={{ fontSize: 12 }}>{log.summary ?? '—'}</td>
+                    <td style={{ fontSize: 12 }}>
+                      {log.status === 'failed' && log.summary
+                        ? <span style={{ color: '#ef4444', display: 'inline-flex', alignItems: 'center', gap: 6 }}><span aria-hidden>⚠</span>{log.summary}</span>
+                        : (log.summary ?? '—')}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -144,7 +162,7 @@ function TaskCard({ task, onChanged }: { task: ScheduledTask; onChanged: () => v
           background: 'rgba(255,255,255,0.04)',
           whiteSpace: 'nowrap',
         }}>
-          {task.last_status ?? 'sin ejecutar'}
+          {task.last_status ? statusLabel(task.last_status) : 'sin ejecutar'}
         </span>
       </div>
 
@@ -176,7 +194,9 @@ function TaskCard({ task, onChanged }: { task: ScheduledTask; onChanged: () => v
       </div>
 
       {task.last_summary && (
-        <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 10, marginBottom: 0 }}>{task.last_summary}</p>
+        task.last_status === 'failed'
+          ? <p style={{ fontSize: 12, color: '#ef4444', marginTop: 10, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 6 }}><span aria-hidden>⚠</span>{task.last_summary}</p>
+          : <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 10, marginBottom: 0 }}>{task.last_summary}</p>
       )}
 
       {msg && <p style={{ fontSize: 12, marginTop: 10, marginBottom: 0 }}>{msg}</p>}

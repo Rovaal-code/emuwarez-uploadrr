@@ -254,7 +254,7 @@ export function LibraryPage() {
   }
 
   return (
-    <div>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div className="page-header">
         <div>
           <div className="page-title">Biblioteca</div>
@@ -363,7 +363,7 @@ export function LibraryPage() {
           body="Añade instancias Radarr/Sonarr en la sección Instancias y sincroniza para ver el contenido aquí."
         />
       ) : viewMode === 'grid' ? (
-        <div className="activity-section" style={{ padding: 20 }}>
+        <div className="activity-section" style={{ padding: 20, flex: 1, minHeight: 0, overflowY: 'auto' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 16 }}>
             {items.map(item => (
               <PosterCard key={item.id} item={item} instances={instances} onClick={() => setSelected(item)} />
@@ -371,7 +371,7 @@ export function LibraryPage() {
           </div>
         </div>
       ) : viewMode === 'grid-lg' ? (
-        <div className="activity-section" style={{ padding: 20 }}>
+        <div className="activity-section" style={{ padding: 20, flex: 1, minHeight: 0, overflowY: 'auto' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 20 }}>
             {items.map(item => (
               <LargePosterCard key={item.id} item={item} instances={instances} onClick={() => setSelected(item)} />
@@ -379,8 +379,8 @@ export function LibraryPage() {
           </div>
         </div>
       ) : (
-        <div className="activity-section">
-          <div style={{ overflowX: 'auto' }}>
+        <div className="activity-section" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
             <table className="data-table">
               <thead>
                 <tr>

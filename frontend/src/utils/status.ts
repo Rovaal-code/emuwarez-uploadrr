@@ -46,6 +46,9 @@ const TASK_STATUS_MAP: Record<string, StatusInfo> = {
   'running':    { label: 'Ejecutando',  color: '#3b82f6', cssClass: 'status-queued' },
   'completed':  { label: 'Completado',  color: '#22c55e', cssClass: 'status-available' },
   'failed':     { label: 'Error',       color: '#ef4444', cssClass: 'status-error' },
+  'skipped':    { label: 'Omitido',     color: '#f59e0b', cssClass: 'status-partial' },
+  'queued':     { label: 'En cola',     color: '#3b82f6', cssClass: 'status-queued' },
+  'pending':    { label: 'Pendiente',   color: '#f59e0b', cssClass: 'status-pending' },
 }
 
 export function getLocalStatusInfo(status: string): StatusInfo {

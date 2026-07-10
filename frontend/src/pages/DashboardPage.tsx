@@ -3,13 +3,14 @@ import { getDashboardSummary, getDashboardActivity, getDashboardLibraryActivity 
 import { getUploads } from '../api/uploads'
 import { syncAll } from '../api/library'
 import { getSyncStatus, syncRequests } from '../api/requests'
+import { fetchSettings, type SettingsData } from '../api/settings'
 import type { DashboardSummaryResponse, DashboardActivityResponse, LibraryItemResponse, UploadJob, RequestSyncStatusResponse } from '../types/api'
 import { StatCard } from '../components/StatCard'
 import { EmptyState } from '../components/EmptyState'
 import { LoadingState } from '../components/LoadingState'
 import { ErrorState } from '../components/ErrorState'
 import { StatusBadge } from '../components/StatusBadge'
-import { ServiceLabel } from '../components/ServiceIcon'
+import { ServiceLabel, ServiceIcon } from '../components/ServiceIcon'
 import { UploadWizardModal } from '../components/UploadWizardModal'
 import { RequestFormModal } from '../components/RequestFormModal'
 import { LibraryActionButtons } from '../components/LibraryActionButtons'
@@ -26,6 +27,21 @@ import { posterUrl } from '../utils/libraryItem'
 // they always match, whether the library is populated or empty. 50% of the
 // viewport height, with internal scroll when the content overflows.
 const ACTIVITY_PANEL_HEIGHT = '50vh'
+// "Últimas tareas ejecutadas" is half the height of the activity panels.
+const TASKS_PANEL_HEIGHT = '25vh'
+
+// One row of the "Conexiones" card: icon + label + connected/not-connected badge.
+function ConnRow({ icon, label, ok }: { icon: React.ReactNode; label: string; ok: boolean }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <span style={{ display: 'flex', width: 18, justifyContent: 'center' }}>{icon}</span>
+      <span style={{ flex: 1, fontSize: 13 }}>{label}</span>
+      <span className={`badge ${ok ? 'status-available' : 'status-error'}`}>
+        {ok ? 'Conectado' : 'No configurado'}
+      </span>
+    </div>
+  )
+}
 
 const RUNNING_PHASES = ['preflight', 'config_staging', 'running', 'finalizing'] as const
 const PHASE_LABEL: Record<string, string> = {
@@ -53,6 +69,7 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
   const [taskActivity, setTaskActivity] = useState<DashboardActivityResponse | null>(null)
   const [libraryActivity, setLibraryActivity] = useState<LibraryItemResponse[]>([])
   const [activeUploads, setActiveUploads] = useState<UploadJob[]>([])
+  const [connSettings, setConnSettings] = useState<SettingsData | null>(null)
   const [loadingData, setLoadingData] = useState(true)
   const [dataError, setDataError] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
@@ -84,17 +101,19 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
     setDataError(null)
     // Promise.allSettled never rejects — each branch's own status carries
     // its outcome, so failures are handled per-item below, not via catch.
-    const [s, a, la, up] = await Promise.allSettled([
+    const [s, a, la, up, cfg] = await Promise.allSettled([
       getDashboardSummary(),
       getDashboardActivity(),
-      getDashboardLibraryActivity(10),
-      getUploads({ status: 'running', limit: 5 }),
+      getDashboardLibraryActivity(50),
+      getUploads({ status: 'running', limit: 50 }),
+      fetchSettings(),
     ])
     if (s.status === 'fulfilled') setSummary(s.value)
     else setDataError('No se pudieron cargar los datos del dashboard')
     if (a.status === 'fulfilled') setTaskActivity(a.value)
     if (la.status === 'fulfilled') setLibraryActivity(la.value.items)
     if (up.status === 'fulfilled') setActiveUploads(up.value)
+    if (cfg.status === 'fulfilled') setConnSettings(cfg.value)
     setLoadingData(false)
   }, [])
 
@@ -151,7 +170,7 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
   if (!summary) return <ErrorState message={dataError ?? 'No se pudieron cargar los datos del dashboard'} onRetry={loadData} />
 
   const s = summary
-  const taskRuns = taskActivity?.items ?? []
+  const taskRuns = (taskActivity?.items ?? []).slice(0, 50)
 
   return (
     <div>
@@ -165,11 +184,13 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
       {/* Stat cards */}
       <div className="stat-cards-row">
         <StatCard label="Biblioteca sincronizada" value={s.library_total}>
-          <div className="stat-card-sub-row">
-            <ServiceLabel type="radarr" label={`Radarr: ${s.radarr_items}`} size={13} />
-          </div>
-          <div className="stat-card-sub-row">
-            <ServiceLabel type="sonarr" label={`Sonarr: ${s.sonarr_items}`} size={13} />
+          <div style={{ maxHeight: 78, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <div className="stat-card-sub-row">
+              <ServiceLabel type="radarr" label={`Radarr: ${s.radarr_items}`} size={13} />
+            </div>
+            <div className="stat-card-sub-row">
+              <ServiceLabel type="sonarr" label={`Sonarr: ${s.sonarr_items}`} size={13} />
+            </div>
           </div>
         </StatCard>
 
@@ -340,6 +361,19 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
               )}
             </div>
           </div>
+
+          {/* Estado de conexiones — misma altura que "Últimas tareas ejecutadas" */}
+          <div className="upload-panel" style={{ height: TASKS_PANEL_HEIGHT, display: 'flex', flexDirection: 'column' }}>
+            <div className="section-header">
+              <div className="section-title">Conexiones</div>
+            </div>
+            <div style={{ padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', flex: 1 }}>
+              <ConnRow icon={<ServiceIcon type="emu" size={16} />} label="API eMuwarez" ok={!!connSettings?.emu_api_key_configured} />
+              <ConnRow icon={<span style={{ fontSize: 15, lineHeight: 1 }}>🎬</span>} label="API TMDb" ok={!!connSettings?.tmdb_api_key_configured} />
+              <ConnRow icon={<ServiceIcon type="discord" size={16} />} label="Bot de Discord" ok={!!connSettings?.notify_discord_webhook_configured} />
+              <ConnRow icon={<ServiceIcon type="telegram" size={16} />} label="Bot de Telegram" ok={!!connSettings?.notify_telegram_bot_token_configured} />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -347,7 +381,7 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
           grid as above so it lines up with (and matches the width of)
           "Actividad reciente" in the left column. */}
       <div className="dashboard-grid" style={{ marginTop: 20 }}>
-        <div className="activity-section" style={{ height: ACTIVITY_PANEL_HEIGHT, display: 'flex', flexDirection: 'column' }}>
+        <div className="activity-section" style={{ height: TASKS_PANEL_HEIGHT, display: 'flex', flexDirection: 'column' }}>
         <div className="section-header">
           <div className="section-title">Últimas tareas ejecutadas</div>
         </div>

@@ -524,9 +524,14 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
           {/* TMDb step */}
           {step === 'tmdb' && (
             <>
-              <div className="wizard-step-desc">API key de TMDb para enriquecimiento de metadatos (título en español, pósters).</div>
+              <div className="wizard-step-desc">Los títulos y pósters vienen de Radarr/Sonarr, no de aquí. La API key de TMDb se usa para dos cosas concretas:</div>
               <div className="alert" style={{ marginBottom: 14, background: 'rgba(59,130,246,0.08)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', fontSize: 12.5, color: 'var(--text-secondary)' }}>
-                ℹ️ También se usa para <strong>detectar el provider</strong> al subir: cuando el Source es <strong>WEB-DL</strong> y no se detecta ningún provider en el nombre del archivo, la app consulta los <em>watch providers</em> de TMDb (para la región elegida abajo) y propone el provider de mayor prioridad. Sin esta key, ese campo se quedará en «Sin provider».
+                <div style={{ marginBottom: 6 }}>
+                  <strong>1. Detectar el provider al subir:</strong> cuando el Source es <strong>WEB-DL</strong> y no se detecta ningún provider en el nombre del archivo, la app consulta los <em>watch providers</em> de TMDb (para la región elegida abajo) y propone el de mayor prioridad. Sin key, ese campo se queda en «Sin provider».
+                </div>
+                <div>
+                  <strong>2. La necesita el subidor Uploadrr-EMU:</strong> se le pasa la key para que complete los metadatos de la ficha en eMuwarez durante la subida.
+                </div>
               </div>
               <div className="wizard-fields">
                 <div className="form-group">
@@ -563,7 +568,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               {!tmdbCanContinue && (
                 <div className="alert alert-error" style={{ marginTop: 10 }}>
                   Todavía no has probado la key (o la prueba ha fallado). Si continúas sin verificarla,
-                  el enriquecimiento de metadatos no funcionará hasta que la corrijas más tarde en Configuración.
+                  la detección de provider no funcionará hasta que la corrijas más tarde en Configuración.
                   <label className="checkbox-label" style={{ display: 'block', marginTop: 8 }}>
                     <input type="checkbox" checked={tmdbAckSkip} onChange={e => setTmdbAckSkip(e.target.checked)} /> Entiendo, continuar sin verificar
                   </label>

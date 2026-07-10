@@ -323,26 +323,28 @@ def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
                 "tmdb_available": p["code"] in tmdb_set,
             })
 
-        # Auto-fill per the wizard spec: Source/Provider come from the filename,
-        # everything else from mediainfo. Fall back to the item's stored
-        # mediainfo columns when there's no prior proposal, and to filename
-        # provider detection when TMDb didn't suggest one — otherwise a WEB-DL
-        # release already tagged (e.g. DSNP) would show empty here.
-        item_audio_summary = " ".join(
-            p for p in (item.get("audio_codec"), item.get("audio_languages")) if p
-        ) or None
+        # Auto-fill per the eMuwarez naming spec: normalize the raw Radarr/Sonarr
+        # (or mediainfo) values to the spec format — resolution + suffix, codec
+        # (AVC/HEVC…), HDR/DV, and the audio segment (DUAL/MULTI + codec + channels).
+        from .emu_format import (
+            format_resolution, format_video_codec, format_hdr, build_audio_string,
+        )
+        spec_audio = build_audio_string(
+            item.get("audio_codec"), item.get("audio_languages"), item.get("audio_channels")
+        )
+        raw_video = (proposal.get("video_codec") if proposal else None) or item.get("video_codec")
 
         fields: dict[str, Any] = {
             "title": title,
             "complement": None,
             "season_episode": season_episode,
             "year": year,
-            "resolution": resolution,
+            "resolution": format_resolution(resolution),
             "source": source,
             "provider": suggested_provider or infer_provider_from_item(item),
-            "dynamic_range": None,
-            "video_codec": (proposal.get("video_codec") if proposal else None) or item.get("video_codec"),
-            "audio_summary": (proposal.get("audio_summary") if proposal else None) or item_audio_summary,
+            "dynamic_range": format_hdr(item.get("dynamic_range")),
+            "video_codec": format_video_codec(raw_video),
+            "audio_summary": (proposal.get("audio_summary") if proposal else None) or spec_audio,
             "subs": "SUBS",
             "tag": tag,
         }
@@ -394,22 +396,19 @@ def update_nomenclature_fields_preview(library_item_id: int, fields: dict, conn=
     if year:
         parts.append(str(year))
 
+    # eMuwarez order: Resolución (+ suffix) · Source · HDR/DV · Códec vídeo · Audio.
+    from .emu_format import format_resolution, format_hdr
     if resolution:
-        parts.append(resolution)
-
-    if resolution and "2160" in str(resolution):
-        if dynamic_range:
-            parts.append(dynamic_range)
-        elif not any("UHD" in p for p in parts):
-            parts.append("UHD")
+        parts.append(format_resolution(resolution) or resolution)
 
     source_str = _build_source_string(source, provider)
     if source_str:
-        if dynamic_range and "2160" not in str(resolution or ""):
-            parts.append(dynamic_range)
         parts.append(source_str)
-    elif dynamic_range:
-        parts.append(dynamic_range)
+
+    # Dolby Vision / HDR goes right before the video codec.
+    hdr = format_hdr(dynamic_range) if dynamic_range else None
+    if hdr:
+        parts.append(hdr)
 
     if video_codec:
         parts.append(video_codec)

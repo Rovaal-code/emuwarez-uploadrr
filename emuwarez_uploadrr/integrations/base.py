@@ -51,7 +51,10 @@ def extract_media_info(file_entry: Any) -> MediaInfoSummary:
 
     Never raises — always returns a dict with every key present (None if
     absent), so callers can rely on `.get(...)` without checking shape."""
-    result = MediaInfoSummary(video_codec=None, audio_codec=None, audio_languages=None, subtitle_languages=None)
+    result = MediaInfoSummary(
+        video_codec=None, audio_codec=None, audio_languages=None,
+        subtitle_languages=None, audio_channels=None, dynamic_range=None,
+    )
     if not isinstance(file_entry, dict):
         return result
     media_info = file_entry.get("mediaInfo")
@@ -63,6 +66,13 @@ def extract_media_info(file_entry: Any) -> MediaInfoSummary:
     # — kept as-is (already human-readable), not split into a list.
     result["audio_languages"] = media_info.get("audioLanguages") or None
     result["subtitle_languages"] = media_info.get("subtitles") or None
+    # audioChannels (e.g. 5.1) and HDR/DV (videoDynamicRangeType preferred, it
+    # distinguishes DV vs HDR10 where videoDynamicRange is just "HDR").
+    ch = media_info.get("audioChannels")
+    result["audio_channels"] = str(ch) if ch not in (None, "", 0) else None
+    result["dynamic_range"] = (
+        media_info.get("videoDynamicRangeType") or media_info.get("videoDynamicRange") or None
+    )
     return result
 
 

@@ -243,6 +243,8 @@ def movie_to_library_item(
         video_codec=media_info.get("video_codec"),
         audio_codec=media_info.get("audio_codec"),
         audio_languages=media_info.get("audio_languages"),
+        audio_channels=media_info.get("audio_channels"),
+        dynamic_range=media_info.get("dynamic_range"),
         subtitle_languages=media_info.get("subtitle_languages"),
         size_bytes=movie_file.get("size") if isinstance(movie_file, dict) else None,
         local_status=local_status,

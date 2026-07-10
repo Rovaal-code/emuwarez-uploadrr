@@ -9,7 +9,8 @@ import {
   adaptNomenclature,
 } from '../api/nomenclature'
 import { uploadPreflight, startUploadJob } from '../api/uploads'
-import { getLibrary } from '../api/library'
+import { getLibrary, getMediaInfoReport } from '../api/library'
+import type { MediaInfoReport } from '../api/library'
 import type { UploadPreflightResponse, LibraryItemResponse } from '../types/api'
 
 // Unified "Subir" wizard (replaces the separate Nomenclatura + Campos + Subir
@@ -59,6 +60,11 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
   const [preview, setPreview] = useState<FieldsPreviewResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Step 1 — on-demand MediaInfo report (only runs when the button is clicked)
+  const [miReport, setMiReport] = useState<MediaInfoReport | null>(null)
+  const [miLoading, setMiLoading] = useState(false)
+  const [miError, setMiError] = useState<string | null>(null)
 
   // Step 2 — apply + preflight + upload
   const [applyError, setApplyError] = useState<string | null>(null)
@@ -130,6 +136,21 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
   }, [targetId])
 
   useEffect(() => { if (step === 1) loadFields() }, [step, loadFields])
+
+  // Reset the MediaInfo report whenever the resolved target changes.
+  useEffect(() => { setMiReport(null); setMiError(null) }, [targetId])
+
+  const runMediaInfo = async () => {
+    if (targetId == null) return
+    setMiLoading(true); setMiError(null); setMiReport(null)
+    try {
+      setMiReport(await getMediaInfoReport(targetId))
+    } catch (e: unknown) {
+      setMiError(e instanceof Error ? e.message : 'Error ejecutando MediaInfo')
+    } finally {
+      setMiLoading(false)
+    }
+  }
 
   // Debounced live preview of the final torrent name + internal title.
   useEffect(() => {
@@ -302,10 +323,53 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
             {!loading && !error && (
               <>
                 <p className="text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
-                  Generada a partir del título en español y año (Radarr/Sonarr), Source y Provider del nombre del
-                  archivo, y el resto desde el mediainfo. Puedes ajustar cualquier campo.
+                  Generada a partir de los datos de Radarr/Sonarr (título en español, año, resolución, códecs,
+                  audio…) y del nombre del archivo (Source/Provider). Puedes ajustar cualquier campo, o
+                  ejecutar MediaInfo abajo para contrastar con el fichero real.
                 </p>
                 {fieldBox}
+
+                <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>MediaInfo del archivo</div>
+                      <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>
+                        Ejecuta MediaInfo sobre el fichero real y compara cada valor con el que iría a eMuwarez.
+                      </div>
+                    </div>
+                    <button className="btn btn-primary" onClick={runMediaInfo} disabled={miLoading || targetId == null}>
+                      {miLoading ? 'Ejecutando…' : miReport ? 'Volver a ejecutar' : 'Ejecutar MediaInfo'}
+                    </button>
+                  </div>
+
+                  {miError && <p className="text-error" style={{ fontSize: 12, marginTop: 10 }}>✗ {miError}</p>}
+                  {miReport && !miReport.available && (
+                    <p className="text-warning" style={{ fontSize: 12, marginTop: 10 }}>⚠ {miReport.message}</p>
+                  )}
+                  {miReport?.available && (
+                    <div style={{ marginTop: 12, overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 8 }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                        <thead>
+                          <tr style={{ background: 'rgba(255,255,255,0.03)' }}>
+                            <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600, color: 'var(--text-muted)' }}>Campo</th>
+                            <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600, color: 'var(--text-muted)' }}>MediaInfo</th>
+                            <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600, color: 'var(--text-muted)' }}>eMuwarez</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {miReport.rows.map((r, i) => (
+                            <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
+                              <td style={{ padding: '7px 12px', fontWeight: 600 }}>{r.field}</td>
+                              <td style={{ padding: '7px 12px', fontFamily: 'monospace', color: 'var(--text-muted)', wordBreak: 'break-word' }}>{r.mediainfo}</td>
+                              <td style={{ padding: '7px 12px', fontFamily: 'monospace', wordBreak: 'break-word' }}>{r.emu}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
                   {needsSelection
                     ? <button className="btn btn-secondary" onClick={() => setStep(0)}>← Selección</button>

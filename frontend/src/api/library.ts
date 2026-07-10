@@ -41,6 +41,23 @@ export async function getLibraryItem(id: number): Promise<LibraryItemResponse> {
   return api.get<LibraryItemResponse>(`/library/${id}`)
 }
 
+export interface MediaInfoRow {
+  field: string
+  mediainfo: string
+  emu: string
+}
+
+export interface MediaInfoReport {
+  available: boolean
+  message: string | null
+  rows: MediaInfoRow[]
+  audio_summary?: string | null
+}
+
+export async function getMediaInfoReport(id: number): Promise<MediaInfoReport> {
+  return api.get<MediaInfoReport>(`/library/${id}/mediainfo`)
+}
+
 export async function syncAll(include_episodes = true): Promise<SyncResponse> {
   return api.post<SyncResponse>('/sync', { include_episodes })
 }

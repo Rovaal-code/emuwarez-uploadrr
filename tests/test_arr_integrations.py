@@ -295,11 +295,13 @@ def test_extract_media_info_full():
     file_entry = {"mediaInfo": {
         "videoCodec": "HEVC", "audioCodec": "DTS",
         "audioLanguages": "eng / spa", "subtitles": "eng",
+        "audioChannels": 5.1, "videoDynamicRangeType": "DV HDR10",
     }}
     result = extract_media_info(file_entry)
     assert result == {
         "video_codec": "HEVC", "audio_codec": "DTS",
         "audio_languages": "eng / spa", "subtitle_languages": "eng",
+        "audio_channels": "5.1", "dynamic_range": "DV HDR10",
     }
 
 
@@ -309,6 +311,7 @@ def test_extract_media_info_missing_key():
     assert result == {
         "video_codec": None, "audio_codec": None,
         "audio_languages": None, "subtitle_languages": None,
+        "audio_channels": None, "dynamic_range": None,
     }
 
 

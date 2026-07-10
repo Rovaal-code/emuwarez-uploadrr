@@ -94,3 +94,55 @@ def test_read_media_info_summary_handles_subprocess_failure(tmp_path):
         patch.object(svc.legacy, "run_mediainfo_json", side_effect=RuntimeError("mediainfo falló")),
     ):
         assert svc.read_media_info_summary(str(f)) is None
+
+
+# ---------------------------------------------------------------------------
+# build_mediainfo_report — on-demand MediaInfo vs eMuwarez comparison table
+# ---------------------------------------------------------------------------
+
+def test_build_mediainfo_report_empty_path():
+    r = svc.build_mediainfo_report("")
+    assert r["available"] is False and r["rows"] == []
+
+
+def test_build_mediainfo_report_binary_missing(tmp_path):
+    f = tmp_path / "movie.mkv"
+    f.write_text("fake")
+    with patch.object(svc, "mediainfo_available", return_value=False):
+        r = svc.build_mediainfo_report(str(f))
+    assert r["available"] is False
+    assert "mediainfo" in r["message"].lower()
+
+
+def test_build_mediainfo_report_missing_file():
+    with patch.object(svc, "mediainfo_available", return_value=True):
+        r = svc.build_mediainfo_report("/nonexistent/movie.mkv")
+    assert r["available"] is False and r["rows"] == []
+
+
+def test_build_mediainfo_report_handles_subprocess_failure(tmp_path):
+    f = tmp_path / "movie.mkv"
+    f.write_text("fake")
+    with (
+        patch.object(svc, "mediainfo_available", return_value=True),
+        patch.object(svc.legacy, "run_mediainfo_json", side_effect=RuntimeError("boom")),
+    ):
+        r = svc.build_mediainfo_report(str(f))
+    assert r["available"] is False and "boom" in r["message"]
+
+
+def test_build_mediainfo_report_rows_and_emu_mapping(tmp_path):
+    f = tmp_path / "movie.mkv"
+    f.write_text("fake")
+    with (
+        patch.object(svc, "mediainfo_available", return_value=True),
+        patch.object(svc.legacy, "run_mediainfo_json", return_value=_fake_mediainfo_json()),
+    ):
+        r = svc.build_mediainfo_report(str(f))
+    assert r["available"] is True
+    by_field = {row["field"]: row for row in r["rows"]}
+    # Two Spanish+English E-AC-3 tracks → DUAL DD+ in the eMuwarez segment.
+    assert r["audio_summary"] and r["audio_summary"].startswith("DUAL DD+")
+    # Each row exposes both the raw MediaInfo value and the eMuwarez value.
+    assert "Subtítulos" in by_field
+    assert by_field["Subtítulos"]["emu"] == "SUBS"

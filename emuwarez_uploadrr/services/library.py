@@ -21,7 +21,7 @@ def upsert_library_item(conn: sqlite3.Connection, item: LibraryItem) -> int:
         "instance_name", "external_id", "tmdb_id", "imdb_id", "tvdb_id", "title_slug",
         "season_number", "episode_number", "parent_id", "path",
         "quality", "resolution", "source", "video_codec", "audio_codec", "audio_languages",
-        "subtitle_languages", "size_bytes", "local_status",
+        "audio_channels", "dynamic_range", "subtitle_languages", "size_bytes", "local_status",
         "request_status", "nomenclature_status", "request_id", "added_at", "raw_json",
         "poster_url",
     ]
@@ -50,6 +50,8 @@ def upsert_library_item(conn: sqlite3.Connection, item: LibraryItem) -> int:
             video_codec = excluded.video_codec,
             audio_codec = excluded.audio_codec,
             audio_languages = excluded.audio_languages,
+            audio_channels = excluded.audio_channels,
+            dynamic_range = excluded.dynamic_range,
             subtitle_languages = excluded.subtitle_languages,
             size_bytes = excluded.size_bytes,
             local_status = excluded.local_status,

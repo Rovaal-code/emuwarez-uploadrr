@@ -62,13 +62,46 @@ def _nomenclature_rollup(conn, item_id: int, item_type: str) -> Optional[str]:
     return "Parcial"
 
 
+def _local_status_rollup(conn, item_id: int) -> Optional[str]:
+    """Availability of a Series aggregated from its seasons (excluding specials,
+    season 0): 'Disponible' only when every season is available, 'Faltante' when
+    none is, 'Parcial' otherwise. Sonarr's own series status counts only
+    monitored/aired episodes, so a series with a downloaded season and other
+    missing seasons wrongly shows 'Disponible' — this fixes that."""
+    if conn is None:
+        return None
+    counts = {
+        r["s"]: r["c"] for r in conn.execute(
+            "SELECT local_status AS s, COUNT(*) AS c FROM library_items "
+            "WHERE parent_id = ? AND item_type = 'season' "
+            "AND (season_number IS NULL OR season_number != 0) GROUP BY local_status",
+            (item_id,),
+        ).fetchall()
+    }
+    total = sum(counts.values())
+    if total == 0:
+        return None
+    available = counts.get("Disponible", 0)
+    partial = counts.get("Parcial", 0)
+    if available == total:
+        return "Disponible"
+    if available == 0 and partial == 0:
+        return "Faltante"
+    return "Parcial"
+
+
 def _to_lib_response(row: dict, conn=None) -> LibraryItemResponse:
     file_exists_raw = row.get("file_exists")
     nomenclature_status = row["nomenclature_status"]
+    local_status = row["local_status"]
     if row["item_type"] in ("season", "series"):
         rollup = _nomenclature_rollup(conn, row["id"], row["item_type"])
         if rollup is not None:
             nomenclature_status = rollup
+    if row["item_type"] == "series":
+        loc = _local_status_rollup(conn, row["id"])
+        if loc is not None:
+            local_status = loc
     return LibraryItemResponse(
         id=row["id"],
         item_type=row["item_type"],
@@ -96,7 +129,7 @@ def _to_lib_response(row: dict, conn=None) -> LibraryItemResponse:
         audio_languages=row.get("audio_languages"),
         subtitle_languages=row.get("subtitle_languages"),
         size_bytes=row.get("size_bytes"),
-        local_status=row["local_status"],
+        local_status=local_status,
         request_status=row["request_status"],
         nomenclature_status=nomenclature_status,
         updated_at=row.get("updated_at"),
@@ -238,6 +271,24 @@ def library_detail(
         if not row:
             raise HTTPException(status_code=404, detail=f"Item {item_id} no encontrado")
         return _to_lib_response(row, conn)
+
+
+@router.get("/library/{item_id}/mediainfo")
+def library_mediainfo(
+    item_id: int,
+    current_user: dict = Depends(require_auth),
+) -> dict:
+    """Run MediaInfo on demand for a single item and return, per field, the raw
+    MediaInfo value and the value that would go to eMuwarez."""
+    from emuwarez_uploadrr.services.library import get_library_item
+    from emuwarez_uploadrr.services.media_info_service import build_mediainfo_report
+
+    with _get_conn() as conn:
+        row = get_library_item(conn, item_id)
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Item {item_id} no encontrado")
+        path = row["path"] if "path" in row.keys() else None
+    return build_mediainfo_report(path)
 
 
 # ---------------------------------------------------------------------------

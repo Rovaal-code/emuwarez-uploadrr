@@ -314,6 +314,10 @@ def _migrate_library_items_phase6b(conn: sqlite3.Connection) -> None:
     for col, col_def in [
         ("prepared_path", "TEXT"),
         ("nomenclature_applied_at", "TEXT"),
+        # Audio channels (e.g. "5.1") and HDR/DV range, from Radarr/Sonarr
+        # mediaInfo — needed to build the eMuwarez audio/HDR segments.
+        ("audio_channels", "TEXT"),
+        ("dynamic_range", "TEXT"),
     ]:
         try:
             conn.execute(f"ALTER TABLE library_items ADD COLUMN {col} {col_def}")

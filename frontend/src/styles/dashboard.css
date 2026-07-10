@@ -2,8 +2,19 @@
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: 1fr 320px;
+  /* Right column ("Actividad de subida") matches the width of a single
+     "Completadas" stat card: the stat rows above are 5 equal columns with a
+     16px gap, so one card is (100% - 4*16px) / 5. */
+  grid-template-columns: 1fr calc((100% - 64px) / 5);
   gap: 20px;
+}
+
+/* Below 1400px the stat rows collapse to 3 columns (see components.css),
+   so a single card becomes (100% - 2*16px) / 3 — keep the panel in step. */
+@media (max-width: 1400px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr calc((100% - 32px) / 3);
+  }
 }
 
 /* Stat card */

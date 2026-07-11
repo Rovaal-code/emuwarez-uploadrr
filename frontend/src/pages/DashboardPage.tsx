@@ -220,9 +220,9 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
       </div>
 
       {/* eMuwarez requests — cards + a "Sincronizar peticiones" button below.
-          16px bottom margin so the gap above the activity panels matches the
-          16px flex gap between them and their lower cards. */}
-      <div style={{ marginBottom: 16 }}>
+          20px bottom margin = the flex gap between the activity panels and
+          their lower cards, so spacing above and below each panel matches. */}
+      <div style={{ marginBottom: 20 }}>
         {emuSyncMsg && (
           <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>{emuSyncMsg}</div>
         )}
@@ -243,7 +243,7 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
         {/* Left column — "Actividad reciente" (50vh) with "Últimas tareas
             ejecutadas" (25vh) stacked under it, so tasks sits parallel to the
             "Conexiones" card in the right column. */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           <div className="activity-section" style={{ height: ACTIVITY_PANEL_HEIGHT, display: 'flex', flexDirection: 'column', marginBottom: 0 }}>
             <div className="section-header">
               <div className="section-title">Actividad reciente</div>
@@ -365,7 +365,7 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
 
         {/* Right — Actividad de subida: real running upload jobs, honest data only.
             Stretches to the full height of "Actividad reciente" on its left. */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           <div className="upload-panel" style={{ height: ACTIVITY_PANEL_HEIGHT, display: 'flex', flexDirection: 'column' }}>
             <div className="section-header">
               <div className="section-title">Actividad de subida</div>

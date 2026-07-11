@@ -308,13 +308,15 @@ export function UploadsPage() {
           <div className="page-subtitle">Trabajos de subida con Uploadrr</div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-            style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 4, color: 'inherit', padding: '4px 8px', fontSize: '0.85rem' }}>
-            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s ? statusLabel(s) : 'Todos los estados'}</option>)}
-          </select>
           <button className="btn btn-secondary btn-sm" onClick={() => load()} disabled={loading}>Actualizar</button>
           {hasRunningJob && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>● actualizando en vivo</span>}
         </div>
+      </div>
+
+      <div className="filters-bar">
+        <select className="form-input form-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ width: 190 }}>
+          {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s ? statusLabel(s) : 'Todos los estados'}</option>)}
+        </select>
       </div>
 
       {loading ? <LoadingState label="Cargando trabajos…" /> : error ? <ErrorState message={error} onRetry={load} /> : jobs.length === 0 ? (

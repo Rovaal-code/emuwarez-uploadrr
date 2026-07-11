@@ -409,9 +409,9 @@ export function LibraryPage() {
           {qualityOptions.map(q => <option key={q} value={q}>{q}</option>)}
         </select>
         <select className="form-input form-select" value={filterEmu} onChange={e => { const v = e.target.value; startTransition(() => setFilterEmu(v)) }}>
-          <option value="">eMuwarez: Todos</option>
-          <option value="candidate">No está (subible)</option>
-          <option value="present">Ya está</option>
+          <option value="">¿En eMuwarez?: Todos</option>
+          <option value="present">Sí</option>
+          <option value="candidate">No</option>
         </select>
         <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
           <button

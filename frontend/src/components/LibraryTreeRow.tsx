@@ -125,11 +125,11 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, com
               </a>
             )}
           </div>
-          {item.year && (
+          {item.year ? (
             <div style={{ fontSize: 11, color: 'var(--text-muted)', paddingLeft: expandable ? indent + 28 : indent }}>
               {item.year}
             </div>
-          )}
+          ) : null}
         </td>
         <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{formatItemType(item.item_type)}</td>
         <td>

@@ -150,11 +150,51 @@ def _size_rollup(conn, item_id: int, item_type: str) -> Optional[int]:
     return int(r["s"]) if r and r["s"] is not None else None
 
 
+def _child_quality_rollup(conn, item_id: int, item_type: str) -> tuple:
+    """(provider_code, resolution, source) for a Season/Series: each is the
+    value shared by ALL its episodes, or None when they differ or are absent.
+    Lets a uniform season/series show the same provider/quality as its
+    episodes."""
+    if conn is None:
+        return (None, None, None)
+    if item_type == "season":
+        rows = conn.execute(
+            "SELECT path, resolution, source FROM library_items "
+            "WHERE parent_id = ? AND item_type = 'episode'",
+            (item_id,),
+        ).fetchall()
+    elif item_type == "series":
+        rows = conn.execute(
+            "SELECT e.path AS path, e.resolution AS resolution, e.source AS source "
+            "FROM library_items e JOIN library_items se ON e.parent_id = se.id "
+            "WHERE se.parent_id = ? AND e.item_type = 'episode'",
+            (item_id,),
+        ).fetchall()
+    else:
+        return (None, None, None)
+    if not rows:
+        return (None, None, None)
+    resolutions = {r["resolution"] for r in rows}
+    sources = {r["source"] for r in rows}
+    resolution = next(iter(resolutions)) if len(resolutions) == 1 else None
+    source = next(iter(sources)) if len(sources) == 1 else None
+    providers: set = set()
+    for r in rows:
+        providers.add(infer_provider_from_item({"path": r["path"], "source": r["source"]}))
+        if len(providers) > 1:
+            break
+    provider = next(iter(providers)) if len(providers) == 1 else None
+    return (provider, resolution, source)
+
+
 def _to_lib_response(row: dict, conn=None) -> LibraryItemResponse:
     file_exists_raw = row.get("file_exists")
     nomenclature_status = row["nomenclature_status"]
     local_status = row["local_status"]
     size_bytes = row.get("size_bytes")
+    provider = infer_provider_from_item(row)
+    resolution = row.get("resolution")
+    source = row.get("source")
     if row["item_type"] in ("season", "series"):
         ignore_specials = _ignore_specials(conn)
         rollup = _nomenclature_rollup(conn, row["id"], row["item_type"], ignore_specials)
@@ -169,6 +209,11 @@ def _to_lib_response(row: dict, conn=None) -> LibraryItemResponse:
         loc = _local_status_rollup(conn, row["id"], row["item_type"], ignore_specials)
         if loc is not None:
             local_status = loc
+        # Provider/quality: show the value shared by every episode (else blank).
+        r_prov, r_res, r_src = _child_quality_rollup(conn, row["id"], row["item_type"])
+        provider = provider or r_prov
+        resolution = resolution or r_res
+        source = source or r_src
     return LibraryItemResponse(
         id=row["id"],
         item_type=row["item_type"],
@@ -188,10 +233,10 @@ def _to_lib_response(row: dict, conn=None) -> LibraryItemResponse:
         parent_id=row.get("parent_id"),
         path=row.get("path"),
         quality=row.get("quality"),
-        resolution=row.get("resolution"),
-        source=row.get("source"),
-        provider=(_prov := infer_provider_from_item(row)),
-        provider_label=_provider_label(_prov),
+        resolution=resolution,
+        source=source,
+        provider=provider,
+        provider_label=_provider_label(provider),
         video_codec=row.get("video_codec"),
         audio_codec=row.get("audio_codec"),
         audio_languages=row.get("audio_languages"),

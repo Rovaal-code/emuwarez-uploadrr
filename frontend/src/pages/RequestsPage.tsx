@@ -6,7 +6,7 @@ import {
   getRequestDetail,
   markRequestReviewed,
 } from '../api/requests'
-import { refreshReadiness, getCandidates } from '../api/requestReadiness'
+import { getCandidates } from '../api/requestReadiness'
 import type {
   RequestItemResponse, RequestDetailResponse, RequestSyncStatusResponse,
   RequestReadinessResponse, RequestCandidateResponse,
@@ -23,15 +23,6 @@ const COMPATIBILITY_STATUSES = [
   { value: 'No compatible', label: 'No compatible' },
   { value: 'Llena', label: 'Llena' },
   { value: 'Sin coincidencia', label: 'Sin coincidencia' },
-]
-
-const READINESS_FILTER = [
-  { value: '', label: 'Readiness: Todos' },
-  { value: 'ready_to_upload', label: 'Listo para subir' },
-  { value: 'needs_nomenclature', label: 'Necesita nomenclatura' },
-  { value: 'downloading', label: 'Descargando' },
-  { value: 'preflight_needed', label: 'Preflight pendiente' },
-  { value: 'no_local_match', label: 'Sin candidato local' },
 ]
 
 function CompatibilityBadge({ status }: { status: string | null }) {
@@ -208,7 +199,6 @@ export function RequestsPage() {
   const [offset, setOffset] = useState(0)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const [readinessFilter, setReadinessFilter] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
@@ -219,8 +209,6 @@ export function RequestsPage() {
   const [readiness, setReadiness] = useState<RequestReadinessResponse | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [showCandidates, setShowCandidates] = useState(false)
-  const [refreshingReadiness, setRefreshingReadiness] = useState(false)
-  const [readinessMsg, setReadinessMsg] = useState<string | null>(null)
 
   const loadItems = useCallback(async (off = 0, q = search, st = statusFilter) => {
     setLoading(true)
@@ -305,20 +293,6 @@ export function RequestsPage() {
     } catch { /* silent */ }
   }
 
-  const handleRefreshReadiness = async () => {
-    setRefreshingReadiness(true)
-    setReadinessMsg(null)
-    try {
-      const r = await refreshReadiness()
-      setReadinessMsg(r.message)
-      await loadItems(offset)
-    } catch {
-      setReadinessMsg('Error al recalcular readiness')
-    } finally {
-      setRefreshingReadiness(false)
-    }
-  }
-
   const displayItems = items
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
@@ -335,17 +309,13 @@ export function RequestsPage() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <button className="btn btn-secondary btn-sm" onClick={handleRefreshReadiness} disabled={refreshingReadiness}>
-              {refreshingReadiness ? 'Calculando…' : 'Recalcular readiness'}
-            </button>
             <SyncInfo syncStatus={syncStatus} onSync={handleSync} syncing={syncing} />
           </div>
         </div>
 
-        {(syncMsg || readinessMsg) && (
+        {syncMsg && (
           <div style={{ marginBottom: 12, fontSize: 13, color: 'var(--text-secondary)' }}>
-            {syncMsg && <div>{syncMsg}</div>}
-            {readinessMsg && <div>{readinessMsg}</div>}
+            <div>{syncMsg}</div>
           </div>
         )}
 
@@ -361,11 +331,6 @@ export function RequestsPage() {
           />
           <select className="form-input form-select" value={statusFilter} onChange={handleStatusChange} style={{ width: 190 }}>
             {COMPATIBILITY_STATUSES.map(s => (
-              <option key={s.value} value={s.value}>{s.label}</option>
-            ))}
-          </select>
-          <select className="form-input form-select" value={readinessFilter} onChange={e => setReadinessFilter(e.target.value)} style={{ width: 190 }}>
-            {READINESS_FILTER.map(s => (
               <option key={s.value} value={s.value}>{s.label}</option>
             ))}
           </select>
@@ -406,7 +371,6 @@ export function RequestsPage() {
                 </thead>
                 <tbody>
                   {displayItems
-                    .filter(item => !readinessFilter || item.readiness_status === readinessFilter)
                     .map(item => {
                     return (
                       <tr

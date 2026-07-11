@@ -76,7 +76,6 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
   const [applyError, setApplyError] = useState<string | null>(null)
   const [preflight, setPreflight] = useState<UploadPreflightResponse | null>(null)
   const [preparing, setPreparing] = useState(false)
-  const [confirmInput, setConfirmInput] = useState('')
   const [uploading, setUploading] = useState(false)
   const [uploadMsg, setUploadMsg] = useState<string | null>(null)
 
@@ -221,7 +220,8 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
 
   const canUpload = preflight?.status === 'ready' && !!preflight.job?.id
   const doUpload = async () => {
-    if (!preflight?.job?.id || confirmInput !== UPLOAD_TOKEN) return
+    if (!preflight?.job?.id) return
+    if (!window.confirm(`¿Seguro que quieres subir «${item.title}» a eMuwarez? Se iniciará la subida real.`)) return
     setUploading(true); setUploadMsg(null)
     try {
       const r = await startUploadJob(preflight.job.id, { dry_run: false, start: true, confirmation: UPLOAD_TOKEN })
@@ -439,16 +439,6 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
               </div>
             )}
 
-            <div style={{ marginTop: 8 }}>
-              <span style={labelStyle}>Escribe <strong>{UPLOAD_TOKEN}</strong> para confirmar la subida</span>
-              <input
-                className="form-input"
-                value={confirmInput}
-                onChange={e => setConfirmInput(e.target.value)}
-                placeholder={UPLOAD_TOKEN}
-                disabled={!canUpload}
-              />
-            </div>
             {uploadMsg && <p style={{ fontSize: 13, marginTop: 8 }}>{uploadMsg}</p>}
 
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
@@ -456,7 +446,7 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
               <button
                 className="btn btn-primary"
                 onClick={doUpload}
-                disabled={!canUpload || confirmInput !== UPLOAD_TOKEN || uploading}
+                disabled={!canUpload || uploading}
                 title={canUpload ? '' : 'El preflight no está listo (revisa los errores)'}
               >
                 {uploading ? 'Subiendo…' : 'Subir a eMuwarez'}

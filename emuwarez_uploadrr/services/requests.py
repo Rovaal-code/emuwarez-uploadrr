@@ -119,6 +119,11 @@ def upsert_request(conn: sqlite3.Connection, item: RequestItem) -> int:
 # Primary sync function — UNIT3D api_token auth (Phase 5B)
 # ---------------------------------------------------------------------------
 
+def _is_requests_endpoint_missing(exc: Exception) -> bool:
+    m = str(exc).lower()
+    return "404" in m and ("api/requests" in m or "could not be found" in m or "route" in m)
+
+
 def _resolve_emu_api_key(conn: sqlite3.Connection, passphrase: Optional[str] = None) -> Optional[str]:
     """The Settings UI stores the eMuwarez key in the DB (settings.emu.api_key);
     the legacy YAML config is only a fallback. Reading only load_app_config()
@@ -158,6 +163,16 @@ def sync_emu_requests(
         summary = f"{len(items)} peticiones importadas, {matched} cruces"
         finish_task(conn, task_id, TaskStatus.COMPLETED.value, summary)
         return {"status": "ok", "imported": len(items), "matched": matched}
+    except IntegrationError as exc:
+        # eMuwarez (UNIT3D) does not expose /api/requests — the endpoint 404s.
+        # That's a known tracker limitation, not a real failure: mark the task
+        # SKIPPED with a clear message instead of a scary raw HTTP 404.
+        if _is_requests_endpoint_missing(exc):
+            msg = "eMuwarez no expone el endpoint de peticiones (/api/requests); función no disponible aún."
+            finish_task(conn, task_id, TaskStatus.SKIPPED.value, msg)
+            return {"status": "unavailable", "imported": 0, "matched": 0, "message": msg}
+        finish_task(conn, task_id, TaskStatus.FAILED.value, str(exc))
+        raise
     except Exception as exc:
         finish_task(conn, task_id, TaskStatus.FAILED.value, str(exc))
         raise

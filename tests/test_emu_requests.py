@@ -223,3 +223,54 @@ def test_create_request_blocked():
     from emuwarez_uploadrr.integrations.base import IntegrationError
     with pytest.raises(IntegrationError):
         emu.create_request(title="Test")
+
+
+# ---------------------------------------------------------------------------
+# sync_emu_requests — API key resolution + missing /api/requests endpoint
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def db_conn(isolated_db):
+    from emuwarez_uploadrr.database import connect, init_db
+    conn = connect(isolated_db / "emuwarez_uploadrr.db")
+    init_db(conn)
+    return conn
+
+
+def test_sync_requests_reads_key_from_db_settings(db_conn, monkeypatch):
+    """The key configured in the Settings UI (settings.emu.api_key) must be
+    used — regression for the task reporting 'No hay API Key' when it was set."""
+    from emuwarez_uploadrr.web.services.settings_service import set_setting
+    from emuwarez_uploadrr.services import requests as reqs
+    set_setting(db_conn, "emu.api_key", "configured-key-123")
+
+    seen = {}
+    def fake_fetch(api_key, *a, **kw):
+        seen["key"] = api_key
+        return []
+    monkeypatch.setattr(reqs.emu, "emu_fetch_all_pages", fake_fetch)
+    monkeypatch.setattr(reqs, "match_all_requests", lambda conn, emu_api_key=None: 0)
+
+    result = reqs.sync_emu_requests(db_conn, force=True)
+    assert seen["key"] == "configured-key-123"
+    assert result["status"] == "ok"
+
+
+def test_sync_requests_missing_endpoint_is_skipped_not_failed(db_conn, monkeypatch):
+    from emuwarez_uploadrr.web.services.settings_service import set_setting
+    from emuwarez_uploadrr.integrations.base import IntegrationError
+    from emuwarez_uploadrr.services import requests as reqs
+    set_setting(db_conn, "emu.api_key", "configured-key-123")
+
+    def fake_fetch(*a, **kw):
+        raise IntegrationError(
+            "HTTP 404 en https://emuwarez.com/api/requests: The route api/requests could not be found."
+        )
+    monkeypatch.setattr(reqs.emu, "emu_fetch_all_pages", fake_fetch)
+
+    result = reqs.sync_emu_requests(db_conn, force=True)
+    assert result["status"] == "unavailable"
+    row = db_conn.execute(
+        "SELECT status FROM task_runs WHERE name='sync-emu-requests' ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    assert row["status"] == "skipped"

@@ -125,6 +125,12 @@ def sync_requests(
             wait_seconds=wait,
             message=f"Peticiones actualizadas recientemente. Disponible en {mins}m {secs}s.",
         )
+    if result.get("status") == "unavailable":
+        return RequestSyncResponse(
+            ok=False,
+            status="unavailable",
+            message=str(result.get("message") or "Sincronización de peticiones no disponible."),
+        )
     return RequestSyncResponse(
         ok=True,
         status="ok",

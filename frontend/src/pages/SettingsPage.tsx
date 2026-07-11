@@ -151,61 +151,7 @@ function ConfigTab() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16, alignItems: 'stretch' }}>
-      <div className="placeholder-card">
-        <h3 style={{ marginTop: 0, marginBottom: 14 }}>TMDb</h3>
-        <div className="form-group" style={{ marginBottom: 12 }}>
-          <label className="form-label">Estado de la API key</label>
-          <div style={{ fontSize: 13 }}>
-            {settings?.tmdb_api_key_configured
-              ? <><span style={{ color: '#22c55e' }}>✓ Configurada</span>{settings.tmdb_api_key_masked && <code style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>{settings.tmdb_api_key_masked}</code>}</>
-              : <span style={{ color: '#ef4444' }}>✗ No configurada</span>}
-          </div>
-        </div>
-        <div className="form-group" style={{ marginBottom: 12 }}>
-          <label className="form-label">Nueva API key <span className="form-hint">(dejar vacío para mantener la actual)</span></label>
-          <input
-            type="password"
-            className="form-input"
-            value={newKey}
-            onChange={e => setNewKey(e.target.value)}
-            placeholder="API key de TMDb"
-            autoComplete="new-password"
-          />
-          <span className="form-hint">Usada para marcar providers disponibles en TMDb.</span>
-        </div>
-        <div style={{ marginBottom: 12 }}>
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={handleTestTmdb}
-            disabled={testingTmdb}
-            type="button"
-          >
-            {testingTmdb ? 'Probando…' : 'Probar conexión'}
-          </button>
-          {tmdbTestResult && (
-            <span style={{ marginLeft: 10, fontSize: 12, color: testResultColor(tmdbTestResult) }}>
-              {testResultLabel(tmdbTestResult)}
-            </span>
-          )}
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div className="form-group">
-            <label className="form-label">Región</label>
-            <select className="form-input form-select" value={region} onChange={e => setRegion(e.target.value)}>
-              {REGION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label} ({o.value})</option>)}
-            </select>
-            <span className="form-hint">País para filtrar providers.</span>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Idioma</label>
-            <select className="form-input form-select" value={language} onChange={e => setLanguage(e.target.value)}>
-              {LANGUAGE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          </div>
-        </div>
-      </div>
-
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16, alignItems: 'stretch' }}>
       <div className="placeholder-card">
         <h3 style={{ marginTop: 0, marginBottom: 14 }}>Emuwarez</h3>
         <div className="form-group" style={{ marginBottom: 12 }}>
@@ -259,6 +205,60 @@ function ConfigTab() {
             Como eMuwarez no expone tu usuario automáticamente, escríbelo aquí para que el Dashboard pueda
             mostrar cuántas peticiones son tuyas ("Mis peticiones").
           </span>
+        </div>
+      </div>
+
+      <div className="placeholder-card">
+        <h3 style={{ marginTop: 0, marginBottom: 14 }}>TMDb</h3>
+        <div className="form-group" style={{ marginBottom: 12 }}>
+          <label className="form-label">Estado de la API key</label>
+          <div style={{ fontSize: 13 }}>
+            {settings?.tmdb_api_key_configured
+              ? <><span style={{ color: '#22c55e' }}>✓ Configurada</span>{settings.tmdb_api_key_masked && <code style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>{settings.tmdb_api_key_masked}</code>}</>
+              : <span style={{ color: '#ef4444' }}>✗ No configurada</span>}
+          </div>
+        </div>
+        <div className="form-group" style={{ marginBottom: 12 }}>
+          <label className="form-label">Nueva API key <span className="form-hint">(dejar vacío para mantener la actual)</span></label>
+          <input
+            type="password"
+            className="form-input"
+            value={newKey}
+            onChange={e => setNewKey(e.target.value)}
+            placeholder="API key de TMDb"
+            autoComplete="new-password"
+          />
+          <span className="form-hint">Usada para marcar providers disponibles en TMDb.</span>
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={handleTestTmdb}
+            disabled={testingTmdb}
+            type="button"
+          >
+            {testingTmdb ? 'Probando…' : 'Probar conexión'}
+          </button>
+          {tmdbTestResult && (
+            <span style={{ marginLeft: 10, fontSize: 12, color: testResultColor(tmdbTestResult) }}>
+              {testResultLabel(tmdbTestResult)}
+            </span>
+          )}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="form-group">
+            <label className="form-label">Región</label>
+            <select className="form-input form-select" value={region} onChange={e => setRegion(e.target.value)}>
+              {REGION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label} ({o.value})</option>)}
+            </select>
+            <span className="form-hint">País para filtrar providers.</span>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Idioma</label>
+            <select className="form-input form-select" value={language} onChange={e => setLanguage(e.target.value)}>
+              {LANGUAGE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -769,7 +769,7 @@ function NotificationsTab() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16, alignItems: 'stretch' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16, alignItems: 'stretch' }}>
       <div className="placeholder-card">
         <h3 style={{ marginTop: 0, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
           <ServiceIcon type="discord" size={20} /> Discord

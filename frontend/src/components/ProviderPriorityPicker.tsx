@@ -59,7 +59,7 @@ export function ProviderPriorityPicker({ order, onChange }: ProviderPriorityPick
         </p>
       )}
       {order.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10, maxHeight: 220, overflowY: 'auto' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10, maxHeight: 150, overflowY: 'auto' }}>
           {order.map((code, idx) => {
             const opt = options.find(p => p.code === code)
             return (

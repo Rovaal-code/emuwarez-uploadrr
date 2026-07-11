@@ -219,8 +219,10 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
         )}
       </div>
 
-      {/* eMuwarez requests — cards + a "Sincronizar peticiones" button below */}
-      <div style={{ marginBottom: 20 }}>
+      {/* eMuwarez requests — cards + a "Sincronizar peticiones" button below.
+          16px bottom margin so the gap above the activity panels matches the
+          16px flex gap between them and their lower cards. */}
+      <div style={{ marginBottom: 16 }}>
         {emuSyncMsg && (
           <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>{emuSyncMsg}</div>
         )}

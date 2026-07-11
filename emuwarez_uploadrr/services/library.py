@@ -324,7 +324,14 @@ def list_library(
     sql = "SELECT * FROM library_items"
     if where:
         sql += " WHERE " + " AND ".join(where)
-    sql += " ORDER BY updated_at DESC, title COLLATE NOCASE LIMIT ? OFFSET ?"
+    # Seasons/episodes carry season_number/episode_number and must sort
+    # numerically (Temporada 1, 2, …, 10, not string order). Top-level rows
+    # (movies/series) have both NULL, so they tie there and keep the
+    # updated_at DESC ordering.
+    sql += (
+        " ORDER BY season_number IS NOT NULL, season_number, episode_number,"
+        " updated_at DESC, title COLLATE NOCASE LIMIT ? OFFSET ?"
+    )
     params.extend([limit, offset])
     return [dict(row) for row in conn.execute(sql, params).fetchall()]
 

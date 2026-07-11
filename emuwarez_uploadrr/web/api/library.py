@@ -385,11 +385,18 @@ def library_filter_options(current_user: dict = Depends(require_auth)) -> dict:
             "SELECT DISTINCT resolution, source FROM library_items "
             "WHERE resolution IS NOT NULL OR source IS NOT NULL"
         ).fetchall()
-        qualities = sorted({
-            " · ".join([x for x in (r["resolution"], r["source"]) if x])
+        seen = {
+            (r["resolution"], r["source"])
             for r in qrows
             if (r["resolution"] or r["source"])
-        })
+        }
+        # Order by real quality: resolution first (higher → better), then source.
+        _RES_RANK = {"4320p": 8, "2160p": 7, "1080p": 6, "1080i": 5, "720p": 4, "576p": 3, "540p": 2, "480p": 1}
+        _SRC_RANK = {"BDRemux": 6, "Remux": 6, "BluRay": 5, "WEB-DL": 4, "WEBRip": 3, "HDTV": 2, "DVD": 1}
+        qualities = [
+            " · ".join([x for x in (res, src) if x])
+            for res, src in sorted(seen, key=lambda p: (_RES_RANK.get(p[0], 0), _SRC_RANK.get(p[1], 0)), reverse=True)
+        ]
         prows = conn.execute(
             "SELECT path, source FROM library_items "
             "WHERE item_type IN ('movie', 'episode') AND path IS NOT NULL"

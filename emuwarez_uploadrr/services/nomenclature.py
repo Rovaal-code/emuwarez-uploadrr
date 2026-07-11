@@ -85,11 +85,25 @@ def _build_proposed_filename(
     return name
 
 
-# Phase 6E — provider codes ordered longest-first so a substring match never
-# picks a shorter code contained in a longer one first (e.g. "MAX" inside
-# "HMAX") when scanning the current filename/path token by token.
-_PROVIDER_CODES_BY_LENGTH: list[str] = sorted(
-    (p["code"] for p in EMU_PROVIDERS), key=len, reverse=True
+# Alternate spellings uploaders use in filenames for a platform whose canonical
+# EMU code is different, mapped to that code so detection recognises them too
+# (found by auditing the real library + eMuwarez catalog).
+_PROVIDER_FILENAME_ALIASES: dict[str, str] = {
+    "HBOMAX": "HMAX",
+    "APTV": "ATVP", "APTV+": "ATVP", "ATPV": "ATVP",
+    "DNSP": "DSNP", "DSN+": "DSNP", "DSNY": "DSNP",
+    "AMZ": "AMZN", "AMZNP": "AMZN",
+}
+
+# token -> canonical EMU code, for every real code (token == code) plus the
+# aliases above. Ordered longest-first so a longer token/alias is matched
+# before a shorter code contained inside it (e.g. "HBOMAX" before "MAX").
+_PROVIDER_TOKEN_MAP: dict[str, str] = {
+    **{p["code"]: p["code"] for p in EMU_PROVIDERS},
+    **_PROVIDER_FILENAME_ALIASES,
+}
+_PROVIDER_TOKENS_BY_LENGTH: list[str] = sorted(
+    _PROVIDER_TOKEN_MAP, key=len, reverse=True
 )
 
 
@@ -112,9 +126,9 @@ def _infer_provider_from_item(item: dict, source: str | None) -> str | None:
     haystack = f"{item.get('path') or ''}"
     if not haystack:
         return None
-    for code in _PROVIDER_CODES_BY_LENGTH:
-        if re.search(rf"(?<![A-Za-z0-9]){re.escape(code)}(?![A-Za-z0-9])", haystack):
-            return code
+    for token in _PROVIDER_TOKENS_BY_LENGTH:
+        if re.search(rf"(?<![A-Za-z0-9]){re.escape(token)}(?![A-Za-z0-9])", haystack):
+            return _PROVIDER_TOKEN_MAP[token]
     return None
 
 

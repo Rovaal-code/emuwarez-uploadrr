@@ -38,7 +38,7 @@ EMU_PROVIDERS: list[dict] = [
     {"code": "MA",    "name": "MoviesAnywhere"},
     {"code": "MAX",   "name": "HBO Max"},
     {"code": "HMAX",  "name": "HBO Max"},
-    {"code": "SKY",   "name": "SkyShowtime"},
+    {"code": "SKY",   "name": "Sky"},
     {"code": "PCOK",  "name": "Peacock"},
     {"code": "PMTP",  "name": "ParamountPlus"},
     {"code": "iP",    "name": "BBC iPlayer"},
@@ -61,6 +61,7 @@ EMU_PROVIDERS: list[dict] = [
     # from our list. Codes are the exact tokens used in the tracker's names.
     {"code": "ANIMEBOX", "name": "Animebox"},
     {"code": "A3P",      "name": "Atresplayer"},
+    {"code": "SKST",     "name": "SkyShowtime"},
     {"code": "FLMN",     "name": "Filmin"},
     {"code": "FLIXOLE",  "name": "FlixOlé"},
     {"code": "MGMP",     "name": "MGM+"},
@@ -91,7 +92,7 @@ _TMDB_PROVIDER_MAP: dict[str, str] = {
     "peacock": "PCOK",
     "paramount plus": "PMTP",
     "paramount+": "PMTP",
-    "skyshowtime": "SKY",  # TODO: tracker uses both SKY(50) and SKST(29) — confirm canonical
+    "skyshowtime": "SKST",  # canonical per user; SKY is Sky (a different service)
     "atresplayer": "A3P",
     "atres player": "A3P",
     "filmin": "FLMN",

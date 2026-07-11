@@ -10,8 +10,11 @@ export function SyncInfo({ syncStatus, onSync, syncing, label = 'Sincronizar', a
   label?: string
   allowForce?: boolean
 }) {
-  if (!syncStatus) return null
-  const { can_sync, wait_seconds, last_sync_at } = syncStatus
+  // Render the button even before the throttle status has loaded (or if it
+  // failed), so the sync action is always visible; treat unknown as "can sync".
+  const can_sync = syncStatus?.can_sync ?? true
+  const wait_seconds = syncStatus?.wait_seconds ?? 0
+  const last_sync_at = syncStatus?.last_sync_at ?? null
   const mins = Math.ceil(wait_seconds / 60)
   return (
     <div className="sync-info">

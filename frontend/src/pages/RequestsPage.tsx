@@ -249,10 +249,6 @@ export function RequestsPage() {
     loadSyncStatus()
   }, [])
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    loadItems(0, search, statusFilter)
-  }
 
   const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value
@@ -353,23 +349,22 @@ export function RequestsPage() {
           </div>
         )}
 
-        <div className="filters-row" style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-          <form onSubmit={handleSearchSubmit} style={{ flex: 1, minWidth: 220 }}>
-            <input
-              className="form-input"
-              type="search"
-              placeholder="Buscar por título…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              style={{ width: '100%' }}
-            />
-          </form>
-          <select className="select" value={statusFilter} onChange={handleStatusChange}>
+        <div className="filters-bar">
+          <input
+            className="form-input"
+            type="search"
+            placeholder="Buscar por título…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && loadItems(0, search, statusFilter)}
+            style={{ minWidth: 220 }}
+          />
+          <select className="form-input form-select" value={statusFilter} onChange={handleStatusChange} style={{ width: 190 }}>
             {COMPATIBILITY_STATUSES.map(s => (
               <option key={s.value} value={s.value}>{s.label}</option>
             ))}
           </select>
-          <select className="select" value={readinessFilter} onChange={e => setReadinessFilter(e.target.value)}>
+          <select className="form-input form-select" value={readinessFilter} onChange={e => setReadinessFilter(e.target.value)} style={{ width: 190 }}>
             {READINESS_FILTER.map(s => (
               <option key={s.value} value={s.value}>{s.label}</option>
             ))}

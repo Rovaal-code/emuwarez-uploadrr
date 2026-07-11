@@ -9,7 +9,7 @@ import type { LibraryItemResponse } from '../types/api'
 const CATEGORIES: { value: string; label: string; enabled: boolean }[] = [
   { value: 'movie', label: 'Películas', enabled: true },
   { value: 'tv', label: 'Series', enabled: true },
-  { value: 'doc', label: 'Documentales', enabled: false },
+  { value: 'doc', label: 'Documentales', enabled: true },
   { value: 'music', label: 'Música', enabled: false },
   { value: 'games', label: 'Juegos', enabled: false },
   { value: 'software', label: 'Software', enabled: false },
@@ -55,7 +55,9 @@ export function RequestFormModal({ item, onClose }: Props) {
 
   const [msg, setMsg] = useState<string | null>(null)
 
-  const isSeries = category === 'tv'
+  // Documentaries share the Series field set (season/episode, tvdb), so they
+  // inherit the exact same behaviour here.
+  const isSeries = category === 'tv' || category === 'doc'
   const rewardNum = parseInt(reward || '0', 10)
   const rewardTooLow = rewardNum < MIN_REWARD
   const canSubmit = title.trim().length > 0 && !rewardTooLow

@@ -141,7 +141,7 @@ export function RequestFormModal({ item, onClose }: Props) {
           </div>
 
           <label style={{ display: 'block', marginTop: 16 }}><span style={labelStyle}>Descripción personal</span>
-            <textarea className="form-input" value={description} onChange={e => setDescription(e.target.value)} rows={3} style={{ resize: 'vertical' }} />
+            <textarea className="form-input" value={description} onChange={e => setDescription(e.target.value)} rows={3} style={{ resize: 'vertical' }} placeholder="No olvides dar las gracias!" />
           </label>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px', marginTop: 12, alignItems: 'center' }}>

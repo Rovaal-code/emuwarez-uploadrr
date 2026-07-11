@@ -53,7 +53,31 @@ def connect(path: Optional[Path] = None) -> sqlite3.Connection:
     # immediate "database is locked"/"table already exists" error instead of
     # one simply waiting its turn.
     conn.execute("PRAGMA busy_timeout = 5000")
+    conn.create_collation("TITLE_SORT", _title_sort_collation)
     return conn
+
+
+def _title_sort_key(s: Optional[str]) -> str:
+    """Sort key for library titles: símbolos < números < letras, con los
+    acentos plegados a su vocal base (Émesis ordena junto a las «E», no al
+    final). NOCASE de SQLite solo ignora mayúsculas, no acentos, y deja los
+    caracteres de código alto (á, ¡, ¿) fuera de sitio."""
+    import unicodedata
+    s = unicodedata.normalize("NFD", s or "")
+    s = "".join(c for c in s if not unicodedata.combining(c)).casefold()
+    out: list[str] = []
+    for c in s:
+        # Category prefix per character so the ordering symbol<number<letter
+        # holds at every position, not just the first char.
+        cat = "2" if c.isalpha() else "1" if c.isdigit() else "0"
+        out.append(cat)
+        out.append(c)
+    return "".join(out)
+
+
+def _title_sort_collation(a: str, b: str) -> int:
+    ka, kb = _title_sort_key(a), _title_sort_key(b)
+    return (ka > kb) - (ka < kb)
 
 
 def _migrate_instances(conn: sqlite3.Connection) -> None:

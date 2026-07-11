@@ -306,12 +306,14 @@ def _build_library_filter(
 # tie-break AFTER the season/episode numeric ordering, so expanding a series
 # always shows its seasons/episodes in numeric order regardless of this choice.
 # "title_asc" (COLLATE NOCASE) gives símbolos < números < A-Z, the default.
+# TITLE_SORT (registered in database.connect) folds accents and orders
+# símbolos < números < letras; NOCASE would drop accented titles at the end.
 _LIBRARY_SORT = {
-    "title_asc": "title COLLATE NOCASE ASC, updated_at DESC",
-    "title_desc": "title COLLATE NOCASE DESC, updated_at DESC",
-    "updated_desc": "updated_at DESC, title COLLATE NOCASE ASC",
-    "year_desc": "year IS NULL, year DESC, title COLLATE NOCASE ASC",
-    "year_asc": "year IS NULL, year ASC, title COLLATE NOCASE ASC",
+    "title_asc": "title COLLATE TITLE_SORT ASC, updated_at DESC",
+    "title_desc": "title COLLATE TITLE_SORT DESC, updated_at DESC",
+    "updated_desc": "updated_at DESC, title COLLATE TITLE_SORT ASC",
+    "year_desc": "year IS NULL, year DESC, title COLLATE TITLE_SORT ASC",
+    "year_asc": "year IS NULL, year ASC, title COLLATE TITLE_SORT ASC",
 }
 DEFAULT_LIBRARY_SORT = "title_asc"
 

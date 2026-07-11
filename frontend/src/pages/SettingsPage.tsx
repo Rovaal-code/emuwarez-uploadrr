@@ -188,10 +188,6 @@ function ConfigTab() {
               {testResultLabel(emuTestResult)}
             </span>
           )}
-          <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8, marginBottom: 0 }}>
-            Nota: la API de Emuwarez no expone un endpoint de cuenta/perfil propio conocido — el test de
-            conexión solo confirma que la key es válida, no muestra el nombre de usuario detectado.
-          </p>
         </div>
         <div className="form-group" style={{ marginTop: 14 }}>
           <label className="form-label">Mi usuario de eMuwarez</label>

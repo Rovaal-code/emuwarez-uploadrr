@@ -8,6 +8,17 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from ..dependencies import require_auth
 from ..runtime import _db_path
 from emuwarez_uploadrr.services.nomenclature import infer_provider_from_item
+from emuwarez_uploadrr.services.source_assistant import EMU_PROVIDERS
+
+_PROVIDER_NAME_BY_CODE = {p["code"]: p["name"] for p in EMU_PROVIDERS}
+
+
+def _provider_label(code: Optional[str]) -> Optional[str]:
+    """'Nombre (CÓDIGO)' for a provider code, e.g. 'Amazon (AMZN)'."""
+    if not code:
+        return None
+    name = _PROVIDER_NAME_BY_CODE.get(code)
+    return f"{name} ({code})" if name else code
 from ..schemas import (
     LibraryItemResponse, LibraryListResponse,
     MissingItemResponse, MissingListResponse,
@@ -179,7 +190,8 @@ def _to_lib_response(row: dict, conn=None) -> LibraryItemResponse:
         quality=row.get("quality"),
         resolution=row.get("resolution"),
         source=row.get("source"),
-        provider=infer_provider_from_item(row),
+        provider=(_prov := infer_provider_from_item(row)),
+        provider_label=_provider_label(_prov),
         video_codec=row.get("video_codec"),
         audio_codec=row.get("audio_codec"),
         audio_languages=row.get("audio_languages"),

@@ -391,6 +391,7 @@ export function LibraryPage() {
                   <th>Petición</th>
                   <th>Nomenclatura</th>
                   <th>Tamaño</th>
+                  <th>Provider</th>
                   <th>Calidad</th>
                   <th>Actualizado</th>
                   <th className="col-actions">Acciones</th>

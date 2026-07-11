@@ -428,6 +428,7 @@ class LibraryItemResponse(BaseModel):
     resolution: Optional[str] = None
     source: Optional[str] = None
     provider: Optional[str] = None
+    provider_label: Optional[str] = None
     video_codec: Optional[str] = None
     audio_codec: Optional[str] = None
     audio_languages: Optional[str] = None

@@ -130,7 +130,7 @@ export function NomenclatureFieldsModal({ itemId, itemTitle, onClose, onSaved }:
 
   const sourceRequiresProvider = PROVIDER_SOURCES.has(fields.source || '')
   const providerOptions = preview?.provider_options ?? providers.map(p => ({
-    code: p.code, name: p.name, label: `${p.code} (${p.name})`, tmdb_available: false,
+    code: p.code, name: p.name, label: `${p.name} (${p.code})`, tmdb_available: false,
   }))
 
   return (

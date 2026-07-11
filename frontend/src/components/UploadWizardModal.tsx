@@ -266,7 +266,7 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
             ) : (
               <select className="form-input" value={fields.provider || ''} onChange={e => setField('provider', e.target.value || null)}>
                 <option value="">— Sin provider —</option>
-                {providers.map(p => <option key={p.code} value={p.code}>{p.code} ({p.name})</option>)}
+                {providers.map(p => <option key={p.code} value={p.code}>{p.name} ({p.code})</option>)}
               </select>
             )}
           </label>

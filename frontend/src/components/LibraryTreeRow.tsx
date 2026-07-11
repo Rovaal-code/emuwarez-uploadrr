@@ -20,6 +20,9 @@ interface LibraryTreeRowProps {
   instances: InstanceSafeResponse[]
   onSelect: (item: LibraryItemResponse) => void
   onAction: (kind: LibraryActionKind, item: LibraryItemResponse) => void
+  // Compact mode (used inside a Series detail): hides the Actualizado and
+  // Acciones columns.
+  compact?: boolean
 }
 
 // Series -> Season -> Episode collapsible tree, one row per level, reused
@@ -29,7 +32,7 @@ interface LibraryTreeRowProps {
 // buttons are placeholders here — the batch action wiring for them lands
 // in Phase 6; showing them disabled-with-explanation now avoids calling
 // single-item endpoints with a rollup id that would error.
-export function LibraryTreeRow({ item, depth, instances, onSelect, onAction }: LibraryTreeRowProps) {
+export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, compact = false }: LibraryTreeRowProps) {
   const [expanded, setExpanded] = useState(false)
   const [children, setChildren] = useState<LibraryItemResponse[]>([])
   const [childTotal, setChildTotal] = useState(0)
@@ -76,7 +79,7 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction }: L
 
   const deepLink = buildDeepLink(item, instances)
   const indent = depth * 20
-  const colSpan = 10
+  const colSpan = compact ? 9 : 11
 
   return (
     <>
@@ -140,17 +143,24 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction }: L
         <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
           {formatBytes(item.size_bytes)}
         </td>
+        <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+          {item.provider_label ?? '—'}
+        </td>
         <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
           {[item.resolution, item.source].filter(Boolean).join(' · ') || '—'}
         </td>
-        <td style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-          {formatDate(item.updated_at)}
-        </td>
-        <td className="col-actions" onClick={e => e.stopPropagation()}>
-          <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-start', alignItems: 'center' }}>
-            <LibraryActionButtons item={item} onAction={onAction} />
-          </div>
-        </td>
+        {!compact && (
+          <td style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+            {formatDate(item.updated_at)}
+          </td>
+        )}
+        {!compact && (
+          <td className="col-actions" onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-start', alignItems: 'center' }}>
+              <LibraryActionButtons item={item} onAction={onAction} />
+            </div>
+          </td>
+        )}
       </tr>
       {expanded && isEpisode && (
         <tr>
@@ -203,6 +213,7 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction }: L
           instances={instances}
           onSelect={onSelect}
           onAction={onAction}
+          compact={compact}
         />
       ))}
       {expanded && !loadingChildren && !isSeries && childTotal > NESTED_PAGE_SIZE && (

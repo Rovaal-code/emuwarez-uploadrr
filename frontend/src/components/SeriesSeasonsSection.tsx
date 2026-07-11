@@ -42,19 +42,16 @@ export function SeriesSeasonsSection({ seriesId, instances, onSelect, onAction }
                 <th>Tipo</th>
                 <th>Origen</th>
                 <th>Estado</th>
-                <th>Archivo</th>
                 <th>Petición</th>
                 <th>Nomenclatura</th>
-                <th>Diagnóstico</th>
-                <th>Acción</th>
+                <th>Tamaño</th>
+                <th>Provider</th>
                 <th>Calidad</th>
-                <th>Actualizado</th>
-                <th className="col-actions">Acciones</th>
               </tr>
             </thead>
             <tbody>
               {seasons.map(season => (
-                <LibraryTreeRow key={season.id} item={season} depth={0} instances={instances} onSelect={onSelect} onAction={onAction} />
+                <LibraryTreeRow key={season.id} item={season} depth={0} instances={instances} onSelect={onSelect} onAction={onAction} compact />
               ))}
             </tbody>
           </table>

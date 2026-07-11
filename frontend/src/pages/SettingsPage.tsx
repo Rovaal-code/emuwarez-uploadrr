@@ -139,7 +139,7 @@ function ConfigTab() {
   if (loading) return <p style={{ padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>Cargando…</p>
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 1400 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {msg && (
         <div style={{
           padding: '10px 14px', borderRadius: 6, fontSize: 13,
@@ -757,7 +757,7 @@ function NotificationsTab() {
   if (loading) return <p style={{ padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>Cargando…</p>
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 1400 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {msg && (
         <div style={{
           padding: '10px 14px', borderRadius: 6, fontSize: 13,

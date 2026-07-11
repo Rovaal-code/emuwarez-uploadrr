@@ -15,6 +15,7 @@ from typing import Any
 from ..database import connect, row_to_dict, rows_to_dicts, get_setting_canonical
 from .filesystem_safety import safe_stat
 from .uploadrr_contract import (
+    DEFAULT_UPLOADRR_PATH,
     RUNTIME_EMU,
     RUNTIME_GENERIC,
     build_uploadrr_emu_command,
@@ -54,7 +55,10 @@ def validate_upload_preconditions(library_item: dict, proposal: dict | None = No
         if not library_item.get("tmdb_id"):
             warnings.append("No hay TMDb ID asociado. Se recomienda para la subida.")
 
-        uploadrr_path = get_setting_canonical(conn, "uploadrr.path")
+        # Same fallback as the runtime layer: when the setting is unset, use the
+        # bundled path (/opt/Uploadrr in the Docker image). Only fail when it's
+        # genuinely absent, not merely "not explicitly configured".
+        uploadrr_path = get_setting_canonical(conn, "uploadrr.path") or DEFAULT_UPLOADRR_PATH
         if not uploadrr_path:
             errors.append("Ruta de Uploadrr no configurada (uploadrr.path).")
         elif not os.path.exists(uploadrr_path):

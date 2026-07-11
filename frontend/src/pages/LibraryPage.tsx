@@ -426,24 +426,27 @@ export function LibraryPage() {
             style={{ opacity: viewMode === 'grid' ? 1 : 0.55 }}
             onClick={() => setViewMode('grid')}
             title="Vista de pósters"
+            aria-label="Vista de pósters"
           >
-            ▦ Pósters
+            ▦
           </button>
           <button
             className="btn btn-primary btn-sm"
             style={{ opacity: viewMode === 'grid-lg' ? 1 : 0.55 }}
             onClick={() => setViewMode('grid-lg')}
             title="Vista de pósters grandes"
+            aria-label="Vista de pósters grandes"
           >
-            ▦▦ Pósters grandes
+            ▦▦
           </button>
           <button
             className="btn btn-primary btn-sm"
             style={{ opacity: viewMode === 'list' ? 1 : 0.55 }}
             onClick={() => setViewMode('list')}
             title="Vista de lista"
+            aria-label="Vista de lista"
           >
-            ☰ Lista
+            ☰
           </button>
         </div>
       </div>

@@ -257,7 +257,19 @@ def _to_lib_response(row: dict, conn=None) -> LibraryItemResponse:
         arr_queue_status=row.get("arr_queue_status"),
         arr_history_status=row.get("arr_history_status"),
         poster_url=row.get("poster_url"),
+        emu_in_catalog=row.get("emu_in_catalog"),
+        emu_aportes=_parse_aportes(row.get("emu_aportes")),
     )
+
+
+def _parse_aportes(raw) -> Optional[list]:
+    if not raw:
+        return None
+    import json as _json
+    try:
+        return _json.loads(raw)
+    except (ValueError, TypeError):
+        return None
 
 
 def _to_missing_response(row: dict) -> MissingItemResponse:
@@ -411,6 +423,41 @@ def library_filter_options(current_user: dict = Depends(require_auth)) -> dict:
                 codes.add(c)
         providers = sorted({lbl for c in codes if (lbl := _provider_label(c))})
     return {"providers": providers, "qualities": qualities}
+
+
+@router.get("/library/emu-sync-status")
+def library_emu_sync_status(current_user: dict = Depends(require_auth)) -> dict:
+    """Throttle status for the eMuwarez catalog comparison (1/hour)."""
+    from emuwarez_uploadrr.services.emu_catalog import get_sync_status
+    with _get_conn() as conn:
+        return get_sync_status(conn)
+
+
+@router.post("/library/emu-sync")
+def library_emu_sync(current_user: dict = Depends(require_auth)) -> dict:
+    """Download the whole eMuwarez catalog and recompute, per movie/season/series,
+    whether it's already there and what your copy would add. Throttled 1/hour."""
+    from emuwarez_uploadrr.services.emu_catalog import sync_emu_catalog
+    from emuwarez_uploadrr.integrations.base import IntegrationError
+    with _get_conn() as conn:
+        try:
+            result = sync_emu_catalog(conn)
+        except IntegrationError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+    if result.get("status") == "throttled":
+        raise HTTPException(
+            status_code=429,
+            detail=f"Espera {result['wait_seconds']}s antes de volver a sincronizar con eMuwarez",
+        )
+    return result
+
+
+@router.get("/library/{item_id}/emu-comparison")
+def library_emu_comparison(item_id: int, current_user: dict = Depends(require_auth)) -> dict:
+    """Your copy vs eMuwarez's matching torrents, for the detail-card table."""
+    from emuwarez_uploadrr.services.emu_catalog import get_item_comparison
+    with _get_conn() as conn:
+        return get_item_comparison(conn, item_id)
 
 
 @router.get("/library/{item_id}", response_model=LibraryItemResponse)

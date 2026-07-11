@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getLibrary, TOP_LEVEL_PARENT_FILTER, getLibraryFilterOptions } from '../api/library'
+import { getLibrary, TOP_LEVEL_PARENT_FILTER, getLibraryFilterOptions, getEmuSyncStatus, emuSync, type EmuSyncStatus } from '../api/library'
 import { getInstances } from '../api/instances'
 import { refreshArrHealth } from '../api/diagnostics'
 import type { LibraryItemResponse, LibraryListResponse, InstanceSafeResponse } from '../types/api'
@@ -27,6 +27,11 @@ const VIEW_MODE_STORAGE_KEY = 'emuwarez_uploadrr_library_view'
 const NOT_AVAILABLE_STATUS_FILTER = '__not_available__'
 
 type ViewMode = 'grid' | 'grid-lg' | 'list'
+
+function formatWait(seconds: number): string {
+  const m = Math.ceil(seconds / 60)
+  return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}min` : `${m} min`
+}
 
 function loadViewMode(): ViewMode {
   const stored = localStorage.getItem(VIEW_MODE_STORAGE_KEY)
@@ -158,7 +163,13 @@ export function LibraryPage() {
   // Client-side text filters (no backend param) over the loaded items.
   const [searchProvider, setSearchProvider] = useState('')
   const [searchQuality, setSearchQuality] = useState('')
+  const [filterEmu, setFilterEmu] = useState('')
   const [offset, setOffset] = useState(0)
+
+  // eMuwarez catalog comparison (1/hour, on-demand button).
+  const [emuStatus, setEmuStatus] = useState<EmuSyncStatus | null>(null)
+  const [emuSyncing, setEmuSyncing] = useState(false)
+  const [emuMsg, setEmuMsg] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -190,6 +201,25 @@ export function LibraryPage() {
 
   useEffect(() => { load() }, [load])
 
+  const loadEmuStatus = useCallback(async () => {
+    try { setEmuStatus(await getEmuSyncStatus()) } catch { /* ignore */ }
+  }, [])
+  useEffect(() => { loadEmuStatus() }, [loadEmuStatus])
+
+  const handleEmuSync = useCallback(async () => {
+    setEmuSyncing(true)
+    setEmuMsg(null)
+    try {
+      const r = await emuSync()
+      setEmuMsg(`Catálogo eMuwarez sincronizado: ${r.torrents} torrents, ${r.items} elementos comparados`)
+      await Promise.all([load(), loadEmuStatus()])
+    } catch (e) {
+      setEmuMsg(e instanceof Error ? e.message : 'Error al sincronizar con eMuwarez')
+    } finally {
+      setEmuSyncing(false)
+    }
+  }, [load, loadEmuStatus])
+
   function applyFilters() {
     setOffset(0)
     load()
@@ -215,6 +245,12 @@ export function LibraryPage() {
     filteredItems = items.filter(it => matchIds.has(it.id) && !(it.parent_id != null && matchIds.has(it.parent_id)))
   } else {
     filteredItems = items
+  }
+  // eMuwarez status is a client-side filter over whatever level is shown:
+  // "candidate" = not on the tracker (opportunity), "present" = already there.
+  if (filterEmu) {
+    filteredItems = filteredItems.filter(it =>
+      filterEmu === 'candidate' ? it.emu_in_catalog === 0 : it.emu_in_catalog === 1)
   }
 
   // Modals/overlays, shared by the list view and the detail page so an action
@@ -275,8 +311,25 @@ export function LibraryPage() {
               ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Sincronizando…</>
               : '↻ Sincronizar'}
           </button>
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={handleEmuSync}
+            disabled={emuSyncing || (emuStatus != null && !emuStatus.can_sync)}
+            title={emuStatus && !emuStatus.can_sync
+              ? `Disponible en ${formatWait(emuStatus.wait_seconds)}`
+              : 'Descarga el catálogo de eMuwarez y compara con tu biblioteca (1 vez/hora)'}
+          >
+            {emuSyncing
+              ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Comparando…</>
+              : emuStatus && !emuStatus.can_sync
+                ? `⇅ eMuwarez (${formatWait(emuStatus.wait_seconds)})`
+                : '⇅ Sincronizar eMuwarez'}
+          </button>
         </div>
       </div>
+      {emuMsg && (
+        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>{emuMsg}</div>
+      )}
 
       {/* Search by title — where the ARR diagnostic buttons used to be */}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
@@ -343,6 +396,11 @@ export function LibraryPage() {
         <select className="form-input form-select" value={searchQuality} onChange={e => setSearchQuality(e.target.value)}>
           <option value="">Calidad: Todas</option>
           {qualityOptions.map(q => <option key={q} value={q}>{q}</option>)}
+        </select>
+        <select className="form-input form-select" value={filterEmu} onChange={e => setFilterEmu(e.target.value)}>
+          <option value="">eMuwarez: Todos</option>
+          <option value="candidate">No está (subible)</option>
+          <option value="present">Ya está</option>
         </select>
         <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
           <button
@@ -413,6 +471,8 @@ export function LibraryPage() {
                   <th>Tamaño</th>
                   <th>Provider</th>
                   <th>Calidad</th>
+                  <th>¿En eMuwarez?</th>
+                  <th>Aportes</th>
                   <th>Actualizado</th>
                   <th className="col-actions">Acciones</th>
                 </tr>

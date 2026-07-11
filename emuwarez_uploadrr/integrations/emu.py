@@ -111,6 +111,32 @@ def emu_fetch_all_pages(api_key: str, base_url: str | None = None) -> list[dict[
     return all_items
 
 
+def emu_fetch_all_torrents(
+    api_key: str,
+    base_url: str | None = None,
+    per_page: int = 100,
+    max_pages: int = 500,
+) -> list[dict[str, Any]]:
+    """Fetch the whole eMuwarez torrent catalog (paginated /api/torrents/filter).
+    Returns the flat list of raw torrent objects ({type, id, attributes})."""
+    import time
+    base = (base_url or EMU_BASE_URL).rstrip("/")
+    all_items: list[dict[str, Any]] = []
+    page = 1
+    while page <= max_pages:
+        url = build_url(base, "/api/torrents/filter", {"api_token": api_key, "perPage": str(per_page), "page": str(page)})
+        data = request_json("GET", url)
+        items = data.get("data") if isinstance(data, dict) else None
+        if not isinstance(items, list) or not items:
+            break
+        all_items.extend(items)
+        if len(items) < per_page:
+            break
+        page += 1
+        time.sleep(0.15)  # be polite
+    return all_items
+
+
 # ---------------------------------------------------------------------------
 # Legacy Bearer-header functions (kept for backward compatibility)
 # ---------------------------------------------------------------------------

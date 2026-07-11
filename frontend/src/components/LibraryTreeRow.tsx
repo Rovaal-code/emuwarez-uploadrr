@@ -32,6 +32,49 @@ interface LibraryTreeRowProps {
 // buttons are placeholders here — the batch action wiring for them lands
 // in Phase 6; showing them disabled-with-explanation now avoids calling
 // single-item endpoints with a rollup id that would error.
+// "¿En eMuwarez?" — 🟢 No = not on the tracker (an upload opportunity),
+// ⚪ Sí = already there, — = catalog not synced yet.
+export function EmuStatusCell({ item }: { item: LibraryItemResponse }) {
+  if (item.emu_in_catalog == null) {
+    return <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>
+  }
+  if (item.emu_in_catalog === 0) {
+    return <span style={{ fontSize: 12, color: '#22c55e', fontWeight: 500 }}>🟢 No</span>
+  }
+  return <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>⚪ Sí</span>
+}
+
+// "Aportes" — what your copy would add: "Contenido nuevo" if it's not on the
+// tracker at all, chips per improvement (resolution / source / codec / ESP),
+// or — when it's there and you add nothing.
+export function EmuAportesCell({ item }: { item: LibraryItemResponse }) {
+  if (item.emu_in_catalog == null) {
+    return <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>
+  }
+  if (item.emu_in_catalog === 0) {
+    return <span style={{ fontSize: 11.5, color: '#22c55e', fontWeight: 500 }}>Contenido nuevo</span>
+  }
+  const aportes = item.emu_aportes ?? []
+  if (aportes.length === 0) {
+    return <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>
+  }
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+      {aportes.map((a, i) => (
+        <span
+          key={i}
+          style={{
+            fontSize: 10.5, padding: '1px 6px', borderRadius: 4, whiteSpace: 'nowrap',
+            background: 'rgba(34,197,94,0.14)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)',
+          }}
+        >
+          {a.detail}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, compact = false }: LibraryTreeRowProps) {
   const [expanded, setExpanded] = useState(false)
   const [children, setChildren] = useState<LibraryItemResponse[]>([])
@@ -79,7 +122,7 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, com
 
   const deepLink = buildDeepLink(item, instances)
   const indent = depth * 20
-  const colSpan = compact ? 9 : 11
+  const colSpan = compact ? 11 : 13
 
   return (
     <>
@@ -149,6 +192,8 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, com
         <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
           {[item.resolution, item.source].filter(Boolean).join(' · ') || '—'}
         </td>
+        <td style={{ whiteSpace: 'nowrap' }}><EmuStatusCell item={item} /></td>
+        <td><EmuAportesCell item={item} /></td>
         {!compact && (
           <td style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
             {formatDate(item.updated_at)}

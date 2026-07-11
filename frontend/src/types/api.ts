@@ -129,6 +129,14 @@ export interface LibraryItemResponse {
   arr_history_status: string | null
   // Phase 11E
   poster_url: string | null
+  // eMuwarez catalog comparison: 1 = already on eMuwarez, 0 = not, null = not synced.
+  emu_in_catalog: number | null
+  emu_aportes: EmuAporte[] | null
+}
+
+export interface EmuAporte {
+  dim: string
+  detail: string
 }
 
 export interface LibraryListResponse {

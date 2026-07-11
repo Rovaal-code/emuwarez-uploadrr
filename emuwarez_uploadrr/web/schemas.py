@@ -462,6 +462,10 @@ class LibraryItemResponse(BaseModel):
     arr_history_status: Optional[str] = None
     # Phase 11E — poster extracted from Radarr/Sonarr's raw images[] at sync time
     poster_url: Optional[str] = None
+    # eMuwarez catalog comparison — 1 = already on eMuwarez, 0 = not, None = not synced.
+    # emu_aportes: list of {dim, detail} describing what your copy would add.
+    emu_in_catalog: Optional[int] = None
+    emu_aportes: Optional[list] = None
 
 
 class LibraryListResponse(BaseModel):

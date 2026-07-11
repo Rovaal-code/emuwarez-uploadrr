@@ -80,3 +80,47 @@ export async function getLibraryFilterOptions(): Promise<LibraryFilterOptions> {
 export async function syncAll(include_episodes = true): Promise<SyncResponse> {
   return api.post<SyncResponse>('/sync', { include_episodes })
 }
+
+export interface EmuSyncStatus {
+  last_sync_at: string | null
+  can_sync: boolean
+  wait_seconds: number
+  min_interval_seconds: number
+}
+
+export interface EmuSyncResult {
+  status: string
+  torrents: number
+  items: number
+  wait_seconds?: number
+}
+
+export async function getEmuSyncStatus(): Promise<EmuSyncStatus> {
+  return api.get<EmuSyncStatus>('/library/emu-sync-status')
+}
+
+export interface EmuMatch {
+  name: string
+  resolution: string | null
+  source: string | null
+  codec: string | null
+  has_spanish: number | null
+  size: number | null
+}
+
+export interface EmuComparison {
+  available: boolean
+  message: string | null
+  mine?: { resolution: string | null; source: string | null; codec: string | null; has_es: boolean; size: number | null }
+  matches: EmuMatch[]
+  in_catalog?: number | null
+  aportes?: { dim: string; detail: string }[]
+}
+
+export async function getEmuComparison(id: number): Promise<EmuComparison> {
+  return api.get<EmuComparison>(`/library/${id}/emu-comparison`)
+}
+
+export async function emuSync(): Promise<EmuSyncResult> {
+  return api.post<EmuSyncResult>('/library/emu-sync', {})
+}

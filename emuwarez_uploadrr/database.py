@@ -740,6 +740,38 @@ def _migrate_library_items_hierarchy(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_library_tvdb ON library_items(tvdb_id)")
 
 
+def _migrate_emu_catalog(conn: sqlite3.Connection) -> None:
+    """eMuwarez torrent catalog index (populated by the on-demand eMuwarez
+    sync) + the per-library-item comparison result. Purely additive."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS emu_catalog (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            torrent_id TEXT,
+            category TEXT,
+            tmdb_id TEXT,
+            tvdb_id TEXT,
+            season_number INTEGER,
+            resolution TEXT,
+            source TEXT,
+            codec TEXT,
+            has_spanish INTEGER,          -- 1 yes, 0 no, NULL unknown
+            size INTEGER,
+            name TEXT
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_emu_catalog_tmdb ON emu_catalog(tmdb_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_emu_catalog_tvdb ON emu_catalog(tvdb_id, season_number)")
+    # Per-item comparison result (movies + seasons).
+    for col, col_def in [
+        ("emu_in_catalog", "INTEGER"),   # 1 present, 0 not, NULL not computed
+        ("emu_aportes", "TEXT"),          # JSON list of {dim,detail}
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE library_items ADD COLUMN {col} {col_def}")
+        except sqlite3.OperationalError:
+            pass
+
+
 def _migrate_notifications_table(conn: sqlite3.Connection) -> None:
     """In-app notification feed backing the topbar bell. Each row is one event
     (request published, upload completed, request match found, …). read_at is
@@ -1068,6 +1100,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_library_items_media_info(conn)
         _migrate_library_items_hierarchy(conn)
         _migrate_notifications_table(conn)
+        _migrate_emu_catalog(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

@@ -1,6 +1,7 @@
 import type { LibraryItemResponse, InstanceSafeResponse } from '../types/api'
 import { StatusBadge } from './StatusBadge'
 import { SeriesSeasonsSection } from './SeriesSeasonsSection'
+import { EmuComparisonSection } from './EmuComparisonSection'
 import { LibraryActionButtons } from './LibraryActionButtons'
 import type { LibraryActionKind } from './LibraryTreeRow'
 import { formatBytes, formatItemType } from '../utils/format'
@@ -94,6 +95,10 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
           )}
         </div>
       </div>
+
+      {(item.item_type === 'movie' || item.item_type === 'season') && (
+        <EmuComparisonSection itemId={item.id} />
+      )}
 
       {item.item_type === 'series' && (
         <div style={{ marginTop: 28 }}>

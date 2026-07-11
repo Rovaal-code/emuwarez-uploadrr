@@ -185,7 +185,7 @@ export function LibraryPage() {
       // one is active we fetch ALL levels (not just top level) — otherwise a
       // mixed-provider series would hide a season whose episodes are all e.g.
       // Netflix. Without them we keep the top-level tree.
-      const flatFilter = !!(searchProvider || searchQuality)
+      const flatFilter = !!(searchProvider || searchQuality || filterEmu)
       const result = await getLibrary({
         search: search || undefined,
         type: filterType || undefined,
@@ -203,7 +203,7 @@ export function LibraryPage() {
     } finally {
       setLoading(false)
     }
-  }, [search, filterType, filterStatus, filterInstanceId, filterNomenclature, filterRequest, searchProvider, searchQuality, offset])
+  }, [search, filterType, filterStatus, filterInstanceId, filterNomenclature, filterRequest, searchProvider, searchQuality, filterEmu, offset])
 
   useEffect(() => { load() }, [load])
 
@@ -238,25 +238,23 @@ export function LibraryPage() {
   const matchesFilter = (it: LibraryItemResponse) => {
     const provOk = !searchProvider || it.provider_label === searchProvider
     const qualOk = !searchQuality || qualityOf(it) === searchQuality
-    return provOk && qualOk
+    // "candidate" = No (not on eMuwarez), "present" = Sí. A partial series
+    // (emu_in_catalog === 2) matches neither on its own — its Sí/No seasons do,
+    // so filtering surfaces those seasons instead of the misleading series row.
+    const emuOk = !filterEmu || (filterEmu === 'candidate' ? it.emu_in_catalog === 0 : it.emu_in_catalog === 1)
+    return provOk && qualOk && emuOk
   }
-  // With a provider/quality filter active, `items` holds every level. Show the
-  // matching items at the highest matching level: if a whole series matches,
-  // show the series (not each of its seasons); if only some seasons match
-  // (mixed series), show those seasons.
-  const flatFilter = !!(searchProvider || searchQuality)
+  // With a Provider/Calidad/eMuwarez filter active, `items` holds every level.
+  // Show the matching items at the highest matching level: if a whole series
+  // matches, show the series (not each of its seasons); if only some seasons
+  // match (mixed series), show those seasons.
+  const flatFilter = !!(searchProvider || searchQuality || filterEmu)
   let filteredItems: LibraryItemResponse[]
   if (flatFilter) {
     const matchIds = new Set(items.filter(matchesFilter).map(i => i.id))
     filteredItems = items.filter(it => matchIds.has(it.id) && !(it.parent_id != null && matchIds.has(it.parent_id)))
   } else {
     filteredItems = items
-  }
-  // eMuwarez status is a client-side filter over whatever level is shown:
-  // "candidate" = not on the tracker (opportunity), "present" = already there.
-  if (filterEmu) {
-    filteredItems = filteredItems.filter(it =>
-      filterEmu === 'candidate' ? it.emu_in_catalog === 0 : it.emu_in_catalog === 1)
   }
 
   // Modals/overlays, shared by the list view and the detail page so an action
@@ -408,7 +406,7 @@ export function LibraryPage() {
           <option value="">Calidad: Todas</option>
           {qualityOptions.map(q => <option key={q} value={q}>{q}</option>)}
         </select>
-        <select className="form-input form-select" value={filterEmu} onChange={e => { const v = e.target.value; startTransition(() => setFilterEmu(v)) }}>
+        <select className="form-input form-select" value={filterEmu} onChange={e => { setFilterEmu(e.target.value); setOffset(0) }}>
           <option value="">¿En eMuwarez?: Todos</option>
           <option value="present">Sí</option>
           <option value="candidate">No</option>

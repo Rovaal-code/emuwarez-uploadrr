@@ -278,7 +278,12 @@ def _compute_and_store_item_status(conn: sqlite3.Connection) -> int:
         "FROM library_items se JOIN library_items sr ON se.parent_id = sr.id "
         "WHERE se.item_type = 'season'"
     ).fetchall()
-    series_in_cat: dict[int, bool] = {}
+    # For the series rollup we count real seasons on/off eMuwarez. Specials
+    # (season 0/None) are excluded from the count — the tracker rarely carries
+    # them, so counting them would flag almost every complete series as partial
+    # (the special still gets its own "No" badge when you expand the series).
+    series_total: dict[int, int] = {}
+    series_in_count: dict[int, int] = {}
     series_aportes: dict[int, list] = {}
     for s in seasons:
         s = dict(s)
@@ -298,16 +303,28 @@ def _compute_and_store_item_status(conn: sqlite3.Connection) -> int:
         save(s["id"], 1 if matches else 0, aportes)
         # Accumulate into the parent series' rollup.
         pid = s["series_id"]
-        series_in_cat[pid] = series_in_cat.get(pid, False) or bool(matches)
+        if s["season_number"] not in (None, 0):
+            series_total[pid] = series_total.get(pid, 0) + 1
+            series_in_count[pid] = series_in_count.get(pid, 0) + (1 if matches else 0)
         for a in aportes:
             series_aportes.setdefault(pid, [])
             if a["detail"] not in [x["detail"] for x in series_aportes[pid]]:
                 series_aportes[pid].append(a)
 
-    # Series rollup
+    # Series rollup: 0 = no seasons on eMuwarez, 1 = all seasons on eMuwarez,
+    # 2 = partial (some seasons on, some off) — so a mixed series is no longer
+    # hidden behind a plain "Sí".
     for sr in conn.execute("SELECT id FROM library_items WHERE item_type = 'series'").fetchall():
         sid = sr["id"]
-        save(sid, 1 if series_in_cat.get(sid) else 0, series_aportes.get(sid, []))
+        total = series_total.get(sid, 0)
+        incount = series_in_count.get(sid, 0)
+        if total == 0 or incount == 0:
+            status = 0
+        elif incount == total:
+            status = 1
+        else:
+            status = 2
+        save(sid, status, series_aportes.get(sid, []))
 
     conn.commit()
     return updated

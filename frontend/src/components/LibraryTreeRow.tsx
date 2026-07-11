@@ -39,7 +39,9 @@ export function EmuStatusCell({ item }: { item: LibraryItemResponse }) {
   if (item.emu_in_catalog == null) {
     return <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>
   }
-  return <StatusBadge status={item.emu_in_catalog === 0 ? 'No' : 'Sí'} type="emu" />
+  // 0 = No, 1 = Sí, 2 = Parcial (series with some seasons on eMuwarez, some not).
+  const status = item.emu_in_catalog === 0 ? 'No' : item.emu_in_catalog === 2 ? 'Parcial' : 'Sí'
+  return <StatusBadge status={status} type="emu" />
 }
 
 // "Aportes" — what your copy would add: "Nuevo" badge if it's not on the

@@ -44,9 +44,11 @@ const NOMENCLATURE_STATUS_MAP: Record<string, StatusInfo> = {
 // gray like "No adaptada"; "Nuevo" (aportes cell, content not on eMuwarez at
 // all) → green like "Disponible".
 const EMU_STATUS_MAP: Record<string, StatusInfo> = {
-  'No':     { label: 'No',     color: '#22c55e', cssClass: 'status-available' },
-  'Sí':     { label: 'Sí',     color: '#9ca3af', cssClass: 'nom-na' },
-  'Nuevo':  { label: 'Nuevo',  color: '#22c55e', cssClass: 'status-available' },
+  'No':      { label: 'No',      color: '#22c55e', cssClass: 'status-available' },
+  'Sí':      { label: 'Sí',      color: '#9ca3af', cssClass: 'nom-na' },
+  // Series with some seasons on eMuwarez and some not — amber, like other "Parcial".
+  'Parcial': { label: 'Parcial', color: '#f59e0b', cssClass: 'status-partial' },
+  'Nuevo':   { label: 'Nuevo',   color: '#22c55e', cssClass: 'status-available' },
 }
 
 // task_runs.status values written by the backend (services/tasks.py):

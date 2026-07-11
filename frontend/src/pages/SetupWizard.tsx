@@ -92,6 +92,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   const [tmdbKey, setTmdbKey] = useState('')
   const [tmdbLang, setTmdbLang] = useState('es-ES')
   const [tmdbRegion, setTmdbRegion] = useState('ES')
+  const [tmdbLocalizeTitles, setTmdbLocalizeTitles] = useState(true)
   const [tmdbAckSkip, setTmdbAckSkip] = useState(false)
 
   // EMU step state
@@ -241,7 +242,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
     // explicitly skipping. Text + "continuar sin verificar" must be discarded
     // so it never shows as configured in Settings afterwards.
     if (tmdbKey.trim() && !tmdbAckSkip) {
-      await setupTmdb(tmdbKey, tmdbLang, tmdbRegion)
+      await setupTmdb(tmdbKey, tmdbLang, tmdbRegion, tmdbLocalizeTitles)
     }
     setStep('nomenclature')
   })
@@ -552,6 +553,17 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
                     Región usada para detectar en qué plataforma (provider) está disponible cada título.
                   </div>
+                </div>
+                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                  <label className="checkbox-label" style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                    <input type="checkbox" checked={tmdbLocalizeTitles} onChange={e => setTmdbLocalizeTitles(e.target.checked)} style={{ marginTop: 3 }} />
+                    <span>
+                      Traducir títulos de series con TMDb
+                      <span className="form-hint" style={{ display: 'block' }}>
+                        Sonarr toma los títulos de TVDB, a menudo en inglés (p. ej. «Los Serrano» → «The Serrano»). Con esto, las series usan el título de TMDb en el idioma elegido arriba, como ya hace Radarr con las películas. Se consulta a TMDb una vez por serie y se cachea.
+                      </span>
+                    </span>
+                  </label>
                 </div>
               </div>
               {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}

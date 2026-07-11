@@ -764,6 +764,22 @@ def _migrate_library_items_hierarchy(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_library_tvdb ON library_items(tvdb_id)")
 
 
+def _migrate_tmdb_title_cache(conn: sqlite3.Connection) -> None:
+    """Cache of TMDb-resolved titles by (tmdb_id, media_type, language), so the
+    Sonarr title localization only hits TMDb once per series instead of on every
+    library sync. Purely additive."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS tmdb_title_cache (
+            tmdb_id TEXT NOT NULL,
+            media_type TEXT NOT NULL,      -- 'tv' | 'movie'
+            language TEXT NOT NULL,
+            title TEXT,
+            fetched_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (tmdb_id, media_type, language)
+        )
+    """)
+
+
 def _migrate_emu_catalog(conn: sqlite3.Connection) -> None:
     """eMuwarez torrent catalog index (populated by the on-demand eMuwarez
     sync) + the per-library-item comparison result. Purely additive."""
@@ -1125,6 +1141,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_library_items_hierarchy(conn)
         _migrate_notifications_table(conn)
         _migrate_emu_catalog(conn)
+        _migrate_tmdb_title_cache(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

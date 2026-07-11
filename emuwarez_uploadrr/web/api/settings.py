@@ -39,6 +39,7 @@ class SettingsResponse(BaseModel):
     provider_priority_order: list[str]
     tmdb_watch_region: str
     tmdb_language: str
+    tmdb_localize_series_titles: bool = True
     tmdb_api_key_configured: bool
     tmdb_api_key_masked: Optional[str] = None
     # Phase 11A: Emuwarez API key, editable from Settings (not just setup wizard).
@@ -75,6 +76,7 @@ class SettingsUpdateRequest(BaseModel):
     provider_priority_order: Optional[list[str]] = None
     tmdb_watch_region: Optional[str] = None
     tmdb_language: Optional[str] = None
+    tmdb_localize_series_titles: Optional[bool] = None
     tmdb_api_key: Optional[str] = None
     # Phase 11A
     emu_api_key: Optional[str] = None
@@ -173,6 +175,7 @@ def _build_response(conn) -> SettingsResponse:
         provider_priority_order=priority,
         tmdb_watch_region=get_setting(conn, "tmdb_watch_region") or _DEFAULT_REGION,
         tmdb_language=get_setting(conn, "tmdb_language") or _DEFAULT_LANGUAGE,
+        tmdb_localize_series_titles=(get_setting_canonical(conn, "tmdb.localize_series_titles") or "true") != "false",
         tmdb_api_key_configured=configured,
         tmdb_api_key_masked=masked,
         uploadrr_path=get_setting_canonical(conn, "uploadrr.path"),
@@ -252,6 +255,10 @@ def update_settings(
 
         if body.tmdb_language is not None:
             set_setting(conn, "tmdb_language", body.tmdb_language.strip())
+
+        if body.tmdb_localize_series_titles is not None:
+            set_setting(conn, "tmdb.localize_series_titles",
+                        "true" if body.tmdb_localize_series_titles else "false")
 
         if body.tmdb_api_key is not None and body.tmdb_api_key.strip():
             set_setting(conn, "tmdb.api_key", body.tmdb_api_key.strip())

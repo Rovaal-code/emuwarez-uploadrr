@@ -129,6 +129,8 @@ class SetupTmdbRequest(BaseModel):
     api_key: str
     language: Optional[str] = "es-ES"
     region: Optional[str] = "ES"
+    # Replace Sonarr/TVDB series titles (often English) with TMDb localized ones.
+    localize_series_titles: Optional[bool] = True
 
     @field_validator("api_key")
     @classmethod

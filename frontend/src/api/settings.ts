@@ -7,6 +7,7 @@ export interface SettingsData {
   provider_priority_order: string[]
   tmdb_watch_region: string
   tmdb_language: string
+  tmdb_localize_series_titles: boolean
   tmdb_api_key_configured: boolean
   tmdb_api_key_masked: string | null
   emu_api_key_configured: boolean
@@ -36,6 +37,7 @@ export interface SettingsUpdatePayload {
   provider_priority_order?: string[]
   tmdb_watch_region?: string
   tmdb_language?: string
+  tmdb_localize_series_titles?: boolean
   tmdb_api_key?: string
   emu_api_key?: string
   emu_username?: string

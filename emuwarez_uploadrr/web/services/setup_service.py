@@ -78,6 +78,7 @@ def setup_tmdb(
     api_key: str,
     language: str = "es-ES",
     region: str = "ES",
+    localize_series_titles: Optional[bool] = None,
 ) -> None:
     if not api_key.strip():
         raise SetupError("La API key de TMDb no puede estar vacía")
@@ -86,6 +87,8 @@ def setup_tmdb(
         set_setting(conn, "tmdb_language", language.strip())
     if region and region.strip():
         set_setting(conn, "tmdb_watch_region", region.strip())
+    if localize_series_titles is not None:
+        set_setting(conn, "tmdb.localize_series_titles", "true" if localize_series_titles else "false")
 
 
 def setup_emu(

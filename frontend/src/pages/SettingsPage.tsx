@@ -45,6 +45,7 @@ function ConfigTab() {
   const [providerOrder, setProviderOrder] = useState<string[]>([])
   const [region, setRegion] = useState('')
   const [language, setLanguage] = useState('')
+  const [localizeTitles, setLocalizeTitles] = useState(true)
   const [newKey, setNewKey] = useState('')
   const [newEmuKey, setNewEmuKey] = useState('')
   const [emuUsername, setEmuUsername] = useState('')
@@ -59,6 +60,7 @@ function ConfigTab() {
         setProviderOrder(s.provider_priority_order)
         setRegion(s.tmdb_watch_region)
         setLanguage(s.tmdb_language)
+        setLocalizeTitles(s.tmdb_localize_series_titles ?? true)
         setEmuUsername(s.emu_username ?? '')
         setIgnoreSpecials(s.series_ignore_specials ?? true)
         setRecentLimit(s.recent_activity_limit ?? 50)
@@ -111,6 +113,7 @@ function ConfigTab() {
         provider_priority_order: providerOrder,
         tmdb_watch_region: region.trim(),
         tmdb_language: language.trim(),
+        tmdb_localize_series_titles: localizeTitles,
         emu_username: emuUsername.trim(),
         series_ignore_specials: ignoreSpecials,
         recent_activity_limit: recentLimit,
@@ -123,6 +126,7 @@ function ConfigTab() {
       setProviderOrder(updated.provider_priority_order)
       setRegion(updated.tmdb_watch_region)
       setLanguage(updated.tmdb_language)
+      setLocalizeTitles(updated.tmdb_localize_series_titles ?? true)
       setEmuUsername(updated.emu_username ?? '')
       setIgnoreSpecials(updated.series_ignore_specials ?? true)
       setRecentLimit(updated.recent_activity_limit ?? 50)
@@ -255,6 +259,15 @@ function ConfigTab() {
               {LANGUAGE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
+          <label className="checkbox-label" style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 4 }}>
+            <input type="checkbox" checked={localizeTitles} onChange={e => setLocalizeTitles(e.target.checked)} style={{ marginTop: 3 }} />
+            <span style={{ fontSize: 13 }}>
+              Traducir títulos de series con TMDb
+              <span className="form-hint" style={{ display: 'block' }}>
+                Sonarr toma los títulos de TVDB (a menudo en inglés). Con esto, las series usan el título de TMDb en el idioma de arriba (p. ej. «The Serrano» → «Los Serrano»). Se aplica en la próxima sincronización de biblioteca.
+              </span>
+            </span>
+          </label>
         </div>
       </div>
 

@@ -98,10 +98,18 @@ def sync_instance(
                 missing += 1
 
     elif instance.type == "sonarr":
+        from .tmdb_titles import series_titles_localized, resolve_series_title
+        localize_titles = series_titles_localized(conn)
         queue_records = sonarr.get_queue(instance.url, instance.api_key)
         series_queue = sonarr.build_series_queue_map(queue_records)
         ep_queue = sonarr.build_episode_queue_map(queue_records)
         for series in sonarr.get_series(instance.url, instance.api_key):
+            # Sonarr's title is TVDB's (often English). Replace it with TMDb's
+            # localized title so seasons/episodes (which embed it) inherit it too.
+            if localize_titles and series.get("title") and series.get("tmdbId"):
+                series["title"] = resolve_series_title(
+                    conn, series.get("tmdbId"), series["title"]
+                )
             series_item = sonarr.series_to_library_item(
                 series,
                 instance_id=int(instance.id),

@@ -16,7 +16,7 @@ import { RequestFormModal } from '../components/RequestFormModal'
 import { LibraryActionButtons } from '../components/LibraryActionButtons'
 import type { LibraryActionKind } from '../components/LibraryTreeRow'
 import { SyncInfo } from '../components/SyncInfo'
-import { formatBytes, formatDate, formatItemType } from '../utils/format'
+import { formatBytes, formatDate, formatItemType, parseServerDate } from '../utils/format'
 import { posterUrl } from '../utils/libraryItem'
 
 // Phase 11F — the four sub-phases a *running* upload job can be in, in
@@ -53,7 +53,7 @@ const PHASE_LABEL: Record<string, string> = {
 
 function elapsedLabel(startedAt: string | null | undefined, now: number): string {
   if (!startedAt) return '—'
-  const started = new Date(startedAt).getTime()
+  const started = parseServerDate(startedAt).getTime()
   const diffSec = Math.max(0, Math.floor((now - started) / 1000))
   const m = Math.floor(diffSec / 60)
   const sec = diffSec % 60

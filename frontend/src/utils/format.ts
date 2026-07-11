@@ -12,10 +12,20 @@ export function formatBytes(bytes: number | null | undefined): string {
   return `${value.toFixed(1)} ${units[unit]}`
 }
 
+// Backend timestamps are UTC. Some carry a 'Z'/offset (ISO), others are naive
+// ("YYYY-MM-DD HH:MM:SS" from SQLite CURRENT_TIMESTAMP). Browsers parse a naive
+// string as *local* time, which shifts the displayed hour by the tz offset —
+// so treat a timezone-less string as UTC before converting to local.
+export function parseServerDate(dateStr: string): Date {
+  const s = dateStr.trim()
+  const hasTz = /([zZ]|[+-]\d{2}:?\d{2})$/.test(s)
+  return new Date(hasTz ? s.replace(' ', 'T') : s.replace(' ', 'T') + 'Z')
+}
+
 export function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return '—'
   try {
-    return new Date(dateStr).toLocaleString('es-ES', {
+    return parseServerDate(dateStr).toLocaleString('es-ES', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -30,7 +40,7 @@ export function formatDate(dateStr: string | null | undefined): string {
 export function formatDateShort(dateStr: string | null | undefined): string {
   if (!dateStr) return '—'
   try {
-    return new Date(dateStr).toLocaleString('es-ES', {
+    return parseServerDate(dateStr).toLocaleString('es-ES', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',

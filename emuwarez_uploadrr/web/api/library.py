@@ -37,11 +37,12 @@ def _get_conn():
 
 def _ignore_specials(conn) -> bool:
     """User setting: exclude specials (season 0) from a Series' availability /
-    nomenclature rollups. Default False."""
+    nomenclature / eMuwarez rollups. Default True (specials rarely matter and
+    are rarely on the tracker); only an explicit "false" turns it off."""
     if conn is None:
-        return False
+        return True
     from ...database import get_setting_canonical
-    return (get_setting_canonical(conn, "series.ignore_specials") or "") == "true"
+    return (get_setting_canonical(conn, "series.ignore_specials") or "true") != "false"
 
 
 def _specials_clause(alias: str, ignore_specials: bool) -> str:

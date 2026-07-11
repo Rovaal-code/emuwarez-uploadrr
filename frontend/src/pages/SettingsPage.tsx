@@ -48,7 +48,7 @@ function ConfigTab() {
   const [newKey, setNewKey] = useState('')
   const [newEmuKey, setNewEmuKey] = useState('')
   const [emuUsername, setEmuUsername] = useState('')
-  const [ignoreSpecials, setIgnoreSpecials] = useState(false)
+  const [ignoreSpecials, setIgnoreSpecials] = useState(true)
   const [recentLimit, setRecentLimit] = useState(50)
 
   useEffect(() => {
@@ -60,7 +60,7 @@ function ConfigTab() {
         setRegion(s.tmdb_watch_region)
         setLanguage(s.tmdb_language)
         setEmuUsername(s.emu_username ?? '')
-        setIgnoreSpecials(s.series_ignore_specials ?? false)
+        setIgnoreSpecials(s.series_ignore_specials ?? true)
         setRecentLimit(s.recent_activity_limit ?? 50)
       })
       .catch(() => setMsg({ ok: false, text: 'Error cargando configuración' }))
@@ -124,7 +124,7 @@ function ConfigTab() {
       setRegion(updated.tmdb_watch_region)
       setLanguage(updated.tmdb_language)
       setEmuUsername(updated.emu_username ?? '')
-      setIgnoreSpecials(updated.series_ignore_specials ?? false)
+      setIgnoreSpecials(updated.series_ignore_specials ?? true)
       setRecentLimit(updated.recent_activity_limit ?? 50)
       setNewKey('')
       setNewEmuKey('')

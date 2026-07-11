@@ -249,8 +249,9 @@ def _compute_and_store_item_status(conn: sqlite3.Connection) -> int:
             by_tvdb_season.setdefault((c["tvdb_id"], c["season_number"]), []).append(c)
 
     # Honor the same "Ignorar especiales" setting the Estado/Nomenclatura
-    # rollups use, so the three series statuses stay consistent.
-    ignore_specials = (get_setting_canonical(conn, "series.ignore_specials") or "") == "true"
+    # rollups use, so the three series statuses stay consistent. Default True
+    # (only an explicit "false" counts specials).
+    ignore_specials = (get_setting_canonical(conn, "series.ignore_specials") or "true") != "false"
 
     updated = 0
 

@@ -66,7 +66,7 @@ class SettingsResponse(BaseModel):
     notify_discord_events: list[str] = []
     notify_telegram_events: list[str] = []
     # "Otros"
-    series_ignore_specials: bool = False
+    series_ignore_specials: bool = True
     recent_activity_limit: int = 50
 
 
@@ -193,7 +193,7 @@ def _build_response(conn) -> SettingsResponse:
         notify_event_types=[{"code": c, "label": l} for c, l in EVENT_TYPES.items()],
         notify_discord_events=sorted(channel_events(conn, "discord")),
         notify_telegram_events=sorted(channel_events(conn, "telegram")),
-        series_ignore_specials=(get_setting_canonical(conn, "series.ignore_specials") or "") == "true",
+        series_ignore_specials=(get_setting_canonical(conn, "series.ignore_specials") or "true") != "false",
         recent_activity_limit=_read_recent_activity_limit(conn),
     )
 

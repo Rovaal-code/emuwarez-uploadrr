@@ -172,6 +172,9 @@ export function LibraryPage() {
   const [filterInstanceId, setFilterInstanceId] = useState('')
   const [filterNomenclature, setFilterNomenclature] = useState('')
   const [filterRequest, setFilterRequest] = useState('')
+  // Client-side text filters (no backend param) over the loaded items.
+  const [searchProvider, setSearchProvider] = useState('')
+  const [searchQuality, setSearchQuality] = useState('')
   const [offset, setOffset] = useState(0)
 
   const load = useCallback(async () => {
@@ -209,6 +212,14 @@ export function LibraryPage() {
 
   const items = data?.items ?? []
   const total = data?.total ?? 0
+  const filteredItems = items.filter(it => {
+    const provOk = !searchProvider ||
+      (it.provider_label ?? '').toLowerCase().includes(searchProvider.toLowerCase()) ||
+      (it.provider ?? '').toLowerCase().includes(searchProvider.toLowerCase())
+    const qual = [it.resolution, it.source].filter(Boolean).join(' ').toLowerCase()
+    const qualOk = !searchQuality || qual.includes(searchQuality.toLowerCase())
+    return provOk && qualOk
+  })
 
   // Modals/overlays, shared by the list view and the detail page so an action
   // triggered from the detail page (Subir/Petición) shows its window without
@@ -262,47 +273,21 @@ export function LibraryPage() {
             {total > 0 ? `${total} elementos sincronizados` : 'Sin elementos'}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 4 }}>
-          <button
-            className={`btn btn-sm ${viewMode === 'grid' ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setViewMode('grid')}
-            title="Vista de pósters"
-          >
-            ▦ Pósters
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button className="btn btn-secondary btn-sm" onClick={handleRefreshHealth} disabled={diagActionLoading}>
+            Refrescar salud ARR
           </button>
-          <button
-            className={`btn btn-sm ${viewMode === 'grid-lg' ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setViewMode('grid-lg')}
-            title="Vista de pósters grandes"
-          >
-            ▦▦ Pósters grandes
+          <button className="btn btn-secondary btn-sm" onClick={handleVerifyFiles} disabled={diagActionLoading}>
+            Verificar archivos
           </button>
-          <button
-            className={`btn btn-sm ${viewMode === 'list' ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setViewMode('list')}
-            title="Vista de lista"
-          >
-            ☰ Lista
+          <button className="btn btn-secondary btn-sm" onClick={handleRefreshRecommendations} disabled={diagActionLoading}>
+            Recalcular recomendaciones
           </button>
         </div>
       </div>
 
-      {/* Diagnostic toolbar — relocated from the removed Faltantes tab */}
+      {/* Search by title — where the ARR diagnostic buttons used to be */}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
-        <button className="btn btn-secondary btn-sm" onClick={handleRefreshHealth} disabled={diagActionLoading}>
-          Refrescar salud ARR
-        </button>
-        <button className="btn btn-secondary btn-sm" onClick={handleVerifyFiles} disabled={diagActionLoading}>
-          Verificar archivos
-        </button>
-        <button className="btn btn-secondary btn-sm" onClick={handleRefreshRecommendations} disabled={diagActionLoading}>
-          Recalcular recomendaciones
-        </button>
-        {diagActionMsg && <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{diagActionMsg}</span>}
-      </div>
-
-      {/* Filters */}
-      <div className="filters-bar">
         <input
           className="form-input"
           placeholder="Buscar título…"
@@ -311,6 +296,11 @@ export function LibraryPage() {
           onKeyDown={e => e.key === 'Enter' && applyFilters()}
           style={{ minWidth: 220 }}
         />
+        {diagActionMsg && <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{diagActionMsg}</span>}
+      </div>
+
+      {/* Filters + view modes on one line */}
+      <div className="filters-bar">
         <select className="form-input form-select" value={filterType} onChange={e => { setFilterType(e.target.value); setOffset(0) }} style={{ width: 140 }}>
           <option value="">Tipo: Todos</option>
           <option value="movie">Película</option>
@@ -349,7 +339,43 @@ export function LibraryPage() {
           <option value="No compatible">No compatible</option>
           <option value="Llena">Llena</option>
         </select>
-        <button className="btn btn-secondary btn-sm" onClick={applyFilters}>Filtrar</button>
+        <input
+          className="form-input"
+          placeholder="Buscar provider…"
+          value={searchProvider}
+          onChange={e => setSearchProvider(e.target.value)}
+          style={{ width: 160 }}
+        />
+        <input
+          className="form-input"
+          placeholder="Buscar calidad…"
+          value={searchQuality}
+          onChange={e => setSearchQuality(e.target.value)}
+          style={{ width: 160 }}
+        />
+        <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
+          <button
+            className={`btn btn-sm ${viewMode === 'grid' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setViewMode('grid')}
+            title="Vista de pósters"
+          >
+            ▦ Pósters
+          </button>
+          <button
+            className={`btn btn-sm ${viewMode === 'grid-lg' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setViewMode('grid-lg')}
+            title="Vista de pósters grandes"
+          >
+            ▦▦ Pósters grandes
+          </button>
+          <button
+            className={`btn btn-sm ${viewMode === 'list' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setViewMode('list')}
+            title="Vista de lista"
+          >
+            ☰ Lista
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -365,7 +391,7 @@ export function LibraryPage() {
       ) : viewMode === 'grid' ? (
         <div className="activity-section" style={{ padding: 20, flex: 1, minHeight: 0, overflowY: 'auto' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 16 }}>
-            {items.map(item => (
+            {filteredItems.map(item => (
               <PosterCard key={item.id} item={item} instances={instances} onClick={() => setSelected(item)} />
             ))}
           </div>
@@ -373,7 +399,7 @@ export function LibraryPage() {
       ) : viewMode === 'grid-lg' ? (
         <div className="activity-section" style={{ padding: 20, flex: 1, minHeight: 0, overflowY: 'auto' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 20 }}>
-            {items.map(item => (
+            {filteredItems.map(item => (
               <LargePosterCard key={item.id} item={item} instances={instances} onClick={() => setSelected(item)} />
             ))}
           </div>
@@ -398,7 +424,7 @@ export function LibraryPage() {
                 </tr>
               </thead>
               <tbody>
-                {items.map(item => (
+                {filteredItems.map(item => (
                   <LibraryTreeRow
                     key={item.id}
                     item={item}

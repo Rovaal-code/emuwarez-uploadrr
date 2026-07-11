@@ -24,7 +24,23 @@ def _get_conn():
     return conn
 
 
-def _nomenclature_rollup(conn, item_id: int, item_type: str) -> Optional[str]:
+def _ignore_specials(conn) -> bool:
+    """User setting: exclude specials (season 0) from a Series' availability /
+    nomenclature rollups. Default False."""
+    if conn is None:
+        return False
+    from ...database import get_setting_canonical
+    return (get_setting_canonical(conn, "series.ignore_specials") or "") == "true"
+
+
+def _specials_clause(alias: str, ignore_specials: bool) -> str:
+    """SQL fragment excluding season-0 episodes when ignore_specials is on."""
+    if not ignore_specials:
+        return ""
+    return f" AND ({alias}.season_number IS NULL OR {alias}.season_number != 0)"
+
+
+def _nomenclature_rollup(conn, item_id: int, item_type: str, ignore_specials: bool = False) -> Optional[str]:
     """Aggregate the nomenclature status of a Season (from its episodes) or a
     Series (from all its episodes). Only counts episodes that have a real
     nomenclature state (Correcta / No adaptada) — missing episodes (N/A) are
@@ -45,7 +61,9 @@ def _nomenclature_rollup(conn, item_id: int, item_type: str) -> Optional[str]:
         sql = (
             "SELECT e.nomenclature_status AS s, COUNT(*) AS c FROM library_items e "
             "JOIN library_items se ON e.parent_id = se.id "
-            "WHERE se.parent_id = ? AND e.item_type = 'episode' GROUP BY e.nomenclature_status"
+            "WHERE se.parent_id = ? AND e.item_type = 'episode'"
+            + _specials_clause("se", ignore_specials)
+            + " GROUP BY e.nomenclature_status"
         )
     else:
         return None
@@ -62,30 +80,37 @@ def _nomenclature_rollup(conn, item_id: int, item_type: str) -> Optional[str]:
     return "Parcial"
 
 
-def _local_status_rollup(conn, item_id: int) -> Optional[str]:
-    """Availability of a Series aggregated from its seasons (excluding specials,
-    season 0): 'Disponible' only when every season is available, 'Faltante' when
-    none is, 'Parcial' otherwise. Sonarr's own series status counts only
-    monitored/aired episodes, so a series with a downloaded season and other
-    missing seasons wrongly shows 'Disponible' — this fixes that."""
+def _local_status_rollup(conn, item_id: int, item_type: str, ignore_specials: bool = False) -> Optional[str]:
+    """Availability of a Season/Series computed from its real EPISODES, not from
+    Sonarr's own status (which reports 'Disponible' even when episodes are
+    missing). 'Disponible' only when every counted episode has a file,
+    'Faltante' when none does, 'Parcial' otherwise. With ignore_specials on,
+    season-0 episodes are excluded from a Series' count."""
     if conn is None:
         return None
-    counts = {
-        r["s"]: r["c"] for r in conn.execute(
+    if item_type == "season":
+        sql = (
             "SELECT local_status AS s, COUNT(*) AS c FROM library_items "
-            "WHERE parent_id = ? AND item_type = 'season' "
-            "AND (season_number IS NULL OR season_number != 0) GROUP BY local_status",
-            (item_id,),
-        ).fetchall()
-    }
+            "WHERE parent_id = ? AND item_type = 'episode' GROUP BY local_status"
+        )
+    elif item_type == "series":
+        sql = (
+            "SELECT e.local_status AS s, COUNT(*) AS c FROM library_items e "
+            "JOIN library_items se ON e.parent_id = se.id "
+            "WHERE se.parent_id = ? AND e.item_type = 'episode'"
+            + _specials_clause("se", ignore_specials)
+            + " GROUP BY e.local_status"
+        )
+    else:
+        return None
+    counts = {r["s"]: r["c"] for r in conn.execute(sql, (item_id,)).fetchall()}
     total = sum(counts.values())
     if total == 0:
         return None
     available = counts.get("Disponible", 0)
-    partial = counts.get("Parcial", 0)
     if available == total:
         return "Disponible"
-    if available == 0 and partial == 0:
+    if available == 0:
         return "Faltante"
     return "Parcial"
 
@@ -120,14 +145,17 @@ def _to_lib_response(row: dict, conn=None) -> LibraryItemResponse:
     local_status = row["local_status"]
     size_bytes = row.get("size_bytes")
     if row["item_type"] in ("season", "series"):
-        rollup = _nomenclature_rollup(conn, row["id"], row["item_type"])
+        ignore_specials = _ignore_specials(conn)
+        rollup = _nomenclature_rollup(conn, row["id"], row["item_type"], ignore_specials)
         if rollup is not None:
             nomenclature_status = rollup
         rolled_size = _size_rollup(conn, row["id"], row["item_type"])
         if rolled_size is not None:
             size_bytes = rolled_size
-    if row["item_type"] == "series":
-        loc = _local_status_rollup(conn, row["id"])
+        # Availability now rolls up from real episodes (Sonarr's own status
+        # reports 'Disponible' even with missing episodes) — for both seasons
+        # and series.
+        loc = _local_status_rollup(conn, row["id"], row["item_type"], ignore_specials)
         if loc is not None:
             local_status = loc
     return LibraryItemResponse(

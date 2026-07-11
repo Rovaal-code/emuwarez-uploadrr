@@ -26,9 +26,9 @@ import { posterUrl } from '../utils/libraryItem'
 // Fixed height for the "Actividad reciente" / "Actividad de subida" panels so
 // they always match, whether the library is populated or empty. 50% of the
 // viewport height, with internal scroll when the content overflows.
-const ACTIVITY_PANEL_HEIGHT = '50vh'
+const ACTIVITY_PANEL_HEIGHT = '40vh'
 // "Últimas tareas ejecutadas" is half the height of the activity panels.
-const TASKS_PANEL_HEIGHT = '25vh'
+const TASKS_PANEL_HEIGHT = '20vh'
 
 // One row of the "Conexiones" card: icon + label + connected/not-connected badge.
 function ConnRow({ icon, label, ok }: { icon: React.ReactNode; label: string; ok: boolean }) {

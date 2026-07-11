@@ -130,7 +130,7 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, com
       <tr className={canExpand ? 'clickable' : undefined} onClick={canExpand ? toggle : undefined}>
         <td>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: indent }}>
-            {canExpand && (
+            {canExpand ? (
               <button
                 className="btn btn-ghost btn-sm"
                 onClick={e => { e.stopPropagation(); toggle() }}
@@ -139,6 +139,10 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, com
               >
                 {expanded ? '▼' : '▶'}
               </button>
+            ) : (
+              // Leaf rows (episodes, movies) keep the chevron's width so their
+              // content stays aligned one indent level deeper than the parent.
+              <span style={{ width: 22, flexShrink: 0 }} />
             )}
             <div style={{ flexShrink: 0, width: 28, height: 42, borderRadius: 4, overflow: 'hidden', background: 'rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {item.poster_url ? (
@@ -176,7 +180,7 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, com
             )}
           </div>
           {item.year ? (
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', paddingLeft: expandable ? indent + 28 : indent }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', paddingLeft: indent + 28 }}>
               {item.year}
             </div>
           ) : null}

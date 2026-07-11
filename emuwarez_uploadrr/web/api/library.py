@@ -53,12 +53,13 @@ def _specials_clause(alias: str, ignore_specials: bool) -> str:
 
 def _nomenclature_rollup(conn, item_id: int, item_type: str, ignore_specials: bool = False) -> Optional[str]:
     """Aggregate the nomenclature status of a Season (from its episodes) or a
-    Series (from all its episodes). Only counts episodes that have a real
-    nomenclature state (Correcta / No adaptada) — missing episodes (N/A) are
-    ignored. Returns:
-      - 'Correcta'    when every counted episode is adapted,
-      - 'No adaptada' when none is,
-      - 'Parcial'     when some are and some aren't,
+    Series (from all its episodes). 'Correcta' only when EVERY episode is
+    'Correcta' — a missing/unadapted episode (N/A or No adaptada) prevents it.
+    Returns:
+      - 'Correcta'    when every episode is adapted,
+      - 'No adaptada' when none is adapted (and none is N/A),
+      - 'N/A'         when every episode is N/A (nothing to adapt yet),
+      - 'Parcial'     otherwise (a mix),
       - None          when there's nothing to aggregate (keep the row's own).
     """
     if conn is None:
@@ -79,15 +80,17 @@ def _nomenclature_rollup(conn, item_id: int, item_type: str, ignore_specials: bo
     else:
         return None
     counts = {r["s"]: r["c"] for r in conn.execute(sql, (item_id,)).fetchall()}
+    total = sum(counts.values())
+    if total == 0:
+        return None
     correct = counts.get("Correcta", 0)
     not_adapted = counts.get("No adaptada", 0)
-    relevant = correct + not_adapted
-    if relevant == 0:
-        return None
-    if not_adapted == 0:
+    # Correcta only when *every* episode is Correcta (N/A/missing counts against).
+    if correct == total:
         return "Correcta"
     if correct == 0:
-        return "No adaptada"
+        # None adapted: N/A if there's simply nothing to adapt, else No adaptada.
+        return "No adaptada" if not_adapted else "N/A"
     return "Parcial"
 
 

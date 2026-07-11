@@ -32,19 +32,17 @@ interface LibraryTreeRowProps {
 // buttons are placeholders here — the batch action wiring for them lands
 // in Phase 6; showing them disabled-with-explanation now avoids calling
 // single-item endpoints with a rollup id that would error.
-// "¿En eMuwarez?" — 🟢 No = not on the tracker (an upload opportunity),
-// ⚪ Sí = already there, — = catalog not synced yet.
+// "¿En eMuwarez?" — badge (same visual format as Estado/Nomenclatura):
+// "No" = not on the tracker (an upload opportunity, green), "Sí" = already
+// there (neutral gray), — = catalog not synced yet.
 export function EmuStatusCell({ item }: { item: LibraryItemResponse }) {
   if (item.emu_in_catalog == null) {
     return <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>
   }
-  if (item.emu_in_catalog === 0) {
-    return <span style={{ fontSize: 12, color: '#22c55e', fontWeight: 500 }}>🟢 No</span>
-  }
-  return <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>⚪ Sí</span>
+  return <StatusBadge status={item.emu_in_catalog === 0 ? 'No' : 'Sí'} type="emu" />
 }
 
-// "Aportes" — what your copy would add: "Contenido nuevo" if it's not on the
+// "Aportes" — what your copy would add: "Nuevo" badge if it's not on the
 // tracker at all, chips per improvement (resolution / source / codec / ESP),
 // or — when it's there and you add nothing.
 export function EmuAportesCell({ item }: { item: LibraryItemResponse }) {
@@ -52,7 +50,7 @@ export function EmuAportesCell({ item }: { item: LibraryItemResponse }) {
     return <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>
   }
   if (item.emu_in_catalog === 0) {
-    return <span style={{ fontSize: 11.5, color: '#22c55e', fontWeight: 500 }}>Contenido nuevo</span>
+    return <StatusBadge status="Nuevo" type="emu" />
   }
   const aportes = item.emu_aportes ?? []
   if (aportes.length === 0) {
@@ -189,7 +187,7 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, com
         <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
           {item.provider_label ?? '—'}
         </td>
-        <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+        <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
           {[item.resolution, item.source].filter(Boolean).join(' · ') || '—'}
         </td>
         <td style={{ whiteSpace: 'nowrap' }}><EmuStatusCell item={item} /></td>

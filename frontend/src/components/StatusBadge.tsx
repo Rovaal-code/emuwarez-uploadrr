@@ -1,8 +1,8 @@
-import { getLocalStatusInfo, getRequestStatusInfo, getNomenclatureStatusInfo, getTaskStatusInfo } from '../utils/status'
+import { getLocalStatusInfo, getRequestStatusInfo, getNomenclatureStatusInfo, getTaskStatusInfo, getEmuStatusInfo } from '../utils/status'
 
 interface StatusBadgeProps {
   status: string
-  type?: 'local' | 'request' | 'nomenclature' | 'task'
+  type?: 'local' | 'request' | 'nomenclature' | 'task' | 'emu'
 }
 
 export function StatusBadge({ status, type = 'local' }: StatusBadgeProps) {
@@ -19,6 +19,8 @@ export function StatusBadge({ status, type = 'local' }: StatusBadgeProps) {
       ? getNomenclatureStatusInfo(status)
       : type === 'task'
       ? getTaskStatusInfo(status)
+      : type === 'emu'
+      ? getEmuStatusInfo(status)
       : getLocalStatusInfo(status)
 
   return (

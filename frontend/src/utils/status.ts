@@ -39,6 +39,16 @@ const NOMENCLATURE_STATUS_MAP: Record<string, StatusInfo> = {
   'Desconocida':  { label: 'Desconocida',  color: '#6b7280', cssClass: 'nom-unknown' },
 }
 
+// eMuwarez catalog comparison. "No" (not on the tracker) is the actionable
+// opportunity → green like "Disponible"; "Sí" (already there) is neutral →
+// gray like "No adaptada"; "Nuevo" (aportes cell, content not on eMuwarez at
+// all) → green like "Disponible".
+const EMU_STATUS_MAP: Record<string, StatusInfo> = {
+  'No':     { label: 'No',     color: '#22c55e', cssClass: 'status-available' },
+  'Sí':     { label: 'Sí',     color: '#9ca3af', cssClass: 'nom-na' },
+  'Nuevo':  { label: 'Nuevo',  color: '#22c55e', cssClass: 'status-available' },
+}
+
 // task_runs.status values written by the backend (services/tasks.py):
 // 'running' | 'completed' | 'failed'. Keyed by the raw backend value so the
 // dashboard no longer collapses everything to "Desconocido".
@@ -61,6 +71,10 @@ export function getRequestStatusInfo(status: string): StatusInfo {
 
 export function getNomenclatureStatusInfo(status: string): StatusInfo {
   return NOMENCLATURE_STATUS_MAP[status] ?? { label: status, color: '#6b7280', cssClass: 'nom-unknown' }
+}
+
+export function getEmuStatusInfo(status: string): StatusInfo {
+  return EMU_STATUS_MAP[status] ?? { label: status, color: '#6b7280', cssClass: 'status-unknown' }
 }
 
 export function getTaskStatusInfo(status: string | null): StatusInfo {

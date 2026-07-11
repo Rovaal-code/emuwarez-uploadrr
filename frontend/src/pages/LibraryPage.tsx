@@ -306,10 +306,15 @@ export function LibraryPage() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button className="btn btn-primary btn-sm" onClick={handleRefreshHealth} disabled={diagActionLoading}>
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={handleRefreshHealth}
+            disabled={diagActionLoading}
+            title="Sincroniza tu biblioteca con Radarr/Sonarr (estado, calidad, episodios)"
+          >
             {diagActionLoading
               ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Sincronizando…</>
-              : '↻ Sincronizar'}
+              : '↻ Sincronizar biblioteca'}
           </button>
           <button
             className="btn btn-primary btn-sm"

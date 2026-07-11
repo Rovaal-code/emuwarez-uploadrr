@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getLibrary, TOP_LEVEL_PARENT_FILTER } from '../api/library'
 import { getInstances } from '../api/instances'
-import { refreshArrHealth, verifyLibraryFiles, refreshRecommendations } from '../api/diagnostics'
+import { refreshArrHealth } from '../api/diagnostics'
 import type { LibraryItemResponse, LibraryListResponse, InstanceSafeResponse } from '../types/api'
 import { PosterStatusIcon } from '../components/PosterStatusIcon'
 import { LoadingState } from '../components/LoadingState'
@@ -137,33 +137,6 @@ export function LibraryPage() {
     }
   }
 
-  async function handleVerifyFiles() {
-    setDiagActionLoading(true)
-    setDiagActionMsg(null)
-    try {
-      const r = await verifyLibraryFiles()
-      setDiagActionMsg(`Archivos verificados: ${r.items_checked} · Encontrados: ${r.files_found}`)
-      await load()
-    } catch {
-      setDiagActionMsg('Error al verificar archivos')
-    } finally {
-      setDiagActionLoading(false)
-    }
-  }
-
-  async function handleRefreshRecommendations() {
-    setDiagActionLoading(true)
-    setDiagActionMsg(null)
-    try {
-      const r = await refreshRecommendations()
-      setDiagActionMsg(`Recomendaciones actualizadas: ${r.items_updated}`)
-      await load()
-    } catch {
-      setDiagActionMsg('Error al recalcular recomendaciones')
-    } finally {
-      setDiagActionLoading(false)
-    }
-  }
 
   // Filters
   const [search, setSearch] = useState('')
@@ -275,13 +248,9 @@ export function LibraryPage() {
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <button className="btn btn-primary btn-sm" onClick={handleRefreshHealth} disabled={diagActionLoading}>
-            Sincronizar
-          </button>
-          <button className="btn btn-primary btn-sm" onClick={handleVerifyFiles} disabled={diagActionLoading}>
-            Verificar
-          </button>
-          <button className="btn btn-primary btn-sm" onClick={handleRefreshRecommendations} disabled={diagActionLoading}>
-            Recomendaciones
+            {diagActionLoading
+              ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Sincronizando…</>
+              : '↻ Sincronizar'}
           </button>
         </div>
       </div>

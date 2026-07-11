@@ -139,7 +139,7 @@ function ConfigTab() {
   if (loading) return <p style={{ padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>Cargando…</p>
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 1040 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 1400 }}>
       {msg && (
         <div style={{
           padding: '10px 14px', borderRadius: 6, fontSize: 13,
@@ -151,7 +151,7 @@ function ConfigTab() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 16, alignItems: 'stretch' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16, alignItems: 'stretch' }}>
       <div className="placeholder-card">
         <h3 style={{ marginTop: 0, marginBottom: 14 }}>TMDb</h3>
         <div className="form-group" style={{ marginBottom: 12 }}>
@@ -757,7 +757,7 @@ function NotificationsTab() {
   if (loading) return <p style={{ padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>Cargando…</p>
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 640 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 1400 }}>
       {msg && (
         <div style={{
           padding: '10px 14px', borderRadius: 6, fontSize: 13,
@@ -769,6 +769,7 @@ function NotificationsTab() {
         </div>
       )}
 
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16, alignItems: 'stretch' }}>
       <div className="placeholder-card">
         <h3 style={{ marginTop: 0, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
           <ServiceIcon type="discord" size={20} /> Discord
@@ -843,6 +844,7 @@ function NotificationsTab() {
           disabled={!telegramEnabled}
           onToggle={(code, checked) => toggleEvent(setTelegramEvents, code, checked)}
         />
+      </div>
       </div>
 
       <div>

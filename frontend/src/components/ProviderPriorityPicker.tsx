@@ -59,7 +59,7 @@ export function ProviderPriorityPicker({ order, onChange }: ProviderPriorityPick
         </p>
       )}
       {order.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10, maxHeight: 220, overflowY: 'auto' }}>
           {order.map((code, idx) => {
             const opt = options.find(p => p.code === code)
             return (
@@ -99,7 +99,7 @@ export function ProviderPriorityPicker({ order, onChange }: ProviderPriorityPick
           <summary style={{ cursor: 'pointer', fontSize: 12, color: 'var(--text-secondary)' }}>
             + Añadir provider ({available.length} disponibles)
           </summary>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 4, marginTop: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 4, marginTop: 8, maxHeight: 200, overflowY: 'auto' }}>
             {available.map(opt => (
               <label key={opt.code} className="checkbox-label" style={{ fontSize: 12 }}>
                 <input type="checkbox" checked={false} onChange={() => enable(opt.code)} /> {opt.label}

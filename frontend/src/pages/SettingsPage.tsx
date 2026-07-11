@@ -151,7 +151,7 @@ function ConfigTab() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 16, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 16, alignItems: 'stretch' }}>
       <div className="placeholder-card">
         <h3 style={{ marginTop: 0, marginBottom: 14 }}>TMDb</h3>
         <div className="form-group" style={{ marginBottom: 12 }}>

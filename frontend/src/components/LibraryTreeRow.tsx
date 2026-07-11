@@ -124,7 +124,7 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, com
 
   return (
     <>
-      <tr className="clickable" onClick={() => canExpand ? toggle() : onSelect(item)}>
+      <tr className={canExpand ? 'clickable' : undefined} onClick={canExpand ? toggle : undefined}>
         <td>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: indent }}>
             {canExpand && (
@@ -152,7 +152,13 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, com
                 </span>
               )}
             </div>
-            <div style={{ fontWeight: 500 }}>{item.title}</div>
+            <div
+              className="lib-title-link"
+              onClick={e => { e.stopPropagation(); onSelect(item) }}
+              title="Abrir ficha"
+            >
+              {item.title}
+            </div>
             {deepLink && (
               <a
                 href={deepLink}

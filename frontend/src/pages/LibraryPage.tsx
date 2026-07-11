@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useTransition } from 'react'
 import { getLibrary, TOP_LEVEL_PARENT_FILTER, getLibraryFilterOptions, getEmuSyncStatus, emuSync, type EmuSyncStatus } from '../api/library'
 import { getInstances } from '../api/instances'
 import { refreshArrHealth } from '../api/diagnostics'
@@ -90,6 +90,12 @@ function PosterCard({ item, instances, onClick }: { item: LibraryItemResponse; i
 export function LibraryPage() {
   const [data, setData] = useState<LibraryListResponse | null>(null)
   const [loading, setLoading] = useState(true)
+  // Applying a Provider/Calidad filter fetches every level (up to LOAD_LIMIT)
+  // and re-renders a large list — a synchronous commit that briefly froze the
+  // UI after `loading` had already flipped back to false. Committing the data
+  // (and the client-side filter changes) inside a transition keeps `isPending`
+  // true through that heavy render so we can keep showing "Cargando…".
+  const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<LibraryItemResponse | null>(null)
   // Only opened from the "Pósters grandes" view — the small modal (grid/list) stays as-is.
@@ -191,7 +197,7 @@ export function LibraryPage() {
         limit: LOAD_LIMIT,
         offset,
       })
-      setData(result)
+      startTransition(() => setData(result))
     } catch {
       setError('Error al cargar la biblioteca')
     } finally {
@@ -402,7 +408,7 @@ export function LibraryPage() {
           <option value="">Calidad: Todas</option>
           {qualityOptions.map(q => <option key={q} value={q}>{q}</option>)}
         </select>
-        <select className="form-input form-select" value={filterEmu} onChange={e => setFilterEmu(e.target.value)}>
+        <select className="form-input form-select" value={filterEmu} onChange={e => { const v = e.target.value; startTransition(() => setFilterEmu(v)) }}>
           <option value="">eMuwarez: Todos</option>
           <option value="candidate">No está (subible)</option>
           <option value="present">Ya está</option>
@@ -435,7 +441,7 @@ export function LibraryPage() {
         </div>
       </div>
 
-      {loading ? (
+      {loading || isPending ? (
         <LoadingState label="Cargando biblioteca…" />
       ) : error ? (
         <ErrorState message={error} onRetry={load} />

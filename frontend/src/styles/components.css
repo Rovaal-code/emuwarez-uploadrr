@@ -307,6 +307,24 @@
   cursor: pointer;
 }
 
+/* Library list: only the title navigates to the dedicated detail card, so it
+   gets its own affordance (pointer + highlight on hover) to make that clear. */
+.lib-title-link {
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-block;
+  border-radius: 4px;
+  transition: color 0.12s ease, text-decoration-color 0.12s ease;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 2px;
+}
+
+.lib-title-link:hover {
+  color: var(--text-accent);
+  text-decoration-color: var(--text-accent);
+}
+
 .data-table .col-actions {
   text-align: left;
   white-space: nowrap;

@@ -38,3 +38,7 @@ export async function testInstance(id: number): Promise<InstanceTestResponse> {
 export async function syncInstance(id: number): Promise<SyncResponse> {
   return api.post<SyncResponse>(`/instances/${id}/sync`)
 }
+
+export async function deleteInstance(id: number): Promise<OkResponse> {
+  return api.delete<OkResponse>(`/instances/${id}`)
+}

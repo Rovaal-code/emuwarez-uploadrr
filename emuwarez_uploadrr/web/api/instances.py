@@ -96,6 +96,22 @@ def update_instance_endpoint(
     return _row_to_safe(dict(row))
 
 
+@router.delete("/{instance_id}", response_model=OkResponse)
+def delete_instance_endpoint(
+    instance_id: int,
+    current_user: dict = Depends(require_auth),
+) -> OkResponse:
+    """Delete an instance. Its synced library items are left untouched (they
+    just stop being refreshed); the user can clean them via a re-sync."""
+    from emuwarez_uploadrr.services.instances import get_instance, remove_instance
+    with _get_conn() as conn:
+        inst = get_instance(conn, instance_id)
+        if not inst:
+            raise HTTPException(status_code=404, detail="Instancia no encontrada")
+        remove_instance(conn, instance_id)
+    return OkResponse(message=f"Instancia '{inst.name}' eliminada")
+
+
 @router.post("/{instance_id}/test", response_model=InstanceTestResponse)
 def test_instance(
     instance_id: int,

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getInstances, addInstance, updateInstance, testInstance, syncInstance } from '../api/instances'
+import { getInstances, addInstance, updateInstance, testInstance, syncInstance, deleteInstance } from '../api/instances'
 import { refreshArrHealth } from '../api/diagnostics'
 import { testArrConnection, type IntegrationTestResult } from '../api/integrationTests'
 import type { InstanceSafeResponse } from '../types/api'
@@ -151,6 +151,16 @@ export function InstancesPage() {
     }
   }
 
+  async function handleDelete(inst: { id: number; name: string }) {
+    if (!window.confirm(`¿Eliminar la instancia «${inst.name}»? Su contenido sincronizado dejará de actualizarse.`)) return
+    try {
+      await deleteInstance(inst.id)
+      await load()
+    } catch (e: unknown) {
+      window.alert(e instanceof Error ? e.message : 'No se pudo eliminar la instancia')
+    }
+  }
+
   async function handleRefreshHealth() {
     setHealthLoading(true)
     setHealthMsg(null)
@@ -257,7 +267,7 @@ export function InstancesPage() {
               </div>
               <div className="form-group">
                 <label className="form-label">Nombre</label>
-                <input className="form-input" placeholder={form.type === 'sonarr' ? 'Sonarr principal' : 'Radarr principal'} value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} required />
+                <input className="form-input" placeholder={form.type === 'sonarr' ? 'Sonarr principal' : 'Radarr principal'} value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} maxLength={15} required />
               </div>
               <div className="form-group">
                 <label className="form-label">URL</label>
@@ -311,7 +321,7 @@ export function InstancesPage() {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 10 }}>
                     <div className="form-group">
                       <label className="form-label">Nombre</label>
-                      <input className="form-input" value={editForm.name} onChange={e => setEditForm(p => p && ({ ...p, name: e.target.value }))} />
+                      <input className="form-input" value={editForm.name} onChange={e => setEditForm(p => p && ({ ...p, name: e.target.value }))} maxLength={15} />
                     </div>
                     <div className="form-group">
                       <label className="form-label">URL</label>
@@ -384,6 +394,9 @@ export function InstancesPage() {
                     </button>
                     <button className="btn btn-secondary btn-sm" onClick={() => startEdit(inst)}>
                       Editar
+                    </button>
+                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(inst)}>
+                      Eliminar
                     </button>
                   </div>
                 </>

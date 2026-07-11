@@ -1,6 +1,7 @@
 """Pydantic request/response schemas for the web API."""
 from __future__ import annotations
 
+import re
 from typing import Any, Optional
 from pydantic import BaseModel, field_validator
 
@@ -276,12 +277,25 @@ class AddInstanceRequest(BaseModel):
             raise ValueError(f"El tipo debe ser uno de: {', '.join(_VALID_INSTANCE_TYPES)}")
         return v
 
+    @field_validator("name")
+    @classmethod
+    def valid_name(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("El nombre no puede estar vacío")
+        if len(v) > 15:
+            raise ValueError("El nombre no puede superar los 15 caracteres")
+        return v
+
     @field_validator("url")
     @classmethod
     def url_not_empty(cls, v: str) -> str:
-        if not v.strip():
+        v = v.strip()
+        if not v:
             raise ValueError("La URL no puede estar vacía")
-        return v.strip()
+        if not re.match(r"^https?://[^\s/]+", v):
+            raise ValueError("La URL debe empezar por http:// o https:// e incluir un host válido")
+        return v
 
     @field_validator("api_key")
     @classmethod

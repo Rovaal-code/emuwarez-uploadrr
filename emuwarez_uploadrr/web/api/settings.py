@@ -65,6 +65,9 @@ class SettingsResponse(BaseModel):
     notify_event_types: list[dict] = []
     notify_discord_events: list[str] = []
     notify_telegram_events: list[str] = []
+    # "Otros"
+    series_ignore_specials: bool = False
+    recent_activity_limit: int = 50
 
 
 class SettingsUpdateRequest(BaseModel):
@@ -92,6 +95,8 @@ class SettingsUpdateRequest(BaseModel):
     notify_telegram_chat_id: Optional[str] = None
     notify_discord_events: Optional[list[str]] = None
     notify_telegram_events: Optional[list[str]] = None
+    series_ignore_specials: Optional[bool] = None
+    recent_activity_limit: Optional[int] = None
 
 
 def _normalize_allowed_roots(value: list[str] | str) -> list[str]:
@@ -100,6 +105,18 @@ def _normalize_allowed_roots(value: list[str] | str) -> list[str]:
     else:
         parts = value
     return [p.strip() for p in parts if p and p.strip()]
+
+
+_RECENT_ACTIVITY_CHOICES = (50, 100, 150, 200, 250, 300)
+
+
+def _read_recent_activity_limit(conn) -> int:
+    raw = get_setting_canonical(conn, "dashboard.recent_activity_limit")
+    try:
+        val = int(raw) if raw else 50
+    except (TypeError, ValueError):
+        return 50
+    return val if val in _RECENT_ACTIVITY_CHOICES else 50
 
 
 def _clean_event_csv(codes: list[str]) -> str:
@@ -176,6 +193,8 @@ def _build_response(conn) -> SettingsResponse:
         notify_event_types=[{"code": c, "label": l} for c, l in EVENT_TYPES.items()],
         notify_discord_events=sorted(channel_events(conn, "discord")),
         notify_telegram_events=sorted(channel_events(conn, "telegram")),
+        series_ignore_specials=(get_setting_canonical(conn, "series.ignore_specials") or "") == "true",
+        recent_activity_limit=_read_recent_activity_limit(conn),
     )
 
 
@@ -279,6 +298,14 @@ def update_settings(
 
         if body.notify_telegram_events is not None:
             set_setting(conn, "notify.telegram.events", _clean_event_csv(body.notify_telegram_events))
+
+        if body.series_ignore_specials is not None:
+            set_setting(conn, "series.ignore_specials", "true" if body.series_ignore_specials else "false")
+
+        if body.recent_activity_limit is not None:
+            if body.recent_activity_limit not in _RECENT_ACTIVITY_CHOICES:
+                raise HTTPException(status_code=422, detail=f"recent_activity_limit debe ser uno de {_RECENT_ACTIVITY_CHOICES}")
+            set_setting(conn, "dashboard.recent_activity_limit", str(body.recent_activity_limit))
 
         conn.commit()
         return _build_response(conn)

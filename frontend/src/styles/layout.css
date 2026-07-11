@@ -305,6 +305,21 @@
   color: var(--text-muted);
 }
 
+.topbar-eye {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 2px;
+  border-radius: 4px;
+}
+
+.topbar-eye:hover {
+  color: var(--text-primary);
+}
+
 /* Main content area */
 .main-content {
   flex: 1;

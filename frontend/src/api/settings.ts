@@ -27,6 +27,8 @@ export interface SettingsData {
   notify_event_types: { code: string; label: string }[]
   notify_discord_events: string[]
   notify_telegram_events: string[]
+  series_ignore_specials: boolean
+  recent_activity_limit: number
 }
 
 export interface SettingsUpdatePayload {
@@ -49,6 +51,8 @@ export interface SettingsUpdatePayload {
   notify_telegram_chat_id?: string
   notify_discord_events?: string[]
   notify_telegram_events?: string[]
+  series_ignore_specials?: boolean
+  recent_activity_limit?: number
 }
 
 export function fetchSettings(): Promise<SettingsData> {

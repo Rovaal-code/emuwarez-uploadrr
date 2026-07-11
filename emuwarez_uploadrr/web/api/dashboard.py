@@ -147,7 +147,7 @@ def dashboard_activity(current_user: dict = Depends(require_auth)) -> DashboardA
 
 @router.get("/library-activity", response_model=LibraryListResponse)
 def dashboard_library_activity(
-    limit: int = Query(default=10, ge=1, le=50),
+    limit: int = Query(default=50, ge=1, le=300),
     current_user: dict = Depends(require_auth),
 ) -> LibraryListResponse:
     """Phase 11F — 'Actividad reciente': library items prioritized by EMU

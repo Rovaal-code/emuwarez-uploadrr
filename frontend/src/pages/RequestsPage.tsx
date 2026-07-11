@@ -200,7 +200,7 @@ function DetailPanel({ item, readiness, onClose, onReviewed, onShowCandidates }:
   )
 }
 
-const PAGE_SIZE = 50
+const PAGE_SIZE = 2000  // show everything in one scrollable container (like Biblioteca)
 
 export function RequestsPage() {
   const [items, setItems] = useState<RequestItemResponse[]>([])
@@ -329,8 +329,8 @@ export function RequestsPage() {
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1
 
   return (
-    <div className="page-split" style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
+    <div className="page-split" style={{ display: 'flex', gap: 16, alignItems: 'flex-start', height: '100%' }}>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', height: '100%' }}>
         <div className="page-header">
           <div>
             <div className="page-title">Peticiones eMuwarez</div>
@@ -376,6 +376,7 @@ export function RequestsPage() {
           </select>
         </div>
 
+        <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
         {loading ? (
           <LoadingState label="Cargando peticiones…" />
         ) : error ? (
@@ -449,6 +450,7 @@ export function RequestsPage() {
             )}
           </>
         )}
+        </div>
       </div>
 
       {selectedId !== null && (

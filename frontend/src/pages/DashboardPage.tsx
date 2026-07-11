@@ -99,21 +99,23 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
   const loadData = useCallback(async () => {
     setLoadingData(true)
     setDataError(null)
+    // Settings first, so "Actividad reciente" honours the configured limit.
+    const cfg = await fetchSettings().catch(() => null)
+    if (cfg) setConnSettings(cfg)
+    const recentLimit = cfg?.recent_activity_limit ?? 50
     // Promise.allSettled never rejects — each branch's own status carries
     // its outcome, so failures are handled per-item below, not via catch.
-    const [s, a, la, up, cfg] = await Promise.allSettled([
+    const [s, a, la, up] = await Promise.allSettled([
       getDashboardSummary(),
       getDashboardActivity(),
-      getDashboardLibraryActivity(50),
+      getDashboardLibraryActivity(recentLimit),
       getUploads({ status: 'running', limit: 50 }),
-      fetchSettings(),
     ])
     if (s.status === 'fulfilled') setSummary(s.value)
     else setDataError('No se pudieron cargar los datos del dashboard')
     if (a.status === 'fulfilled') setTaskActivity(a.value)
     if (la.status === 'fulfilled') setLibraryActivity(la.value.items)
     if (up.status === 'fulfilled') setActiveUploads(up.value)
-    if (cfg.status === 'fulfilled') setConnSettings(cfg.value)
     setLoadingData(false)
   }, [])
 
@@ -240,7 +242,7 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
             ejecutadas" (25vh) stacked under it, so tasks sits parallel to the
             "Conexiones" card in the right column. */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div className="activity-section" style={{ height: ACTIVITY_PANEL_HEIGHT, display: 'flex', flexDirection: 'column' }}>
+          <div className="activity-section" style={{ height: ACTIVITY_PANEL_HEIGHT, display: 'flex', flexDirection: 'column', marginBottom: 0 }}>
             <div className="section-header">
               <div className="section-title">Actividad reciente</div>
             </div>
@@ -318,7 +320,7 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
           </div>
 
           {/* Últimas tareas ejecutadas — parallel to "Conexiones" on the right. */}
-          <div className="activity-section" style={{ height: TASKS_PANEL_HEIGHT, display: 'flex', flexDirection: 'column' }}>
+          <div className="activity-section" style={{ height: TASKS_PANEL_HEIGHT, display: 'flex', flexDirection: 'column', marginBottom: 0 }}>
             <div className="section-header">
               <div className="section-title">Últimas tareas ejecutadas</div>
             </div>

@@ -133,8 +133,8 @@ def sync_emu_requests(
     task_id = start_task(conn, "sync-emu-requests", "Sincronizando peticiones EMU")
     cfg = load_app_config(passphrase=passphrase)
     if not cfg or not getattr(cfg, "emu_api_key", None):
-        finish_task(conn, task_id, TaskStatus.FAILED.value, "No hay API key EMU configurada")
-        raise IntegrationError("No hay API key EMU configurada")
+        finish_task(conn, task_id, TaskStatus.FAILED.value, "No hay API Key de eMuwarez configurada")
+        raise IntegrationError("No hay API Key de eMuwarez configurada")
 
     try:
         raw_items = emu.emu_fetch_all_pages(cfg.emu_api_key)
@@ -170,8 +170,8 @@ def sync_requests(
     task_id = start_task(conn, "sync-emu-requests", "Sincronizando peticiones EMU")
     cfg = load_app_config(passphrase=passphrase)
     if not cfg or not getattr(cfg, "emu_api_key", None):
-        finish_task(conn, task_id, TaskStatus.FAILED.value, "No hay API key EMU configurada")
-        raise IntegrationError("No hay API key EMU configurada")
+        finish_task(conn, task_id, TaskStatus.FAILED.value, "No hay API Key de eMuwarez configurada")
+        raise IntegrationError("No hay API Key de eMuwarez configurada")
     try:
         raw = emu.get_requests(
             cfg.emu_api_key,

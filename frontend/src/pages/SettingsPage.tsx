@@ -48,6 +48,8 @@ function ConfigTab() {
   const [newKey, setNewKey] = useState('')
   const [newEmuKey, setNewEmuKey] = useState('')
   const [emuUsername, setEmuUsername] = useState('')
+  const [ignoreSpecials, setIgnoreSpecials] = useState(false)
+  const [recentLimit, setRecentLimit] = useState(50)
 
   useEffect(() => {
     fetchSettings()
@@ -58,6 +60,8 @@ function ConfigTab() {
         setRegion(s.tmdb_watch_region)
         setLanguage(s.tmdb_language)
         setEmuUsername(s.emu_username ?? '')
+        setIgnoreSpecials(s.series_ignore_specials ?? false)
+        setRecentLimit(s.recent_activity_limit ?? 50)
       })
       .catch(() => setMsg({ ok: false, text: 'Error cargando configuración' }))
       .finally(() => setLoading(false))
@@ -108,6 +112,8 @@ function ConfigTab() {
         tmdb_watch_region: region.trim(),
         tmdb_language: language.trim(),
         emu_username: emuUsername.trim(),
+        series_ignore_specials: ignoreSpecials,
+        recent_activity_limit: recentLimit,
       }
       if (newKey.trim()) payload.tmdb_api_key = newKey.trim()
       if (newEmuKey.trim()) payload.emu_api_key = newEmuKey.trim()
@@ -118,6 +124,8 @@ function ConfigTab() {
       setRegion(updated.tmdb_watch_region)
       setLanguage(updated.tmdb_language)
       setEmuUsername(updated.emu_username ?? '')
+      setIgnoreSpecials(updated.series_ignore_specials ?? false)
+      setRecentLimit(updated.recent_activity_limit ?? 50)
       setNewKey('')
       setNewEmuKey('')
       setMsg({ ok: true, text: '✓ Configuración guardada' })
@@ -131,7 +139,7 @@ function ConfigTab() {
   if (loading) return <p style={{ padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>Cargando…</p>
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 640 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 1040 }}>
       {msg && (
         <div style={{
           padding: '10px 14px', borderRadius: 6, fontSize: 13,
@@ -143,6 +151,7 @@ function ConfigTab() {
         </div>
       )}
 
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 16, alignItems: 'start' }}>
       <div className="placeholder-card">
         <h3 style={{ marginTop: 0, marginBottom: 14 }}>TMDb</h3>
         <div className="form-group" style={{ marginBottom: 12 }}>
@@ -265,6 +274,29 @@ function ConfigTab() {
           <ProviderPriorityPicker order={providerOrder} onChange={setProviderOrder} />
           <span className="form-hint">Se usa para elegir automáticamente el provider cuando TMDb devuelve varios. Arrastra para reordenar.</span>
         </div>
+      </div>
+
+      <div className="placeholder-card">
+        <h3 style={{ marginTop: 0, marginBottom: 14 }}>Otros</h3>
+        <div className="form-group" style={{ marginBottom: 14 }}>
+          <label className="checkbox-label" style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+            <input type="checkbox" checked={ignoreSpecials} onChange={e => setIgnoreSpecials(e.target.checked)} style={{ marginTop: 3 }} />
+            <span>
+              Ignorar episodios especiales en el estado de una serie
+              <span className="form-hint" style={{ display: 'block' }}>
+                Si tienes todas las temporadas y capítulos salvo los de la temporada especial (temporada 0), el estado global de la serie será «Disponible».
+              </span>
+            </span>
+          </label>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Elementos en «Actividad reciente»</label>
+          <select className="form-input form-select" value={recentLimit} onChange={e => setRecentLimit(Number(e.target.value))}>
+            {[50, 100, 150, 200, 250, 300].map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+          <span className="form-hint">Cuántos elementos muestra el panel «Actividad reciente» del dashboard.</span>
+        </div>
+      </div>
       </div>
 
       <div>

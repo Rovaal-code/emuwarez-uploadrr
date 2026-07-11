@@ -154,6 +154,11 @@ export function LibraryPage() {
     setLoading(true)
     setError(null)
     try {
+      // Provider/quality are rollups computed across the hierarchy, so when
+      // one is active we fetch ALL levels (not just top level) — otherwise a
+      // mixed-provider series would hide a season whose episodes are all e.g.
+      // Netflix. Without them we keep the top-level tree.
+      const flatFilter = !!(searchProvider || searchQuality)
       const result = await getLibrary({
         search: search || undefined,
         type: filterType || undefined,
@@ -161,10 +166,7 @@ export function LibraryPage() {
         instance_id: filterInstanceId ? Number(filterInstanceId) : undefined,
         nomenclature: filterNomenclature || undefined,
         request_status: filterRequest || undefined,
-        // Top level only — series/season/episode hierarchy is browsed by
-        // expanding LibraryTreeRow, never flooding this list with raw
-        // episodes/seasons.
-        parent_id: TOP_LEVEL_PARENT_FILTER,
+        parent_id: flatFilter ? undefined : TOP_LEVEL_PARENT_FILTER,
         limit: LOAD_LIMIT,
         offset,
       })
@@ -174,7 +176,7 @@ export function LibraryPage() {
     } finally {
       setLoading(false)
     }
-  }, [search, filterType, filterStatus, filterInstanceId, filterNomenclature, filterRequest, offset])
+  }, [search, filterType, filterStatus, filterInstanceId, filterNomenclature, filterRequest, searchProvider, searchQuality, offset])
 
   useEffect(() => { load() }, [load])
 
@@ -186,18 +188,31 @@ export function LibraryPage() {
   const items = data?.items ?? []
   const total = data?.total ?? 0
   const qualityOf = (it: LibraryItemResponse) => [it.resolution, it.source].filter(Boolean).join(' · ')
-  // Options for the dropdowns: only providers/qualities actually present now.
+  // Options for the dropdowns: providers/qualities actually present now.
   const providerOptions = Array.from(
     new Set(items.map(i => i.provider_label).filter(Boolean) as string[])
   ).sort((a, b) => a.localeCompare(b))
   const qualityOptions = Array.from(
     new Set(items.map(qualityOf).filter(Boolean))
   ).sort((a, b) => a.localeCompare(b))
-  const filteredItems = items.filter(it => {
+
+  const matchesFilter = (it: LibraryItemResponse) => {
     const provOk = !searchProvider || it.provider_label === searchProvider
     const qualOk = !searchQuality || qualityOf(it) === searchQuality
     return provOk && qualOk
-  })
+  }
+  // With a provider/quality filter active, `items` holds every level. Show the
+  // matching items at the highest matching level: if a whole series matches,
+  // show the series (not each of its seasons); if only some seasons match
+  // (mixed series), show those seasons.
+  const flatFilter = !!(searchProvider || searchQuality)
+  let filteredItems: LibraryItemResponse[]
+  if (flatFilter) {
+    const matchIds = new Set(items.filter(matchesFilter).map(i => i.id))
+    filteredItems = items.filter(it => matchIds.has(it.id) && !(it.parent_id != null && matchIds.has(it.parent_id)))
+  } else {
+    filteredItems = items
+  }
 
   // Modals/overlays, shared by the list view and the detail page so an action
   // triggered from the detail page (Subir/Petición) shows its window without

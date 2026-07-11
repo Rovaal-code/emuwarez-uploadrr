@@ -23,6 +23,24 @@ def isolated_db(tmp_path, monkeypatch):
     yield tmp_path
 
 
+@pytest.fixture(autouse=True)
+def _default_instance_connection_ok(monkeypatch):
+    """The create-instance endpoint (POST /api/instances) now verifies the
+    Radarr/Sonarr connection before persisting. Test fixtures create instances
+    with fake URLs/keys, so default that check to OK here — tests that exercise
+    the rejection path patch ``test_connection_params`` themselves (inner patch
+    wins). Only affects the create flow; per-instance /test endpoints mock the
+    real *arr client separately."""
+    try:
+        import emuwarez_uploadrr.services.instances as _inst
+    except Exception:
+        return
+    monkeypatch.setattr(
+        _inst, "test_connection_params",
+        lambda *a, **k: {"ok": True, "version": "test"}, raising=False,
+    )
+
+
 @pytest.fixture
 def client(isolated_db):
     """TestClient with a freshly created app (DB is already isolated)."""

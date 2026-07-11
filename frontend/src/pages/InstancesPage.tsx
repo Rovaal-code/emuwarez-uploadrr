@@ -285,7 +285,7 @@ export function InstancesPage() {
             {addError && <div className="alert alert-error" style={{ marginBottom: 12 }}>{addError}</div>}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <button type="submit" className="btn btn-primary btn-sm" disabled={adding}>
-                {adding ? 'Añadiendo…' : 'Añadir'}
+                {adding ? 'Probando conexión…' : 'Añadir'}
               </button>
               <button type="button" className="btn btn-secondary btn-sm" onClick={handleAddTest} disabled={addTesting}>
                 {addTesting ? 'Probando…' : 'Probar conexión'}

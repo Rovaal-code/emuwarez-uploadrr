@@ -13,6 +13,8 @@ from emuwarez_uploadrr.database import connect, db_path, init_db
 
 
 def _add_instance(client, auth_headers, *, type="radarr", name="Test", url="http://x:7878", api_key="key123"):
+    # The create endpoint verifies the *arr connection before persisting; the
+    # conftest autouse fixture defaults that check to OK for these fake URLs.
     resp = client.post(
         "/api/instances",
         json={"type": type, "name": name, "url": url, "api_key": api_key},
@@ -49,6 +51,60 @@ def test_create_invalid_type_rejected(client, auth_headers):
         headers=auth_headers,
     )
     assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Create verifies the *arr connection before persisting — a well-formed but
+# unreachable/unauthorized instance must be rejected (400) and NOT created.
+# ---------------------------------------------------------------------------
+
+def test_create_rejects_unreachable_instance_and_does_not_persist(client, auth_headers):
+    with patch(
+        "emuwarez_uploadrr.services.instances.test_connection_params",
+        return_value={"ok": False, "error": "401 Unauthorized"},
+    ):
+        resp = client.post(
+            "/api/instances",
+            json={"type": "radarr", "name": "Bad One", "url": "http://nope:7878", "api_key": "wrong"},
+            headers=auth_headers,
+        )
+    assert resp.status_code == 400
+    assert "401 Unauthorized" in resp.json()["detail"]
+    # Nothing was persisted.
+    assert client.get("/api/instances", headers=auth_headers).json() == []
+
+
+def test_create_succeeds_when_connection_ok(client, auth_headers):
+    with patch(
+        "emuwarez_uploadrr.services.instances.test_connection_params",
+        return_value={"ok": True, "version": "5.2.6"},
+    ) as mock_test:
+        resp = client.post(
+            "/api/instances",
+            json={"type": "radarr", "name": "Good One", "url": "http://radarr:7878", "api_key": "valid"},
+            headers=auth_headers,
+        )
+    assert resp.status_code == 201
+    assert mock_test.called  # the connection was actually verified
+    assert len(client.get("/api/instances", headers=auth_headers).json()) == 1
+
+
+def test_create_duplicate_name_reports_name_error_before_connection_test(client, auth_headers):
+    """Name uniqueness is checked before the (expensive) connection test, so a
+    duplicate name reports the name error even if the connection would fail."""
+    _add_instance(client, auth_headers, type="radarr", name="Dup")
+    with patch(
+        "emuwarez_uploadrr.services.instances.test_connection_params",
+        return_value={"ok": False, "error": "should not be reached"},
+    ) as mock_test:
+        resp = client.post(
+            "/api/instances",
+            json={"type": "sonarr", "name": "Dup", "url": "http://x:8989", "api_key": "k"},
+            headers=auth_headers,
+        )
+    assert resp.status_code == 400
+    assert "Dup" in resp.json()["detail"]
+    assert not mock_test.called  # short-circuited before the connection test
 
 
 # ---------------------------------------------------------------------------

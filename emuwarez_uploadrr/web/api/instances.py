@@ -53,7 +53,9 @@ def create_instance(
     from emuwarez_uploadrr.services.instances import add_instance
     with _get_conn() as conn:
         try:
-            iid = add_instance(conn, body.type, body.name, body.url, body.api_key)
+            # Verify the *arr connection before persisting — a well-formed but
+            # unreachable/unauthorized instance must not be created.
+            iid = add_instance(conn, body.type, body.name, body.url, body.api_key, test_connection=True)
             if body.is_4k or body.is_anime:
                 conn.execute(
                     "UPDATE instances SET is_4k=?, is_anime=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",

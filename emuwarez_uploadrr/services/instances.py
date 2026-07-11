@@ -19,13 +19,21 @@ def add_instance(
     url: str,
     api_key: str,
     enabled: bool = True,
+    *,
+    test_connection: bool = False,
 ) -> int:
     """Instance names are globally unique (not just per type, see the
     _migrate_instances_unique_name migration) — a name already in use by
     *any* instance, regardless of type, is now a real rejection (400),
     not a silent upsert. The old ON CONFLICT(type, name) DO UPDATE
     behavior predates that constraint and would silently overwrite an
-    unrelated instance's URL/key if two different types shared a name."""
+    unrelated instance's URL/key if two different types shared a name.
+
+    When ``test_connection`` is set (the web create flow does), the *arr
+    connection is verified *after* the cheap type/name/URL validation but
+    *before* the insert — so a duplicate name still reports the name error
+    (not a connection error), and a well-formed but unreachable/unauthorized
+    instance is never persisted."""
     instance_type = instance_type.lower().strip()
     if instance_type not in _VALID_INSTANCE_TYPES:
         raise ValueError("Tipo de instancia inválido. Usa radarr o sonarr.")
@@ -34,6 +42,13 @@ def add_instance(
     if existing:
         raise ValueError(f"Ya existe una instancia con el nombre '{name}'.")
     url = normalize_base_url(url)
+    if test_connection:
+        result = test_connection_params(instance_type, url, api_key, name)
+        if not result.get("ok"):
+            raise ValueError(
+                f"No se pudo conectar con la instancia {instance_type}: "
+                f"{result.get('error') or 'error desconocido'}"
+            )
     cur = conn.execute(
         """
         INSERT INTO instances(type, name, url, api_key, enabled)
@@ -148,6 +163,22 @@ def test_instance(instance: InstanceConfig) -> dict:
     if instance.type == InstanceType.SONARR.value:
         return sonarr.test_connection(instance.url, instance.api_key)
     raise IntegrationError(f"Tipo de instancia no soportado: {instance.type}")
+
+
+def test_connection_params(instance_type: str, url: str, api_key: str, name: str = "") -> dict:
+    """Test connectivity for not-yet-persisted instance params (create flow).
+    Returns a structured result {ok, version?, error?} — never raises, never
+    leaks the raw api_key."""
+    instance_type = (instance_type or "").lower().strip()
+    inst_dict = {"url": normalize_base_url(url), "api_key": (api_key or "").strip(), "name": name}
+    try:
+        if instance_type == InstanceType.RADARR.value:
+            return radarr.radarr_test_connection(inst_dict)
+        if instance_type == InstanceType.SONARR.value:
+            return sonarr.sonarr_test_connection(inst_dict)
+        return {"ok": False, "error": f"Tipo desconocido: {instance_type}"}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
 
 
 def test_instance_safe(instance: InstanceConfig) -> dict:

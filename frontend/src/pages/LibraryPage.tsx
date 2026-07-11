@@ -185,12 +185,17 @@ export function LibraryPage() {
 
   const items = data?.items ?? []
   const total = data?.total ?? 0
+  const qualityOf = (it: LibraryItemResponse) => [it.resolution, it.source].filter(Boolean).join(' · ')
+  // Options for the dropdowns: only providers/qualities actually present now.
+  const providerOptions = Array.from(
+    new Set(items.map(i => i.provider_label).filter(Boolean) as string[])
+  ).sort((a, b) => a.localeCompare(b))
+  const qualityOptions = Array.from(
+    new Set(items.map(qualityOf).filter(Boolean))
+  ).sort((a, b) => a.localeCompare(b))
   const filteredItems = items.filter(it => {
-    const provOk = !searchProvider ||
-      (it.provider_label ?? '').toLowerCase().includes(searchProvider.toLowerCase()) ||
-      (it.provider ?? '').toLowerCase().includes(searchProvider.toLowerCase())
-    const qual = [it.resolution, it.source].filter(Boolean).join(' ').toLowerCase()
-    const qualOk = !searchQuality || qual.includes(searchQuality.toLowerCase())
+    const provOk = !searchProvider || it.provider_label === searchProvider
+    const qualOk = !searchQuality || qualityOf(it) === searchQuality
     return provOk && qualOk
   })
 
@@ -308,20 +313,14 @@ export function LibraryPage() {
           <option value="No compatible">No compatible</option>
           <option value="Llena">Llena</option>
         </select>
-        <input
-          className="form-input"
-          placeholder="Buscar provider…"
-          value={searchProvider}
-          onChange={e => setSearchProvider(e.target.value)}
-          style={{ width: 160 }}
-        />
-        <input
-          className="form-input"
-          placeholder="Buscar calidad…"
-          value={searchQuality}
-          onChange={e => setSearchQuality(e.target.value)}
-          style={{ width: 160 }}
-        />
+        <select className="form-input form-select" value={searchProvider} onChange={e => setSearchProvider(e.target.value)} style={{ width: 160 }}>
+          <option value="">Provider: Todos</option>
+          {providerOptions.map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+        <select className="form-input form-select" value={searchQuality} onChange={e => setSearchQuality(e.target.value)} style={{ width: 160 }}>
+          <option value="">Calidad: Todas</option>
+          {qualityOptions.map(q => <option key={q} value={q}>{q}</option>)}
+        </select>
         <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
           <button
             className="btn btn-primary btn-sm"

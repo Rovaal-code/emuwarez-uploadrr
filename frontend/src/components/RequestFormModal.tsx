@@ -33,7 +33,14 @@ export function RequestFormModal({ item, onClose }: Props) {
   const isSeriesLike = item.item_type === 'series' || item.item_type === 'season' || item.item_type === 'episode'
 
   const [category, setCategory] = useState(isSeriesLike ? 'tv' : 'movie')
-  const [title, setTitle] = useState(item.title || '')
+  // eMuwarez expects the year in the title: "Título (AÑO)". Prefill it from the
+  // item's year when known (>0), without duplicating an already-present year.
+  const [title, setTitle] = useState(() => {
+    const base = item.title || ''
+    return item.year && item.year > 0 && !/\(\d{4}\)\s*$/.test(base)
+      ? `${base} (${item.year})`
+      : base
+  })
   const [type, setType] = useState(item.source && TYPES.includes(item.source) ? item.source : 'Any')
   const [resolution, setResolution] = useState(item.resolution && RESOLUTIONS.includes(item.resolution) ? item.resolution : 'Any')
 
@@ -85,7 +92,7 @@ export function RequestFormModal({ item, onClose }: Props) {
         <div className="modal-body">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
             <label style={{ gridColumn: '1 / -1' }}><span style={labelStyle}>Título</span>
-              <input className="form-input" value={title} onChange={e => setTitle(e.target.value)} placeholder="Título de la película o serie" />
+              <input className="form-input" value={title} onChange={e => setTitle(e.target.value)} placeholder="Título (AÑO) — p. ej. Origen (2010)" />
             </label>
 
             <label><span style={labelStyle}>Categoría</span>

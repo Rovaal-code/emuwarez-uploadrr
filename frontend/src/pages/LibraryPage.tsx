@@ -275,13 +275,13 @@ export function LibraryPage() {
 
       {/* Filters + view modes on one line */}
       <div className="filters-bar">
-        <select className="form-input form-select" value={filterType} onChange={e => { setFilterType(e.target.value); setOffset(0) }} style={{ width: 140 }}>
+        <select className="form-input form-select" value={filterType} onChange={e => { setFilterType(e.target.value); setOffset(0) }}>
           <option value="">Tipo: Todos</option>
           <option value="movie">Película</option>
           <option value="series">Serie</option>
           <option value="episode">Episodio</option>
         </select>
-        <select className="form-input form-select" value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setOffset(0) }} style={{ width: 190 }}>
+        <select className="form-input form-select" value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setOffset(0) }}>
           <option value="">Estado: Todos</option>
           <option value="Disponible">Disponible</option>
           <option value="Parcial">Parcial</option>
@@ -293,19 +293,24 @@ export function LibraryPage() {
           <option value="Error de importación">Error de importación</option>
           <option value="Error de búsqueda">Error de búsqueda</option>
         </select>
-        <select className="form-input form-select" value={filterInstanceId} onChange={e => { setFilterInstanceId(e.target.value); setOffset(0) }} style={{ width: 170 }}>
+        <select className="form-input form-select" value={filterInstanceId} onChange={e => { setFilterInstanceId(e.target.value); setOffset(0) }}>
           <option value="">Origen: Todos</option>
-          {instances.map(inst => (
-            <option key={inst.id} value={inst.id}>{inst.type === 'radarr' ? 'Radarr' : 'Sonarr'} — {inst.name}</option>
-          ))}
+          {instances.map(inst => {
+            // Cap the instance name at 15 chars so a long name can't blow up
+            // the dropdown width.
+            const name = inst.name.length > 15 ? inst.name.slice(0, 15) + '…' : inst.name
+            return (
+              <option key={inst.id} value={inst.id}>{inst.type === 'radarr' ? 'Radarr' : 'Sonarr'} — {name}</option>
+            )
+          })}
         </select>
-        <select className="form-input form-select" value={filterNomenclature} onChange={e => { setFilterNomenclature(e.target.value); setOffset(0) }} style={{ width: 160 }}>
+        <select className="form-input form-select" value={filterNomenclature} onChange={e => { setFilterNomenclature(e.target.value); setOffset(0) }}>
           <option value="">Nomenclatura: Todas</option>
           <option value="Correcta">Correcta</option>
           <option value="No adaptada">No adaptada</option>
           <option value="N/A">N/A</option>
         </select>
-        <select className="form-input form-select" value={filterRequest} onChange={e => { setFilterRequest(e.target.value); setOffset(0) }} style={{ width: 160 }}>
+        <select className="form-input form-select" value={filterRequest} onChange={e => { setFilterRequest(e.target.value); setOffset(0) }}>
           <option value="">Petición: Todas</option>
           <option value="Sin petición">Sin petición</option>
           <option value="Compatible">Compatible</option>
@@ -313,11 +318,11 @@ export function LibraryPage() {
           <option value="No compatible">No compatible</option>
           <option value="Llena">Llena</option>
         </select>
-        <select className="form-input form-select" value={searchProvider} onChange={e => setSearchProvider(e.target.value)} style={{ width: 160 }}>
+        <select className="form-input form-select" value={searchProvider} onChange={e => setSearchProvider(e.target.value)}>
           <option value="">Provider: Todos</option>
           {providerOptions.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
-        <select className="form-input form-select" value={searchQuality} onChange={e => setSearchQuality(e.target.value)} style={{ width: 160 }}>
+        <select className="form-input form-select" value={searchQuality} onChange={e => setSearchQuality(e.target.value)}>
           <option value="">Calidad: Todas</option>
           {qualityOptions.map(q => <option key={q} value={q}>{q}</option>)}
         </select>

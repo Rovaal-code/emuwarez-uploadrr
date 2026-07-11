@@ -354,6 +354,8 @@
 
 .filters-bar .form-select {
   width: auto;
+  /* Size to the widest option instead of inheriting form-input's 200px floor. */
+  min-width: 0;
 }
 
 /* Instance card */

@@ -41,7 +41,8 @@ export function RequestFormModal({ item, onClose }: Props) {
       ? `${base} (${item.year})`
       : base
   })
-  const [type, setType] = useState(item.source && TYPES.includes(item.source) ? item.source : 'Any')
+  // Tipo por defecto "Any" (una petición no suele exigir un source concreto).
+  const [type, setType] = useState('Any')
   const [resolution, setResolution] = useState(item.resolution && RESOLUTIONS.includes(item.resolution) ? item.resolution : 'Any')
 
   const [useTmdb, setUseTmdb] = useState(!!item.tmdb_id)

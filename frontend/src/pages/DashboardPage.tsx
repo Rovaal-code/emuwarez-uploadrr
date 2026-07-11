@@ -183,6 +183,24 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
         <RequestFormModal item={requestItem} onClose={() => setRequestItem(null)} />
       )}
 
+      <div className="page-header">
+        <div>
+          <div className="page-title">Dashboard</div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button className="btn btn-primary btn-sm" onClick={handleSync} disabled={syncing}>
+            {syncing ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Sincronizando…</> : '↻ Sincronizar biblioteca'}
+          </button>
+          <SyncInfo syncStatus={emuSyncStatus} onSync={handleEmuSync} syncing={emuSyncing} label="Sincronizar peticiones" allowForce={false} />
+        </div>
+      </div>
+      {(syncMsg || emuSyncMsg) && (
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12, fontSize: 12, color: 'var(--text-secondary)' }}>
+          {syncMsg && <span>{syncMsg}</span>}
+          {emuSyncMsg && <span>{emuSyncMsg}</span>}
+        </div>
+      )}
+
       {/* Stat cards */}
       <div className="stat-cards-row">
         <StatCard label="Biblioteca sincronizada" value={s.library_total}>
@@ -209,32 +227,16 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
         <StatCard label="Completadas" value={s.completed} accentColor="var(--color-uploaded)" />
       </div>
 
-      {/* Sync action bar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-        <button className="btn btn-primary btn-sm" onClick={handleSync} disabled={syncing}>
-          {syncing ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Sincronizando…</> : '↻ Sincronizar biblioteca'}
-        </button>
-        {syncMsg && (
-          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{syncMsg}</span>
-        )}
-      </div>
-
       {/* eMuwarez requests — cards + a "Sincronizar peticiones" button below.
           20px bottom margin = the flex gap between the activity panels and
           their lower cards, so spacing above and below each panel matches. */}
       <div style={{ marginBottom: 20 }}>
-        {emuSyncMsg && (
-          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>{emuSyncMsg}</div>
-        )}
         <div className="stat-cards-row">
           <StatCard label="Peticiones eMuwarez" value={s.requests_total ?? 0} />
           <StatCard label="Lista para subir" value={s.requests_ready_to_upload ?? 0} accentColor="var(--color-available)" />
           <StatCard label="Compatibles" value={s.requests_need_nomenclature ?? 0} accentColor="#f59e0b" />
           <StatCard label="Mis peticiones" value={s.requests_mine ?? 0} accentColor="#818cf8" />
           <StatCard label="Completadas" value={s.requests_filled ?? 0} accentColor="var(--color-uploaded)" />
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
-          <SyncInfo syncStatus={emuSyncStatus} onSync={handleEmuSync} syncing={emuSyncing} label="Sincronizar peticiones" allowForce={false} />
         </div>
       </div>
 

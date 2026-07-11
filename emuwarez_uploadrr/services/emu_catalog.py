@@ -248,6 +248,10 @@ def _compute_and_store_item_status(conn: sqlite3.Connection) -> int:
         if c["tvdb_id"] and c["season_number"] is not None:
             by_tvdb_season.setdefault((c["tvdb_id"], c["season_number"]), []).append(c)
 
+    # Honor the same "Ignorar especiales" setting the Estado/Nomenclatura
+    # rollups use, so the three series statuses stay consistent.
+    ignore_specials = (get_setting_canonical(conn, "series.ignore_specials") or "") == "true"
+
     updated = 0
 
     def save(item_id: int, in_cat: Optional[int], aportes: list[dict]) -> None:
@@ -301,9 +305,12 @@ def _compute_and_store_item_status(conn: sqlite3.Connection) -> int:
         }
         aportes = _compute_aportes(mine, matches) if matches else []
         save(s["id"], 1 if matches else 0, aportes)
-        # Accumulate into the parent series' rollup.
+        # Accumulate into the parent series' rollup. A numberless season is
+        # never counted; season 0 (specials) counts unless "Ignorar especiales".
         pid = s["series_id"]
-        if s["season_number"] not in (None, 0):
+        sn = s["season_number"]
+        counts = sn is not None and not (ignore_specials and sn == 0)
+        if counts:
             series_total[pid] = series_total.get(pid, 0) + 1
             series_in_count[pid] = series_in_count.get(pid, 0) + (1 if matches else 0)
         for a in aportes:

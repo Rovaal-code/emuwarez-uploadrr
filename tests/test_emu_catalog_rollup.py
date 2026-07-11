@@ -91,20 +91,33 @@ def test_series_mixed_seasons_is_partial(db_conn):
     assert rows == {1: 1, 2: 0, 3: 0}
 
 
-def test_missing_specials_do_not_make_series_partial(db_conn):
+def test_missing_specials_ignored_when_setting_on(db_conn):
+    from emuwarez_uploadrr.web.services.settings_service import set_setting
+    set_setting(db_conn, "series.ignore_specials", "true")
     sid = _series(db_conn, "Complete But Specials", tvdb_id=400)
-    _season(db_conn, sid, 400, 0)  # specials
+    _season(db_conn, sid, 400, 0)  # specials, not on eMuwarez
     _season(db_conn, sid, 400, 1)
     _season(db_conn, sid, 400, 2)
     _catalog_series(db_conn, 400, 1)
     _catalog_series(db_conn, 400, 2)
-    # specials (season 0) not on eMuwarez
 
     _compute_and_store_item_status(db_conn)
-    # all *real* seasons present → Sí, despite the missing specials
+    # with "Ignorar especiales" ON, all *real* seasons present → Sí
     assert db_conn.execute("SELECT emu_in_catalog FROM library_items WHERE id=?", (sid,)).fetchone()[0] == 1
     # ...but the specials season itself is still marked "No" (uploadable)
     special = db_conn.execute(
         "SELECT emu_in_catalog FROM library_items WHERE parent_id=? AND season_number=0", (sid,)
     ).fetchone()[0]
     assert special == 0
+
+
+def test_missing_specials_count_when_setting_off(db_conn):
+    # Default (ignore_specials off): a missing special counts, so a series
+    # complete except its specials is Partial — consistent with Estado/Nomenclatura.
+    sid = _series(db_conn, "Complete But Specials Off", tvdb_id=410)
+    _season(db_conn, sid, 410, 0)  # specials, not on eMuwarez
+    _season(db_conn, sid, 410, 1)
+    _catalog_series(db_conn, 410, 1)
+
+    _compute_and_store_item_status(db_conn)
+    assert db_conn.execute("SELECT emu_in_catalog FROM library_items WHERE id=?", (sid,)).fetchone()[0] == 2

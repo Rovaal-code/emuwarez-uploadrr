@@ -280,7 +280,7 @@ function ConfigTab() {
             <span>
               Ignorar episodios especiales en el estado de una serie
               <span className="form-hint" style={{ display: 'block' }}>
-                Si tienes todas las temporadas y capítulos salvo los de la temporada especial (temporada 0), el estado global de la serie será «Disponible».
+                Excluye la temporada especial (temporada 0) del estado global de la serie: si tienes todas las temporadas y capítulos salvo los especiales, la serie contará como completa en <strong>Estado</strong>, <strong>Nomenclatura</strong> y <strong>¿En eMuwarez?</strong>.
               </span>
             </span>
           </label>

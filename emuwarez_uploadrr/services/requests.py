@@ -10,7 +10,7 @@ import unicodedata
 from typing import Optional
 
 from ..config import load_app_config
-from ..database import get_state, set_state
+from ..database import get_setting_canonical, get_state, set_state
 from ..integrations import emu
 from ..integrations.base import IntegrationError
 from ..models import RequestItem, RequestStatus, TaskStatus
@@ -119,6 +119,17 @@ def upsert_request(conn: sqlite3.Connection, item: RequestItem) -> int:
 # Primary sync function — UNIT3D api_token auth (Phase 5B)
 # ---------------------------------------------------------------------------
 
+def _resolve_emu_api_key(conn: sqlite3.Connection, passphrase: Optional[str] = None) -> Optional[str]:
+    """The Settings UI stores the eMuwarez key in the DB (settings.emu.api_key);
+    the legacy YAML config is only a fallback. Reading only load_app_config()
+    made the requests task report "No hay API Key" even when it was configured."""
+    key = get_setting_canonical(conn, "emu.api_key")
+    if key:
+        return key
+    cfg = load_app_config(passphrase=passphrase)
+    return getattr(cfg, "emu_api_key", None) if cfg else None
+
+
 def sync_emu_requests(
     conn: sqlite3.Connection,
     *,
@@ -131,19 +142,19 @@ def sync_emu_requests(
         return {"status": "throttled", "wait_seconds": wait, "imported": 0, "matched": 0}
 
     task_id = start_task(conn, "sync-emu-requests", "Sincronizando peticiones EMU")
-    cfg = load_app_config(passphrase=passphrase)
-    if not cfg or not getattr(cfg, "emu_api_key", None):
+    api_key = _resolve_emu_api_key(conn, passphrase)
+    if not api_key:
         finish_task(conn, task_id, TaskStatus.FAILED.value, "No hay API Key de eMuwarez configurada")
         raise IntegrationError("No hay API Key de eMuwarez configurada")
 
     try:
-        raw_items = emu.emu_fetch_all_pages(cfg.emu_api_key)
+        raw_items = emu.emu_fetch_all_pages(api_key)
         items = emu.normalize_requests(raw_items)
         for item in items:
             upsert_request(conn, item)
         set_state(conn, SYNC_STATE_KEY, _utcnow().isoformat())
         conn.commit()
-        matched = match_all_requests(conn, emu_api_key=cfg.emu_api_key)
+        matched = match_all_requests(conn, emu_api_key=api_key)
         summary = f"{len(items)} peticiones importadas, {matched} cruces"
         finish_task(conn, task_id, TaskStatus.COMPLETED.value, summary)
         return {"status": "ok", "imported": len(items), "matched": matched}

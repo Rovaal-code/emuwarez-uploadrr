@@ -274,14 +274,14 @@ export function LibraryPage() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button className="btn btn-secondary btn-sm" onClick={handleRefreshHealth} disabled={diagActionLoading}>
-            Refrescar salud ARR
+          <button className="btn btn-primary btn-sm" onClick={handleRefreshHealth} disabled={diagActionLoading}>
+            Sincronizar
           </button>
-          <button className="btn btn-secondary btn-sm" onClick={handleVerifyFiles} disabled={diagActionLoading}>
-            Verificar archivos
+          <button className="btn btn-primary btn-sm" onClick={handleVerifyFiles} disabled={diagActionLoading}>
+            Verificar
           </button>
-          <button className="btn btn-secondary btn-sm" onClick={handleRefreshRecommendations} disabled={diagActionLoading}>
-            Recalcular recomendaciones
+          <button className="btn btn-primary btn-sm" onClick={handleRefreshRecommendations} disabled={diagActionLoading}>
+            Recomendaciones
           </button>
         </div>
       </div>
@@ -294,7 +294,7 @@ export function LibraryPage() {
           value={search}
           onChange={e => { setSearch(e.target.value); if (!e.target.value) { setOffset(0) } }}
           onKeyDown={e => e.key === 'Enter' && applyFilters()}
-          style={{ minWidth: 220 }}
+          style={{ width: 140 }}
         />
         {diagActionMsg && <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{diagActionMsg}</span>}
       </div>
@@ -355,21 +355,24 @@ export function LibraryPage() {
         />
         <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
           <button
-            className={`btn btn-sm ${viewMode === 'grid' ? 'btn-primary' : 'btn-secondary'}`}
+            className="btn btn-primary btn-sm"
+            style={{ opacity: viewMode === 'grid' ? 1 : 0.55 }}
             onClick={() => setViewMode('grid')}
             title="Vista de pósters"
           >
             ▦ Pósters
           </button>
           <button
-            className={`btn btn-sm ${viewMode === 'grid-lg' ? 'btn-primary' : 'btn-secondary'}`}
+            className="btn btn-primary btn-sm"
+            style={{ opacity: viewMode === 'grid-lg' ? 1 : 0.55 }}
             onClick={() => setViewMode('grid-lg')}
             title="Vista de pósters grandes"
           >
             ▦▦ Pósters grandes
           </button>
           <button
-            className={`btn btn-sm ${viewMode === 'list' ? 'btn-primary' : 'btn-secondary'}`}
+            className="btn btn-primary btn-sm"
+            style={{ opacity: viewMode === 'list' ? 1 : 0.55 }}
             onClick={() => setViewMode('list')}
             title="Vista de lista"
           >

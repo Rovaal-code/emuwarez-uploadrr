@@ -84,9 +84,10 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, com
 
   const isSeries = item.item_type === 'series'
   const isSeason = item.item_type === 'season'
-  const isEpisode = item.item_type === 'episode'
   const expandable = isSeries || isSeason              // has children to load
-  const canExpand = expandable || isEpisode            // clicking toggles inline
+  // Episodes are leaf rows: no dropdown — their title opens their own detail
+  // card, which is where you consult their data.
+  const canExpand = expandable
   const childType = isSeries ? 'season' : 'episode'
 
   const loadChildren = useCallback(async (off: number) => {
@@ -213,35 +214,6 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, com
           </td>
         )}
       </tr>
-      {expanded && isEpisode && (
-        <tr>
-          <td colSpan={colSpan} style={{ padding: 0 }}>
-            <div style={{ padding: '12px 16px', paddingLeft: indent + 44, background: 'rgba(255,255,255,0.02)' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px 20px', fontSize: 12.5 }}>
-                {([
-                  ['Resolución', item.resolution],
-                  ['Source', item.source],
-                  ['Provider', item.provider],
-                  ['Códec de vídeo', item.video_codec],
-                  ['Códec de audio', item.audio_codec],
-                  ['Idiomas de audio', item.audio_languages],
-                  ['Subtítulos', item.subtitle_languages],
-                  ['Tamaño', formatBytes(item.size_bytes)],
-                ] as [string, string | null][]).map(([k, v]) => (
-                  <div key={k}>
-                    <div style={{ fontSize: 10.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{k}</div>
-                    <div>{v || '–'}</div>
-                  </div>
-                ))}
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <div style={{ fontSize: 10.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Ruta</div>
-                  <div style={{ wordBreak: 'break-all' }}>{item.path || '–'}</div>
-                </div>
-              </div>
-            </div>
-          </td>
-        </tr>
-      )}
       {expanded && loadingChildren && (
         <tr>
           <td colSpan={colSpan} style={{ textAlign: 'center', padding: 10, color: 'var(--text-muted)', fontSize: 12 }}>

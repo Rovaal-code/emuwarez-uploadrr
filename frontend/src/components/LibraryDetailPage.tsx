@@ -1,4 +1,6 @@
+import { useState, useEffect } from 'react'
 import type { LibraryItemResponse, InstanceSafeResponse } from '../types/api'
+import { getLibraryItem } from '../api/library'
 import { StatusBadge } from './StatusBadge'
 import { SeriesSeasonsSection } from './SeriesSeasonsSection'
 import { EmuComparisonSection } from './EmuComparisonSection'
@@ -29,9 +31,45 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
   const deepLink = buildDeepLink(item, instances)
   const isRollup = item.item_type === 'series' || item.item_type === 'season'
 
+  // Ancestor navigation: a season can go up to its series; an episode can go up
+  // to its season and to its series. We only have parent_id, so fetch the chain
+  // (episode -> season -> series) and offer a "back to …" button per ancestor.
+  const [parentSeason, setParentSeason] = useState<LibraryItemResponse | null>(null)
+  const [parentSeries, setParentSeries] = useState<LibraryItemResponse | null>(null)
+  useEffect(() => {
+    let alive = true
+    setParentSeason(null)
+    setParentSeries(null)
+    async function loadAncestors() {
+      if (item.item_type === 'season' && item.parent_id != null) {
+        const series = await getLibraryItem(item.parent_id).catch(() => null)
+        if (alive && series) setParentSeries(series)
+      } else if (item.item_type === 'episode' && item.parent_id != null) {
+        const season = await getLibraryItem(item.parent_id).catch(() => null)
+        if (alive && season) {
+          setParentSeason(season)
+          if (season.parent_id != null) {
+            const series = await getLibraryItem(season.parent_id).catch(() => null)
+            if (alive && series) setParentSeries(series)
+          }
+        }
+      }
+    }
+    loadAncestors()
+    return () => { alive = false }
+  }, [item.id, item.item_type, item.parent_id])
+
   return (
     <div style={{ width: '100%' }}>
-      <button className="btn btn-ghost btn-sm" onClick={onBack} style={{ marginBottom: 16 }}>← Volver a la biblioteca</button>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+        <button className="btn btn-ghost btn-sm" onClick={onBack}>← Volver a la biblioteca</button>
+        {parentSeason && (
+          <button className="btn btn-ghost btn-sm" onClick={() => onSelect(parentSeason)}>← Volver a la temporada</button>
+        )}
+        {parentSeries && (
+          <button className="btn btn-ghost btn-sm" onClick={() => onSelect(parentSeries)}>← Volver a la serie</button>
+        )}
+      </div>
 
       <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap' }}>
         <div style={{ flexShrink: 0, width: 300, maxWidth: '100%' }}>

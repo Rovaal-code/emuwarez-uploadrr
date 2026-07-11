@@ -47,6 +47,8 @@ export function SeriesSeasonsSection({ seriesId, instances, onSelect, onAction }
                 <th>Tamaño</th>
                 <th>Provider</th>
                 <th>Calidad</th>
+                <th>¿En eMuwarez?</th>
+                <th>Aportes</th>
               </tr>
             </thead>
             <tbody>

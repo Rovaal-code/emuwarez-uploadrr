@@ -373,6 +373,36 @@ def library_list(
 # GET /api/library/{item_id}
 # ---------------------------------------------------------------------------
 
+@router.get("/library/filter-options")
+def library_filter_options(current_user: dict = Depends(require_auth)) -> dict:
+    """Distinct providers and qualities present anywhere in the library (all
+    levels), for the Biblioteca filter dropdowns — otherwise a value that only
+    appears in the episodes of a mixed-provider/quality series would be missing
+    from the options. Defined before /library/{item_id} so it isn't captured
+    as an item id."""
+    with _get_conn() as conn:
+        qrows = conn.execute(
+            "SELECT DISTINCT resolution, source FROM library_items "
+            "WHERE resolution IS NOT NULL OR source IS NOT NULL"
+        ).fetchall()
+        qualities = sorted({
+            " · ".join([x for x in (r["resolution"], r["source"]) if x])
+            for r in qrows
+            if (r["resolution"] or r["source"])
+        })
+        prows = conn.execute(
+            "SELECT path, source FROM library_items "
+            "WHERE item_type IN ('movie', 'episode') AND path IS NOT NULL"
+        ).fetchall()
+        codes = set()
+        for r in prows:
+            c = infer_provider_from_item({"path": r["path"], "source": r["source"]})
+            if c:
+                codes.add(c)
+        providers = sorted({lbl for c in codes if (lbl := _provider_label(c))})
+    return {"providers": providers, "qualities": qualities}
+
+
 @router.get("/library/{item_id}", response_model=LibraryItemResponse)
 def library_detail(
     item_id: int,

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getLibrary, TOP_LEVEL_PARENT_FILTER } from '../api/library'
+import { getLibrary, TOP_LEVEL_PARENT_FILTER, getLibraryFilterOptions } from '../api/library'
 import { getInstances } from '../api/instances'
 import { refreshArrHealth } from '../api/diagnostics'
 import type { LibraryItemResponse, LibraryListResponse, InstanceSafeResponse } from '../types/api'
@@ -116,6 +116,16 @@ export function LibraryPage() {
   const [instances, setInstances] = useState<InstanceSafeResponse[]>([])
   useEffect(() => { getInstances().then(setInstances).catch(() => {}) }, [])
 
+  // Provider/quality options across ALL levels (a value that only exists in a
+  // mixed series' episodes wouldn't appear in the top-level list otherwise).
+  const [providerOptions, setProviderOptions] = useState<string[]>([])
+  const [qualityOptions, setQualityOptions] = useState<string[]>([])
+  useEffect(() => {
+    getLibraryFilterOptions()
+      .then(o => { setProviderOptions(o.providers); setQualityOptions(o.qualities) })
+      .catch(() => {})
+  }, [])
+
   // Diagnostic actions — relocated here from the removed standalone
   // Faltantes tab (its own filtered view of Biblioteca now covers what it
   // used to show; these 3 buttons were the only functionality that didn't
@@ -188,13 +198,6 @@ export function LibraryPage() {
   const items = data?.items ?? []
   const total = data?.total ?? 0
   const qualityOf = (it: LibraryItemResponse) => [it.resolution, it.source].filter(Boolean).join(' · ')
-  // Options for the dropdowns: providers/qualities actually present now.
-  const providerOptions = Array.from(
-    new Set(items.map(i => i.provider_label).filter(Boolean) as string[])
-  ).sort((a, b) => a.localeCompare(b))
-  const qualityOptions = Array.from(
-    new Set(items.map(qualityOf).filter(Boolean))
-  ).sort((a, b) => a.localeCompare(b))
 
   const matchesFilter = (it: LibraryItemResponse) => {
     const provOk = !searchProvider || it.provider_label === searchProvider

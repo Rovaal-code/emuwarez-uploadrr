@@ -68,6 +68,15 @@ export async function suggestProvider(id: number): Promise<ProviderSuggestion> {
   return api.get<ProviderSuggestion>(`/library/${id}/suggest-provider`)
 }
 
+export interface LibraryFilterOptions {
+  providers: string[]
+  qualities: string[]
+}
+
+export async function getLibraryFilterOptions(): Promise<LibraryFilterOptions> {
+  return api.get<LibraryFilterOptions>('/library/filter-options')
+}
+
 export async function syncAll(include_episodes = true): Promise<SyncResponse> {
   return api.post<SyncResponse>('/sync', { include_episodes })
 }

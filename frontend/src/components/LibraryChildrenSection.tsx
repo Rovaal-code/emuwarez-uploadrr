@@ -3,36 +3,40 @@ import { getLibrary } from '../api/library'
 import type { LibraryItemResponse, InstanceSafeResponse } from '../types/api'
 import { LibraryTreeRow, type LibraryActionKind } from './LibraryTreeRow'
 
-// Seasons (→ episodes, expandable) of a Series, shown below its detail
-// panel — reuses LibraryTreeRow unchanged, just seeded with the series'
-// direct children instead of a top-level list. Shared by the small detail
-// modal and the large "Serr-style" detail card.
-export function SeriesSeasonsSection({ seriesId, instances, onSelect, onAction }: {
-  seriesId: number
+// Direct children (seasons of a series, or episodes of a season) shown below an
+// item's detail panel — reuses LibraryTreeRow unchanged, just seeded with the
+// parent's children instead of a top-level list. Shared by the Series detail
+// (Temporadas) and the Season detail (Capítulos).
+export function LibraryChildrenSection({ parentId, childType, title, instances, onSelect, onAction }: {
+  parentId: number
+  childType: 'season' | 'episode'
+  title: string
   instances: InstanceSafeResponse[]
   onSelect: (item: LibraryItemResponse) => void
   onAction: (kind: LibraryActionKind, item: LibraryItemResponse) => void
 }) {
-  const [seasons, setSeasons] = useState<LibraryItemResponse[]>([])
+  const [children, setChildren] = useState<LibraryItemResponse[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     setLoading(true)
-    getLibrary({ parent_id: seriesId, type: 'season', limit: 500 })
-      .then(r => setSeasons(r.items))
-      .catch(() => setSeasons([]))
+    getLibrary({ parent_id: parentId, type: childType, limit: 500 })
+      .then(r => setChildren(r.items))
+      .catch(() => setChildren([]))
       .finally(() => setLoading(false))
-  }, [seriesId])
+  }, [parentId, childType])
+
+  const emptyLabel = childType === 'season' ? 'Sin temporadas' : 'Sin capítulos'
 
   return (
-    <div style={{ marginTop: 16 }}>
+    <div style={{ marginTop: 28 }}>
       <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>
-        Temporadas
+        {title}
       </div>
       {loading ? (
         <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Cargando…</div>
-      ) : seasons.length === 0 ? (
-        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Sin temporadas</div>
+      ) : children.length === 0 ? (
+        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{emptyLabel}</div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
           <table className="data-table">
@@ -52,8 +56,8 @@ export function SeriesSeasonsSection({ seriesId, instances, onSelect, onAction }
               </tr>
             </thead>
             <tbody>
-              {seasons.map(season => (
-                <LibraryTreeRow key={season.id} item={season} depth={0} instances={instances} onSelect={onSelect} onAction={onAction} compact />
+              {children.map(child => (
+                <LibraryTreeRow key={child.id} item={child} depth={0} instances={instances} onSelect={onSelect} onAction={onAction} compact />
               ))}
             </tbody>
           </table>

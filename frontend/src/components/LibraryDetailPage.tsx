@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import type { LibraryItemResponse, InstanceSafeResponse } from '../types/api'
 import { getLibraryItem } from '../api/library'
 import { StatusBadge } from './StatusBadge'
-import { SeriesSeasonsSection } from './SeriesSeasonsSection'
+import { LibraryChildrenSection } from './LibraryChildrenSection'
 import { EmuComparisonSection } from './EmuComparisonSection'
 import { LibraryActionButtons } from './LibraryActionButtons'
 import type { LibraryActionKind } from './LibraryTreeRow'
@@ -139,9 +139,11 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
       )}
 
       {item.item_type === 'series' && (
-        <div style={{ marginTop: 28 }}>
-          <SeriesSeasonsSection seriesId={item.id} instances={instances} onSelect={onSelect} onAction={onAction} />
-        </div>
+        <LibraryChildrenSection parentId={item.id} childType="season" title="Temporadas" instances={instances} onSelect={onSelect} onAction={onAction} />
+      )}
+
+      {item.item_type === 'season' && (
+        <LibraryChildrenSection parentId={item.id} childType="episode" title="Capítulos" instances={instances} onSelect={onSelect} onAction={onAction} />
       )}
     </div>
   )

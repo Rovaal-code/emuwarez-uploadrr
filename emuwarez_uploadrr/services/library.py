@@ -302,6 +302,20 @@ def _build_library_filter(
     return where, params
 
 
+# User-selectable ordering for the top-level library list. Applied as the
+# tie-break AFTER the season/episode numeric ordering, so expanding a series
+# always shows its seasons/episodes in numeric order regardless of this choice.
+# "title_asc" (COLLATE NOCASE) gives símbolos < números < A-Z, the default.
+_LIBRARY_SORT = {
+    "title_asc": "title COLLATE NOCASE ASC, updated_at DESC",
+    "title_desc": "title COLLATE NOCASE DESC, updated_at DESC",
+    "updated_desc": "updated_at DESC, title COLLATE NOCASE ASC",
+    "year_desc": "year IS NULL, year DESC, title COLLATE NOCASE ASC",
+    "year_asc": "year IS NULL, year ASC, title COLLATE NOCASE ASC",
+}
+DEFAULT_LIBRARY_SORT = "title_asc"
+
+
 def list_library(
     conn: sqlite3.Connection,
     *,
@@ -313,6 +327,7 @@ def list_library(
     instance_id: Optional[int] = None,
     parent_id: Optional[int] = None,
     search: Optional[str] = None,
+    sort: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
 ) -> list[dict]:
@@ -326,11 +341,12 @@ def list_library(
         sql += " WHERE " + " AND ".join(where)
     # Seasons/episodes carry season_number/episode_number and must sort
     # numerically (Temporada 1, 2, …, 10, not string order). Top-level rows
-    # (movies/series) have both NULL, so they tie there and keep the
-    # updated_at DESC ordering.
+    # (movies/series) have both NULL, so they tie there and fall through to the
+    # user-selected sort.
+    sort_sql = _LIBRARY_SORT.get(sort or DEFAULT_LIBRARY_SORT, _LIBRARY_SORT[DEFAULT_LIBRARY_SORT])
     sql += (
         " ORDER BY season_number IS NOT NULL, season_number, episode_number,"
-        " updated_at DESC, title COLLATE NOCASE LIMIT ? OFFSET ?"
+        f" {sort_sql} LIMIT ? OFFSET ?"
     )
     params.extend([limit, offset])
     return [dict(row) for row in conn.execute(sql, params).fetchall()]

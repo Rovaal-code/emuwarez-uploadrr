@@ -14,6 +14,7 @@ export interface LibraryQueryParams {
   request_status?: string
   nomenclature?: string
   search?: string
+  sort?: string
   limit?: number
   offset?: number
 }
@@ -28,6 +29,7 @@ export async function getLibrary(params: LibraryQueryParams = {}): Promise<Libra
   if (params.request_status) qs.set('request_status', params.request_status)
   if (params.nomenclature) qs.set('nomenclature', params.nomenclature)
   if (params.search) qs.set('search', params.search)
+  if (params.sort) qs.set('sort', params.sort)
   if (params.limit !== undefined) qs.set('limit', String(params.limit))
   if (params.offset !== undefined) qs.set('offset', String(params.offset))
   const query = qs.toString()

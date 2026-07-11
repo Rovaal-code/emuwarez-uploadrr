@@ -346,6 +346,7 @@ def library_list(
     request_status: Optional[str] = Query(None, alias="request_status"),
     nomenclature: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    sort: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=20000),
     offset: int = Query(0, ge=0),
 ) -> LibraryListResponse:
@@ -361,6 +362,7 @@ def library_list(
             instance_id=instance_id,
             parent_id=parent_id,
             search=search,
+            sort=sort,
             limit=limit,
             offset=offset,
         )

@@ -170,6 +170,7 @@ export function LibraryPage() {
   const [searchProvider, setSearchProvider] = useState('')
   const [searchQuality, setSearchQuality] = useState('')
   const [filterEmu, setFilterEmu] = useState('')
+  const [sortBy, setSortBy] = useState('title_asc')
   const [offset, setOffset] = useState(0)
 
   // eMuwarez catalog comparison (1/hour, on-demand button).
@@ -193,6 +194,7 @@ export function LibraryPage() {
         instance_id: filterInstanceId ? Number(filterInstanceId) : undefined,
         nomenclature: filterNomenclature || undefined,
         request_status: filterRequest || undefined,
+        sort: sortBy,
         parent_id: flatFilter ? undefined : TOP_LEVEL_PARENT_FILTER,
         limit: LOAD_LIMIT,
         offset,
@@ -203,7 +205,7 @@ export function LibraryPage() {
     } finally {
       setLoading(false)
     }
-  }, [search, filterType, filterStatus, filterInstanceId, filterNomenclature, filterRequest, searchProvider, searchQuality, filterEmu, offset])
+  }, [search, filterType, filterStatus, filterInstanceId, filterNomenclature, filterRequest, searchProvider, searchQuality, filterEmu, sortBy, offset])
 
   useEffect(() => { load() }, [load])
 
@@ -410,6 +412,13 @@ export function LibraryPage() {
           <option value="">¿En eMuwarez?: Todos</option>
           <option value="present">Sí</option>
           <option value="candidate">No</option>
+        </select>
+        <select className="form-input form-select" value={sortBy} onChange={e => { setSortBy(e.target.value); setOffset(0) }}>
+          <option value="title_asc">Orden: Título (A-Z)</option>
+          <option value="title_desc">Orden: Título (Z-A)</option>
+          <option value="updated_desc">Orden: Recién actualizado</option>
+          <option value="year_desc">Orden: Año (nuevo→viejo)</option>
+          <option value="year_asc">Orden: Año (viejo→nuevo)</option>
         </select>
         <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
           <button

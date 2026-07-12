@@ -11,7 +11,7 @@ import {
 import { uploadPreflight, startUploadJob, runUploadChecks, type UploadChecksResult } from '../api/uploads'
 import { getLibrary, getMediaInfoReport, suggestProvider } from '../api/library'
 import type { MediaInfoReport } from '../api/library'
-import type { UploadPreflightResponse, LibraryItemResponse } from '../types/api'
+import type { LibraryItemResponse } from '../types/api'
 
 // Unified "Subir" wizard (replaces the separate Nomenclatura + Campos + Subir
 // buttons). For a Series/Season it first asks which season (and episode, or the
@@ -99,9 +99,7 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
   // most ONE TMDB call per resolved item while this wizard stays open.
   const detectedTargetRef = useRef<number | null>(null)
 
-  // Step 2 — apply + preflight + upload
-  const [applyError, setApplyError] = useState<string | null>(null)
-  const [preflight, setPreflight] = useState<UploadPreflightResponse | null>(null)
+  // Step 2 — checks + (on upload) apply + preflight + start
   const [preparing, setPreparing] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadMsg, setUploadMsg] = useState<string | null>(null)
@@ -233,35 +231,38 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
 
   const sourceRequiresProvider = PROVIDER_SOURCES.has(fields.source || '')
 
+  // Entering step 2 only stores the edited fields and runs the read-only
+  // checks. It does NOT apply the nomenclature nor create an upload job — a job
+  // must only appear in "Subidas" once the user actually uploads.
   const goToUpload = async () => {
     if (targetId == null) return
-    setPreparing(true); setApplyError(null); setPreflight(null); setUploadMsg(null)
+    setPreparing(true); setUploadMsg(null)
+    try { await saveNomenclatureFields(targetId, fields) } catch { /* non-blocking */ }
+    setPreparing(false)
+    setStep(2)
+    runChecks()
+  }
+
+  const canUpload = !!checks?.ready
+  // The real upload: apply the nomenclature, create the preflight job and start
+  // it — all only now that every check passed and the user confirmed. Nothing
+  // reaches "Subidas" before this.
+  const doUpload = async () => {
+    if (targetId == null || !canUpload) return
+    setUploading(true); setUploadMsg(null)
     try {
       await saveNomenclatureFields(targetId, fields)
       const applied = await adaptNomenclature(targetId, { apply: true, confirmation: NOM_TOKEN })
       if (applied.status && applied.status !== 'applied') {
-        setApplyError(`No se pudo aplicar la nomenclatura (estado: ${applied.status}).`)
+        setUploadMsg(`✗ No se pudo aplicar la nomenclatura (estado: ${applied.status}).`)
+        return
       }
-    } catch (e: unknown) {
-      setApplyError(e instanceof Error ? e.message : 'Error aplicando la nomenclatura')
-    }
-    try {
-      setPreflight(await uploadPreflight(targetId))
-    } catch (e: unknown) {
-      setApplyError(prev => prev ?? (e instanceof Error ? e.message : 'Error en el preflight'))
-    } finally {
-      setPreparing(false)
-      setStep(2)
-      runChecks()
-    }
-  }
-
-  const canUpload = !!checks?.ready && !!preflight?.job?.id
-  const doUpload = async () => {
-    if (!canUpload || !preflight?.job?.id) return
-    setUploading(true); setUploadMsg(null)
-    try {
-      const r = await startUploadJob(preflight.job.id, { dry_run: false, start: true, confirmation: UPLOAD_TOKEN })
+      const pf = await uploadPreflight(targetId)
+      if (pf.status !== 'ready' || !pf.job?.id) {
+        setUploadMsg(`✗ El preflight no está listo (estado: ${pf.status}).`)
+        return
+      }
+      const r = await startUploadJob(pf.job.id, { dry_run: false, start: true, confirmation: UPLOAD_TOKEN })
       setUploadMsg(`✓ Subida iniciada (${r.status ?? 'ok'}).`)
       onDone?.()
     } catch (e: unknown) {
@@ -460,8 +461,6 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
               <div style={{ ...labelStyle, marginTop: 10 }}>Título</div>
               <FitText text={preview?.internal_mkv_title || '–'} />
             </div>
-
-            {applyError && <p className="text-error" style={{ fontSize: 12 }}>⚠ {applyError}</p>}
 
             {/* Pre-upload checks card */}
             <div style={{ padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>

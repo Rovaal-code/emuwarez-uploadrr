@@ -64,7 +64,11 @@ function formatElapsed(job: UploadJob): string {
   return '–'
 }
 
-const STATUS_OPTIONS = ['', 'ready', 'running', 'completed', 'failed', 'cancelled', 'queued', 'blocked']
+// Only real upload states — a job now only exists once the user uploads, so
+// the preparatory "ready"/"blocked" states no longer appear here.
+const STATUS_OPTIONS = ['', 'running', 'completed', 'failed', 'cancelled', 'queued']
+// Preparatory states never represent a real upload — hide any stale leftovers.
+const HIDDEN_STATES = new Set(['draft', 'preflight', 'blocked', 'ready', 'config_staging'])
 
 function LogsPanel({ jobId, onClose, autoRefresh }: { jobId: number; onClose: () => void; autoRefresh?: boolean }) {
   const [logs, setLogs] = useState<UploadJobLog[]>([])
@@ -422,6 +426,7 @@ export function UploadsPage() {
   const visibleJobs = useMemo(() => {
     const q = search.trim().toLowerCase()
     const out = jobs.filter(j => {
+      if (HIDDEN_STATES.has(j.status)) return false
       const titleOk = !q || (j.title || '').toLowerCase().includes(q)
       const hasResult = !!(j.result_url || j.result_torrent_id)
       const resultOk = !resultFilter || (resultFilter === 'success' ? hasResult : !hasResult)

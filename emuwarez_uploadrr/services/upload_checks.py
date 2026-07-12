@@ -42,8 +42,12 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int) -> dict:
 
     checks: list[dict] = []
 
-    def add(cid: str, label: str, ok: bool, message: str = "") -> bool:
-        checks.append({"id": cid, "label": label, "status": "ok" if ok else "fail", "message": message})
+    # The label states the outcome: the positive phrase when the check passes,
+    # the negative one when it fails (e.g. "Contenido accesible" / "Contenido no
+    # accesible").
+    def add(cid: str, ok_label: str, fail_label: str, ok: bool, message: str = "") -> bool:
+        checks.append({"id": cid, "label": ok_label if ok else fail_label,
+                       "status": "ok" if ok else "fail", "message": message})
         return ok
 
     def done() -> dict:
@@ -52,19 +56,19 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int) -> dict:
 
     item = get_library_item(conn, item_id)
     if not item:
-        add("accessible", "Contenido accesible", False, "Elemento no encontrado")
+        add("accessible", "Contenido accesible", "Contenido no accesible", False, "Elemento no encontrado")
         return done()
     path = item.get("path")
 
     # 1. Accessible — the file exists on disk.
-    if not add("accessible", "Contenido accesible",
+    if not add("accessible", "Contenido accesible", "Contenido no accesible",
                bool(path) and os.path.isfile(path),
                path or "El elemento no tiene ruta de archivo"):
         return done()
 
     # 2. Renameable — write permission on the file's directory.
     parent = os.path.dirname(path)
-    if not add("renameable", "Renombrable (permiso de escritura)",
+    if not add("renameable", "Se puede renombrar", "No se puede renombrar",
                os.access(parent, os.W_OK), parent):
         return done()
 
@@ -74,34 +78,35 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int) -> dict:
     except OSError:
         size = 0
     if size == 0:
-        add("integrity", "Fichero íntegro", False, "El fichero está vacío (0 bytes)")
+        add("integrity", "Fichero íntegro", "Fichero no íntegro", False, "El fichero está vacío (0 bytes)")
         return done()
     if mediainfo_available():
         info = read_media_info_summary(path)
-        if not add("integrity", "Fichero íntegro", bool(info),
+        if not add("integrity", "Fichero íntegro", "Fichero no íntegro", bool(info),
                    "MediaInfo lo lee correctamente" if info else "MediaInfo no pudo leer el fichero (posible corrupción)"):
             return done()
     else:
-        add("integrity", "Fichero íntegro", True, "mediainfo no disponible: no verificado")
+        add("integrity", "Fichero íntegro", "Fichero no íntegro", True, "mediainfo no disponible: no verificado")
 
     # 4. Hardlink — only when hardlinks are enabled.
     use_hardlinks = (get_setting_canonical(conn, "nomenclature.use_hardlinks") or "true") != "false"
     if use_hardlinks:
         hl_base = get_setting_canonical(conn, "hardlink_base")
         ok, msg = _test_hardlink(path, hl_base)
-        if not add("hardlink", "Hardlink posible", ok, msg):
+        if not add("hardlink", "Se puede crear el hardlink", "No se puede crear el hardlink", ok, msg):
             return done()
 
     # 5. Output directory writable — where Uploadrr stages the .torrent + images.
     out_dir = get_setting_canonical(conn, "uploadrr.path")
-    if not add("output", "Directorio de salida escribible",
+    if not add("output", "Directorio de salida escribible", "Directorio de salida no escribible",
                bool(out_dir) and os.path.isdir(out_dir) and os.access(out_dir, os.W_OK),
                out_dir or "uploadrr.path no configurado"):
         return done()
 
     # 6. qBittorrent — WebUI login.
     r = test_qbit_connection(conn=conn)
-    if not add("qbittorrent", "qBittorrent conectado", bool(r.get("ok")), r.get("message", "")):
+    if not add("qbittorrent", "qBittorrent conectado", "qBittorrent no conectado",
+               bool(r.get("ok")), r.get("message", "")):
         return done()
 
     # 7. Image hosts — at least one reachable (imgbox tried last).
@@ -111,11 +116,12 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int) -> dict:
             reachable = host
             break
     label = host_meta(reachable)["label"] if reachable else None
-    if not add("imghosts", "Repo de imágenes disponible", reachable is not None,
+    if not add("imghosts", "Repo de imágenes disponible", "Repo de imágenes no disponible",
+               reachable is not None,
                f"Responde: {label}" if reachable else "Ningún host de imágenes responde"):
         return done()
 
     # 8. eMuwarez — last, so we don't hit it unless everything else passed.
     r = test_emuwarez_connection(conn=conn)
-    add("emuwarez", "eMuwarez disponible", bool(r.get("ok")), r.get("message", ""))
+    add("emuwarez", "eMuwarez disponible", "eMuwarez no disponible", bool(r.get("ok")), r.get("message", ""))
     return done()

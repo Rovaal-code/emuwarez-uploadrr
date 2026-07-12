@@ -332,3 +332,26 @@ def test_rank_local_status_parcial_ranks_between_available_and_missing():
 
 def test_rank_empty():
     assert rank_request_matches([]) == []
+
+
+def test_not_available_match_is_no_disponible():
+    """A spec-compatible match whose file is Faltante becomes 'No disponible',
+    not 'Compatible' — so it doesn't pollute the Compatible filter."""
+    req = {"tmdb_id": "1", "title": "X", "requested_resolution": "1080p",
+           "requested_source": "Any", "emu_status": "open"}
+    available = {"tmdb_id": "1", "title": "X", "resolution": "1080p", "source": "WEB-DL",
+                 "local_status": "Disponible"}
+    missing = {**available, "local_status": "Faltante"}
+    assert classify_request_match(req, available, id_match=True)["status"] == "Compatible"
+    assert classify_request_match(req, missing, id_match=True)["status"] == "No disponible"
+
+
+def test_availability_only_downgrades_compatible():
+    """The availability override only turns a would-be 'Compatible' into 'No
+    disponible' — a spec mismatch keeps its own status (not overridden)."""
+    req = {"tmdb_id": "1", "title": "X", "requested_resolution": "2160p",
+           "requested_source": "Any", "emu_status": "open"}
+    missing = {"tmdb_id": "1", "title": "X", "resolution": "720p", "source": "WEB-DL",
+               "local_status": "Faltante"}
+    status = classify_request_match(req, missing, id_match=True)["status"]
+    assert status != "No disponible" and status != "Compatible"  # a real mismatch

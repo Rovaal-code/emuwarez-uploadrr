@@ -199,6 +199,14 @@ def match_request_to_library(
     return results
 
 
+# Local statuses that mean the file is actually present (can fulfil a request).
+_AVAILABLE_LOCAL_STATUS = {"Disponible", "Subido", "Subiendo", "Parcial"}
+
+
+def _item_available(item: dict) -> bool:
+    return (item.get("local_status") or "") in _AVAILABLE_LOCAL_STATUS
+
+
 def classify_request_match(
     req: dict,
     item: dict,
@@ -272,6 +280,13 @@ def classify_request_match(
         status = "Parcial"
         confidence = base_confidence * 0.60
 
+    # A spec-compatible match whose file isn't actually on disk (Faltante, en
+    # cola, error…) can't fulfil the request — surface it as "No disponible" so
+    # it doesn't pollute the "Compatible" filter, while still telling you the
+    # library has an entry for it (worth re-downloading).
+    if status == "Compatible" and not _item_available(item):
+        status = "No disponible"
+
     return {
         "status": status,
         "confidence": confidence,
@@ -289,7 +304,7 @@ def rank_request_matches(matches: list[dict]) -> list[dict]:
 
     Each dict must have: compatibility_status, library_item (optional).
     """
-    _STATUS = {"Compatible": 0, "Parcial": 2, "No compatible": 3, "Llena": 4}
+    _STATUS = {"Compatible": 0, "No disponible": 1, "Parcial": 2, "No compatible": 3, "Llena": 4}
     # "Parcial" here is a series/season rollup local_status (some but not
     # all children available) — explicit entry documenting it ranks at the
     # same default as everything else not fully available/uploaded, rather

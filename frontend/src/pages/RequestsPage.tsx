@@ -279,7 +279,7 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '16px 28px' }}>
             <ReqField label="Estado *"><CompatibilityBadge status={m ? m.status : (item.compatibility_status ?? null)} /></ReqField>
-            <ReqField label="Tipo">{t.icon} {t.label}</ReqField>
+            <ReqField label="Tipo">{t.label}</ReqField>
             {isSeriesLike && <ReqField label="Temporada">{temporadaLabel}</ReqField>}
             {isSeriesLike && item.req_scope === 'episode' && <ReqField label="Capítulo">{item.req_episode ?? '?'}</ReqField>}
             <ReqField label="Autor"><AuthorCell author={item.author} isMine={item.is_mine} /></ReqField>
@@ -640,7 +640,7 @@ export function RequestsPage() {
                             </div>
                           </div>
                         </td>
-                        <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{tipoOf(item.category).icon} {tipoOf(item.category).label}</td>
+                        <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{tipoOf(item.category).label}</td>
                         <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}><AuthorCell author={item.author} isMine={item.is_mine} /></td>
                         <td>{item.requested_resolution || '—'}</td>
                         <td>{item.requested_source || '—'}</td>

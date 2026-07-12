@@ -140,19 +140,6 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
             {item.tvdb_id && <Field label="TVDB"><ExternalIdLink id={item.tvdb_id} href={idVerifyUrl('tvdb', item.tvdb_id, isTv)} label="TVDB" /></Field>}
             <Field label="Ruta" wide>{item.path ?? '—'}</Field>
           </div>
-
-          {(item.recommended_action || item.diagnostic_summary) && (
-            <div style={{ marginTop: 20, padding: '14px 16px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>Diagnóstico</div>
-              {item.diagnostic_summary && <div style={{ fontSize: 13 }}>{item.diagnostic_summary}</div>}
-              {item.recommended_action && (
-                <div style={{ fontSize: 13, marginTop: 4 }}>
-                  <span style={{ color: 'var(--text-muted)' }}>Acción recomendada: </span>
-                  <span style={{ color: '#a78bfa', fontWeight: 600 }}>{item.recommended_action}</span>
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </div>
 

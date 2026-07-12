@@ -218,10 +218,15 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
   // item (Radarr/Sonarr). TVDB only comes from the library item; MAL isn't
   // provided by Radarr/Sonarr yet.
   const isTv = /serie/i.test(item.category || '')
+  const isSeriesLike = /serie|docu/i.test(item.category || '')
   const tmdbId = item.tmdb_id || m?.local_tmdb_id || null
   const imdbId = item.imdb_id || m?.local_imdb_id || null
   const tvdbId = m?.local_tvdb_id || null
   const malId: string | null = null
+  const scopeLabel =
+    item.req_scope === 'season' ? `Temporada ${item.req_season ?? '?'}`
+    : item.req_scope === 'episode' ? `Temporada ${item.req_season ?? '?'} · Episodio ${item.req_episode ?? '?'}`
+    : 'Serie completa'
   return (
     <div style={{ width: '100%', flex: 1, minHeight: 0, overflowY: 'auto' }}>
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -245,8 +250,7 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
         </div>
 
         <div style={{ flex: 1, minWidth: 300 }}>
-          <div style={{ fontWeight: 700, fontSize: 28 }}>{item.title}</div>
-          <div style={{ margin: '10px 0 20px', color: 'var(--text-muted)' }}>{t.icon} {t.label}</div>
+          <div style={{ fontWeight: 700, fontSize: 28, marginBottom: 20 }}>{item.title}</div>
 
           <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
             <a
@@ -277,6 +281,8 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '16px 28px' }}>
             <ReqField label="Estado *"><CompatibilityBadge status={m ? m.status : (item.compatibility_status ?? null)} /></ReqField>
+            <ReqField label="Tipo">{t.icon} {t.label}</ReqField>
+            {isSeriesLike && <ReqField label="Alcance">{scopeLabel}</ReqField>}
             <ReqField label="Autor"><AuthorCell author={item.author} isMine={item.is_mine} /></ReqField>
             <ReqField label="Resolución pedida">{noReq(item.requested_resolution)}</ReqField>
             <ReqField label="Source pedido">{noReq(item.requested_source)}</ReqField>

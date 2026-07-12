@@ -593,9 +593,49 @@ def get_request_detail(conn: sqlite3.Connection, request_id: int) -> Optional[di
             "id_match": bool(md.get("type_match")),
             "reasons": [r for r in reasons.splitlines() if r],
         }
+        # For a season/episode-scoped request whose match is the series rollup
+        # (no resolution/source/codec of its own), drill down to the specific
+        # season/episode library item so the comparison shows real data.
+        child = _resolve_scope_child(
+            conn, md["library_item_id"],
+            result.get("req_scope"), result.get("req_season"), result.get("req_episode"),
+        )
+        if child:
+            result["match"].update({
+                "library_item_id": child["id"],
+                "library_title": child.get("title") or result["match"]["library_title"],
+                "local_status": child.get("local_status"),
+                "local_resolution": child.get("resolution"),
+                "local_source": child.get("source"),
+                "local_video_codec": child.get("video_codec"),
+                "local_audio_languages": child.get("audio_languages"),
+                "local_size": child.get("size_bytes"),
+                "local_path": child.get("path"),
+                "nomenclature_status": child.get("nomenclature_status"),
+            })
     else:
         result["match"] = None
     return result
+
+
+def _resolve_scope_child(conn, series_id, scope, season, episode):
+    """Given a series library item and a request scope, return the matching
+    season/episode library item (or None for whole-series / no child)."""
+    if not series_id or scope not in ("season", "episode") or season is None:
+        return None
+    srow = conn.execute(
+        "SELECT * FROM library_items WHERE parent_id = ? AND item_type = 'season' AND season_number = ?",
+        (series_id, season),
+    ).fetchone()
+    if scope == "season":
+        return dict(srow) if srow else None
+    if scope == "episode" and episode is not None and srow:
+        erow = conn.execute(
+            "SELECT * FROM library_items WHERE parent_id = ? AND item_type = 'episode' AND episode_number = ?",
+            (srow["id"], episode),
+        ).fetchone()
+        return dict(erow) if erow else None
+    return None
 
 
 def mark_request_reviewed(conn: sqlite3.Connection, request_id: int) -> bool:

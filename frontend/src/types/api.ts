@@ -234,6 +234,9 @@ export interface RequestItemResponse {
   votes: number | null
   author: string | null
   is_mine: boolean
+  req_scope: string | null
+  req_season: number | null
+  req_episode: number | null
   created_at: string | null
   tmdb_id: string | null
   imdb_id: string | null

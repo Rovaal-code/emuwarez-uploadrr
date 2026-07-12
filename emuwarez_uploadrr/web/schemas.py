@@ -569,6 +569,9 @@ class RequestItemResponse(BaseModel):
     votes: Optional[int] = None
     author: Optional[str] = None
     is_mine: bool = False
+    req_scope: Optional[str] = None
+    req_season: Optional[int] = None
+    req_episode: Optional[int] = None
     created_at: Optional[str] = None
     tmdb_id: Optional[str] = None
     imdb_id: Optional[str] = None

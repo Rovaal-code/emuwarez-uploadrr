@@ -453,6 +453,11 @@ def _migrate_requests(conn: sqlite3.Connection) -> None:
         # eMuwarez requests table shows a 👍 "votes" count (how many other users
         # want it) alongside points/comments.
         ("votes", "INTEGER"),
+        # Series/documentary scope: whole series ('all'), one season ('season')
+        # or a single episode ('episode'), with the season/episode numbers.
+        ("req_scope", "TEXT"),
+        ("req_season", "INTEGER"),
+        ("req_episode", "INTEGER"),
     ]:
         try:
             conn.execute(f"ALTER TABLE request_items ADD COLUMN {col} {col_def}")

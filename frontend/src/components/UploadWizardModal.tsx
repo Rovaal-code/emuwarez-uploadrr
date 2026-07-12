@@ -38,6 +38,17 @@ const labelStyle: React.CSSProperties = {
 
 // Monospace one-liner (torrent name / internal title) that shrinks its font so
 // the whole string fits the card width instead of wrapping onto two lines.
+// Placeholder shown while the torrent name / ficha title is still being
+// generated (the preview arrives a moment after opening), so the box is never
+// empty first.
+function GeneratingHint() {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--text-muted)', fontSize: 13, padding: '2px 0' }}>
+      <span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Generando…
+    </span>
+  )
+}
+
 function FitText({ text, max = 13, min = 8 }: { text: string; max?: number; min?: number }) {
   const ref = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
@@ -324,9 +335,9 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
       </div>
       <div style={{ marginTop: 16, padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
         <div style={labelStyle}>Nombre final del torrent (eMuwarez)</div>
-        <FitText text={preview?.torrent_name || '…'} />
+        {preview?.torrent_name ? <FitText text={preview.torrent_name} /> : <GeneratingHint />}
         <div style={{ ...labelStyle, marginTop: 10 }}>Título de la ficha</div>
-        <FitText text={preview?.internal_mkv_title || '…'} />
+        {preview?.internal_mkv_title ? <FitText text={preview.internal_mkv_title} /> : <GeneratingHint />}
       </div>
     </>
   )

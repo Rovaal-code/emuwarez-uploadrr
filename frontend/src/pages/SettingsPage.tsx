@@ -457,7 +457,7 @@ function ConfigTab() {
             <span>
               Ignorar episodios especiales en el estado de una serie
               <span className="form-hint" style={{ display: 'block' }}>
-                Excluye la temporada especial (temporada 0) del estado global de la serie: si tienes todas las temporadas y capítulos salvo los especiales, la serie contará como completa en <strong>Estado</strong>, <strong>Nomenclatura</strong> y <strong>¿En eMuwarez?</strong>.
+                Excluye la temporada especial (temporada 0) de los datos globales de la serie: si tienes todas las temporadas y capítulos salvo los especiales, la serie contará como completa en <strong>Estado</strong>, <strong>Nomenclatura</strong> y <strong>¿En eMuwarez?</strong>, y sus atributos consolidados (<strong>resolución, source, códecs, audio y subtítulos</strong>) se calculan ignorando los especiales.
               </span>
             </span>
           </label>

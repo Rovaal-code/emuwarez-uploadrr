@@ -154,41 +154,60 @@ def _size_rollup(conn, item_id: int, item_type: str) -> Optional[int]:
     return int(r["s"]) if r and r["s"] is not None else None
 
 
-def _child_quality_rollup(conn, item_id: int, item_type: str) -> tuple:
-    """(provider_code, resolution, source) for a Season/Series: each is the
-    value shared by ALL its episodes, or None when they differ or are absent.
-    Lets a uniform season/series show the same provider/quality as its
-    episodes."""
+_ROLLUP_EMPTY = {
+    "provider": None, "resolution": None, "source": None, "video_codec": None,
+    "audio_codec": None, "audio_languages": None, "subtitle_languages": None,
+}
+
+
+def _child_quality_rollup(conn, item_id: int, item_type: str, ignore_specials: bool = False) -> dict:
+    """Per-attribute value shared by ALL episodes of a Season/Series (or None
+    when they differ or are absent): provider, resolution, source, video/audio
+    codec, audio and subtitle languages. Lets a uniform season/series show the
+    same attributes as its episodes. Specials (season 0) are excluded from a
+    Series rollup when ignore_specials is on."""
     if conn is None:
-        return (None, None, None)
+        return dict(_ROLLUP_EMPTY)
     if item_type == "season":
         rows = conn.execute(
-            "SELECT path, resolution, source FROM library_items "
+            "SELECT path, resolution, source, video_codec, audio_codec, "
+            "audio_languages, subtitle_languages FROM library_items "
             "WHERE parent_id = ? AND item_type = 'episode'",
             (item_id,),
         ).fetchall()
     elif item_type == "series":
         rows = conn.execute(
-            "SELECT e.path AS path, e.resolution AS resolution, e.source AS source "
+            "SELECT e.path AS path, e.resolution AS resolution, e.source AS source, "
+            "e.video_codec AS video_codec, e.audio_codec AS audio_codec, "
+            "e.audio_languages AS audio_languages, e.subtitle_languages AS subtitle_languages "
             "FROM library_items e JOIN library_items se ON e.parent_id = se.id "
-            "WHERE se.parent_id = ? AND e.item_type = 'episode'",
+            "WHERE se.parent_id = ? AND e.item_type = 'episode'"
+            + _specials_clause("se", ignore_specials),
             (item_id,),
         ).fetchall()
     else:
-        return (None, None, None)
+        return dict(_ROLLUP_EMPTY)
     if not rows:
-        return (None, None, None)
-    resolutions = {r["resolution"] for r in rows}
-    sources = {r["source"] for r in rows}
-    resolution = next(iter(resolutions)) if len(resolutions) == 1 else None
-    source = next(iter(sources)) if len(sources) == 1 else None
+        return dict(_ROLLUP_EMPTY)
+
+    def uniq(key: str):
+        vals = {r[key] for r in rows}
+        return next(iter(vals)) if len(vals) == 1 else None
+
     providers: set = set()
     for r in rows:
         providers.add(infer_provider_from_item({"path": r["path"], "source": r["source"]}))
         if len(providers) > 1:
             break
-    provider = next(iter(providers)) if len(providers) == 1 else None
-    return (provider, resolution, source)
+    return {
+        "provider": next(iter(providers)) if len(providers) == 1 else None,
+        "resolution": uniq("resolution"),
+        "source": uniq("source"),
+        "video_codec": uniq("video_codec"),
+        "audio_codec": uniq("audio_codec"),
+        "audio_languages": uniq("audio_languages"),
+        "subtitle_languages": uniq("subtitle_languages"),
+    }
 
 
 def _to_lib_response(row: dict, conn=None) -> LibraryItemResponse:
@@ -199,6 +218,10 @@ def _to_lib_response(row: dict, conn=None) -> LibraryItemResponse:
     provider = infer_provider_from_item(row)
     resolution = row.get("resolution")
     source = row.get("source")
+    video_codec = row.get("video_codec")
+    audio_codec = row.get("audio_codec")
+    audio_languages = row.get("audio_languages")
+    subtitle_languages = row.get("subtitle_languages")
     if row["item_type"] in ("season", "series"):
         ignore_specials = _ignore_specials(conn)
         rollup = _nomenclature_rollup(conn, row["id"], row["item_type"], ignore_specials)
@@ -213,11 +236,16 @@ def _to_lib_response(row: dict, conn=None) -> LibraryItemResponse:
         loc = _local_status_rollup(conn, row["id"], row["item_type"], ignore_specials)
         if loc is not None:
             local_status = loc
-        # Provider/quality: show the value shared by every episode (else blank).
-        r_prov, r_res, r_src = _child_quality_rollup(conn, row["id"], row["item_type"])
-        provider = provider or r_prov
-        resolution = resolution or r_res
-        source = source or r_src
+        # Provider/quality/codecs/audio/subs: show the value shared by every
+        # episode (else blank), so a uniform season/series reflects it.
+        rq = _child_quality_rollup(conn, row["id"], row["item_type"], ignore_specials)
+        provider = provider or rq["provider"]
+        resolution = resolution or rq["resolution"]
+        source = source or rq["source"]
+        video_codec = rq["video_codec"]
+        audio_codec = rq["audio_codec"]
+        audio_languages = rq["audio_languages"]
+        subtitle_languages = rq["subtitle_languages"]
     return LibraryItemResponse(
         id=row["id"],
         item_type=row["item_type"],
@@ -241,10 +269,10 @@ def _to_lib_response(row: dict, conn=None) -> LibraryItemResponse:
         source=source,
         provider=provider,
         provider_label=_provider_label(provider),
-        video_codec=row.get("video_codec"),
-        audio_codec=row.get("audio_codec"),
-        audio_languages=row.get("audio_languages"),
-        subtitle_languages=row.get("subtitle_languages"),
+        video_codec=video_codec,
+        audio_codec=audio_codec,
+        audio_languages=audio_languages,
+        subtitle_languages=subtitle_languages,
         size_bytes=size_bytes,
         local_status=local_status,
         request_status=row["request_status"],

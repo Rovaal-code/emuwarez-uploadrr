@@ -14,6 +14,9 @@ import { LoadingState } from '../components/LoadingState'
 import { ErrorState } from '../components/ErrorState'
 import { EmptyState } from '../components/EmptyState'
 import { SyncInfo } from '../components/SyncInfo'
+import { UploadWizardModal } from '../components/UploadWizardModal'
+import { getLibraryItem } from '../api/library'
+import type { LibraryItemResponse } from '../types/api'
 import { posterUrl } from '../utils/libraryItem'
 
 // A request's category maps to a friendly "Tipo" with an icon.
@@ -170,13 +173,15 @@ function CandidatesPanel({ requestId, onClose }: { requestId: number; onClose: (
   )
 }
 
-function DetailPanel({ item, readiness, onClose, onShowCandidates }: {
+function DetailPanel({ item, readiness, onClose, onShowCandidates, onUpload }: {
   item: RequestDetailResponse
   readiness: RequestReadinessResponse | null
   onClose: () => void
   onShowCandidates: () => void
+  onUpload: (libraryItemId: number) => void
 }) {
   const m = item.match
+  const libId = m?.library_item_id ?? item.library_item_id
   return (
     <div className="detail-panel">
       <div className="detail-panel__header" style={{ alignItems: 'flex-start' }}>
@@ -198,13 +203,37 @@ function DetailPanel({ item, readiness, onClose, onShowCandidates }: {
               {item.created_at && (
                 <div className="detail-row"><span>Creada</span><span>{new Date(item.created_at).toLocaleDateString('es-ES')}</span></div>
               )}
-              {item.url && (
-                <div className="detail-row"><span>Enlace</span><a href={item.url} target="_blank" rel="noreferrer" className="link">Ver en eMuwarez ↗</a></div>
-              )}
             </div>
           </div>
         </div>
         <button className="btn-icon" onClick={onClose}>✕</button>
+      </div>
+
+      <div className="detail-panel__section" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <a
+          className="btn btn-secondary btn-sm"
+          href={item.url ?? undefined}
+          target="_blank"
+          rel="noreferrer"
+          aria-disabled={!item.url}
+          onClick={e => { if (!item.url) e.preventDefault() }}
+          title={item.url
+            ? 'Abrir la petición en eMuwarez (reclamarla, marcarla como llena, ver el ID del torrent…)'
+            : 'La URL estará disponible cuando se sincronicen las peticiones reales de eMuwarez'}
+          style={{ textDecoration: 'none', opacity: item.url ? 1 : 0.5, pointerEvents: item.url ? 'auto' : 'none' }}
+        >
+          Consultar en eMuwarez ↗
+        </a>
+        <button
+          className="btn btn-primary btn-sm"
+          disabled={!libId}
+          title={libId
+            ? 'Subir el contenido de tu biblioteca a eMuwarez (mismo asistente que en Biblioteca)'
+            : 'No tienes este contenido en tu biblioteca'}
+          onClick={() => libId && onUpload(libId)}
+        >
+          ⬆ Subir a eMuwarez
+        </button>
       </div>
 
       {m ? (
@@ -317,6 +346,16 @@ export function RequestsPage() {
   const [readiness, setReadiness] = useState<RequestReadinessResponse | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [showCandidates, setShowCandidates] = useState(false)
+  const [wizardItem, setWizardItem] = useState<LibraryItemResponse | null>(null)
+
+  // "Subir a eMuwarez" — reuse the exact same upload wizard as Biblioteca by
+  // loading the matched library item and handing it to UploadWizardModal.
+  const openUpload = useCallback(async (libraryItemId: number) => {
+    try {
+      const libItem = await getLibraryItem(libraryItemId)
+      setWizardItem(libItem)
+    } catch { /* ignore — button only enabled when a match exists */ }
+  }, [])
 
   const loadItems = useCallback(async (off = 0) => {
     setLoading(true)
@@ -578,10 +617,19 @@ export function RequestsPage() {
                 readiness={readiness}
                 onClose={() => { setSelectedId(null); setDetail(null); setReadiness(null); setShowCandidates(false) }}
                 onShowCandidates={() => setShowCandidates(true)}
+                onUpload={openUpload}
               />
             ) : null}
           </div>
         </div>
+      )}
+
+      {wizardItem && (
+        <UploadWizardModal
+          item={wizardItem}
+          onClose={() => setWizardItem(null)}
+          onDone={() => { setWizardItem(null); loadItems(offset) }}
+        />
       )}
     </div>
   )

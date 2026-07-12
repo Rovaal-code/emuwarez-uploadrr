@@ -265,6 +265,25 @@ def test_classify_filled():
     assert result["status"] == "Llena"
 
 
+@pytest.mark.parametrize("emu_status,expected", [
+    ("Lleno", "Llena"),          # real eMuwarez value
+    ("Reclamado", "Reclamado"),
+    ("Pendiente", "Pendiente"),
+])
+def test_classify_real_emu_states(emu_status, expected):
+    req = _make_req(emu_status=emu_status, requested_resolution="1080p")
+    item = _make_item(resolution="1080p", local_status="Disponible")
+    assert classify_request_match(req, item, id_match=True)["status"] == expected
+
+
+def test_sin_llenar_is_open_not_filled():
+    """'Sin llenar' (abierta) must NOT be read as 'Llena' just because the word
+    'llenar' contains the substring 'llena'."""
+    req = _make_req(emu_status="Sin llenar", requested_resolution="1080p")
+    item = _make_item(resolution="1080p", local_status="Disponible")
+    assert classify_request_match(req, item, id_match=True)["status"] == "Compatible"
+
+
 def test_classify_no_restriction():
     req = _make_req(requested_resolution=None, requested_source=None)
     item = _make_item(resolution="720p", source="HDTV")

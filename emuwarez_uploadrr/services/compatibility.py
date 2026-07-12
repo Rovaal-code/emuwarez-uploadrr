@@ -264,6 +264,10 @@ def classify_request_match(
         emu_state = "Reclamado"
     elif "pend" in status_text or "pending" in status_text:
         emu_state = "Pendiente"
+    elif "sin llen" in status_text or "unfilled" in status_text or "open" in status_text or "abiert" in status_text:
+        # "Sin llenar" = petición abierta. Se comprueba ANTES de "Llena" porque
+        # "llenar" contiene la subcadena "llena" y daría un falso positivo.
+        emu_state = None
     elif "lleno" in status_text or "llena" in status_text or "filled" in status_text or status_text == "1":
         emu_state = "Llena"
     if emu_state:

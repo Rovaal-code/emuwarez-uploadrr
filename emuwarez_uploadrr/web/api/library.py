@@ -1,6 +1,7 @@
 """Real library, missing, and sync endpoints (Phase 4)."""
 from __future__ import annotations
 
+import os
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -154,6 +155,40 @@ def _size_rollup(conn, item_id: int, item_type: str) -> Optional[int]:
     return int(r["s"]) if r and r["s"] is not None else None
 
 
+def _rollup_path(conn, item_id: int, item_type: str, ignore_specials: bool = False) -> Optional[str]:
+    """Folder path for a Season/Series rollup, derived from its episodes'
+    files: the common parent directory (a season's own folder, e.g.
+    '…/Attack on Titan/Season 2'; a series' root folder)."""
+    if conn is None:
+        return None
+    if item_type == "season":
+        rows = conn.execute(
+            "SELECT path FROM library_items "
+            "WHERE parent_id = ? AND item_type = 'episode' AND path IS NOT NULL",
+            (item_id,),
+        ).fetchall()
+    elif item_type == "series":
+        rows = conn.execute(
+            "SELECT e.path AS path FROM library_items e "
+            "JOIN library_items se ON e.parent_id = se.id "
+            "WHERE se.parent_id = ? AND e.item_type = 'episode' AND e.path IS NOT NULL"
+            + _specials_clause("se", ignore_specials),
+            (item_id,),
+        ).fetchall()
+    else:
+        return None
+    paths = [r["path"] for r in rows if r["path"]]
+    if not paths:
+        return None
+    dirs = {os.path.dirname(p) for p in paths}
+    if len(dirs) == 1:
+        return next(iter(dirs))
+    try:
+        return os.path.commonpath(paths)
+    except ValueError:
+        return None
+
+
 _ROLLUP_EMPTY = {
     "provider": None, "resolution": None, "source": None, "video_codec": None,
     "audio_codec": None, "audio_languages": None, "subtitle_languages": None,
@@ -218,6 +253,7 @@ def _to_lib_response(row: dict, conn=None) -> LibraryItemResponse:
     provider = infer_provider_from_item(row)
     resolution = row.get("resolution")
     source = row.get("source")
+    path = row.get("path")
     video_codec = row.get("video_codec")
     audio_codec = row.get("audio_codec")
     audio_languages = row.get("audio_languages")
@@ -246,6 +282,10 @@ def _to_lib_response(row: dict, conn=None) -> LibraryItemResponse:
         audio_codec = rq["audio_codec"]
         audio_languages = rq["audio_languages"]
         subtitle_languages = rq["subtitle_languages"]
+        # A season/series rollup has no file of its own — show its folder path
+        # derived from the episodes (e.g. '…/Attack on Titan/Season 2').
+        if not path:
+            path = _rollup_path(conn, row["id"], row["item_type"], ignore_specials)
     return LibraryItemResponse(
         id=row["id"],
         item_type=row["item_type"],
@@ -263,7 +303,7 @@ def _to_lib_response(row: dict, conn=None) -> LibraryItemResponse:
         season_number=row.get("season_number"),
         episode_number=row.get("episode_number"),
         parent_id=row.get("parent_id"),
-        path=row.get("path"),
+        path=path,
         quality=row.get("quality"),
         resolution=resolution,
         source=source,

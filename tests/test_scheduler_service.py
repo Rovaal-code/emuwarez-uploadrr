@@ -4,6 +4,10 @@ All actual sync work (library/eMuwarez/network) is mocked — these tests
 only exercise the scheduler's own bookkeeping (interval enforcement,
 claim/due logic, status recording), never real Radarr/Sonarr/eMuwarez
 traffic.
+
+Note: the eMuwarez request sync is intentionally NOT a scheduled task (it
+runs only from the "Sincronizar peticiones" button), so the only default
+scheduled task is the library sync.
 """
 from __future__ import annotations
 
@@ -42,15 +46,17 @@ def test_default_tasks_seeded_with_correct_intervals(db_conn):
     assert tasks[TASK_LIBRARY_SYNC]["min_interval_minutes"] == 15
     assert tasks[TASK_LIBRARY_SYNC]["manual_allowed"] == 1
 
-    assert tasks[TASK_EMU_SYNC]["interval_minutes"] == 60
-    assert tasks[TASK_EMU_SYNC]["min_interval_minutes"] == 60
-    assert tasks[TASK_EMU_SYNC]["manual_allowed"] == 0
+
+def test_emu_request_sync_is_not_scheduled(db_conn):
+    """The eMuwarez request sync must not be a scheduled task — button only."""
+    tasks = {t["task_key"] for t in list_scheduled_tasks(db_conn)}
+    assert TASK_EMU_SYNC not in tasks
 
 
 def test_list_scheduled_tasks_idempotent(db_conn):
     first = list_scheduled_tasks(db_conn)
     second = list_scheduled_tasks(db_conn)
-    assert len(first) == len(second) == 2
+    assert len(first) == len(second) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -70,11 +76,6 @@ def test_set_interval_at_minimum_allowed(db_conn):
 def test_set_interval_above_minimum_allowed(db_conn):
     task = set_task_interval(db_conn, TASK_LIBRARY_SYNC, 120)
     assert task["interval_minutes"] == 120
-
-
-def test_set_interval_emu_below_60_rejected(db_conn):
-    with pytest.raises(ValueError, match="mínimo"):
-        set_task_interval(db_conn, TASK_EMU_SYNC, 30)
 
 
 def test_set_interval_unknown_task_raises(db_conn):
@@ -109,29 +110,6 @@ def test_run_library_sync_failure_recorded_not_raised(db_conn):
     assert task["last_status"] == "failed"
 
 
-def test_run_emu_sync_manual_blocked(db_conn):
-    with pytest.raises(ValueError, match="no admite ejecución manual"):
-        run_scheduled_task(db_conn, TASK_EMU_SYNC, manual=True)
-
-
-def test_run_emu_sync_automatic_allowed(db_conn):
-    with patch("emuwarez_uploadrr.services.requests.sync_emu_requests") as mock_sync:
-        mock_sync.return_value = {"status": "ok", "imported": 3, "matched": 2}
-        result = run_scheduled_task(db_conn, TASK_EMU_SYNC, manual=False)
-
-    assert result["status"] == "completed"
-    assert "3" in result["summary"]
-
-
-def test_run_emu_sync_throttled_reports_skipped(db_conn):
-    with patch("emuwarez_uploadrr.services.requests.sync_emu_requests") as mock_sync:
-        mock_sync.return_value = {"status": "throttled", "wait_seconds": 1800, "imported": 0, "matched": 0}
-        result = run_scheduled_task(db_conn, TASK_EMU_SYNC, manual=False)
-
-    assert result["status"] == "skipped"
-    assert "1800" in result["summary"]
-
-
 def test_run_unknown_task_raises(db_conn):
     with pytest.raises(ValueError, match="desconocida"):
         run_scheduled_task(db_conn, "not-a-real-task", manual=False)
@@ -143,12 +121,12 @@ def test_run_unknown_task_raises(db_conn):
 
 def test_claim_due_tasks_all_due_initially(db_conn):
     claimed = claim_due_tasks(db_conn)
-    assert set(claimed) == {TASK_LIBRARY_SYNC, TASK_EMU_SYNC}
+    assert set(claimed) == {TASK_LIBRARY_SYNC}
 
 
 def test_claim_due_tasks_does_not_reclaim_immediately(db_conn):
     first = claim_due_tasks(db_conn)
-    assert len(first) == 2
+    assert len(first) == 1
     second = claim_due_tasks(db_conn)
     assert second == []  # grace window pushed next_run_at forward
 
@@ -166,22 +144,18 @@ def test_claim_due_tasks_respects_disabled_flag(db_conn):
 # ---------------------------------------------------------------------------
 
 def test_tick_due_tasks_runs_all_on_first_tick(isolated_db):
-    with patch("emuwarez_uploadrr.services.library.sync_all") as mock_lib, \
-         patch("emuwarez_uploadrr.services.requests.sync_emu_requests") as mock_emu:
+    with patch("emuwarez_uploadrr.services.library.sync_all") as mock_lib:
         mock_lib.return_value = {"imported": 0, "missing": 0, "instances": 0, "errors": []}
-        mock_emu.return_value = {"status": "ok", "imported": 0, "matched": 0}
         results = tick_due_tasks()
 
     task_keys = {r["task_key"] for r in results}
-    assert task_keys == {TASK_LIBRARY_SYNC, TASK_EMU_SYNC}
+    assert task_keys == {TASK_LIBRARY_SYNC}
     assert all(r["status"] in ("completed", "skipped") for r in results)
 
 
 def test_tick_due_tasks_second_tick_runs_nothing(isolated_db):
-    with patch("emuwarez_uploadrr.services.library.sync_all") as mock_lib, \
-         patch("emuwarez_uploadrr.services.requests.sync_emu_requests") as mock_emu:
+    with patch("emuwarez_uploadrr.services.library.sync_all") as mock_lib:
         mock_lib.return_value = {"imported": 0, "missing": 0, "instances": 0, "errors": []}
-        mock_emu.return_value = {"status": "ok", "imported": 0, "matched": 0}
         tick_due_tasks()
         second_results = tick_due_tasks()
 

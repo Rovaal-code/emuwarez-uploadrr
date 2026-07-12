@@ -35,13 +35,14 @@ DEFAULT_TASKS: list[tuple[str, str, str, int, int, int]] = [
         "Sincroniza las bibliotecas desde las instancias Radarr/Sonarr configuradas.",
         30, 15, 1,
     ),
-    (
-        TASK_EMU_SYNC,
-        "Sincronizar peticiones eMuwarez",
-        "Sincroniza peticiones desde eMuwarez. Sin refresco manual, para no saturar el servicio.",
-        60, 60, 0,
-    ),
+    # NOTE: the eMuwarez request sync (TASK_EMU_SYNC) is intentionally NOT a
+    # scheduled task — it runs only from the "Sincronizar peticiones" button.
+    # The 1h throttle in services/requests.py still applies.
 ]
+
+# Task keys that used to be scheduled but were removed — pruned on seed so they
+# stop appearing in the Tareas page.
+OBSOLETE_TASKS: list[str] = [TASK_EMU_SYNC]
 
 
 def _now() -> datetime:
@@ -61,6 +62,9 @@ def ensure_default_tasks(conn: sqlite3.Connection) -> None:
                VALUES (?, ?, ?, ?, ?, ?)""",
             (task_key, name, description, interval, min_interval, manual_allowed),
         )
+    # Prune tasks that used to be scheduled but no longer are.
+    for task_key in OBSOLETE_TASKS:
+        conn.execute("DELETE FROM scheduled_tasks WHERE task_key = ?", (task_key,))
     conn.commit()
 
 

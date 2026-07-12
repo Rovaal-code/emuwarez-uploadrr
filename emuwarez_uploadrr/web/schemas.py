@@ -540,6 +540,8 @@ class RequestMatchResponse(BaseModel):
     local_status: Optional[str] = None
     local_resolution: Optional[str] = None
     local_source: Optional[str] = None
+    local_video_codec: Optional[str] = None
+    local_audio_languages: Optional[str] = None
     local_path: Optional[str] = None
     nomenclature_status: Optional[str] = None
     status: str

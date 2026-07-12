@@ -74,6 +74,8 @@ def _match_dict_to_response(match_data: dict | None) -> RequestMatchResponse | N
         local_status=match_data.get("local_status"),
         local_resolution=match_data.get("local_resolution"),
         local_source=match_data.get("local_source"),
+        local_video_codec=match_data.get("local_video_codec"),
+        local_audio_languages=match_data.get("local_audio_languages"),
         local_path=match_data.get("local_path"),
         nomenclature_status=match_data.get("nomenclature_status"),
         status=match_data["status"],

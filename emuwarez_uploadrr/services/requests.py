@@ -556,7 +556,8 @@ def get_request_detail(conn: sqlite3.Connection, request_id: int) -> Optional[di
         """
         SELECT rm.*, li.title AS library_title, li.local_status, li.resolution AS local_resolution,
                li.source AS local_source, li.path AS local_path, li.nomenclature_status,
-               li.poster_url AS poster_url
+               li.poster_url AS poster_url, li.video_codec AS local_video_codec,
+               li.audio_languages AS local_audio_languages
         FROM request_matches rm
         JOIN library_items li ON li.id = rm.library_item_id
         WHERE rm.request_item_id = ?
@@ -576,6 +577,8 @@ def get_request_detail(conn: sqlite3.Connection, request_id: int) -> Optional[di
             "local_status": md.get("local_status"),
             "local_resolution": md.get("local_resolution"),
             "local_source": md.get("local_source"),
+            "local_video_codec": md.get("local_video_codec"),
+            "local_audio_languages": md.get("local_audio_languages"),
             "local_path": md.get("local_path"),
             "nomenclature_status": md.get("nomenclature_status"),
             "status": md["status"],

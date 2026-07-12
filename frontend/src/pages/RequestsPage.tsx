@@ -91,12 +91,6 @@ function matchMark(v: boolean | null) {
   return <span style={{ color: 'var(--text-muted)' }}>—</span>
 }
 
-const _AVAILABLE_LOCAL = new Set(['Disponible', 'Subido', 'Subiendo', 'Parcial'])
-function _availableLocal(status: string | null): boolean | null {
-  if (!status) return null
-  return _AVAILABLE_LOCAL.has(status)
-}
-
 function noReq(v: string | null): string {
   if (!v || ['any', 'cualquiera', 'todos', 'all'].includes(v.trim().toLowerCase())) return 'Cualquiera'
   return v
@@ -173,34 +167,57 @@ function CandidatesPanel({ requestId, onClose }: { requestId: number; onClose: (
   )
 }
 
-function DetailPanel({ item, readiness, onClose, onShowCandidates, onUpload }: {
+function ReqField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>{label}</div>
+      <div style={{ fontSize: 14, wordBreak: 'break-word' }}>{children}</div>
+    </div>
+  )
+}
+
+// Full dedicated request page — same visual format as the library item detail
+// page (back button, big poster left, title + fields grid right).
+function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload }: {
   item: RequestDetailResponse
   readiness: RequestReadinessResponse | null
-  onClose: () => void
+  onBack: () => void
   onShowCandidates: () => void
   onUpload: (libraryItemId: number) => void
 }) {
   const m = item.match
   const libId = m?.library_item_id ?? item.library_item_id
+  const t = tipoOf(item.category)
   return (
-    <div className="detail-panel">
-      <div className="detail-panel__header" style={{ alignItems: 'flex-start', position: 'relative' }}>
-        <div style={{ display: 'flex', gap: 16, alignItems: 'stretch', flex: 1, minWidth: 0 }}>
-          {/* Left column: poster fills the text height, "Consultar" below it. */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: 134, flexShrink: 0 }}>
-            <div style={{ flex: 1, minHeight: 170, borderRadius: 8, overflow: 'hidden', background: 'rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {item.poster_url ? (
-                <img
-                  src={posterUrl(item.poster_url, 'w342')}
-                  alt=""
-                  loading="lazy"
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
-                />
-              ) : (
-                <span style={{ fontSize: 44, opacity: 0.35 }}>{tipoOf(item.category).icon}</span>
-              )}
-            </div>
+    <div style={{ width: '100%', flex: 1, minHeight: 0, overflowY: 'auto' }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+        <button className="btn btn-ghost btn-sm" onClick={onBack}>← Volver a peticiones</button>
+      </div>
+
+      <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap' }}>
+        <div style={{ flexShrink: 0, width: 300, maxWidth: '100%' }}>
+          <div style={{ width: '100%', aspectRatio: '2 / 3', borderRadius: 12, overflow: 'hidden', background: 'rgba(255,255,255,0.04)' }}>
+            {item.poster_url ? (
+              <img
+                src={posterUrl(item.poster_url, 'w500')}
+                alt={item.title}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+              />
+            ) : (
+              <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 88, opacity: 0.35 }}>{t.icon}</div>
+            )}
+          </div>
+        </div>
+
+        <div style={{ flex: 1, minWidth: 300 }}>
+          <div style={{ fontWeight: 700, fontSize: 28 }}>{item.title}</div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', margin: '12px 0 20px', flexWrap: 'wrap' }}>
+            <CompatibilityBadge status={m ? m.status : (item.compatibility_status ?? null)} />
+            <span style={{ color: 'var(--text-muted)' }}>{t.icon} {t.label}</span>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
             <a
               className="btn btn-secondary btn-sm"
               href={item.url ?? undefined}
@@ -211,124 +228,74 @@ function DetailPanel({ item, readiness, onClose, onShowCandidates, onUpload }: {
               title={item.url
                 ? 'Abrir la petición en eMuwarez (reclamarla, marcarla como llena, ver el ID del torrent…)'
                 : 'La URL estará disponible cuando se sincronicen las peticiones reales de eMuwarez'}
-              style={{ textDecoration: 'none', justifyContent: 'center', opacity: item.url ? 1 : 0.5, pointerEvents: item.url ? 'auto' : 'none' }}
+              style={{ textDecoration: 'none', opacity: item.url ? 1 : 0.5, pointerEvents: item.url ? 'auto' : 'none' }}
             >
-              Consultar ↗
+              Consultar en eMuwarez ↗
             </a>
+            <button
+              className="btn btn-primary btn-sm"
+              disabled={!libId}
+              title={libId
+                ? 'Subir el contenido de tu biblioteca a eMuwarez (mismo asistente que en Biblioteca)'
+                : 'No tienes este contenido en tu biblioteca'}
+              onClick={() => libId && onUpload(libId)}
+            >
+              ⬆ Subir a eMuwarez
+            </button>
           </div>
 
-          {/* Right column: facts, with "Subir" pinned bottom-right. */}
-          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-            <div className="detail-panel__title" style={{ paddingRight: 26 }}>{item.title}</div>
-            {item.category && <div className="detail-panel__subtitle">{tipoOf(item.category).icon} {tipoOf(item.category).label}</div>}
-            <div style={{ margin: '8px 0 12px' }}><CompatibilityBadge status={m ? m.status : (item.compatibility_status ?? null)} /></div>
-            <div className="req-facts">
-              <div className="detail-row"><span>Autor</span><span><AuthorCell author={item.author} isMine={item.is_mine} /></span></div>
-              <div className="detail-row"><span>Resolución pedida</span><span>{noReq(item.requested_resolution)}</span></div>
-              <div className="detail-row"><span>Source pedido</span><span>{noReq(item.requested_source)}</span></div>
-              <div className="detail-row"><span>🪙 Puntos</span><span>{fmtNum(item.points)}</span></div>
-              <div className="detail-row"><span>👍 Votos</span><span>{item.votes ?? 0}</span></div>
-              <div className="detail-row"><span>💬 Comentarios</span><span>{item.comments ?? 0}</span></div>
-              {item.tmdb_id && <div className="detail-row"><span>TMDb</span><span>{item.tmdb_id}</span></div>}
-              {item.imdb_id && <div className="detail-row"><span>IMDb</span><span>{item.imdb_id}</span></div>}
-              {item.created_at && (
-                <div className="detail-row"><span>Creada</span><span>{new Date(item.created_at).toLocaleDateString('es-ES')}</span></div>
-              )}
-            </div>
-            <div style={{ marginTop: 'auto', paddingTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
-              <button
-                className="btn btn-primary btn-sm"
-                disabled={!libId}
-                title={libId
-                  ? 'Subir el contenido de tu biblioteca a eMuwarez (mismo asistente que en Biblioteca)'
-                  : 'No tienes este contenido en tu biblioteca'}
-                onClick={() => libId && onUpload(libId)}
-              >
-                ⬆ Subir a eMuwarez
-              </button>
-            </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '16px 28px' }}>
+            <ReqField label="Autor"><AuthorCell author={item.author} isMine={item.is_mine} /></ReqField>
+            <ReqField label="Resolución pedida">{noReq(item.requested_resolution)}</ReqField>
+            <ReqField label="Source pedido">{noReq(item.requested_source)}</ReqField>
+            <ReqField label="🪙 Puntos">{fmtNum(item.points)}</ReqField>
+            <ReqField label="👍 Votos">{item.votes ?? 0}</ReqField>
+            <ReqField label="💬 Comentarios">{item.comments ?? 0}</ReqField>
+            <ReqField label="TMDb / IMDb">{item.tmdb_id ?? '—'} / {item.imdb_id ?? '—'}</ReqField>
+            {item.created_at && <ReqField label="Creada">{new Date(item.created_at).toLocaleDateString('es-ES')}</ReqField>}
           </div>
         </div>
-        <button className="btn-icon" onClick={onClose} style={{ position: 'absolute', top: 0, right: 0 }}>✕</button>
       </div>
 
       {m ? (
-        <div className="detail-panel__section">
-          <div className="detail-panel__section-title">Petición vs. tu biblioteca</div>
-          <table className="cmp-table">
+        <div style={{ marginTop: 28 }}>
+          <div className="detail-panel__section-title" style={{ marginBottom: 10 }}>Petición vs. tu biblioteca</div>
+          <table className="cmp-table" style={{ maxWidth: 640 }}>
             <thead>
-              <tr>
-                <th></th>
-                <th>Petición</th>
-                <th>Tu biblioteca</th>
-                <th aria-label="Cumple"></th>
-              </tr>
+              <tr><th></th><th>Petición</th><th>Tu biblioteca</th><th aria-label="Cumple"></th></tr>
             </thead>
             <tbody>
-              <tr>
-                <th>Contenido</th>
-                <td>{item.title}</td>
-                <td>{m.library_title || '—'}</td>
-                <td>{matchMark(m.id_match ? true : null)}</td>
-              </tr>
-              <tr>
-                <th>Resolución</th>
-                <td>{noReq(item.requested_resolution)}</td>
-                <td>{m.local_resolution || '—'}</td>
-                <td>{matchMark(m.resolution_match)}</td>
-              </tr>
-              <tr>
-                <th>Source</th>
-                <td>{noReq(item.requested_source)}</td>
-                <td>{m.local_source || '—'}</td>
-                <td>{matchMark(m.source_match)}</td>
-              </tr>
-              <tr>
-                <th>En disco</th>
-                <td>—</td>
-                <td>{m.local_status || '—'}</td>
-                <td>{matchMark(_availableLocal(m.local_status))}</td>
-              </tr>
-              {m.nomenclature_status && m.nomenclature_status !== 'N/A' && (
-                <tr>
-                  <th>Nomenclatura</th>
-                  <td>—</td>
-                  <td>{m.nomenclature_status}</td>
-                  <td>{matchMark(m.nomenclature_status === 'Correcta' ? true : null)}</td>
-                </tr>
-              )}
+              <tr><th>Contenido</th><td>{item.title}</td><td>{m.library_title || '—'}</td><td>{matchMark(m.id_match ? true : null)}</td></tr>
+              <tr><th>Resolución</th><td>{noReq(item.requested_resolution)}</td><td>{m.local_resolution || '—'}</td><td>{matchMark(m.resolution_match)}</td></tr>
+              <tr><th>Source</th><td>{noReq(item.requested_source)}</td><td>{m.local_source || '—'}</td><td>{matchMark(m.source_match)}</td></tr>
+              <tr><th>Idioma</th><td>—</td><td>{m.local_audio_languages || '—'}</td><td>{matchMark(null)}</td></tr>
+              <tr><th>Códec de vídeo</th><td>—</td><td>{m.local_video_codec || '—'}</td><td>{matchMark(null)}</td></tr>
             </tbody>
           </table>
-          <div className="cmp-confidence">Confianza del emparejamiento: <strong>{Math.round(m.confidence * 100)}%</strong></div>
-          {m.reasons.length > 0 && (
-            <ul className="cmp-reasons">
-              {m.reasons.map((r, i) => <li key={i}>{r}</li>)}
-            </ul>
-          )}
         </div>
       ) : (
-        <div className="detail-panel__section">
-          <div className="empty-inline">Sin coincidencia en tu biblioteca local — no tienes este contenido.</div>
-        </div>
+        <div className="empty-inline" style={{ marginTop: 28 }}>Sin coincidencia en tu biblioteca local — no tienes este contenido.</div>
       )}
 
       {readiness && (
-        <details className="detail-panel__section cmp-readiness">
+        <details className="cmp-readiness" style={{ marginTop: 20, maxWidth: 640 }}>
           <summary>Preparación de subida (avanzado)</summary>
-          <div className="detail-row"><span>Estado</span><ReadinessBadge status={readiness.status} /></div>
-          <div className="detail-row"><span>Acción</span><span style={{ fontSize: 12, color: '#a78bfa' }}>{readiness.recommended_action || '—'}</span></div>
-          <div className="detail-row"><span>Compat. score</span><span>{readiness.compatibility_score?.toFixed(0) ?? '—'}/100</span></div>
-          <div className="detail-row"><span>Readiness score</span><span>{readiness.upload_readiness_score?.toFixed(0) ?? '—'}/100</span></div>
-          {readiness.blockers.length > 0 && (
-            <div style={{ marginTop: 8 }}>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>BLOQUEADORES</div>
-              {readiness.blockers.map((b, i) => (
-                <div key={i} style={{ fontSize: 11, color: 'var(--color-missing)' }}>⛔ {b}</div>
-              ))}
-            </div>
-          )}
           <div style={{ marginTop: 8 }}>
-            <button className="btn btn-ghost btn-sm" onClick={onShowCandidates}>Ver candidatos</button>
+            <div className="detail-row"><span>Estado</span><ReadinessBadge status={readiness.status} /></div>
+            <div className="detail-row"><span>Acción</span><span style={{ fontSize: 12, color: '#a78bfa' }}>{readiness.recommended_action || '—'}</span></div>
+            <div className="detail-row"><span>Compat. score</span><span>{readiness.compatibility_score?.toFixed(0) ?? '—'}/100</span></div>
+            <div className="detail-row"><span>Readiness score</span><span>{readiness.upload_readiness_score?.toFixed(0) ?? '—'}/100</span></div>
+            {readiness.blockers.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>BLOQUEADORES</div>
+                {readiness.blockers.map((b, i) => (
+                  <div key={i} style={{ fontSize: 11, color: 'var(--color-missing)' }}>⛔ {b}</div>
+                ))}
+              </div>
+            )}
+            <div style={{ marginTop: 8 }}>
+              <button className="btn btn-ghost btn-sm" onClick={onShowCandidates}>Ver candidatos</button>
+            </div>
           </div>
         </details>
       )}
@@ -478,6 +445,20 @@ export function RequestsPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {selectedId !== null ? (
+        (detailLoading || !detail) ? (
+          <div style={{ padding: 24 }}><LoadingState label="Cargando petición…" /></div>
+        ) : (
+          <RequestDetailPage
+            item={detail}
+            readiness={readiness}
+            onBack={() => { setSelectedId(null); setDetail(null); setReadiness(null); setShowCandidates(false) }}
+            onShowCandidates={() => setShowCandidates(true)}
+            onUpload={openUpload}
+          />
+        )
+      ) : (
+      <>
         <div className="page-header">
           <div>
             <div className="page-title">Peticiones eMuwarez</div>
@@ -619,23 +600,13 @@ export function RequestsPage() {
             )}
           </div>
         )}
+      </>
+      )}
 
-      {selectedId !== null && (
-        <div className="modal-overlay" onClick={() => { setSelectedId(null); setDetail(null); setReadiness(null); setShowCandidates(false) }}>
-          <div className="modal" style={{ maxWidth: 700 }} onClick={e => e.stopPropagation()}>
-            {detailLoading ? (
-              <div style={{ padding: 24 }}><LoadingState label="Cargando detalle…" /></div>
-            ) : showCandidates ? (
-              <CandidatesPanel requestId={selectedId} onClose={() => setShowCandidates(false)} />
-            ) : detail ? (
-              <DetailPanel
-                item={detail}
-                readiness={readiness}
-                onClose={() => { setSelectedId(null); setDetail(null); setReadiness(null); setShowCandidates(false) }}
-                onShowCandidates={() => setShowCandidates(true)}
-                onUpload={openUpload}
-              />
-            ) : null}
+      {showCandidates && selectedId !== null && (
+        <div className="modal-overlay" onClick={() => setShowCandidates(false)}>
+          <div className="modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
+            <CandidatesPanel requestId={selectedId} onClose={() => setShowCandidates(false)} />
           </div>
         </div>
       )}

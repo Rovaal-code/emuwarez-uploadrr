@@ -108,29 +108,7 @@ function cellMark(v: boolean | null) {
   return null
 }
 
-// eMuwarez requests carry no language field; we derive "Español" from the
-// library item's audio languages string.
-function spanishLabel(langs: string | null): string {
-  if (!langs) return '?'
-  return /\b(spa|esp|es|cast|español|castellano)\b/i.test(langs) ? 'Sí' : 'No'
-}
-
 const baseName = (path: string | null) => (path ? path.split('/').pop() || null : null)
-
-// One-line description of what a compatibility status means, shown next to the
-// badge as the first value of the comparison table.
-function describeStatus(status: string | null): string {
-  switch (status) {
-    case 'Compatible': return 'Tu biblioteca cumple lo que pide la petición.'
-    case 'No disponible': return 'Lo tienes catalogado, pero el archivo falta en disco.'
-    case 'Parcial': return 'Cumple en parte (falla la resolución o el source).'
-    case 'No compatible': return 'Tu copia no alcanza la calidad pedida.'
-    case 'Reclamado': return 'Petición ya reclamada por otro usuario en eMuwarez.'
-    case 'Pendiente': return 'Petición pendiente de aprobación en eMuwarez.'
-    case 'Llena': return 'Petición ya cubierta (llena) en eMuwarez.'
-    default: return 'No tienes este contenido en tu biblioteca.'
-  }
-}
 
 function CompatibilityBadge({ status }: { status: string | null }) {
   if (!status) return <span className="badge req-none">Sin coincidencia</span>
@@ -278,6 +256,7 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '16px 28px' }}>
+            <ReqField label="Estado"><CompatibilityBadge status={m ? m.status : (item.compatibility_status ?? null)} /></ReqField>
             <ReqField label="Autor"><AuthorCell author={item.author} isMine={item.is_mine} /></ReqField>
             <ReqField label="Resolución pedida">{noReq(item.requested_resolution)}</ReqField>
             <ReqField label="Source pedido">{noReq(item.requested_source)}</ReqField>
@@ -295,16 +274,12 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
           Petición vs. tu biblioteca
         </div>
         <div style={{ padding: '16px 18px', background: 'rgba(255,255,255,0.03)', borderRadius: 10, border: '1px solid var(--border)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
-            <CompatibilityBadge status={m ? m.status : (item.compatibility_status ?? null)} />
-            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{describeStatus(m ? m.status : (item.compatibility_status ?? null))}</span>
-          </div>
           {m ? (
             <>
               <div style={{ overflowX: 'auto' }}>
                 <table className="data-table" style={{ fontSize: 12.5 }}>
                   <thead>
-                    <tr><th></th><th>Resolución</th><th>Source</th><th>Códec</th><th>Español</th><th>Tamaño</th><th>Nombre</th></tr>
+                    <tr><th>Contenido</th><th>Resolución</th><th>Source</th><th>Códec</th><th>Idiomas</th><th>Tamaño</th><th>Nombre</th></tr>
                   </thead>
                   <tbody>
                     <tr>
@@ -321,7 +296,7 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
                       <td style={{ whiteSpace: 'nowrap' }}>{m.local_resolution || '—'}{cellMark(satisfies(item.requested_resolution, m.local_resolution, m.resolution_match))}</td>
                       <td style={{ whiteSpace: 'nowrap' }}>{m.local_source || '—'}{cellMark(satisfies(item.requested_source, m.local_source, m.source_match))}</td>
                       <td>{m.local_video_codec || '—'}</td>
-                      <td>{spanishLabel(m.local_audio_languages)}</td>
+                      <td>{m.local_audio_languages || '—'}</td>
                       <td style={{ whiteSpace: 'nowrap' }}>{m.local_size ? formatBytes(m.local_size) : '—'}</td>
                       <td style={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }} title={baseName(m.local_path) || m.library_title || ''}>{baseName(m.local_path) || m.library_title || '—'}</td>
                     </tr>
@@ -329,7 +304,7 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
                 </table>
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10 }}>
-                El códec y el idioma de la petición no están disponibles (eMuwarez los pone en la descripción); "—" = no especificado. El "Español" de tu copia se deduce de los idiomas del archivo; "?" = desconocido.
+                El códec y el idioma de la petición aún no están disponibles.
               </div>
             </>
           ) : (

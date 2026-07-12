@@ -59,7 +59,7 @@ export function EmuComparisonSection({ itemId }: { itemId: number }) {
           <table className="data-table" style={{ fontSize: 12.5 }}>
             <thead>
               <tr>
-                <th></th>
+                <th>Contenido</th>
                 <th>Resolución</th>
                 <th>Source</th>
                 <th>Códec</th>
@@ -96,7 +96,7 @@ export function EmuComparisonSection({ itemId }: { itemId: number }) {
         </div>
       )}
       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10 }}>
-        El idioma español se deduce del nombre del torrent (eMuwarez no expone un campo de idioma); "?" = desconocido.
+        El idioma español se deduce del nombre del torrent; "?" = desconocido.
       </div>
     </Panel>
   )

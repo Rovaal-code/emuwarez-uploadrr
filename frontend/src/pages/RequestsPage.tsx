@@ -15,6 +15,38 @@ import { LoadingState } from '../components/LoadingState'
 import { ErrorState } from '../components/ErrorState'
 import { EmptyState } from '../components/EmptyState'
 import { SyncInfo } from '../components/SyncInfo'
+import { posterUrl } from '../utils/libraryItem'
+
+// A request's category maps to a friendly "Tipo" with an icon.
+function tipoOf(category: string | null): { icon: string; label: string } {
+  const c = (category || '').toLowerCase()
+  if (c.includes('serie')) return { icon: '📺', label: category || 'Serie' }
+  if (c.includes('docu')) return { icon: '🎥', label: category || 'Documental' }
+  if (c.includes('pel') || c.includes('movie') || c.includes('film')) return { icon: '🎬', label: category || 'Película' }
+  return { icon: '🎬', label: category || '—' }
+}
+
+function RequestPoster({ url, category, size = 'sm' }: { url: string | null; category: string | null; size?: 'sm' | 'lg' }) {
+  const dims = size === 'lg'
+    ? { width: 120, height: 180, radius: 8, font: 44 }
+    : { width: 30, height: 45, radius: 4, font: 15 }
+  const t = tipoOf(category)
+  return (
+    <div style={{ flexShrink: 0, width: dims.width, height: dims.height, borderRadius: dims.radius, overflow: 'hidden', background: 'rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      {url ? (
+        <img
+          src={posterUrl(url, size === 'lg' ? 'w342' : 'w154')}
+          alt=""
+          loading="lazy"
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+        />
+      ) : (
+        <span style={{ fontSize: dims.font, opacity: 0.35 }}>{t.icon}</span>
+      )}
+    </div>
+  )
+}
 
 const COMPATIBILITY_STATUSES = [
   { value: '', label: 'Compatibilidad: Todas' },
@@ -119,9 +151,13 @@ function DetailPanel({ item, readiness, onClose, onReviewed, onShowCandidates }:
   return (
     <div className="detail-panel">
       <div className="detail-panel__header">
-        <div>
-          <div className="detail-panel__title">{item.title}</div>
-          {item.category && <div className="detail-panel__subtitle">{item.category}</div>}
+        <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+          <RequestPoster url={item.poster_url} category={item.category} size="lg" />
+          <div>
+            <div className="detail-panel__title">{item.title}</div>
+            {item.category && <div className="detail-panel__subtitle">{tipoOf(item.category).icon} {tipoOf(item.category).label}</div>}
+            <div style={{ marginTop: 8 }}><CompatibilityBadge status={m ? m.status : (item.compatibility_status ?? null)} /></div>
+          </div>
         </div>
         <button className="btn-icon" onClick={onClose}>✕</button>
       </div>
@@ -347,8 +383,7 @@ export function RequestsPage() {
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1
 
   return (
-    <div className="page-split" style={{ display: 'flex', gap: 16, alignItems: 'flex-start', height: '100%' }}>
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         <div className="page-header">
           <div>
             <div className="page-title">Peticiones eMuwarez</div>
@@ -431,12 +466,10 @@ export function RequestsPage() {
                 <thead>
                   <tr>
                     <th>Título</th>
+                    <th>Tipo</th>
                     <th>Resolución</th>
                     <th>Source</th>
                     <th>Compatibilidad</th>
-                    <th>Readiness</th>
-                    <th>Acción</th>
-                    <th>Candidato</th>
                     <th>Estado EMU</th>
                   </tr>
                 </thead>
@@ -451,18 +484,25 @@ export function RequestsPage() {
                         style={{ cursor: 'pointer' }}
                       >
                         <td>
-                          <div style={{ fontWeight: 500 }}>{item.title}</div>
-                          {item.category && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.category}</div>}
-                          {item.reviewed_at && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>✓ Revisada</span>}
+                          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                            <RequestPoster url={item.poster_url} category={item.category} />
+                            <div style={{ minWidth: 0 }}>
+                              <div
+                                className="lib-title-link"
+                                onClick={e => { e.stopPropagation(); handleRowClick(item.id) }}
+                                title="Abrir ficha"
+                                style={{ fontWeight: 500 }}
+                              >
+                                {item.title}
+                              </div>
+                              {item.reviewed_at && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>✓ Revisada</span>}
+                            </div>
+                          </div>
                         </td>
+                        <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{tipoOf(item.category).icon} {tipoOf(item.category).label}</td>
                         <td>{item.requested_resolution || '—'}</td>
                         <td>{item.requested_source || '—'}</td>
                         <td><CompatibilityBadge status={item.compatibility_status} /></td>
-                        <td><ReadinessBadge status={item.readiness_status} /></td>
-                        <td style={{ fontSize: 11, color: '#a78bfa' }}>{item.readiness_action || '—'}</td>
-                        <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                          {item.readiness_best_library_item_id ? `#${item.readiness_best_library_item_id}` : '—'}
-                        </td>
                         <td style={{ fontSize: 12 }}>{item.emu_status || '—'}</td>
                       </tr>
                     )
@@ -480,23 +520,24 @@ export function RequestsPage() {
             )}
           </div>
         )}
-      </div>
 
       {selectedId !== null && (
-        <div style={{ width: 340, flexShrink: 0 }}>
-          {detailLoading ? (
-            <div className="detail-panel"><LoadingState label="Cargando detalle…" /></div>
-          ) : showCandidates ? (
-            <CandidatesPanel requestId={selectedId} onClose={() => setShowCandidates(false)} />
-          ) : detail ? (
-            <DetailPanel
-              item={detail}
-              readiness={readiness}
-              onClose={() => { setSelectedId(null); setDetail(null); setReadiness(null); setShowCandidates(false) }}
-              onReviewed={handleReviewed}
-              onShowCandidates={() => setShowCandidates(true)}
-            />
-          ) : null}
+        <div className="modal-overlay" onClick={() => { setSelectedId(null); setDetail(null); setReadiness(null); setShowCandidates(false) }}>
+          <div className="modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
+            {detailLoading ? (
+              <div style={{ padding: 24 }}><LoadingState label="Cargando detalle…" /></div>
+            ) : showCandidates ? (
+              <CandidatesPanel requestId={selectedId} onClose={() => setShowCandidates(false)} />
+            ) : detail ? (
+              <DetailPanel
+                item={detail}
+                readiness={readiness}
+                onClose={() => { setSelectedId(null); setDetail(null); setReadiness(null); setShowCandidates(false) }}
+                onReviewed={handleReviewed}
+                onShowCandidates={() => setShowCandidates(true)}
+              />
+            ) : null}
+          </div>
         </div>
       )}
     </div>

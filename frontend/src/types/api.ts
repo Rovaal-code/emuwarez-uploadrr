@@ -234,6 +234,7 @@ export interface RequestItemResponse {
   library_item_id: number | null
   library_title: string | null
   local_status: string | null
+  poster_url: string | null
   reviewed_at: string | null
   updated_at: string | null
   // Phase 8B

@@ -46,6 +46,7 @@ def _row_to_item(r: dict) -> RequestItemResponse:
         library_item_id=r.get("library_item_id"),
         library_title=r.get("library_title"),
         local_status=r.get("local_status"),
+        poster_url=r.get("poster_url"),
         reviewed_at=r.get("reviewed_at"),
         updated_at=r.get("updated_at"),
         # Phase 8B readiness fields

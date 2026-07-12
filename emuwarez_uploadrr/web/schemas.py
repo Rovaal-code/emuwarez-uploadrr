@@ -570,6 +570,7 @@ class RequestItemResponse(BaseModel):
     library_item_id: Optional[int] = None
     library_title: Optional[str] = None
     local_status: Optional[str] = None
+    poster_url: Optional[str] = None
     reviewed_at: Optional[str] = None
     updated_at: Optional[str] = None
     # Phase 8B — readiness fields (optional, not populated if readiness not yet evaluated)

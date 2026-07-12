@@ -332,7 +332,7 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
                 </table>
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10 }}>
-                * Aunque salga «Compatible», el audio y el códec aún no se pueden comparar porque suelen indicarse en la descripción. Revisa la petición por si pide un audio o códec concreto.
+                * Aunque salga «Compatible», el audio y el códec aún no se pueden comparar porque suelen indicarse en la descripción, al igual que si pide una serie completa y no se quiere la temporada especial. <span style={{ color: '#eab308' }}>Siempre es mejor revisar la petición por si acaso.</span>
               </div>
             </>
           ) : (

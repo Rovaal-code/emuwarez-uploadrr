@@ -155,6 +155,7 @@ export function LibraryPage() {
       setDiagActionMsg('Error al refrescar salud ARR')
     } finally {
       setDiagActionLoading(false)
+      setTimeout(() => setDiagActionMsg(null), 5000)
     }
   }
 
@@ -225,6 +226,7 @@ export function LibraryPage() {
       setEmuMsg(e instanceof Error ? e.message : 'Error al sincronizar con eMuwarez')
     } finally {
       setEmuSyncing(false)
+      setTimeout(() => setEmuMsg(null), 5000)  // no dejar el mensaje empujando la lista
     }
   }, [load, loadEmuStatus])
 

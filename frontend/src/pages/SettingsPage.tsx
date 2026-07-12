@@ -198,6 +198,7 @@ function ConfigTab() {
       setMsg({ ok: false, text: `✗ ${e instanceof Error ? e.message : String(e)}` })
     } finally {
       setSaving(false)
+      setTimeout(() => setMsg(null), 5000)  // no dejar el mensaje empujando las tarjetas
     }
   }
 
@@ -536,6 +537,13 @@ function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | null; on
   const [restorePath, setRestorePath] = useState('')
   const [restoreConfirm, setRestoreConfirm] = useState('')
 
+  // Show a transient message that clears itself after 5s (so it doesn't keep
+  // pushing the cards down).
+  const showMessage = useCallback((ok: boolean, text: string) => {
+    setMessage({ ok, text })
+    setTimeout(() => setMessage(null), 5000)
+  }, [])
+
   const loadBackups = useCallback(async () => {
     try {
       const r = await listBackups()
@@ -550,19 +558,19 @@ function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | null; on
     setMessage(null)
     try {
       const r = await createBackup()
-      setMessage({ ok: r.ok, text: r.ok ? `✓ Backup creado: ${r.archive_name} (${formatBytes(r.size_bytes ?? 0)})` : `✗ ${r.error}` })
+      showMessage(r.ok, r.ok ? `✓ Backup creado: ${r.archive_name} (${formatBytes(r.size_bytes ?? 0)})` : `✗ ${r.error}`)
       if (r.ok) { loadBackups(); onRefresh() }
     } catch (e: unknown) {
-      setMessage({ ok: false, text: `✗ ${e instanceof Error ? e.message : String(e)}` })
+      showMessage(false, `✗ ${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setBusy(false)
     }
   }
 
   async function handleRestore(dry: boolean) {
-    if (!restorePath) { setMessage({ ok: false, text: 'Introduce la ruta del backup' }); return }
+    if (!restorePath) { showMessage(false, 'Introduce la ruta del backup'); return }
     if (!dry && restoreConfirm !== 'RESTAURAR_CONFIG') {
-      setMessage({ ok: false, text: 'Escribe RESTAURAR_CONFIG para confirmar' }); return
+      showMessage(false, 'Escribe RESTAURAR_CONFIG para confirmar'); return
     }
     setBusy(true)
     setMessage(null)
@@ -572,9 +580,9 @@ function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | null; on
         apply: !dry,
         confirmation: dry ? undefined : restoreConfirm,
       })
-      setMessage({ ok: r.ok, text: r.ok ? `✓ ${r.message}` : `✗ ${r.error}` })
+      showMessage(r.ok, r.ok ? `✓ ${r.message}` : `✗ ${r.error}`)
     } catch (e: unknown) {
-      setMessage({ ok: false, text: `✗ ${e instanceof Error ? e.message : String(e)}` })
+      showMessage(false, `✗ ${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setBusy(false)
     }
@@ -660,7 +668,10 @@ function MaintenanceTab() {
   const [cleanupDays, setCleanupDays] = useState(30)
 
   function addResult(key: string, ok: boolean, text: string) {
-    setResults(prev => [{ key: `${key}-${Date.now()}`, ok, text }, ...prev.slice(0, 9)])
+    const id = `${key}-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    setResults(prev => [{ key: id, ok, text }, ...prev.slice(0, 9)])
+    // Auto-dismiss after 5s so the message doesn't keep pushing the cards.
+    setTimeout(() => setResults(prev => prev.filter(r => r.key !== id)), 5000)
   }
 
   async function handleIntegrity() {
@@ -877,6 +888,7 @@ function NotificationsTab() {
       setMsg({ ok: false, text: `✗ ${e instanceof Error ? e.message : String(e)}` })
     } finally {
       setSaving(false)
+      setTimeout(() => setMsg(null), 5000)
     }
   }
 

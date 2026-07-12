@@ -72,17 +72,21 @@ def dashboard_summary(current_user: dict = Depends(require_auth)) -> DashboardSu
             summary["requests_filled"] = int(row["filled"] or 0) if row else 0
             # Count requests whose BEST match is Compatible (same criterion as
             # the Peticiones list), not every Compatible match row.
-            compatible_row = conn.execute(
-                """
-                SELECT COUNT(*) AS cnt FROM request_items ri
-                WHERE (
-                    SELECT rm.status FROM request_matches rm
-                    WHERE rm.request_item_id = ri.id
-                    ORDER BY rm.confidence DESC LIMIT 1
-                ) = 'Compatible'
-                """
-            ).fetchone()
-            summary["requests_compatible"] = int(compatible_row["cnt"] or 0) if compatible_row else 0
+            def _count_best_status(status: str) -> int:
+                r = conn.execute(
+                    """
+                    SELECT COUNT(*) AS cnt FROM request_items ri
+                    WHERE (
+                        SELECT rm.status FROM request_matches rm
+                        WHERE rm.request_item_id = ri.id
+                        ORDER BY rm.confidence DESC LIMIT 1
+                    ) = ?
+                    """,
+                    (status,),
+                ).fetchone()
+                return int(r["cnt"] or 0) if r else 0
+            summary["requests_compatible"] = _count_best_status("Compatible")
+            summary["requests_partial"] = _count_best_status("Parcial")
             from emuwarez_uploadrr.database import get_state
             summary["requests_last_sync_at"] = get_state(conn, "last_emu_requests_sync_utc")
 
@@ -90,6 +94,7 @@ def dashboard_summary(current_user: dict = Depends(require_auth)) -> DashboardSu
             summary.setdefault("requests_total", 0)
             summary.setdefault("requests_filled", 0)
             summary.setdefault("requests_compatible", 0)
+            summary.setdefault("requests_partial", 0)
             summary.setdefault("requests_last_sync_at", None)
 
         # "Mis peticiones" (Phase 5 of the 12-part batch) — requests authored

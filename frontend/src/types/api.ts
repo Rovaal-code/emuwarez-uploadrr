@@ -43,6 +43,7 @@ export interface DashboardSummaryResponse {
   // Phase 5B — already computed backend-side, just missing from the type
   requests_total?: number
   requests_compatible?: number
+  requests_partial?: number
   requests_filled?: number
   requests_mine?: number
   requests_last_sync_at?: string | null

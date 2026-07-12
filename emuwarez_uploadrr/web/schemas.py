@@ -393,6 +393,7 @@ class DashboardSummaryResponse(BaseModel):
     # Phase 5B — EMU request stats (optional, default 0 if not yet synced)
     requests_total: int = 0
     requests_compatible: int = 0
+    requests_partial: int = 0
     requests_filled: int = 0
     requests_mine: int = 0
     requests_last_sync_at: Optional[str] = None

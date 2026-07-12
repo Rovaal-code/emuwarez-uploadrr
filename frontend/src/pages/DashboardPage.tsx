@@ -195,10 +195,22 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
           <div className="page-title">Dashboard</div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button className="btn btn-primary btn-sm" onClick={handleSync} disabled={syncing}>
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={handleSync}
+            disabled={syncing}
+            title="Consulta tus instancias de Radarr/Sonarr y actualiza la biblioteca local (títulos, rutas, estado en disco y nomenclatura)."
+          >
             {syncing ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Sincronizando…</> : '↻ Sincronizar biblioteca'}
           </button>
-          <SyncInfo syncStatus={emuSyncStatus} onSync={handleEmuSync} syncing={emuSyncing} label="Sincronizar peticiones" allowForce={false} />
+          <SyncInfo
+            syncStatus={emuSyncStatus}
+            onSync={handleEmuSync}
+            syncing={emuSyncing}
+            label="Sincronizar peticiones"
+            allowForce={false}
+            title="Descarga de eMuwarez las peticiones activas y las cruza con tu biblioteca local para ver cuáles puedes cubrir. Limitado a una vez por hora."
+          />
         </div>
       </div>
       {(syncMsg || emuSyncMsg) && (

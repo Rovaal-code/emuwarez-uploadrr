@@ -3,12 +3,13 @@ import type { RequestSyncStatusResponse } from '../types/api'
 // Shared by RequestsPage and the Dashboard's "Peticiones eMuwarez" sync
 // button — both surface the same 1h eMuwarez request-sync throttle
 // (services/requests.py::MIN_SYNC_SECONDS), so this used to be duplicated.
-export function SyncInfo({ syncStatus, onSync, syncing, label = 'Sincronizar', allowForce = true }: {
+export function SyncInfo({ syncStatus, onSync, syncing, label = 'Sincronizar', allowForce = true, title }: {
   syncStatus: RequestSyncStatusResponse | null
   onSync: (force: boolean) => void
   syncing: boolean
   label?: string
   allowForce?: boolean
+  title?: string
 }) {
   // Render the button even before the throttle status has loaded (or if it
   // failed), so the sync action is always visible; treat unknown as "can sync".
@@ -26,7 +27,7 @@ export function SyncInfo({ syncStatus, onSync, syncing, label = 'Sincronizar', a
       {!can_sync && (
         <span className="sync-info__throttle">Disponible en {mins} min</span>
       )}
-      <button className="btn btn-primary btn-sm" onClick={() => onSync(false)} disabled={syncing || !can_sync}>
+      <button className="btn btn-primary btn-sm" onClick={() => onSync(false)} disabled={syncing || !can_sync} title={title}>
         {syncing ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Sincronizando…</> : `↻ ${label}`}
       </button>
       {!can_sync && allowForce && (

@@ -441,6 +441,15 @@ def match_single_request(
 # Querying
 # ---------------------------------------------------------------------------
 
+_REQUEST_SORT = {
+    "created_desc": "ri.created_at DESC, ri.updated_at DESC",
+    "created_asc": "ri.created_at ASC, ri.updated_at ASC",
+    "title": "ri.title COLLATE NOCASE ASC",
+    "points_desc": "ri.points IS NULL, ri.points DESC, ri.created_at DESC",
+}
+_FILLED_STATUSES = ("filled", "1", "lleno", "llena")
+
+
 def list_request_items(
     conn: sqlite3.Connection,
     *,
@@ -448,6 +457,11 @@ def list_request_items(
     offset: int = 0,
     search: Optional[str] = None,
     status: Optional[str] = None,
+    category: Optional[str] = None,
+    resolution: Optional[str] = None,
+    source: Optional[str] = None,
+    emu_status: Optional[str] = None,
+    sort: Optional[str] = None,
 ) -> dict:
     """Return paginated request items enriched with best match info."""
     where_clauses: list[str] = []
@@ -459,8 +473,24 @@ def list_request_items(
     if status:
         where_clauses.append("COALESCE(rm.status, 'Sin coincidencia') = ?")
         params.append(status)
+    if category:
+        where_clauses.append("ri.category = ?")
+        params.append(category)
+    if resolution:
+        where_clauses.append("ri.requested_resolution = ?")
+        params.append(resolution)
+    if source:
+        where_clauses.append("ri.requested_source = ?")
+        params.append(source)
+    if emu_status == "filled":
+        where_clauses.append(f"LOWER(COALESCE(ri.emu_status,'')) IN ({','.join('?' * len(_FILLED_STATUSES))})")
+        params.extend(_FILLED_STATUSES)
+    elif emu_status == "open":
+        where_clauses.append(f"LOWER(COALESCE(ri.emu_status,'')) NOT IN ({','.join('?' * len(_FILLED_STATUSES))})")
+        params.extend(_FILLED_STATUSES)
 
     where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+    order_sql = _REQUEST_SORT.get(sort or "created_desc", _REQUEST_SORT["created_desc"])
 
     count_sql = f"""
         SELECT COUNT(*) AS cnt
@@ -497,7 +527,7 @@ def list_request_items(
           )
         LEFT JOIN library_items li ON li.id = rm.library_item_id
         {where_sql}
-        ORDER BY ri.updated_at DESC, ri.title COLLATE NOCASE
+        ORDER BY {order_sql}
         LIMIT ? OFFSET ?
     """
     rows = conn.execute(items_sql, params + [limit, offset]).fetchall()

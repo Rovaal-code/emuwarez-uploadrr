@@ -17,18 +17,33 @@ import { EmptyState } from '../components/EmptyState'
 import { SyncInfo } from '../components/SyncInfo'
 
 const COMPATIBILITY_STATUSES = [
-  { value: '', label: 'Todos' },
+  { value: '', label: 'Compatibilidad: Todas' },
   { value: 'Compatible', label: 'Compatible' },
+  { value: 'No disponible', label: 'No disponible' },
   { value: 'Parcial', label: 'Parcial' },
   { value: 'No compatible', label: 'No compatible' },
   { value: 'Llena', label: 'Llena' },
   { value: 'Sin coincidencia', label: 'Sin coincidencia' },
 ]
 
+const EMU_STATUS_OPTIONS = [
+  { value: '', label: 'Estado EMU: Todos' },
+  { value: 'open', label: 'Abierta' },
+  { value: 'filled', label: 'Llena' },
+]
+
+const SORT_OPTIONS = [
+  { value: 'created_desc', label: 'Orden: Más recientes' },
+  { value: 'created_asc', label: 'Orden: Más antiguas' },
+  { value: 'title', label: 'Orden: Título (A-Z)' },
+  { value: 'points_desc', label: 'Orden: Puntos (↓)' },
+]
+
 function CompatibilityBadge({ status }: { status: string | null }) {
   if (!status) return <span className="badge req-none">Sin coincidencia</span>
   const cls =
     status === 'Compatible' ? 'badge req-compatible' :
+    status === 'No disponible' ? 'badge req-unavailable' :
     status === 'Parcial' ? 'badge req-partial' :
     status === 'No compatible' ? 'badge req-not-compatible' :
     status === 'Llena' ? 'badge req-filled' :
@@ -199,6 +214,14 @@ export function RequestsPage() {
   const [offset, setOffset] = useState(0)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('')
+  const [resolutionFilter, setResolutionFilter] = useState('')
+  const [sourceFilter, setSourceFilter] = useState('')
+  const [emuFilter, setEmuFilter] = useState('')
+  const [sortBy, setSortBy] = useState('created_desc')
+  const [facets, setFacets] = useState<{ categories: string[]; resolutions: string[]; sources: string[] }>({
+    categories: [], resolutions: [], sources: [],
+  })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
@@ -210,11 +233,21 @@ export function RequestsPage() {
   const [detailLoading, setDetailLoading] = useState(false)
   const [showCandidates, setShowCandidates] = useState(false)
 
-  const loadItems = useCallback(async (off = 0, q = search, st = statusFilter) => {
+  const loadItems = useCallback(async (off = 0) => {
     setLoading(true)
     setError(null)
     try {
-      const res = await getRequests({ search: q || undefined, status: st || undefined, limit: PAGE_SIZE, offset: off })
+      const res = await getRequests({
+        search: search || undefined,
+        status: statusFilter || undefined,
+        category: categoryFilter || undefined,
+        resolution: resolutionFilter || undefined,
+        source: sourceFilter || undefined,
+        emu_status: emuFilter || undefined,
+        sort: sortBy,
+        limit: PAGE_SIZE,
+        offset: off,
+      })
       setItems(res.items)
       setTotal(res.total)
       setOffset(off)
@@ -223,7 +256,7 @@ export function RequestsPage() {
     } finally {
       setLoading(false)
     }
-  }, [search, statusFilter])
+  }, [search, statusFilter, categoryFilter, resolutionFilter, sourceFilter, emuFilter, sortBy])
 
   const loadSyncStatus = useCallback(async () => {
     try {
@@ -232,17 +265,31 @@ export function RequestsPage() {
     } catch { /* optional */ }
   }, [])
 
-  useEffect(() => {
-    loadItems()
-    loadSyncStatus()
+  // Populate filter dropdown options from the full (unfiltered) dataset so they
+  // stay stable regardless of the active filters.
+  const loadFacets = useCallback(async () => {
+    try {
+      const res = await getRequests({ sort: 'created_desc', limit: PAGE_SIZE, offset: 0 })
+      const uniq = (vals: (string | null | undefined)[]) =>
+        Array.from(new Set(vals.filter((v): v is string => !!v && v.trim() !== ''))).sort()
+      setFacets({
+        categories: uniq(res.items.map(i => i.category)),
+        resolutions: uniq(res.items.map(i => i.requested_resolution)),
+        sources: uniq(res.items.map(i => i.requested_source)),
+      })
+    } catch { /* optional */ }
   }, [])
 
+  useEffect(() => {
+    loadSyncStatus()
+    loadFacets()
+  }, [loadSyncStatus, loadFacets])
 
-  const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const val = e.target.value
-    setStatusFilter(val)
-    loadItems(0, search, val)
-  }
+  // Reload the table whenever a filter or the sort order changes.
+  useEffect(() => {
+    loadItems(0)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, categoryFilter, resolutionFilter, sourceFilter, emuFilter, sortBy])
 
   const handleSync = async (force: boolean) => {
     setSyncing(true)
@@ -253,6 +300,7 @@ export function RequestsPage() {
       if (res.ok) {
         await loadItems(0)
         await loadSyncStatus()
+        await loadFacets()
       }
     } catch (e: unknown) {
       setSyncMsg(e instanceof Error ? e.message : 'Error al sincronizar')
@@ -309,7 +357,13 @@ export function RequestsPage() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <SyncInfo syncStatus={syncStatus} onSync={handleSync} syncing={syncing} />
+            <SyncInfo
+              syncStatus={syncStatus}
+              onSync={handleSync}
+              syncing={syncing}
+              label="Sincronizar peticiones"
+              title="Descarga de eMuwarez las peticiones activas y las cruza con tu biblioteca local para ver cuáles puedes cubrir. Limitado a una vez por hora."
+            />
           </div>
         </div>
 
@@ -326,17 +380,34 @@ export function RequestsPage() {
             placeholder="Buscar por título…"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && loadItems(0, search, statusFilter)}
+            onKeyDown={e => e.key === 'Enter' && loadItems(0)}
             style={{ minWidth: 220 }}
           />
-          <select className="form-input form-select" value={statusFilter} onChange={handleStatusChange} style={{ width: 190 }}>
+          <select className="form-input form-select" value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
+            <option value="">Tipo: Todos</option>
+            {facets.categories.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select className="form-input form-select" value={resolutionFilter} onChange={e => setResolutionFilter(e.target.value)}>
+            <option value="">Resolución: Todas</option>
+            {facets.resolutions.map(r => <option key={r} value={r}>{r}</option>)}
+          </select>
+          <select className="form-input form-select" value={sourceFilter} onChange={e => setSourceFilter(e.target.value)}>
+            <option value="">Source: Todos</option>
+            {facets.sources.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select className="form-input form-select" value={emuFilter} onChange={e => setEmuFilter(e.target.value)}>
+            {EMU_STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+          </select>
+          <select className="form-input form-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
             {COMPATIBILITY_STATUSES.map(s => (
               <option key={s.value} value={s.value}>{s.label}</option>
             ))}
           </select>
+          <select className="form-input form-select" value={sortBy} onChange={e => setSortBy(e.target.value)}>
+            {SORT_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+          </select>
         </div>
 
-        <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
         {loading ? (
           <LoadingState label="Cargando peticiones…" />
         ) : error ? (
@@ -345,17 +416,17 @@ export function RequestsPage() {
           <EmptyState
             title="Sin peticiones"
             body={
-              total === 0 && !search && !statusFilter
+              total === 0 && !search && !statusFilter && !categoryFilter && !resolutionFilter && !sourceFilter && !emuFilter
                 ? 'Sincroniza las peticiones de eMuwarez para verlas aquí.'
                 : 'No hay peticiones que coincidan con los filtros.'
             }
             action={total === 0 ? (
-              <button className="btn btn-primary btn-sm" onClick={() => handleSync(false)}>Sincronizar</button>
+              <button className="btn btn-primary btn-sm" onClick={() => handleSync(false)}>Sincronizar peticiones</button>
             ) : undefined}
           />
         ) : (
-          <>
-            <div className="table-wrapper">
+          <div className="activity-section" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
               <table className="data-table">
                 <thead>
                   <tr>
@@ -407,9 +478,8 @@ export function RequestsPage() {
                 <button className="btn btn-secondary btn-sm" disabled={offset + PAGE_SIZE >= total} onClick={() => loadItems(offset + PAGE_SIZE)}>Siguiente</button>
               </div>
             )}
-          </>
+          </div>
         )}
-        </div>
       </div>
 
       {selectedId !== null && (

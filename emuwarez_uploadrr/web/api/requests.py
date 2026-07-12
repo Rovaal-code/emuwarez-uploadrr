@@ -80,13 +80,22 @@ def _match_dict_to_response(match_data: dict | None) -> RequestMatchResponse | N
 def list_requests(
     search: str | None = Query(None),
     status: str | None = Query(None),
+    category: str | None = Query(None),
+    resolution: str | None = Query(None),
+    source: str | None = Query(None),
+    emu_status: str | None = Query(None),
+    sort: str | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     current_user: dict = Depends(require_auth),
 ) -> RequestListResponse:
     from emuwarez_uploadrr.services.requests import list_request_items
     with _get_conn() as conn:
-        result = list_request_items(conn, limit=limit, offset=offset, search=search, status=status)
+        result = list_request_items(
+            conn, limit=limit, offset=offset, search=search, status=status,
+            category=category, resolution=resolution, source=source,
+            emu_status=emu_status, sort=sort,
+        )
     return RequestListResponse(
         items=[_row_to_item(r) for r in result["items"]],
         total=result["total"],

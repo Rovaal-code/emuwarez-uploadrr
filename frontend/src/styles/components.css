@@ -128,6 +128,7 @@
 .badge.req-compatible      { background: rgba(34,197,94,0.22);   color: #22c55e; }
 .badge.req-partial         { background: rgba(245,158,11,0.22);  color: #f59e0b; }
 .badge.req-not-compatible  { background: rgba(249,115,22,0.22);  color: #f97316; }
+.badge.req-unavailable     { background: rgba(239,68,68,0.22);   color: #ef4444; }
 .badge.req-filled          { background: rgba(107,114,128,0.20); color: #9ca3af; }
 .badge.req-unknown         { background: rgba(107,114,128,0.20); color: #9ca3af; }
 

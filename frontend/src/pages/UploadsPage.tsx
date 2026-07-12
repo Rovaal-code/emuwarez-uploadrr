@@ -477,7 +477,6 @@ export function UploadsPage() {
           <div className="page-subtitle">Trabajos de subida con Uploadrr</div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button className="btn btn-secondary btn-sm" onClick={() => load()} disabled={loading}>Actualizar</button>
           {hasRunningJob && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>● actualizando en vivo</span>}
         </div>
       </div>

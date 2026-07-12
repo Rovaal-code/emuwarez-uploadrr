@@ -374,7 +374,7 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
               <div style={{ padding: '36px 0', textAlign: 'center' }}>
                 <div style={{ fontSize: 15, fontWeight: 600 }}>Generando nomenclatura…</div>
                 <div className="text-muted" style={{ fontSize: 12, marginTop: 6 }}>
-                  Leyendo el mediainfo del archivo. Puede tardar unos segundos.
+                  A partir de los datos de Radarr/Sonarr.
                 </div>
               </div>
             )}

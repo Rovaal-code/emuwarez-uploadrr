@@ -296,22 +296,16 @@ def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
             _infer_source_from_item,
             get_latest_nomenclature_proposal,
             infer_provider_from_item,
-            _refresh_media_info_from_real_file,
         )
 
         item = get_library_item_for_nomenclature(library_item_id, conn=conn)
         if not item:
             return {"error": "Item no encontrado"}
 
-        # Run a real MediaInfo read of the actual file so the technical fields
-        # (codec/audio/subtitles) come from mediainfo — not just Radarr/Sonarr's
-        # sync-time metadata. Silently keeps the sync values when the file or the
-        # `mediainfo` binary isn't available (e.g. outside the homelab).
-        try:
-            _refresh_media_info_from_real_file(item, conn=conn)
-            item = get_library_item_for_nomenclature(library_item_id, conn=conn) or item
-        except Exception:
-            pass
+        # The technical fields (codec/audio/subtitles) come from Radarr/Sonarr's
+        # sync-time metadata — fast and offline. A fresh MediaInfo read of the
+        # real file is a separate, on-demand action (the MediaInfo button), so
+        # generating the nomenclature no longer blocks on reading the file.
 
         title = item.get("title") or ""
         year = item.get("year")

@@ -428,6 +428,7 @@ export interface UploadJob {
   runtime_type?: string | null
   command_preview?: string | null
   progress_phase?: string | null
+  media_type?: string | null
 }
 
 // Phase 6D — Artifacts

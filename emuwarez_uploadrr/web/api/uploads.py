@@ -92,11 +92,12 @@ def _extract_command_preview(j: dict) -> str | None:
     return None
 
 
-def _job_to_detail(j: dict) -> UploadJobDetail:
+def _job_to_detail(j: dict, media_type: str | None = None) -> UploadJobDetail:
     prepared = j.get("prepared_path")
     source = j.get("source_path") or j.get("path")
     using_prepared = bool(prepared) if (prepared or source) else None
     return UploadJobDetail(
+        media_type=media_type,
         id=j.get("id"),
         library_item_id=j.get("library_item_id"),
         request_item_id=j.get("request_item_id"),
@@ -195,7 +196,18 @@ def get_uploads(
     }
     with _get_conn() as conn:
         jobs = exec_list_jobs(filters=filters, conn=conn)
-    return [_job_to_detail(j) for j in jobs]
+        # Resolve each job's media type (movie/series/…) from its library item
+        # in a single query, for the Uploads "Tipo" filter.
+        item_ids = {j.get("library_item_id") for j in jobs if j.get("library_item_id")}
+        media_by_item: dict[int, str] = {}
+        if item_ids:
+            placeholders = ",".join("?" * len(item_ids))
+            for row in conn.execute(
+                f"SELECT id, item_type FROM library_items WHERE id IN ({placeholders})",
+                tuple(item_ids),
+            ):
+                media_by_item[row["id"]] = row["item_type"]
+    return [_job_to_detail(j, media_by_item.get(j.get("library_item_id"))) for j in jobs]
 
 
 @router.get("/uploads/{job_id}", response_model=UploadJobDetail)

@@ -888,6 +888,8 @@ class UploadJobDetail(BaseModel):
     runtime_type: Optional[str] = None
     command_preview: Optional[str] = None
     progress_phase: Optional[str] = None
+    # Media type (movie/series/…) from the linked library item, for filtering.
+    media_type: Optional[str] = None
 
 
 class UploadJobLog(BaseModel):

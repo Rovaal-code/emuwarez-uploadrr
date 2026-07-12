@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { getUploads, getUploadJobLogs, getUploadJobArtifacts, startUploadJob, retryUploadJob, cancelUploadJob } from '../api/uploads'
 import type { UploadJob, UploadJobLog, UploadArtifact } from '../types/api'
 import { EmptyState } from '../components/EmptyState'
@@ -35,6 +35,33 @@ const STATUS_LABEL: Record<string, string> = {
 
 function statusLabel(status: string): string {
   return STATUS_LABEL[status] || (status ? status.charAt(0).toUpperCase() + status.slice(1) : '–')
+}
+
+// Human labels for the computed progress_phase (uploadrr works in phases, not %).
+const PHASE_LABEL: Record<string, string> = {
+  preflight: 'Verificando (preflight)',
+  queued: 'En cola',
+  config_staging: 'Preparando configuración',
+  running: 'Subiendo a eMuwarez',
+  finalizing: 'Finalizando',
+  succeeded: 'Completado',
+  failed: 'Fallido',
+  timeout: 'Tiempo agotado',
+  cancelled: 'Cancelado',
+}
+
+function phaseLabel(phase?: string | null): string {
+  if (!phase) return '–'
+  return PHASE_LABEL[phase] || phase
+}
+
+function formatElapsed(job: UploadJob): string {
+  if (job.duration_seconds != null) return `${job.duration_seconds}s`
+  if (job.status === 'running' && job.started_at) {
+    const secs = Math.max(0, Math.round((Date.now() - new Date(job.started_at).getTime()) / 1000))
+    return `${secs}s`
+  }
+  return '–'
 }
 
 const STATUS_OPTIONS = ['', 'ready', 'running', 'completed', 'failed', 'cancelled', 'queued', 'blocked']
@@ -86,6 +113,103 @@ function LogsPanel({ jobId, onClose, autoRefresh }: { jobId: number; onClose: ()
           <button className="btn btn-secondary btn-sm" onClick={load} disabled={loading}>Actualizar</button>
           <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginLeft: 12 }}>{total} entradas</span>
           <button className="btn btn-secondary" onClick={onClose} style={{ marginLeft: 'auto' }}>Cerrar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Live progress card for a job: current phase, elapsed time, result, and a
+// live tail of what uploadrr is doing (auto-refreshed while running).
+function JobProgressPanel({ job, onClose, onStart, onRetry, onCancel, onArtifacts }: {
+  job: UploadJob
+  onClose: () => void
+  onStart: (job: UploadJob) => void
+  onRetry: (job: UploadJob) => void
+  onCancel: (jobId: number) => void
+  onArtifacts: (jobId: number) => void
+}) {
+  const jobId = job.id!
+  const isRunning = job.status === 'running'
+  const [logs, setLogs] = useState<UploadJobLog[]>([])
+  const [loadingLogs, setLoadingLogs] = useState(true)
+
+  const loadLogs = async () => {
+    try {
+      const r = await getUploadJobLogs(jobId, 300, 0)
+      const ordered = [...r.logs].sort((a, b) => a.created_at.localeCompare(b.created_at))
+      setLogs(ordered)
+    } catch { /* ignore */ } finally { setLoadingLogs(false) }
+  }
+  useEffect(() => { loadLogs(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [jobId])
+  useEffect(() => {
+    if (!isRunning) return
+    const t = setInterval(loadLogs, 2000)
+    return () => clearInterval(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobId, isRunning])
+
+  const lastLog = logs.length ? logs[logs.length - 1] : null
+  const tail = logs.slice(-40)
+
+  const fact = (label: string, value: React.ReactNode) => (
+    <div>
+      <div style={{ fontSize: 10.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
+      <div style={{ fontSize: 13 }}>{value}</div>
+    </div>
+  )
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 720 }}>
+        <div className="modal-header">
+          <h2 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span className={STATUS_CLASS[job.status] || 'badge req-unknown'}>{statusLabel(job.status)}</span>
+            {job.title || `Job ${jobId}`}
+            {isRunning && <span style={{ fontSize: 11, color: '#22c55e' }}>● en vivo</span>}
+          </h2>
+          <button className="btn-icon" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '12px 20px', marginBottom: 16 }}>
+            {fact('Fase actual', phaseLabel(job.progress_phase))}
+            {fact('Tiempo', formatElapsed(job))}
+            {fact('Reintentos', (job.retry_count ?? 0) > 0 ? `x${job.retry_count}` : '–')}
+            {fact('Runtime', job.runtime_type || '–')}
+            {fact('Exit code', job.exit_code != null ? job.exit_code : '–')}
+            {fact('Resultado', job.result_url
+              ? <a href={job.result_url} target="_blank" rel="noopener noreferrer" style={{ color: '#4ade80' }}>Ver en eMuwarez ↗</a>
+              : job.result_torrent_id ? `ID: ${job.result_torrent_id}` : '–')}
+          </div>
+
+          {job.error_message && (
+            <div style={{ padding: '8px 12px', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 6, fontSize: 12.5, color: '#fca5a5', marginBottom: 12 }}>
+              {job.error_message}
+            </div>
+          )}
+
+          <div style={{ fontSize: 10.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>
+            Actividad {isRunning && <span style={{ color: '#22c55e' }}>(en directo)</span>}
+          </div>
+          {isRunning && lastLog && (
+            <div style={{ fontSize: 13, marginBottom: 8, display: 'flex', gap: 8, alignItems: 'baseline' }}>
+              <span style={{ color: 'var(--text-muted)' }}>Ahora:</span>
+              <span style={{ fontWeight: 500 }}>{lastLog.message}</span>
+            </div>
+          )}
+          <pre style={{ margin: 0, maxHeight: 260, overflowY: 'auto', fontSize: '0.76rem', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-all', background: 'rgba(0,0,0,0.2)', padding: 10, borderRadius: 6 }}>
+            {loadingLogs ? 'Cargando…' : tail.length === 0 ? 'Sin actividad registrada todavía.' : tail.map(log => {
+              const ts = log.created_at.slice(11, 19)
+              return `[${ts}] ${log.message}\n`
+            })}
+          </pre>
+        </div>
+        <div className="detail-panel__actions" style={{ padding: '10px 16px', gap: 8, display: 'flex', flexWrap: 'wrap' }}>
+          {job.status === 'ready' && <button className="btn btn-primary btn-sm" onClick={() => onStart(job)}>Iniciar subida</button>}
+          {['failed', 'cancelled'].includes(job.status) && <button className="btn btn-secondary btn-sm" onClick={() => onRetry(job)}>Reintentar</button>}
+          {isRunning && <button className="btn btn-secondary btn-sm" style={{ color: '#f87171' }} onClick={() => onCancel(jobId)}>Cancelar</button>}
+          <button className="btn btn-secondary btn-sm" onClick={() => onArtifacts(jobId)}>Artefactos</button>
+          <button className="btn btn-secondary btn-sm" onClick={onClose} style={{ marginLeft: 'auto' }}>Cerrar</button>
         </div>
       </div>
     </div>
@@ -260,6 +384,11 @@ export function UploadsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState('')
+  const [search, setSearch] = useState('')
+  const [sortBy, setSortBy] = useState('created_desc')
+  const [resultFilter, setResultFilter] = useState('')
+  const [typeFilter, setTypeFilter] = useState('')
+  const [detailJob, setDetailJob] = useState<number | null>(null)
   const [logsJob, setLogsJob] = useState<number | null>(null)
   const [artifactsJob, setArtifactsJob] = useState<number | null>(null)
   const [startJob, setStartJob] = useState<UploadJob | null>(null)
@@ -289,6 +418,31 @@ export function UploadsPage() {
     try { await cancelUploadJob(jobId); await load() } catch { /* ignore */ }
   }
 
+  // Client-side filter + sort over the loaded jobs (status stays server-side).
+  const visibleJobs = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    const out = jobs.filter(j => {
+      const titleOk = !q || (j.title || '').toLowerCase().includes(q)
+      const hasResult = !!(j.result_url || j.result_torrent_id)
+      const resultOk = !resultFilter || (resultFilter === 'success' ? hasResult : !hasResult)
+      const typeOk = !typeFilter || j.media_type === typeFilter
+      return titleOk && resultOk && typeOk
+    })
+    const dt = (s?: string | null) => (s ? new Date(s).getTime() : 0)
+    out.sort((a, b) => {
+      switch (sortBy) {
+        case 'created_asc': return dt(a.created_at) - dt(b.created_at)
+        case 'title': return (a.title || '').localeCompare(b.title || '')
+        case 'status': return (a.status || '').localeCompare(b.status || '')
+        case 'duration_desc': return (b.duration_seconds ?? -1) - (a.duration_seconds ?? -1)
+        default: return dt(b.created_at) - dt(a.created_at) // created_desc
+      }
+    })
+    return out
+  }, [jobs, search, sortBy, resultFilter, typeFilter])
+
+  const detailJobData = detailJob != null ? jobs.find(j => j.id === detailJob) : undefined
+
   return (
     <div>
       {logsJob !== null && (
@@ -296,6 +450,16 @@ export function UploadsPage() {
           jobId={logsJob}
           onClose={() => setLogsJob(null)}
           autoRefresh={jobs.find(j => j.id === logsJob)?.status === 'running'}
+        />
+      )}
+      {detailJobData && (
+        <JobProgressPanel
+          job={detailJobData}
+          onClose={() => setDetailJob(null)}
+          onStart={j => setStartJob(j)}
+          onRetry={j => setRetryJob(j)}
+          onCancel={id => handleCancel(id)}
+          onArtifacts={id => setArtifactsJob(id)}
         />
       )}
       {artifactsJob !== null && <ArtifactsPanel jobId={artifactsJob} onClose={() => setArtifactsJob(null)} />}
@@ -314,8 +478,34 @@ export function UploadsPage() {
       </div>
 
       <div className="filters-bar">
-        <select className="form-input form-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ width: 190 }}>
-          {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s ? statusLabel(s) : 'Todos los estados'}</option>)}
+        <input
+          className="form-input"
+          placeholder="Buscar título…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{ width: 160 }}
+        />
+        <select className="form-input form-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+          {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s ? statusLabel(s) : 'Estado: Todos'}</option>)}
+        </select>
+        <select className="form-input form-select" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
+          <option value="">Tipo: Todos</option>
+          <option value="movie">Película</option>
+          <option value="series">Serie</option>
+          <option value="season">Temporada</option>
+          <option value="episode">Episodio</option>
+        </select>
+        <select className="form-input form-select" value={resultFilter} onChange={e => setResultFilter(e.target.value)}>
+          <option value="">Resultado: Todos</option>
+          <option value="success">Subido (con resultado)</option>
+          <option value="none">Sin resultado</option>
+        </select>
+        <select className="form-input form-select" value={sortBy} onChange={e => setSortBy(e.target.value)}>
+          <option value="created_desc">Orden: Reciente primero</option>
+          <option value="created_asc">Orden: Antiguo primero</option>
+          <option value="title">Orden: Título (A-Z)</option>
+          <option value="status">Orden: Estado</option>
+          <option value="duration_desc">Orden: Duración</option>
         </select>
       </div>
 
@@ -325,7 +515,7 @@ export function UploadsPage() {
         <div className="activity-section">
           <div className="section-header">
             <div className="section-title">Trabajos de subida</div>
-            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{jobs.length} registro{jobs.length !== 1 ? 's' : ''}</span>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{visibleJobs.length} registro{visibleJobs.length !== 1 ? 's' : ''}</span>
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table className="data-table">
@@ -346,10 +536,18 @@ export function UploadsPage() {
                 </tr>
               </thead>
               <tbody>
-                {jobs.map(job => (
+                {visibleJobs.map(job => (
                   <tr key={job.id}>
                     <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{job.id}</td>
-                    <td style={{ fontWeight: 500, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{job.title || '–'}</td>
+                    <td style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <span
+                        className="lib-title-link"
+                        onClick={() => setDetailJob(job.id!)}
+                        title="Ver progreso / detalle"
+                      >
+                        {job.title || '–'}
+                      </span>
+                    </td>
                     <td>
                       <span className={STATUS_CLASS[job.status] || 'badge req-unknown'}>
                         {statusLabel(job.status)}

@@ -422,7 +422,7 @@ function ConfigTab() {
               {LANGUAGE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
-          <label className="checkbox-label" style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 4 }}>
+          <label className="checkbox-label" style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 4, gridColumn: '1 / -1' }}>
             <input type="checkbox" checked={localizeTitles} onChange={e => setLocalizeTitles(e.target.checked)} style={{ marginTop: 3 }} />
             <span style={{ fontSize: 13 }}>
               Traducir títulos de series con TMDb

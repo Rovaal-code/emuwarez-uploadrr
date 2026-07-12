@@ -131,7 +131,15 @@ def create_app() -> FastAPI:
                 from fastapi import HTTPException
                 raise HTTPException(status_code=404)
             index = _FRONTEND_DIST / "index.html"
-            return FileResponse(str(index), media_type="text/html")
+            # The SPA shell must never be cached: it points at hash-named bundles
+            # in /assets, so a stale index.html leaves the browser running old
+            # code (or requesting a deleted bundle). Force revalidation on every
+            # load; the hashed assets themselves can still cache normally.
+            return FileResponse(
+                str(index),
+                media_type="text/html",
+                headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+            )
 
     return app
 

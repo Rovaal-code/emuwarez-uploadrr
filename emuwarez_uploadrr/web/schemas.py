@@ -560,6 +560,9 @@ class RequestItemResponse(BaseModel):
     emu_status: Optional[str] = None
     points: Optional[int] = None
     comments: Optional[int] = None
+    votes: Optional[int] = None
+    author: Optional[str] = None
+    is_mine: bool = False
     created_at: Optional[str] = None
     tmdb_id: Optional[str] = None
     imdb_id: Optional[str] = None

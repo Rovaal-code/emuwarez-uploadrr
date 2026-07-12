@@ -225,6 +225,9 @@ export interface RequestItemResponse {
   emu_status: string | null
   points: number | null
   comments: number | null
+  votes: number | null
+  author: string | null
+  is_mine: boolean
   created_at: string | null
   tmdb_id: string | null
   imdb_id: string | null

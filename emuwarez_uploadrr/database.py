@@ -450,6 +450,9 @@ def _migrate_requests(conn: sqlite3.Connection) -> None:
     for col, col_def in [
         ("reviewed_at", "TEXT"),
         ("last_sync_at", "TEXT"),
+        # eMuwarez requests table shows a 👍 "votes" count (how many other users
+        # want it) alongside points/comments.
+        ("votes", "INTEGER"),
     ]:
         try:
             conn.execute(f"ALTER TABLE request_items ADD COLUMN {col} {col_def}")

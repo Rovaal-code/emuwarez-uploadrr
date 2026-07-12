@@ -26,7 +26,12 @@ def _get_conn():
     return conn
 
 
-def _row_to_item(r: dict) -> RequestItemResponse:
+def _row_to_item(r: dict, my_username: str | None = None) -> RequestItemResponse:
+    author = r.get("author")
+    is_mine = bool(
+        my_username and author
+        and author.strip().lower() == my_username.strip().lower()
+    )
     return RequestItemResponse(
         id=r["id"],
         emu_id=r["emu_id"],
@@ -37,6 +42,9 @@ def _row_to_item(r: dict) -> RequestItemResponse:
         emu_status=r.get("emu_status"),
         points=r.get("points"),
         comments=r.get("comments"),
+        votes=r.get("votes"),
+        author=author,
+        is_mine=is_mine,
         created_at=r.get("created_at"),
         tmdb_id=r.get("tmdb_id"),
         imdb_id=r.get("imdb_id"),
@@ -91,14 +99,16 @@ def list_requests(
     current_user: dict = Depends(require_auth),
 ) -> RequestListResponse:
     from emuwarez_uploadrr.services.requests import list_request_items
+    from emuwarez_uploadrr.web.services.settings_service import get_setting
     with _get_conn() as conn:
+        my_username = get_setting(conn, "emu.username")
         result = list_request_items(
             conn, limit=limit, offset=offset, search=search, status=status,
             category=category, resolution=resolution, source=source,
             emu_status=emu_status, sort=sort,
         )
     return RequestListResponse(
-        items=[_row_to_item(r) for r in result["items"]],
+        items=[_row_to_item(r, my_username) for r in result["items"]],
         total=result["total"],
         limit=result["limit"],
         offset=result["offset"],
@@ -159,12 +169,14 @@ def get_request_detail(
     current_user: dict = Depends(require_auth),
 ) -> RequestDetailResponse:
     from emuwarez_uploadrr.services.requests import get_request_detail as _svc_detail
+    from emuwarez_uploadrr.web.services.settings_service import get_setting
     with _get_conn() as conn:
+        my_username = get_setting(conn, "emu.username")
         data = _svc_detail(conn, request_id)
     if not data:
         raise HTTPException(status_code=404, detail="Petición no encontrada")
     match_data = data.pop("match", None)
-    return RequestDetailResponse(**_row_to_item(data).model_dump(), match=_match_dict_to_response(match_data))
+    return RequestDetailResponse(**_row_to_item(data, my_username).model_dump(), match=_match_dict_to_response(match_data))
 
 
 @router.post("/{request_id}/match", response_model=RequestDetailResponse)
@@ -173,13 +185,15 @@ def rematch_request(
     current_user: dict = Depends(require_auth),
 ) -> RequestDetailResponse:
     from emuwarez_uploadrr.services.requests import match_single_request, get_request_detail as _svc_detail
+    from emuwarez_uploadrr.web.services.settings_service import get_setting
     with _get_conn() as conn:
+        my_username = get_setting(conn, "emu.username")
         match_single_request(conn, request_id)
         data = _svc_detail(conn, request_id)
     if not data:
         raise HTTPException(status_code=404, detail="Petición no encontrada")
     match_data = data.pop("match", None)
-    return RequestDetailResponse(**_row_to_item(data).model_dump(), match=_match_dict_to_response(match_data))
+    return RequestDetailResponse(**_row_to_item(data, my_username).model_dump(), match=_match_dict_to_response(match_data))
 
 
 @router.post("/{request_id}/mark-reviewed", response_model=OkResponse)

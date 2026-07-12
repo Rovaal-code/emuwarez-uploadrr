@@ -72,6 +72,15 @@ const SORT_OPTIONS = [
   { value: 'points_desc', label: 'Orden: Puntos (↓)' },
 ]
 
+const fmtNum = (n: number | null | undefined) => (n == null ? '—' : n.toLocaleString('es-ES'))
+
+// Author cell — your own requests (author === emu.username) show in green + "(Yo)".
+function AuthorCell({ author, isMine }: { author: string | null; isMine: boolean }) {
+  if (!author) return <span style={{ color: 'var(--text-muted)' }}>—</span>
+  if (isMine) return <span style={{ color: '#22c55e', fontWeight: 600 }}>{author} (Yo)</span>
+  return <span>{author}</span>
+}
+
 // Comparison-table helpers.
 function matchMark(v: boolean | null) {
   if (v === true) return <span style={{ color: '#22c55e', fontWeight: 700 }}>✓</span>
@@ -244,10 +253,12 @@ function DetailPanel({ item, readiness, onClose, onShowCandidates }: {
 
       <div className="detail-panel__section">
         <div className="detail-panel__section-title">Datos de la petición</div>
+        <div className="detail-row"><span>Autor</span><span><AuthorCell author={item.author} isMine={item.is_mine} /></span></div>
         <div className="detail-row"><span>Resolución pedida</span><span>{noReq(item.requested_resolution)}</span></div>
         <div className="detail-row"><span>Source pedido</span><span>{noReq(item.requested_source)}</span></div>
-        <div className="detail-row"><span>Puntos</span><span>{item.points ?? '—'}</span></div>
-        {item.comments != null && <div className="detail-row"><span>Comentarios</span><span>{item.comments}</span></div>}
+        <div className="detail-row"><span>🪙 Puntos</span><span>{fmtNum(item.points)}</span></div>
+        <div className="detail-row"><span>👍 Votos</span><span>{item.votes ?? 0}</span></div>
+        <div className="detail-row"><span>💬 Comentarios</span><span>{item.comments ?? 0}</span></div>
         {item.tmdb_id && <div className="detail-row"><span>TMDb</span><span>{item.tmdb_id}</span></div>}
         {item.imdb_id && <div className="detail-row"><span>IMDb</span><span>{item.imdb_id}</span></div>}
         {item.created_at && (
@@ -500,8 +511,12 @@ export function RequestsPage() {
                   <tr>
                     <th>Título</th>
                     <th>Tipo</th>
+                    <th>Autor</th>
                     <th>Resolución</th>
                     <th>Source</th>
+                    <th title="Votos (otros usuarios que la quieren)" style={{ textAlign: 'center' }}>👍</th>
+                    <th title="Comentarios" style={{ textAlign: 'center' }}>💬</th>
+                    <th title="Puntos / recompensa" style={{ textAlign: 'center' }}>🪙</th>
                     <th>Compatibilidad</th>
                   </tr>
                 </thead>
@@ -531,8 +546,12 @@ export function RequestsPage() {
                           </div>
                         </td>
                         <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{tipoOf(item.category).icon} {tipoOf(item.category).label}</td>
+                        <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}><AuthorCell author={item.author} isMine={item.is_mine} /></td>
                         <td>{item.requested_resolution || '—'}</td>
                         <td>{item.requested_source || '—'}</td>
+                        <td style={{ textAlign: 'center', fontSize: 12 }}>{item.votes ?? 0}</td>
+                        <td style={{ textAlign: 'center', fontSize: 12 }}>{item.comments ?? 0}</td>
+                        <td style={{ textAlign: 'center', fontSize: 12, whiteSpace: 'nowrap' }}>{fmtNum(item.points)}</td>
                         <td><CompatibilityBadge status={item.compatibility_status} /></td>
                       </tr>
                     )

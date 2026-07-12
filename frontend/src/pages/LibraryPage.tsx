@@ -395,7 +395,7 @@ export function LibraryPage() {
           <option value="present">Sí</option>
           <option value="candidate">No</option>
         </select>
-        <select className="form-input form-select" value={sortBy} onChange={e => { setSortBy(e.target.value); setOffset(0) }} style={{ width: 'fit-content' }}>
+        <select className="form-input form-select" value={sortBy} onChange={e => { setSortBy(e.target.value); setOffset(0) }} style={{ width: 'max-content', paddingRight: 26, backgroundPosition: 'right 8px center' }}>
           <option value="title_asc">Orden: Título (A-Z)</option>
           <option value="title_desc">Orden: Título (Z-A)</option>
           <option value="updated_desc">Orden: RR (Reciente)</option>

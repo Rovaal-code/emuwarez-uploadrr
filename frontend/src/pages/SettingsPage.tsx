@@ -62,6 +62,7 @@ function ConfigTab() {
   const [imgKeys, setImgKeys] = useState<Record<string, string>>({})
   const [imgTest, setImgTest] = useState<Record<string, IntegrationTestResult>>({})
   const [imgTesting, setImgTesting] = useState<string | null>(null)
+  const [showAddImg, setShowAddImg] = useState(false)
 
   async function handleTestImghost(hostId: string) {
     setImgTesting(hostId)
@@ -309,38 +310,65 @@ function ConfigTab() {
         </h3>
         <span className="form-hint" style={{ display: 'block', marginBottom: 12 }}>
           Para las capturas que Uploadrr sube junto al torrent. <strong>imgbox</strong> es el fallback por
-          defecto (sin key); activa otros si quieres, se prueban en orden e imgbox va siempre el último.
+          defecto (sin key); se prueban en orden e imgbox va siempre el último.
         </span>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {(settings?.image_hosts_available ?? []).map(h => {
-            const enabled = imgEnabled.includes(h.id)
-            const isDefault = h.id === 'imgbox'
-            const t = imgTest[h.id]
-            return (
-              <div key={h.id} style={{ padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, background: enabled || isDefault ? 'rgba(139,92,246,0.06)' : 'transparent' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <input type="checkbox" checked={enabled || isDefault} disabled={isDefault} onChange={() => toggleImgHost(h.id)} />
-                  <ServiceIcon type="imghost" size={15} />
-                  <span style={{ fontSize: 13, fontWeight: 500 }}>{h.label}</span>
-                  {isDefault && <span className="badge status-available" style={{ fontSize: 10 }}>por defecto</span>}
-                  {h.needs_key && <span className="badge nom-na" style={{ fontSize: 10 }}>API key</span>}
-                  {(enabled || isDefault) && (
-                    <button className="btn btn-secondary btn-sm" style={{ marginLeft: 'auto', fontSize: 11, padding: '2px 8px' }}
-                      onClick={() => handleTestImghost(h.id)} disabled={imgTesting === h.id} type="button">
-                      {imgTesting === h.id ? 'Probando…' : 'Probar'}
-                    </button>
-                  )}
-                </div>
-                {h.needs_key && enabled && (
-                  <input type="password" className="form-input" style={{ marginTop: 6 }} autoComplete="new-password"
-                    value={imgKeys[h.id] ?? ''} onChange={e => setImgKeys(p => ({ ...p, [h.id]: e.target.value }))}
-                    placeholder={settings?.image_host_keys_configured?.includes(h.id) ? '•••••••• (guardada — vacío para mantener)' : `API key de ${h.label}`} />
-                )}
-                {t && <div style={{ fontSize: 11, marginTop: 4, color: testResultColor(t) }}>{testResultLabel(t)}</div>}
+        {(() => {
+          const avail = settings?.image_hosts_available ?? []
+          const configuredIds = ['imgbox', ...imgEnabled.filter(id => id !== 'imgbox')]
+          const notConfigured = avail.filter(h => !configuredIds.includes(h.id))
+          const metaOf = (id: string) => avail.find(h => h.id === id)
+          return (
+            <>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 230, overflowY: 'auto' }}>
+                {configuredIds.map(id => {
+                  const h = metaOf(id); if (!h) return null
+                  const isDefault = id === 'imgbox'
+                  const t = imgTest[id]
+                  return (
+                    <div key={id} style={{ padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, background: 'rgba(139,92,246,0.06)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <ServiceIcon type="imghost" size={15} />
+                        <span style={{ fontSize: 13, fontWeight: 500 }}>{h.label}</span>
+                        {isDefault && <span className="badge status-available" style={{ fontSize: 10 }}>por defecto</span>}
+                        {h.needs_key && <span className="badge nom-na" style={{ fontSize: 10 }}>API key</span>}
+                        <button className="btn btn-secondary btn-sm" style={{ marginLeft: 'auto', fontSize: 11, padding: '2px 8px' }}
+                          onClick={() => handleTestImghost(id)} disabled={imgTesting === id} type="button">
+                          {imgTesting === id ? 'Probando…' : 'Probar'}
+                        </button>
+                        {!isDefault && (
+                          <button className="btn btn-ghost btn-sm" style={{ fontSize: 13, padding: '2px 6px', color: 'var(--text-muted)' }}
+                            title="Quitar" onClick={() => toggleImgHost(id)} type="button">✕</button>
+                        )}
+                      </div>
+                      {h.needs_key && (
+                        <input type="password" className="form-input" style={{ marginTop: 6 }} autoComplete="new-password"
+                          value={imgKeys[id] ?? ''} onChange={e => setImgKeys(p => ({ ...p, [id]: e.target.value }))}
+                          placeholder={settings?.image_host_keys_configured?.includes(id) ? '•••••••• (guardada — vacío para mantener)' : `API key de ${h.label}`} />
+                      )}
+                      {t && <div style={{ fontSize: 11, marginTop: 4, color: testResultColor(t) }}>{testResultLabel(t)}</div>}
+                    </div>
+                  )
+                })}
               </div>
-            )
-          })}
-        </div>
+              {notConfigured.length > 0 && (
+                <button className="btn btn-secondary btn-sm" style={{ marginTop: 10 }} onClick={() => setShowAddImg(v => !v)} type="button">
+                  {showAddImg ? 'Cerrar' : '+ Añadir proveedor'}
+                </button>
+              )}
+              {showAddImg && (
+                <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 6, maxHeight: 180, overflowY: 'auto', padding: 8, border: '1px solid var(--border)', borderRadius: 8 }}>
+                  {notConfigured.map(h => (
+                    <button key={h.id} className="btn btn-ghost btn-sm" type="button"
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-start', fontSize: 12 }}
+                      onClick={() => { toggleImgHost(h.id); }}>
+                      <ServiceIcon type="imghost" size={13} /> {h.label} {h.needs_key && <span className="badge nom-na" style={{ fontSize: 9 }}>key</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          )
+        })()}
       </div>
 
       <div className="placeholder-card">

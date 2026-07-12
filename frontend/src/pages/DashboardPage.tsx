@@ -424,14 +424,11 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
             <div style={{ padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', flex: 1 }}>
               {(() => {
                 const rows: React.ReactNode[] = []
-                // Radarr/Sonarr instances (each configured one, with its icon + last test).
+                // Radarr/Sonarr instances (each configured one, with its icon).
                 for (const inst of connInstances) {
-                  const tested = inst.last_test_status
-                  const tone = tested == null ? 'ok' : tested === 'ok' ? 'ok' : 'error'
                   rows.push(
                     <ConnRow key={`inst-${inst.id}`} icon={<ServiceIcon type={inst.type === 'sonarr' ? 'sonarr' : 'radarr'} size={16} />}
-                      label={`${inst.type === 'sonarr' ? 'Sonarr' : 'Radarr'}: ${inst.name}`}
-                      badge={tested == null ? 'Configurado' : tested === 'ok' ? 'Conectado' : 'Error'} tone={tone} />
+                      label={`${inst.type === 'sonarr' ? 'Sonarr' : 'Radarr'}: ${inst.name}`} />
                   )
                 }
                 if (connSettings?.emu_api_key_configured)
@@ -445,7 +442,7 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
                 for (const id of imgIds) {
                   const meta = connSettings?.image_hosts_available?.find(h => h.id === id)
                   rows.push(<ConnRow key={`img-${id}`} icon={<ServiceIcon type="imghost" size={16} />}
-                    label={`Imágenes: ${meta?.label ?? id}${id === 'imgbox' ? ' (fallback)' : ''}`} />)
+                    label={`Imágenes: ${meta?.label ?? id}`} />)
                 }
                 if (connSettings?.notify_discord_webhook_configured)
                   rows.push(<ConnRow key="discord" icon={<ServiceIcon type="discord" size={16} />} label="Bot de Discord" />)

@@ -9,7 +9,9 @@ import json
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+import re
+
+from pydantic import BaseModel, field_validator
 
 from ..dependencies import require_auth
 from ..runtime import _db_path
@@ -117,6 +119,18 @@ class SettingsUpdateRequest(BaseModel):
     notify_telegram_events: Optional[list[str]] = None
     series_ignore_specials: Optional[bool] = None
     recent_activity_limit: Optional[int] = None
+
+    @field_validator("qbit_url")
+    @classmethod
+    def valid_qbit_url(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        v = v.strip()
+        # Empty clears the config; otherwise require a real http(s) URL (like
+        # Radarr/Sonarr instances).
+        if v and not re.match(r"^https?://[^\s/]+", v):
+            raise ValueError("La URL de qBittorrent debe empezar por http:// o https:// e incluir un host válido")
+        return v
 
 
 def _normalize_allowed_roots(value: list[str] | str) -> list[str]:

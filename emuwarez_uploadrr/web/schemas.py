@@ -146,6 +146,15 @@ class SetupQbitRequest(BaseModel):
     username: Optional[str] = ""
     password: Optional[str] = ""
 
+    @field_validator("url")
+    @classmethod
+    def valid_url(cls, v: str) -> str:
+        v = (v or "").strip()
+        # Empty = skip qBittorrent setup; otherwise it must be a real http(s) URL.
+        if v and not re.match(r"^https?://[^\s/]+", v):
+            raise ValueError("La URL de qBittorrent debe empezar por http:// o https:// e incluir un host válido")
+        return v
+
 
 class SetupImghostsRequest(BaseModel):
     enabled: list[str] = []

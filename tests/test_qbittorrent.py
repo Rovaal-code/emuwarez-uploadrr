@@ -62,3 +62,23 @@ def test_settings_roundtrip_qbit(client, auth_headers):
     assert s["qbit_password_configured"] is True
     # password never echoed back
     assert "secret" not in client.get("/api/settings", headers=auth_headers).text
+
+
+def test_settings_rejects_invalid_qbit_url(client, auth_headers):
+    r = client.put("/api/settings", json={"qbit_url": "not-a-url"}, headers=auth_headers)
+    assert r.status_code == 422
+
+
+def test_settings_accepts_valid_qbit_url(client, auth_headers):
+    r = client.put("/api/settings", json={"qbit_url": "http://192.168.0.5"}, headers=auth_headers)
+    assert r.status_code == 200
+
+
+def test_settings_empty_qbit_url_ok(client, auth_headers):
+    r = client.put("/api/settings", json={"qbit_url": ""}, headers=auth_headers)
+    assert r.status_code == 200
+
+
+def test_setup_qbit_rejects_invalid_url(client, auth_headers):
+    r = client.post("/api/setup/qbit", json={"url": "ftp://x"}, headers=auth_headers)
+    assert r.status_code == 422

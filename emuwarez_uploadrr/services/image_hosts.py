@@ -18,7 +18,7 @@ from typing import Any, Optional
 
 # id, label, homepage (for the reachability check), needs_key
 IMAGE_HOSTS: list[dict[str, Any]] = [
-    {"id": "imgbox",    "label": "imgbox",     "url": "https://imgbox.com",    "needs_key": False},
+    {"id": "imgbox",    "label": "Imgbox",     "url": "https://imgbox.com",    "needs_key": False},
     {"id": "pixhost",   "label": "Pixhost",    "url": "https://pixhost.to",    "needs_key": False},
     {"id": "fastpic",   "label": "FastPic",    "url": "https://fastpic.org",   "needs_key": False},
     {"id": "imgbb",     "label": "ImgBB",      "url": "https://imgbb.com",     "needs_key": True},

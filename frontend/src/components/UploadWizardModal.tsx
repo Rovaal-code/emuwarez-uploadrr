@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react'
 import type { EmuSource, EmuProvider, NomenclatureFields, FieldsPreviewResult } from '../api/nomenclature'
 import {
   getEmuSources,
@@ -34,6 +34,33 @@ interface Props {
 
 const labelStyle: React.CSSProperties = {
   fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4, display: 'block',
+}
+
+// Monospace one-liner (torrent name / internal title) that shrinks its font so
+// the whole string fits the card width instead of wrapping onto two lines.
+function FitText({ text, max = 13, min = 8 }: { text: string; max?: number; min?: number }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const fit = () => {
+      el.style.fontSize = `${max}px`
+      const avail = el.clientWidth
+      const full = el.scrollWidth
+      if (full > avail && avail > 0) {
+        el.style.fontSize = `${Math.max(min, Math.floor((max * avail) / full))}px`
+      }
+    }
+    fit()
+    const ro = new ResizeObserver(fit)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [text, max, min])
+  return (
+    <div ref={ref} style={{ fontFamily: 'monospace', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+      {text}
+    </div>
+  )
 }
 
 export function UploadWizardModal({ item, onClose, onDone }: Props) {
@@ -286,9 +313,9 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
       </div>
       <div style={{ marginTop: 16, padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
         <div style={labelStyle}>Nombre final del torrent (eMuwarez)</div>
-        <div style={{ fontFamily: 'monospace', fontSize: 13, wordBreak: 'break-all' }}>{preview?.torrent_name || '…'}</div>
+        <FitText text={preview?.torrent_name || '…'} />
         <div style={{ ...labelStyle, marginTop: 10 }}>Título de la ficha</div>
-        <div style={{ fontFamily: 'monospace', fontSize: 13, wordBreak: 'break-all' }}>{preview?.internal_mkv_title || '…'}</div>
+        <FitText text={preview?.internal_mkv_title || '…'} />
       </div>
     </>
   )
@@ -419,9 +446,9 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
           <div className="modal-body">
             <div style={{ marginBottom: 14, padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
               <div style={labelStyle}>Nombre final del torrent</div>
-              <div style={{ fontFamily: 'monospace', fontSize: 13, wordBreak: 'break-all' }}>{preview?.torrent_name || '–'}</div>
+              <FitText text={preview?.torrent_name || '–'} />
               <div style={{ ...labelStyle, marginTop: 10 }}>Título</div>
-              <div style={{ fontFamily: 'monospace', fontSize: 13, wordBreak: 'break-all' }}>{preview?.internal_mkv_title || '–'}</div>
+              <FitText text={preview?.internal_mkv_title || '–'} />
             </div>
 
             {applyError && <p className="text-error">⚠ {applyError}</p>}

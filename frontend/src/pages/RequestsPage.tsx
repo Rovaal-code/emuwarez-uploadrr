@@ -18,6 +18,7 @@ import { UploadWizardModal } from '../components/UploadWizardModal'
 import { getLibraryItem } from '../api/library'
 import type { LibraryItemResponse } from '../types/api'
 import { posterUrl } from '../utils/libraryItem'
+import { formatBytes } from '../utils/format'
 
 // A request's category maps to a friendly "Tipo" with an icon.
 function tipoOf(category: string | null): { icon: string; label: string } {
@@ -85,15 +86,50 @@ function AuthorCell({ author, isMine }: { author: string | null; isMine: boolean
 }
 
 // Comparison-table helpers.
-function matchMark(v: boolean | null) {
-  if (v === true) return <span style={{ color: '#22c55e', fontWeight: 700 }}>✓</span>
-  if (v === false) return <span style={{ color: '#ef4444', fontWeight: 700 }}>✗</span>
-  return <span style={{ color: 'var(--text-muted)' }}>—</span>
-}
+const isAny = (v: string | null | undefined) =>
+  !v || ['any', 'cualquiera', 'todos', 'all'].includes(v.trim().toLowerCase())
 
 function noReq(v: string | null): string {
-  if (!v || ['any', 'cualquiera', 'todos', 'all'].includes(v.trim().toLowerCase())) return 'Cualquiera'
-  return v
+  return isAny(v) ? 'Cualquiera' : (v as string)
+}
+
+// Whether your library value satisfies the request. If the request has no
+// restriction ("Cualquiera") it's satisfied as long as you have the content
+// (any resolution/source you own counts) → green ✓.
+function satisfies(requested: string | null, local: string | null, specMatch: boolean | null): boolean | null {
+  if (isAny(requested)) return local ? true : null
+  return specMatch
+}
+
+// Small ✓/✗ shown inside a comparison cell.
+function cellMark(v: boolean | null) {
+  if (v === true) return <span style={{ color: '#22c55e', fontWeight: 700 }}> ✓</span>
+  if (v === false) return <span style={{ color: '#ef4444', fontWeight: 700 }}> ✗</span>
+  return null
+}
+
+// eMuwarez requests carry no language field; we derive "Español" from the
+// library item's audio languages string.
+function spanishLabel(langs: string | null): string {
+  if (!langs) return '?'
+  return /\b(spa|esp|es|cast|español|castellano)\b/i.test(langs) ? 'Sí' : 'No'
+}
+
+const baseName = (path: string | null) => (path ? path.split('/').pop() || null : null)
+
+// One-line description of what a compatibility status means, shown next to the
+// badge as the first value of the comparison table.
+function describeStatus(status: string | null): string {
+  switch (status) {
+    case 'Compatible': return 'Tu biblioteca cumple lo que pide la petición.'
+    case 'No disponible': return 'Lo tienes catalogado, pero el archivo falta en disco.'
+    case 'Parcial': return 'Cumple en parte (falla la resolución o el source).'
+    case 'No compatible': return 'Tu copia no alcanza la calidad pedida.'
+    case 'Reclamado': return 'Petición ya reclamada por otro usuario en eMuwarez.'
+    case 'Pendiente': return 'Petición pendiente de aprobación en eMuwarez.'
+    case 'Llena': return 'Petición ya cubierta (llena) en eMuwarez.'
+    default: return 'No tienes este contenido en tu biblioteca.'
+  }
 }
 
 function CompatibilityBadge({ status }: { status: string | null }) {
@@ -212,10 +248,7 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
 
         <div style={{ flex: 1, minWidth: 300 }}>
           <div style={{ fontWeight: 700, fontSize: 28 }}>{item.title}</div>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', margin: '12px 0 20px', flexWrap: 'wrap' }}>
-            <CompatibilityBadge status={m ? m.status : (item.compatibility_status ?? null)} />
-            <span style={{ color: 'var(--text-muted)' }}>{t.icon} {t.label}</span>
-          </div>
+          <div style={{ margin: '10px 0 20px', color: 'var(--text-muted)' }}>{t.icon} {t.label}</div>
 
           <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
             <a
@@ -257,25 +290,53 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
         </div>
       </div>
 
-      {m ? (
-        <div style={{ marginTop: 28 }}>
-          <div className="detail-panel__section-title" style={{ marginBottom: 10 }}>Petición vs. tu biblioteca</div>
-          <table className="cmp-table" style={{ maxWidth: 640 }}>
-            <thead>
-              <tr><th></th><th>Petición</th><th>Tu biblioteca</th><th aria-label="Cumple"></th></tr>
-            </thead>
-            <tbody>
-              <tr><th>Contenido</th><td>{item.title}</td><td>{m.library_title || '—'}</td><td>{matchMark(m.id_match ? true : null)}</td></tr>
-              <tr><th>Resolución</th><td>{noReq(item.requested_resolution)}</td><td>{m.local_resolution || '—'}</td><td>{matchMark(m.resolution_match)}</td></tr>
-              <tr><th>Source</th><td>{noReq(item.requested_source)}</td><td>{m.local_source || '—'}</td><td>{matchMark(m.source_match)}</td></tr>
-              <tr><th>Idioma</th><td>—</td><td>{m.local_audio_languages || '—'}</td><td>{matchMark(null)}</td></tr>
-              <tr><th>Códec de vídeo</th><td>—</td><td>{m.local_video_codec || '—'}</td><td>{matchMark(null)}</td></tr>
-            </tbody>
-          </table>
+      <div style={{ marginTop: 28 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-secondary)', marginBottom: 12 }}>
+          Petición vs. tu biblioteca
         </div>
-      ) : (
-        <div className="empty-inline" style={{ marginTop: 28 }}>Sin coincidencia en tu biblioteca local — no tienes este contenido.</div>
-      )}
+        <div style={{ padding: '16px 18px', background: 'rgba(255,255,255,0.03)', borderRadius: 10, border: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+            <CompatibilityBadge status={m ? m.status : (item.compatibility_status ?? null)} />
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{describeStatus(m ? m.status : (item.compatibility_status ?? null))}</span>
+          </div>
+          {m ? (
+            <>
+              <div style={{ overflowX: 'auto' }}>
+                <table className="data-table" style={{ fontSize: 12.5 }}>
+                  <thead>
+                    <tr><th></th><th>Resolución</th><th>Source</th><th>Códec</th><th>Español</th><th>Tamaño</th><th>Nombre</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>Petición</td>
+                      <td>{noReq(item.requested_resolution)}</td>
+                      <td>{noReq(item.requested_source)}</td>
+                      <td style={{ color: 'var(--text-muted)' }}>—</td>
+                      <td style={{ color: 'var(--text-muted)' }}>—</td>
+                      <td style={{ color: 'var(--text-muted)' }}>—</td>
+                      <td style={{ color: 'var(--text-muted)' }}>—</td>
+                    </tr>
+                    <tr style={{ background: 'rgba(34,197,94,0.06)' }}>
+                      <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>Tu biblioteca</td>
+                      <td style={{ whiteSpace: 'nowrap' }}>{m.local_resolution || '—'}{cellMark(satisfies(item.requested_resolution, m.local_resolution, m.resolution_match))}</td>
+                      <td style={{ whiteSpace: 'nowrap' }}>{m.local_source || '—'}{cellMark(satisfies(item.requested_source, m.local_source, m.source_match))}</td>
+                      <td>{m.local_video_codec || '—'}</td>
+                      <td>{spanishLabel(m.local_audio_languages)}</td>
+                      <td style={{ whiteSpace: 'nowrap' }}>{m.local_size ? formatBytes(m.local_size) : '—'}</td>
+                      <td style={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }} title={baseName(m.local_path) || m.library_title || ''}>{baseName(m.local_path) || m.library_title || '—'}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10 }}>
+                El códec y el idioma de la petición no están disponibles (eMuwarez los pone en la descripción); "—" = no especificado. El "Español" de tu copia se deduce de los idiomas del archivo; "?" = desconocido.
+              </div>
+            </>
+          ) : (
+            <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Sin coincidencia en tu biblioteca local — no tienes este contenido.</span>
+          )}
+        </div>
+      </div>
 
       {readiness && (
         <details className="cmp-readiness" style={{ marginTop: 20, maxWidth: 640 }}>

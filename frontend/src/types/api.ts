@@ -207,6 +207,7 @@ export interface RequestMatchResponse {
   local_source: string | null
   local_video_codec: string | null
   local_audio_languages: string | null
+  local_size: number | null
   local_path: string | null
   nomenclature_status: string | null
   status: string

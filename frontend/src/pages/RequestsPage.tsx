@@ -276,7 +276,7 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '16px 28px' }}>
-            <ReqField label="Estado"><CompatibilityBadge status={m ? m.status : (item.compatibility_status ?? null)} /></ReqField>
+            <ReqField label="Estado *"><CompatibilityBadge status={m ? m.status : (item.compatibility_status ?? null)} /></ReqField>
             <ReqField label="Autor"><AuthorCell author={item.author} isMine={item.is_mine} /></ReqField>
             <ReqField label="Resolución pedida">{noReq(item.requested_resolution)}</ReqField>
             <ReqField label="Source pedido">{noReq(item.requested_source)}</ReqField>
@@ -327,7 +327,7 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
                 </table>
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10 }}>
-                El códec y el idioma de la petición aún no están disponibles: aunque salga «Compatible», el audio y el códec no se pueden comparar todavía porque suelen indicarse en la descripción. Revisa la petición por si pide un audio o códec concreto.
+                * Aunque salga «Compatible», el audio y el códec aún no se pueden comparar porque suelen indicarse en la descripción. Revisa la petición por si pide un audio o códec concreto.
               </div>
             </>
           ) : (

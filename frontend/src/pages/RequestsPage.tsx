@@ -71,6 +71,24 @@ const SORT_OPTIONS = [
   { value: 'points_desc', label: 'Orden: Puntos (↓)' },
 ]
 
+// Comparison-table helpers.
+function matchMark(v: boolean | null) {
+  if (v === true) return <span style={{ color: '#22c55e', fontWeight: 700 }}>✓</span>
+  if (v === false) return <span style={{ color: '#ef4444', fontWeight: 700 }}>✗</span>
+  return <span style={{ color: 'var(--text-muted)' }}>—</span>
+}
+
+const _AVAILABLE_LOCAL = new Set(['Disponible', 'Subido', 'Subiendo', 'Parcial'])
+function _availableLocal(status: string | null): boolean | null {
+  if (!status) return null
+  return _AVAILABLE_LOCAL.has(status)
+}
+
+function noReq(v: string | null): string {
+  if (!v || ['any', 'cualquiera', 'todos', 'all'].includes(v.trim().toLowerCase())) return 'Cualquiera'
+  return v
+}
+
 function CompatibilityBadge({ status }: { status: string | null }) {
   if (!status) return <span className="badge req-none">Sin coincidencia</span>
   const cls =
@@ -162,31 +180,87 @@ function DetailPanel({ item, readiness, onClose, onReviewed, onShowCandidates }:
         <button className="btn-icon" onClick={onClose}>✕</button>
       </div>
 
+      {m ? (
+        <div className="detail-panel__section">
+          <div className="detail-panel__section-title">Petición vs. tu biblioteca</div>
+          <table className="cmp-table">
+            <thead>
+              <tr>
+                <th></th>
+                <th>Petición</th>
+                <th>Tu biblioteca</th>
+                <th aria-label="Cumple"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th>Contenido</th>
+                <td>{item.title}</td>
+                <td>{m.library_title || '—'}</td>
+                <td>{matchMark(m.id_match ? true : null)}</td>
+              </tr>
+              <tr>
+                <th>Resolución</th>
+                <td>{noReq(item.requested_resolution)}</td>
+                <td>{m.local_resolution || '—'}</td>
+                <td>{matchMark(m.resolution_match)}</td>
+              </tr>
+              <tr>
+                <th>Source</th>
+                <td>{noReq(item.requested_source)}</td>
+                <td>{m.local_source || '—'}</td>
+                <td>{matchMark(m.source_match)}</td>
+              </tr>
+              <tr>
+                <th>En disco</th>
+                <td>—</td>
+                <td>{m.local_status || '—'}</td>
+                <td>{matchMark(_availableLocal(m.local_status))}</td>
+              </tr>
+              {m.nomenclature_status && m.nomenclature_status !== 'N/A' && (
+                <tr>
+                  <th>Nomenclatura</th>
+                  <td>—</td>
+                  <td>{m.nomenclature_status}</td>
+                  <td>{matchMark(m.nomenclature_status === 'Correcta' ? true : null)}</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+          <div className="cmp-confidence">Confianza del emparejamiento: <strong>{Math.round(m.confidence * 100)}%</strong></div>
+          {m.reasons.length > 0 && (
+            <ul className="cmp-reasons">
+              {m.reasons.map((r, i) => <li key={i}>{r}</li>)}
+            </ul>
+          )}
+        </div>
+      ) : (
+        <div className="detail-panel__section">
+          <div className="empty-inline">Sin coincidencia en tu biblioteca local — no tienes este contenido.</div>
+        </div>
+      )}
+
       <div className="detail-panel__section">
-        <div className="detail-row"><span>Resolución pedida</span><span>{item.requested_resolution || '—'}</span></div>
-        <div className="detail-row"><span>Source pedido</span><span>{item.requested_source || '—'}</span></div>
-        <div className="detail-row"><span>Estado EMU</span><span>{item.emu_status || '—'}</span></div>
+        <div className="detail-panel__section-title">Datos de la petición</div>
         <div className="detail-row"><span>Puntos</span><span>{item.points ?? '—'}</span></div>
+        {item.comments != null && <div className="detail-row"><span>Comentarios</span><span>{item.comments}</span></div>}
         {item.tmdb_id && <div className="detail-row"><span>TMDb</span><span>{item.tmdb_id}</span></div>}
         {item.imdb_id && <div className="detail-row"><span>IMDb</span><span>{item.imdb_id}</span></div>}
         {item.url && (
           <div className="detail-row">
             <span>Enlace</span>
-            <a href={item.url} target="_blank" rel="noreferrer" className="link">Ver en eMuwarez</a>
+            <a href={item.url} target="_blank" rel="noreferrer" className="link">Ver en eMuwarez ↗</a>
           </div>
         )}
       </div>
 
       {readiness && (
-        <div className="detail-panel__section">
-          <div className="detail-panel__section-title">Readiness (Fase 8B)</div>
+        <details className="detail-panel__section cmp-readiness">
+          <summary>Preparación de subida (avanzado)</summary>
           <div className="detail-row"><span>Estado</span><ReadinessBadge status={readiness.status} /></div>
           <div className="detail-row"><span>Acción</span><span style={{ fontSize: 12, color: '#a78bfa' }}>{readiness.recommended_action || '—'}</span></div>
           <div className="detail-row"><span>Compat. score</span><span>{readiness.compatibility_score?.toFixed(0) ?? '—'}/100</span></div>
           <div className="detail-row"><span>Readiness score</span><span>{readiness.upload_readiness_score?.toFixed(0) ?? '—'}/100</span></div>
-          {readiness.best_library_item_id && (
-            <div className="detail-row"><span>Candidato</span><span>#{readiness.best_library_item_id}</span></div>
-          )}
           {readiness.blockers.length > 0 && (
             <div style={{ marginTop: 8 }}>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>BLOQUEADORES</div>
@@ -198,34 +272,7 @@ function DetailPanel({ item, readiness, onClose, onReviewed, onShowCandidates }:
           <div style={{ marginTop: 8 }}>
             <button className="btn btn-ghost btn-sm" onClick={onShowCandidates}>Ver candidatos</button>
           </div>
-        </div>
-      )}
-
-      {m && (
-        <div className="detail-panel__section">
-          <div className="detail-panel__section-title">Cruce con biblioteca</div>
-          <div className="detail-row"><span>Compatibilidad</span><CompatibilityBadge status={m.status} /></div>
-          <div className="detail-row"><span>Confianza</span><span>{Math.round(m.confidence * 100)}%</span></div>
-          <div className="detail-row"><span>Contenido local</span><span>{m.library_title || '—'}</span></div>
-          <div className="detail-row"><span>Estado local</span><span>{m.local_status || '—'}</span></div>
-          <div className="detail-row"><span>Resolución local</span><span>{m.local_resolution || '—'}</span></div>
-          <div className="detail-row"><span>Source local</span><span>{m.local_source || '—'}</span></div>
-          {m.nomenclature_status && (
-            <div className="detail-row"><span>Nomenclatura</span><span>{m.nomenclature_status}</span></div>
-          )}
-          {m.reasons.length > 0 && (
-            <div className="detail-panel__reasons">
-              <div className="detail-panel__section-title">Motivos</div>
-              <ul>{m.reasons.map((r, i) => <li key={i}>{r}</li>)}</ul>
-            </div>
-          )}
-        </div>
-      )}
-
-      {!m && (
-        <div className="detail-panel__section">
-          <div className="empty-inline">Sin coincidencia en biblioteca local</div>
-        </div>
+        </details>
       )}
 
       <div className="detail-panel__actions">
@@ -470,7 +517,6 @@ export function RequestsPage() {
                     <th>Resolución</th>
                     <th>Source</th>
                     <th>Compatibilidad</th>
-                    <th>Estado EMU</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -503,7 +549,6 @@ export function RequestsPage() {
                         <td>{item.requested_resolution || '—'}</td>
                         <td>{item.requested_source || '—'}</td>
                         <td><CompatibilityBadge status={item.compatibility_status} /></td>
-                        <td style={{ fontSize: 12 }}>{item.emu_status || '—'}</td>
                       </tr>
                     )
                   })}

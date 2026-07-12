@@ -110,6 +110,19 @@ function cellMark(v: boolean | null) {
 
 const baseName = (path: string | null) => (path ? path.split('/').pop() || null : null)
 
+// Public page for an external ID so the user can open it in TMDb/IMDb/TheTVDB/MAL.
+function idVerifyUrl(kind: 'tmdb' | 'imdb' | 'tvdb' | 'mal', id: string | null, isTv: boolean): string | null {
+  if (!id) return null
+  const digits = id.replace(/\D+/g, '')
+  if (!digits) return null
+  switch (kind) {
+    case 'tmdb': return `https://www.themoviedb.org/${isTv ? 'tv' : 'movie'}/${digits}`
+    case 'imdb': return `https://www.imdb.com/title/tt${digits.padStart(7, '0')}/`
+    case 'tvdb': return `https://thetvdb.com/dereferrer/series/${digits}`
+    case 'mal':  return `https://myanimelist.net/anime/${digits}`
+  }
+}
+
 function CompatibilityBadge({ status }: { status: string | null }) {
   if (!status) return <span className="badge req-none">Sin coincidencia</span>
   const cls =
@@ -190,6 +203,30 @@ function ReqField({ label, children }: { label: string; children: React.ReactNod
   )
 }
 
+// External-ID field with a mini button to open its public page. Renders nothing
+// when the ID isn't available (e.g. MAL isn't provided by Radarr/Sonarr).
+function IdField({ label, id, href }: { label: string; id: string | null; href: string | null }) {
+  if (!id) return null
+  return (
+    <ReqField label={label}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        {id}
+        {href && (
+          <a
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            title={`Ver en ${label}`}
+            style={{ textDecoration: 'none', fontSize: 12, lineHeight: '16px', padding: '1px 6px', borderRadius: 4, border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
+          >
+            ↗
+          </a>
+        )}
+      </span>
+    </ReqField>
+  )
+}
+
 // Full dedicated request page — same visual format as the library item detail
 // page (back button, big poster left, title + fields grid right).
 function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload }: {
@@ -202,6 +239,14 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
   const m = item.match
   const libId = m?.library_item_id ?? item.library_item_id
   const t = tipoOf(item.category)
+  // External IDs: prefer the request's own, fall back to the matched library
+  // item (Radarr/Sonarr). TVDB only comes from the library item; MAL isn't
+  // provided by Radarr/Sonarr yet.
+  const isTv = /serie/i.test(item.category || '')
+  const tmdbId = item.tmdb_id || m?.local_tmdb_id || null
+  const imdbId = item.imdb_id || m?.local_imdb_id || null
+  const tvdbId = m?.local_tvdb_id || null
+  const malId: string | null = null
   return (
     <div style={{ width: '100%', flex: 1, minHeight: 0, overflowY: 'auto' }}>
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -263,7 +308,10 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
             <ReqField label="🪙 Puntos">{fmtNum(item.points)}</ReqField>
             <ReqField label="👍 Votos">{item.votes ?? 0}</ReqField>
             <ReqField label="💬 Comentarios">{item.comments ?? 0}</ReqField>
-            <ReqField label="TMDb / IMDb">{item.tmdb_id ?? '—'} / {item.imdb_id ?? '—'}</ReqField>
+            <IdField label="TMDb" id={tmdbId} href={idVerifyUrl('tmdb', tmdbId, isTv)} />
+            <IdField label="IMDb" id={imdbId} href={idVerifyUrl('imdb', imdbId, isTv)} />
+            <IdField label="TVDB" id={tvdbId} href={idVerifyUrl('tvdb', tvdbId, isTv)} />
+            <IdField label="MAL" id={malId} href={idVerifyUrl('mal', malId, isTv)} />
             {item.created_at && <ReqField label="Creada">{new Date(item.created_at).toLocaleDateString('es-ES')}</ReqField>}
           </div>
         </div>

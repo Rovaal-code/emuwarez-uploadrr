@@ -543,6 +543,9 @@ class RequestMatchResponse(BaseModel):
     local_video_codec: Optional[str] = None
     local_audio_languages: Optional[str] = None
     local_size: Optional[int] = None
+    local_tmdb_id: Optional[str] = None
+    local_imdb_id: Optional[str] = None
+    local_tvdb_id: Optional[str] = None
     local_path: Optional[str] = None
     nomenclature_status: Optional[str] = None
     status: str

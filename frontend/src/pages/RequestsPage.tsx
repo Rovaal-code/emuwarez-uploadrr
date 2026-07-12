@@ -352,7 +352,7 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
                 </table>
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10 }}>
-                El códec y el idioma de la petición aún no están disponibles.
+                El códec y el idioma de la petición aún no están disponibles: aunque salga «Compatible», el audio y el códec no se pueden comparar todavía porque suelen indicarse en la descripción. Revisa la petición por si pide un audio o códec concreto.
               </div>
             </>
           ) : (

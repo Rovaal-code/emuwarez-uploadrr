@@ -255,10 +255,20 @@ def classify_request_match(
     else:
         reasons.append(f"Source no satisface: local={local_src or 'N/D'} < pedido={req_src or 'N/D'}")
 
+    # eMuwarez request states that override the library-compatibility verdict:
+    # if the request is claimed/pending/filled on the tracker, that status wins
+    # (you can't act on it regardless of what your library holds).
     status_text = str(req.get("emu_status") or "").lower()
-    if "lleno" in status_text or "filled" in status_text or status_text == "1":
+    emu_state: Optional[str] = None
+    if "reclam" in status_text or "claim" in status_text:
+        emu_state = "Reclamado"
+    elif "pend" in status_text or "pending" in status_text:
+        emu_state = "Pendiente"
+    elif "lleno" in status_text or "llena" in status_text or "filled" in status_text or status_text == "1":
+        emu_state = "Llena"
+    if emu_state:
         return {
-            "status": "Llena",
+            "status": emu_state,
             "confidence": base_confidence,
             "resolution_match": None if res_match is None else bool(res_match),
             "source_match": None if src_match is None else bool(src_match),
@@ -304,7 +314,8 @@ def rank_request_matches(matches: list[dict]) -> list[dict]:
 
     Each dict must have: compatibility_status, library_item (optional).
     """
-    _STATUS = {"Compatible": 0, "No disponible": 1, "Parcial": 2, "No compatible": 3, "Llena": 4}
+    _STATUS = {"Compatible": 0, "No disponible": 1, "Parcial": 2, "No compatible": 3,
+               "Pendiente": 4, "Reclamado": 5, "Llena": 6}
     # "Parcial" here is a series/season rollup local_status (some but not
     # all children available) — explicit entry documenting it ranks at the
     # same default as everything else not fully available/uploaded, rather

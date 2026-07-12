@@ -4,7 +4,6 @@ import {
   syncRequests,
   getSyncStatus,
   getRequestDetail,
-  markRequestReviewed,
 } from '../api/requests'
 import { getCandidates } from '../api/requestReadiness'
 import type {
@@ -54,6 +53,8 @@ const COMPATIBILITY_STATUSES = [
   { value: 'No disponible', label: 'No disponible' },
   { value: 'Parcial', label: 'Parcial' },
   { value: 'No compatible', label: 'No compatible' },
+  { value: 'Reclamado', label: 'Reclamado' },
+  { value: 'Pendiente', label: 'Pendiente' },
   { value: 'Llena', label: 'Llena' },
   { value: 'Sin coincidencia', label: 'Sin coincidencia' },
 ]
@@ -96,6 +97,8 @@ function CompatibilityBadge({ status }: { status: string | null }) {
     status === 'No disponible' ? 'badge req-unavailable' :
     status === 'Parcial' ? 'badge req-partial' :
     status === 'No compatible' ? 'badge req-not-compatible' :
+    status === 'Reclamado' ? 'badge req-claimed' :
+    status === 'Pendiente' ? 'badge req-pending' :
     status === 'Llena' ? 'badge req-filled' :
     'badge req-unknown'
   return <span className={cls}>{status}</span>
@@ -158,11 +161,10 @@ function CandidatesPanel({ requestId, onClose }: { requestId: number; onClose: (
   )
 }
 
-function DetailPanel({ item, readiness, onClose, onReviewed, onShowCandidates }: {
+function DetailPanel({ item, readiness, onClose, onShowCandidates }: {
   item: RequestDetailResponse
   readiness: RequestReadinessResponse | null
   onClose: () => void
-  onReviewed: () => void
   onShowCandidates: () => void
 }) {
   const m = item.match
@@ -242,10 +244,15 @@ function DetailPanel({ item, readiness, onClose, onReviewed, onShowCandidates }:
 
       <div className="detail-panel__section">
         <div className="detail-panel__section-title">Datos de la petición</div>
+        <div className="detail-row"><span>Resolución pedida</span><span>{noReq(item.requested_resolution)}</span></div>
+        <div className="detail-row"><span>Source pedido</span><span>{noReq(item.requested_source)}</span></div>
         <div className="detail-row"><span>Puntos</span><span>{item.points ?? '—'}</span></div>
         {item.comments != null && <div className="detail-row"><span>Comentarios</span><span>{item.comments}</span></div>}
         {item.tmdb_id && <div className="detail-row"><span>TMDb</span><span>{item.tmdb_id}</span></div>}
         {item.imdb_id && <div className="detail-row"><span>IMDb</span><span>{item.imdb_id}</span></div>}
+        {item.created_at && (
+          <div className="detail-row"><span>Creada</span><span>{new Date(item.created_at).toLocaleDateString('es-ES')}</span></div>
+        )}
         {item.url && (
           <div className="detail-row">
             <span>Enlace</span>
@@ -274,17 +281,6 @@ function DetailPanel({ item, readiness, onClose, onReviewed, onShowCandidates }:
           </div>
         </details>
       )}
-
-      <div className="detail-panel__actions">
-        {!item.reviewed_at && (
-          <button className="btn btn-secondary btn-sm" onClick={onReviewed}>Marcar como revisada</button>
-        )}
-        {item.reviewed_at && (
-          <span className="text-muted" style={{ fontSize: 12 }}>
-            Revisada {new Date(item.reviewed_at).toLocaleDateString('es-ES')}
-          </span>
-        )}
-      </div>
     </div>
   )
 }
@@ -414,16 +410,6 @@ export function RequestsPage() {
     finally { setDetailLoading(false) }
   }
 
-  const handleReviewed = async () => {
-    if (!detail) return
-    try {
-      await markRequestReviewed(detail.id)
-      const d = await getRequestDetail(detail.id)
-      setDetail(d)
-      setItems(prev => prev.map(i => i.id === d.id ? { ...i, reviewed_at: d.reviewed_at } : i))
-    } catch { /* silent */ }
-  }
-
   const displayItems = items
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
@@ -541,7 +527,6 @@ export function RequestsPage() {
                               >
                                 {item.title}
                               </div>
-                              {item.reviewed_at && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>✓ Revisada</span>}
                             </div>
                           </div>
                         </td>
@@ -578,7 +563,6 @@ export function RequestsPage() {
                 item={detail}
                 readiness={readiness}
                 onClose={() => { setSelectedId(null); setDetail(null); setReadiness(null); setShowCandidates(false) }}
-                onReviewed={handleReviewed}
                 onShowCandidates={() => setShowCandidates(true)}
               />
             ) : null}

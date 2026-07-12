@@ -179,13 +179,29 @@ function DetailPanel({ item, readiness, onClose, onShowCandidates }: {
   const m = item.match
   return (
     <div className="detail-panel">
-      <div className="detail-panel__header">
-        <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+      <div className="detail-panel__header" style={{ alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
           <RequestPoster url={item.poster_url} category={item.category} size="lg" />
-          <div>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <div className="detail-panel__title">{item.title}</div>
             {item.category && <div className="detail-panel__subtitle">{tipoOf(item.category).icon} {tipoOf(item.category).label}</div>}
-            <div style={{ marginTop: 8 }}><CompatibilityBadge status={m ? m.status : (item.compatibility_status ?? null)} /></div>
+            <div style={{ margin: '8px 0 12px' }}><CompatibilityBadge status={m ? m.status : (item.compatibility_status ?? null)} /></div>
+            <div className="req-facts">
+              <div className="detail-row"><span>Autor</span><span><AuthorCell author={item.author} isMine={item.is_mine} /></span></div>
+              <div className="detail-row"><span>Resolución pedida</span><span>{noReq(item.requested_resolution)}</span></div>
+              <div className="detail-row"><span>Source pedido</span><span>{noReq(item.requested_source)}</span></div>
+              <div className="detail-row"><span>🪙 Puntos</span><span>{fmtNum(item.points)}</span></div>
+              <div className="detail-row"><span>👍 Votos</span><span>{item.votes ?? 0}</span></div>
+              <div className="detail-row"><span>💬 Comentarios</span><span>{item.comments ?? 0}</span></div>
+              {item.tmdb_id && <div className="detail-row"><span>TMDb</span><span>{item.tmdb_id}</span></div>}
+              {item.imdb_id && <div className="detail-row"><span>IMDb</span><span>{item.imdb_id}</span></div>}
+              {item.created_at && (
+                <div className="detail-row"><span>Creada</span><span>{new Date(item.created_at).toLocaleDateString('es-ES')}</span></div>
+              )}
+              {item.url && (
+                <div className="detail-row"><span>Enlace</span><a href={item.url} target="_blank" rel="noreferrer" className="link">Ver en eMuwarez ↗</a></div>
+              )}
+            </div>
           </div>
         </div>
         <button className="btn-icon" onClick={onClose}>✕</button>
@@ -250,27 +266,6 @@ function DetailPanel({ item, readiness, onClose, onShowCandidates }: {
           <div className="empty-inline">Sin coincidencia en tu biblioteca local — no tienes este contenido.</div>
         </div>
       )}
-
-      <div className="detail-panel__section">
-        <div className="detail-panel__section-title">Datos de la petición</div>
-        <div className="detail-row"><span>Autor</span><span><AuthorCell author={item.author} isMine={item.is_mine} /></span></div>
-        <div className="detail-row"><span>Resolución pedida</span><span>{noReq(item.requested_resolution)}</span></div>
-        <div className="detail-row"><span>Source pedido</span><span>{noReq(item.requested_source)}</span></div>
-        <div className="detail-row"><span>🪙 Puntos</span><span>{fmtNum(item.points)}</span></div>
-        <div className="detail-row"><span>👍 Votos</span><span>{item.votes ?? 0}</span></div>
-        <div className="detail-row"><span>💬 Comentarios</span><span>{item.comments ?? 0}</span></div>
-        {item.tmdb_id && <div className="detail-row"><span>TMDb</span><span>{item.tmdb_id}</span></div>}
-        {item.imdb_id && <div className="detail-row"><span>IMDb</span><span>{item.imdb_id}</span></div>}
-        {item.created_at && (
-          <div className="detail-row"><span>Creada</span><span>{new Date(item.created_at).toLocaleDateString('es-ES')}</span></div>
-        )}
-        {item.url && (
-          <div className="detail-row">
-            <span>Enlace</span>
-            <a href={item.url} target="_blank" rel="noreferrer" className="link">Ver en eMuwarez ↗</a>
-          </div>
-        )}
-      </div>
 
       {readiness && (
         <details className="detail-panel__section cmp-readiness">
@@ -572,7 +567,7 @@ export function RequestsPage() {
 
       {selectedId !== null && (
         <div className="modal-overlay" onClick={() => { setSelectedId(null); setDetail(null); setReadiness(null); setShowCandidates(false) }}>
-          <div className="modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
+          <div className="modal" style={{ maxWidth: 700 }} onClick={e => e.stopPropagation()}>
             {detailLoading ? (
               <div style={{ padding: 24 }}><LoadingState label="Cargando detalle…" /></div>
             ) : showCandidates ? (

@@ -683,6 +683,12 @@ optgroup {
   margin-top: 14px;
 }
 
+/* Request card — key facts shown to the right of the poster */
+.req-facts .detail-row {
+  padding: 3px 0;
+  font-size: 12.5px;
+}
+
 /* Request card — Petición vs. tu biblioteca comparison */
 .cmp-table {
   width: 100%;

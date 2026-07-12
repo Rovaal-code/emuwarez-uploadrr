@@ -5,6 +5,7 @@ import { StatusBadge } from './StatusBadge'
 import { ServiceLabel } from './ServiceIcon'
 import { formatDate, formatItemType, formatBytes } from '../utils/format'
 import { buildDeepLink, posterUrl } from '../utils/libraryItem'
+import { ProviderTag } from './ProviderIcon'
 import { LibraryActionButtons } from './LibraryActionButtons'
 
 const NESTED_PAGE_SIZE = 25
@@ -198,7 +199,7 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, com
           {formatBytes(item.size_bytes)}
         </td>
         <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-          {item.provider_label ?? '—'}
+          {item.provider ? <ProviderTag code={item.provider} label={item.provider_label} size={16} /> : '—'}
         </td>
         <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
           {[item.resolution, item.source].filter(Boolean).join(' · ') || '—'}

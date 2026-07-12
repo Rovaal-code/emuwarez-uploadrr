@@ -9,6 +9,7 @@ import type { LibraryActionKind } from './LibraryTreeRow'
 import { formatBytes, formatItemType } from '../utils/format'
 import { buildDeepLink, posterUrl, idVerifyUrl } from '../utils/libraryItem'
 import { ExternalIdLink } from './ExternalIdLink'
+import { ProviderTag } from './ProviderIcon'
 
 // Full dedicated detail page (Radarr/Sonarr-style) — replaces the old small
 // modal and the large card. Rendered in place of the library list, with a
@@ -111,7 +112,7 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
             <Field label="Nomenclatura"><StatusBadge status={item.nomenclature_status} type="nomenclature" /></Field>
             <Field label="Resolución">{item.resolution || '–'}</Field>
             <Field label="Source">{item.source || '–'}</Field>
-            <Field label="Provider">{item.provider || '–'}</Field>
+            <Field label="Provider">{item.provider ? <ProviderTag code={item.provider} label={item.provider_label} /> : '–'}</Field>
             <Field label="Códec de vídeo">{item.video_codec || '–'}</Field>
             <Field label="Códec de audio">{item.audio_codec || '–'}</Field>
             <Field label="Idiomas de audio">{item.audio_languages || '–'}</Field>

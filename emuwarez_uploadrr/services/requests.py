@@ -601,6 +601,11 @@ def get_request_detail(conn: sqlite3.Connection, request_id: int) -> Optional[di
             result.get("req_scope"), result.get("req_season"), result.get("req_episode"),
         )
         if child:
+            from .compatibility import compare_resolution, compare_source
+            # Recompute the spec match against the child's real resolution/source
+            # (the original match was against the series rollup, which has none).
+            res_match = compare_resolution(result.get("requested_resolution"), child.get("resolution"))
+            src_match = compare_source(result.get("requested_source"), child.get("source"))
             result["match"].update({
                 "library_item_id": child["id"],
                 "library_title": child.get("title") or result["match"]["library_title"],
@@ -612,6 +617,8 @@ def get_request_detail(conn: sqlite3.Connection, request_id: int) -> Optional[di
                 "local_size": child.get("size_bytes"),
                 "local_path": child.get("path"),
                 "nomenclature_status": child.get("nomenclature_status"),
+                "resolution_match": res_match,
+                "source_match": src_match,
             })
     else:
         result["match"] = None

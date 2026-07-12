@@ -223,10 +223,8 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
   const imdbId = item.imdb_id || m?.local_imdb_id || null
   const tvdbId = m?.local_tvdb_id || null
   const malId: string | null = null
-  const scopeLabel =
-    item.req_scope === 'season' ? `Temporada ${item.req_season ?? '?'}`
-    : item.req_scope === 'episode' ? `Temporada ${item.req_season ?? '?'} · Episodio ${item.req_episode ?? '?'}`
-    : 'Serie completa'
+  const hasSeason = item.req_scope === 'season' || item.req_scope === 'episode'
+  const temporadaLabel = hasSeason ? String(item.req_season ?? '?') : 'Todas'
   return (
     <div style={{ width: '100%', flex: 1, minHeight: 0, overflowY: 'auto' }}>
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -282,7 +280,8 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '16px 28px' }}>
             <ReqField label="Estado *"><CompatibilityBadge status={m ? m.status : (item.compatibility_status ?? null)} /></ReqField>
             <ReqField label="Tipo">{t.icon} {t.label}</ReqField>
-            {isSeriesLike && <ReqField label="Alcance">{scopeLabel}</ReqField>}
+            {isSeriesLike && <ReqField label="Temporada">{temporadaLabel}</ReqField>}
+            {isSeriesLike && item.req_scope === 'episode' && <ReqField label="Capítulo">{item.req_episode ?? '?'}</ReqField>}
             <ReqField label="Autor"><AuthorCell author={item.author} isMine={item.is_mine} /></ReqField>
             <ReqField label="Resolución pedida">{noReq(item.requested_resolution)}</ReqField>
             <ReqField label="Source pedido">{noReq(item.requested_source)}</ReqField>

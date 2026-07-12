@@ -21,6 +21,7 @@ from ..schemas import (
     IntegrationTestResult,
     TestArrRequest,
     TestEmuwarezRequest,
+    TestQbitRequest,
     TestTmdbRequest,
     TestUploadrrRequest,
 )
@@ -65,6 +66,25 @@ def test_emuwarez(
         result = test_emuwarez_connection(
             api_key=body.api_key or None,
             base_url=body.base_url or None,
+            conn=conn,
+        )
+    return IntegrationTestResult(**result)
+
+
+@router.post("/test/qbit", response_model=IntegrationTestResult)
+def test_qbit(
+    body: TestQbitRequest,
+    current_user: dict = Depends(require_auth),
+) -> IntegrationTestResult:
+    """Probe qBittorrent WebUI with the provided (or stored) credentials.
+    Never stores credentials, never touches torrents."""
+    from emuwarez_uploadrr.services.integration_tests import test_qbit_connection
+    with _get_conn() as conn:
+        result = test_qbit_connection(
+            url=body.url or None,
+            port=body.port or None,
+            username=body.username if body.username is not None else None,
+            password=body.password if body.password is not None else None,
             conn=conn,
         )
     return IntegrationTestResult(**result)

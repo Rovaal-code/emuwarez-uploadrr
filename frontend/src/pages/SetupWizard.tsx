@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import {
   setupAdmin, setupTmdb, setupEmu, setupInstances,
-  setupNomenclature, setupComplete,
+  setupNomenclature, setupQbit, setupComplete,
 } from '../api/setup'
 import { login } from '../api/auth'
 import { syncAll } from '../api/library'
-import { testTmdbConnection, testEmuwarezConnection, testArrConnection, type IntegrationTestResult } from '../api/integrationTests'
+import { testTmdbConnection, testEmuwarezConnection, testArrConnection, testQbitConnection, type IntegrationTestResult } from '../api/integrationTests'
 import { ServiceIcon } from '../components/ServiceIcon'
 import { ProviderPriorityPicker } from '../components/ProviderPriorityPicker'
 import { REGION_OPTIONS, LANGUAGE_OPTIONS } from '../constants/regionLanguage'
@@ -98,6 +98,26 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   // EMU step state
   const [emuKey, setEmuKey] = useState('')
   const [emuAckSkip, setEmuAckSkip] = useState(false)
+
+  // qBittorrent step state
+  const [qbitUrl, setQbitUrl] = useState('')
+  const [qbitPort, setQbitPort] = useState('8080')
+  const [qbitUser, setQbitUser] = useState('')
+  const [qbitPass, setQbitPass] = useState('')
+  const [qbitTestResult, setQbitTestResult] = useState<IntegrationTestResult | null>(null)
+  const [qbitTesting, setQbitTesting] = useState(false)
+
+  async function handleTestQbit() {
+    setQbitTesting(true); setQbitTestResult(null)
+    try {
+      setQbitTestResult(await testQbitConnection({
+        url: qbitUrl.trim() || undefined, port: qbitPort.trim() || undefined,
+        username: qbitUser.trim() || undefined, password: qbitPass.trim() || undefined,
+      }))
+    } catch {
+      setQbitTestResult({ ok: false, service: 'qbittorrent', status: 'connection_error', message: 'Error al contactar con el servidor' })
+    } finally { setQbitTesting(false) }
+  }
 
   // Instances step state
   const [instances, setInstances] = useState<InstanceDraft[]>([])
@@ -255,6 +275,14 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
       confirmation: noHardlinks ? hardlinksConfirm : undefined,
       provider_priority_order: nomProviderOrder,
     })
+    setStep('qbit')
+  })
+
+  const handleQbit = wrap(async () => {
+    // Optional/skippable: an empty URL just moves on without configuring qBit.
+    if (qbitUrl.trim()) {
+      await setupQbit(qbitUrl.trim(), qbitPort.trim() || '8080', qbitUser.trim(), qbitPass)
+    }
     setStep('complete')
   })
 
@@ -654,6 +682,48 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   disabled={loading || (noHardlinks && hardlinksConfirm !== DISABLE_HARDLINKS_TOKEN)}
                 >
                   {loading ? 'Guardando…' : 'Continuar'}
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* qBittorrent step */}
+          {step === 'qbit' && (
+            <>
+              <div className="wizard-step-desc" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <ServiceIcon type="qbittorrent" size={18} /> Cliente qBittorrent que usará Uploadrr para añadir el .torrent tras subir. Opcional — puedes configurarlo luego.
+              </div>
+              <div className="wizard-fields">
+                <div className="form-group">
+                  <label className="form-label">URL del WebUI</label>
+                  <input className="form-input" value={qbitUrl} onChange={e => setQbitUrl(e.target.value)} placeholder="http://127.0.0.1" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Puerto</label>
+                  <input className="form-input" value={qbitPort} onChange={e => setQbitPort(e.target.value)} placeholder="8080" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Usuario</label>
+                  <input className="form-input" value={qbitUser} onChange={e => setQbitUser(e.target.value)} placeholder="admin" autoComplete="off" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Contraseña</label>
+                  <input type="password" className="form-input" value={qbitPass} onChange={e => setQbitPass(e.target.value)} placeholder="Contraseña del WebUI" autoComplete="new-password" />
+                </div>
+              </div>
+              {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, marginBottom: 4 }}>
+                <button className="btn btn-secondary btn-sm" onClick={handleTestQbit} disabled={qbitTesting || loading || !qbitUrl.trim()} type="button">
+                  {qbitTesting ? 'Probando…' : 'Probar conexión'}
+                </button>
+                {qbitTestResult && (
+                  <span style={{ fontSize: 12, color: testResultColor(qbitTestResult) }}>{testResultLabel(qbitTestResult)}</span>
+                )}
+              </div>
+              <div className="wizard-actions">
+                <span />
+                <button className="btn btn-primary" onClick={handleQbit} disabled={loading}>
+                  {loading ? 'Guardando…' : qbitUrl.trim() ? 'Continuar' : 'Omitir'}
                 </button>
               </div>
             </>

@@ -22,6 +22,7 @@ from ..schemas import (
     SetupEmuRequest,
     SetupInstanceRequest,
     SetupNomenclatureRequest,
+    SetupQbitRequest,
     SetupStatusResponse,
     SetupTmdbRequest,
 )
@@ -97,6 +98,22 @@ def setup_tmdb(
         except SetupError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     return OkResponse(message="API key de TMDb guardada correctamente")
+
+
+# ---------------------------------------------------------------------------
+# POST /api/setup/qbit — requires auth (optional/skippable)
+# ---------------------------------------------------------------------------
+
+@router.post("/setup/qbit", response_model=OkResponse)
+def setup_qbit(
+    body: SetupQbitRequest,
+    current_user: dict = Depends(require_auth),
+) -> OkResponse:
+    from ..services.setup_service import setup_qbit as _setup_qbit
+    with _get_conn() as conn:
+        _setup_qbit(conn, body.url, body.port, body.username, body.password)
+        conn.commit()
+    return OkResponse(message="Configuración de qBittorrent guardada correctamente")
 
 
 # ---------------------------------------------------------------------------

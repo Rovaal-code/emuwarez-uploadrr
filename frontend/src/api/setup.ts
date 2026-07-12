@@ -17,6 +17,10 @@ export async function setupEmu(api_key: string, endpoint_url: string | null = nu
   return api.post<OkResponse>('/setup/emu', { api_key, endpoint_url })
 }
 
+export async function setupQbit(url: string, port = '8080', username = '', password = ''): Promise<OkResponse> {
+  return api.post<OkResponse>('/setup/qbit', { url, port, username, password })
+}
+
 export interface SetupInstancePayload {
   type: string
   name: string

@@ -37,3 +37,12 @@ export function testUploadrrConnection(params: {
 } = {}): Promise<IntegrationTestResult> {
   return api.post<IntegrationTestResult>('/integrations/test/uploadrr', params)
 }
+
+export function testQbitConnection(params: {
+  url?: string
+  port?: string
+  username?: string
+  password?: string
+} = {}): Promise<IntegrationTestResult> {
+  return api.post<IntegrationTestResult>('/integrations/test/qbit', params)
+}

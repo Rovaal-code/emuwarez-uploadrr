@@ -140,6 +140,13 @@ class SetupTmdbRequest(BaseModel):
         return v.strip()
 
 
+class SetupQbitRequest(BaseModel):
+    url: str
+    port: Optional[str] = "8080"
+    username: Optional[str] = ""
+    password: Optional[str] = ""
+
+
 class SetupEmuRequest(BaseModel):
     api_key: str
     endpoint_url: Optional[str] = None
@@ -1094,6 +1101,14 @@ class TestArrRequest(BaseModel):
     kind: Optional[str] = None
     base_url: Optional[str] = None
     api_key: Optional[str] = None
+
+
+class TestQbitRequest(BaseModel):
+    # All optional — omitted fields fall back to the stored qBittorrent config.
+    url: Optional[str] = None
+    port: Optional[str] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
 
 
 class TestUploadrrRequest(BaseModel):

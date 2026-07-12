@@ -91,6 +91,24 @@ def setup_tmdb(
         set_setting(conn, "tmdb.localize_series_titles", "true" if localize_series_titles else "false")
 
 
+def setup_qbit(
+    conn: sqlite3.Connection,
+    url: str,
+    port: Optional[str] = "8080",
+    username: Optional[str] = "",
+    password: Optional[str] = "",
+) -> None:
+    """Store the qBittorrent WebUI config. Skippable — an empty url means the
+    user didn't configure a torrent client in the wizard."""
+    if not url or not url.strip():
+        return
+    set_setting(conn, "qbit.url", url.strip())
+    set_setting(conn, "qbit.port", (port or "8080").strip())
+    set_setting(conn, "qbit.username", (username or "").strip())
+    if password:
+        set_setting(conn, "qbit.password", password)
+
+
 def setup_emu(
     conn: sqlite3.Connection,
     api_key: str,

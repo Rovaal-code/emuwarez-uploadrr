@@ -55,6 +55,45 @@ def _fail(service: str, status: str, message: str, details: Optional[dict] = Non
 
 
 # ---------------------------------------------------------------------------
+# qBittorrent
+# ---------------------------------------------------------------------------
+
+def _setting(conn, key: str) -> Optional[str]:
+    if conn is None:
+        return None
+    row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+    return row["value"] if row else None
+
+
+def test_qbit_connection(
+    url: Optional[str] = None,
+    port: Optional[str] = None,
+    username: Optional[str] = None,
+    password: Optional[str] = None,
+    *,
+    conn=None,
+) -> dict:
+    """Validate host + login against the qBittorrent WebUI. Falls back to the
+    stored config (settings.qbit.*) for any field left None. Read-only."""
+    from ..integrations.qbittorrent import qbit_test_connection
+
+    _url = url if url is not None else _setting(conn, "qbit.url")
+    _port = port if port is not None else _setting(conn, "qbit.port")
+    _user = username if username is not None else _setting(conn, "qbit.username")
+    _pass = password if password is not None else _setting(conn, "qbit.password")
+
+    if not _url or not str(_url).strip():
+        return _fail("qbittorrent", "not_configured", "qBittorrent no configurado")
+
+    result = qbit_test_connection(_url, _port, _user or "", _pass or "")
+    if result.get("ok"):
+        ver = result.get("version")
+        return _ok("qbittorrent", message=f"Conexión correcta{f' (v{ver})' if ver else ''}",
+                   details={"version": ver} if ver else None)
+    return _fail("qbittorrent", "connection_error", result.get("error") or "No se pudo conectar")
+
+
+# ---------------------------------------------------------------------------
 # TMDb
 # ---------------------------------------------------------------------------
 

@@ -8,6 +8,11 @@ export interface SettingsData {
   tmdb_watch_region: string
   tmdb_language: string
   tmdb_localize_series_titles: boolean
+  qbit_url: string | null
+  qbit_port: string | null
+  qbit_username: string | null
+  qbit_password_configured: boolean
+  qbit_configured: boolean
   tmdb_api_key_configured: boolean
   tmdb_api_key_masked: string | null
   emu_api_key_configured: boolean
@@ -38,6 +43,10 @@ export interface SettingsUpdatePayload {
   tmdb_watch_region?: string
   tmdb_language?: string
   tmdb_localize_series_titles?: boolean
+  qbit_url?: string
+  qbit_port?: string
+  qbit_username?: string
+  qbit_password?: string
   tmdb_api_key?: string
   emu_api_key?: string
   emu_username?: string

@@ -12,7 +12,7 @@ import {
   type BackupInfo,
 } from '../api/maintenance'
 import { fetchSettings, updateSettings, type SettingsData } from '../api/settings'
-import { testTmdbConnection, testEmuwarezConnection, type IntegrationTestResult } from '../api/integrationTests'
+import { testTmdbConnection, testEmuwarezConnection, testQbitConnection, type IntegrationTestResult } from '../api/integrationTests'
 import { useCooldown } from '../hooks/useCooldown'
 import { testDiscordNotification, testTelegramNotification } from '../api/notifications'
 import { ProviderPriorityPicker } from '../components/ProviderPriorityPicker'
@@ -51,6 +51,12 @@ function ConfigTab() {
   const [emuUsername, setEmuUsername] = useState('')
   const [ignoreSpecials, setIgnoreSpecials] = useState(true)
   const [recentLimit, setRecentLimit] = useState(50)
+  const [qbitUrl, setQbitUrl] = useState('')
+  const [qbitPort, setQbitPort] = useState('8080')
+  const [qbitUser, setQbitUser] = useState('')
+  const [qbitPass, setQbitPass] = useState('')
+  const [testingQbit, setTestingQbit] = useState(false)
+  const [qbitTestResult, setQbitTestResult] = useState<IntegrationTestResult | null>(null)
 
   useEffect(() => {
     fetchSettings()
@@ -64,6 +70,9 @@ function ConfigTab() {
         setEmuUsername(s.emu_username ?? '')
         setIgnoreSpecials(s.series_ignore_specials ?? true)
         setRecentLimit(s.recent_activity_limit ?? 50)
+        setQbitUrl(s.qbit_url ?? '')
+        setQbitPort(s.qbit_port ?? '8080')
+        setQbitUser(s.qbit_username ?? '')
       })
       .catch(() => setMsg({ ok: false, text: 'Error cargando configuración' }))
       .finally(() => setLoading(false))
@@ -104,6 +113,24 @@ function ConfigTab() {
     }
   }
 
+  async function handleTestQbit() {
+    setTestingQbit(true)
+    setQbitTestResult(null)
+    try {
+      const r = await testQbitConnection({
+        url: qbitUrl.trim() || undefined,
+        port: qbitPort.trim() || undefined,
+        username: qbitUser.trim() || undefined,
+        password: qbitPass.trim() || undefined,
+      })
+      setQbitTestResult(r)
+    } catch {
+      setQbitTestResult({ ok: false, service: 'qbittorrent', status: 'connection_error', message: 'Error al contactar con el servidor' })
+    } finally {
+      setTestingQbit(false)
+    }
+  }
+
   async function handleSave() {
     setSaving(true)
     setMsg(null)
@@ -117,9 +144,13 @@ function ConfigTab() {
         emu_username: emuUsername.trim(),
         series_ignore_specials: ignoreSpecials,
         recent_activity_limit: recentLimit,
+        qbit_url: qbitUrl.trim(),
+        qbit_port: qbitPort.trim(),
+        qbit_username: qbitUser.trim(),
       }
       if (newKey.trim()) payload.tmdb_api_key = newKey.trim()
       if (newEmuKey.trim()) payload.emu_api_key = newEmuKey.trim()
+      if (qbitPass.trim()) payload.qbit_password = qbitPass.trim()
       const updated = await updateSettings(payload)
       setSettings(updated)
       setTag(updated.default_release_tag)
@@ -130,6 +161,10 @@ function ConfigTab() {
       setEmuUsername(updated.emu_username ?? '')
       setIgnoreSpecials(updated.series_ignore_specials ?? true)
       setRecentLimit(updated.recent_activity_limit ?? 50)
+      setQbitUrl(updated.qbit_url ?? '')
+      setQbitPort(updated.qbit_port ?? '8080')
+      setQbitUser(updated.qbit_username ?? '')
+      setQbitPass('')
       setNewKey('')
       setNewEmuKey('')
       setMsg({ ok: true, text: '✓ Configuración guardada' })
@@ -206,6 +241,41 @@ function ConfigTab() {
             mostrar cuántas peticiones son tuyas ("Mis peticiones").
           </span>
         </div>
+      </div>
+
+      <div className="placeholder-card">
+        <h3 style={{ marginTop: 0, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <ServiceIcon type="qbittorrent" size={18} /> qBittorrent
+        </h3>
+        <div className="form-group" style={{ marginBottom: 10 }}>
+          <label className="form-label">URL del WebUI</label>
+          <input className="form-input" value={qbitUrl} onChange={e => setQbitUrl(e.target.value)} placeholder="http://127.0.0.1" />
+        </div>
+        <div className="form-group" style={{ marginBottom: 10 }}>
+          <label className="form-label">Puerto</label>
+          <input className="form-input" value={qbitPort} onChange={e => setQbitPort(e.target.value)} placeholder="8080" />
+        </div>
+        <div className="form-group" style={{ marginBottom: 10 }}>
+          <label className="form-label">Usuario</label>
+          <input className="form-input" value={qbitUser} onChange={e => setQbitUser(e.target.value)} placeholder="admin" autoComplete="off" />
+        </div>
+        <div className="form-group" style={{ marginBottom: 12 }}>
+          <label className="form-label">Contraseña <span className="form-hint">(dejar vacío para mantener la actual)</span></label>
+          <input type="password" className="form-input" value={qbitPass} onChange={e => setQbitPass(e.target.value)} placeholder={settings?.qbit_password_configured ? '••••••••' : 'Contraseña del WebUI'} autoComplete="new-password" />
+        </div>
+        <div>
+          <button className="btn btn-secondary btn-sm" onClick={handleTestQbit} disabled={testingQbit} type="button">
+            {testingQbit ? 'Probando…' : 'Probar conexión'}
+          </button>
+          {qbitTestResult && (
+            <span style={{ marginLeft: 10, fontSize: 12, color: testResultColor(qbitTestResult) }}>
+              {testResultLabel(qbitTestResult)}
+            </span>
+          )}
+        </div>
+        <span className="form-hint" style={{ display: 'block', marginTop: 10 }}>
+          El cliente de torrents que usa Uploadrr para añadir el .torrent tras subir a eMuwarez.
+        </span>
       </div>
 
       <div className="placeholder-card">

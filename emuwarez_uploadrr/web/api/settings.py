@@ -45,6 +45,12 @@ class SettingsResponse(BaseModel):
     # Phase 11A: Emuwarez API key, editable from Settings (not just setup wizard).
     emu_api_key_configured: bool = False
     emu_api_key_masked: Optional[str] = None
+    # qBittorrent (torrent client used by Uploadrr)
+    qbit_url: Optional[str] = None
+    qbit_port: Optional[str] = None
+    qbit_username: Optional[str] = None
+    qbit_password_configured: bool = False
+    qbit_configured: bool = False
     # Phase 5 (12-part batch): the user's own eMuwarez username, used by the
     # Dashboard's "Mis peticiones" card to filter request_items.author.
     emu_username: Optional[str] = None
@@ -80,6 +86,11 @@ class SettingsUpdateRequest(BaseModel):
     tmdb_api_key: Optional[str] = None
     # Phase 11A
     emu_api_key: Optional[str] = None
+    # qBittorrent
+    qbit_url: Optional[str] = None
+    qbit_port: Optional[str] = None
+    qbit_username: Optional[str] = None
+    qbit_password: Optional[str] = None
     emu_username: Optional[str] = None
     # Phase 10F
     uploadrr_path: Optional[str] = None
@@ -151,6 +162,12 @@ def _build_response(conn) -> SettingsResponse:
     emu_configured = bool(emu_key and emu_key.strip())
     emu_masked = mask_secret(emu_key) if emu_configured else None
 
+    qbit_url = get_setting_canonical(conn, "qbit.url")
+    qbit_pass = get_setting_canonical(conn, "qbit.password")
+    qbit_pass_configured = bool(qbit_pass and qbit_pass.strip())
+    # qBittorrent is "configured" once a host is set (login is optional).
+    qbit_configured = bool(qbit_url and qbit_url.strip())
+
     discord_webhook = get_setting_canonical(conn, "notify.discord.webhook_url")
     discord_webhook_configured = bool(discord_webhook and discord_webhook.strip())
     telegram_token = get_setting_canonical(conn, "notify.telegram.bot_token")
@@ -186,6 +203,11 @@ def _build_response(conn) -> SettingsResponse:
         emu_api_key_configured=emu_configured,
         emu_api_key_masked=emu_masked,
         emu_username=get_setting(conn, "emu.username"),
+        qbit_url=qbit_url,
+        qbit_port=get_setting_canonical(conn, "qbit.port"),
+        qbit_username=get_setting_canonical(conn, "qbit.username"),
+        qbit_password_configured=qbit_pass_configured,
+        qbit_configured=qbit_configured,
         notify_discord_enabled=(get_setting_canonical(conn, "notify.discord.enabled") or "") == "true",
         notify_discord_webhook_configured=discord_webhook_configured,
         notify_discord_webhook_masked=mask_secret(discord_webhook) if discord_webhook_configured else None,
@@ -268,6 +290,16 @@ def update_settings(
 
         if body.emu_username is not None:
             set_setting(conn, "emu.username", body.emu_username.strip())
+
+        if body.qbit_url is not None:
+            set_setting(conn, "qbit.url", body.qbit_url.strip())
+        if body.qbit_port is not None:
+            set_setting(conn, "qbit.port", body.qbit_port.strip())
+        if body.qbit_username is not None:
+            set_setting(conn, "qbit.username", body.qbit_username.strip())
+        # Blank password left untouched (keeps the stored one), same as api keys.
+        if body.qbit_password is not None and body.qbit_password.strip():
+            set_setting(conn, "qbit.password", body.qbit_password.strip())
 
         if body.uploadrr_path is not None:
             set_setting(conn, "uploadrr.path", body.uploadrr_path.strip())

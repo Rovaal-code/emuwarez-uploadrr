@@ -108,3 +108,28 @@ def mark_all_read(
         nc.mark_all_read(conn)
         conn.commit()
         return {"ok": True, "unread_count": 0}
+
+
+@router.delete("/{notification_id}")
+def delete_one(
+    notification_id: int,
+    current_user: dict = Depends(require_auth),
+) -> dict:
+    from emuwarez_uploadrr.services import notification_center as nc
+
+    with _get_conn() as conn:
+        nc.delete_notification(conn, notification_id)
+        conn.commit()
+        return {"ok": True, "unread_count": nc.unread_count(conn)}
+
+
+@router.delete("")
+def delete_all(
+    current_user: dict = Depends(require_auth),
+) -> dict:
+    from emuwarez_uploadrr.services import notification_center as nc
+
+    with _get_conn() as conn:
+        nc.delete_all_notifications(conn)
+        conn.commit()
+        return {"ok": True, "unread_count": 0}

@@ -95,6 +95,14 @@ def mark_all_read(conn: sqlite3.Connection) -> None:
     )
 
 
+def delete_notification(conn: sqlite3.Connection, notification_id: int) -> None:
+    conn.execute("DELETE FROM notifications WHERE id = ?", (notification_id,))
+
+
+def delete_all_notifications(conn: sqlite3.Connection) -> None:
+    conn.execute("DELETE FROM notifications")
+
+
 # --- Emit --------------------------------------------------------------------
 
 def _format_message(title: str, body: Optional[str], link: Optional[str]) -> str:

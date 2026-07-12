@@ -3,6 +3,8 @@ import {
   getNotifications,
   markNotificationRead,
   markAllNotificationsRead,
+  deleteNotification,
+  deleteAllNotifications,
   type NotificationItem,
 } from '../api/notifications'
 
@@ -41,7 +43,7 @@ export function NotificationBell() {
 
   const refresh = useCallback(async () => {
     try {
-      const feed = await getNotifications({ limit: 30 })
+      const feed = await getNotifications({ limit: 50 })
       setItems(feed.notifications)
       setUnread(feed.unread_count)
     } catch {
@@ -99,6 +101,18 @@ export function NotificationBell() {
     try { await markAllNotificationsRead() } catch { /* ignore */ }
   }
 
+  const handleDelete = async (n: NotificationItem) => {
+    setItems(prev => prev.filter(i => i.id !== n.id))
+    if (!n.read) setUnread(u => Math.max(0, u - 1))
+    try { await deleteNotification(n.id) } catch { /* ignore */ }
+  }
+
+  const handleDeleteAll = async () => {
+    setItems([])
+    setUnread(0)
+    try { await deleteAllNotifications() } catch { /* ignore */ }
+  }
+
   return (
     <div className="notif-bell" ref={rootRef}>
       <button className="topbar-btn" title="Notificaciones" aria-label="Notificaciones" onClick={toggle}>
@@ -113,9 +127,14 @@ export function NotificationBell() {
         <div className="notif-dropdown" role="menu">
           <div className="notif-dropdown-header">
             <span className="notif-dropdown-title">Notificaciones</span>
-            {unread > 0 && (
-              <button className="notif-markall" onClick={handleMarkAll}>Marcar todo como leído</button>
-            )}
+            <span style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              {unread > 0 && (
+                <button className="notif-markall" onClick={handleMarkAll}>Marcar todo como leído</button>
+              )}
+              {items.length > 0 && (
+                <button className="notif-markall notif-clearall" onClick={handleDeleteAll}>Borrar todo</button>
+              )}
+            </span>
           </div>
           <div className="notif-list">
             {loading && items.length === 0 && (
@@ -125,18 +144,29 @@ export function NotificationBell() {
               <div className="notif-empty">No tienes notificaciones todavía.</div>
             )}
             {items.map(n => (
-              <button
-                key={n.id}
-                className={`notif-item ${n.read ? 'read' : 'unread'} ${n.link ? 'clickable' : ''}`}
-                onClick={() => handleItemClick(n)}
-              >
-                <span className="notif-item-dot" aria-hidden />
-                <span className="notif-item-body">
-                  <span className="notif-item-title">{n.title}</span>
-                  {n.body && <span className="notif-item-text">{n.body}</span>}
-                  <span className="notif-item-time">{relativeTime(n.created_at)}</span>
-                </span>
-              </button>
+              <div key={n.id} className={`notif-item ${n.read ? 'read' : 'unread'} ${n.link ? 'clickable' : ''}`}>
+                <button
+                  type="button"
+                  className="notif-item-main"
+                  onClick={() => handleItemClick(n)}
+                >
+                  <span className="notif-item-dot" aria-hidden />
+                  <span className="notif-item-body">
+                    <span className="notif-item-title">{n.title}</span>
+                    {n.body && <span className="notif-item-text">{n.body}</span>}
+                    <span className="notif-item-time">{relativeTime(n.created_at)}</span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="notif-item-delete"
+                  title="Borrar notificación"
+                  aria-label="Borrar notificación"
+                  onClick={() => handleDelete(n)}
+                >
+                  ✕
+                </button>
+              </div>
             ))}
           </div>
         </div>

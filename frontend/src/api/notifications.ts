@@ -45,3 +45,11 @@ export function markNotificationRead(id: number): Promise<{ ok: boolean; unread_
 export function markAllNotificationsRead(): Promise<{ ok: boolean; unread_count: number }> {
   return api.post<{ ok: boolean; unread_count: number }>('/notifications/read-all', {})
 }
+
+export function deleteNotification(id: number): Promise<{ ok: boolean; unread_count: number }> {
+  return api.delete<{ ok: boolean; unread_count: number }>(`/notifications/${id}`)
+}
+
+export function deleteAllNotifications(): Promise<{ ok: boolean; unread_count: number }> {
+  return api.delete<{ ok: boolean; unread_count: number }>('/notifications')
+}

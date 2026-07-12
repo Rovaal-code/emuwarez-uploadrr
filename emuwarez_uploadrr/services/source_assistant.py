@@ -480,7 +480,7 @@ def _build_source_string(source: str | None, provider: str | None) -> str | None
 
 
 def _build_internal_mkv_title_from_name(torrent_name: str) -> str:
-    """Derive internal MKV title by replacing spaces with dots."""
-    if not torrent_name:
-        return ""
-    return torrent_name.replace(" ", ".")
+    """Derive internal MKV title: strip accents/special chars and dot it (the
+    torrent/aporte title keeps accents; the internal title does not)."""
+    from .mkv_title import to_filesystem_name
+    return to_filesystem_name(torrent_name)

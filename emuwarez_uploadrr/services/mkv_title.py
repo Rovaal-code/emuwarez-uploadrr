@@ -9,8 +9,10 @@ SAFETY CONTRACT:
 """
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -19,12 +21,30 @@ from ..database import connect
 MKV_CONFIRMATION_TOKEN = "APLICAR_TITULO_MKV"
 _MKV_EXTENSION = ".mkv"
 
+# Characters that break filesystems / torrent clients / players — stripped from
+# the FILE name and the MKV internal title (but NOT from the torrent/aporte
+# title, which keeps its accents and punctuation per the eMuwarez guide).
+_UNSAFE_CHARS = re.compile(r'[:/\\?*!¡¿"|<>%]')
+
+
+def to_filesystem_name(name: str) -> str:
+    """Filesystem/MKV-title form of a name: strip accents (á→a, ñ→n…) and
+    problematic characters, and collapse spaces into dots. The torrent/aporte
+    title keeps accents + punctuation; only the file name and MKV internal title
+    use this cleaned form."""
+    if not name:
+        return ""
+    n = unicodedata.normalize("NFKD", name)
+    n = "".join(ch for ch in n if not unicodedata.combining(ch))
+    n = _UNSAFE_CHARS.sub(" ", n)
+    n = re.sub(r"\s+", ".", n.strip())
+    return re.sub(r"\.{2,}", ".", n).strip(".")
+
 
 def build_internal_mkv_title(torrent_name: str) -> str:
-    """Replace spaces with dots to derive the internal MKV title."""
-    if not torrent_name:
-        return ""
-    return torrent_name.replace(" ", ".")
+    """Internal MKV title: accent/special-char-free, dotted (see
+    to_filesystem_name)."""
+    return to_filesystem_name(torrent_name)
 
 
 def check_mkvpropedit_available() -> dict:

@@ -285,7 +285,8 @@ def build_nomenclature_proposal(item_id: int, *, force_refresh: bool = False, co
         # dropped. Detection only, no TMDb re-recommendation here.
         provider = _infer_provider_from_item(item, source)
 
-        proposed_filename = _build_proposed_filename(
+        # Full nomenclature with spaces + accents = the torrent/aporte title.
+        proposed_torrent_name = _build_proposed_filename(
             title=title,
             year=year,
             resolution=resolution,
@@ -297,6 +298,9 @@ def build_nomenclature_proposal(item_id: int, *, force_refresh: bool = False, co
             media_type=media_type,
             provider=provider,
         )
+        # File name (and folder) use the cleaned, accent-free, dotted form.
+        from .mkv_title import to_filesystem_name
+        proposed_filename = to_filesystem_name(proposed_torrent_name)
 
         proposed_folder = proposed_filename
         proposed_path = None

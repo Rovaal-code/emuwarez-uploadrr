@@ -176,6 +176,18 @@ def upload_preflight(
     )
 
 
+@router.post("/library/{item_id}/upload/checks")
+def upload_checks(
+    item_id: int,
+    current_user: dict = Depends(require_auth),
+) -> dict:
+    """Run the pre-upload checks (fail-fast, eMuwarez last) for the 'Subida a
+    eMuwarez' step. Returns each check's result + a `ready` flag."""
+    from emuwarez_uploadrr.services.upload_checks import run_upload_checks
+    with _get_conn() as conn:
+        return run_upload_checks(conn, item_id)
+
+
 @router.get("/uploads", response_model=list[UploadJobDetail])
 def get_uploads(
     status: str | None = Query(default=None),

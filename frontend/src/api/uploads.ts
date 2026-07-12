@@ -56,3 +56,18 @@ export async function retryUploadJob(
 export async function cancelUploadJob(jobId: number): Promise<unknown> {
   return api.post<unknown>(`/uploads/${jobId}/cancel`, {})
 }
+
+export interface UploadCheck {
+  id: string
+  label: string
+  status: 'ok' | 'fail'
+  message: string
+}
+export interface UploadChecksResult {
+  checks: UploadCheck[]
+  ready: boolean
+}
+
+export async function runUploadChecks(itemId: number): Promise<UploadChecksResult> {
+  return api.post<UploadChecksResult>(`/library/${itemId}/upload/checks`, {})
+}

@@ -8,7 +8,7 @@ import {
   saveNomenclatureFields,
   adaptNomenclature,
 } from '../api/nomenclature'
-import { uploadPreflight, startUploadJob } from '../api/uploads'
+import { uploadPreflight, startUploadJob, runUploadChecks, type UploadChecksResult } from '../api/uploads'
 import { getLibrary, getMediaInfoReport, suggestProvider } from '../api/library'
 import type { MediaInfoReport } from '../api/library'
 import type { UploadPreflightResponse, LibraryItemResponse } from '../types/api'
@@ -105,6 +105,16 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
   const [preparing, setPreparing] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadMsg, setUploadMsg] = useState<string | null>(null)
+  const [checks, setChecks] = useState<UploadChecksResult | null>(null)
+  const [checksLoading, setChecksLoading] = useState(false)
+
+  const runChecks = useCallback(async () => {
+    if (targetId == null) return
+    setChecksLoading(true)
+    try { setChecks(await runUploadChecks(targetId)) }
+    catch { setChecks(null) }
+    finally { setChecksLoading(false) }
+  }, [targetId])
 
   // --- Step 0: load seasons (series) or episodes (season) ---
   useEffect(() => {
@@ -242,13 +252,13 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
     } finally {
       setPreparing(false)
       setStep(2)
+      runChecks()
     }
   }
 
-  const canUpload = preflight?.status === 'ready' && !!preflight.job?.id
+  const canUpload = !!checks?.ready && !!preflight?.job?.id
   const doUpload = async () => {
-    if (!preflight?.job?.id) return
-    if (!window.confirm(`¿Seguro que quieres subir «${item.title}» a eMuwarez? Se iniciará la subida real.`)) return
+    if (!canUpload || !preflight?.job?.id) return
     setUploading(true); setUploadMsg(null)
     try {
       const r = await startUploadJob(preflight.job.id, { dry_run: false, start: true, confirmation: UPLOAD_TOKEN })
@@ -332,7 +342,7 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
           {needsSelection && <><span style={{ fontWeight: step === 0 ? 700 : 400, color: step === 0 ? 'var(--text)' : 'var(--text-muted)' }}>0. Selección</span><span style={{ color: 'var(--text-muted)' }}>→</span></>}
           <span style={{ fontWeight: step === 1 ? 700 : 400, color: step === 1 ? 'var(--text)' : 'var(--text-muted)' }}>1. Nomenclatura</span>
           <span style={{ color: 'var(--text-muted)' }}>→</span>
-          <span style={{ fontWeight: step === 2 ? 700 : 400, color: step === 2 ? 'var(--text)' : 'var(--text-muted)' }}>2. Revisar y subir</span>
+          <span style={{ fontWeight: step === 2 ? 700 : 400, color: step === 2 ? 'var(--text)' : 'var(--text-muted)' }}>2. Subida a eMuwarez</span>
         </div>
 
         {step === 0 && (
@@ -451,21 +461,41 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
               <FitText text={preview?.internal_mkv_title || '–'} />
             </div>
 
-            {applyError && <p className="text-error">⚠ {applyError}</p>}
-            {preparing && <p className="text-muted">Aplicando nomenclatura y ejecutando preflight…</p>}
+            {applyError && <p className="text-error" style={{ fontSize: 12 }}>⚠ {applyError}</p>}
 
-            {preflight && (
-              <div style={{ marginBottom: 14 }}>
-                <div style={{ marginBottom: 6 }}>
-                  <span className={`badge ${preflight.status === 'ready' ? 'status-available' : 'status-error'}`}>
-                    {preflight.status === 'ready' ? 'Listo' : 'Bloqueado'}
-                  </span>
-                </div>
-                {preflight.errors?.map((e, i) => <p key={`e${i}`} className="text-error" style={{ fontSize: 12 }}>✗ {e}</p>)}
-                {preflight.warnings?.map((w, i) => <p key={`w${i}`} className="text-warning" style={{ fontSize: 12 }}>⚠ {w}</p>)}
+            {/* Pre-upload checks card */}
+            <div style={{ padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <div style={labelStyle}>Comprobaciones previas</div>
+                {checksLoading && <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />}
               </div>
-            )}
+              {checks?.checks.map(c => (
+                <div key={c.id} style={{ display: 'flex', gap: 8, alignItems: 'baseline', padding: '3px 0' }}>
+                  <span style={{ color: c.status === 'ok' ? '#22c55e' : '#ef4444', fontWeight: 700 }}>{c.status === 'ok' ? '✓' : '✗'}</span>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 13 }}>{c.label}</div>
+                    {c.message && <div style={{ fontSize: 11, color: 'var(--text-muted)', wordBreak: 'break-all' }}>{c.message}</div>}
+                  </div>
+                </div>
+              ))}
+              {checksLoading && !checks && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Comprobando…</div>}
+              {!checksLoading && checks && (
+                <div style={{ marginTop: 10, fontWeight: 600, color: checks.ready ? '#22c55e' : '#ef4444' }}>
+                  {checks.ready ? '✓ Todo listo para subir' : '✗ La subida no se puede realizar'}
+                </div>
+              )}
+              {!checksLoading && (
+                <button className="btn btn-secondary btn-sm" style={{ marginTop: 10, fontSize: 12 }} onClick={runChecks} type="button">
+                  ↻ Volver a comprobar
+                </button>
+              )}
+            </div>
 
+            {checks?.ready && (
+              <p style={{ marginTop: 12, fontSize: 13 }}>
+                ¿Seguro que quieres subir <strong>«{item.title}»</strong> a eMuwarez? Se iniciará la subida real.
+              </p>
+            )}
             {uploadMsg && <p style={{ fontSize: 13, marginTop: 8 }}>{uploadMsg}</p>}
 
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
@@ -473,8 +503,8 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
               <button
                 className="btn btn-primary"
                 onClick={doUpload}
-                disabled={!canUpload || uploading}
-                title={canUpload ? '' : 'El preflight no está listo (revisa los errores)'}
+                disabled={!canUpload || uploading || checksLoading}
+                title={canUpload ? '' : 'Alguna comprobación ha fallado o aún está en curso'}
               >
                 {uploading ? 'Subiendo…' : 'Subir a eMuwarez'}
               </button>

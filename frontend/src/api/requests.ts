@@ -31,25 +31,25 @@ export async function getRequests(filter?: RequestsFilter): Promise<RequestListR
   if (filter?.limit !== undefined) q.set('limit', String(filter.limit))
   if (filter?.offset !== undefined) q.set('offset', String(filter.offset))
   const qs = q.toString()
-  return api.get(`/api/requests${qs ? '?' + qs : ''}`)
+  return api.get(`/requests${qs ? '?' + qs : ''}`)
 }
 
 export async function getSyncStatus(): Promise<RequestSyncStatusResponse> {
-  return api.get('/api/requests/sync-status')
+  return api.get('/requests/sync-status')
 }
 
 export async function syncRequests(force = false): Promise<RequestSyncResponse> {
-  return api.post('/api/requests/sync', { force })
+  return api.post('/requests/sync', { force })
 }
 
 export async function getRequestDetail(id: number): Promise<RequestDetailResponse> {
-  return api.get(`/api/requests/${id}`)
+  return api.get(`/requests/${id}`)
 }
 
 export async function rematchRequest(id: number): Promise<RequestDetailResponse> {
-  return api.post(`/api/requests/${id}/match`, {})
+  return api.post(`/requests/${id}/match`, {})
 }
 
 export async function markRequestReviewed(id: number): Promise<OkResponse> {
-  return api.post(`/api/requests/${id}/mark-reviewed`, {})
+  return api.post(`/requests/${id}/mark-reviewed`, {})
 }

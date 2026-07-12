@@ -22,21 +22,21 @@ export async function listReadiness(filter?: ReadinessFilter): Promise<RequestRe
   if (filter?.limit !== undefined) q.set('limit', String(filter.limit))
   if (filter?.offset !== undefined) q.set('offset', String(filter.offset))
   const qs = q.toString()
-  return api.get(`/api/requests/readiness${qs ? '?' + qs : ''}`)
+  return api.get(`/requests/readiness${qs ? '?' + qs : ''}`)
 }
 
 export async function refreshReadiness(limit?: number): Promise<OkResponse> {
-  return api.post('/api/requests/readiness/refresh', limit ? { limit } : {})
+  return api.post('/requests/readiness/refresh', limit ? { limit } : {})
 }
 
 export async function getReadiness(requestId: number): Promise<RequestReadinessResponse> {
-  return api.get(`/api/requests/${requestId}/readiness`)
+  return api.get(`/requests/${requestId}/readiness`)
 }
 
 export async function evaluateReadiness(requestId: number): Promise<RequestReadinessResponse> {
-  return api.post(`/api/requests/${requestId}/readiness/evaluate`, {})
+  return api.post(`/requests/${requestId}/readiness/evaluate`, {})
 }
 
 export async function getCandidates(requestId: number): Promise<RequestCandidateResponse[]> {
-  return api.get(`/api/requests/${requestId}/candidates`)
+  return api.get(`/requests/${requestId}/candidates`)
 }

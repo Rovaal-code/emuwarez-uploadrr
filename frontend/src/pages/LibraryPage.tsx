@@ -20,11 +20,6 @@ import { buildDeepLink, posterUrl } from '../utils/libraryItem'
 
 const LOAD_LIMIT = 20000  // show everything in one container (no pagination); backend caps here
 const VIEW_MODE_STORAGE_KEY = 'emuwarez_uploadrr_library_view'
-// Sentinel matching the backend's NOT_AVAILABLE_STATUS_FILTER
-// (services/library.py) — expands server-side to the same LocalStatus
-// "not available" set the old standalone Faltantes tab used, so removing
-// that tab doesn't lose the combined view.
-const NOT_AVAILABLE_STATUS_FILTER = '__not_available__'
 
 type ViewMode = 'grid' | 'grid-lg' | 'list'
 
@@ -141,21 +136,16 @@ export function LibraryPage() {
   // Faltantes tab (its own filtered view of Biblioteca now covers what it
   // used to show; these 3 buttons were the only functionality that didn't
   // already exist elsewhere).
-  const [diagActionMsg, setDiagActionMsg] = useState<string | null>(null)
   const [diagActionLoading, setDiagActionLoading] = useState(false)
 
   async function handleRefreshHealth() {
     setDiagActionLoading(true)
-    setDiagActionMsg(null)
     try {
       await refreshArrHealth({ include_queue: true, include_history: true })
-      setDiagActionMsg('Salud ARR actualizada')
       await load()
-    } catch {
-      setDiagActionMsg('Error al refrescar salud ARR')
-    } finally {
+    } catch { /* the spinner + a fresh load reflect the outcome */ }
+    finally {
       setDiagActionLoading(false)
-      setTimeout(() => setDiagActionMsg(null), 5000)
     }
   }
 
@@ -344,8 +334,8 @@ export function LibraryPage() {
         <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>{emuMsg}</div>
       )}
 
-      {/* Search by title — where the ARR diagnostic buttons used to be */}
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
+      {/* Search by title + filters + view modes, all on one line */}
+      <div className="filters-bar">
         <input
           className="form-input"
           placeholder="Buscar título…"
@@ -354,11 +344,6 @@ export function LibraryPage() {
           onKeyDown={e => e.key === 'Enter' && applyFilters()}
           style={{ width: 140 }}
         />
-        {diagActionMsg && <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{diagActionMsg}</span>}
-      </div>
-
-      {/* Filters + view modes on one line */}
-      <div className="filters-bar">
         <select className="form-input form-select" value={filterType} onChange={e => { setFilterType(e.target.value); setOffset(0) }}>
           <option value="">Tipo: Todos</option>
           <option value="movie">Película</option>
@@ -369,13 +354,8 @@ export function LibraryPage() {
           <option value="">Estado: Todos</option>
           <option value="Disponible">Disponible</option>
           <option value="Parcial">Parcial</option>
-          <option value={NOT_AVAILABLE_STATUS_FILTER}>Todos los no disponibles</option>
           <option value="Faltante">Faltante</option>
-          <option value="En cola">En cola</option>
-          <option value="Descargando">Descargando</option>
-          <option value="Pendiente de importar">Pendiente de importar</option>
-          <option value="Error de importación">Error de importación</option>
-          <option value="Error de búsqueda">Error de búsqueda</option>
+          <option value="Error de importación">Error</option>
         </select>
         <select className="form-input form-select" value={filterInstanceId} onChange={e => { setFilterInstanceId(e.target.value); setOffset(0) }}>
           <option value="">Origen: Todos</option>

@@ -64,14 +64,23 @@ def dashboard_summary(current_user: dict = Depends(require_auth)) -> DashboardSu
                 """
                 SELECT
                     COUNT(*) AS total,
-                    SUM(CASE WHEN LOWER(COALESCE(emu_status,'')) IN ('filled','llena','1') THEN 1 ELSE 0 END) AS filled
+                    SUM(CASE WHEN LOWER(COALESCE(emu_status,'')) IN ('filled','llena','lleno','1') THEN 1 ELSE 0 END) AS filled
                 FROM request_items
                 """
             ).fetchone()
             summary["requests_total"] = int(row["total"] or 0) if row else 0
             summary["requests_filled"] = int(row["filled"] or 0) if row else 0
+            # Count requests whose BEST match is Compatible (same criterion as
+            # the Peticiones list), not every Compatible match row.
             compatible_row = conn.execute(
-                "SELECT COUNT(*) AS cnt FROM request_matches WHERE status = 'Compatible'"
+                """
+                SELECT COUNT(*) AS cnt FROM request_items ri
+                WHERE (
+                    SELECT rm.status FROM request_matches rm
+                    WHERE rm.request_item_id = ri.id
+                    ORDER BY rm.confidence DESC LIMIT 1
+                ) = 'Compatible'
+                """
             ).fetchone()
             summary["requests_compatible"] = int(compatible_row["cnt"] or 0) if compatible_row else 0
             from emuwarez_uploadrr.database import get_state

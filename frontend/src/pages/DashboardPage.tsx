@@ -253,7 +253,7 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
         <div className="stat-cards-row">
           <StatCard label="Peticiones eMuwarez" value={s.requests_total ?? 0} />
           <StatCard label="Lista para subir" value={s.requests_ready_to_upload ?? 0} accentColor="var(--color-available)" />
-          <StatCard label="Compatibles" value={s.requests_need_nomenclature ?? 0} accentColor="#f59e0b" />
+          <StatCard label="Compatibles" value={s.requests_compatible ?? 0} accentColor="#f59e0b" />
           <StatCard label="Mis peticiones" value={s.requests_mine ?? 0} accentColor="#818cf8" />
           <StatCard label="Completadas" value={s.requests_filled ?? 0} accentColor="var(--color-uploaded)" />
         </div>

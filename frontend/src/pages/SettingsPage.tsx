@@ -592,7 +592,7 @@ function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | null; on
         <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: '0 0 12px' }}>
           Crea un archivo <code>.tar.gz</code> del directorio de configuración (sin secretos en el nombre).
         </p>
-        <button className="btn-primary" onClick={handleBackup} disabled={busy}>
+        <button className="btn btn-primary" onClick={handleBackup} disabled={busy}>
           {busy ? 'Creando…' : 'Crear backup ahora'}
         </button>
       </div>
@@ -643,8 +643,8 @@ function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | null; on
           style={{ width: '100%', marginBottom: 10, padding: '6px 10px', fontSize: 13, boxSizing: 'border-box' }}
         />
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn-secondary" onClick={() => handleRestore(true)} disabled={busy}>Previsualizar</button>
-          <button className="btn-danger" onClick={() => handleRestore(false)} disabled={busy}>Restaurar</button>
+          <button className="btn btn-secondary" onClick={() => handleRestore(true)} disabled={busy}>Previsualizar</button>
+          <button className="btn btn-danger" onClick={() => handleRestore(false)} disabled={busy}>Restaurar</button>
         </div>
       </div>
     </div>
@@ -735,13 +735,13 @@ function MaintenanceTab() {
       <div className="placeholder-card">
         <h3>Ajustes</h3>
         <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: '0 0 10px' }}>Exporta los ajustes actuales en JSON (secretos enmascarados).</p>
-        <button className="btn-secondary" onClick={handleExportSettings} disabled={busy}>Exportar ajustes (JSON)</button>
+        <button className="btn btn-secondary" onClick={handleExportSettings} disabled={busy}>Exportar ajustes (JSON)</button>
       </div>
 
       <div className="placeholder-card">
         <h3>Integridad de la base de datos</h3>
         <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: '0 0 10px' }}>Ejecuta <code>PRAGMA integrity_check</code> — solo lectura.</p>
-        <button className="btn-secondary" onClick={handleIntegrity} disabled={busy}>Verificar integridad</button>
+        <button className="btn btn-secondary" onClick={handleIntegrity} disabled={busy}>Verificar integridad</button>
       </div>
 
       <div className="placeholder-card">
@@ -755,8 +755,8 @@ function MaintenanceTab() {
           style={{ width: '100%', marginBottom: 8, padding: '6px 10px', fontSize: 13, boxSizing: 'border-box' }}
         />
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn-secondary" onClick={() => handleVacuum(true)} disabled={busy}>Previsualizar</button>
-          <button className="btn-danger" onClick={() => handleVacuum(false)} disabled={busy}>Ejecutar VACUUM</button>
+          <button className="btn btn-secondary" onClick={() => handleVacuum(true)} disabled={busy}>Previsualizar</button>
+          <button className="btn btn-danger" onClick={() => handleVacuum(false)} disabled={busy}>Ejecutar VACUUM</button>
         </div>
       </div>
 
@@ -776,8 +776,8 @@ function MaintenanceTab() {
           style={{ width: '100%', marginBottom: 8, padding: '6px 10px', fontSize: 13, boxSizing: 'border-box' }}
         />
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn-secondary" onClick={() => handleCleanup(true)} disabled={busy}>Previsualizar</button>
-          <button className="btn-danger" onClick={() => handleCleanup(false)} disabled={busy}>Limpiar logs</button>
+          <button className="btn btn-secondary" onClick={() => handleCleanup(true)} disabled={busy}>Previsualizar</button>
+          <button className="btn btn-danger" onClick={() => handleCleanup(false)} disabled={busy}>Limpiar logs</button>
         </div>
       </div>
     </div>

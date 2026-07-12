@@ -7,7 +7,8 @@ import { EmuComparisonSection } from './EmuComparisonSection'
 import { LibraryActionButtons } from './LibraryActionButtons'
 import type { LibraryActionKind } from './LibraryTreeRow'
 import { formatBytes, formatItemType } from '../utils/format'
-import { buildDeepLink, posterUrl } from '../utils/libraryItem'
+import { buildDeepLink, posterUrl, idVerifyUrl } from '../utils/libraryItem'
+import { ExternalIdLink } from './ExternalIdLink'
 
 // Full dedicated detail page (Radarr/Sonarr-style) — replaces the old small
 // modal and the large card. Rendered in place of the library list, with a
@@ -30,6 +31,7 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
 }) {
   const deepLink = buildDeepLink(item, instances)
   const isRollup = item.item_type === 'series' || item.item_type === 'season'
+  const isTv = item.item_type !== 'movie'
 
   // Ancestor navigation: a season can go up to its series; an episode can go up
   // to its season and to its series. We only have parent_id, so fetch the chain
@@ -115,7 +117,9 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
             <Field label="Idiomas de audio">{item.audio_languages || '–'}</Field>
             <Field label="Subtítulos">{item.subtitle_languages || '–'}</Field>
             <Field label="Tamaño">{formatBytes(item.size_bytes)}</Field>
-            <Field label="TMDb / IMDb">{item.tmdb_id ?? '—'} / {item.imdb_id ?? '—'}</Field>
+            {item.tmdb_id && <Field label="TMDb"><ExternalIdLink id={item.tmdb_id} href={idVerifyUrl('tmdb', item.tmdb_id, isTv)} label="TMDb" /></Field>}
+            {item.imdb_id && <Field label="IMDb"><ExternalIdLink id={item.imdb_id} href={idVerifyUrl('imdb', item.imdb_id, isTv)} label="IMDb" /></Field>}
+            {item.tvdb_id && <Field label="TVDB"><ExternalIdLink id={item.tvdb_id} href={idVerifyUrl('tvdb', item.tvdb_id, isTv)} label="TVDB" /></Field>}
             <Field label="Ruta" wide>{item.path ?? '—'}</Field>
           </div>
 

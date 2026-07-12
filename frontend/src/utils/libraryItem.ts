@@ -28,3 +28,16 @@ export function posterUrl(url: string | null | undefined, size: PosterSize = 'w3
   if (!url) return undefined
   return url.replace(/\/t\/p\/(original|w\d+)\//, `/t/p/${size}/`)
 }
+
+// Public page for an external ID so the user can open it in TMDb/IMDb/TheTVDB/MAL.
+export function idVerifyUrl(kind: 'tmdb' | 'imdb' | 'tvdb' | 'mal', id: string | null | undefined, isTv: boolean): string | null {
+  if (!id) return null
+  const digits = id.replace(/\D+/g, '')
+  if (!digits) return null
+  switch (kind) {
+    case 'tmdb': return `https://www.themoviedb.org/${isTv ? 'tv' : 'movie'}/${digits}`
+    case 'imdb': return `https://www.imdb.com/title/tt${digits.padStart(7, '0')}/`
+    case 'tvdb': return `https://thetvdb.com/dereferrer/series/${digits}`
+    case 'mal':  return `https://myanimelist.net/anime/${digits}`
+  }
+}

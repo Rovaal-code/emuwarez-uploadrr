@@ -17,7 +17,8 @@ import { SyncInfo } from '../components/SyncInfo'
 import { UploadWizardModal } from '../components/UploadWizardModal'
 import { getLibraryItem } from '../api/library'
 import type { LibraryItemResponse } from '../types/api'
-import { posterUrl } from '../utils/libraryItem'
+import { posterUrl, idVerifyUrl } from '../utils/libraryItem'
+import { ExternalIdLink } from '../components/ExternalIdLink'
 import { formatBytes } from '../utils/format'
 
 // A request's category maps to a friendly "Tipo" with an icon.
@@ -110,19 +111,6 @@ function cellMark(v: boolean | null) {
 
 const baseName = (path: string | null) => (path ? path.split('/').pop() || null : null)
 
-// Public page for an external ID so the user can open it in TMDb/IMDb/TheTVDB/MAL.
-function idVerifyUrl(kind: 'tmdb' | 'imdb' | 'tvdb' | 'mal', id: string | null, isTv: boolean): string | null {
-  if (!id) return null
-  const digits = id.replace(/\D+/g, '')
-  if (!digits) return null
-  switch (kind) {
-    case 'tmdb': return `https://www.themoviedb.org/${isTv ? 'tv' : 'movie'}/${digits}`
-    case 'imdb': return `https://www.imdb.com/title/tt${digits.padStart(7, '0')}/`
-    case 'tvdb': return `https://thetvdb.com/dereferrer/series/${digits}`
-    case 'mal':  return `https://myanimelist.net/anime/${digits}`
-  }
-}
-
 function CompatibilityBadge({ status }: { status: string | null }) {
   if (!status) return <span className="badge req-none">Sin coincidencia</span>
   const cls =
@@ -209,20 +197,7 @@ function IdField({ label, id, href }: { label: string; id: string | null; href: 
   if (!id) return null
   return (
     <ReqField label={label}>
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-        {id}
-        {href && (
-          <a
-            href={href}
-            target="_blank"
-            rel="noreferrer"
-            title={`Ver en ${label}`}
-            style={{ textDecoration: 'none', fontSize: 12, lineHeight: '16px', padding: '1px 6px', borderRadius: 4, border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
-          >
-            ↗
-          </a>
-        )}
-      </span>
+      <ExternalIdLink id={id} href={href} label={label} />
     </ReqField>
   )
 }

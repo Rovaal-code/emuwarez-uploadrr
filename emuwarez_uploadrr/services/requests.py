@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import logging
+import os
 import re
 import sqlite3
 import unicodedata
@@ -263,6 +264,83 @@ def _check_emu_catalog_duplicate(conn: sqlite3.Connection, req: dict, emu_api_ke
     )
 
 
+_AVAILABLE = {"Disponible", "Subido", "Subiendo", "Parcial"}
+
+
+def _uniq(values) -> Optional[str]:
+    s = {v for v in values}
+    return next(iter(s)) if len(s) == 1 else None
+
+
+def _relevant_episodes(conn, matched_id, matched_type, scope, season, episode, ignore_specials):
+    """Episode rows that a request's scope points at within the matched
+    series/season (the single episode, the season's episodes, or all
+    non-special episodes of the series)."""
+    if matched_type == "series":
+        if scope == "episode" and season is not None and episode is not None:
+            return conn.execute(
+                "SELECT e.* FROM library_items e JOIN library_items se ON e.parent_id = se.id "
+                "WHERE se.parent_id = ? AND se.item_type = 'season' AND se.season_number = ? "
+                "AND e.item_type = 'episode' AND e.episode_number = ?",
+                (matched_id, season, episode)).fetchall()
+        if scope == "season" and season is not None:
+            return conn.execute(
+                "SELECT e.* FROM library_items e JOIN library_items se ON e.parent_id = se.id "
+                "WHERE se.parent_id = ? AND se.item_type = 'season' AND se.season_number = ? "
+                "AND e.item_type = 'episode'",
+                (matched_id, season)).fetchall()
+        clause = " AND (se.season_number IS NULL OR se.season_number != 0)" if ignore_specials else ""
+        return conn.execute(
+            "SELECT e.* FROM library_items e JOIN library_items se ON e.parent_id = se.id "
+            "WHERE se.parent_id = ? AND e.item_type = 'episode'" + clause,
+            (matched_id,)).fetchall()
+    if matched_type == "season":
+        if scope == "episode" and episode is not None:
+            return conn.execute(
+                "SELECT * FROM library_items WHERE parent_id = ? AND item_type = 'episode' AND episode_number = ?",
+                (matched_id, episode)).fetchall()
+        return conn.execute(
+            "SELECT * FROM library_items WHERE parent_id = ? AND item_type = 'episode'",
+            (matched_id,)).fetchall()
+    return []
+
+
+def _effective_target(conn: sqlite3.Connection, matched_item: dict, req: dict) -> dict:
+    """A copy of the matched library item with resolution/source/codecs/audio/
+    subs/size/path/local_status reflecting the request's SCOPE, so a
+    series/season rollup (which stores none of its own) is classified and shown
+    against its real episodes: the specific episode, or the uniform value across
+    the relevant episodes (None when they differ)."""
+    it = dict(matched_item)
+    if it.get("item_type") not in ("series", "season"):
+        return it
+    ignore_specials = (get_setting_canonical(conn, "series.ignore_specials") or "true") != "false"
+    eps = [dict(e) for e in _relevant_episodes(
+        conn, it["id"], it["item_type"], req.get("req_scope"),
+        req.get("req_season"), req.get("req_episode"), ignore_specials)]
+    if not eps:
+        return it
+    single = eps[0] if len(eps) == 1 else None
+    for key in ("resolution", "source", "video_codec", "audio_languages", "subtitle_languages"):
+        it[key] = single[key] if single else _uniq(e.get(key) for e in eps)
+    if single:
+        it["size_bytes"] = single.get("size_bytes")
+        it["path"] = single.get("path")
+        it["title"] = single.get("title") or it.get("title")
+        it["local_status"] = single.get("local_status")
+        it["id"] = single["id"]
+    else:
+        it["size_bytes"] = sum(e.get("size_bytes") or 0 for e in eps) or None
+        statuses = [e.get("local_status") for e in eps]
+        avail = [s for s in statuses if s in _AVAILABLE]
+        it["local_status"] = "Disponible" if len(avail) == len(statuses) and avail else ("Parcial" if avail else "Faltante")
+        paths = [e["path"] for e in eps if e.get("path")]
+        if paths:
+            dirs = {os.path.dirname(p) for p in paths}
+            it["path"] = next(iter(dirs)) if len(dirs) == 1 else os.path.commonpath(paths)
+    return it
+
+
 def match_all_requests(conn: sqlite3.Connection, *, emu_api_key: Optional[str] = None) -> int:
     """Re-run compatibility matching for all request items. Returns updated count.
 
@@ -290,7 +368,7 @@ def match_all_requests(conn: sqlite3.Connection, *, emu_api_key: Optional[str] =
         best = candidates[0]
         classification = classify_request_match(
             req,
-            best["item"],
+            _effective_target(conn, best["item"], req),
             id_match=best["id_match"],
             title_match=best["title_match"],
             base_confidence=best["confidence"],
@@ -394,7 +472,7 @@ def match_single_request(
     best = candidates[0]
     classification = classify_request_match(
         req,
-        best["item"],
+        _effective_target(conn, best["item"], req),
         id_match=best["id_match"],
         title_match=best["title_match"],
         base_confidence=best["confidence"],
@@ -593,56 +671,37 @@ def get_request_detail(conn: sqlite3.Connection, request_id: int) -> Optional[di
             "id_match": bool(md.get("type_match")),
             "reasons": [r for r in reasons.splitlines() if r],
         }
-        # For a season/episode-scoped request whose match is the series rollup
-        # (no resolution/source/codec of its own), drill down to the specific
-        # season/episode library item so the comparison shows real data.
-        child = _resolve_scope_child(
-            conn, md["library_item_id"],
-            result.get("req_scope"), result.get("req_season"), result.get("req_episode"),
-        )
-        if child:
-            from .compatibility import compare_resolution, compare_source
-            # Recompute the spec match against the child's real resolution/source
-            # (the original match was against the series rollup, which has none).
-            res_match = compare_resolution(result.get("requested_resolution"), child.get("resolution"))
-            src_match = compare_source(result.get("requested_source"), child.get("source"))
+        # The stored match was computed against the matched library item; for a
+        # series/season rollup resolve the SCOPE's effective attributes (a
+        # specific episode, or the uniform value across the relevant episodes)
+        # and re-classify, so the comparison shows real data and the status is
+        # consistent with those checks (e.g. a T2·E5 request that IS 1080p is
+        # Compatible, not Parcial against an empty rollup).
+        lib_row = conn.execute(
+            "SELECT * FROM library_items WHERE id = ?", (md["library_item_id"],)
+        ).fetchone()
+        if lib_row and dict(lib_row).get("item_type") in ("series", "season"):
+            eff = _effective_target(conn, dict(lib_row), result)
+            cls = classify_request_match(
+                result, eff,
+                id_match=bool(md.get("type_match")),
+                base_confidence=float(md["confidence"]),
+            )
             result["match"].update({
-                "library_item_id": child["id"],
-                "library_title": child.get("title") or result["match"]["library_title"],
-                "local_status": child.get("local_status"),
-                "local_resolution": child.get("resolution"),
-                "local_source": child.get("source"),
-                "local_video_codec": child.get("video_codec"),
-                "local_audio_languages": child.get("audio_languages"),
-                "local_size": child.get("size_bytes"),
-                "local_path": child.get("path"),
-                "nomenclature_status": child.get("nomenclature_status"),
-                "resolution_match": res_match,
-                "source_match": src_match,
+                "status": cls["status"],
+                "resolution_match": cls["resolution_match"],
+                "source_match": cls["source_match"],
+                "local_status": eff.get("local_status"),
+                "local_resolution": eff.get("resolution"),
+                "local_source": eff.get("source"),
+                "local_video_codec": eff.get("video_codec"),
+                "local_audio_languages": eff.get("audio_languages"),
+                "local_size": eff.get("size_bytes"),
+                "local_path": eff.get("path"),
             })
     else:
         result["match"] = None
     return result
-
-
-def _resolve_scope_child(conn, series_id, scope, season, episode):
-    """Given a series library item and a request scope, return the matching
-    season/episode library item (or None for whole-series / no child)."""
-    if not series_id or scope not in ("season", "episode") or season is None:
-        return None
-    srow = conn.execute(
-        "SELECT * FROM library_items WHERE parent_id = ? AND item_type = 'season' AND season_number = ?",
-        (series_id, season),
-    ).fetchone()
-    if scope == "season":
-        return dict(srow) if srow else None
-    if scope == "episode" and episode is not None and srow:
-        erow = conn.execute(
-            "SELECT * FROM library_items WHERE parent_id = ? AND item_type = 'episode' AND episode_number = ?",
-            (srow["id"], episode),
-        ).fetchone()
-        return dict(erow) if erow else None
-    return None
 
 
 def mark_request_reviewed(conn: sqlite3.Connection, request_id: int) -> bool:

@@ -20,6 +20,18 @@ const MIN_REWARD = 100
 
 const onlyDigits = (v: string) => v.replace(/\D+/g, '')
 
+// Build the public URL for an external ID so the user can verify the
+// autofilled ID really points at the right movie/series/documentary.
+function idVerifyUrl(kind: 'tmdb' | 'imdb' | 'tvdb' | 'mal', id: string, isSeries: boolean): string | null {
+  if (!id) return null
+  switch (kind) {
+    case 'tmdb': return `https://www.themoviedb.org/${isSeries ? 'tv' : 'movie'}/${id}`
+    case 'imdb': return `https://www.imdb.com/title/tt${id.padStart(7, '0')}/`
+    case 'tvdb': return `https://thetvdb.com/dereferrer/series/${id}`
+    case 'mal':  return `https://myanimelist.net/anime/${id}`
+  }
+}
+
 interface Props {
   item: LibraryItemResponse
   onClose: () => void
@@ -56,6 +68,11 @@ export function RequestFormModal({ item, onClose }: Props) {
   const [tvdbId, setTvdbId] = useState(onlyDigits(item.tvdb_id || ''))
   const [season, setSeason] = useState(item.season_number != null ? String(item.season_number) : '')
   const [episode, setEpisode] = useState(item.episode_number != null ? String(item.episode_number) : '')
+  // A series/doc request can target every season, one season, or a single
+  // episode. Prefill the scope from the item's granularity.
+  const [scope, setScope] = useState<'all' | 'season' | 'episode'>(
+    item.episode_number != null ? 'episode' : item.season_number != null ? 'season' : 'all'
+  )
 
   const [description, setDescription] = useState('')
   const [reward, setReward] = useState(String(MIN_REWARD))
@@ -77,7 +94,12 @@ export function RequestFormModal({ item, onClose }: Props) {
       tmdb_id: useTmdb ? tmdbId : null,
       imdb_id: useImdb ? imdbId : null,
       mal_id: useMal ? malId : null,
-      ...(isSeries ? { tvdb_id: useTvdb ? tvdbId : null, season: onlyDigits(season) || '0', episode: onlyDigits(episode) || '0' } : {}),
+      ...(isSeries ? {
+        tvdb_id: useTvdb ? tvdbId : null,
+        scope,
+        season: scope === 'all' ? '0' : (onlyDigits(season) || '0'),
+        episode: scope === 'episode' ? (onlyDigits(episode) || '0') : '0',
+      } : {}),
       description, reward: rewardNum, anonymous: anon,
     }
     setMsg('La creación de peticiones está pendiente del endpoint real de eMuwarez (aún por capturar). Payload validado: ' + JSON.stringify(payload))
@@ -120,23 +142,34 @@ export function RequestFormModal({ item, onClose }: Props) {
 
             {isSeries && (
               <>
-                <label><span style={labelStyle}>Nº de temporada</span>
-                  <input className="form-input" value={season} onChange={e => setSeason(onlyDigits(e.target.value))} inputMode="numeric" placeholder="1" />
+                <label style={{ gridColumn: '1 / -1' }}><span style={labelStyle}>Alcance de la petición</span>
+                  <select className="form-input" value={scope} onChange={e => setScope(e.target.value as 'all' | 'season' | 'episode')}>
+                    <option value="all">Todas las temporadas</option>
+                    <option value="season">Una temporada</option>
+                    <option value="episode">Un episodio</option>
+                  </select>
                 </label>
-                <label><span style={labelStyle}>Nº de episodio</span>
-                  <input className="form-input" value={episode} onChange={e => setEpisode(onlyDigits(e.target.value))} inputMode="numeric" placeholder="0 = temporada entera" />
-                </label>
+                {scope !== 'all' && (
+                  <label><span style={labelStyle}>Nº de temporada</span>
+                    <input className="form-input" value={season} onChange={e => setSeason(onlyDigits(e.target.value))} inputMode="numeric" placeholder="1" />
+                  </label>
+                )}
+                {scope === 'episode' && (
+                  <label><span style={labelStyle}>Nº de episodio</span>
+                    <input className="form-input" value={episode} onChange={e => setEpisode(onlyDigits(e.target.value))} inputMode="numeric" placeholder="1" />
+                  </label>
+                )}
               </>
             )}
           </div>
 
           {/* ID checkboxes */}
           <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 16px' }}>
-            <IdRow label="TMDB ID" checked={useTmdb} onToggle={setUseTmdb} value={tmdbId} onChange={v => setTmdbId(onlyDigits(v))} />
-            <IdRow label="IMDB ID" checked={useImdb} onToggle={setUseImdb} value={imdbId} onChange={v => setImdbId(onlyDigits(v))} />
-            <IdRow label="MAL ID (anime)" checked={useMal} onToggle={setUseMal} value={malId} onChange={v => setMalId(onlyDigits(v))} />
+            <IdRow label="TMDB ID" checked={useTmdb} onToggle={setUseTmdb} value={tmdbId} onChange={v => setTmdbId(onlyDigits(v))} href={idVerifyUrl('tmdb', tmdbId, isSeries)} />
+            <IdRow label="IMDB ID" checked={useImdb} onToggle={setUseImdb} value={imdbId} onChange={v => setImdbId(onlyDigits(v))} href={idVerifyUrl('imdb', imdbId, isSeries)} />
+            <IdRow label="MAL ID (anime)" checked={useMal} onToggle={setUseMal} value={malId} onChange={v => setMalId(onlyDigits(v))} href={idVerifyUrl('mal', malId, isSeries)} />
             {isSeries && (
-              <IdRow label="TVDB ID" checked={useTvdb} onToggle={setUseTvdb} value={tvdbId} onChange={v => setTvdbId(onlyDigits(v))} />
+              <IdRow label="TVDB ID" checked={useTvdb} onToggle={setUseTvdb} value={tvdbId} onChange={v => setTvdbId(onlyDigits(v))} href={idVerifyUrl('tvdb', tvdbId, isSeries)} />
             )}
           </div>
 
@@ -172,23 +205,43 @@ export function RequestFormModal({ item, onClose }: Props) {
   )
 }
 
-function IdRow({ label, checked, onToggle, value, onChange }: {
+function IdRow({ label, checked, onToggle, value, onChange, href }: {
   label: string; checked: boolean; onToggle: (v: boolean) => void; value: string; onChange: (v: string) => void
+  href?: string | null
 }) {
+  const canVerify = checked && !!href
   return (
     <div>
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, marginBottom: 4 }}>
         <input type="checkbox" checked={checked} onChange={e => onToggle(e.target.checked)} /> {label}
       </label>
-      <input
-        className="form-input"
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        disabled={!checked}
-        inputMode="numeric"
-        placeholder="solo dígitos"
-        style={{ opacity: checked ? 1 : 0.5 }}
-      />
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        <input
+          className="form-input"
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          disabled={!checked}
+          inputMode="numeric"
+          placeholder="solo dígitos"
+          style={{ opacity: checked ? 1 : 0.5, flex: 1, minWidth: 0 }}
+        />
+        <a
+          className="btn btn-secondary btn-sm"
+          href={canVerify ? href! : undefined}
+          target="_blank"
+          rel="noreferrer"
+          title={canVerify ? 'Verificar: abrir la ficha en su web' : 'Introduce un ID para verificarlo'}
+          aria-disabled={!canVerify}
+          onClick={e => { if (!canVerify) e.preventDefault() }}
+          style={{
+            flexShrink: 0, textDecoration: 'none', lineHeight: 1,
+            padding: '0 10px', height: 34, display: 'flex', alignItems: 'center',
+            opacity: canVerify ? 1 : 0.4, pointerEvents: canVerify ? 'auto' : 'none',
+          }}
+        >
+          ↗
+        </a>
+      </div>
     </div>
   )
 }

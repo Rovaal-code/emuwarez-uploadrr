@@ -50,7 +50,7 @@ export const NAV_ITEMS: NavItem[] = [
 // step — the service already ships with sensible runtime defaults;
 // configurable later from Settings if needed.
 export const SETUP_STEPS = [
-  'welcome', 'admin', 'emu', 'instances', 'tmdb', 'nomenclature', 'qbit', 'complete',
+  'welcome', 'admin', 'emu', 'instances', 'tmdb', 'nomenclature', 'qbit', 'imagehosts', 'complete',
 ] as const
 export type SetupStep = (typeof SETUP_STEPS)[number]
 
@@ -62,5 +62,6 @@ export const SETUP_STEP_LABELS: Record<SetupStep, string> = {
   tmdb: 'TMDb',
   nomenclature: 'Nomenclatura y hardlinks',
   qbit: 'qBittorrent',
+  imagehosts: 'Imágenes',
   complete: 'Completar',
 }

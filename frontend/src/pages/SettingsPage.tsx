@@ -12,7 +12,7 @@ import {
   type BackupInfo,
 } from '../api/maintenance'
 import { fetchSettings, updateSettings, type SettingsData } from '../api/settings'
-import { testTmdbConnection, testEmuwarezConnection, testQbitConnection, type IntegrationTestResult } from '../api/integrationTests'
+import { testTmdbConnection, testEmuwarezConnection, testQbitConnection, testImghostConnection, type IntegrationTestResult } from '../api/integrationTests'
 import { useCooldown } from '../hooks/useCooldown'
 import { testDiscordNotification, testTelegramNotification } from '../api/notifications'
 import { ProviderPriorityPicker } from '../components/ProviderPriorityPicker'
@@ -57,6 +57,25 @@ function ConfigTab() {
   const [qbitPass, setQbitPass] = useState('')
   const [testingQbit, setTestingQbit] = useState(false)
   const [qbitTestResult, setQbitTestResult] = useState<IntegrationTestResult | null>(null)
+  // Image hosts
+  const [imgEnabled, setImgEnabled] = useState<string[]>([])
+  const [imgKeys, setImgKeys] = useState<Record<string, string>>({})
+  const [imgTest, setImgTest] = useState<Record<string, IntegrationTestResult>>({})
+  const [imgTesting, setImgTesting] = useState<string | null>(null)
+
+  async function handleTestImghost(hostId: string) {
+    setImgTesting(hostId)
+    try {
+      const r = await testImghostConnection(hostId, imgKeys[hostId]?.trim() || undefined)
+      setImgTest(p => ({ ...p, [hostId]: r }))
+    } catch {
+      setImgTest(p => ({ ...p, [hostId]: { ok: false, service: 'imghost', status: 'connection_error', message: 'Error al contactar con el servidor' } }))
+    } finally { setImgTesting(null) }
+  }
+
+  function toggleImgHost(hostId: string) {
+    setImgEnabled(p => p.includes(hostId) ? p.filter(x => x !== hostId) : [...p, hostId])
+  }
 
   useEffect(() => {
     fetchSettings()
@@ -73,6 +92,7 @@ function ConfigTab() {
         setQbitUrl(s.qbit_url ?? '')
         setQbitPort(s.qbit_port ?? '8080')
         setQbitUser(s.qbit_username ?? '')
+        setImgEnabled(s.image_hosts_enabled ?? [])
       })
       .catch(() => setMsg({ ok: false, text: 'Error cargando configuración' }))
       .finally(() => setLoading(false))
@@ -147,10 +167,13 @@ function ConfigTab() {
         qbit_url: qbitUrl.trim(),
         qbit_port: qbitPort.trim(),
         qbit_username: qbitUser.trim(),
+        image_hosts_enabled: imgEnabled,
       }
       if (newKey.trim()) payload.tmdb_api_key = newKey.trim()
       if (newEmuKey.trim()) payload.emu_api_key = newEmuKey.trim()
       if (qbitPass.trim()) payload.qbit_password = qbitPass.trim()
+      const keysToSend = Object.fromEntries(Object.entries(imgKeys).filter(([, v]) => v.trim()))
+      if (Object.keys(keysToSend).length) payload.image_host_keys = keysToSend
       const updated = await updateSettings(payload)
       setSettings(updated)
       setTag(updated.default_release_tag)
@@ -165,6 +188,8 @@ function ConfigTab() {
       setQbitPort(updated.qbit_port ?? '8080')
       setQbitUser(updated.qbit_username ?? '')
       setQbitPass('')
+      setImgEnabled(updated.image_hosts_enabled ?? [])
+      setImgKeys({})
       setNewKey('')
       setNewEmuKey('')
       setMsg({ ok: true, text: '✓ Configuración guardada' })
@@ -276,6 +301,46 @@ function ConfigTab() {
         <span className="form-hint" style={{ display: 'block', marginTop: 10 }}>
           El cliente de torrents que usa Uploadrr para añadir el .torrent tras subir a eMuwarez.
         </span>
+      </div>
+
+      <div className="placeholder-card">
+        <h3 style={{ marginTop: 0, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <ServiceIcon type="imghost" size={18} /> Proveedores de imágenes
+        </h3>
+        <span className="form-hint" style={{ display: 'block', marginBottom: 12 }}>
+          Para las capturas que Uploadrr sube junto al torrent. <strong>imgbox</strong> es el fallback por
+          defecto (sin key); activa otros si quieres, se prueban en orden e imgbox va siempre el último.
+        </span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {(settings?.image_hosts_available ?? []).map(h => {
+            const enabled = imgEnabled.includes(h.id)
+            const isDefault = h.id === 'imgbox'
+            const t = imgTest[h.id]
+            return (
+              <div key={h.id} style={{ padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, background: enabled || isDefault ? 'rgba(139,92,246,0.06)' : 'transparent' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <input type="checkbox" checked={enabled || isDefault} disabled={isDefault} onChange={() => toggleImgHost(h.id)} />
+                  <ServiceIcon type="imghost" size={15} />
+                  <span style={{ fontSize: 13, fontWeight: 500 }}>{h.label}</span>
+                  {isDefault && <span className="badge status-available" style={{ fontSize: 10 }}>por defecto</span>}
+                  {h.needs_key && <span className="badge nom-na" style={{ fontSize: 10 }}>API key</span>}
+                  {(enabled || isDefault) && (
+                    <button className="btn btn-secondary btn-sm" style={{ marginLeft: 'auto', fontSize: 11, padding: '2px 8px' }}
+                      onClick={() => handleTestImghost(h.id)} disabled={imgTesting === h.id} type="button">
+                      {imgTesting === h.id ? 'Probando…' : 'Probar'}
+                    </button>
+                  )}
+                </div>
+                {h.needs_key && enabled && (
+                  <input type="password" className="form-input" style={{ marginTop: 6 }} autoComplete="new-password"
+                    value={imgKeys[h.id] ?? ''} onChange={e => setImgKeys(p => ({ ...p, [h.id]: e.target.value }))}
+                    placeholder={settings?.image_host_keys_configured?.includes(h.id) ? '•••••••• (guardada — vacío para mantener)' : `API key de ${h.label}`} />
+                )}
+                {t && <div style={{ fontSize: 11, marginTop: 4, color: testResultColor(t) }}>{testResultLabel(t)}</div>}
+              </div>
+            )
+          })}
+        </div>
       </div>
 
       <div className="placeholder-card">

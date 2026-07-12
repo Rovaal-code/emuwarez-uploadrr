@@ -94,6 +94,24 @@ def test_qbit_connection(
 
 
 # ---------------------------------------------------------------------------
+# Image hosts
+# ---------------------------------------------------------------------------
+
+def test_imghost_connection(host_id: str, api_key: Optional[str] = None, *, conn=None) -> dict:
+    """Reachability test for an image host. Falls back to the stored key."""
+    from .image_hosts import test_image_host, get_host_key, host_meta
+
+    meta = host_meta(host_id)
+    label = meta["label"] if meta else host_id
+    key = api_key if api_key is not None else (get_host_key(conn, host_id) if conn is not None else None)
+    result = test_image_host(host_id, key)
+    if result.get("ok"):
+        return _ok("imghost", message=f"{label} responde", details={"host": host_id})
+    return _fail("imghost", "connection_error", result.get("error") or f"{label} no responde",
+                 details={"host": host_id})
+
+
+# ---------------------------------------------------------------------------
 # TMDb
 # ---------------------------------------------------------------------------
 

@@ -21,6 +21,10 @@ export async function setupQbit(url: string, port = '8080', username = '', passw
   return api.post<OkResponse>('/setup/qbit', { url, port, username, password })
 }
 
+export async function setupImghosts(enabled: string[], keys: Record<string, string>): Promise<OkResponse> {
+  return api.post<OkResponse>('/setup/imghosts', { enabled, keys })
+}
+
 export interface SetupInstancePayload {
   type: string
   name: string

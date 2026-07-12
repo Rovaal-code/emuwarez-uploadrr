@@ -1,11 +1,12 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   setupAdmin, setupTmdb, setupEmu, setupInstances,
-  setupNomenclature, setupQbit, setupComplete,
+  setupNomenclature, setupQbit, setupImghosts, setupComplete,
 } from '../api/setup'
 import { login } from '../api/auth'
 import { syncAll } from '../api/library'
-import { testTmdbConnection, testEmuwarezConnection, testArrConnection, testQbitConnection, type IntegrationTestResult } from '../api/integrationTests'
+import { fetchSettings } from '../api/settings'
+import { testTmdbConnection, testEmuwarezConnection, testArrConnection, testQbitConnection, testImghostConnection, type IntegrationTestResult } from '../api/integrationTests'
 import { ServiceIcon } from '../components/ServiceIcon'
 import { ProviderPriorityPicker } from '../components/ProviderPriorityPicker'
 import { REGION_OPTIONS, LANGUAGE_OPTIONS } from '../constants/regionLanguage'
@@ -117,6 +118,29 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
     } catch {
       setQbitTestResult({ ok: false, service: 'qbittorrent', status: 'connection_error', message: 'Error al contactar con el servidor' })
     } finally { setQbitTesting(false) }
+  }
+
+  // Image hosts step state
+  const [imgAvailable, setImgAvailable] = useState<{ id: string; label: string; needs_key: boolean }[]>([])
+  const [imgEnabled, setImgEnabled] = useState<string[]>([])
+  const [imgKeys, setImgKeys] = useState<Record<string, string>>({})
+  const [imgTest, setImgTest] = useState<Record<string, IntegrationTestResult>>({})
+  const [imgTesting, setImgTesting] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (step === 'imagehosts' && imgAvailable.length === 0) {
+      fetchSettings().then(s => setImgAvailable(s.image_hosts_available)).catch(() => { /* ignore */ })
+    }
+  }, [step, imgAvailable.length])
+
+  async function handleTestImghost(hostId: string) {
+    setImgTesting(hostId)
+    try {
+      const r = await testImghostConnection(hostId, imgKeys[hostId]?.trim() || undefined)
+      setImgTest(p => ({ ...p, [hostId]: r }))
+    } catch {
+      setImgTest(p => ({ ...p, [hostId]: { ok: false, service: 'imghost', status: 'connection_error', message: 'Error' } }))
+    } finally { setImgTesting(null) }
   }
 
   // Instances step state
@@ -283,6 +307,12 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
     if (qbitUrl.trim()) {
       await setupQbit(qbitUrl.trim(), qbitPort.trim() || '8080', qbitUser.trim(), qbitPass)
     }
+    setStep('imagehosts')
+  })
+
+  const handleImghosts = wrap(async () => {
+    const keys = Object.fromEntries(Object.entries(imgKeys).filter(([, v]) => v.trim()))
+    await setupImghosts(imgEnabled, keys)
     setStep('complete')
   })
 
@@ -724,6 +754,53 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 <span />
                 <button className="btn btn-primary" onClick={handleQbit} disabled={loading}>
                   {loading ? 'Guardando…' : qbitUrl.trim() ? 'Continuar' : 'Omitir'}
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* Image hosts step */}
+          {step === 'imagehosts' && (
+            <>
+              <div className="wizard-step-desc" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <ServiceIcon type="imghost" size={18} /> Dónde suben las capturas que acompañan al torrent. <strong>imgbox</strong> va por defecto (sin key); activa otros si quieres. Puedes cambiarlo luego en Configuración.
+              </div>
+              <div className="wizard-fields" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {imgAvailable.map(h => {
+                  const enabled = imgEnabled.includes(h.id)
+                  const isDefault = h.id === 'imgbox'
+                  const t = imgTest[h.id]
+                  return (
+                    <div key={h.id} style={{ padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <input type="checkbox" checked={enabled || isDefault} disabled={isDefault}
+                          onChange={() => setImgEnabled(p => p.includes(h.id) ? p.filter(x => x !== h.id) : [...p, h.id])} />
+                        <ServiceIcon type="imghost" size={14} />
+                        <span style={{ fontSize: 13 }}>{h.label}</span>
+                        {isDefault && <span className="badge status-available" style={{ fontSize: 10 }}>por defecto</span>}
+                        {h.needs_key && <span className="badge nom-na" style={{ fontSize: 10 }}>API key</span>}
+                        {(enabled || isDefault) && (
+                          <button className="btn btn-secondary btn-sm" style={{ marginLeft: 'auto', fontSize: 11, padding: '2px 8px' }}
+                            onClick={() => handleTestImghost(h.id)} disabled={imgTesting === h.id} type="button">
+                            {imgTesting === h.id ? 'Probando…' : 'Probar'}
+                          </button>
+                        )}
+                      </div>
+                      {h.needs_key && enabled && (
+                        <input type="password" className="form-input" style={{ marginTop: 6 }} autoComplete="new-password"
+                          value={imgKeys[h.id] ?? ''} onChange={e => setImgKeys(p => ({ ...p, [h.id]: e.target.value }))}
+                          placeholder={`API key de ${h.label}`} />
+                      )}
+                      {t && <div style={{ fontSize: 11, marginTop: 4, color: testResultColor(t) }}>{testResultLabel(t)}</div>}
+                    </div>
+                  )
+                })}
+              </div>
+              {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
+              <div className="wizard-actions">
+                <span />
+                <button className="btn btn-primary" onClick={handleImghosts} disabled={loading}>
+                  {loading ? 'Guardando…' : 'Continuar'}
                 </button>
               </div>
             </>

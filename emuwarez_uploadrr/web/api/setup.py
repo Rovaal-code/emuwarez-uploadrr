@@ -21,6 +21,7 @@ from ..schemas import (
     OkResponse,
     SetupEmuRequest,
     SetupInstanceRequest,
+    SetupImghostsRequest,
     SetupNomenclatureRequest,
     SetupQbitRequest,
     SetupStatusResponse,
@@ -114,6 +115,18 @@ def setup_qbit(
         _setup_qbit(conn, body.url, body.port, body.username, body.password)
         conn.commit()
     return OkResponse(message="Configuración de qBittorrent guardada correctamente")
+
+
+@router.post("/setup/imghosts", response_model=OkResponse)
+def setup_imghosts(
+    body: SetupImghostsRequest,
+    current_user: dict = Depends(require_auth),
+) -> OkResponse:
+    from ..services.setup_service import setup_imghosts as _setup_imghosts
+    with _get_conn() as conn:
+        _setup_imghosts(conn, body.enabled, body.keys)
+        conn.commit()
+    return OkResponse(message="Proveedores de imágenes guardados correctamente")
 
 
 # ---------------------------------------------------------------------------

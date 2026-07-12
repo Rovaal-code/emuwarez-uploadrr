@@ -46,3 +46,7 @@ export function testQbitConnection(params: {
 } = {}): Promise<IntegrationTestResult> {
   return api.post<IntegrationTestResult>('/integrations/test/qbit', params)
 }
+
+export function testImghostConnection(host: string, api_key?: string): Promise<IntegrationTestResult> {
+  return api.post<IntegrationTestResult>('/integrations/test/imghost', { host, api_key })
+}

@@ -51,6 +51,10 @@ class SettingsResponse(BaseModel):
     qbit_username: Optional[str] = None
     qbit_password_configured: bool = False
     qbit_configured: bool = False
+    # Image hosts (screenshots)
+    image_hosts_available: list = []          # [{id, label, needs_key}]
+    image_hosts_enabled: list[str] = []       # enabled ids, in fallback order
+    image_host_keys_configured: list[str] = []  # ids that have a key set
     # Phase 5 (12-part batch): the user's own eMuwarez username, used by the
     # Dashboard's "Mis peticiones" card to filter request_items.author.
     emu_username: Optional[str] = None
@@ -91,6 +95,9 @@ class SettingsUpdateRequest(BaseModel):
     qbit_port: Optional[str] = None
     qbit_username: Optional[str] = None
     qbit_password: Optional[str] = None
+    # Image hosts
+    image_hosts_enabled: Optional[list[str]] = None
+    image_host_keys: Optional[dict] = None  # {host_id: api_key}
     emu_username: Optional[str] = None
     # Phase 10F
     uploadrr_path: Optional[str] = None
@@ -168,6 +175,11 @@ def _build_response(conn) -> SettingsResponse:
     # qBittorrent is "configured" once a host is set (login is optional).
     qbit_configured = bool(qbit_url and qbit_url.strip())
 
+    from emuwarez_uploadrr.services.image_hosts import IMAGE_HOSTS, get_enabled_hosts, get_host_key
+    img_available = [{"id": h["id"], "label": h["label"], "needs_key": h["needs_key"]} for h in IMAGE_HOSTS]
+    img_enabled = get_enabled_hosts(conn)
+    img_keys_configured = [h["id"] for h in IMAGE_HOSTS if (get_host_key(conn, h["id"]) or "").strip()]
+
     discord_webhook = get_setting_canonical(conn, "notify.discord.webhook_url")
     discord_webhook_configured = bool(discord_webhook and discord_webhook.strip())
     telegram_token = get_setting_canonical(conn, "notify.telegram.bot_token")
@@ -208,6 +220,9 @@ def _build_response(conn) -> SettingsResponse:
         qbit_username=get_setting_canonical(conn, "qbit.username"),
         qbit_password_configured=qbit_pass_configured,
         qbit_configured=qbit_configured,
+        image_hosts_available=img_available,
+        image_hosts_enabled=img_enabled,
+        image_host_keys_configured=img_keys_configured,
         notify_discord_enabled=(get_setting_canonical(conn, "notify.discord.enabled") or "") == "true",
         notify_discord_webhook_configured=discord_webhook_configured,
         notify_discord_webhook_masked=mask_secret(discord_webhook) if discord_webhook_configured else None,
@@ -300,6 +315,11 @@ def update_settings(
         # Blank password left untouched (keeps the stored one), same as api keys.
         if body.qbit_password is not None and body.qbit_password.strip():
             set_setting(conn, "qbit.password", body.qbit_password.strip())
+
+        if body.image_hosts_enabled is not None or body.image_host_keys is not None:
+            from emuwarez_uploadrr.services.image_hosts import set_config, get_enabled_hosts
+            enabled = body.image_hosts_enabled if body.image_hosts_enabled is not None else get_enabled_hosts(conn)
+            set_config(conn, enabled, body.image_host_keys or {})
 
         if body.uploadrr_path is not None:
             set_setting(conn, "uploadrr.path", body.uploadrr_path.strip())

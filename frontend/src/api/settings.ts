@@ -13,6 +13,9 @@ export interface SettingsData {
   qbit_username: string | null
   qbit_password_configured: boolean
   qbit_configured: boolean
+  image_hosts_available: { id: string; label: string; needs_key: boolean }[]
+  image_hosts_enabled: string[]
+  image_host_keys_configured: string[]
   tmdb_api_key_configured: boolean
   tmdb_api_key_masked: string | null
   emu_api_key_configured: boolean
@@ -47,6 +50,8 @@ export interface SettingsUpdatePayload {
   qbit_port?: string
   qbit_username?: string
   qbit_password?: string
+  image_hosts_enabled?: string[]
+  image_host_keys?: Record<string, string>
   tmdb_api_key?: string
   emu_api_key?: string
   emu_username?: string

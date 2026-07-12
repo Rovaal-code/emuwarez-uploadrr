@@ -11,7 +11,7 @@
 // background chip behind it.
 
 interface ServiceIconProps {
-  type: 'radarr' | 'sonarr' | 'emu' | 'uploadrr' | 'discord' | 'telegram' | 'qbittorrent'
+  type: 'radarr' | 'sonarr' | 'emu' | 'uploadrr' | 'discord' | 'telegram' | 'qbittorrent' | 'imghost'
   size?: number
 }
 
@@ -88,6 +88,17 @@ export function ServiceIcon({ type, size = 16 }: ServiceIconProps) {
           fill="#FFFFFF"
         />
         <circle cx="12" cy="12" r="1.5" fill="#FFFFFF" />
+      </svg>
+    )
+  }
+
+  if (type === 'imghost') {
+    // Generic image-host icon (photo frame with mountains + sun).
+    return (
+      <svg width={s} height={s} viewBox="0 0 24 24" fill="none" aria-label="Image host">
+        <rect x="3" y="4" width="18" height="16" rx="3" fill="#8b5cf6" opacity="0.15" stroke="#8b5cf6" strokeWidth="1.5" />
+        <circle cx="8.5" cy="9" r="1.6" fill="#8b5cf6" />
+        <path d="M5 17l4.5-4.5L13 16l2.5-2.5L19 17" stroke="#8b5cf6" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
       </svg>
     )
   }

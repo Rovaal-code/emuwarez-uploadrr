@@ -109,6 +109,17 @@ def setup_qbit(
         set_setting(conn, "qbit.password", password)
 
 
+def setup_imghosts(
+    conn: sqlite3.Connection,
+    enabled: Optional[list] = None,
+    keys: Optional[dict] = None,
+) -> None:
+    """Store the image-host selection. Skippable — imgbox is always the default
+    fallback, so an empty selection is fine."""
+    from ...services.image_hosts import set_config
+    set_config(conn, enabled or [], keys or {})
+
+
 def setup_emu(
     conn: sqlite3.Connection,
     api_key: str,

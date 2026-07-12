@@ -21,6 +21,7 @@ from ..schemas import (
     IntegrationTestResult,
     TestArrRequest,
     TestEmuwarezRequest,
+    TestImghostRequest,
     TestQbitRequest,
     TestTmdbRequest,
     TestUploadrrRequest,
@@ -87,6 +88,18 @@ def test_qbit(
             password=body.password if body.password is not None else None,
             conn=conn,
         )
+    return IntegrationTestResult(**result)
+
+
+@router.post("/test/imghost", response_model=IntegrationTestResult)
+def test_imghost(
+    body: TestImghostRequest,
+    current_user: dict = Depends(require_auth),
+) -> IntegrationTestResult:
+    """Reachability probe for an image host. Never uploads anything."""
+    from emuwarez_uploadrr.services.integration_tests import test_imghost_connection
+    with _get_conn() as conn:
+        result = test_imghost_connection(body.host, body.api_key if body.api_key is not None else None, conn=conn)
     return IntegrationTestResult(**result)
 
 

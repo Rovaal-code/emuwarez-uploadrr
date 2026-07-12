@@ -147,6 +147,11 @@ class SetupQbitRequest(BaseModel):
     password: Optional[str] = ""
 
 
+class SetupImghostsRequest(BaseModel):
+    enabled: list[str] = []
+    keys: dict = {}  # {host_id: api_key}
+
+
 class SetupEmuRequest(BaseModel):
     api_key: str
     endpoint_url: Optional[str] = None
@@ -1109,6 +1114,11 @@ class TestQbitRequest(BaseModel):
     port: Optional[str] = None
     username: Optional[str] = None
     password: Optional[str] = None
+
+
+class TestImghostRequest(BaseModel):
+    host: str
+    api_key: Optional[str] = None  # omitted → falls back to the stored key
 
 
 class TestUploadrrRequest(BaseModel):

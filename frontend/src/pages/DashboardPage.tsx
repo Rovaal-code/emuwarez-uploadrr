@@ -4,6 +4,8 @@ import { getUploads } from '../api/uploads'
 import { syncAll } from '../api/library'
 import { getSyncStatus, syncRequests } from '../api/requests'
 import { fetchSettings, type SettingsData } from '../api/settings'
+import { getInstances } from '../api/instances'
+import type { InstanceSafeResponse } from '../types/api'
 import type { DashboardSummaryResponse, DashboardActivityResponse, LibraryItemResponse, UploadJob, RequestSyncStatusResponse } from '../types/api'
 import { StatCard } from '../components/StatCard'
 import { EmptyState } from '../components/EmptyState'
@@ -30,15 +32,18 @@ const ACTIVITY_PANEL_HEIGHT = '40vh'
 // "Últimas tareas ejecutadas" is half the height of the activity panels.
 const TASKS_PANEL_HEIGHT = '20vh'
 
-// One row of the "Conexiones" card: icon + label + connected/not-connected badge.
-function ConnRow({ icon, label, ok }: { icon: React.ReactNode; label: string; ok: boolean }) {
+// One row of the "Conexiones" card: icon + label + status badge. Only
+// actually-configured connections are rendered, so the badge reads
+// "Configurado" (or the instance's last test status when available).
+function ConnRow({ icon, label, badge = 'Configurado', tone = 'ok' }: {
+  icon: React.ReactNode; label: string; badge?: string; tone?: 'ok' | 'warn' | 'error'
+}) {
+  const cls = tone === 'error' ? 'status-error' : tone === 'warn' ? 'status-partial' : 'status-available'
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
       <span style={{ display: 'flex', width: 18, justifyContent: 'center' }}>{icon}</span>
-      <span style={{ flex: 1, fontSize: 13 }}>{label}</span>
-      <span className={`badge ${ok ? 'status-available' : 'status-error'}`}>
-        {ok ? 'Conectado' : 'No configurado'}
-      </span>
+      <span style={{ flex: 1, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+      <span className={`badge ${cls}`}>{badge}</span>
     </div>
   )
 }
@@ -70,6 +75,7 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
   const [libraryActivity, setLibraryActivity] = useState<LibraryItemResponse[]>([])
   const [activeUploads, setActiveUploads] = useState<UploadJob[]>([])
   const [connSettings, setConnSettings] = useState<SettingsData | null>(null)
+  const [connInstances, setConnInstances] = useState<InstanceSafeResponse[]>([])
   const [loadingData, setLoadingData] = useState(true)
   const [dataError, setDataError] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
@@ -102,6 +108,7 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
     // Settings first, so "Actividad reciente" honours the configured limit.
     const cfg = await fetchSettings().catch(() => null)
     if (cfg) setConnSettings(cfg)
+    getInstances().then(setConnInstances).catch(() => { /* ignore */ })
     const recentLimit = cfg?.recent_activity_limit ?? 50
     // Promise.allSettled never rejects — each branch's own status carries
     // its outcome, so failures are handled per-item below, not via catch.
@@ -415,10 +422,37 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
               <div className="section-title">Conexiones</div>
             </div>
             <div style={{ padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', flex: 1 }}>
-              <ConnRow icon={<ServiceIcon type="emu" size={16} />} label="API eMuwarez" ok={!!connSettings?.emu_api_key_configured} />
-              <ConnRow icon={<span style={{ fontSize: 15, lineHeight: 1 }}>🎬</span>} label="API TMDb" ok={!!connSettings?.tmdb_api_key_configured} />
-              <ConnRow icon={<ServiceIcon type="discord" size={16} />} label="Bot de Discord" ok={!!connSettings?.notify_discord_webhook_configured} />
-              <ConnRow icon={<ServiceIcon type="telegram" size={16} />} label="Bot de Telegram" ok={!!connSettings?.notify_telegram_bot_token_configured} />
+              {(() => {
+                const rows: React.ReactNode[] = []
+                // Radarr/Sonarr instances (each configured one, with its icon + last test).
+                for (const inst of connInstances) {
+                  const tested = inst.last_test_status
+                  const tone = tested == null ? 'ok' : tested === 'ok' ? 'ok' : 'error'
+                  rows.push(
+                    <ConnRow key={`inst-${inst.id}`} icon={<ServiceIcon type={inst.type === 'sonarr' ? 'sonarr' : 'radarr'} size={16} />}
+                      label={`${inst.type === 'sonarr' ? 'Sonarr' : 'Radarr'}: ${inst.name}`}
+                      badge={tested == null ? 'Configurado' : tested === 'ok' ? 'Conectado' : 'Error'} tone={tone} />
+                  )
+                }
+                if (connSettings?.emu_api_key_configured)
+                  rows.push(<ConnRow key="emu" icon={<ServiceIcon type="emu" size={16} />} label="API eMuwarez" />)
+                if (connSettings?.tmdb_api_key_configured)
+                  rows.push(<ConnRow key="tmdb" icon={<span style={{ fontSize: 15, lineHeight: 1 }}>🎬</span>} label="API TMDb" />)
+                if (connSettings?.qbit_configured)
+                  rows.push(<ConnRow key="qbit" icon={<ServiceIcon type="qbittorrent" size={16} />} label="qBittorrent" />)
+                // Image hosts: imgbox is always the default fallback, plus enabled ones.
+                const imgIds = Array.from(new Set(['imgbox', ...(connSettings?.image_hosts_enabled ?? [])]))
+                for (const id of imgIds) {
+                  const meta = connSettings?.image_hosts_available?.find(h => h.id === id)
+                  rows.push(<ConnRow key={`img-${id}`} icon={<ServiceIcon type="imghost" size={16} />}
+                    label={`Imágenes: ${meta?.label ?? id}${id === 'imgbox' ? ' (fallback)' : ''}`} />)
+                }
+                if (connSettings?.notify_discord_webhook_configured)
+                  rows.push(<ConnRow key="discord" icon={<ServiceIcon type="discord" size={16} />} label="Bot de Discord" />)
+                if (connSettings?.notify_telegram_bot_token_configured)
+                  rows.push(<ConnRow key="telegram" icon={<ServiceIcon type="telegram" size={16} />} label="Bot de Telegram" />)
+                return rows.length ? rows : <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Sin conexiones configuradas todavía.</div>
+              })()}
             </div>
           </div>
         </div>

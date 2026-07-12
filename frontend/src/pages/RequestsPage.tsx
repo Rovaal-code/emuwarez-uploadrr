@@ -184,11 +184,42 @@ function DetailPanel({ item, readiness, onClose, onShowCandidates, onUpload }: {
   const libId = m?.library_item_id ?? item.library_item_id
   return (
     <div className="detail-panel">
-      <div className="detail-panel__header" style={{ alignItems: 'flex-start' }}>
-        <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
-          <RequestPoster url={item.poster_url} category={item.category} size="lg" />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="detail-panel__title">{item.title}</div>
+      <div className="detail-panel__header" style={{ alignItems: 'flex-start', position: 'relative' }}>
+        <div style={{ display: 'flex', gap: 16, alignItems: 'stretch', flex: 1, minWidth: 0 }}>
+          {/* Left column: poster fills the text height, "Consultar" below it. */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: 134, flexShrink: 0 }}>
+            <div style={{ flex: 1, minHeight: 170, borderRadius: 8, overflow: 'hidden', background: 'rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {item.poster_url ? (
+                <img
+                  src={posterUrl(item.poster_url, 'w342')}
+                  alt=""
+                  loading="lazy"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                />
+              ) : (
+                <span style={{ fontSize: 44, opacity: 0.35 }}>{tipoOf(item.category).icon}</span>
+              )}
+            </div>
+            <a
+              className="btn btn-secondary btn-sm"
+              href={item.url ?? undefined}
+              target="_blank"
+              rel="noreferrer"
+              aria-disabled={!item.url}
+              onClick={e => { if (!item.url) e.preventDefault() }}
+              title={item.url
+                ? 'Abrir la petición en eMuwarez (reclamarla, marcarla como llena, ver el ID del torrent…)'
+                : 'La URL estará disponible cuando se sincronicen las peticiones reales de eMuwarez'}
+              style={{ textDecoration: 'none', justifyContent: 'center', opacity: item.url ? 1 : 0.5, pointerEvents: item.url ? 'auto' : 'none' }}
+            >
+              Consultar ↗
+            </a>
+          </div>
+
+          {/* Right column: facts, with "Subir" pinned bottom-right. */}
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+            <div className="detail-panel__title" style={{ paddingRight: 26 }}>{item.title}</div>
             {item.category && <div className="detail-panel__subtitle">{tipoOf(item.category).icon} {tipoOf(item.category).label}</div>}
             <div style={{ margin: '8px 0 12px' }}><CompatibilityBadge status={m ? m.status : (item.compatibility_status ?? null)} /></div>
             <div className="req-facts">
@@ -204,36 +235,21 @@ function DetailPanel({ item, readiness, onClose, onShowCandidates, onUpload }: {
                 <div className="detail-row"><span>Creada</span><span>{new Date(item.created_at).toLocaleDateString('es-ES')}</span></div>
               )}
             </div>
+            <div style={{ marginTop: 'auto', paddingTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                className="btn btn-primary btn-sm"
+                disabled={!libId}
+                title={libId
+                  ? 'Subir el contenido de tu biblioteca a eMuwarez (mismo asistente que en Biblioteca)'
+                  : 'No tienes este contenido en tu biblioteca'}
+                onClick={() => libId && onUpload(libId)}
+              >
+                ⬆ Subir a eMuwarez
+              </button>
+            </div>
           </div>
         </div>
-        <button className="btn-icon" onClick={onClose}>✕</button>
-      </div>
-
-      <div className="detail-panel__section" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <a
-          className="btn btn-secondary btn-sm"
-          href={item.url ?? undefined}
-          target="_blank"
-          rel="noreferrer"
-          aria-disabled={!item.url}
-          onClick={e => { if (!item.url) e.preventDefault() }}
-          title={item.url
-            ? 'Abrir la petición en eMuwarez (reclamarla, marcarla como llena, ver el ID del torrent…)'
-            : 'La URL estará disponible cuando se sincronicen las peticiones reales de eMuwarez'}
-          style={{ textDecoration: 'none', opacity: item.url ? 1 : 0.5, pointerEvents: item.url ? 'auto' : 'none' }}
-        >
-          Consultar en eMuwarez ↗
-        </a>
-        <button
-          className="btn btn-primary btn-sm"
-          disabled={!libId}
-          title={libId
-            ? 'Subir el contenido de tu biblioteca a eMuwarez (mismo asistente que en Biblioteca)'
-            : 'No tienes este contenido en tu biblioteca'}
-          onClick={() => libId && onUpload(libId)}
-        >
-          ⬆ Subir a eMuwarez
-        </button>
+        <button className="btn-icon" onClick={onClose} style={{ position: 'absolute', top: 0, right: 0 }}>✕</button>
       </div>
 
       {m ? (

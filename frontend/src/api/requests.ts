@@ -13,6 +13,7 @@ export interface RequestsFilter {
   category?: string
   resolution?: string
   source?: string
+  author?: string
   emu_status?: string
   sort?: string
   limit?: number
@@ -26,6 +27,7 @@ export async function getRequests(filter?: RequestsFilter): Promise<RequestListR
   if (filter?.category) q.set('category', filter.category)
   if (filter?.resolution) q.set('resolution', filter.resolution)
   if (filter?.source) q.set('source', filter.source)
+  if (filter?.author) q.set('author', filter.author)
   if (filter?.emu_status) q.set('emu_status', filter.emu_status)
   if (filter?.sort) q.set('sort', filter.sort)
   if (filter?.limit !== undefined) q.set('limit', String(filter.limit))

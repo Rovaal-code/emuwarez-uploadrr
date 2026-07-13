@@ -69,7 +69,10 @@ const SORT_OPTIONS = [
   { value: 'created_desc', label: 'Orden: Más recientes' },
   { value: 'created_asc', label: 'Orden: Más antiguas' },
   { value: 'title', label: 'Orden: Título (A-Z)' },
-  { value: 'points_desc', label: 'Orden: Puntos (↓)' },
+  { value: 'points_desc', label: 'Orden: Más puntos' },
+  { value: 'points_asc', label: 'Orden: Menos puntos' },
+  { value: 'votes_desc', label: 'Orden: Más me gusta' },
+  { value: 'comments_desc', label: 'Orden: Más comentarios' },
 ]
 
 const fmtNum = (n: number | null | undefined) => (n == null ? '—' : n.toLocaleString('es-ES'))
@@ -395,9 +398,10 @@ export function RequestsPage() {
   const [categoryFilter, setCategoryFilter] = useState('')
   const [resolutionFilter, setResolutionFilter] = useState('')
   const [sourceFilter, setSourceFilter] = useState('')
+  const [authorFilter, setAuthorFilter] = useState('')
   const [sortBy, setSortBy] = useState('created_desc')
-  const [facets, setFacets] = useState<{ categories: string[]; resolutions: string[]; sources: string[] }>({
-    categories: [], resolutions: [], sources: [],
+  const [facets, setFacets] = useState<{ categories: string[]; resolutions: string[]; sources: string[]; authors: string[] }>({
+    categories: [], resolutions: [], sources: [], authors: [],
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -430,6 +434,7 @@ export function RequestsPage() {
         category: categoryFilter || undefined,
         resolution: resolutionFilter || undefined,
         source: sourceFilter || undefined,
+        author: authorFilter || undefined,
         sort: sortBy,
         limit: PAGE_SIZE,
         offset: off,
@@ -442,7 +447,7 @@ export function RequestsPage() {
     } finally {
       setLoading(false)
     }
-  }, [search, statusFilter, categoryFilter, resolutionFilter, sourceFilter, sortBy])
+  }, [search, statusFilter, categoryFilter, resolutionFilter, sourceFilter, authorFilter, sortBy])
 
   const loadSyncStatus = useCallback(async () => {
     try {
@@ -462,6 +467,7 @@ export function RequestsPage() {
         categories: uniq(res.items.map(i => i.category)),
         resolutions: uniq(res.items.map(i => i.requested_resolution)),
         sources: uniq(res.items.map(i => i.requested_source)),
+        authors: uniq(res.items.map(i => i.author)),
       })
     } catch { /* optional */ }
   }, [])
@@ -475,7 +481,7 @@ export function RequestsPage() {
   useEffect(() => {
     loadItems(0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, categoryFilter, resolutionFilter, sourceFilter, sortBy])
+  }, [statusFilter, categoryFilter, resolutionFilter, sourceFilter, authorFilter, sortBy])
 
   const handleSync = async (force: boolean) => {
     setSyncing(true)
@@ -585,7 +591,7 @@ export function RequestsPage() {
           <EmptyState
             title="Sin peticiones"
             body={
-              total === 0 && !search && !statusFilter && !categoryFilter && !resolutionFilter && !sourceFilter
+              total === 0 && !search && !statusFilter && !categoryFilter && !resolutionFilter && !sourceFilter && !authorFilter
                 ? 'Sincroniza las peticiones de eMuwarez para verlas aquí.'
                 : 'No hay peticiones que coincidan con los filtros.'
             }
@@ -603,7 +609,9 @@ export function RequestsPage() {
                     <th><HeaderFilter label="Tipo" value={categoryFilter} onChange={setCategoryFilter} options={[
                       { value: '', label: 'Todos' }, ...facets.categories.map(c => ({ value: c, label: c })),
                     ]} /></th>
-                    <th>Autor</th>
+                    <th><HeaderFilter label="Autor" value={authorFilter} onChange={setAuthorFilter} options={[
+                      { value: '', label: 'Todos' }, ...facets.authors.map(a => ({ value: a, label: a })),
+                    ]} /></th>
                     <th><HeaderFilter label="Resolución" value={resolutionFilter} onChange={setResolutionFilter} options={[
                       { value: '', label: 'Todas' }, ...facets.resolutions.map(r => ({ value: r, label: r })),
                     ]} /></th>

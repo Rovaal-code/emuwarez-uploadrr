@@ -101,6 +101,7 @@ def list_requests(
     category: str | None = Query(None),
     resolution: str | None = Query(None),
     source: str | None = Query(None),
+    author: str | None = Query(None),
     emu_status: str | None = Query(None),
     sort: str | None = Query(None),
     limit: int = Query(50, ge=1, le=5000),
@@ -114,7 +115,7 @@ def list_requests(
         result = list_request_items(
             conn, limit=limit, offset=offset, search=search, status=status,
             category=category, resolution=resolution, source=source,
-            emu_status=emu_status, sort=sort,
+            author=author, emu_status=emu_status, sort=sort,
         )
     return RequestListResponse(
         items=[_row_to_item(r, my_username) for r in result["items"]],

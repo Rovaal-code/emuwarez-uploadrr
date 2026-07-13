@@ -524,6 +524,9 @@ _REQUEST_SORT = {
     "created_asc": "ri.created_at ASC, ri.updated_at ASC",
     "title": "ri.title COLLATE NOCASE ASC",
     "points_desc": "ri.points IS NULL, ri.points DESC, ri.created_at DESC",
+    "points_asc": "COALESCE(ri.points, 0) ASC, ri.created_at DESC",      # menos coins pedidas
+    "votes_desc": "COALESCE(ri.votes, 0) DESC, ri.created_at DESC",       # más me gusta
+    "comments_desc": "COALESCE(ri.comments, 0) DESC, ri.created_at DESC", # más comentarios
 }
 _FILLED_STATUSES = ("filled", "1", "lleno", "llena")
 
@@ -538,6 +541,7 @@ def list_request_items(
     category: Optional[str] = None,
     resolution: Optional[str] = None,
     source: Optional[str] = None,
+    author: Optional[str] = None,
     emu_status: Optional[str] = None,
     sort: Optional[str] = None,
 ) -> dict:
@@ -560,6 +564,9 @@ def list_request_items(
     if source:
         where_clauses.append("ri.requested_source = ?")
         params.append(source)
+    if author:
+        where_clauses.append("ri.author = ? AND ri.author_visible = 1")
+        params.append(author)
     if emu_status == "filled":
         where_clauses.append(f"LOWER(COALESCE(ri.emu_status,'')) IN ({','.join('?' * len(_FILLED_STATUSES))})")
         params.extend(_FILLED_STATUSES)

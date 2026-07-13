@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { setUnsavedGuard, confirmDiscardIfDirty } from '../utils/unsavedGuard'
 import {
   getMaintenanceStatus,
   exportSettings,
@@ -26,6 +27,22 @@ function formatBytes(n: number) {
   if (n < 1024) return `${n} B`
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
   return `${(n / 1024 / 1024).toFixed(2)} MB`
+}
+
+// Serialize the Config form's values so we can compare current vs. loaded and
+// know whether there are unsaved changes. Array order is fixed on purpose.
+function configSignature(v: {
+  tag: string; providerOrder: string[]; region: string; language: string
+  localizeTitles: boolean; emuUsername: string; ignoreSpecials: boolean
+  recentLimit: number; qbitUrl: string; qbitPort: string; qbitUser: string
+  imgEnabled: string[]; newKey?: string; newEmuKey?: string; qbitPass?: string
+  imgKeys?: Record<string, string>
+}): string {
+  return JSON.stringify([
+    v.tag, v.providerOrder, v.region, v.language, v.localizeTitles, v.emuUsername,
+    v.ignoreSpecials, v.recentLimit, v.qbitUrl, v.qbitPort, v.qbitUser, v.imgEnabled,
+    v.newKey ?? '', v.newEmuKey ?? '', v.qbitPass ?? '', v.imgKeys ?? {},
+  ])
 }
 
 // ---------- Config tab ----------
@@ -64,6 +81,21 @@ function ConfigTab() {
   const [imgTesting, setImgTesting] = useState<string | null>(null)
   const [showAddImg, setShowAddImg] = useState(false)
 
+  // Unsaved-changes tracking: compare current form values to the loaded ones.
+  const [baseline, setBaseline] = useState('')
+  const currentSig = configSignature({
+    tag, providerOrder, region, language, localizeTitles, emuUsername,
+    ignoreSpecials, recentLimit, qbitUrl, qbitPort, qbitUser, imgEnabled,
+    newKey, newEmuKey, qbitPass, imgKeys,
+  })
+  const dirty = baseline !== '' && currentSig !== baseline
+  const dirtyRef = useRef(false)
+  dirtyRef.current = dirty
+  useEffect(() => {
+    setUnsavedGuard(() => dirtyRef.current)
+    return () => setUnsavedGuard(null)
+  }, [])
+
   async function handleTestImghost(hostId: string) {
     setImgTesting(hostId)
     try {
@@ -94,6 +126,14 @@ function ConfigTab() {
         setQbitPort(s.qbit_port ?? '8080')
         setQbitUser(s.qbit_username ?? '')
         setImgEnabled(s.image_hosts_enabled ?? [])
+        setBaseline(configSignature({
+          tag: s.default_release_tag, providerOrder: s.provider_priority_order,
+          region: s.tmdb_watch_region, language: s.tmdb_language,
+          localizeTitles: s.tmdb_localize_series_titles ?? true, emuUsername: s.emu_username ?? '',
+          ignoreSpecials: s.series_ignore_specials ?? true, recentLimit: s.recent_activity_limit ?? 50,
+          qbitUrl: s.qbit_url ?? '', qbitPort: s.qbit_port ?? '8080', qbitUser: s.qbit_username ?? '',
+          imgEnabled: s.image_hosts_enabled ?? [],
+        }))
       })
       .catch(() => setMsg({ ok: false, text: 'Error cargando configuración' }))
       .finally(() => setLoading(false))
@@ -193,6 +233,14 @@ function ConfigTab() {
       setImgKeys({})
       setNewKey('')
       setNewEmuKey('')
+      setBaseline(configSignature({
+        tag: updated.default_release_tag, providerOrder: updated.provider_priority_order,
+        region: updated.tmdb_watch_region, language: updated.tmdb_language,
+        localizeTitles: updated.tmdb_localize_series_titles ?? true, emuUsername: updated.emu_username ?? '',
+        ignoreSpecials: updated.series_ignore_specials ?? true, recentLimit: updated.recent_activity_limit ?? 50,
+        qbitUrl: updated.qbit_url ?? '', qbitPort: updated.qbit_port ?? '8080', qbitUser: updated.qbit_username ?? '',
+        imgEnabled: updated.image_hosts_enabled ?? [],
+      }))
       setMsg({ ok: true, text: '✓ Configuración guardada' })
     } catch (e: unknown) {
       setMsg({ ok: false, text: `✗ ${e instanceof Error ? e.message : String(e)}` })
@@ -216,6 +264,17 @@ function ConfigTab() {
           {msg.text}
         </div>
       )}
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 12 }}>
+        {dirty && <span style={{ fontSize: 12, color: '#f59e0b' }}>Cambios sin guardar</span>}
+        <button
+          className={`btn btn-primary${dirty ? ' btn-unsaved' : ''}`}
+          onClick={handleSave}
+          disabled={saving}
+        >
+          {saving ? 'Guardando…' : 'Guardar configuración'}
+        </button>
+      </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16, alignItems: 'stretch' }}>
       <div className="placeholder-card">
@@ -470,12 +529,6 @@ function ConfigTab() {
           <span className="form-hint">Cuántos elementos muestra el panel «Actividad reciente» del dashboard.</span>
         </div>
       </div>
-      </div>
-
-      <div>
-        <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-          {saving ? 'Guardando…' : 'Guardar configuración'}
-        </button>
       </div>
     </div>
   )
@@ -823,6 +876,16 @@ function EventPicker({ title, eventTypes, selected, disabled, onToggle }: {
   )
 }
 
+function notifSignature(v: {
+  discordEnabled: boolean; discordWebhook?: string; telegramEnabled: boolean
+  telegramToken?: string; telegramChatId: string; discordEvents: string[]; telegramEvents: string[]
+}): string {
+  return JSON.stringify([
+    v.discordEnabled, v.discordWebhook ?? '', v.telegramEnabled, v.telegramToken ?? '',
+    v.telegramChatId, v.discordEvents, v.telegramEvents,
+  ])
+}
+
 // ---------- Notifications tab ----------
 function NotificationsTab() {
   const [settings, setSettings] = useState<SettingsData | null>(null)
@@ -845,6 +908,18 @@ function NotificationsTab() {
   const [discordEvents, setDiscordEvents] = useState<string[]>([])
   const [telegramEvents, setTelegramEvents] = useState<string[]>([])
 
+  const [baseline, setBaseline] = useState('')
+  const currentSig = notifSignature({
+    discordEnabled, discordWebhook, telegramEnabled, telegramToken, telegramChatId, discordEvents, telegramEvents,
+  })
+  const dirty = baseline !== '' && currentSig !== baseline
+  const dirtyRef = useRef(false)
+  dirtyRef.current = dirty
+  useEffect(() => {
+    setUnsavedGuard(() => dirtyRef.current)
+    return () => setUnsavedGuard(null)
+  }, [])
+
   useEffect(() => {
     fetchSettings()
       .then(s => {
@@ -855,6 +930,11 @@ function NotificationsTab() {
         setEventTypes(s.notify_event_types ?? [])
         setDiscordEvents(s.notify_discord_events ?? [])
         setTelegramEvents(s.notify_telegram_events ?? [])
+        setBaseline(notifSignature({
+          discordEnabled: s.notify_discord_enabled, telegramEnabled: s.notify_telegram_enabled,
+          telegramChatId: s.notify_telegram_chat_id ?? '', discordEvents: s.notify_discord_events ?? [],
+          telegramEvents: s.notify_telegram_events ?? [],
+        }))
       })
       .catch(() => setMsg({ ok: false, text: 'Error cargando configuración' }))
       .finally(() => setLoading(false))
@@ -883,6 +963,11 @@ function NotificationsTab() {
       setTelegramEvents(updated.notify_telegram_events ?? [])
       setDiscordWebhook('')
       setTelegramToken('')
+      setBaseline(notifSignature({
+        discordEnabled: updated.notify_discord_enabled, telegramEnabled: updated.notify_telegram_enabled,
+        telegramChatId: updated.notify_telegram_chat_id ?? '', discordEvents: updated.notify_discord_events ?? [],
+        telegramEvents: updated.notify_telegram_events ?? [],
+      }))
       setMsg({ ok: true, text: '✓ Notificaciones guardadas' })
     } catch (e: unknown) {
       setMsg({ ok: false, text: `✗ ${e instanceof Error ? e.message : String(e)}` })
@@ -942,6 +1027,17 @@ function NotificationsTab() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 12 }}>
+        {dirty && <span style={{ fontSize: 12, color: '#f59e0b' }}>Cambios sin guardar</span>}
+        <button
+          className={`btn btn-primary${dirty ? ' btn-unsaved' : ''}`}
+          onClick={handleSave}
+          disabled={saving}
+        >
+          {saving ? 'Guardando…' : 'Guardar notificaciones'}
+        </button>
+      </div>
+
       {msg && (
         <div style={{
           padding: '10px 14px', borderRadius: 6, fontSize: 13,
@@ -1030,12 +1126,6 @@ function NotificationsTab() {
         />
       </div>
       </div>
-
-      <div>
-        <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-          {saving ? 'Guardando…' : 'Guardar notificaciones'}
-        </button>
-      </div>
     </div>
   )
 }
@@ -1084,7 +1174,7 @@ export function SettingsPage() {
         {tabs.map(t => (
           <button
             key={t.key}
-            onClick={() => setTab(t.key)}
+            onClick={() => { if (t.key !== tab && confirmDiscardIfDirty()) setTab(t.key) }}
             style={{
               padding: '8px 16px',
               fontSize: 13,

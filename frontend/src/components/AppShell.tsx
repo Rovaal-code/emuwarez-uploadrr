@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Sidebar } from './Sidebar'
 import { Topbar } from './Topbar'
 import type { CurrentUserResponse } from '../types/api'
+import { confirmDiscardIfDirty, hasUnsavedChanges } from '../utils/unsavedGuard'
 
 // Pages
 import { DashboardPage } from '../pages/DashboardPage'
@@ -57,6 +58,7 @@ export function AppShell({ user, onLogout }: AppShellProps) {
   const [activePage, setActivePage] = useState<string>(pageFromPath)
 
   const navigate = useCallback((page: string) => {
+    if (page !== pageFromPath() && !confirmDiscardIfDirty()) return  // block leaving with unsaved changes
     setActivePage(page)
     const path = page === 'dashboard' ? '/' : `/${page}`
     if (window.location.pathname !== path) {
@@ -69,6 +71,18 @@ export function AppShell({ user, onLogout }: AppShellProps) {
     const onPop = () => setActivePage(pageFromPath())
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
+  }, [])
+
+  // Warn before a full reload / closing the tab while there are unsaved changes.
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges()) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [])
 
   return (

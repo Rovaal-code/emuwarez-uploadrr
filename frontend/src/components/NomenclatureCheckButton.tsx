@@ -141,7 +141,7 @@ export function NomenclatureCheckButton({ item, onChecked, compact }: Props) {
 
       {open && (
         <div className="modal-overlay" onClick={close}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 720 }}>
             <div className="modal-header">
               <h2 className="modal-title">Nomenclatura eMuwarez</h2>
               <button className="btn-icon" onClick={close} title="Cerrar">✕</button>

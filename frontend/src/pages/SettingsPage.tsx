@@ -429,7 +429,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                     <button key={h.id} className="btn btn-ghost btn-sm" type="button"
                       style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-start', fontSize: 12 }}
                       onClick={() => { toggleImgHost(h.id); }}>
-                      <ServiceIcon type="imghost" size={13} /> {h.label} {h.needs_key && <span className="badge nom-na" style={{ fontSize: 9 }}>key</span>}
+                      <ServiceIcon type="imghost" size={13} /> {h.label} {h.needs_key && <span className="badge nom-na" style={{ fontSize: 9 }}>API key</span>}
                     </button>
                   ))}
                 </div>

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { logout } from '../api/auth'
 import type { CurrentUserResponse } from '../types/api'
 import { NotificationBell } from './NotificationBell'
@@ -9,8 +9,15 @@ interface TopbarProps {
   onLogout: () => void
 }
 
+const HIDE_NAME_KEY = 'emuwarez_uploadrr_hide_username'
+
 export function Topbar({ user, pageTitle, onLogout }: TopbarProps) {
-  const [hideName, setHideName] = useState(false)
+  // Persisted so obfuscation survives a reload — the name only reappears when
+  // the user explicitly toggles it back on.
+  const [hideName, setHideName] = useState(() => localStorage.getItem(HIDE_NAME_KEY) === '1')
+  useEffect(() => {
+    localStorage.setItem(HIDE_NAME_KEY, hideName ? '1' : '0')
+  }, [hideName])
 
   async function handleLogout() {
     try {

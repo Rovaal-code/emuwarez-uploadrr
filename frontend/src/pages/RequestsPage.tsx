@@ -117,7 +117,7 @@ function CompatibilityBadge({ status }: { status: string | null }) {
     status === 'Compatible' ? 'badge req-compatible' :
     status === 'No disponible' ? 'badge req-unavailable' :
     status === 'Parcial' ? 'badge req-partial' :
-    status === 'No compatible' ? 'badge req-not-compatible' :
+    status === 'No compatible' ? 'badge req-unavailable' :
     status === 'Reclamado' ? 'badge req-claimed' :
     status === 'Pendiente' ? 'badge req-pending' :
     status === 'Llena' ? 'badge req-filled' :
@@ -212,6 +212,7 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
   onUpload: (libraryItemId: number) => void
 }) {
   const m = item.match
+  const effectiveStatus = m ? m.status : (item.compatibility_status ?? null)
   const libId = m?.library_item_id ?? item.library_item_id
   const t = tipoOf(item.category)
   // External IDs: prefer the request's own, fall back to the matched library
@@ -278,7 +279,7 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '16px 28px' }}>
-            <ReqField label="Estado *"><CompatibilityBadge status={m ? m.status : (item.compatibility_status ?? null)} /></ReqField>
+            <ReqField label="Estado *"><CompatibilityBadge status={effectiveStatus} /></ReqField>
             <ReqField label="Tipo">{t.label}</ReqField>
             {isSeriesLike && <ReqField label="Temporada">{temporadaLabel}</ReqField>}
             {isSeriesLike && item.req_scope === 'episode' && <ReqField label="Capítulo">{item.req_episode ?? '?'}</ReqField>}
@@ -302,7 +303,11 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
           Petición vs. tu biblioteca
         </div>
         <div style={{ padding: '16px 18px', background: 'rgba(255,255,255,0.03)', borderRadius: 10, border: '1px solid var(--border)' }}>
-          {m ? (
+          {!m ? (
+            <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Sin coincidencia en tu biblioteca local — no tienes este contenido.</span>
+          ) : effectiveStatus === 'No disponible' ? (
+            <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Tienes una entrada para este contenido en tu biblioteca, pero el archivo no está disponible (falta, en cola o con error), así que no hay nada que comparar. Vuelve a descargarlo para poder cotejarlo con la petición.</span>
+          ) : (
             <>
               <div style={{ overflowX: 'auto' }}>
                 <table className="data-table" style={{ fontSize: 12.5 }}>
@@ -335,8 +340,6 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
                 * Aunque salga «Compatible», el audio y el códec aún no se pueden comparar porque suelen indicarse en la descripción, al igual que si pide una serie completa y no se quiere la temporada especial. <span style={{ color: '#eab308' }}>Siempre es mejor revisar la petición por si acaso.</span>
               </div>
             </>
-          ) : (
-            <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Sin coincidencia en tu biblioteca local — no tienes este contenido.</span>
           )}
         </div>
       </div>

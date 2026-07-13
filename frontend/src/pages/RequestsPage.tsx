@@ -301,7 +301,7 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
             <ReqField label="Estado *"><CompatibilityBadge status={effectiveStatus} /></ReqField>
             <ReqField label="Tipo">{t.label}</ReqField>
             {isSeriesLike && <ReqField label="Temporada">{temporadaLabel}</ReqField>}
-            {isSeriesLike && item.req_scope === 'episode' && <ReqField label="Capítulo">{item.req_episode ?? '?'}</ReqField>}
+            {isSeriesLike && <ReqField label="Capítulo">{item.req_scope === 'episode' ? (item.req_episode ?? '?') : 'Todos'}</ReqField>}
             <ReqField label="Autor"><AuthorCell author={item.author} isMine={item.is_mine} /></ReqField>
             <ReqField label="Resolución pedida">{noReq(item.requested_resolution)}</ReqField>
             <ReqField label="Source pedido">{noReq(item.requested_source)}</ReqField>

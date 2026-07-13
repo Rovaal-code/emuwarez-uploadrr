@@ -71,25 +71,16 @@ export function HeaderFilter({ label, value, options, onChange }: {
             borderRadius: 8, boxShadow: 'var(--shadow-modal, 0 10px 30px rgba(0,0,0,0.45))',
           }}
         >
-          {options.map(o => {
-            const sel = o.value === value
-            return (
-              <button
-                key={o.value || '__all__'}
-                type="button"
-                onClick={() => { onChange(o.value); setOpen(false) }}
-                style={{
-                  display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px',
-                  border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 12.5,
-                  fontWeight: sel ? 600 : 400,
-                  background: sel ? 'rgba(59,130,246,0.16)' : 'transparent',
-                  color: sel ? accent : 'var(--text-primary)',
-                }}
-              >
-                {o.label}
-              </button>
-            )
-          })}
+          {options.map(o => (
+            <button
+              key={o.value || '__all__'}
+              type="button"
+              className={`hf-option${o.value === value ? ' selected' : ''}`}
+              onClick={() => { onChange(o.value); setOpen(false) }}
+            >
+              {o.label}
+            </button>
+          ))}
         </div>,
         document.body,
       )}

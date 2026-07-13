@@ -70,6 +70,9 @@ export function NomenclatureCheckButton({ item, onChecked, compact }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
   const [summary, setSummary] = useState<NomenclatureCheckSummary | null>(null)
+  // A check happened while the card was open — refresh the parent's badges on
+  // close (doing it right away would reload the library and unmount the card).
+  const [dirty, setDirty] = useState(false)
 
   const isNA = item.nomenclature_status === 'N/A' || item.nomenclature_status == null
 
@@ -88,9 +91,15 @@ export function NomenclatureCheckButton({ item, onChecked, compact }: Props) {
   useEffect(() => {
     if (open) {
       setSummary(null)
+      setDirty(false)
       loadInfo()
     }
   }, [open, loadInfo])
+
+  const close = useCallback(() => {
+    setOpen(false)
+    if (dirty) onChecked?.()   // reload the list/tree only after the card is gone
+  }, [dirty, onChecked])
 
   async function run(force: boolean) {
     setRunning(true)
@@ -98,7 +107,7 @@ export function NomenclatureCheckButton({ item, onChecked, compact }: Props) {
     try {
       setSummary(await runNomenclatureCheck(item.id, force))
       await loadInfo()      // refresh status + stored result inside the card
-      onChecked?.()         // refresh the parent's badges
+      setDirty(true)        // parent badges refresh when the card is closed
     } catch (err) {
       setError(friendlyError(err))
     } finally {
@@ -131,11 +140,11 @@ export function NomenclatureCheckButton({ item, onChecked, compact }: Props) {
       )}
 
       {open && (
-        <div className="modal-overlay" onClick={() => setOpen(false)}>
+        <div className="modal-overlay" onClick={close}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h2 className="modal-title">Nomenclatura eMuwarez</h2>
-              <button className="btn-icon" onClick={() => setOpen(false)} title="Cerrar">✕</button>
+              <button className="btn-icon" onClick={close} title="Cerrar">✕</button>
             </div>
             <div className="modal-body">
               {loading && <div style={{ color: 'var(--text-muted)' }}>Cargando…</div>}
@@ -187,14 +196,13 @@ export function NomenclatureCheckButton({ item, onChecked, compact }: Props) {
                 </div>
               )}
             </div>
-            <div className="modal-actions">
-              {canRun && (
+            {canRun && (
+              <div className="modal-actions" style={{ justifyContent: 'flex-end' }}>
                 <button className="btn btn-primary" onClick={() => run(forceRerun)} disabled={running}>
                   {running ? 'Comprobando…' : forceRerun ? 'Volver a comprobar' : 'Comprobar'}
                 </button>
-              )}
-              <button className="btn btn-secondary" onClick={() => setOpen(false)}>Cerrar</button>
-            </div>
+              </div>
+            )}
           </div>
         </div>
       )}

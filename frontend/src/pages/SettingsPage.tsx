@@ -296,7 +296,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           </div>
         </div>
         <div className="form-group" style={{ marginBottom: 12 }}>
-          <label className="form-label">Nueva API key / token <span className="form-hint">(dejar vacío para mantener la actual)</span></label>
+          <label className="form-label">Nueva API key <span className="form-hint">(dejar vacío para mantener la actual)</span></label>
           <input
             type="password"
             className="form-input"
@@ -305,7 +305,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
             placeholder="API key de Emuwarez"
             autoComplete="new-password"
           />
-          <span className="form-hint">Usada para leer peticiones y (en el futuro) subir contenido a Emuwarez.</span>
+          <span className="form-hint">Usada para leer el catálogo, las peticiones de Emuwarez.</span>
         </div>
         <div>
           <button

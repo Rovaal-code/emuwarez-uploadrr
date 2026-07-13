@@ -37,6 +37,20 @@ export function EmuComparisonSection({ itemId }: { itemId: number }) {
   const aportes = data.aportes ?? []
   const mine = data.mine
 
+  // If your copy matches a candidate on EVERY visible field (resolution,
+  // source, codec, Spanish, size), it's presumed to come from eMuwarez — show
+  // that candidate's name on the "Tu copia" row.
+  const norm = (v?: string | null) => (v ?? '').trim().toLowerCase()
+  const matchedCandidate = mine
+    ? data.matches.find(m =>
+        norm(m.resolution) === norm(mine.resolution) &&
+        norm(m.source) === norm(mine.source) &&
+        norm(m.codec) === norm(mine.codec) &&
+        (m.has_spanish === 1) === !!mine.has_es &&
+        mine.size != null && m.size != null && formatBytes(mine.size) === formatBytes(m.size),
+      )
+    : null
+
   return (
     <Panel>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
@@ -77,11 +91,15 @@ export function EmuComparisonSection({ itemId }: { itemId: number }) {
                   <td>{mine.codec || '–'}</td>
                   <td>{mine.has_es ? 'Sí' : '–'}</td>
                   <td style={{ whiteSpace: 'nowrap' }}>{formatBytes(mine.size)}</td>
-                  <td style={{ color: 'var(--text-muted)' }}>—</td>
+                  {matchedCandidate ? (
+                    <td style={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }} title={matchedCandidate.name}>{matchedCandidate.name}</td>
+                  ) : (
+                    <td style={{ color: 'var(--text-muted)' }}>—</td>
+                  )}
                 </tr>
               )}
               {data.matches.map((m, i) => (
-                <tr key={i}>
+                <tr key={i} style={m === matchedCandidate ? { background: 'rgba(59,130,246,0.08)' } : undefined}>
                   <td style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>eMuwarez</td>
                   <td>{m.resolution || '–'}</td>
                   <td>{m.source || '–'}</td>
@@ -97,6 +115,7 @@ export function EmuComparisonSection({ itemId }: { itemId: number }) {
       )}
       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10 }}>
         El idioma español se deduce del nombre del torrent; "?" = desconocido.
+        {' '}Si todos los campos coinciden con algún candidato, se presupone que tu copia proviene de eMuwarez (se muestra su nombre en «Tu copia»).
       </div>
     </Panel>
   )

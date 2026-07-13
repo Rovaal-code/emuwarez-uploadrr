@@ -387,6 +387,7 @@ class DashboardSummaryResponse(BaseModel):
     missing: int = 0
     uploading: int = 0
     completed: int = 0
+    unique_content: int = 0
     radarr_items: int = 0
     sonarr_items: int = 0
     last_sync_at: Optional[str] = None

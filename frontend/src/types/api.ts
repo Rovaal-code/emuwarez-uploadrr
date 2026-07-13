@@ -32,6 +32,8 @@ export interface DashboardSummaryResponse {
   missing: number
   uploading: number
   completed: number
+  unique_content?: number
+  uploads_completed?: number
   radarr_items: number
   sonarr_items: number
   last_sync_at: string | null

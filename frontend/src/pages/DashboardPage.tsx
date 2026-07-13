@@ -8,6 +8,7 @@ import { getInstances } from '../api/instances'
 import type { InstanceSafeResponse } from '../types/api'
 import type { DashboardSummaryResponse, DashboardActivityResponse, LibraryItemResponse, UploadJob, RequestSyncStatusResponse } from '../types/api'
 import { StatCard } from '../components/StatCard'
+import { Tooltip } from '../components/Tooltip'
 import { EmptyState } from '../components/EmptyState'
 import { LoadingState } from '../components/LoadingState'
 import { ErrorState } from '../components/ErrorState'
@@ -195,14 +196,15 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
           <div className="page-title">Dashboard</div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={handleSync}
-            disabled={syncing}
-            title="Consulta tus instancias de Radarr/Sonarr y actualiza la biblioteca local (títulos, rutas, estado en disco y nomenclatura)."
-          >
-            {syncing ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Sincronizando…</> : '↻ Sincronizar biblioteca'}
-          </button>
+          <Tooltip content="Consulta tus instancias de Radarr/Sonarr y actualiza la biblioteca local (títulos, rutas, estado en disco y nomenclatura).">
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={handleSync}
+              disabled={syncing}
+            >
+              {syncing ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Sincronizando…</> : '↻ Sincronizar biblioteca'}
+            </button>
+          </Tooltip>
           <SyncInfo
             syncStatus={emuSyncStatus}
             onSync={handleEmuSync}
@@ -222,7 +224,11 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
 
       {/* Stat cards */}
       <div className="stat-cards-row">
-        <StatCard label="Biblioteca sincronizada" value={s.library_total}>
+        <StatCard
+          label="Biblioteca sincronizada"
+          value={s.library_total}
+          info="Total de películas y episodios importados desde tus instancias de Radarr y Sonarr."
+        >
           <div style={{ maxHeight: 78, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
             <div className="stat-card-sub-row">
               <ServiceLabel type="radarr" label={`Radarr: ${s.radarr_items}`} size={13} />
@@ -233,17 +239,37 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
           </div>
         </StatCard>
 
-        <StatCard label="Disponibles" value={s.available} accentColor="var(--color-available)" />
+        <StatCard
+          label="Disponibles"
+          value={s.available}
+          accentColor="var(--color-available)"
+          info="Contenido cuyo archivo está presente en disco, listo para comparar o subir."
+        />
 
-        <StatCard label="Faltantes" value={s.missing} accentColor="var(--color-missing)">
+        <StatCard
+          label="Faltantes"
+          value={s.missing}
+          accentColor="var(--color-missing)"
+          info="Contenido que Radarr/Sonarr conocen pero cuyo archivo aún no está en disco (falta, en cola o con error)."
+        >
           <div className="stat-card-sub-row" style={{ color: 'var(--text-muted)', fontSize: 12 }}>
             {s.last_sync_at ? `Última sync: ${formatDate(s.last_sync_at)}` : 'Sin sincronizar'}
           </div>
         </StatCard>
 
-        <StatCard label="Subiendo" value={s.uploading} accentColor="var(--color-uploading)" />
+        <StatCard
+          label="Contenido único"
+          value={s.unique_content ?? 0}
+          accentColor="var(--color-uploading)"
+          info="Contenido que tienes y que NO está en eMuwarez (aparece como «No» en ¿En eMuwarez?), sin contar lo Faltante. Son tus oportunidades de subida."
+        />
 
-        <StatCard label="Completadas" value={s.completed} accentColor="var(--color-uploaded)" />
+        <StatCard
+          label="Tus subidas"
+          value={s.uploads_completed ?? 0}
+          accentColor="var(--color-uploaded)"
+          info="Número de subidas a eMuwarez que has completado con Uploadrr."
+        />
       </div>
 
       {/* eMuwarez requests — cards + a "Sincronizar peticiones" button below.
@@ -251,11 +277,35 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
           their lower cards, so spacing above and below each panel matches. */}
       <div style={{ marginBottom: 20 }}>
         <div className="stat-cards-row">
-          <StatCard label="Peticiones eMuwarez" value={s.requests_total ?? 0} />
-          <StatCard label="Mis peticiones" value={s.requests_mine ?? 0} accentColor="#818cf8" />
-          <StatCard label="Compatibles" value={s.requests_compatible ?? 0} accentColor="#22c55e" />
-          <StatCard label="Parciales" value={s.requests_partial ?? 0} accentColor="#f59e0b" />
-          <StatCard label="Llenas" value={s.requests_filled ?? 0} accentColor="#9ca3af" />
+          <StatCard
+            label="Peticiones eMuwarez"
+            value={s.requests_total ?? 0}
+            info="Total de peticiones activas descargadas de eMuwarez."
+          />
+          <StatCard
+            label="Mis peticiones"
+            value={s.requests_mine ?? 0}
+            accentColor="#818cf8"
+            info="Peticiones creadas por tu propio usuario de eMuwarez (según el nombre configurado en Ajustes)."
+          />
+          <StatCard
+            label="Compatibles"
+            value={s.requests_compatible ?? 0}
+            accentColor="#22c55e"
+            info="Peticiones cuya mejor coincidencia en tu biblioteca cumple resolución y source: puedes cubrirlas."
+          />
+          <StatCard
+            label="Parciales"
+            value={s.requests_partial ?? 0}
+            accentColor="#f59e0b"
+            info="Peticiones cuya mejor coincidencia cumple solo parte de lo pedido (resolución o source, pero no ambos)."
+          />
+          <StatCard
+            label="Llenas"
+            value={s.requests_filled ?? 0}
+            accentColor="#9ca3af"
+            info="Peticiones que ya están cubiertas/llenas en eMuwarez."
+          />
         </div>
       </div>
 

@@ -432,6 +432,9 @@ def get_dashboard_summary(conn: sqlite3.Connection) -> dict:
             SUM(CASE WHEN local_status IN ({missing_ph}) THEN 1 ELSE 0 END) AS missing_count,
             SUM(CASE WHEN local_status = ? THEN 1 ELSE 0 END) AS uploading,
             SUM(CASE WHEN local_status = ? THEN 1 ELSE 0 END) AS uploaded,
+            -- "Contenido único": lo que sale como "No" en ¿En eMuwarez?
+            -- (emu_in_catalog = 0), excluyendo lo Faltante/no disponible.
+            SUM(CASE WHEN emu_in_catalog = 0 AND local_status NOT IN ({missing_ph}) THEN 1 ELSE 0 END) AS unique_content,
             SUM(CASE WHEN instance_type = 'radarr' THEN 1 ELSE 0 END) AS radarr_items,
             SUM(CASE WHEN instance_type = 'sonarr' THEN 1 ELSE 0 END) AS sonarr_items
         FROM library_items
@@ -442,6 +445,7 @@ def get_dashboard_summary(conn: sqlite3.Connection) -> dict:
             *_MISSING_STATUSES,
             LocalStatus.UPLOADING.value,
             LocalStatus.UPLOADED.value,
+            *_MISSING_STATUSES,
         ],
     ).fetchone()
 
@@ -455,6 +459,7 @@ def get_dashboard_summary(conn: sqlite3.Connection) -> dict:
         "missing": int(row["missing_count"] or 0),
         "uploading": int(row["uploading"] or 0),
         "completed": int(row["uploaded"] or 0),
+        "unique_content": int(row["unique_content"] or 0),
         "radarr_items": int(row["radarr_items"] or 0),
         "sonarr_items": int(row["sonarr_items"] or 0),
         "last_sync_at": last_sync["started_at"] if last_sync else None,

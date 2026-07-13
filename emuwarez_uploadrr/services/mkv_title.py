@@ -24,7 +24,9 @@ _MKV_EXTENSION = ".mkv"
 # Characters that break filesystems / torrent clients / players — stripped from
 # the FILE name and the MKV internal title (but NOT from the torrent/aporte
 # title, which keeps its accents and punctuation per the eMuwarez guide).
-_UNSAFE_CHARS = re.compile(r'[:/\\?*!¡¿"|<>%]')
+# Includes brackets/parentheses () [] {} — forbidden in the file name and the
+# internal MKV title per the eMuwarez nomenclature guide.
+_UNSAFE_CHARS = re.compile(r'[:/\\?*!¡¿"|<>%()\[\]{}]')
 
 
 def to_filesystem_name(name: str) -> str:

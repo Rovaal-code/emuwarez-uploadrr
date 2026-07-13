@@ -36,6 +36,10 @@ export function EmuComparisonSection({ itemId }: { itemId: number }) {
   const notInCatalog = data.in_catalog === 0 || data.matches.length === 0
   const aportes = data.aportes ?? []
   const mine = data.mine
+  // You only have a real copy to compare if the file is on disk. For a
+  // "Faltante" item there's nothing local, so the "Tu copia" row is hidden and
+  // the verdict changes accordingly.
+  const hasLocal = data.mine_available ?? (mine?.size != null)
 
   // If your copy matches a candidate on EVERY visible field (resolution,
   // source, codec, Spanish, size), it's presumed to come from eMuwarez — show
@@ -54,8 +58,14 @@ export function EmuComparisonSection({ itemId }: { itemId: number }) {
   return (
     <Panel>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
-        {notInCatalog ? (
-          <span style={{ fontWeight: 600, color: '#22c55e' }}>🟢 No está en eMuwarez — contenido nuevo</span>
+        {!hasLocal ? (
+          notInCatalog ? (
+            <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>No lo tienes descargado y no está en eMuwarez todavía</span>
+          ) : (
+            <span style={{ fontWeight: 600, color: '#60a5fa' }}>⬇️ Está en eMuwarez, pero aún no lo tienes descargado</span>
+          )
+        ) : notInCatalog ? (
+          <span style={{ fontWeight: 600, color: '#22c55e' }}>🟢 No está en eMuwarez — Contenido único</span>
         ) : aportes.length > 0 ? (
           <>
             <span style={{ fontWeight: 600 }}>Ya está en eMuwarez, pero aportas:</span>
@@ -83,7 +93,7 @@ export function EmuComparisonSection({ itemId }: { itemId: number }) {
               </tr>
             </thead>
             <tbody>
-              {mine && (
+              {mine && hasLocal && (
                 <tr style={{ background: 'rgba(34,197,94,0.06)' }}>
                   <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>Tu copia</td>
                   <td>{mine.resolution || '–'}</td>
@@ -113,10 +123,12 @@ export function EmuComparisonSection({ itemId }: { itemId: number }) {
           </table>
         </div>
       )}
-      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10 }}>
-        El idioma español se deduce del nombre del torrent; "?" = desconocido.
-        {' '}Si todos los campos coinciden con algún candidato, se presupone que tu copia proviene de eMuwarez (se muestra su nombre en «Tu copia»).
-      </div>
+      {!notInCatalog && (
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10 }}>
+          El idioma español se deduce del nombre del torrent; "?" = desconocido.
+          {hasLocal && ' Si todos los campos coinciden con algún candidato, se presupone que tu copia proviene de eMuwarez (se muestra su nombre en «Tu copia»).'}
+        </div>
+      )}
     </Panel>
   )
 }

@@ -148,6 +148,7 @@ export interface EmuComparison {
   available: boolean
   message: string | null
   mine?: { resolution: string | null; source: string | null; codec: string | null; has_es: boolean; size: number | null }
+  mine_available?: boolean
   matches: EmuMatch[]
   in_catalog?: number | null
   aportes?: { dim: string; detail: string }[]

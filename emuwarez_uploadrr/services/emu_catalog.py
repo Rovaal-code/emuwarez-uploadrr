@@ -407,6 +407,9 @@ def get_item_comparison(conn: sqlite3.Connection, item_id: int) -> dict:
         "available": True,
         "message": None,
         "mine": mine,
+        # Whether you actually have the file on disk. For a "Faltante" item there
+        # is no local copy, so the "Tu copia" comparison would be meaningless.
+        "mine_available": mine.get("size") is not None,
         "matches": matches,
         "in_catalog": 1 if matches else 0,
         "aportes": _compute_aportes(mine, [dict(r) for r in rows]) if matches else [],

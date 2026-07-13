@@ -305,7 +305,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
             placeholder="API key de Emuwarez"
             autoComplete="new-password"
           />
-          <span className="form-hint">Usada para leer el catálogo, las peticiones de Emuwarez.</span>
+          <span className="form-hint">Usada para leer el catálogo y las peticiones de Emuwarez.</span>
         </div>
         <div>
           <button

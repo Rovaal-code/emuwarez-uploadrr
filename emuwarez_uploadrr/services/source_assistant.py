@@ -373,6 +373,26 @@ def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
         )
         raw_video = (proposal.get("video_codec") if proposal else None) or item.get("video_codec")
 
+        # The eMuwarez name needs the PER-TRACK audio, which Radarr/Sonarr's
+        # summary metadata can't give — so read MediaInfo of the real file for
+        # the technical fields (audio, exact códec, HDR/DV). Falls back to the
+        # sync-time values when MediaInfo isn't available (no file / no
+        # `mediainfo` binary) so generation never blocks or fails.
+        mi_audio = mi_video = mi_hdr = None
+        try:
+            from .media_info_service import build_mediainfo_report
+            report = build_mediainfo_report(item.get("path") or "")
+            if report.get("available"):
+                mi_audio = report.get("audio_summary")
+                emu_by_field = {
+                    r["field"]: (None if r["emu"] in (None, "—", "") else r["emu"])
+                    for r in report.get("rows", [])
+                }
+                mi_video = emu_by_field.get("Códec de vídeo")
+                mi_hdr = emu_by_field.get("HDR/DV")
+        except Exception:  # noqa: BLE001 — MediaInfo is best-effort here
+            pass
+
         fields: dict[str, Any] = {
             "title": title,
             "complement": None,
@@ -381,9 +401,9 @@ def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
             "resolution": format_resolution(resolution),
             "source": source,
             "provider": suggested_provider or infer_provider_from_item(item),
-            "dynamic_range": format_hdr(item.get("dynamic_range")),
-            "video_codec": format_video_codec(raw_video),
-            "audio_summary": (proposal.get("audio_summary") if proposal else None) or spec_audio,
+            "dynamic_range": mi_hdr or format_hdr(item.get("dynamic_range")),
+            "video_codec": mi_video or format_video_codec(raw_video),
+            "audio_summary": mi_audio or (proposal.get("audio_summary") if proposal else None) or spec_audio,
             "subs": "SUBS",
             "tag": tag,
         }

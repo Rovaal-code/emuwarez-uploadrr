@@ -394,9 +394,9 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
           <div className="modal-body">
             {loading && (
               <div style={{ padding: '36px 0', textAlign: 'center' }}>
-                <div style={{ fontSize: 15, fontWeight: 600 }}>Generando nomenclatura…</div>
+                <div style={{ fontSize: 15, fontWeight: 600 }}>Generando nomenclatura con MediaInfo…</div>
                 <div className="text-muted" style={{ fontSize: 12, marginTop: 6 }}>
-                  A partir de los datos de Radarr/Sonarr.
+                  Leyendo el archivo real (Radarr/Sonarr como respaldo si no es accesible).
                 </div>
               </div>
             )}
@@ -404,9 +404,9 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
             {!loading && !error && (
               <>
                 <p className="text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
-                  Generada a partir de los datos de Radarr/Sonarr (título en español, año, resolución, códecs,
-                  audio…) y del nombre del archivo (Source/Provider). Puedes ajustar cualquier campo, o
-                  ejecutar MediaInfo abajo para contrastar con el fichero real.
+                  Los campos técnicos (audio por pista, códec, HDR/DV) se leen con MediaInfo del archivo
+                  real; el título/año vienen de Radarr/Sonarr y el Source/Provider del nombre del archivo.
+                  Puedes ajustar cualquier campo, o ver el detalle de MediaInfo abajo.
                 </p>
                 {fieldBox}
 
@@ -415,11 +415,11 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 600 }}>MediaInfo del archivo</div>
                       <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>
-                        Ejecuta MediaInfo sobre el fichero real y compara cada valor con el que iría a eMuwarez.
+                        Muestra los datos de MediaInfo del archivo real y compara cada valor con el que iría a eMuwarez.
                       </div>
                     </div>
                     <button className="btn btn-primary" onClick={runMediaInfo} disabled={miLoading || targetId == null}>
-                      {miLoading ? 'Ejecutando…' : miReport ? 'Volver a ejecutar' : 'Ejecutar MediaInfo'}
+                      {miLoading ? 'Cargando…' : miReport ? 'Actualizar MediaInfo' : 'Ver MediaInfo'}
                     </button>
                   </div>
 

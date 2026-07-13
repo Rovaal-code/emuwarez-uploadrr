@@ -19,7 +19,7 @@ import { getLibraryItem } from '../api/library'
 import type { LibraryItemResponse } from '../types/api'
 import { posterUrl, idVerifyUrl } from '../utils/libraryItem'
 import { ExternalIdLink } from '../components/ExternalIdLink'
-import { formatBytes } from '../utils/format'
+import { formatBytes, timeAgo, formatDate } from '../utils/format'
 
 // A request's category maps to a friendly "Tipo" with an icon.
 function tipoOf(category: string | null): { icon: string; label: string } {
@@ -78,6 +78,25 @@ const SORT_OPTIONS = [
 ]
 
 const fmtNum = (n: number | null | undefined) => (n == null ? '—' : n.toLocaleString('es-ES'))
+
+// Inline SVG icons for the votes/comments/points columns — emoji (👍💬🪙)
+// render as bare white outlines on some systems, so use real vector icons.
+function Svg({ children, color }: { children: React.ReactNode; color: string }) {
+  return (
+    <svg viewBox="0 0 24 24" width={15} height={15} fill={color} style={{ verticalAlign: 'middle' }} aria-hidden="true">
+      {children}
+    </svg>
+  )
+}
+const VotesIcon = () => (
+  <Svg color="#60a5fa"><path d="M2 21h4V9H2v12zM23 10c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z"/></Svg>
+)
+const CommentsIcon = () => (
+  <Svg color="#9ca3af"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></Svg>
+)
+const PointsIcon = () => (
+  <Svg color="#eab308"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 15.09V18h-2v-.91c-1.28-.26-2.34-1.06-2.41-2.35h1.47c.07.67.55 1.19 1.94 1.19 1.49 0 1.82-.75 1.82-1.21 0-.63-.33-1.22-2.01-1.62-1.87-.45-3.15-1.22-3.15-2.76 0-1.29 1.05-2.13 2.34-2.41V7h2v.92c1.39.34 2.09 1.4 2.13 2.55h-1.47c-.04-.71-.42-1.19-1.65-1.19-1.17 0-1.87.53-1.87 1.28 0 .66.51 1.09 2.01 1.48s3.15 1.04 3.15 2.9c-.01 1.37-1.04 2.12-2.34 2.35z"/></Svg>
+)
 
 // Author cell — your own requests (author === emu.username) show in green + "(Yo)".
 function AuthorCell({ author, isMine }: { author: string | null; isMine: boolean }) {
@@ -612,9 +631,10 @@ export function RequestsPage() {
                     <th>Autor</th>
                     <th>Resolución</th>
                     <th>Source</th>
-                    <th title="Votos (otros usuarios que la quieren)" style={{ textAlign: 'center' }}>👍</th>
-                    <th title="Comentarios" style={{ textAlign: 'center' }}>💬</th>
-                    <th title="Puntos / recompensa" style={{ textAlign: 'center' }}>🪙</th>
+                    <th title="Votos (otros usuarios que la quieren)" style={{ textAlign: 'center' }}><VotesIcon /></th>
+                    <th title="Comentarios" style={{ textAlign: 'center' }}><CommentsIcon /></th>
+                    <th title="Puntos / recompensa" style={{ textAlign: 'center' }}><PointsIcon /></th>
+                    <th>Creada</th>
                     <th>Compatibilidad</th>
                   </tr>
                 </thead>
@@ -650,6 +670,7 @@ export function RequestsPage() {
                         <td style={{ textAlign: 'center', fontSize: 12 }}>{item.votes ?? 0}</td>
                         <td style={{ textAlign: 'center', fontSize: 12 }}>{item.comments ?? 0}</td>
                         <td style={{ textAlign: 'center', fontSize: 12, whiteSpace: 'nowrap' }}>{fmtNum(item.points)}</td>
+                        <td style={{ fontSize: 12, whiteSpace: 'nowrap', color: 'var(--text-secondary)' }} title={item.created_at ? formatDate(item.created_at) : ''}>{timeAgo(item.created_at)}</td>
                         <td><CompatibilityBadge status={item.compatibility_status} /></td>
                       </tr>
                     )

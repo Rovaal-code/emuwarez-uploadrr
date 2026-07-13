@@ -50,6 +50,27 @@ export function formatDateShort(dateStr: string | null | undefined): string {
   }
 }
 
+// Relative "hace X" label in Spanish (for the requests table).
+export function timeAgo(dateStr: string | null | undefined): string {
+  if (!dateStr) return '—'
+  try {
+    const secs = Math.max(0, Math.floor((Date.now() - parseServerDate(dateStr).getTime()) / 1000))
+    if (secs < 60) return 'hace segundos'
+    const mins = Math.floor(secs / 60)
+    if (mins < 60) return `hace ${mins} min`
+    const hours = Math.floor(mins / 60)
+    if (hours < 24) return `hace ${hours} h`
+    const days = Math.floor(hours / 24)
+    if (days < 30) return `hace ${days} día${days === 1 ? '' : 's'}`
+    const months = Math.floor(days / 30)
+    if (months < 12) return `hace ${months} mes${months === 1 ? '' : 'es'}`
+    const years = Math.floor(days / 365)
+    return `hace ${years} año${years === 1 ? '' : 's'}`
+  } catch {
+    return dateStr
+  }
+}
+
 export function formatItemType(type: string): string {
   const map: Record<string, string> = {
     movie: 'Película',

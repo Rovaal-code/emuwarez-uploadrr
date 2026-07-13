@@ -81,6 +81,8 @@ class SettingsResponse(BaseModel):
     # "Otros"
     series_ignore_specials: bool = True
     recent_activity_limit: int = 50
+    # Remote path mappings: [{"from": "/data/media", "to": "/mnt/emu-media"}]
+    path_mappings: list[dict] = []
 
 
 class SettingsUpdateRequest(BaseModel):
@@ -119,6 +121,7 @@ class SettingsUpdateRequest(BaseModel):
     notify_telegram_events: Optional[list[str]] = None
     series_ignore_specials: Optional[bool] = None
     recent_activity_limit: Optional[int] = None
+    path_mappings: Optional[list[dict]] = None
 
     @field_validator("qbit_url")
     @classmethod
@@ -151,6 +154,24 @@ def _read_recent_activity_limit(conn) -> int:
     except (TypeError, ValueError):
         return 50
     return val if val in _RECENT_ACTIVITY_CHOICES else 50
+
+
+def _read_path_mappings(conn) -> list[dict]:
+    from emuwarez_uploadrr.services.path_mapping import get_path_mappings
+    return get_path_mappings(conn)
+
+
+def _clean_path_mappings(raw: list[dict]) -> list[dict]:
+    """Keep only well-formed {from, to} entries with absolute paths, trimmed."""
+    out: list[dict] = []
+    for m in raw or []:
+        if not isinstance(m, dict):
+            continue
+        frm = str(m.get("from") or "").strip()
+        to = str(m.get("to") or "").strip()
+        if frm and to:
+            out.append({"from": frm, "to": to})
+    return out
 
 
 def _clean_event_csv(codes: list[str]) -> str:
@@ -249,6 +270,7 @@ def _build_response(conn) -> SettingsResponse:
         notify_telegram_events=sorted(channel_events(conn, "telegram")),
         series_ignore_specials=(get_setting_canonical(conn, "series.ignore_specials") or "true") != "false",
         recent_activity_limit=_read_recent_activity_limit(conn),
+        path_mappings=_read_path_mappings(conn),
     )
 
 
@@ -379,6 +401,10 @@ def update_settings(
             if body.recent_activity_limit not in _RECENT_ACTIVITY_CHOICES:
                 raise HTTPException(status_code=422, detail=f"recent_activity_limit debe ser uno de {_RECENT_ACTIVITY_CHOICES}")
             set_setting(conn, "dashboard.recent_activity_limit", str(body.recent_activity_limit))
+
+        if body.path_mappings is not None:
+            import json as _json
+            set_setting(conn, "library.path_mappings", _json.dumps(_clean_path_mappings(body.path_mappings), ensure_ascii=False))
 
         conn.commit()
         return _build_response(conn)

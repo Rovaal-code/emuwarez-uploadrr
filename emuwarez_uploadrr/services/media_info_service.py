@@ -52,6 +52,8 @@ def read_media_info_summary(path: str) -> Optional[dict]:
     subtitle_languages columns (Phase 6A), or None if unavailable/failed.
 
     Never raises."""
+    from .path_mapping import resolve_local_path
+    path = resolve_local_path(path)
     if not path or not mediainfo_available():
         return None
     try:
@@ -105,9 +107,11 @@ def build_mediainfo_report(path: str) -> dict:
             audio_summary: str|None}
     """
     from . import emu_format
+    from .path_mapping import resolve_local_path
 
     if not path:
         return {"available": False, "message": "El item no tiene ruta de archivo.", "rows": []}
+    path = resolve_local_path(path)
     if not mediainfo_available():
         return {"available": False, "message": "El binario `mediainfo` no está instalado en este entorno.", "rows": []}
     p = Path(path)

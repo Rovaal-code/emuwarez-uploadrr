@@ -201,6 +201,8 @@ def evaluate_file(path: str, title: str, year, *, season=None, episode=None) -> 
     {status, expected, actual, diff}. Requires the file + `mediainfo` binary."""
     from pathlib import Path
     from ..legacy import read_media_info
+    from .path_mapping import resolve_local_path
+    path = resolve_local_path(path)
     if not path or not os.path.exists(path):
         raise FileNotFoundError(f"El archivo no existe o no es accesible: {path or '(sin ruta)'}")
     media = read_media_info(Path(path))

@@ -38,6 +38,7 @@ export interface SettingsData {
   notify_telegram_events: string[]
   series_ignore_specials: boolean
   recent_activity_limit: number
+  path_mappings: { from: string; to: string }[]
 }
 
 export interface SettingsUpdatePayload {
@@ -69,6 +70,7 @@ export interface SettingsUpdatePayload {
   notify_telegram_events?: string[]
   series_ignore_specials?: boolean
   recent_activity_limit?: number
+  path_mappings?: { from: string; to: string }[]
 }
 
 export function fetchSettings(): Promise<SettingsData> {

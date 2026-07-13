@@ -44,13 +44,14 @@ function configSignature(v: {
   tag: string; providerOrder: string[]; region: string; language: string
   localizeTitles: boolean; emuUsername: string; ignoreSpecials: boolean
   recentLimit: number; qbitUrl: string; qbitPort: string; qbitUser: string
-  imgEnabled: string[]; newKey?: string; newEmuKey?: string; qbitPass?: string
+  imgEnabled: string[]; pathMappings: { from: string; to: string }[]
+  newKey?: string; newEmuKey?: string; qbitPass?: string
   imgKeys?: Record<string, string>
 }): string {
   return JSON.stringify([
     v.tag, v.providerOrder, v.region, v.language, v.localizeTitles, v.emuUsername,
     v.ignoreSpecials, v.recentLimit, v.qbitUrl, v.qbitPort, v.qbitUser, v.imgEnabled,
-    v.newKey ?? '', v.newEmuKey ?? '', v.qbitPass ?? '', v.imgKeys ?? {},
+    v.pathMappings, v.newKey ?? '', v.newEmuKey ?? '', v.qbitPass ?? '', v.imgKeys ?? {},
   ])
 }
 
@@ -89,12 +90,13 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const [imgTest, setImgTest] = useState<Record<string, IntegrationTestResult>>({})
   const [imgTesting, setImgTesting] = useState<string | null>(null)
   const [showAddImg, setShowAddImg] = useState(false)
+  const [pathMappings, setPathMappings] = useState<{ from: string; to: string }[]>([])
 
   // Unsaved-changes tracking: compare current form values to the loaded ones.
   const [baseline, setBaseline] = useState('')
   const currentSig = configSignature({
     tag, providerOrder, region, language, localizeTitles, emuUsername,
-    ignoreSpecials, recentLimit, qbitUrl, qbitPort, qbitUser, imgEnabled,
+    ignoreSpecials, recentLimit, qbitUrl, qbitPort, qbitUser, imgEnabled, pathMappings,
     newKey, newEmuKey, qbitPass, imgKeys,
   })
   const dirty = baseline !== '' && currentSig !== baseline
@@ -145,13 +147,14 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         setQbitPort(s.qbit_port ?? '8080')
         setQbitUser(s.qbit_username ?? '')
         setImgEnabled(s.image_hosts_enabled ?? [])
+        setPathMappings(s.path_mappings ?? [])
         setBaseline(configSignature({
           tag: s.default_release_tag, providerOrder: s.provider_priority_order,
           region: s.tmdb_watch_region, language: s.tmdb_language,
           localizeTitles: s.tmdb_localize_series_titles ?? true, emuUsername: s.emu_username ?? '',
           ignoreSpecials: s.series_ignore_specials ?? true, recentLimit: s.recent_activity_limit ?? 50,
           qbitUrl: s.qbit_url ?? '', qbitPort: s.qbit_port ?? '8080', qbitUser: s.qbit_username ?? '',
-          imgEnabled: s.image_hosts_enabled ?? [],
+          imgEnabled: s.image_hosts_enabled ?? [], pathMappings: s.path_mappings ?? [],
         }))
       })
       .catch(() => setMsg({ ok: false, text: 'Error cargando configuración' }))
@@ -228,6 +231,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         qbit_port: qbitPort.trim(),
         qbit_username: qbitUser.trim(),
         image_hosts_enabled: imgEnabled,
+        path_mappings: pathMappings.map(m => ({ from: m.from.trim(), to: m.to.trim() })).filter(m => m.from && m.to),
       }
       if (newKey.trim()) payload.tmdb_api_key = newKey.trim()
       if (newEmuKey.trim()) payload.emu_api_key = newEmuKey.trim()
@@ -252,13 +256,14 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
       setImgKeys({})
       setNewKey('')
       setNewEmuKey('')
+      setPathMappings(updated.path_mappings ?? [])
       setBaseline(configSignature({
         tag: updated.default_release_tag, providerOrder: updated.provider_priority_order,
         region: updated.tmdb_watch_region, language: updated.tmdb_language,
         localizeTitles: updated.tmdb_localize_series_titles ?? true, emuUsername: updated.emu_username ?? '',
         ignoreSpecials: updated.series_ignore_specials ?? true, recentLimit: updated.recent_activity_limit ?? 50,
         qbitUrl: updated.qbit_url ?? '', qbitPort: updated.qbit_port ?? '8080', qbitUser: updated.qbit_username ?? '',
-        imgEnabled: updated.image_hosts_enabled ?? [],
+        imgEnabled: updated.image_hosts_enabled ?? [], pathMappings: updated.path_mappings ?? [],
       }))
       setMsg({ ok: true, text: '✓ Configuración guardada' })
     } catch (e: unknown) {
@@ -537,6 +542,39 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           <span className="form-hint">Cuántos elementos muestra el panel «Actividad reciente» del dashboard.</span>
         </div>
       </div>
+      </div>
+
+      <div className="placeholder-card">
+        <h3 style={{ marginTop: 0, marginBottom: 6 }}>Mapeo de rutas (biblioteca remota)</h3>
+        <p className="form-hint" style={{ marginTop: 0, marginBottom: 12 }}>
+          Traduce la ruta que reporta Radarr/Sonarr a la ruta donde la app alcanza el archivo
+          (monta la biblioteca por SSHFS/NFS/SMB donde quieras). Se aplica al leer MediaInfo,
+          verificar y subir. Sin reglas, no cambia nada.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {pathMappings.length === 0 && (
+            <span className="form-hint">No hay reglas. Añade una para acceder a una biblioteca remota.</span>
+          )}
+          {pathMappings.map((m, i) => (
+            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                className="form-input" style={{ flex: 1, minWidth: 200 }}
+                value={m.from} placeholder="Ruta de Radarr/Sonarr — /data/media"
+                onChange={e => setPathMappings(p => p.map((x, j) => j === i ? { ...x, from: e.target.value } : x))}
+              />
+              <span style={{ color: 'var(--text-muted)' }}>→</span>
+              <input
+                className="form-input" style={{ flex: 1, minWidth: 200 }}
+                value={m.to} placeholder="Ruta local — /home/alvaro/mnt/emu-media"
+                onChange={e => setPathMappings(p => p.map((x, j) => j === i ? { ...x, to: e.target.value } : x))}
+              />
+              <button className="btn btn-ghost btn-sm" type="button" title="Quitar regla"
+                onClick={() => setPathMappings(p => p.filter((_, j) => j !== i))}>✕</button>
+            </div>
+          ))}
+        </div>
+        <button className="btn btn-secondary btn-sm" style={{ marginTop: 10 }} type="button"
+          onClick={() => setPathMappings(p => [...p, { from: '', to: '' }])}>+ Añadir regla</button>
       </div>
     </div>
   )

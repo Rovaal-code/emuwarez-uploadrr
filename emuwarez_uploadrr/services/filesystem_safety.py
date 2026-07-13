@@ -13,12 +13,19 @@ VIDEO_EXTENSIONS = {
 }
 
 
+def _local(path: str) -> str:
+    # Translate a Radarr/Sonarr path to where the media is actually reachable
+    # (remote path mapping). No-op when no mappings are configured.
+    from .path_mapping import resolve_local_path
+    return resolve_local_path(path) or path
+
+
 def path_exists(path: str) -> bool:
-    return bool(path) and Path(path).exists()
+    return bool(path) and Path(_local(path)).exists()
 
 
 def is_file(path: str) -> bool:
-    return bool(path) and Path(path).is_file()
+    return bool(path) and Path(_local(path)).is_file()
 
 
 def is_video_file(path: str) -> bool:
@@ -40,7 +47,7 @@ def safe_stat(path: str) -> dict[str, Any]:
         "parent": None,
     }
     try:
-        p = Path(path)
+        p = Path(_local(path))
         result["name"] = p.name
         result["parent"] = str(p.parent)
         result["extension"] = p.suffix.lower()

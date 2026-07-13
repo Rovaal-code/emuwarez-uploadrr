@@ -157,7 +157,11 @@ def check_one(conn, item: dict) -> dict:
 def check_item(conn, item_id: int, *, force: bool = False) -> dict:
     """Check a leaf, a season (all its episodes) or a series (all episodes).
     Only 'No comprobada' available files are checked unless force=True.
-    Returns a summary {checked, correct, not_adapted, skipped, results}."""
+
+    Returns {attempted, evaluated, correct, not_adapted, errors, error_detail,
+    results}. A file whose MediaInfo can't be read (not accessible, no
+    `mediainfo` binary) is counted as an *error*, NOT as evaluated — its status
+    stays 'No comprobada' so it isn't wrongly marked 'No adaptada'."""
     row = conn.execute("SELECT * FROM library_items WHERE id = ?", (item_id,)).fetchone()
     if not row:
         return {"error": "not found"}
@@ -165,7 +169,8 @@ def check_item(conn, item_id: int, *, force: bool = False) -> dict:
     eps = _leaf_episodes(conn, item_id, item["item_type"])
     targets = [e for e in eps if _is_available(e) and
                (force or (e.get("nomenclature_status") or STATUS_UNCHECKED) == STATUS_UNCHECKED)]
-    results, correct, not_adapted = [], 0, 0
+    results, correct, not_adapted, errors = [], 0, 0, 0
+    error_detail = None
     for e in targets:
         try:
             r = check_one(conn, e)
@@ -176,8 +181,19 @@ def check_item(conn, item_id: int, *, force: bool = False) -> dict:
             correct += 1
         elif r.get("status") == STATUS_NOT_ADAPTED:
             not_adapted += 1
+        if r.get("error"):
+            errors += 1
+            error_detail = error_detail or r["error"]
     conn.commit()
-    return {"checked": len(targets), "correct": correct, "not_adapted": not_adapted, "results": results}
+    return {
+        "attempted": len(targets),
+        "evaluated": correct + not_adapted,
+        "correct": correct,
+        "not_adapted": not_adapted,
+        "errors": errors,
+        "error_detail": error_detail,
+        "results": results,
+    }
 
 
 def evaluate_file(path: str, title: str, year, *, season=None, episode=None) -> dict:
@@ -185,7 +201,11 @@ def evaluate_file(path: str, title: str, year, *, season=None, episode=None) -> 
     {status, expected, actual, diff}. Requires the file + `mediainfo` binary."""
     from pathlib import Path
     from ..legacy import read_media_info
+    if not path or not os.path.exists(path):
+        raise FileNotFoundError(f"El archivo no existe o no es accesible: {path or '(sin ruta)'}")
     media = read_media_info(Path(path))
+    if media is None:
+        raise RuntimeError("MediaInfo no devolvió datos (¿está instalado el binario 'mediainfo'?)")
     exp = expected_core(title, year, media, season=season, episode=episode)
     matches, diff = compare(os.path.basename(path), exp)
     return {

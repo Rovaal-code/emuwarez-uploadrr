@@ -87,9 +87,12 @@ export interface NomenclatureCheckInfo {
 }
 
 export interface NomenclatureCheckSummary {
-  checked: number
+  attempted: number
+  evaluated: number
   correct: number
   not_adapted: number
+  errors: number
+  error_detail: string | null
   results: { id: number; status: string; error?: string }[]
 }
 

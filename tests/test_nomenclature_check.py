@@ -109,4 +109,21 @@ def test_check_item_skips_unavailable():
     season = _add(conn, item_type="season", title="S1", path=None)
     _add(conn, parent_id=season, title="E1", path=None, local_status="Ausente", nomenclature_status="N/A")
     summary = nc.check_item(conn, season)
-    assert summary["checked"] == 0
+    assert summary["attempted"] == 0
+    assert summary["evaluated"] == 0
+    assert summary["errors"] == 0
+
+
+def test_check_item_reports_unreadable_file_as_error():
+    # A file that can't be read counts as an error, not evaluated, and the
+    # item stays 'No comprobada' (never wrongly 'No adaptada').
+    conn = _conn()
+    mid = _add(conn, item_type="movie", title="Peli", local_status="Disponible",
+               path="/no/such/file.mkv", nomenclature_status="No comprobada")
+    summary = nc.check_item(conn, mid)
+    assert summary["attempted"] == 1
+    assert summary["evaluated"] == 0
+    assert summary["errors"] == 1
+    assert summary["error_detail"]
+    status = conn.execute("SELECT nomenclature_status FROM library_items WHERE id = ?", (mid,)).fetchone()[0]
+    assert status == "No comprobada"

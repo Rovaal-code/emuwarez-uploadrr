@@ -189,20 +189,33 @@ export function NomenclatureCheckButton({ item, onChecked, compact }: Props) {
                   )}
 
                   {summary && (
-                    <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
-                      Comprobados {summary.checked}: {summary.correct} correcta(s), {summary.not_adapted} no adaptada(s).
-                    </p>
+                    <div style={{ margin: 0, display: 'grid', gap: 6 }}>
+                      {summary.evaluated > 0 && (
+                        <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
+                          Comprobados {summary.evaluated}: {summary.correct} correcta(s), {summary.not_adapted} no adaptada(s).
+                        </p>
+                      )}
+                      {summary.errors > 0 && (
+                        <p style={{ margin: 0, color: 'var(--danger, #ef4444)' }}>
+                          No se pudo leer {summary.errors} archivo(s) con MediaInfo, así que siguen «No comprobada».
+                          {summary.error_detail ? ` (${summary.error_detail})` : ''}
+                        </p>
+                      )}
+                      {summary.evaluated === 0 && summary.errors === 0 && (
+                        <p style={{ margin: 0, color: 'var(--text-muted)' }}>No había nada que comprobar.</p>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
+              {canRun && (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+                  <button className="btn btn-primary" onClick={() => run(forceRerun)} disabled={running}>
+                    {running ? 'Comprobando…' : forceRerun ? 'Volver a comprobar' : 'Comprobar'}
+                  </button>
+                </div>
+              )}
             </div>
-            {canRun && (
-              <div className="modal-actions" style={{ justifyContent: 'flex-end' }}>
-                <button className="btn btn-primary" onClick={() => run(forceRerun)} disabled={running}>
-                  {running ? 'Comprobando…' : forceRerun ? 'Volver a comprobar' : 'Comprobar'}
-                </button>
-              </div>
-            )}
           </div>
         </div>
       )}

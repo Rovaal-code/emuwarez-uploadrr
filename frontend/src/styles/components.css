@@ -136,7 +136,9 @@
 
 /* Nomenclature badges */
 .badge.nom-correct         { background: rgba(34,197,94,0.22);   color: #22c55e; }
-.badge.nom-not-adapted     { background: rgba(245,158,11,0.22);  color: #f59e0b; }
+.badge.nom-unchecked       { background: rgba(107,114,128,0.22); color: #9ca3af; }
+.badge.nom-partial         { background: rgba(245,158,11,0.22);  color: #f59e0b; }
+.badge.nom-not-adapted     { background: rgba(239,68,68,0.22);   color: #ef4444; }
 .badge.nom-na              { background: rgba(107,114,128,0.20); color: #9ca3af; }
 .badge.nom-unknown         { background: rgba(107,114,128,0.20); color: #9ca3af; }
 

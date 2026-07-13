@@ -255,7 +255,7 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
           <StatCard label="Mis peticiones" value={s.requests_mine ?? 0} accentColor="#818cf8" />
           <StatCard label="Compatibles" value={s.requests_compatible ?? 0} accentColor="#22c55e" />
           <StatCard label="Parciales" value={s.requests_partial ?? 0} accentColor="#f59e0b" />
-          <StatCard label="Llenas" value={s.requests_filled ?? 0} accentColor="var(--color-uploaded)" />
+          <StatCard label="Llenas" value={s.requests_filled ?? 0} accentColor="#9ca3af" />
         </div>
       </div>
 

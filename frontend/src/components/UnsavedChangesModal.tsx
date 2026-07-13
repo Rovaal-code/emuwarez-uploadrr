@@ -32,10 +32,9 @@ export function UnsavedChangesModal() {
           <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: 13.5, lineHeight: 1.5 }}>
             Tienes cambios sin guardar en Configuración. Si sales ahora se perderán.
           </p>
-        </div>
-        <div className="modal-actions" style={{ justifyContent: 'flex-end' }}>
-          <button className="btn btn-secondary" onClick={cancel}>Seguir editando</button>
-          <button className="btn btn-danger" onClick={confirm}>Salir sin guardar</button>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+            <button className="btn btn-danger" onClick={confirm}>Salir sin guardar</button>
+          </div>
         </div>
       </div>
     </div>

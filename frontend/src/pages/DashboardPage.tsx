@@ -260,7 +260,7 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
         <StatCard
           label="Contenido único"
           value={s.unique_content ?? 0}
-          accentColor="var(--color-uploading)"
+          accentColor="#22c55e"
           info="Contenido disponible que aún no está en eMuwarez: las películas, las temporadas completas de series o documentales y sus capítulos. Son tus oportunidades de subida."
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -272,7 +272,7 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
         <StatCard
           label="Tus subidas"
           value={s.uploads_completed ?? 0}
-          accentColor="var(--color-uploaded)"
+          accentColor="#3b82f6"
           info="Número de subidas a eMuwarez que has completado con Uploadrr."
         />
       </div>
@@ -290,7 +290,7 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
           <StatCard
             label="Mis peticiones"
             value={s.requests_mine ?? 0}
-            accentColor="#818cf8"
+            accentColor="#3b82f6"
             info="Peticiones creadas por tu propio usuario de eMuwarez (según el nombre configurado en Ajustes)."
           />
           <StatCard

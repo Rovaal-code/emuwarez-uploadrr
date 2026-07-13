@@ -112,7 +112,7 @@ function cellMark(v: boolean | null) {
 const baseName = (path: string | null) => (path ? path.split('/').pop() || null : null)
 
 function CompatibilityBadge({ status }: { status: string | null }) {
-  if (!status) return <span className="badge req-none">Sin coincidencia</span>
+  if (!status) return <span style={{ color: 'var(--text-muted)' }}>—</span>
   const cls =
     status === 'Compatible' ? 'badge req-compatible' :
     status === 'No disponible' ? 'badge req-unavailable' :

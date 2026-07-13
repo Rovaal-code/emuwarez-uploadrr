@@ -4,9 +4,14 @@ import type { UploadJob, UploadJobLog, UploadArtifact } from '../types/api'
 import { EmptyState } from '../components/EmptyState'
 import { LoadingState } from '../components/LoadingState'
 import { ErrorState } from '../components/ErrorState'
+import { HeaderFilter } from '../components/HeaderFilter'
 import { formatDate } from '../utils/format'
 
 const CONFIRMATION_TOKEN = 'INICIAR_UPLOADRR'
+
+const UPLOAD_TYPE_LABEL: Record<string, string> = {
+  movie: 'Película', series: 'Serie', season: 'Temporada', episode: 'Episodio',
+}
 
 const STATUS_CLASS: Record<string, string> = {
   ready: 'badge req-compatible',
@@ -489,21 +494,6 @@ export function UploadsPage() {
           onChange={e => setSearch(e.target.value)}
           style={{ width: 160 }}
         />
-        <select className="form-input form-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-          {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s ? statusLabel(s) : 'Estado: Todos'}</option>)}
-        </select>
-        <select className="form-input form-select" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
-          <option value="">Tipo: Todos</option>
-          <option value="movie">Película</option>
-          <option value="series">Serie</option>
-          <option value="season">Temporada</option>
-          <option value="episode">Episodio</option>
-        </select>
-        <select className="form-input form-select" value={resultFilter} onChange={e => setResultFilter(e.target.value)}>
-          <option value="">Resultado: Todos</option>
-          <option value="success">Subido (con resultado)</option>
-          <option value="none">Sin resultado</option>
-        </select>
         <select className="form-input form-select" value={sortBy} onChange={e => setSortBy(e.target.value)}>
           <option value="created_desc">Orden: Reciente primero</option>
           <option value="created_asc">Orden: Antiguo primero</option>
@@ -527,11 +517,18 @@ export function UploadsPage() {
                 <tr>
                   <th>ID</th>
                   <th>Título</th>
-                  <th>Estado</th>
+                  <th><HeaderFilter label="Tipo" value={typeFilter} onChange={setTypeFilter} options={[
+                    { value: '', label: 'Todos' }, { value: 'movie', label: 'Película' }, { value: 'series', label: 'Serie' }, { value: 'season', label: 'Temporada' }, { value: 'episode', label: 'Episodio' },
+                  ]} /></th>
+                  <th><HeaderFilter label="Estado" value={statusFilter} onChange={setStatusFilter} options={[
+                    { value: '', label: 'Todos' }, ...STATUS_OPTIONS.filter(Boolean).map(s => ({ value: s, label: statusLabel(s) })),
+                  ]} /></th>
                   <th>Progreso</th>
                   <th>Duración</th>
                   <th>Exit</th>
-                  <th>Resultado</th>
+                  <th><HeaderFilter label="Resultado" value={resultFilter} onChange={setResultFilter} options={[
+                    { value: '', label: 'Todos' }, { value: 'success', label: 'Subido (con resultado)' }, { value: 'none', label: 'Sin resultado' },
+                  ]} /></th>
                   <th>Preparado</th>
                   <th>Reintentos</th>
                   <th>Creado</th>
@@ -551,6 +548,9 @@ export function UploadsPage() {
                       >
                         {job.title || '–'}
                       </span>
+                    </td>
+                    <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                      {UPLOAD_TYPE_LABEL[job.media_type ?? ''] ?? '–'}
                     </td>
                     <td>
                       <span className={STATUS_CLASS[job.status] || 'badge req-unknown'}>

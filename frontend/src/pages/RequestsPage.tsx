@@ -19,6 +19,7 @@ import { getLibraryItem } from '../api/library'
 import type { LibraryItemResponse } from '../types/api'
 import { posterUrl, idVerifyUrl } from '../utils/libraryItem'
 import { ExternalIdLink } from '../components/ExternalIdLink'
+import { HeaderFilter } from '../components/HeaderFilter'
 import { formatBytes, timeAgo, formatDate } from '../utils/format'
 
 // A request's category maps to a friendly "Tipo" with an icon.
@@ -62,12 +63,6 @@ const COMPATIBILITY_STATUSES = [
   { value: 'Pendiente', label: 'Pendiente' },
   { value: 'Llena', label: 'Llena' },
   { value: 'Sin coincidencia', label: 'Sin coincidencia' },
-]
-
-const EMU_STATUS_OPTIONS = [
-  { value: '', label: 'Estado EMU: Todos' },
-  { value: 'open', label: 'Abierta' },
-  { value: 'filled', label: 'Llena' },
 ]
 
 const SORT_OPTIONS = [
@@ -400,7 +395,6 @@ export function RequestsPage() {
   const [categoryFilter, setCategoryFilter] = useState('')
   const [resolutionFilter, setResolutionFilter] = useState('')
   const [sourceFilter, setSourceFilter] = useState('')
-  const [emuFilter, setEmuFilter] = useState('')
   const [sortBy, setSortBy] = useState('created_desc')
   const [facets, setFacets] = useState<{ categories: string[]; resolutions: string[]; sources: string[] }>({
     categories: [], resolutions: [], sources: [],
@@ -436,7 +430,6 @@ export function RequestsPage() {
         category: categoryFilter || undefined,
         resolution: resolutionFilter || undefined,
         source: sourceFilter || undefined,
-        emu_status: emuFilter || undefined,
         sort: sortBy,
         limit: PAGE_SIZE,
         offset: off,
@@ -449,7 +442,7 @@ export function RequestsPage() {
     } finally {
       setLoading(false)
     }
-  }, [search, statusFilter, categoryFilter, resolutionFilter, sourceFilter, emuFilter, sortBy])
+  }, [search, statusFilter, categoryFilter, resolutionFilter, sourceFilter, sortBy])
 
   const loadSyncStatus = useCallback(async () => {
     try {
@@ -482,7 +475,7 @@ export function RequestsPage() {
   useEffect(() => {
     loadItems(0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, categoryFilter, resolutionFilter, sourceFilter, emuFilter, sortBy])
+  }, [statusFilter, categoryFilter, resolutionFilter, sourceFilter, sortBy])
 
   const handleSync = async (force: boolean) => {
     setSyncing(true)
@@ -579,26 +572,6 @@ export function RequestsPage() {
             onKeyDown={e => e.key === 'Enter' && loadItems(0)}
             style={{ minWidth: 220 }}
           />
-          <select className="form-input form-select" value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
-            <option value="">Tipo: Todos</option>
-            {facets.categories.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <select className="form-input form-select" value={resolutionFilter} onChange={e => setResolutionFilter(e.target.value)}>
-            <option value="">Resolución: Todas</option>
-            {facets.resolutions.map(r => <option key={r} value={r}>{r}</option>)}
-          </select>
-          <select className="form-input form-select" value={sourceFilter} onChange={e => setSourceFilter(e.target.value)}>
-            <option value="">Source: Todos</option>
-            {facets.sources.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-          <select className="form-input form-select" value={emuFilter} onChange={e => setEmuFilter(e.target.value)}>
-            {EMU_STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-          </select>
-          <select className="form-input form-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-            {COMPATIBILITY_STATUSES.map(s => (
-              <option key={s.value} value={s.value}>{s.label}</option>
-            ))}
-          </select>
           <select className="form-input form-select" value={sortBy} onChange={e => setSortBy(e.target.value)}>
             {SORT_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
@@ -612,7 +585,7 @@ export function RequestsPage() {
           <EmptyState
             title="Sin peticiones"
             body={
-              total === 0 && !search && !statusFilter && !categoryFilter && !resolutionFilter && !sourceFilter && !emuFilter
+              total === 0 && !search && !statusFilter && !categoryFilter && !resolutionFilter && !sourceFilter
                 ? 'Sincroniza las peticiones de eMuwarez para verlas aquí.'
                 : 'No hay peticiones que coincidan con los filtros.'
             }
@@ -627,15 +600,23 @@ export function RequestsPage() {
                 <thead>
                   <tr>
                     <th>Título</th>
-                    <th>Tipo</th>
+                    <th><HeaderFilter label="Tipo" value={categoryFilter} onChange={setCategoryFilter} options={[
+                      { value: '', label: 'Todos' }, ...facets.categories.map(c => ({ value: c, label: c })),
+                    ]} /></th>
                     <th>Autor</th>
-                    <th>Resolución</th>
-                    <th>Source</th>
+                    <th><HeaderFilter label="Resolución" value={resolutionFilter} onChange={setResolutionFilter} options={[
+                      { value: '', label: 'Todas' }, ...facets.resolutions.map(r => ({ value: r, label: r })),
+                    ]} /></th>
+                    <th><HeaderFilter label="Source" value={sourceFilter} onChange={setSourceFilter} options={[
+                      { value: '', label: 'Todos' }, ...facets.sources.map(s => ({ value: s, label: s })),
+                    ]} /></th>
                     <th title="Votos (otros usuarios que la quieren)" style={{ textAlign: 'center' }}><VotesIcon /></th>
                     <th title="Comentarios" style={{ textAlign: 'center' }}><CommentsIcon /></th>
                     <th title="Puntos / recompensa" style={{ textAlign: 'center' }}><PointsIcon /></th>
                     <th>Creada</th>
-                    <th>Compatibilidad</th>
+                    <th><HeaderFilter label="Compatibilidad" value={statusFilter} onChange={setStatusFilter} options={[
+                      { value: '', label: 'Todas' }, ...COMPATIBILITY_STATUSES.filter(s => s.value).map(s => ({ value: s.value, label: s.label })),
+                    ]} /></th>
                   </tr>
                 </thead>
                 <tbody>

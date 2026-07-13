@@ -16,6 +16,7 @@ import { LibraryTreeRow, type LibraryActionKind } from '../components/LibraryTre
 import { LargePosterCard } from '../components/LargePosterCard'
 import { LibraryDetailPage } from '../components/LibraryDetailPage'
 import { SeasonPackModal } from '../components/SeasonPackModal'
+import { HeaderFilter } from '../components/HeaderFilter'
 import { buildDeepLink, posterUrl } from '../utils/libraryItem'
 
 const LOAD_LIMIT = 20000  // show everything in one container (no pagination); backend caps here
@@ -344,57 +345,6 @@ export function LibraryPage() {
           onKeyDown={e => e.key === 'Enter' && applyFilters()}
           style={{ width: 140 }}
         />
-        <select className="form-input form-select" value={filterType} onChange={e => { setFilterType(e.target.value); setOffset(0) }}>
-          <option value="">Tipo: Todos</option>
-          <option value="movie">Película</option>
-          <option value="series">Serie</option>
-          <option value="episode">Episodio</option>
-        </select>
-        <select className="form-input form-select" value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setOffset(0) }}>
-          <option value="">Estado: Todos</option>
-          <option value="Disponible">Disponible</option>
-          <option value="Parcial">Parcial</option>
-          <option value="Faltante">Faltante</option>
-          <option value="Error de importación">Error</option>
-        </select>
-        <select className="form-input form-select" value={filterInstanceId} onChange={e => { setFilterInstanceId(e.target.value); setOffset(0) }}>
-          <option value="">Origen: Todos</option>
-          {instances.map(inst => {
-            // Cap the instance name at 15 chars so a long name can't blow up
-            // the dropdown width.
-            const name = inst.name.length > 15 ? inst.name.slice(0, 15) + '…' : inst.name
-            return (
-              <option key={inst.id} value={inst.id}>{inst.type === 'radarr' ? 'Radarr' : 'Sonarr'} — {name}</option>
-            )
-          })}
-        </select>
-        <select className="form-input form-select" value={filterNomenclature} onChange={e => { setFilterNomenclature(e.target.value); setOffset(0) }}>
-          <option value="">Nomenclatura: Todas</option>
-          <option value="Correcta">Correcta</option>
-          <option value="No adaptada">No adaptada</option>
-          <option value="N/A">N/A</option>
-        </select>
-        <select className="form-input form-select" value={filterRequest} onChange={e => { setFilterRequest(e.target.value); setOffset(0) }}>
-          <option value="">Petición: Todas</option>
-          <option value="Sin petición">Sin petición</option>
-          <option value="Compatible">Compatible</option>
-          <option value="Parcial">Parcial</option>
-          <option value="No compatible">No compatible</option>
-          <option value="Llena">Llena</option>
-        </select>
-        <select className="form-input form-select" value={searchProvider} onChange={e => setSearchProvider(e.target.value)}>
-          <option value="">Provider: Todos</option>
-          {providerOptions.map(p => <option key={p} value={p}>{p}</option>)}
-        </select>
-        <select className="form-input form-select" value={searchQuality} onChange={e => setSearchQuality(e.target.value)}>
-          <option value="">Calidad: Todas</option>
-          {qualityOptions.map(q => <option key={q} value={q}>{q}</option>)}
-        </select>
-        <select className="form-input form-select" value={filterEmu} onChange={e => { setFilterEmu(e.target.value); setOffset(0) }}>
-          <option value="">¿En eMuwarez?: Todos</option>
-          <option value="present">Sí</option>
-          <option value="candidate">No</option>
-        </select>
         <select className="form-input form-select" value={sortBy} onChange={e => { setSortBy(e.target.value); setOffset(0) }} style={{ width: 'max-content', paddingRight: 26, backgroundPosition: 'right 8px center' }}>
           <option value="title_asc">Orden: Título (A-Z)</option>
           <option value="title_desc">Orden: Título (Z-A)</option>
@@ -466,15 +416,32 @@ export function LibraryPage() {
               <thead>
                 <tr>
                   <th>Título</th>
-                  <th>Tipo</th>
-                  <th>Origen</th>
-                  <th>Estado</th>
-                  <th>Petición</th>
-                  <th>Nomenclatura</th>
+                  <th><HeaderFilter label="Tipo" value={filterType} onChange={v => { setFilterType(v); setOffset(0) }} options={[
+                    { value: '', label: 'Todos' }, { value: 'movie', label: 'Película' }, { value: 'series', label: 'Serie' }, { value: 'episode', label: 'Episodio' },
+                  ]} /></th>
+                  <th><HeaderFilter label="Origen" value={filterInstanceId} onChange={v => { setFilterInstanceId(v); setOffset(0) }} options={[
+                    { value: '', label: 'Todos' },
+                    ...instances.map(inst => ({ value: String(inst.id), label: `${inst.type === 'radarr' ? 'Radarr' : 'Sonarr'} — ${inst.name.length > 15 ? inst.name.slice(0, 15) + '…' : inst.name}` })),
+                  ]} /></th>
+                  <th><HeaderFilter label="Estado" value={filterStatus} onChange={v => { setFilterStatus(v); setOffset(0) }} options={[
+                    { value: '', label: 'Todos' }, { value: 'Disponible', label: 'Disponible' }, { value: 'Parcial', label: 'Parcial' }, { value: 'Faltante', label: 'Faltante' }, { value: 'Error de importación', label: 'Error' },
+                  ]} /></th>
+                  <th><HeaderFilter label="Petición" value={filterRequest} onChange={v => { setFilterRequest(v); setOffset(0) }} options={[
+                    { value: '', label: 'Todas' }, { value: 'Sin petición', label: 'Sin petición' }, { value: 'Compatible', label: 'Compatible' }, { value: 'Parcial', label: 'Parcial' }, { value: 'No compatible', label: 'No compatible' }, { value: 'Llena', label: 'Llena' },
+                  ]} /></th>
+                  <th><HeaderFilter label="Nomenclatura" value={filterNomenclature} onChange={v => { setFilterNomenclature(v); setOffset(0) }} options={[
+                    { value: '', label: 'Todas' }, { value: 'Correcta', label: 'Correcta' }, { value: 'No adaptada', label: 'No adaptada' }, { value: 'N/A', label: 'N/A' },
+                  ]} /></th>
                   <th>Tamaño</th>
-                  <th>Provider</th>
-                  <th>Calidad</th>
-                  <th>¿En eMuwarez?</th>
+                  <th><HeaderFilter label="Provider" value={searchProvider} onChange={setSearchProvider} options={[
+                    { value: '', label: 'Todos' }, ...providerOptions.map(p => ({ value: p, label: p })),
+                  ]} /></th>
+                  <th><HeaderFilter label="Calidad" value={searchQuality} onChange={setSearchQuality} options={[
+                    { value: '', label: 'Todas' }, ...qualityOptions.map(q => ({ value: q, label: q })),
+                  ]} /></th>
+                  <th><HeaderFilter label="¿En eMuwarez?" value={filterEmu} onChange={v => { setFilterEmu(v); setOffset(0) }} options={[
+                    { value: '', label: 'Todos' }, { value: 'present', label: 'Sí' }, { value: 'candidate', label: 'No' },
+                  ]} /></th>
                   <th>Aportes</th>
                   <th>Actualizado</th>
                   <th className="col-actions">Acciones</th>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { setUnsavedGuard, confirmDiscardIfDirty } from '../utils/unsavedGuard'
+import { setUnsavedGuard, guardedLeave } from '../utils/unsavedGuard'
 import {
   getMaintenanceStatus,
   exportSettings,
@@ -22,6 +22,15 @@ import { REGION_OPTIONS, LANGUAGE_OPTIONS } from '../constants/regionLanguage'
 import { testResultLabel, testResultColor, emuTestCooldownSeconds } from '../utils/integrationResult'
 
 type Tab = 'config' | 'notifications' | 'diagnostics' | 'backup' | 'maintenance'
+
+// A tab exposes its save action so the page-header (top-right) can render the
+// button, like the sync buttons in Biblioteca/Peticiones.
+export interface SaveExpose {
+  dirty: boolean
+  saving: boolean
+  onSave: () => void
+  label: string
+}
 
 function formatBytes(n: number) {
   if (n < 1024) return `${n} B`
@@ -46,7 +55,7 @@ function configSignature(v: {
 }
 
 // ---------- Config tab ----------
-function ConfigTab() {
+function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => void }) {
   const [settings, setSettings] = useState<SettingsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -95,6 +104,16 @@ function ConfigTab() {
     setUnsavedGuard(() => dirtyRef.current)
     return () => setUnsavedGuard(null)
   }, [])
+
+  // Expose the save action to the page-header (top-right button). onSave goes
+  // through a ref so it always runs with the latest form values.
+  const saveRef = useRef<() => void>(() => {})
+  saveRef.current = () => { void handleSave() }
+  const stableSave = useRef(() => saveRef.current()).current
+  useEffect(() => {
+    onExposeSave({ dirty, saving, onSave: stableSave, label: 'Guardar configuración' })
+  }, [dirty, saving, onExposeSave, stableSave])
+  useEffect(() => () => onExposeSave(null), [onExposeSave])
 
   async function handleTestImghost(hostId: string) {
     setImgTesting(hostId)
@@ -264,17 +283,6 @@ function ConfigTab() {
           {msg.text}
         </div>
       )}
-
-      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 12 }}>
-        {dirty && <span style={{ fontSize: 12, color: '#f59e0b' }}>Cambios sin guardar</span>}
-        <button
-          className={`btn btn-primary${dirty ? ' btn-unsaved' : ''}`}
-          onClick={handleSave}
-          disabled={saving}
-        >
-          {saving ? 'Guardando…' : 'Guardar configuración'}
-        </button>
-      </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16, alignItems: 'stretch' }}>
       <div className="placeholder-card">
@@ -887,7 +895,7 @@ function notifSignature(v: {
 }
 
 // ---------- Notifications tab ----------
-function NotificationsTab() {
+function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => void }) {
   const [settings, setSettings] = useState<SettingsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -919,6 +927,14 @@ function NotificationsTab() {
     setUnsavedGuard(() => dirtyRef.current)
     return () => setUnsavedGuard(null)
   }, [])
+
+  const saveRef = useRef<() => void>(() => {})
+  saveRef.current = () => { void handleSave() }
+  const stableSave = useRef(() => saveRef.current()).current
+  useEffect(() => {
+    onExposeSave({ dirty, saving, onSave: stableSave, label: 'Guardar notificaciones' })
+  }, [dirty, saving, onExposeSave, stableSave])
+  useEffect(() => () => onExposeSave(null), [onExposeSave])
 
   useEffect(() => {
     fetchSettings()
@@ -1027,17 +1043,6 @@ function NotificationsTab() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 12 }}>
-        {dirty && <span style={{ fontSize: 12, color: '#f59e0b' }}>Cambios sin guardar</span>}
-        <button
-          className={`btn btn-primary${dirty ? ' btn-unsaved' : ''}`}
-          onClick={handleSave}
-          disabled={saving}
-        >
-          {saving ? 'Guardando…' : 'Guardar notificaciones'}
-        </button>
-      </div>
-
       {msg && (
         <div style={{
           padding: '10px 14px', borderRadius: 6, fontSize: 13,
@@ -1135,6 +1140,7 @@ export function SettingsPage() {
   const [tab, setTab] = useState<Tab>('config')
   const [status, setStatus] = useState<MaintenanceStatus | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [saveAction, setSaveAction] = useState<SaveExpose | null>(null)
 
   const loadStatus = useCallback(async () => {
     try {
@@ -1162,6 +1168,18 @@ export function SettingsPage() {
           <div className="page-title">Configuración</div>
           <div className="page-subtitle">Ajustes, diagnóstico, backup y mantenimiento</div>
         </div>
+        {saveAction && (
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            {saveAction.dirty && <span style={{ fontSize: 12, color: '#f59e0b' }}>Cambios sin guardar</span>}
+            <button
+              className={`btn btn-primary btn-sm${saveAction.dirty ? ' btn-unsaved' : ''}`}
+              onClick={saveAction.onSave}
+              disabled={saveAction.saving}
+            >
+              {saveAction.saving ? 'Guardando…' : saveAction.label}
+            </button>
+          </div>
+        )}
       </div>
 
       {loadError && (
@@ -1174,7 +1192,7 @@ export function SettingsPage() {
         {tabs.map(t => (
           <button
             key={t.key}
-            onClick={() => { if (t.key !== tab && confirmDiscardIfDirty()) setTab(t.key) }}
+            onClick={() => { if (t.key !== tab) guardedLeave(() => setTab(t.key)) }}
             style={{
               padding: '8px 16px',
               fontSize: 13,
@@ -1191,8 +1209,8 @@ export function SettingsPage() {
         ))}
       </div>
 
-      {tab === 'config' && <ConfigTab />}
-      {tab === 'notifications' && <NotificationsTab />}
+      {tab === 'config' && <ConfigTab onExposeSave={setSaveAction} />}
+      {tab === 'notifications' && <NotificationsTab onExposeSave={setSaveAction} />}
       {tab === 'diagnostics' && <DiagnosticsTab status={status} />}
       {tab === 'backup' && <BackupTab status={status} onRefresh={loadStatus} />}
       {tab === 'maintenance' && <MaintenanceTab />}

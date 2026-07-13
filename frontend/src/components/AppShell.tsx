@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { Sidebar } from './Sidebar'
 import { Topbar } from './Topbar'
 import type { CurrentUserResponse } from '../types/api'
-import { confirmDiscardIfDirty, hasUnsavedChanges } from '../utils/unsavedGuard'
+import { guardedLeave, hasUnsavedChanges } from '../utils/unsavedGuard'
+import { UnsavedChangesModal } from './UnsavedChangesModal'
 
 // Pages
 import { DashboardPage } from '../pages/DashboardPage'
@@ -58,12 +59,15 @@ export function AppShell({ user, onLogout }: AppShellProps) {
   const [activePage, setActivePage] = useState<string>(pageFromPath)
 
   const navigate = useCallback((page: string) => {
-    if (page !== pageFromPath() && !confirmDiscardIfDirty()) return  // block leaving with unsaved changes
-    setActivePage(page)
-    const path = page === 'dashboard' ? '/' : `/${page}`
-    if (window.location.pathname !== path) {
-      window.history.pushState({}, '', path)
-    }
+    if (page === pageFromPath()) return
+    // Ask (styled modal) before leaving a form with unsaved changes.
+    guardedLeave(() => {
+      setActivePage(page)
+      const path = page === 'dashboard' ? '/' : `/${page}`
+      if (window.location.pathname !== path) {
+        window.history.pushState({}, '', path)
+      }
+    })
   }, [])
 
   // Keep the tab in sync with browser back/forward.
@@ -87,6 +91,7 @@ export function AppShell({ user, onLogout }: AppShellProps) {
 
   return (
     <div className="app-shell">
+      <UnsavedChangesModal />
       <Sidebar active={activePage} onNavigate={navigate} />
       <div className="main-content">
         <Topbar

@@ -1,11 +1,29 @@
 import { useState, useEffect, useCallback } from 'react'
 import { StatusBadge } from './StatusBadge'
+import { ApiClientError } from '../api/client'
 import {
   getNomenclatureCheckInfo,
   runNomenclatureCheck,
   type NomenclatureCheckInfo,
   type NomenclatureCheckSummary,
 } from '../api/library'
+
+// Turn a raw API error into a specific Spanish message. The most common one
+// here is a 404 with detail "Not Found" — that means the running server does
+// not have the nomenclature-check endpoint yet (needs a restart after update).
+function friendlyError(err: unknown): string {
+  if (err instanceof ApiClientError) {
+    if (err.status === 404 && (err.message === 'Not Found' || !err.message)) {
+      return 'El servidor no reconoce la comprobación de nomenclatura (endpoint no encontrado). Si acabas de actualizar Uploadrr, reinicia el servidor.'
+    }
+    if (err.status === 404) return err.message                 // "Elemento no encontrado", etc.
+    if (err.status === 500) {
+      return `Error del servidor al comprobar la nomenclatura${err.message ? `: ${err.message}` : '.'} Comprueba que el binario "mediainfo" esté instalado y que el archivo sea accesible.`
+    }
+    return err.message || `Error ${err.status}.`
+  }
+  return (err as Error)?.message || 'Error desconocido.'
+}
 
 const labelStyle: React.CSSProperties = {
   fontSize: 11,
@@ -61,7 +79,7 @@ export function NomenclatureCheckButton({ item, onChecked, compact }: Props) {
     try {
       setInfo(await getNomenclatureCheckInfo(item.id))
     } catch (err) {
-      setError((err as Error).message)
+      setError(friendlyError(err))
     } finally {
       setLoading(false)
     }
@@ -82,7 +100,7 @@ export function NomenclatureCheckButton({ item, onChecked, compact }: Props) {
       await loadInfo()      // refresh status + stored result inside the card
       onChecked?.()         // refresh the parent's badges
     } catch (err) {
-      setError((err as Error).message)
+      setError(friendlyError(err))
     } finally {
       setRunning(false)
     }
@@ -121,7 +139,7 @@ export function NomenclatureCheckButton({ item, onChecked, compact }: Props) {
             </div>
             <div className="modal-body">
               {loading && <div style={{ color: 'var(--text-muted)' }}>Cargando…</div>}
-              {error && <div style={{ color: 'var(--danger, #ef4444)' }}>Error: {error}</div>}
+              {error && <div style={{ color: 'var(--danger, #ef4444)' }}>{error}</div>}
 
               {info && !loading && (
                 <div style={{ display: 'grid', gap: 14 }}>

@@ -428,8 +428,13 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
                     <p className="text-warning" style={{ fontSize: 12, marginTop: 10 }}>⚠ {miReport.message}</p>
                   )}
                   {miReport?.available && (
-                    <div style={{ marginTop: 12, overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 8 }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                    <div style={{ marginTop: 12, overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 8, background: 'rgba(255,255,255,0.03)' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, tableLayout: 'fixed' }}>
+                        <colgroup>
+                          <col style={{ width: '22%' }} />
+                          <col style={{ width: '39%' }} />
+                          <col style={{ width: '39%' }} />
+                        </colgroup>
                         <thead>
                           <tr style={{ background: 'rgba(255,255,255,0.03)' }}>
                             <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600, color: 'var(--text-muted)' }}>Campo</th>

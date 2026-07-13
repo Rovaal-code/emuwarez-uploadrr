@@ -27,6 +27,12 @@ from .. import legacy
 
 logger = logging.getLogger(__name__)
 
+# Cache of build_mediainfo_report() results, keyed by resolved path →
+# ((path, mtime, size), report). Avoids re-reading MediaInfo of the same file
+# (slow over remote mounts) within the upload wizard / nomenclature flow.
+_REPORT_CACHE: dict[str, tuple[tuple, dict]] = {}
+_REPORT_CACHE_MAX = 256
+
 
 def mediainfo_available() -> bool:
     """Whether the `mediainfo` binary is on PATH. The dev/test sandbox for
@@ -117,6 +123,20 @@ def build_mediainfo_report(path: str) -> dict:
     p = Path(path)
     if not p.is_file():
         return {"available": False, "message": f"Archivo no accesible desde la app: {path}", "rows": []}
+
+    # MediaInfo over a remote (SSHFS/NFS) mount is slow, and the upload wizard
+    # reads the same file twice (once to generate the nomenclature, once for
+    # the "Ver MediaInfo" button). Cache the report per file (invalidated by
+    # mtime+size) so the second read is instant.
+    try:
+        st = p.stat()
+        cache_key = (str(p), int(st.st_mtime), int(st.st_size))
+        cached = _REPORT_CACHE.get(str(p))
+        if cached and cached[0] == cache_key:
+            return cached[1]
+    except OSError:
+        cache_key = None
+
     try:
         info = legacy.run_mediainfo_json(p)
     except Exception as exc:  # noqa: BLE001
@@ -176,4 +196,9 @@ def build_mediainfo_report(path: str) -> dict:
     )
     add("Subtítulos", sub_langs or None, "SUBS" if sub_tracks else None)
 
-    return {"available": True, "message": None, "rows": rows, "audio_summary": audio_summary}
+    report = {"available": True, "message": None, "rows": rows, "audio_summary": audio_summary}
+    if cache_key is not None:
+        if len(_REPORT_CACHE) >= _REPORT_CACHE_MAX:
+            _REPORT_CACHE.clear()
+        _REPORT_CACHE[str(p)] = (cache_key, report)
+    return report

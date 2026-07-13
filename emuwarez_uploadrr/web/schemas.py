@@ -388,6 +388,9 @@ class DashboardSummaryResponse(BaseModel):
     uploading: int = 0
     completed: int = 0
     unique_content: int = 0
+    unique_movies: int = 0
+    unique_seasons: int = 0
+    unique_episodes: int = 0
     radarr_items: int = 0
     sonarr_items: int = 0
     last_sync_at: Optional[str] = None

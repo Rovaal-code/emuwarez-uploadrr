@@ -261,8 +261,13 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
           label="Contenido único"
           value={s.unique_content ?? 0}
           accentColor="var(--color-uploading)"
-          info="Contenido que tienes y que NO está en eMuwarez (aparece como «No» en ¿En eMuwarez?), sin contar lo Faltante. Son tus oportunidades de subida."
-        />
+          info="Contenido disponible que aún no está en eMuwarez: las películas, las temporadas completas de series o documentales y sus capítulos. Son tus oportunidades de subida."
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <div className="stat-card-sub-row">🎬 {s.unique_movies ?? 0} películas</div>
+            <div className="stat-card-sub-row">📺 {s.unique_seasons ?? 0} temporadas · {s.unique_episodes ?? 0} capítulos</div>
+          </div>
+        </StatCard>
 
         <StatCard
           label="Tus subidas"

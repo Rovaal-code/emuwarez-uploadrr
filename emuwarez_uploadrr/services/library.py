@@ -432,9 +432,6 @@ def get_dashboard_summary(conn: sqlite3.Connection) -> dict:
             SUM(CASE WHEN local_status IN ({missing_ph}) THEN 1 ELSE 0 END) AS missing_count,
             SUM(CASE WHEN local_status = ? THEN 1 ELSE 0 END) AS uploading,
             SUM(CASE WHEN local_status = ? THEN 1 ELSE 0 END) AS uploaded,
-            -- "Contenido único": lo que sale como "No" en ¿En eMuwarez?
-            -- (emu_in_catalog = 0), excluyendo lo Faltante/no disponible.
-            SUM(CASE WHEN emu_in_catalog = 0 AND local_status NOT IN ({missing_ph}) THEN 1 ELSE 0 END) AS unique_content,
             SUM(CASE WHEN instance_type = 'radarr' THEN 1 ELSE 0 END) AS radarr_items,
             SUM(CASE WHEN instance_type = 'sonarr' THEN 1 ELSE 0 END) AS sonarr_items
         FROM library_items
@@ -445,9 +442,38 @@ def get_dashboard_summary(conn: sqlite3.Connection) -> dict:
             *_MISSING_STATUSES,
             LocalStatus.UPLOADING.value,
             LocalStatus.UPLOADED.value,
-            *_MISSING_STATUSES,
         ],
     ).fetchone()
+
+    # "Contenido único": lo disponible que sale como "No" en ¿En eMuwarez?
+    # (emu_in_catalog = 0). Se cuenta por unidad subible: cada película, cada
+    # temporada completa de serie/documental, y sus capítulos. emu_in_catalog
+    # se calcula a nivel de película y de serie/temporada (nunca por episodio),
+    # así que los capítulos se cuentan por su temporada única.
+    avail = LocalStatus.AVAILABLE.value
+    uniq = conn.execute(
+        """
+        SELECT
+            SUM(CASE WHEN item_type = 'movie'  THEN 1 ELSE 0 END) AS movies,
+            SUM(CASE WHEN item_type = 'season' THEN 1 ELSE 0 END) AS seasons
+        FROM library_items
+        WHERE emu_in_catalog = 0 AND local_status = ?
+        """,
+        [avail],
+    ).fetchone()
+    uniq_ep = conn.execute(
+        """
+        SELECT COUNT(*) AS n
+        FROM library_items e
+        JOIN library_items s ON e.parent_id = s.id
+        WHERE e.item_type = 'episode' AND e.local_status = ?
+          AND s.item_type = 'season' AND s.emu_in_catalog = 0
+        """,
+        [avail],
+    ).fetchone()
+    unique_movies = int(uniq["movies"] or 0)
+    unique_seasons = int(uniq["seasons"] or 0)
+    unique_episodes = int(uniq_ep["n"] or 0)
 
     last_sync = conn.execute(
         "SELECT started_at FROM task_runs WHERE name = 'sync-library' AND status = 'completed' ORDER BY id DESC LIMIT 1"
@@ -459,7 +485,11 @@ def get_dashboard_summary(conn: sqlite3.Connection) -> dict:
         "missing": int(row["missing_count"] or 0),
         "uploading": int(row["uploading"] or 0),
         "completed": int(row["uploaded"] or 0),
-        "unique_content": int(row["unique_content"] or 0),
+        # Headline = unidades subibles (películas + temporadas completas).
+        "unique_content": unique_movies + unique_seasons,
+        "unique_movies": unique_movies,
+        "unique_seasons": unique_seasons,
+        "unique_episodes": unique_episodes,
         "radarr_items": int(row["radarr_items"] or 0),
         "sonarr_items": int(row["sonarr_items"] or 0),
         "last_sync_at": last_sync["started_at"] if last_sync else None,

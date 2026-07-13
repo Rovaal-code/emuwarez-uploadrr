@@ -33,6 +33,9 @@ export interface DashboardSummaryResponse {
   uploading: number
   completed: number
   unique_content?: number
+  unique_movies?: number
+  unique_seasons?: number
+  unique_episodes?: number
   uploads_completed?: number
   radarr_items: number
   sonarr_items: number

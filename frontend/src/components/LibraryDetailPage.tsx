@@ -10,6 +10,7 @@ import { formatBytes, formatItemType } from '../utils/format'
 import { buildDeepLink, posterUrl, idVerifyUrl } from '../utils/libraryItem'
 import { ExternalIdLink } from './ExternalIdLink'
 import { ProviderTag } from './ProviderIcon'
+import { NomenclatureCheckButton } from './NomenclatureCheckButton'
 
 // Full dedicated detail page (Radarr/Sonarr-style) — replaces the old small
 // modal and the large card. Rendered in place of the library list, with a
@@ -126,7 +127,15 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
             <Field label="Origen">{item.instance_name ?? '—'}</Field>
             <Field label="Estado"><StatusBadge status={item.local_status} type="local" /></Field>
             <Field label="Petición"><StatusBadge status={item.request_status} type="request" /></Field>
-            <Field label="Nomenclatura"><StatusBadge status={item.nomenclature_status} type="nomenclature" /></Field>
+            <Field label="Nomenclatura">
+              <NomenclatureCheckButton
+                item={item}
+                onChecked={async () => {
+                  const updated = await getLibraryItem(item.id).catch(() => null)
+                  if (updated) onSelect(updated)
+                }}
+              />
+            </Field>
             <Field label="Resolución" help={rollupHelp}>{item.resolution || '–'}</Field>
             <Field label="Source" help={rollupHelp}>{item.source || '–'}</Field>
             <Field label="Provider" help={rollupHelp}>{item.provider ? <ProviderTag code={item.provider} label={item.provider_label} /> : '–'}</Field>

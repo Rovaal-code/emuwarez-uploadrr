@@ -32,11 +32,12 @@ const REQUEST_STATUS_MAP: Record<string, StatusInfo> = {
 }
 
 const NOMENCLATURE_STATUS_MAP: Record<string, StatusInfo> = {
-  'Correcta':     { label: 'Correcta',     color: '#22c55e', cssClass: 'nom-correct' },
-  'Parcial':      { label: 'Parcial',      color: '#f59e0b', cssClass: 'nom-not-adapted' },
-  'No adaptada':  { label: 'No adaptada',  color: '#9ca3af', cssClass: 'nom-na' },
-  'N/A':          { label: 'N/A',          color: '#6b7280', cssClass: 'nom-na' },
-  'Desconocida':  { label: 'Desconocida',  color: '#6b7280', cssClass: 'nom-unknown' },
+  'Correcta':      { label: 'Correcta',      color: '#22c55e', cssClass: 'nom-correct' },
+  'No comprobada': { label: 'No comprobada', color: '#9ca3af', cssClass: 'nom-unchecked' },
+  'Parcial':       { label: 'Parcial',       color: '#f59e0b', cssClass: 'nom-not-adapted' },
+  'No adaptada':   { label: 'No adaptada',   color: '#ef4444', cssClass: 'nom-not-adapted' },
+  'N/A':           { label: 'N/A',           color: '#6b7280', cssClass: 'nom-na' },
+  'Desconocida':   { label: 'Desconocida',   color: '#6b7280', cssClass: 'nom-unknown' },
 }
 
 // eMuwarez catalog comparison. "No" (not on the tracker) is the actionable

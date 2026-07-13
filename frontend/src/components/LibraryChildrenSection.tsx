@@ -17,6 +17,7 @@ export function LibraryChildrenSection({ parentId, childType, title, instances, 
 }) {
   const [children, setChildren] = useState<LibraryItemResponse[]>([])
   const [loading, setLoading] = useState(true)
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     setLoading(true)
@@ -24,7 +25,7 @@ export function LibraryChildrenSection({ parentId, childType, title, instances, 
       .then(r => setChildren(r.items))
       .catch(() => setChildren([]))
       .finally(() => setLoading(false))
-  }, [parentId, childType])
+  }, [parentId, childType, reloadKey])
 
   const emptyLabel = childType === 'season' ? 'Sin temporadas' : 'Sin capítulos'
 
@@ -57,7 +58,7 @@ export function LibraryChildrenSection({ parentId, childType, title, instances, 
             </thead>
             <tbody>
               {children.map(child => (
-                <LibraryTreeRow key={child.id} item={child} depth={0} instances={instances} onSelect={onSelect} onAction={onAction} compact />
+                <LibraryTreeRow key={child.id} item={child} depth={0} instances={instances} onSelect={onSelect} onAction={onAction} onReload={() => setReloadKey(k => k + 1)} compact />
               ))}
             </tbody>
           </table>

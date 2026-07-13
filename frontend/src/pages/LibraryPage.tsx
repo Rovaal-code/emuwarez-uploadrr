@@ -489,6 +489,7 @@ export function LibraryPage() {
                     instances={instances}
                     onSelect={setSelected}
                     onAction={handleTreeAction}
+                    onReload={load}
                   />
                 ))}
               </tbody>

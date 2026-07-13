@@ -70,6 +70,37 @@ export async function suggestProvider(id: number): Promise<ProviderSuggestion> {
   return api.get<ProviderSuggestion>(`/library/${id}/suggest-provider`)
 }
 
+export interface NomenclatureCheckResult {
+  status: string | null
+  expected: string
+  actual: string
+  diff: string[]
+}
+
+export interface NomenclatureCheckInfo {
+  item_type: string
+  status: string | null
+  pending: number
+  available: number
+  seasons: number
+  result: NomenclatureCheckResult | null
+}
+
+export interface NomenclatureCheckSummary {
+  checked: number
+  correct: number
+  not_adapted: number
+  results: { id: number; status: string; error?: string }[]
+}
+
+export async function getNomenclatureCheckInfo(id: number): Promise<NomenclatureCheckInfo> {
+  return api.get<NomenclatureCheckInfo>(`/library/${id}/nomenclature-check`)
+}
+
+export async function runNomenclatureCheck(id: number, force = false): Promise<NomenclatureCheckSummary> {
+  return api.post<NomenclatureCheckSummary>(`/library/${id}/nomenclature-check?force=${force ? 'true' : 'false'}`, {})
+}
+
 export interface LibraryFilterOptions {
   providers: string[]
   qualities: string[]

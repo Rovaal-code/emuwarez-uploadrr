@@ -7,6 +7,7 @@ import { formatDate, formatItemType, formatBytes } from '../utils/format'
 import { buildDeepLink, posterUrl } from '../utils/libraryItem'
 import { ProviderTag } from './ProviderIcon'
 import { LibraryActionButtons } from './LibraryActionButtons'
+import { NomenclatureCheckButton } from './NomenclatureCheckButton'
 
 const NESTED_PAGE_SIZE = 25
 // Seasons per series — well under the API's max limit=500 (a season list
@@ -21,6 +22,8 @@ interface LibraryTreeRowProps {
   instances: InstanceSafeResponse[]
   onSelect: (item: LibraryItemResponse) => void
   onAction: (kind: LibraryActionKind, item: LibraryItemResponse) => void
+  // Called after a nomenclature check so the list can refresh the badges.
+  onReload?: () => void
   // Compact mode (used inside a Series detail): hides the Actualizado and
   // Acciones columns.
   compact?: boolean
@@ -76,7 +79,7 @@ export function EmuAportesCell({ item }: { item: LibraryItemResponse }) {
   )
 }
 
-export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, compact = false }: LibraryTreeRowProps) {
+export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, onReload, compact = false }: LibraryTreeRowProps) {
   const [expanded, setExpanded] = useState(false)
   const [children, setChildren] = useState<LibraryItemResponse[]>([])
   const [childTotal, setChildTotal] = useState(0)
@@ -194,7 +197,12 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, com
         </td>
         <td><StatusBadge status={item.local_status} type="local" /></td>
         <td><StatusBadge status={item.request_status} type="request" /></td>
-        <td><StatusBadge status={item.nomenclature_status} type="nomenclature" /></td>
+        <td onClick={e => e.stopPropagation()}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <StatusBadge status={item.nomenclature_status} type="nomenclature" />
+            <NomenclatureCheckButton item={item} compact onChecked={onReload} />
+          </div>
+        </td>
         <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
           {formatBytes(item.size_bytes)}
         </td>
@@ -241,6 +249,7 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, com
           instances={instances}
           onSelect={onSelect}
           onAction={onAction}
+          onReload={onReload}
           compact={compact}
         />
       ))}

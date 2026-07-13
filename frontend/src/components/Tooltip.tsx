@@ -1,31 +1,22 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 
-// Custom hover tooltip styled like the app's cards (not the native browser
-// title box). Rendered in a fixed-position portal so it is never clipped by
-// table/overflow containers. Reusable anywhere a hover explanation is needed.
+// Custom hover tooltip styled like the app's cards (opaque surface, not the
+// native browser title box). Rendered in a fixed-position portal just below
+// the cursor, so it is never clipped by table/overflow containers.
 
 export function useTooltip(content: React.ReactNode, maxWidth = 260) {
-  const ref = useRef<HTMLElement | null>(null)
   const [show, setShow] = useState(false)
-  const [pos, setPos] = useState({ top: 0, left: 0, above: true })
+  const [pt, setPt] = useState({ x: 0, y: 0 })
 
-  const open = useCallback(() => {
-    const el = ref.current
-    if (!el) return
-    const r = el.getBoundingClientRect()
-    const above = r.top > 140                       // flip below if near the top
-    setPos({ top: above ? r.top : r.bottom, left: r.left + r.width / 2, above })
-    setShow(true)
-  }, [])
+  const track = useCallback((e: React.MouseEvent) => setPt({ x: e.clientX, y: e.clientY }), [])
+  const open = useCallback((e: React.MouseEvent) => { setPt({ x: e.clientX, y: e.clientY }); setShow(true) }, [])
   const close = useCallback(() => setShow(false), [])
 
   const triggerProps = {
-    ref: ref as React.Ref<never>,
     onMouseEnter: open,
+    onMouseMove: track,
     onMouseLeave: close,
-    onFocus: open,
-    onBlur: close,
   }
 
   const tooltipNode = show && content != null
@@ -34,15 +25,15 @@ export function useTooltip(content: React.ReactNode, maxWidth = 260) {
           role="tooltip"
           style={{
             position: 'fixed',
-            top: pos.top,
-            left: pos.left,
-            transform: `translate(-50%, ${pos.above ? 'calc(-100% - 8px)' : '8px'})`,
+            top: pt.y + 14,          // just below the cursor
+            left: pt.x,
+            transform: 'translateX(-50%)',
             maxWidth,
             zIndex: 2000,
-            background: 'var(--bg-card)',
+            background: 'var(--bg-surface, #0f1420)',   // opaque
             border: '1px solid var(--border)',
             borderRadius: 10,
-            boxShadow: 'var(--shadow-modal, 0 10px 30px rgba(0,0,0,0.4))',
+            boxShadow: 'var(--shadow-modal, 0 10px 30px rgba(0,0,0,0.45))',
             padding: '10px 12px',
             fontSize: 12.5,
             lineHeight: 1.45,

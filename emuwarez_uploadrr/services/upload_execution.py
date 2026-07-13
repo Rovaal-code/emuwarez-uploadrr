@@ -600,6 +600,50 @@ def _restore_uploadrr_config(job_id: int, config_path: Path | None) -> None:
         append_upload_log(job_id, "error", f"Fallo al restaurar config.yaml: {exc}", stream="system")
 
 
+# The staged config.yaml (TMDb/EMU keys) is a SHARED resource: every job stages
+# the exact same secrets from settings. To let uploads run in PARALLEL without
+# clobbering each other's config (or restoring it out from under a still-running
+# job), we reference-count it: the first concurrent job stages it, the last one
+# to finish restores it. All overlapping jobs read the same correct config.
+_config_stage_lock = threading.Lock()
+_config_stage_refcount: dict[str, int] = {}
+
+
+def _acquire_staged_config(job_id: int, cwd: str) -> Path | None:
+    """Stage the config for this job, sharing a single staged file across
+    concurrent uploads. Returns the config_path to release later, or None if
+    nothing was staged."""
+    config_path = default_uploadrr_config_path(cwd)
+    key = str(config_path)
+    with _config_stage_lock:
+        if _config_stage_refcount.get(key, 0) > 0:
+            # Already staged by another in-flight upload — just join the count.
+            _config_stage_refcount[key] += 1
+            append_upload_log(job_id, "info", "config.yaml ya stageado por otra subida en curso; se reutiliza.", stream="system")
+            return config_path
+        staged = _stage_uploadrr_config(job_id, cwd)
+        if staged is None:
+            return None
+        _config_stage_refcount[key] = 1
+        return staged
+
+
+def _release_staged_config(job_id: int, config_path: Path | None) -> None:
+    """Drop this job's reference; restore the config only when the last
+    concurrent upload finishes."""
+    if config_path is None:
+        return
+    key = str(config_path)
+    with _config_stage_lock:
+        n = _config_stage_refcount.get(key, 0)
+        if n <= 1:
+            _config_stage_refcount.pop(key, None)
+            _restore_uploadrr_config(job_id, config_path)
+        else:
+            _config_stage_refcount[key] = n - 1
+            append_upload_log(job_id, "info", "config.yaml sigue en uso por otra subida; no se restaura todavía.", stream="system")
+
+
 def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str]) -> None:
     """Execute Uploadrr in a background thread. Updates job status, logs, and result artifacts."""
     executable = cmd["executable"]
@@ -651,7 +695,7 @@ def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str]) -> None
     staged_config_path: Path | None = None
     if cmd.get("runtime_type") == RUNTIME_EMU and os.path.isdir(cwd):
         _update_job_status(job_id, "running", stage="config_staging")
-        staged_config_path = _stage_uploadrr_config(job_id, cwd)
+        staged_config_path = _acquire_staged_config(job_id, cwd)
         _update_job_status(job_id, "running", stage="running")
 
     try:
@@ -821,7 +865,7 @@ def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str]) -> None
         )
         append_upload_log(job_id, "error", f"Excepción inesperada: {msg}", stream="system")
     finally:
-        _restore_uploadrr_config(job_id, staged_config_path)
+        _release_staged_config(job_id, staged_config_path)
 
 
 def start_upload_job(

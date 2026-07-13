@@ -172,19 +172,12 @@ export function NomenclatureCheckButton({ item, onChecked, compact }: Props) {
                         <div style={labelStyle}>Nombre real</div>
                         <code style={{ wordBreak: 'break-all' }}>{result.actual || '—'}</code>
                       </div>
-                      {result.diff.length > 0 && (
-                        <div>
-                          <div style={labelStyle}>Diferencias</div>
-                          <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
-                            {result.diff.map((d, i) => (
-                              <li key={i} style={{ color: 'var(--danger, #ef4444)' }}>{d}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
                       {result.status === 'Correcta' && (
                         <p style={{ color: 'var(--success, #22c55e)', margin: 0 }}>El nombre cumple la nomenclatura de eMuwarez.</p>
                       )}
+                      <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>
+                        El Tag del Grupo (lo que va tras el último «-») no se compara.
+                      </p>
                     </div>
                   )}
 

@@ -578,6 +578,7 @@ def library_nomenclature_info(
     confirmation message (¿Comprobar N capítulos? / N temporadas con X...)."""
     from emuwarez_uploadrr.services.nomenclature_check import count_pending, compare
     from emuwarez_uploadrr.services.mkv_title import to_filesystem_name
+    from emuwarez_uploadrr.services.source_assistant import _get_default_tag
 
     with _get_conn() as conn:
         row = conn.execute("SELECT * FROM library_items WHERE id = ?", (item_id,)).fetchone()
@@ -592,9 +593,13 @@ def library_nomenclature_info(
         if item_type in ("movie", "episode") and expected and path:
             base = os.path.basename(path)
             matches, diff = compare(base, expected)
+            # Show the user's configured group tag in the expected name (it is
+            # NOT part of the comparison — the group is always ignored).
+            tag = _get_default_tag(conn)
+            expected_display = f"{expected}-{tag}" if tag else expected
             result = {
                 "status": item.get("nomenclature_status"),
-                "expected": expected,
+                "expected": expected_display,
                 "actual": to_filesystem_name(os.path.splitext(base)[0]),
                 "diff": diff,
             }

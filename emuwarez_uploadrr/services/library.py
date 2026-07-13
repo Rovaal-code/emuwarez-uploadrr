@@ -55,7 +55,19 @@ def upsert_library_item(conn: sqlite3.Connection, item: LibraryItem) -> int:
             subtitle_languages = excluded.subtitle_languages,
             size_bytes = excluded.size_bytes,
             local_status = excluded.local_status,
-            nomenclature_status = excluded.nomenclature_status,
+            -- Keep the strict nomenclature verdict while the FILE is unchanged
+            -- (same path + size); reset to whatever the sync brings ('No
+            -- comprobada') when the file is new or changed (e.g. renamed after
+            -- an upload / re-downloaded).
+            nomenclature_status = CASE
+                WHEN library_items.path IS excluded.path
+                 AND library_items.size_bytes IS excluded.size_bytes
+                THEN library_items.nomenclature_status
+                ELSE excluded.nomenclature_status END,
+            nomenclature_expected = CASE
+                WHEN library_items.path IS excluded.path
+                 AND library_items.size_bytes IS excluded.size_bytes
+                THEN library_items.nomenclature_expected ELSE NULL END,
             raw_json = excluded.raw_json,
             poster_url = excluded.poster_url,
             updated_at = CURRENT_TIMESTAMP

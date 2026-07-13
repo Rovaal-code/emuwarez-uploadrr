@@ -82,17 +82,20 @@ def _nomenclature_rollup(conn, item_id: int, item_type: str, ignore_specials: bo
     else:
         return None
     counts = {r["s"]: r["c"] for r in conn.execute(sql, (item_id,)).fetchall()}
-    total = sum(counts.values())
-    if total == 0:
+    if sum(counts.values()) == 0:
         return None
     correct = counts.get("Correcta", 0)
     not_adapted = counts.get("No adaptada", 0)
-    # Correcta only when *every* episode is Correcta (N/A/missing counts against).
-    if correct == total:
-        return "Correcta"
-    if correct == 0:
-        # None adapted: N/A if there's simply nothing to adapt, else No adaptada.
-        return "No adaptada" if not_adapted else "N/A"
+    unchecked = counts.get("No comprobada", 0)
+    available = correct + not_adapted + unchecked  # episodes with a file
+    if available == 0:
+        return "N/A"                 # nothing on disk to adapt yet
+    if unchecked > 0:
+        return "No comprobada"       # some available episode still not checked
+    if correct == available:
+        return "Correcta"            # all available checked and correct
+    if not_adapted == available:
+        return "No adaptada"
     return "Parcial"
 
 
@@ -560,6 +563,67 @@ def library_mediainfo(
             raise HTTPException(status_code=404, detail=f"Item {item_id} no encontrado")
         path = row["path"] if "path" in row.keys() else None
     return build_mediainfo_report(path)
+
+
+@router.get("/library/{item_id}/nomenclature-check")
+def library_nomenclature_info(
+    item_id: int,
+    current_user: dict = Depends(require_auth),
+) -> dict:
+    """Info for the 'Comprobar Nomenclatura' confirmation + stored result.
+
+    Returns {item_type, status, pending, available, seasons, result} where
+    `result` (only for a checked leaf) is {status, expected, actual, diff} for
+    the 'Ver resultados' view. `pending`/`available`/`seasons` drive the
+    confirmation message (¿Comprobar N capítulos? / N temporadas con X...)."""
+    from emuwarez_uploadrr.services.nomenclature_check import count_pending, compare
+    from emuwarez_uploadrr.services.mkv_title import to_filesystem_name
+
+    with _get_conn() as conn:
+        row = conn.execute("SELECT * FROM library_items WHERE id = ?", (item_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Item {item_id} no encontrado")
+        item = dict(row)
+        item_type = item.get("item_type")
+        pending, available, seasons = count_pending(conn, item_id, item_type)
+        result = None
+        expected = item.get("nomenclature_expected")
+        path = item.get("path")
+        if item_type in ("movie", "episode") and expected and path:
+            base = os.path.basename(path)
+            matches, diff = compare(base, expected)
+            result = {
+                "status": item.get("nomenclature_status"),
+                "expected": expected,
+                "actual": to_filesystem_name(os.path.splitext(base)[0]),
+                "diff": diff,
+            }
+        return {
+            "item_type": item_type,
+            "status": item.get("nomenclature_status"),
+            "pending": pending,
+            "available": available,
+            "seasons": seasons,
+            "result": result,
+        }
+
+
+@router.post("/library/{item_id}/nomenclature-check")
+def library_nomenclature_check(
+    item_id: int,
+    force: bool = Query(False),
+    current_user: dict = Depends(require_auth),
+) -> dict:
+    """Run the MediaInfo-based nomenclature check on a leaf/season/series.
+    Only DISPONIBLE + 'No comprobada' files are checked unless force=True.
+    Returns {checked, correct, not_adapted, results}."""
+    from emuwarez_uploadrr.services.nomenclature_check import check_item
+
+    with _get_conn() as conn:
+        result = check_item(conn, item_id, force=force)
+        if result.get("error") == "not found":
+            raise HTTPException(status_code=404, detail=f"Item {item_id} no encontrado")
+        return result
 
 
 @router.get("/library/{item_id}/suggest-provider")

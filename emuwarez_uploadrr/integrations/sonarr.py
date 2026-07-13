@@ -211,11 +211,9 @@ def _source_from_quality(value: str | None) -> str | None:
 
 
 def _nomenclature(path: str | None, available: bool) -> str:
-    if not available:
-        return NomenclatureStatus.NA.value
-    if path and DEFAULT_TAG.lower() in path.lower():
-        return NomenclatureStatus.CORRECT.value
-    return NomenclatureStatus.NOT_ADAPTED.value
+    # Judged only by MediaInfo (per-track audio), not at sync time → starts
+    # 'No comprobada' until the user runs the check. No file → N/A.
+    return NomenclatureStatus.NA.value if not available else NomenclatureStatus.UNCHECKED.value
 
 
 # ---------------------------------------------------------------------------

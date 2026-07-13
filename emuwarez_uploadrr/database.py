@@ -744,6 +744,11 @@ def _migrate_library_items_media_info(conn: sqlite3.Connection) -> None:
         ("audio_codec", "TEXT"),
         ("audio_languages", "TEXT"),
         ("subtitle_languages", "TEXT"),
+        # Nomenclature strict check (MediaInfo): the expected name and when it
+        # was last checked, so the UI can show the diff. Status uses the
+        # existing nomenclature_status column ('No comprobada' by default now).
+        ("nomenclature_expected", "TEXT"),
+        ("nomenclature_checked_at", "TEXT"),
     ]
     for col, col_type in new_cols:
         try:

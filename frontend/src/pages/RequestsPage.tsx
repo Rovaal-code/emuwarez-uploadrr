@@ -321,7 +321,7 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
         </div>
         <div style={{ padding: '16px 18px', background: 'rgba(255,255,255,0.03)', borderRadius: 10, border: '1px solid var(--border)' }}>
           {!m ? (
-            <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Sin coincidencia en tu biblioteca local — no tienes este contenido.</span>
+            <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Sin coincidencia en tu biblioteca local, no tienes este contenido.</span>
           ) : effectiveStatus === 'No disponible' ? (
             <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Tienes una entrada para este contenido en tu biblioteca, pero el archivo no está disponible (falta, en cola o con error), así que no hay nada que comparar. Vuelve a descargarlo para poder cotejarlo con la petición.</span>
           ) : (

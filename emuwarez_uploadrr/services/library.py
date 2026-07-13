@@ -68,6 +68,10 @@ def upsert_library_item(conn: sqlite3.Connection, item: LibraryItem) -> int:
                 WHEN library_items.path IS excluded.path
                  AND library_items.size_bytes IS excluded.size_bytes
                 THEN library_items.nomenclature_expected ELSE NULL END,
+            nomenclature_checked_at = CASE
+                WHEN library_items.path IS excluded.path
+                 AND library_items.size_bytes IS excluded.size_bytes
+                THEN library_items.nomenclature_checked_at ELSE NULL END,
             raw_json = excluded.raw_json,
             poster_url = excluded.poster_url,
             updated_at = CURRENT_TIMESTAMP

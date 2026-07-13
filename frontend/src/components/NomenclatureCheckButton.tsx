@@ -103,12 +103,12 @@ export function NomenclatureCheckButton({ item, onChecked, compact }: Props) {
           aria-label="Comprobar nomenclatura"
           style={{
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            width: 22, height: 22, padding: 0, fontSize: 12, lineHeight: 1, cursor: 'pointer',
+            fontSize: 12, lineHeight: '16px', padding: '1px 6px', cursor: 'pointer',
             borderRadius: 4, border: '1px solid var(--border)',
             background: 'transparent', color: 'var(--text-secondary)',
           }}
         >
-          🔍
+          ↗
         </button>
       )}
 

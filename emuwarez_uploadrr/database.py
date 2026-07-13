@@ -756,6 +756,23 @@ def _migrate_library_items_media_info(conn: sqlite3.Connection) -> None:
         except sqlite3.OperationalError:
             pass
 
+    # Clear stale verdicts from the OLD tag-based heuristic. Nomenclature can
+    # now only be judged by reading MediaInfo, so anything the new checker has
+    # NOT actually run (nomenclature_checked_at IS NULL) must fall back to the
+    # honest default: 'No comprobada' when a file is on disk, 'N/A' otherwise.
+    # Idempotent — checked items (checked_at set) are never touched.
+    try:
+        conn.execute(
+            "UPDATE library_items SET nomenclature_status = CASE "
+            "  WHEN local_status IN ('Disponible','Subido','Subiendo') AND path IS NOT NULL "
+            "  THEN 'No comprobada' ELSE 'N/A' END "
+            "WHERE nomenclature_checked_at IS NULL "
+            "  AND nomenclature_status IS NOT 'No comprobada' "
+            "  AND nomenclature_status IS NOT 'N/A'"
+        )
+    except sqlite3.OperationalError:
+        pass
+
 
 def _migrate_library_items_hierarchy(conn: sqlite3.Connection) -> None:
     """Add parent_id/season_number/episode_number to library_items — lets

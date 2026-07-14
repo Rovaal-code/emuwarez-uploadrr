@@ -10,7 +10,7 @@ interface StatCardProps {
 }
 
 export function StatCard({ label, value, children, accentColor, info }: StatCardProps) {
-  const { triggerProps, tooltipNode } = useTooltip(info, 280)
+  const { triggerProps, tooltipNode } = useTooltip(info, 460)
   return (
     <div
       className="stat-card"

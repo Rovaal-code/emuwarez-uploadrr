@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 // native browser title box). Rendered in a fixed-position portal just below
 // the cursor, so it is never clipped by table/overflow containers.
 
-export function useTooltip(content: React.ReactNode, maxWidth = 260) {
+export function useTooltip(content: React.ReactNode, maxWidth = 460) {
   const [show, setShow] = useState(false)
   const [pt, setPt] = useState({ x: 0, y: 0 })
 
@@ -26,7 +26,12 @@ export function useTooltip(content: React.ReactNode, maxWidth = 260) {
           style={{
             position: 'fixed',
             top: pt.y + 14,          // just below the cursor
-            left: pt.x,
+            // Centre under the cursor, but clamp so a wide tooltip near a screen
+            // edge (e.g. the top-right sync buttons) stays fully on screen.
+            left: Math.min(
+              Math.max(pt.x, maxWidth / 2 + 8),
+              (typeof window !== 'undefined' ? window.innerWidth : 1280) - maxWidth / 2 - 8,
+            ),
             transform: 'translateX(-50%)',
             maxWidth,
             zIndex: 2000,
@@ -41,11 +46,6 @@ export function useTooltip(content: React.ReactNode, maxWidth = 260) {
             textAlign: 'left',
             whiteSpace: 'normal',
             pointerEvents: 'none',
-            // Cap at 3 lines (truncate with … beyond that).
-            display: '-webkit-box',
-            WebkitLineClamp: 3,
-            WebkitBoxOrient: 'vertical',
-            overflow: 'hidden',
           }}
         >
           {content}

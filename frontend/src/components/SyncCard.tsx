@@ -16,9 +16,16 @@ export function SyncCard() {
   const requestsWait = requestsStatus && !requestsStatus.can_sync ? Math.ceil(requestsStatus.wait_seconds / 60) : 0
 
   return (
-    <div className="activity-section" style={{ padding: '8px 14px', marginBottom: 0, display: 'flex', alignItems: 'center', gap: 12 }}>
+    <div className="activity-section" style={{
+      // Same width as one stat card ("Tus subidas"): the stat row is a 5-col
+      // grid with 16px gaps, so a card is (100% − 4·16px) / 5. Right-aligned in
+      // the header, it lines up directly above "Tus subidas".
+      width: 'calc((100% - 64px) / 5)',
+      flexShrink: 0,
+      padding: '8px 14px', marginBottom: 0, display: 'flex', alignItems: 'center', gap: 10,
+    }}>
       <div className="section-title" style={{ margin: 0, whiteSpace: 'nowrap' }}>↻</div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', flex: 1 }}>
         <Tooltip content="Consulta tus instancias de Radarr/Sonarr y actualiza la biblioteca local (títulos, rutas, estado en disco y nomenclatura).">
           <button className="btn btn-primary btn-sm" onClick={startLibrarySync} disabled={libSyncing}>
             {libSyncing

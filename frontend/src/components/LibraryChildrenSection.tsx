@@ -39,7 +39,7 @@ export function LibraryChildrenSection({ parentId, childType, title, instances, 
       ) : children.length === 0 ? (
         <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{emptyLabel}</div>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
+        <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 10, background: 'rgba(255,255,255,0.03)' }}>
           <table className="data-table">
             <thead>
               <tr>

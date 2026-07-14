@@ -39,29 +39,31 @@ export function LibraryChildrenSection({ parentId, childType, title, instances, 
       ) : children.length === 0 ? (
         <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{emptyLabel}</div>
       ) : (
-        <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 10, background: 'rgba(255,255,255,0.03)' }}>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Título</th>
-                <th>Tipo</th>
-                <th>Origen</th>
-                <th>Estado</th>
-                <th>Petición</th>
-                <th>Nomenclatura</th>
-                <th>Tamaño</th>
-                <th>Provider</th>
-                <th>Calidad</th>
-                <th>¿En eMuwarez?</th>
-                <th>Aportes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {children.map(child => (
-                <LibraryTreeRow key={child.id} item={child} depth={0} instances={instances} onSelect={onSelect} onAction={onAction} onReload={() => setReloadKey(k => k + 1)} compact />
-              ))}
-            </tbody>
-          </table>
+        <div className="activity-section" style={{ marginBottom: 0 }}>
+          <div style={{ overflow: 'auto' }}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Título</th>
+                  <th>Tipo</th>
+                  <th>Origen</th>
+                  <th>Estado</th>
+                  <th>Petición</th>
+                  <th>Nomenclatura</th>
+                  <th>Tamaño</th>
+                  <th>Provider</th>
+                  <th>Calidad</th>
+                  <th>¿En eMuwarez?</th>
+                  <th>Aportes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {children.map(child => (
+                  <LibraryTreeRow key={child.id} item={child} depth={0} instances={instances} onSelect={onSelect} onAction={onAction} onReload={() => setReloadKey(k => k + 1)} compact />
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

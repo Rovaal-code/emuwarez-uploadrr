@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useTransition } from 'react'
-import { getLibrary, TOP_LEVEL_PARENT_FILTER, getLibraryFilterOptions, getEmuSyncStatus, emuSync, getEmuSyncProgress, startLibrarySync, getLibrarySyncProgress, type EmuSyncStatus, type EmuSyncProgress, type LibrarySyncProgress } from '../api/library'
+import { getLibrary, TOP_LEVEL_PARENT_FILTER, getLibraryFilterOptions } from '../api/library'
 import { Tooltip } from '../components/Tooltip'
+import { useSync } from '../context/SyncContext'
 import { getInstances } from '../api/instances'
 import type { LibraryItemResponse, LibraryListResponse, InstanceSafeResponse } from '../types/api'
 import { PosterStatusIcon } from '../components/PosterStatusIcon'
@@ -21,12 +22,6 @@ import { buildDeepLink, posterUrl } from '../utils/libraryItem'
 
 const LOAD_LIMIT = 20000  // show everything in one container (no pagination); backend caps here
 
-// "1m 20s" / "45s" for the sync ETA.
-function fmtEta(s: number): string {
-  if (s < 60) return `${s}s`
-  const m = Math.floor(s / 60)
-  return `${m}m ${s % 60}s`
-}
 const VIEW_MODE_STORAGE_KEY = 'emuwarez_uploadrr_library_view'
 
 type ViewMode = 'grid' | 'grid-lg' | 'list'
@@ -141,33 +136,14 @@ export function LibraryPage() {
   }, [])
 
   // Diagnostic actions — relocated here from the removed standalone
-  // Faltantes tab (its own filtered view of Biblioteca now covers what it
-  // used to show; these 3 buttons were the only functionality that didn't
-  // already exist elsewhere).
-  const [diagActionLoading, setDiagActionLoading] = useState(false)
-  const [libProgress, setLibProgress] = useState<LibrarySyncProgress | null>(null)
-
-  // Same library sync as the dashboard button: background import with a live
-  // element-count card.
-  async function handleLibrarySync() {
-    setDiagActionLoading(true)
-    setLibProgress({ active: true, done: false, phase: 'Iniciando…', imported: 0, missing: 0, instance: '', error: null })
-    try {
-      await startLibrarySync(true)
-      for (let i = 0; i < 3600; i++) {
-        const p = await getLibrarySyncProgress()
-        setLibProgress(p)
-        if (p.done || !p.active) break
-        await new Promise(r => setTimeout(r, 800))
-      }
-      await load()
-    } catch { /* the card reflects the outcome */ }
-    finally {
-      setDiagActionLoading(false)
-      setLibProgress(null)
-    }
-  }
-
+  // Library + eMuwarez syncs are global (shared with the Dashboard/Peticiones
+  // and the progress banner), so a running sync stays visible and its button
+  // stays disabled on every tab.
+  const {
+    libSyncing, startLibrarySync,
+    catalogSyncing, catalogStatus: emuStatus, startCatalogSync,
+    lastCompletedAt,
+  } = useSync()
 
   // Filters
   const [search, setSearch] = useState('')
@@ -182,12 +158,6 @@ export function LibraryPage() {
   const [filterEmu, setFilterEmu] = useState('')
   const [sortBy, setSortBy] = useState('title_asc')
   const [offset, setOffset] = useState(0)
-
-  // eMuwarez catalog comparison (1/hour, on-demand button).
-  const [emuStatus, setEmuStatus] = useState<EmuSyncStatus | null>(null)
-  const [emuSyncing, setEmuSyncing] = useState(false)
-  const [emuMsg, setEmuMsg] = useState<string | null>(null)
-  const [emuProgress, setEmuProgress] = useState<EmuSyncProgress | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -220,62 +190,8 @@ export function LibraryPage() {
 
   useEffect(() => { load() }, [load])
 
-  const loadEmuStatus = useCallback(async () => {
-    try { setEmuStatus(await getEmuSyncStatus()) } catch { /* ignore */ }
-  }, [])
-  useEffect(() => { loadEmuStatus() }, [loadEmuStatus])
-
-  // Poll the background sync's progress card until it finishes, then refresh.
-  const followEmuSync = useCallback(async () => {
-    try {
-      for (let i = 0; i < 3600; i++) {
-        const p = await getEmuSyncProgress()
-        setEmuProgress(p)
-        if (p.done || !p.active) {
-          setEmuMsg(p.error
-            ? `Error al sincronizar: ${p.error}`
-            : `Catálogo eMuwarez sincronizado: ${p.torrents} torrents, ${p.items} elementos comparados`)
-          break
-        }
-        await new Promise(r => setTimeout(r, 800))
-      }
-      await Promise.all([load(), loadEmuStatus()])
-    } finally {
-      setEmuSyncing(false)
-      setEmuProgress(null)
-      setTimeout(() => setEmuMsg(null), 6000)  // no dejar el mensaje empujando la lista
-    }
-  }, [load, loadEmuStatus])
-
-  const handleEmuSync = useCallback(async () => {
-    setEmuSyncing(true)
-    setEmuMsg(null)
-    setEmuProgress({ active: true, done: false, phase: 'Iniciando…', torrents: 0, items: 0, page: 0, total_pages: null, eta_seconds: null, error: null })
-    try {
-      await emuSync()  // starts the background sync (429 throws when throttled)
-    } catch (e) {
-      setEmuMsg(e instanceof Error ? e.message : 'Error al sincronizar con eMuwarez')
-      setEmuSyncing(false)
-      setEmuProgress(null)
-      setTimeout(() => setEmuMsg(null), 6000)
-      return
-    }
-    await followEmuSync()
-  }, [followEmuSync])
-
-  // If the page is (re)opened while a sync is running in the background, resume
-  // showing its progress card — otherwise a refresh would hide it.
-  useEffect(() => {
-    let alive = true
-    getEmuSyncProgress().then(p => {
-      if (alive && p.active && !p.done) {
-        setEmuSyncing(true)
-        setEmuProgress(p)
-        followEmuSync()
-      }
-    }).catch(() => { /* ignore */ })
-    return () => { alive = false }
-  }, [followEmuSync])
+  // Refresh the list whenever any global sync finishes (library or eMuwarez).
+  useEffect(() => { if (lastCompletedAt) load() }, [lastCompletedAt, load])
 
   function applyFilters() {
     setOffset(0)
@@ -364,10 +280,10 @@ export function LibraryPage() {
           <Tooltip content="Consulta tus instancias de Radarr/Sonarr y actualiza la biblioteca local (títulos, rutas, estado en disco y nomenclatura).">
             <button
               className="btn btn-primary btn-sm"
-              onClick={handleLibrarySync}
-              disabled={diagActionLoading}
+              onClick={startLibrarySync}
+              disabled={libSyncing}
             >
-              {diagActionLoading
+              {libSyncing
                 ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Sincronizando…</>
                 : '↻ Sincronizar biblioteca'}
             </button>
@@ -377,10 +293,10 @@ export function LibraryPage() {
             : 'Descarga el catálogo de eMuwarez y compara con tu biblioteca (1 vez/hora)'}>
             <button
               className="btn btn-primary btn-sm"
-              onClick={handleEmuSync}
-              disabled={emuSyncing || (emuStatus != null && !emuStatus.can_sync)}
+              onClick={startCatalogSync}
+              disabled={catalogSyncing || (emuStatus != null && !emuStatus.can_sync)}
             >
-              {emuSyncing
+              {catalogSyncing
                 ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Comparando…</>
                 : emuStatus && !emuStatus.can_sync
                   ? `⇅ eMuwarez (${formatWait(emuStatus.wait_seconds)})`
@@ -389,9 +305,6 @@ export function LibraryPage() {
           </Tooltip>
         </div>
       </div>
-      {emuMsg && (
-        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>{emuMsg}</div>
-      )}
 
       {/* Search by title + filters + view modes, all on one line */}
       <div className="filters-bar">
@@ -443,47 +356,6 @@ export function LibraryPage() {
           </Tooltip>
         </div>
       </div>
-
-      {libProgress && (
-        <div className="activity-section" style={{ padding: '14px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
-          {libProgress.error
-            ? <span style={{ color: 'var(--color-missing, #ef4444)', fontSize: 18, lineHeight: 1 }}>✗</span>
-            : <span className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />}
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 600 }}>Sincronizando biblioteca…</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              {libProgress.error ?? libProgress.phase}
-              {libProgress.imported ? ` · ${libProgress.imported.toLocaleString('es-ES')} elementos` : ''}
-              {libProgress.missing ? ` · ${libProgress.missing.toLocaleString('es-ES')} no disponibles` : ''}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {emuProgress && (
-        <div className="activity-section" style={{ padding: '14px 18px', marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {emuProgress.error
-              ? <span style={{ color: 'var(--color-missing, #ef4444)', fontSize: 18, lineHeight: 1 }}>✗</span>
-              : <span className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />}
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ fontWeight: 600 }}>Sincronizando con eMuwarez…</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                {emuProgress.error ?? emuProgress.phase}
-                {emuProgress.total_pages ? ` · página ${emuProgress.page}/${emuProgress.total_pages}` : (emuProgress.page ? ` · página ${emuProgress.page}` : '')}
-                {emuProgress.torrents ? ` · ${emuProgress.torrents.toLocaleString('es-ES')} torrents` : ''}
-                {emuProgress.items ? ` · ${emuProgress.items.toLocaleString('es-ES')} comparados` : ''}
-                {emuProgress.eta_seconds != null ? ` · ~${fmtEta(emuProgress.eta_seconds)} restante` : ''}
-              </div>
-            </div>
-          </div>
-          {!emuProgress.error && emuProgress.total_pages ? (
-            <div className="progress-bar" style={{ marginTop: 10 }}>
-              <div className="progress-fill" style={{ width: `${Math.min(100, Math.round((emuProgress.page / emuProgress.total_pages) * 100))}%` }} />
-            </div>
-          ) : null}
-        </div>
-      )}
 
       {loading || isPending ? (
         <LoadingState label="Cargando biblioteca…" />

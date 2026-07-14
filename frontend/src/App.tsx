@@ -7,6 +7,7 @@ import { LoginPage } from './pages/LoginPage'
 import { SetupWizard } from './pages/SetupWizard'
 import { AppShell } from './components/AppShell'
 import { LoadingState } from './components/LoadingState'
+import { SyncProvider } from './context/SyncContext'
 
 type AppState = 'loading' | 'setup' | 'login' | 'app'
 
@@ -79,5 +80,9 @@ export function App() {
     return <LoginPage onSuccess={handleLoginSuccess} />
   }
 
-  return <AppShell user={user} onLogout={handleLogout} />
+  return (
+    <SyncProvider>
+      <AppShell user={user} onLogout={handleLogout} />
+    </SyncProvider>
+  )
 }

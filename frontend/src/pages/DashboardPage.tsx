@@ -1,14 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getDashboardSummary, getDashboardActivity, getDashboardLibraryActivity } from '../api/dashboard'
 import { getUploads } from '../api/uploads'
-import { startLibrarySync, getLibrarySyncProgress, emuSync, getEmuSyncProgress, getEmuSyncStatus, type LibrarySyncProgress, type EmuSyncStatus, type EmuSyncProgress } from '../api/library'
-import { getSyncStatus, syncRequests } from '../api/requests'
 import { fetchSettings, type SettingsData } from '../api/settings'
 import { getInstances } from '../api/instances'
 import type { InstanceSafeResponse } from '../types/api'
-import type { DashboardSummaryResponse, DashboardActivityResponse, LibraryItemResponse, UploadJob, RequestSyncStatusResponse } from '../types/api'
+import type { DashboardSummaryResponse, DashboardActivityResponse, LibraryItemResponse, UploadJob } from '../types/api'
 import { StatCard } from '../components/StatCard'
-import { Tooltip } from '../components/Tooltip'
+import { SyncCard } from '../components/SyncCard'
+import { useSync } from '../context/SyncContext'
 import { EmptyState } from '../components/EmptyState'
 import { LoadingState } from '../components/LoadingState'
 import { ErrorState } from '../components/ErrorState'
@@ -18,7 +17,6 @@ import { UploadWizardModal } from '../components/UploadWizardModal'
 import { RequestFormModal } from '../components/RequestFormModal'
 import { LibraryActionButtons } from '../components/LibraryActionButtons'
 import type { LibraryActionKind } from '../components/LibraryTreeRow'
-import { SyncInfo } from '../components/SyncInfo'
 import { formatBytes, formatDate, formatItemType, parseServerDate } from '../utils/format'
 import { posterUrl } from '../utils/libraryItem'
 
@@ -79,30 +77,18 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
   const [connInstances, setConnInstances] = useState<InstanceSafeResponse[]>([])
   const [loadingData, setLoadingData] = useState(true)
   const [dataError, setDataError] = useState<string | null>(null)
-  const [syncing, setSyncing] = useState(false)
-  const [syncMsg, setSyncMsg] = useState<string | null>(null)
-  const [syncProgress, setSyncProgress] = useState<LibrarySyncProgress | null>(null)
-  // eMuwarez catalog sync — same behaviour as the Biblioteca button (shared 1h
-  // cooldown via the backend, so you can't cheat running it on both pages).
-  const [catalogStatus, setCatalogStatus] = useState<EmuSyncStatus | null>(null)
-  const [catalogSyncing, setCatalogSyncing] = useState(false)
-  const [catalogProgress, setCatalogProgress] = useState<EmuSyncProgress | null>(null)
   const [wizardItem, setWizardItem] = useState<LibraryItemResponse | null>(null)
   const [requestItem, setRequestItem] = useState<LibraryItemResponse | null>(null)
+  // Global sync state (shared with Biblioteca/Peticiones and the progress
+  // banner). `message` shows the last completion result; `lastCompletedAt`
+  // triggers a data reload when any sync finishes.
+  const { message: syncMsg, lastCompletedAt } = useSync()
 
   function handleActivityAction(kind: LibraryActionKind, item: LibraryItemResponse) {
     if (kind === 'request') setRequestItem(item)
     else setWizardItem(item)  // 'upload' → wizard
   }
   const [now, setNow] = useState(Date.now())
-
-  // eMuwarez requests sync — deliberately separate from library sync
-  // (different throttle: 1h vs none) and from readiness recalculation
-  // (kept as its own manual action on Peticiones, since it may later get
-  // its own independent scheduled cadence).
-  const [emuSyncStatus, setEmuSyncStatus] = useState<RequestSyncStatusResponse | null>(null)
-  const [emuSyncing, setEmuSyncing] = useState(false)
-  const [emuSyncMsg, setEmuSyncMsg] = useState<string | null>(null)
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000)
@@ -135,96 +121,15 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
 
   useEffect(() => { loadData() }, [loadData])
 
+  // Reload the dashboard data whenever any global sync finishes.
+  useEffect(() => { if (lastCompletedAt) loadData() }, [lastCompletedAt, loadData])
+
   // Light polling so the upload activity panel reflects real progress
   // while the dashboard stays open.
   useEffect(() => {
     const t = setInterval(loadData, 15000)
     return () => clearInterval(t)
   }, [loadData])
-
-  async function handleSync() {
-    setSyncing(true)
-    setSyncMsg(null)
-    setSyncProgress({ active: true, done: false, phase: 'Iniciando…', imported: 0, missing: 0, instance: '', error: null })
-    try {
-      await startLibrarySync(true)
-      for (let i = 0; i < 3600; i++) {
-        const p = await getLibrarySyncProgress()
-        setSyncProgress(p)
-        if (p.done || !p.active) {
-          setSyncMsg(p.error
-            ? `Error durante la sincronización: ${p.error}`
-            : `Sincronizado: ${p.imported} elementos · ${p.missing} no disponibles`)
-          break
-        }
-        await new Promise(r => setTimeout(r, 800))
-      }
-      await loadData()
-    } catch {
-      setSyncMsg('Error durante la sincronización')
-    } finally {
-      setSyncing(false)
-      setSyncProgress(null)
-    }
-  }
-
-  const loadEmuSyncStatus = useCallback(async () => {
-    try {
-      const s = await getSyncStatus()
-      setEmuSyncStatus(s)
-    } catch { /* optional */ }
-  }, [])
-
-  useEffect(() => { loadEmuSyncStatus() }, [loadEmuSyncStatus])
-
-  // eMuwarez catalog sync (same as the Biblioteca button).
-  const loadCatalogStatus = useCallback(async () => {
-    try { setCatalogStatus(await getEmuSyncStatus()) } catch { /* optional */ }
-  }, [])
-  useEffect(() => { loadCatalogStatus() }, [loadCatalogStatus])
-
-  async function handleCatalogSync() {
-    setCatalogSyncing(true)
-    setSyncMsg(null)
-    setCatalogProgress({ active: true, done: false, phase: 'Iniciando…', torrents: 0, items: 0, page: 0, total_pages: null, eta_seconds: null, error: null })
-    try {
-      await emuSync()
-      for (let i = 0; i < 3600; i++) {
-        const p = await getEmuSyncProgress()
-        setCatalogProgress(p)
-        if (p.done || !p.active) {
-          setSyncMsg(p.error
-            ? `Error al sincronizar eMuwarez: ${p.error}`
-            : `Catálogo eMuwarez: ${p.torrents} torrents, ${p.items} elementos comparados`)
-          break
-        }
-        await new Promise(r => setTimeout(r, 800))
-      }
-      await Promise.all([loadData(), loadCatalogStatus()])
-    } catch (e) {
-      setSyncMsg(e instanceof Error ? e.message : 'Error al sincronizar con eMuwarez')
-    } finally {
-      setCatalogSyncing(false)
-      setCatalogProgress(null)
-    }
-  }
-
-  async function handleEmuSync(force: boolean) {
-    setEmuSyncing(true)
-    setEmuSyncMsg(null)
-    try {
-      const res = await syncRequests(force)
-      setEmuSyncMsg(res.message)
-      if (res.ok) {
-        await loadData()
-        await loadEmuSyncStatus()
-      }
-    } catch (e: unknown) {
-      setEmuSyncMsg(e instanceof Error ? e.message : 'Error al sincronizar')
-    } finally {
-      setEmuSyncing(false)
-    }
-  }
 
   if (loadingData && !summary) return <LoadingState label="Cargando dashboard…" />
   if (!summary) return <ErrorState message={dataError ?? 'No se pudieron cargar los datos del dashboard'} onRetry={loadData} />
@@ -245,86 +150,12 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
         <div>
           <div className="page-title">Dashboard</div>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <Tooltip content="Consulta tus instancias de Radarr/Sonarr y actualiza la biblioteca local (títulos, rutas, estado en disco y nomenclatura).">
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={handleSync}
-              disabled={syncing}
-            >
-              {syncing ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Sincronizando…</> : '↻ Sincronizar biblioteca'}
-            </button>
-          </Tooltip>
-          <SyncInfo
-            syncStatus={emuSyncStatus}
-            onSync={handleEmuSync}
-            syncing={emuSyncing}
-            label="Sincronizar peticiones"
-            allowForce={false}
-            title="Descarga de eMuwarez las peticiones activas y las cruza con tu biblioteca local para ver cuáles puedes cubrir. Limitado a una vez por hora."
-          />
-          <Tooltip content={catalogStatus && !catalogStatus.can_sync
-            ? `Disponible en ${Math.ceil(catalogStatus.wait_seconds / 60)} min`
-            : 'Descarga el catálogo de eMuwarez y compara con tu biblioteca (1 vez/hora).'}>
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={handleCatalogSync}
-              disabled={catalogSyncing || (catalogStatus != null && !catalogStatus.can_sync)}
-            >
-              {catalogSyncing
-                ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Comparando…</>
-                : catalogStatus && !catalogStatus.can_sync
-                  ? `⇅ eMuwarez (${Math.ceil(catalogStatus.wait_seconds / 60)} min)`
-                  : '⇅ Sincronizar eMuwarez'}
-            </button>
-          </Tooltip>
-        </div>
       </div>
-      {syncProgress && (
-        <div className="activity-section" style={{ padding: '14px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
-          {syncProgress.error
-            ? <span style={{ color: 'var(--color-missing, #ef4444)', fontSize: 18, lineHeight: 1 }}>✗</span>
-            : <span className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />}
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 600 }}>Sincronizando biblioteca…</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              {syncProgress.error ?? syncProgress.phase}
-              {syncProgress.imported ? ` · ${syncProgress.imported.toLocaleString('es-ES')} elementos` : ''}
-              {syncProgress.missing ? ` · ${syncProgress.missing.toLocaleString('es-ES')} no disponibles` : ''}
-            </div>
-          </div>
-        </div>
-      )}
 
-      {catalogProgress && (
-        <div className="activity-section" style={{ padding: '14px 18px', marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {catalogProgress.error
-              ? <span style={{ color: 'var(--color-missing, #ef4444)', fontSize: 18, lineHeight: 1 }}>✗</span>
-              : <span className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />}
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ fontWeight: 600 }}>Sincronizando con eMuwarez…</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                {catalogProgress.error ?? catalogProgress.phase}
-                {catalogProgress.total_pages ? ` · página ${catalogProgress.page}/${catalogProgress.total_pages}` : (catalogProgress.page ? ` · página ${catalogProgress.page}` : '')}
-                {catalogProgress.torrents ? ` · ${catalogProgress.torrents.toLocaleString('es-ES')} torrents` : ''}
-                {catalogProgress.items ? ` · ${catalogProgress.items.toLocaleString('es-ES')} comparados` : ''}
-              </div>
-            </div>
-          </div>
-          {!catalogProgress.error && catalogProgress.total_pages ? (
-            <div className="progress-bar" style={{ marginTop: 10 }}>
-              <div className="progress-fill" style={{ width: `${Math.min(100, Math.round((catalogProgress.page / catalogProgress.total_pages) * 100))}%` }} />
-            </div>
-          ) : null}
-        </div>
-      )}
+      <SyncCard />
 
-      {(syncMsg || emuSyncMsg) && (
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12, fontSize: 12, color: 'var(--text-secondary)' }}>
-          {syncMsg && <span>{syncMsg}</span>}
-          {emuSyncMsg && <span>{emuSyncMsg}</span>}
-        </div>
+      {syncMsg && (
+        <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--text-secondary)' }}>{syncMsg}</div>
       )}
 
       {/* Stat cards */}

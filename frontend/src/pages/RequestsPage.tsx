@@ -1,19 +1,18 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   getRequests,
-  syncRequests,
-  getSyncStatus,
   getRequestDetail,
 } from '../api/requests'
 import { getCandidates } from '../api/requestReadiness'
 import type {
-  RequestItemResponse, RequestDetailResponse, RequestSyncStatusResponse,
+  RequestItemResponse, RequestDetailResponse,
   RequestReadinessResponse, RequestCandidateResponse,
 } from '../types/api'
 import { LoadingState } from '../components/LoadingState'
 import { ErrorState } from '../components/ErrorState'
 import { EmptyState } from '../components/EmptyState'
 import { SyncInfo } from '../components/SyncInfo'
+import { useSync } from '../context/SyncContext'
 import { UploadWizardModal } from '../components/UploadWizardModal'
 import { getLibraryItem } from '../api/library'
 import type { LibraryItemResponse } from '../types/api'
@@ -405,9 +404,9 @@ export function RequestsPage() {
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [syncing, setSyncing] = useState(false)
-  const [syncMsg, setSyncMsg] = useState<string | null>(null)
-  const [syncStatus, setSyncStatus] = useState<RequestSyncStatusResponse | null>(null)
+  // Requests sync is global (shared with the Dashboard's "Peticiones" button
+  // and the progress banner), so it can't be launched twice across tabs.
+  const { requestsSyncing, requestsStatus, startRequestsSync, lastCompletedAt } = useSync()
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [detail, setDetail] = useState<RequestDetailResponse | null>(null)
   const [readiness, setReadiness] = useState<RequestReadinessResponse | null>(null)
@@ -449,13 +448,6 @@ export function RequestsPage() {
     }
   }, [search, statusFilter, categoryFilter, resolutionFilter, sourceFilter, authorFilter, sortBy])
 
-  const loadSyncStatus = useCallback(async () => {
-    try {
-      const s = await getSyncStatus()
-      setSyncStatus(s)
-    } catch { /* optional */ }
-  }, [])
-
   // Populate filter dropdown options from the full (unfiltered) dataset so they
   // stay stable regardless of the active filters.
   const loadFacets = useCallback(async () => {
@@ -473,9 +465,8 @@ export function RequestsPage() {
   }, [])
 
   useEffect(() => {
-    loadSyncStatus()
     loadFacets()
-  }, [loadSyncStatus, loadFacets])
+  }, [loadFacets])
 
   // Reload the table whenever a filter or the sort order changes.
   useEffect(() => {
@@ -483,23 +474,11 @@ export function RequestsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter, categoryFilter, resolutionFilter, sourceFilter, authorFilter, sortBy])
 
-  const handleSync = async (force: boolean) => {
-    setSyncing(true)
-    setSyncMsg(null)
-    try {
-      const res = await syncRequests(force)
-      setSyncMsg(res.message)
-      if (res.ok) {
-        await loadItems(0)
-        await loadSyncStatus()
-        await loadFacets()
-      }
-    } catch (e: unknown) {
-      setSyncMsg(e instanceof Error ? e.message : 'Error al sincronizar')
-    } finally {
-      setSyncing(false)
-    }
-  }
+  // Reload table + facets whenever a global sync (peticiones or otra) finishes.
+  useEffect(() => {
+    if (lastCompletedAt) { loadItems(0); loadFacets() }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastCompletedAt])
 
   const handleRowClick = async (id: number) => {
     if (selectedId === id) {
@@ -553,20 +532,14 @@ export function RequestsPage() {
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <SyncInfo
-              syncStatus={syncStatus}
-              onSync={handleSync}
-              syncing={syncing}
+              syncStatus={requestsStatus}
+              onSync={startRequestsSync}
+              syncing={requestsSyncing}
               label="Sincronizar peticiones"
               title="Descarga de eMuwarez las peticiones activas y las cruza con tu biblioteca local para ver cuáles puedes cubrir. Limitado a una vez por hora."
             />
           </div>
         </div>
-
-        {syncMsg && (
-          <div style={{ marginBottom: 12, fontSize: 13, color: 'var(--text-secondary)' }}>
-            <div>{syncMsg}</div>
-          </div>
-        )}
 
         <div className="filters-bar">
           <input
@@ -596,7 +569,7 @@ export function RequestsPage() {
                 : 'No hay peticiones que coincidan con los filtros.'
             }
             action={total === 0 ? (
-              <button className="btn btn-primary btn-sm" onClick={() => handleSync(false)}>Sincronizar peticiones</button>
+              <button className="btn btn-primary btn-sm" onClick={() => startRequestsSync(false)} disabled={requestsSyncing}>Sincronizar peticiones</button>
             ) : undefined}
           />
         ) : (

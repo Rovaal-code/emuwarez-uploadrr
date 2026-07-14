@@ -1,5 +1,6 @@
 import type { LibraryItemResponse } from '../types/api'
 import type { LibraryActionKind } from './LibraryTreeRow'
+import { Tooltip } from './Tooltip'
 
 // Single source of truth for the per-item action buttons, shared by the detail
 // page and the tree. Same visual format as the "Sincronizar biblioteca" button
@@ -15,17 +16,22 @@ export function LibraryActionButtons({ item, onAction, title }: {
   const missing = item.local_status === 'Faltante'
   return (
     <>
-      <button
-        className="btn btn-primary btn-sm"
-        title={missing ? 'No se puede subir: contenido faltante' : title}
-        onClick={() => onAction('upload', item)}
-        disabled={missing}
-      >
-        Subir
-      </button>
-      <button className="btn btn-primary btn-sm" onClick={() => onAction('request', item)}>
-        Petición
-      </button>
+      <Tooltip content={missing
+        ? 'No se puede subir: contenido faltante (no lo tienes en disco).'
+        : (title ?? 'Prepara y sube este contenido a eMuwarez (nomenclatura, comprobaciones y subida).')}>
+        <button
+          className="btn btn-primary btn-sm"
+          onClick={() => onAction('upload', item)}
+          disabled={missing}
+        >
+          Subir
+        </button>
+      </Tooltip>
+      <Tooltip content="Crea una petición de este contenido en eMuwarez.">
+        <button className="btn btn-primary btn-sm" onClick={() => onAction('request', item)}>
+          Petición
+        </button>
+      </Tooltip>
     </>
   )
 }

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
 
 // Custom hover tooltip styled like the app's cards (opaque surface, not the
@@ -8,10 +8,21 @@ import { createPortal } from 'react-dom'
 export function useTooltip(content: React.ReactNode, maxWidth = 460) {
   const [show, setShow] = useState(false)
   const [pt, setPt] = useState({ x: 0, y: 0 })
+  const ref = useRef<HTMLDivElement>(null)
 
   const track = useCallback((e: React.MouseEvent) => setPt({ x: e.clientX, y: e.clientY }), [])
   const open = useCallback((e: React.MouseEvent) => { setPt({ x: e.clientX, y: e.clientY }); setShow(true) }, [])
   const close = useCallback(() => setShow(false), [])
+
+  // Clamp using the REAL rendered width (not the max), so a narrow tooltip can
+  // still reach the right edge instead of leaving a gap.
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!show || !el) return
+    const half = el.offsetWidth / 2
+    const clamped = Math.min(Math.max(pt.x, half + 6), window.innerWidth - half - 6)
+    el.style.left = `${clamped}px`
+  }, [show, pt.x, pt.y])
 
   const triggerProps = {
     onMouseEnter: open,
@@ -22,17 +33,13 @@ export function useTooltip(content: React.ReactNode, maxWidth = 460) {
   const tooltipNode = show && content != null
     ? createPortal(
         <div
+          ref={ref}
           role="tooltip"
           style={{
             position: 'fixed',
             top: pt.y + 14,          // just below the cursor
-            // Centre under the cursor, but clamp so a wide tooltip near a screen
-            // edge (e.g. the top-right sync buttons) stays fully on screen.
-            left: Math.min(
-              Math.max(pt.x, maxWidth / 2 + 8),
-              (typeof window !== 'undefined' ? window.innerWidth : 1280) - maxWidth / 2 - 8,
-            ),
-            transform: 'translateX(-50%)',
+            left: pt.x,              // centred under the cursor; useLayoutEffect
+            transform: 'translateX(-50%)',  // clamps it to the viewport by real width
             maxWidth,
             zIndex: 2000,
             background: 'var(--bg-surface, #0f1420)',   // opaque

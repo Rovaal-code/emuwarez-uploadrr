@@ -157,9 +157,12 @@ def build_mediainfo_report(path: str) -> dict:
     # Source: from the file name first; if the name says nothing, a MediaInfo
     # heuristic (lossless audio → disc, DD+/EAC3 → WEB-DL). "(estimado)" marks a
     # guess so it isn't trusted blindly.
+    # MediaInfo does NOT provide the source; it comes from the file name, or —
+    # when the name says nothing — from a heuristic (audio + size). Show that
+    # origin in the "MediaInfo" column instead of pretending MediaInfo gave it.
     _audio_codecs = [legacy.audio_codec(t) for t in legacy.media_tracks(info) if t.get("@type") == "Audio"]
     src, src_guess = legacy.detect_source_smart(p, _audio_codecs, resolution)
-    add("Source", p.name, f"{src} (estimado)" if src_guess else src)
+    add("Source", "estimado por audio/tamaño" if src_guess else "del nombre del archivo", src)
     # HDR / Dolby Vision
     hdr = legacy.detect_hdr(video) if video else []
     add("HDR/DV", video.get("HDR_Format") or video.get("HDR_Format_String"), " ".join(hdr) or None)

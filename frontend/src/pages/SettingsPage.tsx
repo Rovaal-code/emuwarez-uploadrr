@@ -1110,7 +1110,7 @@ function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | nul
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16, alignItems: 'stretch' }}>
       <div className="placeholder-card">
         <h3 style={{ marginTop: 0, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <ServiceIcon type="emu" size={20} /> Notificaciones en la app
+          <ServiceIcon type="emu" size={20} /> Notificaciones UI
         </h3>
         <label className="checkbox-label" style={{ marginBottom: 12, display: 'block' }}>
           <input type="checkbox" checked={uiEnabled} onChange={e => setUiEnabled(e.target.checked)} /> Mostrar avisos en la campana

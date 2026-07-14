@@ -17,13 +17,13 @@ export function SyncCard() {
 
   return (
     <div className="activity-section" style={{ padding: '8px 14px', marginBottom: 0, display: 'flex', alignItems: 'center', gap: 12 }}>
-      <div className="section-title" style={{ margin: 0, whiteSpace: 'nowrap' }}>Sincronizar</div>
+      <div className="section-title" style={{ margin: 0, whiteSpace: 'nowrap' }}>↻</div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <Tooltip content="Consulta tus instancias de Radarr/Sonarr y actualiza la biblioteca local (títulos, rutas, estado en disco y nomenclatura).">
           <button className="btn btn-primary btn-sm" onClick={startLibrarySync} disabled={libSyncing}>
             {libSyncing
               ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Sincronizando…</>
-              : '↻ Biblioteca'}
+              : 'Biblioteca'}
           </button>
         </Tooltip>
 
@@ -38,8 +38,8 @@ export function SyncCard() {
             {catalogSyncing
               ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Comparando…</>
               : catalogWait
-                ? `⇅ eMuwarez (${catalogWait} min)`
-                : '⇅ eMuwarez'}
+                ? `eMuwarez (${catalogWait} min)`
+                : 'eMuwarez'}
           </button>
         </Tooltip>
 
@@ -54,8 +54,8 @@ export function SyncCard() {
             {requestsSyncing
               ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Sincronizando…</>
               : requestsWait
-                ? `↻ Peticiones (${requestsWait} min)`
-                : '↻ Peticiones'}
+                ? `Peticiones (${requestsWait} min)`
+                : 'Peticiones'}
           </button>
         </Tooltip>
       </div>

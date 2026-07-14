@@ -53,12 +53,6 @@ export function useTooltip(content: React.ReactNode, maxWidth = 460) {
             textAlign: 'left',
             whiteSpace: 'normal',
             pointerEvents: 'none',
-            // Hard cap of 3 lines: the box never grows beyond that; longer text
-            // is truncated with "…". At maxWidth most texts fit in ~2 lines.
-            display: '-webkit-box',
-            WebkitLineClamp: 3,
-            WebkitBoxOrient: 'vertical',
-            overflow: 'hidden',
           }}
         >
           {content}

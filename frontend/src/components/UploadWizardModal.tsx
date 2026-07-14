@@ -396,7 +396,7 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
               <div style={{ padding: '36px 0', textAlign: 'center' }}>
                 <div style={{ fontSize: 15, fontWeight: 600 }}>Generando nomenclatura con MediaInfo…</div>
                 <div className="text-muted" style={{ fontSize: 12, marginTop: 6 }}>
-                  Leyendo el archivo real (Radarr/Sonarr como respaldo si no es accesible).
+                  Leyendo el archivo real. MediaInfo es obligatorio para los campos técnicos.
                 </div>
               </div>
             )}
@@ -428,7 +428,7 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
                     <p className="text-warning" style={{ fontSize: 12, marginTop: 10 }}>⚠ {miReport.message}</p>
                   )}
                   {miReport?.available && (
-                    <div style={{ marginTop: 12, overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 8, background: 'rgba(255,255,255,0.03)' }}>
+                    <div style={{ marginTop: 12, maxHeight: 240, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 8, background: 'rgba(255,255,255,0.03)' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, tableLayout: 'fixed' }}>
                         <colgroup>
                           <col style={{ width: '22%' }} />
@@ -436,10 +436,10 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
                           <col style={{ width: '39%' }} />
                         </colgroup>
                         <thead>
-                          <tr style={{ background: 'rgba(255,255,255,0.03)' }}>
-                            <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600, color: 'var(--text-muted)' }}>Campo</th>
-                            <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600, color: 'var(--text-muted)' }}>MediaInfo</th>
-                            <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600, color: 'var(--text-muted)' }}>eMuwarez</th>
+                          <tr>
+                            <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600, color: 'var(--text-muted)', position: 'sticky', top: 0, background: 'var(--bg-surface, #0f1420)' }}>Campo</th>
+                            <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600, color: 'var(--text-muted)', position: 'sticky', top: 0, background: 'var(--bg-surface, #0f1420)' }}>MediaInfo</th>
+                            <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600, color: 'var(--text-muted)', position: 'sticky', top: 0, background: 'var(--bg-surface, #0f1420)' }}>eMuwarez</th>
                           </tr>
                         </thead>
                         <tbody>

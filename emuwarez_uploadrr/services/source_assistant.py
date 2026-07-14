@@ -362,22 +362,13 @@ def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
                 "tmdb_available": p["code"] in tmdb_set,
             })
 
-        # Auto-fill per the eMuwarez naming spec: normalize the raw Radarr/Sonarr
-        # (or mediainfo) values to the spec format — resolution + suffix, codec
-        # (AVC/HEVC…), HDR/DV, and the audio segment (DUAL/MULTI + codec + channels).
-        from .emu_format import (
-            format_resolution, format_video_codec, format_hdr, build_audio_string,
-        )
-        spec_audio = build_audio_string(
-            item.get("audio_codec"), item.get("audio_languages"), item.get("audio_channels")
-        )
-        raw_video = (proposal.get("video_codec") if proposal else None) or item.get("video_codec")
+        from .emu_format import format_resolution
 
-        # The eMuwarez name needs the PER-TRACK audio, which Radarr/Sonarr's
-        # summary metadata can't give — so read MediaInfo of the real file for
-        # the technical fields (audio, exact códec, HDR/DV). Falls back to the
-        # sync-time values when MediaInfo isn't available (no file / no
-        # `mediainfo` binary) so generation never blocks or fails.
+        # The technical fields (per-track audio, exact códec, HDR/DV) come ONLY
+        # from MediaInfo of the real file — Radarr/Sonarr's summary metadata is
+        # NOT used here (it can't give per-track audio). If MediaInfo isn't
+        # available the fields are left empty (the user sees they must fix
+        # access / install `mediainfo`), rather than filling with sync values.
         mi_audio = mi_video = mi_hdr = None
         try:
             from .media_info_service import build_mediainfo_report
@@ -390,7 +381,7 @@ def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
                 }
                 mi_video = emu_by_field.get("Códec de vídeo")
                 mi_hdr = emu_by_field.get("HDR/DV")
-        except Exception:  # noqa: BLE001 — MediaInfo is best-effort here
+        except Exception:  # noqa: BLE001 — MediaInfo failure leaves fields empty
             pass
 
         fields: dict[str, Any] = {
@@ -401,9 +392,9 @@ def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
             "resolution": format_resolution(resolution),
             "source": source,
             "provider": suggested_provider or infer_provider_from_item(item),
-            "dynamic_range": mi_hdr or format_hdr(item.get("dynamic_range")),
-            "video_codec": mi_video or format_video_codec(raw_video),
-            "audio_summary": mi_audio or (proposal.get("audio_summary") if proposal else None) or spec_audio,
+            "dynamic_range": mi_hdr,
+            "video_codec": mi_video,
+            "audio_summary": mi_audio,
             "subs": "SUBS",
             "tag": tag,
         }

@@ -1,4 +1,5 @@
 import type { RequestSyncStatusResponse } from '../types/api'
+import { Tooltip } from './Tooltip'
 
 // Shared by RequestsPage and the Dashboard's "Peticiones eMuwarez" sync
 // button — both surface the same 1h eMuwarez request-sync throttle
@@ -27,13 +28,17 @@ export function SyncInfo({ syncStatus, onSync, syncing, label = 'Sincronizar', a
       {!can_sync && (
         <span className="sync-info__throttle">Disponible en {mins} min</span>
       )}
-      <button className="btn btn-primary btn-sm" onClick={() => onSync(false)} disabled={syncing || !can_sync} title={title}>
-        {syncing ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Sincronizando…</> : `↻ ${label}`}
-      </button>
-      {!can_sync && allowForce && (
-        <button className="btn btn-secondary btn-sm" onClick={() => onSync(true)} disabled={syncing} title="Forzar sync">
-          Forzar
+      <Tooltip content={!can_sync ? `Disponible en ${mins} min` : (title ?? 'Sincronizar')}>
+        <button className="btn btn-primary btn-sm" onClick={() => onSync(false)} disabled={syncing || !can_sync}>
+          {syncing ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Sincronizando…</> : `↻ ${label}`}
         </button>
+      </Tooltip>
+      {!can_sync && allowForce && (
+        <Tooltip content="Forzar sync">
+          <button className="btn btn-secondary btn-sm" onClick={() => onSync(true)} disabled={syncing}>
+            Forzar
+          </button>
+        </Tooltip>
       )}
     </div>
   )

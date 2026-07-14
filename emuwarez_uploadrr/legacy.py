@@ -2905,12 +2905,58 @@ def map_resolution(video: dict[str, Any]) -> str:
         return "480p SD"
     return "1080p"
 
-def detect_source(path: Path) -> str:
+def _detect_source_by_name(path: Path) -> Optional[str]:
+    """Source from the file/folder NAME only (most reliable). None if the name
+    has no source keyword."""
     text = " ".join([path.name, path.parent.name, path.parent.parent.name])
     for pattern, value in SOURCE_PATTERNS:
         if pattern.search(text):
             return value
-    return "BluRay"
+    return None
+
+
+def detect_source(path: Path) -> str:
+    """Name-based source, defaulting to BluRay when the name says nothing."""
+    return _detect_source_by_name(path) or "BluRay"
+
+
+# Lossless audio → the file comes from a disc (streaming services never ship
+# lossless), so it's BluRay or a BDRemux, never WEB-DL.
+_LOSSLESS_AUDIO = ("dts-hd ma", "dts-hd hra", "dts:x", "truehd", "pcm", "lpcm", "flac", "mlp")
+# Size (GiB) at/above which an untouched-disc BDRemux is assumed, per resolution.
+_REMUX_MIN_GB = {"2160p": 40.0, "1080p": 20.0, "720p": 8.0}
+
+
+def heuristic_source(audio_codecs: list[str], size_gb: float, resolution: Optional[str]) -> Optional[str]:
+    """Best-effort source guess from MediaInfo, used ONLY when the name has no
+    source keyword. Returns None if it can't decide (caller keeps the default).
+
+    - Lossless audio (DTS-HD MA / TrueHD / PCM…) → disc: BDRemux if the size is
+      near-untouched, else BluRay.
+    - DD+/E-AC3 as audio → typical of streaming → WEB-DL.
+    """
+    codecs = " ".join(c or "" for c in audio_codecs).lower()
+    if any(k in codecs for k in _LOSSLESS_AUDIO):
+        thr = _REMUX_MIN_GB.get(resolution or "", 20.0)
+        return "BDRemux" if size_gb >= thr else "BluRay"
+    if "dd+" in codecs or "e-ac-3" in codecs or "eac3" in codecs:
+        return "WEB-DL"
+    return None
+
+
+def detect_source_smart(path: Path, audio_codecs: list[str], resolution: Optional[str]) -> tuple[str, bool]:
+    """(source, is_guess). Name first; if the name says nothing, fall back to the
+    MediaInfo heuristic; last resort is BluRay. is_guess=True when it wasn't
+    resolved from the name."""
+    by_name = _detect_source_by_name(path)
+    if by_name:
+        return by_name, False
+    try:
+        size_gb = path.stat().st_size / (1024 ** 3)
+    except OSError:
+        size_gb = 0.0
+    guess = heuristic_source(audio_codecs, size_gb, resolution)
+    return (guess or "BluRay"), True
 
 
 def detect_video_codec(video: dict[str, Any], path: Path) -> str:
@@ -3074,9 +3120,11 @@ def read_media_info(path: Path) -> MediaInfoData:
             }
         )
 
+    _resolution = map_resolution(video)
+    _source, _ = detect_source_smart(path, [a.get("codec") or "" for a in audio_items], _resolution)
     return MediaInfoData(
-        resolution=map_resolution(video),
-        source=detect_source(path),
+        resolution=_resolution,
+        source=_source,
         video_codec=detect_video_codec(video, path),
         hdr_tokens=detect_hdr(video),
         audio=audio_items,

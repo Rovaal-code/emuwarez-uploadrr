@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sqlite3
+import threading
 from typing import Optional
 
 from ..integrations import radarr, sonarr
@@ -95,9 +96,16 @@ def sync_instance(
     instance: InstanceConfig,
     *,
     include_episodes: bool = False,
+    on_progress=None,
 ) -> tuple[int, int]:
     imported = 0
     missing = 0
+
+    def _bump() -> None:
+        nonlocal imported
+        imported = imported + 1
+        if on_progress:
+            on_progress(imported)
     if instance.type == "radarr":
         queue_records = radarr.get_queue(instance.url, instance.api_key)
         queue_map = radarr.build_queue_map(queue_records)
@@ -109,7 +117,7 @@ def sync_instance(
                 queue_map=queue_map,
             )
             upsert_library_item(conn, item)
-            imported += 1
+            _bump()
             if item.local_status != LocalStatus.AVAILABLE.value:
                 missing += 1
 
@@ -133,7 +141,7 @@ def sync_instance(
                 series_queue_map=series_queue,
             )
             series_row_id = upsert_library_item(conn, series_item)
-            imported += 1
+            _bump()
             if series_item.local_status in LocalStatus.not_available():
                 missing += 1
             if include_episodes and series.get("id"):
@@ -177,7 +185,7 @@ def sync_instance(
                         file_count_override=None if stats_present else _file_count(season_eps),
                     )
                     season_row_id_by_number[season_num] = upsert_library_item(conn, season_item)
-                    imported += 1
+                    _bump()
                     if season_item.local_status in LocalStatus.not_available():
                         missing += 1
 
@@ -198,7 +206,7 @@ def sync_instance(
                         file_count_override=_file_count(season_eps),
                     )
                     season_row_id_by_number[season_num] = upsert_library_item(conn, season_item)
-                    imported += 1
+                    _bump()
                     if season_item.local_status in LocalStatus.not_available():
                         missing += 1
 
@@ -223,10 +231,50 @@ def sync_instance(
                         parent_id=parent_season_id,
                     )
                     upsert_library_item(conn, ep_item)
-                    imported += 1
+                    _bump()
                     if ep_item.local_status != LocalStatus.AVAILABLE.value:
                         missing += 1
     return imported, missing
+
+
+# Live progress of the library sync, so the UI can show a card with the running
+# element count. Single-process app → an in-memory dict is enough.
+_LIB_SYNC_LOCK = threading.Lock()
+_LIB_SYNC_PROGRESS: dict = {"active": False, "done": False, "phase": "", "imported": 0,
+                           "missing": 0, "instance": "", "error": None}
+
+
+def get_lib_sync_progress() -> dict:
+    with _LIB_SYNC_LOCK:
+        return dict(_LIB_SYNC_PROGRESS)
+
+
+def _set_lib_progress(**kw) -> None:
+    with _LIB_SYNC_LOCK:
+        _LIB_SYNC_PROGRESS.update(kw)
+
+
+def start_library_sync_background(include_episodes: bool = True) -> dict:
+    """Run sync_all in a background thread so the UI can poll the element count."""
+    from ..database import connect, db_path
+    with _LIB_SYNC_LOCK:
+        if _LIB_SYNC_PROGRESS.get("active"):
+            return {"status": "started"}
+    _set_lib_progress(active=True, done=False, error=None, phase="Iniciando…",
+                      imported=0, missing=0, instance="")
+
+    def _run() -> None:
+        c = connect(db_path())
+        try:
+            sync_all(c, include_episodes=include_episodes)
+        except Exception as exc:  # noqa: BLE001
+            _set_lib_progress(error=str(exc), phase="Error")
+        finally:
+            c.close()
+            _set_lib_progress(active=False, done=True)
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"status": "started"}
 
 
 def sync_all(conn: sqlite3.Connection, *, include_episodes: bool = False) -> dict:
@@ -237,10 +285,17 @@ def sync_all(conn: sqlite3.Connection, *, include_episodes: bool = False) -> dic
     errors: list[str] = []
     try:
         for instance in list_instances(conn, enabled_only=True):
+            base = total  # cumulative count before this instance
+            _set_lib_progress(phase=f"Sincronizando {instance.type.capitalize()}: {instance.name}…",
+                              instance=instance.name)
             try:
-                imported, miss = sync_instance(conn, instance, include_episodes=include_episodes)
+                imported, miss = sync_instance(
+                    conn, instance, include_episodes=include_episodes,
+                    on_progress=lambda c, b=base: _set_lib_progress(imported=b + c),
+                )
                 total += imported
                 missing += miss
+                _set_lib_progress(imported=total, missing=missing)
                 details.append(f"{instance.type}:{instance.name}: {imported} importados, {miss} faltantes")
             except Exception as exc:
                 err = f"{instance.type}:{instance.name}: {exc}"

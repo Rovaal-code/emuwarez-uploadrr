@@ -379,6 +379,25 @@ def _to_missing_response(row: dict) -> MissingItemResponse:
 # POST /api/sync — sync all instances
 # ---------------------------------------------------------------------------
 
+@router.post("/library/sync-start")
+def library_sync_start(
+    body: Optional[SyncRequest] = None,
+    current_user: dict = Depends(require_auth),
+) -> dict:
+    """Start the Radarr/Sonarr library sync in the background (poll
+    /library/sync-progress for the live element count)."""
+    from emuwarez_uploadrr.services.library import start_library_sync_background
+    include_episodes = body.include_episodes if body else True
+    return start_library_sync_background(include_episodes=include_episodes)
+
+
+@router.get("/library/sync-progress")
+def library_sync_progress(current_user: dict = Depends(require_auth)) -> dict:
+    """Live progress of the Radarr/Sonarr library sync, for the process card."""
+    from emuwarez_uploadrr.services.library import get_lib_sync_progress
+    return get_lib_sync_progress()
+
+
 @router.post("/sync", response_model=SyncResponse)
 def sync_all(
     body: Optional[SyncRequest] = None,

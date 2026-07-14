@@ -117,6 +117,24 @@ export async function syncAll(include_episodes = true): Promise<SyncResponse> {
   return api.post<SyncResponse>('/sync', { include_episodes })
 }
 
+export async function startLibrarySync(include_episodes = true): Promise<{ status: string }> {
+  return api.post<{ status: string }>('/library/sync-start', { include_episodes })
+}
+
+export interface LibrarySyncProgress {
+  active: boolean
+  done: boolean
+  phase: string
+  imported: number
+  missing: number
+  instance: string
+  error: string | null
+}
+
+export async function getLibrarySyncProgress(): Promise<LibrarySyncProgress> {
+  return api.get<LibrarySyncProgress>('/library/sync-progress')
+}
+
 export interface EmuSyncStatus {
   last_sync_at: string | null
   can_sync: boolean

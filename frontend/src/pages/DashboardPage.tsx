@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getDashboardSummary, getDashboardActivity, getDashboardLibraryActivity } from '../api/dashboard'
 import { getUploads } from '../api/uploads'
-import { syncAll } from '../api/library'
+import { startLibrarySync, getLibrarySyncProgress, type LibrarySyncProgress } from '../api/library'
 import { getSyncStatus, syncRequests } from '../api/requests'
 import { fetchSettings, type SettingsData } from '../api/settings'
 import { getInstances } from '../api/instances'
@@ -81,6 +81,7 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
   const [dataError, setDataError] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [syncMsg, setSyncMsg] = useState<string | null>(null)
+  const [syncProgress, setSyncProgress] = useState<LibrarySyncProgress | null>(null)
   const [wizardItem, setWizardItem] = useState<LibraryItemResponse | null>(null)
   const [requestItem, setRequestItem] = useState<LibraryItemResponse | null>(null)
 
@@ -139,14 +140,26 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
   async function handleSync() {
     setSyncing(true)
     setSyncMsg(null)
+    setSyncProgress({ active: true, done: false, phase: 'Iniciando…', imported: 0, missing: 0, instance: '', error: null })
     try {
-      const result = await syncAll(true)
-      setSyncMsg(`Sincronizado: ${result.imported} elementos · ${result.missing} no disponibles`)
+      await startLibrarySync(true)
+      for (let i = 0; i < 3600; i++) {
+        const p = await getLibrarySyncProgress()
+        setSyncProgress(p)
+        if (p.done || !p.active) {
+          setSyncMsg(p.error
+            ? `Error durante la sincronización: ${p.error}`
+            : `Sincronizado: ${p.imported} elementos · ${p.missing} no disponibles`)
+          break
+        }
+        await new Promise(r => setTimeout(r, 800))
+      }
       await loadData()
     } catch {
       setSyncMsg('Error durante la sincronización')
     } finally {
       setSyncing(false)
+      setSyncProgress(null)
     }
   }
 
@@ -215,6 +228,22 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
           />
         </div>
       </div>
+      {syncProgress && (
+        <div className="activity-section" style={{ padding: '14px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+          {syncProgress.error
+            ? <span style={{ color: 'var(--color-missing, #ef4444)', fontSize: 18, lineHeight: 1 }}>✗</span>
+            : <span className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />}
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 600 }}>Sincronizando biblioteca…</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              {syncProgress.error ?? syncProgress.phase}
+              {syncProgress.imported ? ` · ${syncProgress.imported.toLocaleString('es-ES')} elementos` : ''}
+              {syncProgress.missing ? ` · ${syncProgress.missing.toLocaleString('es-ES')} no disponibles` : ''}
+            </div>
+          </div>
+        </div>
+      )}
+
       {(syncMsg || emuSyncMsg) && (
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12, fontSize: 12, color: 'var(--text-secondary)' }}>
           {syncMsg && <span>{syncMsg}</span>}

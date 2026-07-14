@@ -133,7 +133,7 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, onR
     <>
       <tr className={canExpand ? 'clickable' : undefined} onClick={canExpand ? toggle : undefined}>
         <td>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: indent }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: item.item_type === 'episode' ? 0 : indent }}>
             {canExpand ? (
               <button
                 className="btn btn-ghost btn-sm"
@@ -145,7 +145,7 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, onR
               </button>
             ) : item.item_type === 'episode' && item.episode_number != null ? (
               // Episodes use the chevron's slot to show their episode number.
-              <span style={{ width: 22, flexShrink: 0, textAlign: 'center', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
+              <span style={{ width: 22, flexShrink: 0, textAlign: 'left', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
                 {item.episode_number}
               </span>
             ) : (

@@ -923,10 +923,12 @@ function EventPicker({ title, eventTypes, selected, disabled, onToggle }: {
 }
 
 function notifSignature(v: {
+  uiEnabled: boolean; uiEvents: string[]
   discordEnabled: boolean; discordWebhook?: string; telegramEnabled: boolean
   telegramToken?: string; telegramChatId: string; discordEvents: string[]; telegramEvents: string[]
 }): string {
   return JSON.stringify([
+    v.uiEnabled, v.uiEvents,
     v.discordEnabled, v.discordWebhook ?? '', v.telegramEnabled, v.telegramToken ?? '',
     v.telegramChatId, v.discordEvents, v.telegramEvents,
   ])
@@ -950,12 +952,18 @@ function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | nul
   const [testingTelegram, setTestingTelegram] = useState(false)
   const [telegramResult, setTelegramResult] = useState<IntegrationTestResult | null>(null)
 
+  // In-app bell ("UI" card): a configurable channel like Discord/Telegram, but
+  // on by default and without credentials.
+  const [uiEnabled, setUiEnabled] = useState(true)
+  const [uiEvents, setUiEvents] = useState<string[]>([])
+
   const [eventTypes, setEventTypes] = useState<{ code: string; label: string }[]>([])
   const [discordEvents, setDiscordEvents] = useState<string[]>([])
   const [telegramEvents, setTelegramEvents] = useState<string[]>([])
 
   const [baseline, setBaseline] = useState('')
   const currentSig = notifSignature({
+    uiEnabled, uiEvents,
     discordEnabled, discordWebhook, telegramEnabled, telegramToken, telegramChatId, discordEvents, telegramEvents,
   })
   const dirty = baseline !== '' && currentSig !== baseline
@@ -978,6 +986,8 @@ function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | nul
     fetchSettings()
       .then(s => {
         setSettings(s)
+        setUiEnabled(s.notify_ui_enabled)
+        setUiEvents(s.notify_ui_events ?? [])
         setDiscordEnabled(s.notify_discord_enabled)
         setTelegramEnabled(s.notify_telegram_enabled)
         setTelegramChatId(s.notify_telegram_chat_id ?? '')
@@ -985,6 +995,7 @@ function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | nul
         setDiscordEvents(s.notify_discord_events ?? [])
         setTelegramEvents(s.notify_telegram_events ?? [])
         setBaseline(notifSignature({
+          uiEnabled: s.notify_ui_enabled, uiEvents: s.notify_ui_events ?? [],
           discordEnabled: s.notify_discord_enabled, telegramEnabled: s.notify_telegram_enabled,
           telegramChatId: s.notify_telegram_chat_id ?? '', discordEvents: s.notify_discord_events ?? [],
           telegramEvents: s.notify_telegram_events ?? [],
@@ -1003,6 +1014,8 @@ function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | nul
     setMsg(null)
     try {
       const payload: Parameters<typeof updateSettings>[0] = {
+        notify_ui_enabled: uiEnabled,
+        notify_ui_events: uiEvents,
         notify_discord_enabled: discordEnabled,
         notify_telegram_enabled: telegramEnabled,
         notify_telegram_chat_id: telegramChatId.trim(),
@@ -1013,11 +1026,13 @@ function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | nul
       if (telegramToken.trim()) payload.notify_telegram_bot_token = telegramToken.trim()
       const updated = await updateSettings(payload)
       setSettings(updated)
+      setUiEvents(updated.notify_ui_events ?? [])
       setDiscordEvents(updated.notify_discord_events ?? [])
       setTelegramEvents(updated.notify_telegram_events ?? [])
       setDiscordWebhook('')
       setTelegramToken('')
       setBaseline(notifSignature({
+        uiEnabled: updated.notify_ui_enabled, uiEvents: updated.notify_ui_events ?? [],
         discordEnabled: updated.notify_discord_enabled, telegramEnabled: updated.notify_telegram_enabled,
         telegramChatId: updated.notify_telegram_chat_id ?? '', discordEvents: updated.notify_discord_events ?? [],
         telegramEvents: updated.notify_telegram_events ?? [],
@@ -1093,6 +1108,25 @@ function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | nul
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16, alignItems: 'stretch' }}>
+      <div className="placeholder-card">
+        <h3 style={{ marginTop: 0, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <ServiceIcon type="emu" size={20} /> Notificaciones en la app
+        </h3>
+        <label className="checkbox-label" style={{ marginBottom: 12, display: 'block' }}>
+          <input type="checkbox" checked={uiEnabled} onChange={e => setUiEnabled(e.target.checked)} /> Mostrar avisos en la campana
+        </label>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 0 }}>
+          Avisos dentro de la propia app (icono de la campana en la barra superior).
+        </p>
+        <EventPicker
+          title="Qué mostrar en la campana"
+          eventTypes={eventTypes}
+          selected={uiEvents}
+          disabled={!uiEnabled}
+          onToggle={(code, checked) => toggleEvent(setUiEvents, code, checked)}
+        />
+      </div>
+
       <div className="placeholder-card">
         <h3 style={{ marginTop: 0, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
           <ServiceIcon type="discord" size={20} /> Discord

@@ -40,6 +40,22 @@ def _channel_enabled(conn: sqlite3.Connection, channel: str) -> bool:
     return (get_setting_canonical(conn, f"notify.{channel}.enabled") or "") == "true"
 
 
+def ui_enabled(conn: sqlite3.Connection) -> bool:
+    """The in-app bell channel is ON by default (unlike Discord/Telegram, which
+    must be opted into with credentials). Only an explicit "false" disables it."""
+    return (get_setting_canonical(conn, "notify.ui.enabled") or "true") != "false"
+
+
+def _ui_stores(conn: sqlite3.Connection, event_type: str) -> bool:
+    """Whether this event should be stored in the bell feed. Known events honour
+    the UI channel's checkbox selection; unknown/system events are always kept."""
+    if not ui_enabled(conn):
+        return False
+    if event_type not in EVENT_TYPES:
+        return True
+    return event_type in channel_events(conn, "ui")
+
+
 def channel_events(conn: sqlite3.Connection, channel: str) -> set[str]:
     """Event types enabled for a channel. Unset (never saved) → all events."""
     raw = get_setting_canonical(conn, f"notify.{channel}.events")
@@ -156,16 +172,22 @@ def emit(
     when the caller's own transaction is long-lived; pass False to fold it into
     the caller's transaction.
     """
-    cur = conn.execute(
-        """
-        INSERT INTO notifications (event_type, title, body, link, level, entity_type, entity_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        """,
-        (event_type, title, body, link, level, entity_type, entity_id),
-    )
-    notif_id = int(cur.lastrowid)
-    if commit:
-        conn.commit()
+    # The bell is now a configurable channel ("UI" card in Ajustes →
+    # Notificaciones): only store the event if that channel keeps it enabled.
+    notif_id = 0
+    if _ui_stores(conn, event_type):
+        cur = conn.execute(
+            """
+            INSERT INTO notifications (event_type, title, body, link, level, entity_type, entity_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (event_type, title, body, link, level, entity_type, entity_id),
+        )
+        notif_id = int(cur.lastrowid)
+        if commit:
+            conn.commit()
+    # Discord/Telegram fan-out is independent of the bell (each has its own
+    # enabled flag + event selection).
     if dispatch:
         _dispatch(conn, event_type, _format_message(title, body, link))
     return notif_id
@@ -174,6 +196,7 @@ def emit(
 __all__ = [
     "EVENT_TYPES",
     "channel_events",
+    "ui_enabled",
     "list_notifications",
     "unread_count",
     "mark_read",

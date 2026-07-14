@@ -18,7 +18,7 @@ from ..runtime import _db_path
 from ..services.settings_service import get_setting, mask_secret, set_setting
 from ...services.uploadrr_contract import RUNTIME_EMU, RUNTIME_GENERIC, DEFAULT_TIMEOUT_SECONDS
 from ...services.source_assistant import EMU_PROVIDERS
-from ...services.notification_center import EVENT_TYPES, channel_events
+from ...services.notification_center import EVENT_TYPES, channel_events, ui_enabled
 from ...database import get_setting_canonical
 
 router = APIRouter(tags=["settings"])
@@ -75,7 +75,9 @@ class SettingsResponse(BaseModel):
     notify_telegram_bot_token_masked: Optional[str] = None
     notify_telegram_chat_id: Optional[str] = None
     # Per-channel event-type selection + the catalog of available event types.
+    notify_ui_enabled: bool = True
     notify_event_types: list[dict] = []
+    notify_ui_events: list[str] = []
     notify_discord_events: list[str] = []
     notify_telegram_events: list[str] = []
     # "Otros"
@@ -117,6 +119,8 @@ class SettingsUpdateRequest(BaseModel):
     notify_telegram_enabled: Optional[bool] = None
     notify_telegram_bot_token: Optional[str] = None
     notify_telegram_chat_id: Optional[str] = None
+    notify_ui_enabled: Optional[bool] = None
+    notify_ui_events: Optional[list[str]] = None
     notify_discord_events: Optional[list[str]] = None
     notify_telegram_events: Optional[list[str]] = None
     series_ignore_specials: Optional[bool] = None
@@ -265,7 +269,9 @@ def _build_response(conn) -> SettingsResponse:
         notify_telegram_bot_token_configured=telegram_token_configured,
         notify_telegram_bot_token_masked=mask_secret(telegram_token) if telegram_token_configured else None,
         notify_telegram_chat_id=get_setting_canonical(conn, "notify.telegram.chat_id"),
+        notify_ui_enabled=ui_enabled(conn),
         notify_event_types=[{"code": c, "label": l} for c, l in EVENT_TYPES.items()],
+        notify_ui_events=sorted(channel_events(conn, "ui")),
         notify_discord_events=sorted(channel_events(conn, "discord")),
         notify_telegram_events=sorted(channel_events(conn, "telegram")),
         series_ignore_specials=(get_setting_canonical(conn, "series.ignore_specials") or "true") != "false",
@@ -387,6 +393,12 @@ def update_settings(
 
         if body.notify_telegram_chat_id is not None:
             set_setting(conn, "notify.telegram.chat_id", body.notify_telegram_chat_id.strip())
+
+        if body.notify_ui_enabled is not None:
+            set_setting(conn, "notify.ui.enabled", "true" if body.notify_ui_enabled else "false")
+
+        if body.notify_ui_events is not None:
+            set_setting(conn, "notify.ui.events", _clean_event_csv(body.notify_ui_events))
 
         if body.notify_discord_events is not None:
             set_setting(conn, "notify.discord.events", _clean_event_csv(body.notify_discord_events))

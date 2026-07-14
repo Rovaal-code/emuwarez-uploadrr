@@ -66,6 +66,13 @@ export function EmuComparisonSection({ itemId }: { itemId: number }) {
           )
         ) : notInCatalog ? (
           <span style={{ fontWeight: 600, color: '#22c55e' }}>🟢 No está en eMuwarez — Contenido único</span>
+        ) : data.only_episodes ? (
+          <span style={{ fontWeight: 600, color: '#eab308' }}>
+            🟡 Los capítulos ya están en eMuwarez (sueltos), no hay season pack{' '}
+            {data.have_all_episodes
+              ? '— tienes todos, podrías aportar el pack de temporada.'
+              : '(podrías aportar el pack si tienes todos).'}
+          </span>
         ) : aportes.length > 0 ? (
           <>
             <span style={{ fontWeight: 600 }}>Ya está en eMuwarez, pero aportas:</span>

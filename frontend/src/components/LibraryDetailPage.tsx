@@ -152,7 +152,7 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
         </div>
       </div>
 
-      {(item.item_type === 'movie' || item.item_type === 'season') && (
+      {(item.item_type === 'movie' || item.item_type === 'season' || item.item_type === 'episode') && (
         <EmuComparisonSection itemId={item.id} />
       )}
 

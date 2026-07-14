@@ -242,11 +242,17 @@ def _compute_and_store_item_status(conn: sqlite3.Connection) -> int:
     cat = [dict(r) for r in conn.execute("SELECT * FROM emu_catalog").fetchall()]
     by_tmdb: dict[str, list] = {}
     by_tvdb_season: dict[tuple, list] = {}
+    by_tvdb_season_episode: dict[tuple, list] = {}
     for c in cat:
         if c["tmdb_id"] and c["category"] != "Series":
             by_tmdb.setdefault(c["tmdb_id"], []).append(c)
         if c["tvdb_id"] and c["season_number"] is not None:
             by_tvdb_season.setdefault((c["tvdb_id"], c["season_number"]), []).append(c)
+            # The catalog has no episode_number column — parse it from the name
+            # (e.g. "…S01E08…") so each episode can be matched to its torrent.
+            ep = _parse_episode_number(c["name"] or "")
+            if ep is not None:
+                by_tvdb_season_episode.setdefault((c["tvdb_id"], c["season_number"], ep), []).append(c)
 
     # Honor the same "Ignorar especiales" setting the Estado/Nomenclatura
     # rollups use, so the three series statuses stay consistent. Default True
@@ -319,6 +325,28 @@ def _compute_and_store_item_status(conn: sqlite3.Connection) -> int:
             if a["detail"] not in [x["detail"] for x in series_aportes[pid]]:
                 series_aportes[pid].append(a)
 
+    # Episodes — each matched to its own eMuwarez torrent (parsed SxxExx), so a
+    # series that only exists as loose episodes still shows "Sí" per capítulo.
+    for e in conn.execute(
+        "SELECT e.id AS id, e.season_number AS season_number, e.episode_number AS episode_number, "
+        "e.resolution AS resolution, e.source AS source, e.video_codec AS video_codec, "
+        "e.audio_languages AS audio_languages, e.size_bytes AS size_bytes, sr.tvdb_id AS tvdb_id "
+        "FROM library_items e JOIN library_items se ON e.parent_id = se.id "
+        "JOIN library_items sr ON se.parent_id = sr.id "
+        "WHERE e.item_type = 'episode'"
+    ).fetchall():
+        e = dict(e)
+        matches = []
+        if e["tvdb_id"] and e["season_number"] is not None and e["episode_number"] is not None:
+            matches = by_tvdb_season_episode.get((str(e["tvdb_id"]), e["season_number"], e["episode_number"]), [])
+        if not matches:
+            save(e["id"], 0, [])
+            continue
+        mine = {"resolution": e["resolution"], "source": e["source"],
+                "codec": _norm_codec(e["video_codec"] or "") or e["video_codec"],
+                "has_es": _episode_lang_has_es(e["audio_languages"]), "size": e["size_bytes"]}
+        save(e["id"], 1, _compute_aportes(mine, matches))
+
     # Series rollup: 0 = no seasons on eMuwarez, 1 = all seasons on eMuwarez,
     # 2 = partial (some seasons on, some off) — so a mixed series is no longer
     # hidden behind a plain "Sí".
@@ -336,6 +364,16 @@ def _compute_and_store_item_status(conn: sqlite3.Connection) -> int:
 
     conn.commit()
     return updated
+
+
+_SXXEXX_RE = re.compile(r"S\d{1,3}\s*E(\d{1,4})", re.I)
+
+
+def _parse_episode_number(name: str) -> Optional[int]:
+    """Episode number from a torrent name (…S01E08… → 8). None for a season
+    pack / anything without an SxxExx marker."""
+    m = _SXXEXX_RE.search(name or "")
+    return int(m.group(1)) if m else None
 
 
 def _mode(values: list) -> Optional[str]:
@@ -393,17 +431,35 @@ def get_item_comparison(conn: sqlite3.Connection, item_id: int) -> dict:
             "has_es": any(_episode_lang_has_es(e["audio_languages"]) for e in eps),
             "size": sum(e["size_bytes"] or 0 for e in eps) or None,
         }
+    elif itype == "episode":
+        # Match this episode to its own torrent (parsed SxxExx). tvdb comes from
+        # the series (episode → season → series).
+        season_row = conn.execute("SELECT parent_id FROM library_items WHERE id = ?", (item["parent_id"],)).fetchone()
+        series_id = season_row["parent_id"] if season_row else None
+        tvdb = None
+        if series_id:
+            sr = conn.execute("SELECT tvdb_id FROM library_items WHERE id = ?", (series_id,)).fetchone()
+            tvdb = sr["tvdb_id"] if sr else None
+        season_n, ep_n = item.get("season_number"), item.get("episode_number")
+        rows = []
+        if tvdb and season_n is not None and ep_n is not None:
+            all_rows = conn.execute(
+                "SELECT * FROM emu_catalog WHERE tvdb_id = ? AND season_number = ?", (str(tvdb), season_n)
+            ).fetchall()
+            rows = [r for r in all_rows if _parse_episode_number(r["name"]) == ep_n]
+        mine = {"resolution": item["resolution"], "source": item["source"],
+                "codec": _norm_codec(item["video_codec"] or "") or item["video_codec"],
+                "has_es": _episode_lang_has_es(item["audio_languages"]), "size": item["size_bytes"]}
     else:
-        # Series/episode rows don't have a direct catalog match table — series
-        # is a rollup (drill into its seasons), episodes roll into their season.
-        return {"available": False, "message": "La comparación es a nivel de película o temporada",
+        # Series is a rollup (drill into its seasons).
+        return {"available": False, "message": "La comparación es a nivel de película, temporada o capítulo",
                 "matches": [], "in_catalog": item.get("emu_in_catalog"),
                 "aportes": _safe_json(item.get("emu_aportes"))}
 
     matches = [{"name": r["name"], "resolution": r["resolution"], "source": r["source"],
                 "codec": r["codec"], "has_spanish": r["has_spanish"], "size": r["size"]}
                for r in map(dict, rows)]
-    return {
+    result = {
         "available": True,
         "message": None,
         "mine": mine,
@@ -414,6 +470,19 @@ def get_item_comparison(conn: sqlite3.Connection, item_id: int) -> dict:
         "in_catalog": 1 if matches else 0,
         "aportes": _compute_aportes(mine, [dict(r) for r in rows]) if matches else [],
     }
+    if itype == "season":
+        # Distinguish "there is a season pack" from "only loose episodes". When
+        # only episodes exist, contributing the pack could be new — but only if
+        # you actually have all the episodes.
+        cat_ep_nums = {n for n in (_parse_episode_number(m["name"]) for m in matches) if n is not None}
+        has_pack = any(_parse_episode_number(m["name"]) is None for m in matches)
+        my_ep_nums = {r[0] for r in conn.execute(
+            "SELECT episode_number FROM library_items WHERE parent_id = ? AND item_type = 'episode' "
+            "AND local_status IN ('Disponible','Subido','Subiendo') AND episode_number IS NOT NULL", (item_id,)
+        )}
+        result["only_episodes"] = bool(cat_ep_nums) and not has_pack
+        result["have_all_episodes"] = bool(cat_ep_nums) and cat_ep_nums.issubset(my_ep_nums)
+    return result
 
 
 def _safe_json(raw):

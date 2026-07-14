@@ -152,6 +152,10 @@ export interface EmuComparison {
   matches: EmuMatch[]
   in_catalog?: number | null
   aportes?: { dim: string; detail: string }[]
+  // Season only: eMuwarez has this season only as loose episodes (no season
+  // pack), and whether you have every episode (so you could contribute the pack).
+  only_episodes?: boolean
+  have_all_episodes?: boolean
 }
 
 export async function getEmuComparison(id: number): Promise<EmuComparison> {

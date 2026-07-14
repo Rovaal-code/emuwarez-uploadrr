@@ -30,7 +30,7 @@ export function SyncCard() {
           <button className="btn btn-primary btn-sm" onClick={startLibrarySync} disabled={libSyncing}>
             {libSyncing
               ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Sincronizando…</>
-              : 'Biblioteca'}
+              : '↻ Biblioteca'}
           </button>
         </Tooltip>
 
@@ -45,8 +45,8 @@ export function SyncCard() {
             {catalogSyncing
               ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Comparando…</>
               : catalogWait
-                ? `eMuwarez (${catalogWait} min)`
-                : 'eMuwarez'}
+                ? `↻ eMuwarez (${catalogWait} min)`
+                : '↻ eMuwarez'}
           </button>
         </Tooltip>
 
@@ -61,8 +61,8 @@ export function SyncCard() {
             {requestsSyncing
               ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Sincronizando…</>
               : requestsWait
-                ? `Peticiones (${requestsWait} min)`
-                : 'Peticiones'}
+                ? `↻ Peticiones (${requestsWait} min)`
+                : '↻ Peticiones'}
           </button>
         </Tooltip>
       </div>

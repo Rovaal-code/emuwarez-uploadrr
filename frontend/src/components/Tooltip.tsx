@@ -19,14 +19,21 @@ export function useTooltip(content: React.ReactNode, maxWidth = 460) {
   const open = useCallback((e: React.MouseEvent) => { setPt({ x: e.clientX, y: e.clientY }); setShow(true) }, [])
   const close = useCallback(() => { setShow(false); setWidth(null) }, [])
 
-  // First render happens in "measure mode" (anchored top-left with full room, so
-  // the text wraps to its natural width, capped at maxWidth) and is hidden. We
-  // read that natural width here and freeze it; every later render uses it.
+  // First render happens in "measure mode": hidden, anchored top-left, with
+  // white-space:nowrap and no width cap, so offsetWidth is the text's SINGLE
+  // line width. From it we pick a fixed box width that hugs the text in ~2
+  // balanced lines (or 1 line if it already fits), and freeze it.
   useLayoutEffect(() => {
     if (!show) return
     const el = ref.current
-    if (el && width == null) setWidth(el.offsetWidth)
-  }, [show, width])
+    if (el && width == null) {
+      const single = el.offsetWidth              // full width on one line
+      const w = single <= maxWidth
+        ? single                                 // fits on one line → hug it
+        : Math.min(maxWidth, Math.round(single / 2) + 32)  // split into ~2 lines
+      setWidth(w)
+    }
+  }, [show, width, maxWidth])
 
   const triggerProps = {
     onMouseEnter: open,
@@ -52,7 +59,10 @@ export function useTooltip(content: React.ReactNode, maxWidth = 460) {
             left: width == null ? 8 : left,
             transform: width == null ? 'none' : 'translateX(-50%)',
             width: width ?? undefined,     // fixed once measured → never re-wraps
-            maxWidth,
+            maxWidth: width == null ? undefined : maxWidth,  // uncapped while measuring
+            // measure mode forces one line so we can read the true text width
+            whiteSpace: width == null ? 'nowrap' : 'normal',
+            textWrap: 'balance' as React.CSSProperties['textWrap'],
             visibility: width == null ? 'hidden' : 'visible',
             zIndex: 2000,
             background: 'var(--bg-surface, #0f1420)',   // opaque
@@ -64,7 +74,6 @@ export function useTooltip(content: React.ReactNode, maxWidth = 460) {
             lineHeight: 1.45,
             color: 'var(--text-secondary)',
             textAlign: 'left',
-            whiteSpace: 'normal',
             pointerEvents: 'none',
           }}
         >

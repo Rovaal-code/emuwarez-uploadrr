@@ -82,8 +82,10 @@ def compare(actual_filename: str, exp_core: str) -> tuple[bool, list[str]]:
     case-insensitively."""
     base = os.path.splitext(actual_filename)[0]
     actual_core = _strip_group(to_filesystem_name(base))
+    # Provider is optional (before the source) — ignore it on BOTH sides so it
+    # never drives the verdict, whether or not each name carries it.
     at = _drop_optional_provider([t for t in actual_core.split(".") if t])
-    et = [t for t in exp_core.split(".") if t]
+    et = _drop_optional_provider([t for t in exp_core.split(".") if t])
     if [t.lower() for t in at] == [t.lower() for t in et]:
         return True, []
     diff: list[str] = []
@@ -208,6 +210,15 @@ def evaluate_file(path: str, title: str, year, *, season=None, episode=None) -> 
     media = read_media_info(Path(path))
     if media is None:
         raise RuntimeError("MediaInfo no devolvió datos (¿está instalado el binario 'mediainfo'?)")
+    # If the file name carries a streaming provider (AMZN/NF/DSNP…), include it
+    # in the expected name (provider goes before the source; only WEB-DL). It's
+    # optional, so `compare` ignores it either way — this just makes the shown
+    # expected match the real name.
+    if (media.source or "").upper().startswith("WEB-DL"):
+        from .nomenclature import infer_provider_from_item
+        prov = infer_provider_from_item({"path": path})
+        if prov:
+            media.source = f"{prov} {media.source}"
     exp = expected_core(title, year, media, season=season, episode=episode)
     matches, diff = compare(os.path.basename(path), exp)
     return {

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useTransition } from 'react'
-import { getLibrary, TOP_LEVEL_PARENT_FILTER, getLibraryFilterOptions, getEmuSyncStatus, emuSync, getEmuSyncProgress, type EmuSyncStatus, type EmuSyncProgress } from '../api/library'
+import { getLibrary, TOP_LEVEL_PARENT_FILTER, getLibraryFilterOptions, getEmuSyncStatus, emuSync, getEmuSyncProgress, startLibrarySync, getLibrarySyncProgress, type EmuSyncStatus, type EmuSyncProgress, type LibrarySyncProgress } from '../api/library'
+import { Tooltip } from '../components/Tooltip'
 import { getInstances } from '../api/instances'
-import { refreshArrHealth } from '../api/diagnostics'
 import type { LibraryItemResponse, LibraryListResponse, InstanceSafeResponse } from '../types/api'
 import { PosterStatusIcon } from '../components/PosterStatusIcon'
 import { LoadingState } from '../components/LoadingState'
@@ -145,15 +145,26 @@ export function LibraryPage() {
   // used to show; these 3 buttons were the only functionality that didn't
   // already exist elsewhere).
   const [diagActionLoading, setDiagActionLoading] = useState(false)
+  const [libProgress, setLibProgress] = useState<LibrarySyncProgress | null>(null)
 
-  async function handleRefreshHealth() {
+  // Same library sync as the dashboard button: background import with a live
+  // element-count card.
+  async function handleLibrarySync() {
     setDiagActionLoading(true)
+    setLibProgress({ active: true, done: false, phase: 'Iniciando…', imported: 0, missing: 0, instance: '', error: null })
     try {
-      await refreshArrHealth({ include_queue: true, include_history: true })
+      await startLibrarySync(true)
+      for (let i = 0; i < 3600; i++) {
+        const p = await getLibrarySyncProgress()
+        setLibProgress(p)
+        if (p.done || !p.active) break
+        await new Promise(r => setTimeout(r, 800))
+      }
       await load()
-    } catch { /* the spinner + a fresh load reflect the outcome */ }
+    } catch { /* the card reflects the outcome */ }
     finally {
       setDiagActionLoading(false)
+      setLibProgress(null)
     }
   }
 
@@ -350,30 +361,32 @@ export function LibraryPage() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={handleRefreshHealth}
-            disabled={diagActionLoading}
-            title="Sincroniza tu biblioteca con Radarr/Sonarr (estado, calidad, episodios)"
-          >
-            {diagActionLoading
-              ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Sincronizando…</>
-              : '↻ Sincronizar biblioteca'}
-          </button>
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={handleEmuSync}
-            disabled={emuSyncing || (emuStatus != null && !emuStatus.can_sync)}
-            title={emuStatus && !emuStatus.can_sync
-              ? `Disponible en ${formatWait(emuStatus.wait_seconds)}`
-              : 'Descarga el catálogo de eMuwarez y compara con tu biblioteca (1 vez/hora)'}
-          >
-            {emuSyncing
-              ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Comparando…</>
-              : emuStatus && !emuStatus.can_sync
-                ? `⇅ eMuwarez (${formatWait(emuStatus.wait_seconds)})`
-                : '⇅ Sincronizar eMuwarez'}
-          </button>
+          <Tooltip content="Consulta tus instancias de Radarr/Sonarr y actualiza la biblioteca local (títulos, rutas, estado en disco y nomenclatura).">
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={handleLibrarySync}
+              disabled={diagActionLoading}
+            >
+              {diagActionLoading
+                ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Sincronizando…</>
+                : '↻ Sincronizar biblioteca'}
+            </button>
+          </Tooltip>
+          <Tooltip content={emuStatus && !emuStatus.can_sync
+            ? `Disponible en ${formatWait(emuStatus.wait_seconds)}`
+            : 'Descarga el catálogo de eMuwarez y compara con tu biblioteca (1 vez/hora)'}>
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={handleEmuSync}
+              disabled={emuSyncing || (emuStatus != null && !emuStatus.can_sync)}
+            >
+              {emuSyncing
+                ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Comparando…</>
+                : emuStatus && !emuStatus.can_sync
+                  ? `⇅ eMuwarez (${formatWait(emuStatus.wait_seconds)})`
+                  : '⇅ Sincronizar eMuwarez'}
+            </button>
+          </Tooltip>
         </div>
       </div>
       {emuMsg && (
@@ -398,35 +411,54 @@ export function LibraryPage() {
           <option value="year_asc">Orden: Año (Antiguo)</option>
         </select>
         <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
-          <button
-            className="btn btn-primary btn-sm"
-            style={{ opacity: viewMode === 'grid' ? 1 : 0.55 }}
-            onClick={() => setViewMode('grid')}
-            title="Vista de pósters"
-            aria-label="Vista de pósters"
-          >
-            ▦
-          </button>
-          <button
-            className="btn btn-primary btn-sm"
-            style={{ opacity: viewMode === 'grid-lg' ? 1 : 0.55 }}
-            onClick={() => setViewMode('grid-lg')}
-            title="Vista de pósters grandes"
-            aria-label="Vista de pósters grandes"
-          >
-            ▦▦
-          </button>
-          <button
-            className="btn btn-primary btn-sm"
-            style={{ opacity: viewMode === 'list' ? 1 : 0.55 }}
-            onClick={() => setViewMode('list')}
-            title="Vista de lista"
-            aria-label="Vista de lista"
-          >
-            ☰
-          </button>
+          <Tooltip content="Vista de pósters">
+            <button
+              className="btn btn-primary btn-sm"
+              style={{ opacity: viewMode === 'grid' ? 1 : 0.55 }}
+              onClick={() => setViewMode('grid')}
+              aria-label="Vista de pósters"
+            >
+              ▦
+            </button>
+          </Tooltip>
+          <Tooltip content="Vista de pósters grandes">
+            <button
+              className="btn btn-primary btn-sm"
+              style={{ opacity: viewMode === 'grid-lg' ? 1 : 0.55 }}
+              onClick={() => setViewMode('grid-lg')}
+              aria-label="Vista de pósters grandes"
+            >
+              ▦▦
+            </button>
+          </Tooltip>
+          <Tooltip content="Vista de lista">
+            <button
+              className="btn btn-primary btn-sm"
+              style={{ opacity: viewMode === 'list' ? 1 : 0.55 }}
+              onClick={() => setViewMode('list')}
+              aria-label="Vista de lista"
+            >
+              ☰
+            </button>
+          </Tooltip>
         </div>
       </div>
+
+      {libProgress && (
+        <div className="activity-section" style={{ padding: '14px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+          {libProgress.error
+            ? <span style={{ color: 'var(--color-missing, #ef4444)', fontSize: 18, lineHeight: 1 }}>✗</span>
+            : <span className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />}
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 600 }}>Sincronizando biblioteca…</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              {libProgress.error ?? libProgress.phase}
+              {libProgress.imported ? ` · ${libProgress.imported.toLocaleString('es-ES')} elementos` : ''}
+              {libProgress.missing ? ` · ${libProgress.missing.toLocaleString('es-ES')} no disponibles` : ''}
+            </div>
+          </div>
+        </div>
+      )}
 
       {emuProgress && (
         <div className="activity-section" style={{ padding: '14px 18px', marginBottom: 16 }}>

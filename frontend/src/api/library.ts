@@ -162,6 +162,19 @@ export async function getEmuComparison(id: number): Promise<EmuComparison> {
   return api.get<EmuComparison>(`/library/${id}/emu-comparison`)
 }
 
-export async function emuSync(): Promise<EmuSyncResult> {
-  return api.post<EmuSyncResult>('/library/emu-sync', {})
+export async function emuSync(): Promise<{ status: string }> {
+  return api.post<{ status: string }>('/library/emu-sync', {})
+}
+
+export interface EmuSyncProgress {
+  active: boolean
+  done: boolean
+  phase: string
+  torrents: number
+  items: number
+  error: string | null
+}
+
+export async function getEmuSyncProgress(): Promise<EmuSyncProgress> {
+  return api.get<EmuSyncProgress>('/library/emu-sync-progress')
 }

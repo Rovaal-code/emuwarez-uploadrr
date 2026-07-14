@@ -509,21 +509,23 @@ def library_emu_sync_status(current_user: dict = Depends(require_auth)) -> dict:
 
 @router.post("/library/emu-sync")
 def library_emu_sync(current_user: dict = Depends(require_auth)) -> dict:
-    """Download the whole eMuwarez catalog and recompute, per movie/season/series,
-    whether it's already there and what your copy would add. Throttled 1/hour."""
-    from emuwarez_uploadrr.services.emu_catalog import sync_emu_catalog
-    from emuwarez_uploadrr.integrations.base import IntegrationError
-    with _get_conn() as conn:
-        try:
-            result = sync_emu_catalog(conn)
-        except IntegrationError as exc:
-            raise HTTPException(status_code=400, detail=str(exc))
+    """Start the eMuwarez catalog sync in the background (poll emu-sync-progress
+    for the live status). Throttled 1/hour."""
+    from emuwarez_uploadrr.services.emu_catalog import start_emu_sync_background
+    result = start_emu_sync_background()
     if result.get("status") == "throttled":
         raise HTTPException(
             status_code=429,
             detail=f"Espera {result['wait_seconds']}s antes de volver a sincronizar con eMuwarez",
         )
     return result
+
+
+@router.get("/library/emu-sync-progress")
+def library_emu_sync_progress(current_user: dict = Depends(require_auth)) -> dict:
+    """Live progress of the eMuwarez catalog sync, for the process card."""
+    from emuwarez_uploadrr.services.emu_catalog import get_sync_progress
+    return get_sync_progress()
 
 
 @router.get("/library/{item_id}/emu-comparison")

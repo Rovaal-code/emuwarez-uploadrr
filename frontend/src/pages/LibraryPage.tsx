@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useTransition } from 'react'
-import { getLibrary, TOP_LEVEL_PARENT_FILTER, getLibraryFilterOptions, getEmuSyncStatus, emuSync, type EmuSyncStatus } from '../api/library'
+import { getLibrary, TOP_LEVEL_PARENT_FILTER, getLibraryFilterOptions, getEmuSyncStatus, emuSync, getEmuSyncProgress, type EmuSyncStatus, type EmuSyncProgress } from '../api/library'
 import { getInstances } from '../api/instances'
 import { refreshArrHealth } from '../api/diagnostics'
 import type { LibraryItemResponse, LibraryListResponse, InstanceSafeResponse } from '../types/api'
@@ -169,6 +169,7 @@ export function LibraryPage() {
   const [emuStatus, setEmuStatus] = useState<EmuSyncStatus | null>(null)
   const [emuSyncing, setEmuSyncing] = useState(false)
   const [emuMsg, setEmuMsg] = useState<string | null>(null)
+  const [emuProgress, setEmuProgress] = useState<EmuSyncProgress | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -209,15 +210,28 @@ export function LibraryPage() {
   const handleEmuSync = useCallback(async () => {
     setEmuSyncing(true)
     setEmuMsg(null)
+    setEmuProgress({ active: true, done: false, phase: 'Iniciando…', torrents: 0, items: 0, error: null })
     try {
-      const r = await emuSync()
-      setEmuMsg(`Catálogo eMuwarez sincronizado: ${r.torrents} torrents, ${r.items} elementos comparados`)
+      await emuSync()  // starts the background sync (429 throws when throttled)
+      // Poll the process card until it finishes.
+      for (let i = 0; i < 900; i++) {
+        const p = await getEmuSyncProgress()
+        setEmuProgress(p)
+        if (p.done || !p.active) {
+          setEmuMsg(p.error
+            ? `Error al sincronizar: ${p.error}`
+            : `Catálogo eMuwarez sincronizado: ${p.torrents} torrents, ${p.items} elementos comparados`)
+          break
+        }
+        await new Promise(r => setTimeout(r, 800))
+      }
       await Promise.all([load(), loadEmuStatus()])
     } catch (e) {
       setEmuMsg(e instanceof Error ? e.message : 'Error al sincronizar con eMuwarez')
     } finally {
       setEmuSyncing(false)
-      setTimeout(() => setEmuMsg(null), 5000)  // no dejar el mensaje empujando la lista
+      setEmuProgress(null)
+      setTimeout(() => setEmuMsg(null), 6000)  // no dejar el mensaje empujando la lista
     }
   }, [load, loadEmuStatus])
 
@@ -382,6 +396,22 @@ export function LibraryPage() {
           </button>
         </div>
       </div>
+
+      {emuProgress && (
+        <div className="activity-section" style={{ padding: '14px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+          {emuProgress.error
+            ? <span style={{ color: 'var(--color-missing, #ef4444)', fontSize: 18, lineHeight: 1 }}>✗</span>
+            : <span className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />}
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 600 }}>Sincronizando con eMuwarez…</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              {emuProgress.error ?? emuProgress.phase}
+              {emuProgress.torrents ? ` · ${emuProgress.torrents} torrents` : ''}
+              {emuProgress.items ? ` · ${emuProgress.items} comparados` : ''}
+            </div>
+          </div>
+        </div>
+      )}
 
       {loading || isPending ? (
         <LoadingState label="Cargando biblioteca…" />

@@ -15,6 +15,7 @@ import datetime as dt
 import json
 import re
 import sqlite3
+import threading
 from typing import Any, Optional
 
 from ..database import get_setting_canonical, get_state, set_state
@@ -496,6 +497,53 @@ def _safe_json(raw):
 
 # --- Public sync -------------------------------------------------------------
 
+# Live progress of the eMuwarez sync, so the UI can show a card of what it's
+# doing. Single-process app → an in-memory dict is enough (the sync is on-demand,
+# 1/hour). Polled via GET /library/emu-sync-progress.
+_SYNC_LOCK = threading.Lock()
+_SYNC_PROGRESS: dict = {"active": False, "done": False, "phase": "", "torrents": 0, "items": 0, "error": None}
+
+
+def get_sync_progress() -> dict:
+    with _SYNC_LOCK:
+        return dict(_SYNC_PROGRESS)
+
+
+def _set_progress(**kw) -> None:
+    with _SYNC_LOCK:
+        _SYNC_PROGRESS.update(kw)
+
+
+def start_emu_sync_background(force: bool = False) -> dict:
+    """Start the catalog sync in a background thread (so the UI can poll
+    progress). Returns {status:'started'} or {status:'throttled', wait_seconds}."""
+    from ..database import connect, db_path
+    conn = connect(db_path())
+    try:
+        wait = seconds_until_next_sync(conn)
+    finally:
+        conn.close()
+    if wait > 0 and not force:
+        return {"status": "throttled", "wait_seconds": wait}
+    with _SYNC_LOCK:
+        if _SYNC_PROGRESS.get("active"):
+            return {"status": "started"}  # one already running
+    _set_progress(active=True, done=False, error=None, phase="Iniciando…", torrents=0, items=0)
+
+    def _run() -> None:
+        c = connect(db_path())
+        try:
+            sync_emu_catalog(c, force=True)  # throttle already checked above
+        except Exception as exc:  # noqa: BLE001 — surface the error to the card
+            _set_progress(error=str(exc), phase="Error")
+        finally:
+            c.close()
+            _set_progress(active=False, done=True)
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"status": "started"}
+
+
 def sync_emu_catalog(conn: sqlite3.Connection, *, force: bool = False) -> dict:
     """Download the eMuwarez catalog and recompute per-item status. 1/hour."""
     wait = seconds_until_next_sync(conn)
@@ -506,10 +554,14 @@ def sync_emu_catalog(conn: sqlite3.Connection, *, force: bool = False) -> dict:
     if not api_key:
         raise IntegrationError("No hay API Key de eMuwarez configurada")
 
+    _set_progress(phase="Descargando catálogo de eMuwarez…")
     torrents = emu.emu_fetch_all_torrents(api_key)
     rows = _index_catalog(torrents)
+    _set_progress(phase="Guardando catálogo…", torrents=len(rows))
     _store_catalog(conn, rows)
+    _set_progress(phase="Calculando comparaciones con tu biblioteca…")
     items = _compute_and_store_item_status(conn)
+    _set_progress(phase="Listo", items=items)
     set_state(conn, SYNC_STATE_KEY, _utcnow().isoformat())
     conn.commit()
     return {"status": "ok", "torrents": len(rows), "items": items}

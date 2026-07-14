@@ -172,6 +172,9 @@ export interface EmuSyncProgress {
   phase: string
   torrents: number
   items: number
+  page: number
+  total_pages: number | null
+  eta_seconds: number | null
   error: string | null
 }
 

@@ -116,20 +116,36 @@ def emu_fetch_all_torrents(
     base_url: str | None = None,
     per_page: int = 100,
     max_pages: int = 500,
+    progress=None,
 ) -> list[dict[str, Any]]:
     """Fetch the whole eMuwarez torrent catalog (paginated /api/torrents/filter).
-    Returns the flat list of raw torrent objects ({type, id, attributes})."""
+    Returns the flat list of raw torrent objects ({type, id, attributes}).
+
+    `progress(page, total_pages, items_so_far, total_items)` is called after each
+    page (total_pages/total_items from the API `meta`, or None if absent) so the
+    caller can report a live X/N + ETA."""
     import time
     base = (base_url or EMU_BASE_URL).rstrip("/")
     all_items: list[dict[str, Any]] = []
+    total_pages: int | None = None
+    total_items: int | None = None
     page = 1
     while page <= max_pages:
         url = build_url(base, "/api/torrents/filter", {"api_token": api_key, "perPage": str(per_page), "page": str(page)})
         data = request_json("GET", url)
         items = data.get("data") if isinstance(data, dict) else None
+        meta = data.get("meta") if isinstance(data, dict) else None
+        if isinstance(meta, dict):
+            total_pages = meta.get("last_page") or total_pages
+            total_items = meta.get("total") or total_items
         if not isinstance(items, list) or not items:
             break
         all_items.extend(items)
+        if progress:
+            try:
+                progress(page, total_pages, len(all_items), total_items)
+            except Exception:  # noqa: BLE001 — progress is best-effort
+                pass
         if len(items) < per_page:
             break
         page += 1

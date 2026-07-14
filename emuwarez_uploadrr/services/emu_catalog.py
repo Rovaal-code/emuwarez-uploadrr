@@ -501,7 +501,8 @@ def _safe_json(raw):
 # doing. Single-process app → an in-memory dict is enough (the sync is on-demand,
 # 1/hour). Polled via GET /library/emu-sync-progress.
 _SYNC_LOCK = threading.Lock()
-_SYNC_PROGRESS: dict = {"active": False, "done": False, "phase": "", "torrents": 0, "items": 0, "error": None}
+_SYNC_PROGRESS: dict = {"active": False, "done": False, "phase": "", "torrents": 0, "items": 0,
+                        "page": 0, "total_pages": None, "eta_seconds": None, "error": None}
 
 
 def get_sync_progress() -> dict:
@@ -528,7 +529,8 @@ def start_emu_sync_background(force: bool = False) -> dict:
     with _SYNC_LOCK:
         if _SYNC_PROGRESS.get("active"):
             return {"status": "started"}  # one already running
-    _set_progress(active=True, done=False, error=None, phase="Iniciando…", torrents=0, items=0)
+    _set_progress(active=True, done=False, error=None, phase="Iniciando…", torrents=0, items=0,
+                  page=0, total_pages=None, eta_seconds=None)
 
     def _run() -> None:
         c = connect(db_path())
@@ -554,10 +556,21 @@ def sync_emu_catalog(conn: sqlite3.Connection, *, force: bool = False) -> dict:
     if not api_key:
         raise IntegrationError("No hay API Key de eMuwarez configurada")
 
-    _set_progress(phase="Descargando catálogo de eMuwarez…")
-    torrents = emu.emu_fetch_all_torrents(api_key)
+    import time
+    _set_progress(phase="Descargando catálogo de eMuwarez…", page=0, total_pages=None, eta_seconds=None)
+    _dl_start = time.time()
+
+    def _on_page(page: int, total_pages, items_so_far: int, total_items) -> None:
+        elapsed = time.time() - _dl_start
+        eta = None
+        if total_pages and page > 0 and page < total_pages:
+            eta = max(0, int(elapsed / page * (total_pages - page)))
+        _set_progress(phase="Descargando catálogo de eMuwarez…", page=page,
+                      total_pages=total_pages, torrents=items_so_far, eta_seconds=eta)
+
+    torrents = emu.emu_fetch_all_torrents(api_key, progress=_on_page)
     rows = _index_catalog(torrents)
-    _set_progress(phase="Guardando catálogo…", torrents=len(rows))
+    _set_progress(phase="Guardando catálogo…", torrents=len(rows), eta_seconds=None)
     _store_catalog(conn, rows)
     _set_progress(phase="Calculando comparaciones con tu biblioteca…")
     items = _compute_and_store_item_status(conn)

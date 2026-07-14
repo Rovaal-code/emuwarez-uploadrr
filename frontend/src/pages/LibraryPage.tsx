@@ -20,6 +20,13 @@ import { HeaderFilter } from '../components/HeaderFilter'
 import { buildDeepLink, posterUrl } from '../utils/libraryItem'
 
 const LOAD_LIMIT = 20000  // show everything in one container (no pagination); backend caps here
+
+// "1m 20s" / "45s" for the sync ETA.
+function fmtEta(s: number): string {
+  if (s < 60) return `${s}s`
+  const m = Math.floor(s / 60)
+  return `${m}m ${s % 60}s`
+}
 const VIEW_MODE_STORAGE_KEY = 'emuwarez_uploadrr_library_view'
 
 type ViewMode = 'grid' | 'grid-lg' | 'list'
@@ -210,7 +217,7 @@ export function LibraryPage() {
   const handleEmuSync = useCallback(async () => {
     setEmuSyncing(true)
     setEmuMsg(null)
-    setEmuProgress({ active: true, done: false, phase: 'Iniciando…', torrents: 0, items: 0, error: null })
+    setEmuProgress({ active: true, done: false, phase: 'Iniciando…', torrents: 0, items: 0, page: 0, total_pages: null, eta_seconds: null, error: null })
     try {
       await emuSync()  // starts the background sync (429 throws when throttled)
       // Poll the process card until it finishes.
@@ -398,18 +405,27 @@ export function LibraryPage() {
       </div>
 
       {emuProgress && (
-        <div className="activity-section" style={{ padding: '14px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
-          {emuProgress.error
-            ? <span style={{ color: 'var(--color-missing, #ef4444)', fontSize: 18, lineHeight: 1 }}>✗</span>
-            : <span className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />}
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 600 }}>Sincronizando con eMuwarez…</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              {emuProgress.error ?? emuProgress.phase}
-              {emuProgress.torrents ? ` · ${emuProgress.torrents} torrents` : ''}
-              {emuProgress.items ? ` · ${emuProgress.items} comparados` : ''}
+        <div className="activity-section" style={{ padding: '14px 18px', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {emuProgress.error
+              ? <span style={{ color: 'var(--color-missing, #ef4444)', fontSize: 18, lineHeight: 1 }}>✗</span>
+              : <span className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />}
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontWeight: 600 }}>Sincronizando con eMuwarez…</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                {emuProgress.error ?? emuProgress.phase}
+                {emuProgress.total_pages ? ` · página ${emuProgress.page}/${emuProgress.total_pages}` : (emuProgress.page ? ` · página ${emuProgress.page}` : '')}
+                {emuProgress.torrents ? ` · ${emuProgress.torrents.toLocaleString('es-ES')} torrents` : ''}
+                {emuProgress.items ? ` · ${emuProgress.items.toLocaleString('es-ES')} comparados` : ''}
+                {emuProgress.eta_seconds != null ? ` · ~${fmtEta(emuProgress.eta_seconds)} restante` : ''}
+              </div>
             </div>
           </div>
+          {!emuProgress.error && emuProgress.total_pages ? (
+            <div className="progress-bar" style={{ marginTop: 10 }}>
+              <div className="progress-fill" style={{ width: `${Math.min(100, Math.round((emuProgress.page / emuProgress.total_pages) * 100))}%` }} />
+            </div>
+          ) : null}
         </div>
       )}
 

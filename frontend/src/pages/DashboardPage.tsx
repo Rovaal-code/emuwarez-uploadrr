@@ -150,9 +150,8 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
         <div>
           <div className="page-title">Dashboard</div>
         </div>
+        <SyncCard />
       </div>
-
-      <SyncCard />
 
       {syncMsg && (
         <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--text-secondary)' }}>{syncMsg}</div>

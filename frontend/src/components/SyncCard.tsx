@@ -16,8 +16,8 @@ export function SyncCard() {
   const requestsWait = requestsStatus && !requestsStatus.can_sync ? Math.ceil(requestsStatus.wait_seconds / 60) : 0
 
   return (
-    <div className="activity-section" style={{ padding: '12px 16px', marginBottom: 16 }}>
-      <div className="section-title" style={{ marginBottom: 10 }}>Sincronizar</div>
+    <div className="activity-section" style={{ padding: '8px 14px', marginBottom: 0, display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div className="section-title" style={{ margin: 0, whiteSpace: 'nowrap' }}>Sincronizar</div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <Tooltip content="Consulta tus instancias de Radarr/Sonarr y actualiza la biblioteca local (títulos, rutas, estado en disco y nomenclatura).">
           <button className="btn btn-primary btn-sm" onClick={startLibrarySync} disabled={libSyncing}>

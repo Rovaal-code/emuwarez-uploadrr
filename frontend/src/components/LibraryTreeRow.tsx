@@ -143,8 +143,13 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, onR
               >
                 {expanded ? '▼' : '▶'}
               </button>
+            ) : item.item_type === 'episode' && item.episode_number != null ? (
+              // Episodes use the chevron's slot to show their episode number.
+              <span style={{ width: 22, flexShrink: 0, textAlign: 'center', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
+                {item.episode_number}
+              </span>
             ) : (
-              // Leaf rows (episodes, movies) keep the chevron's width so their
+              // Other leaf rows (movies) keep the chevron's width so their
               // content stays aligned one indent level deeper than the parent.
               <span style={{ width: 22, flexShrink: 0 }} />
             )}

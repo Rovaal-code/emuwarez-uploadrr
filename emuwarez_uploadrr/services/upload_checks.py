@@ -59,29 +59,34 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int) -> dict:
         add("accessible", "Contenido accesible", "Contenido no accesible", False, "Elemento no encontrado")
         return done()
     path = item.get("path")
+    # Translate the Radarr/Sonarr path to where the file is actually reachable
+    # (remote path mapping) — same as MediaInfo. Otherwise a remote-mounted
+    # library reads fine but the filesystem checks fail on the raw /data path.
+    from .path_mapping import resolve_local_path
+    local_path = resolve_local_path(path) or path
 
     # 1. Accessible — the file exists on disk.
     if not add("accessible", "Contenido accesible", "Contenido no accesible",
-               bool(path) and os.path.isfile(path),
+               bool(local_path) and os.path.isfile(local_path),
                path or "El elemento no tiene ruta de archivo"):
         return done()
 
     # 2. Renameable — write permission on the file's directory.
-    parent = os.path.dirname(path)
+    parent = os.path.dirname(local_path)
     if not add("renameable", "Se puede renombrar", "No se puede renombrar",
                os.access(parent, os.W_OK), parent):
         return done()
 
     # 3. Integrity — non-empty and MediaInfo can read it (light corruption check).
     try:
-        size = os.path.getsize(path)
+        size = os.path.getsize(local_path)
     except OSError:
         size = 0
     if size == 0:
         add("integrity", "Fichero íntegro", "Fichero no íntegro", False, "El fichero está vacío (0 bytes)")
         return done()
     if mediainfo_available():
-        info = read_media_info_summary(path)
+        info = read_media_info_summary(local_path)
         if not add("integrity", "Fichero íntegro", "Fichero no íntegro", bool(info),
                    "MediaInfo lo lee correctamente" if info else "MediaInfo no pudo leer el fichero (posible corrupción)"):
             return done()
@@ -92,7 +97,7 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int) -> dict:
     use_hardlinks = (get_setting_canonical(conn, "nomenclature.use_hardlinks") or "true") != "false"
     if use_hardlinks:
         hl_base = get_setting_canonical(conn, "hardlink_base")
-        ok, msg = _test_hardlink(path, hl_base)
+        ok, msg = _test_hardlink(local_path, hl_base)
         if not add("hardlink", "Se puede crear el hardlink", "No se puede crear el hardlink", ok, msg):
             return done()
 

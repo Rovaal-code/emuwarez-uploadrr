@@ -40,7 +40,9 @@ export function LibraryChildrenSection({ parentId, childType, title, instances, 
         <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{emptyLabel}</div>
       ) : (
         <div className="activity-section" style={{ marginBottom: 0 }}>
-          <div style={{ overflow: 'auto' }}>
+          {/* Bounded to the remaining viewport height so the table scrolls
+              inside itself and the sticky column headers stay pinned. */}
+          <div style={{ overflow: 'auto', maxHeight: 'calc(100vh - 130px)' }}>
             <table className="data-table">
               <thead>
                 <tr>

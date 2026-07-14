@@ -214,14 +214,10 @@ export function LibraryPage() {
   }, [])
   useEffect(() => { loadEmuStatus() }, [loadEmuStatus])
 
-  const handleEmuSync = useCallback(async () => {
-    setEmuSyncing(true)
-    setEmuMsg(null)
-    setEmuProgress({ active: true, done: false, phase: 'Iniciando…', torrents: 0, items: 0, page: 0, total_pages: null, eta_seconds: null, error: null })
+  // Poll the background sync's progress card until it finishes, then refresh.
+  const followEmuSync = useCallback(async () => {
     try {
-      await emuSync()  // starts the background sync (429 throws when throttled)
-      // Poll the process card until it finishes.
-      for (let i = 0; i < 900; i++) {
+      for (let i = 0; i < 3600; i++) {
         const p = await getEmuSyncProgress()
         setEmuProgress(p)
         if (p.done || !p.active) {
@@ -233,14 +229,42 @@ export function LibraryPage() {
         await new Promise(r => setTimeout(r, 800))
       }
       await Promise.all([load(), loadEmuStatus()])
-    } catch (e) {
-      setEmuMsg(e instanceof Error ? e.message : 'Error al sincronizar con eMuwarez')
     } finally {
       setEmuSyncing(false)
       setEmuProgress(null)
       setTimeout(() => setEmuMsg(null), 6000)  // no dejar el mensaje empujando la lista
     }
   }, [load, loadEmuStatus])
+
+  const handleEmuSync = useCallback(async () => {
+    setEmuSyncing(true)
+    setEmuMsg(null)
+    setEmuProgress({ active: true, done: false, phase: 'Iniciando…', torrents: 0, items: 0, page: 0, total_pages: null, eta_seconds: null, error: null })
+    try {
+      await emuSync()  // starts the background sync (429 throws when throttled)
+    } catch (e) {
+      setEmuMsg(e instanceof Error ? e.message : 'Error al sincronizar con eMuwarez')
+      setEmuSyncing(false)
+      setEmuProgress(null)
+      setTimeout(() => setEmuMsg(null), 6000)
+      return
+    }
+    await followEmuSync()
+  }, [followEmuSync])
+
+  // If the page is (re)opened while a sync is running in the background, resume
+  // showing its progress card — otherwise a refresh would hide it.
+  useEffect(() => {
+    let alive = true
+    getEmuSyncProgress().then(p => {
+      if (alive && p.active && !p.done) {
+        setEmuSyncing(true)
+        setEmuProgress(p)
+        followEmuSync()
+      }
+    }).catch(() => { /* ignore */ })
+    return () => { alive = false }
+  }, [followEmuSync])
 
   function applyFilters() {
     setOffset(0)

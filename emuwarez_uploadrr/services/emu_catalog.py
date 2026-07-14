@@ -518,26 +518,41 @@ def _set_progress(**kw) -> None:
 def start_emu_sync_background(force: bool = False) -> dict:
     """Start the catalog sync in a background thread (so the UI can poll
     progress). Returns {status:'started'} or {status:'throttled', wait_seconds}."""
-    from ..database import connect, db_path
+    from ..database import connect, db_path, get_state
     conn = connect(db_path())
     try:
         wait = seconds_until_next_sync(conn)
+        if wait > 0 and not force:
+            return {"status": "throttled", "wait_seconds": wait}
+        with _SYNC_LOCK:
+            if _SYNC_PROGRESS.get("active"):
+                return {"status": "started"}  # one already running
+        # Record the throttle NOW (at start), not at the end — otherwise a slow
+        # or stalled download leaves no throttle and a page refresh lets you
+        # relaunch it. Saved so a failed run can restore it (no 1h lock-out).
+        prev = get_state(conn, SYNC_STATE_KEY)
+        set_state(conn, SYNC_STATE_KEY, _utcnow().isoformat())
+        conn.commit()
     finally:
         conn.close()
-    if wait > 0 and not force:
-        return {"status": "throttled", "wait_seconds": wait}
-    with _SYNC_LOCK:
-        if _SYNC_PROGRESS.get("active"):
-            return {"status": "started"}  # one already running
     _set_progress(active=True, done=False, error=None, phase="Iniciando…", torrents=0, items=0,
                   page=0, total_pages=None, eta_seconds=None)
 
     def _run() -> None:
         c = connect(db_path())
         try:
-            sync_emu_catalog(c, force=True)  # throttle already checked above
+            sync_emu_catalog(c, force=True)  # throttle already recorded above
         except Exception as exc:  # noqa: BLE001 — surface the error to the card
             _set_progress(error=str(exc), phase="Error")
+            # A failed sync shouldn't lock you out for an hour — restore the
+            # previous throttle timestamp.
+            try:
+                cc = connect(db_path())
+                set_state(cc, SYNC_STATE_KEY, prev or "")
+                cc.commit()
+                cc.close()
+            except Exception:  # noqa: BLE001
+                pass
         finally:
             c.close()
             _set_progress(active=False, done=True)

@@ -153,6 +153,17 @@ def sync_emu_requests(
         finish_task(conn, task_id, TaskStatus.FAILED.value, "No hay API Key de eMuwarez configurada")
         raise IntegrationError("No hay API Key de eMuwarez configurada")
 
+    # Record the throttle at START (not at the end), so a slow fetch or a page
+    # refresh mid-sync can't relaunch it. Restored if the sync fails / is
+    # unavailable, so a failed run doesn't lock the user out for an hour.
+    prev_sync = get_state(conn, SYNC_STATE_KEY)
+    set_state(conn, SYNC_STATE_KEY, _utcnow().isoformat())
+    conn.commit()
+
+    def _restore_throttle() -> None:
+        set_state(conn, SYNC_STATE_KEY, prev_sync or "")
+        conn.commit()
+
     try:
         raw_items = emu.emu_fetch_all_pages(api_key)
         items = emu.normalize_requests(raw_items)
@@ -168,6 +179,7 @@ def sync_emu_requests(
         # eMuwarez (UNIT3D) does not expose /api/requests — the endpoint 404s.
         # That's a known tracker limitation, not a real failure: mark the task
         # SKIPPED with a clear message instead of a scary raw HTTP 404.
+        _restore_throttle()
         if _is_requests_endpoint_missing(exc):
             msg = "eMuwarez no expone el endpoint de peticiones (/api/requests); función no disponible aún."
             finish_task(conn, task_id, TaskStatus.SKIPPED.value, msg)
@@ -175,6 +187,7 @@ def sync_emu_requests(
         finish_task(conn, task_id, TaskStatus.FAILED.value, str(exc))
         raise
     except Exception as exc:
+        _restore_throttle()
         finish_task(conn, task_id, TaskStatus.FAILED.value, str(exc))
         raise
 

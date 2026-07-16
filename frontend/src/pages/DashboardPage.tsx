@@ -436,7 +436,7 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
                 if (connSettings?.emu_api_key_configured)
                   rows.push(<ConnRow key="emu" icon={<ServiceIcon type="emu" size={16} />} label="API eMuwarez" />)
                 if (connSettings?.tmdb_api_key_configured)
-                  rows.push(<ConnRow key="tmdb" icon={<span style={{ fontSize: 15, lineHeight: 1 }}>🎬</span>} label="API TMDb" />)
+                  rows.push(<ConnRow key="tmdb" icon={<ServiceIcon type="tmdb" size={16} />} label="API TMDb" />)
                 if (connSettings?.qbit_configured)
                   rows.push(<ConnRow key="qbit" icon={<ServiceIcon type="qbittorrent" size={16} />} label="qBittorrent" />)
                 // Image hosts: imgbox is always the default fallback, plus enabled ones.

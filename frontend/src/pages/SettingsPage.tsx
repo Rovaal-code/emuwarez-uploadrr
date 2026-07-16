@@ -321,7 +321,9 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16, alignItems: 'stretch' }}>
       <div className="placeholder-card">
-        <h3 style={{ marginTop: 0, marginBottom: 14 }}>Emuwarez</h3>
+        <h3 style={{ marginTop: 0, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <ServiceIcon type="emu" size={18} /> Emuwarez
+        </h3>
         <div className="form-group" style={{ marginBottom: 12 }}>
           <label className="form-label">Estado de la API key</label>
           <div style={{ fontSize: 13 }}>
@@ -514,7 +516,9 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
       </div>
 
       <div className="placeholder-card">
-        <h3 style={{ marginTop: 0, marginBottom: 14 }}>TMDb</h3>
+        <h3 style={{ marginTop: 0, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <ServiceIcon type="tmdb" size={18} /> TMDb
+        </h3>
         <div className="form-group" style={{ marginBottom: 12 }}>
           <label className="form-label">Estado de la API key</label>
           <div style={{ fontSize: 13 }}>

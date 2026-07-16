@@ -11,12 +11,31 @@
 // background chip behind it.
 
 interface ServiceIconProps {
-  type: 'radarr' | 'sonarr' | 'emu' | 'uploadrr' | 'discord' | 'telegram' | 'qbittorrent' | 'imghost'
+  type: 'radarr' | 'sonarr' | 'emu' | 'uploadrr' | 'discord' | 'telegram' | 'qbittorrent' | 'imghost' | 'tmdb'
   size?: number
 }
 
 export function ServiceIcon({ type, size = 16 }: ServiceIconProps) {
   const s = size
+
+  if (type === 'tmdb') {
+    // The Movie DB's real brand mark: rounded square with their teal→blue
+    // gradient and the two-bar logo.
+    return (
+      <svg width={s} height={s} viewBox="0 0 24 24" aria-label="TMDb">
+        <defs>
+          <linearGradient id="tmdbGrad" x1="0" y1="0" x2="24" y2="0" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="#90cea1" />
+            <stop offset="0.56" stopColor="#3cbec9" />
+            <stop offset="1" stopColor="#00b3e5" />
+          </linearGradient>
+        </defs>
+        <rect x="1" y="1" width="22" height="22" rx="5" fill="url(#tmdbGrad)" />
+        <rect x="5" y="8" width="14" height="3.1" rx="1.55" fill="#0d253f" />
+        <rect x="5" y="12.9" width="9" height="3.1" rx="1.55" fill="#0d253f" />
+      </svg>
+    )
+  }
 
   if (type === 'radarr') {
     return (

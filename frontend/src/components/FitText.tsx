@@ -1,40 +1,42 @@
 import { useRef, useLayoutEffect } from 'react'
 
 // Monospace one-liner (torrent name / internal title / expected name) that
-// shrinks its font so the whole string fits on a single line instead of
-// wrapping, down to `min`px.
+// shrinks its font JUST ENOUGH to fit the whole string on one line — filling
+// the box, never smaller than needed — down to `min`px. If the string already
+// fits at `max`, it stays at `max` (e.g. a short title keeps full size).
 export function FitText({ text, max = 13, min = 8 }: { text: string; max?: number; min?: number }) {
   const ref = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
     const el = ref.current
-    const parent = el?.parentElement
-    if (!el || !parent) return
+    if (!el) return
+    // Guard on the measured width: setting the font changes el's HEIGHT, which
+    // re-fires the ResizeObserver — but the available WIDTH is unchanged, so we
+    // skip and avoid an infinite measure→resize loop. A real container resize
+    // changes the width and does re-fit.
+    let lastAvail = -1
     const fit = () => {
-      // `el` is width:100%, so its clientWidth is the real available width
-      // (the container's CONTENT box, i.e. excluding the container's padding) —
-      // and it doesn't shrink-wrap to the text. Using the parent's clientWidth
-      // instead would over-count by the padding and let the text overflow.
+      // `el` is width:100%, so clientWidth is the container's content width
+      // (excludes padding) and is NOT affected by our font changes.
       const avail = el.clientWidth
-      if (avail <= 0) return
+      if (avail <= 0 || avail === lastAvail) return
+      lastAvail = avail
       el.style.fontSize = `${max}px`
-      if (el.scrollWidth <= avail) return          // fits at max
-      // Binary-search the LARGEST font size in [min, max] that fits on one line
-      // (2px margin so sub-pixel rounding never clips it with an ellipsis).
-      let lo = min, hi = max
-      for (let i = 0; i < 14; i++) {
-        const mid = (lo + hi) / 2
-        el.style.fontSize = `${mid}px`
-        if (el.scrollWidth <= avail - 2) lo = mid
-        else hi = mid
-      }
-      el.style.fontSize = `${lo}px`
+      const natural = el.scrollWidth // full text width at max font, one line
+      if (natural <= avail) return   // fits at max → keep it big
+      // Proportional shrink: the largest size whose text width ≤ avail. The −1
+      // guards sub-pixel rounding so it never clips into an ellipsis.
+      const size = Math.max(min, (max * (avail - 1)) / natural)
+      el.style.fontSize = `${size}px`
     }
     fit()
-    // Observe the PARENT (not `el`) so changing the font — which alters el's
-    // height — doesn't retrigger the observer in a loop.
+    // Re-measure once layout has fully settled (modal open, fonts, etc.), since
+    // the first synchronous pass can read a transient width.
+    const raf = requestAnimationFrame(fit)
     const ro = new ResizeObserver(fit)
-    ro.observe(parent)
-    return () => ro.disconnect()
+    ro.observe(el)
+    let cancelled = false
+    if (document.fonts?.ready) document.fonts.ready.then(() => { if (!cancelled) { lastAvail = -1; fit() } })
+    return () => { cancelled = true; cancelAnimationFrame(raf); ro.disconnect() }
   }, [text, max, min])
   return (
     <div ref={ref} style={{ fontFamily: 'monospace', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%', minWidth: 0 }}>

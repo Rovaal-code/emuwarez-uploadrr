@@ -13,34 +13,7 @@ import { getLibrary, getMediaInfoReport, suggestProvider } from '../api/library'
 import type { MediaInfoReport } from '../api/library'
 import type { LibraryItemResponse } from '../types/api'
 import { InfoIcon } from './InfoIcon'
-
-// Ficha title preview: fixed, readable monospace that wraps onto extra lines at
-// the box width (breaking at spaces) instead of shrinking. A long title stays
-// big and complete over 1-2 lines.
-function TitleText({ text }: { text: string }) {
-  return (
-    <div style={{
-      fontFamily: 'monospace', fontSize: 13, lineHeight: 1.45,
-      whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', wordBreak: 'break-word',
-    }}>
-      {text}
-    </div>
-  )
-}
-
-// Torrent name preview: the final name must read as a single continuous string,
-// so it stays on ONE line at a fixed, readable size and scrolls horizontally
-// when it's longer than the box (never wraps, never shrinks).
-function TorrentName({ text }: { text: string }) {
-  return (
-    <div style={{
-      fontFamily: 'monospace', fontSize: 13, lineHeight: 1.45,
-      whiteSpace: 'nowrap', overflowX: 'auto', overflowY: 'hidden', paddingBottom: 2,
-    }}>
-      {text}
-    </div>
-  )
-}
+import { FitText } from './FitText'
 
 // Unified "Subir" wizard (replaces the separate Nomenclatura + Campos + Subir
 // buttons). For a Series/Season it first asks which season (and episode, or the
@@ -405,9 +378,9 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
       </div>
       <div style={{ marginTop: 16, padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
         <div style={labelStyle}>Nombre final del torrent (eMuwarez)</div>
-        {preview?.torrent_name ? <TorrentName text={preview.torrent_name} /> : <GeneratingHint />}
+        {preview?.torrent_name ? <FitText text={preview.torrent_name} /> : <GeneratingHint />}
         <div style={{ ...labelStyle, marginTop: 10 }}>Título</div>
-        {preview?.internal_mkv_title ? <TitleText text={preview.internal_mkv_title} /> : <GeneratingHint />}
+        {preview?.internal_mkv_title ? <FitText text={preview.internal_mkv_title} /> : <GeneratingHint />}
       </div>
     </>
   )
@@ -546,9 +519,9 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
           <div className="modal-body">
             <div style={{ marginBottom: 14, padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
               <div style={labelStyle}>Nombre final del torrent</div>
-              <TorrentName text={preview?.torrent_name || '–'} />
+              <FitText text={preview?.torrent_name || '–'} />
               <div style={{ ...labelStyle, marginTop: 10 }}>Título</div>
-              <TitleText text={preview?.internal_mkv_title || '–'} />
+              <FitText text={preview?.internal_mkv_title || '–'} />
             </div>
 
             {/* Pre-upload checks card */}

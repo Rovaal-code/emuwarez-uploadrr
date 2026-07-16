@@ -334,15 +334,12 @@ optgroup {
   cursor: pointer;
   display: inline-block;
   border-radius: 4px;
-  transition: color 0.12s ease, text-decoration-color 0.12s ease;
-  text-decoration: underline;
-  text-decoration-color: transparent;
-  text-underline-offset: 2px;
+  transition: color 0.12s ease;
+  text-decoration: none;
 }
 
 .lib-title-link:hover {
   color: var(--text-accent);
-  text-decoration-color: var(--text-accent);
 }
 
 .data-table .col-actions {

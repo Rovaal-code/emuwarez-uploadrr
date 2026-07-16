@@ -276,7 +276,7 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
       await saveNomenclatureFields(targetId, fields)
       const applied = await adaptNomenclature(targetId, { apply: true, confirmation: NOM_TOKEN })
       if (applied.status && applied.status !== 'applied') {
-        setUploadMsg(`✗ No se pudo aplicar la nomenclatura (estado: ${applied.status}).`)
+        setUploadMsg(`✗ No se pudo aplicar la nomenclatura (estado: ${applied.status}). Suele deberse a que el archivo está en una ubicación de solo lectura, o a que los hardlinks no están configurados con una ruta escribible en el mismo disco que tus medios.`)
         return
       }
       const pf = await uploadPreflight(targetId)
@@ -533,7 +533,14 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
                 ¿Seguro que quieres subir <strong>«{item.title}»</strong> a eMuwarez? Se iniciará la subida real.
               </p>
             )}
-            {uploadMsg && <p style={{ fontSize: 13, marginTop: 8 }}>{uploadMsg}</p>}
+            {uploadMsg && (
+              <p style={{
+                fontSize: 13, marginTop: 8, padding: '8px 12px', borderRadius: 6, fontWeight: 500,
+                background: uploadMsg.startsWith('✗') ? 'rgba(239,68,68,0.12)' : 'rgba(34,197,94,0.12)',
+                border: `1px solid ${uploadMsg.startsWith('✗') ? 'rgba(239,68,68,0.35)' : 'rgba(34,197,94,0.35)'}`,
+                color: uploadMsg.startsWith('✗') ? '#fca5a5' : '#86efac',
+              }}>{uploadMsg}</p>
+            )}
 
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
               <button className="btn btn-secondary" onClick={() => setStep(1)} disabled={uploading}>← Volver</button>

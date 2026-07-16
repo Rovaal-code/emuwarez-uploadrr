@@ -2944,18 +2944,56 @@ def heuristic_source(audio_codecs: list[str], size_gb: float, resolution: Option
     return None
 
 
-def detect_source_smart(path: Path, audio_codecs: list[str], resolution: Optional[str]) -> tuple[str, bool]:
-    """(source, is_guess). Name first; if the name says nothing, fall back to the
-    MediaInfo heuristic; last resort is BluRay. is_guess=True when it wasn't
-    resolved from the name."""
+# Overall bitrate (Mbps) thresholds per resolution: (BDRemux, BluRay, WEB-DL).
+# Below the WEB-DL threshold with lossy audio → HDTV. Derived from the size
+# thresholds above assuming a ~2h runtime, but bitrate normalizes for length.
+_BITRATE_MBPS = {
+    "2160p": (45.0, 16.0, 8.0),
+    "1080p": (22.0, 9.0, 4.0),
+    "720p":  (9.0, 4.0, 2.0),
+}
+_DEFAULT_BITRATE_MBPS = (22.0, 9.0, 4.0)
+
+
+def estimate_source_from_bitrate(
+    size_bytes: Optional[int], duration_s: Optional[float],
+    audio_codecs: list[str], resolution: Optional[str],
+) -> Optional[str]:
+    """Source guess from the file's overall bitrate (size / duration) + audio,
+    used ONLY when the name/Radarr give no source. Bitrate normalizes for
+    content length, unlike raw size. Returns None if duration is unknown.
+
+    - Lossless audio → disc: BDRemux if bitrate is near-untouched, else BluRay.
+    - Lossy audio → WEB-DL, or HDTV when the bitrate is very low.
+    """
+    if not size_bytes or not duration_s or duration_s <= 0:
+        return None
+    mbps = (size_bytes * 8) / duration_s / 1_000_000
+    remux_thr, bluray_thr, webdl_thr = _BITRATE_MBPS.get(resolution or "", _DEFAULT_BITRATE_MBPS)
+    codecs = " ".join(c or "" for c in audio_codecs).lower()
+    if any(k in codecs for k in _LOSSLESS_AUDIO):
+        return "BDRemux" if mbps >= remux_thr else "BluRay"
+    return "WEB-DL" if mbps >= webdl_thr else "HDTV"
+
+
+def detect_source_smart(
+    path: Path, audio_codecs: list[str], resolution: Optional[str],
+    duration_s: Optional[float] = None,
+) -> tuple[str, bool]:
+    """(source, is_guess). Name first; if the name says nothing, estimate from the
+    overall bitrate (size/duration) + audio, falling back to the size-only
+    heuristic when duration is unknown; last resort BluRay. is_guess=True when it
+    wasn't resolved from the name."""
     by_name = _detect_source_by_name(path)
     if by_name:
         return by_name, False
     try:
-        size_gb = path.stat().st_size / (1024 ** 3)
+        size_bytes = path.stat().st_size
     except OSError:
-        size_gb = 0.0
-    guess = heuristic_source(audio_codecs, size_gb, resolution)
+        size_bytes = 0
+    guess = estimate_source_from_bitrate(size_bytes, duration_s, audio_codecs, resolution)
+    if guess is None:  # no duration → old size-only heuristic
+        guess = heuristic_source(audio_codecs, size_bytes / (1024 ** 3), resolution)
     return (guess or "BluRay"), True
 
 
@@ -3083,6 +3121,14 @@ def subtitle_forced(track: dict[str, Any]) -> str:
     return "Sí" if "yes" in text or "sí" in text or "forced" in text or "forzado" in text else "No"
 
 
+def duration_seconds(general: dict[str, Any]) -> Optional[float]:
+    """Content duration in seconds from a MediaInfo General track."""
+    try:
+        return float(general.get("Duration"))
+    except (TypeError, ValueError):
+        return None
+
+
 def read_media_info(path: Path) -> MediaInfoData:
     info = run_mediainfo_json(path)
     general = first_track(info, "General")
@@ -3121,7 +3167,10 @@ def read_media_info(path: Path) -> MediaInfoData:
         )
 
     _resolution = map_resolution(video)
-    _source, _ = detect_source_smart(path, [a.get("codec") or "" for a in audio_items], _resolution)
+    _source, _ = detect_source_smart(
+        path, [a.get("codec") or "" for a in audio_items], _resolution,
+        duration_s=duration_seconds(general),
+    )
     return MediaInfoData(
         resolution=_resolution,
         source=_source,

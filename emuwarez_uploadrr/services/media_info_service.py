@@ -161,8 +161,11 @@ def build_mediainfo_report(path: str) -> dict:
     # when the name says nothing — from a heuristic (audio + size). Show that
     # origin in the "MediaInfo" column instead of pretending MediaInfo gave it.
     _audio_codecs = [legacy.audio_codec(t) for t in legacy.media_tracks(info) if t.get("@type") == "Audio"]
-    src, src_guess = legacy.detect_source_smart(p, _audio_codecs, resolution)
-    add("Source", "estimado por audio/tamaño" if src_guess else "del nombre del archivo", src)
+    _general = legacy.first_track(info, "General")
+    src, src_guess = legacy.detect_source_smart(
+        p, _audio_codecs, resolution, duration_s=legacy.duration_seconds(_general),
+    )
+    add("Source", "estimado por bitrate (tamaño/duración) + audio" if src_guess else "del nombre del archivo", src)
     # HDR / Dolby Vision
     hdr = legacy.detect_hdr(video) if video else []
     add("HDR/DV", video.get("HDR_Format") or video.get("HDR_Format_String"), " ".join(hdr) or None)

@@ -433,7 +433,8 @@ def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
         # NOT used here (it can't give per-track audio). If MediaInfo isn't
         # available the fields are left empty (the user sees they must fix
         # access / install `mediainfo`), rather than filling with sync values.
-        mi_audio = mi_video = mi_hdr = None
+        mi_audio = mi_video = mi_hdr = mi_source = None
+        mi_source_estimated = False
         try:
             from .media_info_service import build_mediainfo_report
             report = build_mediainfo_report(item.get("path") or "")
@@ -445,8 +446,23 @@ def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
                 }
                 mi_video = emu_by_field.get("Códec de vídeo")
                 mi_hdr = emu_by_field.get("HDR/DV")
+                mi_source = emu_by_field.get("Source")
+                for r in report.get("rows", []):
+                    if r["field"] == "Source":
+                        mi_source_estimated = "estimado" in (r.get("mediainfo") or "").lower()
         except Exception:  # noqa: BLE001 — MediaInfo failure leaves fields empty
             pass
+
+        # Source comes from Radarr/Sonarr (≈ the file name). Only when it's null
+        # or not a valid eMuwarez source do we fall back to the MediaInfo estimate
+        # (bitrate + audio); flag it so the user can review it.
+        valid_sources = {s["code"] for s in EMU_SOURCES}
+        source_warning = None
+        if (not source or source not in valid_sources) and mi_source:
+            source = mi_source
+            if mi_source_estimated:
+                source_warning = ("Source estimado por MediaInfo (bitrate y audio): "
+                                  "Radarr/Sonarr no dio un source válido. Revísalo.")
 
         fields: dict[str, Any] = {
             "title": title,
@@ -476,6 +492,8 @@ def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
             # Set when the title couldn't be confirmed in Spanish via TMDb, so
             # the wizard can flag the Title field.
             "title_warning": title_warning,
+            # Set when the source had to be estimated from MediaInfo.
+            "source_warning": source_warning,
         }
     finally:
         if own:

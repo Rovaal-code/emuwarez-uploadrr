@@ -63,6 +63,7 @@ export async function getNomenclatureFields(itemId: number): Promise<{
   internal_mkv_title: string
   tmdb_available_providers?: string[]
   title_warning?: string | null
+  source_warning?: string | null
 }> {
   return api.get(`/library/${itemId}/nomenclature/fields`)
 }

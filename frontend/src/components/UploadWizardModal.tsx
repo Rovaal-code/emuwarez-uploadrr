@@ -96,6 +96,7 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
   const [providers, setProviders] = useState<EmuProvider[]>([])
   const [fields, setFields] = useState<NomenclatureFields>({})
   const [titleWarning, setTitleWarning] = useState<string | null>(null)
+  const [sourceWarning, setSourceWarning] = useState<string | null>(null)
   const [preview, setPreview] = useState<FieldsPreviewResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -181,6 +182,7 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
       setProviders(prvResp.providers)
       setFields(fieldsResp.fields || {})
       setTitleWarning(fieldsResp.title_warning ?? null)
+      setSourceWarning(fieldsResp.source_warning ?? null)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error cargando la nomenclatura')
     } finally {
@@ -310,6 +312,9 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
             <option value="">— Seleccionar —</option>
             {sources.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}
           </select>
+          {sourceWarning && (
+            <span style={{ display: 'block', marginTop: 4, fontSize: 11, color: '#f59e0b' }}>⚠ {sourceWarning}</span>
+          )}
         </label>
         {sourceRequiresProvider && (
           <label><span style={labelStyle}>Provider</span>

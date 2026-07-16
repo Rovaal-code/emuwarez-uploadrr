@@ -73,15 +73,22 @@ function SyncOption({ icon, title, desc, cadence, wait, onClick }: {
   icon: string; title: string; desc: string; cadence: string; wait: number; onClick: () => void
 }) {
   const blocked = wait > 0
+  const [hover, setHover] = useState(false)
+  const lit = hover && !blocked
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={blocked}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
       style={{
         display: 'block', width: '100%', textAlign: 'left', padding: '12px 14px',
-        border: '1px solid var(--border)', borderRadius: 10, cursor: blocked ? 'not-allowed' : 'pointer',
-        background: 'var(--bg-card, transparent)', color: 'var(--text-primary)', opacity: blocked ? 0.55 : 1,
+        border: `1px solid ${lit ? 'var(--text-accent, #2563eb)' : 'var(--border)'}`,
+        borderRadius: 10, cursor: blocked ? 'not-allowed' : 'pointer',
+        background: lit ? 'var(--bg-hover, rgba(255,255,255,0.06))' : 'var(--bg-card, transparent)',
+        color: 'var(--text-primary)', opacity: blocked ? 0.55 : 1,
+        transition: 'background 0.12s, border-color 0.12s',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>

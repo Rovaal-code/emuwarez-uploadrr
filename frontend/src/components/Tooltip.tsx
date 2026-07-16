@@ -1,18 +1,32 @@
-import { useState, useCallback, useRef, useLayoutEffect } from 'react'
+import { useState, useCallback, useRef, useLayoutEffect, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 
 // Custom hover tooltip styled like the app's cards (opaque surface, not the
 // native browser title box). Rendered in a fixed-position portal just below
 // the cursor, so it is never clipped by table/overflow containers.
 
+// Hover dwell before a tooltip appears (ms). The box shows only after the
+// cursor has rested on the target for this long.
+const HOVER_DELAY_MS = 1000
+
 export function useTooltip(content: React.ReactNode, maxWidth = 460) {
   const [show, setShow] = useState(false)
   const [pt, setPt] = useState({ x: 0, y: 0 })
   const ref = useRef<HTMLDivElement>(null)
+  const timer = useRef<number | null>(null)
 
   const track = useCallback((e: React.MouseEvent) => setPt({ x: e.clientX, y: e.clientY }), [])
-  const open = useCallback((e: React.MouseEvent) => { setPt({ x: e.clientX, y: e.clientY }); setShow(true) }, [])
-  const close = useCallback(() => setShow(false), [])
+  const open = useCallback((e: React.MouseEvent) => {
+    setPt({ x: e.clientX, y: e.clientY })
+    if (timer.current) window.clearTimeout(timer.current)
+    timer.current = window.setTimeout(() => setShow(true), HOVER_DELAY_MS)
+  }, [])
+  const close = useCallback(() => {
+    if (timer.current) { window.clearTimeout(timer.current); timer.current = null }
+    setShow(false)
+  }, [])
+
+  useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current) }, [])
 
   // The box width is `max-content` capped at maxWidth, so it hugs the text
   // exactly (one line for short text, wrapping to the cap for long text) with no

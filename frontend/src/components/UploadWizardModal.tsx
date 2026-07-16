@@ -12,6 +12,7 @@ import { uploadPreflight, startUploadJob, runUploadChecks, type UploadChecksResu
 import { getLibrary, getMediaInfoReport, suggestProvider } from '../api/library'
 import type { MediaInfoReport } from '../api/library'
 import type { LibraryItemResponse } from '../types/api'
+import { InfoIcon } from './InfoIcon'
 
 // Unified "Subir" wizard (replaces the separate Nomenclatura + Campos + Subir
 // buttons). For a Series/Season it first asks which season (and episode, or the
@@ -34,6 +35,29 @@ interface Props {
 
 const labelStyle: React.CSSProperties = {
   fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4, display: 'block',
+}
+
+// Field label + an info "?" explaining where the field's data comes from.
+function FieldLabel({ label, info }: { label: string; info?: React.ReactNode }) {
+  return (
+    <span style={{ ...labelStyle, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+      {label}{info && <InfoIcon text={info} />}
+    </span>
+  )
+}
+
+// Where each nomenclature field comes from (shown in the "?" tooltips).
+const FIELD_INFO = {
+  title: 'Viene de Radarr/Sonarr y se traduce al español con TMDb.',
+  year: 'Viene de Radarr/Sonarr.',
+  season_episode: 'Temporada/episodio del release (SxxExx).',
+  resolution: 'Viene de Radarr/Sonarr. El botón «Ver MediaInfo» muestra la del archivo real.',
+  source: 'Viene de Radarr/Sonarr (≈ el del nombre del archivo). Si falta o es inválido, se estima con MediaInfo por bitrate (tamaño/duración).',
+  provider: 'Sale del nombre del archivo. Si no lo trae y el source es WEB-DL, se sugiere con TMDb (suscripción antes que alquiler, según tu prioridad).',
+  video_codec: 'Se lee con MediaInfo del archivo real.',
+  audio: 'Se lee con MediaInfo del archivo real (por pista).',
+  subs: 'Subtítulos incluidos en el release.',
+  tag: 'El tag de tu grupo de subida, configurado en Ajustes.',
 }
 
 // Monospace one-liner (torrent name / internal title) that shrinks its font so
@@ -297,24 +321,24 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
   const fieldBox = (
     <>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
-        <label><span style={labelStyle}>Título</span>
+        <label><FieldLabel label="Título" info={FIELD_INFO.title} />
           <input className="form-input" value={fields.title || ''} onChange={e => setField('title', e.target.value)} />
           {titleWarning && (
             <span style={{ display: 'block', marginTop: 4, fontSize: 11, color: '#f59e0b' }}>⚠ {titleWarning}</span>
           )}
         </label>
-        <label><span style={labelStyle}>Año</span>
+        <label><FieldLabel label="Año" info={FIELD_INFO.year} />
           <input className="form-input" value={fields.year || ''} onChange={e => setField('year', e.target.value)} />
         </label>
         {fields.season_episode != null && (
-          <label><span style={labelStyle}>Temporada / Episodio</span>
+          <label><FieldLabel label="Temporada / Episodio" info={FIELD_INFO.season_episode} />
             <input className="form-input" value={fields.season_episode || ''} onChange={e => setField('season_episode', e.target.value)} />
           </label>
         )}
-        <label><span style={labelStyle}>Resolución</span>
+        <label><FieldLabel label="Resolución" info={FIELD_INFO.resolution} />
           <input className="form-input" value={fields.resolution || ''} onChange={e => setField('resolution', e.target.value)} />
         </label>
-        <label><span style={labelStyle}>Source</span>
+        <label><FieldLabel label="Source" info={FIELD_INFO.source} />
           <select className="form-input" value={fields.source || ''} onChange={e => setField('source', e.target.value)}>
             <option value="">— Seleccionar —</option>
             {sources.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}
@@ -324,7 +348,7 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
           )}
         </label>
         {sourceRequiresProvider && (
-          <label><span style={labelStyle}>Provider</span>
+          <label><FieldLabel label="Provider" info={FIELD_INFO.provider} />
             {detectingProvider ? (
               <div className="form-input" style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-muted)' }}>
                 <span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Detectando…
@@ -337,16 +361,16 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
             )}
           </label>
         )}
-        <label><span style={labelStyle}>Códec de vídeo</span>
+        <label><FieldLabel label="Códec de vídeo" info={FIELD_INFO.video_codec} />
           <input className="form-input" value={fields.video_codec || ''} onChange={e => setField('video_codec', e.target.value)} />
         </label>
-        <label><span style={labelStyle}>Audio</span>
+        <label><FieldLabel label="Audio" info={FIELD_INFO.audio} />
           <input className="form-input" value={fields.audio_summary || ''} onChange={e => setField('audio_summary', e.target.value)} />
         </label>
-        <label><span style={labelStyle}>Subtítulos</span>
+        <label><FieldLabel label="Subtítulos" info={FIELD_INFO.subs} />
           <input className="form-input" value={fields.subs || ''} onChange={e => setField('subs', e.target.value)} />
         </label>
-        <label><span style={labelStyle}>Tag</span>
+        <label><FieldLabel label="Tag" info={FIELD_INFO.tag} />
           <input className="form-input" value={fields.tag || ''} onChange={e => setField('tag', e.target.value)} />
         </label>
       </div>

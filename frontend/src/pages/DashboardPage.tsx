@@ -49,7 +49,7 @@ function ConnRow({ icon, label, href, badge = 'Configurado', tone = 'ok' }: {
     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
       {href
         ? <a className="hover-link" href={href} target="_blank" rel="noreferrer" title={`Abrir ${label}`}
-             style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, textDecoration: 'none', color: 'inherit' }}>{inner}</a>
+             style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>{inner}</a>
         : <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>{inner}</div>}
       <span className={`badge ${cls}`}>{badge}</span>
     </div>
@@ -331,7 +331,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                                 const link = buildDeepLink(item, connInstances)
                                 const label = <ServiceLabel type={item.instance_type!} label={item.instance_name ?? item.instance_type!} size={13} />
                                 return link
-                                  ? <a className="hover-link" href={link} target="_blank" rel="noreferrer" title={`Abrir en ${item.instance_name ?? item.instance_type}`} style={{ textDecoration: 'none', color: 'inherit' }}>{label}</a>
+                                  ? <a className="hover-link" href={link} target="_blank" rel="noreferrer" title={`Abrir en ${item.instance_name ?? item.instance_type}`}>{label}</a>
                                   : label
                               })()
                             : <span style={{ color: 'var(--text-muted)' }}>—</span>}

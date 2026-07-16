@@ -60,7 +60,7 @@ function textOn(hex: string): string {
   return lum > 0.62 ? '#1a1a1a' : '#fff'
 }
 
-export function ProviderIcon({ code, size = 18 }: { code: string | null | undefined; size?: number }) {
+export function ProviderIcon({ code, size = 18, link = true }: { code: string | null | undefined; size?: number; link?: boolean }) {
   if (!code) return null
   const key = code.trim().toLowerCase()
   const box: React.CSSProperties = {
@@ -92,8 +92,9 @@ export function ProviderIcon({ code, size = 18 }: { code: string | null | undefi
       : codeTile
 
   // Link the icon to the provider's official site (opens in a new tab; the
-  // stopPropagation keeps a table-row click from also firing).
-  if (domain) {
+  // stopPropagation keeps a table-row click from also firing). `link={false}`
+  // lets ProviderTag wrap the icon + name in a single link instead.
+  if (domain && link) {
     return (
       <a
         className="hover-link"
@@ -112,13 +113,19 @@ export function ProviderIcon({ code, size = 18 }: { code: string | null | undefi
   return visual
 }
 
-// Icon + name inline (e.g. "🅰 Amazon (AMZN)").
+// Icon + name inline (e.g. "🅰 Amazon (AMZN)"). The whole thing (icon AND name)
+// is the link to the provider's site, so hovering the text counts too.
 export function ProviderTag({ code, label, size = 18 }: { code: string | null | undefined; label?: string | null; size?: number }) {
   if (!code) return <>{label ?? '—'}</>
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-      <ProviderIcon code={code} size={size} />
+  const domain = DOMAINS[code.trim().toLowerCase()]
+  const inner = (
+    <>
+      <ProviderIcon code={code} size={size} link={false} />
       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{label ?? code}</span>
-    </span>
+    </>
   )
+  const style: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }
+  return domain
+    ? <a className="hover-link" href={`https://${domain}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} title={`Abrir ${domain}`} style={style}>{inner}</a>
+    : <span style={style}>{inner}</span>
 }

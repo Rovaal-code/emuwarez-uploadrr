@@ -6,22 +6,16 @@ import { Favicon, domainOf } from './Favicon'
 // and the library detail page so the ID fields look and behave the same.
 export function ExternalIdLink({ id, href, label }: { id: string; href: string | null; label: string }) {
   const domain = domainOf(href)
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-      {href && (
-        <a
-          className="hover-link"
-          href={href}
-          target="_blank"
-          rel="noreferrer"
-          title={`Ver en ${label}`}
-          onClick={e => e.stopPropagation()}
-          style={{ display: 'inline-flex', flexShrink: 0 }}
-        >
-          <Favicon domain={domain} size={16} radius={3} fallback={<span style={{ fontSize: 12 }}>↗</span>} />
-        </a>
-      )}
+  const inner = (
+    <>
+      <Favicon domain={domain} size={16} radius={3} fallback={<span style={{ fontSize: 12 }}>↗</span>} />
       {id}
-    </span>
+    </>
   )
+  const style: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6 }
+  // The whole field (favicon AND the id text) is the link, so hovering the text
+  // counts too and it turns the accent colour like a title.
+  return href
+    ? <a className="hover-link" href={href} target="_blank" rel="noreferrer" title={`Ver en ${label}`} onClick={e => e.stopPropagation()} style={style}>{inner}</a>
+    : <span style={style}>{inner}</span>
 }

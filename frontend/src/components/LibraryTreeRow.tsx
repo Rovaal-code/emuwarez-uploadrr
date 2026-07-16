@@ -186,7 +186,7 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, onR
         <td>
           {item.instance_type
             ? (deepLink
-                ? <a className="hover-link" href={deepLink} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} title={`Abrir en ${item.instance_name ?? item.instance_type}`} style={{ textDecoration: 'none', color: 'inherit' }}><ServiceLabel type={item.instance_type} label={item.instance_name ?? item.instance_type} size={13} /></a>
+                ? <a className="hover-link" href={deepLink} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} title={`Abrir en ${item.instance_name ?? item.instance_type}`}><ServiceLabel type={item.instance_type} label={item.instance_name ?? item.instance_type} size={13} /></a>
                 : <ServiceLabel type={item.instance_type} label={item.instance_name ?? item.instance_type} size={13} />)
             : <span style={{ color: 'var(--text-muted)' }}>—</span>}
         </td>

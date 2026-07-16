@@ -119,7 +119,7 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
             <Field label="Origen">
               {item.instance_type
                 ? (deepLink
-                    ? <a className="hover-link" href={deepLink} target="_blank" rel="noreferrer" title={`Abrir en ${item.instance_name ?? item.instance_type}`} style={{ textDecoration: 'none', color: 'inherit' }}><ServiceLabel type={item.instance_type} label={item.instance_name ?? item.instance_type} size={15} /></a>
+                    ? <a className="hover-link" href={deepLink} target="_blank" rel="noreferrer" title={`Abrir en ${item.instance_name ?? item.instance_type}`}><ServiceLabel type={item.instance_type} label={item.instance_name ?? item.instance_type} size={15} /></a>
                     : <ServiceLabel type={item.instance_type} label={item.instance_name ?? item.instance_type} size={15} />)
                 : '—'}
             </Field>

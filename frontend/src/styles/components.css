@@ -884,3 +884,14 @@ optgroup {
 .hf-option.selected:hover {
   background: rgba(59,130,246,0.26);
 }
+
+/* Clickable text (dashboard recent-activity title, radarr/sonarr origin link):
+   lights up on hover so it's clearly interactive. */
+.hover-link {
+  cursor: pointer;
+  transition: color 0.12s;
+}
+.hover-link:hover {
+  color: var(--text-accent, #2563eb);
+  text-decoration: underline;
+}

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useTransition } from 'react'
-import { getLibrary, TOP_LEVEL_PARENT_FILTER, getLibraryFilterOptions } from '../api/library'
+import { getLibrary, TOP_LEVEL_PARENT_FILTER, getLibraryFilterOptions, getLibraryItem } from '../api/library'
 import { Tooltip } from '../components/Tooltip'
 import { useSync } from '../context/SyncContext'
 import { EmuSyncButton } from '../components/EmuSyncButton'
@@ -181,6 +181,16 @@ export function LibraryPage() {
   }, [search, filterType, filterStatus, filterInstanceId, filterNomenclature, filterRequest, searchProvider, searchQuality, filterEmu, sortBy, offset])
 
   useEffect(() => { load() }, [load])
+
+  // Opened from the dashboard "Actividad reciente" (clicking a title): pick up
+  // the stashed item id and show its detail page.
+  useEffect(() => {
+    let pending: string | null = null
+    try { pending = sessionStorage.getItem('emuwarez_open_library_item') } catch { /* ignore */ }
+    if (!pending) return
+    try { sessionStorage.removeItem('emuwarez_open_library_item') } catch { /* ignore */ }
+    getLibraryItem(Number(pending)).then(setSelected).catch(() => { /* ignore */ })
+  }, [])
 
   // Refresh the list whenever any global sync finishes (library or eMuwarez).
   useEffect(() => { if (lastCompletedAt) load() }, [lastCompletedAt, load])

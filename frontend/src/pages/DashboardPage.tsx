@@ -19,7 +19,7 @@ import { RequestFormModal } from '../components/RequestFormModal'
 import { LibraryActionButtons } from '../components/LibraryActionButtons'
 import type { LibraryActionKind } from '../components/LibraryTreeRow'
 import { formatBytes, formatDate, formatItemType, parseServerDate } from '../utils/format'
-import { posterUrl } from '../utils/libraryItem'
+import { posterUrl, buildDeepLink } from '../utils/libraryItem'
 
 // Phase 11F — the four sub-phases a *running* upload job can be in, in
 // order. compute_progress_phase() on the backend never emits a numeric
@@ -69,7 +69,14 @@ interface DashboardPageProps {
   onNavigate?: (page: string) => void
 }
 
-export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = {}) {
+export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
+  // Open a library item's dedicated detail page from the dashboard: stash the id
+  // and switch to the Biblioteca tab, which picks it up on mount.
+  const openItemDetail = (item: LibraryItemResponse) => {
+    try { sessionStorage.setItem('emuwarez_open_library_item', String(item.id)) } catch { /* ignore */ }
+    onNavigate?.('library')
+  }
+
   const [summary, setSummary] = useState<DashboardSummaryResponse | null>(null)
   const [taskActivity, setTaskActivity] = useState<DashboardActivityResponse | null>(null)
   const [libraryActivity, setLibraryActivity] = useState<LibraryItemResponse[]>([])
@@ -304,15 +311,21 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
                                 </span>
                               )}
                             </div>
-                            <div>
-                              <div style={{ fontWeight: 500 }}>{item.title}</div>
+                            <div style={{ minWidth: 0 }}>
+                              <div className="hover-link" style={{ fontWeight: 500 }} onClick={() => openItemDetail(item)} title="Ver ficha">{item.title}</div>
                               <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{formatItemType(item.item_type)}{item.year ? ` · ${item.year}` : ''}</div>
                             </div>
                           </div>
                         </td>
                         <td>
                           {item.instance_type
-                            ? <ServiceLabel type={item.instance_type} label={item.instance_name ?? item.instance_type} size={13} />
+                            ? (() => {
+                                const link = buildDeepLink(item, connInstances)
+                                const label = <ServiceLabel type={item.instance_type!} label={item.instance_name ?? item.instance_type!} size={13} />
+                                return link
+                                  ? <a className="hover-link" href={link} target="_blank" rel="noreferrer" title={`Abrir en ${item.instance_name ?? item.instance_type}`} style={{ textDecoration: 'none', color: 'inherit' }}>{label}</a>
+                                  : label
+                              })()
                             : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                         </td>
                         <td><StatusBadge status={item.local_status} type="local" /></td>

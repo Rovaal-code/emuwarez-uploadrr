@@ -471,6 +471,7 @@ def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
         mi_video = emu_by_field.get("Códec de vídeo")
         mi_hdr = emu_by_field.get("HDR/DV")
         mi_source = emu_by_field.get("Source")
+        mi_subs = emu_by_field.get("Subtítulos")  # "SUBS" if the file has subtitle tracks
         for r in report.get("rows", []):
             if r["field"] == "Source":
                 mi_source_estimated = "estimado" in (r.get("mediainfo") or "").lower()
@@ -499,7 +500,7 @@ def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
             "dynamic_range": mi_hdr,
             "video_codec": mi_video,
             "audio_summary": mi_audio,
-            "subs": "SUBS",
+            "subs": mi_subs,
             "tag": tag,
         }
 

@@ -56,7 +56,7 @@ const FIELD_INFO = {
   provider: 'Sale del nombre del archivo. Si no lo trae y el source es WEB-DL, se sugiere con TMDb (suscripción antes que alquiler, según tu prioridad).',
   video_codec: 'Se lee con MediaInfo del archivo real.',
   audio: 'Se lee con MediaInfo del archivo real (por pista).',
-  subs: 'Subtítulos incluidos en el release.',
+  subs: 'Se genera con MediaInfo del archivo real: «SUBS» si tiene pistas de subtítulos.',
   tag: 'El tag de tu grupo de subida, configurado en Ajustes.',
 }
 

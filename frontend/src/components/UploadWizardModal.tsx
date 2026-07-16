@@ -393,11 +393,9 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
         {step === 1 && (
           <div className="modal-body">
             {loading && (
-              <div style={{ padding: '36px 0', textAlign: 'center' }}>
+              <div style={{ padding: '36px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                <span className="spinner" style={{ width: 28, height: 28, borderWidth: 3 }} />
                 <div style={{ fontSize: 15, fontWeight: 600 }}>Generando nomenclatura con MediaInfo…</div>
-                <div className="text-muted" style={{ fontSize: 12, marginTop: 6 }}>
-                  Leyendo el archivo real. MediaInfo es obligatorio para los campos técnicos.
-                </div>
               </div>
             )}
             {error && <p className="text-error">{error}</p>}

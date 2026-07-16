@@ -8,44 +8,31 @@ import { createPortal } from 'react-dom'
 export function useTooltip(content: React.ReactNode, maxWidth = 460) {
   const [show, setShow] = useState(false)
   const [pt, setPt] = useState({ x: 0, y: 0 })
-  // Once measured, the box gets an EXPLICIT width so its size is fixed: it wraps
-  // to the same 2 lines no matter where on screen it lands. Without this, moving
-  // the box near a screen edge shrinks the space available to it and the browser
-  // re-wraps the text into many narrow lines.
-  const [width, setWidth] = useState<number | null>(null)
   const ref = useRef<HTMLDivElement>(null)
 
   const track = useCallback((e: React.MouseEvent) => setPt({ x: e.clientX, y: e.clientY }), [])
   const open = useCallback((e: React.MouseEvent) => { setPt({ x: e.clientX, y: e.clientY }); setShow(true) }, [])
-  const close = useCallback(() => { setShow(false); setWidth(null) }, [])
+  const close = useCallback(() => setShow(false), [])
 
-  // First render happens in "measure mode": hidden, anchored top-left, with
-  // white-space:nowrap and no width cap, so offsetWidth is the text's SINGLE
-  // line width. From it we pick a fixed box width that hugs the text in ~2
-  // balanced lines (or 1 line if it already fits), and freeze it.
+  // The box width is `max-content` capped at maxWidth, so it hugs the text
+  // exactly (one line for short text, wrapping to the cap for long text) with no
+  // wasted space. `max-content` is an intrinsic size, so it does NOT shrink when
+  // the box sits near a screen edge — the text never re-wraps into extra lines.
+  // We only READ the rendered width here, to clamp the horizontal position so
+  // the box stays on screen.
   useLayoutEffect(() => {
-    if (!show) return
     const el = ref.current
-    if (el && width == null) {
-      const single = el.offsetWidth              // full width on one line
-      const w = single <= maxWidth
-        ? single                                 // fits on one line → hug it
-        : Math.min(maxWidth, Math.round(single / 2) + 32)  // split into ~2 lines
-      setWidth(w)
-    }
-  }, [show, width, maxWidth])
+    if (!show || !el) return
+    const half = el.offsetWidth / 2
+    const clamped = Math.min(Math.max(pt.x, half + 6), window.innerWidth - half - 6)
+    el.style.left = `${clamped}px`
+  }, [show, pt.x, pt.y])
 
   const triggerProps = {
     onMouseEnter: open,
     onMouseMove: track,
     onMouseLeave: close,
   }
-
-  // Centre under the cursor, then clamp by the (now fixed) half-width so the box
-  // stays fully on screen without ever changing size or re-wrapping.
-  const half = (width ?? maxWidth) / 2
-  const vw = typeof window !== 'undefined' ? window.innerWidth : 1280
-  const left = Math.min(Math.max(pt.x, half + 6), vw - half - 6)
 
   const tooltipNode = show && content != null
     ? createPortal(
@@ -55,15 +42,11 @@ export function useTooltip(content: React.ReactNode, maxWidth = 460) {
           style={{
             position: 'fixed',
             top: pt.y + 14,          // just below the cursor
-            // measure mode: anchored at x=8 with full room; display mode: centred
-            left: width == null ? 8 : left,
-            transform: width == null ? 'none' : 'translateX(-50%)',
-            width: width ?? undefined,     // fixed once measured → never re-wraps
-            maxWidth: width == null ? undefined : maxWidth,  // uncapped while measuring
-            // measure mode forces one line so we can read the true text width
-            whiteSpace: width == null ? 'nowrap' : 'normal',
-            textWrap: 'balance' as React.CSSProperties['textWrap'],
-            visibility: width == null ? 'hidden' : 'visible',
+            left: pt.x,              // centred under the cursor; useLayoutEffect
+            transform: 'translateX(-50%)',  // then clamps it onto the screen
+            width: 'max-content',    // hug the text; cap at maxWidth
+            maxWidth,
+            whiteSpace: 'normal',
             zIndex: 2000,
             background: 'var(--bg-surface, #0f1420)',   // opaque
             border: '1px solid var(--border)',

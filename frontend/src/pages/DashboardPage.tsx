@@ -14,16 +14,29 @@ import { ErrorState } from '../components/ErrorState'
 import { StatusBadge } from '../components/StatusBadge'
 import { ServiceLabel, ServiceIcon } from '../components/ServiceIcon'
 import { Favicon, domainOf } from '../components/Favicon'
+import { UploadWizardModal } from '../components/UploadWizardModal'
+import { RequestFormModal } from '../components/RequestFormModal'
+import { getLibraryItem } from '../api/library'
+import type { LibraryItemResponse } from '../types/api'
 import { formatBytes, formatDate, formatItemType, parseServerDate } from '../utils/format'
 import { posterUrl } from '../utils/libraryItem'
 
 // Phase 11G — "Recomendaciones" groups, in the order they appear. Each maps to
-// a coloured badge and a click target: group 1 opens the eMuwarez request,
-// groups 2 & 3 open the content's own detail page.
-const REC_GROUP_META: Record<number, { label: string; hint: string; color: string; bg: string; border: string }> = {
-  1: { label: 'Petición compatible', hint: 'Ver la petición en eMuwarez', color: '#60a5fa', bg: 'rgba(96,165,250,0.14)', border: 'rgba(96,165,250,0.35)' },
-  2: { label: 'Único · súbelo',      hint: 'Ver ficha para subir a eMuwarez', color: '#22c55e', bg: 'rgba(34,197,94,0.14)', border: 'rgba(34,197,94,0.35)' },
-  3: { label: 'Falta · pídelo',      hint: 'Ver ficha del contenido', color: '#eab308', bg: 'rgba(234,179,8,0.14)', border: 'rgba(234,179,8,0.35)' },
+// a category badge, a recommendation phrase, the action button to offer, and a
+// click target for the name: group 1 opens the eMuwarez request, groups 2 & 3
+// open the content's own detail page.
+type RecAction = 'upload' | 'request'
+const REC_GROUP_META: Record<number, {
+  category: string; recommendation: string; hint: string
+  action: RecAction; actionLabel: string
+  color: string; bg: string; border: string
+}> = {
+  1: { category: 'Petición', recommendation: 'Cumple una petición compatible', hint: 'Ver la petición en eMuwarez',
+       action: 'upload', actionLabel: 'Subir', color: '#60a5fa', bg: 'rgba(96,165,250,0.14)', border: 'rgba(96,165,250,0.35)' },
+  2: { category: 'Contenido único', recommendation: 'Súbelo: no está en eMuwarez', hint: 'Ver ficha del contenido',
+       action: 'upload', actionLabel: 'Subir', color: '#22c55e', bg: 'rgba(34,197,94,0.14)', border: 'rgba(34,197,94,0.35)' },
+  3: { category: 'Falta', recommendation: 'Pídelo en eMuwarez', hint: 'Ver ficha del contenido',
+       action: 'request', actionLabel: 'Petición', color: '#eab308', bg: 'rgba(234,179,8,0.14)', border: 'rgba(234,179,8,0.35)' },
 }
 
 // Phase 11F — the four sub-phases a *running* upload job can be in, in
@@ -96,6 +109,23 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
     }
   }
 
+  // "Acción" column: fetch the full library item and open the upload wizard
+  // ("Subir", groups 1 & 2) or the request form ("Petición", group 3). For a
+  // compatible request the wizard is pre-filled with the request's season /
+  // episode scope (carried on the recommendation row).
+  const runRecommendationAction = async (item: DashboardRecommendationItem) => {
+    const meta = REC_GROUP_META[item.rec_group] ?? REC_GROUP_META[2]
+    try {
+      const libItem = await getLibraryItem(item.id)
+      if (meta.action === 'request') {
+        setRequestItem(libItem)
+      } else {
+        setWizardPreselect(item.rec_group === 1 ? { season: item.season_number, episode: item.episode_number } : undefined)
+        setWizardItem(libItem)
+      }
+    } catch { /* ignore — the content may have vanished since the last sync */ }
+  }
+
   const [summary, setSummary] = useState<DashboardSummaryResponse | null>(null)
   const [taskActivity, setTaskActivity] = useState<DashboardActivityResponse | null>(null)
   const [recommendations, setRecommendations] = useState<DashboardRecommendationItem[]>([])
@@ -104,6 +134,9 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   const [connInstances, setConnInstances] = useState<InstanceSafeResponse[]>([])
   const [loadingData, setLoadingData] = useState(true)
   const [dataError, setDataError] = useState<string | null>(null)
+  const [wizardItem, setWizardItem] = useState<LibraryItemResponse | null>(null)
+  const [wizardPreselect, setWizardPreselect] = useState<{ season?: number | null; episode?: number | null } | undefined>(undefined)
+  const [requestItem, setRequestItem] = useState<LibraryItemResponse | null>(null)
   // Global sync state (shared with Biblioteca/Peticiones and the progress
   // banner). `message` shows the last completion result; `lastCompletedAt`
   // triggers a data reload when any sync finishes.
@@ -160,6 +193,13 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
 
   return (
     <div>
+      {wizardItem && (
+        <UploadWizardModal item={wizardItem} preselect={wizardPreselect} onClose={() => setWizardItem(null)} onDone={loadData} />
+      )}
+      {requestItem && (
+        <RequestFormModal item={requestItem} onClose={() => setRequestItem(null)} />
+      )}
+
       <div className="page-header">
         <div>
           <div className="page-title">Dashboard</div>
@@ -286,15 +326,17 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                     <tr>
                       <th>Nombre</th>
                       <th>Tipo</th>
+                      <th>Categoría</th>
                       <th>Recomendación</th>
                       <th>Tamaño</th>
+                      <th className="col-actions">Acción</th>
                     </tr>
                   </thead>
                   <tbody>
                     {recommendations.map(item => {
                       const meta = REC_GROUP_META[item.rec_group] ?? REC_GROUP_META[2]
                       return (
-                      <tr key={item.id}>
+                      <tr key={`${item.rec_group}-${item.rec_request_id ?? item.id}`}>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                             <div style={{
@@ -322,9 +364,19 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                         <td>
                           <span className="badge" style={{
                             color: meta.color, background: meta.bg, border: `1px solid ${meta.border}`, whiteSpace: 'nowrap',
-                          }}>{meta.label}</span>
+                          }}>{meta.category}</span>
                         </td>
+                        <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{meta.recommendation}</td>
                         <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{formatBytes(item.size_bytes)}</td>
+                        <td className="col-actions">
+                          <button
+                            className={meta.action === 'request' ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm'}
+                            onClick={() => runRecommendationAction(item)}
+                            title={meta.action === 'request' ? 'Crear una petición en eMuwarez' : 'Subir a eMuwarez'}
+                          >
+                            {meta.actionLabel}
+                          </button>
+                        </td>
                       </tr>
                       )
                     })}

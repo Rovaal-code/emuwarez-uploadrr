@@ -808,6 +808,10 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 60) 
             disp_type = lib["item_type"]
         d = dict(lib)
         d["item_type"] = disp_type
+        # Expose the request's scope so the "Subir" action can pre-select the
+        # right season/episode in the upload wizard.
+        d["season_number"] = season
+        d["episode_number"] = episode
         d["rec_group"] = 1
         d["rec_request_id"] = r["req_id"]
         d["content_name"] = _rec_content_name(conn, lib, season=season, episode=episode, scope=scope)

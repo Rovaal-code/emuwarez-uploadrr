@@ -91,7 +91,7 @@ export function ProviderIcon({ code, size = 18 }: { code: string | null | undefi
   // coloured code tile if it can't be loaded.
   const domain = DOMAINS[key]
   if (domain) {
-    return <Favicon domain={domain} size={size} radius={4} background="#fff" fallback={codeTile} />
+    return <Favicon domain={domain} size={size} radius={4} fallback={codeTile} />
   }
   return codeTile
 }

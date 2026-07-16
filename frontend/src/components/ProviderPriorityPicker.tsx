@@ -42,6 +42,7 @@ interface ProviderPriorityPickerProps {
 export function ProviderPriorityPicker({ order, onChange }: ProviderPriorityPickerProps) {
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [options, setOptions] = useState<ProviderOption[]>([])
+  const [showAdd, setShowAdd] = useState(false)
 
   useEffect(() => {
     getEmuProviders()
@@ -61,13 +62,15 @@ export function ProviderPriorityPicker({ order, onChange }: ProviderPriorityPick
     onChange(order.filter(c => c !== code))
   }
 
-  function handleDrop(targetIndex: number) {
-    if (dragIndex === null || dragIndex === targetIndex) { setDragIndex(null); return }
+  // Live reorder: while dragging, hovering over another row moves the dragged
+  // item there immediately, so the list rearranges under the cursor.
+  function handleDragEnter(targetIndex: number) {
+    if (dragIndex === null || dragIndex === targetIndex) return
     const next = [...order]
     const [moved] = next.splice(dragIndex, 1)
     next.splice(targetIndex, 0, moved)
     onChange(next)
-    setDragIndex(null)
+    setDragIndex(targetIndex)
   }
 
   const available = options.filter(p => !order.includes(p.code))
@@ -94,13 +97,15 @@ export function ProviderPriorityPicker({ order, onChange }: ProviderPriorityPick
                   e.dataTransfer.setDragImage(e.currentTarget, e.clientX - rect.left, e.clientY - rect.top)
                   e.dataTransfer.effectAllowed = 'move'
                 }}
+                onDragEnter={() => handleDragEnter(idx)}
                 onDragOver={e => e.preventDefault()}
-                onDrop={() => handleDrop(idx)}
+                onDragEnd={() => setDragIndex(null)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 8,
                   padding: '6px 10px', background: 'rgba(255,255,255,0.04)',
                   border: '1px solid var(--border, rgba(255,255,255,0.08))',
                   borderRadius: 6, cursor: 'grab', fontSize: 13,
+                  opacity: dragIndex === idx ? 0.4 : 1,
                 }}
               >
                 <span style={{ color: 'var(--text-muted)', fontSize: 11, width: 16 }}>{idx + 1}</span>
@@ -123,20 +128,40 @@ export function ProviderPriorityPicker({ order, onChange }: ProviderPriorityPick
         </div>
       )}
       {available.length > 0 && (
-        <details>
-          <summary style={{ cursor: 'pointer', fontSize: 12, color: 'var(--text-secondary)' }}>
-            + Añadir provider ({available.length} disponibles)
-          </summary>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 4, marginTop: 8, maxHeight: 200, overflowY: 'auto' }}>
-            {available.map(opt => (
-              <label key={opt.code} className="checkbox-label" style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <input type="checkbox" checked={false} onChange={() => enable(opt.code)} />
-                <ProviderIcon domain={opt.domain} size={14} />
-                {opt.label}
-              </label>
-            ))}
+        <button className="btn btn-secondary btn-sm" type="button" onClick={() => setShowAdd(true)}>
+          + Añadir provider ({available.length})
+        </button>
+      )}
+
+      {showAdd && (
+        <div className="modal-overlay" onClick={() => setShowAdd(false)}>
+          <div className="modal-panel" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
+            <div className="modal-header">
+              <h2 className="modal-title">Añadir provider de vídeo</h2>
+              <button className="modal-close" onClick={() => setShowAdd(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              {available.length === 0 ? (
+                <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Ya están todos añadidos.</p>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 6, maxHeight: '55vh', overflowY: 'auto' }}>
+                  {available.map(opt => (
+                    <button
+                      key={opt.code}
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-start', fontSize: 12 }}
+                      onClick={() => enable(opt.code)}
+                    >
+                      <Favicon domain={opt.domain} size={16} radius={4} background="#fff" fallback={<span aria-hidden>🎬</span>} />
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-        </details>
+        </div>
       )}
     </div>
   )

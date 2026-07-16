@@ -94,6 +94,21 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const [imgTest, setImgTest] = useState<Record<string, IntegrationTestResult>>({})
   const [imgTesting, setImgTesting] = useState<string | null>(null)
   const [showAddImg, setShowAddImg] = useState(false)
+  // Drag-reorder of image hosts: `imgDragEnabled` is the card whose handle was
+  // grabbed (so inputs stay usable), `imgDragId` the one being moved.
+  const [imgDragEnabled, setImgDragEnabled] = useState<string | null>(null)
+  const [imgDragId, setImgDragId] = useState<string | null>(null)
+
+  function reorderImg(targetId: string) {
+    if (!imgDragId || imgDragId === targetId || targetId === 'imgbox' || imgDragId === 'imgbox') return
+    const list = [...imgEnabled]
+    const from = list.indexOf(imgDragId)
+    const to = list.indexOf(targetId)
+    if (from < 0 || to < 0) return
+    list.splice(from, 1)
+    list.splice(to, 0, imgDragId)
+    setImgEnabled(list)
+  }
   const [pathMappings, setPathMappings] = useState<{ from: string; to: string }[]>([])
   // Hardlinks
   const [useHardlinks, setUseHardlinks] = useState(true)
@@ -500,8 +515,30 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                   const isDefault = id === 'imgbox'
                   const t = imgTest[id]
                   return (
-                    <div key={id} style={{ padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, background: 'rgba(139,92,246,0.06)' }}>
+                    <div
+                      key={id}
+                      draggable={imgDragEnabled === id}
+                      onDragStart={e => {
+                        setImgDragId(id)
+                        const rect = e.currentTarget.getBoundingClientRect()
+                        e.dataTransfer.setDragImage(e.currentTarget, e.clientX - rect.left, e.clientY - rect.top)
+                        e.dataTransfer.effectAllowed = 'move'
+                      }}
+                      onDragEnter={() => reorderImg(id)}
+                      onDragOver={e => e.preventDefault()}
+                      onDragEnd={() => { setImgDragId(null); setImgDragEnabled(null) }}
+                      style={{ padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, background: 'rgba(139,92,246,0.06)', opacity: imgDragId === id ? 0.4 : 1 }}
+                    >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {!isDefault && (
+                          <span
+                            onMouseDown={() => setImgDragEnabled(id)}
+                            onMouseUp={() => setImgDragEnabled(null)}
+                            title="Arrastrar para reordenar"
+                            style={{ color: 'var(--text-muted)', cursor: 'grab', userSelect: 'none' }}
+                            aria-hidden
+                          >⠿</span>
+                        )}
                         <Favicon domain={domainOf(h.url)} size={15} fallback={<ServiceIcon type="imghost" size={15} />} />
                         <span style={{ fontSize: 13, fontWeight: 500 }}>{h.label}</span>
                         {isDefault && <span className="badge status-available" style={{ fontSize: 10 }}>por defecto</span>}
@@ -526,19 +563,33 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                 })}
               </div>
               {notConfigured.length > 0 && (
-                <button className="btn btn-secondary btn-sm" style={{ marginTop: 10 }} onClick={() => setShowAddImg(v => !v)} type="button">
-                  {showAddImg ? 'Cerrar' : '+ Añadir proveedor'}
+                <button className="btn btn-secondary btn-sm" style={{ marginTop: 10 }} onClick={() => setShowAddImg(true)} type="button">
+                  + Añadir proveedor ({notConfigured.length})
                 </button>
               )}
               {showAddImg && (
-                <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 6, maxHeight: 180, overflowY: 'auto', padding: 8, border: '1px solid var(--border)', borderRadius: 8 }}>
-                  {notConfigured.map(h => (
-                    <button key={h.id} className="btn btn-ghost btn-sm" type="button"
-                      style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-start', fontSize: 12 }}
-                      onClick={() => { toggleImgHost(h.id); }}>
-                      <Favicon domain={domainOf(h.url)} size={13} fallback={<ServiceIcon type="imghost" size={13} />} /> {h.label} {h.needs_key && <span className="badge nom-na" style={{ fontSize: 9 }}>API key</span>}
-                    </button>
-                  ))}
+                <div className="modal-overlay" onClick={() => setShowAddImg(false)}>
+                  <div className="modal-panel" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
+                    <div className="modal-header">
+                      <h2 className="modal-title">Añadir proveedor de imágenes</h2>
+                      <button className="modal-close" onClick={() => setShowAddImg(false)}>✕</button>
+                    </div>
+                    <div className="modal-body">
+                      {notConfigured.length === 0 ? (
+                        <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Ya están todos añadidos.</p>
+                      ) : (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 6, maxHeight: '55vh', overflowY: 'auto' }}>
+                          {notConfigured.map(h => (
+                            <button key={h.id} className="btn btn-ghost btn-sm" type="button"
+                              style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-start', fontSize: 12 }}
+                              onClick={() => toggleImgHost(h.id)}>
+                              <Favicon domain={domainOf(h.url)} size={16} radius={4} background="#fff" fallback={<ServiceIcon type="imghost" size={16} />} /> {h.label} {h.needs_key && <span className="badge nom-na" style={{ fontSize: 9 }}>API key</span>}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
             </>

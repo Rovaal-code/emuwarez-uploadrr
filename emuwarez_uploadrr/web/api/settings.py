@@ -343,6 +343,21 @@ def update_settings(
     if body.uploadrr_timeout is not None and body.uploadrr_timeout <= 0:
         errors.append("uploadrr_timeout debe ser un entero positivo")
 
+    # Hardlinks can't be left enabled without a base dir that actually supports
+    # them: if this save would result in hardlinks ON, verify the base with a
+    # real test hardlink and reject otherwise.
+    if body.use_hardlinks is not None or body.hardlink_base is not None:
+        with _get_conn() as _c:
+            cur_use = (get_setting_canonical(_c, "nomenclature.use_hardlinks") or "true") != "false"
+            cur_base = get_setting_canonical(_c, "hardlink_base")
+        eff_use = body.use_hardlinks if body.use_hardlinks is not None else cur_use
+        eff_base = (body.hardlink_base if body.hardlink_base is not None else cur_base) or ""
+        if eff_use:
+            from ...services.upload_checks import probe_hardlink_dir
+            ok, message = probe_hardlink_dir(eff_base.strip())
+            if not ok:
+                errors.append(f"No se pueden activar los hardlinks: {message}")
+
     if errors:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

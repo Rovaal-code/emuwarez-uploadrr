@@ -255,9 +255,11 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         qbit_username: qbitUser.trim(),
         image_hosts_enabled: imgEnabled,
         path_mappings: pathMappings.map(m => ({ from: m.from.trim(), to: m.to.trim() })).filter(m => m.from && m.to),
-        use_hardlinks: useHardlinks,
-        hardlink_base: hardlinkBase.trim(),
       }
+      // Only send hardlink fields when they changed, so an unrelated save isn't
+      // rejected by the "enabled needs a valid base" server-side check.
+      if (useHardlinks !== (settings?.use_hardlinks ?? true)) payload.use_hardlinks = useHardlinks
+      if (hardlinkBase.trim() !== (settings?.hardlink_base ?? '')) payload.hardlink_base = hardlinkBase.trim()
       if (newKey.trim()) payload.tmdb_api_key = newKey.trim()
       if (newEmuKey.trim()) payload.emu_api_key = newEmuKey.trim()
       if (qbitPass.trim()) payload.qbit_password = qbitPass.trim()
@@ -412,6 +414,11 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         <label className="checkbox-label" style={{ marginBottom: 10, display: 'block' }}>
           <input type="checkbox" checked={useHardlinks} onChange={e => setUseHardlinks(e.target.checked)} /> Usar hardlinks al preparar la subida
         </label>
+        {useHardlinks && !hardlinkBase.trim() && (
+          <div style={{ fontSize: 12, color: 'var(--color-error, #f87171)', marginBottom: 10 }}>
+            ⚠ No puedes activar los hardlinks sin una ruta base válida. Indica una ruta y pruébala, o desactívalos.
+          </div>
+        )}
         <div className="form-group" style={{ marginBottom: 12, opacity: useHardlinks ? 1 : 0.5 }}>
           <label className="form-label">Ruta base de hardlinks</label>
           <input

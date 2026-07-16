@@ -18,6 +18,7 @@ import { useCooldown } from '../hooks/useCooldown'
 import { testDiscordNotification, testTelegramNotification } from '../api/notifications'
 import { ProviderPriorityPicker } from '../components/ProviderPriorityPicker'
 import { ServiceIcon } from '../components/ServiceIcon'
+import { Favicon, domainOf } from '../components/Favicon'
 import { REGION_OPTIONS, LANGUAGE_OPTIONS } from '../constants/regionLanguage'
 import { testResultLabel, testResultColor, emuTestCooldownSeconds } from '../utils/integrationResult'
 
@@ -471,7 +472,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                   return (
                     <div key={id} style={{ padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, background: 'rgba(139,92,246,0.06)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <ServiceIcon type="imghost" size={15} />
+                        <Favicon domain={domainOf(h.url)} size={15} fallback={<ServiceIcon type="imghost" size={15} />} />
                         <span style={{ fontSize: 13, fontWeight: 500 }}>{h.label}</span>
                         {isDefault && <span className="badge status-available" style={{ fontSize: 10 }}>por defecto</span>}
                         {h.needs_key && <span className="badge nom-na" style={{ fontSize: 10 }}>API key</span>}
@@ -505,7 +506,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                     <button key={h.id} className="btn btn-ghost btn-sm" type="button"
                       style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-start', fontSize: 12 }}
                       onClick={() => { toggleImgHost(h.id); }}>
-                      <ServiceIcon type="imghost" size={13} /> {h.label} {h.needs_key && <span className="badge nom-na" style={{ fontSize: 9 }}>API key</span>}
+                      <Favicon domain={domainOf(h.url)} size={13} fallback={<ServiceIcon type="imghost" size={13} />} /> {h.label} {h.needs_key && <span className="badge nom-na" style={{ fontSize: 9 }}>API key</span>}
                     </button>
                   ))}
                 </div>

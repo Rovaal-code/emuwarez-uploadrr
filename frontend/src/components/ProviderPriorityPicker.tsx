@@ -1,9 +1,30 @@
 import { useEffect, useState } from 'react'
 import { getEmuProviders } from '../api/nomenclature'
+import { Favicon } from './Favicon'
 
 export interface ProviderOption {
   code: string
   label: string
+  domain?: string | null
+}
+
+// The provider's favicon, linking to its official page when the domain is known.
+function ProviderIcon({ domain, size = 16 }: { domain?: string | null; size?: number }) {
+  const icon = <Favicon domain={domain} size={size} fallback={<span aria-hidden style={{ opacity: 0.4 }}>🎬</span>} />
+  if (!domain) return icon
+  return (
+    <a
+      href={`https://${domain}`}
+      target="_blank"
+      rel="noreferrer"
+      title={`Abrir ${domain}`}
+      onClick={e => e.stopPropagation()}
+      draggable={false}
+      style={{ display: 'flex', flexShrink: 0 }}
+    >
+      {icon}
+    </a>
+  )
 }
 
 interface ProviderPriorityPickerProps {
@@ -26,7 +47,7 @@ export function ProviderPriorityPicker({ order, onChange }: ProviderPriorityPick
     getEmuProviders()
       .then(r => setOptions(
         r.providers
-          .map(p => ({ code: p.code, label: p.name }))
+          .map(p => ({ code: p.code, label: p.name, domain: p.domain }))
           .sort((a, b) => a.code.localeCompare(b.code, undefined, { sensitivity: 'base' })),
       ))
       .catch(() => setOptions([]))
@@ -78,6 +99,7 @@ export function ProviderPriorityPicker({ order, onChange }: ProviderPriorityPick
               >
                 <span style={{ color: 'var(--text-muted)', fontSize: 11, width: 16 }}>{idx + 1}</span>
                 <span style={{ color: 'var(--text-muted)' }} aria-hidden>⠿</span>
+                <ProviderIcon domain={opt?.domain} size={16} />
                 <span style={{ flex: 1 }}>
                   {opt?.label ?? code} <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>({code})</span>
                 </span>
@@ -101,8 +123,10 @@ export function ProviderPriorityPicker({ order, onChange }: ProviderPriorityPick
           </summary>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 4, marginTop: 8, maxHeight: 200, overflowY: 'auto' }}>
             {available.map(opt => (
-              <label key={opt.code} className="checkbox-label" style={{ fontSize: 12 }}>
-                <input type="checkbox" checked={false} onChange={() => enable(opt.code)} /> {opt.label}
+              <label key={opt.code} className="checkbox-label" style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <input type="checkbox" checked={false} onChange={() => enable(opt.code)} />
+                <ProviderIcon domain={opt.domain} size={14} />
+                {opt.label}
               </label>
             ))}
           </div>

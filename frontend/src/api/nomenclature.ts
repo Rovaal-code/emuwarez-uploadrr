@@ -15,6 +15,7 @@ export interface EmuSource {
 export interface EmuProvider {
   code: string
   name: string
+  domain?: string | null
 }
 
 export interface NomenclatureFields {

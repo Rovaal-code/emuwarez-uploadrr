@@ -13,6 +13,7 @@ import { LoadingState } from '../components/LoadingState'
 import { ErrorState } from '../components/ErrorState'
 import { StatusBadge } from '../components/StatusBadge'
 import { ServiceLabel, ServiceIcon } from '../components/ServiceIcon'
+import { Favicon, domainOf } from '../components/Favicon'
 import { UploadWizardModal } from '../components/UploadWizardModal'
 import { RequestFormModal } from '../components/RequestFormModal'
 import { LibraryActionButtons } from '../components/LibraryActionButtons'
@@ -44,26 +45,6 @@ function ConnRow({ icon, label, badge = 'Configurado', tone = 'ok' }: {
       <span style={{ flex: 1, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
       <span className={`badge ${cls}`}>{badge}</span>
     </div>
-  )
-}
-
-// Real favicon of an image host (fetched from its domain), falling back to the
-// generic image-host glyph if it can't be loaded.
-function HostFavicon({ url, size = 16 }: { url?: string; size?: number }) {
-  const [failed, setFailed] = useState(false)
-  let domain = ''
-  try { domain = url ? new URL(url).hostname : '' } catch { domain = '' }
-  if (failed || !domain) return <ServiceIcon type="imghost" size={size} />
-  return (
-    <img
-      src={`https://www.google.com/s2/favicons?sz=64&domain=${domain}`}
-      width={size}
-      height={size}
-      alt=""
-      loading="lazy"
-      onError={() => setFailed(true)}
-      style={{ borderRadius: 3, display: 'block' }}
-    />
   )
 }
 
@@ -463,7 +444,7 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
                 const imgIds = Array.from(new Set(['imgbox', ...(connSettings?.image_hosts_enabled ?? [])]))
                 for (const id of imgIds) {
                   const meta = connSettings?.image_hosts_available?.find(h => h.id === id)
-                  rows.push(<ConnRow key={`img-${id}`} icon={<HostFavicon url={meta?.url} size={16} />}
+                  rows.push(<ConnRow key={`img-${id}`} icon={<Favicon domain={domainOf(meta?.url)} size={16} fallback={<ServiceIcon type="imghost" size={16} />} />}
                     label={meta?.label ?? id} />)
                 }
                 if (connSettings?.notify_discord_webhook_configured)

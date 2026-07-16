@@ -138,9 +138,59 @@ def list_emu_sources() -> list[dict]:
     return list(EMU_SOURCES)
 
 
+# Official site domain per provider code, used to show its real favicon and to
+# link the icon to the provider's page. Best-effort; a wrong/missing domain just
+# falls back to a generic glyph in the UI.
+PROVIDER_DOMAINS: dict[str, str] = {
+    "AMZN": "primevideo.com",
+    "ATVP": "tv.apple.com",
+    "DSNP": "disneyplus.com",
+    "F1TV": "f1tv.formula1.com",
+    "GLB": "globoplay.globo.com",
+    "HS": "hotstar.com",
+    "HULU": "hulu.com",
+    "M+": "movistarplus.es",
+    "IT": "apple.com",
+    "MA": "moviesanywhere.com",
+    "MAX": "max.com",
+    "HMAX": "max.com",
+    "SKY": "sky.com",
+    "PCOK": "peacocktv.com",
+    "PMTP": "paramountplus.com",
+    "iP": "bbc.co.uk",
+    "PLAY": "play.google.com",
+    "MUBI": "mubi.com",
+    "NF": "netflix.com",
+    "RKTN": "rakuten.tv",
+    "SL": "sonyliv.com",
+    "SNXT": "sunnxt.com",
+    "VIU": "viu.com",
+    "RTVE": "rtve.es",
+    "HBO": "hbo.com",
+    "CR": "crunchyroll.com",
+    "ADN": "animationdigitalnetwork.com",
+    "HIDIVE": "hidive.com",
+    "VRV": "vrv.co",
+    "BILI": "bilibili.com",
+    "ANIMEBOX": "animebox.es",
+    "A3P": "atresplayer.com",
+    "SKST": "skyshowtime.com",
+    "FLMN": "filmin.es",
+    "FLIXOLE": "flixole.com",
+    "MGMP": "mgmplus.com",
+    "STRP": "starplus.com",
+    "STZ": "starz.com",
+    "CNLP": "canalplus.com",
+}
+
+
 def list_emu_providers() -> list[dict]:
-    # Alphabetical by code so the dropdowns are ordered.
-    return sorted(EMU_PROVIDERS, key=lambda p: p["code"].lower())
+    # Alphabetical by code so the dropdowns are ordered. Each entry carries its
+    # official-site domain (for the favicon + link) when known.
+    return [
+        {**p, "domain": PROVIDER_DOMAINS.get(p["code"])}
+        for p in sorted(EMU_PROVIDERS, key=lambda p: p["code"].lower())
+    ]
 
 
 def map_tmdb_provider_to_emu_provider(provider_name: str) -> str | None:

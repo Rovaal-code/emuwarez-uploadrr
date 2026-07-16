@@ -7,6 +7,8 @@
 // consistent treatment instead: a rounded tile in the brand's colour with a
 // short code. If you drop a curated square SVG into src/assets/providers/
 // <code>.svg it is used instead.
+import { Favicon } from './Favicon'
+
 const PROVIDER_SVGS = (import.meta as unknown as {
   glob: (pattern: string, opts: object) => Record<string, string>
 }).glob('../assets/providers/*.svg', { eager: true, query: '?url', import: 'default' })
@@ -14,6 +16,20 @@ const PROVIDER_SVGS = (import.meta as unknown as {
 const BY_CODE: Record<string, string> = {}
 for (const [path, url] of Object.entries(PROVIDER_SVGS)) {
   BY_CODE[path.split('/').pop()!.replace(/\.svg$/, '').toLowerCase()] = url
+}
+
+// Official-site domain per provider code (lowercase), for the real favicon.
+// Mirrors services/source_assistant.PROVIDER_DOMAINS.
+const DOMAINS: Record<string, string> = {
+  amzn: 'primevideo.com', atvp: 'tv.apple.com', dsnp: 'disneyplus.com', f1tv: 'f1tv.formula1.com',
+  glb: 'globoplay.globo.com', hs: 'hotstar.com', hulu: 'hulu.com', 'm+': 'movistarplus.es',
+  it: 'apple.com', ma: 'moviesanywhere.com', max: 'max.com', hmax: 'max.com', sky: 'sky.com',
+  pcok: 'peacocktv.com', pmtp: 'paramountplus.com', ip: 'bbc.co.uk', play: 'play.google.com',
+  mubi: 'mubi.com', nf: 'netflix.com', rktn: 'rakuten.tv', sl: 'sonyliv.com', snxt: 'sunnxt.com',
+  viu: 'viu.com', rtve: 'rtve.es', hbo: 'hbo.com', cr: 'crunchyroll.com',
+  adn: 'animationdigitalnetwork.com', hidive: 'hidive.com', vrv: 'vrv.co', bili: 'bilibili.com',
+  animebox: 'animebox.es', a3p: 'atresplayer.com', skst: 'skyshowtime.com', flmn: 'filmin.es',
+  flixole: 'flixole.com', mgmp: 'mgmplus.com', strp: 'starplus.com', stz: 'starz.com', cnlp: 'canalplus.com',
 }
 
 // Brand colours per provider code (lowercase). Used for the tile background.
@@ -52,6 +68,16 @@ export function ProviderIcon({ code, size = 18 }: { code: string | null | undefi
     width: size, height: size, borderRadius: 4, flexShrink: 0, overflow: 'hidden',
     verticalAlign: 'middle',
   }
+  // Coloured 2-letter tile — the last-resort fallback.
+  const bg = BRAND[key] ?? fallbackColor(key)
+  const short = code.replace(/[^A-Za-z0-9+]/g, '').slice(0, 2).toUpperCase()
+  const codeTile = (
+    <span style={{ ...box, background: bg, color: textOn(bg), fontSize: size * 0.44, fontWeight: 700, letterSpacing: '-0.03em' }} title={code}>
+      {short}
+    </span>
+  )
+
+  // A curated square SVG (dropped in assets/providers/) wins over everything.
   const url = BY_CODE[key]
   if (url) {
     return (
@@ -60,13 +86,14 @@ export function ProviderIcon({ code, size = 18 }: { code: string | null | undefi
       </span>
     )
   }
-  const bg = BRAND[key] ?? fallbackColor(key)
-  const short = code.replace(/[^A-Za-z0-9+]/g, '').slice(0, 2).toUpperCase()
-  return (
-    <span style={{ ...box, background: bg, color: textOn(bg), fontSize: size * 0.44, fontWeight: 700, letterSpacing: '-0.03em' }} title={code}>
-      {short}
-    </span>
-  )
+
+  // Otherwise the provider's real favicon (on a white tile), falling back to the
+  // coloured code tile if it can't be loaded.
+  const domain = DOMAINS[key]
+  if (domain) {
+    return <Favicon domain={domain} size={size} radius={4} background="#fff" fallback={codeTile} />
+  }
+  return codeTile
 }
 
 // Icon + name inline (e.g. "🅰 Amazon (AMZN)").

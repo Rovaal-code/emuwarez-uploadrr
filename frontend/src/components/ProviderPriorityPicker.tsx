@@ -80,14 +80,20 @@ export function ProviderPriorityPicker({ order, onChange }: ProviderPriorityPick
         </p>
       )}
       {order.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10, maxHeight: 150, overflowY: 'auto' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10, maxHeight: 340, overflowY: 'auto' }}>
           {order.map((code, idx) => {
             const opt = options.find(p => p.code === code)
             return (
               <div
                 key={code}
                 draggable
-                onDragStart={() => setDragIndex(idx)}
+                onDragStart={e => {
+                  setDragIndex(idx)
+                  // Grab the row as-is (full size), not the browser's shrunk ghost.
+                  const rect = e.currentTarget.getBoundingClientRect()
+                  e.dataTransfer.setDragImage(e.currentTarget, e.clientX - rect.left, e.clientY - rect.top)
+                  e.dataTransfer.effectAllowed = 'move'
+                }}
                 onDragOver={e => e.preventDefault()}
                 onDrop={() => handleDrop(idx)}
                 style={{

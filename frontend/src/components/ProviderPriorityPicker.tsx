@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getEmuProviders } from '../api/nomenclature'
 import { Favicon } from './Favicon'
+import { setFullSizeDragImage } from '../utils/dnd'
 
 export interface ProviderOption {
   code: string
@@ -90,22 +91,16 @@ export function ProviderPriorityPicker({ order, onChange }: ProviderPriorityPick
               <div
                 key={code}
                 draggable
-                onDragStart={e => {
-                  setDragIndex(idx)
-                  // Grab the row as-is (full size), not the browser's shrunk ghost.
-                  const rect = e.currentTarget.getBoundingClientRect()
-                  e.dataTransfer.setDragImage(e.currentTarget, e.clientX - rect.left, e.clientY - rect.top)
-                  e.dataTransfer.effectAllowed = 'move'
-                }}
+                onDragStart={e => { setDragIndex(idx); setFullSizeDragImage(e) }}
                 onDragEnter={() => handleDragEnter(idx)}
                 onDragOver={e => e.preventDefault()}
                 onDragEnd={() => setDragIndex(null)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '6px 10px', background: 'rgba(255,255,255,0.04)',
-                  border: '1px solid var(--border, rgba(255,255,255,0.08))',
+                  padding: '6px 10px',
+                  background: dragIndex === idx ? 'rgba(37,99,235,0.15)' : 'rgba(255,255,255,0.04)',
+                  border: `1px solid ${dragIndex === idx ? 'var(--text-accent, #2563eb)' : 'var(--border, rgba(255,255,255,0.08))'}`,
                   borderRadius: 6, cursor: 'grab', fontSize: 13,
-                  opacity: dragIndex === idx ? 0.4 : 1,
                 }}
               >
                 <span style={{ color: 'var(--text-muted)', fontSize: 11, width: 16 }}>{idx + 1}</span>

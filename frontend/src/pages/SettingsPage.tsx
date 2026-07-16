@@ -19,6 +19,7 @@ import { testDiscordNotification, testTelegramNotification } from '../api/notifi
 import { ProviderPriorityPicker } from '../components/ProviderPriorityPicker'
 import { ServiceIcon } from '../components/ServiceIcon'
 import { Favicon, domainOf } from '../components/Favicon'
+import { setFullSizeDragImage } from '../utils/dnd'
 import { REGION_OPTIONS, LANGUAGE_OPTIONS } from '../constants/regionLanguage'
 import { testResultLabel, testResultColor, emuTestCooldownSeconds } from '../utils/integrationResult'
 
@@ -99,9 +100,13 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const [imgDragEnabled, setImgDragEnabled] = useState<string | null>(null)
   const [imgDragId, setImgDragId] = useState<string | null>(null)
 
+  // Full displayed order, always including imgbox (which may not live in the
+  // saved list yet). imgbox is reorderable like the rest.
+  const imgOrder = () => (imgEnabled.includes('imgbox') ? [...imgEnabled] : ['imgbox', ...imgEnabled])
+
   function reorderImg(targetId: string) {
-    if (!imgDragId || imgDragId === targetId || targetId === 'imgbox' || imgDragId === 'imgbox') return
-    const list = [...imgEnabled]
+    if (!imgDragId || imgDragId === targetId) return
+    const list = imgOrder()
     const from = list.indexOf(imgDragId)
     const to = list.indexOf(targetId)
     if (from < 0 || to < 0) return
@@ -499,12 +504,12 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           <ServiceIcon type="imghost" size={18} /> Proveedores de imágenes
         </h3>
         <span className="form-hint" style={{ display: 'block', marginBottom: 12 }}>
-          Para las capturas que Uploadrr sube junto al torrent. <strong>imgbox</strong> es el fallback por
-          defecto (sin key); se prueban en orden e imgbox va siempre el último.
+          Para las capturas que Uploadrr sube junto al torrent. Se prueban por orden de prioridad; arrastra para reordenar. <strong>imgbox</strong> es el fallback sin API key.
         </span>
+        <label className="form-label" style={{ display: 'block', marginBottom: 8 }}>Prioridad de providers</label>
         {(() => {
           const avail = settings?.image_hosts_available ?? []
-          const configuredIds = ['imgbox', ...imgEnabled.filter(id => id !== 'imgbox')]
+          const configuredIds = imgOrder()
           const notConfigured = avail.filter(h => !configuredIds.includes(h.id))
           const metaOf = (id: string) => avail.find(h => h.id === id)
           return (
@@ -518,27 +523,24 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                     <div
                       key={id}
                       draggable={imgDragEnabled === id}
-                      onDragStart={e => {
-                        setImgDragId(id)
-                        const rect = e.currentTarget.getBoundingClientRect()
-                        e.dataTransfer.setDragImage(e.currentTarget, e.clientX - rect.left, e.clientY - rect.top)
-                        e.dataTransfer.effectAllowed = 'move'
-                      }}
+                      onDragStart={e => { setImgDragId(id); setFullSizeDragImage(e) }}
                       onDragEnter={() => reorderImg(id)}
                       onDragOver={e => e.preventDefault()}
                       onDragEnd={() => { setImgDragId(null); setImgDragEnabled(null) }}
-                      style={{ padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, background: 'rgba(139,92,246,0.06)', opacity: imgDragId === id ? 0.4 : 1 }}
+                      style={{
+                        padding: '8px 10px', borderRadius: 8,
+                        background: imgDragId === id ? 'rgba(37,99,235,0.15)' : 'rgba(139,92,246,0.06)',
+                        border: `1px solid ${imgDragId === id ? 'var(--text-accent, #2563eb)' : 'var(--border)'}`,
+                      }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        {!isDefault && (
-                          <span
-                            onMouseDown={() => setImgDragEnabled(id)}
-                            onMouseUp={() => setImgDragEnabled(null)}
-                            title="Arrastrar para reordenar"
-                            style={{ color: 'var(--text-muted)', cursor: 'grab', userSelect: 'none' }}
-                            aria-hidden
-                          >⠿</span>
-                        )}
+                        <span
+                          onMouseDown={() => setImgDragEnabled(id)}
+                          onMouseUp={() => setImgDragEnabled(null)}
+                          title="Arrastrar para reordenar"
+                          style={{ color: 'var(--text-muted)', cursor: 'grab', userSelect: 'none' }}
+                          aria-hidden
+                        >⠿</span>
                         <Favicon domain={domainOf(h.url)} size={15} fallback={<ServiceIcon type="imghost" size={15} />} />
                         <span style={{ fontSize: 13, fontWeight: 500 }}>{h.label}</span>
                         {isDefault && <span className="badge status-available" style={{ fontSize: 10 }}>por defecto</span>}
@@ -674,6 +676,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           Se usa para elegir automáticamente el provider cuando TMDb devuelve varios. Arrastra para reordenar. El icono de cada uno enlaza a su web oficial.
         </span>
         <div className="form-group">
+          <label className="form-label">Prioridad de providers</label>
           <ProviderPriorityPicker order={providerOrder} onChange={setProviderOrder} />
         </div>
       </div>

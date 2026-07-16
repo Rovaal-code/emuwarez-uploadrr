@@ -755,11 +755,6 @@ def _rec_rolled_size(conn: sqlite3.Connection, row: dict, *, season: int | None 
     return r["s"] if r and r["c"] else None
 
 
-# Order tier by content granularity: movie & complete series first, then whole
-# season, then loose episode — the ordering the user asked for.
-_REC_TYPE_RANK = {"movie": 0, "series": 0, "season": 1, "episode": 2}
-
-
 def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 60) -> list[dict]:
     from datetime import datetime, timezone
     now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -768,7 +763,7 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 60) 
     seen_lib: set[int] = set()  # library ids already shown (so a piece of
     # content isn't repeated across groups 2 & 3 or after appearing in group 1)
 
-    cols = ("id, item_type, title, year, poster_url, local_status, "
+    cols = ("id, item_type, title, year, poster_url, local_status, added_at, "
             "season_number, episode_number, parent_id, size_bytes, "
             "resolution, source, tmdb_id, imdb_id, tvdb_id, instance_type")
 
@@ -776,10 +771,10 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 60) 
     # table (library_items.request_status only records one request per item, so
     # a series with several compatible requests would otherwise show just once).
     # One row per request, named/sized at the request's own scope (season /
-    # episode), linking to that request.
+    # episode), linking to that request. Ordered newest request first.
     g1 = conn.execute(
         """
-        SELECT ri.id AS req_id, ri.req_scope, ri.req_season, ri.req_episode,
+        SELECT ri.id AS req_id, ri.req_scope, ri.req_season, ri.req_episode, ri.created_at AS req_created,
                (SELECT rm.library_item_id FROM request_matches rm
                 WHERE rm.request_item_id = ri.id ORDER BY rm.confidence DESC LIMIT 1) AS lib_id
         FROM request_items ri
@@ -818,8 +813,7 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 60) 
         size_episode = episode if (scope == "episode" or disp_type == "episode") else None
         d["size_bytes"] = _rec_rolled_size(conn, lib, season=season, episode=size_episode)
         d["missing_count"] = None
-        d["_type_rank"] = _REC_TYPE_RANK.get(disp_type, 3)
-        d["_sort_title"] = (d["content_name"] or "").lower()
+        d["_added"] = r["req_created"] or ""
         recs.append(d)
         seen_lib.add(int(lib_id))
 
@@ -834,15 +828,20 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 60) 
         d["size_bytes"] = size if size is not None else _rec_rolled_size(conn, d)
         d["rec_request_id"] = None
         d["missing_count"] = missing_count
-        d["_type_rank"] = _REC_TYPE_RANK.get(d.get("item_type"), 3)
-        d["_sort_title"] = (d["content_name"] or "").lower()
+        # Recency = when Radarr/Sonarr added the content (falls back to when we
+        # first recorded it). Used to order each group newest-first.
+        d["_added"] = row.get("arr_added") or row.get("added_at") or ""
         recs.append(d)
 
     # Group 2 — available content not in eMuwarez ("Contenido único"): movies,
     # whole unique series, and unique seasons whose parent series isn't itself
     # flagged unique (avoids listing a series and all its seasons twice).
     for row in conn.execute(
-        f"""SELECT {cols} FROM library_items li
+        f"""SELECT {cols},
+              COALESCE(json_extract(li.raw_json, '$.added'),
+                       (SELECT json_extract(p.raw_json, '$.added')
+                        FROM library_items p WHERE p.id = li.parent_id)) AS arr_added
+            FROM library_items li
             WHERE li.local_status = 'Disponible' AND li.emu_in_catalog = 0
               AND li.item_type IN ('movie', 'series', 'season')
               AND NOT (li.item_type = 'season' AND EXISTS (
@@ -857,7 +856,8 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 60) 
     # yet. Movies directly; series rolled up to the season with monitored
     # missing episodes (you'd request the season, not each episode).
     for row in conn.execute(
-        f"""SELECT {cols} FROM library_items
+        f"""SELECT {cols}, json_extract(raw_json, '$.added') AS arr_added
+            FROM library_items
             WHERE item_type = 'movie' AND local_status = 'Faltante'
               AND emu_in_catalog = 0
               AND json_extract(raw_json, '$.monitored') = 1
@@ -866,7 +866,10 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 60) 
         _push(dict(row), 3)
 
     for row in conn.execute(
-        f"""SELECT {cols}, cnt.missing_count FROM library_items s
+        f"""SELECT {cols}, cnt.missing_count,
+              (SELECT json_extract(se.raw_json, '$.added')
+               FROM library_items se WHERE se.id = s.parent_id) AS arr_added
+            FROM library_items s
             JOIN (
                 SELECT ep.parent_id AS sid, COUNT(*) AS missing_count
                 FROM library_items ep
@@ -885,10 +888,12 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 60) 
         _push(row, 3, name=_rec_content_name(conn, row, missing_count=row.get("missing_count")),
               missing_count=row.get("missing_count"))
 
-    recs.sort(key=lambda d: (d["rec_group"], d["_type_rank"], d["_sort_title"]))
+    # Newest-first within each group (stable sort: order by recency, then by
+    # group so the three blocks stay in order 1 → 2 → 3).
+    recs.sort(key=lambda d: d.get("_added") or "", reverse=True)
+    recs.sort(key=lambda d: d["rec_group"])
     for d in recs:
-        d.pop("_type_rank", None)
-        d.pop("_sort_title", None)
+        d.pop("_added", None)
     return recs[:limit]
 
 

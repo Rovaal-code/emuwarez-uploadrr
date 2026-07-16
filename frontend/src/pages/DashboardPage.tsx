@@ -16,27 +16,26 @@ import { ServiceLabel, ServiceIcon } from '../components/ServiceIcon'
 import { Favicon, domainOf } from '../components/Favicon'
 import { UploadWizardModal } from '../components/UploadWizardModal'
 import { RequestFormModal } from '../components/RequestFormModal'
+import { LibraryActionButtons } from '../components/LibraryActionButtons'
+import type { LibraryActionKind } from '../components/LibraryTreeRow'
 import { getLibraryItem } from '../api/library'
 import type { LibraryItemResponse } from '../types/api'
 import { formatBytes, formatDate, formatItemType, parseServerDate } from '../utils/format'
 import { posterUrl } from '../utils/libraryItem'
 
 // Phase 11G — "Recomendaciones" groups, in the order they appear. Each maps to
-// a category badge, a recommendation phrase, the action button to offer, and a
-// click target for the name: group 1 opens the eMuwarez request, groups 2 & 3
-// open the content's own detail page.
-type RecAction = 'upload' | 'request'
+// a category badge and a recommendation phrase; the name's click target is
+// group 1 → the eMuwarez request, groups 2 & 3 → the content's detail page.
 const REC_GROUP_META: Record<number, {
   category: string; recommendation: string; hint: string
-  action: RecAction; actionLabel: string
   color: string; bg: string; border: string
 }> = {
   1: { category: 'Petición', recommendation: 'Cumple una petición compatible', hint: 'Ver la petición en eMuwarez',
-       action: 'upload', actionLabel: 'Subir', color: '#60a5fa', bg: 'rgba(96,165,250,0.14)', border: 'rgba(96,165,250,0.35)' },
+       color: '#60a5fa', bg: 'rgba(96,165,250,0.14)', border: 'rgba(96,165,250,0.35)' },
   2: { category: 'Contenido único', recommendation: 'Súbelo: no está en eMuwarez', hint: 'Ver ficha del contenido',
-       action: 'upload', actionLabel: 'Subir', color: '#22c55e', bg: 'rgba(34,197,94,0.14)', border: 'rgba(34,197,94,0.35)' },
+       color: '#22c55e', bg: 'rgba(34,197,94,0.14)', border: 'rgba(34,197,94,0.35)' },
   3: { category: 'Falta', recommendation: 'Pídelo en eMuwarez', hint: 'Ver ficha del contenido',
-       action: 'request', actionLabel: 'Petición', color: '#eab308', bg: 'rgba(234,179,8,0.14)', border: 'rgba(234,179,8,0.35)' },
+       color: '#eab308', bg: 'rgba(234,179,8,0.14)', border: 'rgba(234,179,8,0.35)' },
 }
 
 // Phase 11F — the four sub-phases a *running* upload job can be in, in
@@ -109,15 +108,14 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
     }
   }
 
-  // "Acción" column: fetch the full library item and open the upload wizard
-  // ("Subir", groups 1 & 2) or the request form ("Petición", group 3). For a
+  // "Acción" column: the same [Subir]/[Petición] buttons as Biblioteca. Fetch
+  // the full library item and open the upload wizard or the request form. For a
   // compatible request the wizard is pre-filled with the request's season /
   // episode scope (carried on the recommendation row).
-  const runRecommendationAction = async (item: DashboardRecommendationItem) => {
-    const meta = REC_GROUP_META[item.rec_group] ?? REC_GROUP_META[2]
+  const handleRecAction = async (kind: LibraryActionKind, item: DashboardRecommendationItem) => {
     try {
       const libItem = await getLibraryItem(item.id)
-      if (meta.action === 'request') {
+      if (kind === 'request') {
         setRequestItem(libItem)
       } else {
         setWizardPreselect(item.rec_group === 1 ? { season: item.season_number, episode: item.episode_number } : undefined)
@@ -369,13 +367,12 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                         <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{meta.recommendation}</td>
                         <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{formatBytes(item.size_bytes)}</td>
                         <td className="col-actions">
-                          <button
-                            className={meta.action === 'request' ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm'}
-                            onClick={() => runRecommendationAction(item)}
-                            title={meta.action === 'request' ? 'Crear una petición en eMuwarez' : 'Subir a eMuwarez'}
-                          >
-                            {meta.actionLabel}
-                          </button>
+                          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-start', alignItems: 'center' }}>
+                            <LibraryActionButtons
+                              item={{ id: item.id, item_type: item.item_type, local_status: item.local_status, title: item.content_name } as unknown as LibraryItemResponse}
+                              onAction={kind => handleRecAction(kind, item)}
+                            />
+                          </div>
                         </td>
                       </tr>
                       )

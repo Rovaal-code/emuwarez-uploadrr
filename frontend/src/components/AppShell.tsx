@@ -36,7 +36,7 @@ function PageContent({ page, onNavigate }: { page: string; onNavigate: (p: strin
   switch (page) {
     case 'dashboard':  return <DashboardPage onNavigate={onNavigate} />
     case 'library':    return <LibraryPage />
-    case 'requests':   return <RequestsPage />
+    case 'requests':   return <RequestsPage onNavigate={onNavigate} />
     case 'uploads':    return <UploadsPage />
     case 'tasks':      return <TasksPage />
     case 'instances':  return <InstancesPage />

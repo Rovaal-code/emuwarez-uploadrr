@@ -220,12 +220,13 @@ function IdField({ label, id, href }: { label: string; id: string | null; href: 
 
 // Full dedicated request page — same visual format as the library item detail
 // page (back button, big poster left, title + fields grid right).
-function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload }: {
+function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload, onOpenLibraryItem }: {
   item: RequestDetailResponse
   readiness: RequestReadinessResponse | null
   onBack: () => void
   onShowCandidates: () => void
   onUpload: (libraryItemId: number, preselect?: { season?: number | null; episode?: number | null }) => void
+  onOpenLibraryItem?: (id: number) => void
 }) {
   const m = item.match
   const effectiveStatus = m ? m.status : (item.compatibility_status ?? null)
@@ -353,7 +354,11 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
                       <td>{m.local_video_codec || '—'}</td>
                       <td>{m.local_audio_languages || '—'}</td>
                       <td style={{ whiteSpace: 'nowrap' }}>{m.local_size ? formatBytes(m.local_size) : '—'}</td>
-                      <td style={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }} title={m.content_name || baseName(m.local_path) || m.library_title || ''}>{m.content_name || baseName(m.local_path) || m.library_title || '—'}</td>
+                      <td style={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={m.content_name || baseName(m.local_path) || m.library_title || ''}>
+                        {libId
+                          ? <span className="lib-title-link" onClick={() => onOpenLibraryItem?.(libId)} title="Ver ficha del contenido">{m.content_name || baseName(m.local_path) || m.library_title || '—'}</span>
+                          : <span style={{ color: 'var(--text-secondary)' }}>{m.content_name || baseName(m.local_path) || m.library_title || '—'}</span>}
+                      </td>
                     </tr>
                   </tbody>
                 </table>
@@ -394,7 +399,13 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
 
 const PAGE_SIZE = 2000  // show everything in one scrollable container (like Biblioteca)
 
-export function RequestsPage() {
+export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => void } = {}) {
+  // Open a library item's dedicated detail page from a request (its "Tu
+  // biblioteca" name): stash the id and switch to the Biblioteca tab.
+  const goToLibraryItem = (id: number) => {
+    try { sessionStorage.setItem('emuwarez_open_library_item', String(id)) } catch { /* ignore */ }
+    onNavigate?.('library')
+  }
   const [items, setItems] = useState<RequestItemResponse[]>([])
   const [total, setTotal] = useState(0)
   const [offset, setOffset] = useState(0)
@@ -528,6 +539,7 @@ export function RequestsPage() {
             onBack={() => { setSelectedId(null); setDetail(null); setReadiness(null); setShowCandidates(false) }}
             onShowCandidates={() => setShowCandidates(true)}
             onUpload={openUpload}
+            onOpenLibraryItem={goToLibraryItem}
           />
         )
       ) : (

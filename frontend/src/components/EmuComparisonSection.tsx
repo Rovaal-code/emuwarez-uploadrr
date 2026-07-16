@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { getEmuComparison, type EmuComparison } from '../api/library'
 import { formatBytes } from '../utils/format'
+import { InfoIcon } from './InfoIcon'
 
 // Detail-card comparison: your copy vs every eMuwarez torrent that matches this
 // movie/season, plus the summary of what you'd add ("Aportes"). Only rendered
@@ -94,9 +95,9 @@ export function EmuComparisonSection({ itemId }: { itemId: number }) {
                 <th>Resolución</th>
                 <th>Source</th>
                 <th>Códec</th>
-                <th>Español</th>
+                <th><span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>Español <InfoIcon text="El idioma español se deduce del nombre del torrent; «?» = desconocido." /></span></th>
                 <th>Tamaño</th>
-                <th>Nombre</th>
+                <th><span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>Nombre <InfoIcon text="Si todos los campos coinciden con algún candidato, se presupone que tu copia proviene de eMuwarez (se muestra su nombre en «Tu copia»)." /></span></th>
               </tr>
             </thead>
             <tbody>
@@ -128,12 +129,6 @@ export function EmuComparisonSection({ itemId }: { itemId: number }) {
               ))}
             </tbody>
           </table>
-        </div>
-      )}
-      {!notInCatalog && (
-        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10 }}>
-          El idioma español se deduce del nombre del torrent; "?" = desconocido.
-          {hasLocal && ' Si todos los campos coinciden con algún candidato, se presupone que tu copia proviene de eMuwarez (se muestra su nombre en «Tu copia»).'}
         </div>
       )}
     </Panel>

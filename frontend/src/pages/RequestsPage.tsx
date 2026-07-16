@@ -18,6 +18,7 @@ import { getLibraryItem } from '../api/library'
 import type { LibraryItemResponse } from '../types/api'
 import { posterUrl, idVerifyUrl } from '../utils/libraryItem'
 import { ExternalIdLink } from '../components/ExternalIdLink'
+import { InfoIcon } from '../components/InfoIcon'
 import { HeaderFilter } from '../components/HeaderFilter'
 import { formatBytes, timeAgo, formatDate } from '../utils/format'
 
@@ -198,10 +199,12 @@ function CandidatesPanel({ requestId, onClose }: { requestId: number; onClose: (
   )
 }
 
-function ReqField({ label, children }: { label: string; children: React.ReactNode }) {
+function ReqField({ label, children, info }: { label: string; children: React.ReactNode; info?: React.ReactNode }) {
   return (
     <div>
-      <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>{label}</div>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 4 }}>
+        {label}{info && <InfoIcon text={info} />}
+      </div>
       <div style={{ fontSize: 14, wordBreak: 'break-word' }}>{children}</div>
     </div>
   )
@@ -299,7 +302,7 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '16px 28px' }}>
-            <ReqField label="Estado *"><CompatibilityBadge status={effectiveStatus} /></ReqField>
+            <ReqField label="Estado" info="Aunque salga «Compatible», revisa la petición: el audio y el códec no se pueden comparar del todo (suelen indicarse en la descripción del torrent), y si pide la serie completa puede que no quiera la temporada especial."><CompatibilityBadge status={effectiveStatus} /></ReqField>
             <ReqField label="Tipo">{t.label}</ReqField>
             {isSeriesLike && <ReqField label="Temporada">{temporadaLabel}</ReqField>}
             {isSeriesLike && <ReqField label="Capítulo">{item.req_scope === 'episode' ? (item.req_episode ?? '?') : 'Todos'}</ReqField>}
@@ -335,7 +338,12 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
               <div style={{ overflowX: 'auto' }}>
                 <table className="data-table" style={{ fontSize: 12.5 }}>
                   <thead>
-                    <tr><th>Contenido</th><th>Resolución</th><th>Source</th><th>Códec</th><th>Idiomas</th><th>Tamaño</th><th>Nombre</th></tr>
+                    <tr>
+                      <th>Contenido</th><th>Resolución</th><th>Source</th>
+                      <th><span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>Códec <InfoIcon text="El códec no se puede comparar de forma fiable: en eMuwarez suele indicarse en la descripción del torrent, no en los campos." /></span></th>
+                      <th><span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>Idiomas <InfoIcon text="El audio/idiomas no se pueden comparar de forma fiable: suelen indicarse en la descripción del torrent." /></span></th>
+                      <th>Tamaño</th><th>Nombre</th>
+                    </tr>
                   </thead>
                   <tbody>
                     <tr>
@@ -362,9 +370,6 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
                     </tr>
                   </tbody>
                 </table>
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10 }}>
-                * Aunque salga «Compatible», el audio y el códec aún no se pueden comparar porque suelen indicarse en la descripción, al igual que si pide una serie completa y no se quiere la temporada especial. <span style={{ color: '#eab308' }}>Siempre es mejor revisar la petición por si acaso.</span>
               </div>
             </>
           )}

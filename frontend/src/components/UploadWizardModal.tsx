@@ -95,6 +95,7 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
   const [sources, setSources] = useState<EmuSource[]>([])
   const [providers, setProviders] = useState<EmuProvider[]>([])
   const [fields, setFields] = useState<NomenclatureFields>({})
+  const [titleWarning, setTitleWarning] = useState<string | null>(null)
   const [preview, setPreview] = useState<FieldsPreviewResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -179,6 +180,7 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
       setSources(srcResp.sources)
       setProviders(prvResp.providers)
       setFields(fieldsResp.fields || {})
+      setTitleWarning(fieldsResp.title_warning ?? null)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error cargando la nomenclatura')
     } finally {
@@ -288,6 +290,9 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
         <label><span style={labelStyle}>Título</span>
           <input className="form-input" value={fields.title || ''} onChange={e => setField('title', e.target.value)} />
+          {titleWarning && (
+            <span style={{ display: 'block', marginTop: 4, fontSize: 11, color: '#f59e0b' }}>⚠ {titleWarning}</span>
+          )}
         </label>
         <label><span style={labelStyle}>Año</span>
           <input className="form-input" value={fields.year || ''} onChange={e => setField('year', e.target.value)} />

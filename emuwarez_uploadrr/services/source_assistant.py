@@ -315,24 +315,30 @@ def suggest_provider_for_item(library_item_id: int, conn=None) -> dict:
             conn.close()
 
 
-def _resolve_series_title(item: dict, conn) -> str | None:
-    """Walk parent_id up from an episode/season row to the series row and
-    return its (clean) title, so episode nomenclature uses the series name
-    instead of the per-episode "Serie S01E01 - Nombre" title."""
+def _resolve_series_row(item: dict, conn) -> dict | None:
+    """Walk parent_id up from an episode/season row to the series row and return
+    it (title + tmdb_id), so episode nomenclature uses the series name and can
+    localize it via the series' own TMDb id."""
     seen: set[int] = set()
     pid = item.get("parent_id")
     while pid and pid not in seen:
         seen.add(pid)
         row = conn.execute(
-            "SELECT title, item_type, parent_id FROM library_items WHERE id = ?", (pid,)
+            "SELECT title, tmdb_id, item_type, parent_id FROM library_items WHERE id = ?", (pid,)
         ).fetchone()
         if not row:
             break
         row = dict(row)
         if row.get("item_type") == "series":
-            return row.get("title")
+            return row
         pid = row.get("parent_id")
     return None
+
+
+def _resolve_series_title(item: dict, conn) -> str | None:
+    """The series title for an episode/season row (see _resolve_series_row)."""
+    row = _resolve_series_row(item, conn)
+    return row.get("title") if row else None
 
 
 def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
@@ -360,6 +366,7 @@ def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
         title = item.get("title") or ""
         year = item.get("year")
         media_type = item.get("item_type") or "movie"
+        tmdb_id = item.get("tmdb_id")
         resolution = _infer_resolution_from_item(item)
         source = _infer_source_from_item(item)
 
@@ -369,10 +376,17 @@ def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
         # walking up parent_id to the series row.
         season_num = item.get("season_number")
         episode_num = item.get("episode_number")
+        # Title always in Spanish via TMDb (forced here, regardless of the
+        # library-sync localize setting). For series, resolve the series row so
+        # we localize with the series' own TMDb id.
+        title_tmdb_id = tmdb_id
         if media_type in ("season", "episode"):
-            series_title = _resolve_series_title(item, conn)
-            if series_title:
-                title = series_title
+            srow = _resolve_series_row(item, conn)
+            if srow:
+                title = srow.get("title") or title
+                title_tmdb_id = srow.get("tmdb_id") or title_tmdb_id
+        from .tmdb_titles import resolve_localized_title
+        title, title_warning = resolve_localized_title(conn, media_type, title_tmdb_id, title)
 
         def _se_token() -> str | None:
             if season_num is None:
@@ -459,6 +473,9 @@ def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
             "provider_options": provider_options,
             "tmdb_available_providers": tmdb_providers,
             "sources": list_emu_sources(),
+            # Set when the title couldn't be confirmed in Spanish via TMDb, so
+            # the wizard can flag the Title field.
+            "title_warning": title_warning,
         }
     finally:
         if own:

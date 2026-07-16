@@ -35,14 +35,22 @@ const TASKS_PANEL_HEIGHT = '20vh'
 // One row of the "Conexiones" card: icon + label + status badge. Only
 // actually-configured connections are rendered, so the badge reads
 // "Configurado" (or the instance's last test status when available).
-function ConnRow({ icon, label, badge = 'Configurado', tone = 'ok' }: {
-  icon: React.ReactNode; label: string; badge?: string; tone?: 'ok' | 'warn' | 'error'
+function ConnRow({ icon, label, href, badge = 'Configurado', tone = 'ok' }: {
+  icon: React.ReactNode; label: string; href?: string | null; badge?: string; tone?: 'ok' | 'warn' | 'error'
 }) {
   const cls = tone === 'error' ? 'status-error' : tone === 'warn' ? 'status-partial' : 'status-available'
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+  const inner = (
+    <>
       <span style={{ display: 'flex', width: 18, justifyContent: 'center' }}>{icon}</span>
       <span style={{ flex: 1, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+    </>
+  )
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      {href
+        ? <a className="hover-link" href={href} target="_blank" rel="noreferrer" title={`Abrir ${label}`}
+             style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, textDecoration: 'none', color: 'inherit' }}>{inner}</a>
+        : <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>{inner}</div>}
       <span className={`badge ${cls}`}>{badge}</span>
     </div>
   )
@@ -440,25 +448,28 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
             <div style={{ padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', flex: 1 }}>
               {(() => {
                 const rows: React.ReactNode[] = []
+                const qbitUrl = connSettings?.qbit_url
+                  ? `${connSettings.qbit_url}${connSettings.qbit_port ? `:${connSettings.qbit_port}` : ''}`
+                  : null
                 // Radarr/Sonarr instances (each configured one, with its icon).
                 for (const inst of connInstances) {
                   rows.push(
                     <ConnRow key={`inst-${inst.id}`} icon={<ServiceIcon type={inst.type === 'sonarr' ? 'sonarr' : 'radarr'} size={16} />}
-                      label={inst.name} />
+                      label={inst.name} href={inst.url} />
                   )
                 }
                 if (connSettings?.emu_api_key_configured)
-                  rows.push(<ConnRow key="emu" icon={<ServiceIcon type="emu" size={16} />} label="API eMuwarez" />)
+                  rows.push(<ConnRow key="emu" icon={<ServiceIcon type="emu" size={16} />} label="API eMuwarez" href="https://emuwarez.com" />)
                 if (connSettings?.tmdb_api_key_configured)
-                  rows.push(<ConnRow key="tmdb" icon={<ServiceIcon type="tmdb" size={16} />} label="API TMDb" />)
+                  rows.push(<ConnRow key="tmdb" icon={<ServiceIcon type="tmdb" size={16} />} label="API TMDb" href="https://www.themoviedb.org" />)
                 if (connSettings?.qbit_configured)
-                  rows.push(<ConnRow key="qbit" icon={<ServiceIcon type="qbittorrent" size={16} />} label="qBittorrent" />)
+                  rows.push(<ConnRow key="qbit" icon={<ServiceIcon type="qbittorrent" size={16} />} label="qBittorrent" href={qbitUrl} />)
                 // Image hosts: imgbox is always the default fallback, plus enabled ones.
                 const imgIds = Array.from(new Set(['imgbox', ...(connSettings?.image_hosts_enabled ?? [])]))
                 for (const id of imgIds) {
                   const meta = connSettings?.image_hosts_available?.find(h => h.id === id)
                   rows.push(<ConnRow key={`img-${id}`} icon={<Favicon domain={domainOf(meta?.url)} size={16} fallback={<ServiceIcon type="imghost" size={16} />} />}
-                    label={meta?.label ?? id} />)
+                    label={meta?.label ?? id} href={meta?.url} />)
                 }
                 if (connSettings?.notify_discord_webhook_configured)
                   rows.push(<ConnRow key="discord" icon={<ServiceIcon type="discord" size={16} />} label="Bot de Discord" />)

@@ -895,3 +895,13 @@ optgroup {
   color: var(--text-accent, #2563eb);
   text-decoration: underline;
 }
+
+/* Grow the service icon (Radarr/Sonarr) a touch when hovering its link. */
+.hover-link svg,
+.hover-link img {
+  transition: transform 0.12s ease;
+}
+.hover-link:hover svg,
+.hover-link:hover img {
+  transform: scale(1.18);
+}

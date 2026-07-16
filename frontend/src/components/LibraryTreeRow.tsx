@@ -175,18 +175,6 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, onR
             >
               {item.title}
             </div>
-            {deepLink && (
-              <a
-                href={deepLink}
-                target="_blank"
-                rel="noreferrer"
-                onClick={e => e.stopPropagation()}
-                title={`Ver en ${item.instance_name ?? item.instance_type}`}
-                style={{ fontSize: 11, textDecoration: 'none' }}
-              >
-                🔗
-              </a>
-            )}
           </div>
           {item.year ? (
             <div style={{ fontSize: 11, color: 'var(--text-muted)', paddingLeft: indent + 28 }}>
@@ -197,7 +185,9 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, onR
         <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{formatItemType(item.item_type)}</td>
         <td>
           {item.instance_type
-            ? <ServiceLabel type={item.instance_type} label={item.instance_name ?? item.instance_type} size={13} />
+            ? (deepLink
+                ? <a className="hover-link" href={deepLink} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} title={`Abrir en ${item.instance_name ?? item.instance_type}`} style={{ textDecoration: 'none', color: 'inherit' }}><ServiceLabel type={item.instance_type} label={item.instance_name ?? item.instance_type} size={13} /></a>
+                : <ServiceLabel type={item.instance_type} label={item.instance_name ?? item.instance_type} size={13} />)
             : <span style={{ color: 'var(--text-muted)' }}>—</span>}
         </td>
         <td><StatusBadge status={item.local_status} type="local" /></td>

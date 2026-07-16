@@ -10,6 +10,7 @@ import { formatBytes, formatItemType } from '../utils/format'
 import { buildDeepLink, posterUrl, idVerifyUrl } from '../utils/libraryItem'
 import { ExternalIdLink } from './ExternalIdLink'
 import { ProviderTag } from './ProviderIcon'
+import { ServiceLabel } from './ServiceIcon'
 import { NomenclatureCheckButton } from './NomenclatureCheckButton'
 import { InfoIcon } from './InfoIcon'
 
@@ -107,9 +108,6 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
         <div style={{ flex: 1, minWidth: 300 }}>
           <div style={{ fontWeight: 700, fontSize: 28, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             {item.title} {item.year ? <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>({item.year})</span> : null}
-            {deepLink && (
-              <a href={deepLink} target="_blank" rel="noreferrer" title={`Ver en ${item.instance_name ?? item.instance_type}`} style={{ fontSize: 18, textDecoration: 'none' }}>🔗</a>
-            )}
           </div>
 
           <div style={{ display: 'flex', gap: 8, margin: '20px 0', flexWrap: 'wrap' }}>
@@ -118,7 +116,13 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '16px 28px' }}>
             <Field label="Tipo">{formatItemType(item.item_type)}</Field>
-            <Field label="Origen">{item.instance_name ?? '—'}</Field>
+            <Field label="Origen">
+              {item.instance_type
+                ? (deepLink
+                    ? <a className="hover-link" href={deepLink} target="_blank" rel="noreferrer" title={`Abrir en ${item.instance_name ?? item.instance_type}`} style={{ textDecoration: 'none', color: 'inherit' }}><ServiceLabel type={item.instance_type} label={item.instance_name ?? item.instance_type} size={15} /></a>
+                    : <ServiceLabel type={item.instance_type} label={item.instance_name ?? item.instance_type} size={15} />)
+                : '—'}
+            </Field>
             <Field label="Estado"><StatusBadge status={item.local_status} type="local" /></Field>
             <Field label="Petición"><StatusBadge status={item.request_status} type="request" /></Field>
             <Field label="Nomenclatura">

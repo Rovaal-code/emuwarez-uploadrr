@@ -893,7 +893,6 @@ optgroup {
 }
 .hover-link:hover {
   color: var(--text-accent, #2563eb);
-  text-decoration: underline;
 }
 
 /* Grow the service icon (Radarr/Sonarr) a touch when hovering its link. */

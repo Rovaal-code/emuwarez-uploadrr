@@ -7,31 +7,35 @@ export function FitText({ text, max = 13, min = 8 }: { text: string; max?: numbe
   const ref = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
     const el = ref.current
-    if (!el) return
+    const parent = el?.parentElement
+    if (!el || !parent) return
     const fit = () => {
+      // Available width = the CONTAINER's inner width (not `el`'s own, which can
+      // shrink-wrap to the text and make the fit spiral down to `min`).
+      const avail = parent.clientWidth
+      if (avail <= 0) return
       el.style.fontSize = `${max}px`
-      // 2px safety margin so sub-pixel rounding of scrollWidth never leaves the
-      // text 1px over the edge (which would clip it with an ellipsis).
-      const fits = () => el.clientWidth > 0 && el.scrollWidth <= el.clientWidth - 2
-      if (el.clientWidth === 0 || fits()) return  // fits at max
-      // Binary-search the LARGEST font size in [min, max] that still fits on one
-      // line, so it fills the box instead of shrinking too far.
+      if (el.scrollWidth <= avail) return          // fits at max
+      // Binary-search the LARGEST font size in [min, max] that fits on one line
+      // (2px margin so sub-pixel rounding never clips it with an ellipsis).
       let lo = min, hi = max
       for (let i = 0; i < 14; i++) {
         const mid = (lo + hi) / 2
         el.style.fontSize = `${mid}px`
-        if (fits()) lo = mid
+        if (el.scrollWidth <= avail - 2) lo = mid
         else hi = mid
       }
       el.style.fontSize = `${lo}px`
     }
     fit()
+    // Observe the PARENT (not `el`) so changing the font — which alters el's
+    // height — doesn't retrigger the observer in a loop.
     const ro = new ResizeObserver(fit)
-    ro.observe(el)
+    ro.observe(parent)
     return () => ro.disconnect()
   }, [text, max, min])
   return (
-    <div ref={ref} style={{ fontFamily: 'monospace', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+    <div ref={ref} style={{ fontFamily: 'monospace', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%', minWidth: 0 }}>
       {text}
     </div>
   )

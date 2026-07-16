@@ -96,6 +96,7 @@ export function ProviderIcon({ code, size = 18 }: { code: string | null | undefi
   if (domain) {
     return (
       <a
+        className="hover-link"
         href={`https://${domain}`}
         target="_blank"
         rel="noreferrer"

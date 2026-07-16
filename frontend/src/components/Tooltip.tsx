@@ -28,15 +28,22 @@ export function useTooltip(content: React.ReactNode, maxWidth = 460) {
 
   useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current) }, [])
 
-  // The box width is `max-content` capped at maxWidth, so it hugs the text
-  // exactly (one line for short text, wrapping to the cap for long text) with no
-  // wasted space. `max-content` is an intrinsic size, so it does NOT shrink when
-  // the box sits near a screen edge — the text never re-wraps into extra lines.
-  // We only READ the rendered width here, to clamp the horizontal position so
-  // the box stays on screen.
+  // `max-content` capped at maxWidth wraps long text, but leaves the box as wide
+  // as the cap even when the wrapped lines are shorter. So after it wraps, we
+  // measure the LONGEST actually-rendered line and shrink the box to it — the
+  // box then hugs the text on every line. Then clamp the position on screen.
   useLayoutEffect(() => {
     const el = ref.current
     if (!show || !el) return
+    el.style.width = 'max-content'
+    const range = document.createRange()
+    range.selectNodeContents(el)
+    let longest = 0
+    for (const r of range.getClientRects()) longest = Math.max(longest, r.width)
+    if (longest > 0) {
+      // + horizontal padding (24px) + border (2px)
+      el.style.width = `${Math.ceil(longest) + 26}px`
+    }
     const half = el.offsetWidth / 2
     const clamped = Math.min(Math.max(pt.x, half + 6), window.innerWidth - half - 6)
     el.style.left = `${clamped}px`

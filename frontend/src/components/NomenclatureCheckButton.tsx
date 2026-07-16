@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { StatusBadge } from './StatusBadge'
+import { FitText } from './FitText'
 import { ApiClientError } from '../api/client'
 import {
   getNomenclatureCheckInfo,
@@ -166,11 +167,11 @@ export function NomenclatureCheckButton({ item, onChecked, compact }: Props) {
                     <div style={{ display: 'grid', gap: 12, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
                       <div>
                         <div style={labelStyle}>Nombre esperado</div>
-                        <code style={{ wordBreak: 'break-all' }}>{result.expected || '—'}</code>
+                        <FitText text={result.expected || '—'} />
                       </div>
                       <div>
                         <div style={labelStyle}>Nombre real</div>
-                        <code style={{ wordBreak: 'break-all' }}>{result.actual || '—'}</code>
+                        <FitText text={result.actual || '—'} />
                       </div>
                       {result.status === 'Correcta' && (
                         <p style={{ color: 'var(--success, #22c55e)', margin: 0 }}>El nombre cumple la nomenclatura de eMuwarez.</p>

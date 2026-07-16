@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import type { EmuSource, EmuProvider, NomenclatureFields, FieldsPreviewResult } from '../api/nomenclature'
 import {
   getEmuSources,
@@ -13,6 +13,7 @@ import { getLibrary, getMediaInfoReport, suggestProvider } from '../api/library'
 import type { MediaInfoReport } from '../api/library'
 import type { LibraryItemResponse } from '../types/api'
 import { InfoIcon } from './InfoIcon'
+import { FitText } from './FitText'
 
 // Unified "Subir" wizard (replaces the separate Nomenclatura + Campos + Subir
 // buttons). For a Series/Season it first asks which season (and episode, or the
@@ -70,31 +71,6 @@ function GeneratingHint() {
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--text-muted)', fontSize: 13, padding: '2px 0' }}>
       <span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Generando…
     </span>
-  )
-}
-
-function FitText({ text, max = 13, min = 8 }: { text: string; max?: number; min?: number }) {
-  const ref = useRef<HTMLDivElement>(null)
-  useLayoutEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const fit = () => {
-      el.style.fontSize = `${max}px`
-      const avail = el.clientWidth
-      const full = el.scrollWidth
-      if (full > avail && avail > 0) {
-        el.style.fontSize = `${Math.max(min, Math.floor((max * avail) / full))}px`
-      }
-    }
-    fit()
-    const ro = new ResizeObserver(fit)
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [text, max, min])
-  return (
-    <div ref={ref} style={{ fontFamily: 'monospace', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-      {text}
-    </div>
   )
 }
 

@@ -527,6 +527,19 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
     finally { setDetailLoading(false) }
   }
 
+  // Deep link from the Dashboard "Recomendaciones" panel: open a specific
+  // request's detail on mount when its id was stashed before navigating here.
+  useEffect(() => {
+    let stashed: string | null = null
+    try {
+      stashed = sessionStorage.getItem('emuwarez_open_request')
+      if (stashed) sessionStorage.removeItem('emuwarez_open_request')
+    } catch { /* ignore */ }
+    const id = stashed ? parseInt(stashed, 10) : NaN
+    if (!Number.isNaN(id)) handleRowClick(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const displayItems = items
 
   const totalPages = Math.ceil(total / PAGE_SIZE)

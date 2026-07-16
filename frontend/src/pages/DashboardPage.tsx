@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getDashboardSummary, getDashboardActivity, getDashboardLibraryActivity } from '../api/dashboard'
+import { getDashboardSummary, getDashboardActivity, getDashboardRecommendations, type DashboardRecommendationItem } from '../api/dashboard'
 import { getUploads } from '../api/uploads'
 import { fetchSettings, type SettingsData } from '../api/settings'
 import { getInstances } from '../api/instances'
 import type { InstanceSafeResponse } from '../types/api'
-import type { DashboardSummaryResponse, DashboardActivityResponse, LibraryItemResponse, UploadJob } from '../types/api'
+import type { DashboardSummaryResponse, DashboardActivityResponse, UploadJob } from '../types/api'
 import { StatCard } from '../components/StatCard'
 import { SyncCard } from '../components/SyncCard'
 import { useSync } from '../context/SyncContext'
@@ -14,12 +14,17 @@ import { ErrorState } from '../components/ErrorState'
 import { StatusBadge } from '../components/StatusBadge'
 import { ServiceLabel, ServiceIcon } from '../components/ServiceIcon'
 import { Favicon, domainOf } from '../components/Favicon'
-import { UploadWizardModal } from '../components/UploadWizardModal'
-import { RequestFormModal } from '../components/RequestFormModal'
-import { LibraryActionButtons } from '../components/LibraryActionButtons'
-import type { LibraryActionKind } from '../components/LibraryTreeRow'
 import { formatBytes, formatDate, formatItemType, parseServerDate } from '../utils/format'
-import { posterUrl, buildDeepLink } from '../utils/libraryItem'
+import { posterUrl } from '../utils/libraryItem'
+
+// Phase 11G — "Recomendaciones" groups, in the order they appear. Each maps to
+// a coloured badge and a click target: group 1 opens the eMuwarez request,
+// groups 2 & 3 open the content's own detail page.
+const REC_GROUP_META: Record<number, { label: string; hint: string; color: string; bg: string; border: string }> = {
+  1: { label: 'Petición compatible', hint: 'Ver la petición en eMuwarez', color: '#60a5fa', bg: 'rgba(96,165,250,0.14)', border: 'rgba(96,165,250,0.35)' },
+  2: { label: 'Único · súbelo',      hint: 'Ver ficha para subir a eMuwarez', color: '#22c55e', bg: 'rgba(34,197,94,0.14)', border: 'rgba(34,197,94,0.35)' },
+  3: { label: 'Falta · pídelo',      hint: 'Ver ficha del contenido', color: '#eab308', bg: 'rgba(234,179,8,0.14)', border: 'rgba(234,179,8,0.35)' },
+}
 
 // Phase 11F — the four sub-phases a *running* upload job can be in, in
 // order. compute_progress_phase() on the backend never emits a numeric
@@ -78,32 +83,32 @@ interface DashboardPageProps {
 }
 
 export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
-  // Open a library item's dedicated detail page from the dashboard: stash the id
-  // and switch to the Biblioteca tab, which picks it up on mount.
-  const openItemDetail = (item: LibraryItemResponse) => {
-    try { sessionStorage.setItem('emuwarez_open_library_item', String(item.id)) } catch { /* ignore */ }
-    onNavigate?.('library')
+  // Open a recommendation's target: group 1 → its eMuwarez request (Peticiones
+  // tab), groups 2 & 3 → the content's own detail page (Biblioteca tab). Both
+  // stash an id that the destination page reads on mount.
+  const openRecommendation = (item: DashboardRecommendationItem) => {
+    if (item.rec_group === 1 && item.rec_request_id != null) {
+      try { sessionStorage.setItem('emuwarez_open_request', String(item.rec_request_id)) } catch { /* ignore */ }
+      onNavigate?.('requests')
+    } else {
+      try { sessionStorage.setItem('emuwarez_open_library_item', String(item.id)) } catch { /* ignore */ }
+      onNavigate?.('library')
+    }
   }
 
   const [summary, setSummary] = useState<DashboardSummaryResponse | null>(null)
   const [taskActivity, setTaskActivity] = useState<DashboardActivityResponse | null>(null)
-  const [libraryActivity, setLibraryActivity] = useState<LibraryItemResponse[]>([])
+  const [recommendations, setRecommendations] = useState<DashboardRecommendationItem[]>([])
   const [activeUploads, setActiveUploads] = useState<UploadJob[]>([])
   const [connSettings, setConnSettings] = useState<SettingsData | null>(null)
   const [connInstances, setConnInstances] = useState<InstanceSafeResponse[]>([])
   const [loadingData, setLoadingData] = useState(true)
   const [dataError, setDataError] = useState<string | null>(null)
-  const [wizardItem, setWizardItem] = useState<LibraryItemResponse | null>(null)
-  const [requestItem, setRequestItem] = useState<LibraryItemResponse | null>(null)
   // Global sync state (shared with Biblioteca/Peticiones and the progress
   // banner). `message` shows the last completion result; `lastCompletedAt`
   // triggers a data reload when any sync finishes.
   const { message: syncMsg, lastCompletedAt } = useSync()
 
-  function handleActivityAction(kind: LibraryActionKind, item: LibraryItemResponse) {
-    if (kind === 'request') setRequestItem(item)
-    else setWizardItem(item)  // 'upload' → wizard
-  }
   const [now, setNow] = useState(Date.now())
 
   useEffect(() => {
@@ -114,23 +119,23 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   const loadData = useCallback(async () => {
     setLoadingData(true)
     setDataError(null)
-    // Settings first, so "Actividad reciente" honours the configured limit.
+    // Settings first, so "Recomendaciones" honours the configured limit.
     const cfg = await fetchSettings().catch(() => null)
     if (cfg) setConnSettings(cfg)
     getInstances().then(setConnInstances).catch(() => { /* ignore */ })
-    const recentLimit = cfg?.recent_activity_limit ?? 50
+    const recentLimit = cfg?.recent_activity_limit ?? 60
     // Promise.allSettled never rejects — each branch's own status carries
     // its outcome, so failures are handled per-item below, not via catch.
     const [s, a, la, up] = await Promise.allSettled([
       getDashboardSummary(),
       getDashboardActivity(),
-      getDashboardLibraryActivity(recentLimit),
+      getDashboardRecommendations(recentLimit),
       getUploads({ status: 'running', limit: 50 }),
     ])
     if (s.status === 'fulfilled') setSummary(s.value)
     else setDataError('No se pudieron cargar los datos del dashboard')
     if (a.status === 'fulfilled') setTaskActivity(a.value)
-    if (la.status === 'fulfilled') setLibraryActivity(la.value.items)
+    if (la.status === 'fulfilled') setRecommendations(la.value.items)
     if (up.status === 'fulfilled') setActiveUploads(up.value)
     setLoadingData(false)
   }, [])
@@ -155,13 +160,6 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
 
   return (
     <div>
-      {wizardItem && (
-        <UploadWizardModal item={wizardItem} onClose={() => setWizardItem(null)} onDone={loadData} />
-      )}
-      {requestItem && (
-        <RequestFormModal item={requestItem} onClose={() => setRequestItem(null)} />
-      )}
-
       <div className="page-header">
         <div>
           <div className="page-title">Dashboard</div>
@@ -273,32 +271,29 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           <div className="activity-section" style={{ height: ACTIVITY_PANEL_HEIGHT, display: 'flex', flexDirection: 'column', marginBottom: 0 }}>
             <div className="section-header">
-              <div className="section-title">Actividad reciente</div>
+              <div className="section-title">Recomendaciones</div>
             </div>
-            {libraryActivity.length === 0 ? (
+            {recommendations.length === 0 ? (
               <EmptyState
-                icon="📋"
-                title="No hay elementos en la biblioteca todavía"
-                body="Ejecuta una sincronización desde el botón superior o desde la sección Instancias."
+                icon="✨"
+                title="No hay recomendaciones todavía"
+                body="Sincroniza tu biblioteca, eMuwarez y las peticiones para ver aquí qué subir o pedir."
               />
             ) : (
               <div style={{ overflowX: 'auto', overflowY: 'auto', flex: 1 }}>
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>Título</th>
+                      <th>Nombre</th>
                       <th>Tipo</th>
-                      <th>Origen</th>
-                      <th>Estado</th>
-                      <th>Petición</th>
-                      <th>Nomenclatura</th>
+                      <th>Recomendación</th>
                       <th>Tamaño</th>
-                      <th>Actualizado</th>
-                      <th className="col-actions">Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {libraryActivity.map(item => (
+                    {recommendations.map(item => {
+                      const meta = REC_GROUP_META[item.rec_group] ?? REC_GROUP_META[2]
+                      return (
                       <tr key={item.id}>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -316,40 +311,23 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                                 />
                               ) : (
                                 <span style={{ fontSize: 14, opacity: 0.35 }}>
-                                  {item.item_type === 'series' || item.item_type === 'episode' ? '📺' : '🎬'}
+                                  {item.item_type === 'series' || item.item_type === 'season' || item.item_type === 'episode' ? '📺' : '🎬'}
                                 </span>
                               )}
                             </div>
-                            <div style={{ minWidth: 0 }}>
-                              <div className="hover-link" style={{ fontWeight: 500 }} onClick={() => openItemDetail(item)} title="Ver ficha">{item.title}</div>
-                              {item.year ? <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.year}</div> : null}
-                            </div>
+                            <div className="hover-link" style={{ fontWeight: 500, minWidth: 0 }} onClick={() => openRecommendation(item)} title={meta.hint}>{item.content_name}</div>
                           </div>
                         </td>
                         <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{formatItemType(item.item_type)}</td>
                         <td>
-                          {item.instance_type
-                            ? (() => {
-                                const link = buildDeepLink(item, connInstances)
-                                const label = <ServiceLabel type={item.instance_type!} label={item.instance_name ?? item.instance_type!} size={13} />
-                                return link
-                                  ? <a className="hover-link" href={link} target="_blank" rel="noreferrer" title={`Abrir en ${item.instance_name ?? item.instance_type}`}>{label}</a>
-                                  : label
-                              })()
-                            : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                          <span className="badge" style={{
+                            color: meta.color, background: meta.bg, border: `1px solid ${meta.border}`, whiteSpace: 'nowrap',
+                          }}>{meta.label}</span>
                         </td>
-                        <td><StatusBadge status={item.local_status} type="local" /></td>
-                        <td><StatusBadge status={item.request_status} type="request" /></td>
-                        <td><StatusBadge status={item.nomenclature_status} type="nomenclature" /></td>
                         <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{formatBytes(item.size_bytes)}</td>
-                        <td style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{formatDate(item.updated_at)}</td>
-                        <td className="col-actions">
-                          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-start', alignItems: 'center' }}>
-                            <LibraryActionButtons item={item} onAction={handleActivityAction} />
-                          </div>
-                        </td>
                       </tr>
-                    ))}
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>

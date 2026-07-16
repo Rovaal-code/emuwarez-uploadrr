@@ -650,6 +650,137 @@ def get_dashboard_library_activity(conn: sqlite3.Connection, *, limit: int = 10)
     return [dict(row) for row in rows]
 
 
+# Phase 11G — dashboard "Recomendaciones": actionable content, in three ranked
+# groups. (1) content you have that satisfies a *compatible* eMuwarez request
+# → click goes to that request. (2) content you have available that is NOT in
+# eMuwarez yet ("Contenido único") → an upload opportunity. (3) content you are
+# *missing* and that is monitored in Radarr/Sonarr and not on eMuwarez → a
+# candidate to request on eMuwarez. Within each group items are ordered by
+# type (movie / complete series → season → loose episode) then by title, like
+# the library. Groups 2 & 3 link to the content's own detail page.
+def _rec_content_name(conn: sqlite3.Connection, row: dict, *, missing_count: int | None = None) -> str:
+    """Friendly display name: "Título (año)" for movies/series, "Serie (año) -
+    Season N" for seasons, with an optional "· N faltantes" tail for group 3."""
+    it = row.get("item_type")
+    if it in ("season", "episode"):
+        title, year = _rec_series_title_year(conn, row)
+        name = title or row.get("title") or ""
+        if year:
+            name += f" ({year})"
+        sn = row.get("season_number")
+        if sn is not None:
+            name += f" - Season {sn}"
+        if it == "episode" and row.get("episode_number") is not None and sn is not None:
+            try:
+                name += f" - S{int(sn):02d}E{int(row['episode_number']):02d}"
+            except (TypeError, ValueError):
+                pass
+    else:
+        name = row.get("title") or ""
+        if row.get("year"):
+            name += f" ({row.get('year')})"
+    if missing_count:
+        name += f" · {missing_count} cap. faltante" + ("s" if missing_count != 1 else "")
+    return name
+
+
+def _rec_series_title_year(conn: sqlite3.Connection, row: dict) -> tuple:
+    pid = row.get("parent_id")
+    seen: set = set()
+    while pid and pid not in seen:
+        seen.add(pid)
+        prow = conn.execute(
+            "SELECT title, year, item_type, parent_id FROM library_items WHERE id = ?", (pid,)
+        ).fetchone()
+        if not prow:
+            break
+        prow = dict(prow)
+        if prow.get("item_type") == "series":
+            return prow.get("title"), prow.get("year")
+        pid = prow.get("parent_id")
+    return row.get("title"), row.get("year")
+
+
+# Order tier by content granularity: movie & complete series first, then whole
+# season, then loose episode — the ordering the user asked for.
+_REC_TYPE_RANK = {"movie": 0, "series": 0, "season": 1, "episode": 2}
+
+
+def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 60) -> list[dict]:
+    recs: list[dict] = []
+    seen_ids: set[int] = set()
+
+    def _push(row: dict, group: int, *, name: str | None = None, request_id=None, sort_title=None):
+        rid = int(row["id"])
+        if rid in seen_ids:
+            return
+        seen_ids.add(rid)
+        d = dict(row)
+        d["rec_group"] = group
+        d["content_name"] = name if name is not None else _rec_content_name(conn, d)
+        d["rec_request_id"] = request_id if request_id is not None else d.get("request_id")
+        d["_type_rank"] = _REC_TYPE_RANK.get(d.get("item_type"), 3)
+        d["_sort_title"] = (sort_title or d["content_name"] or "").lower()
+        recs.append(d)
+
+    cols = ("id, item_type, title, year, poster_url, local_status, request_status, "
+            "request_id, season_number, episode_number, parent_id, size_bytes, "
+            "resolution, source, tmdb_id, imdb_id, tvdb_id, instance_type")
+
+    # Group 1 — content that satisfies a Compatible eMuwarez request.
+    for row in conn.execute(
+        f"SELECT {cols} FROM library_items WHERE request_status = 'Compatible'"
+    ).fetchall():
+        row = dict(row)
+        _push(row, 1, request_id=row.get("request_id"))
+
+    # Group 2 — available content not in eMuwarez ("Contenido único"): movies,
+    # whole unique series, and unique seasons whose parent series isn't itself
+    # flagged unique (avoids listing a series and all its seasons twice).
+    for row in conn.execute(
+        f"""SELECT {cols} FROM library_items li
+            WHERE li.local_status = 'Disponible' AND li.emu_in_catalog = 0
+              AND li.item_type IN ('movie', 'series', 'season')
+              AND NOT (li.item_type = 'season' AND EXISTS (
+                  SELECT 1 FROM library_items s
+                  WHERE s.id = li.parent_id AND s.emu_in_catalog = 0))"""
+    ).fetchall():
+        _push(dict(row), 2)
+
+    # Group 3 — monitored content you're missing and that isn't on eMuwarez, a
+    # candidate to request. Movies directly; series rolled up to the season
+    # that has monitored missing episodes (you'd request the season, not each
+    # episode). "monitored" comes from the raw Radarr/Sonarr payload.
+    for row in conn.execute(
+        f"""SELECT {cols} FROM library_items
+            WHERE item_type = 'movie' AND local_status = 'Faltante'
+              AND emu_in_catalog = 0
+              AND json_extract(raw_json, '$.monitored') = 1"""
+    ).fetchall():
+        _push(dict(row), 3)
+
+    for row in conn.execute(
+        f"""SELECT {cols}, cnt.missing_count FROM library_items s
+            JOIN (
+                SELECT ep.parent_id AS sid, COUNT(*) AS missing_count
+                FROM library_items ep
+                WHERE ep.item_type = 'episode' AND ep.local_status = 'Faltante'
+                  AND ep.emu_in_catalog = 0
+                  AND json_extract(ep.raw_json, '$.episode.monitored') = 1
+                GROUP BY ep.parent_id
+            ) cnt ON cnt.sid = s.id
+            WHERE s.item_type = 'season'"""
+    ).fetchall():
+        row = dict(row)
+        _push(row, 3, name=_rec_content_name(conn, row, missing_count=row.get("missing_count")))
+
+    recs.sort(key=lambda d: (d["rec_group"], d["_type_rank"], d["_sort_title"]))
+    for d in recs:
+        d.pop("_type_rank", None)
+        d.pop("_sort_title", None)
+    return recs[:limit]
+
+
 def update_request_status(
     conn: sqlite3.Connection,
     library_item_id: int,

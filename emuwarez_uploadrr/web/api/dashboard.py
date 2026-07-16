@@ -6,8 +6,9 @@ from fastapi import APIRouter, Depends, Query
 from ..dependencies import require_auth
 from ..runtime import _db_path
 from ..schemas import (
-    DashboardActivityItem, DashboardActivityResponse, DashboardSummaryResponse,
-    LibraryListResponse,
+    DashboardActivityItem, DashboardActivityResponse,
+    DashboardRecommendationItem, DashboardRecommendationsResponse,
+    DashboardSummaryResponse, LibraryListResponse,
 )
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -156,6 +157,25 @@ def dashboard_activity(current_user: dict = Depends(require_auth)) -> DashboardA
         items = get_recent_activity(conn, limit=20)
     return DashboardActivityResponse(
         items=[DashboardActivityItem(**{k: i.get(k) for k in DashboardActivityItem.model_fields}) for i in items]
+    )
+
+
+@router.get("/recommendations", response_model=DashboardRecommendationsResponse)
+def dashboard_recommendations(
+    limit: int = Query(default=60, ge=1, le=200),
+    current_user: dict = Depends(require_auth),
+) -> DashboardRecommendationsResponse:
+    """Phase 11G — 'Recomendaciones': actionable content in three ranked groups
+    (compatible request → unique/upload → missing/request). Replaces the old
+    request-priority feed shown under 'Actividad reciente'."""
+    from emuwarez_uploadrr.services.library import get_dashboard_recommendations
+    with _get_conn() as conn:
+        rows = get_dashboard_recommendations(conn, limit=limit)
+    return DashboardRecommendationsResponse(
+        items=[
+            DashboardRecommendationItem(**{k: r.get(k) for k in DashboardRecommendationItem.model_fields})
+            for r in rows
+        ]
     )
 
 

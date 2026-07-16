@@ -442,6 +442,29 @@ class DashboardActivityResponse(BaseModel):
     items: list[DashboardActivityItem] = []
 
 
+class DashboardRecommendationItem(BaseModel):
+    id: int
+    rec_group: int  # 1 = compatible request, 2 = unique/upload, 3 = missing/request
+    item_type: str
+    title: Optional[str] = None
+    content_name: str
+    year: Optional[int] = None
+    poster_url: Optional[str] = None
+    local_status: Optional[str] = None
+    season_number: Optional[int] = None
+    episode_number: Optional[int] = None
+    size_bytes: Optional[int] = None
+    resolution: Optional[str] = None
+    source: Optional[str] = None
+    instance_type: Optional[str] = None
+    missing_count: Optional[int] = None
+    rec_request_id: Optional[int] = None
+
+
+class DashboardRecommendationsResponse(BaseModel):
+    items: list[DashboardRecommendationItem] = []
+
+
 # ---------------------------------------------------------------------------
 # Library
 # ---------------------------------------------------------------------------

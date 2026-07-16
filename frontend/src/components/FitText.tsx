@@ -21,12 +21,20 @@ export function FitText({ text, max = 13, min = 8 }: { text: string; max?: numbe
       if (avail <= 0 || avail === lastAvail) return
       lastAvail = avail
       el.style.fontSize = `${max}px`
-      const natural = el.scrollWidth // full text width at max font, one line
-      if (natural <= avail) return   // fits at max → keep it big
-      // Proportional shrink: the largest size whose text width ≤ avail. The −1
-      // guards sub-pixel rounding so it never clips into an ellipsis.
-      const size = Math.max(min, (max * (avail - 1)) / natural)
-      el.style.fontSize = `${size}px`
+      if (el.scrollWidth <= avail) return // fits at max → keep it big
+      // Binary-search the LARGEST font that actually MEASURES as fitting. We
+      // measure each candidate (scrollWidth) rather than estimate from a ratio:
+      // monospace glyph advances don't scale perfectly linearly, so an estimate
+      // can overflow by a sub-pixel and get clipped into an ellipsis. Measuring
+      // guarantees the final size shows the whole string, no "…".
+      let lo = min, hi = max
+      for (let i = 0; i < 18; i++) {
+        const mid = (lo + hi) / 2
+        el.style.fontSize = `${mid}px`
+        if (el.scrollWidth <= avail) lo = mid
+        else hi = mid
+      }
+      el.style.fontSize = `${lo}px`
     }
     fit()
     // Re-measure once layout has fully settled (modal open, fonts, etc.), since

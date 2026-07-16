@@ -10,15 +10,17 @@ export function FitText({ text, max = 13, min = 8 }: { text: string; max?: numbe
     if (!el) return
     const fit = () => {
       el.style.fontSize = `${max}px`
-      if (el.clientWidth === 0 || el.scrollWidth <= el.clientWidth) return  // fits at max
+      // 2px safety margin so sub-pixel rounding of scrollWidth never leaves the
+      // text 1px over the edge (which would clip it with an ellipsis).
+      const fits = () => el.clientWidth > 0 && el.scrollWidth <= el.clientWidth - 2
+      if (el.clientWidth === 0 || fits()) return  // fits at max
       // Binary-search the LARGEST font size in [min, max] that still fits on one
-      // line, so it fills the box instead of shrinking too far (a single
-      // proportional estimate undershoots).
+      // line, so it fills the box instead of shrinking too far.
       let lo = min, hi = max
       for (let i = 0; i < 14; i++) {
         const mid = (lo + hi) / 2
         el.style.fontSize = `${mid}px`
-        if (el.scrollWidth <= el.clientWidth) lo = mid
+        if (fits()) lo = mid
         else hi = mid
       }
       el.style.fontSize = `${lo}px`

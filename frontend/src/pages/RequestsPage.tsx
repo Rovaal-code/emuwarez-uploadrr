@@ -225,7 +225,7 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
   readiness: RequestReadinessResponse | null
   onBack: () => void
   onShowCandidates: () => void
-  onUpload: (libraryItemId: number) => void
+  onUpload: (libraryItemId: number, preselect?: { season?: number | null; episode?: number | null }) => void
 }) {
   const m = item.match
   const effectiveStatus = m ? m.status : (item.compatibility_status ?? null)
@@ -288,7 +288,10 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
               title={libId
                 ? 'Subir el contenido de tu biblioteca a eMuwarez (mismo asistente que en Biblioteca)'
                 : 'No tienes este contenido en tu biblioteca'}
-              onClick={() => libId && onUpload(libId)}
+              onClick={() => libId && onUpload(libId, {
+                season: item.req_season,
+                episode: item.req_scope === 'episode' ? item.req_episode : null,
+              })}
             >
               ⬆ Subir a eMuwarez
             </button>
@@ -308,7 +311,10 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
             <IdField label="TMDb" id={tmdbId} href={idVerifyUrl('tmdb', tmdbId, isTv)} />
             <IdField label="IMDb" id={imdbId} href={idVerifyUrl('imdb', imdbId, isTv)} />
             <IdField label="TVDB" id={tvdbId} href={idVerifyUrl('tvdb', tvdbId, isTv)} />
-            <IdField label="MAL" id={malId} href={idVerifyUrl('mal', malId, isTv)} />
+            {/* MAL always shown (mainly for anime); "—" when the request had none. */}
+            <ReqField label="MAL">
+              {malId ? <ExternalIdLink id={malId} href={idVerifyUrl('mal', malId, isTv)} label="MAL" /> : '—'}
+            </ReqField>
             {item.created_at && <ReqField label="Creada">{new Date(item.created_at).toLocaleDateString('es-ES')}</ReqField>}
           </div>
         </div>
@@ -413,12 +419,15 @@ export function RequestsPage() {
   const [detailLoading, setDetailLoading] = useState(false)
   const [showCandidates, setShowCandidates] = useState(false)
   const [wizardItem, setWizardItem] = useState<LibraryItemResponse | null>(null)
+  const [wizardPreselect, setWizardPreselect] = useState<{ season?: number | null; episode?: number | null } | undefined>(undefined)
 
   // "Subir a eMuwarez" — reuse the exact same upload wizard as Biblioteca by
-  // loading the matched library item and handing it to UploadWizardModal.
-  const openUpload = useCallback(async (libraryItemId: number) => {
+  // loading the matched library item and handing it to UploadWizardModal, with
+  // the request's scope (season / episode) so the selection is pre-filled.
+  const openUpload = useCallback(async (libraryItemId: number, preselect?: { season?: number | null; episode?: number | null }) => {
     try {
       const libItem = await getLibraryItem(libraryItemId)
+      setWizardPreselect(preselect)
       setWizardItem(libItem)
     } catch { /* ignore — button only enabled when a match exists */ }
   }, [])
@@ -664,6 +673,7 @@ export function RequestsPage() {
       {wizardItem && (
         <UploadWizardModal
           item={wizardItem}
+          preselect={wizardPreselect}
           onClose={() => setWizardItem(null)}
           onDone={() => { setWizardItem(null); loadItems(offset) }}
         />

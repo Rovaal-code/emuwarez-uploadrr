@@ -32,6 +32,9 @@ interface Props {
   item: LibraryItemResponse
   onClose: () => void
   onDone?: () => void
+  // Optional pre-selection (e.g. from a request's scope): season number and,
+  // for a single episode, its episode number. Used to auto-fill step 0.
+  preselect?: { season?: number | null; episode?: number | null }
 }
 
 const labelStyle: React.CSSProperties = {
@@ -74,7 +77,7 @@ function GeneratingHint() {
   )
 }
 
-export function UploadWizardModal({ item, onClose, onDone }: Props) {
+export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
   const isSeries = item.item_type === 'series'
   const isSeason = item.item_type === 'season'
   const needsSelection = isSeries || isSeason
@@ -136,24 +139,46 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
         if (isSeries) {
           const r = await getLibrary({ parent_id: item.id, type: 'season', limit: 500 })
           setSeasons(r.items)
+          // Preselect the requested season (its episodes load via the effect below).
+          if (preselect?.season != null) {
+            const s = r.items.find(x => x.season_number === preselect.season)
+            if (s) setSelSeasonId(s.id)
+          }
         } else {
           const r = await getLibrary({ parent_id: item.id, type: 'episode', limit: 500 })
           setEpisodes(r.items)
+          if (preselect?.episode != null) {
+            const e = r.items.find(x => x.episode_number === preselect.episode)
+            if (e) setSelEpisode(String(e.id))
+          }
         }
       } catch (e: unknown) {
         setSelError(e instanceof Error ? e.message : 'Error cargando temporadas')
       }
     }
     load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.id, isSeries, needsSelection])
 
   // When a season is picked (series flow), load its episodes.
   useEffect(() => {
     if (!isSeries || selSeasonId === '') return
-    setSelEpisode('')
     getLibrary({ parent_id: Number(selSeasonId), type: 'episode', limit: 500 })
-      .then(r => setEpisodes(r.items))
+      .then(r => {
+        setEpisodes(r.items)
+        // Preselect the requested episode, or the whole-season pack when the
+        // request's scope is the season (not a single episode).
+        if (preselect?.episode != null) {
+          const e = r.items.find(x => x.episode_number === preselect.episode)
+          setSelEpisode(e ? String(e.id) : WHOLE_SEASON)
+        } else if (preselect?.season != null) {
+          setSelEpisode(WHOLE_SEASON)
+        } else {
+          setSelEpisode('')
+        }
+      })
       .catch(() => setEpisodes([]))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSeries, selSeasonId])
 
   const confirmSelection = () => {

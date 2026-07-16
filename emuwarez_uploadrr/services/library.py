@@ -479,12 +479,19 @@ def get_dashboard_summary(conn: sqlite3.Connection) -> dict:
     so series/season rollup rows (organizational, not real content) never
     double-count against these totals (a series with 10 episodes must
     contribute 10, not 11 by also counting the series row itself)."""
+    # When "ignorar especiales" is on, missing episodes of a special season
+    # (season 0) don't count as Faltantes on the dashboard.
+    from ..database import get_setting_canonical
+    ignore_specials = (get_setting_canonical(conn, "series.ignore_specials") or "true") != "false"
+
     row = conn.execute(
         """
         SELECT
             COUNT(*) AS total,
             SUM(CASE WHEN local_status = ? THEN 1 ELSE 0 END) AS available,
-            SUM(CASE WHEN local_status IN ({missing_ph}) THEN 1 ELSE 0 END) AS missing_count,
+            SUM(CASE WHEN local_status IN ({missing_ph})
+                     AND NOT (? = 1 AND item_type = 'episode' AND COALESCE(season_number, -1) = 0)
+                THEN 1 ELSE 0 END) AS missing_count,
             SUM(CASE WHEN local_status = ? THEN 1 ELSE 0 END) AS uploading,
             SUM(CASE WHEN local_status = ? THEN 1 ELSE 0 END) AS uploaded,
             SUM(CASE WHEN instance_type = 'radarr' THEN 1 ELSE 0 END) AS radarr_items,
@@ -495,6 +502,7 @@ def get_dashboard_summary(conn: sqlite3.Connection) -> dict:
         [
             LocalStatus.AVAILABLE.value,
             *_MISSING_STATUSES,
+            1 if ignore_specials else 0,
             LocalStatus.UPLOADING.value,
             LocalStatus.UPLOADED.value,
         ],

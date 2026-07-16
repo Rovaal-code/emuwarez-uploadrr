@@ -26,27 +26,37 @@ export function SortableList({ ids, onChange, renderRow, gap = 6 }: {
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const nodeRefs = useRef<Map<string, HTMLElement>>(new Map())
   const prevRects = useRef<Map<string, DOMRect>>(new Map())
+  const prevIds = useRef<string[]>(ids)
 
-  // FLIP: animate each row from its previous position to the new one.
+  // FLIP: animate each row from its previous position to the new one — but ONLY
+  // when the ORDER actually changed. Otherwise an unrelated re-render that
+  // shifts the whole list (e.g. a save button appearing above it) would look
+  // like a reorder and slide every row.
   useLayoutEffect(() => {
-    nodeRefs.current.forEach((node, id) => {
-      const prev = prevRects.current.get(id)
-      if (prev) {
-        const cur = node.getBoundingClientRect()
-        const dy = prev.top - cur.top
-        if (dy) {
-          node.style.transition = 'none'
-          node.style.transform = `translateY(${dy}px)`
-          requestAnimationFrame(() => {
-            node.style.transition = 'transform 170ms ease'
-            node.style.transform = ''
-          })
+    const orderChanged = prevIds.current.length !== ids.length
+      || prevIds.current.some((v, i) => v !== ids[i])
+    if (orderChanged) {
+      nodeRefs.current.forEach((node, id) => {
+        const prev = prevRects.current.get(id)
+        if (prev) {
+          const dy = prev.top - node.getBoundingClientRect().top
+          if (dy) {
+            node.style.transition = 'none'
+            node.style.transform = `translateY(${dy}px)`
+            requestAnimationFrame(() => {
+              node.style.transition = 'transform 170ms ease'
+              node.style.transform = ''
+            })
+          }
         }
-      }
-    })
+      })
+    }
+    // Always refresh the baseline so the next reorder measures from where the
+    // rows currently are (even after a plain layout shift).
     const map = new Map<string, DOMRect>()
     nodeRefs.current.forEach((node, id) => map.set(id, node.getBoundingClientRect()))
     prevRects.current = map
+    prevIds.current = ids
   }, [ids])
 
   // Reorder only once the cursor crosses the target row's midpoint in the

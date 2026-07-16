@@ -23,6 +23,13 @@ from ..integrations import emu
 from ..integrations.base import IntegrationError
 
 SYNC_STATE_KEY = "last_emu_catalog_sync_utc"
+# Highest torrent id stored, so the next sync only fetches newer torrents
+# (incremental). Empty/unset → the catalog has never been fully downloaded, so
+# the next sync is a full pass.
+MAX_ID_STATE_KEY = "last_emu_catalog_max_id"
+# Torrent count of the last full download, used only to estimate the progress
+# bar's total on a (rare) subsequent full sync.
+COUNT_STATE_KEY = "last_emu_catalog_torrents"
 MIN_SYNC_SECONDS = 3600
 
 # --- Parsing -----------------------------------------------------------------
@@ -119,16 +126,36 @@ def _index_catalog(torrents: list[dict]) -> list[dict]:
     return rows
 
 
+_INSERT_CATALOG_SQL = (
+    "INSERT INTO emu_catalog (torrent_id, category, tmdb_id, tvdb_id, season_number, "
+    "resolution, source, codec, has_spanish, size, name) VALUES "
+    "(:torrent_id, :category, :tmdb_id, :tvdb_id, :season_number, :resolution, :source, "
+    ":codec, :has_spanish, :size, :name)"
+)
+
+
 def _store_catalog(conn: sqlite3.Connection, rows: list[dict]) -> None:
+    """Full replace — used on the first (complete) download."""
     conn.execute("DELETE FROM emu_catalog")
-    conn.executemany(
-        "INSERT INTO emu_catalog (torrent_id, category, tmdb_id, tvdb_id, season_number, "
-        "resolution, source, codec, has_spanish, size, name) VALUES "
-        "(:torrent_id, :category, :tmdb_id, :tvdb_id, :season_number, :resolution, :source, "
-        ":codec, :has_spanish, :size, :name)",
-        rows,
-    )
+    conn.executemany(_INSERT_CATALOG_SQL, rows)
     conn.commit()
+
+
+def _append_catalog(conn: sqlite3.Connection, rows: list[dict]) -> None:
+    """Incremental — add newly-uploaded torrents without dropping the rest."""
+    if rows:
+        conn.executemany(_INSERT_CATALOG_SQL, rows)
+        conn.commit()
+
+
+def _max_torrent_id(rows: list[dict]) -> int:
+    best = 0
+    for r in rows:
+        try:
+            best = max(best, int(r.get("torrent_id") or 0))
+        except (TypeError, ValueError):
+            pass
+    return best
 
 
 # --- Comparison --------------------------------------------------------------
@@ -572,24 +599,61 @@ def sync_emu_catalog(conn: sqlite3.Connection, *, force: bool = False) -> dict:
         raise IntegrationError("No hay API Key de eMuwarez configurada")
 
     import time
-    _set_progress(phase="Descargando catálogo de eMuwarez…", page=0, total_pages=None, eta_seconds=None)
+    # Incremental: only fetch torrents newer than the highest id we already have.
+    # First sync ever (no stored max) → full download.
+    try:
+        known_max_id = int(get_state(conn, MAX_ID_STATE_KEY) or 0)
+    except (TypeError, ValueError):
+        known_max_id = 0
+    incremental = known_max_id > 0
+    # Estimate the page total (the API doesn't send last_page): a full pass is
+    # ~ceil(previous_count / 100). Only meaningful for a full re-download.
+    try:
+        prev_count = int(get_state(conn, COUNT_STATE_KEY) or 0)
+    except (TypeError, ValueError):
+        prev_count = 0
+    if not prev_count:
+        # Fall back to whatever is already stored (e.g. a catalog downloaded
+        # before this bookkeeping existed) so the first full bar has an estimate.
+        prev_count = int(conn.execute("SELECT COUNT(*) AS n FROM emu_catalog").fetchone()["n"])
+    est_full_pages = ((prev_count + 99) // 100) if (prev_count and not incremental) else None
+
+    phase_label = "Buscando torrents nuevos en eMuwarez…" if incremental else "Descargando catálogo de eMuwarez…"
+    _set_progress(phase=phase_label, page=0, total_pages=None, eta_seconds=None)
     _dl_start = time.time()
 
     def _on_page(page: int, total_pages, items_so_far: int, total_items) -> None:
+        tp = total_pages or est_full_pages
         elapsed = time.time() - _dl_start
         eta = None
-        if total_pages and page > 0 and page < total_pages:
-            eta = max(0, int(elapsed / page * (total_pages - page)))
-        _set_progress(phase="Descargando catálogo de eMuwarez…", page=page,
-                      total_pages=total_pages, torrents=items_so_far, eta_seconds=eta)
+        if tp and page > 0 and page < tp:
+            eta = max(0, int(elapsed / page * (tp - page)))
+        _set_progress(phase=phase_label, page=page,
+                      total_pages=tp, torrents=items_so_far, eta_seconds=eta)
 
-    torrents = emu.emu_fetch_all_torrents(api_key, progress=_on_page)
+    torrents = emu.emu_fetch_all_torrents(
+        api_key, progress=_on_page,
+        stop_after_id=known_max_id if incremental else None,
+    )
     rows = _index_catalog(torrents)
-    _set_progress(phase="Guardando catálogo…", torrents=len(rows), eta_seconds=None)
-    _store_catalog(conn, rows)
+
+    if incremental:
+        _set_progress(phase="Guardando torrents nuevos…", torrents=len(rows), eta_seconds=None)
+        _append_catalog(conn, rows)
+    else:
+        _set_progress(phase="Guardando catálogo…", torrents=len(rows), eta_seconds=None)
+        _store_catalog(conn, rows)
+
+    # Track the highest id + total count for the next incremental / estimate.
+    new_max_id = max(known_max_id, _max_torrent_id(rows))
+    total_now = int(conn.execute("SELECT COUNT(*) AS n FROM emu_catalog").fetchone()["n"])
+    if new_max_id > 0:
+        set_state(conn, MAX_ID_STATE_KEY, str(new_max_id))
+    set_state(conn, COUNT_STATE_KEY, str(total_now))
+
     _set_progress(phase="Calculando comparaciones con tu biblioteca…")
     items = _compute_and_store_item_status(conn)
     _set_progress(phase="Listo", items=items)
     set_state(conn, SYNC_STATE_KEY, _utcnow().isoformat())
     conn.commit()
-    return {"status": "ok", "torrents": len(rows), "items": items}
+    return {"status": "ok", "torrents": len(rows), "items": items, "incremental": incremental}

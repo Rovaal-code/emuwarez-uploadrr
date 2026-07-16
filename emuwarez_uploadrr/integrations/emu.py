@@ -111,26 +111,45 @@ def emu_fetch_all_pages(api_key: str, base_url: str | None = None) -> list[dict[
     return all_items
 
 
+# eMuwarez rate-limits the API to 30 requests/minute (x-ratelimit-limit: 30)
+# and caps perPage at 100 server-side, so a full ~11k-torrent catalog is ~112
+# sequential requests. We deliberately pace to ~10/min (one every 6s) to stay
+# well under the limit and never trip a 429.
+EMU_MIN_REQUEST_INTERVAL = 6.0  # seconds between torrent-catalog requests
+
+
 def emu_fetch_all_torrents(
     api_key: str,
     base_url: str | None = None,
     per_page: int = 100,
     max_pages: int = 500,
     progress=None,
+    stop_after_id: int | None = None,
+    min_interval: float = EMU_MIN_REQUEST_INTERVAL,
 ) -> list[dict[str, Any]]:
-    """Fetch the whole eMuwarez torrent catalog (paginated /api/torrents/filter).
+    """Fetch eMuwarez torrents (paginated /api/torrents/filter), newest first.
     Returns the flat list of raw torrent objects ({type, id, attributes}).
 
+    Incremental: when `stop_after_id` is given, the walk stops as soon as a
+    torrent already known (id <= stop_after_id) is reached — so only the
+    newly-uploaded torrents come back, instead of re-downloading the whole
+    catalog. The catalog's default order is created_at desc, so ids decrease as
+    we page and the first known id means everything after it is known too.
+
+    Requests are paced to `min_interval` seconds apart (rate limit).
+
     `progress(page, total_pages, items_so_far, total_items)` is called after each
-    page (total_pages/total_items from the API `meta`, or None if absent) so the
-    caller can report a live X/N + ETA."""
+    page (total_pages/total_items from the API `meta`, or None if absent)."""
     import time
     base = (base_url or EMU_BASE_URL).rstrip("/")
     all_items: list[dict[str, Any]] = []
     total_pages: int | None = None
     total_items: int | None = None
     page = 1
-    while page <= max_pages:
+    reached_known = False
+    while page <= max_pages and not reached_known:
+        if page > 1:
+            time.sleep(min_interval)  # rate limit (~10/min, well under 30/min)
         url = build_url(base, "/api/torrents/filter", {"api_token": api_key, "perPage": str(per_page), "page": str(page)})
         data = request_json("GET", url)
         items = data.get("data") if isinstance(data, dict) else None
@@ -140,7 +159,18 @@ def emu_fetch_all_torrents(
             total_items = meta.get("total") or total_items
         if not isinstance(items, list) or not items:
             break
-        all_items.extend(items)
+        if stop_after_id is not None:
+            for t in items:
+                try:
+                    tid = int(t.get("id") or 0)
+                except (TypeError, ValueError):
+                    tid = 0
+                if tid <= stop_after_id:
+                    reached_known = True
+                    break
+                all_items.append(t)
+        else:
+            all_items.extend(items)
         if progress:
             try:
                 progress(page, total_pages, len(all_items), total_items)
@@ -149,7 +179,6 @@ def emu_fetch_all_torrents(
         if len(items) < per_page:
             break
         page += 1
-        time.sleep(0.15)  # be polite
     return all_items
 
 

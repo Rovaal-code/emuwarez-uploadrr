@@ -123,7 +123,7 @@ export function ProviderPriorityPicker({ order, onChange }: ProviderPriorityPick
                       key={opt.code}
                       type="button"
                       className="btn btn-ghost btn-sm"
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-start', fontSize: 12 }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-start', justifySelf: 'start', fontSize: 12 }}
                       onClick={() => enable(opt.code)}
                     >
                       <Favicon domain={opt.domain} size={16} fallback={<span aria-hidden>🎬</span>} />

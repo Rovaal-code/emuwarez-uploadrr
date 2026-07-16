@@ -49,12 +49,20 @@ export function SortableList({ ids, onChange, renderRow, gap = 6 }: {
     prevRects.current = map
   }, [ids])
 
-  function reorder(targetId: string) {
+  // Reorder only once the cursor crosses the target row's midpoint in the
+  // direction of travel. Without this, moving over an adjacent row ping-pongs
+  // (the moved row lands under the cursor and immediately triggers a move back).
+  function handleDragOver(e: React.DragEvent<HTMLDivElement>, targetId: string) {
+    e.preventDefault()
     if (!draggingId || draggingId === targetId) return
-    const list = [...ids]
-    const from = list.indexOf(draggingId)
-    const to = list.indexOf(targetId)
+    const from = ids.indexOf(draggingId)
+    const to = ids.indexOf(targetId)
     if (from < 0 || to < 0) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const past = (e.clientY - rect.top) / rect.height  // 0 = top … 1 = bottom
+    if (to > from && past < 0.5) return  // going down, not past the midpoint yet
+    if (to < from && past > 0.5) return  // going up, not past the midpoint yet
+    const list = [...ids]
     list.splice(from, 1)
     list.splice(to, 0, draggingId)
     onChange(list)
@@ -79,8 +87,7 @@ export function SortableList({ ids, onChange, renderRow, gap = 6 }: {
               if (TRANSPARENT_IMG) e.dataTransfer.setDragImage(TRANSPARENT_IMG, 0, 0)
               e.dataTransfer.effectAllowed = 'move'
             }}
-            onDragEnter={() => reorder(id)}
-            onDragOver={e => e.preventDefault()}
+            onDragOver={e => handleDragOver(e, id)}
             onDragEnd={() => { setDraggingId(null); setGrabbedId(null) }}
           >
             {renderRow(id, index, { dragging: grabbedId === id || draggingId === id, handleProps })}

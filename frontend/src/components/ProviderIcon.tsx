@@ -77,23 +77,38 @@ export function ProviderIcon({ code, size = 18 }: { code: string | null | undefi
     </span>
   )
 
-  // A curated square SVG (dropped in assets/providers/) wins over everything.
+  const domain = DOMAINS[key]
+  // A curated square SVG (dropped in assets/providers/) wins over everything;
+  // otherwise the provider's real favicon, falling back to the coloured tile.
   const url = BY_CODE[key]
-  if (url) {
-    return (
+  const visual = url
+    ? (
       <span style={{ ...box, background: '#fff' }} title={code}>
         <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 2 }} />
       </span>
     )
-  }
+    : domain
+      ? <Favicon domain={domain} size={size} radius={4} fallback={codeTile} />
+      : codeTile
 
-  // Otherwise the provider's real favicon (on a white tile), falling back to the
-  // coloured code tile if it can't be loaded.
-  const domain = DOMAINS[key]
+  // Link the icon to the provider's official site (opens in a new tab; the
+  // stopPropagation keeps a table-row click from also firing).
   if (domain) {
-    return <Favicon domain={domain} size={size} radius={4} fallback={codeTile} />
+    return (
+      <a
+        href={`https://${domain}`}
+        target="_blank"
+        rel="noreferrer"
+        title={`Abrir ${domain}`}
+        onClick={e => e.stopPropagation()}
+        draggable={false}
+        style={{ display: 'inline-flex', flexShrink: 0 }}
+      >
+        {visual}
+      </a>
+    )
   }
-  return codeTile
+  return visual
 }
 
 // Icon + name inline (e.g. "🅰 Amazon (AMZN)").

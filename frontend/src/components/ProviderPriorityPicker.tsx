@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getEmuProviders } from '../api/nomenclature'
 import { Favicon } from './Favicon'
-import { setFullSizeDragImage } from '../utils/dnd'
+import { SortableList } from './SortableList'
 
 export interface ProviderOption {
   code: string
@@ -41,7 +41,6 @@ interface ProviderPriorityPickerProps {
 // already returned sorted), so Crunchyroll and the rest stay in sync and are
 // shown alphabetically everywhere.
 export function ProviderPriorityPicker({ order, onChange }: ProviderPriorityPickerProps) {
-  const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [options, setOptions] = useState<ProviderOption[]>([])
   const [showAdd, setShowAdd] = useState(false)
 
@@ -63,17 +62,6 @@ export function ProviderPriorityPicker({ order, onChange }: ProviderPriorityPick
     onChange(order.filter(c => c !== code))
   }
 
-  // Live reorder: while dragging, hovering over another row moves the dragged
-  // item there immediately, so the list rearranges under the cursor.
-  function handleDragEnter(targetIndex: number) {
-    if (dragIndex === null || dragIndex === targetIndex) return
-    const next = [...order]
-    const [moved] = next.splice(dragIndex, 1)
-    next.splice(targetIndex, 0, moved)
-    onChange(next)
-    setDragIndex(targetIndex)
-  }
-
   const available = options.filter(p => !order.includes(p.code))
 
   return (
@@ -84,27 +72,17 @@ export function ProviderPriorityPicker({ order, onChange }: ProviderPriorityPick
         </p>
       )}
       {order.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10, maxHeight: 340, overflowY: 'auto' }}>
-          {order.map((code, idx) => {
+        <div style={{ marginBottom: 10, maxHeight: 340, overflowY: 'auto' }}>
+          <SortableList ids={order} onChange={onChange} renderRow={(code, idx, { dragging, handleProps }) => {
             const opt = options.find(p => p.code === code)
             return (
-              <div
-                key={code}
-                draggable
-                onDragStart={e => { setDragIndex(idx); setFullSizeDragImage(e) }}
-                onDragEnter={() => handleDragEnter(idx)}
-                onDragOver={e => e.preventDefault()}
-                onDragEnd={() => setDragIndex(null)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '6px 10px',
-                  background: dragIndex === idx ? 'rgba(37,99,235,0.15)' : 'rgba(255,255,255,0.04)',
-                  border: `1px solid ${dragIndex === idx ? 'var(--text-accent, #2563eb)' : 'var(--border, rgba(255,255,255,0.08))'}`,
-                  borderRadius: 6, cursor: 'grab', fontSize: 13,
-                }}
-              >
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, fontSize: 13,
+                background: dragging ? 'rgba(37,99,235,0.15)' : 'rgba(139,92,246,0.06)',
+                border: `1px solid ${dragging ? 'var(--text-accent, #2563eb)' : 'var(--border)'}`,
+              }}>
                 <span style={{ color: 'var(--text-muted)', fontSize: 11, width: 16 }}>{idx + 1}</span>
-                <span style={{ color: 'var(--text-muted)' }} aria-hidden>⠿</span>
+                <span {...handleProps} style={{ ...handleProps.style, color: 'var(--text-muted)' }} aria-hidden>⠿</span>
                 <ProviderIcon domain={opt?.domain} size={16} />
                 <span style={{ flex: 1 }}>
                   {opt?.label ?? code} <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>({code})</span>
@@ -119,7 +97,7 @@ export function ProviderPriorityPicker({ order, onChange }: ProviderPriorityPick
                 </button>
               </div>
             )
-          })}
+          }} />
         </div>
       )}
       {available.length > 0 && (
@@ -148,7 +126,7 @@ export function ProviderPriorityPicker({ order, onChange }: ProviderPriorityPick
                       style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-start', fontSize: 12 }}
                       onClick={() => enable(opt.code)}
                     >
-                      <Favicon domain={opt.domain} size={16} radius={4} background="#fff" fallback={<span aria-hidden>🎬</span>} />
+                      <Favicon domain={opt.domain} size={16} fallback={<span aria-hidden>🎬</span>} />
                       {opt.label}
                     </button>
                   ))}

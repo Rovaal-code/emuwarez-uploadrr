@@ -19,7 +19,7 @@ import { testDiscordNotification, testTelegramNotification } from '../api/notifi
 import { ProviderPriorityPicker } from '../components/ProviderPriorityPicker'
 import { ServiceIcon } from '../components/ServiceIcon'
 import { Favicon, domainOf } from '../components/Favicon'
-import { setFullSizeDragImage } from '../utils/dnd'
+import { SortableList } from '../components/SortableList'
 import { REGION_OPTIONS, LANGUAGE_OPTIONS } from '../constants/regionLanguage'
 import { testResultLabel, testResultColor, emuTestCooldownSeconds } from '../utils/integrationResult'
 
@@ -95,25 +95,9 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const [imgTest, setImgTest] = useState<Record<string, IntegrationTestResult>>({})
   const [imgTesting, setImgTesting] = useState<string | null>(null)
   const [showAddImg, setShowAddImg] = useState(false)
-  // Drag-reorder of image hosts: `imgDragEnabled` is the card whose handle was
-  // grabbed (so inputs stay usable), `imgDragId` the one being moved.
-  const [imgDragEnabled, setImgDragEnabled] = useState<string | null>(null)
-  const [imgDragId, setImgDragId] = useState<string | null>(null)
-
-  // Full displayed order, always including imgbox (which may not live in the
-  // saved list yet). imgbox is reorderable like the rest.
+  // Full displayed order of image hosts, always including imgbox (which may not
+  // live in the saved list yet). imgbox is reorderable like the rest.
   const imgOrder = () => (imgEnabled.includes('imgbox') ? [...imgEnabled] : ['imgbox', ...imgEnabled])
-
-  function reorderImg(targetId: string) {
-    if (!imgDragId || imgDragId === targetId) return
-    const list = imgOrder()
-    const from = list.indexOf(imgDragId)
-    const to = list.indexOf(targetId)
-    if (from < 0 || to < 0) return
-    list.splice(from, 1)
-    list.splice(to, 0, imgDragId)
-    setImgEnabled(list)
-  }
   const [pathMappings, setPathMappings] = useState<{ from: string; to: string }[]>([])
   // Hardlinks
   const [useHardlinks, setUseHardlinks] = useState(true)
@@ -514,33 +498,20 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           const metaOf = (id: string) => avail.find(h => h.id === id)
           return (
             <>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 230, overflowY: 'auto' }}>
-                {configuredIds.map(id => {
+              <div style={{ maxHeight: 260, overflowY: 'auto' }}>
+                <SortableList ids={configuredIds} onChange={setImgEnabled} gap={8} renderRow={(id, idx, { dragging, handleProps }) => {
                   const h = metaOf(id); if (!h) return null
                   const isDefault = id === 'imgbox'
                   const t = imgTest[id]
                   return (
-                    <div
-                      key={id}
-                      draggable={imgDragEnabled === id}
-                      onDragStart={e => { setImgDragId(id); setFullSizeDragImage(e) }}
-                      onDragEnter={() => reorderImg(id)}
-                      onDragOver={e => e.preventDefault()}
-                      onDragEnd={() => { setImgDragId(null); setImgDragEnabled(null) }}
-                      style={{
-                        padding: '8px 10px', borderRadius: 8,
-                        background: imgDragId === id ? 'rgba(37,99,235,0.15)' : 'rgba(139,92,246,0.06)',
-                        border: `1px solid ${imgDragId === id ? 'var(--text-accent, #2563eb)' : 'var(--border)'}`,
-                      }}
-                    >
+                    <div style={{
+                      padding: '8px 10px', borderRadius: 8,
+                      background: dragging ? 'rgba(37,99,235,0.15)' : 'rgba(139,92,246,0.06)',
+                      border: `1px solid ${dragging ? 'var(--text-accent, #2563eb)' : 'var(--border)'}`,
+                    }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span
-                          onMouseDown={() => setImgDragEnabled(id)}
-                          onMouseUp={() => setImgDragEnabled(null)}
-                          title="Arrastrar para reordenar"
-                          style={{ color: 'var(--text-muted)', cursor: 'grab', userSelect: 'none' }}
-                          aria-hidden
-                        >⠿</span>
+                        <span style={{ color: 'var(--text-muted)', fontSize: 11, width: 16 }}>{idx + 1}</span>
+                        <span {...handleProps} style={{ ...handleProps.style, color: 'var(--text-muted)' }} aria-hidden>⠿</span>
                         <Favicon domain={domainOf(h.url)} size={15} fallback={<ServiceIcon type="imghost" size={15} />} />
                         <span style={{ fontSize: 13, fontWeight: 500 }}>{h.label}</span>
                         {isDefault && <span className="badge status-available" style={{ fontSize: 10 }}>por defecto</span>}
@@ -562,7 +533,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                       {t && <div style={{ fontSize: 11, marginTop: 4, color: testResultColor(t) }}>{testResultLabel(t)}</div>}
                     </div>
                   )
-                })}
+                }} />
               </div>
               {notConfigured.length > 0 && (
                 <button className="btn btn-secondary btn-sm" style={{ marginTop: 10 }} onClick={() => setShowAddImg(true)} type="button">
@@ -585,7 +556,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                             <button key={h.id} className="btn btn-ghost btn-sm" type="button"
                               style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-start', fontSize: 12 }}
                               onClick={() => toggleImgHost(h.id)}>
-                              <Favicon domain={domainOf(h.url)} size={16} radius={4} background="#fff" fallback={<ServiceIcon type="imghost" size={16} />} /> {h.label} {h.needs_key && <span className="badge nom-na" style={{ fontSize: 9 }}>API key</span>}
+                              <Favicon domain={domainOf(h.url)} size={16} fallback={<ServiceIcon type="imghost" size={16} />} /> {h.label} {h.needs_key && <span className="badge nom-na" style={{ fontSize: 9 }}>API key</span>}
                             </button>
                           ))}
                         </div>

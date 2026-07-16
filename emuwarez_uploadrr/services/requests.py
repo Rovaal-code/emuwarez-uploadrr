@@ -646,6 +646,51 @@ def get_request_item(conn: sqlite3.Connection, request_id: int) -> Optional[dict
     return _safe_request_dict(dict(row)) if row else None
 
 
+def _series_title_year(conn, lib: dict) -> tuple:
+    """Resolve the series title + premiere year for a library item (walking up
+    parent_id from a season/episode to its series)."""
+    if lib.get("item_type") == "series":
+        return lib.get("title"), lib.get("year")
+    pid = lib.get("parent_id")
+    seen: set = set()
+    while pid and pid not in seen:
+        seen.add(pid)
+        prow = conn.execute(
+            "SELECT title, year, item_type, parent_id FROM library_items WHERE id = ?", (pid,)
+        ).fetchone()
+        if not prow:
+            break
+        prow = dict(prow)
+        if prow.get("item_type") == "series":
+            return prow.get("title"), prow.get("year")
+        pid = prow.get("parent_id")
+    return lib.get("title"), lib.get("year")
+
+
+def _comparison_content_name(conn, lib: dict, req: dict) -> str:
+    """Friendly name for the comparison table: "Serie (año) - Season N" and, for
+    an episode request, "Serie (año) - Season N - SxxEyy"; "Título (año)" for a
+    movie."""
+    scope, season, episode = req.get("req_scope"), req.get("req_season"), req.get("req_episode")
+    if lib.get("item_type") in ("series", "season", "episode") or season is not None:
+        title, year = _series_title_year(conn, lib)
+        name = title or req.get("title") or ""
+        if year:
+            name += f" ({year})"
+        if season is not None:
+            name += f" - Season {season}"
+            if scope == "episode" and episode is not None:
+                try:
+                    name += f" - S{int(season):02d}E{int(episode):02d}"
+                except (TypeError, ValueError):
+                    pass
+        return name
+    name = lib.get("title") or req.get("title") or ""
+    if lib.get("year"):
+        name += f" ({lib.get('year')})"
+    return name
+
+
 def get_request_detail(conn: sqlite3.Connection, request_id: int) -> Optional[dict]:
     """Return request + best match info."""
     req_row = conn.execute("SELECT * FROM request_items WHERE id = ?", (request_id,)).fetchone()
@@ -702,6 +747,8 @@ def get_request_detail(conn: sqlite3.Connection, request_id: int) -> Optional[di
         lib_row = conn.execute(
             "SELECT * FROM library_items WHERE id = ?", (md["library_item_id"],)
         ).fetchone()
+        if lib_row:
+            result["match"]["content_name"] = _comparison_content_name(conn, dict(lib_row), result)
         if lib_row and dict(lib_row).get("item_type") in ("series", "season"):
             eff = _effective_target(conn, dict(lib_row), result)
             cls = classify_request_match(

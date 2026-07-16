@@ -218,6 +218,7 @@ export interface RequestMatchResponse {
   local_imdb_id: string | null
   local_tvdb_id: string | null
   local_path: string | null
+  content_name: string | null
   nomenclature_status: string | null
   status: string
   confidence: number

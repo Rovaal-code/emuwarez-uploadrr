@@ -344,7 +344,7 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
                       <td style={{ color: 'var(--text-muted)' }}>—</td>
                       <td style={{ color: 'var(--text-muted)' }}>—</td>
                       <td style={{ color: 'var(--text-muted)' }}>—</td>
-                      <td style={{ color: 'var(--text-muted)' }}>—</td>
+                      <td style={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }} title={m.content_name || ''}>{m.content_name || '—'}</td>
                     </tr>
                     <tr style={{ background: 'rgba(34,197,94,0.06)' }}>
                       <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>Tu biblioteca</td>
@@ -353,7 +353,7 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
                       <td>{m.local_video_codec || '—'}</td>
                       <td>{m.local_audio_languages || '—'}</td>
                       <td style={{ whiteSpace: 'nowrap' }}>{m.local_size ? formatBytes(m.local_size) : '—'}</td>
-                      <td style={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }} title={baseName(m.local_path) || m.library_title || ''}>{baseName(m.local_path) || m.library_title || '—'}</td>
+                      <td style={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }} title={m.content_name || baseName(m.local_path) || m.library_title || ''}>{m.content_name || baseName(m.local_path) || m.library_title || '—'}</td>
                     </tr>
                   </tbody>
                 </table>

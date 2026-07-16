@@ -552,6 +552,7 @@ class RequestMatchResponse(BaseModel):
     local_imdb_id: Optional[str] = None
     local_tvdb_id: Optional[str] = None
     local_path: Optional[str] = None
+    content_name: Optional[str] = None
     nomenclature_status: Optional[str] = None
     status: str
     confidence: float

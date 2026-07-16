@@ -86,6 +86,7 @@ def _match_dict_to_response(match_data: dict | None) -> RequestMatchResponse | N
         local_imdb_id=match_data.get("local_imdb_id"),
         local_tvdb_id=match_data.get("local_tvdb_id"),
         local_path=match_data.get("local_path"),
+        content_name=match_data.get("content_name"),
         nomenclature_status=match_data.get("nomenclature_status"),
         status=match_data["status"],
         confidence=float(match_data["confidence"]),

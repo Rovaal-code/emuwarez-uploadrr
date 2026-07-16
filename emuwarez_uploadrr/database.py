@@ -531,6 +531,16 @@ def _migrate_drop_priority_columns(conn: sqlite3.Connection) -> None:
                 pass
 
 
+def _migrate_request_items_extra_ids(conn: sqlite3.Connection) -> None:
+    """Add mal_id / tvdb_id to request_items (populated at sync from the eMuwarez
+    request when present — mal_id mainly for anime requests)."""
+    for col in ("mal_id", "tvdb_id"):
+        try:
+            conn.execute(f"ALTER TABLE request_items ADD COLUMN {col} TEXT")
+        except sqlite3.OperationalError:
+            pass
+
+
 def _migrate_request_readiness_tables(conn: sqlite3.Connection) -> None:
     """Create Phase 8B request readiness and candidates tables."""
     conn.execute("""
@@ -1165,6 +1175,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_library_items_title_slug(conn)
         _migrate_instances_narrow_type_check(conn)
         _migrate_request_items_emu_catalog_check(conn)
+        _migrate_request_items_extra_ids(conn)
         _migrate_drop_priority_columns(conn)
         _migrate_instances_unique_name(conn)
         _migrate_library_items_media_info(conn)

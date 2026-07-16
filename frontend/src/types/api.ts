@@ -246,6 +246,8 @@ export interface RequestItemResponse {
   created_at: string | null
   tmdb_id: string | null
   imdb_id: string | null
+  tvdb_id: string | null
+  mal_id: string | null
   url: string | null
   compatibility_status: string | null
   compatibility_confidence: number | null

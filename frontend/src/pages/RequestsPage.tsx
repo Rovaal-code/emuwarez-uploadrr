@@ -238,8 +238,8 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
   const isSeriesLike = /serie|docu/i.test(item.category || '')
   const tmdbId = item.tmdb_id || m?.local_tmdb_id || null
   const imdbId = item.imdb_id || m?.local_imdb_id || null
-  const tvdbId = m?.local_tvdb_id || null
-  const malId: string | null = null
+  const tvdbId = item.tvdb_id || m?.local_tvdb_id || null
+  const malId = item.mal_id || null
   const hasSeason = item.req_scope === 'season' || item.req_scope === 'episode'
   const temporadaLabel = hasSeason ? String(item.req_season ?? '?') : 'Todas'
   return (

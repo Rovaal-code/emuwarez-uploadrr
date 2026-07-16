@@ -580,6 +580,8 @@ class RequestItemResponse(BaseModel):
     created_at: Optional[str] = None
     tmdb_id: Optional[str] = None
     imdb_id: Optional[str] = None
+    tvdb_id: Optional[str] = None
+    mal_id: Optional[str] = None
     url: Optional[str] = None
     # author omitted — author_visible=0 by default
     compatibility_status: Optional[str] = None

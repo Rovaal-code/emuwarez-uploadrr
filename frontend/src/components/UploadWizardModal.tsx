@@ -88,7 +88,8 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
   const [seasons, setSeasons] = useState<LibraryItemResponse[]>([])
   const [episodes, setEpisodes] = useState<LibraryItemResponse[]>([])
   const [selSeasonId, setSelSeasonId] = useState<number | ''>(isSeason ? item.id : '')
-  const [selEpisode, setSelEpisode] = useState<string>('')  // episode id or WHOLE_SEASON
+  // A season opened directly defaults to its whole-season pack pre-selected.
+  const [selEpisode, setSelEpisode] = useState<string>(isSeason ? WHOLE_SEASON : '')  // episode id or WHOLE_SEASON
   const [selError, setSelError] = useState<string | null>(null)
 
   // Step 1 — nomenclature fields

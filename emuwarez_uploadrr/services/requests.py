@@ -85,9 +85,9 @@ def upsert_request(conn: sqlite3.Connection, item: RequestItem) -> int:
         """
         INSERT INTO request_items(
             emu_id, title, category, requested_source, requested_resolution,
-            emu_status, points, comments, created_at, tmdb_id, imdb_id, url,
+            emu_status, points, comments, created_at, tmdb_id, imdb_id, tvdb_id, mal_id, url,
             author, author_visible, raw_json, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         ON CONFLICT(emu_id) DO UPDATE SET
             title = excluded.title,
             category = excluded.category,
@@ -99,6 +99,8 @@ def upsert_request(conn: sqlite3.Connection, item: RequestItem) -> int:
             created_at = excluded.created_at,
             tmdb_id = excluded.tmdb_id,
             imdb_id = excluded.imdb_id,
+            tvdb_id = excluded.tvdb_id,
+            mal_id = excluded.mal_id,
             url = excluded.url,
             author = excluded.author,
             raw_json = excluded.raw_json,
@@ -107,7 +109,7 @@ def upsert_request(conn: sqlite3.Connection, item: RequestItem) -> int:
         (
             item.emu_id, item.title, item.category, item.requested_source,
             item.requested_resolution, item.emu_status, item.points, item.comments,
-            item.created_at, item.tmdb_id, item.imdb_id, item.url, item.author,
+            item.created_at, item.tmdb_id, item.imdb_id, item.tvdb_id, item.mal_id, item.url, item.author,
             1 if item.author_visible else 0, item.raw_json,
         ),
     )

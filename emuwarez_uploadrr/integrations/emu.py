@@ -268,6 +268,8 @@ def normalize_request(raw: dict[str, Any]) -> RequestItem:
     title = str(_first(flat, "name", "title", "movie_title", "series_title") or "Sin título")
     tmdb_id = _extract_id(_first(flat, "tmdb_id", "tmdbId", "tmdb", "tmdb_url", "tmdbUrl", "tmdb"))
     imdb_id = _extract_imdb(_first(flat, "imdb_id", "imdbId", "imdb", "imdb_url", "imdbUrl", "imdb"))
+    tvdb_id = _extract_id(_first(flat, "tvdb_id", "tvdbId", "tvdb"))
+    mal_id = _extract_id(_first(flat, "mal_id", "malId", "mal"))
     points = _first(flat, "points", "bonus", "bounty", "reward")
     comments = _first(flat, "comments", "comment_count", "commentsCount")
     url = _first(flat, "url", "link", "request_url") or (
@@ -289,6 +291,8 @@ def normalize_request(raw: dict[str, Any]) -> RequestItem:
         created_at=_first(flat, "created_at", "createdAt", "date", "created"),
         tmdb_id=tmdb_id,
         imdb_id=imdb_id,
+        tvdb_id=tvdb_id,
+        mal_id=mal_id,
         url=url,
         author=author,
         author_visible=False,

@@ -30,7 +30,10 @@ MAX_ID_STATE_KEY = "last_emu_catalog_max_id"
 # Torrent count of the last full download, used only to estimate the progress
 # bar's total on a (rare) subsequent full sync.
 COUNT_STATE_KEY = "last_emu_catalog_torrents"
-MIN_SYNC_SECONDS = 3600
+# Timestamp of the last FULL download, throttled apart from the incremental one.
+FULL_SYNC_STATE_KEY = "last_emu_catalog_full_utc"
+MIN_SYNC_SECONDS = 3600        # incremental: 1/hour
+MIN_FULL_SYNC_SECONDS = 86400  # full re-download: 1/day
 
 # --- Parsing -----------------------------------------------------------------
 
@@ -88,18 +91,33 @@ def _parse_iso(v: Optional[str]) -> Optional[dt.datetime]:
         return None
 
 
-def seconds_until_next_sync(conn: sqlite3.Connection) -> int:
-    last = _parse_iso(get_state(conn, SYNC_STATE_KEY))
+def seconds_until_next_sync(conn: sqlite3.Connection, mode: str = "incremental") -> int:
+    """Seconds left on the throttle for a given mode. Incremental is gated by the
+    last sync of any kind (1/hour); full by the last full sync (1/day)."""
+    if mode == "full":
+        last = _parse_iso(get_state(conn, FULL_SYNC_STATE_KEY))
+        interval = MIN_FULL_SYNC_SECONDS
+    else:
+        last = _parse_iso(get_state(conn, SYNC_STATE_KEY))
+        interval = MIN_SYNC_SECONDS
     if not last:
         return 0
-    return max(0, int(MIN_SYNC_SECONDS - (_utcnow() - last).total_seconds()))
+    return max(0, int(interval - (_utcnow() - last).total_seconds()))
 
 
 def get_sync_status(conn: sqlite3.Connection) -> dict:
     last = get_state(conn, SYNC_STATE_KEY)
-    wait = seconds_until_next_sync(conn)
-    return {"last_sync_at": last, "can_sync": wait <= 0, "wait_seconds": wait,
-            "min_interval_seconds": MIN_SYNC_SECONDS}
+    last_full = get_state(conn, FULL_SYNC_STATE_KEY)
+    wait = seconds_until_next_sync(conn, "incremental")
+    wait_full = seconds_until_next_sync(conn, "full")
+    return {
+        "last_sync_at": last, "can_sync": wait <= 0, "wait_seconds": wait,
+        "min_interval_seconds": MIN_SYNC_SECONDS,
+        # Per-mode throttles for the two-button sync card.
+        "incremental_can_sync": wait <= 0, "incremental_wait_seconds": wait,
+        "full_can_sync": wait_full <= 0, "full_wait_seconds": wait_full,
+        "last_full_sync_at": last_full,
+    }
 
 
 # --- Catalog storage ---------------------------------------------------------
@@ -548,8 +566,9 @@ def start_emu_sync_background(force: bool = False, mode: str = "incremental") ->
     mode: "incremental" (only new torrents) or "full" (re-download + reconcile)."""
     from ..database import connect, db_path, get_state
     conn = connect(db_path())
+    is_full = mode == "full"
     try:
-        wait = seconds_until_next_sync(conn)
+        wait = seconds_until_next_sync(conn, mode)
         if wait > 0 and not force:
             return {"status": "throttled", "wait_seconds": wait}
         with _SYNC_LOCK:
@@ -557,9 +576,14 @@ def start_emu_sync_background(force: bool = False, mode: str = "incremental") ->
                 return {"status": "started"}  # one already running
         # Record the throttle NOW (at start), not at the end — otherwise a slow
         # or stalled download leaves no throttle and a page refresh lets you
-        # relaunch it. Saved so a failed run can restore it (no 1h lock-out).
+        # relaunch it. Saved so a failed run can restore it. A full pass also
+        # counts as a sync, so it bumps both timestamps.
         prev = get_state(conn, SYNC_STATE_KEY)
-        set_state(conn, SYNC_STATE_KEY, _utcnow().isoformat())
+        prev_full = get_state(conn, FULL_SYNC_STATE_KEY)
+        now_iso = _utcnow().isoformat()
+        set_state(conn, SYNC_STATE_KEY, now_iso)
+        if is_full:
+            set_state(conn, FULL_SYNC_STATE_KEY, now_iso)
         conn.commit()
     finally:
         conn.close()
@@ -572,11 +596,13 @@ def start_emu_sync_background(force: bool = False, mode: str = "incremental") ->
             sync_emu_catalog(c, force=True, mode=mode)  # throttle already recorded above
         except Exception as exc:  # noqa: BLE001 — surface the error to the card
             _set_progress(error=str(exc), phase="Error")
-            # A failed sync shouldn't lock you out for an hour — restore the
-            # previous throttle timestamp.
+            # A failed sync shouldn't lock you out — restore the previous
+            # throttle timestamp(s).
             try:
                 cc = connect(db_path())
                 set_state(cc, SYNC_STATE_KEY, prev or "")
+                if is_full:
+                    set_state(cc, FULL_SYNC_STATE_KEY, prev_full or "")
                 cc.commit()
                 cc.close()
             except Exception:  # noqa: BLE001
@@ -596,7 +622,7 @@ def sync_emu_catalog(conn: sqlite3.Connection, *, force: bool = False, mode: str
     torrents deleted on the tracker); mode="incremental" only fetches torrents
     newer than the last sync and appends them (fast, but can't detect deletions).
     A first sync with no baseline is always full regardless of mode."""
-    wait = seconds_until_next_sync(conn)
+    wait = seconds_until_next_sync(conn, mode)
     if wait > 0 and not force:
         return {"status": "throttled", "wait_seconds": wait, "torrents": 0, "items": 0}
 
@@ -661,6 +687,9 @@ def sync_emu_catalog(conn: sqlite3.Connection, *, force: bool = False, mode: str
     _set_progress(phase="Calculando comparaciones con tu biblioteca…")
     items = _compute_and_store_item_status(conn)
     _set_progress(phase="Listo", items=items)
-    set_state(conn, SYNC_STATE_KEY, _utcnow().isoformat())
+    now_iso = _utcnow().isoformat()
+    set_state(conn, SYNC_STATE_KEY, now_iso)
+    if not incremental:  # a full pass also refreshes the 1/day full throttle
+        set_state(conn, FULL_SYNC_STATE_KEY, now_iso)
     conn.commit()
     return {"status": "ok", "torrents": len(rows), "items": items, "incremental": incremental}

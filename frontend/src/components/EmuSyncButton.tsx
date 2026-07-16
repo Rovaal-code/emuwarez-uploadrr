@@ -1,89 +1,96 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState } from 'react'
 import { useSync } from '../context/SyncContext'
 import { Tooltip } from './Tooltip'
 
-// eMuwarez catalog sync button with a two-mode dropdown:
-//  · "Solo nuevos" (incremental) — fast, only torrents uploaded since last time.
-//  · "Completo" (full) — re-downloads everything and reconciles torrents that
-//    were deleted on the tracker (the incremental pass can't detect deletions).
+function fmtWait(seconds: number): string {
+  const m = Math.ceil(seconds / 60)
+  if (m < 60) return `${m} min`
+  const h = Math.floor(m / 60)
+  const rem = m % 60
+  return rem ? `${h} h ${rem} min` : `${h} h`
+}
+
+// eMuwarez catalog sync. The button opens a centered card with the two sync
+// modes and their descriptions:
+//  · "Solo nuevos" (incremental, 1/hour) — fast, only torrents uploaded since
+//    last time.
+//  · "Completo" (full, 1/day) — re-downloads everything and reconciles torrents
+//    deleted on the tracker (the incremental pass can't detect deletions).
 // Backed by the global SyncContext, so it stays disabled while a sync runs on
 // any tab. Used in the Dashboard and the Biblioteca header.
 export function EmuSyncButton({ label = 'Sincronizar eMuwarez' }: { label?: string }) {
   const { catalogSyncing, catalogStatus, startCatalogSync } = useSync()
   const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
 
-  const wait = catalogStatus && !catalogStatus.can_sync ? Math.ceil(catalogStatus.wait_seconds / 60) : 0
-  const disabled = catalogSyncing || wait > 0
-
-  useEffect(() => {
-    if (!open) return
-    const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', onDoc)
-    return () => document.removeEventListener('mousedown', onDoc)
-  }, [open])
+  const incWait = catalogStatus && !catalogStatus.incremental_can_sync ? catalogStatus.incremental_wait_seconds : 0
+  const fullWait = catalogStatus && !catalogStatus.full_can_sync ? catalogStatus.full_wait_seconds : 0
 
   const pick = (mode: 'incremental' | 'full') => { setOpen(false); startCatalogSync(mode) }
 
   return (
-    <div ref={ref} style={{ position: 'relative', display: 'inline-flex' }}>
-      <Tooltip content={wait
-        ? `Disponible en ${wait} min`
-        : 'Sincroniza el catálogo de eMuwarez para comparar con tu biblioteca (elige rápido o completo).'}>
-        <button className="btn btn-primary btn-sm" onClick={() => setOpen(o => !o)} disabled={disabled}>
+    <>
+      <Tooltip content="Sincroniza el catálogo de eMuwarez para comparar con tu biblioteca (elige rápido o completo).">
+        <button className="btn btn-primary btn-sm" onClick={() => setOpen(true)} disabled={catalogSyncing}>
           {catalogSyncing
             ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Comparando…</>
-            : wait
-              ? `↻ ${label} (${wait} min)`
-              : <>↻ {label} <span style={{ fontSize: 10, opacity: 0.8 }}>▾</span></>}
+            : `↻ ${label}`}
         </button>
       </Tooltip>
 
-      {open && !disabled && (
-        <div style={{
-          position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 200,
-          background: 'var(--bg-surface, #0f1420)', border: '1px solid var(--border)',
-          borderRadius: 8, boxShadow: 'var(--shadow-modal, 0 10px 30px rgba(0,0,0,0.45))',
-          minWidth: 260, overflow: 'hidden',
-        }}>
-          <MenuItem
-            onClick={() => pick('incremental')}
-            title="↻ Solo nuevos"
-            sub="Rápido · trae los torrents subidos desde la última vez"
-          />
-          <MenuItem
-            onClick={() => pick('full')}
-            title="⇅ Completo"
-            sub="Lento · re-descarga todo y quita los borrados del tracker"
-            border
-          />
+      {open && (
+        <div className="modal-overlay" onClick={() => setOpen(false)}>
+          <div className="modal-panel" onClick={e => e.stopPropagation()} style={{ maxWidth: 460 }}>
+            <div className="modal-header">
+              <h2 className="modal-title">Sincronizar eMuwarez</h2>
+              <button className="modal-close" onClick={() => setOpen(false)}>✕</button>
+            </div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <SyncOption
+                icon="↻"
+                title="Solo nuevos"
+                desc="Trae solo los torrents subidos a eMuwarez desde la última vez. Rápido."
+                cadence="1 vez/hora"
+                wait={incWait}
+                onClick={() => pick('incremental')}
+              />
+              <SyncOption
+                icon="⇅"
+                title="Completo"
+                desc="Re-descarga todo el catálogo y quita los torrents borrados del tracker. Lento (varios minutos)."
+                cadence="1 vez/día"
+                wait={fullWait}
+                onClick={() => pick('full')}
+              />
+            </div>
+          </div>
         </div>
       )}
-    </div>
+    </>
   )
 }
 
-function MenuItem({ onClick, title, sub, border }: {
-  onClick: () => void; title: string; sub: string; border?: boolean
+function SyncOption({ icon, title, desc, cadence, wait, onClick }: {
+  icon: string; title: string; desc: string; cadence: string; wait: number; onClick: () => void
 }) {
-  const [hover, setHover] = useState(false)
+  const blocked = wait > 0
   return (
     <button
       type="button"
       onClick={onClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+      disabled={blocked}
       style={{
-        display: 'block', width: '100%', textAlign: 'left', padding: '9px 12px',
-        background: hover ? 'var(--bg-hover, rgba(255,255,255,0.05))' : 'transparent',
-        border: 'none', borderTop: border ? '1px solid var(--border)' : 'none',
-        cursor: 'pointer', color: 'var(--text-primary)',
+        display: 'block', width: '100%', textAlign: 'left', padding: '12px 14px',
+        border: '1px solid var(--border)', borderRadius: 10, cursor: blocked ? 'not-allowed' : 'pointer',
+        background: 'var(--bg-card, transparent)', color: 'var(--text-primary)', opacity: blocked ? 0.55 : 1,
       }}
     >
-      <div style={{ fontSize: 13, fontWeight: 600 }}>{title}</div>
-      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{sub}</div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <span style={{ fontSize: 14, fontWeight: 600 }}>{icon} {title}</span>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+          {blocked ? `Disponible en ${fmtWait(wait)}` : cadence}
+        </span>
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{desc}</div>
     </button>
   )
 }

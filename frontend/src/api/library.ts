@@ -140,6 +140,12 @@ export interface EmuSyncStatus {
   can_sync: boolean
   wait_seconds: number
   min_interval_seconds: number
+  // Per-mode throttles: incremental (1/hour) and full (1/day).
+  incremental_can_sync: boolean
+  incremental_wait_seconds: number
+  full_can_sync: boolean
+  full_wait_seconds: number
+  last_full_sync_at: string | null
 }
 
 export interface EmuSyncResult {

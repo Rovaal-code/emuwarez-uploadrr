@@ -287,6 +287,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                   <thead>
                     <tr>
                       <th>Título</th>
+                      <th>Tipo</th>
                       <th>Origen</th>
                       <th>Estado</th>
                       <th>Petición</th>
@@ -321,10 +322,11 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                             </div>
                             <div style={{ minWidth: 0 }}>
                               <div className="hover-link" style={{ fontWeight: 500 }} onClick={() => openItemDetail(item)} title="Ver ficha">{item.title}</div>
-                              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{formatItemType(item.item_type)}{item.year ? ` · ${item.year}` : ''}</div>
+                              {item.year ? <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.year}</div> : null}
                             </div>
                           </div>
                         </td>
+                        <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{formatItemType(item.item_type)}</td>
                         <td>
                           {item.instance_type
                             ? (() => {

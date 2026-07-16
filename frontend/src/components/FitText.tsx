@@ -10,9 +10,11 @@ export function FitText({ text, max = 13, min = 8 }: { text: string; max?: numbe
     const parent = el?.parentElement
     if (!el || !parent) return
     const fit = () => {
-      // Available width = the CONTAINER's inner width (not `el`'s own, which can
-      // shrink-wrap to the text and make the fit spiral down to `min`).
-      const avail = parent.clientWidth
+      // `el` is width:100%, so its clientWidth is the real available width
+      // (the container's CONTENT box, i.e. excluding the container's padding) —
+      // and it doesn't shrink-wrap to the text. Using the parent's clientWidth
+      // instead would over-count by the padding and let the text overflow.
+      const avail = el.clientWidth
       if (avail <= 0) return
       el.style.fontSize = `${max}px`
       if (el.scrollWidth <= avail) return          // fits at max

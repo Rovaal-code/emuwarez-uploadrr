@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useTransition } from 'react'
 import { getLibrary, TOP_LEVEL_PARENT_FILTER, getLibraryFilterOptions } from '../api/library'
 import { Tooltip } from '../components/Tooltip'
 import { useSync } from '../context/SyncContext'
+import { EmuSyncButton } from '../components/EmuSyncButton'
 import { getInstances } from '../api/instances'
 import type { LibraryItemResponse, LibraryListResponse, InstanceSafeResponse } from '../types/api'
 import { PosterStatusIcon } from '../components/PosterStatusIcon'
@@ -25,11 +26,6 @@ const LOAD_LIMIT = 20000  // show everything in one container (no pagination); b
 const VIEW_MODE_STORAGE_KEY = 'emuwarez_uploadrr_library_view'
 
 type ViewMode = 'grid' | 'grid-lg' | 'list'
-
-function formatWait(seconds: number): string {
-  const m = Math.ceil(seconds / 60)
-  return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}min` : `${m} min`
-}
 
 function loadViewMode(): ViewMode {
   const stored = localStorage.getItem(VIEW_MODE_STORAGE_KEY)
@@ -139,11 +135,7 @@ export function LibraryPage() {
   // Library + eMuwarez syncs are global (shared with the Dashboard/Peticiones
   // and the progress banner), so a running sync stays visible and its button
   // stays disabled on every tab.
-  const {
-    libSyncing, startLibrarySync,
-    catalogSyncing, catalogStatus: emuStatus, startCatalogSync,
-    lastCompletedAt,
-  } = useSync()
+  const { libSyncing, startLibrarySync, lastCompletedAt } = useSync()
 
   // Filters
   const [search, setSearch] = useState('')
@@ -288,21 +280,7 @@ export function LibraryPage() {
                 : '↻ Sincronizar biblioteca'}
             </button>
           </Tooltip>
-          <Tooltip content={emuStatus && !emuStatus.can_sync
-            ? `Disponible en ${formatWait(emuStatus.wait_seconds)}`
-            : 'Descarga el catálogo de eMuwarez y compara con tu biblioteca (1 vez/hora)'}>
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={startCatalogSync}
-              disabled={catalogSyncing || (emuStatus != null && !emuStatus.can_sync)}
-            >
-              {catalogSyncing
-                ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Comparando…</>
-                : emuStatus && !emuStatus.can_sync
-                  ? `⇅ eMuwarez (${formatWait(emuStatus.wait_seconds)})`
-                  : '⇅ Sincronizar eMuwarez'}
-            </button>
-          </Tooltip>
+          <EmuSyncButton />
         </div>
       </div>
 

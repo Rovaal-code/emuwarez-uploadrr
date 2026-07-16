@@ -180,8 +180,10 @@ export async function getEmuComparison(id: number): Promise<EmuComparison> {
   return api.get<EmuComparison>(`/library/${id}/emu-comparison`)
 }
 
-export async function emuSync(): Promise<{ status: string }> {
-  return api.post<{ status: string }>('/library/emu-sync', {})
+export type EmuSyncMode = 'incremental' | 'full'
+
+export async function emuSync(mode: EmuSyncMode = 'incremental'): Promise<{ status: string }> {
+  return api.post<{ status: string }>(`/library/emu-sync?mode=${mode}`, {})
 }
 
 export interface EmuSyncProgress {

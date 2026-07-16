@@ -527,11 +527,13 @@ def library_emu_sync_status(current_user: dict = Depends(require_auth)) -> dict:
 
 
 @router.post("/library/emu-sync")
-def library_emu_sync(current_user: dict = Depends(require_auth)) -> dict:
+def library_emu_sync(mode: str = "incremental", current_user: dict = Depends(require_auth)) -> dict:
     """Start the eMuwarez catalog sync in the background (poll emu-sync-progress
-    for the live status). Throttled 1/hour."""
+    for the live status). Throttled 1/hour. mode="incremental" (only new
+    torrents) or "full" (re-download the whole catalog and reconcile deletions)."""
     from emuwarez_uploadrr.services.emu_catalog import start_emu_sync_background
-    result = start_emu_sync_background()
+    mode = "full" if mode == "full" else "incremental"
+    result = start_emu_sync_background(mode=mode)
     if result.get("status") == "throttled":
         raise HTTPException(
             status_code=429,

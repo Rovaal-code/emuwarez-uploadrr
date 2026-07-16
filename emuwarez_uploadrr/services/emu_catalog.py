@@ -542,9 +542,10 @@ def _set_progress(**kw) -> None:
         _SYNC_PROGRESS.update(kw)
 
 
-def start_emu_sync_background(force: bool = False) -> dict:
+def start_emu_sync_background(force: bool = False, mode: str = "incremental") -> dict:
     """Start the catalog sync in a background thread (so the UI can poll
-    progress). Returns {status:'started'} or {status:'throttled', wait_seconds}."""
+    progress). Returns {status:'started'} or {status:'throttled', wait_seconds}.
+    mode: "incremental" (only new torrents) or "full" (re-download + reconcile)."""
     from ..database import connect, db_path, get_state
     conn = connect(db_path())
     try:
@@ -568,7 +569,7 @@ def start_emu_sync_background(force: bool = False) -> dict:
     def _run() -> None:
         c = connect(db_path())
         try:
-            sync_emu_catalog(c, force=True)  # throttle already recorded above
+            sync_emu_catalog(c, force=True, mode=mode)  # throttle already recorded above
         except Exception as exc:  # noqa: BLE001 — surface the error to the card
             _set_progress(error=str(exc), phase="Error")
             # A failed sync shouldn't lock you out for an hour — restore the
@@ -588,8 +589,13 @@ def start_emu_sync_background(force: bool = False) -> dict:
     return {"status": "started"}
 
 
-def sync_emu_catalog(conn: sqlite3.Connection, *, force: bool = False) -> dict:
-    """Download the eMuwarez catalog and recompute per-item status. 1/hour."""
+def sync_emu_catalog(conn: sqlite3.Connection, *, force: bool = False, mode: str = "incremental") -> dict:
+    """Download the eMuwarez catalog and recompute per-item status. 1/hour.
+
+    mode="full" re-downloads the whole catalog and replaces it (reconciles
+    torrents deleted on the tracker); mode="incremental" only fetches torrents
+    newer than the last sync and appends them (fast, but can't detect deletions).
+    A first sync with no baseline is always full regardless of mode."""
     wait = seconds_until_next_sync(conn)
     if wait > 0 and not force:
         return {"status": "throttled", "wait_seconds": wait, "torrents": 0, "items": 0}
@@ -605,7 +611,8 @@ def sync_emu_catalog(conn: sqlite3.Connection, *, force: bool = False) -> dict:
         known_max_id = int(get_state(conn, MAX_ID_STATE_KEY) or 0)
     except (TypeError, ValueError):
         known_max_id = 0
-    incremental = known_max_id > 0
+    # Incremental unless a full pass is requested (or there's no baseline yet).
+    incremental = (mode != "full") and known_max_id > 0
     # Estimate the page total (the API doesn't send last_page): a full pass is
     # ~ceil(previous_count / 100). Only meaningful for a full re-download.
     try:

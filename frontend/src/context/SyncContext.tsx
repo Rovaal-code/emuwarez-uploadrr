@@ -8,6 +8,7 @@ import {
   type LibrarySyncProgress,
   type EmuSyncProgress,
   type EmuSyncStatus,
+  type EmuSyncMode,
 } from '../api/library'
 import { syncRequests, getSyncStatus } from '../api/requests'
 import type { RequestSyncStatusResponse } from '../types/api'
@@ -27,7 +28,7 @@ interface SyncContextValue {
   catalogSyncing: boolean
   catalogProgress: EmuSyncProgress | null
   catalogStatus: EmuSyncStatus | null
-  startCatalogSync: () => void
+  startCatalogSync: (mode?: EmuSyncMode) => void
   refreshCatalogStatus: () => void
   // eMuwarez requests sync
   requestsSyncing: boolean
@@ -135,13 +136,13 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     }
   }, [bumpCompleted, refreshCatalogStatus])
 
-  const startCatalogSync = useCallback(() => {
+  const startCatalogSync = useCallback((mode: EmuSyncMode = 'incremental') => {
     if (catalogBusy.current) return
     catalogBusy.current = true
     setCatalogSyncing(true)
     setMessage(null)
     setCatalogProgress({ active: true, done: false, phase: 'Iniciando…', torrents: 0, items: 0, page: 0, total_pages: null, eta_seconds: null, error: null })
-    emuSync()
+    emuSync(mode)
       .then(() => followCatalog())
       .catch((e: unknown) => {
         setMessage(e instanceof Error ? e.message : 'Error al sincronizar con eMuwarez')

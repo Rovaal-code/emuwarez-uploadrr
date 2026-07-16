@@ -1,5 +1,6 @@
 import { useSync } from '../context/SyncContext'
 import { Tooltip } from './Tooltip'
+import { EmuSyncButton } from './EmuSyncButton'
 
 // Small "Sincronizar" card grouping the three sync actions (Biblioteca,
 // eMuwarez, Peticiones). Backed by the global SyncContext, so the buttons stay
@@ -8,11 +9,9 @@ import { Tooltip } from './Tooltip'
 export function SyncCard() {
   const {
     libSyncing, startLibrarySync,
-    catalogSyncing, catalogStatus, startCatalogSync,
     requestsSyncing, requestsStatus, startRequestsSync,
   } = useSync()
 
-  const catalogWait = catalogStatus && !catalogStatus.can_sync ? Math.ceil(catalogStatus.wait_seconds / 60) : 0
   const requestsWait = requestsStatus && !requestsStatus.can_sync ? Math.ceil(requestsStatus.wait_seconds / 60) : 0
 
   return (
@@ -25,21 +24,7 @@ export function SyncCard() {
           </button>
         </Tooltip>
 
-        <Tooltip content={catalogWait
-          ? `Disponible en ${catalogWait} min`
-          : 'Descarga el catálogo de eMuwarez y compara con tu biblioteca (1 vez/hora).'}>
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={startCatalogSync}
-            disabled={catalogSyncing || catalogWait > 0}
-          >
-            {catalogSyncing
-              ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Comparando…</>
-              : catalogWait
-                ? `↻ eMuwarez (${catalogWait} min)`
-                : '↻ eMuwarez'}
-          </button>
-        </Tooltip>
+        <EmuSyncButton label="eMuwarez" />
 
         <Tooltip content={requestsWait
           ? `Disponible en ${requestsWait} min`

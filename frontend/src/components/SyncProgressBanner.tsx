@@ -1,4 +1,5 @@
 import { useSync } from '../context/SyncContext'
+import { ServiceIcon } from './ServiceIcon'
 
 // "1m 20s" / "45s" for the eMuwarez ETA.
 function fmtEta(s: number): string {
@@ -16,18 +17,31 @@ export function SyncProgressBanner() {
   return (
     <>
       {libProgress && (
-        <div className="activity-section" style={{ padding: '14px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
-          {libProgress.error
-            ? <span style={{ color: 'var(--color-missing, #ef4444)', fontSize: 18, lineHeight: 1 }}>✗</span>
-            : <span className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />}
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 600 }}>Sincronizando biblioteca…</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              {libProgress.error ?? libProgress.phase}
-              {libProgress.imported ? ` · ${libProgress.imported.toLocaleString('es-ES')} elementos` : ''}
-              {libProgress.missing ? ` · ${libProgress.missing.toLocaleString('es-ES')} no disponibles` : ''}
+        <div className="activity-section" style={{ padding: '14px 18px', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {libProgress.error
+              ? <span style={{ color: 'var(--color-missing, #ef4444)', fontSize: 18, lineHeight: 1 }}>✗</span>
+              : <span className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />}
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontWeight: 600 }}>Sincronizando biblioteca…</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                {(libProgress.instance_type === 'radarr' || libProgress.instance_type === 'sonarr') &&
+                  <ServiceIcon type={libProgress.instance_type} size={14} />}
+                {libProgress.instance && <span>{libProgress.instance}</span>}
+                <span>
+                  {libProgress.error ?? (libProgress.total
+                    ? `· ${libProgress.imported.toLocaleString('es-ES')} / ${libProgress.total.toLocaleString('es-ES')} elementos`
+                    : `· ${libProgress.imported.toLocaleString('es-ES')} elementos`)}
+                  {libProgress.missing ? ` · ${libProgress.missing.toLocaleString('es-ES')} no disponibles` : ''}
+                </span>
+              </div>
             </div>
           </div>
+          {!libProgress.error && libProgress.total ? (
+            <div className="progress-bar" style={{ marginTop: 10 }}>
+              <div className="progress-fill" style={{ width: `${Math.min(100, Math.round((libProgress.imported / libProgress.total) * 100))}%` }} />
+            </div>
+          ) : null}
         </div>
       )}
 
@@ -38,7 +52,9 @@ export function SyncProgressBanner() {
               ? <span style={{ color: 'var(--color-missing, #ef4444)', fontSize: 18, lineHeight: 1 }}>✗</span>
               : <span className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />}
             <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ fontWeight: 600 }}>Sincronizando con eMuwarez…</div>
+              <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <ServiceIcon type="emu" size={15} /> Sincronizando con eMuwarez…
+              </div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                 {catalogProgress.error ?? catalogProgress.phase}
                 {catalogProgress.total_pages ? ` · página ${catalogProgress.page}/${catalogProgress.total_pages}` : (catalogProgress.page ? ` · página ${catalogProgress.page}` : '')}

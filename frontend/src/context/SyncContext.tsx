@@ -102,7 +102,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     libBusy.current = true
     setLibSyncing(true)
     setMessage(null)
-    setLibProgress({ active: true, done: false, phase: 'Iniciando…', imported: 0, missing: 0, instance: '', error: null })
+    setLibProgress({ active: true, done: false, phase: 'Iniciando…', imported: 0, missing: 0, total: 0, instance: '', instance_type: '', error: null })
     apiStartLibrarySync(true)
       .then(() => followLibrary())
       .catch(() => {

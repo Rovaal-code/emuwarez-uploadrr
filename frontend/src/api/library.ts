@@ -127,7 +127,9 @@ export interface LibrarySyncProgress {
   phase: string
   imported: number
   missing: number
+  total: number
   instance: string
+  instance_type: string
   error: string | null
 }
 

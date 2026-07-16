@@ -97,6 +97,7 @@ def sync_instance(
     *,
     include_episodes: bool = False,
     on_progress=None,
+    on_total=None,
 ) -> tuple[int, int]:
     imported = 0
     missing = 0
@@ -109,7 +110,10 @@ def sync_instance(
     if instance.type == "radarr":
         queue_records = radarr.get_queue(instance.url, instance.api_key)
         queue_map = radarr.build_queue_map(queue_records)
-        for movie in radarr.get_movies(instance.url, instance.api_key):
+        movies = list(radarr.get_movies(instance.url, instance.api_key))
+        if on_total:
+            on_total(len(movies))  # total items to import from this instance
+        for movie in movies:
             item = radarr.movie_to_library_item(
                 movie,
                 instance_id=int(instance.id),
@@ -127,7 +131,14 @@ def sync_instance(
         queue_records = sonarr.get_queue(instance.url, instance.api_key)
         series_queue = sonarr.build_series_queue_map(queue_records)
         ep_queue = sonarr.build_episode_queue_map(queue_records)
-        for series in sonarr.get_series(instance.url, instance.api_key):
+        series_list = list(sonarr.get_series(instance.url, instance.api_key))
+        if on_total:
+            # One row per series + all their episodes (from Sonarr's stats).
+            total = len(series_list)
+            if include_episodes:
+                total += sum(int((s.get("statistics") or {}).get("totalEpisodeCount") or 0) for s in series_list)
+            on_total(total)
+        for series in series_list:
             # Sonarr's title is TVDB's (often English). Replace it with TMDb's
             # localized title so seasons/episodes (which embed it) inherit it too.
             if localize_titles and series.get("title") and series.get("tmdbId"):
@@ -241,7 +252,7 @@ def sync_instance(
 # element count. Single-process app → an in-memory dict is enough.
 _LIB_SYNC_LOCK = threading.Lock()
 _LIB_SYNC_PROGRESS: dict = {"active": False, "done": False, "phase": "", "imported": 0,
-                           "missing": 0, "instance": "", "error": None}
+                           "missing": 0, "total": 0, "instance": "", "instance_type": "", "error": None}
 
 
 def get_lib_sync_progress() -> dict:
@@ -261,7 +272,7 @@ def start_library_sync_background(include_episodes: bool = True) -> dict:
         if _LIB_SYNC_PROGRESS.get("active"):
             return {"status": "started"}
     _set_lib_progress(active=True, done=False, error=None, phase="Iniciando…",
-                      imported=0, missing=0, instance="")
+                      imported=0, missing=0, total=0, instance="", instance_type="")
 
     def _run() -> None:
         c = connect(db_path())
@@ -281,17 +292,25 @@ def sync_all(conn: sqlite3.Connection, *, include_episodes: bool = False) -> dic
     task_id = start_task(conn, "sync-library", "Sincronizando Radarr/Sonarr")
     total = 0
     missing = 0
+    grand_total = 0  # total items expected (all instances), for the progress bar
     details: list[str] = []
     errors: list[str] = []
+
+    def _report_total(t: int) -> None:
+        nonlocal grand_total
+        grand_total += t
+        _set_lib_progress(total=grand_total)
+
     try:
         for instance in list_instances(conn, enabled_only=True):
             base = total  # cumulative count before this instance
             _set_lib_progress(phase=f"Sincronizando {instance.type.capitalize()}: {instance.name}…",
-                              instance=instance.name)
+                              instance=instance.name, instance_type=instance.type)
             try:
                 imported, miss = sync_instance(
                     conn, instance, include_episodes=include_episodes,
                     on_progress=lambda c, b=base: _set_lib_progress(imported=b + c),
+                    on_total=_report_total,
                 )
                 total += imported
                 missing += miss

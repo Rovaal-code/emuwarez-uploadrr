@@ -64,6 +64,10 @@ export async function getNomenclatureFields(itemId: number): Promise<{
   tmdb_available_providers?: string[]
   title_warning?: string | null
   source_warning?: string | null
+  // Set when the file isn't accessible / MediaInfo can't read it: no name is
+  // generated and `error` explains why.
+  blocked?: boolean
+  error?: string
 }> {
   return api.get(`/library/${itemId}/nomenclature/fields`)
 }

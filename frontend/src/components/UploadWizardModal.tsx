@@ -180,6 +180,13 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
       ])
       setSources(srcResp.sources)
       setProviders(prvResp.providers)
+      // File not accessible / MediaInfo unavailable → block: show the error and
+      // don't render a (bogus, incomplete) name.
+      if (fieldsResp.blocked) {
+        setError(fieldsResp.error || 'No se puede generar la nomenclatura.')
+        setFields({})
+        return
+      }
       setFields(fieldsResp.fields || {})
       setTitleWarning(fieldsResp.title_warning ?? null)
       setSourceWarning(fieldsResp.source_warning ?? null)
@@ -408,7 +415,12 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
                 <div style={{ fontSize: 15, fontWeight: 600 }}>Generando nomenclatura con MediaInfo…</div>
               </div>
             )}
-            {error && <p className="text-error">{error}</p>}
+            {error && !loading && (
+              <div style={{ padding: '20px 0' }}>
+                <p className="text-error" style={{ marginTop: 0 }}>⚠ {error}</p>
+                <button className="btn btn-secondary btn-sm" type="button" onClick={loadFields}>↻ Reintentar</button>
+              </div>
+            )}
             {!loading && !error && (
               <>
                 <p className="text-muted" style={{ fontSize: 12, marginBottom: 12 }}>

@@ -17,15 +17,15 @@ def _run_cli(args, tmp_path):
     return modern_main(["--db", _db_for(tmp_path)] + args)
 
 
-def _seed_db(tmp_path, title="Film", prepared_path=None, torrent_name=None):
+def _seed_db(tmp_path, title="Film", prepared_path=None, torrent_name=None, path=None):
     from emuwarez_uploadrr.database import connect, init_db
     from datetime import datetime, timezone
     now = datetime.now(timezone.utc).isoformat()
     conn = connect(_db_for(tmp_path))
     init_db(conn)
     conn.execute(
-        "INSERT INTO library_items (title, item_type, local_status, prepared_path) VALUES (?,?,?,?)",
-        (title, "movie", "downloaded", prepared_path),
+        "INSERT INTO library_items (title, item_type, local_status, prepared_path, path) VALUES (?,?,?,?,?)",
+        (title, "movie", "downloaded", prepared_path, path),
     )
     conn.commit()
     item_id = conn.execute("SELECT last_insert_rowid() as id").fetchone()["id"]
@@ -75,8 +75,18 @@ def test_nomenclature_fields_not_found(tmp_path, capsys):
 
 
 def test_nomenclature_fields_found(tmp_path, capsys):
-    with patch("emuwarez_uploadrr.services.source_assistant._get_tmdb_available_providers_raw", return_value=[]):
-        item_id = _seed_db(tmp_path, title="Dune", torrent_name="Dune 2021 1080p WEB-DL AMZN - EMUWAREZ")
+    f = tmp_path / "dune.mkv"; f.write_bytes(b"x" * 2048)
+    _MI_OK = {
+        "available": True, "audio_summary": "ESP AC3 5.1",
+        "rows": [
+            {"field": "Códec de vídeo", "mediainfo": "AVC", "emu": "H.264"},
+            {"field": "Source", "mediainfo": "del nombre del archivo", "emu": "WEB-DL"},
+        ],
+    }
+    with patch("emuwarez_uploadrr.services.source_assistant._get_tmdb_available_providers_raw", return_value=[]), \
+         patch("emuwarez_uploadrr.services.media_info_service.build_mediainfo_report", return_value=_MI_OK):
+        item_id = _seed_db(tmp_path, title="Dune", path=str(f),
+                           torrent_name="Dune 2021 1080p WEB-DL AMZN - EMUWAREZ")
         rc = _run_cli(["nomenclature", "fields", str(item_id)], tmp_path)
     out = capsys.readouterr().out
     assert rc == 0

@@ -6,6 +6,7 @@ directly — TMDb calls are delegated to integrations/tmdb.py.
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
 from ..database import connect
@@ -358,6 +359,23 @@ def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
         if not item:
             return {"error": "Item no encontrado"}
 
+        # The technical fields (códec/audio/HDR) are read with MediaInfo from the
+        # real file and are mandatory for the eMuwarez name — so if the file
+        # isn't reachable there's no complete/correct name to generate. Check
+        # accessibility up front (applying the remote path mapping) and block
+        # instead of producing a misleading name with empty technical fields.
+        from .path_mapping import resolve_local_path
+        raw_path = item.get("path")
+        local_path = resolve_local_path(raw_path, conn=conn) or raw_path
+        if not (local_path and os.path.isfile(local_path)):
+            return {
+                "library_item_id": library_item_id,
+                "blocked": True,
+                "error": (f"Archivo no accesible desde la app: {raw_path or '(sin ruta)'}. "
+                          "Los campos técnicos (códec, audio, HDR) se leen con MediaInfo del "
+                          "archivo real; sin acceso al archivo no se puede generar la nomenclatura."),
+            }
+
         # The technical fields (codec/audio/subtitles) come from Radarr/Sonarr's
         # sync-time metadata — fast and offline. A fresh MediaInfo read of the
         # real file is a separate, on-demand action (the MediaInfo button), so
@@ -435,23 +453,27 @@ def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
         # access / install `mediainfo`), rather than filling with sync values.
         mi_audio = mi_video = mi_hdr = mi_source = None
         mi_source_estimated = False
-        try:
-            from .media_info_service import build_mediainfo_report
-            report = build_mediainfo_report(item.get("path") or "")
-            if report.get("available"):
-                mi_audio = report.get("audio_summary")
-                emu_by_field = {
-                    r["field"]: (None if r["emu"] in (None, "—", "") else r["emu"])
-                    for r in report.get("rows", [])
-                }
-                mi_video = emu_by_field.get("Códec de vídeo")
-                mi_hdr = emu_by_field.get("HDR/DV")
-                mi_source = emu_by_field.get("Source")
-                for r in report.get("rows", []):
-                    if r["field"] == "Source":
-                        mi_source_estimated = "estimado" in (r.get("mediainfo") or "").lower()
-        except Exception:  # noqa: BLE001 — MediaInfo failure leaves fields empty
-            pass
+        from .media_info_service import build_mediainfo_report
+        report = build_mediainfo_report(item.get("path") or "")
+        if not report.get("available"):
+            # File reachable but MediaInfo couldn't read it (binary missing or
+            # parse failure) → same block: no technical fields, no valid name.
+            return {
+                "library_item_id": library_item_id,
+                "blocked": True,
+                "error": report.get("message") or "MediaInfo no está disponible para leer el archivo.",
+            }
+        mi_audio = report.get("audio_summary")
+        emu_by_field = {
+            r["field"]: (None if r["emu"] in (None, "—", "") else r["emu"])
+            for r in report.get("rows", [])
+        }
+        mi_video = emu_by_field.get("Códec de vídeo")
+        mi_hdr = emu_by_field.get("HDR/DV")
+        mi_source = emu_by_field.get("Source")
+        for r in report.get("rows", []):
+            if r["field"] == "Source":
+                mi_source_estimated = "estimado" in (r.get("mediainfo") or "").lower()
 
         # Source comes from Radarr/Sonarr (≈ the file name). Only when it's null
         # or not a valid eMuwarez source do we fall back to the MediaInfo estimate
@@ -471,7 +493,9 @@ def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
             "year": year,
             "resolution": format_resolution(resolution),
             "source": source,
-            "provider": suggested_provider or infer_provider_from_item(item),
+            # Provider: from the file name first; only if the name has none (and
+            # the source is WEB-DL) fall back to the TMDb suggestion.
+            "provider": infer_provider_from_item(item) or suggested_provider,
             "dynamic_range": mi_hdr,
             "video_codec": mi_video,
             "audio_summary": mi_audio,

@@ -7,7 +7,18 @@ from unittest.mock import patch
 import pytest
 
 
-def _seed_item(client, auth_headers, title="Dune"):
+# Building the fields now requires an accessible file + MediaInfo.
+_MI_OK = {
+    "available": True,
+    "audio_summary": "ESP AC3 5.1",
+    "rows": [
+        {"field": "Códec de vídeo", "mediainfo": "AVC", "emu": "H.264"},
+        {"field": "Source", "mediainfo": "del nombre del archivo", "emu": "WEB-DL"},
+    ],
+}
+
+
+def _seed_item(client, auth_headers, title="Dune", path=None):
     """Insert a library item via DB directly (no sync endpoint needed)."""
     from emuwarez_uploadrr.database import connect, init_db
     from emuwarez_uploadrr.web.runtime import _db_path
@@ -16,8 +27,8 @@ def _seed_item(client, auth_headers, title="Dune"):
     with connect(_db_path()) as conn:
         init_db(conn)
         conn.execute(
-            "INSERT INTO library_items (title, item_type, local_status, tmdb_id) VALUES (?,?,?,?)",
-            (title, "movie", "downloaded", "438631"),
+            "INSERT INTO library_items (title, item_type, local_status, tmdb_id, path) VALUES (?,?,?,?,?)",
+            (title, "movie", "downloaded", "438631", path),
         )
         conn.commit()
         item_id = conn.execute("SELECT last_insert_rowid() as id").fetchone()["id"]
@@ -71,9 +82,11 @@ def test_get_fields_not_found(client, auth_headers):
     assert resp.status_code == 404
 
 
-def test_get_fields_found(client, auth_headers):
-    with patch("emuwarez_uploadrr.services.source_assistant._get_tmdb_available_providers_raw", return_value=[]):
-        item_id = _seed_item(client, auth_headers, title="Dune")
+def test_get_fields_found(client, auth_headers, tmp_path):
+    f = tmp_path / "dune.mkv"; f.write_bytes(b"x" * 2048)
+    with patch("emuwarez_uploadrr.services.source_assistant._get_tmdb_available_providers_raw", return_value=[]), \
+         patch("emuwarez_uploadrr.services.media_info_service.build_mediainfo_report", return_value=_MI_OK):
+        item_id = _seed_item(client, auth_headers, title="Dune", path=str(f))
         resp = client.get(f"/api/library/{item_id}/nomenclature/fields", headers=auth_headers)
     assert resp.status_code == 200
     data = resp.json()

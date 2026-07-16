@@ -17,14 +17,33 @@ def _make_conn(tmp_path):
     return conn
 
 
-def _insert_library_item(conn, title="Test Movie", tmdb_id="123"):
+def _insert_library_item(conn, title="Test Movie", tmdb_id="123", path=None):
     conn.execute(
-        "INSERT INTO library_items (title, item_type, tmdb_id, local_status) VALUES (?,?,?,?)",
-        (title, "movie", tmdb_id, "downloaded"),
+        "INSERT INTO library_items (title, item_type, tmdb_id, local_status, path) VALUES (?,?,?,?,?)",
+        (title, "movie", tmdb_id, "downloaded", path),
     )
     conn.commit()
     row = conn.execute("SELECT last_insert_rowid() as id").fetchone()
     return row["id"]
+
+
+# MediaInfo of the real file is now mandatory to build the fields (the wizard
+# blocks otherwise), so tests provide an accessible file + a stubbed report.
+_MI_OK = {
+    "available": True,
+    "audio_summary": "ESP AC3 5.1",
+    "rows": [
+        {"field": "Códec de vídeo", "mediainfo": "AVC", "emu": "H.264"},
+        {"field": "HDR/DV", "mediainfo": None, "emu": None},
+        {"field": "Source", "mediainfo": "del nombre del archivo", "emu": "WEB-DL"},
+    ],
+}
+
+
+def _accessible_item(conn, tmp_path, **kw):
+    f = tmp_path / "movie.mkv"
+    f.write_bytes(b"x" * 2048)
+    return _insert_library_item(conn, path=str(f), **kw)
 
 
 def _insert_proposal(conn, item_id, torrent_name="Test.Movie.2024.1080p.WEB-DL.AMZN-EMUWAREZ"):
@@ -102,12 +121,15 @@ def test_build_editable_nomenclature_fields_not_found(tmp_path):
 
 def test_build_editable_nomenclature_fields_basic(tmp_path):
     conn = _make_conn(tmp_path)
-    item_id = _insert_library_item(conn, title="Dune", tmdb_id="438631")
+    item_id = _accessible_item(conn, tmp_path, title="Dune", tmdb_id="438631")
     _insert_proposal(conn, item_id, "Dune.2021.1080p.WEB-DL.AMZN-EMUWAREZ")
 
     with patch(
         "emuwarez_uploadrr.services.source_assistant._get_tmdb_available_providers_raw",
         return_value=[],
+    ), patch(
+        "emuwarez_uploadrr.services.media_info_service.build_mediainfo_report",
+        return_value=_MI_OK,
     ):
         from emuwarez_uploadrr.services.source_assistant import build_editable_nomenclature_fields
         result = build_editable_nomenclature_fields(item_id, conn=conn)

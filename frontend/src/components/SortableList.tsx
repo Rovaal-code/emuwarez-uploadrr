@@ -27,6 +27,12 @@ export function SortableList({ ids, onChange, renderRow, gap = 6 }: {
   const nodeRefs = useRef<Map<string, HTMLElement>>(new Map())
   const prevRects = useRef<Map<string, DOMRect>>(new Map())
   const prevIds = useRef<string[]>(ids)
+  // While a FLIP slide is running, rows carry a transform, so their
+  // getBoundingClientRect() reports the ANIMATED position — measuring midpoints
+  // or a new FLIP baseline off that scrambles the list. So we don't chain a new
+  // reorder until the current slide has settled.
+  const FLIP_MS = 170
+  const reorderLockUntil = useRef(0)
 
   // FLIP: animate each row from its previous position to the new one — but ONLY
   // when the ORDER actually changed. Otherwise an unrelated re-render that
@@ -44,7 +50,7 @@ export function SortableList({ ids, onChange, renderRow, gap = 6 }: {
             node.style.transition = 'none'
             node.style.transform = `translateY(${dy}px)`
             requestAnimationFrame(() => {
-              node.style.transition = 'transform 170ms ease'
+              node.style.transition = `transform ${FLIP_MS}ms ease`
               node.style.transform = ''
             })
           }
@@ -65,6 +71,9 @@ export function SortableList({ ids, onChange, renderRow, gap = 6 }: {
   function handleDragOver(e: React.DragEvent<HTMLDivElement>, targetId: string) {
     e.preventDefault()
     if (!draggingId || draggingId === targetId) return
+    // Ignore hovers while the previous slide animates — the rects are mid-flight
+    // and would produce a bogus reorder (and scramble the FLIP baseline).
+    if (performance.now() < reorderLockUntil.current) return
     const from = ids.indexOf(draggingId)
     const to = ids.indexOf(targetId)
     if (from < 0 || to < 0) return
@@ -75,6 +84,7 @@ export function SortableList({ ids, onChange, renderRow, gap = 6 }: {
     const list = [...ids]
     list.splice(from, 1)
     list.splice(to, 0, draggingId)
+    reorderLockUntil.current = performance.now() + FLIP_MS + 40
     onChange(list)
   }
 

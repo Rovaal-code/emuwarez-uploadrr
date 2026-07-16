@@ -12,7 +12,7 @@ import {
   type MaintenanceStatus,
   type BackupInfo,
 } from '../api/maintenance'
-import { fetchSettings, updateSettings, type SettingsData } from '../api/settings'
+import { fetchSettings, updateSettings, testHardlink, type SettingsData } from '../api/settings'
 import { testTmdbConnection, testEmuwarezConnection, testQbitConnection, testImghostConnection, type IntegrationTestResult } from '../api/integrationTests'
 import { useCooldown } from '../hooks/useCooldown'
 import { testDiscordNotification, testTelegramNotification } from '../api/notifications'
@@ -45,13 +45,15 @@ function configSignature(v: {
   localizeTitles: boolean; emuUsername: string; ignoreSpecials: boolean
   recentLimit: number; qbitUrl: string; qbitPort: string; qbitUser: string
   imgEnabled: string[]; pathMappings: { from: string; to: string }[]
+  useHardlinks: boolean; hardlinkBase: string
   newKey?: string; newEmuKey?: string; qbitPass?: string
   imgKeys?: Record<string, string>
 }): string {
   return JSON.stringify([
     v.tag, v.providerOrder, v.region, v.language, v.localizeTitles, v.emuUsername,
     v.ignoreSpecials, v.recentLimit, v.qbitUrl, v.qbitPort, v.qbitUser, v.imgEnabled,
-    v.pathMappings, v.newKey ?? '', v.newEmuKey ?? '', v.qbitPass ?? '', v.imgKeys ?? {},
+    v.pathMappings, v.useHardlinks, v.hardlinkBase,
+    v.newKey ?? '', v.newEmuKey ?? '', v.qbitPass ?? '', v.imgKeys ?? {},
   ])
 }
 
@@ -91,12 +93,18 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const [imgTesting, setImgTesting] = useState<string | null>(null)
   const [showAddImg, setShowAddImg] = useState(false)
   const [pathMappings, setPathMappings] = useState<{ from: string; to: string }[]>([])
+  // Hardlinks
+  const [useHardlinks, setUseHardlinks] = useState(true)
+  const [hardlinkBase, setHardlinkBase] = useState('')
+  const [testingHl, setTestingHl] = useState(false)
+  const [hlTestResult, setHlTestResult] = useState<{ ok: boolean; message: string } | null>(null)
 
   // Unsaved-changes tracking: compare current form values to the loaded ones.
   const [baseline, setBaseline] = useState('')
   const currentSig = configSignature({
     tag, providerOrder, region, language, localizeTitles, emuUsername,
     ignoreSpecials, recentLimit, qbitUrl, qbitPort, qbitUser, imgEnabled, pathMappings,
+    useHardlinks, hardlinkBase,
     newKey, newEmuKey, qbitPass, imgKeys,
   })
   const dirty = baseline !== '' && currentSig !== baseline
@@ -148,6 +156,8 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         setQbitUser(s.qbit_username ?? '')
         setImgEnabled(s.image_hosts_enabled ?? [])
         setPathMappings(s.path_mappings ?? [])
+        setUseHardlinks(s.use_hardlinks ?? true)
+        setHardlinkBase(s.hardlink_base ?? '')
         setBaseline(configSignature({
           tag: s.default_release_tag, providerOrder: s.provider_priority_order,
           region: s.tmdb_watch_region, language: s.tmdb_language,
@@ -155,6 +165,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           ignoreSpecials: s.series_ignore_specials ?? true, recentLimit: s.recent_activity_limit ?? 50,
           qbitUrl: s.qbit_url ?? '', qbitPort: s.qbit_port ?? '8080', qbitUser: s.qbit_username ?? '',
           imgEnabled: s.image_hosts_enabled ?? [], pathMappings: s.path_mappings ?? [],
+          useHardlinks: s.use_hardlinks ?? true, hardlinkBase: s.hardlink_base ?? '',
         }))
       })
       .catch(() => setMsg({ ok: false, text: 'Error cargando configuración' }))
@@ -214,6 +225,18 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
     }
   }
 
+  async function handleTestHardlink() {
+    setTestingHl(true)
+    setHlTestResult(null)
+    try {
+      setHlTestResult(await testHardlink(hardlinkBase.trim() || undefined))
+    } catch {
+      setHlTestResult({ ok: false, message: 'Error al contactar con el servidor' })
+    } finally {
+      setTestingHl(false)
+    }
+  }
+
   async function handleSave() {
     setSaving(true)
     setMsg(null)
@@ -232,6 +255,8 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         qbit_username: qbitUser.trim(),
         image_hosts_enabled: imgEnabled,
         path_mappings: pathMappings.map(m => ({ from: m.from.trim(), to: m.to.trim() })).filter(m => m.from && m.to),
+        use_hardlinks: useHardlinks,
+        hardlink_base: hardlinkBase.trim(),
       }
       if (newKey.trim()) payload.tmdb_api_key = newKey.trim()
       if (newEmuKey.trim()) payload.emu_api_key = newEmuKey.trim()
@@ -257,6 +282,8 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
       setNewKey('')
       setNewEmuKey('')
       setPathMappings(updated.path_mappings ?? [])
+      setUseHardlinks(updated.use_hardlinks ?? true)
+      setHardlinkBase(updated.hardlink_base ?? '')
       setBaseline(configSignature({
         tag: updated.default_release_tag, providerOrder: updated.provider_priority_order,
         region: updated.tmdb_watch_region, language: updated.tmdb_language,
@@ -264,6 +291,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         ignoreSpecials: updated.series_ignore_specials ?? true, recentLimit: updated.recent_activity_limit ?? 50,
         qbitUrl: updated.qbit_url ?? '', qbitPort: updated.qbit_port ?? '8080', qbitUser: updated.qbit_username ?? '',
         imgEnabled: updated.image_hosts_enabled ?? [], pathMappings: updated.path_mappings ?? [],
+        useHardlinks: updated.use_hardlinks ?? true, hardlinkBase: updated.hardlink_base ?? '',
       }))
       setMsg({ ok: true, text: '✓ Configuración guardada' })
     } catch (e: unknown) {
@@ -374,6 +402,40 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         </div>
         <span className="form-hint" style={{ display: 'block', marginTop: 10 }}>
           El cliente de torrents que usa Uploadrr para añadir el .torrent tras subir a eMuwarez.
+        </span>
+      </div>
+
+      <div className="placeholder-card">
+        <h3 style={{ marginTop: 0, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+          🔗 Hardlinks
+        </h3>
+        <label className="checkbox-label" style={{ marginBottom: 10, display: 'block' }}>
+          <input type="checkbox" checked={useHardlinks} onChange={e => setUseHardlinks(e.target.checked)} /> Usar hardlinks al preparar la subida
+        </label>
+        <div className="form-group" style={{ marginBottom: 12, opacity: useHardlinks ? 1 : 0.5 }}>
+          <label className="form-label">Ruta base de hardlinks</label>
+          <input
+            className="form-input"
+            value={hardlinkBase}
+            onChange={e => setHardlinkBase(e.target.value)}
+            placeholder="/ruta/a/tu/carpeta/de/subidas"
+            disabled={!useHardlinks}
+          />
+        </div>
+        <div>
+          <button className="btn btn-secondary btn-sm" onClick={handleTestHardlink} disabled={testingHl || !useHardlinks} type="button">
+            {testingHl ? 'Probando…' : 'Probar hardlink'}
+          </button>
+          {hlTestResult && (
+            <span style={{ marginLeft: 10, fontSize: 12, color: hlTestResult.ok ? 'var(--color-success, #4ade80)' : 'var(--color-error, #f87171)' }}>
+              {hlTestResult.ok ? '🟢 ' : '🔴 '}{hlTestResult.message}
+            </span>
+          )}
+        </div>
+        <span className="form-hint" style={{ display: 'block', marginTop: 10 }}>
+          Los hardlinks dejan el archivo original intacto y crean un enlace con la nomenclatura de eMuwarez.
+          Requieren que la ruta base esté en el <strong>mismo sistema de ficheros</strong> que tus medios.
+          Si están desactivados o sin configurar, la comprobación de subida los marca en amarillo (se omiten).
         </span>
       </div>
 

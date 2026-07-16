@@ -486,7 +486,9 @@ export function UploadWizardModal({ item, onClose, onDone }: Props) {
               </div>
               {checks?.checks.map(c => (
                 <div key={c.id} style={{ display: 'flex', gap: 8, alignItems: 'baseline', padding: '3px 0' }}>
-                  <span style={{ color: c.status === 'ok' ? '#22c55e' : '#ef4444', fontWeight: 700 }}>{c.status === 'ok' ? '✓' : '✗'}</span>
+                  <span style={{ color: c.status === 'ok' ? '#22c55e' : c.status === 'skip' ? '#f59e0b' : '#ef4444', fontWeight: 700 }}>
+                    {c.status === 'ok' ? '🟢' : c.status === 'skip' ? '🟡' : '🔴'}
+                  </span>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 13 }}>{c.label}</div>
                     {c.message && <div style={{ fontSize: 11, color: 'var(--text-muted)', wordBreak: 'break-all' }}>{c.message}</div>}

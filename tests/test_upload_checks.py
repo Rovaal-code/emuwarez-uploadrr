@@ -37,7 +37,9 @@ def test_all_green_when_everything_passes(db_conn, tmp_path, monkeypatch):
     from emuwarez_uploadrr.web.services.settings_service import set_setting
     f = tmp_path / "movie.mkv"
     f.write_bytes(b"x" * 2048)
-    set_setting(db_conn, "nomenclature.use_hardlinks", "false")   # skip hardlink check
+    set_setting(db_conn, "nomenclature.use_hardlinks", "true")
+    set_setting(db_conn, "hardlink_base", str(tmp_path))          # same FS → hardlink OK
+    set_setting(db_conn, "qbit.url", "http://localhost:8080")     # so qBittorrent runs
     set_setting(db_conn, "uploadrr.path", str(tmp_path))           # writable output dir
 
     # Integrity: pretend mediainfo reads it fine.
@@ -55,15 +57,40 @@ def test_all_green_when_everything_passes(db_conn, tmp_path, monkeypatch):
     iid = _movie_with_path(db_conn, str(f))
     r = uc.run_upload_checks(db_conn, iid)
     ids = [c["id"] for c in r["checks"]]
-    assert ids == ["accessible", "renameable", "integrity", "output", "qbittorrent", "imghosts", "emuwarez"]
+    assert ids == ["accessible", "renameable", "integrity", "hardlink", "output", "qbittorrent", "imghosts", "emuwarez"]
     assert all(c["status"] == "ok" for c in r["checks"])
     assert r["ready"] is True
+
+
+def test_skips_unconfigured_qbit_and_hardlink(db_conn, tmp_path, monkeypatch):
+    """Hardlinks disabled + qBittorrent not configured → both yellow 'skip',
+    non-blocking: the upload is still ready."""
+    from emuwarez_uploadrr.web.services.settings_service import set_setting
+    f = tmp_path / "movie.mkv"; f.write_bytes(b"x" * 2048)
+    set_setting(db_conn, "nomenclature.use_hardlinks", "false")   # → hardlink skip
+    set_setting(db_conn, "uploadrr.path", str(tmp_path))
+    # qbit.url intentionally not set → qbittorrent skip
+    import emuwarez_uploadrr.services.media_info_service as mis
+    monkeypatch.setattr(mis, "mediainfo_available", lambda: True)
+    monkeypatch.setattr(mis, "read_media_info_summary", lambda p: {"ok": 1})
+    import emuwarez_uploadrr.services.integration_tests as it
+    monkeypatch.setattr(it, "test_emuwarez_connection", lambda **k: {"ok": True, "message": "ok"})
+    import emuwarez_uploadrr.services.image_hosts as ih
+    monkeypatch.setattr(ih, "test_image_host", lambda hid, key=None, **k: {"ok": True})
+
+    iid = _movie_with_path(db_conn, str(f))
+    r = uc.run_upload_checks(db_conn, iid)
+    by_id = {c["id"]: c for c in r["checks"]}
+    assert by_id["hardlink"]["status"] == "skip"
+    assert by_id["qbittorrent"]["status"] == "skip"
+    assert r["ready"] is True  # skips don't block
 
 
 def test_stops_at_qbit_before_emuwarez(db_conn, tmp_path, monkeypatch):
     from emuwarez_uploadrr.web.services.settings_service import set_setting
     f = tmp_path / "m.mkv"; f.write_bytes(b"x" * 2048)
     set_setting(db_conn, "nomenclature.use_hardlinks", "false")
+    set_setting(db_conn, "qbit.url", "http://localhost:8080")   # configured → qbit runs
     set_setting(db_conn, "uploadrr.path", str(tmp_path))
     import emuwarez_uploadrr.services.media_info_service as mis
     monkeypatch.setattr(mis, "mediainfo_available", lambda: True)

@@ -33,6 +33,36 @@ def _test_hardlink(path: str, hardlink_base: Optional[str]) -> tuple[bool, str]:
         return False, f"No se pudo crear el hardlink en {target_dir}: {exc}"
 
 
+def probe_hardlink_dir(base_dir: Optional[str]) -> tuple[bool, str]:
+    """Settings-time hardlink test: verify a directory can hold hardlinks by
+    creating a temp file there and hardlinking it (same-filesystem + writable).
+    Cleans up both files. Used by the 'Probar hardlink' button in Ajustes."""
+    if not base_dir or not base_dir.strip():
+        return False, "No has indicado ninguna ruta base para hardlinks"
+    base = base_dir.strip()
+    if not os.path.isdir(base):
+        return False, f"El directorio no existe: {base}"
+    if not os.access(base, os.W_OK):
+        return False, f"Sin permiso de escritura en {base}"
+    src = os.path.join(base, f".emuwarez_hlsrc_{os.getpid()}")
+    link = os.path.join(base, f".emuwarez_hltest_{os.getpid()}")
+    try:
+        with open(src, "wb") as fh:
+            fh.write(b"emuwarez hardlink test")
+        os.link(src, link)
+        ok = os.path.exists(link)
+        return ok, (f"Hardlinks funcionan en {base}" if ok
+                    else f"No se pudo crear el hardlink en {base}")
+    except OSError as exc:
+        return False, f"No se pudo crear el hardlink en {base}: {exc}"
+    finally:
+        for p in (link, src):
+            try:
+                os.remove(p)
+            except OSError:
+                pass
+
+
 def run_upload_checks(conn: sqlite3.Connection, item_id: int) -> dict:
     from .library import get_library_item
     from .media_info_service import mediainfo_available, read_media_info_summary
@@ -50,8 +80,14 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int) -> dict:
                        "status": "ok" if ok else "fail", "message": message})
         return ok
 
+    # A skipped check (yellow): an optional integration that isn't configured, so
+    # it's not blocking — the upload can still go ahead.
+    def add_skip(cid: str, label: str, message: str = "") -> None:
+        checks.append({"id": cid, "label": label, "status": "skip", "message": message})
+
     def done() -> dict:
-        ready = bool(checks) and all(c["status"] == "ok" for c in checks) and checks[-1]["id"] == "emuwarez"
+        # Skips don't block: only a real failure (red) does.
+        ready = bool(checks) and all(c["status"] in ("ok", "skip") for c in checks) and checks[-1]["id"] == "emuwarez"
         return {"checks": checks, "ready": ready}
 
     item = get_library_item(conn, item_id)
@@ -93,10 +129,14 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int) -> dict:
     else:
         add("integrity", "Fichero íntegro", "Fichero no íntegro", True, "mediainfo no disponible: no verificado")
 
-    # 4. Hardlink — only when hardlinks are enabled.
+    # 4. Hardlink — only when hardlinks are configured; otherwise skipped (yellow).
     use_hardlinks = (get_setting_canonical(conn, "nomenclature.use_hardlinks") or "true") != "false"
-    if use_hardlinks:
-        hl_base = get_setting_canonical(conn, "hardlink_base")
+    hl_base = get_setting_canonical(conn, "hardlink_base")
+    if not use_hardlinks:
+        add_skip("hardlink", "Hardlinks desactivados (se omite)", "Actívalos en Ajustes si quieres usarlos")
+    elif not (hl_base and hl_base.strip()):
+        add_skip("hardlink", "Hardlinks sin configurar (se omite)", "Configura la ruta base en Ajustes")
+    else:
         ok, msg = _test_hardlink(local_path, hl_base)
         if not add("hardlink", "Se puede crear el hardlink", "No se puede crear el hardlink", ok, msg):
             return done()
@@ -108,11 +148,16 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int) -> dict:
                out_dir or "uploadrr.path no configurado"):
         return done()
 
-    # 6. qBittorrent — WebUI login.
-    r = test_qbit_connection(conn=conn)
-    if not add("qbittorrent", "qBittorrent conectado", "qBittorrent no conectado",
-               bool(r.get("ok")), r.get("message", "")):
-        return done()
+    # 6. qBittorrent — WebUI login; skipped (yellow) when it isn't configured.
+    qbit_url = get_setting_canonical(conn, "qbit.url")
+    if not (qbit_url and qbit_url.strip()):
+        add_skip("qbittorrent", "qBittorrent sin configurar (se omite)",
+                 "Configúralo en Ajustes para sembrar automáticamente tras subir")
+    else:
+        r = test_qbit_connection(conn=conn)
+        if not add("qbittorrent", "qBittorrent conectado", "qBittorrent no conectado",
+                   bool(r.get("ok")), r.get("message", "")):
+            return done()
 
     # 7. Image hosts — at least one reachable (imgbox tried last).
     reachable = None

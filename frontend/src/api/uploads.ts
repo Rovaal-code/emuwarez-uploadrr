@@ -60,7 +60,7 @@ export async function cancelUploadJob(jobId: number): Promise<unknown> {
 export interface UploadCheck {
   id: string
   label: string
-  status: 'ok' | 'fail'
+  status: 'ok' | 'fail' | 'skip'
   message: string
 }
 export interface UploadChecksResult {

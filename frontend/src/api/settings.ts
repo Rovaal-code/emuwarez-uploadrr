@@ -26,6 +26,9 @@ export interface SettingsData {
   uploadrr_python_path: string | null
   uploadrr_timeout: number
   uploadrr_allowed_roots: string[]
+  use_hardlinks: boolean
+  hardlink_base: string | null
+  hardlink_configured: boolean
   notify_discord_enabled: boolean
   notify_discord_webhook_configured: boolean
   notify_discord_webhook_masked: string | null
@@ -63,6 +66,8 @@ export interface SettingsUpdatePayload {
   uploadrr_python_path?: string
   uploadrr_timeout?: number
   uploadrr_allowed_roots?: string[] | string
+  use_hardlinks?: boolean
+  hardlink_base?: string
   notify_discord_enabled?: boolean
   notify_discord_webhook_url?: string
   notify_telegram_enabled?: boolean
@@ -83,4 +88,10 @@ export function fetchSettings(): Promise<SettingsData> {
 
 export function updateSettings(payload: SettingsUpdatePayload): Promise<SettingsData> {
   return api.put<SettingsData>('/settings', payload)
+}
+
+// Create a real test hardlink in the given base dir (or the saved one if omitted)
+// to verify hardlinks work before saving.
+export function testHardlink(hardlink_base?: string): Promise<{ ok: boolean; message: string }> {
+  return api.post<{ ok: boolean; message: string }>('/settings/test-hardlink', { hardlink_base })
 }

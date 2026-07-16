@@ -66,6 +66,10 @@ class SettingsResponse(BaseModel):
     uploadrr_python_path: Optional[str] = None
     uploadrr_timeout: int = DEFAULT_TIMEOUT_SECONDS
     uploadrr_allowed_roots: list[str] = []
+    # Hardlinks (nomenclature apply): toggle + base dir, testable.
+    use_hardlinks: bool = True
+    hardlink_base: Optional[str] = None
+    hardlink_configured: bool = False
     # Phase 11A: notification providers (Discord webhook / Telegram bot).
     notify_discord_enabled: bool = False
     notify_discord_webhook_configured: bool = False
@@ -113,6 +117,9 @@ class SettingsUpdateRequest(BaseModel):
     # Accepts either a list of strings or a single CSV string (frontend may
     # submit either a textarea/CSV field or a parsed list).
     uploadrr_allowed_roots: Optional[list[str] | str] = None
+    # Hardlinks
+    use_hardlinks: Optional[bool] = None
+    hardlink_base: Optional[str] = None
     # Phase 11A: notifications
     notify_discord_enabled: Optional[bool] = None
     notify_discord_webhook_url: Optional[str] = None
@@ -251,6 +258,9 @@ def _build_response(conn) -> SettingsResponse:
         uploadrr_python_path=get_setting_canonical(conn, "uploadrr.python_path"),
         uploadrr_timeout=timeout,
         uploadrr_allowed_roots=allowed_roots,
+        use_hardlinks=(get_setting_canonical(conn, "nomenclature.use_hardlinks") or "true") != "false",
+        hardlink_base=get_setting_canonical(conn, "hardlink_base"),
+        hardlink_configured=bool((get_setting_canonical(conn, "hardlink_base") or "").strip()),
         emu_api_key_configured=emu_configured,
         emu_api_key_masked=emu_masked,
         emu_username=get_setting(conn, "emu.username"),
@@ -284,6 +294,24 @@ def _build_response(conn) -> SettingsResponse:
 def get_settings(current_user: dict = Depends(require_auth)) -> SettingsResponse:
     with _get_conn() as conn:
         return _build_response(conn)
+
+
+class HardlinkTestRequest(BaseModel):
+    # If omitted, the currently-saved hardlink_base is tested.
+    hardlink_base: Optional[str] = None
+
+
+@router.post("/settings/test-hardlink")
+def test_hardlink(body: HardlinkTestRequest, current_user: dict = Depends(require_auth)) -> dict:
+    """Create a real test hardlink in the given base directory to verify it
+    works (same filesystem + write permission) before saving."""
+    from ...services.upload_checks import probe_hardlink_dir
+    base = body.hardlink_base
+    if base is None:
+        with _get_conn() as conn:
+            base = get_setting_canonical(conn, "hardlink_base")
+    ok, message = probe_hardlink_dir(base)
+    return {"ok": ok, "message": message}
 
 
 @router.put("/settings", response_model=SettingsResponse)
@@ -362,6 +390,12 @@ def update_settings(
             from emuwarez_uploadrr.services.image_hosts import set_config, get_enabled_hosts
             enabled = body.image_hosts_enabled if body.image_hosts_enabled is not None else get_enabled_hosts(conn)
             set_config(conn, enabled, body.image_host_keys or {})
+
+        if body.use_hardlinks is not None:
+            set_setting(conn, "nomenclature.use_hardlinks", "true" if body.use_hardlinks else "false")
+
+        if body.hardlink_base is not None:
+            set_setting(conn, "hardlink_base", body.hardlink_base.strip())
 
         if body.uploadrr_path is not None:
             set_setting(conn, "uploadrr.path", body.uploadrr_path.strip())

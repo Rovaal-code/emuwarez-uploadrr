@@ -8,13 +8,10 @@ import { Tooltip } from './Tooltip'
 // missing (Faltante) "Subir" is disabled — you can't upload what you don't
 // have. For a series/season, "Subir" opens the wizard, which asks which
 // season/episode (or the whole season) to target.
-export function LibraryActionButtons({ item, onAction, title, showRequest = true }: {
+export function LibraryActionButtons({ item, onAction, title }: {
   item: LibraryItemResponse
   onAction: (kind: LibraryActionKind, item: LibraryItemResponse) => void
   title?: string
-  // Hide the "Petición" button where creating a request makes no sense — e.g.
-  // a dashboard recommendation that already has a compatible request.
-  showRequest?: boolean
 }) {
   const missing = item.local_status === 'Faltante'
   return (
@@ -30,13 +27,11 @@ export function LibraryActionButtons({ item, onAction, title, showRequest = true
           Subir
         </button>
       </Tooltip>
-      {showRequest && (
-        <Tooltip content="Crea una petición de este contenido en eMuwarez.">
-          <button className="btn btn-primary btn-sm" onClick={() => onAction('request', item)}>
-            Petición
-          </button>
-        </Tooltip>
-      )}
+      <Tooltip content="Crea una petición de este contenido en eMuwarez.">
+        <button className="btn btn-primary btn-sm" onClick={() => onAction('request', item)}>
+          Petición
+        </button>
+      </Tooltip>
     </>
   )
 }

@@ -16,25 +16,28 @@ import { ServiceLabel, ServiceIcon } from '../components/ServiceIcon'
 import { Favicon, domainOf } from '../components/Favicon'
 import { UploadWizardModal } from '../components/UploadWizardModal'
 import { RequestFormModal } from '../components/RequestFormModal'
-import { LibraryActionButtons } from '../components/LibraryActionButtons'
-import type { LibraryActionKind } from '../components/LibraryTreeRow'
 import { getLibraryItem } from '../api/library'
 import type { LibraryItemResponse } from '../types/api'
 import { formatBytes, formatDate, formatItemType, parseServerDate } from '../utils/format'
 import { posterUrl } from '../utils/libraryItem'
 
-// Phase 11G — "Recomendaciones" groups, in the order they appear. Each maps to
-// a category badge and a recommendation phrase; the name's click target is
-// group 1 → the eMuwarez request, groups 2 & 3 → the content's detail page.
+// Phase 11G — "Recomendaciones" groups, in the order they appear. The content
+// name always links to its Biblioteca detail; the "Acción" button is
+// group-specific: view the existing request, upload, or create a request.
+type RecAction = 'view-request' | 'upload' | 'request'
 const REC_GROUP_META: Record<number, {
-  category: string; recommendation: string; hint: string
+  category: string; recommendation: string
+  action: RecAction; actionLabel: string
   color: string; bg: string; border: string
 }> = {
-  1: { category: 'Petición', recommendation: 'Cumple una petición compatible', hint: 'Ver la petición en eMuwarez',
+  1: { category: 'Petición', recommendation: 'Cumple una petición compatible',
+       action: 'view-request', actionLabel: 'Ver Petición',
        color: '#60a5fa', bg: 'rgba(96,165,250,0.14)', border: 'rgba(96,165,250,0.35)' },
-  2: { category: 'Contenido único', recommendation: 'Súbelo: no está en eMuwarez', hint: 'Ver ficha del contenido',
+  2: { category: 'Contenido único', recommendation: 'Súbelo: no está en eMuwarez',
+       action: 'upload', actionLabel: 'Subir a eMuwarez',
        color: '#22c55e', bg: 'rgba(34,197,94,0.14)', border: 'rgba(34,197,94,0.35)' },
-  3: { category: 'Falta', recommendation: 'Pídelo en eMuwarez', hint: 'Ver ficha del contenido',
+  3: { category: 'Falta', recommendation: 'Pídelo en eMuwarez',
+       action: 'request', actionLabel: 'Petición a eMuwarez',
        color: '#eab308', bg: 'rgba(234,179,8,0.14)', border: 'rgba(234,179,8,0.35)' },
 }
 
@@ -98,29 +101,28 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   // Open a recommendation's target: group 1 → its eMuwarez request (Peticiones
   // tab), groups 2 & 3 → the content's own detail page (Biblioteca tab). Both
   // stash an id that the destination page reads on mount.
-  const openRecommendation = (item: DashboardRecommendationItem) => {
-    if (item.rec_group === 1 && item.rec_request_id != null) {
-      try { sessionStorage.setItem('emuwarez_open_request', String(item.rec_request_id)) } catch { /* ignore */ }
-      onNavigate?.('requests')
-    } else {
-      try { sessionStorage.setItem('emuwarez_open_library_item', String(item.id)) } catch { /* ignore */ }
-      onNavigate?.('library')
-    }
+  // The content name always opens its own Biblioteca detail page (all groups).
+  const openLibraryDetail = (item: DashboardRecommendationItem) => {
+    try { sessionStorage.setItem('emuwarez_open_library_item', String(item.id)) } catch { /* ignore */ }
+    onNavigate?.('library')
   }
 
-  // "Acción" column: the same [Subir]/[Petición] buttons as Biblioteca. Fetch
-  // the full library item and open the upload wizard or the request form. For a
-  // compatible request the wizard is pre-filled with the request's season /
-  // episode scope (carried on the recommendation row).
-  const handleRecAction = async (kind: LibraryActionKind, item: DashboardRecommendationItem) => {
+  // "Acción" column, group-specific: group 1 → open the existing request;
+  // group 2 → open the upload wizard; group 3 → open the request form. Groups
+  // 2 & 3 fetch the full library item first.
+  const handleRecAction = async (item: DashboardRecommendationItem) => {
+    const meta = REC_GROUP_META[item.rec_group] ?? REC_GROUP_META[2]
+    if (meta.action === 'view-request') {
+      if (item.rec_request_id != null) {
+        try { sessionStorage.setItem('emuwarez_open_request', String(item.rec_request_id)) } catch { /* ignore */ }
+        onNavigate?.('requests')
+      }
+      return
+    }
     try {
       const libItem = await getLibraryItem(item.id)
-      if (kind === 'request') {
-        setRequestItem(libItem)
-      } else {
-        setWizardPreselect(item.rec_group === 1 ? { season: item.season_number, episode: item.episode_number } : undefined)
-        setWizardItem(libItem)
-      }
+      if (meta.action === 'request') setRequestItem(libItem)
+      else { setWizardPreselect(undefined); setWizardItem(libItem) }
     } catch { /* ignore — the content may have vanished since the last sync */ }
   }
 
@@ -355,7 +357,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                                 </span>
                               )}
                             </div>
-                            <div className="hover-link" style={{ fontWeight: 500, minWidth: 0 }} onClick={() => openRecommendation(item)} title={meta.hint}>{item.content_name}</div>
+                            <div className="hover-link" style={{ fontWeight: 500, minWidth: 0 }} onClick={() => openLibraryDetail(item)} title="Ver ficha del contenido">{item.content_name}</div>
                           </div>
                         </td>
                         <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{formatItemType(item.item_type)}</td>
@@ -367,13 +369,9 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                         <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{meta.recommendation}</td>
                         <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{formatBytes(item.size_bytes)}</td>
                         <td className="col-actions">
-                          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-start', alignItems: 'center' }}>
-                            <LibraryActionButtons
-                              item={{ id: item.id, item_type: item.item_type, local_status: item.local_status, title: item.content_name } as unknown as LibraryItemResponse}
-                              onAction={kind => handleRecAction(kind, item)}
-                              showRequest={item.rec_group !== 1}
-                            />
-                          </div>
+                          <button className="btn btn-primary btn-sm" style={{ whiteSpace: 'nowrap' }} onClick={() => handleRecAction(item)}>
+                            {meta.actionLabel}
+                          </button>
                         </td>
                       </tr>
                       )

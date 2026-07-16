@@ -17,6 +17,37 @@
   }
 }
 
+/* Header "Sincronizar" buttons (Biblioteca · eMuwarez · Peticiones): the three
+   buttons + their gaps span exactly one stat card ("Tus subidas", the last
+   column) so they sit flush above it. Same one-card calc as the grid above. */
+.sync-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc((100% - 64px) / 5);
+}
+.sync-card > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+/* Only the three trigger buttons (span > button), never the buttons inside the
+   eMuwarez modal that also hangs off .sync-card. */
+.sync-card > * > button.btn {
+  width: 100%;
+  justify-content: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11.5px;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+@media (max-width: 1400px) {
+  .sync-card {
+    width: calc((100% - 32px) / 3);
+  }
+}
+
 /* Stat card */
 .stat-card {
   background: var(--bg-card);

@@ -371,6 +371,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                             <LibraryActionButtons
                               item={{ id: item.id, item_type: item.item_type, local_status: item.local_status, title: item.content_name } as unknown as LibraryItemResponse}
                               onAction={kind => handleRecAction(kind, item)}
+                              showRequest={item.rec_group !== 1}
                             />
                           </div>
                         </td>

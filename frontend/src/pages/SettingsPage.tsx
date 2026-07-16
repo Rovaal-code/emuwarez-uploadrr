@@ -670,10 +670,11 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           </svg>
           Providers de vídeo
         </h3>
+        <span className="form-hint" style={{ display: 'block', marginBottom: 12 }}>
+          Se usa para elegir automáticamente el provider cuando TMDb devuelve varios. Arrastra para reordenar. El icono de cada uno enlaza a su web oficial.
+        </span>
         <div className="form-group">
-          <label className="form-label">Prioridad de providers</label>
           <ProviderPriorityPicker order={providerOrder} onChange={setProviderOrder} />
-          <span className="form-hint">Se usa para elegir automáticamente el provider cuando TMDb devuelve varios. Arrastra para reordenar. El icono de cada uno enlaza a su web oficial.</span>
         </div>
       </div>
 

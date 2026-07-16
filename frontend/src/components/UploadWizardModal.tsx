@@ -13,7 +13,21 @@ import { getLibrary, getMediaInfoReport, suggestProvider } from '../api/library'
 import type { MediaInfoReport } from '../api/library'
 import type { LibraryItemResponse } from '../types/api'
 import { InfoIcon } from './InfoIcon'
-import { FitText } from './FitText'
+
+// Torrent name / ficha title preview. Fixed, readable monospace size that wraps
+// onto extra lines instead of shrinking to fit one line — a long name stays big
+// and complete, reflowing to the box width (breaking at spaces, or mid-token as
+// a last resort). Replaces the old shrink-to-fit that turned long names tiny.
+function TorrentName({ text }: { text: string }) {
+  return (
+    <div style={{
+      fontFamily: 'monospace', fontSize: 13, lineHeight: 1.45,
+      whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', wordBreak: 'break-word',
+    }}>
+      {text}
+    </div>
+  )
+}
 
 // Unified "Subir" wizard (replaces the separate Nomenclatura + Campos + Subir
 // buttons). For a Series/Season it first asks which season (and episode, or the
@@ -378,9 +392,9 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
       </div>
       <div style={{ marginTop: 16, padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
         <div style={labelStyle}>Nombre final del torrent (eMuwarez)</div>
-        {preview?.torrent_name ? <FitText text={preview.torrent_name} /> : <GeneratingHint />}
+        {preview?.torrent_name ? <TorrentName text={preview.torrent_name} /> : <GeneratingHint />}
         <div style={{ ...labelStyle, marginTop: 10 }}>Título de la ficha</div>
-        {preview?.internal_mkv_title ? <FitText text={preview.internal_mkv_title} /> : <GeneratingHint />}
+        {preview?.internal_mkv_title ? <TorrentName text={preview.internal_mkv_title} /> : <GeneratingHint />}
       </div>
     </>
   )
@@ -519,9 +533,9 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
           <div className="modal-body">
             <div style={{ marginBottom: 14, padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
               <div style={labelStyle}>Nombre final del torrent</div>
-              <FitText text={preview?.torrent_name || '–'} />
+              <TorrentName text={preview?.torrent_name || '–'} />
               <div style={{ ...labelStyle, marginTop: 10 }}>Título</div>
-              <FitText text={preview?.internal_mkv_title || '–'} />
+              <TorrentName text={preview?.internal_mkv_title || '–'} />
             </div>
 
             {/* Pre-upload checks card */}

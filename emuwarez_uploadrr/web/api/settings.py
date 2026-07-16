@@ -222,7 +222,7 @@ def _build_response(conn) -> SettingsResponse:
     qbit_configured = bool(qbit_url and qbit_url.strip())
 
     from emuwarez_uploadrr.services.image_hosts import IMAGE_HOSTS, get_enabled_hosts, get_host_key
-    img_available = [{"id": h["id"], "label": h["label"], "needs_key": h["needs_key"]} for h in IMAGE_HOSTS]
+    img_available = [{"id": h["id"], "label": h["label"], "needs_key": h["needs_key"], "url": h["url"]} for h in IMAGE_HOSTS]
     img_enabled = get_enabled_hosts(conn)
     img_keys_configured = [h["id"] for h in IMAGE_HOSTS if (get_host_key(conn, h["id"]) or "").strip()]
 

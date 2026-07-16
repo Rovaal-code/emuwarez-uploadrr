@@ -47,6 +47,26 @@ function ConnRow({ icon, label, badge = 'Configurado', tone = 'ok' }: {
   )
 }
 
+// Real favicon of an image host (fetched from its domain), falling back to the
+// generic image-host glyph if it can't be loaded.
+function HostFavicon({ url, size = 16 }: { url?: string; size?: number }) {
+  const [failed, setFailed] = useState(false)
+  let domain = ''
+  try { domain = url ? new URL(url).hostname : '' } catch { domain = '' }
+  if (failed || !domain) return <ServiceIcon type="imghost" size={size} />
+  return (
+    <img
+      src={`https://www.google.com/s2/favicons?sz=64&domain=${domain}`}
+      width={size}
+      height={size}
+      alt=""
+      loading="lazy"
+      onError={() => setFailed(true)}
+      style={{ borderRadius: 3, display: 'block' }}
+    />
+  )
+}
+
 const RUNNING_PHASES = ['preflight', 'config_staging', 'running', 'finalizing'] as const
 const PHASE_LABEL: Record<string, string> = {
   preflight: 'Preflight',
@@ -430,7 +450,7 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
                 for (const inst of connInstances) {
                   rows.push(
                     <ConnRow key={`inst-${inst.id}`} icon={<ServiceIcon type={inst.type === 'sonarr' ? 'sonarr' : 'radarr'} size={16} />}
-                      label={`${inst.type === 'sonarr' ? 'Sonarr' : 'Radarr'}: ${inst.name}`} />
+                      label={inst.name} />
                   )
                 }
                 if (connSettings?.emu_api_key_configured)
@@ -443,8 +463,8 @@ export function DashboardPage({ onNavigate: _onNavigate }: DashboardPageProps = 
                 const imgIds = Array.from(new Set(['imgbox', ...(connSettings?.image_hosts_enabled ?? [])]))
                 for (const id of imgIds) {
                   const meta = connSettings?.image_hosts_available?.find(h => h.id === id)
-                  rows.push(<ConnRow key={`img-${id}`} icon={<ServiceIcon type="imghost" size={16} />}
-                    label={`Imágenes: ${meta?.label ?? id}`} />)
+                  rows.push(<ConnRow key={`img-${id}`} icon={<HostFavicon url={meta?.url} size={16} />}
+                    label={meta?.label ?? id} />)
                 }
                 if (connSettings?.notify_discord_webhook_configured)
                   rows.push(<ConnRow key="discord" icon={<ServiceIcon type="discord" size={16} />} label="Bot de Discord" />)

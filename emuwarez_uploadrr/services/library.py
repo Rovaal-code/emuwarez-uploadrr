@@ -658,33 +658,11 @@ def get_dashboard_library_activity(conn: sqlite3.Connection, *, limit: int = 10)
 # candidate to request on eMuwarez. Within each group items are ordered by
 # type (movie / complete series → season → loose episode) then by title, like
 # the library. Groups 2 & 3 link to the content's own detail page.
-def _rec_content_name(conn: sqlite3.Connection, row: dict, *, missing_count: int | None = None) -> str:
-    """Friendly display name: "Título (año)" for movies/series, "Serie (año) -
-    Season N" for seasons, with an optional "· N faltantes" tail for group 3."""
-    it = row.get("item_type")
-    if it in ("season", "episode"):
-        title, year = _rec_series_title_year(conn, row)
-        name = title or row.get("title") or ""
-        if year:
-            name += f" ({year})"
-        sn = row.get("season_number")
-        if sn is not None:
-            name += f" - Season {sn}"
-        if it == "episode" and row.get("episode_number") is not None and sn is not None:
-            try:
-                name += f" - S{int(sn):02d}E{int(row['episode_number']):02d}"
-            except (TypeError, ValueError):
-                pass
-    else:
-        name = row.get("title") or ""
-        if row.get("year"):
-            name += f" ({row.get('year')})"
-    if missing_count:
-        name += f" · {missing_count} cap. faltante" + ("s" if missing_count != 1 else "")
-    return name
-
-
 def _rec_series_title_year(conn: sqlite3.Connection, row: dict) -> tuple:
+    """Series title + premiere year for a library item — walks up parent_id from
+    a season/episode; a series/movie row returns its own title/year."""
+    if row.get("item_type") == "series":
+        return row.get("title"), row.get("year")
     pid = row.get("parent_id")
     seen: set = set()
     while pid and pid not in seen:
@@ -701,38 +679,160 @@ def _rec_series_title_year(conn: sqlite3.Connection, row: dict) -> tuple:
     return row.get("title"), row.get("year")
 
 
+def _rec_content_name(
+    conn: sqlite3.Connection, row: dict, *,
+    season: int | None = None, episode: int | None = None,
+    scope: str | None = None, missing_count: int | None = None,
+) -> str:
+    """Friendly display name. Movies: "Título (año)". Series/season/episode:
+    "Serie (año) - Season N [- SxxEyy]" using the given request scope (or the
+    row's own season_number/episode_number when no scope is passed)."""
+    it = row.get("item_type")
+    sn = season if season is not None else row.get("season_number")
+    ep = episode if episode is not None else row.get("episode_number")
+    if it == "movie":
+        name = row.get("title") or ""
+        if row.get("year"):
+            name += f" ({row.get('year')})"
+        return name
+    title, year = _rec_series_title_year(conn, row)
+    name = title or row.get("title") or ""
+    if year:
+        name += f" ({year})"
+    if sn is not None:
+        name += f" - Season {sn}"
+        is_episode = (scope == "episode") or (scope is None and it == "episode")
+        if is_episode and ep is not None:
+            try:
+                name += f" - S{int(sn):02d}E{int(ep):02d}"
+            except (TypeError, ValueError):
+                pass
+    if missing_count:
+        name += f" · {missing_count} cap. faltante" + ("s" if missing_count != 1 else "")
+    return name
+
+
+def _rec_rolled_size(conn: sqlite3.Connection, row: dict, *, season: int | None = None, episode: int | None = None):
+    """Size to show for a recommendation. Movies/episodes use their own file
+    size; a series/season has none of its own, so we sum the file sizes of the
+    episodes underneath (optionally restricted to one season, or a single
+    episode of it). Returns None when nothing on disk contributes a size, so the
+    UI shows "—"."""
+    it = row.get("item_type")
+    if it in ("movie", "episode"):
+        return row.get("size_bytes")
+    rid = int(row["id"])
+    # A specific episode of a series → drill series → season → episode.
+    if it == "series" and season is not None and episode is not None:
+        r = conn.execute(
+            "SELECT e.size_bytes AS s FROM library_items e "
+            "JOIN library_items se ON se.id = e.parent_id "
+            "WHERE se.parent_id = ? AND e.item_type = 'episode' "
+            "AND se.season_number = ? AND e.episode_number = ? LIMIT 1",
+            (rid, season, episode),
+        ).fetchone()
+        return r["s"] if r else None
+    if it == "season":
+        r = conn.execute(
+            "SELECT SUM(size_bytes) AS s, COUNT(size_bytes) AS c "
+            "FROM library_items WHERE parent_id = ? AND item_type = 'episode'",
+            (rid,),
+        ).fetchone()
+    elif season is not None:
+        r = conn.execute(
+            "SELECT SUM(e.size_bytes) AS s, COUNT(e.size_bytes) AS c "
+            "FROM library_items e JOIN library_items se ON se.id = e.parent_id "
+            "WHERE se.parent_id = ? AND e.item_type = 'episode' AND se.season_number = ?",
+            (rid, season),
+        ).fetchone()
+    else:
+        r = conn.execute(
+            "SELECT SUM(e.size_bytes) AS s, COUNT(e.size_bytes) AS c "
+            "FROM library_items e JOIN library_items se ON se.id = e.parent_id "
+            "WHERE se.parent_id = ? AND e.item_type = 'episode'",
+            (rid,),
+        ).fetchone()
+    return r["s"] if r and r["c"] else None
+
+
 # Order tier by content granularity: movie & complete series first, then whole
 # season, then loose episode — the ordering the user asked for.
 _REC_TYPE_RANK = {"movie": 0, "series": 0, "season": 1, "episode": 2}
 
 
 def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 60) -> list[dict]:
-    recs: list[dict] = []
-    seen_ids: set[int] = set()
+    from datetime import datetime, timezone
+    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    def _push(row: dict, group: int, *, name: str | None = None, request_id=None, sort_title=None):
+    recs: list[dict] = []
+    seen_lib: set[int] = set()  # library ids already shown (so a piece of
+    # content isn't repeated across groups 2 & 3 or after appearing in group 1)
+
+    cols = ("id, item_type, title, year, poster_url, local_status, "
+            "season_number, episode_number, parent_id, size_bytes, "
+            "resolution, source, tmdb_id, imdb_id, tvdb_id, instance_type")
+
+    # Group 1 — every *compatible* eMuwarez request, sourced from the match
+    # table (library_items.request_status only records one request per item, so
+    # a series with several compatible requests would otherwise show just once).
+    # One row per request, named/sized at the request's own scope (season /
+    # episode), linking to that request.
+    g1 = conn.execute(
+        """
+        SELECT ri.id AS req_id, ri.req_scope, ri.req_season, ri.req_episode,
+               (SELECT rm.library_item_id FROM request_matches rm
+                WHERE rm.request_item_id = ri.id ORDER BY rm.confidence DESC LIMIT 1) AS lib_id
+        FROM request_items ri
+        WHERE (SELECT rm.status FROM request_matches rm
+               WHERE rm.request_item_id = ri.id ORDER BY rm.confidence DESC LIMIT 1) = 'Compatible'
+        """
+    ).fetchall()
+    for r in g1:
+        lib_id = r["lib_id"]
+        if lib_id is None:
+            continue
+        lib_row = conn.execute(f"SELECT {cols} FROM library_items WHERE id = ?", (lib_id,)).fetchone()
+        if not lib_row:
+            continue
+        lib = dict(lib_row)
+        scope, season, episode = r["req_scope"], r["req_season"], r["req_episode"]
+        # Display type follows the request scope, not the matched row (which is
+        # usually the series): season request → "Temporada", episode → "Capítulo".
+        if lib["item_type"] == "movie":
+            disp_type = "movie"
+        elif scope == "episode" or episode is not None:
+            disp_type = "episode"
+        elif season is not None:
+            disp_type = "season"
+        else:
+            disp_type = lib["item_type"]
+        d = dict(lib)
+        d["item_type"] = disp_type
+        d["rec_group"] = 1
+        d["rec_request_id"] = r["req_id"]
+        d["content_name"] = _rec_content_name(conn, lib, season=season, episode=episode, scope=scope)
+        size_episode = episode if (scope == "episode" or disp_type == "episode") else None
+        d["size_bytes"] = _rec_rolled_size(conn, lib, season=season, episode=size_episode)
+        d["missing_count"] = None
+        d["_type_rank"] = _REC_TYPE_RANK.get(disp_type, 3)
+        d["_sort_title"] = (d["content_name"] or "").lower()
+        recs.append(d)
+        seen_lib.add(int(lib_id))
+
+    def _push(row: dict, group: int, *, name: str | None = None, size=None, missing_count=None):
         rid = int(row["id"])
-        if rid in seen_ids:
+        if rid in seen_lib:
             return
-        seen_ids.add(rid)
+        seen_lib.add(rid)
         d = dict(row)
         d["rec_group"] = group
         d["content_name"] = name if name is not None else _rec_content_name(conn, d)
-        d["rec_request_id"] = request_id if request_id is not None else d.get("request_id")
+        d["size_bytes"] = size if size is not None else _rec_rolled_size(conn, d)
+        d["rec_request_id"] = None
+        d["missing_count"] = missing_count
         d["_type_rank"] = _REC_TYPE_RANK.get(d.get("item_type"), 3)
-        d["_sort_title"] = (sort_title or d["content_name"] or "").lower()
+        d["_sort_title"] = (d["content_name"] or "").lower()
         recs.append(d)
-
-    cols = ("id, item_type, title, year, poster_url, local_status, request_status, "
-            "request_id, season_number, episode_number, parent_id, size_bytes, "
-            "resolution, source, tmdb_id, imdb_id, tvdb_id, instance_type")
-
-    # Group 1 — content that satisfies a Compatible eMuwarez request.
-    for row in conn.execute(
-        f"SELECT {cols} FROM library_items WHERE request_status = 'Compatible'"
-    ).fetchall():
-        row = dict(row)
-        _push(row, 1, request_id=row.get("request_id"))
 
     # Group 2 — available content not in eMuwarez ("Contenido único"): movies,
     # whole unique series, and unique seasons whose parent series isn't itself
@@ -748,14 +848,16 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 60) 
         _push(dict(row), 2)
 
     # Group 3 — monitored content you're missing and that isn't on eMuwarez, a
-    # candidate to request. Movies directly; series rolled up to the season
-    # that has monitored missing episodes (you'd request the season, not each
-    # episode). "monitored" comes from the raw Radarr/Sonarr payload.
+    # candidate to request. Excludes anything not yet released (unreleased /
+    # future air date / "TBA") — you can't request content that doesn't exist
+    # yet. Movies directly; series rolled up to the season with monitored
+    # missing episodes (you'd request the season, not each episode).
     for row in conn.execute(
         f"""SELECT {cols} FROM library_items
             WHERE item_type = 'movie' AND local_status = 'Faltante'
               AND emu_in_catalog = 0
-              AND json_extract(raw_json, '$.monitored') = 1"""
+              AND json_extract(raw_json, '$.monitored') = 1
+              AND json_extract(raw_json, '$.status') = 'released'"""
     ).fetchall():
         _push(dict(row), 3)
 
@@ -767,12 +869,17 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 60) 
                 WHERE ep.item_type = 'episode' AND ep.local_status = 'Faltante'
                   AND ep.emu_in_catalog = 0
                   AND json_extract(ep.raw_json, '$.episode.monitored') = 1
+                  AND json_extract(ep.raw_json, '$.episode.airDateUtc') IS NOT NULL
+                  AND json_extract(ep.raw_json, '$.episode.airDateUtc') <= ?
+                  AND UPPER(COALESCE(json_extract(ep.raw_json, '$.episode.title'), '')) <> 'TBA'
                 GROUP BY ep.parent_id
             ) cnt ON cnt.sid = s.id
-            WHERE s.item_type = 'season'"""
+            WHERE s.item_type = 'season'""",
+        (now_iso,),
     ).fetchall():
         row = dict(row)
-        _push(row, 3, name=_rec_content_name(conn, row, missing_count=row.get("missing_count")))
+        _push(row, 3, name=_rec_content_name(conn, row, missing_count=row.get("missing_count")),
+              missing_count=row.get("missing_count"))
 
     recs.sort(key=lambda d: (d["rec_group"], d["_type_rank"], d["_sort_title"]))
     for d in recs:

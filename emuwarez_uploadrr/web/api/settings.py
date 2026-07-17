@@ -304,13 +304,14 @@ class HardlinkTestRequest(BaseModel):
 @router.post("/settings/test-hardlink")
 def test_hardlink(body: HardlinkTestRequest, current_user: dict = Depends(require_auth)) -> dict:
     """Create a real test hardlink in the given base directory to verify it
-    works (same filesystem + write permission) before saving."""
-    from ...services.upload_checks import probe_hardlink_dir
+    works (write permission + supports hardlinks) AND that it's on the same
+    filesystem as the media (a hardlink can't cross filesystems)."""
+    from ...services.upload_checks import probe_hardlink_for_library
     base = body.hardlink_base
-    if base is None:
-        with _get_conn() as conn:
+    with _get_conn() as conn:
+        if base is None:
             base = get_setting_canonical(conn, "hardlink_base")
-    ok, message = probe_hardlink_dir(base)
+        ok, message = probe_hardlink_for_library(base, conn)
     return {"ok": ok, "message": message}
 
 
@@ -353,8 +354,9 @@ def update_settings(
         eff_use = body.use_hardlinks if body.use_hardlinks is not None else cur_use
         eff_base = (body.hardlink_base if body.hardlink_base is not None else cur_base) or ""
         if eff_use:
-            from ...services.upload_checks import probe_hardlink_dir
-            ok, message = probe_hardlink_dir(eff_base.strip())
+            from ...services.upload_checks import probe_hardlink_for_library
+            with _get_conn() as _c:
+                ok, message = probe_hardlink_for_library(eff_base.strip(), _c)
             if not ok:
                 errors.append(f"No se pueden activar los hardlinks: {message}")
 

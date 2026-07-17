@@ -451,6 +451,25 @@ def mark_nomenclature_status(item_id: int, status: str, conn=None) -> None:
 CONFIRMATION_TOKEN = "APLICAR_NOMENCLATURA"
 
 
+def _get_use_hardlinks(conn=None) -> bool:
+    """Whether nomenclature is applied by hardlink (default) or by renaming the
+    original in place (when the user disabled hardlinks)."""
+    own = conn is None
+    _conn = conn or connect()
+    try:
+        row = _conn.execute(
+            "SELECT value FROM settings WHERE key = 'nomenclature.use_hardlinks'"
+        ).fetchone()
+        if row is not None and row["value"] is not None:
+            return str(row["value"]).strip().lower() != "false"
+        return True
+    except Exception:
+        return True
+    finally:
+        if own:
+            _conn.close()
+
+
 def _get_hardlink_base(conn=None) -> str | None:
     """Get configured hardlink_base from settings or app_state."""
     own = conn is None
@@ -506,8 +525,10 @@ def build_nomenclature_apply_plan(
     proposal_id: int | None = None,
     conn=None,
 ) -> dict:
-    """Build a dry-run plan for applying nomenclature via hardlink. Never modifies filesystem."""
-    from .filesystem_apply import build_safe_apply_plan
+    """Build a dry-run plan for applying nomenclature — by hardlink (default) or
+    by renaming the original in place (hardlinks disabled). Never modifies the
+    filesystem."""
+    from .filesystem_apply import build_safe_apply_plan, build_safe_rename_plan
     import os as _os
 
     own = conn is None
@@ -557,7 +578,45 @@ def build_nomenclature_apply_plan(
                 "destination_path": None,
             }
 
-        source_path = item.get("path")
+        # Map the Radarr/Sonarr-reported path (e.g. /data/media/…) to where this
+        # app actually reaches the file (e.g. an SSHFS/NFS mount). All real
+        # filesystem work uses the mapped local path; `path` in the DB stays in
+        # the raw convention.
+        from .path_mapping import resolve_local_path
+        raw_source = item.get("path")
+        source_path = (resolve_local_path(raw_source, conn=conn) or raw_source) if raw_source else raw_source
+        proposed_filename = (
+            proposal.get("proposed_filename")
+            or proposal.get("proposed_title")
+            or "archivo"
+        )
+        ext = _os.path.splitext(source_path)[1] if source_path else ""
+
+        if not _get_use_hardlinks(conn=conn):
+            # Hardlinks disabled: rename the original in place (same folder →
+            # same filesystem, so it works even when the media lives on an
+            # SSHFS/NFS mount and a hardlink to local disk would be cross-device).
+            if not source_path:
+                return {
+                    "status": "blocked",
+                    "errors": ["El elemento no tiene ruta de archivo."],
+                    "warnings": [], "proposal": proposal,
+                    "source_path": None, "destination_path": None,
+                }
+            destination_path = _os.path.join(
+                _os.path.dirname(source_path), proposed_filename + ext
+            )
+            plan = build_safe_rename_plan(source_path, destination_path)
+            plan["proposal"] = proposal
+            plan["item"] = {"id": item_id, "title": item.get("title")}
+            # Raw-convention path the DB should point to after the rename (same
+            # folder, new filename) — keeps `path` consistent for future mapping.
+            plan["raw_destination_path"] = (
+                _os.path.join(_os.path.dirname(raw_source), proposed_filename + ext)
+                if raw_source else destination_path
+            )
+            return plan
+
         hardlink_base = _get_hardlink_base(conn=conn)
 
         if not hardlink_base:
@@ -573,13 +632,7 @@ def build_nomenclature_apply_plan(
                 "destination_path": None,
             }
 
-        proposed_filename = (
-            proposal.get("proposed_filename")
-            or proposal.get("proposed_title")
-            or "archivo"
-        )
         folder_name = proposal.get("proposed_folder") or proposed_filename
-        ext = _os.path.splitext(source_path)[1] if source_path else ""
         destination_path = _os.path.join(
             hardlink_base, folder_name, proposed_filename + ext
         )
@@ -603,8 +656,9 @@ def apply_nomenclature_proposal(
     overwrite: bool = False,
     conn=None,
 ) -> dict:
-    """Apply nomenclature proposal by creating a hardlink. Never modifies the original file."""
-    from .filesystem_apply import apply_hardlink_plan
+    """Apply nomenclature proposal — by hardlink (original untouched) or, when
+    hardlinks are disabled, by renaming the original file in place."""
+    from .filesystem_apply import apply_hardlink_plan, apply_rename_plan
 
     own = conn is None
     conn = conn or connect()
@@ -644,7 +698,11 @@ def apply_nomenclature_proposal(
                 return base_result
 
         effective_dry_run = dry_run or not apply
-        result = apply_hardlink_plan(plan, dry_run=effective_dry_run, overwrite=overwrite)
+        is_rename = plan.get("operation_type") == "nomenclature_rename"
+        if is_rename:
+            result = apply_rename_plan(plan, dry_run=effective_dry_run)
+        else:
+            result = apply_hardlink_plan(plan, dry_run=effective_dry_run, overwrite=overwrite)
 
         fs_op_id = None
         try:
@@ -658,7 +716,7 @@ def apply_nomenclature_proposal(
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    "nomenclature_hardlink",
+                    plan.get("operation_type", "nomenclature_hardlink"),
                     result.get("status", "planned"),
                     item_id,
                     (plan.get("proposal") or {}).get("id"),
@@ -692,13 +750,27 @@ def apply_nomenclature_proposal(
                            WHERE id = ?""",
                         (dst, now, fs_op_id, now, pid),
                     )
-                conn.execute(
-                    """UPDATE library_items
-                       SET prepared_path = ?, nomenclature_applied_at = ?,
-                           nomenclature_status = 'Correcta', updated_at = ?
-                       WHERE id = ?""",
-                    (dst, now, now, item_id),
-                )
+                if is_rename:
+                    # The original file was moved, so the library's path must
+                    # follow it (until the next Radarr/Sonarr sync refreshes it).
+                    # `path` stays in the raw convention; prepared_path is the
+                    # real local file the uploader will use.
+                    raw_dst = plan.get("raw_destination_path") or dst
+                    conn.execute(
+                        """UPDATE library_items
+                           SET path = ?, prepared_path = ?, nomenclature_applied_at = ?,
+                               nomenclature_status = 'Correcta', updated_at = ?
+                           WHERE id = ?""",
+                        (raw_dst, dst, now, now, item_id),
+                    )
+                else:
+                    conn.execute(
+                        """UPDATE library_items
+                           SET prepared_path = ?, nomenclature_applied_at = ?,
+                               nomenclature_status = 'Correcta', updated_at = ?
+                           WHERE id = ?""",
+                        (dst, now, now, item_id),
+                    )
             conn.commit()
         except Exception:
             pass

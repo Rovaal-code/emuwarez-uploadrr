@@ -1,6 +1,15 @@
-"""Filesystem apply service for nomenclature hardlink preparation.
+"""Filesystem apply service for nomenclature preparation.
 
-SAFETY CONTRACT:
+Two modes:
+- HARDLINK (default, use_hardlinks=true): creates a hardlink of the original
+  into hardlink_base; the original is never touched.
+- RENAME (use_hardlinks=false): renames the original file IN PLACE to the
+  Emuwarez nomenclature (same directory → same filesystem, so it works across
+  SSHFS/NFS mounts where a hardlink to local disk can't). This is the only
+  sanctioned path that moves/renames a source file, and only when the user has
+  explicitly disabled hardlinks.
+
+SAFETY CONTRACT (hardlink mode):
 - Never rename, move, or delete source files.
 - Never modify source file content.
 - Never execute mkvpropedit or Uploadrr.
@@ -205,5 +214,95 @@ def apply_hardlink_plan(
                 f"Error de sistema: {exc}"
             ]
             result["message"] = f"Falló la creación del hardlink: {exc}"
+
+    return result
+
+
+def build_safe_rename_plan(source_path: str, destination_path: str) -> dict[str, Any]:
+    """Validate an in-place rename of the original file (same directory). Used
+    when hardlinks are disabled. Never touches the filesystem."""
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    src = Path(source_path) if source_path else None
+    if not source_path:
+        errors.append("source_path no proporcionado.")
+    elif not src.exists():
+        errors.append(f"El archivo origen no existe: {source_path}")
+    elif src.is_symlink():
+        errors.append("El archivo origen es un symlink. No se permite renombrar symlinks.")
+    elif not src.is_file():
+        errors.append(f"El origen no es un archivo regular: {source_path}")
+    elif src.suffix.lower() not in VIDEO_EXTENSIONS:
+        warnings.append(f"El archivo origen no parece un vídeo ({src.suffix}). Continuando con precaución.")
+
+    if not destination_path:
+        errors.append("destination_path no proporcionado.")
+    elif src is not None and src.exists():
+        dst = Path(destination_path)
+        # Stay in the same directory as the source: a rename in place is on the
+        # same filesystem (no EXDEV), and we never move files between folders.
+        if dst.parent.resolve() != src.parent.resolve():
+            errors.append("El destino debe estar en la misma carpeta que el origen.")
+        if dst.resolve() == src.resolve():
+            warnings.append("El archivo ya tiene la nomenclatura correcta; no hay nada que renombrar.")
+        elif dst.exists():
+            errors.append(f"El destino ya existe: {destination_path}.")
+        if not os.access(str(src.parent), os.W_OK):
+            errors.append(f"La carpeta del origen no es escribible: {src.parent}")
+
+    status = "blocked" if errors else "ready"
+    return {
+        "status": status,
+        "operation_type": "nomenclature_rename",
+        "source_path": source_path,
+        "destination_path": destination_path,
+        "parent_dir": str(Path(destination_path).parent) if destination_path else None,
+        "hardlink_base": None,
+        "errors": errors,
+        "warnings": warnings,
+    }
+
+
+def apply_rename_plan(plan: dict[str, Any], *, dry_run: bool = True) -> dict[str, Any]:
+    """Execute or simulate the in-place rename. Only os.rename is allowed."""
+    result = dict(plan)
+    now = datetime.now(timezone.utc).isoformat()
+    result["dry_run"] = dry_run
+    result["applied_at"] = None
+
+    src = plan.get("source_path")
+    dst = plan.get("destination_path")
+
+    # Nothing to do when the file already matches (a warning, not an error).
+    if src and dst and Path(src).exists() and Path(dst).exists() and Path(src).resolve() == Path(dst).resolve():
+        result["status"] = "applied"
+        result["applied_at"] = now
+        result["message"] = "El archivo ya tiene la nomenclatura correcta."
+        return result
+
+    if plan["status"] == "blocked":
+        result["message"] = "Plan bloqueado. Ver errors para más detalles."
+        return result
+
+    if dry_run:
+        result["status"] = "ready"
+        result["message"] = f"Dry-run: se renombraría '{src}' → '{dst}'. No se ha escrito nada."
+        return result
+
+    try:
+        if Path(dst).exists():
+            result["status"] = "blocked"
+            result["errors"] = list(plan.get("errors", [])) + [f"El destino ya existe: {dst}."]
+            result["message"] = "Renombrado bloqueado: el destino ya existe."
+            return result
+        os.rename(src, dst)
+        result["status"] = "applied"
+        result["applied_at"] = now
+        result["message"] = f"Archivo renombrado correctamente: '{dst}'."
+    except OSError as exc:
+        result["status"] = "failed"
+        result["errors"] = list(plan.get("errors", [])) + [f"Error de sistema: {exc}"]
+        result["message"] = f"Falló el renombrado: {exc}"
 
     return result

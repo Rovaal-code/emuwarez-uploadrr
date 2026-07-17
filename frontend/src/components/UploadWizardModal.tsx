@@ -300,7 +300,7 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
     setUploading(true); setUploadMsg(null)
     try {
       await saveNomenclatureFields(targetId, fields)
-      const applied = await adaptNomenclature(targetId, { apply: true, confirmation: NOM_TOKEN })
+      const applied = await adaptNomenclature(targetId, { apply: true, dryRun: false, confirmation: NOM_TOKEN })
       if (applied.status && applied.status !== 'applied') {
         setUploadMsg(`✗ No se pudo aplicar la nomenclatura (estado: ${applied.status}). Suele deberse a que el archivo está en una ubicación de solo lectura, o a que los hardlinks no están configurados con una ruta escribible en el mismo disco que tus medios.`)
         return

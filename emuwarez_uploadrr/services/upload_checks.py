@@ -63,6 +63,39 @@ def probe_hardlink_dir(base_dir: Optional[str]) -> tuple[bool, str]:
                 pass
 
 
+def probe_hardlink_for_library(base_dir: Optional[str], conn) -> tuple[bool, str]:
+    """Settings-time gate for ENABLING hardlinks: the base must support hardlinks
+    (probe_hardlink_dir) AND live on the same filesystem as the media, because a
+    hardlink can't cross filesystems. Samples a real library file and compares
+    st_dev — catches the common case of media on an SSHFS/NFS mount with a
+    hardlink_base on the local disk."""
+    ok, msg = probe_hardlink_dir(base_dir)
+    if not ok or not base_dir:
+        return ok, msg
+    try:
+        from .path_mapping import resolve_local_path
+        row = conn.execute(
+            "SELECT path FROM library_items WHERE path IS NOT NULL AND path <> '' "
+            "AND local_status = 'Disponible' AND item_type IN ('movie', 'episode') LIMIT 1"
+        ).fetchone()
+        raw = row["path"] if row else None
+        if raw:
+            media_local = resolve_local_path(raw, conn=conn) or raw
+            media_dir = os.path.dirname(media_local)
+            if os.path.isdir(media_dir):
+                if os.stat(base_dir.strip()).st_dev != os.stat(media_dir).st_dev:
+                    return False, (
+                        "La ruta de hardlinks está en un sistema de ficheros distinto al de tu "
+                        f"biblioteca ({media_dir}). Los hardlinks no pueden cruzar sistemas de "
+                        "ficheros: elige una carpeta dentro de la misma unidad que tu media, o "
+                        "desactiva los hardlinks (se renombrará el archivo original)."
+                    )
+    except Exception:
+        # Best-effort: if we can't sample the media, fall back to the base probe.
+        pass
+    return True, msg
+
+
 def run_upload_checks(conn: sqlite3.Connection, item_id: int) -> dict:
     from .library import get_library_item
     from .media_info_service import mediainfo_available, read_media_info_summary

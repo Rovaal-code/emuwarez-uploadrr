@@ -20,8 +20,15 @@ export function FitText({ text, max = 13, min = 8 }: { text: string; max?: numbe
       const avail = el.clientWidth
       if (avail <= 0 || avail === lastAvail) return
       lastAvail = avail
+      // 1px safety margin: `scrollWidth` is an integer (rounded) layout
+      // measurement, but the browser's actual sub-pixel glyph paint can come
+      // out a hair wider than that rounded value — a font size that measures
+      // as "exactly touching" the boundary can then clip into "…" at paint
+      // time. 1px absorbs that without being a big enough buffer to visibly
+      // under-size the text (unlike the old proportional-estimate approach).
+      const target = avail - 1
       el.style.fontSize = `${max}px`
-      if (el.scrollWidth <= avail) return // fits at max → keep it big
+      if (el.scrollWidth <= target) return // fits at max → keep it big
       // Binary-search the LARGEST font that actually MEASURES as fitting. We
       // measure each candidate (scrollWidth) rather than estimate from a ratio:
       // monospace glyph advances don't scale perfectly linearly, so an estimate
@@ -31,7 +38,7 @@ export function FitText({ text, max = 13, min = 8 }: { text: string; max?: numbe
       for (let i = 0; i < 18; i++) {
         const mid = (lo + hi) / 2
         el.style.fontSize = `${mid}px`
-        if (el.scrollWidth <= avail) lo = mid
+        if (el.scrollWidth <= target) lo = mid
         else hi = mid
       }
       el.style.fontSize = `${lo}px`

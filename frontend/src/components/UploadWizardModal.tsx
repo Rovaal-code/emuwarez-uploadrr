@@ -460,7 +460,7 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
       <div style={{ marginTop: 16, padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
         <div style={labelStyle}>Nombre final del torrent (eMuwarez)</div>
         {preview?.torrent_name ? <FitText text={preview.torrent_name} /> : <GeneratingHint />}
-        <div style={{ ...labelStyle, marginTop: 10 }}>Título</div>
+        <div style={{ ...labelStyle, marginTop: 10 }}>Título Final del Archivo (También el Interno)</div>
         {preview?.internal_mkv_title ? <FitText text={preview.internal_mkv_title} /> : <GeneratingHint />}
       </div>
     </>
@@ -711,7 +711,7 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
             <div style={{ marginBottom: 14, padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
               <div style={labelStyle}>Nombre final del torrent</div>
               <FitText text={preview?.torrent_name || '–'} />
-              <div style={{ ...labelStyle, marginTop: 10 }}>Título</div>
+              <div style={{ ...labelStyle, marginTop: 10 }}>Título Final del Archivo (También el Interno)</div>
               <FitText text={preview?.internal_mkv_title || '–'} />
             </div>
 

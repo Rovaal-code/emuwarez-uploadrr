@@ -62,8 +62,24 @@ function TableLoadingSpinner({ label = 'Cargando…' }: { label?: string }) {
   )
 }
 
-// One check's icon + label + message — shared between the progressive
-// single-row reveal (while the run is in flight) and the final full list.
+// Same order run_upload_checks() runs them in (services/upload_checks.py) —
+// used to name the check currently in flight ("Comprobando si es
+// accesible…") while its own result hasn't landed yet, since liveChecks only
+// grows with COMPLETED checks: its length is the index of the one running now.
+const CHECK_STEP_ORDER = ['accessible', 'renameable', 'integrity', 'hardlink', 'output', 'qbittorrent', 'imghosts', 'emuwarez']
+const CHECK_STEP_PENDING_LABEL: Record<string, string> = {
+  accessible: 'Comprobando si el contenido es accesible…',
+  renameable: 'Comprobando si se puede renombrar…',
+  integrity: 'Comprobando la integridad del fichero…',
+  hardlink: 'Comprobando si se puede crear el hardlink…',
+  output: 'Comprobando el directorio de salida…',
+  qbittorrent: 'Comprobando la conexión con qBittorrent…',
+  imghosts: 'Comprobando el repositorio de imágenes…',
+  emuwarez: 'Comprobando la conexión con eMuwarez…',
+}
+
+// One check's icon + label + message — used for the final full list once the
+// run is done.
 function CheckRow({ c }: { c: UploadCheck }) {
   return (
     <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', padding: '3px 0' }}>
@@ -492,7 +508,6 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
         {preview?.torrent_name && preview?.internal_mkv_title ? (
           <FitTextPair
             min={12}
-            showSizeControls
             items={[
               { label: 'Nombre final del torrent (eMuwarez)', text: preview.torrent_name, labelStyle },
               { label: 'Título Final del Archivo (También el Interno)', text: preview.internal_mkv_title, labelStyle },
@@ -755,7 +770,6 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
             <div style={{ marginBottom: 14, padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
               <FitTextPair
                 min={12}
-                showSizeControls
                 items={[
                   { label: 'Nombre final del torrent', text: preview?.torrent_name || '–', labelStyle },
                   { label: 'Título Final del Archivo (También el Interno)', text: preview?.internal_mkv_title || '–', labelStyle },
@@ -770,12 +784,15 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
                 {checksLoading && <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />}
               </div>
               {checksLoading ? (
-                // Progressive reveal: one line that replaces itself with the
-                // latest check as each one actually completes, instead of a
-                // silent wait — the full run is real network calls (~30s).
-                liveChecks.length > 0
-                  ? <CheckRow key={liveChecks[liveChecks.length - 1].id} c={liveChecks[liveChecks.length - 1]} />
-                  : <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Comprobando…</div>
+                // Progressive reveal: one line naming whichever check is
+                // currently running ("Comprobando si es accesible…"),
+                // replacing itself as each one finishes and the next starts —
+                // instead of a silent wait (the full run is real network
+                // calls, ~30s). liveChecks only holds COMPLETED checks, so
+                // its length is the index of the one in flight right now.
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  {CHECK_STEP_PENDING_LABEL[CHECK_STEP_ORDER[liveChecks.length]] ?? 'Finalizando comprobaciones…'}
+                </div>
               ) : (
                 checks?.checks.map(c => <CheckRow key={c.id} c={c} />)
               )}

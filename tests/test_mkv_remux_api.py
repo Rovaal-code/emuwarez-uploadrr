@@ -152,3 +152,48 @@ def test_apply_track_remux_correct_token_calls_mkvmerge(client, auth_headers, tm
     assert mkv_file.read_bytes() == b"fake mkv remuxed"
     _, kwargs = mock_run.call_args
     assert not kwargs.get("shell", False)
+
+
+def test_apply_track_remux_with_manual_overrides(client, auth_headers, tmp_path):
+    """The upload wizard's editable table sends per-track overrides — the
+    manual name must reach the actual mkvmerge command line."""
+    mkv_file = tmp_path / "Film.2024.mkv"
+    mkv_file.write_bytes(b"fake mkv original")
+    item_id = _seed_item(prepared_path=str(mkv_file))
+
+    captured_args = {}
+
+    def _fake_run(args, **kwargs):
+        captured_args["args"] = args
+        out_idx = args.index("-o") + 1
+        with open(args[out_idx], "wb") as fh:
+            fh.write(b"fake mkv remuxed")
+        m = MagicMock()
+        m.returncode = 0
+        m.stdout = ""
+        m.stderr = ""
+        return m
+
+    with patch("emuwarez_uploadrr.services.mkv_remux.subprocess.run", side_effect=_fake_run), \
+         patch("emuwarez_uploadrr.services.mkv_remux.check_mkvmerge_available",
+               return_value={"available": True, "path": "/usr/bin/mkvmerge"}), \
+         patch("emuwarez_uploadrr.services.mkv_remux.read_tracks_json",
+               return_value={"ok": True, "data": _SAMPLE_MKV_JSON}):
+        resp = client.post(
+            f"/api/library/{item_id}/track-remux/apply",
+            json={
+                "dry_run": False, "apply": True, "confirmation": "REORDENAR_PISTAS",
+                "overrides": {"2": {"new_name": "Mi nombre manual ES"}, "1": {"default_after": True}},
+            },
+            headers=auth_headers,
+        )
+
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "applied"
+    args = captured_args["args"]
+    assert "2:Mi nombre manual ES" in args
+    # The manual English default override reached the actual command line.
+    assert "--default-track-flag" in args
+    df_idx = [i for i, a in enumerate(args) if a == "--default-track-flag"]
+    df_values = [args[i + 1] for i in df_idx]
+    assert "1:1" in df_values

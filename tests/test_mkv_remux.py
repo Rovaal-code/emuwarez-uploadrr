@@ -115,6 +115,44 @@ def test_build_track_plan_default_flags():
     assert by_id[3]["default_after"] is False
 
 
+def test_apply_track_overrides_name_and_default():
+    from emuwarez_uploadrr.services.mkv_remux import build_track_plan, apply_track_overrides
+    plan = build_track_plan(_SAMPLE_MKV_JSON)
+    overrides = {
+        2: {"new_name": "Español (mi nombre a mano)"},
+        1: {"default_after": True},  # user wants English as default instead
+    }
+    patched = apply_track_overrides(plan, overrides)
+    by_id = {t["id"]: t for t in patched["ordered_tracks"]}
+    assert by_id[2]["new_name"] == "Español (mi nombre a mano)"
+    assert by_id[1]["default_after"] is True
+    # untouched tracks keep the auto-computed values
+    assert by_id[5]["new_name"] == "Català - DD 2.0"
+
+
+def test_apply_track_overrides_ignores_video_default():
+    """Video's default flag is never touched, even via override."""
+    from emuwarez_uploadrr.services.mkv_remux import build_track_plan, apply_track_overrides
+    plan = build_track_plan(_SAMPLE_MKV_JSON)
+    patched = apply_track_overrides(plan, {0: {"default_after": True}})
+    video = [t for t in patched["ordered_tracks"] if t["type"] == "video"][0]
+    assert video["default_after"] is False  # untouched — the sample video track has no default_track set
+
+
+def test_apply_track_overrides_blank_name_is_ignored():
+    from emuwarez_uploadrr.services.mkv_remux import build_track_plan, apply_track_overrides
+    plan = build_track_plan(_SAMPLE_MKV_JSON)
+    patched = apply_track_overrides(plan, {2: {"new_name": "   "}})
+    by_id = {t["id"]: t for t in patched["ordered_tracks"]}
+    assert by_id[2]["new_name"] == "Español (Castellano) - DD 5.1"  # auto-computed kept
+
+
+def test_apply_track_overrides_none_is_noop():
+    from emuwarez_uploadrr.services.mkv_remux import build_track_plan, apply_track_overrides
+    plan = build_track_plan(_SAMPLE_MKV_JSON)
+    assert apply_track_overrides(plan, None) is plan
+
+
 def test_build_track_plan_no_change_when_already_ordered():
     from emuwarez_uploadrr.services.mkv_remux import build_track_plan
     already_ok = {

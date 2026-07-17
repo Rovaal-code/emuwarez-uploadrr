@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 from pydantic import BaseModel, field_validator
 
 
@@ -1139,10 +1139,17 @@ class MkvTitleApplyBody(BaseModel):
     confirmation: Optional[str] = None
 
 
+class TrackRemuxOverride(BaseModel):
+    new_name: Optional[str] = None
+    default_after: Optional[bool] = None
+
+
 class TrackRemuxApplyBody(BaseModel):
     dry_run: bool = True
     apply: bool = False
     confirmation: Optional[str] = None
+    # Keyed by track id (string in JSON — object keys are always strings).
+    overrides: Optional[Dict[str, TrackRemuxOverride]] = None
 
 
 # ---------------------------------------------------------------------------

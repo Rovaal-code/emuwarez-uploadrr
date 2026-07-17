@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import type { EmuSource, EmuProvider, NomenclatureFields, FieldsPreviewResult } from '../api/nomenclature'
+import type { EmuSource, EmuProvider, NomenclatureFields, FieldsPreviewResult, TrackRemuxPreview, TrackRemuxOverride } from '../api/nomenclature'
 import {
   getEmuSources,
   getEmuProviders,
@@ -7,6 +7,8 @@ import {
   previewNomenclatureFields,
   saveNomenclatureFields,
   adaptNomenclature,
+  previewTrackRemux,
+  applyTrackRemux,
 } from '../api/nomenclature'
 import { uploadPreflight, startUploadJob, runUploadChecks, type UploadChecksResult } from '../api/uploads'
 import { getLibrary, getMediaInfoReport, suggestProvider } from '../api/library'
@@ -25,6 +27,7 @@ import { FitText } from './FitText'
 // real upload.
 const NOM_TOKEN = 'APLICAR_NOMENCLATURA'
 const UPLOAD_TOKEN = 'INICIAR_UPLOADRR'
+const REMUX_TOKEN = 'REORDENAR_PISTAS'
 const PROVIDER_SOURCES = new Set(['WEB-DL'])
 const WHOLE_SEASON = 'WHOLE_SEASON'
 
@@ -40,6 +43,12 @@ interface Props {
 const labelStyle: React.CSSProperties = {
   fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4, display: 'block',
 }
+
+const thStyle: React.CSSProperties = {
+  textAlign: 'left', padding: '8px 10px', fontWeight: 600, color: 'var(--text-muted)',
+  position: 'sticky', top: 0, background: 'var(--bg-surface, #0f1420)',
+}
+const TRACK_TYPE_LABEL: Record<string, string> = { video: 'Vídeo', audio: 'Audio', subtitles: 'Subs' }
 
 // Field label + an info "?" explaining where the field's data comes from.
 function FieldLabel({ label, info }: { label: string; info?: React.ReactNode }) {
@@ -109,6 +118,13 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
   const [miReport, setMiReport] = useState<MediaInfoReport | null>(null)
   const [miLoading, setMiLoading] = useState(false)
   const [miError, setMiError] = useState<string | null>(null)
+
+  // Step 1 — on-demand track remux preview (reorder + rename audio/subs/video),
+  // editable by hand; applied automatically as part of "Subir" (see doUpload).
+  const [remuxPreview, setRemuxPreview] = useState<TrackRemuxPreview | null>(null)
+  const [remuxLoading, setRemuxLoading] = useState(false)
+  const [remuxError, setRemuxError] = useState<string | null>(null)
+  const [remuxEdits, setRemuxEdits] = useState<Record<number, TrackRemuxOverride>>({})
 
   // Step 1 — automatic TMDB provider detection for WEB-DL with no provider.
   const [detectingProvider, setDetectingProvider] = useState(false)
@@ -228,6 +244,10 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
   // Reset the MediaInfo report whenever the resolved target changes.
   useEffect(() => { setMiReport(null); setMiError(null) }, [targetId])
 
+  // Reset the track remux preview + any manual edits whenever the resolved
+  // target changes (a different file → a different, unrelated track plan).
+  useEffect(() => { setRemuxPreview(null); setRemuxError(null); setRemuxEdits({}) }, [targetId])
+
   // Auto-detect the provider via TMDB when Source is WEB-DL and none was
   // detected from the filename. Debounced 500ms and fired at most once per
   // resolved target, so clicking "Subir" never triggers a burst of TMDB calls.
@@ -258,6 +278,23 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
     } finally {
       setMiLoading(false)
     }
+  }
+
+  const runTrackRemux = async () => {
+    if (targetId == null) return
+    setRemuxLoading(true); setRemuxError(null); setRemuxEdits({})
+    try {
+      setRemuxPreview(await previewTrackRemux(targetId))
+    } catch (e: unknown) {
+      setRemuxPreview(null)
+      setRemuxError(e instanceof Error ? e.message : 'Error calculando el remux de pistas')
+    } finally {
+      setRemuxLoading(false)
+    }
+  }
+
+  const setRemuxEdit = (trackId: number, patch: TrackRemuxOverride) => {
+    setRemuxEdits(prev => ({ ...prev, [trackId]: { ...prev[trackId], ...patch } }))
   }
 
   // Debounced live preview of the final torrent name + internal title.
@@ -305,6 +342,30 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
         setUploadMsg(`✗ No se pudo aplicar la nomenclatura (estado: ${applied.status}). Suele deberse a que el archivo está en una ubicación de solo lectura, o a que los hardlinks no están configurados con una ruta escribible en el mismo disco que tus medios.`)
         return
       }
+
+      // Track remux (reorder + rename audio/subs/video) — runs AFTER the
+      // nomenclature step so it always operates on the file at its final
+      // path. Re-fetches the plan fresh here (even if the user already
+      // opened "Ver Remux") so it reflects the just-renamed file; any manual
+      // edits the user made are layered back on top via overrides. Silently
+      // skipped when mkvmerge isn't installed or the file is already
+      // correctly ordered/named — only a REAL failure blocks the upload.
+      try {
+        const rp = await previewTrackRemux(targetId)
+        if (rp.status === 'ready') {
+          const remuxed = await applyTrackRemux(targetId, {
+            apply: true, dryRun: false, confirmation: REMUX_TOKEN, overrides: remuxEdits,
+          })
+          if (remuxed.status !== 'applied') {
+            setUploadMsg(`✗ No se pudieron reordenar/renombrar las pistas (estado: ${remuxed.status}). ${(remuxed.errors || []).join(' ')}`)
+            return
+          }
+        }
+      } catch (e: unknown) {
+        setUploadMsg(`✗ Error reordenando/renombrando las pistas: ${e instanceof Error ? e.message : 'error desconocido'}`)
+        return
+      }
+
       const pf = await uploadPreflight(targetId)
       if (pf.status !== 'ready' || !pf.job?.id) {
         setUploadMsg(`✗ El preflight no está listo (estado: ${pf.status}).`)
@@ -496,6 +557,86 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
                               <td style={{ padding: '7px 12px', fontFamily: 'monospace', wordBreak: 'break-word' }}>{r.emu}</td>
                             </tr>
                           ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>Remux — orden y nombre de pistas</div>
+                      <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>
+                        Reordena audio/subtítulos (Español → Català → Inglés → resto) y pone un nombre claro a
+                        cada pista (vídeo, audio, subtítulos). Puedes editar el nombre nuevo o el «predeterminada»
+                        a mano. Se aplica junto con la nomenclatura al pulsar «Subir a eMuwarez» abajo.
+                      </div>
+                    </div>
+                    <button className="btn btn-primary" onClick={runTrackRemux} disabled={remuxLoading || targetId == null}>
+                      {remuxLoading ? 'Cargando…' : remuxPreview ? 'Actualizar Remux' : 'Ver Remux'}
+                    </button>
+                  </div>
+
+                  {remuxError && <p className="text-error" style={{ fontSize: 12, marginTop: 10 }}>✗ {remuxError}</p>}
+                  {remuxPreview?.errors?.map((e, i) => (
+                    <p key={i} className="text-error" style={{ fontSize: 12, marginTop: 10 }}>✗ {e}</p>
+                  ))}
+                  {remuxPreview?.warnings?.map((w, i) => (
+                    <p key={i} className="text-warning" style={{ fontSize: 12, marginTop: 10 }}>⚠ {w}</p>
+                  ))}
+
+                  {remuxPreview && remuxPreview.ordered_tracks && remuxPreview.ordered_tracks.length > 0 && (
+                    <div style={{ marginTop: 12, maxHeight: 260, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 8, background: 'rgba(255,255,255,0.03)' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, tableLayout: 'fixed' }}>
+                        <colgroup>
+                          <col style={{ width: '10%' }} />
+                          <col style={{ width: '10%' }} />
+                          <col style={{ width: '25%' }} />
+                          <col style={{ width: '38%' }} />
+                          <col style={{ width: '17%' }} />
+                        </colgroup>
+                        <thead>
+                          <tr>
+                            <th style={thStyle}>Tipo</th>
+                            <th style={thStyle}>Idioma</th>
+                            <th style={thStyle}>Nombre actual</th>
+                            <th style={thStyle}>Nombre nuevo</th>
+                            <th style={thStyle}>Predet.</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {remuxPreview.ordered_tracks.map(t => {
+                            const edit = remuxEdits[t.id]
+                            const effectiveName = edit?.new_name ?? t.new_name
+                            const effectiveDefault = edit?.default_after ?? t.default_after
+                            return (
+                              <tr key={t.id} style={{ borderTop: '1px solid var(--border)' }}>
+                                <td style={{ padding: '6px 10px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{TRACK_TYPE_LABEL[t.type] ?? t.type}</td>
+                                <td style={{ padding: '6px 10px', fontFamily: 'monospace', color: 'var(--text-secondary)' }}>{t.language || '—'}</td>
+                                <td style={{ padding: '6px 10px', color: 'var(--text-muted)', wordBreak: 'break-word' }}>{t.current_name || '—'}</td>
+                                <td style={{ padding: '5px 8px' }}>
+                                  <input
+                                    className="form-input"
+                                    style={{ fontSize: 12, padding: '4px 6px' }}
+                                    value={effectiveName}
+                                    onChange={e => setRemuxEdit(t.id, { new_name: e.target.value })}
+                                  />
+                                </td>
+                                <td style={{ padding: '6px 10px', textAlign: 'center' }}>
+                                  {t.type === 'video' ? (
+                                    <span style={{ color: 'var(--text-muted)' }}>—</span>
+                                  ) : (
+                                    <input
+                                      type="checkbox"
+                                      checked={effectiveDefault}
+                                      onChange={e => setRemuxEdit(t.id, { default_after: e.target.checked })}
+                                    />
+                                  )}
+                                </td>
+                              </tr>
+                            )
+                          })}
                         </tbody>
                       </table>
                     </div>

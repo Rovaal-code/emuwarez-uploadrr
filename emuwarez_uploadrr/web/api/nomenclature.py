@@ -344,12 +344,21 @@ def apply_track_remux(
     current_user: dict = Depends(require_auth),
 ):
     from ...services.mkv_remux import apply_remux
+    overrides = None
+    if body.overrides:
+        overrides = {}
+        for raw_id, ov in body.overrides.items():
+            try:
+                overrides[int(raw_id)] = {"new_name": ov.new_name, "default_after": ov.default_after}
+            except (TypeError, ValueError):
+                continue
     with _get_conn() as conn:
         result = apply_remux(
             item_id,
             dry_run=body.dry_run,
             apply=body.apply,
             confirmation=body.confirmation,
+            overrides=overrides,
             conn=conn,
         )
     return result

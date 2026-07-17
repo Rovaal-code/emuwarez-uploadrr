@@ -384,6 +384,39 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None) -> 
     }
 
 
+def apply_track_overrides(plan: dict, overrides: dict[int, dict] | None) -> dict:
+    """Layer manual edits (from the upload wizard's editable table) on top of
+    an auto-computed plan — the user can override the proposed `new_name`
+    and/or `default_after` per track id. Pure function: returns a NEW plan,
+    doesn't mutate the input. Track order/grouping (video→audio→subs, language
+    priority) is never overridable — only the name and the default flag."""
+    if not overrides:
+        return plan
+
+    def _apply(t: dict) -> dict:
+        ov = overrides.get(t["id"])
+        if not ov:
+            return t
+        t = dict(t)
+        if ov.get("new_name") is not None and str(ov["new_name"]).strip():
+            t["new_name"] = str(ov["new_name"]).strip()
+        if ov.get("default_after") is not None and t["type"] != "video":
+            t["default_after"] = bool(ov["default_after"])
+        t["changed"] = (
+            plan["order_changed"]
+            or t.get("current_name") != t.get("new_name")
+            or t.get("default_before") != t.get("default_after")
+        )
+        return t
+
+    ordered_tracks = [_apply(t) for t in plan["ordered_tracks"]]
+    return {
+        **plan,
+        "ordered_tracks": ordered_tracks,
+        "any_changed": any(t["changed"] for t in ordered_tracks),
+    }
+
+
 def build_mkvmerge_args(output_path: str, source_path: str, plan: dict) -> list[str]:
     args: list[str] = ["mkvmerge", "-o", output_path]
     for t in plan["ordered_tracks"]:
@@ -482,12 +515,18 @@ def apply_remux(
     dry_run: bool = True,
     apply: bool = False,
     confirmation: str | None = None,
+    overrides: dict[int, dict] | None = None,
     conn=None,
 ) -> dict:
     """Apply or preview the track reorder/rename.
 
     Real execution requires: dry_run=False, apply=True,
     confirmation=REMUX_CONFIRMATION_TOKEN.
+
+    `overrides` (track id -> {new_name?, default_after?}) lets a caller (the
+    upload wizard's editable table) override the auto-computed name/default
+    per track — grouping and priority order are never overridable, only what
+    each track ends up called and whether it's marked default.
     """
     own = conn is None
     conn = conn or connect()
@@ -519,6 +558,7 @@ def apply_remux(
             return {**preview, "status": "blocked", "dry_run": False, "apply": False,
                      "errors": [f"mkvmerge -J falló: {read.get('error')}"]}
         plan = build_track_plan(read["data"], known_resolution=_get_known_resolution(library_item_id, conn))
+        plan = apply_track_overrides(plan, overrides)
 
         # Write to a temp file in the SAME directory (same filesystem — works
         # over SSHFS/NFS), then atomically replace the original.

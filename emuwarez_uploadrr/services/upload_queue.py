@@ -385,6 +385,22 @@ def _run_queued_job(job_id: int) -> None:
                 _fail(job_id, f"No se pudo aplicar la nomenclatura: {reason}")
                 return
 
+        # Best-effort: tell Radarr/Sonarr to rescan now, so its own DB picks
+        # up the new filename immediately instead of only at its next
+        # scheduled scan — otherwise a later "Sincronizar biblioteca" here
+        # just re-imports the same stale path Radarr/Sonarr still has on
+        # file. Never blocks the upload: logged either way, failure or not.
+        from .library import trigger_arr_rescan
+        rescan_result = trigger_arr_rescan(conn, item_id)
+        if rescan_result.get("ok"):
+            append_upload_log(job_id, "info", "Radarr/Sonarr avisado para que actualice la ficha.", stream="system", conn=conn)
+        else:
+            append_upload_log(
+                job_id, "warning",
+                f"No se pudo avisar a Radarr/Sonarr para que actualice la ficha: {rescan_result.get('message')}",
+                stream="system", conn=conn,
+            )
+
         # --- 3. Track remux (reorder + rename audio/subs), on the final path.
         _mark(job_id, stage="remux")
         append_upload_log(job_id, "info", "Reordenando/renombrando pistas…", stream="system", conn=conn)

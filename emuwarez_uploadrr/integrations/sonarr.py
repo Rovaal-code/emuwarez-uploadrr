@@ -31,6 +31,18 @@ def get_series(url: str, api_key: str) -> list[dict[str, Any]]:
     return data if isinstance(data, list) else []
 
 
+def rescan_series(url: str, api_key: str, series_id: int) -> dict[str, Any]:
+    """Ask Sonarr to rescan this series' folder right now — used right after
+    we rename/hardlink an episode file, so Sonarr's own DB picks up the new
+    filename immediately instead of waiting for its next scheduled scan
+    (otherwise a "Sincronizar biblioteca" here just re-imports the same
+    stale path Sonarr still has on file)."""
+    return request_json(
+        "POST", build_url(url, "/api/v3/command"), api_key=api_key,
+        data={"name": "RescanSeries", "seriesId": series_id},
+    )
+
+
 def get_episodes(url: str, api_key: str, series_id: int) -> list[dict[str, Any]]:
     data = request_json("GET", build_url(url, "/api/v3/episode", {"seriesId": series_id}), api_key=api_key)
     return data if isinstance(data, list) else []

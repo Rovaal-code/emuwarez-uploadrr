@@ -358,6 +358,49 @@ def test_sync_sonarr_partial_series_and_season(sonarr_conn):
     assert missing == 1
 
 
+def test_sync_sonarr_progress_total_counts_seasons(sonarr_conn):
+    """on_total() must count every level _bump()/on_progress() fires for —
+    series + seasons + episodes — or the live "done" counter runs past
+    "total" partway through a real sync (seasons were missing from the
+    total entirely before, since series["seasons"] is on the series
+    response Sonarr already returns, not a separate per-season fetch)."""
+    from emuwarez_uploadrr.services.library import sync_instance
+    from emuwarez_uploadrr.services.instances import list_instances
+    instance = list_instances(sonarr_conn)[0]
+
+    series_data = _fake_series(40, "Two Season Show", has_episodes=True)
+    series_data["seasons"] = [
+        {"seasonNumber": 1, "statistics": {"episodeCount": 2, "episodeFileCount": 2}},
+        {"seasonNumber": 2, "statistics": {"episodeCount": 1, "episodeFileCount": 1}},
+    ]
+    series_data["statistics"]["totalEpisodeCount"] = 3
+    episodes = [
+        {**_fake_episode(1, 40, has_file=True), "seasonNumber": 1},
+        {**_fake_episode(2, 40, has_file=True), "seasonNumber": 1},
+        {**_fake_episode(3, 40, has_file=True), "seasonNumber": 2},
+    ]
+    ep_files = [_fake_ep_file(1), _fake_ep_file(2), _fake_ep_file(3)]
+
+    totals: list[int] = []
+    done_values: list[int] = []
+
+    with (
+        patch("emuwarez_uploadrr.integrations.sonarr.get_series", return_value=[series_data]),
+        patch("emuwarez_uploadrr.integrations.sonarr.get_queue", return_value=[]),
+        patch("emuwarez_uploadrr.integrations.sonarr.get_episodes", return_value=episodes),
+        patch("emuwarez_uploadrr.integrations.sonarr.get_episode_files", return_value=ep_files),
+    ):
+        imported, _missing = sync_instance(
+            sonarr_conn, instance, include_episodes=True,
+            on_total=totals.append, on_progress=done_values.append,
+        )
+
+    # 1 series + 2 seasons + 3 episodes.
+    assert imported == 6
+    assert totals == [6]
+    assert max(done_values) <= totals[0]
+
+
 # ---------------------------------------------------------------------------
 # Dashboard summary
 # ---------------------------------------------------------------------------

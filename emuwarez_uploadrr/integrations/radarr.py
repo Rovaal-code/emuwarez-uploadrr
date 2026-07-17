@@ -26,6 +26,18 @@ def get_root_folders(url: str, api_key: str) -> list[dict[str, Any]]:
     return data if isinstance(data, list) else []
 
 
+def rescan_movie(url: str, api_key: str, movie_id: int) -> dict[str, Any]:
+    """Ask Radarr to rescan this movie's folder right now — used right after
+    we rename/hardlink its file, so Radarr's own DB picks up the new
+    filename immediately instead of waiting for its next scheduled scan
+    (otherwise a "Sincronizar biblioteca" here just re-imports the same
+    stale path Radarr still has on file)."""
+    return request_json(
+        "POST", build_url(url, "/api/v3/command"), api_key=api_key,
+        data={"name": "RescanMovie", "movieIds": [movie_id]},
+    )
+
+
 def get_movies(url: str, api_key: str) -> list[dict[str, Any]]:
     data = request_json("GET", build_url(url, "/api/v3/movie"), api_key=api_key)
     return data if isinstance(data, list) else []

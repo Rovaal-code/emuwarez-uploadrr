@@ -136,8 +136,17 @@ def sync_instance(
         ep_queue = sonarr.build_episode_queue_map(queue_records)
         series_list = list(sonarr.get_series(instance.url, instance.api_key))
         if on_total:
-            # One row per series + all their episodes (from Sonarr's stats).
-            total = len(series_list)
+            # One row per series + one per season + all their episodes (from
+            # Sonarr's own stats) — _bump() below fires once for EACH of
+            # these three levels, so all three must be counted here or
+            # "done" runs past "total" partway through (seasons were
+            # missing from this count entirely before). series["seasons"]
+            # is already present on each series from get_series() above, no
+            # extra request needed. totalEpisodeCount is Sonarr's own cached
+            # stat and can drift slightly from the episode list fetched
+            # per-series below — an occasional few-off "total" from that is
+            # expected and self-corrects next sync, unlike the season gap.
+            total = len(series_list) + sum(len(s.get("seasons") or []) for s in series_list)
             if include_episodes:
                 total += sum(int((s.get("statistics") or {}).get("totalEpisodeCount") or 0) for s in series_list)
             on_total(total)
@@ -489,6 +498,51 @@ def count_library(
 def get_library_item(conn: sqlite3.Connection, item_id: int) -> Optional[dict]:
     row = conn.execute("SELECT * FROM library_items WHERE id = ?", (item_id,)).fetchone()
     return dict(row) if row else None
+
+
+def trigger_arr_rescan(conn: sqlite3.Connection, item_id: int) -> dict:
+    """Ask Radarr/Sonarr to rescan the movie/series this item belongs to,
+    right after we've renamed/hardlinked its file — otherwise Radarr/
+    Sonarr's own DB keeps the stale filename until ITS next scheduled scan,
+    and a "Sincronizar biblioteca" here would just re-import that same
+    stale path. Best-effort: never raises, so it can't block or fail an
+    upload — only logs a warning on failure."""
+    try:
+        item = get_library_item(conn, item_id)
+        if not item:
+            return {"ok": False, "message": "Item no encontrado."}
+        # Walk up to the movie/series row — Radarr/Sonarr's rescan command
+        # targets that level, a season/episode has no rescan of its own.
+        top = item
+        seen: set[int] = set()
+        while top and top.get("item_type") not in ("movie", "series") and top.get("parent_id"):
+            if top["id"] in seen:
+                break
+            seen.add(top["id"])
+            top = get_library_item(conn, top["parent_id"])
+        if not top or top.get("item_type") not in ("movie", "series"):
+            return {"ok": False, "message": "No se encontró la película/serie asociada."}
+
+        instance_id = top.get("instance_id")
+        external_id = top.get("external_id")
+        if not instance_id or not external_id:
+            return {"ok": False, "message": "El elemento no tiene instancia/ID externo de Radarr/Sonarr."}
+
+        from .instances import get_instance
+        instance = get_instance(conn, int(instance_id))
+        if not instance:
+            return {"ok": False, "message": "Instancia no encontrada."}
+
+        if top["item_type"] == "movie":
+            from ..integrations import radarr
+            radarr.rescan_movie(instance.url, instance.api_key, int(external_id))
+        else:
+            from ..integrations import sonarr
+            sonarr.rescan_series(instance.url, instance.api_key, int(external_id))
+        return {"ok": True}
+    except Exception as exc:
+        logger.warning("No se pudo pedir el rescan de Radarr/Sonarr para el item %s: %s", item_id, exc)
+        return {"ok": False, "message": str(exc)}
 
 
 def list_missing(conn: sqlite3.Connection, *, limit: int = 50, offset: int = 0) -> list[dict]:

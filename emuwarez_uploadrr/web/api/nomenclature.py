@@ -23,6 +23,7 @@ from ..schemas import (
     NomenclatureFieldsSaveBody,
     NomenclaturePreviewBody,
     NomenclatureProposalResponse,
+    TrackRemuxApplyBody,
 )
 
 router = APIRouter(tags=["nomenclature"])
@@ -319,6 +320,32 @@ def apply_mkv_title(
 ):
     with _get_conn() as conn:
         result = apply_internal_title_update(
+            item_id,
+            dry_run=body.dry_run,
+            apply=body.apply,
+            confirmation=body.confirmation,
+            conn=conn,
+        )
+    return result
+
+
+@router.get("/library/{item_id}/track-remux/preview")
+def preview_track_remux(item_id: int, current_user: dict = Depends(require_auth)):
+    from ...services.mkv_remux import build_remux_plan
+    with _get_conn() as conn:
+        result = build_remux_plan(item_id, conn=conn)
+    return result
+
+
+@router.post("/library/{item_id}/track-remux/apply")
+def apply_track_remux(
+    item_id: int,
+    body: TrackRemuxApplyBody,
+    current_user: dict = Depends(require_auth),
+):
+    from ...services.mkv_remux import apply_remux
+    with _get_conn() as conn:
+        result = apply_remux(
             item_id,
             dry_run=body.dry_run,
             apply=body.apply,

@@ -12,6 +12,7 @@ import { ExternalIdLink } from './ExternalIdLink'
 import { ProviderTag } from './ProviderIcon'
 import { ServiceLabel } from './ServiceIcon'
 import { NomenclatureCheckButton } from './NomenclatureCheckButton'
+import { TrackRemuxButton } from './TrackRemuxButton'
 import { InfoIcon } from './InfoIcon'
 
 // Full dedicated detail page (Radarr/Sonarr-style) — replaces the old small
@@ -112,6 +113,13 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
 
           <div style={{ display: 'flex', gap: 8, margin: '20px 0', flexWrap: 'wrap' }}>
             <LibraryActionButtons item={item} onAction={onAction} title={isRollup ? 'Ver season pack' : undefined} />
+            <TrackRemuxButton
+              item={item}
+              onApplied={async () => {
+                const updated = await getLibraryItem(item.id).catch(() => null)
+                if (updated) onSelect(updated)
+              }}
+            />
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '16px 28px' }}>

@@ -820,6 +820,22 @@ def _migrate_tmdb_title_cache(conn: sqlite3.Connection) -> None:
     """)
 
 
+def _migrate_library_items_track_remux(conn: sqlite3.Connection) -> None:
+    """Track reorder/rename via mkvmerge (Phase 12A) — status of the last
+    remux applied to this item's file, so the UI can show a badge without
+    re-running mkvmerge -J on every page load. Purely additive."""
+    new_cols = [
+        ("track_remux_status", "TEXT"),        # 'aplicado' | 'error' | NULL
+        ("track_remux_applied_at", "TEXT"),
+        ("track_remux_error", "TEXT"),
+    ]
+    for col, col_type in new_cols:
+        try:
+            conn.execute(f"ALTER TABLE library_items ADD COLUMN {col} {col_type}")
+        except sqlite3.OperationalError:
+            pass
+
+
 def _migrate_emu_catalog(conn: sqlite3.Connection) -> None:
     """eMuwarez torrent catalog index (populated by the on-demand eMuwarez
     sync) + the per-library-item comparison result. Purely additive."""
@@ -1183,6 +1199,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_notifications_table(conn)
         _migrate_emu_catalog(conn)
         _migrate_tmdb_title_cache(conn)
+        _migrate_library_items_track_remux(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

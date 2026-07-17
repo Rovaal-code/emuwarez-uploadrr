@@ -1139,6 +1139,12 @@ class MkvTitleApplyBody(BaseModel):
     confirmation: Optional[str] = None
 
 
+class TrackRemuxApplyBody(BaseModel):
+    dry_run: bool = True
+    apply: bool = False
+    confirmation: Optional[str] = None
+
+
 # ---------------------------------------------------------------------------
 # Phase 10C — External API connection tests
 # ---------------------------------------------------------------------------

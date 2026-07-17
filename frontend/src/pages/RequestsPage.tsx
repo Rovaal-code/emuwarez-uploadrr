@@ -621,6 +621,9 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                     <th><HeaderFilter label="Tipo" value={categoryFilter} onChange={setCategoryFilter} options={[
                       { value: '', label: 'Todos' }, ...facets.categories.map(c => ({ value: c, label: c })),
                     ]} /></th>
+                    <th><HeaderFilter label="Compatibilidad" value={statusFilter} onChange={setStatusFilter} options={[
+                      { value: '', label: 'Todas' }, ...COMPATIBILITY_STATUSES.filter(s => s.value).map(s => ({ value: s.value, label: s.label })),
+                    ]} /></th>
                     <th><HeaderFilter label="Autor" value={authorFilter} onChange={setAuthorFilter} options={[
                       { value: '', label: 'Todos' }, ...facets.authors.map(a => ({ value: a, label: a })),
                     ]} /></th>
@@ -634,9 +637,6 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                     <th title="Comentarios" style={{ textAlign: 'center' }}><CommentsIcon /></th>
                     <th title="Puntos / recompensa" style={{ textAlign: 'center' }}><PointsIcon /></th>
                     <th>Creada</th>
-                    <th><HeaderFilter label="Compatibilidad" value={statusFilter} onChange={setStatusFilter} options={[
-                      { value: '', label: 'Todas' }, ...COMPATIBILITY_STATUSES.filter(s => s.value).map(s => ({ value: s.value, label: s.label })),
-                    ]} /></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -665,6 +665,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                           </div>
                         </td>
                         <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{tipoOf(item.category).label}</td>
+                        <td><CompatibilityBadge status={item.compatibility_status} /></td>
                         <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}><AuthorCell author={item.author} isMine={item.is_mine} /></td>
                         <td>{item.requested_resolution || '—'}</td>
                         <td>{item.requested_source || '—'}</td>
@@ -672,7 +673,6 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                         <td style={{ textAlign: 'center', fontSize: 12 }}>{item.comments ?? 0}</td>
                         <td style={{ textAlign: 'center', fontSize: 12, whiteSpace: 'nowrap' }}>{fmtNum(item.points)}</td>
                         <td style={{ fontSize: 12, whiteSpace: 'nowrap', color: 'var(--text-secondary)' }} title={item.created_at ? formatDate(item.created_at) : ''}>{timeAgo(item.created_at)}</td>
-                        <td><CompatibilityBadge status={item.compatibility_status} /></td>
                       </tr>
                     )
                   })}

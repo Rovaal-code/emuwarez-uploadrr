@@ -10,7 +10,7 @@ import {
   previewTrackRemux,
   applyTrackRemux,
 } from '../api/nomenclature'
-import { uploadPreflight, startUploadJob, runUploadChecks, type UploadChecksResult } from '../api/uploads'
+import { uploadPreflight, startUploadJob, runUploadChecks, getUploadChecksProgress, type UploadChecksResult, type UploadCheck } from '../api/uploads'
 import { getLibrary, getMediaInfoReport, suggestProvider } from '../api/library'
 import type { MediaInfoReport } from '../api/library'
 import type { LibraryItemResponse } from '../types/api'
@@ -58,6 +58,22 @@ function TableLoadingSpinner({ label = 'Cargando…' }: { label?: string }) {
     <div style={{ padding: '28px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
       <span className="spinner" style={{ width: 24, height: 24, borderWidth: 3 }} />
       <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{label}</span>
+    </div>
+  )
+}
+
+// One check's icon + label + message — shared between the progressive
+// single-row reveal (while the run is in flight) and the final full list.
+function CheckRow({ c }: { c: UploadCheck }) {
+  return (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', padding: '3px 0' }}>
+      <span style={{ color: c.status === 'ok' ? '#22c55e' : c.status === 'skip' ? '#f59e0b' : '#ef4444', fontWeight: 700 }}>
+        {c.status === 'ok' ? '🟢' : c.status === 'skip' ? '🟡' : '🔴'}
+      </span>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 13 }}>{c.label}</div>
+        {c.message && <div style={{ fontSize: 11, color: 'var(--text-muted)', wordBreak: 'break-all' }}>{c.message}</div>}
+      </div>
     </div>
   )
 }
@@ -152,13 +168,28 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
   const [uploadMsg, setUploadMsg] = useState<string | null>(null)
   const [checks, setChecks] = useState<UploadChecksResult | null>(null)
   const [checksLoading, setChecksLoading] = useState(false)
+  // Checks landing one at a time while the run (POST, ~30s of real network
+  // calls) is in flight — polled separately so the UI can reveal each one as
+  // it actually completes instead of sitting on a static spinner.
+  const [liveChecks, setLiveChecks] = useState<UploadCheck[]>([])
 
   const runChecks = useCallback(async () => {
     if (targetId == null) return
     setChecksLoading(true)
+    setLiveChecks([])
+    const poll = window.setInterval(async () => {
+      try {
+        const p = await getUploadChecksProgress(targetId)
+        setLiveChecks(p.checks)
+      } catch { /* transient poll failure — next tick retries */ }
+    }, 400)
     try { setChecks(await runUploadChecks(targetId)) }
     catch { setChecks(null) }
-    finally { setChecksLoading(false) }
+    finally {
+      window.clearInterval(poll)
+      setChecksLoading(false)
+      setLiveChecks([])
+    }
   }, [targetId])
 
   // --- Step 0: load seasons (series) or episodes (season) ---
@@ -738,18 +769,16 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
                 <div style={labelStyle}>Comprobaciones previas</div>
                 {checksLoading && <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />}
               </div>
-              {checks?.checks.map(c => (
-                <div key={c.id} style={{ display: 'flex', gap: 8, alignItems: 'baseline', padding: '3px 0' }}>
-                  <span style={{ color: c.status === 'ok' ? '#22c55e' : c.status === 'skip' ? '#f59e0b' : '#ef4444', fontWeight: 700 }}>
-                    {c.status === 'ok' ? '🟢' : c.status === 'skip' ? '🟡' : '🔴'}
-                  </span>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 13 }}>{c.label}</div>
-                    {c.message && <div style={{ fontSize: 11, color: 'var(--text-muted)', wordBreak: 'break-all' }}>{c.message}</div>}
-                  </div>
-                </div>
-              ))}
-              {checksLoading && !checks && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Comprobando…</div>}
+              {checksLoading ? (
+                // Progressive reveal: one line that replaces itself with the
+                // latest check as each one actually completes, instead of a
+                // silent wait — the full run is real network calls (~30s).
+                liveChecks.length > 0
+                  ? <CheckRow key={liveChecks[liveChecks.length - 1].id} c={liveChecks[liveChecks.length - 1]} />
+                  : <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Comprobando…</div>
+              ) : (
+                checks?.checks.map(c => <CheckRow key={c.id} c={c} />)
+              )}
               {!checksLoading && checks && (
                 <div style={{ marginTop: 10, fontWeight: 600, color: checks.ready ? '#22c55e' : '#ef4444' }}>
                   {checks.ready ? '✓ Todo listo para subir' : '✗ La subida no se puede realizar'}

@@ -9,7 +9,27 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import threading
 from typing import Optional
+
+# Live progress of a running checks call, so the UI can reveal each check as
+# it completes (some — qBittorrent, image hosts, eMuwarez — are real network
+# calls; the whole sequence has been observed taking ~30s) instead of showing
+# nothing until the whole POST resolves. Keyed by item_id: only one checks run
+# per item makes sense at a time. Single-process app → an in-memory dict is
+# enough, same pattern as services/library.py's sync progress.
+_CHECKS_LOCK = threading.Lock()
+_CHECKS_PROGRESS: dict[int, dict] = {}
+
+
+def get_checks_progress(item_id: int) -> dict:
+    with _CHECKS_LOCK:
+        return dict(_CHECKS_PROGRESS.get(item_id, {"checks": [], "done": False, "ready": False}))
+
+
+def _set_checks_progress(item_id: int, *, checks: list[dict], done: bool = False, ready: bool = False) -> None:
+    with _CHECKS_LOCK:
+        _CHECKS_PROGRESS[item_id] = {"checks": list(checks), "done": done, "ready": ready}
 
 
 def _test_hardlink(path: str, hardlink_base: Optional[str]) -> tuple[bool, str]:
@@ -104,23 +124,30 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int) -> dict:
     from ..database import get_setting_canonical
 
     checks: list[dict] = []
+    _set_checks_progress(item_id, checks=[])  # reset — a previous run's leftovers shouldn't leak in
 
     # The label states the outcome: the positive phrase when the check passes,
     # the negative one when it fails (e.g. "Contenido accesible" / "Contenido no
-    # accesible").
+    # accesible"). Published to _CHECKS_PROGRESS immediately after each one, so
+    # a concurrent poller sees checks land one at a time as they actually
+    # complete (some — qBittorrent/image hosts/eMuwarez — are real network
+    # calls, not instant).
     def add(cid: str, ok_label: str, fail_label: str, ok: bool, message: str = "") -> bool:
         checks.append({"id": cid, "label": ok_label if ok else fail_label,
                        "status": "ok" if ok else "fail", "message": message})
+        _set_checks_progress(item_id, checks=checks)
         return ok
 
     # A skipped check (yellow): an optional integration that isn't configured, so
     # it's not blocking — the upload can still go ahead.
     def add_skip(cid: str, label: str, message: str = "") -> None:
         checks.append({"id": cid, "label": label, "status": "skip", "message": message})
+        _set_checks_progress(item_id, checks=checks)
 
     def done() -> dict:
         # Skips don't block: only a real failure (red) does.
         ready = bool(checks) and all(c["status"] in ("ok", "skip") for c in checks) and checks[-1]["id"] == "emuwarez"
+        _set_checks_progress(item_id, checks=checks, done=True, ready=ready)
         return {"checks": checks, "ready": ready}
 
     item = get_library_item(conn, item_id)

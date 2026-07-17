@@ -71,3 +71,15 @@ export interface UploadChecksResult {
 export async function runUploadChecks(itemId: number): Promise<UploadChecksResult> {
   return api.post<UploadChecksResult>(`/library/${itemId}/upload/checks`, {})
 }
+
+export interface UploadChecksProgress {
+  checks: UploadCheck[]
+  done: boolean
+  ready: boolean
+}
+
+// Poll this WHILE runUploadChecks() is in flight to see each check land as it
+// actually completes (the full run is ~30s of real network calls).
+export async function getUploadChecksProgress(itemId: number): Promise<UploadChecksProgress> {
+  return api.get<UploadChecksProgress>(`/library/${itemId}/upload/checks/progress`)
+}

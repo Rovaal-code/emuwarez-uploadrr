@@ -182,10 +182,24 @@ def upload_checks(
     current_user: dict = Depends(require_auth),
 ) -> dict:
     """Run the pre-upload checks (fail-fast, eMuwarez last) for the 'Subida a
-    eMuwarez' step. Returns each check's result + a `ready` flag."""
+    eMuwarez' step. Returns each check's result + a `ready` flag. Can take
+    ~30s (real network calls) — poll GET .../checks/progress concurrently to
+    show each check landing as it completes instead of a static wait."""
     from emuwarez_uploadrr.services.upload_checks import run_upload_checks
     with _get_conn() as conn:
         return run_upload_checks(conn, item_id)
+
+
+@router.get("/library/{item_id}/upload/checks/progress")
+def upload_checks_progress(
+    item_id: int,
+    current_user: dict = Depends(require_auth),
+) -> dict:
+    """Live progress of a checks run in flight for this item — {checks, done,
+    ready}, `checks` growing one at a time. Meant to be polled while the
+    POST above is running; returns the empty/initial shape if none is running."""
+    from emuwarez_uploadrr.services.upload_checks import get_checks_progress
+    return get_checks_progress(item_id)
 
 
 @router.get("/uploads", response_model=list[UploadJobDetail])

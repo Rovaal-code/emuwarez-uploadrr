@@ -362,7 +362,11 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None) -> 
 
     for t in subs_sorted:
         lang_name = lang_display_name(t["language"], ietf_by_id.get(t["id"]), t["current_name"])
-        t["new_name"] = f"{lang_name} (Forzado)" if t["forced"] else lang_name
+        # Same "{Idioma} - {Cualificador}" format as audio's "{Idioma} - {Códec}
+        # {Canales}" — consistent separator across track types, whatever the
+        # qualifier ends up being (Forzado today; Full/SDH etc. would follow
+        # the same pattern if ever added).
+        t["new_name"] = f"{lang_name} - Forzado" if t["forced"] else lang_name
         t["default_after"] = t["forced"]  # forced subs stay auto-shown; the rest don't
 
     ordered_tracks = video + audio_sorted + subs_sorted

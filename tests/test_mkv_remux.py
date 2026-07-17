@@ -99,7 +99,7 @@ def test_build_track_plan_names_are_professional():
     assert by_id[2]["new_name"] == "Español (Castellano) - DD 5.1"
     assert by_id[5]["new_name"] == "Català - DD 2.0"
     assert by_id[1]["new_name"] == "Inglés - DD+ 5.1"
-    assert by_id[4]["new_name"] == "Español (Castellano) (Forzado)"
+    assert by_id[4]["new_name"] == "Español (Castellano) - Forzado"
     assert by_id[3]["new_name"] == "Inglés"
 
 

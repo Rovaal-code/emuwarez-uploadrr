@@ -59,21 +59,35 @@ def _build_proposed_filename(
     season: int | None = None,
     episode: int | None = None,
     provider: str | None = None,
+    dynamic_range: str | None = None,
 ) -> str:
+    from .emu_format import format_resolution, format_hdr
+    from .source_assistant import _build_source_string
+
     parts = [_normalize_title_for_emu(title)]
-    if year:
-        parts.append(str(year))
-    if media_type in ("tv", "series", "anime") and season is not None:
+    # SxxExx comes right after the title, BEFORE the year — matches
+    # source_assistant.py's update_nomenclature_fields_preview() (the
+    # wizard's own live preview), which the two must stay in sync with.
+    if media_type in ("tv", "series", "anime", "season", "episode") and season is not None:
         season_str = f"S{season:02d}"
         if episode is not None:
             season_str += f"E{episode:02d}"
         parts.append(season_str)
+    if year:
+        parts.append(str(year))
     if resolution:
-        parts.append(resolution)
-    if source:
-        parts.append(source)
-    if provider:
-        parts.append(provider)
+        # eMuwarez suffixes 4K/8K with UHD/FUHD ("2160p UHD"), not just "2160p".
+        parts.append(format_resolution(resolution) or resolution)
+    # Provider (AMZN/NF/DSNP...) attaches to Source, in front of it — "AMZN
+    # WEB-DL", never after — matching the eMuwarez nomenclature guide. Reuses
+    # source_assistant's own combiner so the two never drift apart again.
+    source_str = _build_source_string(source, provider)
+    if source_str:
+        parts.append(source_str)
+    # HDR/Dolby Vision goes right before the video codec.
+    hdr = format_hdr(dynamic_range) if dynamic_range else None
+    if hdr:
+        parts.append(hdr)
     if video_codec:
         parts.append(video_codec)
     if audio_summary:
@@ -256,6 +270,23 @@ def build_nomenclature_proposal(item_id: int, *, force_refresh: bool = False, co
         imdb_id = item.get("imdb_id")
         path = item.get("path")
 
+        # For episodes/seasons the eMuwarez title must be the SERIES name
+        # (not the per-episode title Sonarr stores, e.g. "Serie S01E01 -
+        # Nombre del capítulo") — same resolution
+        # build_editable_nomenclature_fields() (the wizard's live preview)
+        # already does; without this the REAL applied name diverged from
+        # what the wizard showed and the user approved.
+        if media_type in ("season", "episode"):
+            from .source_assistant import _resolve_series_row
+            srow = _resolve_series_row(item, conn)
+            if srow:
+                title = srow.get("title") or title
+                tmdb_id = srow.get("tmdb_id") or tmdb_id
+        from .tmdb_titles import resolve_localized_title
+        title, _title_warning = resolve_localized_title(conn, media_type, tmdb_id, title)
+        if _title_warning:
+            warnings.append(_title_warning)
+
         resolution = _infer_resolution_from_item(item)
         source = _infer_source_from_item(item)
         release_tag = _get_release_tag(conn=conn)
@@ -265,9 +296,11 @@ def build_nomenclature_proposal(item_id: int, *, force_refresh: bool = False, co
 
         # Phase 6A: real values parsed from Radarr/Sonarr's own movieFile/
         # episodeFile mediaInfo at sync time (integrations/base.py::
-        # extract_media_info), not a guess against the quality profile NAME.
-        # Falls back to the old substring guess only for rows synced before
-        # this column existed (video_codec is NULL, not just falsy-empty).
+        # extract_media_info), not a guess against the quality profile NAME —
+        # the starting point/fallback. Real MediaInfo of the actual file
+        # (below) wins when it's reachable, since it has proper per-track
+        # codec labels and the DUAL/MULTI-aware audio summary the eMuwarez
+        # guide expects — Radarr/Sonarr's own columns are coarser.
         video_codec = item.get("video_codec")
         if video_codec is None:
             quality = item.get("quality") or ""
@@ -282,6 +315,26 @@ def build_nomenclature_proposal(item_id: int, *, force_refresh: bool = False, co
         audio_languages = item.get("audio_languages")
         audio_summary = " ".join(p for p in (audio_codec, audio_languages) if p) or None
         subtitle_summary = item.get("subtitle_languages")
+        dynamic_range = item.get("dynamic_range")
+
+        # Real MediaInfo read of the actual file (cached per file by mtime+
+        # size, so repeat calls for the same unchanged file are instant) —
+        # same source build_editable_nomenclature_fields() uses. Best-effort:
+        # any failure just keeps the Radarr/Sonarr-derived values above.
+        if path:
+            from .path_mapping import resolve_local_path
+            from .media_info_service import build_mediainfo_report
+            local_path = resolve_local_path(path, conn=conn) or path
+            mi_report = build_mediainfo_report(local_path)
+            if mi_report.get("available"):
+                emu_by_field = {
+                    r["field"]: (None if r["emu"] in (None, "—", "") else r["emu"])
+                    for r in mi_report.get("rows", [])
+                }
+                video_codec = emu_by_field.get("Códec de vídeo") or video_codec
+                audio_summary = mi_report.get("audio_summary") or audio_summary
+                subtitle_summary = emu_by_field.get("Subtítulos") or subtitle_summary
+                dynamic_range = emu_by_field.get("HDR/DV") or dynamic_range
 
         # Phase 6E — provider (AMZN/NF/DSNP...) already present in the
         # current filename, kept in the proposal instead of silently
@@ -300,6 +353,9 @@ def build_nomenclature_proposal(item_id: int, *, force_refresh: bool = False, co
             release_tag=release_tag,
             media_type=media_type,
             provider=provider,
+            season=item.get("season_number"),
+            episode=item.get("episode_number"),
+            dynamic_range=dynamic_range,
         )
         # File name (and folder) use the cleaned, accent-free, dotted form.
         from .mkv_title import to_filesystem_name

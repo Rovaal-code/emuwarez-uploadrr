@@ -140,8 +140,32 @@ def test_build_track_plan_default_flags():
     assert by_id[2]["default_after"] is True    # first audio (Spanish)
     assert by_id[5]["default_after"] is False
     assert by_id[1]["default_after"] is False
-    assert by_id[4]["default_after"] is True    # forced subtitle stays default
+    assert by_id[4]["default_after"] is True    # Español (Castellano), also happens to be forced
     assert by_id[3]["default_after"] is False
+
+
+def test_build_track_plan_subtitle_default_follows_language_priority_not_forced_flag():
+    """Subtitle default_after must follow the SAME Español Castellano ->
+    Català -> Inglés priority as audio — NOT the "forced" flag. A forced
+    track in a lower-priority language must NOT become default just because
+    it's forced; a non-forced Castellano track must."""
+    from emuwarez_uploadrr.services.mkv_remux import build_track_plan
+    mkv_json = {
+        "tracks": [
+            {"id": 0, "type": "video", "codec": "AVC/H.264/MPEG-4p10",
+             "properties": {"pixel_dimensions": "1920x1080"}},
+            {"id": 1, "type": "audio", "codec": "AC-3", "properties": {"language": "spa", "audio_channels": 6}},
+            # Forced, but English (lowest priority) — must NOT win default.
+            {"id": 2, "type": "subtitles", "codec": "SubRip/SRT",
+             "properties": {"language": "eng", "forced_track": True}},
+            # Not forced, but Castellano (highest priority) — must win default.
+            {"id": 3, "type": "subtitles", "codec": "SubRip/SRT", "properties": {"language": "spa"}},
+        ]
+    }
+    plan = build_track_plan(mkv_json)
+    by_id = {t["id"]: t for t in plan["ordered_tracks"]}
+    assert by_id[3]["default_after"] is True    # Español (Castellano), not forced
+    assert by_id[2]["default_after"] is False   # Inglés, forced — still not default
 
 
 def test_apply_track_overrides_name_and_default():

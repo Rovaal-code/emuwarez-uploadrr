@@ -445,6 +445,17 @@ def _migrate_upload_jobs_phase6d(conn: sqlite3.Connection) -> None:
     """)
 
 
+def _migrate_upload_jobs_queue(conn: sqlite3.Connection) -> None:
+    """Add queued_until to upload_jobs — the queued (grace-period) job created
+    the instant the user clicks "Subir a eMuwarez" carries this so the UI can
+    show a countdown and a Cancel button before the server actually starts
+    renaming/remuxing/uploading."""
+    try:
+        conn.execute("ALTER TABLE upload_jobs ADD COLUMN queued_until TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+
 def _migrate_requests(conn: sqlite3.Connection) -> None:
     """Add Phase 5B columns to request_items and request_matches."""
     for col, col_def in [
@@ -1200,6 +1211,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_emu_catalog(conn)
         _migrate_tmdb_title_cache(conn)
         _migrate_library_items_track_remux(conn)
+        _migrate_upload_jobs_queue(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

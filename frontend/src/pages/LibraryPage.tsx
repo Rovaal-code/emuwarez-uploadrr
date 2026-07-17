@@ -81,7 +81,7 @@ function PosterCard({ item, instances, onClick }: { item: LibraryItemResponse; i
   )
 }
 
-export function LibraryPage() {
+export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => void } = {}) {
   const [data, setData] = useState<LibraryListResponse | null>(null)
   const [loading, setLoading] = useState(true)
   // Applying a Provider/Calidad filter fetches every level (up to LOAD_LIMIT)
@@ -244,7 +244,7 @@ export function LibraryPage() {
         <UploadPreflightModal itemId={uploadItem.id} itemTitle={uploadItem.title} onClose={() => setUploadItem(null)} />
       )}
       {wizardItem && (
-        <UploadWizardModal item={wizardItem} onClose={() => setWizardItem(null)} onDone={() => { load() }} />
+        <UploadWizardModal item={wizardItem} onClose={() => setWizardItem(null)} onDone={() => { load() }} onNavigate={onNavigate} />
       )}
       {requestItem && (
         <RequestFormModal item={requestItem} onClose={() => setRequestItem(null)} />

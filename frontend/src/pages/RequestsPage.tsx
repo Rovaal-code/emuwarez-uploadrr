@@ -706,6 +706,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
           preselect={wizardPreselect}
           onClose={() => setWizardItem(null)}
           onDone={() => { setWizardItem(null); loadItems(offset) }}
+          onNavigate={onNavigate}
         />
       )}
     </div>

@@ -19,6 +19,7 @@ const STATUS_CLASS: Record<string, string> = {
   blocked: 'badge req-not-compatible',
   draft: 'badge req-unknown',
   queued: 'badge req-partial',
+  preparing: 'badge req-partial',
   running: 'badge req-filled',
   completed: 'badge req-compatible',
   failed: 'badge req-not-compatible',
@@ -32,6 +33,7 @@ const STATUS_LABEL: Record<string, string> = {
   blocked: 'Bloqueado',
   draft: 'Borrador',
   queued: 'En cola',
+  preparing: 'Preparando',
   running: 'Subiendo',
   completed: 'Completado',
   failed: 'Fallido',
@@ -46,6 +48,9 @@ function statusLabel(status: string): string {
 const PHASE_LABEL: Record<string, string> = {
   preflight: 'Verificando (preflight)',
   queued: 'En cola',
+  integrity: 'Comprobando integridad del archivo',
+  nomenclature: 'Aplicando nomenclatura',
+  remux: 'Reordenando/renombrando pistas',
   config_staging: 'Preparando configuración',
   running: 'Subiendo a eMuwarez',
   finalizing: 'Finalizando',
@@ -69,9 +74,28 @@ function formatElapsed(job: UploadJob): string {
   return '–'
 }
 
+// Seconds left in the cancel-if-you-regret-it grace period, or null once it's
+// not applicable (job isn't queued, or has no deadline). Ticks down live via
+// useTicker() below — computed from wall-clock time, not server polling.
+function queuedSecondsLeft(job: UploadJob): number | null {
+  if (job.status !== 'queued' || !job.queued_until) return null
+  return Math.max(0, Math.round((new Date(job.queued_until).getTime() - Date.now()) / 1000))
+}
+
+// Forces a re-render every `intervalMs` while `active` — used to keep the
+// queued countdown ticking without depending on the next server poll.
+function useTicker(active: boolean, intervalMs = 1000) {
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    if (!active) return
+    const t = setInterval(() => setTick(n => n + 1), intervalMs)
+    return () => clearInterval(t)
+  }, [active, intervalMs])
+}
+
 // Only real upload states — a job now only exists once the user uploads, so
 // the preparatory "ready"/"blocked" states no longer appear here.
-const STATUS_OPTIONS = ['', 'running', 'completed', 'failed', 'cancelled', 'queued']
+const STATUS_OPTIONS = ['', 'queued', 'preparing', 'running', 'completed', 'failed', 'cancelled']
 // Preparatory states never represent a real upload — hide any stale leftovers.
 const HIDDEN_STATES = new Set(['draft', 'preflight', 'blocked', 'ready', 'config_staging'])
 
@@ -140,8 +164,13 @@ function JobProgressPanel({ job, onClose, onStart, onRetry, onCancel, onArtifact
 }) {
   const jobId = job.id!
   const isRunning = job.status === 'running'
+  const isQueued = job.status === 'queued'
+  const isPreparing = job.status === 'preparing'
+  const canCancel = isRunning || isQueued
   const [logs, setLogs] = useState<UploadJobLog[]>([])
   const [loadingLogs, setLoadingLogs] = useState(true)
+  useTicker(isQueued)
+  const secondsLeft = queuedSecondsLeft(job)
 
   const loadLogs = async () => {
     try {
@@ -152,11 +181,11 @@ function JobProgressPanel({ job, onClose, onStart, onRetry, onCancel, onArtifact
   }
   useEffect(() => { loadLogs(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [jobId])
   useEffect(() => {
-    if (!isRunning) return
+    if (!isRunning && !isPreparing) return
     const t = setInterval(loadLogs, 2000)
     return () => clearInterval(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobId, isRunning])
+  }, [jobId, isRunning, isPreparing])
 
   const lastLog = logs.length ? logs[logs.length - 1] : null
   const tail = logs.slice(-40)
@@ -182,7 +211,9 @@ function JobProgressPanel({ job, onClose, onStart, onRetry, onCancel, onArtifact
         <div className="modal-body">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '12px 20px', marginBottom: 16 }}>
             {fact('Fase actual', phaseLabel(job.progress_phase))}
-            {fact('Tiempo', formatElapsed(job))}
+            {isQueued
+              ? fact('Empieza en', secondsLeft != null ? `${secondsLeft}s` : '–')
+              : fact('Tiempo', formatElapsed(job))}
             {fact('Reintentos', (job.retry_count ?? 0) > 0 ? `x${job.retry_count}` : '–')}
             {fact('Runtime', job.runtime_type || '–')}
             {fact('Exit code', job.exit_code != null ? job.exit_code : '–')}
@@ -190,6 +221,12 @@ function JobProgressPanel({ job, onClose, onStart, onRetry, onCancel, onArtifact
               ? <a href={job.result_url} target="_blank" rel="noopener noreferrer" style={{ color: '#4ade80' }}>Ver en eMuwarez ↗</a>
               : job.result_torrent_id ? `ID: ${job.result_torrent_id}` : '–')}
           </div>
+
+          {isQueued && (
+            <div style={{ padding: '8px 12px', background: 'rgba(148,163,184,0.1)', border: '1px solid rgba(148,163,184,0.3)', borderRadius: 6, fontSize: 12.5, marginBottom: 12 }}>
+              En cola — empieza a prepararse (nomenclatura + pistas) en {secondsLeft ?? '–'}s. Puedes cancelarla mientras tanto.
+            </div>
+          )}
 
           {job.error_message && (
             <div style={{ padding: '8px 12px', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 6, fontSize: 12.5, color: '#fca5a5', marginBottom: 12 }}>
@@ -216,7 +253,7 @@ function JobProgressPanel({ job, onClose, onStart, onRetry, onCancel, onArtifact
         <div className="detail-panel__actions" style={{ padding: '10px 16px', gap: 8, display: 'flex', flexWrap: 'wrap' }}>
           {job.status === 'ready' && <button className="btn btn-primary btn-sm" onClick={() => onStart(job)}>Iniciar subida</button>}
           {['failed', 'cancelled'].includes(job.status) && <button className="btn btn-secondary btn-sm" onClick={() => onRetry(job)}>Reintentar</button>}
-          {isRunning && <button className="btn btn-secondary btn-sm" style={{ color: '#f87171' }} onClick={() => onCancel(jobId)}>Cancelar</button>}
+          {canCancel && <button className="btn btn-secondary btn-sm" style={{ color: '#f87171' }} onClick={() => onCancel(jobId)}>Cancelar</button>}
           <button className="btn btn-secondary btn-sm" onClick={() => onArtifacts(jobId)}>Artefactos</button>
           <button className="btn btn-secondary btn-sm" onClick={onClose} style={{ marginLeft: 'auto' }}>Cerrar</button>
         </div>
@@ -414,14 +451,17 @@ export function UploadsPage() {
 
   useEffect(() => { load() }, [statusFilter])
 
-  // Poll every 2.5s while at least one job is running, so status/progress/logs update live.
-  const hasRunningJob = jobs.some(j => j.status === 'running')
+  // Poll every 2.5s while at least one job is live (queued/preparing/running),
+  // so status/progress/logs — and the queued→preparing→running transition —
+  // update on their own.
+  const hasLiveJob = jobs.some(j => j.status === 'running' || j.status === 'preparing' || j.status === 'queued')
   useEffect(() => {
-    if (!hasRunningJob) return
+    if (!hasLiveJob) return
     const timer = setInterval(() => load({ silent: true }), 2500)
     return () => clearInterval(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasRunningJob, statusFilter])
+  }, [hasLiveJob, statusFilter])
+  useTicker(jobs.some(j => j.status === 'queued'))
 
   const handleCancel = async (jobId: number) => {
     try { await cancelUploadJob(jobId); await load() } catch { /* ignore */ }
@@ -459,7 +499,7 @@ export function UploadsPage() {
         <LogsPanel
           jobId={logsJob}
           onClose={() => setLogsJob(null)}
-          autoRefresh={jobs.find(j => j.id === logsJob)?.status === 'running'}
+          autoRefresh={['running', 'preparing'].includes(jobs.find(j => j.id === logsJob)?.status ?? '')}
         />
       )}
       {detailJobData && (
@@ -482,7 +522,7 @@ export function UploadsPage() {
           <div className="page-subtitle">Trabajos de subida con Uploadrr</div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {hasRunningJob && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>● actualizando en vivo</span>}
+          {hasLiveJob && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>● actualizando en vivo</span>}
         </div>
       </div>
 
@@ -558,8 +598,8 @@ export function UploadsPage() {
                       </span>
                     </td>
                     <td style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                      {job.status === 'running' && <span style={{ marginRight: 4 }}>⏳</span>}
-                      {job.progress_phase || '–'}
+                      {(job.status === 'running' || job.status === 'preparing') && <span style={{ marginRight: 4 }}>⏳</span>}
+                      {job.status === 'queued' ? `En cola (${queuedSecondsLeft(job) ?? '–'}s)` : (job.progress_phase || '–')}
                     </td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                       {job.duration_seconds != null ? `${job.duration_seconds}s` : '–'}
@@ -594,7 +634,7 @@ export function UploadsPage() {
                         {['failed', 'cancelled'].includes(job.status) && (
                           <button className="btn btn-secondary btn-sm" style={{ fontSize: '0.72rem', padding: '2px 7px', color: 'var(--color-warning, #fbbf24)' }} onClick={() => setRetryJob(job)} title="Reintentar">Retry</button>
                         )}
-                        {job.status === 'running' && (
+                        {(job.status === 'running' || job.status === 'queued') && (
                           <button className="btn btn-secondary btn-sm" style={{ fontSize: '0.72rem', padding: '2px 7px', color: 'var(--color-error, #f87171)' }} onClick={() => handleCancel(job.id!)} title="Cancelar">Cancelar</button>
                         )}
                       </div>

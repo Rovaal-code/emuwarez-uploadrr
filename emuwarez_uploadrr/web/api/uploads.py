@@ -33,6 +33,8 @@ from ..schemas import (
     UploadJobResponse,
     UploadPreflightBody,
     UploadPreflightResponse,
+    UploadQueueBody,
+    UploadQueueResponse,
     UploadRetryRequest,
     UploadStartRequest,
     UploadStartResult,
@@ -129,6 +131,7 @@ def _job_to_detail(j: dict, media_type: str | None = None) -> UploadJobDetail:
         runtime_type=_extract_runtime_type(j),
         command_preview=_extract_command_preview(j),
         progress_phase=compute_progress_phase(j.get("status", ""), j.get("stage")),
+        queued_until=j.get("queued_until"),
     )
 
 
@@ -200,6 +203,37 @@ def upload_checks_progress(
     POST above is running; returns the empty/initial shape if none is running."""
     from emuwarez_uploadrr.services.upload_checks import get_checks_progress
     return get_checks_progress(item_id)
+
+
+@router.post("/library/{item_id}/upload/queue", response_model=UploadQueueResponse)
+def queue_upload(
+    item_id: int,
+    body: UploadQueueBody,
+    current_user: dict = Depends(require_auth),
+):
+    """Queue "Subir a eMuwarez": creates the upload_jobs row in status='queued'
+    and returns immediately (the caller navigates to Subidas right after).
+    The real work — integrity check, nomenclature rename, track remux, then
+    the actual Uploadrr start — runs server-side after a grace period during
+    which the job can still be cancelled (see services/upload_queue.py)."""
+    from ...services.upload_queue import queue_upload_for_item
+    overrides = None
+    if body.remux_overrides:
+        overrides = {}
+        for raw_id, ov in body.remux_overrides.items():
+            try:
+                overrides[int(raw_id)] = {"new_name": ov.new_name, "default_after": ov.default_after}
+            except (TypeError, ValueError):
+                continue
+    with _get_conn() as conn:
+        result = queue_upload_for_item(item_id, remux_overrides=overrides, conn=conn)
+
+    job = result.get("job")
+    return UploadQueueResponse(
+        status=result.get("status", "blocked"),
+        job=_job_to_detail(job) if job else None,
+        errors=result.get("errors", []),
+    )
 
 
 @router.get("/uploads", response_model=list[UploadJobDetail])

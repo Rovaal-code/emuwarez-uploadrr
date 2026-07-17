@@ -194,7 +194,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   return (
     <div>
       {wizardItem && (
-        <UploadWizardModal item={wizardItem} preselect={wizardPreselect} onClose={() => setWizardItem(null)} onDone={loadData} />
+        <UploadWizardModal item={wizardItem} preselect={wizardPreselect} onClose={() => setWizardItem(null)} onDone={loadData} onNavigate={onNavigate} />
       )}
       {requestItem && (
         <RequestFormModal item={requestItem} onClose={() => setRequestItem(null)} />

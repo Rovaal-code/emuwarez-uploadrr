@@ -35,7 +35,7 @@ const PAGE_TITLE: Record<string, string> = {
 function PageContent({ page, onNavigate }: { page: string; onNavigate: (p: string) => void }) {
   switch (page) {
     case 'dashboard':  return <DashboardPage onNavigate={onNavigate} />
-    case 'library':    return <LibraryPage />
+    case 'library':    return <LibraryPage onNavigate={onNavigate} />
     case 'requests':   return <RequestsPage onNavigate={onNavigate} />
     case 'uploads':    return <UploadsPage />
     case 'tasks':      return <TasksPage />

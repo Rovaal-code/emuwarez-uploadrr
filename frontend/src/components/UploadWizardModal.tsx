@@ -6,11 +6,9 @@ import {
   getNomenclatureFields,
   previewNomenclatureFields,
   saveNomenclatureFields,
-  adaptNomenclature,
   previewTrackRemux,
-  applyTrackRemux,
 } from '../api/nomenclature'
-import { uploadPreflight, startUploadJob, runUploadChecks, getUploadChecksProgress, type UploadChecksResult, type UploadCheck } from '../api/uploads'
+import { queueUpload, runUploadChecks, getUploadChecksProgress, type UploadChecksResult, type UploadCheck } from '../api/uploads'
 import { getLibrary, getMediaInfoReport, suggestProvider } from '../api/library'
 import type { MediaInfoReport } from '../api/library'
 import type { LibraryItemResponse } from '../types/api'
@@ -22,12 +20,10 @@ import { FitTextPair } from './FitText'
 // whole season) to target; then Step 1 generates the eMuwarez nomenclature —
 // Spanish title + year from Radarr/Sonarr, Source/Provider from the filename,
 // the rest from mediainfo — as editable boxes with a live preview of the final
-// torrent name; Step 2 applies the nomenclature (hardlink → prepared_path),
-// runs the read-only preflight, and asks for a confirmation token before the
-// real upload.
-const NOM_TOKEN = 'APLICAR_NOMENCLATURA'
-const UPLOAD_TOKEN = 'INICIAR_UPLOADRR'
-const REMUX_TOKEN = 'REORDENAR_PISTAS'
+// torrent name; Step 2 runs the pre-upload checks and, once confirmed, QUEUES
+// the upload (services/upload_queue.py runs integrity/nomenclature/remux/start
+// server-side after a grace period) and hands off to Subidas — nothing here
+// applies nomenclature or starts Uploadrr directly anymore.
 const PROVIDER_SOURCES = new Set(['WEB-DL'])
 const WHOLE_SEASON = 'WHOLE_SEASON'
 
@@ -35,6 +31,9 @@ interface Props {
   item: LibraryItemResponse
   onClose: () => void
   onDone?: () => void
+  // Switches the app to the Subidas tab right after queueing — same
+  // onNavigate(page) callback AppShell hands its pages.
+  onNavigate?: (page: string) => void
   // Optional pre-selection (e.g. from a request's scope): season number and,
   // for a single episode, its episode number. Used to auto-fill step 0.
   preselect?: { season?: number | null; episode?: number | null }
@@ -66,11 +65,14 @@ function TableLoadingSpinner({ label = 'Cargando…' }: { label?: string }) {
 // used to name the check currently in flight ("Comprobando si es
 // accesible…") while its own result hasn't landed yet, since liveChecks only
 // grows with COMPLETED checks: its length is the index of the one running now.
-const CHECK_STEP_ORDER = ['accessible', 'renameable', 'integrity', 'hardlink', 'output', 'qbittorrent', 'imghosts', 'emuwarez']
+// Accessibility/integrity are no longer checked here — they're checked for
+// real once the upload is queued (services/upload_queue.py's "integrity"
+// stage, which already runs MediaInfo/mkvmerge on the file for the
+// nomenclature/remux steps), so a failure lands with a specific reason
+// instead of duplicating that work upfront.
+const CHECK_STEP_ORDER = ['renameable', 'hardlink', 'output', 'qbittorrent', 'imghosts', 'emuwarez']
 const CHECK_STEP_PENDING_LABEL: Record<string, string> = {
-  accessible: 'Comprobando si el contenido es accesible…',
   renameable: 'Comprobando si se puede renombrar…',
-  integrity: 'Comprobando la integridad del fichero…',
   hardlink: 'Comprobando si se puede crear el hardlink…',
   output: 'Comprobando el directorio de salida…',
   qbittorrent: 'Comprobando la conexión con qBittorrent…',
@@ -130,7 +132,7 @@ function GeneratingHint() {
   )
 }
 
-export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
+export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect }: Props) {
   const isSeries = item.item_type === 'series'
   const isSeason = item.item_type === 'season'
   const needsSelection = isSeries || isSeason
@@ -396,53 +398,25 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
   }
 
   const canUpload = !!checks?.ready
-  // The real upload: apply the nomenclature, create the preflight job and start
-  // it — all only now that every check passed and the user confirmed. Nothing
-  // reaches "Subidas" before this.
+  // Queues the upload and hands off to Subidas immediately — nomenclature
+  // rename, track remux, and the actual Uploadrr start all run server-side
+  // afterwards (services/upload_queue.py), against the SAME job the user
+  // lands on, with a grace period the user can still cancel from there.
   const doUpload = async () => {
     if (targetId == null || !canUpload) return
     setUploading(true); setUploadMsg(null)
     try {
       await saveNomenclatureFields(targetId, fields)
-      const applied = await adaptNomenclature(targetId, { apply: true, dryRun: false, confirmation: NOM_TOKEN })
-      if (applied.status && applied.status !== 'applied') {
-        setUploadMsg(`✗ No se pudo aplicar la nomenclatura (estado: ${applied.status}). Suele deberse a que el archivo está en una ubicación de solo lectura, o a que los hardlinks no están configurados con una ruta escribible en el mismo disco que tus medios.`)
+      const r = await queueUpload(targetId, remuxEdits)
+      if (r.status !== 'queued' || !r.job?.id) {
+        setUploadMsg(`✗ No se pudo encolar la subida (estado: ${r.status}). ${(r.errors || []).join(' ')}`)
         return
       }
-
-      // Track remux (reorder + rename audio/subs/video) — runs AFTER the
-      // nomenclature step so it always operates on the file at its final
-      // path. Re-fetches the plan fresh here (even if the user already
-      // opened "Ver Remux") so it reflects the just-renamed file; any manual
-      // edits the user made are layered back on top via overrides. Silently
-      // skipped when mkvmerge isn't installed or the file is already
-      // correctly ordered/named — only a REAL failure blocks the upload.
-      try {
-        const rp = await previewTrackRemux(targetId)
-        if (rp.status === 'ready') {
-          const remuxed = await applyTrackRemux(targetId, {
-            apply: true, dryRun: false, confirmation: REMUX_TOKEN, overrides: remuxEdits,
-          })
-          if (remuxed.status !== 'applied') {
-            setUploadMsg(`✗ No se pudieron reordenar/renombrar las pistas (estado: ${remuxed.status}). ${(remuxed.errors || []).join(' ')}`)
-            return
-          }
-        }
-      } catch (e: unknown) {
-        setUploadMsg(`✗ Error reordenando/renombrando las pistas: ${e instanceof Error ? e.message : 'error desconocido'}`)
-        return
-      }
-
-      const pf = await uploadPreflight(targetId)
-      if (pf.status !== 'ready' || !pf.job?.id) {
-        setUploadMsg(`✗ El preflight no está listo (estado: ${pf.status}).`)
-        return
-      }
-      const r = await startUploadJob(pf.job.id, { dry_run: false, start: true, confirmation: UPLOAD_TOKEN })
-      setUploadMsg(`✓ Subida iniciada (${r.status ?? 'ok'}).`)
       onDone?.()
+      onNavigate?.('uploads')
+      onClose()
     } catch (e: unknown) {
-      setUploadMsg(`✗ ${e instanceof Error ? e.message : 'Error iniciando la subida'}`)
+      setUploadMsg(`✗ ${e instanceof Error ? e.message : 'Error encolando la subida'}`)
     } finally {
       setUploading(false)
     }

@@ -48,8 +48,9 @@ CONFIRMATION_TOKEN = "INICIAR_UPLOADRR"
 # does not emit structured progress, so this is a coarse stage mapping, never
 # a fabricated percentage.
 PROGRESS_PHASES = (
-    "queued", "preflight", "config_staging", "running",
-    "finalizing", "succeeded", "failed", "cancelled", "timeout",
+    "queued", "integrity", "nomenclature", "remux", "preflight",
+    "config_staging", "running", "finalizing", "succeeded", "failed",
+    "cancelled", "timeout",
 )
 
 
@@ -64,6 +65,13 @@ def compute_progress_phase(status: str, stage: str | None) -> str:
         return "failed"
     if status == "completed":
         return "succeeded"
+    if status == "preparing":
+        # Server-side prep queued jobs go through before the real Uploadrr
+        # subprocess: integrity check -> nomenclature rename -> track remux
+        # -> preflight, all against the SAME job row the user is watching.
+        if stage in ("integrity", "nomenclature", "remux"):
+            return stage
+        return "preflight"
     if status == "running":
         if stage == "config_staging":
             return "config_staging"
@@ -1138,6 +1146,17 @@ def cancel_upload_job(job_id: int, conn=None) -> dict:
             return {"ok": False, "message": f"Job {job_id} no encontrado.", "job_id": job_id}
 
         status = job.get("status", "")
+
+        if status == "queued":
+            # Grace-period cancel: stop the deferred timer before it fires
+            # (services/upload_queue.py) — nothing has touched the filesystem
+            # yet, so this is a plain status flip, no subprocess to signal.
+            from .upload_queue import cancel_queued_timer
+            cancel_queued_timer(job_id)
+            _update_job_status(job_id, "cancelled", stage="cancelled", finished_at=_now())
+            append_upload_log(job_id, "info", "Subida cancelada durante la cola de espera.", stream="system")
+            return {"ok": True, "message": "Subida cancelada.", "job_id": job_id}
+
         if status != "running":
             return {
                 "ok": False,

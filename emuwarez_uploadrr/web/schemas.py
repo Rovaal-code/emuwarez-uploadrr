@@ -955,6 +955,9 @@ class UploadJobDetail(BaseModel):
     progress_phase: Optional[str] = None
     # Media type (movie/series/…) from the linked library item, for filtering.
     media_type: Optional[str] = None
+    # Grace-period deadline while status='queued' — lets the UI show a
+    # countdown + Cancel before the server starts renaming/remuxing/uploading.
+    queued_until: Optional[str] = None
 
 
 class UploadJobLog(BaseModel):
@@ -1150,6 +1153,18 @@ class TrackRemuxApplyBody(BaseModel):
     confirmation: Optional[str] = None
     # Keyed by track id (string in JSON — object keys are always strings).
     overrides: Optional[Dict[str, TrackRemuxOverride]] = None
+
+
+class UploadQueueBody(BaseModel):
+    # Manual edits the user made in the wizard's "Ver Remux" card, carried
+    # through to the server-side remux step that runs after the grace period.
+    remux_overrides: Optional[Dict[str, TrackRemuxOverride]] = None
+
+
+class UploadQueueResponse(BaseModel):
+    status: str
+    job: Optional[UploadJobDetail] = None
+    errors: list[str] = []
 
 
 # ---------------------------------------------------------------------------

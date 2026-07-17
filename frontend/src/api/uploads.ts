@@ -8,9 +8,26 @@ import type {
   UploadArtifactsResponse,
   UploadRetryRequest,
 } from '../types/api'
+import type { TrackRemuxOverride } from './nomenclature'
 
 export async function uploadPreflight(itemId: number, requestId?: number): Promise<UploadPreflightResponse> {
   return api.post<UploadPreflightResponse>(`/library/${itemId}/upload/preflight`, { request_id: requestId ?? null })
+}
+
+export interface UploadQueueResult {
+  status: string
+  job: UploadJob | null
+  errors: string[]
+}
+
+// Queues "Subir a eMuwarez": the job appears immediately in Subidas as
+// 'queued' with a grace period (see services/upload_queue.py) before the
+// server actually renames/remuxes/starts it — nothing runs synchronously here.
+export async function queueUpload(
+  itemId: number,
+  remuxOverrides?: Record<number, TrackRemuxOverride>,
+): Promise<UploadQueueResult> {
+  return api.post<UploadQueueResult>(`/library/${itemId}/upload/queue`, { remux_overrides: remuxOverrides ?? null })
 }
 
 export async function getUploads(params?: { status?: string; limit?: number; offset?: number; search?: string }): Promise<UploadJob[]> {

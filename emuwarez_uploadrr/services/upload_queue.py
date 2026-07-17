@@ -129,6 +129,28 @@ def _fail(job_id: int, message: str) -> None:
     logger.warning("Job %s en cola falló durante la preparación: %s", job_id, message)
 
 
+def _season_upload_preconditions(conn) -> list[str]:
+    """The generic (not season-specific) preconditions
+    upload_preflight.validate_upload_preconditions() checks for a single
+    file — uploadrr path/script + eMuwarez/TMDb API keys. Season-specific
+    concerns (episodes consistent, complete, hardlink_base configured) are
+    already covered by build_season_pack_plan() before this ever runs."""
+    from ..database import get_setting_canonical
+    from .uploadrr_contract import DEFAULT_UPLOADRR_PATH
+
+    errors: list[str] = []
+    uploadrr_path = get_setting_canonical(conn, "uploadrr.path") or DEFAULT_UPLOADRR_PATH
+    if not uploadrr_path:
+        errors.append("Ruta de Uploadrr no configurada (uploadrr.path).")
+    elif not os.path.exists(uploadrr_path):
+        errors.append(f"Ruta de Uploadrr no existe: {uploadrr_path}")
+    if not get_setting_canonical(conn, "emu.api_key"):
+        errors.append("API key de eMuwarez no configurada.")
+    if not get_setting_canonical(conn, "tmdb.api_key"):
+        errors.append("API key de TMDb no configurada.")
+    return errors
+
+
 def _populate_ready(job_id: int, item_id: int, conn) -> bool:
     """Recompute preconditions + command preview NOW (after rename/remux, so
     prepared_path reflects the final file) and, if ok, flip the SAME job row
@@ -141,6 +163,47 @@ def _populate_ready(job_id: int, item_id: int, conn) -> bool:
     if not item:
         _fail(job_id, "El elemento ya no existe en la biblioteca.")
         return False
+
+    if item.get("item_type") == "season":
+        # validate_upload_preconditions() hard-blocks on `if not path`, and a
+        # season row has no `path` of its own (only its episodes do) — a
+        # season-specific precondition check replaces it.
+        from .season_pack import build_season_pack_plan
+
+        plan = build_season_pack_plan(item_id, conn=conn)
+        if plan["status"] != "valid":
+            _fail(job_id, "; ".join(plan.get("errors") or ["No se pudo preparar el pack de temporada."]))
+            return False
+
+        errors = _season_upload_preconditions(conn)
+        if errors:
+            _fail(job_id, "; ".join(errors))
+            return False
+
+        # A synthetic item-like dict so build_uploadrr_command_preview() (and,
+        # inside it, uploadrr_contract.validate_uploadrr_emu_contract) runs
+        # the SAME safety checks (allowed_roots, python_path, script
+        # existence) a single file's command preview gets, instead of
+        # hand-building the command dict and skipping them.
+        synthetic_item = {
+            "path": None,
+            "prepared_path": plan.get("hardlink_folder"),
+            "item_type": "season",
+            "title": plan.get("season_pack_title"),
+            "tmdb_id": plan.get("tmdb_id"),
+            "resolution": plan.get("resolution"),
+            "season": plan.get("season_number"),
+            "episode": None,
+        }
+        command_preview = build_uploadrr_command_preview(synthetic_item, None, None, conn=conn)
+        conn.execute(
+            "UPDATE upload_jobs SET status = 'ready', stage = 'preflight', "
+            "prepared_path = ?, uploadrr_command_json = ?, error_message = NULL, updated_at = ? "
+            "WHERE id = ?",
+            (plan.get("hardlink_folder"), json.dumps(command_preview, ensure_ascii=False), _now_iso(), job_id),
+        )
+        conn.commit()
+        return True
 
     proposal_row = conn.execute(
         "SELECT * FROM nomenclature_proposals WHERE library_item_id = ? AND status != 'expired' "
@@ -162,6 +225,71 @@ def _populate_ready(job_id: int, item_id: int, conn) -> bool:
         (item.get("prepared_path"), json.dumps(command_preview, ensure_ascii=False), _now_iso(), job_id),
     )
     conn.commit()
+    return True
+
+
+def _check_season_integrity(job_id: int, season_id: int, conn) -> bool:
+    """Season equivalent of the single-file integrity stage below — same
+    three checks (accessible / MediaInfo reads it / mkvtoolnix reads it),
+    run per available episode, failing with the specific episode's number
+    so the user knows which file to fix."""
+    from .season_pack import _get_season_episodes
+    from .models import LocalStatus
+    from .mkv_remux import check_mkvmerge_available, read_tracks_json
+    from .media_info_service import mediainfo_available, read_media_info_summary
+    from .path_mapping import resolve_local_path
+
+    episodes = _get_season_episodes(season_id, conn=conn)
+    available = [e for e in episodes if e.get("local_status") == LocalStatus.AVAILABLE.value]
+    if not available:
+        _fail(job_id, "La temporada no tiene ningún episodio disponible.")
+        return False
+    for ep in available:
+        label = f"capítulo {ep.get('episode_number')}"
+        ep_path = resolve_local_path(ep.get("path"), conn=conn) or ep.get("path")
+        if not ep_path or not os.path.isfile(ep_path):
+            _fail(job_id, f"El archivo del {label} no es accesible: {ep_path or ep.get('path') or '(sin ruta)'}")
+            return False
+        if mediainfo_available():
+            info = read_media_info_summary(ep_path)
+            if not info:
+                _fail(job_id, f"MediaInfo no pudo leer el archivo del {label} (posible corrupción).")
+                return False
+        if ep_path.lower().endswith(".mkv") and check_mkvmerge_available().get("available"):
+            tracks = read_tracks_json(ep_path)
+            if not tracks.get("ok"):
+                _fail(job_id, f"mkvtoolnix no pudo leer el archivo del {label}: {tracks.get('error') or 'error desconocido'}")
+                return False
+    return True
+
+
+def _run_season_remux(job_id: int, season_id: int, conn) -> bool:
+    """Season equivalent of the single-file remux stage below — loops
+    build_remux_plan()/apply_remux() per available episode. No manual
+    per-track overrides for season packs (out of scope for v1): each
+    episode's own auto-computed plan is applied as-is."""
+    from .season_pack import _get_season_episodes
+    from .models import LocalStatus
+    from .mkv_remux import build_remux_plan, apply_remux, REMUX_CONFIRMATION_TOKEN as REMUX_TOKEN
+
+    episodes = _get_season_episodes(season_id, conn=conn)
+    available = [e for e in episodes if e.get("local_status") == LocalStatus.AVAILABLE.value]
+    for ep in available:
+        label = f"capítulo {ep.get('episode_number')}"
+        try:
+            plan = build_remux_plan(ep["id"], conn=conn)
+            if plan.get("status") == "ready":
+                remuxed = apply_remux(
+                    ep["id"], apply=True, dry_run=False,
+                    confirmation=REMUX_TOKEN, overrides=None, conn=conn,
+                )
+                if remuxed.get("status") != "applied":
+                    reason = "; ".join(remuxed.get("errors") or [])
+                    _fail(job_id, f"No se pudieron reordenar/renombrar las pistas del {label}: {reason}")
+                    return False
+        except Exception as exc:
+            _fail(job_id, f"Error reordenando/renombrando las pistas del {label}: {exc}")
+            return False
     return True
 
 
@@ -195,63 +323,83 @@ def _run_queued_job(job_id: int) -> None:
         if not item:
             _fail(job_id, "El elemento ya no existe en la biblioteca.")
             return
-
-        local_path = resolve_local_path(item.get("path")) or item.get("path")
+        is_season = item.get("item_type") == "season"
 
         # --- 1. Integrity: accessible, MediaInfo reads it, mkvtoolnix reads it.
         # These used to be separate pre-upload checks, but the nomenclature
         # and remux steps right below already invoke MediaInfo/mkvmerge on
-        # this exact file — running the check here means real (not
+        # each real file — running the check here means real (not
         # duplicated) work, and a failure lands with a specific reason
         # instead of a generic "no accesible".
         _mark(job_id, stage="integrity", started_at=_now_iso())
         append_upload_log(job_id, "info", "Comprobando integridad del archivo…", stream="system", conn=conn)
-        if not local_path or not os.path.isfile(local_path):
-            _fail(job_id, f"El archivo no es accesible: {local_path or item.get('path') or '(sin ruta)'}")
-            return
-        if mediainfo_available():
-            info = read_media_info_summary(local_path)
-            if not info:
-                _fail(job_id, "MediaInfo no pudo leer el fichero (posible corrupción).")
+        if is_season:
+            if not _check_season_integrity(job_id, item_id, conn=conn):
                 return
-        if local_path.lower().endswith(".mkv") and check_mkvmerge_available().get("available"):
-            tracks = read_tracks_json(local_path)
-            if not tracks.get("ok"):
-                _fail(job_id, f"mkvtoolnix no pudo leer el fichero: {tracks.get('error') or 'error desconocido'}")
+        else:
+            local_path = resolve_local_path(item.get("path")) or item.get("path")
+            if not local_path or not os.path.isfile(local_path):
+                _fail(job_id, f"El archivo no es accesible: {local_path or item.get('path') or '(sin ruta)'}")
                 return
+            if mediainfo_available():
+                info = read_media_info_summary(local_path)
+                if not info:
+                    _fail(job_id, "MediaInfo no pudo leer el fichero (posible corrupción).")
+                    return
+            if local_path.lower().endswith(".mkv") and check_mkvmerge_available().get("available"):
+                tracks = read_tracks_json(local_path)
+                if not tracks.get("ok"):
+                    _fail(job_id, f"mkvtoolnix no pudo leer el fichero: {tracks.get('error') or 'error desconocido'}")
+                    return
 
         # --- 2. Nomenclature (rename/hardlink to the final eMuwarez name).
         _mark(job_id, stage="nomenclature")
         append_upload_log(job_id, "info", "Aplicando nomenclatura…", stream="system", conn=conn)
-        try:
-            applied = apply_nomenclature_proposal(
-                item_id, apply=True, dry_run=False, confirmation=NOM_TOKEN, conn=conn,
-            )
-        except Exception as exc:
-            _fail(job_id, f"Error aplicando la nomenclatura: {exc}")
-            return
-        if applied.get("status") != "applied":
-            reason = "; ".join(applied.get("errors") or []) or applied.get("message") or "estado desconocido"
-            _fail(job_id, f"No se pudo aplicar la nomenclatura: {reason}")
-            return
+        if is_season:
+            from .season_pack import apply_season_hardlinks
+            try:
+                applied = apply_season_hardlinks(item_id, conn=conn)
+            except Exception as exc:
+                _fail(job_id, f"Error aplicando la nomenclatura del pack de temporada: {exc}")
+                return
+            if applied.get("status") != "applied":
+                reason = "; ".join(applied.get("errors") or []) or "estado desconocido"
+                _fail(job_id, f"No se pudo aplicar la nomenclatura del pack de temporada: {reason}")
+                return
+        else:
+            try:
+                applied = apply_nomenclature_proposal(
+                    item_id, apply=True, dry_run=False, confirmation=NOM_TOKEN, conn=conn,
+                )
+            except Exception as exc:
+                _fail(job_id, f"Error aplicando la nomenclatura: {exc}")
+                return
+            if applied.get("status") != "applied":
+                reason = "; ".join(applied.get("errors") or []) or applied.get("message") or "estado desconocido"
+                _fail(job_id, f"No se pudo aplicar la nomenclatura: {reason}")
+                return
 
         # --- 3. Track remux (reorder + rename audio/subs), on the final path.
         _mark(job_id, stage="remux")
         append_upload_log(job_id, "info", "Reordenando/renombrando pistas…", stream="system", conn=conn)
-        try:
-            plan = build_remux_plan(item_id, conn=conn)
-            if plan.get("status") == "ready":
-                remuxed = apply_remux(
-                    item_id, apply=True, dry_run=False,
-                    confirmation=REMUX_TOKEN, overrides=overrides, conn=conn,
-                )
-                if remuxed.get("status") != "applied":
-                    reason = "; ".join(remuxed.get("errors") or [])
-                    _fail(job_id, f"No se pudieron reordenar/renombrar las pistas: {reason}")
-                    return
-        except Exception as exc:
-            _fail(job_id, f"Error reordenando/renombrando las pistas: {exc}")
-            return
+        if is_season:
+            if not _run_season_remux(job_id, item_id, conn=conn):
+                return
+        else:
+            try:
+                plan = build_remux_plan(item_id, conn=conn)
+                if plan.get("status") == "ready":
+                    remuxed = apply_remux(
+                        item_id, apply=True, dry_run=False,
+                        confirmation=REMUX_TOKEN, overrides=overrides, conn=conn,
+                    )
+                    if remuxed.get("status") != "applied":
+                        reason = "; ".join(remuxed.get("errors") or [])
+                        _fail(job_id, f"No se pudieron reordenar/renombrar las pistas: {reason}")
+                        return
+            except Exception as exc:
+                _fail(job_id, f"Error reordenando/renombrando las pistas: {exc}")
+                return
 
         # --- 4. Preflight (fresh preconditions + command preview) then start.
         _mark(job_id, stage="preflight")

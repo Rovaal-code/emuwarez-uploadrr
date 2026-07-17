@@ -11,9 +11,14 @@ import {
 import { queueUpload, runUploadChecks, getUploadChecksProgress, type UploadChecksResult, type UploadCheck } from '../api/uploads'
 import { getLibrary, getMediaInfoReport, suggestProvider } from '../api/library'
 import type { MediaInfoReport } from '../api/library'
-import type { LibraryItemResponse } from '../types/api'
+import {
+  previewSeasonPack, getSeasonPlanProgress, getSeasonEpisodeNames,
+  getSeasonEpisodeMediaInfo, getSeasonEpisodeRemuxPreview,
+  type SeasonPlanProgress, type SeasonEpisodeName, type SeasonEpisodeMediaInfo, type SeasonEpisodeRemux,
+} from '../api/seasonPack'
+import type { LibraryItemResponse, SeasonPackPlanResponse } from '../types/api'
 import { InfoIcon } from './InfoIcon'
-import { FitTextPair } from './FitText'
+import { FitText, FitTextPair } from './FitText'
 
 // Unified "Subir" wizard (replaces the separate Nomenclatura + Campos + Subir
 // buttons). For a Series/Season it first asks which season (and episode, or the
@@ -70,14 +75,163 @@ function TableLoadingSpinner({ label = 'Cargando…' }: { label?: string }) {
 // stage, which already runs MediaInfo/mkvmerge on the file for the
 // nomenclature/remux steps), so a failure lands with a specific reason
 // instead of duplicating that work upfront.
+// A season target collapses "renameable"/"hardlink" into one "season_pack"
+// check (run_upload_checks' season branch — see upload_checks.py).
 const CHECK_STEP_ORDER = ['renameable', 'hardlink', 'output', 'qbittorrent', 'imghosts', 'emuwarez']
+const CHECK_STEP_ORDER_SEASON = ['season_pack', 'output', 'qbittorrent', 'imghosts', 'emuwarez']
 const CHECK_STEP_PENDING_LABEL: Record<string, string> = {
   renameable: 'Comprobando si se puede renombrar…',
   hardlink: 'Comprobando si se puede crear el hardlink…',
+  season_pack: 'Comprobando el pack de temporada…',
   output: 'Comprobando el directorio de salida…',
   qbittorrent: 'Comprobando la conexión con qBittorrent…',
   imghosts: 'Comprobando el repositorio de imágenes…',
   emuwarez: 'Comprobando la conexión con eMuwarez…',
+}
+
+// MediaInfo field/value table — shared by the single-file "Ver MediaInfo"
+// card and the season target's per-episode accordion.
+function MediaInfoTable({ report }: { report: MediaInfoReport }) {
+  if (!report.available) {
+    return <p className="text-warning" style={{ fontSize: 12, margin: 0 }}>⚠ {report.message}</p>
+  }
+  return (
+    <div style={{ maxHeight: 420, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 8, background: 'rgba(255,255,255,0.03)' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, tableLayout: 'fixed' }}>
+        <colgroup>
+          <col style={{ width: '22%' }} />
+          <col style={{ width: '39%' }} />
+          <col style={{ width: '39%' }} />
+        </colgroup>
+        <thead>
+          <tr>
+            <th style={thStyle}>Campo</th>
+            <th style={thStyle}>MediaInfo</th>
+            <th style={thStyle}>eMuwarez</th>
+          </tr>
+        </thead>
+        <tbody>
+          {report.rows.map((r, i) => (
+            <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
+              <td style={{ padding: '7px 12px', fontWeight: 600 }}>{r.field}</td>
+              <td style={{ padding: '7px 12px', fontFamily: 'monospace', color: 'var(--text-muted)', wordBreak: 'break-word' }}>{r.mediainfo}</td>
+              <td style={{ padding: '7px 12px', fontFamily: 'monospace', wordBreak: 'break-word' }}>{r.emu}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+// Track reorder/rename table — the single-file "Ver Remux" card renders it
+// editable (inputs); the season target's per-episode accordion renders it
+// read-only (editable=false — no manual per-track overrides for seasons).
+function RemuxTable({ plan, editable, edits, onEdit }: {
+  plan: TrackRemuxPreview
+  editable: boolean
+  edits?: Record<number, TrackRemuxOverride>
+  onEdit?: (trackId: number, patch: TrackRemuxOverride) => void
+}) {
+  return (
+    <>
+      {plan.errors?.map((e, i) => (
+        <p key={i} className="text-error" style={{ fontSize: 12, marginTop: 10 }}>✗ {e}</p>
+      ))}
+      {plan.warnings?.map((w, i) => (
+        <p key={i} className="text-warning" style={{ fontSize: 12, marginTop: 10 }}>⚠ {w}</p>
+      ))}
+      {plan.ordered_tracks && plan.ordered_tracks.length > 0 && (
+        <div style={{ marginTop: 12, maxHeight: 260, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 8, background: 'rgba(255,255,255,0.03)' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, tableLayout: 'fixed' }}>
+            <colgroup>
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '25%' }} />
+              <col style={{ width: '38%' }} />
+              <col style={{ width: '17%' }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th style={thStyle}>Tipo</th>
+                <th style={thStyle}>Idioma</th>
+                <th style={thStyle}>Nombre actual</th>
+                <th style={thStyle}>Nombre nuevo</th>
+                <th style={thStyle}>Predet.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {plan.ordered_tracks.map(t => {
+                const edit = edits?.[t.id]
+                const effectiveName = edit?.new_name ?? t.new_name
+                const effectiveDefault = edit?.default_after ?? t.default_after
+                return (
+                  <tr key={t.id} style={{ borderTop: '1px solid var(--border)' }}>
+                    <td style={{ padding: '6px 10px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{TRACK_TYPE_LABEL[t.type] ?? t.type}</td>
+                    <td style={{ padding: '6px 10px', fontFamily: 'monospace', color: 'var(--text-secondary)' }}>{t.language || '—'}</td>
+                    <td style={{ padding: '6px 10px', color: 'var(--text-muted)', wordBreak: 'break-word' }}>{t.current_name || '—'}</td>
+                    <td style={{ padding: '5px 8px' }}>
+                      {editable ? (
+                        <input
+                          className="form-input"
+                          style={{ fontSize: 12, padding: '4px 6px' }}
+                          value={effectiveName}
+                          onChange={e => onEdit?.(t.id, { new_name: e.target.value })}
+                        />
+                      ) : (
+                        <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{effectiveName}</span>
+                      )}
+                    </td>
+                    <td style={{ padding: '6px 10px', textAlign: 'center' }}>
+                      {t.type === 'video' ? (
+                        <span style={{ color: 'var(--text-muted)' }}>—</span>
+                      ) : editable ? (
+                        <input
+                          type="checkbox"
+                          checked={effectiveDefault}
+                          onChange={e => onEdit?.(t.id, { default_after: e.target.checked })}
+                        />
+                      ) : (
+                        <span>{effectiveDefault ? '✓' : '—'}</span>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  )
+}
+
+// One collapsible episode row — used by the season target's MediaInfo/Remux
+// accordions (one entry per episode instead of a single-file table).
+function EpisodeAccordionRow({ episodeNumber, title, expanded, onToggle, children }: {
+  episodeNumber?: number | null
+  title?: string | null
+  expanded: boolean
+  onToggle: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <div style={{ border: '1px solid var(--border)', borderRadius: 8, marginBottom: 8, overflow: 'hidden' }}>
+      <button
+        type="button"
+        onClick={onToggle}
+        style={{
+          width: '100%', textAlign: 'left', padding: '8px 12px', background: 'rgba(255,255,255,0.03)',
+          border: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between',
+          alignItems: 'center', color: 'inherit', fontSize: 13,
+        }}
+      >
+        <span>{episodeNumber != null ? `E${String(episodeNumber).padStart(2, '0')} — ` : ''}{title}</span>
+        <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{expanded ? '▲' : '▼'}</span>
+      </button>
+      {expanded && <div style={{ padding: 10 }}>{children}</div>}
+    </div>
+  )
 }
 
 // One check's icon + label + message — used for the final full list once the
@@ -140,6 +294,11 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
   // The item the nomenclature actually runs on: a movie/episode directly, a
   // season row for a whole-season pack, or an episode picked from a series.
   const [targetId, setTargetId] = useState<number | null>(needsSelection ? null : item.id)
+  // Whether targetId resolves to a whole season (pack) rather than one file —
+  // known at selection time (confirmSelection), drives an entirely different
+  // Step 1 (plan preview instead of per-file nomenclature fields), but the
+  // rest of the wizard (checks/queue) needs no branching at all.
+  const [targetIsSeason, setTargetIsSeason] = useState(false)
   const [step, setStep] = useState<0 | 1 | 2>(needsSelection ? 0 : 1)
 
   // Step 0 — series/season selection
@@ -173,6 +332,32 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
   const [remuxError, setRemuxError] = useState<string | null>(null)
   const [remuxEdits, setRemuxEdits] = useState<Record<number, TrackRemuxOverride>>({})
   const [showRemuxCard, setShowRemuxCard] = useState(false)
+
+  // Step 1 (season target only) — the pack plan: consistency across
+  // episodes, completeness, and the single pack torrent name. Built with a
+  // live "N de M capítulos" counter (real work per episode server-side).
+  const [seasonPlan, setSeasonPlan] = useState<SeasonPackPlanResponse | null>(null)
+  const [seasonPlanLoading, setSeasonPlanLoading] = useState(false)
+  const [seasonPlanError, setSeasonPlanError] = useState<string | null>(null)
+  const [seasonProgress, setSeasonProgress] = useState<SeasonPlanProgress>({ done: 0, total: 0, current_title: null })
+
+  // Season target — per-episode final names ("Ver nombre de todos los
+  // capítulos"), on demand.
+  const [seasonNames, setSeasonNames] = useState<SeasonEpisodeName[] | null>(null)
+  const [seasonNamesLoading, setSeasonNamesLoading] = useState(false)
+  const [showSeasonNamesCard, setShowSeasonNamesCard] = useState(false)
+
+  // Season target — per-episode MediaInfo/Remux (accordion, one entry per
+  // episode), replacing the single-file "Ver MediaInfo"/"Ver Remux" cards.
+  const [seasonMi, setSeasonMi] = useState<SeasonEpisodeMediaInfo[] | null>(null)
+  const [seasonMiLoading, setSeasonMiLoading] = useState(false)
+  const [seasonMiError, setSeasonMiError] = useState<string | null>(null)
+  const [expandedMiEp, setExpandedMiEp] = useState<number | null>(null)
+
+  const [seasonRemux, setSeasonRemux] = useState<SeasonEpisodeRemux[] | null>(null)
+  const [seasonRemuxLoading, setSeasonRemuxLoading] = useState(false)
+  const [seasonRemuxError, setSeasonRemuxError] = useState<string | null>(null)
+  const [expandedRemuxEp, setExpandedRemuxEp] = useState<number | null>(null)
 
   // Step 1 — automatic TMDB provider detection for WEB-DL with no provider.
   const [detectingProvider, setDetectingProvider] = useState(false)
@@ -266,8 +451,10 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
       const seasonId = isSeason ? item.id : Number(selSeasonId)
       if (!seasonId) { setSelError('Selecciona una temporada'); return }
       setTargetId(seasonId)
+      setTargetIsSeason(true)
     } else if (selEpisode) {
       setTargetId(Number(selEpisode))
+      setTargetIsSeason(false)
     } else {
       setSelError('Selecciona un episodio o "Temporada entera"')
       return
@@ -302,19 +489,72 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
     }
   }, [targetId])
 
-  useEffect(() => { if (step === 1) loadFields() }, [step, loadFields])
+  useEffect(() => { if (step === 1 && !targetIsSeason) loadFields() }, [step, targetIsSeason, loadFields])
 
-  // Reset the MediaInfo report whenever the resolved target changes.
-  useEffect(() => { setMiReport(null); setMiError(null); setShowMiCard(false) }, [targetId])
+  // --- Step 1 (season target): build the pack plan, polling progress while
+  // it's in flight (real work per episode — build_nomenclature_proposal()).
+  const loadSeasonPlan = useCallback(async () => {
+    if (targetId == null) return
+    setSeasonPlanLoading(true); setSeasonPlanError(null)
+    setSeasonProgress({ done: 0, total: 0, current_title: null })
+    const poll = window.setInterval(async () => {
+      try { setSeasonProgress(await getSeasonPlanProgress(targetId)) } catch { /* transient poll failure — next tick retries */ }
+    }, 400)
+    try {
+      const plan = await previewSeasonPack(targetId)
+      setSeasonPlan(plan)
+      if (plan.status !== 'valid') setSeasonPlanError(plan.errors.join(' '))
+    } catch (e: unknown) {
+      setSeasonPlan(null)
+      setSeasonPlanError(e instanceof Error ? e.message : 'Error preparando la temporada')
+    } finally {
+      window.clearInterval(poll)
+      setSeasonPlanLoading(false)
+    }
+  }, [targetId])
 
-  // Reset the track remux preview + any manual edits whenever the resolved
-  // target changes (a different file → a different, unrelated track plan).
-  useEffect(() => { setRemuxPreview(null); setRemuxError(null); setRemuxEdits({}); setShowRemuxCard(false) }, [targetId])
+  useEffect(() => { if (step === 1 && targetIsSeason) loadSeasonPlan() }, [step, targetIsSeason, loadSeasonPlan])
+
+  const loadSeasonNames = useCallback(async () => {
+    if (targetId == null) return
+    setSeasonNamesLoading(true)
+    try { setSeasonNames((await getSeasonEpisodeNames(targetId)).episodes) }
+    catch { setSeasonNames(null) }
+    finally { setSeasonNamesLoading(false) }
+  }, [targetId])
+
+  const loadSeasonMi = useCallback(async () => {
+    if (targetId == null) return
+    setSeasonMiLoading(true); setSeasonMiError(null)
+    try { setSeasonMi((await getSeasonEpisodeMediaInfo(targetId)).episodes) }
+    catch (e: unknown) { setSeasonMi(null); setSeasonMiError(e instanceof Error ? e.message : 'Error cargando MediaInfo') }
+    finally { setSeasonMiLoading(false) }
+  }, [targetId])
+
+  const loadSeasonRemux = useCallback(async () => {
+    if (targetId == null) return
+    setSeasonRemuxLoading(true); setSeasonRemuxError(null)
+    try { setSeasonRemux((await getSeasonEpisodeRemuxPreview(targetId)).episodes) }
+    catch (e: unknown) { setSeasonRemux(null); setSeasonRemuxError(e instanceof Error ? e.message : 'Error calculando el remux') }
+    finally { setSeasonRemuxLoading(false) }
+  }, [targetId])
+
+  // Reset all per-target state (both single-file and season) whenever the
+  // resolved target changes — a different item means unrelated data.
+  useEffect(() => {
+    setMiReport(null); setMiError(null); setShowMiCard(false)
+    setRemuxPreview(null); setRemuxError(null); setRemuxEdits({}); setShowRemuxCard(false)
+    setSeasonPlan(null); setSeasonPlanError(null)
+    setSeasonNames(null); setShowSeasonNamesCard(false)
+    setSeasonMi(null); setSeasonMiError(null); setExpandedMiEp(null)
+    setSeasonRemux(null); setSeasonRemuxError(null); setExpandedRemuxEp(null)
+  }, [targetId])
 
   // Auto-detect the provider via TMDB when Source is WEB-DL and none was
   // detected from the filename. Debounced 500ms and fired at most once per
   // resolved target, so clicking "Subir" never triggers a burst of TMDB calls.
   useEffect(() => {
+    if (targetIsSeason) return
     if (targetId == null || loading) return
     if (!PROVIDER_SOURCES.has(fields.source || '')) return
     if (fields.provider) return                       // already have one
@@ -329,7 +569,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
       finally { setDetectingProvider(false) }
     }, 500)
     return () => clearTimeout(t)
-  }, [targetId, loading, fields.source, fields.provider])
+  }, [targetId, targetIsSeason, loading, fields.source, fields.provider])
 
   const runMediaInfo = async () => {
     if (targetId == null) return
@@ -360,7 +600,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
   // (reading a real .mkv's tracks — mkvmerge -J — can be slow over a remote
   // mount) so it's usually already loaded (or well underway) by the time the
   // user opens "Ver Remux", instead of only starting the read on click.
-  useEffect(() => { if (step === 1) runTrackRemux() }, [step, runTrackRemux])
+  useEffect(() => { if (step === 1 && !targetIsSeason) runTrackRemux() }, [step, targetIsSeason, runTrackRemux])
 
   const setRemuxEdit = (trackId: number, patch: TrackRemuxOverride) => {
     setRemuxEdits(prev => ({ ...prev, [trackId]: { ...prev[trackId], ...patch } }))
@@ -368,12 +608,13 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
 
   // Debounced live preview of the final torrent name + internal title.
   useEffect(() => {
+    if (targetIsSeason) return
     if (targetId == null || !Object.keys(fields).length) return
     const t = setTimeout(async () => {
       try { setPreview(await previewNomenclatureFields(targetId, fields)) } catch { /* non-blocking */ }
     }, 400)
     return () => clearTimeout(t)
-  }, [targetId, fields])
+  }, [targetId, targetIsSeason, fields])
 
   const setField = (key: string, value: string | null) => {
     setFields(prev => {
@@ -391,7 +632,12 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
   const goToUpload = async () => {
     if (targetId == null) return
     setPreparing(true); setUploadMsg(null)
-    try { await saveNomenclatureFields(targetId, fields) } catch { /* non-blocking */ }
+    // Editable fields (title/year/resolution/…) only exist for a single
+    // file — a season pack's fields come from build_season_pack_plan()
+    // (per-episode, already computed), nothing to save here.
+    if (!targetIsSeason) {
+      try { await saveNomenclatureFields(targetId, fields) } catch { /* non-blocking */ }
+    }
     setPreparing(false)
     setStep(2)
     runChecks()
@@ -499,6 +745,37 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
     </>
   )
 
+  // Season target: no editable fields (they come from each episode's own
+  // proposal, already computed) — just the single pack torrent name (no
+  // per-file "internal title" at season level, see "Ver nombre de todos los
+  // capítulos" instead) plus a summary of the episodes included.
+  const seasonSummaryBox = (
+    <>
+      <div style={{ marginTop: 16, padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
+        {seasonPlan?.season_pack_title ? (
+          <FitText min={12} text={seasonPlan.season_pack_title} />
+        ) : (
+          <>
+            <div style={labelStyle}>Nombre final del torrent (eMuwarez)</div>
+            <GeneratingHint />
+          </>
+        )}
+      </div>
+      {seasonPlan?.status === 'valid' && (
+        <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span>✓ {seasonPlan.episodes.length} capítulo(s) listos, coherentes entre sí</span>
+          <button
+            className="btn btn-secondary btn-sm"
+            type="button"
+            onClick={() => { setShowSeasonNamesCard(true); if (!seasonNames && !seasonNamesLoading) loadSeasonNames() }}
+          >
+            Ver nombre de todos los capítulos
+          </button>
+        </div>
+      )}
+    </>
+  )
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 720 }}>
@@ -547,7 +824,163 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
           </div>
         )}
 
-        {step === 1 && (
+        {step === 1 && targetIsSeason && (
+          <div className="modal-body">
+            {seasonPlanLoading && (
+              <div style={{ padding: '36px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                <span className="spinner" style={{ width: 28, height: 28, borderWidth: 3 }} />
+                <div style={{ fontSize: 15, fontWeight: 600 }}>
+                  {seasonProgress.total > 0
+                    ? `Comprobando ${seasonProgress.done} de ${seasonProgress.total} capítulos…`
+                    : 'Comprobando los capítulos de la temporada…'}
+                </div>
+                {seasonProgress.current_title && (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{seasonProgress.current_title}</div>
+                )}
+              </div>
+            )}
+            {seasonPlanError && !seasonPlanLoading && (
+              <div style={{ padding: '20px 0' }}>
+                <p className="text-error" style={{ marginTop: 0 }}>⚠ {seasonPlanError}</p>
+                <button className="btn btn-secondary btn-sm" type="button" onClick={loadSeasonPlan}>↻ Reintentar</button>
+              </div>
+            )}
+            {!seasonPlanLoading && !seasonPlanError && seasonPlan && (
+              <>
+                <p className="text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
+                  Se sube como un único pack de temporada. Todos los capítulos deben tener el mismo códec
+                  de audio/vídeo, los mismos idiomas de audio/subtítulos, la misma resolución y source.
+                </p>
+                {seasonSummaryBox}
+
+                <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>MediaInfo y Remux de los capítulos</div>
+                      <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>
+                        Un capítulo por fila, expandible — cada uno con su propio detalle de MediaInfo y su
+                        propio plan de reordenación/renombrado de pistas (sin edición manual para temporadas).
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                      <button className="btn btn-primary" onClick={() => { setShowMiCard(true); if (!seasonMi && !seasonMiLoading) loadSeasonMi() }} disabled={targetId == null}>
+                        Ver MediaInfo
+                      </button>
+                      <button className="btn btn-primary" onClick={() => { setShowRemuxCard(true); if (!seasonRemux && !seasonRemuxLoading) loadSeasonRemux() }} disabled={targetId == null}>
+                        Ver Remux
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {showMiCard && (
+                  <div className="modal-overlay" onClick={() => setShowMiCard(false)}>
+                    <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 720 }}>
+                      <div className="modal-header">
+                        <h2 className="modal-title">MediaInfo de los capítulos</h2>
+                        <button className="modal-close" onClick={() => setShowMiCard(false)}>✕</button>
+                      </div>
+                      <div className="modal-body">
+                        {seasonMiLoading && !seasonMi && <TableLoadingSpinner label="Leyendo MediaInfo de cada capítulo…" />}
+                        {seasonMiError && !seasonMiLoading && (
+                          <>
+                            <p className="text-error" style={{ fontSize: 12, marginTop: 0 }}>✗ {seasonMiError}</p>
+                            <button className="btn btn-secondary btn-sm" type="button" onClick={loadSeasonMi}>↻ Reintentar</button>
+                          </>
+                        )}
+                        {seasonMi?.map(ep => (
+                          <EpisodeAccordionRow
+                            key={ep.episode_id}
+                            episodeNumber={ep.episode_number}
+                            title={ep.title}
+                            expanded={expandedMiEp === ep.episode_id}
+                            onToggle={() => setExpandedMiEp(expandedMiEp === ep.episode_id ? null : ep.episode_id)}
+                          >
+                            <MediaInfoTable report={ep.report} />
+                          </EpisodeAccordionRow>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {showRemuxCard && (
+                  <div className="modal-overlay" onClick={() => setShowRemuxCard(false)}>
+                    <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 780 }}>
+                      <div className="modal-header">
+                        <h2 className="modal-title">Remux — orden y nombre de pistas por capítulo</h2>
+                        <button className="modal-close" onClick={() => setShowRemuxCard(false)}>✕</button>
+                      </div>
+                      <div className="modal-body">
+                        {seasonRemuxLoading && !seasonRemux && <TableLoadingSpinner label="Calculando el remux de cada capítulo…" />}
+                        {seasonRemuxError && !seasonRemuxLoading && (
+                          <>
+                            <p className="text-error" style={{ fontSize: 12, marginTop: 0 }}>✗ {seasonRemuxError}</p>
+                            <button className="btn btn-secondary btn-sm" type="button" onClick={loadSeasonRemux}>↻ Reintentar</button>
+                          </>
+                        )}
+                        {seasonRemux?.map(ep => (
+                          <EpisodeAccordionRow
+                            key={ep.episode_id}
+                            episodeNumber={ep.episode_number}
+                            title={ep.title}
+                            expanded={expandedRemuxEp === ep.episode_id}
+                            onToggle={() => setExpandedRemuxEp(expandedRemuxEp === ep.episode_id ? null : ep.episode_id)}
+                          >
+                            <RemuxTable plan={ep.plan} editable={false} />
+                          </EpisodeAccordionRow>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {showSeasonNamesCard && (
+                  <div className="modal-overlay" onClick={() => setShowSeasonNamesCard(false)}>
+                    <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 720 }}>
+                      <div className="modal-header">
+                        <h2 className="modal-title">Nombre de todos los capítulos</h2>
+                        <button className="modal-close" onClick={() => setShowSeasonNamesCard(false)}>✕</button>
+                      </div>
+                      <div className="modal-body">
+                        {seasonNamesLoading && !seasonNames && <TableLoadingSpinner label="Generando el nombre de cada capítulo…" />}
+                        {seasonNames?.map(ep => (
+                          <div key={ep.episode_id} style={{ marginBottom: 14, paddingBottom: 14, borderBottom: '1px solid var(--border)' }}>
+                            <div style={{ ...labelStyle, marginBottom: 6 }}>
+                              {ep.episode_number != null ? `E${String(ep.episode_number).padStart(2, '0')} — ` : ''}{ep.title}
+                            </div>
+                            {ep.error ? (
+                              <p className="text-error" style={{ fontSize: 12, margin: 0 }}>✗ {ep.error}</p>
+                            ) : (
+                              <FitTextPair
+                                min={12}
+                                items={[
+                                  { label: 'Nombre del torrent', text: ep.torrent_name || '–', labelStyle: { ...labelStyle, fontSize: 10 } },
+                                  { label: 'Título interno del archivo', text: ep.internal_mkv_title || '–', labelStyle: { ...labelStyle, fontSize: 10 } },
+                                ]}
+                              />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
+                  {needsSelection
+                    ? <button className="btn btn-secondary" onClick={() => setStep(0)}>← Selección</button>
+                    : <span />}
+                  <button className="btn btn-primary" onClick={goToUpload} disabled={preparing || seasonPlan.status !== 'valid'}>
+                    {preparing ? 'Preparando…' : 'Continuar →'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {step === 1 && !targetIsSeason && (
           <div className="modal-body">
             {loading && (
               <div style={{ padding: '36px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
@@ -609,36 +1042,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
                             <button className="btn btn-secondary btn-sm" type="button" onClick={runMediaInfo}>↻ Reintentar</button>
                           </>
                         )}
-                        {miReport && !miReport.available && (
-                          <p className="text-warning" style={{ fontSize: 12, marginTop: 0 }}>⚠ {miReport.message}</p>
-                        )}
-                        {miReport?.available && (
-                          <div style={{ maxHeight: 420, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 8, background: 'rgba(255,255,255,0.03)' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, tableLayout: 'fixed' }}>
-                              <colgroup>
-                                <col style={{ width: '22%' }} />
-                                <col style={{ width: '39%' }} />
-                                <col style={{ width: '39%' }} />
-                              </colgroup>
-                              <thead>
-                                <tr>
-                                  <th style={thStyle}>Campo</th>
-                                  <th style={thStyle}>MediaInfo</th>
-                                  <th style={thStyle}>eMuwarez</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {miReport.rows.map((r, i) => (
-                                  <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
-                                    <td style={{ padding: '7px 12px', fontWeight: 600 }}>{r.field}</td>
-                                    <td style={{ padding: '7px 12px', fontFamily: 'monospace', color: 'var(--text-muted)', wordBreak: 'break-word' }}>{r.mediainfo}</td>
-                                    <td style={{ padding: '7px 12px', fontFamily: 'monospace', wordBreak: 'break-word' }}>{r.emu}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
+                        {miReport && <MediaInfoTable report={miReport} />}
                       </div>
                     </div>
                   </div>
@@ -652,75 +1056,14 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
                         <button className="modal-close" onClick={() => setShowRemuxCard(false)}>✕</button>
                       </div>
                       <div className="modal-body">
-                  {remuxLoading && !remuxPreview && <TableLoadingSpinner label="Cargando pistas del archivo…" />}
-                  {remuxError && !remuxLoading && (
-                    <>
-                      <p className="text-error" style={{ fontSize: 12, marginTop: 0 }}>✗ {remuxError}</p>
-                      <button className="btn btn-secondary btn-sm" type="button" onClick={runTrackRemux}>↻ Reintentar</button>
-                    </>
-                  )}
-                  {remuxPreview?.errors?.map((e, i) => (
-                    <p key={i} className="text-error" style={{ fontSize: 12, marginTop: 10 }}>✗ {e}</p>
-                  ))}
-                  {remuxPreview?.warnings?.map((w, i) => (
-                    <p key={i} className="text-warning" style={{ fontSize: 12, marginTop: 10 }}>⚠ {w}</p>
-                  ))}
-
-                  {remuxPreview && remuxPreview.ordered_tracks && remuxPreview.ordered_tracks.length > 0 && (
-                    <div style={{ marginTop: 12, maxHeight: 260, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 8, background: 'rgba(255,255,255,0.03)' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, tableLayout: 'fixed' }}>
-                        <colgroup>
-                          <col style={{ width: '10%' }} />
-                          <col style={{ width: '10%' }} />
-                          <col style={{ width: '25%' }} />
-                          <col style={{ width: '38%' }} />
-                          <col style={{ width: '17%' }} />
-                        </colgroup>
-                        <thead>
-                          <tr>
-                            <th style={thStyle}>Tipo</th>
-                            <th style={thStyle}>Idioma</th>
-                            <th style={thStyle}>Nombre actual</th>
-                            <th style={thStyle}>Nombre nuevo</th>
-                            <th style={thStyle}>Predet.</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {remuxPreview.ordered_tracks.map(t => {
-                            const edit = remuxEdits[t.id]
-                            const effectiveName = edit?.new_name ?? t.new_name
-                            const effectiveDefault = edit?.default_after ?? t.default_after
-                            return (
-                              <tr key={t.id} style={{ borderTop: '1px solid var(--border)' }}>
-                                <td style={{ padding: '6px 10px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{TRACK_TYPE_LABEL[t.type] ?? t.type}</td>
-                                <td style={{ padding: '6px 10px', fontFamily: 'monospace', color: 'var(--text-secondary)' }}>{t.language || '—'}</td>
-                                <td style={{ padding: '6px 10px', color: 'var(--text-muted)', wordBreak: 'break-word' }}>{t.current_name || '—'}</td>
-                                <td style={{ padding: '5px 8px' }}>
-                                  <input
-                                    className="form-input"
-                                    style={{ fontSize: 12, padding: '4px 6px' }}
-                                    value={effectiveName}
-                                    onChange={e => setRemuxEdit(t.id, { new_name: e.target.value })}
-                                  />
-                                </td>
-                                <td style={{ padding: '6px 10px', textAlign: 'center' }}>
-                                  {t.type === 'video' ? (
-                                    <span style={{ color: 'var(--text-muted)' }}>—</span>
-                                  ) : (
-                                    <input
-                                      type="checkbox"
-                                      checked={effectiveDefault}
-                                      onChange={e => setRemuxEdit(t.id, { default_after: e.target.checked })}
-                                    />
-                                  )}
-                                </td>
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
+                        {remuxLoading && !remuxPreview && <TableLoadingSpinner label="Cargando pistas del archivo…" />}
+                        {remuxError && !remuxLoading && (
+                          <>
+                            <p className="text-error" style={{ fontSize: 12, marginTop: 0 }}>✗ {remuxError}</p>
+                            <button className="btn btn-secondary btn-sm" type="button" onClick={runTrackRemux}>↻ Reintentar</button>
+                          </>
+                        )}
+                        {remuxPreview && <RemuxTable plan={remuxPreview} editable edits={remuxEdits} onEdit={setRemuxEdit} />}
                       </div>
                     </div>
                   </div>
@@ -742,13 +1085,20 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
         {step === 2 && (
           <div className="modal-body">
             <div style={{ marginBottom: 14, padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
-              <FitTextPair
-                min={12}
-                items={[
-                  { label: 'Nombre final del torrent', text: preview?.torrent_name || '–', labelStyle },
-                  { label: 'Título Final del Archivo (También el Interno)', text: preview?.internal_mkv_title || '–', labelStyle },
-                ]}
-              />
+              {targetIsSeason ? (
+                <>
+                  <div style={labelStyle}>Nombre final del torrent (pack de temporada)</div>
+                  <FitText min={12} text={seasonPlan?.season_pack_title || '–'} />
+                </>
+              ) : (
+                <FitTextPair
+                  min={12}
+                  items={[
+                    { label: 'Nombre final del torrent', text: preview?.torrent_name || '–', labelStyle },
+                    { label: 'Título Final del Archivo (También el Interno)', text: preview?.internal_mkv_title || '–', labelStyle },
+                  ]}
+                />
+              )}
             </div>
 
             {/* Pre-upload checks card */}
@@ -765,7 +1115,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
                 // calls, ~30s). liveChecks only holds COMPLETED checks, so
                 // its length is the index of the one in flight right now.
                 <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                  {CHECK_STEP_PENDING_LABEL[CHECK_STEP_ORDER[liveChecks.length]] ?? 'Finalizando comprobaciones…'}
+                  {CHECK_STEP_PENDING_LABEL[(targetIsSeason ? CHECK_STEP_ORDER_SEASON : CHECK_STEP_ORDER)[liveChecks.length]] ?? 'Finalizando comprobaciones…'}
                 </div>
               ) : (
                 checks?.checks.map(c => <CheckRow key={c.id} c={c} />)

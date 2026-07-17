@@ -127,7 +127,7 @@ def build_uploadrr_command_preview(
         season = (proposal or {}).get("season") or library_item.get("season")
         episode = (proposal or {}).get("episode") or library_item.get("episode")
 
-        category = "tv" if media_type in ("tv", "series", "anime") else "movie"
+        category = "tv" if media_type in ("tv", "series", "anime", "season", "episode") else "movie"
 
         if runtime_type == RUNTIME_EMU:
             uploadrr_path = runtime["uploadrr_path"] or "/path/to/Uploadrr"

@@ -17,7 +17,6 @@ import { RequestFormModal } from '../components/RequestFormModal'
 import { LibraryTreeRow, type LibraryActionKind } from '../components/LibraryTreeRow'
 import { LargePosterCard } from '../components/LargePosterCard'
 import { LibraryDetailPage } from '../components/LibraryDetailPage'
-import { SeasonPackModal } from '../components/SeasonPackModal'
 import { HeaderFilter } from '../components/HeaderFilter'
 import { buildDeepLink, posterUrl } from '../utils/libraryItem'
 
@@ -99,14 +98,11 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const [wizardItem, setWizardItem] = useState<LibraryItemResponse | null>(null)
   const [requestItem, setRequestItem] = useState<LibraryItemResponse | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode)
-  // Season pack modal — opened for a single Season row, or for a whole
-  // Series row (its seasons resolved first, then all listed/applied here).
-  const [packSeasons, setPackSeasons] = useState<LibraryItemResponse[] | null>(null)
 
-  // Movie/episode leaf rows: open the existing single-item modals as
-  // before. Season/Series rows: all 3 buttons open the same season-pack
-  // modal (its per-episode filenames are already computed automatically —
-  // no separate manual field-editing step for "Campos" in this version).
+  // Movie/episode leaf rows: open the existing single-item modals as before.
+  // Season/Series rows: 'upload' opens the same unified wizard too — it asks
+  // which season/episode (or the whole season) to target, and handles a
+  // whole-season pack internally (server-side).
   async function handleTreeAction(kind: LibraryActionKind, item: LibraryItemResponse) {
     if (kind === 'nomenclature') { setNomenclatureItem(item); return }
     if (kind === 'fields') { setFieldsItem(item); return }
@@ -231,9 +227,6 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // having to go back to the library first.
   const modals = (
     <>
-      {packSeasons && packSeasons.length > 0 && (
-        <SeasonPackModal seasons={packSeasons} onClose={() => { setPackSeasons(null); load() }} />
-      )}
       {nomenclatureItem && (
         <NomenclatureModal itemId={nomenclatureItem.id} itemTitle={nomenclatureItem.title} onClose={() => setNomenclatureItem(null)} />
       )}

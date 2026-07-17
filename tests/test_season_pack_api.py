@@ -1,12 +1,10 @@
-"""Tests for the season-pack preview/apply API endpoints (Phase 6 of the
-Series/Season/Episode hierarchy batch).
+"""Tests for the season-pack preview + per-episode read API endpoints.
 
 conftest.py provides: client, auth_headers, isolated_db.
 """
 from __future__ import annotations
 
 from emuwarez_uploadrr.database import connect
-from emuwarez_uploadrr.services.season_pack import CONFIRMATION_TOKEN
 
 
 def _seed_season_with_episode(isolated_db, tmp_path):
@@ -58,41 +56,59 @@ def test_pack_preview_valid(client, auth_headers, isolated_db, tmp_path):
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "valid"
+    assert data["mode"] == "hardlink"
     assert len(data["episodes"]) == 1
     assert data["season_pack_title"].startswith("One Piece S01")
 
 
-def test_adapt_pack_dry_run(client, auth_headers, isolated_db, tmp_path):
+def test_pack_preview_progress_requires_auth(client):
+    resp = client.get("/api/library/season/1/pack-preview/progress")
+    assert resp.status_code == 401
+
+
+def test_pack_preview_progress_reaches_total_after_preview(client, auth_headers, isolated_db, tmp_path):
+    season_id = _seed_season_with_episode(isolated_db, tmp_path)
+    client.get(f"/api/library/season/{season_id}/pack-preview", headers=auth_headers)
+    resp = client.get(f"/api/library/season/{season_id}/pack-preview/progress", headers=auth_headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["done"] == data["total"] == 1
+
+
+def test_episode_names_endpoint(client, auth_headers, isolated_db, tmp_path):
+    season_id = _seed_season_with_episode(isolated_db, tmp_path)
+    resp = client.get(f"/api/library/season/{season_id}/episode-names", headers=auth_headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["episodes"]) == 1
+    assert data["episodes"][0]["torrent_name"]
+
+
+def test_episode_mediainfo_endpoint(client, auth_headers, isolated_db, tmp_path):
+    season_id = _seed_season_with_episode(isolated_db, tmp_path)
+    resp = client.get(f"/api/library/season/{season_id}/episode-mediainfo", headers=auth_headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["episodes"]) == 1
+    assert "report" in data["episodes"][0]
+
+
+def test_episode_remux_preview_endpoint(client, auth_headers, isolated_db, tmp_path):
+    season_id = _seed_season_with_episode(isolated_db, tmp_path)
+    resp = client.get(f"/api/library/season/{season_id}/episode-remux-preview", headers=auth_headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["episodes"]) == 1
+    assert "plan" in data["episodes"][0]
+
+
+def test_adapt_pack_endpoint_removed(client, auth_headers, isolated_db, tmp_path):
+    # Retired along with SeasonPackModal.tsx — applying a season now only
+    # happens through the queued-upload pipeline (POST /library/{id}/upload/queue).
     season_id = _seed_season_with_episode(isolated_db, tmp_path)
     resp = client.post(
         f"/api/library/season/{season_id}/adapt-pack",
         json={"dry_run": True},
         headers=auth_headers,
     )
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["status"] == "ready"
-    assert not list((tmp_path / "prepared").rglob("*.mkv"))
-
-
-def test_adapt_pack_apply_requires_confirmation(client, auth_headers, isolated_db, tmp_path):
-    season_id = _seed_season_with_episode(isolated_db, tmp_path)
-    resp = client.post(
-        f"/api/library/season/{season_id}/adapt-pack",
-        json={"dry_run": False, "apply": True},
-        headers=auth_headers,
-    )
-    data = resp.json()
-    assert data["status"] == "blocked"
-
-
-def test_adapt_pack_apply_real(client, auth_headers, isolated_db, tmp_path):
-    season_id = _seed_season_with_episode(isolated_db, tmp_path)
-    resp = client.post(
-        f"/api/library/season/{season_id}/adapt-pack",
-        json={"dry_run": False, "apply": True, "confirmation": CONFIRMATION_TOKEN},
-        headers=auth_headers,
-    )
-    data = resp.json()
-    assert data["status"] == "applied"
-    assert len(list((tmp_path / "prepared").rglob("*.mkv"))) == 1
+    assert resp.status_code in (404, 405)

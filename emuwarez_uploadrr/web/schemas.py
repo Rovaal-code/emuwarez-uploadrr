@@ -831,34 +831,12 @@ class SeasonPackPlanResponse(BaseModel):
     hardlink_base: Optional[str] = None
     hardlink_folder: Optional[str] = None
     episodes: list[SeasonPackEpisodePlan] = []
-
-
-class AdaptSeasonPackBody(BaseModel):
-    dry_run: bool = True
-    apply: bool = False
-    confirmation: Optional[str] = None
-
-
-class SeasonPackEpisodeResult(BaseModel):
-    episode_id: int
-    title: Optional[str] = None
-    destination_path: Optional[str] = None
-    status: str
-    message: Optional[str] = None
-    errors: list[str] = []
-
-
-class SeasonPackApplyResult(BaseModel):
-    dry_run: bool
-    apply: bool
-    status: str
-    message: Optional[str] = None
-    season_pack_title: Optional[str] = None
-    hardlink_folder: Optional[str] = None
-    warnings: list[str] = []
-    errors: list[str] = []
-    episodes: list[SeasonPackEpisodeResult] = []
-    upload_job_id: Optional[int] = None
+    # Resolved provider (filename-detected across episodes, or the single
+    # TMDb fallback when none revealed one and source is WEB-DL).
+    provider: Optional[str] = None
+    # "hardlink" (new shared folder) or "rename" (hardlinks disabled but all
+    # episodes already share one folder — renamed in place there).
+    mode: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------

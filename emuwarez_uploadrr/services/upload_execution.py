@@ -230,6 +230,12 @@ def validate_upload_job_start(job_id: int, conn=None) -> dict:
                 errors.append(f"El archivo no existe en disco: {active_path}")
             elif p.is_symlink():
                 errors.append(f"El archivo es un symlink y no puede usarse: {active_path}")
+            elif p.is_dir():
+                # A season pack's prepared_path is the shared hardlink folder,
+                # not a single file — nothing more to check here (each
+                # episode inside it was already validated during the
+                # queue's own integrity/nomenclature/remux stages).
+                pass
             elif not p.is_file():
                 errors.append(f"La ruta no es un archivo regular: {active_path}")
             elif p.suffix.lower() not in VIDEO_EXTENSIONS:

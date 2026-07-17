@@ -153,40 +153,63 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int) -> dict:
     if not item:
         add("renameable", "Se puede renombrar", "No se puede renombrar", False, "Elemento no encontrado")
         return done()
-    path = item.get("path")
-    # Translate the Radarr/Sonarr path to where the file is actually reachable
-    # (remote path mapping) — same as MediaInfo. Otherwise a remote-mounted
-    # library reads fine but the filesystem checks fail on the raw /data path.
-    from .path_mapping import resolve_local_path
-    local_path = resolve_local_path(path) or path
 
     # Accessibility and integrity (MediaInfo/mkvtoolnix can read the file) are
     # NOT checked here anymore — they're checked for real once the upload is
     # actually queued, as the first stage of the server-side preparation
     # (services/upload_queue.py), which already runs MediaInfo/mkvmerge on
-    # this exact file for the nomenclature/remux steps. Checking twice would
+    # each real file for the nomenclature/remux steps. Checking twice would
     # just duplicate that work; a failure there fails the job with a specific
     # reason ("no accesible" / "MediaInfo no pudo leer" / "mkvtoolnix no pudo
     # leer") instead of blocking the wizard's checklist pre-emptively.
 
-    # 1. Renameable — write permission on the file's directory.
-    parent = os.path.dirname(local_path) if local_path else ""
-    if not add("renameable", "Se puede renombrar", "No se puede renombrar",
-               bool(parent) and os.access(parent, os.W_OK),
-               parent or (path or "El elemento no tiene ruta de archivo")):
-        return done()
-
-    # 2. Hardlink — only when hardlinks are configured; otherwise skipped (yellow).
-    use_hardlinks = (get_setting_canonical(conn, "nomenclature.use_hardlinks") or "true") != "false"
-    hl_base = get_setting_canonical(conn, "hardlink_base")
-    if not use_hardlinks:
-        add_skip("hardlink", "Hardlinks desactivados (se omite)", "Actívalos en Ajustes si quieres usarlos")
-    elif not (hl_base and hl_base.strip()):
-        add_skip("hardlink", "Hardlinks sin configurar (se omite)", "Configura la ruta base en Ajustes")
-    else:
-        ok, msg = _test_hardlink(local_path, hl_base)
-        if not add("hardlink", "Se puede crear el hardlink", "No se puede crear el hardlink", ok, msg):
+    if item.get("item_type") == "season":
+        # A season has no `path` of its own — only its episodes do — so the
+        # generic single-file "renameable"/"hardlink" checks below don't
+        # apply. build_season_pack_plan() already covers everything relevant
+        # here in one pass — completeness, per-episode consistency, and
+        # whether a shared pack folder is achievable (hardlink into a new
+        # folder, or rename in place when hardlinks are off and episodes
+        # already share one folder) — so it's reused as the single season
+        # check instead of re-deriving pieces of it.
+        from .season_pack import build_season_pack_plan
+        plan = build_season_pack_plan(item_id, conn=conn)
+        ok = plan["status"] == "valid"
+        msg = "; ".join(plan["errors"]) if not ok else (
+            f"Pack listo: {len(plan['episodes'])} episodio(s) → {plan.get('hardlink_folder')}"
+        )
+        if not add("season_pack", "Se puede preparar el pack de temporada",
+                   "No se puede preparar el pack de temporada", ok, msg):
             return done()
+        # Falls through to the shared checks below (output dir/qBittorrent/
+        # image hosts/eMuwarez) — those don't depend on item_type.
+    else:
+        path = item.get("path")
+        # Translate the Radarr/Sonarr path to where the file is actually
+        # reachable (remote path mapping) — same as MediaInfo. Otherwise a
+        # remote-mounted library reads fine but the filesystem checks fail on
+        # the raw /data path.
+        from .path_mapping import resolve_local_path
+        local_path = resolve_local_path(path) or path
+
+        # 1. Renameable — write permission on the file's directory.
+        parent = os.path.dirname(local_path) if local_path else ""
+        if not add("renameable", "Se puede renombrar", "No se puede renombrar",
+                   bool(parent) and os.access(parent, os.W_OK),
+                   parent or (path or "El elemento no tiene ruta de archivo")):
+            return done()
+
+        # 2. Hardlink — only when hardlinks are configured; otherwise skipped (yellow).
+        use_hardlinks = (get_setting_canonical(conn, "nomenclature.use_hardlinks") or "true") != "false"
+        hl_base = get_setting_canonical(conn, "hardlink_base")
+        if not use_hardlinks:
+            add_skip("hardlink", "Hardlinks desactivados (se omite)", "Actívalos en Ajustes si quieres usarlos")
+        elif not (hl_base and hl_base.strip()):
+            add_skip("hardlink", "Hardlinks sin configurar (se omite)", "Configura la ruta base en Ajustes")
+        else:
+            ok, msg = _test_hardlink(local_path, hl_base)
+            if not add("hardlink", "Se puede crear el hardlink", "No se puede crear el hardlink", ok, msg):
+                return done()
 
     # 3. Output directory writable — where Uploadrr stages the .torrent + images.
     out_dir = get_setting_canonical(conn, "uploadrr.path")

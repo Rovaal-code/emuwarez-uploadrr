@@ -1,20 +1,27 @@
-"""API endpoints for season-pack preview/apply (Phase 6 of the
-Series/Season/Episode hierarchy batch) — one release for a whole
-Temporada, mirroring the single-item nomenclature preview/apply endpoints
-in web/api/nomenclature.py but scoped to a season_id."""
+"""API endpoints for season-pack planning + per-episode views — one release
+for a whole Temporada, mirroring the single-item nomenclature/mediainfo/
+track-remux endpoints in web/api/nomenclature.py but scoped to a season_id.
+
+Applying/uploading a season is NOT triggered here — that's the same
+POST /library/{item_id}/upload/queue endpoint a single file uses
+(web/api/uploads.py), pointed at the season's own library_items id;
+services/upload_queue.py's season branch drives services/season_pack.py's
+apply_season_hardlinks() internally after the grace period."""
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 
 from ...database import connect, init_db
-from ...services.season_pack import apply_season_pack, build_season_pack_plan
+from ...services.season_pack import (
+    build_season_pack_plan,
+    get_season_episode_mediainfo,
+    get_season_episode_names,
+    get_season_episode_remux_previews,
+    get_season_plan_progress,
+)
 from ..dependencies import require_auth
 from ..runtime import _db_path
-from ..schemas import (
-    AdaptSeasonPackBody,
-    SeasonPackApplyResult,
-    SeasonPackPlanResponse,
-)
+from ..schemas import SeasonPackPlanResponse
 
 router = APIRouter(tags=["season-pack"])
 
@@ -27,6 +34,8 @@ def _get_conn():
 
 @router.get("/library/season/{season_id}/pack-preview", response_model=SeasonPackPlanResponse)
 def preview_season_pack(season_id: int, current_user: dict = Depends(require_auth)):
+    """Can take a while for a big season (real work per episode) — poll
+    GET .../pack-preview/progress concurrently for a live "N de M" counter."""
     with _get_conn() as conn:
         plan = build_season_pack_plan(season_id, conn=conn)
     if plan["status"] == "blocked" and plan["errors"] == ["Temporada no encontrada."]:
@@ -34,18 +43,33 @@ def preview_season_pack(season_id: int, current_user: dict = Depends(require_aut
     return SeasonPackPlanResponse(**plan)
 
 
-@router.post("/library/season/{season_id}/adapt-pack", response_model=SeasonPackApplyResult)
-def adapt_season_pack(
-    season_id: int,
-    body: AdaptSeasonPackBody,
-    current_user: dict = Depends(require_auth),
-):
+@router.get("/library/season/{season_id}/pack-preview/progress")
+def preview_season_pack_progress(season_id: int, current_user: dict = Depends(require_auth)) -> dict:
+    """Live progress of a pack-preview build in flight for this season —
+    {done, total, current_title}. Meant to be polled while the GET above is
+    running; returns the empty/initial shape if none is running."""
+    return get_season_plan_progress(season_id)
+
+
+@router.get("/library/season/{season_id}/episode-names")
+def season_episode_names(season_id: int, current_user: dict = Depends(require_auth)) -> dict:
+    """Per-episode final torrent name + internal MKV title — backs "Ver
+    nombre de todos los capítulos" (a season pack has no single "título del
+    archivo interno", each episode file has its own)."""
     with _get_conn() as conn:
-        result = apply_season_pack(
-            season_id,
-            dry_run=body.dry_run,
-            apply=body.apply,
-            confirmation=body.confirmation,
-            conn=conn,
-        )
-    return SeasonPackApplyResult(**result)
+        return get_season_episode_names(season_id, conn=conn)
+
+
+@router.get("/library/season/{season_id}/episode-mediainfo")
+def season_episode_mediainfo(season_id: int, current_user: dict = Depends(require_auth)) -> dict:
+    """Per-episode MediaInfo report — backs "Ver MediaInfo" for a season target."""
+    with _get_conn() as conn:
+        return get_season_episode_mediainfo(season_id, conn=conn)
+
+
+@router.get("/library/season/{season_id}/episode-remux-preview")
+def season_episode_remux_preview(season_id: int, current_user: dict = Depends(require_auth)) -> dict:
+    """Per-episode track remux plan — backs "Ver Remux" for a season target
+    (read-only preview; no manual per-track overrides for season packs)."""
+    with _get_conn() as conn:
+        return get_season_episode_remux_previews(season_id, conn=conn)

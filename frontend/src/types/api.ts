@@ -386,35 +386,17 @@ export interface SeasonPackEpisodePlan {
 }
 
 export interface SeasonPackPlanResponse {
-  status: 'valid' | 'warning' | 'blocked'
+  status: 'valid' | 'blocked'
   errors: string[]
   warnings: string[]
-  season_pack_title?: string
-  hardlink_base?: string
-  hardlink_folder?: string
+  season_pack_title?: string | null
+  hardlink_base?: string | null
+  hardlink_folder?: string | null
   episodes: SeasonPackEpisodePlan[]
+  provider?: string | null
+  mode?: 'hardlink' | 'rename' | null
 }
 
-export interface SeasonPackEpisodeResult {
-  episode_id: number
-  title?: string
-  destination_path?: string
-  status: string
-  message?: string
-  errors: string[]
-}
-
-export interface SeasonPackApplyResult {
-  dry_run: boolean
-  apply: boolean
-  status: 'ready' | 'blocked' | 'applied' | 'failed'
-  message?: string
-  season_pack_title?: string
-  hardlink_folder?: string
-  warnings: string[]
-  errors: string[]
-  episodes: SeasonPackEpisodeResult[]
-}
 
 // Phase 6A — Upload preflight
 

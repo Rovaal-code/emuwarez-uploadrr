@@ -468,7 +468,14 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 720 }}>
+      {/* 960px (not the usual 720/780): the real monospace font this app uses
+          renders characters much wider than a typical ~0.6 ratio (measured
+          ~0.95 on a real torrent name) — an 85-char release name needs close
+          to 650px just to reach the 720px modal's floor (min=8px, barely not
+          clipping). Widening the modal is what actually buys FitText room to
+          render bigger while staying on one line, not a smarter algorithm —
+          the fit measurement itself was already accurate. */}
+      <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 960 }}>
         <div className="modal-header">
           <h2 className="modal-title">Subir a eMuwarez — {item.title}</h2>
           <button className="modal-close" onClick={onClose}>✕</button>

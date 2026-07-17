@@ -22,7 +22,7 @@ interface AppShellProps {
 }
 
 const PAGE_TITLE: Record<string, string> = {
-  dashboard:  'Dashboard',
+  dashboard:  'Panel',
   library:    'Biblioteca',
   requests:   'Peticiones',
   uploads:    'Subidas',

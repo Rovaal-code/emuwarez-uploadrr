@@ -202,7 +202,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
 
       <div className="page-header">
         <div>
-          <div className="page-title">Dashboard</div>
+          <div className="page-title">Panel</div>
         </div>
         <SyncCard />
       </div>

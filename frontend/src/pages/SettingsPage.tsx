@@ -374,7 +374,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
             placeholder="Tu nombre de usuario en eMuwarez"
           />
           <span className="form-hint">
-            Como eMuwarez no expone tu usuario automáticamente, escríbelo aquí para que el Dashboard pueda
+            Como eMuwarez no expone tu usuario automáticamente, escríbelo aquí para que el Panel pueda
             mostrar cuántas peticiones son tuyas ("Mis peticiones").
           </span>
         </div>
@@ -671,7 +671,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
               <ul className="form-hint" style={{ margin: '4px 0 0', paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <li>Si tienes todas las temporadas y capítulos salvo los especiales, la serie cuenta como <strong>completa</strong> en <strong>Estado</strong>, <strong>Nomenclatura</strong> y <strong>¿En eMuwarez?</strong>.</li>
                 <li>Sus atributos consolidados (<strong>resolución, source, códecs, audio y subtítulos</strong>) se calculan ignorando los especiales.</li>
-                <li>En el Dashboard, los capítulos faltantes de las temporadas especiales <strong>no cuentan</strong> como faltantes.</li>
+                <li>En el Panel, los capítulos faltantes de las temporadas especiales <strong>no cuentan</strong> como faltantes.</li>
               </ul>
             </span>
           </label>

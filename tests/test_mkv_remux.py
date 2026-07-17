@@ -135,6 +135,25 @@ def test_build_track_plan_no_change_when_already_ordered():
     assert audio["changed"] is False
 
 
+def test_build_track_plan_prefers_known_resolution_over_pixel_height():
+    """A cropped/letterboxed 2.40:1 encode can store fewer pixel rows than its
+    nominal resolution (e.g. 1920x800 for an actual 1080p master, confirmed on
+    a real file) — known_resolution (from Radarr/Sonarr) must win over the
+    pixel-height heuristic."""
+    from emuwarez_uploadrr.services.mkv_remux import build_track_plan
+    cropped = {
+        "tracks": [
+            {"id": 0, "type": "video", "codec": "AVC/H.264",
+             "properties": {"pixel_dimensions": "1920x800"}},
+        ]
+    }
+    without_hint = build_track_plan(cropped)
+    assert without_hint["ordered_tracks"][0]["new_name"] == "720p AVC"  # the bug, unpatched
+
+    with_hint = build_track_plan(cropped, known_resolution="1080p")
+    assert with_hint["ordered_tracks"][0]["new_name"] == "1080p AVC"
+
+
 def test_build_mkvmerge_args_shape():
     from emuwarez_uploadrr.services.mkv_remux import build_track_plan, build_mkvmerge_args
     plan = build_track_plan(_SAMPLE_MKV_JSON)

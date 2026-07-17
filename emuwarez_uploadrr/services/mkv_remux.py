@@ -235,9 +235,16 @@ def read_tracks_json(path: str) -> dict:
 # Plan building (pure — testable without the mkvmerge binary)
 # ---------------------------------------------------------------------------
 
-def build_track_plan(mkv_json: dict) -> dict:
+def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None) -> dict:
     """Turn a parsed `mkvmerge -J` structure into a reorder+rename plan: which
-    track ids go where, and what name each gets. Pure function — no I/O."""
+    track ids go where, and what name each gets. Pure function — no I/O.
+
+    `known_resolution` (e.g. "1080p", already resolved elsewhere in the app
+    from Radarr/Sonarr's quality profile) is preferred over deriving it from
+    the raw pixel height — a cropped/letterboxed encode (common for 2.35:1/
+    2.40:1 sources) can store fewer pixel rows than its nominal resolution
+    (e.g. 1920x800 for an actual 1080p master), which would otherwise mislabel
+    the video track."""
     raw_tracks = mkv_json.get("tracks") or []
     tracks: list[dict] = []
     ietf_by_id: dict[int, str | None] = {}
@@ -270,7 +277,7 @@ def build_track_plan(mkv_json: dict) -> dict:
     new_order = [t["id"] for t in video] + [t["id"] for t in audio_sorted] + [t["id"] for t in subs_sorted]
 
     for t in video:
-        res = _resolution_label(t["pixel_dimensions"])
+        res = known_resolution or _resolution_label(t["pixel_dimensions"])
         codec = _video_codec_label(t["codec"])
         t["new_name"] = " ".join(x for x in (res, codec) if x) or codec
         t["default_after"] = t["default_before"]  # never touch video default
@@ -325,6 +332,16 @@ def _preview_command(args: list[str]) -> str:
 # Preview / apply — DB + filesystem orchestration
 # ---------------------------------------------------------------------------
 
+def _get_known_resolution(library_item_id: int, conn) -> str | None:
+    """The resolution already resolved elsewhere in the app (from Radarr/
+    Sonarr's quality profile), preferred over deriving it from raw pixel
+    height for the video track's name — see build_track_plan's docstring."""
+    row = conn.execute(
+        "SELECT resolution FROM library_items WHERE id = ?", (library_item_id,)
+    ).fetchone()
+    return (row["resolution"] or None) if row else None
+
+
 def build_remux_plan(library_item_id: int, conn=None) -> dict:
     own = conn is None
     conn = conn or connect()
@@ -356,7 +373,7 @@ def build_remux_plan(library_item_id: int, conn=None) -> dict:
         if not read.get("ok"):
             return {**base, "status": "blocked", "errors": [f"mkvmerge -J falló: {read.get('error')}"]}
 
-        plan = build_track_plan(read["data"])
+        plan = build_track_plan(read["data"], known_resolution=_get_known_resolution(library_item_id, conn))
         if not plan["tracks"]:
             return {**base, "status": "blocked", "errors": ["mkvmerge no encontró pistas en el archivo."]}
 
@@ -430,7 +447,7 @@ def apply_remux(
         if not read.get("ok"):
             return {**preview, "status": "blocked", "dry_run": False, "apply": False,
                      "errors": [f"mkvmerge -J falló: {read.get('error')}"]}
-        plan = build_track_plan(read["data"])
+        plan = build_track_plan(read["data"], known_resolution=_get_known_resolution(library_item_id, conn))
 
         # Write to a temp file in the SAME directory (same filesystem — works
         # over SSHFS/NFS), then atomically replace the original.

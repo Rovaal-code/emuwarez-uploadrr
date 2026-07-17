@@ -23,6 +23,8 @@ from .compatibility import (
     rank_request_matches,
 )
 
+logger = logging.getLogger("emuwarez.requests")
+
 SYNC_STATE_KEY = "last_emu_requests_sync_utc"
 MIN_SYNC_SECONDS = 3600
 
@@ -166,6 +168,7 @@ def sync_emu_requests(
         set_state(conn, SYNC_STATE_KEY, prev_sync or "")
         conn.commit()
 
+    logger.info("Sincronización de peticiones iniciada")
     try:
         raw_items = emu.emu_fetch_all_pages(api_key)
         items = emu.normalize_requests(raw_items)
@@ -176,6 +179,8 @@ def sync_emu_requests(
         matched = match_all_requests(conn, emu_api_key=api_key)
         summary = f"{len(items)} peticiones importadas, {matched} cruces"
         finish_task(conn, task_id, TaskStatus.COMPLETED.value, summary)
+        logger.info("Sincronización de peticiones terminada: %d importadas, %d cruzadas con tu biblioteca",
+                    len(items), matched)
         return {"status": "ok", "imported": len(items), "matched": matched}
     except IntegrationError as exc:
         # eMuwarez (UNIT3D) does not expose /api/requests — the endpoint 404s.
@@ -185,12 +190,15 @@ def sync_emu_requests(
         if _is_requests_endpoint_missing(exc):
             msg = "eMuwarez no expone el endpoint de peticiones (/api/requests); función no disponible aún."
             finish_task(conn, task_id, TaskStatus.SKIPPED.value, msg)
+            logger.info("Sincronización de peticiones omitida: %s", msg)
             return {"status": "unavailable", "imported": 0, "matched": 0, "message": msg}
         finish_task(conn, task_id, TaskStatus.FAILED.value, str(exc))
+        logger.warning("Sincronización de peticiones fallida: %s", exc)
         raise
     except Exception as exc:
         _restore_throttle()
         finish_task(conn, task_id, TaskStatus.FAILED.value, str(exc))
+        logger.error("Sincronización de peticiones fallida: %s", exc)
         raise
 
 

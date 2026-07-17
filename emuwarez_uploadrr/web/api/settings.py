@@ -6,10 +6,13 @@ PUT  /api/settings  — update one or more settings
 from __future__ import annotations
 
 import json
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 import re
+
+logger = logging.getLogger("emuwarez.settings")
 
 from pydantic import BaseModel, field_validator
 
@@ -470,4 +473,8 @@ def update_settings(
             set_setting(conn, "library.path_mappings", _json.dumps(_clean_path_mappings(body.path_mappings), ensure_ascii=False))
 
         conn.commit()
+        # Log WHICH settings changed (names only — never values, some are secrets).
+        changed = sorted(body.model_dump(exclude_none=True).keys())
+        if changed:
+            logger.info("Ajustes guardados: %s", ", ".join(changed))
         return _build_response(conn)

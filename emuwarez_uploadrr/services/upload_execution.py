@@ -40,6 +40,8 @@ from .uploadrr_config_staging import (
     write_staged_config,
 )
 
+logger = logging.getLogger("emuwarez.upload")
+
 CONFIRMATION_TOKEN = "INICIAR_UPLOADRR"
 
 # Phase 10F: approximate progress phases surfaced to the UI. Uploadrr-EMU
@@ -821,6 +823,8 @@ def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str]) -> None
                 f"Proceso finalizado correctamente (exit code 0). Duración: {duration_seconds}s",
                 stream="system",
             )
+            logger.info("Subida completada (job %s) en %ss%s", job_id, duration_seconds,
+                        f" → {result['urls'][0]}" if result["urls"] else "")
             _notify_upload_completed(job_id, result["urls"][0] if result["urls"] else None)
         else:
             err_summary = build_error_summary(stderr_text, stdout_text, returncode)
@@ -841,6 +845,7 @@ def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str]) -> None
                 f"Proceso fallido (exit code {returncode}). Duración: {duration_seconds}s",
                 stream="system",
             )
+            logger.warning("Subida fallida (job %s, exit %s): %s", job_id, returncode, safe_err[:300])
 
     except FileNotFoundError as exc:
         finished_at = _now()
@@ -853,6 +858,7 @@ def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str]) -> None
             last_error_at=finished_at,
         )
         append_upload_log(job_id, "error", msg, stream="system")
+        logger.error("Subida fallida (job %s): %s", job_id, msg)
     except Exception as exc:
         finished_at = _now()
         msg = redact_secrets(str(exc), secrets)
@@ -864,6 +870,7 @@ def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str]) -> None
             last_error_at=finished_at,
         )
         append_upload_log(job_id, "error", f"Excepción inesperada: {msg}", stream="system")
+        logger.error("Subida fallida (job %s): excepción inesperada: %s", job_id, msg)
     finally:
         _release_staged_config(job_id, staged_config_path)
 
@@ -974,6 +981,8 @@ def start_upload_job(
             daemon=True,
         )
         t.start()
+        logger.info("Subida iniciada (job %s): «%s»", job_id,
+                    (job or {}).get("title") or (job or {}).get("torrent_name") or "?")
 
         return {
             "job_id": job_id,

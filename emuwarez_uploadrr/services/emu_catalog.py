@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import logging
 import re
 import sqlite3
 import threading
@@ -21,6 +22,8 @@ from typing import Any, Optional
 from ..database import get_setting_canonical, get_state, set_state
 from ..integrations import emu
 from ..integrations.base import IntegrationError
+
+logger = logging.getLogger("emuwarez.emu")
 
 SYNC_STATE_KEY = "last_emu_catalog_sync_utc"
 # Highest torrent id stored, so the next sync only fetches newer torrents
@@ -652,6 +655,7 @@ def sync_emu_catalog(conn: sqlite3.Connection, *, force: bool = False, mode: str
     est_full_pages = ((prev_count + 99) // 100) if (prev_count and not incremental) else None
 
     phase_label = "Buscando torrents nuevos en eMuwarez…" if incremental else "Descargando catálogo de eMuwarez…"
+    logger.info("Sincronización de eMuwarez iniciada (modo %s)", "incremental" if incremental else "completo")
     _set_progress(phase=phase_label, page=0, total_pages=None, eta_seconds=None)
     _dl_start = time.time()
 
@@ -692,4 +696,7 @@ def sync_emu_catalog(conn: sqlite3.Connection, *, force: bool = False, mode: str
     if not incremental:  # a full pass also refreshes the 1/day full throttle
         set_state(conn, FULL_SYNC_STATE_KEY, now_iso)
     conn.commit()
+    logger.info("Sincronización de eMuwarez terminada (%s): %d torrents %s, %d en catálogo, %d elementos comparados",
+                "incremental" if incremental else "completo", len(rows),
+                "nuevos" if incremental else "descargados", total_now, items)
     return {"status": "ok", "torrents": len(rows), "items": items, "incremental": incremental}

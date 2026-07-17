@@ -1,6 +1,7 @@
 """Library synchronization and querying."""
 from __future__ import annotations
 
+import logging
 import sqlite3
 import threading
 from typing import Optional
@@ -9,6 +10,8 @@ from ..integrations import radarr, sonarr
 from ..models import InstanceConfig, LibraryItem, LocalStatus, NomenclatureStatus
 from .instances import list_instances
 from .tasks import start_task, finish_task
+
+logger = logging.getLogger("emuwarez.library")
 
 
 # ---------------------------------------------------------------------------
@@ -301,6 +304,7 @@ def sync_all(conn: sqlite3.Connection, *, include_episodes: bool = False) -> dic
         grand_total += t
         _set_lib_progress(total=grand_total)
 
+    logger.info("Sincronización de biblioteca iniciada (episodios=%s)", include_episodes)
     try:
         for instance in list_instances(conn, enabled_only=True):
             base = total  # cumulative count before this instance
@@ -316,15 +320,21 @@ def sync_all(conn: sqlite3.Connection, *, include_episodes: bool = False) -> dic
                 missing += miss
                 _set_lib_progress(imported=total, missing=missing)
                 details.append(f"{instance.type}:{instance.name}: {imported} importados, {miss} faltantes")
+                logger.info("Sincronizado %s «%s»: %d importados, %d faltantes",
+                            instance.type, instance.name, imported, miss)
             except Exception as exc:
                 err = f"{instance.type}:{instance.name}: {exc}"
                 errors.append(err)
                 details.append(f"ERROR — {err}")
+                logger.warning("Error sincronizando %s «%s»: %s", instance.type, instance.name, exc)
         summary = f"{total} elementos sincronizados; {missing} no disponibles"
         finish_task(conn, task_id, "completed", summary, "\n".join(details))
+        logger.info("Sincronización de biblioteca terminada: %d elementos, %d no disponibles%s",
+                    total, missing, f" ({len(errors)} instancias con error)" if errors else "")
         return {"imported": total, "missing": missing, "instances": len(list_instances(conn)), "errors": errors}
     except Exception as exc:
         finish_task(conn, task_id, "failed", str(exc), "\n".join(details))
+        logger.error("Sincronización de biblioteca fallida: %s", exc)
         raise
 
 

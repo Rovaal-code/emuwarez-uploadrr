@@ -6,6 +6,7 @@ It only reads library_items from the database and generates proposals.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import unicodedata
@@ -15,6 +16,8 @@ from typing import Any
 from ..database import connect, row_to_dict, get_state
 from .filesystem_safety import safe_stat
 from .source_assistant import EMU_PROVIDERS, PROVIDER_SOURCES
+
+logger = logging.getLogger("emuwarez.nomenclature")
 
 STATUS_DRAFT = "draft"
 STATUS_VALID = "valid"
@@ -703,6 +706,19 @@ def apply_nomenclature_proposal(
             result = apply_rename_plan(plan, dry_run=effective_dry_run)
         else:
             result = apply_hardlink_plan(plan, dry_run=effective_dry_run, overwrite=overwrite)
+
+        # Only log REAL applies (the wizard preview runs this as a dry-run each
+        # keystroke — that would flood the log).
+        if not effective_dry_run:
+            title = (plan.get("item") or {}).get("title") or f"item {item_id}"
+            mode = "renombrado" if is_rename else "hardlink"
+            if result.get("status") == "applied":
+                logger.info("Nomenclatura aplicada (%s) a «%s» → %s",
+                            mode, title, result.get("destination_path"))
+            else:
+                reason = "; ".join(result.get("errors", [])) or result.get("message") or ""
+                logger.warning("Nomenclatura NO aplicada (%s) a «%s» [%s]: %s",
+                               mode, title, result.get("status"), reason)
 
         fs_op_id = None
         try:

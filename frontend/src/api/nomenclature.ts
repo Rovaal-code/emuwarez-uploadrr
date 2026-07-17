@@ -117,6 +117,7 @@ export interface TrackRemuxPreview {
   status: string
   library_item_id?: number
   prepared_path?: string | null
+  using_prepared_copy?: boolean
   mkvmerge_available?: boolean
   order_changed?: boolean
   tracks?: TrackRemuxTrack[]

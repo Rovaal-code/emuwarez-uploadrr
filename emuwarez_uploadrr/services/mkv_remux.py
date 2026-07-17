@@ -38,6 +38,24 @@ logger = logging.getLogger("emuwarez.mkv_remux")
 
 REMUX_CONFIRMATION_TOKEN = "REORDENAR_PISTAS"
 
+
+def _get_target_path(library_item_id: int, conn) -> tuple[str | None, bool]:
+    """Track reorder/rename is independent of nomenclature — it only needs a
+    real .mkv on disk, so it can be tried before nomenclature has ever run.
+    Prefers `prepared_path` (the copy about to be uploaded, from a hardlink or
+    a rename) when nomenclature already ran; otherwise falls back to the
+    item's own file, resolved to the local mount (same convention nomenclature
+    itself uses before it has a prepared copy). Returns (path, is_prepared)."""
+    prepared = _get_prepared_path(library_item_id, conn)
+    if prepared:
+        return prepared, True
+    row = conn.execute("SELECT path FROM library_items WHERE id = ?", (library_item_id,)).fetchone()
+    raw_path = row["path"] if row else None
+    if not raw_path:
+        return None, False
+    from .path_mapping import resolve_local_path
+    return (resolve_local_path(raw_path, conn=conn) or raw_path), False
+
 # ---------------------------------------------------------------------------
 # Language: display name + sort priority + Latin-Spanish detection
 # ---------------------------------------------------------------------------
@@ -312,17 +330,18 @@ def build_remux_plan(library_item_id: int, conn=None) -> dict:
     conn = conn or connect()
     try:
         mkvmerge_check = check_mkvmerge_available()
-        prepared_path = _get_prepared_path(library_item_id, conn)
+        prepared_path, using_prepared_copy = _get_target_path(library_item_id, conn)
         base = {
             "library_item_id": library_item_id,
             "prepared_path": prepared_path,
+            "using_prepared_copy": using_prepared_copy,
             "mkvmerge_available": mkvmerge_check.get("available", False),
             "mkvmerge_path": mkvmerge_check.get("path"),
             "tracks": [], "ordered_tracks": [], "warnings": [],
         }
         if not prepared_path:
             return {**base, "status": "blocked",
-                    "errors": ["No hay prepared_path disponible. Aplica la nomenclatura primero."]}
+                    "errors": ["El elemento no tiene ningún archivo (ni preparado ni original) para operar."]}
         p = Path(prepared_path)
         if p.suffix.lower() != ".mkv":
             return {**base, "status": "blocked", "errors": [f"El archivo no es .mkv: {p.suffix}"]}
@@ -342,6 +361,11 @@ def build_remux_plan(library_item_id: int, conn=None) -> dict:
             return {**base, "status": "blocked", "errors": ["mkvmerge no encontró pistas en el archivo."]}
 
         warnings: list[str] = []
+        if not using_prepared_copy:
+            warnings.append(
+                "Aún no se ha aplicado la nomenclatura: esto operará sobre el archivo ORIGINAL "
+                "que gestionan Radarr/Sonarr (mismo nombre y carpeta, se sobrescribe en sitio)."
+            )
         if not any(t["type"] == "audio" for t in plan["tracks"]):
             warnings.append("El archivo no tiene pistas de audio.")
         if not plan["any_changed"]:

@@ -15,10 +15,10 @@ def _make_conn(tmp_path):
     return conn
 
 
-def _insert_library_item(conn, title="Movie", prepared_path=None):
+def _insert_library_item(conn, title="Movie", prepared_path=None, path=None):
     conn.execute(
-        "INSERT INTO library_items (title, item_type, local_status, prepared_path) VALUES (?,?,?,?)",
-        (title, "movie", "downloaded", prepared_path),
+        "INSERT INTO library_items (title, item_type, local_status, prepared_path, path) VALUES (?,?,?,?,?)",
+        (title, "movie", "downloaded", prepared_path, path),
     )
     conn.commit()
     return conn.execute("SELECT last_insert_rowid() as id").fetchone()["id"]
@@ -164,13 +164,35 @@ def test_plan_item_not_found(tmp_path):
     assert result["errors"]
 
 
-def test_plan_no_prepared_path(tmp_path):
+def test_plan_no_file_at_all(tmp_path):
     conn = _make_conn(tmp_path)
-    item_id = _insert_library_item(conn, prepared_path=None)
+    item_id = _insert_library_item(conn, prepared_path=None, path=None)
     from emuwarez_uploadrr.services.mkv_remux import build_remux_plan
     result = build_remux_plan(item_id, conn=conn)
     assert result["status"] == "blocked"
-    assert any("prepared_path" in e.lower() for e in result["errors"])
+    assert result["using_prepared_copy"] is False
+    assert result["errors"]
+
+
+def test_plan_falls_back_to_source_path_without_nomenclature(tmp_path):
+    """Track reorder/rename must work BEFORE nomenclature has ever run — it
+    should fall back to the item's own file when there's no prepared_path."""
+    mkv_file = tmp_path / "Original.File.mkv"
+    mkv_file.write_bytes(b"fake mkv")
+    conn = _make_conn(tmp_path)
+    item_id = _insert_library_item(conn, prepared_path=None, path=str(mkv_file))
+
+    with patch("emuwarez_uploadrr.services.mkv_remux.check_mkvmerge_available") as mock_chk, \
+         patch("emuwarez_uploadrr.services.mkv_remux.read_tracks_json") as mock_read:
+        mock_chk.return_value = {"available": True, "path": "/usr/bin/mkvmerge"}
+        mock_read.return_value = {"ok": True, "data": _SAMPLE_MKV_JSON}
+        from emuwarez_uploadrr.services.mkv_remux import build_remux_plan
+        result = build_remux_plan(item_id, conn=conn)
+
+    assert result["status"] == "ready"
+    assert result["prepared_path"] == str(mkv_file)
+    assert result["using_prepared_copy"] is False
+    assert any("nomenclatura" in w.lower() for w in result["warnings"])
 
 
 def test_plan_mkvmerge_unavailable(tmp_path):

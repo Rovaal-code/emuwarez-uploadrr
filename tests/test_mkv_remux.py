@@ -61,6 +61,18 @@ def test_lang_priority_latin_spanish_is_not_castilian():
     assert lang_priority("spa", lang_ietf="es-ES") == 0
 
 
+def test_lang_priority_x_private_use_suffix_is_not_latin():
+    """Regression found auditing a real 2802-file library: MAX/HBO Max tags
+    some Spanish tracks 'es-x-01'..'es-x-09' (a private-use BCP47 subtag, not
+    a region) — even on natively Castilian-Spanish content (e.g. a
+    Spanish-produced sitcom). Must stay Castilian priority, not be demoted."""
+    from emuwarez_uploadrr.services.mkv_remux import lang_priority, lang_display_name
+    assert lang_priority("spa", lang_ietf="es-x-02") == 0
+    assert lang_display_name("spa", lang_ietf="es-x-02") == "Español (Castellano)"
+    # A real Latin American region code still works.
+    assert lang_priority("spa", lang_ietf="es-MX") == 3
+
+
 def test_lang_display_name():
     from emuwarez_uploadrr.services.mkv_remux import lang_display_name
     assert lang_display_name("spa") == "Español (Castellano)"
@@ -69,6 +81,23 @@ def test_lang_display_name():
     assert lang_display_name("eng") == "Inglés"
     assert lang_display_name("und") == "Desconocido"
     assert lang_display_name(None) == "Desconocido"
+
+
+def test_lang_display_name_covers_audit_gaps():
+    """Norwegian Bokmål and Filipino, both found in a real-library audit and
+    missing from the map at the time."""
+    from emuwarez_uploadrr.services.mkv_remux import lang_display_name
+    assert lang_display_name("nb") == "Noruego (Bokmål)"
+    assert lang_display_name("nob") == "Noruego (Bokmål)"
+    assert lang_display_name("fil") == "Filipino"
+
+
+def test_audio_codec_label_recognizes_mlp():
+    """MediaInfo/mkvmerge can report TrueHD's underlying codec as 'MLP FBA
+    16-ch' with no 'TrueHD' substring at all — found on real files."""
+    from emuwarez_uploadrr.services.mkv_remux import _audio_codec_label
+    assert _audio_codec_label("MLP FBA 16-ch") == "MLP"
+    assert _audio_codec_label("TrueHD Atmos") == "TrueHD"
 
 
 # ---------------------------------------------------------------------------

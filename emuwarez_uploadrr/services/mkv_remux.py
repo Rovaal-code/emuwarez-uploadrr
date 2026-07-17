@@ -124,6 +124,9 @@ _LANG_DISPLAY: dict[str, str] = {
     "mn": "Mongol", "mon": "Mongol",
     "ne": "Nepalí", "nep": "Nepalí",
     "no": "Noruego", "nor": "Noruego",
+    "nb": "Noruego (Bokmål)", "nob": "Noruego (Bokmål)",
+    "nn": "Noruego (Nynorsk)", "nno": "Noruego (Nynorsk)",
+    "fil": "Filipino",
     "fa": "Persa", "fas": "Persa", "per": "Persa",
     "pl": "Polaco", "pol": "Polaco",
     "pa": "Panyabí", "pan": "Panyabí",
@@ -157,14 +160,29 @@ _UNKNOWN_LANG_NAME = "Desconocido"
 _PRIORITY_CASTILIAN, _PRIORITY_CATALAN, _PRIORITY_ENGLISH, _PRIORITY_OTHER = 0, 1, 2, 3
 
 
+# Real-world audit (2802 files, MAX/HBO Max releases) found `es-x-01`..`es-x-09`
+# — a private-use BCP47 subtag some streaming services attach to disambiguate
+# tracks, NOT a region code. It shows up even on natively Castilian-Spanish
+# content (e.g. "Aquí no hay quien viva", a Spanish-produced sitcom) — so
+# matching on `es-` prefix alone (anything but "es-es") mislabeled ~100 native
+# Castilian tracks as Latin American. Only a real Latin American region code
+# counts now.
+_LATIN_SPANISH_REGIONS = {
+    "419",  # UN M49 region code for Latin America & the Caribbean
+    "mx", "ar", "co", "cl", "pe", "ve", "ec", "gt", "cu", "bo",
+    "do", "hn", "py", "sv", "ni", "cr", "pa", "uy", "pr",
+}
+
+
 def _is_latin_spanish(lang_ietf: str | None, existing_name: str | None) -> bool:
     """Castilian vs Latin American Spanish can't be told apart from the plain
     639-2 'spa' tag (it has no regional variant) — only from the BCP47
-    `language_ietf` tag (e.g. 'es-419', 'es-MX') when the source set one, or
-    from the track's own existing name already saying so."""
+    `language_ietf` tag (e.g. 'es-419', 'es-MX') when the source set a REAL
+    Latin American region, or from the track's own existing name already
+    saying so."""
     if lang_ietf:
-        ietf = lang_ietf.strip().lower()
-        if ietf.startswith("es-") and ietf != "es-es":
+        parts = lang_ietf.strip().lower().split("-")
+        if parts and parts[0] == "es" and len(parts) > 1 and parts[1] in _LATIN_SPANISH_REGIONS:
             return True
     if existing_name:
         n = existing_name.strip().lower()
@@ -209,6 +227,13 @@ def _audio_codec_label(mkv_codec: str | None) -> str:
     text = (mkv_codec or "").lower()
     if "truehd" in text:
         return "TrueHD"
+    # MLP is TrueHD's underlying codec name — mkvmerge/MediaInfo sometimes
+    # report it as e.g. "MLP FBA 16-ch" with no "TrueHD" substring at all
+    # (confirmed against a real library: 3 tracks would've fallen through to
+    # the raw codec string otherwise). Kept as its own label ("MLP"), matching
+    # legacy.py's existing audio_codec() convention.
+    if "mlp" in text:
+        return "MLP"
     if "dts-hd master" in text or "dts-hd ma" in text:
         return "DTS-HD MA"
     if "dts-hd" in text:

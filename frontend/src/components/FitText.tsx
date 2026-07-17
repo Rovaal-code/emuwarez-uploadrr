@@ -3,14 +3,16 @@ import { useRef, useLayoutEffect } from 'react'
 // Monospace one-liner (torrent name / internal title / expected name) that
 // shrinks its font JUST ENOUGH to fit the whole string on one line — filling
 // the box, never smaller than needed — down to `min`px. If the string already
-// fits at `max`, it stays at `max` (e.g. a short title keeps full size).
+// fits at `max`, it stays at `max` (e.g. a short title keeps full size). If it
+// still doesn't fit even at `min` (an especially long name in a narrow box),
+// the leftover scrolls horizontally rather than shrinking further or being
+// clipped with "…" — callers that want to guarantee no scroll at all should
+// pass a low enough `min` (down to 8) to accept a smaller font instead.
 //
-// Confirmed correct with a live diagnostic readout on a real 85-char torrent
-// name: avail=648.8px, and even at the floor (min=8px) the text measured
-// 649px — i.e. this component was already filling ~100% of the space it
-// actually has. The container's own width (the modal), not this fitting
-// logic, is what determines how big the text can get on one line — see
-// UploadWizardModal's 960px comment.
+// Confirmed accurate with a live diagnostic readout on a real 85-char torrent
+// name: measured avail=648.8px, and at font=8px the text measured 649px — the
+// fit was already using ~100% of the real available space; a still-visible
+// small font for a long name is the box being narrow, not a measurement bug.
 export function FitText({ text, max = 13, min = 8 }: { text: string; max?: number; min?: number }) {
   const ref = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
@@ -69,7 +71,11 @@ export function FitText({ text, max = 13, min = 8 }: { text: string; max?: numbe
     }
   }, [text, max, min])
   return (
-    <div ref={ref} style={{ fontFamily: 'monospace', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%', minWidth: 0 }}>
+    // overflowX:auto (not hidden+ellipsis): with a raised `min`, the fit can
+    // legitimately stop short of eliminating all overflow for an especially
+    // long string — the leftover scrolls into view instead of being silently
+    // clipped behind a "…".
+    <div ref={ref} style={{ fontFamily: 'monospace', whiteSpace: 'nowrap', overflowX: 'auto', overflowY: 'hidden', width: '100%', minWidth: 0 }}>
       {text}
     </div>
   )

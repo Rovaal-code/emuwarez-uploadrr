@@ -15,6 +15,7 @@ import { getLibrary, getMediaInfoReport, suggestProvider } from '../api/library'
 import type { MediaInfoReport } from '../api/library'
 import type { LibraryItemResponse } from '../types/api'
 import { InfoIcon } from './InfoIcon'
+import { FitText } from './FitText'
 
 // Unified "Subir" wizard (replaces the separate Nomenclatura + Campos + Subir
 // buttons). For a Series/Season it first asks which season (and episode, or the
@@ -41,13 +42,6 @@ interface Props {
 
 const labelStyle: React.CSSProperties = {
   fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4, display: 'block',
-}
-
-// Plain, fixed-size, single-line text — no dynamic fit/shrink logic. If it's
-// wider than its box, the box scrolls horizontally; nothing about the text
-// itself changes.
-const monoLineStyle: React.CSSProperties = {
-  fontFamily: 'monospace', fontSize: 13, whiteSpace: 'nowrap', overflowX: 'auto',
 }
 
 const thStyle: React.CSSProperties = {
@@ -465,9 +459,9 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
       </div>
       <div style={{ marginTop: 16, padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
         <div style={labelStyle}>Nombre final del torrent (eMuwarez)</div>
-        {preview?.torrent_name ? <div style={monoLineStyle}>{preview.torrent_name}</div> : <GeneratingHint />}
+        {preview?.torrent_name ? <FitText text={preview.torrent_name} min={10} /> : <GeneratingHint />}
         <div style={{ ...labelStyle, marginTop: 10 }}>Título Final del Archivo (También el Interno)</div>
-        {preview?.internal_mkv_title ? <div style={monoLineStyle}>{preview.internal_mkv_title}</div> : <GeneratingHint />}
+        {preview?.internal_mkv_title ? <FitText text={preview.internal_mkv_title} min={10} /> : <GeneratingHint />}
       </div>
     </>
   )
@@ -716,9 +710,9 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
           <div className="modal-body">
             <div style={{ marginBottom: 14, padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
               <div style={labelStyle}>Nombre final del torrent</div>
-              <div style={monoLineStyle}>{preview?.torrent_name || '–'}</div>
+              <FitText text={preview?.torrent_name || '–'} min={10} />
               <div style={{ ...labelStyle, marginTop: 10 }}>Título Final del Archivo (También el Interno)</div>
-              <div style={monoLineStyle}>{preview?.internal_mkv_title || '–'}</div>
+              <FitText text={preview?.internal_mkv_title || '–'} min={10} />
             </div>
 
             {/* Pre-upload checks card */}

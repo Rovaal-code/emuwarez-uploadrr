@@ -935,6 +935,8 @@ class UploadJobDetail(BaseModel):
     progress_phase: Optional[str] = None
     # Media type (movie/series/…) from the linked library item, for filtering.
     media_type: Optional[str] = None
+    # Poster thumbnail from the linked library item, for the Subidas row.
+    poster_url: Optional[str] = None
     # Grace-period deadline while status='queued' — lets the UI show a
     # countdown + Cancel before the server starts renaming/remuxing/uploading.
     queued_until: Optional[str] = None

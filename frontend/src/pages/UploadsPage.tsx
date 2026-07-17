@@ -562,15 +562,15 @@ export function UploadsPage() {
           <option value="status">Orden: Estado</option>
           <option value="duration_desc">Orden: Duración</option>
         </select>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 'auto' }}>
+          {visibleJobs.length} registro{visibleJobs.length !== 1 ? 's' : ''}
+        </span>
       </div>
 
       {loading ? <LoadingState label="Cargando trabajos…" /> : error ? <ErrorState message={error} onRetry={load} /> : jobs.length === 0 ? (
         <EmptyState icon="📤" title="No hay trabajos de subida." body="Usa el botón 'Subir' desde Biblioteca para generar un preflight." />
       ) : (
         <div className="activity-section">
-          <div className="section-header" style={{ justifyContent: 'flex-end' }}>
-            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{visibleJobs.length} registro{visibleJobs.length !== 1 ? 's' : ''}</span>
-          </div>
           <div style={{ overflowX: 'auto' }}>
             <table className="data-table">
               <thead>

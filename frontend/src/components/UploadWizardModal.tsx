@@ -118,6 +118,7 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
   const [miReport, setMiReport] = useState<MediaInfoReport | null>(null)
   const [miLoading, setMiLoading] = useState(false)
   const [miError, setMiError] = useState<string | null>(null)
+  const [showMiCard, setShowMiCard] = useState(false)
 
   // Step 1 — on-demand track remux preview (reorder + rename audio/subs/video),
   // editable by hand; applied automatically as part of "Subir" (see doUpload).
@@ -125,6 +126,7 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
   const [remuxLoading, setRemuxLoading] = useState(false)
   const [remuxError, setRemuxError] = useState<string | null>(null)
   const [remuxEdits, setRemuxEdits] = useState<Record<number, TrackRemuxOverride>>({})
+  const [showRemuxCard, setShowRemuxCard] = useState(false)
 
   // Step 1 — automatic TMDB provider detection for WEB-DL with no provider.
   const [detectingProvider, setDetectingProvider] = useState(false)
@@ -242,11 +244,11 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
   useEffect(() => { if (step === 1) loadFields() }, [step, loadFields])
 
   // Reset the MediaInfo report whenever the resolved target changes.
-  useEffect(() => { setMiReport(null); setMiError(null) }, [targetId])
+  useEffect(() => { setMiReport(null); setMiError(null); setShowMiCard(false) }, [targetId])
 
   // Reset the track remux preview + any manual edits whenever the resolved
   // target changes (a different file → a different, unrelated track plan).
-  useEffect(() => { setRemuxPreview(null); setRemuxError(null); setRemuxEdits({}) }, [targetId])
+  useEffect(() => { setRemuxPreview(null); setRemuxError(null); setRemuxEdits({}); setShowRemuxCard(false) }, [targetId])
 
   // Auto-detect the provider via TMDB when Source is WEB-DL and none was
   // detected from the filename. Debounced 500ms and fired at most once per
@@ -520,64 +522,75 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
                 <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>MediaInfo del archivo</div>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>MediaInfo y Remux del archivo</div>
                       <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>
-                        Muestra los datos de MediaInfo del archivo real y compara cada valor con el que iría a eMuwarez.
+                        «Ver Remux» muestra la reordenación y el nombre de las pistas de vídeo/audio/subtítulos del
+                        contenido (editable a mano); «Ver MediaInfo» muestra el detalle técnico real del archivo.
                       </div>
                     </div>
-                    <button className="btn btn-primary" onClick={runMediaInfo} disabled={miLoading || targetId == null}>
-                      {miLoading ? 'Cargando…' : miReport ? 'Actualizar MediaInfo' : 'Ver MediaInfo'}
-                    </button>
-                  </div>
-
-                  {miError && <p className="text-error" style={{ fontSize: 12, marginTop: 10 }}>✗ {miError}</p>}
-                  {miReport && !miReport.available && (
-                    <p className="text-warning" style={{ fontSize: 12, marginTop: 10 }}>⚠ {miReport.message}</p>
-                  )}
-                  {miReport?.available && (
-                    <div style={{ marginTop: 12, maxHeight: 240, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 8, background: 'rgba(255,255,255,0.03)' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, tableLayout: 'fixed' }}>
-                        <colgroup>
-                          <col style={{ width: '22%' }} />
-                          <col style={{ width: '39%' }} />
-                          <col style={{ width: '39%' }} />
-                        </colgroup>
-                        <thead>
-                          <tr>
-                            <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600, color: 'var(--text-muted)', position: 'sticky', top: 0, background: 'var(--bg-surface, #0f1420)' }}>Campo</th>
-                            <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600, color: 'var(--text-muted)', position: 'sticky', top: 0, background: 'var(--bg-surface, #0f1420)' }}>MediaInfo</th>
-                            <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600, color: 'var(--text-muted)', position: 'sticky', top: 0, background: 'var(--bg-surface, #0f1420)' }}>eMuwarez</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {miReport.rows.map((r, i) => (
-                            <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
-                              <td style={{ padding: '7px 12px', fontWeight: 600 }}>{r.field}</td>
-                              <td style={{ padding: '7px 12px', fontFamily: 'monospace', color: 'var(--text-muted)', wordBreak: 'break-word' }}>{r.mediainfo}</td>
-                              <td style={{ padding: '7px 12px', fontFamily: 'monospace', wordBreak: 'break-word' }}>{r.emu}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                    <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                      <button className="btn btn-primary" onClick={() => { runMediaInfo(); setShowMiCard(true) }} disabled={miLoading || targetId == null}>
+                        {miLoading ? 'Cargando…' : 'Ver MediaInfo'}
+                      </button>
+                      <button className="btn btn-primary" onClick={() => { runTrackRemux(); setShowRemuxCard(true) }} disabled={remuxLoading || targetId == null}>
+                        {remuxLoading ? 'Cargando…' : 'Ver Remux'}
+                      </button>
                     </div>
-                  )}
+                  </div>
                 </div>
 
-                <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>Remux — orden y nombre de pistas</div>
-                      <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>
-                        Reordena audio/subtítulos (Español → Català → Inglés → resto) y pone un nombre claro a
-                        cada pista (vídeo, audio, subtítulos). Puedes editar el nombre nuevo o el «predeterminada»
-                        a mano. Se aplica junto con la nomenclatura al pulsar «Subir a eMuwarez» abajo.
+                {showMiCard && (
+                  <div className="modal-overlay" onClick={() => setShowMiCard(false)}>
+                    <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 720 }}>
+                      <div className="modal-header">
+                        <h2 className="modal-title">MediaInfo del archivo</h2>
+                        <button className="modal-close" onClick={() => setShowMiCard(false)}>✕</button>
+                      </div>
+                      <div className="modal-body">
+                        {miError && <p className="text-error" style={{ fontSize: 12, marginTop: 0 }}>✗ {miError}</p>}
+                        {miReport && !miReport.available && (
+                          <p className="text-warning" style={{ fontSize: 12, marginTop: 0 }}>⚠ {miReport.message}</p>
+                        )}
+                        {miReport?.available && (
+                          <div style={{ maxHeight: 420, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 8, background: 'rgba(255,255,255,0.03)' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, tableLayout: 'fixed' }}>
+                              <colgroup>
+                                <col style={{ width: '22%' }} />
+                                <col style={{ width: '39%' }} />
+                                <col style={{ width: '39%' }} />
+                              </colgroup>
+                              <thead>
+                                <tr>
+                                  <th style={thStyle}>Campo</th>
+                                  <th style={thStyle}>MediaInfo</th>
+                                  <th style={thStyle}>eMuwarez</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {miReport.rows.map((r, i) => (
+                                  <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
+                                    <td style={{ padding: '7px 12px', fontWeight: 600 }}>{r.field}</td>
+                                    <td style={{ padding: '7px 12px', fontFamily: 'monospace', color: 'var(--text-muted)', wordBreak: 'break-word' }}>{r.mediainfo}</td>
+                                    <td style={{ padding: '7px 12px', fontFamily: 'monospace', wordBreak: 'break-word' }}>{r.emu}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
                       </div>
                     </div>
-                    <button className="btn btn-primary" onClick={runTrackRemux} disabled={remuxLoading || targetId == null}>
-                      {remuxLoading ? 'Cargando…' : remuxPreview ? 'Actualizar Remux' : 'Ver Remux'}
-                    </button>
                   </div>
+                )}
 
+                {showRemuxCard && (
+                  <div className="modal-overlay" onClick={() => setShowRemuxCard(false)}>
+                    <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 780 }}>
+                      <div className="modal-header">
+                        <h2 className="modal-title">Remux — orden y nombre de pistas</h2>
+                        <button className="modal-close" onClick={() => setShowRemuxCard(false)}>✕</button>
+                      </div>
+                      <div className="modal-body">
                   {remuxError && <p className="text-error" style={{ fontSize: 12, marginTop: 10 }}>✗ {remuxError}</p>}
                   {remuxPreview?.errors?.map((e, i) => (
                     <p key={i} className="text-error" style={{ fontSize: 12, marginTop: 10 }}>✗ {e}</p>
@@ -641,7 +654,10 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
                       </table>
                     </div>
                   )}
-                </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
                   {needsSelection

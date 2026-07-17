@@ -23,6 +23,7 @@ function TrackTable({ tracks }: { tracks: TrackRemuxTrack[] }) {
         <thead>
           <tr>
             <th>Tipo</th>
+            <th>Idioma (pista)</th>
             <th>Nombre actual</th>
             <th>Nombre nuevo</th>
             <th>Predeterminada</th>
@@ -32,6 +33,9 @@ function TrackTable({ tracks }: { tracks: TrackRemuxTrack[] }) {
           {tracks.map(t => (
             <tr key={t.id} style={t.changed ? { background: 'rgba(96,165,250,0.08)' } : undefined}>
               <td style={{ whiteSpace: 'nowrap', color: 'var(--text-muted)' }}>{TYPE_LABEL[t.type] ?? t.type}</td>
+              <td style={{ whiteSpace: 'nowrap', fontFamily: 'monospace', color: 'var(--text-secondary)' }} title="Idioma leído por mkvmerge en la pista (no depende del nombre que le puso el grupo anterior)">
+                {t.language || '—'}
+              </td>
               <td style={{ color: 'var(--text-muted)' }}>{t.current_name || '—'}</td>
               <td style={{ fontWeight: t.changed ? 600 : 400 }}>{t.new_name}</td>
               <td>

@@ -272,7 +272,15 @@ def _get_default_tag(conn) -> str:
 
 
 def suggest_provider_for_item(library_item_id: int, conn=None) -> dict:
-    """Suggest the best EMU provider code for a library item using TMDb + priority config."""
+    """Suggest the best EMU provider code for a library item.
+
+    Checks the filename FIRST (infer_provider_from_item — cheap, deterministic,
+    no network) before ever calling TMDb: if the file is already named e.g.
+    "...WEB-DL AMZN x265..." there's nothing to guess, and re-detecting via
+    TMDb could disagree with what's already in the name (see the historical
+    NF-vs-AMZN bug this same precedence already fixed elsewhere). Only when
+    the filename doesn't reveal a provider does this fall back to TMDb +
+    the configured priority order."""
     own = conn is None
     conn = conn or connect()
     try:
@@ -280,6 +288,15 @@ def suggest_provider_for_item(library_item_id: int, conn=None) -> dict:
         if not item_row:
             return {"suggested": None, "tmdb_providers": [], "reason": "Item no encontrado"}
         item = dict(item_row)
+
+        from .nomenclature import infer_provider_from_item
+        from_filename = infer_provider_from_item(item)
+        if from_filename:
+            return {
+                "suggested": from_filename,
+                "tmdb_providers": [],
+                "reason": "Detectado en el nombre del archivo",
+            }
 
         tmdb_id_raw = item.get("tmdb_id")
         if not tmdb_id_raw:

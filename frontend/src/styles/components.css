@@ -857,6 +857,17 @@ optgroup {
   animation: btn-unsaved-pulse 1.1s ease-in-out infinite;
 }
 
+/* Blinking "En cola" badge (Subidas) — a real flash (opacity all the way
+ * down), not just a subtle pulse, so a queued job visibly stands out from
+ * a job actively "Subiendo" even though both use the same blue. */
+@keyframes badge-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.25; }
+}
+.badge-blink {
+  animation: badge-blink 1s step-start infinite;
+}
+
 /* Column-header (Excel-style) filter menu options. */
 .hf-option {
   display: block;

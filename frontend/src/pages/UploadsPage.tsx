@@ -14,21 +14,20 @@ const UPLOAD_TYPE_LABEL: Record<string, string> = {
   movie: 'Película', series: 'Serie', season: 'Temporada', episode: 'Episodio',
 }
 
-// Same semantic palette as the Progreso badge (progressToneClass): gris=en
-// cola, azul=en curso (preparando o subiendo — ambos se muestran igual,
-// "Subiendo", ya no hay un estado "Preparando" aparte), verde=completado,
-// rojo=fallido, amarillo=cancelado.
+// Same semantic palette as the Progreso badge: azul=en cola/en curso
+// (preparando o subiendo — ambos se muestran igual, "Subiendo", ya no hay un
+// estado "Preparando" aparte), verde=completado, rojo=fallido, gris=cancelado.
 const STATUS_CLASS: Record<string, string> = {
   ready: 'badge req-compatible',
   preflight: 'badge status-queued',
   blocked: 'badge status-error',
   draft: 'badge status-unknown',
-  queued: 'badge status-unknown',
+  queued: 'badge status-queued',
   preparing: 'badge status-queued',
   running: 'badge status-queued',
   completed: 'badge status-available',
   failed: 'badge status-error',
-  cancelled: 'badge req-claimed',
+  cancelled: 'badge status-unknown',
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -628,7 +627,7 @@ export function UploadsPage() {
                     </td>
                     <td>
                       {job.status === 'queued' ? (
-                        <span className="badge status-unknown">{queuedSecondsLeft(job) ?? '–'}s</span>
+                        <span className="badge status-queued badge-blink">{queuedSecondsLeft(job) ?? '–'}s</span>
                       ) : (
                         <span className={STATUS_CLASS[job.status] || 'badge req-unknown'}>
                           {statusLabel(job.status)}
@@ -637,7 +636,7 @@ export function UploadsPage() {
                     </td>
                     <td style={{ whiteSpace: 'nowrap' }}>
                       {job.status === 'queued' ? (
-                        <span className="badge status-unknown">{queuedSecondsLeft(job) ?? '–'}s</span>
+                        <span className="badge status-queued badge-blink">{queuedSecondsLeft(job) ?? '–'}s</span>
                       ) : (job.status === 'preparing' || job.status === 'running') ? (
                         <span className="badge status-queued">
                           {phaseLabel(job.progress_phase)}{progressCounter(job) ? ` · ${progressCounter(job)}` : ''}

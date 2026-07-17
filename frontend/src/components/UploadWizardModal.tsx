@@ -15,7 +15,6 @@ import { getLibrary, getMediaInfoReport, suggestProvider } from '../api/library'
 import type { MediaInfoReport } from '../api/library'
 import type { LibraryItemResponse } from '../types/api'
 import { InfoIcon } from './InfoIcon'
-import { FitText } from './FitText'
 
 // Unified "Subir" wizard (replaces the separate Nomenclatura + Campos + Subir
 // buttons). For a Series/Season it first asks which season (and episode, or the
@@ -42,6 +41,13 @@ interface Props {
 
 const labelStyle: React.CSSProperties = {
   fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4, display: 'block',
+}
+
+// Plain, fixed-size, single-line text — no dynamic fit/shrink logic. If it's
+// wider than its box, the box scrolls horizontally; nothing about the text
+// itself changes.
+const monoLineStyle: React.CSSProperties = {
+  fontFamily: 'monospace', fontSize: 13, whiteSpace: 'nowrap', overflowX: 'auto',
 }
 
 const thStyle: React.CSSProperties = {
@@ -459,23 +465,16 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
       </div>
       <div style={{ marginTop: 16, padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
         <div style={labelStyle}>Nombre final del torrent (eMuwarez)</div>
-        {preview?.torrent_name ? <FitText text={preview.torrent_name} /> : <GeneratingHint />}
+        {preview?.torrent_name ? <div style={monoLineStyle}>{preview.torrent_name}</div> : <GeneratingHint />}
         <div style={{ ...labelStyle, marginTop: 10 }}>Título Final del Archivo (También el Interno)</div>
-        {preview?.internal_mkv_title ? <FitText text={preview.internal_mkv_title} /> : <GeneratingHint />}
+        {preview?.internal_mkv_title ? <div style={monoLineStyle}>{preview.internal_mkv_title}</div> : <GeneratingHint />}
       </div>
     </>
   )
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      {/* 960px (not the usual 720/780): the real monospace font this app uses
-          renders characters much wider than a typical ~0.6 ratio (measured
-          ~0.95 on a real torrent name) — an 85-char release name needs close
-          to 650px just to reach the 720px modal's floor (min=8px, barely not
-          clipping). Widening the modal is what actually buys FitText room to
-          render bigger while staying on one line, not a smarter algorithm —
-          the fit measurement itself was already accurate. */}
-      <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 960 }}>
+      <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 720 }}>
         <div className="modal-header">
           <h2 className="modal-title">Subir a eMuwarez — {item.title}</h2>
           <button className="modal-close" onClick={onClose}>✕</button>
@@ -717,9 +716,9 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
           <div className="modal-body">
             <div style={{ marginBottom: 14, padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
               <div style={labelStyle}>Nombre final del torrent</div>
-              <FitText text={preview?.torrent_name || '–'} />
+              <div style={monoLineStyle}>{preview?.torrent_name || '–'}</div>
               <div style={{ ...labelStyle, marginTop: 10 }}>Título Final del Archivo (También el Interno)</div>
-              <FitText text={preview?.internal_mkv_title || '–'} />
+              <div style={monoLineStyle}>{preview?.internal_mkv_title || '–'}</div>
             </div>
 
             {/* Pre-upload checks card */}

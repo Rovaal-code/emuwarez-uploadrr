@@ -400,6 +400,8 @@ class DashboardSummaryResponse(BaseModel):
     requests_partial: int = 0
     requests_filled: int = 0
     requests_mine: int = 0
+    # Of "mine": how many are already Reclamado (claimed) on eMuwarez.
+    requests_mine_reclaimed: int = 0
     requests_last_sync_at: Optional[str] = None
     # Phase 6D — Upload job counts
     uploads_ready: int = 0

@@ -114,10 +114,21 @@ def dashboard_summary(current_user: dict = Depends(require_auth)) -> DashboardSu
                     (my_username,),
                 ).fetchone()
                 summary["requests_mine"] = int(mine_row["cnt"] or 0) if mine_row else 0
+                # Of those, how many are already Reclamado on eMuwarez — same
+                # loose substring match compatibility.py uses for emu_status
+                # ("reclamado"/"Reclamado"/whatever casing the tracker sends).
+                reclaimed_row = conn.execute(
+                    "SELECT COUNT(*) AS cnt FROM request_items "
+                    "WHERE author_visible = 1 AND author = ? AND LOWER(COALESCE(emu_status,'')) LIKE '%reclam%'",
+                    (my_username,),
+                ).fetchone()
+                summary["requests_mine_reclaimed"] = int(reclaimed_row["cnt"] or 0) if reclaimed_row else 0
             else:
                 summary["requests_mine"] = 0
+                summary["requests_mine_reclaimed"] = 0
         except Exception:
             summary["requests_mine"] = 0
+            summary["requests_mine_reclaimed"] = 0
 
         # Phase 6D: upload counts
         upload_counts = _get_upload_counts(conn)

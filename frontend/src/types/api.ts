@@ -51,6 +51,7 @@ export interface DashboardSummaryResponse {
   requests_partial?: number
   requests_filled?: number
   requests_mine?: number
+  requests_mine_reclaimed?: number
   requests_last_sync_at?: string | null
 }
 

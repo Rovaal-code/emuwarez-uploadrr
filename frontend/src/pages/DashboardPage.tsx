@@ -286,7 +286,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
             label="Compatibles"
             value={s.requests_compatible ?? 0}
             accentColor="#22c55e"
-            info="Peticiones cuya mejor coincidencia en tu biblioteca cumple resolución y source: puedes cubrirlas."
+            info="Peticiones cuya mejor coincidencia en tu biblioteca cumple resolución y source: quizás puedas cubrirlas."
           />
           <StatCard
             label="Parciales"
@@ -295,10 +295,10 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
             info="Peticiones cuya mejor coincidencia cumple solo parte de lo pedido (resolución o source, pero no ambos)."
           />
           <StatCard
-            label="Llenas"
-            value={s.requests_filled ?? 0}
+            label="Reclamadas"
+            value={s.requests_mine_reclaimed ?? 0}
             accentColor="#9ca3af"
-            info="Peticiones que ya están cubiertas/llenas en eMuwarez."
+            info="De tus propias peticiones (creadas por tu usuario de eMuwarez), cuántas ya están Reclamadas en eMuwarez."
           />
         </div>
       </div>

@@ -115,8 +115,10 @@ function useTicker(active: boolean, intervalMs = 1000) {
 }
 
 // Only real upload states — a job now only exists once the user uploads, so
-// the preparatory "ready"/"blocked" states no longer appear here.
-const STATUS_OPTIONS = ['', 'queued', 'preparing', 'running', 'completed', 'failed', 'cancelled']
+// the preparatory "ready"/"blocked" states no longer appear here. 'preparing'
+// isn't offered as its own filter option — it displays as "Subiendo" same as
+// 'running' (see STATUS_LABEL), and the "Subiendo" filter option matches both.
+const STATUS_OPTIONS = ['', 'queued', 'running', 'completed', 'failed', 'cancelled']
 // Preparatory states never represent a real upload — hide any stale leftovers.
 const HIDDEN_STATES = new Set(['draft', 'preflight', 'blocked', 'ready', 'config_staging'])
 
@@ -465,7 +467,11 @@ export function UploadsPage() {
   const load = async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) { setLoading(true); setError(null) }
     try {
-      const data = await getUploads(statusFilter ? { status: statusFilter } : undefined)
+      // The "Subiendo" filter option (value 'running') must also catch
+      // 'preparing' jobs — they display identically as "Subiendo" now (see
+      // STATUS_LABEL) — so it can't be a single exact server-side match;
+      // fetch unfiltered and narrow client-side in visibleJobs instead.
+      const data = await getUploads(statusFilter && statusFilter !== 'running' ? { status: statusFilter } : undefined)
       setJobs(data)
     } catch { if (!opts?.silent) setError('Error al cargar los trabajos de subida.') }
     finally { if (!opts?.silent) setLoading(false) }
@@ -489,14 +495,16 @@ export function UploadsPage() {
     try { await cancelUploadJob(jobId); await load() } catch { /* ignore */ }
   }
 
-  // Client-side filter + sort over the loaded jobs (status stays server-side).
+  // Client-side filter + sort over the loaded jobs (status stays server-side,
+  // except 'running' — see load() — which also has to catch 'preparing').
   const visibleJobs = useMemo(() => {
     const q = search.trim().toLowerCase()
     const out = jobs.filter(j => {
       if (HIDDEN_STATES.has(j.status)) return false
       const titleOk = !q || (j.title || '').toLowerCase().includes(q)
       const typeOk = !typeFilter || j.media_type === typeFilter
-      return titleOk && typeOk
+      const statusOk = statusFilter !== 'running' || j.status === 'running' || j.status === 'preparing'
+      return titleOk && typeOk && statusOk
     })
     const dt = (s?: string | null) => (s ? new Date(s).getTime() : 0)
     out.sort((a, b) => {
@@ -509,7 +517,7 @@ export function UploadsPage() {
       }
     })
     return out
-  }, [jobs, search, sortBy, typeFilter])
+  }, [jobs, search, sortBy, typeFilter, statusFilter])
 
   const detailJobData = detailJob != null ? jobs.find(j => j.id === detailJob) : undefined
 

@@ -15,7 +15,7 @@ import { getLibrary, getMediaInfoReport, suggestProvider } from '../api/library'
 import type { MediaInfoReport } from '../api/library'
 import type { LibraryItemResponse } from '../types/api'
 import { InfoIcon } from './InfoIcon'
-import { FitText } from './FitText'
+import { FitTextPair } from './FitText'
 
 // Unified "Subir" wizard (replaces the separate Nomenclatura + Campos + Subir
 // buttons). For a Series/Season it first asks which season (and episode, or the
@@ -458,10 +458,23 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
         </label>
       </div>
       <div style={{ marginTop: 16, padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
-        <div style={labelStyle}>Nombre final del torrent (eMuwarez)</div>
-        {preview?.torrent_name ? <FitText text={preview.torrent_name} min={10} showSizeControls /> : <GeneratingHint />}
-        <div style={{ ...labelStyle, marginTop: 10 }}>Título Final del Archivo (También el Interno)</div>
-        {preview?.internal_mkv_title ? <FitText text={preview.internal_mkv_title} min={10} showSizeControls /> : <GeneratingHint />}
+        {preview?.torrent_name && preview?.internal_mkv_title ? (
+          <FitTextPair
+            min={10}
+            showSizeControls
+            items={[
+              { label: 'Nombre final del torrent (eMuwarez)', text: preview.torrent_name, labelStyle },
+              { label: 'Título Final del Archivo (También el Interno)', text: preview.internal_mkv_title, labelStyle },
+            ]}
+          />
+        ) : (
+          <>
+            <div style={labelStyle}>Nombre final del torrent (eMuwarez)</div>
+            <GeneratingHint />
+            <div style={{ ...labelStyle, marginTop: 10 }}>Título Final del Archivo (También el Interno)</div>
+            <GeneratingHint />
+          </>
+        )}
       </div>
     </>
   )
@@ -709,10 +722,14 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
         {step === 2 && (
           <div className="modal-body">
             <div style={{ marginBottom: 14, padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
-              <div style={labelStyle}>Nombre final del torrent</div>
-              <FitText text={preview?.torrent_name || '–'} min={10} showSizeControls />
-              <div style={{ ...labelStyle, marginTop: 10 }}>Título Final del Archivo (También el Interno)</div>
-              <FitText text={preview?.internal_mkv_title || '–'} min={10} showSizeControls />
+              <FitTextPair
+                min={10}
+                showSizeControls
+                items={[
+                  { label: 'Nombre final del torrent', text: preview?.torrent_name || '–', labelStyle },
+                  { label: 'Título Final del Archivo (También el Interno)', text: preview?.internal_mkv_title || '–', labelStyle },
+                ]}
+              />
             </div>
 
             {/* Pre-upload checks card */}

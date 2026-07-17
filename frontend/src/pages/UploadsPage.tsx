@@ -14,17 +14,21 @@ const UPLOAD_TYPE_LABEL: Record<string, string> = {
   movie: 'Película', series: 'Serie', season: 'Temporada', episode: 'Episodio',
 }
 
+// Same semantic palette as the Progreso badge (progressToneClass): gris=en
+// cola, azul=en curso (preparando o subiendo — ambos se muestran igual,
+// "Subiendo", ya no hay un estado "Preparando" aparte), verde=completado,
+// rojo=fallido, amarillo=cancelado.
 const STATUS_CLASS: Record<string, string> = {
   ready: 'badge req-compatible',
-  preflight: 'badge req-partial',
-  blocked: 'badge req-not-compatible',
-  draft: 'badge req-unknown',
-  queued: 'badge req-partial',
-  preparing: 'badge req-partial',
-  running: 'badge req-filled',
-  completed: 'badge req-compatible',
-  failed: 'badge req-not-compatible',
-  cancelled: 'badge req-unknown',
+  preflight: 'badge status-queued',
+  blocked: 'badge status-error',
+  draft: 'badge status-unknown',
+  queued: 'badge status-unknown',
+  preparing: 'badge status-queued',
+  running: 'badge status-queued',
+  completed: 'badge status-available',
+  failed: 'badge status-error',
+  cancelled: 'badge req-claimed',
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -34,7 +38,11 @@ const STATUS_LABEL: Record<string, string> = {
   blocked: 'Bloqueado',
   draft: 'Borrador',
   queued: 'En cola',
-  preparing: 'Preparando',
+  // "Preparando" ya no es un estado propio de cara al usuario — en cuanto
+  // deja de estar en cola (empieza a comprobar integridad/renombrar/
+  // remuxear) se muestra como "Subiendo", mismo texto que el estado
+  // 'running' real — el detalle de qué está haciendo vive en Progreso.
+  preparing: 'Subiendo',
   running: 'Subiendo',
   completed: 'Completado',
   failed: 'Fallido',
@@ -66,21 +74,12 @@ function phaseLabel(phase?: string | null): string {
   return PHASE_LABEL[phase] || phase
 }
 
-// Progreso badge color — same visual language as other status pills in the
-// app (e.g. "Disponible" en Biblioteca): rojo=error, amarillo=cancelado,
-// azul=cualquier fase en curso, verde=completado.
-function progressToneClass(status: string): string {
-  if (status === 'completed') return 'badge status-available'   // verde
-  if (status === 'failed') return 'badge status-error'          // rojo
-  if (status === 'cancelled') return 'badge req-claimed'        // amarillo
-  return 'badge status-queued'                                  // azul — cualquier fase en curso
-}
-
 // Live "Xs" counter next to the current phase — ticks while the job is
-// actually doing something, freezes at the final duration once it's done.
+// actually doing something (preparing/running only — Progreso shows nothing
+// for queued (its own countdown covers that) or terminal states (Estado
+// already says Completado/Fallido/Cancelado, no need to repeat it here)).
 function progressCounter(job: UploadJob): string | null {
-  if (job.duration_seconds != null) return `${job.duration_seconds}s`
-  if (job.started_at && job.status !== 'queued') {
+  if (job.started_at) {
     const secs = Math.max(0, Math.round((Date.now() - new Date(job.started_at).getTime()) / 1000))
     return `${secs}s`
   }
@@ -632,9 +631,13 @@ export function UploadsPage() {
                       )}
                     </td>
                     <td style={{ whiteSpace: 'nowrap' }}>
-                      <span className={progressToneClass(job.status)}>
-                        {phaseLabel(job.progress_phase)}{progressCounter(job) ? ` · ${progressCounter(job)}` : ''}
-                      </span>
+                      {job.status === 'queued' ? (
+                        <span className="badge status-unknown">{queuedSecondsLeft(job) ?? '–'}s</span>
+                      ) : (job.status === 'preparing' || job.status === 'running') ? (
+                        <span className="badge status-queued">
+                          {phaseLabel(job.progress_phase)}{progressCounter(job) ? ` · ${progressCounter(job)}` : ''}
+                        </span>
+                      ) : '–'}
                     </td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                       {(job.retry_count ?? 0) > 0 ? `x${job.retry_count}` : '–'}

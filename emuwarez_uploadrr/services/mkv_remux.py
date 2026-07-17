@@ -61,8 +61,12 @@ def _get_target_path(library_item_id: int, conn) -> tuple[str | None, bool]:
 # ---------------------------------------------------------------------------
 
 # Spanish display names for a track's language, keyed by normalized ISO 639-1/
-# 639-2 codes (mirrors the ESP/CAT/ING/... codes emu_format.LANG_MAP already
-# uses elsewhere in the app, spelled out here for a track-selector menu).
+# 639-2 (both bibliographic and terminological where they differ) codes —
+# mirrors the ESP/CAT/ING/... codes emu_format.LANG_MAP already uses elsewhere
+# in the app, spelled out here for a track-selector menu. Covers the ISO 639-1
+# set (not just the handful realistic for a Spanish tracker) so an unusual
+# language still gets a proper Spanish name instead of falling back to the
+# raw code — see lang_display_name().
 _LANG_DISPLAY: dict[str, str] = {
     "es": "Español (Castellano)", "spa": "Español (Castellano)",
     "ca": "Català", "cat": "Català",
@@ -77,6 +81,73 @@ _LANG_DISPLAY: dict[str, str] = {
     "zh": "Chino", "chi": "Chino", "zho": "Chino",
     "eu": "Euskera", "baq": "Euskera", "eus": "Euskera",
     "gl": "Gallego", "glg": "Gallego",
+    "af": "Afrikáans", "afr": "Afrikáans",
+    "sq": "Albanés", "sqi": "Albanés", "alb": "Albanés",
+    "am": "Amárico", "amh": "Amárico",
+    "ar": "Árabe", "ara": "Árabe",
+    "hy": "Armenio", "hye": "Armenio", "arm": "Armenio",
+    "az": "Azerí", "aze": "Azerí",
+    "be": "Bielorruso", "bel": "Bielorruso",
+    "bn": "Bengalí", "ben": "Bengalí",
+    "bs": "Bosnio", "bos": "Bosnio",
+    "bg": "Búlgaro", "bul": "Búlgaro",
+    "my": "Birmano", "mya": "Birmano", "bur": "Birmano",
+    "hr": "Croata", "hrv": "Croata",
+    "cs": "Checo", "ces": "Checo", "cze": "Checo",
+    "da": "Danés", "dan": "Danés",
+    "nl": "Neerlandés", "nld": "Neerlandés", "dut": "Neerlandés",
+    "eo": "Esperanto", "epo": "Esperanto",
+    "et": "Estonio", "est": "Estonio",
+    "fi": "Finlandés", "fin": "Finlandés",
+    "ka": "Georgiano", "kat": "Georgiano", "geo": "Georgiano",
+    "el": "Griego", "ell": "Griego", "gre": "Griego",
+    "gu": "Guyaratí", "guj": "Guyaratí",
+    "he": "Hebreo", "heb": "Hebreo",
+    "hi": "Hindi", "hin": "Hindi",
+    "hu": "Húngaro", "hun": "Húngaro",
+    "is": "Islandés", "isl": "Islandés", "ice": "Islandés",
+    "id": "Indonesio", "ind": "Indonesio",
+    "ga": "Irlandés", "gle": "Irlandés",
+    "kn": "Canarés", "kan": "Canarés",
+    "kk": "Kazajo", "kaz": "Kazajo",
+    "km": "Jemer", "khm": "Jemer",
+    "ku": "Kurdo", "kur": "Kurdo",
+    "lo": "Lao", "lao": "Lao",
+    "la": "Latín", "lat": "Latín",
+    "lv": "Letón", "lav": "Letón",
+    "lt": "Lituano", "lit": "Lituano",
+    "mk": "Macedonio", "mkd": "Macedonio", "mac": "Macedonio",
+    "ms": "Malayo", "msa": "Malayo", "may": "Malayo",
+    "ml": "Malayalam", "mal": "Malayalam",
+    "mt": "Maltés", "mlt": "Maltés",
+    "mr": "Maratí", "mar": "Maratí",
+    "mn": "Mongol", "mon": "Mongol",
+    "ne": "Nepalí", "nep": "Nepalí",
+    "no": "Noruego", "nor": "Noruego",
+    "fa": "Persa", "fas": "Persa", "per": "Persa",
+    "pl": "Polaco", "pol": "Polaco",
+    "pa": "Panyabí", "pan": "Panyabí",
+    "ro": "Rumano", "ron": "Rumano", "rum": "Rumano",
+    "sr": "Serbio", "srp": "Serbio",
+    "si": "Cingalés", "sin": "Cingalés",
+    "sk": "Eslovaco", "slk": "Eslovaco", "slo": "Eslovaco",
+    "sl": "Esloveno", "slv": "Esloveno",
+    "so": "Somalí", "som": "Somalí",
+    "sw": "Suajili", "swa": "Suajili",
+    "sv": "Sueco", "swe": "Sueco",
+    "tl": "Tagalo", "tgl": "Tagalo",
+    "ta": "Tamil", "tam": "Tamil",
+    "te": "Telugu", "tel": "Telugu",
+    "th": "Tailandés", "tha": "Tailandés",
+    "tr": "Turco", "tur": "Turco",
+    "uk": "Ucraniano", "ukr": "Ucraniano",
+    "ur": "Urdu", "urd": "Urdu",
+    "uz": "Uzbeko", "uzb": "Uzbeko",
+    "vi": "Vietnamita", "vie": "Vietnamita",
+    "cy": "Galés", "cym": "Galés", "wel": "Galés",
+    "xh": "Xhosa", "xho": "Xhosa",
+    "yi": "Yidis", "yid": "Yidis",
+    "zu": "Zulú", "zul": "Zulú",
 }
 _LATIN_SPANISH_NAME = "Español (Latinoamérica)"
 _UNKNOWN_LANG_NAME = "Desconocido"

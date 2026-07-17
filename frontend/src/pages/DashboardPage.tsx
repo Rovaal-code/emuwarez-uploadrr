@@ -156,7 +156,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
     const cfg = await fetchSettings().catch(() => null)
     if (cfg) setConnSettings(cfg)
     getInstances().then(setConnInstances).catch(() => { /* ignore */ })
-    const recentLimit = cfg?.recent_activity_limit ?? 60
+    const recentLimit = cfg?.recent_activity_limit ?? 100
     // Promise.allSettled never rejects — each branch's own status carries
     // its outcome, so failures are handled per-item below, not via catch.
     const [s, a, la, up] = await Promise.allSettled([

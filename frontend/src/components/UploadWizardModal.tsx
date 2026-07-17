@@ -438,7 +438,7 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
             {loading && (
               <div style={{ padding: '36px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
                 <span className="spinner" style={{ width: 28, height: 28, borderWidth: 3 }} />
-                <div style={{ fontSize: 15, fontWeight: 600 }}>Generando nomenclatura con MediaInfo…</div>
+                <div style={{ fontSize: 15, fontWeight: 600 }}>Generando Nomenclatura para eMuwarez…</div>
               </div>
             )}
             {error && !loading && (

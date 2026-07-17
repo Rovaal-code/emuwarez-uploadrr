@@ -81,7 +81,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const [newEmuKey, setNewEmuKey] = useState('')
   const [emuUsername, setEmuUsername] = useState('')
   const [ignoreSpecials, setIgnoreSpecials] = useState(true)
-  const [recentLimit, setRecentLimit] = useState(50)
+  const [recentLimit, setRecentLimit] = useState(100)
   const [qbitUrl, setQbitUrl] = useState('')
   const [qbitPort, setQbitPort] = useState('8080')
   const [qbitUser, setQbitUser] = useState('')
@@ -156,7 +156,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         setLocalizeTitles(s.tmdb_localize_series_titles ?? true)
         setEmuUsername(s.emu_username ?? '')
         setIgnoreSpecials(s.series_ignore_specials ?? true)
-        setRecentLimit(s.recent_activity_limit ?? 50)
+        setRecentLimit(s.recent_activity_limit ?? 100)
         setQbitUrl(s.qbit_url ?? '')
         setQbitPort(s.qbit_port ?? '8080')
         setQbitUser(s.qbit_username ?? '')
@@ -168,7 +168,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           tag: s.default_release_tag, providerOrder: s.provider_priority_order,
           region: s.tmdb_watch_region, language: s.tmdb_language,
           localizeTitles: s.tmdb_localize_series_titles ?? true, emuUsername: s.emu_username ?? '',
-          ignoreSpecials: s.series_ignore_specials ?? true, recentLimit: s.recent_activity_limit ?? 50,
+          ignoreSpecials: s.series_ignore_specials ?? true, recentLimit: s.recent_activity_limit ?? 100,
           qbitUrl: s.qbit_url ?? '', qbitPort: s.qbit_port ?? '8080', qbitUser: s.qbit_username ?? '',
           imgEnabled: s.image_hosts_enabled ?? [], pathMappings: s.path_mappings ?? [],
           useHardlinks: s.use_hardlinks ?? true, hardlinkBase: s.hardlink_base ?? '',
@@ -280,7 +280,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
       setLocalizeTitles(updated.tmdb_localize_series_titles ?? true)
       setEmuUsername(updated.emu_username ?? '')
       setIgnoreSpecials(updated.series_ignore_specials ?? true)
-      setRecentLimit(updated.recent_activity_limit ?? 50)
+      setRecentLimit(updated.recent_activity_limit ?? 100)
       setQbitUrl(updated.qbit_url ?? '')
       setQbitPort(updated.qbit_port ?? '8080')
       setQbitUser(updated.qbit_username ?? '')
@@ -296,7 +296,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         tag: updated.default_release_tag, providerOrder: updated.provider_priority_order,
         region: updated.tmdb_watch_region, language: updated.tmdb_language,
         localizeTitles: updated.tmdb_localize_series_titles ?? true, emuUsername: updated.emu_username ?? '',
-        ignoreSpecials: updated.series_ignore_specials ?? true, recentLimit: updated.recent_activity_limit ?? 50,
+        ignoreSpecials: updated.series_ignore_specials ?? true, recentLimit: updated.recent_activity_limit ?? 100,
         qbitUrl: updated.qbit_url ?? '', qbitPort: updated.qbit_port ?? '8080', qbitUser: updated.qbit_username ?? '',
         imgEnabled: updated.image_hosts_enabled ?? [], pathMappings: updated.path_mappings ?? [],
         useHardlinks: updated.use_hardlinks ?? true, hardlinkBase: updated.hardlink_base ?? '',
@@ -660,6 +660,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           <span className="form-hint">El tag que va tras el último «-» en el nombre del torrent (tu grupo/usuario).</span>
         </div>
         <div className="form-group" style={{ marginBottom: 14 }}>
+          <label className="form-label">Episodios especiales</label>
           <label className="checkbox-label" style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
             <input type="checkbox" checked={ignoreSpecials} onChange={e => setIgnoreSpecials(e.target.checked)} style={{ marginTop: 3 }} />
             <span>
@@ -676,11 +677,12 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           </label>
         </div>
         <div className="form-group">
-          <label className="form-label">Elementos en «Actividad reciente»</label>
+          <label className="form-label">Elementos en Recomendaciones</label>
           <select className="form-input form-select" value={recentLimit} onChange={e => setRecentLimit(Number(e.target.value))}>
+            <option value={0}>Sin límite</option>
             {[50, 100, 150, 200, 250, 300].map(n => <option key={n} value={n}>{n}</option>)}
           </select>
-          <span className="form-hint">Cuántos elementos muestra el panel «Actividad reciente» del dashboard.</span>
+          <span className="form-hint">Cuántos elementos muestra el panel «Recomendaciones» del dashboard.</span>
         </div>
       </div>
       </div>

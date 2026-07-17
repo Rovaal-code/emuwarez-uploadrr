@@ -755,7 +755,7 @@ def _rec_rolled_size(conn: sqlite3.Connection, row: dict, *, season: int | None 
     return r["s"] if r and r["c"] else None
 
 
-def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 60) -> list[dict]:
+def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100) -> list[dict]:
     from datetime import datetime, timezone
     now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -894,7 +894,7 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 60) 
     recs.sort(key=lambda d: d["rec_group"])
     for d in recs:
         d.pop("_added", None)
-    return recs[:limit]
+    return recs if limit <= 0 else recs[:limit]
 
 
 def update_request_status(

@@ -86,7 +86,7 @@ class SettingsResponse(BaseModel):
     notify_telegram_events: list[str] = []
     # "Otros"
     series_ignore_specials: bool = True
-    recent_activity_limit: int = 50
+    recent_activity_limit: int = 100
     # Remote path mappings: [{"from": "/data/media", "to": "/mnt/emu-media"}]
     path_mappings: list[dict] = []
 
@@ -155,16 +155,16 @@ def _normalize_allowed_roots(value: list[str] | str) -> list[str]:
     return [p.strip() for p in parts if p and p.strip()]
 
 
-_RECENT_ACTIVITY_CHOICES = (50, 100, 150, 200, 250, 300)
+_RECENT_ACTIVITY_CHOICES = (0, 50, 100, 150, 200, 250, 300)  # 0 = sin límite
 
 
 def _read_recent_activity_limit(conn) -> int:
     raw = get_setting_canonical(conn, "dashboard.recent_activity_limit")
     try:
-        val = int(raw) if raw else 50
+        val = int(raw) if raw else 100
     except (TypeError, ValueError):
-        return 50
-    return val if val in _RECENT_ACTIVITY_CHOICES else 50
+        return 100
+    return val if val in _RECENT_ACTIVITY_CHOICES else 100
 
 
 def _read_path_mappings(conn) -> list[dict]:

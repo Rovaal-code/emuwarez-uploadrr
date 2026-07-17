@@ -162,7 +162,7 @@ def dashboard_activity(current_user: dict = Depends(require_auth)) -> DashboardA
 
 @router.get("/recommendations", response_model=DashboardRecommendationsResponse)
 def dashboard_recommendations(
-    limit: int = Query(default=60, ge=1, le=200),
+    limit: int = Query(default=100, ge=0, le=100000),  # 0 = sin límite
     current_user: dict = Depends(require_auth),
 ) -> DashboardRecommendationsResponse:
     """Phase 11G — 'Recomendaciones': actionable content in three ranked groups

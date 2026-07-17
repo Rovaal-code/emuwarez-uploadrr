@@ -460,7 +460,7 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
       <div style={{ marginTop: 16, padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
         {preview?.torrent_name && preview?.internal_mkv_title ? (
           <FitTextPair
-            min={10}
+            min={12}
             showSizeControls
             items={[
               { label: 'Nombre final del torrent (eMuwarez)', text: preview.torrent_name, labelStyle },
@@ -723,7 +723,7 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
           <div className="modal-body">
             <div style={{ marginBottom: 14, padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
               <FitTextPair
-                min={10}
+                min={12}
                 showSizeControls
                 items={[
                   { label: 'Nombre final del torrent', text: preview?.torrent_name || '–', labelStyle },

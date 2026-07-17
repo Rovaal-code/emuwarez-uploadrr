@@ -68,7 +68,13 @@ export function FitText({
       lastAvail = avail
       autoSizeRef.current = measureFitSize(el, min, max)
     }
-    fit()
+    // No synchronous fit() here: right after mount, sibling content in the
+    // same modal (other fields, async sections) can still be settling its own
+    // layout, so a measurement taken THIS early can read a container width
+    // that's temporarily too generous — briefly showing an oversized font
+    // that then visibly shrinks once a later check corrects it (seen live: a
+    // torrent name flashing 13px before settling at its real fitted size).
+    // Waiting one frame (rAF) for the first real measurement avoids that.
     const raf = requestAnimationFrame(fit)
     const timers = [50, 150, 300].map(ms => window.setTimeout(fit, ms))
     const ro = new ResizeObserver(fit)
@@ -148,7 +154,9 @@ export function FitTextPair({
       elB.style.fontSize = `${shared}px`
       autoSizeRef.current = shared
     }
-    fit()
+    // No synchronous fit() here — see FitText's comment: measuring before
+    // sibling layout has settled can read a too-generous width and briefly
+    // show an oversized font that then visibly shrinks a beat later.
     const raf = requestAnimationFrame(fit)
     const timers = [50, 150, 300].map(ms => window.setTimeout(fit, ms))
     const ro = new ResizeObserver(fit)

@@ -96,10 +96,13 @@ export function FitText({
 
   if (!showSizeControls) return textNode
 
+  // Controls sit on their OWN row below the text — never sharing horizontal
+  // space with it, so they can't overlap/cover it regardless of how wide the
+  // text ends up.
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', minWidth: 0 }}>
+    <div style={{ width: '100%', minWidth: 0 }}>
       {textNode}
-      <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginTop: 4 }}>
         <button
           type="button"
           onClick={() => setManualSize(s => Math.max(4, Math.round((s ?? autoSizeRef.current) - 1)))}
@@ -115,7 +118,7 @@ export function FitText({
         {manualSize != null && (
           <button type="button" onClick={() => setManualSize(null)} title="Volver al ajuste automático" style={debugBtnStyle}>↺</button>
         )}
-        <span style={{ fontSize: 10, color: 'var(--text-muted)', alignSelf: 'center' }}>
+        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
           {manualSize != null ? `${manualSize}px (manual)` : `${autoSizeRef.current.toFixed(1)}px (auto)`}
         </span>
       </div>

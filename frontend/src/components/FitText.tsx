@@ -1,4 +1,4 @@
-import { useRef, useLayoutEffect } from 'react'
+import { useRef, useLayoutEffect, useState } from 'react'
 
 // Monospace one-liner (torrent name / internal title / expected name) that
 // shrinks its font JUST ENOUGH to fit the whole string on one line — filling
@@ -9,15 +9,27 @@ import { useRef, useLayoutEffect } from 'react'
 // clipped with "…" — callers that want to guarantee no scroll at all should
 // pass a low enough `min` (down to 8) to accept a smaller font instead.
 //
-// Confirmed accurate with a live diagnostic readout on a real 85-char torrent
-// name: measured avail=648.8px, and at font=8px the text measured 649px — the
-// fit was already using ~100% of the real available space; a still-visible
-// small font for a long name is the box being narrow, not a measurement bug.
-export function FitText({ text, max = 13, min = 8 }: { text: string; max?: number; min?: number }) {
+// `showSizeControls` adds a small −/+/↺ next to the text so a size that still
+// looks wrong after the automatic fit can be dialed in by hand — a debugging
+// aid while we track down what "the right size" actually looks like here,
+// not meant as a permanent per-user setting.
+export function FitText({
+  text, max = 13, min = 8, showSizeControls = false,
+}: { text: string; max?: number; min?: number; showSizeControls?: boolean }) {
   const ref = useRef<HTMLDivElement>(null)
+  const autoSizeRef = useRef(max)
+  const [manualSize, setManualSize] = useState<number | null>(null)
+
   useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
+
+    // Manual override: skip the fit algorithm entirely, pin the size as-is.
+    if (manualSize != null) {
+      el.style.fontSize = `${manualSize}px`
+      return
+    }
+
     // Guard on the measured width: setting the font changes el's HEIGHT, which
     // re-fires the ResizeObserver — but the available WIDTH is unchanged, so we
     // skip and avoid an infinite measure→resize loop. A real container resize
@@ -39,7 +51,7 @@ export function FitText({ text, max = 13, min = 8 }: { text: string; max?: numbe
       // under-size the text.
       const target = avail - 1
       el.style.fontSize = `${max}px`
-      if (el.scrollWidth <= target) return // fits at max → keep it big
+      if (el.scrollWidth <= target) { autoSizeRef.current = max; return } // fits at max → keep it big
       // Binary-search the LARGEST font that actually MEASURES as fitting. We
       // measure each candidate (scrollWidth) rather than estimate from a ratio:
       // monospace glyph advances don't scale perfectly linearly, so an estimate
@@ -53,6 +65,7 @@ export function FitText({ text, max = 13, min = 8 }: { text: string; max?: numbe
         else hi = mid
       }
       el.style.fontSize = `${lo}px`
+      autoSizeRef.current = lo
     }
     fit()
     // A couple of re-checks catch layout that's still settling after the
@@ -69,8 +82,9 @@ export function FitText({ text, max = 13, min = 8 }: { text: string; max?: numbe
       timers.forEach(clearTimeout)
       ro.disconnect()
     }
-  }, [text, max, min])
-  return (
+  }, [text, max, min, manualSize])
+
+  const textNode = (
     // overflowX:auto (not hidden+ellipsis): with a raised `min`, the fit can
     // legitimately stop short of eliminating all overflow for an especially
     // long string — the leftover scrolls into view instead of being silently
@@ -79,4 +93,38 @@ export function FitText({ text, max = 13, min = 8 }: { text: string; max?: numbe
       {text}
     </div>
   )
+
+  if (!showSizeControls) return textNode
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', minWidth: 0 }}>
+      {textNode}
+      <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+        <button
+          type="button"
+          onClick={() => setManualSize(s => Math.max(4, Math.round((s ?? autoSizeRef.current) - 1)))}
+          title="Reducir tamaño de letra"
+          style={debugBtnStyle}
+        >−</button>
+        <button
+          type="button"
+          onClick={() => setManualSize(s => Math.min(40, Math.round((s ?? autoSizeRef.current) + 1)))}
+          title="Aumentar tamaño de letra"
+          style={debugBtnStyle}
+        >+</button>
+        {manualSize != null && (
+          <button type="button" onClick={() => setManualSize(null)} title="Volver al ajuste automático" style={debugBtnStyle}>↺</button>
+        )}
+        <span style={{ fontSize: 10, color: 'var(--text-muted)', alignSelf: 'center' }}>
+          {manualSize != null ? `${manualSize}px (manual)` : `${autoSizeRef.current.toFixed(1)}px (auto)`}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+const debugBtnStyle: React.CSSProperties = {
+  fontSize: 11, lineHeight: 1, padding: '2px 6px', borderRadius: 4,
+  border: '1px solid var(--border)', background: 'rgba(255,255,255,0.04)',
+  color: 'var(--text-secondary)', cursor: 'pointer',
 }

@@ -459,9 +459,9 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
       </div>
       <div style={{ marginTop: 16, padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
         <div style={labelStyle}>Nombre final del torrent (eMuwarez)</div>
-        {preview?.torrent_name ? <FitText text={preview.torrent_name} min={10} /> : <GeneratingHint />}
+        {preview?.torrent_name ? <FitText text={preview.torrent_name} min={10} showSizeControls /> : <GeneratingHint />}
         <div style={{ ...labelStyle, marginTop: 10 }}>Título Final del Archivo (También el Interno)</div>
-        {preview?.internal_mkv_title ? <FitText text={preview.internal_mkv_title} min={10} /> : <GeneratingHint />}
+        {preview?.internal_mkv_title ? <FitText text={preview.internal_mkv_title} min={10} showSizeControls /> : <GeneratingHint />}
       </div>
     </>
   )
@@ -710,9 +710,9 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
           <div className="modal-body">
             <div style={{ marginBottom: 14, padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
               <div style={labelStyle}>Nombre final del torrent</div>
-              <FitText text={preview?.torrent_name || '–'} min={10} />
+              <FitText text={preview?.torrent_name || '–'} min={10} showSizeControls />
               <div style={{ ...labelStyle, marginTop: 10 }}>Título Final del Archivo (También el Interno)</div>
-              <FitText text={preview?.internal_mkv_title || '–'} min={10} />
+              <FitText text={preview?.internal_mkv_title || '–'} min={10} showSizeControls />
             </div>
 
             {/* Pre-upload checks card */}

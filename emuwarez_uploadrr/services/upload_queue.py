@@ -337,9 +337,15 @@ def _run_queued_job(job_id: int) -> None:
             if not _check_season_integrity(job_id, item_id, conn=conn):
                 return
         else:
-            local_path = resolve_local_path(item.get("path")) or item.get("path")
+            # Prefer prepared_path over the raw path — same convention
+            # mkv_remux.py/mkv_title.py already use: once nomenclature has
+            # been applied before, `path` may be stale (the original file
+            # was renamed/hardlinked away) while prepared_path is the real
+            # current file.
+            candidate_path = item.get("prepared_path") or item.get("path")
+            local_path = resolve_local_path(candidate_path) or candidate_path
             if not local_path or not os.path.isfile(local_path):
-                _fail(job_id, f"El archivo no es accesible: {local_path or item.get('path') or '(sin ruta)'}")
+                _fail(job_id, f"El archivo no es accesible: {local_path or candidate_path or '(sin ruta)'}")
                 return
             if mediainfo_available():
                 info = read_media_info_summary(local_path)

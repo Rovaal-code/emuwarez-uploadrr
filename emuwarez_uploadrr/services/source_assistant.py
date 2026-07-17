@@ -381,14 +381,21 @@ def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
         # isn't reachable there's no complete/correct name to generate. Check
         # accessibility up front (applying the remote path mapping) and block
         # instead of producing a misleading name with empty technical fields.
+        #
+        # Prefer prepared_path over the raw path — same convention
+        # mkv_remux.py/mkv_title.py already use: once nomenclature has been
+        # applied, `path` may be stale (the original file was renamed/
+        # hardlinked away) while prepared_path is the real current file.
         from .path_mapping import resolve_local_path
         raw_path = item.get("path")
-        local_path = resolve_local_path(raw_path, conn=conn) or raw_path
+        prepared_path = item.get("prepared_path")
+        candidate_path = prepared_path or raw_path
+        local_path = resolve_local_path(candidate_path, conn=conn) or candidate_path
         if not (local_path and os.path.isfile(local_path)):
             return {
                 "library_item_id": library_item_id,
                 "blocked": True,
-                "error": (f"Archivo no accesible desde la app: {raw_path or '(sin ruta)'}. "
+                "error": (f"Archivo no accesible desde la app: {candidate_path or '(sin ruta)'}. "
                           "Los campos técnicos (códec, audio, HDR) se leen con MediaInfo del "
                           "archivo real; sin acceso al archivo no se puede generar la nomenclatura."),
             }
@@ -471,14 +478,41 @@ def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
         mi_audio = mi_video = mi_hdr = mi_source = None
         mi_source_estimated = False
         from .media_info_service import build_mediainfo_report
-        report = build_mediainfo_report(item.get("path") or "")
-        if not report.get("available"):
-            # File reachable but MediaInfo couldn't read it (binary missing or
-            # parse failure) → same block: no technical fields, no valid name.
+        report = build_mediainfo_report(candidate_path or "")
+        mediainfo_ok = bool(report.get("available"))
+
+        # Distinct from MediaInfo: mkvtoolnix (mkvmerge -J) is what the track
+        # remux step needs to reorder/rename audio/subs — a file can be
+        # readable by one tool and not the other (or neither), and each case
+        # points the user at a different fix, so they're reported separately
+        # instead of collapsing into one generic "no se puede leer".
+        mkvtoolnix_ok = True
+        if local_path.lower().endswith(".mkv"):
+            from .mkv_remux import check_mkvmerge_available, read_tracks_json
+            if check_mkvmerge_available().get("available"):
+                mkvtoolnix_ok = bool(read_tracks_json(local_path).get("ok"))
+
+        if not mediainfo_ok and not mkvtoolnix_ok:
             return {
                 "library_item_id": library_item_id,
                 "blocked": True,
-                "error": report.get("message") or "MediaInfo no está disponible para leer el archivo.",
+                "error": ("El archivo es accesible, pero ni MediaInfo ni mkvtoolnix han podido leerlo "
+                          "(probable corrupción)." + (f" {report.get('message')}" if report.get("message") else "")),
+            }
+        if not mediainfo_ok:
+            # File reachable but MediaInfo couldn't read it (binary missing or
+            # parse failure) → block: no technical fields, no valid name.
+            return {
+                "library_item_id": library_item_id,
+                "blocked": True,
+                "error": report.get("message") or "El archivo es accesible, pero MediaInfo no ha podido leerlo.",
+            }
+        if not mkvtoolnix_ok:
+            return {
+                "library_item_id": library_item_id,
+                "blocked": True,
+                "error": ("El archivo es accesible y MediaInfo lo lee correctamente, pero mkvtoolnix no ha "
+                          "podido leerlo (probable corrupción) — hace falta para reordenar/renombrar las pistas."),
             }
         mi_audio = report.get("audio_summary")
         emu_by_field = {

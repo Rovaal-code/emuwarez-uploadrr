@@ -249,7 +249,6 @@ def test_plan_falls_back_to_source_path_without_nomenclature(tmp_path):
     assert result["status"] == "ready"
     assert result["prepared_path"] == str(mkv_file)
     assert result["using_prepared_copy"] is False
-    assert any("nomenclatura" in w.lower() for w in result["warnings"])
 
 
 def test_plan_mkvmerge_unavailable(tmp_path):

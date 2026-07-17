@@ -50,6 +50,18 @@ const thStyle: React.CSSProperties = {
 }
 const TRACK_TYPE_LABEL: Record<string, string> = { video: 'Vídeo', audio: 'Audio', subtitles: 'Subs' }
 
+// Shown in place of a table whose data isn't loaded yet, so a slow fetch (e.g.
+// mkvmerge/MediaInfo reading a real file over a remote mount) never looks like
+// the UI has frozen — always show a spinner instead of a blank area.
+function TableLoadingSpinner({ label = 'Cargando…' }: { label?: string }) {
+  return (
+    <div style={{ padding: '28px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+      <span className="spinner" style={{ width: 24, height: 24, borderWidth: 3 }} />
+      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{label}</span>
+    </div>
+  )
+}
+
 // Field label + an info "?" explaining where the field's data comes from.
 function FieldLabel({ label, info }: { label: string; info?: React.ReactNode }) {
   return (
@@ -282,7 +294,7 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
     }
   }
 
-  const runTrackRemux = async () => {
+  const runTrackRemux = useCallback(async () => {
     if (targetId == null) return
     setRemuxLoading(true); setRemuxError(null); setRemuxEdits({})
     try {
@@ -293,7 +305,13 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
     } finally {
       setRemuxLoading(false)
     }
-  }
+  }, [targetId])
+
+  // Prefetch the track remux plan IN PARALLEL with the nomenclature fields
+  // (reading a real .mkv's tracks — mkvmerge -J — can be slow over a remote
+  // mount) so it's usually already loaded (or well underway) by the time the
+  // user opens "Ver Remux", instead of only starting the read on click.
+  useEffect(() => { if (step === 1) runTrackRemux() }, [step, runTrackRemux])
 
   const setRemuxEdit = (trackId: number, patch: TrackRemuxOverride) => {
     setRemuxEdits(prev => ({ ...prev, [trackId]: { ...prev[trackId], ...patch } }))
@@ -529,11 +547,15 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                      <button className="btn btn-primary" onClick={() => { runMediaInfo(); setShowMiCard(true) }} disabled={miLoading || targetId == null}>
-                        {miLoading ? 'Cargando…' : 'Ver MediaInfo'}
+                      <button className="btn btn-primary" onClick={() => { runMediaInfo(); setShowMiCard(true) }} disabled={targetId == null}>
+                        Ver MediaInfo
                       </button>
-                      <button className="btn btn-primary" onClick={() => { runTrackRemux(); setShowRemuxCard(true) }} disabled={remuxLoading || targetId == null}>
-                        {remuxLoading ? 'Cargando…' : 'Ver Remux'}
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => { setShowRemuxCard(true); if (!remuxPreview && !remuxLoading) runTrackRemux() }}
+                        disabled={targetId == null}
+                      >
+                        Ver Remux
                       </button>
                     </div>
                   </div>
@@ -547,7 +569,13 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
                         <button className="modal-close" onClick={() => setShowMiCard(false)}>✕</button>
                       </div>
                       <div className="modal-body">
-                        {miError && <p className="text-error" style={{ fontSize: 12, marginTop: 0 }}>✗ {miError}</p>}
+                        {miLoading && !miReport && <TableLoadingSpinner label="Cargando MediaInfo…" />}
+                        {miError && !miLoading && (
+                          <>
+                            <p className="text-error" style={{ fontSize: 12, marginTop: 0 }}>✗ {miError}</p>
+                            <button className="btn btn-secondary btn-sm" type="button" onClick={runMediaInfo}>↻ Reintentar</button>
+                          </>
+                        )}
                         {miReport && !miReport.available && (
                           <p className="text-warning" style={{ fontSize: 12, marginTop: 0 }}>⚠ {miReport.message}</p>
                         )}
@@ -591,7 +619,13 @@ export function UploadWizardModal({ item, onClose, onDone, preselect }: Props) {
                         <button className="modal-close" onClick={() => setShowRemuxCard(false)}>✕</button>
                       </div>
                       <div className="modal-body">
-                  {remuxError && <p className="text-error" style={{ fontSize: 12, marginTop: 10 }}>✗ {remuxError}</p>}
+                  {remuxLoading && !remuxPreview && <TableLoadingSpinner label="Cargando pistas del archivo…" />}
+                  {remuxError && !remuxLoading && (
+                    <>
+                      <p className="text-error" style={{ fontSize: 12, marginTop: 0 }}>✗ {remuxError}</p>
+                      <button className="btn btn-secondary btn-sm" type="button" onClick={runTrackRemux}>↻ Reintentar</button>
+                    </>
+                  )}
                   {remuxPreview?.errors?.map((e, i) => (
                     <p key={i} className="text-error" style={{ fontSize: 12, marginTop: 10 }}>✗ {e}</p>
                   ))}

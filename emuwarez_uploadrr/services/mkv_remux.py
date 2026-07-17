@@ -482,11 +482,6 @@ def build_remux_plan(library_item_id: int, conn=None) -> dict:
             return {**base, "status": "blocked", "errors": ["mkvmerge no encontró pistas en el archivo."]}
 
         warnings: list[str] = []
-        if not using_prepared_copy:
-            warnings.append(
-                "Aún no se ha aplicado la nomenclatura: esto operará sobre el archivo ORIGINAL "
-                "que gestionan Radarr/Sonarr (mismo nombre y carpeta, se sobrescribe en sitio)."
-            )
         if not any(t["type"] == "audio" for t in plan["tracks"]):
             warnings.append("El archivo no tiene pistas de audio.")
         if not plan["any_changed"]:

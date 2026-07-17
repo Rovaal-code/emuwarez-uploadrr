@@ -131,7 +131,12 @@ export function TrackRemuxButton({ item, onApplied }: Props) {
                 de vídeo, audio y subtítulos. No modifica la imagen/sonido, solo la estructura del contenedor.
               </p>
 
-              {loading && <div style={{ color: 'var(--text-muted)' }}>Cargando…</div>}
+              {loading && (
+                <div style={{ padding: '20px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                  <span className="spinner" style={{ width: 22, height: 22, borderWidth: 3 }} />
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Cargando…</span>
+                </div>
+              )}
               {error && <p style={{ color: 'var(--danger, #ef4444)' }}>{error}</p>}
 
               {preview && !loading && (

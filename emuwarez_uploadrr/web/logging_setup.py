@@ -87,4 +87,12 @@ def setup_app_logging() -> None:
     for name in ("uvicorn", "uvicorn.access", "uvicorn.error", "fastapi"):
         logging.getLogger(name).propagate = True
 
+    # Noise control:
+    #  • uvicorn.access duplicates our own request middleware line-for-line, so
+    #    mute it (only its warnings/errors get through, still via root).
+    #  • httpx/httpcore log every outgoing call to Radarr/Sonarr/TMDB/eMuwarez/
+    #    qBittorrent at INFO — per-request noise; keep only warnings+.
+    for name in ("uvicorn.access", "httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.WARNING)
+
     _configured = True

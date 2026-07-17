@@ -88,7 +88,39 @@ def create_app() -> FastAPI:
         lifespan=_lifespan,
     )
 
-    # Log every HTTP request the app handles — part of "log everything".
+    # HTTP request logging. To keep the INFO stream meaningful (not drowned in
+    # polling), we classify each request:
+    #   • 5xx                     → ERROR   (server broke)
+    #   • 4xx (non-benign paths)  → WARNING (bad request / auth)
+    #   • mutations POST/PUT/…    → INFO    (a real state change)
+    #   • GET reads, polling,     → DEBUG   (dropped: the root logs at INFO, so
+    #     static assets, SPA         these never reach the buffer/file at all)
+    # High-frequency pollers and static assets are always DEBUG so they never
+    # clutter the stream even when they 4xx (e.g. a 401 while logged out).
+    _MUTATIONS = {"POST", "PUT", "DELETE", "PATCH"}
+    _SKIP_PATHS = {
+        "/api/logs", "/api/notifications", "/api/auth/me", "/api/setup/status",
+        "/api/library/sync-status", "/api/library/sync-progress",
+        "/api/library/emu-sync-status", "/api/library/emu-sync-progress",
+        "/api/requests/sync-status",
+    }
+    _SKIP_SUFFIXES = ("/sync-status", "/sync-progress", "/emu-sync-status", "/emu-sync-progress")
+
+    def _level_for(method: str, path: str, status: int) -> int:
+        if status >= 500:
+            return logging.ERROR
+        is_quiet = (
+            path.startswith("/assets/")
+            or not path.startswith("/api/")            # SPA fallback / static
+            or path in _SKIP_PATHS
+            or path.endswith(_SKIP_SUFFIXES)
+        )
+        if is_quiet:
+            return logging.DEBUG
+        if status >= 400:
+            return logging.WARNING
+        return logging.INFO if method in _MUTATIONS else logging.DEBUG
+
     @app.middleware("http")
     async def _log_requests(request, call_next):
         start = time.time()
@@ -99,9 +131,10 @@ def create_app() -> FastAPI:
             raise
         dur_ms = (time.time() - start) * 1000
         path = request.url.path
-        # Skip the noisy polling of the logs endpoint itself.
-        if path != "/api/logs":
-            _req_log.info("%s %s → %s (%.0f ms)", request.method, path, response.status_code, dur_ms)
+        _req_log.log(
+            _level_for(request.method, path, response.status_code),
+            "%s %s → %s (%.0f ms)", request.method, path, response.status_code, dur_ms,
+        )
         return response
 
     app.add_exception_handler(AppError, app_error_handler)

@@ -39,7 +39,31 @@ function Gauge({ percent, label, color, title }: { percent: number; label: strin
   )
 }
 
-export function SystemStatusPanel() {
+// Collapsed sidebar (icon-only nav): the down/up throughput no longer fits
+// as text side by side, so it collapses to a single icon whose tooltip
+// carries both values — same reveal-on-hover pattern as the nav items.
+function NetRow({ down, up, collapsed }: { down: number; up: number; collapsed: boolean }) {
+  const { triggerProps, tooltipNode } = useTooltip(collapsed ? `↓ ${formatBytes(down)}/s · ↑ ${formatBytes(up)}/s` : null)
+  if (collapsed) {
+    return (
+      <div className="sys-net-row collapsed" {...triggerProps}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M12 3v8M8 7l4-4 4 4" />
+          <path d="M12 21v-8M8 17l4 4 4-4" />
+        </svg>
+        {tooltipNode}
+      </div>
+    )
+  }
+  return (
+    <div className="sys-net-row">
+      <span className="sys-net-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M6 13l6 6 6-6" /></svg>{formatBytes(down)}/s</span>
+      <span className="sys-net-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 19V5M6 11l6-6 6 6" /></svg>{formatBytes(up)}/s</span>
+    </div>
+  )
+}
+
+export function SystemStatusPanel({ collapsed = false }: { collapsed?: boolean }) {
   const [stats, setStats] = useState<SystemStats | null>(null)
 
   useEffect(() => {
@@ -53,7 +77,7 @@ export function SystemStatusPanel() {
   if (!stats) return null
 
   return (
-    <div className="sys-status">
+    <div className={`sys-status${collapsed ? ' collapsed' : ''}`}>
       <div className="sys-gauge-list">
         <Gauge percent={stats.cpu_percent} label="CPU" color="var(--hud-cyan)" title={stats.cpu_name} />
         <Gauge percent={stats.ram_percent} label="RAM" color="var(--hud-cyan)"
@@ -68,10 +92,7 @@ export function SystemStatusPanel() {
           </>
         )}
       </div>
-      <div className="sys-net-row">
-        <span className="sys-net-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M6 13l6 6 6-6" /></svg>{formatBytes(stats.net_down_bps)}/s</span>
-        <span className="sys-net-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 19V5M6 11l6-6 6 6" /></svg>{formatBytes(stats.net_up_bps)}/s</span>
-      </div>
+      <NetRow down={stats.net_down_bps} up={stats.net_up_bps} collapsed={collapsed} />
     </div>
   )
 }

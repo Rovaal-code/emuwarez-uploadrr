@@ -135,7 +135,7 @@ export function Sidebar({ active, onNavigate }: SidebarProps) {
           />
         ))}
       </nav>
-      {!collapsed && <SystemStatusPanel />}
+      <SystemStatusPanel collapsed={collapsed} />
     </aside>
   )
 }

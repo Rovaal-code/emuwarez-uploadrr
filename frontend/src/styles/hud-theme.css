@@ -495,3 +495,29 @@
   height: 11px;
   color: var(--hud-cyan);
 }
+
+/* Collapsed sidebar (icon-only nav, 64px wide): the gauges stay in the same
+   spot and order, just shrunk to fit — no horizontal room is wasted on
+   padding, and the percent/label text scales down with the ring instead of
+   disappearing (see Sidebar.tsx: SystemStatusPanel used to be skipped
+   entirely while collapsed). */
+.hud-app .sidebar.collapsed .sys-status {
+  padding: 8px 4px;
+}
+.hud-app .sidebar.collapsed .sys-gauge-pct {
+  font-size: 9px;
+}
+.hud-app .sidebar.collapsed .sys-gauge-label {
+  font-size: 6px;
+  letter-spacing: .03em;
+}
+.hud-app .sys-net-row.collapsed {
+  justify-content: center;
+  padding: 6px 0 2px;
+  cursor: default;
+}
+.hud-app .sys-net-row.collapsed svg {
+  width: 14px;
+  height: 14px;
+  color: var(--hud-cyan);
+}

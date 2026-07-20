@@ -12,6 +12,7 @@ def test_get_system_stats_shape(isolated_db):
         init_db(conn)
         stats = system_stats.get_system_stats(conn)
     assert 0 <= stats["cpu_percent"] <= 100
+    assert stats["cpu_name"]
     assert 0 <= stats["ram_percent"] <= 100
     assert stats["ram_total_gb"] > 0
     assert stats["net_down_bps"] >= 0

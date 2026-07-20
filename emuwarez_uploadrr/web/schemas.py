@@ -169,6 +169,7 @@ class GpuStatsResponse(BaseModel):
 
 class SystemStatsResponse(BaseModel):
     cpu_percent: float
+    cpu_name: str
     ram_percent: float
     ram_used_gb: float
     ram_total_gb: float

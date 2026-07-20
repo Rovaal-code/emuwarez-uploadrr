@@ -381,7 +381,7 @@
 /* ---- Sidebar System Status (CPU/RAM/disk/GPU/VRAM + network) ---- */
 .hud-app .sys-status {
   margin-top: auto;
-  padding: 16px 14px 18px;
+  padding: 8px 14px 8px;
   border-top: 1px solid rgba(30, 110, 190, .35);
 }
 .hud-app .sys-status-title {
@@ -390,20 +390,20 @@
   letter-spacing: .12em;
   text-transform: uppercase;
   color: var(--text-muted);
-  margin-bottom: 12px;
+  margin-bottom: 6px;
   text-align: center;
 }
 .hud-app .sys-gauge-list {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 5px;
 }
 .hud-app .sys-gauge-row {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 1px;
   cursor: default;
 }
 .hud-app .sys-gauge {
@@ -411,8 +411,8 @@
   flex-shrink: 0;
 }
 .hud-app .sys-gauge svg {
-  width: 112px;
-  height: 112px;
+  width: 48px;
+  height: 48px;
 }
 .hud-app .sys-gauge-track {
   fill: none;
@@ -433,13 +433,13 @@
   align-items: center;
   justify-content: center;
   font-family: var(--hud-font);
-  font-size: 22px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--hud-ice);
 }
 .hud-app .sys-gauge-label {
   font-family: var(--hud-font);
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: .08em;
   text-transform: uppercase;
@@ -448,8 +448,8 @@
 .hud-app .sys-net-row {
   display: flex;
   justify-content: space-between;
-  margin-top: 14px;
-  padding-top: 12px;
+  margin-top: 6px;
+  padding-top: 6px;
   border-top: 1px solid rgba(30, 110, 190, .2);
 }
 .hud-app .sys-net-item {

@@ -8,6 +8,7 @@ default instead of raising.
 from __future__ import annotations
 
 import os
+import platform
 import shutil
 import subprocess
 import time
@@ -15,6 +16,30 @@ import time
 import psutil
 
 from ..constants import CONFIG_DIR
+
+_cpu_name_cache: str | None = None
+
+
+def _cpu_name() -> str:
+    """Best-effort CPU model name — cached, since it never changes for the
+    life of the process and /proc/cpuinfo is a bit of a waste to re-read on
+    every poll."""
+    global _cpu_name_cache
+    if _cpu_name_cache is not None:
+        return _cpu_name_cache
+    name = ""
+    try:
+        with open("/proc/cpuinfo") as f:
+            for line in f:
+                if line.lower().startswith("model name"):
+                    name = line.split(":", 1)[1].strip()
+                    break
+    except Exception:
+        pass
+    if not name:
+        name = platform.processor() or platform.machine() or "CPU"
+    _cpu_name_cache = name
+    return name
 
 # psutil.cpu_percent() with no interval returns 0.0 (or the since-boot
 # average) on its very first call, then the real delta on every call after
@@ -123,6 +148,7 @@ def get_system_stats(conn) -> dict:
     gpu = _gpu_stats()
     return {
         "cpu_percent": psutil.cpu_percent(interval=None),
+        "cpu_name": _cpu_name(),
         "ram_percent": vm.percent,
         "ram_used_gb": round(vm.used / (1024 ** 3), 2),
         "ram_total_gb": round(vm.total / (1024 ** 3), 2),

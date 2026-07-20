@@ -10,6 +10,7 @@ export interface GpuStats {
 
 export interface SystemStats {
   cpu_percent: number
+  cpu_name: string
   ram_percent: number
   ram_used_gb: number
   ram_total_gb: number

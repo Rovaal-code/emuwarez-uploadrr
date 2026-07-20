@@ -7,6 +7,13 @@ const POLL_MS = 4000
 const RADIUS = 44
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS
 
+// The backend already reports *_gb as a float — feeding it back through
+// formatBytes (which expects raw bytes) picks the right unit on its own
+// (GB vs TB) instead of always printing "GB" even once it's really 5+ TB.
+function formatGb(gb: number): string {
+  return formatBytes(gb * 1024 ** 3)
+}
+
 function Gauge({ percent, label, color, title }: { percent: number; label: string; color: string; title?: string }) {
   const clamped = Math.max(0, Math.min(100, percent))
   const offset = CIRCUMFERENCE * (1 - clamped / 100)
@@ -47,16 +54,16 @@ export function SystemStatusPanel() {
     <div className="sys-status">
       <div className="sys-status-title">Estado del sistema</div>
       <div className="sys-gauge-list">
-        <Gauge percent={stats.cpu_percent} label="CPU" color="var(--hud-cyan)" />
+        <Gauge percent={stats.cpu_percent} label="CPU" color="var(--hud-cyan)" title={stats.cpu_name} />
         <Gauge percent={stats.ram_percent} label="RAM" color="var(--hud-cyan)"
-          title={`${stats.ram_used_gb.toFixed(1)} / ${stats.ram_total_gb.toFixed(1)} GB`} />
+          title={`${formatGb(stats.ram_used_gb)} / ${formatGb(stats.ram_total_gb)}`} />
         <Gauge percent={stats.disk_percent} label="Disco" color="var(--hud-ice)"
-          title={`Biblioteca: ${stats.disk_used_gb.toFixed(0)} / ${stats.disk_total_gb.toFixed(0)} GB`} />
+          title={`${stats.disk_path} — ${formatGb(stats.disk_used_gb)} / ${formatGb(stats.disk_total_gb)}`} />
         {stats.gpu && (
           <>
             <Gauge percent={stats.gpu.percent} label="GPU" color="var(--hud-cyan)" title={stats.gpu.name} />
             <Gauge percent={stats.gpu.vram_percent} label="VRAM" color="var(--hud-ice)"
-              title={`${stats.gpu.vram_used_gb.toFixed(1)} / ${stats.gpu.vram_total_gb.toFixed(1)} GB`} />
+              title={`${formatGb(stats.gpu.vram_used_gb)} / ${formatGb(stats.gpu.vram_total_gb)}`} />
           </>
         )}
       </div>

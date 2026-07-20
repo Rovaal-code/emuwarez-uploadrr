@@ -16,6 +16,7 @@ import { ServiceLabel, ServiceIcon } from '../components/ServiceIcon'
 import { Favicon, domainOf } from '../components/Favicon'
 import { UploadWizardModal } from '../components/UploadWizardModal'
 import { RequestFormModal } from '../components/RequestFormModal'
+import { useTooltip } from '../components/Tooltip'
 import { getLibraryItem } from '../api/library'
 import type { LibraryItemResponse } from '../types/api'
 import { formatBytes, formatDate, formatItemType } from '../utils/format'
@@ -153,6 +154,10 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   // banner). `message` shows the last completion result; `lastCompletedAt`
   // triggers a data reload when any sync finishes.
   const { message: syncMsg, lastCompletedAt } = useSync()
+  // The empty-state hologram has no room for a caption of its own — the
+  // explanation lives in a hover tooltip instead, styled like the rest of
+  // the app's tooltips (not a native title box).
+  const { triggerProps: uploadEmptyTip, tooltipNode: uploadEmptyTooltip } = useTooltip('No hay subidas en curso ahora mismo.')
 
   useTicker(activeUploads.some(j => j.status === 'queued'))
 
@@ -471,10 +476,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
               minHeight: 'auto', flex: 1, overflowY: 'auto',
             }}>
               {activeUploads.length === 0 ? (
-                <div className="hud-projection">
-                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0 0 6px' }}>
-                    No hay subidas en curso ahora mismo.
-                  </p>
+                <div className="hud-projection" {...uploadEmptyTip} style={{ cursor: 'help' }}>
+                  {uploadEmptyTooltip}
                   <svg viewBox="0 0 260 196" className="hud-projection-svg">
                     <defs>
                       <linearGradient id="hudBeamGrad" x1="0" y1="1" x2="0" y2="0">

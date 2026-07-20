@@ -4,15 +4,28 @@
 // filename inference, or a Settings value), so a user can understand why a
 // generated name looks the way it does. Purely informational, no state.
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+import { useState } from 'react'
+
+function Section({ title, defaultOpen = false, children }: { title: string; defaultOpen?: boolean; children: React.ReactNode }) {
+  const [open, setOpen] = useState(defaultOpen)
   return (
     <div style={{ marginTop: 28 }}>
-      <div style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-secondary)', marginBottom: 12 }}>
+      <div
+        onClick={() => setOpen(o => !o)}
+        style={{
+          fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em',
+          color: 'var(--text-secondary)', marginBottom: 12, cursor: 'pointer', userSelect: 'none',
+          display: 'flex', alignItems: 'center', gap: 8,
+        }}
+      >
+        <span style={{ display: 'inline-flex', fontSize: 10, transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>▶</span>
         {title}
       </div>
-      <div className="detail-card" style={{ padding: '16px 18px', borderRadius: 10 }}>
-        {children}
-      </div>
+      {open && (
+        <div className="detail-card" style={{ padding: '16px 18px', borderRadius: 10 }}>
+          {children}
+        </div>
+      )}
     </div>
   )
 }
@@ -211,7 +224,7 @@ export function GuidePage() {
         </div>
       </div>
 
-      <Section title="Fórmula del nombre">
+      <Section title="Fórmula del nombre" defaultOpen>
         <p style={{ fontSize: 12.5, marginTop: 0 }}>
           Cada elemento se identifica entre corchetes, que se omiten en el nombre real del fichero y en el título del aporte.
           El provider (cuando se conoce) va entre la resolución y el source.

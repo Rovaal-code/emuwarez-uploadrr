@@ -26,16 +26,28 @@ def get_root_folders(url: str, api_key: str) -> list[dict[str, Any]]:
     return data if isinstance(data, list) else []
 
 
-def rescan_movie(url: str, api_key: str, movie_id: int) -> dict[str, Any]:
-    """Ask Radarr to rescan this movie's folder right now — used right after
-    we rename/hardlink its file, so Radarr's own DB picks up the new
-    filename immediately instead of waiting for its next scheduled scan
-    (otherwise a "Sincronizar biblioteca" here just re-imports the same
-    stale path Radarr still has on file)."""
+def refresh_movie(url: str, api_key: str, movie_id: int) -> dict[str, Any]:
+    """Ask Radarr to refresh this movie's metadata AND rescan its folder in
+    one command (same as its own "Refresh & Scan" button) — used right after
+    we rename/hardlink its file, so Radarr actually adopts the new filename
+    as this movie's file instead of just noticing the old one is gone. A
+    disk-scan-only RescanMovie is not enough: Radarr's own reconciliation
+    between "file went missing" and "here's a new file" runs as part of the
+    fuller refresh, not the bare rescan."""
     return request_json(
         "POST", build_url(url, "/api/v3/command"), api_key=api_key,
-        data={"name": "RescanMovie", "movieIds": [movie_id]},
+        data={"name": "RefreshMovie", "movieIds": [movie_id]},
     )
+
+
+def get_movie(url: str, api_key: str, movie_id: int) -> dict[str, Any]:
+    return request_json("GET", build_url(url, f"/api/v3/movie/{movie_id}"), api_key=api_key)
+
+
+def get_command_status(url: str, api_key: str, command_id: int) -> dict[str, Any]:
+    """Poll a previously-issued command (e.g. RefreshMovie) — Radarr commands
+    run async; `status` becomes "completed"/"failed" once done."""
+    return request_json("GET", build_url(url, f"/api/v3/command/{command_id}"), api_key=api_key)
 
 
 def get_movies(url: str, api_key: str) -> list[dict[str, Any]]:

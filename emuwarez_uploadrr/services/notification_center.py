@@ -26,6 +26,7 @@ _log = logging.getLogger("emuwarez.notifications")
 EVENT_TYPES: dict[str, str] = {
     "request_published": "Petición publicada en eMuwarez",
     "upload_completed": "Subida completada",
+    "upload_failed": "Subida fallida",
     "request_match_found": "Contenido compatible con una petición",
 }
 

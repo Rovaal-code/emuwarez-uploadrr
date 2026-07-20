@@ -28,11 +28,14 @@ import os
 import shutil
 import subprocess
 import tempfile
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 
 from ..database import connect
 from .mkv_title import _get_prepared_path
+from .uploadrr_progress import parse_mkvmerge_gui_progress
 
 logger = logging.getLogger("emuwarez.mkv_remux")
 
@@ -368,7 +371,14 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None) -> 
         t["_priority"] = lang_priority(t["language"], ietf_by_id.get(t["id"]), t["current_name"])
 
     audio_sorted = sorted(audio, key=lambda t: t["_priority"])
-    subs_sorted = sorted(subs, key=lambda t: t["_priority"])
+    # Secondary key `t["forced"]` (False < True): when two subtitle tracks of
+    # the SAME language tie on priority (e.g. a regular Spanish track and a
+    # forced-only Spanish track), the regular one must sort first — Python's
+    # sort is stable, so without this a forced track that merely happened to
+    # come first in the file's own original order would win the tie and end
+    # up marked default below, which is backwards (a forced track only
+    # covers foreign-language lines, it's not meant to be the general default).
+    subs_sorted = sorted(subs, key=lambda t: (t["_priority"], t["forced"]))
 
     new_order = [t["id"] for t in video] + [t["id"] for t in audio_sorted] + [t["id"] for t in subs_sorted]
 
@@ -393,11 +403,9 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None) -> 
         # the same pattern if ever added).
         t["new_name"] = f"{lang_name} - Forzado" if t["forced"] else lang_name
         # Same priority rule as audio: Español Castellano first, then
-        # Català, then Inglés, then whatever's left — the first (index 0)
-        # after that sort is the default, same as audio just above. NOT
-        # driven by the "forced" flag: a forced-only track being first in
-        # mkvmerge's own original order used to win by accident whenever no
-        # track was marked default_before, regardless of language.
+        # Català, then Inglés, then whatever's left — plus the forced
+        # tiebreaker above (regular before forced) — the first (index 0)
+        # after that sort is the default, same as audio just above.
         t["default_after"] = (i == 0)
 
     ordered_tracks = video + audio_sorted + subs_sorted
@@ -452,8 +460,15 @@ def apply_track_overrides(plan: dict, overrides: dict[int, dict] | None) -> dict
     }
 
 
-def build_mkvmerge_args(output_path: str, source_path: str, plan: dict) -> list[str]:
-    args: list[str] = ["mkvmerge", "-o", output_path]
+def build_mkvmerge_args(
+    output_path: str, source_path: str, plan: dict, *, gui_mode: bool = False
+) -> list[str]:
+    args: list[str] = ["mkvmerge"]
+    if gui_mode:
+        # Emits "#GUI#progress N%" lines on stdout as it works — real,
+        # precise progress instead of a fabricated estimate.
+        args.append("--gui-mode")
+    args += ["-o", output_path]
     for t in plan["ordered_tracks"]:
         args += ["--track-name", f"{t['id']}:{t['new_name']}"]
         if t["type"] in ("audio", "subtitles"):
@@ -547,6 +562,7 @@ def apply_remux(
     confirmation: str | None = None,
     overrides: dict[int, dict] | None = None,
     conn=None,
+    on_progress: Callable[[int], None] | None = None,
 ) -> dict:
     """Apply or preview the track reorder/rename.
 
@@ -557,6 +573,11 @@ def apply_remux(
     upload wizard's editable table) override the auto-computed name/default
     per track — grouping and priority order are never overridable, only what
     each track ends up called and whether it's marked default.
+
+    `on_progress`, if given, is called with a 0-100 int each time mkvmerge's
+    `--gui-mode` output reports a new percentage — lets the caller surface
+    real remux progress (e.g. a job's progress_json) instead of a binary
+    0/100 state.
     """
     own = conn is None
     conn = conn or connect()
@@ -596,22 +617,43 @@ def apply_remux(
         os.close(fd)
         os.remove(tmp_path)  # mkvmerge must create the file itself
 
-        args = build_mkvmerge_args(tmp_path, prepared_path, plan)
+        args = build_mkvmerge_args(tmp_path, prepared_path, plan, gui_mode=True)
         try:
-            result = subprocess.run(args, capture_output=True, text=True, timeout=1800, shell=False)
+            proc = subprocess.Popen(
+                args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, bufsize=1,
+            )
         except FileNotFoundError:
             return {**preview, "status": "error", "dry_run": False, "apply": True,
                      "errors": ["mkvmerge no encontrado al ejecutar."]}
-        except subprocess.TimeoutExpired:
+
+        output_lines: list[str] = []
+
+        def _read_output() -> None:
+            assert proc.stdout is not None
+            for line in proc.stdout:
+                output_lines.append(line)
+                if on_progress:
+                    pct = parse_mkvmerge_gui_progress(line)
+                    if pct is not None:
+                        on_progress(pct)
+
+        reader = threading.Thread(target=_read_output, daemon=True)
+        reader.start()
+        reader.join(timeout=1800)
+        if reader.is_alive():
+            proc.kill()
+            reader.join(timeout=5)
             _cleanup(tmp_path)
             _update_status(conn, library_item_id, "error", "mkvmerge agotó el timeout (30 min).")
             return {**preview, "status": "error", "dry_run": False, "apply": True,
                      "errors": ["mkvmerge agotó el timeout (30 min)."]}
+        returncode = proc.wait()
 
         # mkvmerge: 0 = OK, 1 = OK with warnings, 2 = failed (no output file).
-        if result.returncode not in (0, 1) or not os.path.isfile(tmp_path):
+        if returncode not in (0, 1) or not os.path.isfile(tmp_path):
             _cleanup(tmp_path)
-            err = (result.stderr or result.stdout or f"exit code {result.returncode}").strip()
+            err = ("".join(output_lines) or f"exit code {returncode}").strip()
             _update_status(conn, library_item_id, "error", err[:2000])
             logger.warning("Reordenar/renombrar pistas falló (item %s): %s", library_item_id, err[:300])
             return {**preview, "status": "error", "dry_run": False, "apply": True, "errors": [err[:2000]]}
@@ -620,10 +662,12 @@ def apply_remux(
         now = datetime.now(timezone.utc).isoformat()
         _update_status(conn, library_item_id, "aplicado", None, applied_at=now)
         logger.info("Pistas reordenadas/renombradas (item %s): %s", library_item_id, prepared_path)
+        if on_progress:
+            on_progress(100)
 
         return {
             **preview, "status": "applied", "dry_run": False, "apply": True,
-            "applied_at": now, "exit_code": result.returncode,
+            "applied_at": now, "exit_code": returncode,
         }
     finally:
         if own:

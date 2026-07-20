@@ -257,6 +257,7 @@ def _to_lib_response(row: dict, conn=None) -> LibraryItemResponse:
     resolution = row.get("resolution")
     source = row.get("source")
     path = row.get("path")
+    prepared_path = row.get("prepared_path")
     video_codec = row.get("video_codec")
     audio_codec = row.get("audio_codec")
     audio_languages = row.get("audio_languages")
@@ -307,6 +308,7 @@ def _to_lib_response(row: dict, conn=None) -> LibraryItemResponse:
         episode_number=row.get("episode_number"),
         parent_id=row.get("parent_id"),
         path=path,
+        prepared_path=prepared_path,
         quality=row.get("quality"),
         resolution=resolution,
         source=source,
@@ -483,11 +485,15 @@ def library_list(
 
 @router.get("/library/filter-options")
 def library_filter_options(current_user: dict = Depends(require_auth)) -> dict:
-    """Distinct providers and qualities present anywhere in the library (all
-    levels), for the Biblioteca filter dropdowns — otherwise a value that only
-    appears in the episodes of a mixed-provider/quality series would be missing
-    from the options. Defined before /library/{item_id} so it isn't captured
-    as an item id."""
+    """Distinct values actually present anywhere in the library (all levels),
+    for every Biblioteca column filter dropdown — Excel-style: a filter only
+    ever offers values that really occur in the data, never an invented fixed
+    list (e.g. LocalStatus has ~10 possible values, but only the ones some
+    item actually has should show up; a value that only appears in the
+    episodes of a mixed-provider/quality series would otherwise be missing
+    too). Defined before /library/{item_id} so it isn't captured as an item id."""
+    import json as _json
+
     with _get_conn() as conn:
         qrows = conn.execute(
             "SELECT DISTINCT resolution, source FROM library_items "
@@ -515,7 +521,64 @@ def library_filter_options(current_user: dict = Depends(require_auth)) -> dict:
             if c:
                 codes.add(c)
         providers = sorted({lbl for c in codes if (lbl := _provider_label(c))})
-    return {"providers": providers, "qualities": qualities}
+
+        types = [r[0] for r in conn.execute(
+            "SELECT DISTINCT item_type FROM library_items WHERE item_type IS NOT NULL ORDER BY item_type"
+        ).fetchall()]
+        statuses = [r[0] for r in conn.execute(
+            "SELECT DISTINCT local_status FROM library_items WHERE local_status IS NOT NULL ORDER BY local_status"
+        ).fetchall()]
+        request_statuses = [r[0] for r in conn.execute(
+            "SELECT DISTINCT request_status FROM library_items WHERE request_status IS NOT NULL ORDER BY request_status"
+        ).fetchall()]
+        nomenclature_statuses = [r[0] for r in conn.execute(
+            "SELECT DISTINCT nomenclature_status FROM library_items WHERE nomenclature_status IS NOT NULL ORDER BY nomenclature_status"
+        ).fetchall()]
+        instances = [
+            {"id": r["id"], "type": r["type"], "name": r["name"]}
+            for r in conn.execute(
+                "SELECT DISTINCT i.id, i.type, i.name FROM instances i "
+                "WHERE EXISTS (SELECT 1 FROM library_items li WHERE li.instance_id = i.id) "
+                "ORDER BY i.name"
+            ).fetchall()
+        ]
+
+        # emu_in_catalog/emu_aportes only get computed by the (throttled)
+        # eMuwarez catalog sync — read once and derive both which "¿En
+        # eMuwarez?" values and which "Aportes" values actually occur, rather
+        # than always offering both fixed options regardless of whether any
+        # item currently has them.
+        emu_rows = conn.execute("SELECT emu_in_catalog, emu_aportes FROM library_items").fetchall()
+        has_candidate = has_present = has_aporte_yes = has_aporte_no = False
+        for r in emu_rows:
+            ic = r["emu_in_catalog"]
+            if ic == 0:
+                has_candidate = True
+                has_aporte_yes = True
+            elif ic == 1:
+                has_present = True
+                try:
+                    aportes = _json.loads(r["emu_aportes"]) if r["emu_aportes"] else []
+                except (TypeError, ValueError):
+                    aportes = []
+                if aportes:
+                    has_aporte_yes = True
+                else:
+                    has_aporte_no = True
+        emu_states = [v for v, present in [("candidate", has_candidate), ("present", has_present)] if present]
+        aporte_states = [v for v, present in [("yes", has_aporte_yes), ("no", has_aporte_no)] if present]
+
+    return {
+        "providers": providers,
+        "qualities": qualities,
+        "types": types,
+        "statuses": statuses,
+        "request_statuses": request_statuses,
+        "nomenclature_statuses": nomenclature_statuses,
+        "instances": instances,
+        "emu_states": emu_states,
+        "aporte_states": aporte_states,
+    }
 
 
 @router.get("/library/emu-sync-status")
@@ -585,7 +648,8 @@ def library_mediainfo(
         if not row:
             raise HTTPException(status_code=404, detail=f"Item {item_id} no encontrado")
         path = row["path"] if "path" in row.keys() else None
-    return build_mediainfo_report(path)
+        radarr_source = row["source"] if "source" in row.keys() else None
+    return build_mediainfo_report(path, radarr_source=radarr_source)
 
 
 @router.get("/library/{item_id}/nomenclature-check")

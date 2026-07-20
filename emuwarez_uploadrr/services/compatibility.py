@@ -207,6 +207,26 @@ def _item_available(item: dict) -> bool:
     return (item.get("local_status") or "") in _AVAILABLE_LOCAL_STATUS
 
 
+def emu_override_status(emu_status: str | None) -> Optional[str]:
+    """eMuwarez request states that override any library-compatibility verdict
+    (Reclamado/Pendiente/Llena) — these describe the request's own fulfillment
+    state on the tracker and hold regardless of whether your library has a
+    matching item at all, so this is checked independently of any (request,
+    library_item) pairing, not just inside classify_request_match()."""
+    status_text = str(emu_status or "").lower()
+    if "reclam" in status_text or "claim" in status_text:
+        return "Reclamado"
+    if "pend" in status_text or "pending" in status_text:
+        return "Pendiente"
+    if "sin llen" in status_text or "unfilled" in status_text or "open" in status_text or "abiert" in status_text:
+        # "Sin llenar" = petición abierta. Se comprueba ANTES de "Llena" porque
+        # "llenar" contiene la subcadena "llena" y daría un falso positivo.
+        return None
+    if "lleno" in status_text or "llena" in status_text or "filled" in status_text or status_text == "1":
+        return "Llena"
+    return None
+
+
 def classify_request_match(
     req: dict,
     item: dict,
@@ -258,18 +278,7 @@ def classify_request_match(
     # eMuwarez request states that override the library-compatibility verdict:
     # if the request is claimed/pending/filled on the tracker, that status wins
     # (you can't act on it regardless of what your library holds).
-    status_text = str(req.get("emu_status") or "").lower()
-    emu_state: Optional[str] = None
-    if "reclam" in status_text or "claim" in status_text:
-        emu_state = "Reclamado"
-    elif "pend" in status_text or "pending" in status_text:
-        emu_state = "Pendiente"
-    elif "sin llen" in status_text or "unfilled" in status_text or "open" in status_text or "abiert" in status_text:
-        # "Sin llenar" = petición abierta. Se comprueba ANTES de "Llena" porque
-        # "llenar" contiene la subcadena "llena" y daría un falso positivo.
-        emu_state = None
-    elif "lleno" in status_text or "llena" in status_text or "filled" in status_text or status_text == "1":
-        emu_state = "Llena"
+    emu_state = emu_override_status(req.get("emu_status"))
     if emu_state:
         return {
             "status": emu_state,

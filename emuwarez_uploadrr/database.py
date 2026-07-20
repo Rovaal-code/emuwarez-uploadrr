@@ -456,6 +456,34 @@ def _migrate_upload_jobs_queue(conn: sqlite3.Connection) -> None:
         pass
 
 
+def _migrate_upload_jobs_snapshots(conn: sqlite3.Connection) -> None:
+    """Add nomenclature/remux snapshot columns to upload_jobs — persisted
+    read-only copies of the field breakdown and track plan actually applied,
+    so the job detail page can show them after the fact even though the
+    live nomenclature/remux services never keep this data themselves."""
+    for col, col_def in [
+        ("nomenclature_snapshot_json", "TEXT"),
+        ("remux_snapshot_json", "TEXT"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE upload_jobs ADD COLUMN {col} {col_def}")
+        except sqlite3.OperationalError:
+            pass
+
+
+def _migrate_upload_jobs_checks_snapshot(conn: sqlite3.Connection) -> None:
+    """Add checks_snapshot_json — the pre-upload checks (renameable/hardlink
+    or season_pack, output dir, qBittorrent, image hosts, eMuwarez) result at
+    the moment the job was queued. For a manual upload these are the exact
+    results the wizard already computed and showed the user before they
+    confirmed; run_upload_checks() itself never persists anything, so without
+    this the job detail page would have nothing to show for this section."""
+    try:
+        conn.execute("ALTER TABLE upload_jobs ADD COLUMN checks_snapshot_json TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+
 def _migrate_requests(conn: sqlite3.Connection) -> None:
     """Add Phase 5B columns to request_items and request_matches."""
     for col, col_def in [
@@ -921,6 +949,25 @@ def _migrate_nomenclature_phase10a(conn: sqlite3.Connection) -> None:
             pass
 
 
+def _migrate_nomenclature_year_series(conn: sqlite3.Connection) -> None:
+    """Add year/series_title/season_number to nomenclature_proposals — the
+    proposal dict always used the real year to build proposed_title/
+    proposed_filename, but never stored it as its own column, so anything
+    reading the saved proposal (the automated upload job's nomenclature
+    snapshot table) saw a blank Año/Serie/Temporada even though the
+    generated name itself had it right."""
+    new_cols = [
+        ("year",           "TEXT"),
+        ("series_title",   "TEXT"),
+        ("season_number",  "INTEGER"),
+    ]
+    for col, col_def in new_cols:
+        try:
+            conn.execute(f"ALTER TABLE nomenclature_proposals ADD COLUMN {col} {col_def}")
+        except sqlite3.OperationalError:
+            pass
+
+
 def _migrate_settings_phase10a(conn: sqlite3.Connection) -> None:
     """Insert default Phase 10A settings if not already present."""
     defaults = [
@@ -1212,6 +1259,9 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_tmdb_title_cache(conn)
         _migrate_library_items_track_remux(conn)
         _migrate_upload_jobs_queue(conn)
+        _migrate_upload_jobs_snapshots(conn)
+        _migrate_upload_jobs_checks_snapshot(conn)
+        _migrate_nomenclature_year_series(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

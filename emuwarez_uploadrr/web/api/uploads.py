@@ -24,6 +24,8 @@ from ...services.upload_execution import (
 from ..dependencies import require_auth
 from ..runtime import _db_path
 from ..schemas import (
+    AutoUploadRequest,
+    AutoUploadSourceCheckResponse,
     CommandPreviewResponse,
     UploadArtifact,
     UploadArtifactsResponse,
@@ -94,13 +96,34 @@ def _extract_command_preview(j: dict) -> str | None:
     return None
 
 
-def _job_to_detail(j: dict, media_type: str | None = None, poster_url: str | None = None) -> UploadJobDetail:
+def _extract_json_dict(j: dict, key: str) -> dict | None:
+    raw = j.get(key)
+    if not raw:
+        return None
+    try:
+        parsed = json.loads(raw)
+        return parsed if isinstance(parsed, dict) else None
+    except Exception:
+        return None
+
+
+def _job_to_detail(
+    j: dict,
+    media_type: str | None = None,
+    poster_url: str | None = None,
+    instance_type: str | None = None,
+    instance_name: str | None = None,
+    request_status: str | None = None,
+) -> UploadJobDetail:
     prepared = j.get("prepared_path")
     source = j.get("source_path") or j.get("path")
     using_prepared = bool(prepared) if (prepared or source) else None
     return UploadJobDetail(
         media_type=media_type,
         poster_url=poster_url,
+        instance_type=instance_type,
+        instance_name=instance_name,
+        request_status=request_status,
         id=j.get("id"),
         library_item_id=j.get("library_item_id"),
         request_item_id=j.get("request_item_id"),
@@ -133,6 +156,10 @@ def _job_to_detail(j: dict, media_type: str | None = None, poster_url: str | Non
         command_preview=_extract_command_preview(j),
         progress_phase=compute_progress_phase(j.get("status", ""), j.get("stage")),
         queued_until=j.get("queued_until"),
+        nomenclature_snapshot=_extract_json_dict(j, "nomenclature_snapshot_json"),
+        remux_snapshot=_extract_json_dict(j, "remux_snapshot_json"),
+        checks_snapshot=_extract_json_dict(j, "checks_snapshot_json"),
+        progress=_extract_json_dict(j, "progress_json"),
     )
 
 
@@ -226,8 +253,9 @@ def queue_upload(
                 overrides[int(raw_id)] = {"new_name": ov.new_name, "default_after": ov.default_after}
             except (TypeError, ValueError):
                 continue
+    checks = body.checks.model_dump() if body.checks else None
     with _get_conn() as conn:
-        result = queue_upload_for_item(item_id, remux_overrides=overrides, conn=conn)
+        result = queue_upload_for_item(item_id, remux_overrides=overrides, checks=checks, conn=conn)
 
     job = result.get("job")
     return UploadQueueResponse(
@@ -235,6 +263,48 @@ def queue_upload(
         job=_job_to_detail(job) if job else None,
         errors=result.get("errors", []),
     )
+
+
+@router.post("/library/{item_id}/upload/auto", response_model=UploadQueueResponse)
+def queue_auto_upload(
+    item_id: int,
+    body: AutoUploadRequest = AutoUploadRequest(),
+    current_user: dict = Depends(require_auth),
+):
+    """"Automático": no wizard involved. The job appears immediately in
+    Subidas as 'staging' ("Preparando") while nomenclature/remux/checks
+    previews are computed server-side; see services/upload_queue.py.
+
+    `body.source`/`body.provider` come from the frontend's source-disparity
+    gate (GET .../upload/auto/source-check, called right before this) —
+    set only when the user had to resolve a disparity by hand."""
+    from ...services.upload_queue import queue_auto_upload_for_item
+    with _get_conn() as conn:
+        result = queue_auto_upload_for_item(
+            item_id, conn=conn,
+            source_override=body.source, provider_override=body.provider,
+        )
+
+    job = result.get("job")
+    return UploadQueueResponse(
+        status=result.get("status", "blocked"),
+        job=_job_to_detail(job) if job else None,
+        errors=result.get("errors", []),
+    )
+
+
+@router.get("/library/{item_id}/upload/auto/source-check", response_model=AutoUploadSourceCheckResponse)
+def check_auto_upload_source_route(
+    item_id: int,
+    current_user: dict = Depends(require_auth),
+):
+    """Quick pre-flight source check run right before an "Automático" upload
+    — see services/source_assistant.py::check_auto_upload_source for the
+    exact trigger condition."""
+    from ...services.source_assistant import check_auto_upload_source
+    with _get_conn() as conn:
+        result = check_auto_upload_source(item_id, conn=conn)
+    return AutoUploadSourceCheckResponse(**result)
 
 
 @router.get("/uploads", response_model=list[UploadJobDetail])
@@ -257,22 +327,40 @@ def get_uploads(
     }
     with _get_conn() as conn:
         jobs = exec_list_jobs(filters=filters, conn=conn)
-        # Resolve each job's media type (movie/series/…) and poster in a
-        # single query, for the Uploads "Tipo" filter and the row thumbnail.
+        # Resolve each job's media type (movie/series/…), poster, Origen
+        # (Radarr/Sonarr instance) and Petición status in a single query —
+        # same fields Biblioteca already shows per content.
         item_ids = {j.get("library_item_id") for j in jobs if j.get("library_item_id")}
         media_by_item: dict[int, str] = {}
         poster_by_item: dict[int, str] = {}
+        instance_type_by_item: dict[int, str] = {}
+        instance_name_by_item: dict[int, str] = {}
+        request_status_by_item: dict[int, str] = {}
         if item_ids:
             placeholders = ",".join("?" * len(item_ids))
             for row in conn.execute(
-                f"SELECT id, item_type, poster_url FROM library_items WHERE id IN ({placeholders})",
+                f"SELECT id, item_type, poster_url, instance_type, instance_name, request_status "
+                f"FROM library_items WHERE id IN ({placeholders})",
                 tuple(item_ids),
             ):
                 media_by_item[row["id"]] = row["item_type"]
                 if row["poster_url"]:
                     poster_by_item[row["id"]] = row["poster_url"]
+                if row["instance_type"]:
+                    instance_type_by_item[row["id"]] = row["instance_type"]
+                if row["instance_name"]:
+                    instance_name_by_item[row["id"]] = row["instance_name"]
+                if row["request_status"]:
+                    request_status_by_item[row["id"]] = row["request_status"]
     return [
-        _job_to_detail(j, media_by_item.get(j.get("library_item_id")), poster_by_item.get(j.get("library_item_id")))
+        _job_to_detail(
+            j,
+            media_by_item.get(j.get("library_item_id")),
+            poster_by_item.get(j.get("library_item_id")),
+            instance_type_by_item.get(j.get("library_item_id")),
+            instance_name_by_item.get(j.get("library_item_id")),
+            request_status_by_item.get(j.get("library_item_id")),
+        )
         for j in jobs
     ]
 
@@ -281,9 +369,23 @@ def get_uploads(
 def get_upload(job_id: int, current_user: dict = Depends(require_auth)):
     with _get_conn() as conn:
         job = exec_get_job(job_id, conn=conn)
-    if not job:
-        raise HTTPException(status_code=404, detail="Job no encontrado.")
-    return _job_to_detail(job)
+        if not job:
+            raise HTTPException(status_code=404, detail="Job no encontrado.")
+        media_type = poster_url = instance_type = instance_name = request_status = None
+        item_id = job.get("library_item_id")
+        if item_id:
+            row = conn.execute(
+                "SELECT item_type, poster_url, instance_type, instance_name, request_status "
+                "FROM library_items WHERE id = ?",
+                (item_id,),
+            ).fetchone()
+            if row:
+                media_type = row["item_type"]
+                poster_url = row["poster_url"]
+                instance_type = row["instance_type"]
+                instance_name = row["instance_name"]
+                request_status = row["request_status"]
+    return _job_to_detail(job, media_type, poster_url, instance_type, instance_name, request_status)
 
 
 @router.get("/uploads/{job_id}/logs", response_model=UploadJobLogsResponse)
@@ -415,6 +517,28 @@ def retry_upload(
         command_preview=result.get("command_preview"),
         message=result.get("message"),
         error=result.get("error"),
+    )
+
+
+@router.post("/uploads/{job_id}/retry-queued", response_model=UploadQueueResponse)
+def retry_upload_queued(job_id: int, current_user: dict = Depends(require_auth)):
+    """Retry straight into the same queued/60s-countdown flow "Subir a
+    eMuwarez" uses — no confirmation token, since it only ever creates a
+    brand new job row (the original failed/cancelled job is never touched)."""
+    from ...services.upload_queue import queue_retry_for_job
+    with _get_conn() as conn:
+        result = queue_retry_for_job(job_id, conn=conn)
+
+    job = result.get("job")
+    if result.get("status") != "queued":
+        raise HTTPException(
+            status_code=400,
+            detail={"message": "; ".join(result.get("errors", [])) or "No se pudo reintentar."},
+        )
+    return UploadQueueResponse(
+        status=result.get("status", "blocked"),
+        job=_job_to_detail(job) if job else None,
+        errors=result.get("errors", []),
     )
 
 

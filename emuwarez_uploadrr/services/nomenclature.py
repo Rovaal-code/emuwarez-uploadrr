@@ -172,11 +172,27 @@ def _infer_resolution_from_item(item: dict) -> str | None:
 
 
 def _infer_source_from_item(item: dict) -> str | None:
+    """Source for the item, in priority order: 1) the file/folder NAME (most
+    reliable, and free — pure text match, no file access); 2) Radarr/Sonarr's
+    own reported source; 3) a loose text match over quality profile + path as
+    a last resort. Radarr/Sonarr used to win outright even when the name said
+    otherwise (e.g. reporting "BluRay" for an actual MicroHD rip) — the name
+    is checked first now so it isn't silently overridden. A further fallback,
+    MediaInfo's bitrate/audio estimate, needs to actually read the file — too
+    expensive to do here (this must stay cheap, called even for whole-season
+    batches); it's applied downstream instead, only where that I/O is already
+    being paid for (source_assistant.py's field editor)."""
+    path = item.get("path") or ""
+    if path:
+        from pathlib import Path
+        from .. import legacy
+        by_name = legacy._detect_source_by_name(Path(path))
+        if by_name:
+            return by_name
     src = item.get("source")
     if src:
         return src
     quality = item.get("quality") or ""
-    path = item.get("path") or ""
     combined = (quality + " " + path).lower()
     source_map = [
         ("bluray", "BluRay"), ("blu-ray", "BluRay"), ("blu_ray", "BluRay"),
@@ -210,7 +226,7 @@ def _get_release_tag(conn=None) -> str:
             _conn.close()
 
 
-def validate_nomenclature_preconditions(library_item: dict) -> dict:
+def validate_nomenclature_preconditions(library_item: dict, conn=None) -> dict:
     errors = []
     warnings = []
 
@@ -221,11 +237,27 @@ def validate_nomenclature_preconditions(library_item: dict) -> dict:
     if local_status in ("Faltante", "Missing", "missing", "faltante"):
         errors.append("El ítem no está disponible localmente (faltante).")
 
-    path = library_item.get("path")
+    # Prefer prepared_path over the raw path — see build_nomenclature_proposal.
+    path = library_item.get("prepared_path") or library_item.get("path")
     if not path:
         errors.append("El ítem no tiene ruta de archivo registrada.")
-    elif not safe_stat(path)["exists"]:
-        warnings.append(f"La ruta registrada no existe en disco: {path}")
+    else:
+        stat_info = safe_stat(path)
+        if not stat_info["exists"]:
+            warnings.append(f"La ruta registrada no existe en disco: {path}")
+        elif not _get_use_hardlinks(conn=conn):
+            # Rename-in-place mode (hardlinks disabled, e.g. media on an SSHFS
+            # mount): applying the proposal renames the original file, so the
+            # containing folder must be writable NOW. Being readable/accessible
+            # isn't enough — a read-only mount (e.g. sshfs -o ro) passes the
+            # exists() check above but rejects the rename later, and that
+            # failure was only surfacing deep inside "Ver MediaInfo"/"Ver
+            # remux" instead of here.
+            from .path_mapping import resolve_local_path
+            resolved = resolve_local_path(path, conn=conn) or path
+            parent = os.path.dirname(resolved)
+            if parent and not os.access(parent, os.W_OK):
+                errors.append(f"La carpeta del archivo no es escribible: {parent}")
 
     title = library_item.get("title")
     if not title:
@@ -240,11 +272,23 @@ def validate_nomenclature_preconditions(library_item: dict) -> dict:
     return {"ok": len(errors) == 0, "errors": errors, "warnings": warnings}
 
 
-def build_nomenclature_proposal(item_id: int, *, force_refresh: bool = False, conn=None) -> dict:
-    """Generate a nomenclature proposal for a library item. Never modifies the filesystem."""
+def build_nomenclature_proposal(
+    item_id: int, *, force_refresh: bool = False, conn=None,
+    source_override: str | None = None, provider_override: str | None = None,
+) -> dict:
+    """Generate a nomenclature proposal for a library item. Never modifies the
+    filesystem.
+
+    `source_override`/`provider_override` let a caller that already resolved
+    an ambiguity by hand (the automated-upload source-disparity gate) force
+    that choice instead of the usual name -> Radarr/Sonarr -> bitrate-tool
+    inference — an override always forces a fresh build (a cached proposal
+    predates the user's choice and must not be reused)."""
     own = conn is None
     conn = conn or connect()
     try:
+        if source_override is not None or provider_override is not None:
+            force_refresh = True
         if not force_refresh:
             existing = get_latest_nomenclature_proposal(item_id, conn=conn)
             if existing and existing.get("status") not in (STATUS_EXPIRED,):
@@ -259,7 +303,7 @@ def build_nomenclature_proposal(item_id: int, *, force_refresh: bool = False, co
                 "warnings_json": json.dumps([]),
             }
 
-        preconditions = validate_nomenclature_preconditions(item)
+        preconditions = validate_nomenclature_preconditions(item, conn=conn)
         errors = preconditions["errors"]
         warnings = list(preconditions["warnings"])
 
@@ -268,7 +312,12 @@ def build_nomenclature_proposal(item_id: int, *, force_refresh: bool = False, co
         media_type = item.get("item_type") or "movie"
         tmdb_id = item.get("tmdb_id")
         imdb_id = item.get("imdb_id")
-        path = item.get("path")
+        # Prefer prepared_path over the raw path — same convention
+        # source_assistant.py/mkv_remux.py already use: once nomenclature has
+        # been applied before, `path` may be stale (e.g. overwritten by a
+        # later Radarr/Sonarr sync) while prepared_path is the real current
+        # file on disk.
+        path = item.get("prepared_path") or item.get("path")
 
         # For episodes/seasons the eMuwarez title must be the SERIES name
         # (not the per-episode title Sonarr stores, e.g. "Serie S01E01 -
@@ -286,9 +335,14 @@ def build_nomenclature_proposal(item_id: int, *, force_refresh: bool = False, co
         title, _title_warning = resolve_localized_title(conn, media_type, tmdb_id, title)
         if _title_warning:
             warnings.append(_title_warning)
+        # `title` above is already the series name for season/episode (see the
+        # resolution above) — surfaced again under its own key so consumers
+        # that show "Serie" and "Título propuesto" as separate rows (the
+        # automated upload job's nomenclature snapshot table) have both.
+        series_title = title if media_type in ("season", "episode") else None
 
         resolution = _infer_resolution_from_item(item)
-        source = _infer_source_from_item(item)
+        source = source_override or _infer_source_from_item(item)
         release_tag = _get_release_tag(conn=conn)
 
         stat_info = safe_stat(path) if path else {}
@@ -339,7 +393,7 @@ def build_nomenclature_proposal(item_id: int, *, force_refresh: bool = False, co
         # Phase 6E — provider (AMZN/NF/DSNP...) already present in the
         # current filename, kept in the proposal instead of silently
         # dropped. Detection only, no TMDb re-recommendation here.
-        provider = _infer_provider_from_item(item, source)
+        provider = provider_override or _infer_provider_from_item(item, source)
 
         # Full nomenclature with spaces + accents = the torrent/aporte title.
         proposed_torrent_name = _build_proposed_filename(
@@ -387,6 +441,9 @@ def build_nomenclature_proposal(item_id: int, *, force_refresh: bool = False, co
             "media_type": media_type,
             "tmdb_id": tmdb_id,
             "imdb_id": imdb_id,
+            "year": year,
+            "series_title": series_title,
+            "season_number": item.get("season_number"),
             "resolution": resolution,
             "source": source,
             # Stored under the same provider_final column name the 'editar
@@ -423,10 +480,11 @@ def save_nomenclature_proposal(proposal: dict, conn=None) -> dict:
             INSERT INTO nomenclature_proposals (
                 library_item_id, status, current_name, current_path,
                 proposed_title, proposed_filename, proposed_folder, proposed_path,
-                media_type, tmdb_id, imdb_id, resolution, source, provider_final,
+                media_type, tmdb_id, imdb_id, year, series_title, season_number,
+                resolution, source, provider_final,
                 video_codec, audio_summary, subtitle_summary, release_tag,
                 warnings_json, errors_json, raw_json, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 proposal["library_item_id"],
@@ -440,6 +498,9 @@ def save_nomenclature_proposal(proposal: dict, conn=None) -> dict:
                 proposal.get("media_type"),
                 proposal.get("tmdb_id"),
                 proposal.get("imdb_id"),
+                proposal.get("year"),
+                proposal.get("series_title"),
+                proposal.get("season_number"),
                 proposal.get("resolution"),
                 proposal.get("source"),
                 proposal.get("provider_final"),
@@ -556,7 +617,11 @@ def _refresh_media_info_from_real_file(item: dict, *, conn) -> None:
     Phase 6A values (or lack thereof) are always a safe fallback."""
     from .media_info_service import read_media_info_summary
 
-    path = item.get("path")
+    # Same prepared_path-first rule as build_nomenclature_proposal — this
+    # function's whole job is correcting stale Radarr/Sonarr-reported values
+    # with a real file read, so it must never read from a `path` that itself
+    # went stale after a prior successful rename.
+    path = item.get("prepared_path") or item.get("path")
     if not path:
         return
     real = read_media_info_summary(path)
@@ -583,6 +648,8 @@ def build_nomenclature_apply_plan(
     *,
     proposal_id: int | None = None,
     conn=None,
+    source_override: str | None = None,
+    provider_override: str | None = None,
 ) -> dict:
     """Build a dry-run plan for applying nomenclature — by hardlink (default) or
     by renaming the original in place (hardlinks disabled). Never modifies the
@@ -603,7 +670,15 @@ def build_nomenclature_apply_plan(
                 "destination_path": None,
             }
 
-        if proposal_id:
+        if source_override is not None or provider_override is not None:
+            # The user already resolved a source-disparity by hand (the
+            # automated-upload gate) — that choice must win over whatever
+            # proposal_id/cached-latest would otherwise be reused, and forces
+            # a fresh build (see build_nomenclature_proposal's own guard).
+            proposal = build_nomenclature_proposal(
+                item_id, conn=conn, source_override=source_override, provider_override=provider_override,
+            )
+        elif proposal_id:
             row = conn.execute(
                 "SELECT * FROM nomenclature_proposals WHERE id = ?", (proposal_id,)
             ).fetchone()
@@ -633,17 +708,25 @@ def build_nomenclature_apply_plan(
                 "errors": ["La propuesta de nomenclatura está bloqueada."] + prop_errors,
                 "warnings": [],
                 "proposal": proposal,
-                "source_path": item.get("path"),
+                "source_path": item.get("prepared_path") or item.get("path"),
                 "destination_path": None,
             }
 
         # Map the Radarr/Sonarr-reported path (e.g. /data/media/…) to where this
         # app actually reaches the file (e.g. an SSHFS/NFS mount). All real
         # filesystem work uses the mapped local path; `path` in the DB stays in
-        # the raw convention.
+        # the raw convention. If nomenclature was already applied once,
+        # prepared_path IS that local path already (no mapping needed) and is
+        # the only field guaranteed to still point at the real current file —
+        # `path` can go stale (e.g. overwritten by a later Radarr/Sonarr sync)
+        # without ever being renamed back, which would otherwise make this
+        # rename read from — and compute a fresh proposal against — a file
+        # that no longer exists under that name.
         from .path_mapping import resolve_local_path
         raw_source = item.get("path")
-        source_path = (resolve_local_path(raw_source, conn=conn) or raw_source) if raw_source else raw_source
+        source_path = item.get("prepared_path") or (
+            (resolve_local_path(raw_source, conn=conn) or raw_source) if raw_source else raw_source
+        )
         proposed_filename = (
             proposal.get("proposed_filename")
             or proposal.get("proposed_title")
@@ -714,6 +797,8 @@ def apply_nomenclature_proposal(
     confirmation: str | None = None,
     overwrite: bool = False,
     conn=None,
+    source_override: str | None = None,
+    provider_override: str | None = None,
 ) -> dict:
     """Apply nomenclature proposal — by hardlink (original untouched) or, when
     hardlinks are disabled, by renaming the original file in place."""
@@ -728,7 +813,8 @@ def apply_nomenclature_proposal(
             apply = False
 
         plan = build_nomenclature_apply_plan(
-            item_id, proposal_id=proposal_id, conn=conn
+            item_id, proposal_id=proposal_id, conn=conn,
+            source_override=source_override, provider_override=provider_override,
         )
 
         base_result = {

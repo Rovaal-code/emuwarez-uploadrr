@@ -21,6 +21,7 @@ from .compatibility import (
     match_request_to_library,
     classify_request_match,
     rank_request_matches,
+    emu_override_status,
 )
 
 logger = logging.getLogger("emuwarez.requests")
@@ -576,7 +577,24 @@ def list_request_items(
         where_clauses.append("ri.title LIKE ?")
         params.append(f"%{search}%")
     if status:
-        where_clauses.append("COALESCE(rm.status, 'Sin coincidencia') = ?")
+        # Mirrors compatibility.emu_override_status() — a request with zero
+        # library candidates has no request_matches row at all, but can still
+        # be Reclamado/Pendiente/Llena on the tracker itself; keep this SQL
+        # fallback in sync with that function if its substring rules change.
+        where_clauses.append("""
+            COALESCE(
+                rm.status,
+                CASE
+                    WHEN LOWER(COALESCE(ri.emu_status,'')) LIKE '%reclam%' OR LOWER(COALESCE(ri.emu_status,'')) LIKE '%claim%' THEN 'Reclamado'
+                    WHEN LOWER(COALESCE(ri.emu_status,'')) LIKE '%pend%' THEN 'Pendiente'
+                    WHEN LOWER(COALESCE(ri.emu_status,'')) LIKE '%sin llen%' OR LOWER(COALESCE(ri.emu_status,'')) LIKE '%unfilled%'
+                         OR LOWER(COALESCE(ri.emu_status,'')) LIKE '%open%' OR LOWER(COALESCE(ri.emu_status,'')) LIKE '%abiert%' THEN NULL
+                    WHEN LOWER(COALESCE(ri.emu_status,'')) LIKE '%lleno%' OR LOWER(COALESCE(ri.emu_status,'')) LIKE '%llena%'
+                         OR LOWER(COALESCE(ri.emu_status,'')) LIKE '%filled%' OR ri.emu_status = '1' THEN 'Llena'
+                    ELSE 'Sin coincidencia'
+                END
+            ) = ?
+        """)
         params.append(status)
     if category:
         where_clauses.append("ri.category = ?")
@@ -854,7 +872,18 @@ def normalize_title(value: str | None) -> str:
 
 
 def _safe_request_dict(d: dict) -> dict:
-    """Remove author info if author_visible=0."""
+    """Remove author info if author_visible=0.
+
+    Also fills in compatibility_status when there's no request_matches row at
+    all (no library candidate ever matched this request) — Reclamado/
+    Pendiente/Llena describe the request's own state on the tracker, true
+    regardless of whether your library holds anything for it, so a request
+    with zero candidates would otherwise silently read as "Sin coincidencia"
+    even when eMuwarez itself already says it's Reclamado."""
     if not d.get("author_visible"):
         d.pop("author", None)
+    if not d.get("compatibility_status"):
+        override = emu_override_status(d.get("emu_status"))
+        if override:
+            d["compatibility_status"] = override
     return d

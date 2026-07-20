@@ -153,12 +153,20 @@ def _consistency_errors(episode_entries: list[dict]) -> list[str]:
     return errors
 
 
-def build_season_pack_plan(season_id: int, conn=None) -> dict[str, Any]:
+def build_season_pack_plan(
+    season_id: int, conn=None,
+    source_override: str | None = None, provider_override: str | None = None,
+) -> dict[str, Any]:
     """Build a dry-run plan for a season-pack upload. Never modifies the
     filesystem. Blocks (status="blocked") on: season not found, no episode
     available, hardlinks disabled, incomplete season, or an
     episode-vs-episode consistency mismatch — a season pack has no
-    "warning, upload anyway" state, unlike a single file."""
+    "warning, upload anyway" state, unlike a single file.
+
+    `source_override`/`provider_override` (set by the automated-upload
+    source-disparity gate once the user picks by hand) are applied to every
+    episode's own proposal — a pack requires every episode to share the same
+    source anyway, so the override applies uniformly."""
     own = conn is None
     conn = conn or connect()
     try:
@@ -265,7 +273,10 @@ def build_season_pack_plan(season_id: int, conn=None) -> dict[str, Any]:
         _set_season_plan_progress(season_id, done=0, total=total)
         episode_entries = []
         for i, ep in enumerate(available_episodes):
-            proposal = build_nomenclature_proposal(ep["id"], conn=conn)
+            proposal = build_nomenclature_proposal(
+                ep["id"], conn=conn,
+                source_override=source_override, provider_override=provider_override,
+            )
             episode_entries.append({"episode": ep, "proposal": proposal})
             _set_season_plan_progress(season_id, done=i + 1, total=total, current_title=ep.get("title"))
 
@@ -358,13 +369,23 @@ def build_season_pack_plan(season_id: int, conn=None) -> dict[str, Any]:
             "source": first_proposal.get("source"),
             "tmdb_id": (series or {}).get("tmdb_id"),
             "provider": provider,
+            # Rest of the field breakdown used to build season_pack_title,
+            # kept on the return dict so a caller (upload_queue.py) can
+            # snapshot the full nomenclature breakdown for the job detail
+            # page, not just the pieces build_season_pack_plan itself needs.
+            "video_codec": first_proposal.get("video_codec"),
+            "audio_summary": first_proposal.get("audio_summary"),
+            "subtitle_summary": first_proposal.get("subtitle_summary"),
+            "release_tag": release_tag,
+            "series_title": series_title,
+            "year": year,
         }
     finally:
         if own:
             conn.close()
 
 
-def apply_season_hardlinks(season_id: int, conn) -> dict[str, Any]:
+def apply_season_hardlinks(season_id: int, conn, *, job_id: int | None = None) -> dict[str, Any]:
     """Place every available episode at its final pack path AND record each
     episode's prepared_path on its own library_items row — mirrors what
     nomenclature.py::apply_nomenclature_proposal does for a single file right
@@ -396,7 +417,15 @@ def apply_season_hardlinks(season_id: int, conn) -> dict[str, Any]:
     now = datetime.now(timezone.utc).isoformat()
     episode_results = []
     any_failed = False
-    for ep in plan["episodes"]:
+    total = len(plan["episodes"])
+    for idx, ep in enumerate(plan["episodes"]):
+        if job_id is not None:
+            from .upload_execution import append_upload_log
+            append_upload_log(
+                job_id, "info",
+                f"Aplicando nomenclatura: capítulo {ep.get('episode_number')} ({idx + 1}/{total})…",
+                stream="system", conn=conn,
+            )
         if mode == "hardlink":
             file_plan = build_safe_apply_plan(ep["source_path"] or "", ep["destination_path"], hardlink_base)
             result = apply_hardlink_plan(file_plan, dry_run=False)
@@ -438,6 +467,20 @@ def apply_season_hardlinks(season_id: int, conn) -> dict[str, Any]:
         "episodes": episode_results,
         "hardlink_folder": plan["hardlink_folder"],
         "season_pack_title": plan.get("season_pack_title"),
+        # Full field breakdown, for the job detail page's nomenclature
+        # snapshot — mirrors what apply_nomenclature_proposal()'s "proposal"
+        # already carries for a single file.
+        "series_title": plan.get("series_title"),
+        "year": plan.get("year"),
+        "season_number": plan.get("season_number"),
+        "tmdb_id": plan.get("tmdb_id"),
+        "resolution": plan.get("resolution"),
+        "source": plan.get("source"),
+        "provider": plan.get("provider"),
+        "video_codec": plan.get("video_codec"),
+        "audio_summary": plan.get("audio_summary"),
+        "subtitle_summary": plan.get("subtitle_summary"),
+        "release_tag": plan.get("release_tag"),
     }
 
 

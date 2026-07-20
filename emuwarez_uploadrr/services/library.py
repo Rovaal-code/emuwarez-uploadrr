@@ -4,7 +4,8 @@ from __future__ import annotations
 import logging
 import sqlite3
 import threading
-from typing import Optional
+import time
+from typing import Callable, Optional
 
 from ..integrations import radarr, sonarr
 from ..models import InstanceConfig, LibraryItem, LocalStatus, NomenclatureStatus
@@ -94,6 +95,128 @@ def upsert_library_item(conn: sqlite3.Connection, item: LibraryItem) -> int:
 # Sync
 # ---------------------------------------------------------------------------
 
+def _sync_one_series(
+    conn: sqlite3.Connection,
+    instance: InstanceConfig,
+    series: dict,
+    *,
+    localize_titles: bool,
+    series_queue: Optional[dict] = None,
+    ep_queue: Optional[dict] = None,
+    include_episodes: bool = True,
+    bump_fn=None,
+) -> int:
+    """Upsert one series row (+ its seasons/episodes if include_episodes) from
+    a single Sonarr `series` dict. Extracted from sync_instance's own Sonarr
+    loop body so a single-item resync (resync_single_item, below) can reuse
+    the exact same conversion/assembly logic for just one series instead of
+    re-fetching and re-walking the whole instance. Calls `bump_fn()` once per
+    row written (mirrors sync_instance's own progress bump) and returns the
+    missing-count for just this series."""
+    missing = 0
+
+    def _bump() -> None:
+        if bump_fn:
+            bump_fn()
+
+    if localize_titles and series.get("title") and series.get("tmdbId"):
+        from .tmdb_titles import resolve_series_title
+        series["title"] = resolve_series_title(conn, series.get("tmdbId"), series["title"])
+    series_item = sonarr.series_to_library_item(
+        series,
+        instance_id=int(instance.id),
+        instance_name=instance.name,
+        series_queue_map=series_queue,
+    )
+    series_row_id = upsert_library_item(conn, series_item)
+    _bump()
+    if series_item.local_status in LocalStatus.not_available():
+        missing += 1
+
+    if include_episodes and series.get("id"):
+        files = sonarr.get_episode_files(instance.url, instance.api_key, int(series["id"]))
+        files_by_id = {f.get("id"): f for f in files if f.get("id") is not None}
+        episodes = sonarr.get_episodes(instance.url, instance.api_key, int(series["id"]))
+
+        episodes_by_season: dict[int, list[dict]] = {}
+        for ep in episodes:
+            season_num = ep.get("seasonNumber")
+            if season_num is None:
+                continue
+            episodes_by_season.setdefault(int(season_num), []).append(ep)
+
+        def _file_count(season_eps: list[dict]) -> int:
+            return sum(
+                1 for ep in season_eps
+                if ep.get("episodeFileId") and files_by_id.get(ep.get("episodeFileId"))
+            )
+
+        season_row_id_by_number: dict[int, int] = {}
+        seen_season_numbers: set[int] = set()
+        for season_entry in series.get("seasons") or []:
+            season_num = season_entry.get("seasonNumber")
+            if season_num is None:
+                continue
+            season_num = int(season_num)
+            seen_season_numbers.add(season_num)
+            season_eps = episodes_by_season.get(season_num, [])
+            stats_present = bool(season_entry.get("statistics"))
+            season_item = sonarr.season_to_library_item(
+                series, season_entry,
+                instance_id=int(instance.id),
+                instance_name=instance.name,
+                parent_id=series_row_id,
+                episode_count_override=None if stats_present else len(season_eps),
+                file_count_override=None if stats_present else _file_count(season_eps),
+            )
+            season_row_id_by_number[season_num] = upsert_library_item(conn, season_item)
+            _bump()
+            if season_item.local_status in LocalStatus.not_available():
+                missing += 1
+
+        for season_num, season_eps in episodes_by_season.items():
+            if season_num in seen_season_numbers:
+                continue
+            synthetic_entry = {"seasonNumber": season_num, "statistics": {}}
+            season_item = sonarr.season_to_library_item(
+                series, synthetic_entry,
+                instance_id=int(instance.id),
+                instance_name=instance.name,
+                parent_id=series_row_id,
+                episode_count_override=len(season_eps),
+                file_count_override=_file_count(season_eps),
+            )
+            season_row_id_by_number[season_num] = upsert_library_item(conn, season_item)
+            _bump()
+            if season_item.local_status in LocalStatus.not_available():
+                missing += 1
+
+        for episode in episodes:
+            ep_file = (
+                files_by_id.get(episode.get("episodeFileId"))
+                if episode.get("episodeFileId")
+                else None
+            )
+            season_num = episode.get("seasonNumber")
+            parent_season_id = (
+                season_row_id_by_number.get(int(season_num))
+                if season_num is not None else None
+            )
+            ep_item = sonarr.episode_to_library_item(
+                episode, ep_file, series,
+                instance_id=int(instance.id),
+                instance_name=instance.name,
+                ep_queue_map=ep_queue,
+                parent_id=parent_season_id,
+            )
+            upsert_library_item(conn, ep_item)
+            _bump()
+            if ep_item.local_status != LocalStatus.AVAILABLE.value:
+                missing += 1
+
+    return missing
+
+
 def sync_instance(
     conn: sqlite3.Connection,
     instance: InstanceConfig,
@@ -129,7 +252,7 @@ def sync_instance(
                 missing += 1
 
     elif instance.type == "sonarr":
-        from .tmdb_titles import series_titles_localized, resolve_series_title
+        from .tmdb_titles import series_titles_localized
         localize_titles = series_titles_localized(conn)
         queue_records = sonarr.get_queue(instance.url, instance.api_key)
         series_queue = sonarr.build_series_queue_map(queue_records)
@@ -151,112 +274,11 @@ def sync_instance(
                 total += sum(int((s.get("statistics") or {}).get("totalEpisodeCount") or 0) for s in series_list)
             on_total(total)
         for series in series_list:
-            # Sonarr's title is TVDB's (often English). Replace it with TMDb's
-            # localized title so seasons/episodes (which embed it) inherit it too.
-            if localize_titles and series.get("title") and series.get("tmdbId"):
-                series["title"] = resolve_series_title(
-                    conn, series.get("tmdbId"), series["title"]
-                )
-            series_item = sonarr.series_to_library_item(
-                series,
-                instance_id=int(instance.id),
-                instance_name=instance.name,
-                series_queue_map=series_queue,
+            missing += _sync_one_series(
+                conn, instance, series,
+                localize_titles=localize_titles, series_queue=series_queue, ep_queue=ep_queue,
+                include_episodes=include_episodes, bump_fn=_bump,
             )
-            series_row_id = upsert_library_item(conn, series_item)
-            _bump()
-            if series_item.local_status in LocalStatus.not_available():
-                missing += 1
-            if include_episodes and series.get("id"):
-                files = sonarr.get_episode_files(instance.url, instance.api_key, int(series["id"]))
-                files_by_id = {f.get("id"): f for f in files if f.get("id") is not None}
-                episodes = sonarr.get_episodes(instance.url, instance.api_key, int(series["id"]))
-
-                # Group episodes by season to (a) resolve each episode's
-                # parent season row id, and (b) compute a bottom-up
-                # episode/file count fallback for seasons whose Sonarr
-                # `statistics` block is missing/empty.
-                episodes_by_season: dict[int, list[dict]] = {}
-                for ep in episodes:
-                    season_num = ep.get("seasonNumber")
-                    if season_num is None:
-                        continue
-                    episodes_by_season.setdefault(int(season_num), []).append(ep)
-
-                def _file_count(season_eps: list[dict]) -> int:
-                    return sum(
-                        1 for ep in season_eps
-                        if ep.get("episodeFileId") and files_by_id.get(ep.get("episodeFileId"))
-                    )
-
-                season_row_id_by_number: dict[int, int] = {}
-                seen_season_numbers: set[int] = set()
-                for season_entry in series.get("seasons") or []:
-                    season_num = season_entry.get("seasonNumber")
-                    if season_num is None:
-                        continue
-                    season_num = int(season_num)
-                    seen_season_numbers.add(season_num)
-                    season_eps = episodes_by_season.get(season_num, [])
-                    stats_present = bool(season_entry.get("statistics"))
-                    season_item = sonarr.season_to_library_item(
-                        series, season_entry,
-                        instance_id=int(instance.id),
-                        instance_name=instance.name,
-                        parent_id=series_row_id,
-                        episode_count_override=None if stats_present else len(season_eps),
-                        file_count_override=None if stats_present else _file_count(season_eps),
-                    )
-                    season_row_id_by_number[season_num] = upsert_library_item(conn, season_item)
-                    _bump()
-                    if season_item.local_status in LocalStatus.not_available():
-                        missing += 1
-
-                # Defensive fallback: series["seasons"] was empty/missing a
-                # season that episodes actually reference — synthesize that
-                # season row purely bottom-up so no episode is ever left
-                # without a parent.
-                for season_num, season_eps in episodes_by_season.items():
-                    if season_num in seen_season_numbers:
-                        continue
-                    synthetic_entry = {"seasonNumber": season_num, "statistics": {}}
-                    season_item = sonarr.season_to_library_item(
-                        series, synthetic_entry,
-                        instance_id=int(instance.id),
-                        instance_name=instance.name,
-                        parent_id=series_row_id,
-                        episode_count_override=len(season_eps),
-                        file_count_override=_file_count(season_eps),
-                    )
-                    season_row_id_by_number[season_num] = upsert_library_item(conn, season_item)
-                    _bump()
-                    if season_item.local_status in LocalStatus.not_available():
-                        missing += 1
-
-                for episode in episodes:
-                    ep_file = (
-                        files_by_id.get(episode.get("episodeFileId"))
-                        if episode.get("episodeFileId")
-                        else None
-                    )
-                    season_num = episode.get("seasonNumber")
-                    parent_season_id = (
-                        season_row_id_by_number.get(int(season_num))
-                        if season_num is not None else None
-                    )
-                    ep_item = sonarr.episode_to_library_item(
-                        episode,
-                        ep_file,
-                        series,
-                        instance_id=int(instance.id),
-                        instance_name=instance.name,
-                        ep_queue_map=ep_queue,
-                        parent_id=parent_season_id,
-                    )
-                    upsert_library_item(conn, ep_item)
-                    _bump()
-                    if ep_item.local_status != LocalStatus.AVAILABLE.value:
-                        missing += 1
     return imported, missing
 
 
@@ -500,48 +522,145 @@ def get_library_item(conn: sqlite3.Connection, item_id: int) -> Optional[dict]:
     return dict(row) if row else None
 
 
-def trigger_arr_rescan(conn: sqlite3.Connection, item_id: int) -> dict:
-    """Ask Radarr/Sonarr to rescan the movie/series this item belongs to,
-    right after we've renamed/hardlinked its file — otherwise Radarr/
-    Sonarr's own DB keeps the stale filename until ITS next scheduled scan,
-    and a "Sincronizar biblioteca" here would just re-import that same
-    stale path. Best-effort: never raises, so it can't block or fail an
-    upload — only logs a warning on failure."""
+def _resolve_arr_top(conn: sqlite3.Connection, item_id: int) -> dict:
+    """Walk up to the movie/series row an item belongs to — Radarr/Sonarr's
+    refresh/rescan commands target that level; a season/episode has none of
+    its own. Returns {"ok": False, "message": ...} on any resolution
+    failure, or {"ok": True, "top": ..., "instance": ...} once a usable
+    Radarr/Sonarr instance is found."""
+    item = get_library_item(conn, item_id)
+    if not item:
+        return {"ok": False, "message": "Item no encontrado."}
+    top = item
+    seen: set[int] = set()
+    while top and top.get("item_type") not in ("movie", "series") and top.get("parent_id"):
+        if top["id"] in seen:
+            break
+        seen.add(top["id"])
+        top = get_library_item(conn, top["parent_id"])
+    if not top or top.get("item_type") not in ("movie", "series"):
+        return {"ok": False, "message": "No se encontró la película/serie asociada."}
+
+    instance_id = top.get("instance_id")
+    external_id = top.get("external_id")
+    if not instance_id or not external_id:
+        return {"ok": False, "message": "El elemento no tiene instancia/ID externo de Radarr/Sonarr."}
+
+    from .instances import get_instance
+    instance = get_instance(conn, int(instance_id))
+    if not instance:
+        return {"ok": False, "message": "Instancia no encontrada."}
+
+    return {"ok": True, "top": top, "instance": instance}
+
+
+def resync_single_item(conn: sqlite3.Connection, item_id: int) -> dict:
+    """Re-fetch just ONE movie/series from Radarr/Sonarr and upsert it (+
+    seasons/episodes for a series) — the single-item equivalent of
+    sync_instance, for a caller that only needs one item refreshed (e.g.
+    right after refresh_arr_and_resync's Radarr/Sonarr refresh completes)
+    instead of paying for a full library resync. Best-effort: never raises."""
     try:
-        item = get_library_item(conn, item_id)
-        if not item:
-            return {"ok": False, "message": "Item no encontrado."}
-        # Walk up to the movie/series row — Radarr/Sonarr's rescan command
-        # targets that level, a season/episode has no rescan of its own.
-        top = item
-        seen: set[int] = set()
-        while top and top.get("item_type") not in ("movie", "series") and top.get("parent_id"):
-            if top["id"] in seen:
-                break
-            seen.add(top["id"])
-            top = get_library_item(conn, top["parent_id"])
-        if not top or top.get("item_type") not in ("movie", "series"):
-            return {"ok": False, "message": "No se encontró la película/serie asociada."}
-
-        instance_id = top.get("instance_id")
-        external_id = top.get("external_id")
-        if not instance_id or not external_id:
-            return {"ok": False, "message": "El elemento no tiene instancia/ID externo de Radarr/Sonarr."}
-
-        from .instances import get_instance
-        instance = get_instance(conn, int(instance_id))
-        if not instance:
-            return {"ok": False, "message": "Instancia no encontrada."}
+        resolved = _resolve_arr_top(conn, item_id)
+        if not resolved["ok"]:
+            return resolved
+        top, instance = resolved["top"], resolved["instance"]
+        external_id = top["external_id"]
 
         if top["item_type"] == "movie":
-            from ..integrations import radarr
-            radarr.rescan_movie(instance.url, instance.api_key, int(external_id))
+            movie = radarr.get_movie(instance.url, instance.api_key, int(external_id))
+            movie_item = radarr.movie_to_library_item(
+                movie, instance_id=int(instance.id), instance_name=instance.name,
+            )
+            upsert_library_item(conn, movie_item)
         else:
-            from ..integrations import sonarr
-            sonarr.rescan_series(instance.url, instance.api_key, int(external_id))
+            from .tmdb_titles import series_titles_localized
+            localize_titles = series_titles_localized(conn)
+            series = sonarr.get_series_by_id(instance.url, instance.api_key, int(external_id))
+            _sync_one_series(conn, instance, series, localize_titles=localize_titles, include_episodes=True)
+        conn.commit()
         return {"ok": True}
     except Exception as exc:
-        logger.warning("No se pudo pedir el rescan de Radarr/Sonarr para el item %s: %s", item_id, exc)
+        logger.warning("No se pudo resincronizar el item %s tras el renombrado: %s", item_id, exc)
+        return {"ok": False, "message": str(exc)}
+
+
+def refresh_arr_and_resync(
+    conn: sqlite3.Connection, item_id: int, *,
+    on_log: Optional[Callable[[str, str], None]] = None,
+    poll_timeout: float = 45.0,
+    poll_interval: float = 2.0,
+) -> dict:
+    """Best-effort post-rename reconciliation: ask Radarr/Sonarr to refresh
+    this movie/series' metadata + rescan its folder (RefreshMovie/
+    RefreshSeries — Radarr/Sonarr's own "Refresh & Scan"), wait for that
+    command to finish, then resync just this item so our own library_items
+    row reflects whatever Radarr/Sonarr now reports about the renamed file.
+
+    Never raises — a failure at any step here only means our own cache
+    stays stale until the next sync; the real renamed file on disk and
+    Radarr/Sonarr's own state are unaffected either way. `on_log`, if given,
+    is called as `on_log(level, message)` for every step (so a caller with
+    an upload job can mirror all of this into its own Actividad log)."""
+    def _log(level: str, message: str) -> None:
+        if on_log:
+            try:
+                on_log(level, message)
+            except Exception:
+                pass
+        (logger.warning if level == "warning" else logger.info)(message)
+
+    try:
+        resolved = _resolve_arr_top(conn, item_id)
+        if not resolved["ok"]:
+            _log("warning", f"No se pudo localizar la instancia de Radarr/Sonarr: {resolved['message']}")
+            return resolved
+        top, instance = resolved["top"], resolved["instance"]
+        external_id = int(top["external_id"])
+        is_movie = top["item_type"] == "movie"
+        service = "Radarr" if is_movie else "Sonarr"
+
+        _log("info", f"Avisando a {service} para que actualice y escanee la ficha…")
+        cmd = (
+            radarr.refresh_movie(instance.url, instance.api_key, external_id) if is_movie
+            else sonarr.refresh_series(instance.url, instance.api_key, external_id)
+        )
+        command_id = cmd.get("id") if isinstance(cmd, dict) else None
+
+        status = None
+        if not command_id:
+            _log("warning", f"{service} no devolvió un id de comando; no se puede esperar a que termine.")
+        else:
+            deadline = time.monotonic() + poll_timeout
+            while time.monotonic() < deadline:
+                time.sleep(poll_interval)
+                try:
+                    poll = (
+                        radarr.get_command_status(instance.url, instance.api_key, int(command_id)) if is_movie
+                        else sonarr.get_command_status(instance.url, instance.api_key, int(command_id))
+                    )
+                except Exception as exc:
+                    _log("warning", f"No se pudo consultar el estado del comando en {service}: {exc}")
+                    break
+                status = (poll or {}).get("status")
+                if status in ("completed", "failed", "cancelled"):
+                    break
+            if status == "completed":
+                _log("info", f"{service} ha terminado de actualizar y escanear.")
+            elif status in ("failed", "cancelled"):
+                _log("warning", f"{service} no pudo completar la actualización (estado: {status}).")
+            else:
+                _log("warning", f"{service} no confirmó haber terminado a tiempo; se continúa de todas formas.")
+
+        _log("info", f"Sincronizando la ficha con los datos actualizados de {service}…")
+        result = resync_single_item(conn, item_id)
+        if result.get("ok"):
+            _log("info", "Ficha sincronizada correctamente.")
+        else:
+            _log("warning", f"No se pudo sincronizar la ficha: {result.get('message')}")
+        return {"ok": True}
+    except Exception as exc:
+        _log("warning", f"No se pudo completar la actualización con Radarr/Sonarr tras el renombrado: {exc}")
         return {"ok": False, "message": str(exc)}
 
 

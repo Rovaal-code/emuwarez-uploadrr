@@ -333,6 +333,73 @@ def suggest_provider_for_item(library_item_id: int, conn=None) -> dict:
             conn.close()
 
 
+def check_auto_upload_source(item_id: int, conn=None) -> dict:
+    """Quick pre-flight check run right before an "Automático" upload is
+    queued: does the file's own name already resolve the source, or is
+    Radarr/Sonarr's reported source at odds with what MediaInfo's bitrate
+    tool would estimate? Only THAT specific case ("nombre no dice nada Y
+    Radarr/Sonarr != MediaInfo") is worth interrupting an otherwise fully
+    automated flow for — if the name already resolves it, the name wins
+    regardless (see nomenclature.py::_infer_source_from_item), so a
+    Radarr/MediaInfo disagreement wouldn't change the outcome and isn't
+    worth asking about.
+
+    For a season, checks ONE representative available episode — every
+    episode in a pack must already share the same source to be uploadable
+    (season_pack.py::_consistency_errors), so one stands in for all.
+
+    Never blocks: MediaInfo being unavailable, or the file being
+    unreachable, just returns disparity=False (fail-open) — same philosophy
+    as _refresh_media_info_from_real_file elsewhere in this codebase."""
+    own = conn is None
+    conn = conn or connect()
+    no_disparity = {"disparity": False, "from_name": None, "from_radarr": None, "from_mediainfo": None}
+    try:
+        row = conn.execute("SELECT * FROM library_items WHERE id = ?", (item_id,)).fetchone()
+        if not row:
+            return no_disparity
+        item = dict(row)
+
+        if item.get("item_type") == "season":
+            from .season_pack import _get_season_episodes
+            from ..models import LocalStatus
+            available = [
+                e for e in _get_season_episodes(item_id, conn)
+                if e.get("local_status") == LocalStatus.AVAILABLE.value
+            ]
+            if not available:
+                return no_disparity
+            representative = available[0]
+        else:
+            representative = item
+
+        path = representative.get("path")
+        if not path:
+            return no_disparity
+
+        from .path_mapping import resolve_local_path
+        from .media_info_service import build_mediainfo_report
+        local_path = resolve_local_path(path, conn=conn) or path
+        radarr_source = representative.get("source")
+        report = build_mediainfo_report(local_path, radarr_source=radarr_source)
+        if not report.get("available"):
+            return {**no_disparity, "from_radarr": radarr_source}
+
+        sig = report.get("source_signals") or {}
+        from_name = sig.get("from_name")
+        from_mediainfo = sig.get("from_mediainfo_bitrate")
+        disparity = bool(from_name is None and radarr_source and from_mediainfo and radarr_source != from_mediainfo)
+        return {
+            "disparity": disparity,
+            "from_name": from_name,
+            "from_radarr": radarr_source,
+            "from_mediainfo": from_mediainfo,
+        }
+    finally:
+        if own:
+            conn.close()
+
+
 def _resolve_series_row(item: dict, conn) -> dict | None:
     """Walk parent_id up from an episode/season row to the series row and return
     it (title + tmdb_id), so episode nomenclature uses the series name and can
@@ -478,7 +545,7 @@ def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
         mi_audio = mi_video = mi_hdr = mi_source = None
         mi_source_estimated = False
         from .media_info_service import build_mediainfo_report
-        report = build_mediainfo_report(candidate_path or "")
+        report = build_mediainfo_report(candidate_path or "", radarr_source=item.get("source"))
         mediainfo_ok = bool(report.get("available"))
 
         # Distinct from MediaInfo: mkvtoolnix (mkvmerge -J) is what the track
@@ -523,20 +590,43 @@ def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
         mi_hdr = emu_by_field.get("HDR/DV")
         mi_source = emu_by_field.get("Source")
         mi_subs = emu_by_field.get("Subtítulos")  # "SUBS" if the file has subtitle tracks
-        for r in report.get("rows", []):
-            if r["field"] == "Source":
-                mi_source_estimated = "estimado" in (r.get("mediainfo") or "").lower()
+        # Whether `mi_source` came from the name (reliable) or had to fall
+        # back to the bitrate/audio tool (a guess) — read from the structured
+        # signal, not by sniffing row text (the "Source" row's own text no
+        # longer carries that description; it moved to its help tooltip).
+        _sig_early = report.get("source_signals") or {}
+        mi_source_estimated = bool(mi_source) and not _sig_early.get("from_name")
 
-        # Source comes from Radarr/Sonarr (≈ the file name). Only when it's null
-        # or not a valid eMuwarez source do we fall back to the MediaInfo estimate
-        # (bitrate + audio); flag it so the user can review it.
+        # Source: `source` here is already name → Radarr/Sonarr (see
+        # _infer_source_from_item). Only when NEITHER gave anything valid do
+        # we fall back to the MediaInfo estimate (bitrate + audio); flag it
+        # so the user reviews it — it's a guess, not a certainty.
         valid_sources = {s["code"] for s in EMU_SOURCES}
         source_warning = None
         if (not source or source not in valid_sources) and mi_source:
             source = mi_source
             if mi_source_estimated:
                 source_warning = ("Source estimado por MediaInfo (bitrate y audio): "
-                                  "Radarr/Sonarr no dio un source válido. Revísalo.")
+                                  "ni el nombre del archivo ni Radarr/Sonarr dieron un source válido. Revísalo.")
+
+        # Three-way cross-check for the Source field's alert icon: the name,
+        # Radarr/Sonarr's raw value, and the MediaInfo bitrate-tool estimate
+        # (forced — bypasses the name-first shortcut, unlike `mi_source`
+        # above). `source` above already applies name → Radarr/Sonarr
+        # priority, so this is purely informational (and covers the case
+        # where the bitrate tool itself disagrees with both).
+        source_comparison = {
+            "from_name": _sig_early.get("from_name"),
+            "from_radarr": item.get("source"),
+            "from_mediainfo": _sig_early.get("from_mediainfo_bitrate"),
+            # Whether "from_mediainfo" is actually confirmed (no re-encode
+            # fingerprint → WEB-DL is decisive) or just a bitrate-threshold
+            # guess that can't tell a WEB-DL re-encode from a disc re-encode
+            # (MicroHD/BluRay-encode) apart.
+            "mediainfo_confirmed": _sig_early.get("from_mediainfo_bitrate") is not None and not _sig_early.get("mediainfo_reencoded", True),
+        }
+        _vals = [source_comparison["from_name"], source_comparison["from_radarr"], source_comparison["from_mediainfo"]]
+        source_comparison["agree"] = all(_vals) and len(set(_vals)) == 1
 
         fields: dict[str, Any] = {
             "title": title,
@@ -570,6 +660,13 @@ def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
             "title_warning": title_warning,
             # Set when the source had to be estimated from MediaInfo.
             "source_warning": source_warning,
+            # Name vs Radarr/Sonarr vs MediaInfo-bitrate cross-check for the
+            # Source field's alert icon.
+            "source_comparison": source_comparison,
+            # Reference table: every eMuwarez source code, the bitrate range
+            # that maps to it at this file's resolution, and why — opened from
+            # a link in the comparison table's "MediaInfo (bitrate)" cell.
+            "source_bitrate_table": _sig_early.get("bitrate_table"),
         }
     finally:
         if own:

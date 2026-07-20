@@ -400,8 +400,9 @@ class DashboardSummaryResponse(BaseModel):
     requests_partial: int = 0
     requests_filled: int = 0
     requests_mine: int = 0
-    # Of "mine": how many are already Reclamado (claimed) on eMuwarez.
-    requests_mine_reclaimed: int = 0
+    # eMuwarez doesn't expose whether a claim belongs to you specifically —
+    # this is every request currently Reclamado on the tracker, not just yours.
+    requests_reclaimed: int = 0
     requests_last_sync_at: Optional[str] = None
     # Phase 6D — Upload job counts
     uploads_ready: int = 0
@@ -491,6 +492,11 @@ class LibraryItemResponse(BaseModel):
     episode_number: Optional[int] = None
     parent_id: Optional[int] = None
     path: Optional[str] = None
+    # The real current local file once nomenclature has been applied — `path`
+    # stays in Radarr/Sonarr's own raw convention and can go stale (e.g. a
+    # later sync overwrites it) without ever pointing at a renamed file
+    # again; prepared_path is the only field guaranteed current.
+    prepared_path: Optional[str] = None
     quality: Optional[str] = None
     resolution: Optional[str] = None
     source: Optional[str] = None
@@ -937,9 +943,26 @@ class UploadJobDetail(BaseModel):
     media_type: Optional[str] = None
     # Poster thumbnail from the linked library item, for the Subidas row.
     poster_url: Optional[str] = None
+    # Origen (Radarr/Sonarr instance) and Petición status from the linked
+    # library item — same fields Biblioteca already shows per content.
+    instance_type: Optional[str] = None
+    instance_name: Optional[str] = None
+    request_status: Optional[str] = None
     # Grace-period deadline while status='queued' — lets the UI show a
     # countdown + Cancel before the server starts renaming/remuxing/uploading.
     queued_until: Optional[str] = None
+    # Read-only snapshots taken at apply time — the nomenclature field
+    # breakdown and the applied remux track plan, neither of which survive
+    # anywhere else once nomenclature.py/mkv_remux.py return. Backs the job
+    # detail page's "Nomenclatura"/"Remux aplicado" sections.
+    nomenclature_snapshot: Optional[dict] = None
+    remux_snapshot: Optional[dict] = None
+    # Pre-upload checks ({"checks": [...], "ready": bool}) as computed by the
+    # wizard before the user confirmed — backs "Verificación pre-subida".
+    checks_snapshot: Optional[dict] = None
+    # Real per-phase progress ({"phases": [...], "global_pct": N}), built
+    # from uploadrr_progress.py's fixed-weight phase table.
+    progress: Optional[dict] = None
 
 
 class UploadJobLog(BaseModel):
@@ -1137,16 +1160,48 @@ class TrackRemuxApplyBody(BaseModel):
     overrides: Optional[Dict[str, TrackRemuxOverride]] = None
 
 
+class UploadCheckResultItem(BaseModel):
+    id: str
+    label: str
+    status: str
+    message: Optional[str] = None
+
+
+class UploadChecksSnapshot(BaseModel):
+    checks: list[UploadCheckResultItem] = []
+    ready: bool = False
+
+
 class UploadQueueBody(BaseModel):
     # Manual edits the user made in the wizard's "Ver Remux" card, carried
     # through to the server-side remux step that runs after the grace period.
     remux_overrides: Optional[Dict[str, TrackRemuxOverride]] = None
+    # The pre-upload checks result the wizard already computed and showed
+    # the user before they confirmed — persisted verbatim on the new job so
+    # its detail page's "Verificación pre-subida" section can show exactly
+    # what was checked, without re-running anything server-side.
+    checks: Optional[UploadChecksSnapshot] = None
 
 
 class UploadQueueResponse(BaseModel):
     status: str
     job: Optional[UploadJobDetail] = None
     errors: list[str] = []
+
+
+class AutoUploadRequest(BaseModel):
+    """Optional source/provider override for an "Automático" upload — set
+    once the user resolved a source-disparity by hand (see
+    services/source_assistant.py::check_auto_upload_source)."""
+    source: Optional[str] = None
+    provider: Optional[str] = None
+
+
+class AutoUploadSourceCheckResponse(BaseModel):
+    disparity: bool
+    from_name: Optional[str] = None
+    from_radarr: Optional[str] = None
+    from_mediainfo: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------

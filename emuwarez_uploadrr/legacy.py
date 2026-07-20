@@ -28,6 +28,7 @@ import base64
 import difflib
 import errno
 import getpass
+import glob
 import hashlib
 import hmac
 import json
@@ -2927,6 +2928,26 @@ _LOSSLESS_AUDIO = ("dts-hd ma", "dts-hd hra", "dts:x", "truehd", "pcm", "lpcm", 
 _REMUX_MIN_GB = {"2160p": 40.0, "1080p": 20.0, "720p": 8.0}
 
 
+# Encoder CLI tags left behind by a hand re-encode (scene WEBRip or a
+# BluRay/MicroHD encode). Their absence is the strongest signal available for
+# an untouched, unmodified release: streaming platforms and disc authoring
+# tools never leave an x264/x265/x266/AV1 settings dump — only a manual CLI
+# encode does. It can't tell a WEBRip re-encode apart from a BluRay/MicroHD
+# re-encode (both leave the same fingerprint), only "re-encoded" from "not".
+_REENCODE_LIBS = ("x264", "x265", "x266", "svt-av1", "aomenc", "rav1e")
+
+
+def looks_reencoded(video: Optional[dict]) -> bool:
+    """Whether the video track carries a hand-encoder fingerprint (x264/x265
+    CLI settings dump), as opposed to an untouched platform/disc stream."""
+    if not video:
+        return False
+    if video.get("Encoded_Library_Settings"):
+        return True
+    lib = f"{video.get('Encoded_Library') or ''} {video.get('Writing_library') or ''}".lower()
+    return any(tag in lib for tag in _REENCODE_LIBS)
+
+
 def heuristic_source(audio_codecs: list[str], size_gb: float, resolution: Optional[str]) -> Optional[str]:
     """Best-effort source guess from MediaInfo, used ONLY when the name has no
     source keyword. Returns None if it can't decide (caller keeps the default).
@@ -2955,16 +2976,27 @@ _BITRATE_MBPS = {
 _DEFAULT_BITRATE_MBPS = (22.0, 9.0, 4.0)
 
 
+def bitrate_thresholds(resolution: Optional[str]) -> tuple[float, float, float]:
+    """(remux, bluray, webdl) Mbps thresholds `estimate_source_from_bitrate`
+    uses for this resolution — exposed for the UI's bitrate reference table."""
+    return _BITRATE_MBPS.get(resolution or "", _DEFAULT_BITRATE_MBPS)
+
+
 def estimate_source_from_bitrate(
     size_bytes: Optional[int], duration_s: Optional[float],
     audio_codecs: list[str], resolution: Optional[str],
+    video: Optional[dict] = None,
 ) -> Optional[str]:
     """Source guess from the file's overall bitrate (size / duration) + audio,
     used ONLY when the name/Radarr give no source. Bitrate normalizes for
     content length, unlike raw size. Returns None if duration is unknown.
 
     - Lossless audio → disc: BDRemux if bitrate is near-untouched, else BluRay.
-    - Lossy audio → WEB-DL, or HDTV when the bitrate is very low.
+    - Lossy audio, NOT hand re-encoded (no x264/x265 fingerprint) → confidently
+      WEB-DL: an untouched platform rip, regardless of its bitrate.
+    - Lossy audio, hand re-encoded (or unknown) → WEB-DL/WEBRip by bitrate, or
+      HDTV when it's very low. Can't be told apart from a BluRay/MicroHD
+      re-encode this way — both leave an identical encoder fingerprint.
     """
     if not size_bytes or not duration_s or duration_s <= 0:
         return None
@@ -2973,12 +3005,14 @@ def estimate_source_from_bitrate(
     codecs = " ".join(c or "" for c in audio_codecs).lower()
     if any(k in codecs for k in _LOSSLESS_AUDIO):
         return "BDRemux" if mbps >= remux_thr else "BluRay"
+    if video is not None and not looks_reencoded(video):
+        return "WEB-DL"
     return "WEB-DL" if mbps >= webdl_thr else "HDTV"
 
 
 def detect_source_smart(
     path: Path, audio_codecs: list[str], resolution: Optional[str],
-    duration_s: Optional[float] = None,
+    duration_s: Optional[float] = None, video: Optional[dict] = None,
 ) -> tuple[str, bool]:
     """(source, is_guess). Name first; if the name says nothing, estimate from the
     overall bitrate (size/duration) + audio, falling back to the size-only
@@ -2991,7 +3025,7 @@ def detect_source_smart(
         size_bytes = path.stat().st_size
     except OSError:
         size_bytes = 0
-    guess = estimate_source_from_bitrate(size_bytes, duration_s, audio_codecs, resolution)
+    guess = estimate_source_from_bitrate(size_bytes, duration_s, audio_codecs, resolution, video=video)
     if guess is None:  # no duration → old size-only heuristic
         guess = heuristic_source(audio_codecs, size_bytes / (1024 ** 3), resolution)
     return (guess or "BluRay"), True
@@ -3169,7 +3203,7 @@ def read_media_info(path: Path) -> MediaInfoData:
     _resolution = map_resolution(video)
     _source, _ = detect_source_smart(
         path, [a.get("codec") or "" for a in audio_items], _resolution,
-        duration_s=duration_seconds(general),
+        duration_s=duration_seconds(general), video=video,
     )
     return MediaInfoData(
         resolution=_resolution,
@@ -4066,8 +4100,11 @@ def find_emu_description_file(plan: RunPlan) -> Optional[Path]:
             if exact.exists():
                 return exact
 
+    # rglob() treats [...] as a glob character class, not literal brackets —
+    # without glob.escape() this would match e.g. "EDESCRIPTION.txt" (one
+    # char from {E,U,M}), never the real "[EMU]DESCRIPTION.txt".
     candidates = sorted(
-        tmp_dir.rglob("[EMU]DESCRIPTION.txt"),
+        tmp_dir.rglob(glob.escape("[EMU]DESCRIPTION.txt")),
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )

@@ -31,16 +31,28 @@ def get_series(url: str, api_key: str) -> list[dict[str, Any]]:
     return data if isinstance(data, list) else []
 
 
-def rescan_series(url: str, api_key: str, series_id: int) -> dict[str, Any]:
-    """Ask Sonarr to rescan this series' folder right now — used right after
-    we rename/hardlink an episode file, so Sonarr's own DB picks up the new
-    filename immediately instead of waiting for its next scheduled scan
-    (otherwise a "Sincronizar biblioteca" here just re-imports the same
-    stale path Sonarr still has on file)."""
+def refresh_series(url: str, api_key: str, series_id: int) -> dict[str, Any]:
+    """Ask Sonarr to refresh this series' metadata AND rescan its folder in
+    one command (same as its own "Refresh & Scan" button) — used right after
+    we rename/hardlink an episode file, so Sonarr actually adopts the new
+    filename as that episode's file instead of just noticing the old one is
+    gone. A disk-scan-only RescanSeries is not enough: Sonarr's own
+    reconciliation between "file went missing" and "here's a new file" runs
+    as part of the fuller refresh, not the bare rescan."""
     return request_json(
         "POST", build_url(url, "/api/v3/command"), api_key=api_key,
-        data={"name": "RescanSeries", "seriesId": series_id},
+        data={"name": "RefreshSeries", "seriesId": series_id},
     )
+
+
+def get_series_by_id(url: str, api_key: str, series_id: int) -> dict[str, Any]:
+    return request_json("GET", build_url(url, f"/api/v3/series/{series_id}"), api_key=api_key)
+
+
+def get_command_status(url: str, api_key: str, command_id: int) -> dict[str, Any]:
+    """Poll a previously-issued command (e.g. RefreshSeries) — Sonarr
+    commands run async; `status` becomes "completed"/"failed" once done."""
+    return request_json("GET", build_url(url, f"/api/v3/command/{command_id}"), api_key=api_key)
 
 
 def get_episodes(url: str, api_key: str, series_id: int) -> list[dict[str, Any]]:

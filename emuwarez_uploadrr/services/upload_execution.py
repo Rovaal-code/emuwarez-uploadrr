@@ -25,6 +25,12 @@ from typing import Any
 
 from ..database import connect, init_db, row_to_dict, rows_to_dicts, get_setting_canonical
 from .upload_result_parser import classify_upload_result, build_error_summary
+from .uploadrr_progress import (
+    RUNNING_SUB_PHASE_ORDER,
+    build_phase_state,
+    parse_uploadrr_progress,
+    with_phase_timestamps,
+)
 from .uploadrr_contract import (
     RUNTIME_EMU,
     build_uploadrr_emu_command,
@@ -44,11 +50,12 @@ logger = logging.getLogger("emuwarez.upload")
 
 CONFIRMATION_TOKEN = "INICIAR_UPLOADRR"
 
-# Phase 10F: approximate progress phases surfaced to the UI. Uploadrr-EMU
-# does not emit structured progress, so this is a coarse stage mapping, never
-# a fabricated percentage.
+# Phase 10F: approximate progress phases surfaced to the UI (string label
+# only). Numeric per-phase percentages are tracked separately in
+# upload_jobs.progress_json — see mark_phase_done/update_phase_progress below
+# and uploadrr_progress.py's PHASES table.
 PROGRESS_PHASES = (
-    "queued", "integrity", "nomenclature", "remux", "preflight",
+    "staging", "queued", "integrity", "nomenclature", "remux", "preflight",
     "config_staging", "running", "finalizing", "succeeded", "failed",
     "cancelled", "timeout",
 )
@@ -65,6 +72,8 @@ def compute_progress_phase(status: str, stage: str | None) -> str:
         return "failed"
     if status == "completed":
         return "succeeded"
+    if status == "staging":
+        return "staging"
     if status == "preparing":
         # Server-side prep queued jobs go through before the real Uploadrr
         # subprocess: integrity check -> nomenclature rename -> track remux
@@ -524,6 +533,52 @@ def _finalize_job_status(job_id: int, desired_status: str, **kwargs) -> None:
         conn.close()
 
 
+def _check_trailer_and_log(job_id: int) -> None:
+    """Best-effort post-upload check: does the description Uploadrr-EMU just
+    sent to eMuwarez actually include a [youtube] trailer tag? Never blocks
+    or fails the job either way — just logs to Actividad, and records a
+    "trailer_url" artifact when found so _notify_upload_completed() (and the
+    job detail page) can tell. See services/trailer_check.py for why reading
+    Uploadrr-EMU's own generated file is a reliable signal, not a guess."""
+    try:
+        from .trailer_check import check_trailer_for_job
+
+        conn = _get_db_conn()
+        try:
+            job = get_upload_job(job_id, conn=conn)
+            if not job:
+                return
+            uploadrr_path = get_setting_canonical(conn, "uploadrr.path")
+            snapshot = {}
+            try:
+                snapshot = json.loads(job.get("nomenclature_snapshot_json") or "{}") or {}
+            except (TypeError, ValueError):
+                pass
+            candidate_names = [n for n in (snapshot.get("proposed_filename"), snapshot.get("proposed_title")) if n]
+
+            result = check_trailer_for_job(uploadrr_path, candidate_names)
+            if result["found"]:
+                create_upload_artifact(job_id, "trailer_url", name="Trailer", url=result["url"], conn=conn)
+                append_upload_log(job_id, "info", f"Trailer incluido en la descripción: {result['url']}", stream="system", conn=conn)
+            elif result["checked"]:
+                append_upload_log(
+                    job_id, "warning",
+                    "No se encontró un trailer en la descripción generada por Uploadrr "
+                    "(TMDb podría no tener uno para este contenido).",
+                    stream="system", conn=conn,
+                )
+            else:
+                append_upload_log(
+                    job_id, "warning",
+                    "No se pudo localizar el archivo de descripción de Uploadrr para comprobar el trailer.",
+                    stream="system", conn=conn,
+                )
+        finally:
+            conn.close()
+    except Exception:
+        logger.exception("Error comprobando el trailer (job %s)", job_id)
+
+
 def _notify_upload_completed(job_id: int, result_url: str | None) -> None:
     """Emit a 'subida completada' notification. Best-effort: never lets a
     notification failure affect the upload result."""
@@ -533,10 +588,15 @@ def _notify_upload_completed(job_id: int, result_url: str | None) -> None:
         try:
             job = get_upload_job(job_id, conn=conn)
             title = (job or {}).get("title") or "Subida"
+            artifacts = get_upload_job_artifacts(job_id, conn=conn)
+            has_trailer = any(a.get("artifact_type") == "trailer_url" for a in artifacts)
+            body = f"«{title}» se ha subido a eMuwarez correctamente."
+            if not has_trailer:
+                body += " Requiere Trailer."
             emit(
                 conn, "upload_completed",
                 "Subida completada",
-                f"«{title}» se ha subido a eMuwarez correctamente.",
+                body,
                 link=result_url,
                 level="success",
                 entity_type="upload_job",
@@ -547,6 +607,36 @@ def _notify_upload_completed(job_id: int, result_url: str | None) -> None:
     except Exception:
         logging.getLogger("emuwarez.notifications").exception(
             "No se pudo emitir la notificación de subida completada (job %s)", job_id
+        )
+
+
+def _notify_upload_failed(job_id: int, error_message: str | None) -> None:
+    """Emit a 'subida fallida' notification. Best-effort: never lets a
+    notification failure affect the upload result. Called from every
+    terminal-failure branch of _run_uploadrr_subprocess (timeout, non-zero
+    exit, executable not found, unexpected exception)."""
+    try:
+        from .notification_center import emit
+        conn = _get_db_conn()
+        try:
+            job = get_upload_job(job_id, conn=conn)
+            title = (job or {}).get("title") or "Subida"
+            body = f"«{title}» ha fallado al subirse a eMuwarez."
+            if error_message:
+                body += f" {error_message.strip()[:300]}"
+            emit(
+                conn, "upload_failed",
+                "Subida fallida",
+                body,
+                level="error",
+                entity_type="upload_job",
+                entity_id=job_id,
+            )
+        finally:
+            conn.close()
+    except Exception:
+        logging.getLogger("emuwarez.notifications").exception(
+            "No se pudo emitir la notificación de subida fallida (job %s)", job_id
         )
 
 
@@ -660,6 +750,86 @@ def _release_staged_config(job_id: int, config_path: Path | None) -> None:
             append_upload_log(job_id, "info", "config.yaml sigue en uso por otra subida; no se restaura todavía.", stream="system")
 
 
+def _read_progress_state(job_id: int) -> dict:
+    conn = _get_db_conn()
+    try:
+        row = conn.execute(
+            "SELECT progress_json FROM upload_jobs WHERE id = ?", (job_id,)
+        ).fetchone()
+    finally:
+        conn.close()
+    if not row or not row["progress_json"]:
+        return {"phases": [], "global_pct": 0}
+    try:
+        return json.loads(row["progress_json"])
+    except (TypeError, ValueError):
+        return {"phases": [], "global_pct": 0}
+
+
+def _write_progress_json(job_id: int, state: dict) -> None:
+    conn = _get_db_conn()
+    try:
+        conn.execute(
+            "UPDATE upload_jobs SET progress_json = ? WHERE id = ?",
+            (json.dumps(state, ensure_ascii=False), job_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def mark_phase_started(job_id: int, stage_key: str) -> None:
+    """Record the wall-clock start of a phase — call this right when a
+    phase's real work begins (mark_phase_done when it completes), so the
+    Fases table's Creado/Finalizado/Duración columns reflect real timing,
+    not just the current status snapshot. Safe to call even if the phase
+    finishes almost immediately (started_at/finished_at can be equal)."""
+    state = _read_progress_state(job_id)
+    completed = {p["key"] for p in state.get("phases", []) if p.get("status") == "done"}
+    completed.discard(stage_key)
+    new_state = build_phase_state(list(completed), current=stage_key, current_pct=0)
+    _write_progress_json(job_id, with_phase_timestamps(new_state, state.get("phases")))
+
+
+def mark_phase_done(job_id: int, stage_key: str) -> None:
+    """Mark a pipeline phase (integrity/nomenclature/remux/preflight/running)
+    as fully complete, keeping whichever other phases were already done, and
+    persist the recomputed job-wide percentage."""
+    state = _read_progress_state(job_id)
+    completed = {p["key"] for p in state.get("phases", []) if p.get("status") == "done"}
+    completed.add(stage_key)
+    new_state = build_phase_state(list(completed))
+    _write_progress_json(job_id, with_phase_timestamps(new_state, state.get("phases")))
+
+
+def update_phase_progress(job_id: int, stage_key: str, pct: int) -> None:
+    """Update the live in-progress percentage of one phase (remux via
+    mkvmerge --gui-mode), keeping whatever phases were already marked done
+    intact."""
+    state = _read_progress_state(job_id)
+    completed = {p["key"] for p in state.get("phases", []) if p.get("status") == "done"}
+    completed.discard(stage_key)
+    new_state = build_phase_state(list(completed), current=stage_key, current_pct=pct)
+    _write_progress_json(job_id, with_phase_timestamps(new_state, state.get("phases")))
+
+
+def advance_running_phase(job_id: int, phase_key: str, pct: int) -> None:
+    """Update progress_json as Uploadrr-EMU's own output reports a new
+    internal sub-phase (queue -> video processing -> MediaInfo -> ... ->
+    uploading to eMuwarez). Uploadrr-EMU reports these strictly in order, so
+    every sub-phase before `phase_key` is marked done, and `phase_key` itself
+    becomes the current one."""
+    if phase_key not in RUNNING_SUB_PHASE_ORDER:
+        return
+    state = _read_progress_state(job_id)
+    completed = {p["key"] for p in state.get("phases", []) if p.get("status") == "done"}
+    idx = RUNNING_SUB_PHASE_ORDER.index(phase_key)
+    completed.update(RUNNING_SUB_PHASE_ORDER[:idx])
+    completed.discard(phase_key)
+    new_state = build_phase_state(list(completed), current=phase_key, current_pct=pct)
+    _write_progress_json(job_id, with_phase_timestamps(new_state, state.get("phases")))
+
+
 def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str]) -> None:
     """Execute Uploadrr in a background thread. Updates job status, logs, and result artifacts."""
     executable = cmd["executable"]
@@ -733,12 +903,32 @@ def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str]) -> None
         stdout_lines: list[str] = []
         stderr_lines: list[str] = []
 
+        progress_lock = threading.Lock()
+        progress_state = {"phase": None, "pct": 0, "last_sig": None}
+
+        def _track_uploadrr_progress(line: str) -> None:
+            parsed = parse_uploadrr_progress(line)
+            if not parsed:
+                return
+            phase_key, pct, ok_state = parsed
+            with progress_lock:
+                if phase_key == progress_state["phase"] and pct < progress_state["pct"] and ok_state is not False:
+                    pct = progress_state["pct"]
+                sig = (phase_key, pct, ok_state)
+                if sig == progress_state["last_sig"]:
+                    return
+                progress_state["phase"] = phase_key
+                progress_state["pct"] = pct
+                progress_state["last_sig"] = sig
+            advance_running_phase(job_id, phase_key, pct)
+
         def _read_stream(stream, level, stream_name, buf):
             for line in stream:
                 line = line.rstrip("\n")
                 safe_line = redact_secrets(line, secrets)
                 buf.append(safe_line)
                 append_upload_log(job_id, level, safe_line, stream=stream_name)
+                _track_uploadrr_progress(safe_line)
 
         t_out = threading.Thread(
             target=_read_stream,
@@ -783,6 +973,7 @@ def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str]) -> None
                 last_error_at=finished_at,
             )
             append_upload_log(job_id, "error", msg, stream="system")
+            _notify_upload_failed(job_id, msg)
             return
 
         returncode = proc.wait()
@@ -832,6 +1023,13 @@ def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str]) -> None
                 last_log_at=_now(),
                 last_success_at=finished_at,
             )
+            mark_phase_done(job_id, "uploading_emu")
+            # Safety net: if qBittorrent isn't configured in Uploadrr, it
+            # never prints anything for this step (not even to stderr) and
+            # "qbittorrent_add" would otherwise stay stuck "pending" forever
+            # on an otherwise-successful job — mark it done here regardless
+            # of whether the real add_to_client() output was actually seen.
+            mark_phase_done(job_id, "qbittorrent_add")
             append_upload_log(
                 job_id, "info",
                 f"Proceso finalizado correctamente (exit code 0). Duración: {duration_seconds}s",
@@ -839,6 +1037,7 @@ def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str]) -> None
             )
             logger.info("Subida completada (job %s) en %ss%s", job_id, duration_seconds,
                         f" → {result['urls'][0]}" if result["urls"] else "")
+            _check_trailer_and_log(job_id)
             _notify_upload_completed(job_id, result["urls"][0] if result["urls"] else None)
         else:
             err_summary = build_error_summary(stderr_text, stdout_text, returncode)
@@ -860,6 +1059,7 @@ def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str]) -> None
                 stream="system",
             )
             logger.warning("Subida fallida (job %s, exit %s): %s", job_id, returncode, safe_err[:300])
+            _notify_upload_failed(job_id, safe_err)
 
     except FileNotFoundError as exc:
         finished_at = _now()
@@ -873,6 +1073,7 @@ def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str]) -> None
         )
         append_upload_log(job_id, "error", msg, stream="system")
         logger.error("Subida fallida (job %s): %s", job_id, msg)
+        _notify_upload_failed(job_id, msg)
     except Exception as exc:
         finished_at = _now()
         msg = redact_secrets(str(exc), secrets)
@@ -885,6 +1086,7 @@ def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str]) -> None
         )
         append_upload_log(job_id, "error", f"Excepción inesperada: {msg}", stream="system")
         logger.error("Subida fallida (job %s): excepción inesperada: %s", job_id, msg)
+        _notify_upload_failed(job_id, msg)
     finally:
         _release_staged_config(job_id, staged_config_path)
 
@@ -1163,6 +1365,14 @@ def cancel_upload_job(job_id: int, conn=None) -> dict:
             append_upload_log(job_id, "info", "Subida cancelada durante la cola de espera.", stream="system")
             return {"ok": True, "message": "Subida cancelada.", "job_id": job_id}
 
+        if status == "staging":
+            # Nothing to signal (no subprocess, no timer yet) — just flip the
+            # row; _run_staging_job() re-reads status before persisting any
+            # snapshot or promoting to 'queued' and bails out when it sees this.
+            _update_job_status(job_id, "cancelled", stage="cancelled", finished_at=_now())
+            append_upload_log(job_id, "info", "Subida automática cancelada mientras se preparaba.", stream="system")
+            return {"ok": True, "message": "Subida cancelada.", "job_id": job_id}
+
         if status != "running":
             return {
                 "ok": False,
@@ -1225,4 +1435,8 @@ __all__ = [
     "create_upload_artifact",
     "get_upload_job_artifacts",
     "cancel_upload_job",
+    "mark_phase_started",
+    "mark_phase_done",
+    "update_phase_progress",
+    "advance_running_phase",
 ]

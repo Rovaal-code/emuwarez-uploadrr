@@ -436,25 +436,30 @@
   filter: drop-shadow(0 0 4px currentColor);
   transition: stroke-dashoffset .4s ease;
 }
-.hud-app .sys-gauge-pct {
+.hud-app .sys-gauge-center {
   position: absolute;
   inset: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 2px;
+}
+.hud-app .sys-gauge-pct {
   font-family: var(--hud-font);
   font-size: 15px;
   font-weight: 700;
   color: var(--hud-ice);
+  line-height: 1;
 }
 .hud-app .sys-gauge-label {
-  flex-shrink: 0;
   font-family: var(--hud-font);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
-  letter-spacing: .08em;
+  letter-spacing: .06em;
   text-transform: uppercase;
   color: var(--text-secondary);
+  line-height: 1;
 }
 .hud-app .sys-net-row {
   flex-shrink: 0;

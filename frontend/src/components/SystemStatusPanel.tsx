@@ -29,9 +29,11 @@ function Gauge({ percent, label, color, title }: { percent: number; label: strin
             transform="rotate(-90 50 50)"
           />
         </svg>
-        <div className="sys-gauge-pct">{Math.round(clamped)}%</div>
+        <div className="sys-gauge-center">
+          <div className="sys-gauge-pct">{Math.round(clamped)}%</div>
+          <div className="sys-gauge-label">{label}</div>
+        </div>
       </div>
-      <div className="sys-gauge-label">{label}</div>
       {tooltipNode}
     </div>
   )

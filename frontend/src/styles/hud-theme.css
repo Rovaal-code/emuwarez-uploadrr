@@ -165,14 +165,10 @@
   border-color: var(--hud-cyan);
   box-shadow: 0 0 10px -4px rgba(47, 216, 255, .6);
 }
-.hud-app input[type="text"],
-.hud-app input[type="password"],
-.hud-app input[type="number"],
-.hud-app input[type="search"],
-.hud-app input[type="email"],
-.hud-app input[type="url"],
+.hud-app input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
 .hud-app textarea,
-.hud-app select {
+.hud-app select,
+.hud-app .form-input {
   background: rgba(3, 12, 26, .7);
   border-color: rgba(30, 110, 190, .45);
 }

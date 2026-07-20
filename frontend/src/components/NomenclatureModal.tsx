@@ -94,7 +94,7 @@ export function NomenclatureModal({ itemId, itemTitle, onClose }: Props) {
 
   const statusLabel = proposal ? (STATUS_LABELS[proposal.status] || proposal.status) : ''
   const statusClass = proposal ? (STATUS_CLASS[proposal.status] || 'badge req-unknown') : ''
-  const canApply = proposal && proposal.status !== 'blocked' && proposal.hardlink_configured
+  const canApply = proposal && proposal.status !== 'blocked'
   const alreadyApplied = applyResult?.status === 'applied'
 
   return (
@@ -178,12 +178,6 @@ export function NomenclatureModal({ itemId, itemTitle, onClose }: Props) {
                 </div>
               )}
 
-              {proposal.status !== 'blocked' && !proposal.hardlink_configured && (
-                <p style={{ fontSize: '0.8rem', marginTop: 12, color: 'var(--color-text-muted, #9ca3af)' }}>
-                  La ruta de hardlinks no está configurada — configúrala en Ajustes para poder aplicar esta nomenclatura.
-                </p>
-              )}
-
               {/* Apply section */}
               {canApply && (
                 <div
@@ -191,7 +185,7 @@ export function NomenclatureModal({ itemId, itemTitle, onClose }: Props) {
                   style={{ marginTop: 16, padding: '12px', background: 'rgba(99,102,241,0.08)', borderRadius: 6 }}
                 >
                   <div className="detail-panel__section-title" style={{ marginBottom: 8 }}>
-                    Crear hardlink preparado
+                    Aplicar nomenclatura
                   </div>
                   {!showApplySection ? (
                     <button className="btn btn-secondary" onClick={() => setShowApplySection(true)}>
@@ -200,8 +194,8 @@ export function NomenclatureModal({ itemId, itemTitle, onClose }: Props) {
                   ) : (
                     <>
                       <p style={{ fontSize: '0.85rem', marginBottom: 8, color: 'var(--color-text-muted, #9ca3af)' }}>
-                        Se creará un hardlink del archivo original con el nombre propuesto.
-                        El archivo original no se modifica. Uploadrr no se ejecuta.
+                        Se renombrará el archivo original con el nombre propuesto (mismo directorio).
+                        Uploadrr no se ejecuta.
                       </p>
                       <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
                         <button
@@ -270,7 +264,7 @@ export function NomenclatureModal({ itemId, itemTitle, onClose }: Props) {
                       </div>
                       {applyResult.destination_path && (
                         <div className="detail-row" style={{ fontSize: '0.8rem' }}>
-                          <span className="text-muted">Hardlink:</span>
+                          <span className="text-muted">Nuevo nombre:</span>
                           <span style={{ wordBreak: 'break-all' }}>{applyResult.destination_path}</span>
                         </div>
                       )}

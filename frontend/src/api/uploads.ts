@@ -7,6 +7,7 @@ import type {
   UploadStartResult,
   UploadArtifactsResponse,
   UploadRetryRequest,
+  OkResponse,
 } from '../types/api'
 import type { TrackRemuxOverride } from './nomenclature'
 import { latestInChain } from '../utils/uploadStatus'
@@ -130,6 +131,15 @@ export async function retryUploadJobQueued(jobId: number): Promise<UploadQueueRe
 
 export async function cancelUploadJob(jobId: number): Promise<unknown> {
   return api.post<unknown>(`/uploads/${jobId}/cancel`, {})
+}
+
+// Only ever called after the styled confirmation card — the token itself
+// isn't user-typed, it's the same constant the backend requires
+// (services/upload_execution.py::DELETE_CONFIRMATION_TOKEN).
+const DELETE_CONFIRMATION_TOKEN = 'BORRAR_SUBIDA'
+
+export async function deleteUploadJob(jobId: number): Promise<OkResponse> {
+  return api.post<OkResponse>(`/uploads/${jobId}/delete`, { confirmation: DELETE_CONFIRMATION_TOKEN })
 }
 
 export interface UploadCheck {

@@ -4,10 +4,13 @@ import { Tooltip } from './Tooltip'
 // Shared by RequestsPage and the Dashboard's "Peticiones eMuwarez" sync
 // button — both surface the same 1h eMuwarez request-sync throttle
 // (services/requests.py::MIN_SYNC_SECONDS), so this used to be duplicated.
-export function SyncInfo({ syncStatus, onSync, syncing, label = 'Sincronizar', allowForce = true, title }: {
+export function SyncInfo({ syncStatus, onSync, syncing, blocked = false, label = 'Sincronizar', allowForce = true, title }: {
   syncStatus: RequestSyncStatusResponse | null
   onSync: (force: boolean) => void
   syncing: boolean
+  // True while a DIFFERENT sync is running — disables the buttons without
+  // showing this sync's own "Sincronizando…" label (that's reserved for `syncing`).
+  blocked?: boolean
   label?: string
   allowForce?: boolean
   title?: string
@@ -28,14 +31,14 @@ export function SyncInfo({ syncStatus, onSync, syncing, label = 'Sincronizar', a
       {!can_sync && (
         <span className="sync-info__throttle">Disponible en {mins} min</span>
       )}
-      <Tooltip content={!can_sync ? `Disponible en ${mins} min` : (title ?? 'Sincronizar')}>
-        <button className="btn btn-primary btn-sm" onClick={() => onSync(false)} disabled={syncing || !can_sync}>
+      <Tooltip content={!can_sync ? `Disponible en ${mins} min` : blocked ? 'Otra sincronización en curso' : (title ?? 'Sincronizar')}>
+        <button className="btn btn-primary btn-sm" onClick={() => onSync(false)} disabled={syncing || blocked || !can_sync}>
           {syncing ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Sincronizando…</> : `↻ ${label}`}
         </button>
       </Tooltip>
       {!can_sync && allowForce && (
         <Tooltip content="Forzar sync">
-          <button className="btn btn-secondary btn-sm" onClick={() => onSync(true)} disabled={syncing}>
+          <button className="btn btn-secondary btn-sm" onClick={() => onSync(true)} disabled={syncing || blocked}>
             Forzar
           </button>
         </Tooltip>

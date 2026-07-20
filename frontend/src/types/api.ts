@@ -368,7 +368,6 @@ export interface NomenclatureProposal {
   errors: string[]
   created_at?: string
   updated_at?: string
-  hardlink_configured?: boolean
 }
 
 export interface NomenclatureExistsResponse {
@@ -394,11 +393,9 @@ export interface SeasonPackPlanResponse {
   errors: string[]
   warnings: string[]
   season_pack_title?: string | null
-  hardlink_base?: string | null
-  hardlink_folder?: string | null
+  pack_folder?: string | null
   episodes: SeasonPackEpisodePlan[]
   provider?: string | null
-  mode?: 'hardlink' | 'rename' | null
 }
 
 

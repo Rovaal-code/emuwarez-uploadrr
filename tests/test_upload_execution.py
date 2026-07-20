@@ -12,9 +12,11 @@ import pytest
 from emuwarez_uploadrr.database import connect, init_db
 from emuwarez_uploadrr.services.upload_execution import (
     CONFIRMATION_TOKEN,
+    DELETE_CONFIRMATION_TOKEN,
     append_upload_log,
     cancel_upload_job,
     create_upload_artifact,
+    delete_upload_job,
     get_upload_job,
     get_upload_job_logs,
     list_upload_jobs,
@@ -474,3 +476,85 @@ def test_list_upload_jobs(db_conn):
     _insert_job(db_conn, status="completed")
     jobs = list_upload_jobs(conn=db_conn)
     assert len(jobs) == 2
+
+
+# ---------------------------------------------------------------------------
+# delete_upload_job
+# ---------------------------------------------------------------------------
+
+def test_delete_not_found(db_conn):
+    result = delete_upload_job(999, confirmation=DELETE_CONFIRMATION_TOKEN, conn=db_conn)
+    assert not result["ok"]
+    assert result["error"] == "not_found"
+
+
+def test_delete_requires_confirmation_token(db_conn):
+    jid = _insert_job(db_conn, status="failed")
+    result = delete_upload_job(jid, confirmation=None, conn=db_conn)
+    assert not result["ok"]
+    assert result["error"] == "confirmation_required"
+    # Nothing was deleted.
+    assert db_conn.execute("SELECT id FROM upload_jobs WHERE id=?", (jid,)).fetchone() is not None
+
+
+def test_delete_rejects_wrong_confirmation(db_conn):
+    jid = _insert_job(db_conn, status="failed")
+    result = delete_upload_job(jid, confirmation="nope", conn=db_conn)
+    assert not result["ok"]
+    assert result["error"] == "confirmation_required"
+
+
+def test_delete_blocked_for_running_job(db_conn):
+    jid = _insert_job(db_conn, status="running")
+    result = delete_upload_job(jid, confirmation=DELETE_CONFIRMATION_TOKEN, conn=db_conn)
+    assert not result["ok"]
+    assert result["error"] == "invalid_status"
+    assert db_conn.execute("SELECT id FROM upload_jobs WHERE id=?", (jid,)).fetchone() is not None
+
+
+def test_delete_blocked_for_queued_job(db_conn):
+    jid = _insert_job(db_conn, status="queued")
+    result = delete_upload_job(jid, confirmation=DELETE_CONFIRMATION_TOKEN, conn=db_conn)
+    assert not result["ok"]
+    assert result["error"] == "invalid_status"
+
+
+def test_delete_blocked_for_completed_job(db_conn):
+    jid = _insert_job(db_conn, status="completed")
+    result = delete_upload_job(jid, confirmation=DELETE_CONFIRMATION_TOKEN, conn=db_conn)
+    assert not result["ok"]
+    assert result["error"] == "invalid_status"
+
+
+def test_delete_cancelled_job_removes_row_logs_and_artifacts(db_conn):
+    jid = _insert_job(db_conn, status="cancelled")
+    append_upload_log(jid, "info", "algo", stream="system", conn=db_conn)
+    create_upload_artifact(jid, "trailer_url", name="Trailer", url="http://x", conn=db_conn)
+
+    result = delete_upload_job(jid, confirmation=DELETE_CONFIRMATION_TOKEN, conn=db_conn)
+    assert result["ok"] is True
+
+    assert db_conn.execute("SELECT id FROM upload_jobs WHERE id=?", (jid,)).fetchone() is None
+    assert db_conn.execute("SELECT id FROM upload_job_logs WHERE upload_job_id=?", (jid,)).fetchone() is None
+    assert db_conn.execute("SELECT id FROM upload_artifacts WHERE upload_job_id=?", (jid,)).fetchone() is None
+
+
+def test_delete_failed_job_ok(db_conn):
+    jid = _insert_job(db_conn, status="failed")
+    result = delete_upload_job(jid, confirmation=DELETE_CONFIRMATION_TOKEN, conn=db_conn)
+    assert result["ok"] is True
+
+
+def test_delete_blocked_when_newer_retry_exists(db_conn):
+    jid = _insert_job(db_conn, status="failed")
+    db_conn.execute(
+        """INSERT INTO upload_jobs (library_item_id, title, path, status, stage, retry_of_job_id, created_at, updated_at)
+           VALUES (NULL, 'Test Movie', '', 'queued', 'preflight', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""",
+        (jid,),
+    )
+    db_conn.commit()
+
+    result = delete_upload_job(jid, confirmation=DELETE_CONFIRMATION_TOKEN, conn=db_conn)
+    assert not result["ok"]
+    assert result["error"] == "has_retry"
+    assert db_conn.execute("SELECT id FROM upload_jobs WHERE id=?", (jid,)).fetchone() is not None

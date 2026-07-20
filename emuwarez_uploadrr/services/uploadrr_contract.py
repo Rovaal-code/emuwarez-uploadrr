@@ -35,7 +35,7 @@ from typing import Optional
 DEFAULT_UPLOADRR_PATH = os.environ.get("UPLOADRR_PATH", "/opt/Uploadrr")
 DEFAULT_UPLOADRR_PYTHON = os.environ.get("UPLOADRR_PYTHON", sys.executable)
 
-from ..database import get_setting_canonical, get_state
+from ..database import get_setting_canonical
 from .filesystem_apply import ensure_path_under_base
 
 RUNTIME_GENERIC = "uploadrr_generic"
@@ -67,9 +67,12 @@ def get_runtime_settings(conn: sqlite3.Connection) -> dict:
 def get_allowed_roots(conn: sqlite3.Connection) -> list[str]:
     """Return the configured allowed roots for prepared_path checks.
 
-    An empty `uploadrr.allowed_roots` setting means "fall back to the
-    existing hardlink_base setting" (same base already enforced by
-    services/filesystem_apply.py for nomenclature hardlinks).
+    Must be configured explicitly (Settings > Uploadrr): an empty
+    `uploadrr.allowed_roots` means no roots at all, so
+    path_within_allowed_roots() fails closed and real uploads are blocked
+    until it's set — this is the folder(s) where THIS app's own container
+    reaches the media (e.g. "/data" if mounted the same way as Radarr/
+    Sonarr), not necessarily the same path Radarr/Sonarr themselves report.
     """
     raw = get_setting_canonical(conn, "uploadrr.allowed_roots")
     roots: list[str] = []
@@ -80,20 +83,7 @@ def get_allowed_roots(conn: sqlite3.Connection) -> list[str]:
                 roots = [str(r) for r in parsed if r]
         except (TypeError, ValueError):
             pass
-    if roots:
-        return roots
-
-    hardlink_base = None
-    try:
-        row = conn.execute(
-            "SELECT value FROM settings WHERE key = 'hardlink_base'"
-        ).fetchone()
-        hardlink_base = row["value"] if row else None
-    except Exception:
-        hardlink_base = None
-    if not hardlink_base:
-        hardlink_base = get_state(conn, "hardlink_base")
-    return [hardlink_base] if hardlink_base else []
+    return roots
 
 
 def path_within_allowed_roots(path: str, allowed_roots: list[str]) -> bool:

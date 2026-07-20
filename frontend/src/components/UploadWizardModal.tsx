@@ -85,13 +85,12 @@ function TableLoadingSpinner({ label = 'Cargando…' }: { label?: string }) {
 // stage, which already runs MediaInfo/mkvmerge on the file for the
 // nomenclature/remux steps), so a failure lands with a specific reason
 // instead of duplicating that work upfront.
-// A season target collapses "renameable"/"hardlink" into one "season_pack"
-// check (run_upload_checks' season branch — see upload_checks.py).
-const CHECK_STEP_ORDER = ['renameable', 'hardlink', 'output', 'qbittorrent', 'imghosts', 'emuwarez']
+// A season target collapses "renameable" into one "season_pack" check
+// (run_upload_checks' season branch — see upload_checks.py).
+const CHECK_STEP_ORDER = ['renameable', 'output', 'qbittorrent', 'imghosts', 'emuwarez']
 const CHECK_STEP_ORDER_SEASON = ['season_pack', 'output', 'qbittorrent', 'imghosts', 'emuwarez']
 const CHECK_STEP_PENDING_LABEL: Record<string, string> = {
   renameable: 'Comprobando si se puede renombrar…',
-  hardlink: 'Comprobando si se puede crear el hardlink…',
   season_pack: 'Comprobando el pack de temporada…',
   output: 'Comprobando el directorio de salida…',
   qbittorrent: 'Comprobando la conexión con qBittorrent…',

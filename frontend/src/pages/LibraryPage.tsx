@@ -18,7 +18,7 @@ import { LibraryTreeRow, type LibraryActionKind } from '../components/LibraryTre
 import { LargePosterCard } from '../components/LargePosterCard'
 import { LibraryDetailPage } from '../components/LibraryDetailPage'
 import { HeaderFilter } from '../components/HeaderFilter'
-import { buildDeepLink, posterUrl, isAporteEligible } from '../utils/libraryItem'
+import { posterUrl, isAporteEligible } from '../utils/libraryItem'
 
 const LOAD_LIMIT = 20000  // show everything in one container (no pagination); backend caps here
 
@@ -47,8 +47,7 @@ const GRID_PRIORITY_COUNT = 30
 // the fold — same rationale, higher count.
 const LIST_PRIORITY_COUNT = 40
 
-function PosterCard({ item, instances, onClick, priority }: { item: LibraryItemResponse; instances: InstanceSafeResponse[]; onClick: () => void; priority?: boolean }) {
-  const deepLink = buildDeepLink(item, instances)
+function PosterCard({ item, onClick, priority }: { item: LibraryItemResponse; onClick: () => void; priority?: boolean }) {
   return (
     <div
       className="clickable"
@@ -76,22 +75,6 @@ function PosterCard({ item, instances, onClick, priority }: { item: LibraryItemR
         <div style={{ position: 'absolute', top: 6, right: 6 }}>
           <PosterStatusIcon status={item.local_status} />
         </div>
-        {deepLink && (
-          <a
-            href={deepLink}
-            target="_blank"
-            rel="noreferrer"
-            onClick={e => e.stopPropagation()}
-            title={`Ver en ${item.instance_name ?? item.instance_type}`}
-            style={{
-              position: 'absolute', top: 6, left: 6, width: 22, height: 22, borderRadius: 5,
-              background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 12, textDecoration: 'none',
-            }}
-          >
-            🔗
-          </a>
-        )}
       </div>
     </div>
   )
@@ -154,7 +137,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // Library + eMuwarez syncs are global (shared with the Dashboard/Peticiones
   // and the progress banner), so a running sync stays visible and its button
   // stays disabled on every tab.
-  const { libSyncing, startLibrarySync, lastCompletedAt } = useSync()
+  const { libSyncing, startLibrarySync, lastCompletedAt, isAnySyncing } = useSync()
 
   // Filters
   const [search, setSearch] = useState('')
@@ -324,7 +307,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
             <button
               className="btn btn-primary btn-sm"
               onClick={startLibrarySync}
-              disabled={libSyncing}
+              disabled={isAnySyncing}
             >
               {libSyncing
                 ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Sincronizando…</>
@@ -400,7 +383,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
         <div className="activity-section" style={{ padding: 20, flex: 1, minHeight: 0, overflowY: 'auto', marginBottom: 0 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 16 }}>
             {filteredItems.map((item, i) => (
-              <PosterCard key={item.id} item={item} instances={instances} onClick={() => setSelected(item)} priority={i < GRID_PRIORITY_COUNT} />
+              <PosterCard key={item.id} item={item} onClick={() => setSelected(item)} priority={i < GRID_PRIORITY_COUNT} />
             ))}
           </div>
         </div>
@@ -408,7 +391,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
         <div className="activity-section" style={{ padding: 20, flex: 1, minHeight: 0, overflowY: 'auto', marginBottom: 0 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 20 }}>
             {filteredItems.map((item, i) => (
-              <LargePosterCard key={item.id} item={item} instances={instances} onClick={() => setSelected(item)} priority={i < GRID_PRIORITY_COUNT} />
+              <LargePosterCard key={item.id} item={item} onClick={() => setSelected(item)} priority={i < GRID_PRIORITY_COUNT} />
             ))}
           </div>
         </div>

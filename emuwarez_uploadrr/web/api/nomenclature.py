@@ -7,7 +7,6 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ...database import connect, init_db
 from ...services.nomenclature import (
-    _get_hardlink_base,
     apply_nomenclature_proposal,
     build_nomenclature_proposal,
     get_latest_nomenclature_proposal,
@@ -35,7 +34,7 @@ def _get_conn():
     return conn
 
 
-def _proposal_to_response(p: dict, *, conn=None) -> NomenclatureProposalResponse:
+def _proposal_to_response(p: dict) -> NomenclatureProposalResponse:
     warnings: list[str] = []
     errors: list[str] = []
     try:
@@ -72,7 +71,6 @@ def _proposal_to_response(p: dict, *, conn=None) -> NomenclatureProposalResponse
         errors=errors,
         created_at=p.get("created_at"),
         updated_at=p.get("updated_at"),
-        hardlink_configured=bool(_get_hardlink_base(conn=conn)),
     )
 
 
@@ -87,7 +85,7 @@ def get_nomenclature(item_id: int, current_user: dict = Depends(require_auth)):
             )
         return NomenclatureExistsResponse(
             exists=True,
-            proposal=_proposal_to_response(proposal, conn=conn),
+            proposal=_proposal_to_response(proposal),
         )
 
 
@@ -101,7 +99,7 @@ def preview_nomenclature(
         proposal = build_nomenclature_proposal(item_id, force_refresh=body.force_refresh, conn=conn)
         if not proposal.get("library_item_id"):
             raise HTTPException(status_code=404, detail="Item no encontrado.")
-        return _proposal_to_response(proposal, conn=conn)
+        return _proposal_to_response(proposal)
 
 
 @router.post("/library/{item_id}/adapt-nomenclature", response_model=NomenclatureApplyResult)
@@ -117,7 +115,6 @@ def adapt_nomenclature(
             dry_run=body.dry_run,
             apply=body.apply,
             confirmation=body.confirmation,
-            overwrite=body.overwrite,
             conn=conn,
         )
 
@@ -144,7 +141,7 @@ def get_nomenclature_operations(item_id: int, current_user: dict = Depends(requi
     with _get_conn() as conn:
         rows = conn.execute(
             """SELECT * FROM filesystem_operations
-               WHERE library_item_id = ? AND operation_type = 'nomenclature_hardlink'
+               WHERE library_item_id = ? AND operation_type IN ('nomenclature_rename', 'nomenclature_hardlink')
                ORDER BY created_at DESC LIMIT 20""",
             (item_id,),
         ).fetchall()

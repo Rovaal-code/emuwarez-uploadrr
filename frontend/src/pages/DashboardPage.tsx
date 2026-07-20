@@ -478,6 +478,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
             <div className="upload-panel-body" style={{
               padding: '12px 16px', display: 'flex', flexDirection: 'column',
               justifyContent: activeUploads.length === 0 ? 'flex-end' : 'flex-start',
+              alignItems: 'stretch',
               minHeight: 'auto', flex: 1, overflowY: 'auto',
             }}>
               {activeUploads.length === 0 ? (

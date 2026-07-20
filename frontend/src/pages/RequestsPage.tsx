@@ -12,6 +12,7 @@ import { LoadingState } from '../components/LoadingState'
 import { ErrorState } from '../components/ErrorState'
 import { EmptyState } from '../components/EmptyState'
 import { SyncInfo } from '../components/SyncInfo'
+import { StatusBadge } from '../components/StatusBadge'
 import { HoverTitle } from '../components/Tooltip'
 import { useSync } from '../context/SyncContext'
 import { UploadWizardModal } from '../components/UploadWizardModal'
@@ -132,16 +133,7 @@ const baseName = (path: string | null) => (path ? path.split('/').pop() || null 
 
 function CompatibilityBadge({ status }: { status: string | null }) {
   if (!status) return <span style={{ color: 'var(--text-muted)' }}>—</span>
-  const cls =
-    status === 'Compatible' ? 'badge req-compatible' :
-    status === 'No disponible' ? 'badge req-unavailable' :
-    status === 'Parcial' ? 'badge req-partial' :
-    status === 'No compatible' ? 'badge req-unavailable' :
-    status === 'Reclamado' ? 'badge req-claimed' :
-    status === 'Pendiente' ? 'badge req-pending' :
-    status === 'Llena' ? 'badge req-filled' :
-    'badge req-unknown'
-  return <span className={cls}>{status}</span>
+  return <StatusBadge status={status} type="request" />
 }
 
 function ReadinessBadge({ status }: { status: string | null | undefined }) {
@@ -441,7 +433,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   const [error, setError] = useState<string | null>(null)
   // Requests sync is global (shared with the Dashboard's "Peticiones" button
   // and the progress banner), so it can't be launched twice across tabs.
-  const { requestsSyncing, requestsStatus, startRequestsSync, lastCompletedAt } = useSync()
+  const { requestsSyncing, requestsStatus, startRequestsSync, lastCompletedAt, isAnySyncing } = useSync()
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [detail, setDetail] = useState<RequestDetailResponse | null>(null)
   const [readiness, setReadiness] = useState<RequestReadinessResponse | null>(null)
@@ -588,6 +580,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
               syncStatus={requestsStatus}
               onSync={startRequestsSync}
               syncing={requestsSyncing}
+              blocked={isAnySyncing && !requestsSyncing}
               label="Sincronizar peticiones"
               title="Descarga de eMuwarez las peticiones activas y las cruza con tu biblioteca local para ver cuáles puedes cubrir. Limitado a una vez por hora."
             />
@@ -622,7 +615,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                 : 'No hay peticiones que coincidan con los filtros.'
             }
             action={total === 0 ? (
-              <button className="btn btn-primary btn-sm" onClick={() => startRequestsSync(false)} disabled={requestsSyncing}>Sincronizar peticiones</button>
+              <button className="btn btn-primary btn-sm" onClick={() => startRequestsSync(false)} disabled={isAnySyncing}>Sincronizar peticiones</button>
             ) : undefined}
           />
         ) : (

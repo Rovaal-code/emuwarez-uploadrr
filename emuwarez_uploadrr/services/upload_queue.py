@@ -472,7 +472,7 @@ def _season_upload_preconditions(conn) -> list[str]:
     """The generic (not season-specific) preconditions
     upload_preflight.validate_upload_preconditions() checks for a single
     file — uploadrr path/script + eMuwarez/TMDb API keys. Season-specific
-    concerns (episodes consistent, complete, hardlink_base configured) are
+    concerns (episodes consistent, complete, all in the same folder) are
     already covered by build_season_pack_plan() before this ever runs."""
     from ..database import get_setting_canonical
     from .uploadrr_contract import DEFAULT_UPLOADRR_PATH
@@ -526,7 +526,7 @@ def _populate_ready(job_id: int, item_id: int, conn) -> bool:
         # hand-building the command dict and skipping them.
         synthetic_item = {
             "path": None,
-            "prepared_path": plan.get("hardlink_folder"),
+            "prepared_path": plan.get("pack_folder"),
             "item_type": "season",
             "title": plan.get("season_pack_title"),
             "tmdb_id": plan.get("tmdb_id"),
@@ -539,7 +539,7 @@ def _populate_ready(job_id: int, item_id: int, conn) -> bool:
             "UPDATE upload_jobs SET status = 'ready', stage = 'preflight', "
             "prepared_path = ?, uploadrr_command_json = ?, error_message = NULL, updated_at = ? "
             "WHERE id = ?",
-            (plan.get("hardlink_folder"), json.dumps(command_preview, ensure_ascii=False), _now_iso(), job_id),
+            (plan.get("pack_folder"), json.dumps(command_preview, ensure_ascii=False), _now_iso(), job_id),
         )
         conn.commit()
         return True
@@ -734,14 +734,14 @@ def _run_queued_job(job_id: int) -> None:
                     return
         mark_phase_done(job_id, "integrity")
 
-        # --- 2. Nomenclature (rename/hardlink to the final eMuwarez name).
+        # --- 2. Nomenclature (rename to the final eMuwarez name).
         _mark(job_id, stage="nomenclature")
         mark_phase_started(job_id, "nomenclature")
         append_upload_log(job_id, "info", "Aplicando nomenclatura…", stream="system", conn=conn)
         if is_season:
-            from .season_pack import apply_season_hardlinks
+            from .season_pack import apply_season_pack
             try:
-                applied = apply_season_hardlinks(item_id, conn=conn, job_id=job_id)
+                applied = apply_season_pack(item_id, conn=conn, job_id=job_id)
             except Exception as exc:
                 _fail(job_id, f"Error aplicando la nomenclatura del pack de temporada: {exc}")
                 return

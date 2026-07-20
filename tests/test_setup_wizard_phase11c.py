@@ -1,7 +1,8 @@
-"""Tests for Phase 11C onboarding wizard additions:
-new step order (admin -> emu -> instances -> tmdb -> complete), and the
-nomenclature/hardlink-strategy step. No dedicated Uploadrr step (removed —
-configurable later from Settings, service ships with sensible defaults).
+"""Tests for the onboarding wizard's step order (admin -> emu -> instances ->
+tmdb -> complete). No dedicated Uploadrr step — service ships with sensible
+defaults, configurable later from Settings. No dedicated nomenclature step
+either — the upload tag lives on the eMuwarez step and provider priority on
+its own step now, both frontend-only via PUT /settings (see SetupWizard.tsx).
 """
 from __future__ import annotations
 
@@ -58,135 +59,11 @@ def test_next_step_order_after_tmdb(client, auth_headers):
     assert resp.json()["next_step"] == "complete"
 
 
-
-# ---------------------------------------------------------------------------
-# POST /api/setup/nomenclature
-# ---------------------------------------------------------------------------
-
-def test_setup_nomenclature_requires_auth(client):
-    resp = client.post("/api/setup/nomenclature", json={})
-    assert resp.status_code == 401
-
-
-def test_setup_nomenclature_default_uses_hardlinks_no_confirmation_needed(client, auth_headers):
-    resp = client.post(
-        "/api/setup/nomenclature",
-        json={"default_release_tag": "MYTAG", "hardlink_base": "/data/uploads/emu"},
-        headers=auth_headers,
-    )
-    assert resp.status_code == 200
-
-
-def test_setup_nomenclature_disable_hardlinks_without_confirmation_returns_400(client, auth_headers):
-    resp = client.post(
-        "/api/setup/nomenclature",
-        json={"default_release_tag": "TAG", "use_hardlinks": False},
-        headers=auth_headers,
-    )
-    assert resp.status_code == 400
-    assert "DESACTIVAR_HARDLINKS" in resp.json()["detail"]
-
-
-def test_setup_nomenclature_disable_hardlinks_wrong_confirmation_returns_400(client, auth_headers):
-    resp = client.post(
-        "/api/setup/nomenclature",
-        json={"default_release_tag": "TAG", "use_hardlinks": False, "confirmation": "WRONG"},
-        headers=auth_headers,
-    )
-    assert resp.status_code == 400
-
-
-def test_setup_nomenclature_disable_hardlinks_with_correct_confirmation_persists(client, auth_headers):
-    resp = client.post(
-        "/api/setup/nomenclature",
-        json={"default_release_tag": "TAG", "use_hardlinks": False, "confirmation": "DESACTIVAR_HARDLINKS"},
-        headers=auth_headers,
-    )
-    assert resp.status_code == 200
-
-    settings_resp = client.get("/api/settings", headers=auth_headers)
-    assert settings_resp.json()["default_release_tag"] == "TAG"
-
-
-def test_setup_nomenclature_persists_hardlink_base_setting(client, auth_headers):
-    from emuwarez_uploadrr.database import connect, db_path, init_db
-    client.post(
-        "/api/setup/nomenclature",
-        json={"default_release_tag": "TAG", "hardlink_base": "/data/uploads/emu"},
-        headers=auth_headers,
-    )
-    conn = connect(db_path())
-    init_db(conn)
-    row = conn.execute("SELECT value FROM settings WHERE key = 'hardlink_base'").fetchone()
-    assert row["value"] == "/data/uploads/emu"
-    row2 = conn.execute("SELECT value FROM settings WHERE key = 'nomenclature.use_hardlinks'").fetchone()
-    assert row2["value"] == "true"
-    conn.close()
-
-
-def test_setup_nomenclature_persists_provider_priority_order(client, auth_headers):
-    import json as _json
-    from emuwarez_uploadrr.database import connect, db_path, init_db
-    resp = client.post(
-        "/api/setup/nomenclature",
-        json={"default_release_tag": "TAG", "provider_priority_order": ["NF", "AMZN", "DSNP"]},
-        headers=auth_headers,
-    )
-    assert resp.status_code == 200
-    conn = connect(db_path())
-    init_db(conn)
-    row = conn.execute("SELECT value FROM settings WHERE key = 'provider_priority_order'").fetchone()
-    assert _json.loads(row["value"]) == ["NF", "AMZN", "DSNP"]
-    conn.close()
-
-    settings_resp = client.get("/api/settings", headers=auth_headers)
-    assert settings_resp.json()["provider_priority_order"] == ["NF", "AMZN", "DSNP"]
-
-
-def test_setup_nomenclature_rejects_invalid_provider_code(client, auth_headers):
-    resp = client.post(
-        "/api/setup/nomenclature",
-        json={"default_release_tag": "TAG", "provider_priority_order": ["NOT_A_CODE"]},
-        headers=auth_headers,
-    )
-    assert resp.status_code == 400
-    assert "NOT_A_CODE" in resp.json()["detail"]
-
-
-def test_setup_nomenclature_rejects_duplicate_provider_codes(client, auth_headers):
-    resp = client.post(
-        "/api/setup/nomenclature",
-        json={"default_release_tag": "TAG", "provider_priority_order": ["AMZN", "AMZN"]},
-        headers=auth_headers,
-    )
-    assert resp.status_code == 400
-    assert "duplicados" in resp.json()["detail"]
-
-
-def test_setup_nomenclature_without_provider_priority_leaves_setting_untouched(client, auth_headers):
-    from emuwarez_uploadrr.database import connect, db_path, init_db
-    resp = client.post(
-        "/api/setup/nomenclature",
-        json={"default_release_tag": "TAG"},
-        headers=auth_headers,
-    )
-    assert resp.status_code == 200
-    conn = connect(db_path())
-    init_db(conn)
-    row = conn.execute("SELECT value FROM settings WHERE key = 'provider_priority_order'").fetchone()
-    conn.close()
-    # Untouched means either absent, or (if a prior test in this session set
-    # it) not overwritten by this call — either way this call must not have
-    # written an empty/garbage value.
-    if row is not None:
-        assert row["value"]
-
-
 # ---------------------------------------------------------------------------
 # Full flow — new step order end to end, including optional steps
 # ---------------------------------------------------------------------------
 
-def test_full_setup_flow_new_order_with_nomenclature(client, auth_headers):
+def test_full_setup_flow_new_order(client, auth_headers):
     client.post("/api/setup/emu", json={"api_key": "emu_key_e2e"}, headers=auth_headers)
     client.post(
         "/api/setup/instances",
@@ -194,11 +71,6 @@ def test_full_setup_flow_new_order_with_nomenclature(client, auth_headers):
         headers=auth_headers,
     )
     client.post("/api/setup/tmdb", json={"api_key": "tmdb_key_e2e"}, headers=auth_headers)
-    client.post(
-        "/api/setup/nomenclature",
-        json={"default_release_tag": "EMUWAREZ", "hardlink_base": "/data/uploads/emu"},
-        headers=auth_headers,
-    )
 
     complete_resp = client.post("/api/setup/complete", headers=auth_headers)
     assert complete_resp.status_code == 200

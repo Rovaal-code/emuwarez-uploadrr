@@ -4,12 +4,18 @@ Ports (does not rewrite) legacy.py::build_plan()'s `season_pack` branch to
 the modern service layer: each available episode gets its own individually
 correct nomenclature-adapted filename (reusing
 nomenclature.py::build_nomenclature_proposal() as-is — already computes
-real codec/audio/provider per Phases 6A/6E), but every episode is
-hardlinked into ONE shared season folder, and the pack gets ONE overall
+real codec/audio/provider per Phases 6A/6E), and the pack gets ONE overall
 title (using the first available episode's own metadata as representative,
 same as legacy). services/uploadrr_contract.py::build_uploadrr_emu_command()
 already supports this exact shape (season set, episode=None -> only
 `-season Sxx`, never `-episode`) — nothing there needs to change.
+
+A pack requires every available episode to already live in the same
+directory (the common Sonarr/Radarr convention: one folder per season) —
+that shared folder becomes the pack folder and each episode is renamed in
+place there, same technique nomenclature.py uses for a single file. There
+is no way to unify episodes scattered across different folders into one
+pack; the folder they already share IS the pack folder.
 
 The whole season is required to be consistent (same video/audio codec,
 audio/subtitle languages, resolution, source across every available
@@ -18,11 +24,11 @@ both are hard blocks, not warnings, since a mismatched or partial pack
 would be a broken release.
 
 SAFETY CONTRACT: identical to filesystem_apply.py — this module never
-renames/moves/deletes a source file. It only calls the existing generic
-build_safe_apply_plan()/apply_hardlink_plan() primitives once per episode.
-Confirmation-token gating for a REAL apply happens once, server-side, in
-services/upload_queue.py (same as the single-file nomenclature step) — this
-module has no confirmation token of its own.
+moves/deletes a source file, only renames it in place. It only calls the
+existing generic build_safe_rename_plan()/apply_rename_plan() primitives
+once per episode. Confirmation-token gating for a REAL apply happens once,
+server-side, in services/upload_queue.py (same as the single-file
+nomenclature step) — this module has no confirmation token of its own.
 """
 from __future__ import annotations
 
@@ -31,11 +37,10 @@ import threading
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from ..database import connect, get_setting_canonical, row_to_dict
+from ..database import connect, row_to_dict
 from ..models import LocalStatus
-from .filesystem_apply import apply_hardlink_plan, build_safe_apply_plan
+from .filesystem_apply import apply_rename_plan, build_safe_rename_plan
 from .nomenclature import (
-    _get_hardlink_base,
     _get_release_tag,
     build_nomenclature_proposal,
 )
@@ -159,8 +164,8 @@ def build_season_pack_plan(
 ) -> dict[str, Any]:
     """Build a dry-run plan for a season-pack upload. Never modifies the
     filesystem. Blocks (status="blocked") on: season not found, no episode
-    available, hardlinks disabled, incomplete season, or an
-    episode-vs-episode consistency mismatch — a season pack has no
+    available, episodes not all in the same folder, incomplete season, or
+    an episode-vs-episode consistency mismatch — a season pack has no
     "warning, upload anyway" state, unlike a single file.
 
     `source_override`/`provider_override` (set by the automated-upload
@@ -172,8 +177,7 @@ def build_season_pack_plan(
     try:
         empty = {
             "status": "blocked", "errors": [], "warnings": [],
-            "season_pack_title": None, "hardlink_base": None,
-            "hardlink_folder": None, "episodes": [],
+            "season_pack_title": None, "pack_folder": None, "episodes": [],
         }
 
         season = _get_season_row(season_id, conn=conn)
@@ -213,17 +217,11 @@ def build_season_pack_plan(
             empty["errors"] = errors
             return empty
 
-        # A season pack needs ONE shared destination folder. With hardlinks
-        # enabled that's hardlink_base/serie/pack — a NEW folder, works
-        # regardless of where each episode's source file lives. With
-        # hardlinks disabled (e.g. media on an SSHFS mount, cross-device
-        # hardlinks impossible — same reason a single file falls back to an
-        # in-place rename) there's no copy step available, so a pack can
-        # only work when every available episode ALREADY lives in the same
-        # directory (the common Sonarr/Radarr convention: one folder per
-        # season) — that shared folder becomes the pack folder and each
-        # episode is simply renamed in place, same technique the single-file
-        # path already uses when hardlinks are off.
+        # A season pack needs ONE shared destination folder: every available
+        # episode must already live in the same directory (the common
+        # Sonarr/Radarr convention: one folder per season) — that shared
+        # folder becomes the pack folder and each episode is renamed in
+        # place there, same technique the single-file path uses.
         # Radarr/Sonarr-reported paths (raw convention, e.g. /data/media/…)
         # need mapping to where this app actually reaches the file (e.g. an
         # SSHFS/NFS mount) for every real filesystem check/operation — same
@@ -235,35 +233,20 @@ def build_season_pack_plan(
             for e in available_episodes
         }
 
-        use_hardlinks = (get_setting_canonical(conn, "nomenclature.use_hardlinks") or "true") != "false"
-        mode = "hardlink"
-        hardlink_base: Optional[str] = None
-        common_dir: Optional[str] = None
-
-        if use_hardlinks:
-            hardlink_base = _get_hardlink_base(conn=conn)
-            if not hardlink_base:
-                errors.append("hardlink_base no configurado. Configura la ruta de subidas en ajustes.")
-                empty["errors"] = errors
-                return empty
-        else:
-            dirs = {os.path.dirname(p or "") for p in local_paths.values()}
-            dirs.discard("")
-            if len(dirs) == 1:
-                common_dir = next(iter(dirs))
-                if not os.access(common_dir, os.W_OK):
-                    errors.append(f"La carpeta de los episodios no es escribible: {common_dir}")
-                    empty["errors"] = errors
-                    return empty
-                mode = "rename"
-            else:
-                errors.append(
-                    "Los hardlinks están desactivados (Ajustes) y los episodios de esta temporada "
-                    "no están todos en la misma carpeta, así que no se puede unificar el pack. "
-                    "Actívalos, o mueve los episodios a una carpeta común."
-                )
-                empty["errors"] = errors
-                return empty
+        dirs = {os.path.dirname(p or "") for p in local_paths.values()}
+        dirs.discard("")
+        if len(dirs) != 1:
+            errors.append(
+                "Los episodios de esta temporada no están todos en la misma carpeta, así que no "
+                "se puede unificar el pack. Muévelos a una carpeta común."
+            )
+            empty["errors"] = errors
+            return empty
+        common_dir = next(iter(dirs))
+        if not os.access(common_dir, os.W_OK):
+            errors.append(f"La carpeta de los episodios no es escribible: {common_dir}")
+            empty["errors"] = errors
+            return empty
 
         # Per-episode proposals — reused as-is, already compute real
         # codec/audio/provider (Phases 6A/6E), not recomputed here. Progress
@@ -307,13 +290,9 @@ def build_season_pack_plan(
             release_tag=release_tag,
         )
 
-        if mode == "hardlink":
-            series_folder_name = f"{series_title} ({year})" if year else series_title
-            hardlink_folder = os.path.join(hardlink_base, series_folder_name, season_pack_title)
-        else:
-            # Rename-in-place: the episodes' own shared folder IS the pack
-            # folder, nothing gets copied anywhere.
-            hardlink_folder = common_dir
+        # Rename-in-place: the episodes' own shared folder IS the pack folder,
+        # nothing gets copied anywhere.
+        pack_folder = common_dir
 
         episodes_out = []
         for entry in episode_entries:
@@ -325,12 +304,12 @@ def build_season_pack_plan(
             ext = ""
             if source_path and os.path.isfile(source_path):
                 ext = os.path.splitext(source_path)[1]
-            destination_path = os.path.join(hardlink_folder, proposed_filename + ext)
-            # Only meaningful in "rename" mode: same raw dirname as the
-            # original (Radarr/Sonarr-reported) path — what library_items.path
-            # should be updated to after the in-place rename, mirroring
-            # nomenclature.py's raw_destination_path convention for a single
-            # file, so future path-mapping stays consistent.
+            destination_path = os.path.join(pack_folder, proposed_filename + ext)
+            # Same raw dirname as the original (Radarr/Sonarr-reported) path —
+            # what library_items.path should be updated to after the in-place
+            # rename, mirroring nomenclature.py's raw_destination_path
+            # convention for a single file, so future path-mapping stays
+            # consistent.
             raw_destination_path = (
                 os.path.join(os.path.dirname(raw_source_path), proposed_filename + ext)
                 if raw_source_path else None
@@ -353,14 +332,8 @@ def build_season_pack_plan(
             "errors": errors,
             "warnings": [],
             "season_pack_title": season_pack_title,
-            "hardlink_base": hardlink_base,
-            "hardlink_folder": hardlink_folder,
+            "pack_folder": pack_folder,
             "episodes": episodes_out,
-            # "hardlink" (new shared folder, hardlink_base/serie/pack) or
-            # "rename" (hardlinks disabled — episodes already share one
-            # folder, renamed in place there). Read by apply_season_hardlinks
-            # to pick the right filesystem primitive per episode.
-            "mode": mode,
             # Not part of the public API schema — used internally to build
             # the upload_jobs row's Uploadrr command once queued for real
             # (services/upload_queue.py's season branch).
@@ -385,35 +358,28 @@ def build_season_pack_plan(
             conn.close()
 
 
-def apply_season_hardlinks(season_id: int, conn, *, job_id: int | None = None) -> dict[str, Any]:
-    """Place every available episode at its final pack path AND record each
-    episode's prepared_path on its own library_items row — mirrors what
-    nomenclature.py::apply_nomenclature_proposal does for a single file right
-    after its own apply_hardlink_plan()/apply_rename_plan() call. Without
-    this UPDATE, mkv_remux._get_target_path (which reads library_items.
+def apply_season_pack(season_id: int, conn, *, job_id: int | None = None) -> dict[str, Any]:
+    """Rename every available episode in place to its final pack filename AND
+    record each episode's prepared_path on its own library_items row —
+    mirrors what nomenclature.py::apply_nomenclature_proposal does for a
+    single file right after its own apply_rename_plan() call. Without this
+    UPDATE, mkv_remux._get_target_path (which reads library_items.
     prepared_path) can't find the file at its new path, and the remux step
     that runs right after this one in upload_queue.py would either touch the
     original source file (breaks the never-touch-the-original contract) or
     fail to find anything to remux.
 
-    Uses whichever technique build_season_pack_plan() decided (plan["mode"]):
-    "hardlink" into a new shared folder, or "rename" each episode in place
-    when hardlinks are disabled but all episodes already share one folder.
     No confirmation-token gate here — the caller (upload_queue.py) already
     gates the whole prep sequence once, same as it does for a single file's
     apply_nomenclature_proposal call."""
-    from .filesystem_apply import apply_rename_plan, build_safe_rename_plan
-
     plan = build_season_pack_plan(season_id, conn=conn)
     if plan["status"] != "valid":
         return {
             "status": "blocked", "errors": plan["errors"], "episodes": [],
-            "hardlink_folder": plan.get("hardlink_folder"),
+            "pack_folder": plan.get("pack_folder"),
             "season_pack_title": plan.get("season_pack_title"),
         }
 
-    mode = plan.get("mode", "hardlink")
-    hardlink_base = plan["hardlink_base"]
     now = datetime.now(timezone.utc).isoformat()
     episode_results = []
     any_failed = False
@@ -426,12 +392,8 @@ def apply_season_hardlinks(season_id: int, conn, *, job_id: int | None = None) -
                 f"Aplicando nomenclatura: capítulo {ep.get('episode_number')} ({idx + 1}/{total})…",
                 stream="system", conn=conn,
             )
-        if mode == "hardlink":
-            file_plan = build_safe_apply_plan(ep["source_path"] or "", ep["destination_path"], hardlink_base)
-            result = apply_hardlink_plan(file_plan, dry_run=False)
-        else:
-            file_plan = build_safe_rename_plan(ep["source_path"] or "", ep["destination_path"])
-            result = apply_rename_plan(file_plan, dry_run=False)
+        file_plan = build_safe_rename_plan(ep["source_path"] or "", ep["destination_path"])
+        result = apply_rename_plan(file_plan, dry_run=False)
         episode_results.append({
             "episode_id": ep["episode_id"],
             "title": ep["title"],
@@ -441,31 +403,24 @@ def apply_season_hardlinks(season_id: int, conn, *, job_id: int | None = None) -
             "errors": result.get("errors", []),
         })
         if result["status"] == "applied":
-            if mode == "rename":
-                # The original file was moved (renamed in place) — `path`
-                # must follow it too (raw convention), same as
-                # nomenclature.py's single-file rename branch.
-                raw_dst = ep.get("raw_destination_path") or ep["destination_path"]
-                conn.execute(
-                    "UPDATE library_items SET path = ?, prepared_path = ?, "
-                    "nomenclature_applied_at = ?, nomenclature_status = 'Correcta' WHERE id = ?",
-                    (raw_dst, ep["destination_path"], now, ep["episode_id"]),
-                )
-            else:
-                conn.execute(
-                    "UPDATE library_items SET prepared_path = ?, nomenclature_applied_at = ?, "
-                    "nomenclature_status = 'Correcta' WHERE id = ?",
-                    (ep["destination_path"], now, ep["episode_id"]),
-                )
+            # The original file was moved (renamed in place) — `path` must
+            # follow it too (raw convention), same as nomenclature.py's
+            # single-file rename branch.
+            raw_dst = ep.get("raw_destination_path") or ep["destination_path"]
+            conn.execute(
+                "UPDATE library_items SET path = ?, prepared_path = ?, "
+                "nomenclature_applied_at = ?, nomenclature_status = 'Correcta' WHERE id = ?",
+                (raw_dst, ep["destination_path"], now, ep["episode_id"]),
+            )
         else:
             any_failed = True
     conn.commit()
 
     return {
         "status": "failed" if any_failed else "applied",
-        "errors": [] if not any_failed else ["Algunos episodios fallaron al hardlinkear. Ver episodes."],
+        "errors": [] if not any_failed else ["Algunos episodios fallaron al renombrar. Ver episodes."],
         "episodes": episode_results,
-        "hardlink_folder": plan["hardlink_folder"],
+        "pack_folder": plan["pack_folder"],
         "season_pack_title": plan.get("season_pack_title"),
         # Full field breakdown, for the job detail page's nomenclature
         # snapshot — mirrors what apply_nomenclature_proposal()'s "proposal"

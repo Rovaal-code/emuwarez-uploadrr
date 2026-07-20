@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 
 from emuwarez_uploadrr.database import connect, init_db
-from emuwarez_uploadrr.services.upload_execution import CONFIRMATION_TOKEN
+from emuwarez_uploadrr.services.upload_execution import CONFIRMATION_TOKEN, DELETE_CONFIRMATION_TOKEN
 
 
 @pytest.fixture
@@ -191,3 +191,48 @@ def test_cancel_without_token(client, db_conn):
     jid = _insert_job(db_conn)
     resp = client.post(f"/api/uploads/{jid}/cancel", json={})
     assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# POST /api/uploads/{id}/delete
+# ---------------------------------------------------------------------------
+
+def test_delete_without_auth(client, db_conn):
+    jid = _insert_job(db_conn, status="failed")
+    resp = client.post(f"/api/uploads/{jid}/delete", json={"confirmation": DELETE_CONFIRMATION_TOKEN})
+    assert resp.status_code == 401
+
+
+def test_delete_requires_confirmation_token(client, auth_headers, db_conn):
+    jid = _insert_job(db_conn, status="failed")
+    resp = client.post(f"/api/uploads/{jid}/delete", json={}, headers=auth_headers)
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["error"] == "confirmation_required"
+
+
+def test_delete_blocked_for_running_job(client, auth_headers, db_conn):
+    jid = _insert_job(db_conn, status="running")
+    resp = client.post(
+        f"/api/uploads/{jid}/delete", json={"confirmation": DELETE_CONFIRMATION_TOKEN}, headers=auth_headers
+    )
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["error"] == "invalid_status"
+
+
+def test_delete_not_found(client, auth_headers):
+    resp = client.post(
+        "/api/uploads/999/delete", json={"confirmation": DELETE_CONFIRMATION_TOKEN}, headers=auth_headers
+    )
+    assert resp.status_code == 404
+
+
+def test_delete_cancelled_job_ok(client, auth_headers, db_conn):
+    jid = _insert_job(db_conn, status="cancelled")
+    resp = client.post(
+        f"/api/uploads/{jid}/delete", json={"confirmation": DELETE_CONFIRMATION_TOKEN}, headers=auth_headers
+    )
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is True
+
+    get_resp = client.get(f"/api/uploads/{jid}", headers=auth_headers)
+    assert get_resp.status_code == 404

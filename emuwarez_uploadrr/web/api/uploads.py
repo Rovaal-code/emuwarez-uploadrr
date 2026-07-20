@@ -18,6 +18,7 @@ from ...services.upload_execution import (
     get_upload_job_artifacts,
     start_upload_job,
     cancel_upload_job,
+    delete_upload_job,
     retry_upload_job,
     compute_progress_phase,
 )
@@ -27,8 +28,10 @@ from ..schemas import (
     AutoUploadRequest,
     AutoUploadSourceCheckResponse,
     CommandPreviewResponse,
+    OkResponse,
     UploadArtifact,
     UploadArtifactsResponse,
+    UploadDeleteRequest,
     UploadJobDetail,
     UploadJobLog,
     UploadJobLogsResponse,
@@ -555,3 +558,22 @@ def cancel_upload(job_id: int, current_user: dict = Depends(require_auth)):
     with _get_conn() as conn:
         result = cancel_upload_job(job_id, conn=conn)
     return result
+
+
+@router.post("/uploads/{job_id}/delete", response_model=OkResponse)
+def delete_upload(
+    job_id: int,
+    body: UploadDeleteRequest,
+    current_user: dict = Depends(require_auth),
+):
+    with _get_conn() as conn:
+        result = delete_upload_job(job_id, confirmation=body.confirmation, conn=conn)
+
+    if not result.get("ok"):
+        status_code = 404 if result.get("error") == "not_found" else 400
+        raise HTTPException(
+            status_code=status_code,
+            detail={"message": result.get("message") or "No se pudo borrar la subida.", "error": result.get("error")},
+        )
+
+    return OkResponse(message=result.get("message", "Subida eliminada."))

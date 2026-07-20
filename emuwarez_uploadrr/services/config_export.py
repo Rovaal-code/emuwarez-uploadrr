@@ -13,7 +13,6 @@ SETTINGS_SCHEMA: dict[str, dict] = {
     "app_name": {"secret": False},
     "timezone": {"secret": False},
     "uploadrr_path": {"secret": False},
-    "hardlink_base": {"secret": False},
     "tmdb_api_key": {"secret": True},
     "tmdb_language": {"secret": False},
     "tmdb_region": {"secret": False},

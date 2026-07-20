@@ -25,17 +25,6 @@ def _insert_item(isolated_db, title="Test Movie", path=None, local_status="Dispo
     return item_id
 
 
-def _set_hardlink_base(isolated_db, base_path):
-    from emuwarez_uploadrr.database import connect
-    conn = connect(isolated_db / "emuwarez_uploadrr.db")
-    conn.execute(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES ('hardlink_base', ?)",
-        (str(base_path),),
-    )
-    conn.commit()
-    conn.close()
-
-
 # ---------------------------------------------------------------------------
 # Endpoint requires auth
 # ---------------------------------------------------------------------------
@@ -171,11 +160,8 @@ def test_get_nomenclature_operations_empty(client, auth_headers, isolated_db):
 def test_get_nomenclature_operations_after_dry_run(client, auth_headers, isolated_db, tmp_path):
     src = tmp_path / "film.mkv"
     src.write_bytes(b"data")
-    prepared = tmp_path / "prepared"
-    prepared.mkdir()
 
     item_id = _insert_item(isolated_db, title="Film", path=str(src))
-    _set_hardlink_base(isolated_db, prepared)
 
     client.post(
         f"/api/library/{item_id}/adapt-nomenclature",
@@ -192,21 +178,18 @@ def test_get_nomenclature_operations_after_dry_run(client, auth_headers, isolate
     assert len(ops) >= 1
     op = ops[0]
     assert op["dry_run"] is True
-    assert op["operation_type"] == "nomenclature_hardlink"
+    assert op["operation_type"] == "nomenclature_rename"
 
 
 # ---------------------------------------------------------------------------
 # Real apply via API with valid source
 # ---------------------------------------------------------------------------
 
-def test_adapt_nomenclature_real_apply_creates_hardlink(client, auth_headers, isolated_db, tmp_path):
+def test_adapt_nomenclature_real_apply_renames_file(client, auth_headers, isolated_db, tmp_path):
     src = tmp_path / "film.mkv"
     src.write_bytes(b"film data")
-    prepared = tmp_path / "prepared"
-    prepared.mkdir()
 
     item_id = _insert_item(isolated_db, title="Test Film", path=str(src))
-    _set_hardlink_base(isolated_db, prepared)
 
     from emuwarez_uploadrr.database import connect
     conn = connect(isolated_db / "emuwarez_uploadrr.db")
@@ -226,38 +209,17 @@ def test_adapt_nomenclature_real_apply_creates_hardlink(client, auth_headers, is
     body = r.json()
 
     if body["status"] == "applied":
+        dst = Path(body["destination_path"])
         assert body["destination_path"] is not None
-        assert Path(body["destination_path"]).exists()
-        # Same inode — hardlink
-        assert src.stat().st_ino == Path(body["destination_path"]).stat().st_ino
+        assert dst.exists()
+        # Renamed in place — same directory, original filename gone.
+        assert dst.parent == tmp_path
+        assert not src.exists()
 
         conn = connect(isolated_db / "emuwarez_uploadrr.db")
         row = conn.execute(
             "SELECT prepared_path, path FROM library_items WHERE id = ?", (item_id,)
         ).fetchone()
         assert row["prepared_path"] == body["destination_path"]
-        assert row["path"] == str(src)  # original path NEVER changed
+        assert row["path"] == body["destination_path"]  # `path` follows the rename
         conn.close()
-
-
-def test_adapt_nomenclature_original_path_never_modified(client, auth_headers, isolated_db, tmp_path):
-    src = tmp_path / "original.mkv"
-    src.write_bytes(b"original")
-    original_path = str(src)
-    prepared = tmp_path / "prepared"
-    prepared.mkdir()
-
-    item_id = _insert_item(isolated_db, title="Original", path=original_path)
-    _set_hardlink_base(isolated_db, prepared)
-
-    client.post(
-        f"/api/library/{item_id}/adapt-nomenclature",
-        json={"dry_run": False, "apply": True, "confirmation": "APLICAR_NOMENCLATURA"},
-        headers=auth_headers,
-    )
-
-    from emuwarez_uploadrr.database import connect
-    conn = connect(isolated_db / "emuwarez_uploadrr.db")
-    row = conn.execute("SELECT path FROM library_items WHERE id = ?", (item_id,)).fetchone()
-    assert row["path"] == original_path  # NEVER changed
-    conn.close()

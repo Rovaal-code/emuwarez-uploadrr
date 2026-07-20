@@ -46,16 +46,6 @@ export async function setupInstances(instances: SetupInstancePayload[]): Promise
   return results
 }
 
-export async function setupNomenclature(params: {
-  default_release_tag: string
-  hardlink_base?: string
-  use_hardlinks: boolean
-  confirmation?: string
-  provider_priority_order?: string[]
-}): Promise<OkResponse> {
-  return api.post<OkResponse>('/setup/nomenclature', params)
-}
-
 export async function setupComplete(): Promise<OkResponse> {
   return api.post<OkResponse>('/setup/complete')
 }

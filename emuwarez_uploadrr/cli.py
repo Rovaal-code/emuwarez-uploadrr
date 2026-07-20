@@ -230,7 +230,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_nom_preview.add_argument("--force", action="store_true", help="Forzar regeneración aunque ya exista propuesta")
     p_nom_show = nom_sub.add_parser("show", help="Mostrar última propuesta de nomenclatura")
     p_nom_show.add_argument("id", type=int, help="ID del library_item")
-    p_nom_apply = nom_sub.add_parser("apply", help="Adaptar nomenclatura creando hardlink preparado")
+    p_nom_apply = nom_sub.add_parser("apply", help="Adaptar nomenclatura renombrando el archivo original")
     p_nom_apply.add_argument("id", type=int, help="ID del library_item")
     p_nom_apply.add_argument("--dry-run", action="store_true", help="Solo previsualización (no escribe nada)")
     p_nom_apply.add_argument("--apply", action="store_true", dest="nom_apply", help="Aplicar cambios reales")
@@ -1593,9 +1593,10 @@ def cmd_web_info() -> int:
         "  URL:      http://localhost:9494\n"
         "  Config:   /config  (montar como volumen persistente)\n"
         "  Uploadrr: /opt/Uploadrr  (bind mount externo, no incluido en imagen)\n"
-        "  Hardlink base recomendada: /data/uploads/emu\n"
-        "  Advertencia: media y hardlink_base deben estar en el mismo filesystem\n"
-        "               para evitar error EXDEV en creación de hardlinks."
+        "  Media:    monta tu biblioteca en el contenedor (p. ej. -v /mnt/storage:/data,\n"
+        "            igual que Radarr/Sonarr) y configura esa misma ruta en\n"
+        "            Ajustes > uploadrr_allowed_roots — sin ella, las subidas\n"
+        "            reales se bloquean."
     )
     return 0
 

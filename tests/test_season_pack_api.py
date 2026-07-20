@@ -9,11 +9,6 @@ from emuwarez_uploadrr.database import connect
 
 def _seed_season_with_episode(isolated_db, tmp_path):
     conn = connect(isolated_db / "emuwarez_uploadrr.db")
-    conn.execute(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES ('hardlink_base', ?)",
-        (str(tmp_path / "prepared"),),
-    )
-    (tmp_path / "prepared").mkdir(exist_ok=True)
     cur = conn.execute(
         """INSERT INTO library_items (item_type, title, year, local_status, request_status, nomenclature_status, updated_at)
            VALUES ('series', 'One Piece', 1999, 'Parcial', 'Sin petición', 'N/A', CURRENT_TIMESTAMP)"""
@@ -56,7 +51,7 @@ def test_pack_preview_valid(client, auth_headers, isolated_db, tmp_path):
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "valid"
-    assert data["mode"] == "hardlink"
+    assert data["pack_folder"] == str(tmp_path)
     assert len(data["episodes"]) == 1
     assert data["season_pack_title"].startswith("One Piece S01")
 

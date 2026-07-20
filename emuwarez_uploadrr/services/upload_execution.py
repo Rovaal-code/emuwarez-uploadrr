@@ -49,6 +49,7 @@ from .uploadrr_config_staging import (
 logger = logging.getLogger("emuwarez.upload")
 
 CONFIRMATION_TOKEN = "INICIAR_UPLOADRR"
+DELETE_CONFIRMATION_TOKEN = "BORRAR_SUBIDA"
 
 # Phase 10F: approximate progress phases surfaced to the UI (string label
 # only). Numeric per-phase percentages are tracked separately in
@@ -1419,8 +1420,69 @@ def cancel_upload_job(job_id: int, conn=None) -> dict:
             conn.close()
 
 
+def delete_upload_job(job_id: int, confirmation: str | None = None, conn=None) -> dict:
+    """Permanently remove a job and everything registered about it (logs,
+    artifacts) — never the real media file, which lives in Radarr/Sonarr's own
+    library and this app never touches.
+
+    Only allowed for a terminal, non-retryable-source status: 'cancelled' or
+    'failed'. A job still queued/staging/preparing/running has to be cancelled
+    first (there's a live subprocess/timer to stop, which this never does).
+    A job that has a later retry pointing at it (retry_of_job_id) is also
+    refused — deleting it would orphan that retry's place in the chain shown
+    in the UI.
+    """
+    own = conn is None
+    conn = conn or _get_db_conn()
+    try:
+        job = get_upload_job(job_id, conn=conn)
+        if not job:
+            return {"ok": False, "error": "not_found", "message": f"Job {job_id} no encontrado.", "job_id": job_id}
+
+        if confirmation != DELETE_CONFIRMATION_TOKEN:
+            return {
+                "ok": False,
+                "error": "confirmation_required",
+                "message": f"Confirmación requerida: {DELETE_CONFIRMATION_TOKEN}",
+                "job_id": job_id,
+            }
+
+        status = job.get("status", "")
+        if status not in ("cancelled", "failed"):
+            return {
+                "ok": False,
+                "error": "invalid_status",
+                "message": f"Solo se pueden borrar subidas canceladas o fallidas (status={status}).",
+                "job_id": job_id,
+            }
+
+        newer_retry = conn.execute(
+            "SELECT id FROM upload_jobs WHERE retry_of_job_id = ? LIMIT 1", (job_id,)
+        ).fetchone()
+        if newer_retry:
+            return {
+                "ok": False,
+                "error": "has_retry",
+                "message": "No se puede borrar: existe un reintento posterior basado en esta subida. Bórralo primero.",
+                "job_id": job_id,
+            }
+
+        conn.execute("DELETE FROM upload_artifacts WHERE upload_job_id = ?", (job_id,))
+        conn.execute("DELETE FROM upload_job_logs WHERE upload_job_id = ?", (job_id,))
+        conn.execute("UPDATE filesystem_operations SET upload_job_id = NULL WHERE upload_job_id = ?", (job_id,))
+        conn.execute("UPDATE operational_queue_items SET upload_job_id = NULL WHERE upload_job_id = ?", (job_id,))
+        conn.execute("DELETE FROM upload_jobs WHERE id = ?", (job_id,))
+        conn.commit()
+
+        return {"ok": True, "message": "Subida eliminada.", "job_id": job_id}
+    finally:
+        if own:
+            conn.close()
+
+
 __all__ = [
     "CONFIRMATION_TOKEN",
+    "DELETE_CONFIRMATION_TOKEN",
     "PROGRESS_PHASES",
     "compute_progress_phase",
     "redact_secrets",
@@ -1435,6 +1497,7 @@ __all__ = [
     "create_upload_artifact",
     "get_upload_job_artifacts",
     "cancel_upload_job",
+    "delete_upload_job",
     "mark_phase_started",
     "mark_phase_done",
     "update_phase_progress",

@@ -264,24 +264,6 @@ class SetupInstanceRequest(BaseModel):
         return v.strip()
 
 
-class SetupNomenclatureRequest(BaseModel):
-    """Phase 11C — upload tag + hardlink strategy step.
-
-    use_hardlinks=False requires the exact confirmation token
-    (NOMENCLATURE_DISABLE_HARDLINKS_TOKEN = 'DESACTIVAR_HARDLINKS') — the
-    endpoint validates this, not this schema, so the error message can
-    reference the constant directly.
-    """
-    default_release_tag: str = "EMUWAREZ"
-    hardlink_base: Optional[str] = None
-    use_hardlinks: bool = True
-    confirmation: Optional[str] = None
-    # Optional — same setting as Settings > Nomenclatura, offered during setup
-    # too (Phase 2 of the 12-part batch). Validated in web/api/setup.py against
-    # the same _VALID_PROVIDER_CODES used by web/api/settings.py.
-    provider_priority_order: Optional[list[str]] = None
-
-
 # ---------------------------------------------------------------------------
 # Settings / secrets
 # ---------------------------------------------------------------------------
@@ -839,10 +821,6 @@ class NomenclatureProposalResponse(BaseModel):
     errors: list[str] = []
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
-    # Phase 6D — lets the frontend skip a wasted preview round-trip: hide
-    # the hardlink section outright when hardlink_base isn't configured,
-    # instead of only finding out after clicking "Previsualizar".
-    hardlink_configured: bool = False
 
 
 class NomenclatureExistsResponse(BaseModel):
@@ -859,7 +837,6 @@ class AdaptNomenclatureBody(BaseModel):
     dry_run: bool = True
     apply: bool = False
     confirmation: Optional[str] = None
-    overwrite: bool = False
     proposal_id: Optional[int] = None
 
 
@@ -895,15 +872,11 @@ class SeasonPackPlanResponse(BaseModel):
     errors: list[str] = []
     warnings: list[str] = []
     season_pack_title: Optional[str] = None
-    hardlink_base: Optional[str] = None
-    hardlink_folder: Optional[str] = None
+    pack_folder: Optional[str] = None
     episodes: list[SeasonPackEpisodePlan] = []
     # Resolved provider (filename-detected across episodes, or the single
     # TMDb fallback when none revealed one and source is WEB-DL).
     provider: Optional[str] = None
-    # "hardlink" (new shared folder) or "rename" (hardlinks disabled but all
-    # episodes already share one folder — renamed in place there).
-    mode: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -1080,6 +1053,10 @@ class UploadArtifactsResponse(BaseModel):
 class UploadRetryRequest(BaseModel):
     dry_run: bool = True
     start: bool = False
+    confirmation: Optional[str] = None
+
+
+class UploadDeleteRequest(BaseModel):
     confirmation: Optional[str] = None
 
 

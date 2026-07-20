@@ -989,8 +989,8 @@ def _migrate_settings_phase10e(conn: sqlite3.Connection) -> None:
     Defaults are conservative and require operator review: python_path
     assumes the Docker image layout (/usr/local/bin/python); host/manual
     deployments must override it with the path to Uploadrr-EMU's own venv.
-    allowed_roots starts empty, which means "fall back to hardlink_base"
-    (see services/uploadrr_contract.py::get_allowed_roots).
+    allowed_roots starts empty, which means real uploads fail closed until
+    it's configured in Settings (see services/uploadrr_contract.py::get_allowed_roots).
     """
     defaults = [
         ("uploadrr.runtime_type", "uploadrr_emu", 0),

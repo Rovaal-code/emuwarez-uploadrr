@@ -32,90 +32,6 @@ def _set_checks_progress(item_id: int, *, checks: list[dict], done: bool = False
         _CHECKS_PROGRESS[item_id] = {"checks": list(checks), "done": done, "ready": ready}
 
 
-def _test_hardlink(path: str, hardlink_base: Optional[str]) -> tuple[bool, str]:
-    target_dir = hardlink_base or os.path.dirname(path)
-    if not target_dir or not os.path.isdir(target_dir):
-        return False, f"El directorio de hardlinks no existe: {target_dir or '(sin ruta)'}"
-    if not os.access(target_dir, os.W_OK):
-        return False, f"Sin permiso de escritura en {target_dir}"
-    link = os.path.join(target_dir, f".emuwarez_hltest_{os.getpid()}")
-    try:
-        if os.path.exists(link):
-            os.remove(link)
-        os.link(path, link)
-        os.remove(link)
-        return True, f"Se puede crear un hardlink en {target_dir}"
-    except OSError as exc:
-        try:
-            os.remove(link)
-        except OSError:
-            pass
-        return False, f"No se pudo crear el hardlink en {target_dir}: {exc}"
-
-
-def probe_hardlink_dir(base_dir: Optional[str]) -> tuple[bool, str]:
-    """Settings-time hardlink test: verify a directory can hold hardlinks by
-    creating a temp file there and hardlinking it (same-filesystem + writable).
-    Cleans up both files. Used by the 'Probar hardlink' button in Ajustes."""
-    if not base_dir or not base_dir.strip():
-        return False, "No has indicado ninguna ruta base para hardlinks"
-    base = base_dir.strip()
-    if not os.path.isdir(base):
-        return False, f"El directorio no existe: {base}"
-    if not os.access(base, os.W_OK):
-        return False, f"Sin permiso de escritura en {base}"
-    src = os.path.join(base, f".emuwarez_hlsrc_{os.getpid()}")
-    link = os.path.join(base, f".emuwarez_hltest_{os.getpid()}")
-    try:
-        with open(src, "wb") as fh:
-            fh.write(b"emuwarez hardlink test")
-        os.link(src, link)
-        ok = os.path.exists(link)
-        return ok, (f"Hardlinks funcionan en {base}" if ok
-                    else f"No se pudo crear el hardlink en {base}")
-    except OSError as exc:
-        return False, f"No se pudo crear el hardlink en {base}: {exc}"
-    finally:
-        for p in (link, src):
-            try:
-                os.remove(p)
-            except OSError:
-                pass
-
-
-def probe_hardlink_for_library(base_dir: Optional[str], conn) -> tuple[bool, str]:
-    """Settings-time gate for ENABLING hardlinks: the base must support hardlinks
-    (probe_hardlink_dir) AND live on the same filesystem as the media, because a
-    hardlink can't cross filesystems. Samples a real library file and compares
-    st_dev — catches the common case of media on an SSHFS/NFS mount with a
-    hardlink_base on the local disk."""
-    ok, msg = probe_hardlink_dir(base_dir)
-    if not ok or not base_dir:
-        return ok, msg
-    try:
-        from .path_mapping import resolve_local_path
-        row = conn.execute(
-            "SELECT path FROM library_items WHERE path IS NOT NULL AND path <> '' "
-            "AND local_status = 'Disponible' AND item_type IN ('movie', 'episode') LIMIT 1"
-        ).fetchone()
-        raw = row["path"] if row else None
-        if raw:
-            media_local = resolve_local_path(raw, conn=conn) or raw
-            media_dir = os.path.dirname(media_local)
-            if os.path.isdir(media_dir):
-                if os.stat(base_dir.strip()).st_dev != os.stat(media_dir).st_dev:
-                    return False, (
-                        "La ruta de hardlinks está en un sistema de ficheros distinto al de tu "
-                        f"biblioteca ({media_dir}). Los hardlinks no pueden cruzar sistemas de "
-                        "ficheros: elige una carpeta dentro de la misma unidad que tu media, o "
-                        "desactiva los hardlinks (se renombrará el archivo original)."
-                    )
-    except Exception:
-        # Best-effort: if we can't sample the media, fall back to the base probe.
-        pass
-    return True, msg
-
-
 def run_upload_checks(conn: sqlite3.Connection, item_id: int) -> dict:
     from .library import get_library_item
     from .integration_tests import test_qbit_connection, test_emuwarez_connection
@@ -165,18 +81,17 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int) -> dict:
 
     if item.get("item_type") == "season":
         # A season has no `path` of its own — only its episodes do — so the
-        # generic single-file "renameable"/"hardlink" checks below don't
+        # generic single-file "renameable" check below doesn't
         # apply. build_season_pack_plan() already covers everything relevant
         # here in one pass — completeness, per-episode consistency, and
-        # whether a shared pack folder is achievable (hardlink into a new
-        # folder, or rename in place when hardlinks are off and episodes
-        # already share one folder) — so it's reused as the single season
-        # check instead of re-deriving pieces of it.
+        # whether a shared pack folder is achievable (every available episode
+        # must already live in the same folder) — so it's reused as the
+        # single season check instead of re-deriving pieces of it.
         from .season_pack import build_season_pack_plan
         plan = build_season_pack_plan(item_id, conn=conn)
         ok = plan["status"] == "valid"
         msg = "; ".join(plan["errors"]) if not ok else (
-            f"Pack listo: {len(plan['episodes'])} episodio(s) → {plan.get('hardlink_folder')}"
+            f"Pack listo: {len(plan['episodes'])} episodio(s) → {plan.get('pack_folder')}"
         )
         if not add("season_pack", "Se puede preparar el pack de temporada",
                    "No se puede preparar el pack de temporada", ok, msg):
@@ -199,26 +114,14 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int) -> dict:
                    parent or (path or "El elemento no tiene ruta de archivo")):
             return done()
 
-        # 2. Hardlink — only when hardlinks are configured; otherwise skipped (yellow).
-        use_hardlinks = (get_setting_canonical(conn, "nomenclature.use_hardlinks") or "true") != "false"
-        hl_base = get_setting_canonical(conn, "hardlink_base")
-        if not use_hardlinks:
-            add_skip("hardlink", "Hardlinks desactivados (se omite)", "Actívalos en Ajustes si quieres usarlos")
-        elif not (hl_base and hl_base.strip()):
-            add_skip("hardlink", "Hardlinks sin configurar (se omite)", "Configura la ruta base en Ajustes")
-        else:
-            ok, msg = _test_hardlink(local_path, hl_base)
-            if not add("hardlink", "Se puede crear el hardlink", "No se puede crear el hardlink", ok, msg):
-                return done()
-
-    # 3. Output directory writable — where Uploadrr stages the .torrent + images.
+    # 2. Output directory writable — where Uploadrr stages the .torrent + images.
     out_dir = get_setting_canonical(conn, "uploadrr.path")
     if not add("output", "Directorio de salida escribible", "Directorio de salida no escribible",
                bool(out_dir) and os.path.isdir(out_dir) and os.access(out_dir, os.W_OK),
                out_dir or "uploadrr.path no configurado"):
         return done()
 
-    # 4. qBittorrent — WebUI login; skipped (yellow) when it isn't configured.
+    # 3. qBittorrent — WebUI login; skipped (yellow) when it isn't configured.
     qbit_url = get_setting_canonical(conn, "qbit.url")
     if not (qbit_url and qbit_url.strip()):
         add_skip("qbittorrent", "qBittorrent sin configurar (se omite)",
@@ -229,7 +132,7 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int) -> dict:
                    bool(r.get("ok")), r.get("message", "")):
             return done()
 
-    # 5. Image hosts — at least one reachable (imgbox tried last).
+    # 4. Image hosts — at least one reachable (imgbox tried last).
     reachable = None
     for host in fallback_order(conn):
         if test_image_host(host, get_host_key(conn, host)).get("ok"):
@@ -241,7 +144,7 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int) -> dict:
                f"Responde: {label}" if reachable else "Ningún host de imágenes responde"):
         return done()
 
-    # 6. eMuwarez — last, so we don't hit it unless everything else passed.
+    # 5. eMuwarez — last, so we don't hit it unless everything else passed.
     r = test_emuwarez_connection(conn=conn)
     add("emuwarez", "eMuwarez disponible", "eMuwarez no disponible", bool(r.get("ok")), r.get("message", ""))
     return done()

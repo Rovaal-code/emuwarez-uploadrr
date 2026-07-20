@@ -1,9 +1,9 @@
 """Tests for services/season_pack.py — one season-pack release for a whole
 Temporada, ported from legacy.py::build_plan()'s season_pack branch, now
 extended with: live progress, blocking (not warning) on an incomplete
-season, cross-episode consistency validation, a rename-in-place fallback
-when hardlinks are disabled but every episode already shares one folder,
-and the per-episode read views (names/mediainfo/remux) backing the wizard.
+season, cross-episode consistency validation, a rename-in-place technique
+requiring every episode to already share one folder, and the per-episode
+read views (names/mediainfo/remux) backing the wizard.
 
 conftest.py provides isolated_db (autouse) pointing CONFIG_DIR to a tmp dir.
 """
@@ -12,7 +12,7 @@ from __future__ import annotations
 from emuwarez_uploadrr.database import init_db, connect
 from emuwarez_uploadrr.services.season_pack import (
     build_season_pack_plan,
-    apply_season_hardlinks,
+    apply_season_pack,
     get_season_plan_progress,
     get_season_episode_names,
     get_season_episode_mediainfo,
@@ -32,22 +32,6 @@ def _open(isolated_db):
     conn = connect(_db(isolated_db))
     init_db(conn)
     return conn
-
-
-def _set_hardlink_base(conn, base_path):
-    conn.execute(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES ('hardlink_base', ?)",
-        (str(base_path),),
-    )
-    conn.commit()
-
-
-def _set_use_hardlinks(conn, enabled: bool):
-    conn.execute(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES ('nomenclature.use_hardlinks', ?)",
-        ("true" if enabled else "false",),
-    )
-    conn.commit()
 
 
 def _seed_series_season(conn, *, series_title="One Piece", year=1999):
@@ -98,9 +82,6 @@ def test_plan_not_found(isolated_db):
 
 def test_plan_blocked_no_available_episodes(isolated_db, tmp_path):
     conn = _open(isolated_db)
-    prepared = tmp_path / "prepared"
-    prepared.mkdir()
-    _set_hardlink_base(conn, prepared)
     _series_id, season_id = _seed_series_season(conn)
     _seed_episode(conn, season_id, number=1, title="One Piece S01E01", available=False)
     plan = build_season_pack_plan(season_id, conn=conn)
@@ -113,9 +94,6 @@ def test_plan_blocks_on_partial_season(isolated_db, tmp_path):
     # An incomplete season is a hard block now, not a warning — silently
     # uploading a partial season as if it were the whole thing is wrong.
     conn = _open(isolated_db)
-    prepared = tmp_path / "prepared"
-    prepared.mkdir()
-    _set_hardlink_base(conn, prepared)
     _series_id, season_id = _seed_series_season(conn)
     src1 = tmp_path / "S01E01.mkv"
     src1.write_bytes(b"video")
@@ -129,24 +107,8 @@ def test_plan_blocks_on_partial_season(isolated_db, tmp_path):
     conn.close()
 
 
-def test_plan_blocked_without_hardlink_base(isolated_db, tmp_path):
-    conn = _open(isolated_db)
-    _series_id, season_id = _seed_series_season(conn)
-    src = tmp_path / "S01E01.mkv"
-    src.write_bytes(b"video")
-    _seed_episode(conn, season_id, number=1, title="One Piece S01E01", path=str(src), quality="WEBDL-1080p")
-    plan = build_season_pack_plan(season_id, conn=conn)
-    assert plan["status"] == "blocked"
-    assert any("hardlink_base" in e for e in plan["errors"])
-    assert plan.get("mode") is None
-    conn.close()
-
-
 def test_plan_full_season_all_episodes_present(isolated_db, tmp_path):
     conn = _open(isolated_db)
-    prepared = tmp_path / "prepared"
-    prepared.mkdir()
-    _set_hardlink_base(conn, prepared)
     _series_id, season_id = _seed_series_season(conn)
     for i in (1, 2):
         src = tmp_path / f"S01E0{i}.mkv"
@@ -156,10 +118,10 @@ def test_plan_full_season_all_episodes_present(isolated_db, tmp_path):
     plan = build_season_pack_plan(season_id, conn=conn)
 
     assert plan["status"] == "valid"
-    assert plan["mode"] == "hardlink"
     assert len(plan["episodes"]) == 2
     assert plan["season_pack_title"].startswith("One Piece S01")
-    assert plan["hardlink_folder"].startswith(str(prepared))
+    # All available episodes already share tmp_path — that becomes the pack folder.
+    assert plan["pack_folder"] == str(tmp_path)
     # Each episode gets its own individually-named destination inside the
     # SAME shared season folder — not the season pack title verbatim.
     folders = {ep["destination_path"].rsplit("/", 1)[0] for ep in plan["episodes"]}
@@ -171,9 +133,6 @@ def test_plan_full_season_all_episodes_present(isolated_db, tmp_path):
 
 def test_plan_blocks_on_codec_mismatch(isolated_db, tmp_path):
     conn = _open(isolated_db)
-    prepared = tmp_path / "prepared"
-    prepared.mkdir()
-    _set_hardlink_base(conn, prepared)
     _series_id, season_id = _seed_series_season(conn)
     src1 = tmp_path / "S01E01.mkv"
     src1.write_bytes(b"video")
@@ -191,12 +150,11 @@ def test_plan_blocks_on_codec_mismatch(isolated_db, tmp_path):
     conn.close()
 
 
-def test_plan_rename_mode_when_hardlinks_off_and_shared_folder(isolated_db, tmp_path):
-    # Hardlinks disabled but every available episode already lives in the
-    # same folder (the common Sonarr/Radarr convention) — the pack still
-    # works, renaming each episode in place instead of hardlinking.
+def test_plan_valid_when_shared_folder(isolated_db, tmp_path):
+    # Every available episode already lives in the same folder (the common
+    # Sonarr/Radarr convention) — the pack works, renaming each episode in
+    # place there.
     conn = _open(isolated_db)
-    _set_use_hardlinks(conn, False)
     _series_id, season_id = _seed_series_season(conn)
     season_dir = tmp_path / "Season 1"
     season_dir.mkdir()
@@ -208,15 +166,12 @@ def test_plan_rename_mode_when_hardlinks_off_and_shared_folder(isolated_db, tmp_
     plan = build_season_pack_plan(season_id, conn=conn)
 
     assert plan["status"] == "valid"
-    assert plan["mode"] == "rename"
-    assert plan["hardlink_folder"] == str(season_dir)
-    assert plan["hardlink_base"] is None
+    assert plan["pack_folder"] == str(season_dir)
     conn.close()
 
 
-def test_plan_blocked_when_hardlinks_off_and_episodes_scattered(isolated_db, tmp_path):
+def test_plan_blocked_when_episodes_scattered(isolated_db, tmp_path):
     conn = _open(isolated_db)
-    _set_use_hardlinks(conn, False)
     _series_id, season_id = _seed_series_season(conn)
     dir1 = tmp_path / "dir1"; dir1.mkdir()
     dir2 = tmp_path / "dir2"; dir2.mkdir()
@@ -234,9 +189,6 @@ def test_plan_blocked_when_hardlinks_off_and_episodes_scattered(isolated_db, tmp
 
 def test_plan_progress_reaches_total(isolated_db, tmp_path):
     conn = _open(isolated_db)
-    prepared = tmp_path / "prepared"
-    prepared.mkdir()
-    _set_hardlink_base(conn, prepared)
     _series_id, season_id = _seed_series_season(conn)
     for i in (1, 2, 3):
         src = tmp_path / f"S01E0{i}.mkv"
@@ -252,60 +204,23 @@ def test_plan_progress_reaches_total(isolated_db, tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# apply_season_hardlinks
+# apply_season_pack
 # ---------------------------------------------------------------------------
 
-def test_apply_hardlinks_creates_files_and_sets_prepared_path(isolated_db, tmp_path):
-    conn = _open(isolated_db)
-    prepared = tmp_path / "prepared"
-    prepared.mkdir()
-    _set_hardlink_base(conn, prepared)
-    _series_id, season_id = _seed_series_season(conn)
-    sources = []
-    ep_ids = []
-    for i in (1, 2):
-        src = tmp_path / f"S01E0{i}.mkv"
-        src.write_bytes(f"video {i}".encode())
-        sources.append(src)
-        ep_ids.append(_seed_episode(conn, season_id, number=i, title=f"One Piece S01E0{i}", path=str(src), quality="WEBDL-1080p"))
-
-    result = apply_season_hardlinks(season_id, conn)
-
-    assert result["status"] == "applied"
-    assert len(result["episodes"]) == 2
-    created_files = list(prepared.rglob("*.mkv"))
-    assert len(created_files) == 2
-    # All in the SAME shared season folder.
-    assert len({f.parent for f in created_files}) == 1
-    # Originals never modified.
-    for src in sources:
-        assert src.exists()
-    # Each episode's prepared_path now points at its hardlinked copy — this
-    # is what mkv_remux._get_target_path needs to find the right file for
-    # the remux step that runs right after this one in upload_queue.py.
-    for ep_id in ep_ids:
-        row = conn.execute("SELECT prepared_path, nomenclature_status FROM library_items WHERE id = ?", (ep_id,)).fetchone()
-        assert row["prepared_path"] is not None
-        assert row["prepared_path"] in [str(f) for f in created_files]
-        assert row["nomenclature_status"] == "Correcta"
-    conn.close()
-
-
-def test_apply_hardlinks_blocked_when_plan_invalid(isolated_db, tmp_path):
+def test_apply_pack_blocked_when_plan_invalid(isolated_db, tmp_path):
     conn = _open(isolated_db)
     _series_id, season_id = _seed_series_season(conn)
     _seed_episode(conn, season_id, number=1, title="One Piece S01E01", available=False)
 
-    result = apply_season_hardlinks(season_id, conn)
+    result = apply_season_pack(season_id, conn)
 
     assert result["status"] == "blocked"
     assert result["episodes"] == []
     conn.close()
 
 
-def test_apply_rename_mode_moves_files_in_place_and_updates_path(isolated_db, tmp_path):
+def test_apply_pack_renames_files_in_place_and_updates_path(isolated_db, tmp_path):
     conn = _open(isolated_db)
-    _set_use_hardlinks(conn, False)
     _series_id, season_id = _seed_series_season(conn)
     season_dir = tmp_path / "Season 1"
     season_dir.mkdir()
@@ -315,15 +230,16 @@ def test_apply_rename_mode_moves_files_in_place_and_updates_path(isolated_db, tm
         src.write_bytes(b"video")
         ep_ids.append(_seed_episode(conn, season_id, number=i, title=f"One Piece S01E0{i}", path=str(src), quality="WEBDL-1080p"))
 
-    result = apply_season_hardlinks(season_id, conn)
+    result = apply_season_pack(season_id, conn)
 
     assert result["status"] == "applied"
     renamed_files = list(season_dir.glob("*.mkv"))
     assert len(renamed_files) == 2  # originals renamed in place, none duplicated
     for ep_id in ep_ids:
-        row = conn.execute("SELECT path, prepared_path FROM library_items WHERE id = ?", (ep_id,)).fetchone()
+        row = conn.execute("SELECT path, prepared_path, nomenclature_status FROM library_items WHERE id = ?", (ep_id,)).fetchone()
         assert row["path"] in [str(f) for f in renamed_files]
         assert row["prepared_path"] == row["path"]
+        assert row["nomenclature_status"] == "Correcta"
     conn.close()
 
 

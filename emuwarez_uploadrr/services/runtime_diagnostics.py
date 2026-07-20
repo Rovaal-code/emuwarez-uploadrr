@@ -73,29 +73,40 @@ def check_uploadrr_mount() -> dict:
     )
 
 
-def check_hardlink_base_setting() -> dict:
-    """Verifica si hardlink_base está configurado en settings (sin secretos)."""
+def check_allowed_roots_setting() -> dict:
+    """Verifica si uploadrr.allowed_roots está configurado en settings (sin
+    secretos) — sin él, las subidas reales se bloquean (ver
+    services/uploadrr_contract.py::get_allowed_roots)."""
     try:
         config_dir = os.environ.get("CONFIG_DIR", str(Path.home() / ".config" / "emuwarez-renamer"))
         db_path = Path(config_dir) / "emuwarez_uploadrr.db"
         if not db_path.exists():
-            return _check("hardlink_base", "warning", "BD no existe aún, hardlink_base no configurado", {})
+            return _check("allowed_roots", "warning", "BD no existe aún, uploadrr.allowed_roots no configurado", {})
         conn = sqlite3.connect(str(db_path))
-        row = conn.execute("SELECT value FROM settings WHERE key='hardlink_base' LIMIT 1").fetchone()
+        row = conn.execute("SELECT value FROM settings WHERE key='uploadrr.allowed_roots' LIMIT 1").fetchone()
         conn.close()
         if row and row[0]:
-            hb_path = Path(row[0])
-            exists = hb_path.exists()
-            suffix = "" if exists else " (directorio no existe)"
-            return _check(
-                "hardlink_base",
-                "ok" if exists else "warning",
-                f"hardlink_base configurado: {row[0]}{suffix}",
-                {"exists": exists},
-            )
-        return _check("hardlink_base", "warning", "hardlink_base no configurado (configurable en setup)", {})
+            import json as _json
+            try:
+                roots = [r for r in _json.loads(row[0]) if r]
+            except Exception:
+                roots = []
+            if roots:
+                missing = [r for r in roots if not Path(r).exists()]
+                if missing:
+                    return _check(
+                        "allowed_roots", "warning",
+                        f"uploadrr.allowed_roots configurado, pero no existe: {', '.join(missing)}",
+                        {"roots": roots},
+                    )
+                return _check("allowed_roots", "ok", f"uploadrr.allowed_roots configurado: {', '.join(roots)}", {"roots": roots})
+        return _check(
+            "allowed_roots", "warning",
+            "uploadrr.allowed_roots no configurado — las subidas reales se bloquearán hasta configurarlo en Ajustes",
+            {},
+        )
     except Exception:
-        return _check("hardlink_base", "warning", "No se pudo leer hardlink_base de la BD", {})
+        return _check("allowed_roots", "warning", "No se pudo leer uploadrr.allowed_roots de la BD", {})
 
 
 def check_environment() -> dict:
@@ -236,7 +247,7 @@ def get_runtime_diagnostics() -> dict:
         check_database_path(),
         check_frontend_dist(),
         check_uploadrr_mount(),
-        check_hardlink_base_setting(),
+        check_allowed_roots_setting(),
         check_required_secrets(),
         check_arr_instances_configuration(),
         check_arr_health_configuration(),

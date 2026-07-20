@@ -5,7 +5,6 @@ POST /api/setup/admin          — create first admin user (public — only befo
 POST /api/setup/tmdb           — TMDb API key (requires auth)
 POST /api/setup/emu            — eMuwarez API key + optional endpoint (requires auth)
 POST /api/setup/instances      — add Radarr/Sonarr instance (requires auth)
-POST /api/setup/nomenclature   — upload tag + hardlink strategy, optional/skippable (requires auth) [Phase 11C]
 POST /api/setup/complete       — finalize setup (requires auth)
 """
 from __future__ import annotations
@@ -22,7 +21,6 @@ from ..schemas import (
     SetupEmuRequest,
     SetupInstanceRequest,
     SetupImghostsRequest,
-    SetupNomenclatureRequest,
     SetupQbitRequest,
     SetupStatusResponse,
     SetupTmdbRequest,
@@ -175,48 +173,6 @@ def setup_instances(
     return OkResponse(
         message=f"Instancia {body.type.capitalize()} '{body.name}' añadida con ID {instance_id}"
     )
-
-
-# ---------------------------------------------------------------------------
-# POST /api/setup/nomenclature — requires auth — Phase 11C, optional/skippable
-# ---------------------------------------------------------------------------
-
-@router.post("/setup/nomenclature", response_model=OkResponse)
-def setup_nomenclature(
-    body: SetupNomenclatureRequest,
-    current_user: dict = Depends(require_auth),
-) -> OkResponse:
-    """Upload tag + hardlink strategy + optional provider priority. Disabling
-    hardlinks (use_hardlinks=False) means the app may rename the original
-    library file using Emuwarez nomenclature instead of creating a hardlink —
-    requires the exact confirmation token."""
-    from .settings import _VALID_PROVIDER_CODES
-    from ..services.setup_service import NOMENCLATURE_DISABLE_HARDLINKS_TOKEN, setup_nomenclature as _setup_nomenclature
-    if not body.use_hardlinks and body.confirmation != NOMENCLATURE_DISABLE_HARDLINKS_TOKEN:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Para desactivar los hardlinks se requiere confirmación exacta: "{NOMENCLATURE_DISABLE_HARDLINKS_TOKEN}".',
-        )
-    if body.provider_priority_order is not None:
-        codes = [c.strip() for c in body.provider_priority_order]
-        invalid = [c for c in codes if c not in _VALID_PROVIDER_CODES]
-        if invalid:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Códigos de provider inválidos: {', '.join(invalid)}",
-            )
-        if len(codes) != len(set(codes)):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="provider_priority_order contiene duplicados",
-            )
-    with _get_conn() as conn:
-        _setup_nomenclature(
-            conn, body.default_release_tag, body.hardlink_base, body.use_hardlinks,
-            provider_priority_order=body.provider_priority_order,
-        )
-        conn.commit()
-    return OkResponse(message="Preferencias de nomenclatura guardadas correctamente")
 
 
 # ---------------------------------------------------------------------------

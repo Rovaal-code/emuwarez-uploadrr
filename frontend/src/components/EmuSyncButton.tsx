@@ -19,7 +19,7 @@ function fmtWait(seconds: number): string {
 // Backed by the global SyncContext, so it stays disabled while a sync runs on
 // any tab. Used in the Dashboard and the Biblioteca header.
 export function EmuSyncButton({ label = 'Sincronizar eMuwarez' }: { label?: string }) {
-  const { catalogSyncing, catalogStatus, startCatalogSync } = useSync()
+  const { catalogSyncing, catalogStatus, startCatalogSync, isAnySyncing } = useSync()
   const [open, setOpen] = useState(false)
 
   const incWait = catalogStatus && !catalogStatus.incremental_can_sync ? catalogStatus.incremental_wait_seconds : 0
@@ -30,7 +30,7 @@ export function EmuSyncButton({ label = 'Sincronizar eMuwarez' }: { label?: stri
   return (
     <>
       <Tooltip content="Sincroniza el catálogo de eMuwarez para comparar con tu biblioteca (elige rápido o completo).">
-        <button className="btn btn-primary btn-sm" onClick={() => setOpen(true)} disabled={catalogSyncing}>
+        <button className="btn btn-primary btn-sm" onClick={() => setOpen(true)} disabled={isAnySyncing}>
           {catalogSyncing
             ? <><span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Comparando…</>
             : `↻ ${label}`}
@@ -51,6 +51,7 @@ export function EmuSyncButton({ label = 'Sincronizar eMuwarez' }: { label?: stri
                 desc="Trae solo los torrents subidos a eMuwarez desde la última vez. Rápido."
                 cadence="1 vez/hora"
                 wait={incWait}
+                blocked={isAnySyncing}
                 onClick={() => pick('incremental')}
               />
               <SyncOption
@@ -59,6 +60,7 @@ export function EmuSyncButton({ label = 'Sincronizar eMuwarez' }: { label?: stri
                 desc="Re-descarga todo el catálogo y quita los torrents borrados del tracker. Lento (varios minutos)."
                 cadence="1 vez/día"
                 wait={fullWait}
+                blocked={isAnySyncing}
                 onClick={() => pick('full')}
               />
             </div>
@@ -69,10 +71,10 @@ export function EmuSyncButton({ label = 'Sincronizar eMuwarez' }: { label?: stri
   )
 }
 
-function SyncOption({ icon, title, desc, cadence, wait, onClick }: {
-  icon: string; title: string; desc: string; cadence: string; wait: number; onClick: () => void
+function SyncOption({ icon, title, desc, cadence, wait, blocked: externallyBlocked = false, onClick }: {
+  icon: string; title: string; desc: string; cadence: string; wait: number; blocked?: boolean; onClick: () => void
 }) {
-  const blocked = wait > 0
+  const blocked = wait > 0 || externallyBlocked
   const [hover, setHover] = useState(false)
   const lit = hover && !blocked
   return (
@@ -94,7 +96,7 @@ function SyncOption({ icon, title, desc, cadence, wait, onClick }: {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         <span style={{ fontSize: 14, fontWeight: 600 }}>{icon} {title}</span>
         <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-          {blocked ? `Disponible en ${fmtWait(wait)}` : cadence}
+          {wait > 0 ? `Disponible en ${fmtWait(wait)}` : blocked ? 'Otra sincronización en curso' : cadence}
         </span>
       </div>
       <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{desc}</div>

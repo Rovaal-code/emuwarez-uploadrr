@@ -113,15 +113,15 @@ def test_uploadrr_not_mounted_returns_warning(monkeypatch):
     assert result["status"] in ("ok", "warning")
 
 
-def test_hardlink_base_warning_without_db(tmp_path, monkeypatch):
+def test_allowed_roots_warning_without_db(tmp_path, monkeypatch):
     monkeypatch.setenv("CONFIG_DIR", str(tmp_path / "empty_config"))
     import emuwarez_uploadrr.services.runtime_diagnostics as rd
     importlib.reload(rd)
-    result = rd.check_hardlink_base_setting()
+    result = rd.check_allowed_roots_setting()
     assert result["status"] == "warning"
 
 
-def test_hardlink_base_warning_when_not_configured(tmp_path, monkeypatch):
+def test_allowed_roots_warning_when_not_configured(tmp_path, monkeypatch):
     import sqlite3
     db_path = tmp_path / "emuwarez_uploadrr.db"
     conn = sqlite3.connect(str(db_path))
@@ -131,7 +131,7 @@ def test_hardlink_base_warning_when_not_configured(tmp_path, monkeypatch):
     monkeypatch.setenv("CONFIG_DIR", str(tmp_path))
     import emuwarez_uploadrr.services.runtime_diagnostics as rd
     importlib.reload(rd)
-    result = rd.check_hardlink_base_setting()
+    result = rd.check_allowed_roots_setting()
     assert result["status"] == "warning"
 
 

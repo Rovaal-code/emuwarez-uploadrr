@@ -186,16 +186,14 @@ export async function adaptNomenclature(
     dryRun?: boolean
     apply?: boolean
     confirmation?: string | null
-    overwrite?: boolean
     proposalId?: number | null
   } = {},
 ): Promise<NomenclatureApplyResult> {
-  const { dryRun = true, apply = false, confirmation = null, overwrite = false, proposalId = null } = options
+  const { dryRun = true, apply = false, confirmation = null, proposalId = null } = options
   return api.post<NomenclatureApplyResult>(`/library/${itemId}/adapt-nomenclature`, {
     dry_run: dryRun,
     apply,
     confirmation,
-    overwrite,
     proposal_id: proposalId,
   })
 }

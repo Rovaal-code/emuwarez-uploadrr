@@ -6,6 +6,7 @@ import { LoadingState } from '../components/LoadingState'
 import { ErrorState } from '../components/ErrorState'
 import { HeaderFilter } from '../components/HeaderFilter'
 import { UploadJobDetailPage } from '../components/UploadJobDetailPage'
+import { DeleteUploadModal } from '../components/DeleteUploadModal'
 import { StatusBadge } from '../components/StatusBadge'
 import { ServiceLabel } from '../components/ServiceIcon'
 import { CancelButtonIcon, RetryButtonIcon } from '../components/DetailCard'
@@ -240,6 +241,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const [typeFilter, setTypeFilter] = useState('')
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null)
   const [startJob, setStartJob] = useState<UploadJob | null>(null)
+  const [deleteJob, setDeleteJob] = useState<UploadJob | null>(null)
   // Retry chains: which terminal (latest-attempt) job ids currently have
   // their older attempts expanded below them.
   const [expandedChains, setExpandedChains] = useState<Set<number>>(new Set())
@@ -371,6 +373,13 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const modals = (
     <>
       {startJob && <StartModal job={startJob} onClose={() => setStartJob(null)} onDone={() => { setStartJob(null); load() }} />}
+      {deleteJob && (
+        <DeleteUploadModal
+          job={deleteJob}
+          onClose={() => setDeleteJob(null)}
+          onDeleted={() => { setDeleteJob(null); setSelectedJobId(null); load() }}
+        />
+      )}
     </>
   )
 
@@ -385,6 +394,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
           onStart={j => setStartJob(j)}
           onRetry={j => handleRetryQueued(j)}
           onCancel={id => handleCancel(id)}
+          onDelete={j => setDeleteJob(j)}
           onOpenLibraryItem={goToLibraryItem}
           retryError={retryError}
         />

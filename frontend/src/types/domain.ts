@@ -51,7 +51,7 @@ export const NAV_ITEMS: NavItem[] = [
 // step — the service already ships with sensible runtime defaults;
 // configurable later from Settings if needed.
 export const SETUP_STEPS = [
-  'welcome', 'admin', 'emu', 'instances', 'tmdb', 'nomenclature', 'qbit', 'imagehosts', 'complete',
+  'welcome', 'admin', 'emu', 'instances', 'tmdb', 'qbit', 'providers', 'imagehosts', 'complete',
 ] as const
 export type SetupStep = (typeof SETUP_STEPS)[number]
 
@@ -61,8 +61,8 @@ export const SETUP_STEP_LABELS: Record<SetupStep, string> = {
   emu: 'eMuwarez',
   instances: 'Instancias',
   tmdb: 'TMDb',
-  nomenclature: 'Nomenclatura y hardlinks',
   qbit: 'qBittorrent',
+  providers: 'Providers de vídeo',
   imagehosts: 'Imágenes',
   complete: 'Completar',
 }

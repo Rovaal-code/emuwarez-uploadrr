@@ -35,6 +35,10 @@ interface SyncContextValue {
   requestsStatus: RequestSyncStatusResponse | null
   startRequestsSync: (force: boolean) => void
   refreshRequestsStatus: () => void
+  // True while any of the three syncs above is running — buttons for the
+  // OTHER sync types use this to disable themselves, since running two syncs
+  // at once caused a visual glitch in the top bar.
+  isAnySyncing: boolean
   // last completion message + a monotonically increasing marker so pages can
   // reload their own data when any sync finishes.
   message: string | null
@@ -199,6 +203,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     libSyncing, libProgress, startLibrarySync,
     catalogSyncing, catalogProgress, catalogStatus, startCatalogSync, refreshCatalogStatus,
     requestsSyncing, requestsStatus, startRequestsSync, refreshRequestsStatus,
+    isAnySyncing: libSyncing || catalogSyncing || requestsSyncing,
     message, lastCompletedAt,
   }
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>

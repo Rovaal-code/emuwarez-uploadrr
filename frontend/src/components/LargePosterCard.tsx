@@ -1,17 +1,14 @@
-import type { LibraryItemResponse, InstanceSafeResponse } from '../types/api'
+import type { LibraryItemResponse } from '../types/api'
 import { PosterStatusIcon } from './PosterStatusIcon'
-import { buildDeepLink, posterUrl } from '../utils/libraryItem'
+import { posterUrl } from '../utils/libraryItem'
 
 // Bigger, Overseerr/Jellyseerr-style poster card for the "Pósters grandes"
 // view — additive alongside the existing small grid, not a replacement.
-export function LargePosterCard({ item, instances, onClick, priority }: {
+export function LargePosterCard({ item, onClick, priority }: {
   item: LibraryItemResponse
-  instances: InstanceSafeResponse[]
   onClick: () => void
   priority?: boolean
 }) {
-  const deepLink = buildDeepLink(item, instances)
-
   return (
     <div
       className="clickable"
@@ -40,22 +37,6 @@ export function LargePosterCard({ item, instances, onClick, priority }: {
         <div style={{ position: 'absolute', top: 10, right: 10 }}>
           <PosterStatusIcon status={item.local_status} />
         </div>
-        {deepLink && (
-          <a
-            href={deepLink}
-            target="_blank"
-            rel="noreferrer"
-            onClick={e => e.stopPropagation()}
-            title={`Ver en ${item.instance_name ?? item.instance_type}`}
-            style={{
-              position: 'absolute', top: 10, left: 10, width: 28, height: 28, borderRadius: 6,
-              background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 15, textDecoration: 'none',
-            }}
-          >
-            🔗
-          </a>
-        )}
         <div style={{
           position: 'absolute', bottom: 0, left: 0, right: 0, padding: '20px 12px 10px',
           background: 'linear-gradient(to top, rgba(0,0,0,0.85), transparent)',

@@ -1,4 +1,5 @@
-"""Tests for apply_nomenclature_proposal service (Phase 6B).
+"""Tests for apply_nomenclature_proposal service — renames the original file
+in place (same directory, so it works across SSHFS/NFS mounts too).
 
 conftest.py provides isolated_db (autouse) pointing CONFIG_DIR to a tmp dir.
 """
@@ -45,19 +46,11 @@ def _insert_item(conn, title="Test Movie", path=None):
     return item_id
 
 
-def _set_hardlink_base(conn, base_path):
-    conn.execute(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES ('hardlink_base', ?)",
-        (str(base_path),),
-    )
-    conn.commit()
-
-
 # ---------------------------------------------------------------------------
 # dry_run — no filesystem changes
 # ---------------------------------------------------------------------------
 
-def test_dry_run_no_hardlink_base(isolated_db):
+def test_dry_run_source_file_missing(isolated_db):
     conn = _open(isolated_db)
     item_id = _insert_item(conn, path="/fake/source.mkv")
     result = apply_nomenclature_proposal(item_id, dry_run=True, conn=conn)
@@ -69,23 +62,17 @@ def test_dry_run_no_hardlink_base(isolated_db):
 def test_dry_run_blocked_no_source(isolated_db, tmp_path):
     conn = _open(isolated_db)
     item_id = _insert_item(conn)  # no path
-    prepared = tmp_path / "prepared"
-    prepared.mkdir()
-    _set_hardlink_base(conn, prepared)
     result = apply_nomenclature_proposal(item_id, dry_run=True, conn=conn)
     assert result["dry_run"] is True
     assert result["status"] == "blocked"
     conn.close()
 
 
-def test_dry_run_no_hardlink_created(isolated_db, tmp_path):
+def test_dry_run_creates_nothing(isolated_db, tmp_path):
     src = tmp_path / "movie.mkv"
     src.write_bytes(b"video")
-    prepared = tmp_path / "prepared"
-    prepared.mkdir()
     conn = _open(isolated_db)
     item_id = _insert_item(conn, title="My Movie", path=str(src))
-    _set_hardlink_base(conn, prepared)
     conn.execute(
         "UPDATE library_items SET tmdb_id = '12345', year = 2020, resolution = '1080p', source = 'Blu-ray' WHERE id = ?",
         (item_id,),
@@ -93,8 +80,8 @@ def test_dry_run_no_hardlink_created(isolated_db, tmp_path):
     conn.commit()
     result = apply_nomenclature_proposal(item_id, dry_run=True, conn=conn)
     assert result["dry_run"] is True
-    # No hardlinks created
-    assert not list(prepared.rglob("*.mkv"))
+    # Nothing renamed — only the original file is still there.
+    assert list(tmp_path.glob("*.mkv")) == [src]
     conn.close()
 
 
@@ -105,63 +92,51 @@ def test_dry_run_no_hardlink_created(isolated_db, tmp_path):
 def test_apply_blocked_without_confirmation(isolated_db, tmp_path):
     src = tmp_path / "movie.mkv"
     src.write_bytes(b"video")
-    prepared = tmp_path / "prepared"
-    prepared.mkdir()
     conn = _open(isolated_db)
     item_id = _insert_item(conn, title="My Movie", path=str(src))
-    _set_hardlink_base(conn, prepared)
     result = apply_nomenclature_proposal(
         item_id, dry_run=False, apply=True, confirmation=None, conn=conn
     )
     assert result["status"] == "blocked"
-    assert not list(prepared.rglob("*.mkv"))
+    assert src.exists()
     conn.close()
 
 
 def test_apply_blocked_wrong_confirmation(isolated_db, tmp_path):
     src = tmp_path / "movie.mkv"
     src.write_bytes(b"video")
-    prepared = tmp_path / "prepared"
-    prepared.mkdir()
     conn = _open(isolated_db)
     item_id = _insert_item(conn, title="My Movie", path=str(src))
-    _set_hardlink_base(conn, prepared)
     result = apply_nomenclature_proposal(
         item_id, dry_run=False, apply=True, confirmation="WRONG_TOKEN", conn=conn
     )
     assert result["status"] == "blocked"
-    assert not list(prepared.rglob("*.mkv"))
+    assert src.exists()
     conn.close()
 
 
 def test_dry_run_takes_precedence_over_apply(isolated_db, tmp_path):
     src = tmp_path / "movie.mkv"
     src.write_bytes(b"video")
-    prepared = tmp_path / "prepared"
-    prepared.mkdir()
     conn = _open(isolated_db)
     item_id = _insert_item(conn, path=str(src))
-    _set_hardlink_base(conn, prepared)
     result = apply_nomenclature_proposal(
         item_id, dry_run=True, apply=True, confirmation=CONFIRMATION_TOKEN, conn=conn
     )
     assert result["dry_run"] is True
-    assert not list(prepared.rglob("*.mkv"))
+    assert src.exists()
     conn.close()
 
 
 # ---------------------------------------------------------------------------
-# Real apply — hardlink created and DB updated
+# Real apply — renamed in place and DB updated
 # ---------------------------------------------------------------------------
 
-def test_apply_real_creates_hardlink_and_updates_db(isolated_db, tmp_path):
+def test_apply_real_renames_file_and_updates_db(isolated_db, tmp_path):
     src = tmp_path / "source.mkv"
     src.write_bytes(b"video bytes")
-    prepared = tmp_path / "prepared"
-    prepared.mkdir()
     conn = _open(isolated_db)
     item_id = _insert_item(conn, title="Test Film", path=str(src))
-    _set_hardlink_base(conn, prepared)
     conn.execute(
         "UPDATE library_items SET tmdb_id = '9999', year = 2021, resolution = '1080p' WHERE id = ?",
         (item_id,),
@@ -176,13 +151,17 @@ def test_apply_real_creates_hardlink_and_updates_db(isolated_db, tmp_path):
         dst = result["destination_path"]
         assert dst is not None
         assert Path(dst).exists()
-        assert src.stat().st_ino == Path(dst).stat().st_ino
-        assert src.read_bytes() == b"video bytes"
+        # Renamed in place — same directory as the original, and the original
+        # filename no longer exists (it's not a copy).
+        assert Path(dst).parent == tmp_path
+        assert not src.exists()
+        assert Path(dst).read_bytes() == b"video bytes"
 
         row = conn.execute("SELECT * FROM library_items WHERE id = ?", (item_id,)).fetchone()
         assert row["prepared_path"] == dst
         assert row["nomenclature_applied_at"] is not None
-        assert row["path"] == str(src)  # NEVER changed
+        # `path` follows the rename (same directory, raw convention).
+        assert row["path"] == dst
 
         proposal_row = conn.execute(
             "SELECT * FROM nomenclature_proposals WHERE library_item_id = ? ORDER BY id DESC LIMIT 1",
@@ -204,25 +183,6 @@ def test_apply_real_creates_hardlink_and_updates_db(isolated_db, tmp_path):
     conn.close()
 
 
-def test_apply_original_path_never_modified(isolated_db, tmp_path):
-    src = tmp_path / "original.mkv"
-    original_path = str(src)
-    src.write_bytes(b"original")
-    prepared = tmp_path / "prepared"
-    prepared.mkdir()
-    conn = _open(isolated_db)
-    item_id = _insert_item(conn, title="Test", path=original_path)
-    _set_hardlink_base(conn, prepared)
-
-    apply_nomenclature_proposal(
-        item_id, dry_run=False, apply=True, confirmation=CONFIRMATION_TOKEN, conn=conn
-    )
-
-    row = conn.execute("SELECT path FROM library_items WHERE id = ?", (item_id,)).fetchone()
-    assert row["path"] == original_path  # NEVER changed
-    conn.close()
-
-
 # ---------------------------------------------------------------------------
 # filesystem_operations always saved
 # ---------------------------------------------------------------------------
@@ -230,11 +190,8 @@ def test_apply_original_path_never_modified(isolated_db, tmp_path):
 def test_filesystem_operation_saved_on_dry_run(isolated_db, tmp_path):
     src = tmp_path / "movie.mkv"
     src.write_bytes(b"v")
-    prepared = tmp_path / "prepared"
-    prepared.mkdir()
     conn = _open(isolated_db)
     item_id = _insert_item(conn, title="Movie", path=str(src))
-    _set_hardlink_base(conn, prepared)
 
     result = apply_nomenclature_proposal(item_id, dry_run=True, conn=conn)
     ops = conn.execute(
@@ -261,11 +218,8 @@ def test_confirmation_token_value():
 def test_apply_plan_prefers_real_media_info_over_synced_values(isolated_db, tmp_path):
     src = tmp_path / "movie.mkv"
     src.write_bytes(b"video")
-    prepared = tmp_path / "prepared"
-    prepared.mkdir()
     conn = _open(isolated_db)
     item_id = _insert_item(conn, title="Ad Astra", path=str(src))
-    _set_hardlink_base(conn, prepared)
     # Simulate stale/guessed values from an old sync (Phase 6A columns).
     conn.execute(
         "UPDATE library_items SET video_codec = 'AVC', audio_codec = 'AAC', tmdb_id = '1', year = 2019 WHERE id = ?",
@@ -293,11 +247,8 @@ def test_apply_plan_prefers_real_media_info_over_synced_values(isolated_db, tmp_
 def test_apply_plan_falls_back_when_mediainfo_unavailable(isolated_db, tmp_path):
     src = tmp_path / "movie.mkv"
     src.write_bytes(b"video")
-    prepared = tmp_path / "prepared"
-    prepared.mkdir()
     conn = _open(isolated_db)
     item_id = _insert_item(conn, title="Some Movie", path=str(src))
-    _set_hardlink_base(conn, prepared)
     conn.execute("UPDATE library_items SET video_codec = 'AVC', tmdb_id = '1', year = 2019 WHERE id = ?", (item_id,))
     conn.commit()
 

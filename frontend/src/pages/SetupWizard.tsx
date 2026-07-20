@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
 import {
   setupAdmin, setupTmdb, setupEmu, setupInstances,
-  setupNomenclature, setupQbit, setupImghosts, setupComplete,
+  setupQbit, setupImghosts, setupComplete,
 } from '../api/setup'
 import { login } from '../api/auth'
 import { syncAll } from '../api/library'
-import { fetchSettings } from '../api/settings'
+import { fetchSettings, updateSettings } from '../api/settings'
 import { testTmdbConnection, testEmuwarezConnection, testArrConnection, testQbitConnection, testImghostConnection, type IntegrationTestResult } from '../api/integrationTests'
 import { ServiceIcon } from '../components/ServiceIcon'
 import { ProviderPriorityPicker } from '../components/ProviderPriorityPicker'
@@ -15,8 +15,6 @@ import type { SetupStep } from '../types/domain'
 import type { SetupStatusResponse } from '../types/api'
 import { testResultLabel, testResultColor, emuTestCooldownSeconds } from '../utils/integrationResult'
 import { useCooldown } from '../hooks/useCooldown'
-
-const DISABLE_HARDLINKS_TOKEN = 'DESACTIVAR_HARDLINKS'
 
 // Mirrors validate_password_strength() in web/security.py exactly (same
 // regexes) so the checklist never drifts from what the backend enforces.
@@ -99,6 +97,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   // EMU step state
   const [emuKey, setEmuKey] = useState('')
   const [emuAckSkip, setEmuAckSkip] = useState(false)
+  const [emuUsername, setEmuUsername] = useState('')
 
   // qBittorrent step state
   const [qbitUrl, setQbitUrl] = useState('')
@@ -150,13 +149,10 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   const [instAckSkip, setInstAckSkip] = useState(false)
   const [instPathAckSkip, setInstPathAckSkip] = useState(false)
 
-  // Nomenclature step state (Phase 11C)
+  // Upload tag — set on the eMuwarez step now (see handleEmu).
   const [nomTag, setNomTag] = useState('EMUWAREZ')
-  const [nomHardlinkBase, setNomHardlinkBase] = useState('')
-  const [noHardlinks, setNoHardlinks] = useState(false)
-  const [hardlinksConfirm, setHardlinksConfirm] = useState('')
-  // Same default as the backend's provider_priority_order setting
-  // (web/api/settings.py::_DEFAULT_PRIORITY) — offered here too so it's
+  // Providers step state. Same default as the backend's provider_priority_order
+  // setting (web/api/settings.py::_DEFAULT_PRIORITY) — offered here too so it's
   // configured from the start instead of only reachable via Settings later.
   const [nomProviderOrder, setNomProviderOrder] = useState<string[]>(['AMZN', 'NF', 'DSNP', 'MAX', 'ATVP'])
 
@@ -253,6 +249,14 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
     if (emuKey.trim() && !emuAckSkip) {
       await setupEmu(emuKey)
     }
+    // Username/tag are independent of the API key itself — worth keeping
+    // even if the key is being skipped for now.
+    if (emuUsername.trim() || nomTag.trim()) {
+      await updateSettings({
+        emu_username: emuUsername.trim() || undefined,
+        default_release_tag: nomTag.trim() || undefined,
+      })
+    }
     setStep('instances')
   })
 
@@ -288,17 +292,6 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
     if (tmdbKey.trim() && !tmdbAckSkip) {
       await setupTmdb(tmdbKey, tmdbLang, tmdbRegion, tmdbLocalizeTitles)
     }
-    setStep('nomenclature')
-  })
-
-  const handleNomenclature = wrap(async () => {
-    await setupNomenclature({
-      default_release_tag: nomTag,
-      hardlink_base: nomHardlinkBase.trim() || undefined,
-      use_hardlinks: !noHardlinks,
-      confirmation: noHardlinks ? hardlinksConfirm : undefined,
-      provider_priority_order: nomProviderOrder,
-    })
     setStep('qbit')
   })
 
@@ -307,6 +300,11 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
     if (qbitUrl.trim()) {
       await setupQbit(qbitUrl.trim(), qbitPort.trim() || '8080', qbitUser.trim(), qbitPass)
     }
+    setStep('providers')
+  })
+
+  const handleProviders = wrap(async () => {
+    await updateSettings({ provider_priority_order: nomProviderOrder })
     setStep('imagehosts')
   })
 
@@ -363,7 +361,8 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 <li>Gestiona y sincroniza tus bibliotecas de Radarr y Sonarr.</li>
                 <li>Prepara y sube contenido siguiendo la nomenclatura de eMuwarez.</li>
                 <li>Se conecta con eMuwarez para listar las peticiones actuales.</li>
-                <li>Permite crear o modificar peticiones en eMuwarez.</li>
+                <li>Obtiene el catálogo de eMuwarez y lo compara contra tu biblioteca.</li>
+                <li>Muestra el contenido único de tu biblioteca, aquel que todavía no esté en eMuwarez.</li>
                 <li>Si tienes contenido compatible con una petición existente en eMuwarez, te recomienda subirlo a la plataforma.</li>
                 <li>Te recomienda crear una petición si tienes contenido faltante en tu biblioteca.</li>
               </ul>
@@ -426,6 +425,16 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 <div className="form-group">
                   <label className="form-label">API key eMuwarez</label>
                   <input className="form-input" value={emuKey} onChange={e => { setEmuKey(e.target.value); setEmuAckSkip(false) }} placeholder="Tu API key de eMuwarez" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Mi usuario de eMuwarez</label>
+                  <input className="form-input" value={emuUsername} onChange={e => setEmuUsername(e.target.value)} placeholder="Tu nombre de usuario en eMuwarez" />
+                  <span className="form-hint">Se usa para reconocer cuáles de todas las peticiones descargadas las has creado tú.</span>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Tag del grupo de subida</label>
+                  <input className="form-input" value={nomTag} onChange={e => setNomTag(e.target.value)} placeholder="EMUWAREZ" />
+                  <span className="form-hint">El tag que va tras el último «-» en el nombre del torrent (tu grupo/usuario).</span>
                 </div>
               </div>
               {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
@@ -637,8 +646,10 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               </div>
               {!tmdbCanContinue && (
                 <div className="alert alert-error" style={{ marginTop: 10 }}>
-                  Todavía no has probado la key (o la prueba ha fallado). Si continúas sin verificarla,
-                  la detección de provider no funcionará hasta que la corrijas más tarde en Configuración.
+                  Todavía no has probado la key (o la prueba ha fallado). Si continúas sin verificarla, no
+                  podrás: (a) obtener los nombres en español de las series y (b) detectar los posibles
+                  providers en subidas WEB-DL sin provider o mal catalogados por Radarr/Sonarr. Podrás
+                  configurarlo más tarde en Configuración.
                   <label className="checkbox-label" style={{ display: 'block', marginTop: 8 }}>
                     <input type="checkbox" checked={tmdbAckSkip} onChange={e => setTmdbAckSkip(e.target.checked)} /> Entiendo, continuar sin verificar
                   </label>
@@ -647,70 +658,6 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               <div className="wizard-actions">
                 <span />
                 <button className="btn btn-primary" onClick={handleTmdb} disabled={loading || !tmdbCanContinue}>
-                  {loading ? 'Guardando…' : 'Continuar'}
-                </button>
-              </div>
-            </>
-          )}
-
-          {/* Nomenclature + hardlink strategy step (Phase 11C) */}
-          {step === 'nomenclature' && (
-            <>
-              <div className="wizard-step-desc">
-                El directorio de hardlinks se usa para crear archivos listos para subir con la nomenclatura
-                de Emuwarez, sin renombrar los archivos originales de tu biblioteca.
-              </div>
-              <div className="wizard-fields">
-                <div className="form-group">
-                  <label className="form-label">Etiqueta de subida</label>
-                  <input className="form-input" value={nomTag} onChange={e => setNomTag(e.target.value)} placeholder="EMUWAREZ" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Directorio de hardlinks</label>
-                  <input
-                    className="form-input"
-                    value={nomHardlinkBase}
-                    onChange={e => setNomHardlinkBase(e.target.value)}
-                    placeholder="/data/uploads/emu"
-                    disabled={noHardlinks}
-                  />
-                  <span className="form-hint">Debe estar en el mismo filesystem que tu biblioteca, para evitar errores EXDEV.</span>
-                </div>
-              </div>
-              <label className="checkbox-label" style={{ display: 'block', marginTop: 14 }}>
-                <input type="checkbox" checked={noHardlinks} onChange={e => { setNoHardlinks(e.target.checked); setHardlinksConfirm('') }} /> No usar hardlinks
-              </label>
-              {noHardlinks && (
-                <div className="alert alert-error" style={{ marginTop: 10 }}>
-                  Sin hardlinks, la aplicación puede renombrar el archivo original de tu biblioteca usando la
-                  nomenclatura de Emuwarez, en vez de crear una copia preparada aparte. Escribe{' '}
-                  <strong>{DISABLE_HARDLINKS_TOKEN}</strong> para confirmar que entiendes esto:
-                  <input
-                    className="form-input"
-                    style={{ marginTop: 8 }}
-                    value={hardlinksConfirm}
-                    onChange={e => setHardlinksConfirm(e.target.value)}
-                    placeholder={DISABLE_HARDLINKS_TOKEN}
-                  />
-                </div>
-              )}
-              <div className="form-group" style={{ marginTop: 18 }}>
-                <label className="form-label">Prioridad de providers</label>
-                <p className="form-hint" style={{ marginBottom: 8 }}>
-                  Cuando el mismo contenido está disponible en varias plataformas de streaming (Amazon,
-                  Netflix, Disney+...), esta prioridad decide cuál recomendar automáticamente para la subida.
-                  Arrastra para reordenar — los de arriba tienen preferencia.
-                </p>
-                <ProviderPriorityPicker order={nomProviderOrder} onChange={setNomProviderOrder} />
-              </div>
-              {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
-              <div className="wizard-actions">
-                <span />
-                <button
-                  className="btn btn-primary"
-                  onClick={handleNomenclature}
-                  disabled={loading || (noHardlinks && hardlinksConfirm !== DISABLE_HARDLINKS_TOKEN)}
-                >
                   {loading ? 'Guardando…' : 'Continuar'}
                 </button>
               </div>
@@ -750,10 +697,35 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   <span style={{ fontSize: 12, color: testResultColor(qbitTestResult) }}>{testResultLabel(qbitTestResult)}</span>
                 )}
               </div>
+              {!qbitUrl.trim() && (
+                <div className="alert alert-error" style={{ marginTop: 10 }}>
+                  Sin qBittorrent configurado, los torrents no se añadirán automáticamente a su cola tras
+                  subir: tendrás que hacerlo a mano. Podrás configurarlo más tarde en Configuración.
+                </div>
+              )}
               <div className="wizard-actions">
                 <span />
                 <button className="btn btn-primary" onClick={handleQbit} disabled={loading}>
                   {loading ? 'Guardando…' : qbitUrl.trim() ? 'Continuar' : 'Omitir'}
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* Video providers step */}
+          {step === 'providers' && (
+            <>
+              <div className="wizard-step-desc">
+                Cuando el mismo contenido está disponible en varias plataformas de streaming (Amazon,
+                Netflix, Disney+...), esta prioridad decide cuál recomendar automáticamente para la subida.
+                Arrastra para reordenar — los de arriba tienen preferencia.
+              </div>
+              <ProviderPriorityPicker order={nomProviderOrder} onChange={setNomProviderOrder} />
+              {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
+              <div className="wizard-actions">
+                <span />
+                <button className="btn btn-primary" onClick={handleProviders} disabled={loading}>
+                  {loading ? 'Guardando…' : 'Continuar'}
                 </button>
               </div>
             </>

@@ -12,7 +12,7 @@ import {
   type MaintenanceStatus,
   type BackupInfo,
 } from '../api/maintenance'
-import { fetchSettings, updateSettings, testHardlink, type SettingsData } from '../api/settings'
+import { fetchSettings, updateSettings, type SettingsData } from '../api/settings'
 import { testTmdbConnection, testEmuwarezConnection, testQbitConnection, testImghostConnection, type IntegrationTestResult } from '../api/integrationTests'
 import { useCooldown } from '../hooks/useCooldown'
 import { testDiscordNotification, testTelegramNotification } from '../api/notifications'
@@ -48,15 +48,13 @@ function configSignature(v: {
   tag: string; providerOrder: string[]; region: string; language: string
   emuUsername: string; ignoreSpecials: boolean
   recentLimit: number; qbitUrl: string; qbitPort: string; qbitUser: string
-  imgEnabled: string[]
-  useHardlinks: boolean; hardlinkBase: string
+  imgEnabled: string[]; allowedRoots: string
   newKey?: string; newEmuKey?: string; qbitPass?: string
   imgKeys?: Record<string, string>
 }): string {
   return JSON.stringify([
     v.tag, v.providerOrder, v.region, v.language, v.emuUsername,
-    v.ignoreSpecials, v.recentLimit, v.qbitUrl, v.qbitPort, v.qbitUser, v.imgEnabled,
-    v.useHardlinks, v.hardlinkBase,
+    v.ignoreSpecials, v.recentLimit, v.qbitUrl, v.qbitPort, v.qbitUser, v.imgEnabled, v.allowedRoots,
     v.newKey ?? '', v.newEmuKey ?? '', v.qbitPass ?? '', v.imgKeys ?? {},
   ])
 }
@@ -99,18 +97,15 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   // Full displayed order of image hosts, always including imgbox (which may not
   // live in the saved list yet). imgbox is reorderable like the rest.
   const imgOrder = () => (imgEnabled.includes('imgbox') ? [...imgEnabled] : ['imgbox', ...imgEnabled])
-  // Hardlinks
-  const [useHardlinks, setUseHardlinks] = useState(true)
-  const [hardlinkBase, setHardlinkBase] = useState('')
-  const [testingHl, setTestingHl] = useState(false)
-  const [hlTestResult, setHlTestResult] = useState<{ ok: boolean; message: string } | null>(null)
+  // Uploadrr sandboxing: folder(s) where THIS container reaches the media,
+  // comma-separated. Empty means real uploads fail closed until it's set.
+  const [allowedRoots, setAllowedRoots] = useState('')
 
   // Unsaved-changes tracking: compare current form values to the loaded ones.
   const [baseline, setBaseline] = useState('')
   const currentSig = configSignature({
     tag, providerOrder, region, language, emuUsername,
-    ignoreSpecials, recentLimit, qbitUrl, qbitPort, qbitUser, imgEnabled,
-    useHardlinks, hardlinkBase,
+    ignoreSpecials, recentLimit, qbitUrl, qbitPort, qbitUser, imgEnabled, allowedRoots,
     newKey, newEmuKey, qbitPass, imgKeys,
   })
   const dirty = baseline !== '' && currentSig !== baseline
@@ -160,8 +155,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         setQbitPort(s.qbit_port ?? '8080')
         setQbitUser(s.qbit_username ?? '')
         setImgEnabled(s.image_hosts_enabled ?? [])
-        setUseHardlinks(s.use_hardlinks ?? true)
-        setHardlinkBase(s.hardlink_base ?? '')
+        setAllowedRoots((s.uploadrr_allowed_roots ?? []).join(', '))
         setBaseline(configSignature({
           tag: s.default_release_tag, providerOrder: s.provider_priority_order,
           region: s.tmdb_watch_region, language: s.tmdb_language,
@@ -169,7 +163,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           ignoreSpecials: s.series_ignore_specials ?? true, recentLimit: s.recent_activity_limit ?? 100,
           qbitUrl: s.qbit_url ?? '', qbitPort: s.qbit_port ?? '8080', qbitUser: s.qbit_username ?? '',
           imgEnabled: s.image_hosts_enabled ?? [],
-          useHardlinks: s.use_hardlinks ?? true, hardlinkBase: s.hardlink_base ?? '',
+          allowedRoots: (s.uploadrr_allowed_roots ?? []).join(', '),
         }))
       })
       .catch(() => setMsg({ ok: false, text: 'Error cargando configuración' }))
@@ -229,18 +223,6 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
     }
   }
 
-  async function handleTestHardlink() {
-    setTestingHl(true)
-    setHlTestResult(null)
-    try {
-      setHlTestResult(await testHardlink(hardlinkBase.trim() || undefined))
-    } catch {
-      setHlTestResult({ ok: false, message: 'Error al contactar con el servidor' })
-    } finally {
-      setTestingHl(false)
-    }
-  }
-
   async function handleSave() {
     setSaving(true)
     setMsg(null)
@@ -259,11 +241,8 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         qbit_port: qbitPort.trim(),
         qbit_username: qbitUser.trim(),
         image_hosts_enabled: imgEnabled,
+        uploadrr_allowed_roots: allowedRoots,
       }
-      // Only send hardlink fields when they changed, so an unrelated save isn't
-      // rejected by the "enabled needs a valid base" server-side check.
-      if (useHardlinks !== (settings?.use_hardlinks ?? true)) payload.use_hardlinks = useHardlinks
-      if (hardlinkBase.trim() !== (settings?.hardlink_base ?? '')) payload.hardlink_base = hardlinkBase.trim()
       if (newKey.trim()) payload.tmdb_api_key = newKey.trim()
       if (newEmuKey.trim()) payload.emu_api_key = newEmuKey.trim()
       if (qbitPass.trim()) payload.qbit_password = qbitPass.trim()
@@ -286,8 +265,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
       setImgKeys({})
       setNewKey('')
       setNewEmuKey('')
-      setUseHardlinks(updated.use_hardlinks ?? true)
-      setHardlinkBase(updated.hardlink_base ?? '')
+      setAllowedRoots((updated.uploadrr_allowed_roots ?? []).join(', '))
       setBaseline(configSignature({
         tag: updated.default_release_tag, providerOrder: updated.provider_priority_order,
         region: updated.tmdb_watch_region, language: updated.tmdb_language,
@@ -295,7 +273,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         ignoreSpecials: updated.series_ignore_specials ?? true, recentLimit: updated.recent_activity_limit ?? 100,
         qbitUrl: updated.qbit_url ?? '', qbitPort: updated.qbit_port ?? '8080', qbitUser: updated.qbit_username ?? '',
         imgEnabled: updated.image_hosts_enabled ?? [],
-        useHardlinks: updated.use_hardlinks ?? true, hardlinkBase: updated.hardlink_base ?? '',
+        allowedRoots: (updated.uploadrr_allowed_roots ?? []).join(', '),
       }))
       setMsg({ ok: true, text: '✓ Configuración guardada' })
     } catch (e: unknown) {
@@ -611,42 +589,24 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
       </div>
 
       <div className="placeholder-card">
-        <h3 style={{ marginTop: 0, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
-          🔗 Hardlinks
+        <h3 style={{ marginTop: 0, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+          Acceso a la biblioteca
+          <InfoIcon text="Antes de subir un archivo, la app comprueba que su ruta está dentro de una de estas carpetas — una red de seguridad para que nunca se toque un archivo fuera de donde debería. Si la dejas vacía, las subidas reales se bloquearán hasta que la rellenes." />
         </h3>
-        <label className="checkbox-label" style={{ marginBottom: 10, display: 'block' }}>
-          <input type="checkbox" checked={useHardlinks} onChange={e => setUseHardlinks(e.target.checked)} /> Usar hardlinks al preparar la subida
-        </label>
-        {useHardlinks && !hardlinkBase.trim() && (
-          <div style={{ fontSize: 12, color: 'var(--color-error, #f87171)', marginBottom: 10 }}>
-            ⚠ No puedes activar los hardlinks sin una ruta base válida. Indica una ruta y pruébala, o desactívalos.
-          </div>
-        )}
-        <div className="form-group" style={{ marginBottom: 12, opacity: useHardlinks ? 1 : 0.5 }}>
-          <label className="form-label">Ruta base de hardlinks</label>
+        <p className="form-hint" style={{ marginTop: 0, marginBottom: 12 }}>
+          La carpeta donde este contenedor accede a tu biblioteca (el punto de montaje del volumen, no necesariamente
+          el mismo que reportan Radarr/Sonarr). Por ejemplo: <code>/data</code> si lo montas igual que Radarr/Sonarr.
+          Varias rutas separadas por comas.
+        </p>
+        <div className="form-group">
+          <label className="form-label">Rutas permitidas</label>
           <input
             className="form-input"
-            value={hardlinkBase}
-            onChange={e => setHardlinkBase(e.target.value)}
-            placeholder="/ruta/a/tu/carpeta/de/subidas"
-            disabled={!useHardlinks}
+            value={allowedRoots}
+            onChange={e => setAllowedRoots(e.target.value)}
+            placeholder="/data"
           />
         </div>
-        <div>
-          <button className="btn btn-secondary btn-sm" onClick={handleTestHardlink} disabled={testingHl || !useHardlinks} type="button">
-            {testingHl ? 'Probando…' : 'Probar hardlink'}
-          </button>
-          {hlTestResult && (
-            <span style={{ marginLeft: 10, fontSize: 12, color: hlTestResult.ok ? 'var(--color-success, #4ade80)' : 'var(--color-error, #f87171)' }}>
-              {hlTestResult.ok ? '🟢 ' : '🔴 '}{hlTestResult.message}
-            </span>
-          )}
-        </div>
-        <span className="form-hint" style={{ display: 'block', marginTop: 10 }}>
-          Los hardlinks dejan el archivo original intacto y crean un enlace con la nomenclatura de eMuwarez.
-          Requieren que la ruta base esté en el <strong>mismo sistema de ficheros</strong> que tus medios.
-          Si están desactivados o sin configurar, la comprobación de subida los marca en amarillo (se omiten).
-        </span>
       </div>
 
       <div className="placeholder-card">

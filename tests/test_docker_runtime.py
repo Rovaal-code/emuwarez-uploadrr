@@ -129,4 +129,4 @@ def test_web_info_contains_docker_section(tmp_path, monkeypatch, capsys):
     assert "docker build" in captured.out
     assert "docker compose" in captured.out
     assert "/config" in captured.out
-    assert "EXDEV" in captured.out or "hardlink" in captured.out.lower()
+    assert "allowed_roots" in captured.out

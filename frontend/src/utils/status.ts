@@ -27,6 +27,9 @@ const REQUEST_STATUS_MAP: Record<string, StatusInfo> = {
   'Compatible':     { label: 'Compatible',     color: '#22c55e', cssClass: 'req-compatible' },
   'Parcial':        { label: 'Parcial',        color: '#f59e0b', cssClass: 'req-partial' },
   'No compatible':  { label: 'No compatible',  color: '#f97316', cssClass: 'req-not-compatible' },
+  'No disponible':  { label: 'No disponible',  color: '#ef4444', cssClass: 'req-unavailable' },
+  'Reclamado':      { label: 'Reclamado',      color: '#a855f7', cssClass: 'req-claimed' },
+  'Pendiente':      { label: 'Pendiente',      color: '#eab308', cssClass: 'req-pending' },
   'Llena':          { label: 'Llena',          color: '#9ca3af', cssClass: 'req-filled' },
   'Desconocida':    { label: 'Desconocida',    color: '#6b7280', cssClass: 'req-unknown' },
 }

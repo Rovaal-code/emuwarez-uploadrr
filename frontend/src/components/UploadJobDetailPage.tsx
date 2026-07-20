@@ -8,7 +8,7 @@ import { StatusBadge } from './StatusBadge'
 import { ServiceLabel } from './ServiceIcon'
 import {
   Card, FieldRow, DetailPoster, ValueChip, ValueIcon, DETAIL_CARD_HEIGHT,
-  StatusCardIcon, ClockCardIcon, UploadButtonIcon, LibraryButtonIcon, RetryButtonIcon, CancelButtonIcon,
+  StatusCardIcon, ClockCardIcon, UploadButtonIcon, LibraryButtonIcon, RetryButtonIcon, CancelButtonIcon, DeleteButtonIcon,
   TypeValueIcon, CalendarValueIcon, ProgressValueIcon,
 } from './DetailCard'
 import { RemuxTable, EpisodeAccordionRow } from './UploadWizardModal'
@@ -204,11 +204,10 @@ function RemuxSection({ snapshot, isStaging }: { snapshot: UploadJob['remux_snap
 }
 
 // Static topic per check id — matches services/upload_checks.py's CHECK
-// ids exactly (renameable/hardlink for a single file, season_pack for a
-// season pack, then output/qbittorrent/imghosts/emuwarez shared by both).
+// ids exactly (renameable for a single file, season_pack for a season pack,
+// then output/qbittorrent/imghosts/emuwarez shared by both).
 const CHECK_TOPICS: { id: string; label: string }[] = [
   { id: 'renameable', label: 'Renombrado' },
-  { id: 'hardlink', label: 'Hardlink' },
   { id: 'season_pack', label: 'Pack de temporada' },
   { id: 'output', label: 'Directorio de salida' },
   { id: 'qbittorrent', label: 'qBittorrent' },
@@ -219,7 +218,7 @@ const CHECK_TOPICS: { id: string; label: string }[] = [
 function checkTopicsFor(mediaType?: string | null): { id: string; label: string }[] {
   const isSeason = mediaType === 'season'
   return CHECK_TOPICS.filter(t => {
-    if (t.id === 'renameable' || t.id === 'hardlink') return !isSeason
+    if (t.id === 'renameable') return !isSeason
     if (t.id === 'season_pack') return isSeason
     return true
   })
@@ -389,12 +388,13 @@ function PhasesSection({ phases, globalPct, job }: { phases: UploadProgressPhase
   )
 }
 
-export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, onOpenLibraryItem, retryError }: {
+export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, onDelete, onOpenLibraryItem, retryError }: {
   job: UploadJob
   onBack: () => void
   onStart: (job: UploadJob) => void
   onRetry: (job: UploadJob) => void
   onCancel: (jobId: number) => void
+  onDelete: (job: UploadJob) => void
   onOpenLibraryItem?: (id: number) => void
   retryError?: string | null
 }) {
@@ -404,6 +404,9 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
   const isPreparing = job.status === 'preparing'
   const isStaging = job.status === 'staging'
   const canCancel = isRunning || isQueued || isStaging
+  // Mirrors the backend's delete_upload_job() gate exactly: only a terminal,
+  // dead-end job (never running/queued/staging, nothing left to interrupt).
+  const canDelete = job.status === 'failed' || job.status === 'cancelled'
   // Which section is currently "working" — staging advances through its own
   // sub-steps (stage: nomenclature -> remux -> checks) one snapshot at a
   // time; once queued, "Progreso de la subida" covers everything else until
@@ -455,6 +458,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
           {job.status === 'ready' && <button className="btn btn-primary btn-sm" onClick={() => onStart(job)}><UploadButtonIcon /> Iniciar subida</button>}
           {['failed', 'cancelled'].includes(job.status) && <button className="btn btn-primary btn-sm" onClick={() => onRetry(job)}><RetryButtonIcon /> Reintentar</button>}
           {canCancel && <button className="btn btn-danger btn-sm" onClick={() => onCancel(jobId)}><CancelButtonIcon /> Cancelar</button>}
+          {canDelete && <button className="btn btn-danger btn-sm" onClick={() => onDelete(job)}><DeleteButtonIcon /> Borrar</button>}
           {job.library_item_id != null && (
             <button className="btn btn-primary btn-sm" onClick={() => onOpenLibraryItem?.(job.library_item_id!)}><LibraryButtonIcon /> Ver en Biblioteca</button>
           )}

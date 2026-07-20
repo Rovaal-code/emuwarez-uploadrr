@@ -96,6 +96,22 @@
   font-family: var(--hud-font);
   letter-spacing: .03em;
 }
+.hud-app .topbar-sync-row {
+  border-top: 1px solid rgba(30, 110, 190, .3);
+}
+.hud-app .sync-chip-label {
+  font-family: var(--hud-font);
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--hud-ice);
+}
+.hud-app .sync-chip-bar {
+  background: rgba(56, 189, 255, .12);
+}
+.hud-app .sync-chip-bar-fill {
+  background: var(--hud-cyan);
+  box-shadow: 0 0 6px rgba(47, 216, 255, .6);
+}
 
 .hud-app .page-title {
   font-family: var(--hud-font);

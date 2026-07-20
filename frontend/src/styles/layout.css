@@ -97,17 +97,81 @@
   padding: 9px 0;
 }
 
-/* Topbar */
+/* Topbar — fixed total height regardless of content, so the live sync row
+   (.topbar-sync-row, second child) never causes the page below to shift:
+   it's simply blank when nothing is syncing. */
 .topbar {
   height: var(--topbar-height);
   background: var(--bg-topbar);
   border-bottom: 1px solid var(--border);
   display: flex;
+  flex-direction: column;
+  backdrop-filter: blur(8px);
+  flex-shrink: 0;
+}
+
+.topbar-main {
+  height: var(--topbar-main-height);
+  flex-shrink: 0;
+  display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 24px;
-  backdrop-filter: blur(8px);
+}
+
+.topbar-sync-row {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 24px;
+  overflow: hidden;
+}
+
+.sync-chip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  cursor: default;
+}
+
+.sync-chip-error {
+  color: var(--color-missing, #ef4444);
+  font-size: 13px;
+  line-height: 1;
+}
+
+.sync-chip-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.sync-chip-detail {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sync-chip-bar {
+  width: 64px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--bg-input);
+  overflow: hidden;
   flex-shrink: 0;
+}
+
+.sync-chip-bar-fill {
+  height: 100%;
+  background: var(--text-accent);
+  border-radius: 2px;
+  transition: width 0.3s ease;
 }
 
 .topbar-left {

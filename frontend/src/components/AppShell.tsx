@@ -4,7 +4,6 @@ import { Topbar } from './Topbar'
 import type { CurrentUserResponse } from '../types/api'
 import { guardedLeave, hasUnsavedChanges } from '../utils/unsavedGuard'
 import { UnsavedChangesModal } from './UnsavedChangesModal'
-import { SyncProgressBanner } from './SyncProgressBanner'
 
 // Pages
 import { DashboardPage } from '../pages/DashboardPage'
@@ -104,7 +103,6 @@ export function AppShell({ user, onLogout }: AppShellProps) {
           onLogout={onLogout}
         />
         <main className="page-container">
-          <SyncProgressBanner />
           <PageContent page={activePage} onNavigate={navigate} />
         </main>
       </div>

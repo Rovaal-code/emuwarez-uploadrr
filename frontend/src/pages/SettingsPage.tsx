@@ -1055,7 +1055,7 @@ function EventPicker({ title, eventTypes, selected, disabled, onToggle }: {
       <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{title}</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {eventTypes.map(ev => (
-          <label key={ev.code} className="checkbox-label" style={{ fontSize: 13, display: 'block' }}>
+          <label key={ev.code} className="checkbox-label" style={{ fontSize: 13 }}>
             <input
               type="checkbox"
               checked={selected.includes(ev.code)}
@@ -1259,7 +1259,7 @@ function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | nul
         <h3 style={{ marginTop: 0, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
           <ServiceIcon type="emu" size={20} /> Notificaciones UI
         </h3>
-        <label className="checkbox-label" style={{ marginBottom: 12, display: 'block' }}>
+        <label className="checkbox-label" style={{ marginBottom: 12 }}>
           <input type="checkbox" checked={uiEnabled} onChange={e => setUiEnabled(e.target.checked)} /> Mostrar avisos en la campana
         </label>
         <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 0 }}>
@@ -1411,17 +1411,8 @@ export function SettingsPage() {
         {tabs.map(t => (
           <button
             key={t.key}
+            className={`settings-tab${tab === t.key ? ' active' : ''}`}
             onClick={() => { if (t.key !== tab) guardedLeave(() => setTab(t.key)) }}
-            style={{
-              padding: '8px 16px',
-              fontSize: 13,
-              border: 'none',
-              background: 'none',
-              cursor: 'pointer',
-              color: tab === t.key ? 'var(--color-accent, #7c6af7)' : 'var(--text-secondary)',
-              borderBottom: tab === t.key ? '2px solid var(--color-accent, #7c6af7)' : '2px solid transparent',
-              marginBottom: -1,
-            }}
           >
             {t.label}
           </button>

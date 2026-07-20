@@ -183,6 +183,19 @@
   background: var(--hud-cyan);
   box-shadow: 0 0 6px var(--hud-cyan);
 }
+.hud-app .settings-tab {
+  border-radius: 2px;
+}
+.hud-app .settings-tab:hover:not(.active) {
+  color: var(--hud-ice);
+  background: rgba(47, 216, 255, .05);
+}
+.hud-app .settings-tab.active {
+  color: var(--hud-ice);
+  background: rgba(47, 216, 255, .1);
+  border-color: var(--hud-cyan);
+  box-shadow: 0 0 10px -4px rgba(47, 216, 255, .6);
+}
 .hud-app .btn-ghost {
   color: var(--hud-ice);
   border-color: transparent;

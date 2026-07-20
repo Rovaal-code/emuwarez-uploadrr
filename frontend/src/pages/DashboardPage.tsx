@@ -16,7 +16,7 @@ import { ServiceLabel, ServiceIcon } from '../components/ServiceIcon'
 import { Favicon, domainOf } from '../components/Favicon'
 import { UploadWizardModal } from '../components/UploadWizardModal'
 import { RequestFormModal } from '../components/RequestFormModal'
-import { useTooltip } from '../components/Tooltip'
+import { useTooltip, HoverTitle } from '../components/Tooltip'
 import { getLibraryItem } from '../api/library'
 import type { LibraryItemResponse } from '../types/api'
 import { formatBytes, formatDate, formatItemType } from '../utils/format'
@@ -65,6 +65,7 @@ function ConnRow({ icon, label, href, badge = 'Configurado', tone = 'ok' }: {
   icon: React.ReactNode; label: string; href?: string | null; badge?: string; tone?: 'ok' | 'warn' | 'error'
 }) {
   const cls = tone === 'error' ? 'status-error' : tone === 'warn' ? 'status-partial' : 'status-available'
+  const { triggerProps, tooltipNode } = useTooltip(href ? `Abrir ${label}` : null)
   const inner = (
     <>
       <span style={{ display: 'flex', width: 18, justifyContent: 'center' }}>{icon}</span>
@@ -74,8 +75,8 @@ function ConnRow({ icon, label, href, badge = 'Configurado', tone = 'ok' }: {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
       {href
-        ? <a className="hover-link" href={href} target="_blank" rel="noreferrer" title={`Abrir ${label}`}
-             style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>{inner}</a>
+        ? <a className="hover-link" href={href} target="_blank" rel="noreferrer" {...triggerProps}
+             style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>{inner}{tooltipNode}</a>
         : <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>{inner}</div>}
       <span className={`badge ${cls}`}>{badge}</span>
     </div>
@@ -396,7 +397,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                                 </span>
                               )}
                             </div>
-                            <div className="hover-link" style={{ fontWeight: 500, minWidth: 0 }} onClick={() => openLibraryDetail(item)} title="Ver ficha del contenido">{item.content_name}</div>
+                            <HoverTitle className="hover-link" style={{ fontWeight: 500, minWidth: 0 }} onClick={() => openLibraryDetail(item)} tip="Ver ficha del contenido">{item.content_name}</HoverTitle>
                           </div>
                         </td>
                         <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{formatItemType(item.item_type)}</td>
@@ -532,14 +533,14 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
-                          <div
+                          <HoverTitle
                             className="hover-link"
                             style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}
                             onClick={() => goToUpload(job.id!)}
-                            title="Ver progreso / detalle"
+                            tip="Ver progreso / detalle"
                           >
                             {job.title ?? `Job #${job.id}`}
-                          </div>
+                          </HoverTitle>
                           {totalElapsedText && (
                             <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>{totalElapsedText}</span>
                           )}

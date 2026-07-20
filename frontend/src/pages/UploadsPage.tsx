@@ -9,6 +9,7 @@ import { UploadJobDetailPage } from '../components/UploadJobDetailPage'
 import { StatusBadge } from '../components/StatusBadge'
 import { ServiceLabel } from '../components/ServiceIcon'
 import { CancelButtonIcon, RetryButtonIcon } from '../components/DetailCard'
+import { useTooltip } from '../components/Tooltip'
 import { formatDateTimeSeconds } from '../utils/format'
 import { posterUrl } from '../utils/libraryItem'
 import {
@@ -114,6 +115,7 @@ function JobRow({ job, onOpen, indent, retryToggle, onCancel, onRetry }: {
   const phaseInfo = isPreparingOrRunning ? currentPhaseInfo(job) : null
   const phaseLabelText = phaseInfo?.label ?? (isPreparingOrRunning ? phaseLabel(job.progress_phase) : null)
   const phaseElapsedText = isPreparingOrRunning ? progressCounter(job) : null
+  const { triggerProps: titleTip, tooltipNode: titleTooltip } = useTooltip('Ver progreso / detalle')
   return (
     <tr style={indent ? { opacity: 0.65 } : undefined}>
       <td style={{ width: 36 }}>
@@ -138,9 +140,10 @@ function JobRow({ job, onOpen, indent, retryToggle, onCancel, onRetry }: {
         <span
           className="lib-title-link"
           onClick={onOpen}
-          title="Ver progreso / detalle"
+          {...titleTip}
         >
           {job.title || '–'}
+          {titleTooltip}
         </span>
         {job.year ? <span style={{ color: 'var(--text-muted)', marginLeft: 4 }}>({job.year})</span> : null}
       </td>

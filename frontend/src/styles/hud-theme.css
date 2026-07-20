@@ -393,51 +393,55 @@
   margin-bottom: 12px;
   text-align: center;
 }
-.hud-app .sys-gauge-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px 4px;
-  justify-content: center;
-}
-.hud-app .sys-gauge {
+.hud-app .sys-gauge-list {
   display: flex;
   flex-direction: column;
+  gap: 14px;
+}
+.hud-app .sys-gauge-row {
+  display: flex;
   align-items: center;
-  position: relative;
+  gap: 12px;
   cursor: default;
 }
+.hud-app .sys-gauge {
+  position: relative;
+  flex-shrink: 0;
+}
 .hud-app .sys-gauge svg {
-  width: 40px;
-  height: 40px;
+  width: 56px;
+  height: 56px;
 }
 .hud-app .sys-gauge-track {
   fill: none;
   stroke: rgba(56, 189, 255, .15);
-  stroke-width: 3;
+  stroke-width: 4;
 }
 .hud-app .sys-gauge-fill {
   fill: none;
-  stroke-width: 3;
+  stroke-width: 4;
   stroke-linecap: round;
   filter: drop-shadow(0 0 3px currentColor);
   transition: stroke-dashoffset .4s ease;
 }
 .hud-app .sys-gauge-pct {
   position: absolute;
-  top: 12px; left: 0; right: 0;
-  text-align: center;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-family: var(--hud-font);
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--hud-ice);
 }
 .hud-app .sys-gauge-label {
-  margin-top: 3px;
   font-family: var(--hud-font);
-  font-size: 9px;
-  letter-spacing: .06em;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .08em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 .hud-app .sys-net-row {
   display: flex;

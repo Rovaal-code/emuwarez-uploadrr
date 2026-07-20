@@ -7,6 +7,7 @@ import { formatDate, formatItemType, formatBytes } from '../utils/format'
 import { buildDeepLink, posterUrl, isAporteEligible, episodeListLabel } from '../utils/libraryItem'
 import { ProviderTag } from './ProviderIcon'
 import { LibraryActionButtons } from './LibraryActionButtons'
+import { useTooltip } from './Tooltip'
 
 const NESTED_PAGE_SIZE = 25
 // Seasons per series — well under the API's max limit=500 (a season list
@@ -90,6 +91,7 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, onR
   const [childTotal, setChildTotal] = useState(0)
   const [childOffset, setChildOffset] = useState(0)
   const [loadingChildren, setLoadingChildren] = useState(false)
+  const { triggerProps: titleTip, tooltipNode: titleTooltip } = useTooltip('Abrir ficha')
 
   const isSeries = item.item_type === 'series'
   const isSeason = item.item_type === 'season'
@@ -177,9 +179,10 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, onR
             <div
               className="lib-title-link"
               onClick={e => { e.stopPropagation(); onSelect(item) }}
-              title="Abrir ficha"
+              {...titleTip}
             >
               {episodeListLabel(item)}
+              {titleTooltip}
             </div>
             {item.year ? <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 4, flexShrink: 0 }}>({item.year})</span> : null}
           </div>

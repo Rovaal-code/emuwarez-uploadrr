@@ -12,6 +12,7 @@ import { LoadingState } from '../components/LoadingState'
 import { ErrorState } from '../components/ErrorState'
 import { EmptyState } from '../components/EmptyState'
 import { SyncInfo } from '../components/SyncInfo'
+import { HoverTitle } from '../components/Tooltip'
 import { useSync } from '../context/SyncContext'
 import { UploadWizardModal } from '../components/UploadWizardModal'
 import { getLibraryItem } from '../api/library'
@@ -666,14 +667,14 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                             <RequestPoster url={item.poster_url} category={item.category} />
                             <div style={{ minWidth: 0 }}>
-                              <div
+                              <HoverTitle
                                 className="lib-title-link"
                                 onClick={e => { e.stopPropagation(); handleRowClick(item.id) }}
-                                title="Abrir ficha"
+                                tip="Abrir ficha"
                                 style={{ fontWeight: 500 }}
                               >
                                 {item.title}
-                              </div>
+                              </HoverTitle>
                             </div>
                           </div>
                         </td>

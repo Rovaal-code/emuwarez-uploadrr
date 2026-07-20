@@ -104,3 +104,27 @@ export function Tooltip({ content, children, style, maxWidth }: {
     </span>
   )
 }
+
+// Drop-in replacement for a plain element with a native `title=` attribute —
+// same tag/className/style/onClick, just with the app's own styled tooltip
+// instead of the browser's default box. Exists so a title-link rendered
+// inside a `.map()` (where a hook can't be called directly) still gets one:
+// this is a real component instance per row, so its own useTooltip() call
+// is perfectly legal.
+export function HoverTitle({ as = 'div', className, style, onClick, tip, children }: {
+  as?: 'div' | 'span'
+  className?: string
+  style?: React.CSSProperties
+  onClick?: (e: React.MouseEvent) => void
+  tip: string
+  children: React.ReactNode
+}) {
+  const { triggerProps, tooltipNode } = useTooltip(tip)
+  const Tag = as as 'div'
+  return (
+    <Tag className={className} style={style} onClick={onClick} {...triggerProps}>
+      {children}
+      {tooltipNode}
+    </Tag>
+  )
+}

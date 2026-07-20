@@ -4,7 +4,7 @@ import { formatBytes } from '../utils/format'
 import { useTooltip } from './Tooltip'
 
 const POLL_MS = 4000
-const RADIUS = 17
+const RADIUS = 22
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS
 
 function Gauge({ percent, label, color, title }: { percent: number; label: string; color: string; title?: string }) {
@@ -12,16 +12,18 @@ function Gauge({ percent, label, color, title }: { percent: number; label: strin
   const offset = CIRCUMFERENCE * (1 - clamped / 100)
   const { triggerProps, tooltipNode } = useTooltip(title ?? null)
   return (
-    <div className="sys-gauge" {...triggerProps}>
-      <svg viewBox="0 0 40 40">
-        <circle cx="20" cy="20" r={RADIUS} className="sys-gauge-track" />
-        <circle
-          cx="20" cy="20" r={RADIUS} className="sys-gauge-fill"
-          style={{ stroke: color, strokeDasharray: CIRCUMFERENCE, strokeDashoffset: offset }}
-          transform="rotate(-90 20 20)"
-        />
-      </svg>
-      <div className="sys-gauge-pct">{Math.round(clamped)}%</div>
+    <div className="sys-gauge-row" {...triggerProps}>
+      <div className="sys-gauge">
+        <svg viewBox="0 0 50 50">
+          <circle cx="25" cy="25" r={RADIUS} className="sys-gauge-track" />
+          <circle
+            cx="25" cy="25" r={RADIUS} className="sys-gauge-fill"
+            style={{ stroke: color, strokeDasharray: CIRCUMFERENCE, strokeDashoffset: offset }}
+            transform="rotate(-90 25 25)"
+          />
+        </svg>
+        <div className="sys-gauge-pct">{Math.round(clamped)}%</div>
+      </div>
       <div className="sys-gauge-label">{label}</div>
       {tooltipNode}
     </div>
@@ -43,8 +45,8 @@ export function SystemStatusPanel() {
 
   return (
     <div className="sys-status">
-      <div className="sys-status-title">System Status</div>
-      <div className="sys-gauge-grid">
+      <div className="sys-status-title">Estado del sistema</div>
+      <div className="sys-gauge-list">
         <Gauge percent={stats.cpu_percent} label="CPU" color="var(--hud-cyan)" />
         <Gauge percent={stats.ram_percent} label="RAM" color="var(--hud-cyan)"
           title={`${stats.ram_used_gb.toFixed(1)} / ${stats.ram_total_gb.toFixed(1)} GB`} />

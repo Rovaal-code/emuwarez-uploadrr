@@ -397,7 +397,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
           body="Añade instancias Radarr/Sonarr en la sección Instancias y sincroniza para ver el contenido aquí."
         />
       ) : viewMode === 'grid' ? (
-        <div className="activity-section" style={{ padding: 20, flex: 1, minHeight: 0, overflowY: 'auto' }}>
+        <div className="activity-section" style={{ padding: 20, flex: 1, minHeight: 0, overflowY: 'auto', marginBottom: 0 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 16 }}>
             {filteredItems.map((item, i) => (
               <PosterCard key={item.id} item={item} instances={instances} onClick={() => setSelected(item)} priority={i < GRID_PRIORITY_COUNT} />
@@ -405,7 +405,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
           </div>
         </div>
       ) : viewMode === 'grid-lg' ? (
-        <div className="activity-section" style={{ padding: 20, flex: 1, minHeight: 0, overflowY: 'auto' }}>
+        <div className="activity-section" style={{ padding: 20, flex: 1, minHeight: 0, overflowY: 'auto', marginBottom: 0 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 20 }}>
             {filteredItems.map((item, i) => (
               <LargePosterCard key={item.id} item={item} instances={instances} onClick={() => setSelected(item)} priority={i < GRID_PRIORITY_COUNT} />
@@ -413,7 +413,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
           </div>
         </div>
       ) : (
-        <div className="activity-section" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        <div className="activity-section" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', marginBottom: 0 }}>
           <div style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
             <table className="data-table">
               <thead>

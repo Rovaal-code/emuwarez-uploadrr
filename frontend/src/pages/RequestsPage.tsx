@@ -625,7 +625,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
             ) : undefined}
           />
         ) : (
-          <div className="activity-section" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          <div className="activity-section" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', marginBottom: 0 }}>
             <div style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
               <table className="data-table">
                 <thead>

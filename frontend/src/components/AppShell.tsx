@@ -94,7 +94,7 @@ export function AppShell({ user, onLogout }: AppShellProps) {
   }, [])
 
   return (
-    <div className="app-shell">
+    <div className="app-shell hud-app">
       <UnsavedChangesModal />
       <Sidebar active={activePage} onNavigate={navigate} />
       <div className="main-content">

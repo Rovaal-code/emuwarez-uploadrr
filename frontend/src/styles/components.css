@@ -1,5 +1,15 @@
 /* Reusable components */
 
+/* Detail-page semantic cards (DetailCard.tsx's <Card>) */
+.detail-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+}
+.detail-card-title {
+  color: var(--text-secondary);
+  border-bottom: 2px solid var(--border-hover);
+}
+
 /* Cards */
 .card {
   background: var(--bg-card);

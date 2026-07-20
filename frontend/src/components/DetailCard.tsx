@@ -27,11 +27,10 @@ export function Card({ title, icon, children, padding = '21px 19px', gap = 10, t
   titleGap?: number
 }) {
   return (
-    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: 10, padding }}>
-      <div style={{
+    <div className="detail-card" style={{ borderRadius: 10, padding }}>
+      <div className="detail-card-title" style={{
         fontSize: 13.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em',
-        color: 'var(--text-secondary)', marginBottom: titleGap, paddingBottom: titleGap / 2,
-        borderBottom: '2px solid var(--border-hover)',
+        marginBottom: titleGap, paddingBottom: titleGap / 2,
         display: 'flex', alignItems: 'center', gap: 8,
       }}>
         {icon && <span style={{ display: 'inline-flex', color: 'var(--text-accent)', flexShrink: 0 }}>{icon}</span>}

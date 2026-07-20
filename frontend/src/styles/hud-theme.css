@@ -1,0 +1,276 @@
+/* eMuwarez Uploadrr — holographic HUD skin, BLUE_HUD profile.
+   Every rule is scoped under `.hud-app` (the AppShell's own root element,
+   see AppShell.tsx) so pre-auth screens (login/setup wizard) are untouched.
+   See the approved boceto (artifacts/visual-review/panel/) for the visual
+   source of truth. */
+
+.hud-app {
+  --hud-fill: rgba(3, 17, 39, .82);
+  --hud-fill-2: rgba(2, 10, 24, .9);
+  --hud-line: rgba(30, 110, 190, .65);
+  --hud-line-inner: rgba(140, 220, 255, .28);
+  --hud-cyan: #2fd8ff;
+  --hud-ice: #a9ecff;
+  --hud-ok: #28e394;
+  --hud-warn: #ffb930;
+  --hud-danger: #ff5470;
+  --hud-font: "Share Tech Mono", "Consolas", ui-monospace, monospace;
+  position: relative;
+  background:
+    radial-gradient(900px 500px at 10% -10%, rgba(47, 216, 255, .08), transparent 60%),
+    radial-gradient(800px 460px at 95% 0%, rgba(28, 125, 255, .07), transparent 60%),
+    var(--bg-base);
+}
+
+/* ---- shell: sidebar + topbar ---- */
+.hud-app .sidebar {
+  background: linear-gradient(175deg, rgba(3, 10, 22, .96), rgba(2, 7, 16, .98));
+  border-right: 1px solid var(--hud-line);
+  box-shadow: 4px 0 30px -20px rgba(47, 216, 255, .5);
+}
+.hud-app .sidebar-logo {
+  border-bottom: 1px solid rgba(30, 110, 190, .4);
+}
+.hud-app .sidebar-logo-text {
+  font-family: var(--hud-font);
+  letter-spacing: .04em;
+  text-shadow: 0 0 10px rgba(47, 216, 255, .5);
+}
+.hud-app .nav-item {
+  font-family: var(--hud-font);
+  font-size: 12.5px;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  border-left: 2px solid transparent;
+}
+.hud-app .nav-item.active {
+  color: var(--hud-ice);
+  background: linear-gradient(90deg, rgba(47, 216, 255, .16), rgba(47, 216, 255, .02));
+  border-left-color: var(--hud-cyan);
+  box-shadow: inset 0 0 0 1px rgba(47, 216, 255, .18);
+}
+.hud-app .nav-item.active .nav-item-icon {
+  filter: drop-shadow(0 0 4px var(--hud-cyan));
+  opacity: 1;
+}
+.hud-app .topbar {
+  background: rgba(3, 10, 22, .88);
+  border-bottom: 1px solid var(--hud-line);
+}
+.hud-app .topbar-title {
+  font-family: var(--hud-font);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.hud-app .topbar-btn {
+  border-color: rgba(30, 110, 190, .5);
+  background: rgba(6, 20, 42, .6);
+}
+.hud-app .topbar-btn:hover {
+  border-color: var(--hud-cyan);
+  box-shadow: 0 0 12px -4px rgba(47, 216, 255, .7);
+}
+
+.hud-app .page-title {
+  font-family: var(--hud-font);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  text-shadow: 0 0 22px rgba(47, 216, 255, .45);
+}
+
+/* ---- shared HUD panel material: chamfer + layered frame + corner glow ---- */
+.hud-app .stat-card,
+.hud-app .activity-section,
+.hud-app .upload-panel {
+  background:
+    radial-gradient(120px 90px at 0% 0%, rgba(47, 216, 255, .16), transparent 60%),
+    radial-gradient(140px 100px at 100% 100%, rgba(47, 216, 255, .1), transparent 60%),
+    linear-gradient(175deg, var(--hud-fill) 0%, var(--hud-fill-2) 100%);
+  border: 1.5px solid var(--hud-line);
+  border-radius: 3px;
+  clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 18px 100%, 0 calc(100% - 18px));
+  box-shadow:
+    inset 0 0 0 1px var(--hud-line-inner),
+    inset 0 22px 40px -32px rgba(140, 220, 255, .45),
+    0 14px 30px -16px rgba(0, 0, 0, .7),
+    0 0 26px -12px rgba(47, 216, 255, .35);
+}
+
+/* ---- global primitives: cards, buttons, modals, inputs ---- */
+.hud-app .card,
+.hud-app .modal,
+.hud-app .modal-panel {
+  background:
+    radial-gradient(120px 90px at 0% 0%, rgba(47, 216, 255, .1), transparent 60%),
+    linear-gradient(175deg, var(--hud-fill) 0%, var(--hud-fill-2) 100%);
+  border: 1px solid var(--hud-line);
+  box-shadow: inset 0 0 0 1px var(--hud-line-inner), 0 14px 30px -16px rgba(0, 0, 0, .7);
+}
+.hud-app .modal-header,
+.hud-app .modal-title {
+  border-color: rgba(30, 110, 190, .4);
+}
+.hud-app .btn-primary {
+  background: linear-gradient(180deg, rgba(47, 216, 255, .22), rgba(28, 125, 255, .35));
+  border-color: var(--hud-cyan);
+  box-shadow: 0 0 12px -4px rgba(47, 216, 255, .7), inset 0 1px 0 rgba(255, 255, 255, .12);
+}
+.hud-app .btn-primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, rgba(47, 216, 255, .32), rgba(28, 125, 255, .45));
+  box-shadow: 0 0 18px -4px rgba(47, 216, 255, .9);
+}
+.hud-app .btn-secondary {
+  background: rgba(6, 20, 42, .6);
+  border-color: rgba(30, 110, 190, .5);
+}
+.hud-app .btn-secondary:hover:not(:disabled) {
+  border-color: var(--hud-cyan);
+  box-shadow: 0 0 10px -4px rgba(47, 216, 255, .6);
+}
+.hud-app input[type="text"],
+.hud-app input[type="password"],
+.hud-app input[type="number"],
+.hud-app input[type="search"],
+.hud-app input[type="email"],
+.hud-app input[type="url"],
+.hud-app textarea,
+.hud-app select {
+  background: rgba(3, 12, 26, .7);
+  border-color: rgba(30, 110, 190, .45);
+}
+.hud-app input:focus,
+.hud-app textarea:focus,
+.hud-app select:focus {
+  border-color: var(--hud-cyan);
+  box-shadow: 0 0 0 3px rgba(47, 216, 255, .15);
+}
+
+.hud-app .detail-card {
+  background:
+    radial-gradient(120px 90px at 0% 0%, rgba(47, 216, 255, .1), transparent 60%),
+    linear-gradient(175deg, var(--hud-fill) 0%, var(--hud-fill-2) 100%);
+  border: 1px solid var(--hud-line);
+  box-shadow: inset 0 0 0 1px var(--hud-line-inner), 0 14px 30px -16px rgba(0, 0, 0, .7);
+}
+.hud-app .detail-card-title {
+  font-family: var(--hud-font);
+  color: var(--hud-ice);
+  border-bottom-color: rgba(30, 110, 190, .4);
+}
+
+/* ---- stat cards: big icon badge + text stack ---- */
+.hud-app .stat-card {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 15px;
+}
+.hud-app .stat-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
+  border-radius: 3px;
+  color: var(--hud-cyan);
+  background: radial-gradient(circle at 35% 30%, rgba(47, 216, 255, .28), rgba(47, 216, 255, .04) 70%);
+  border: 1px solid rgba(47, 216, 255, .45);
+  box-shadow: 0 0 14px -4px rgba(47, 216, 255, .6), inset 0 0 10px rgba(47, 216, 255, .2);
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%);
+}
+.hud-app .stat-card-icon svg { width: 24px; height: 24px; }
+.hud-app .stat-card-label {
+  font-family: var(--hud-font);
+  letter-spacing: .08em;
+}
+.hud-app .stat-card-value {
+  font-family: var(--hud-font);
+  text-shadow: 0 0 10px currentColor;
+}
+
+/* ---- section headers ---- */
+.hud-app .section-header {
+  border-bottom: none;
+  padding: 14px 18px 0;
+}
+.hud-app .section-title {
+  font-family: var(--hud-font);
+  font-size: 12px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--hud-ice);
+  text-shadow: 0 0 8px rgba(47, 216, 255, .4);
+  position: relative;
+  padding-bottom: 10px;
+  width: 100%;
+}
+.hud-app .section-title::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(56, 189, 255, .7) 15%, rgba(140, 220, 255, .9) 50%, rgba(56, 189, 255, .7) 85%, transparent);
+  box-shadow: 0 0 8px rgba(56, 189, 255, .5);
+}
+
+/* ---- tables ---- */
+.hud-app .data-table th {
+  font-family: var(--hud-font);
+  font-size: 10px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.hud-app .data-table td {
+  border-bottom: 1px solid rgba(56, 189, 255, .09);
+}
+.hud-app .data-table tr:hover td {
+  background: rgba(47, 216, 255, .06);
+}
+.hud-app .badge {
+  font-family: var(--hud-font);
+  letter-spacing: .04em;
+  border-radius: 2px;
+}
+
+/* ---- upload activity rows ---- */
+.hud-app .upload-panel-body .hover-link {
+  color: var(--text-primary);
+}
+
+/* ---- projected empty-state hologram (Actividad de subida) ---- */
+.hud-app .hud-projection {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 4px;
+}
+.hud-app .hud-projection-svg {
+  width: 100%;
+  max-width: 240px;
+  height: auto;
+  overflow: visible;
+}
+.hud-app .hud-beam {
+  transform-origin: 130px 150px;
+  animation: panelHudSweep 6s linear infinite;
+}
+.hud-app .hud-particle {
+  animation: panelHudRise 4.2s ease-in-out infinite;
+}
+.hud-app .hud-bar {
+  animation: panelHudPulse 3.4s ease-in-out infinite;
+  transform-origin: bottom;
+}
+@keyframes panelHudSweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes panelHudRise { 0% { opacity: 0; transform: translateY(0); } 30% { opacity: 1; } 100% { opacity: 0; transform: translateY(-40px); } }
+@keyframes panelHudPulse { 0%, 100% { transform: scaleY(.7); opacity: .55; } 50% { transform: scaleY(1); opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-app .hud-beam,
+  .hud-app .hud-particle,
+  .hud-app .hud-bar {
+    animation: none;
+  }
+}

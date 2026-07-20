@@ -92,6 +92,23 @@ function ConnRow({ icon, label, href, badge = 'Configurado', tone = 'ok' }: {
   )
 }
 
+// Panel HUD stat-card icons — large, single-purpose per metric (matches the
+// approved holographic reference; other pages' StatCard usage is unaffected
+// since the `icon` prop only renders inside `.panel-hud`'s CSS scope).
+function svgIcon(d: React.ReactNode) {
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">{d}</svg>
+}
+const ICON_LIBRARY = svgIcon(<><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5" /><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" /></>)
+const ICON_AVAILABLE = svgIcon(<><path d="M21 15V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9" /><path d="M2 15h20l-2 5H4l-2-5z" /></>)
+const ICON_MISSING = svgIcon(<><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /><path d="M12 9v4M12 17h.01" /></>)
+const ICON_UNIQUE = svgIcon(<><circle cx="12" cy="12" r="9" /><path d="M10 8l6 4-6 4V8z" /></>)
+const ICON_UPLOADS = svgIcon(<path d="M12 19V5M5 12l7-7 7 7" />)
+const ICON_REQUESTS = svgIcon(<><rect x="9" y="3" width="6" height="4" rx="1" /><path d="M9 12h6M9 16h4" /></>)
+const ICON_COMPATIBLE = svgIcon(<><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-6 8-6s8 2 8 6" /></>)
+const ICON_PARTIAL = svgIcon(<path d="M12 22s8-4.5 8-11V5l-8-3-8 3v6c0 6.5 8 11 8 11z" />)
+const ICON_RECLAIMED = svgIcon(<><path d="M21.2 15a9 9 0 1 1-2.6-11.3" /><path d="M21 3v6h-6" /></>)
+const ICON_MINE = svgIcon(<><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><path d="M3.3 7 12 12l8.7-5M12 22V12" /></>)
+
 interface DashboardPageProps {
   onNavigate?: (page: string) => void
 }
@@ -234,6 +251,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
       {/* Stat cards */}
       <div className="stat-cards-row">
         <StatCard
+          icon={ICON_LIBRARY}
           label="Biblioteca sincronizada"
           value={s.library_total}
           info="Total de películas y episodios importados desde tus instancias de Radarr y Sonarr."
@@ -249,6 +267,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
         </StatCard>
 
         <StatCard
+          icon={ICON_AVAILABLE}
           label="Disponibles"
           value={s.available}
           accentColor="var(--color-available)"
@@ -256,6 +275,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
         />
 
         <StatCard
+          icon={ICON_MISSING}
           label="Faltantes"
           value={s.missing}
           accentColor="var(--color-missing)"
@@ -263,6 +283,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
         />
 
         <StatCard
+          icon={ICON_UNIQUE}
           label="Contenido único"
           value={s.unique_content ?? 0}
           accentColor="#a855f7"
@@ -275,6 +296,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
         </StatCard>
 
         <StatCard
+          icon={ICON_UPLOADS}
           label="Tus subidas"
           value={s.uploads_completed ?? 0}
           accentColor="#3b82f6"
@@ -288,29 +310,34 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
       <div style={{ marginBottom: 20 }}>
         <div className="stat-cards-row">
           <StatCard
+            icon={ICON_REQUESTS}
             label="Peticiones eMuwarez"
             value={s.requests_total ?? 0}
             info="Total de peticiones activas descargadas de eMuwarez."
           />
           <StatCard
+            icon={ICON_COMPATIBLE}
             label="Peticiones Compatibles"
             value={s.requests_compatible ?? 0}
             accentColor="#22c55e"
             info="Peticiones cuya mejor coincidencia en tu biblioteca cumple resolución y source: quizás puedas cubrirlas."
           />
           <StatCard
+            icon={ICON_PARTIAL}
             label="Peticiones Parciales"
             value={s.requests_partial ?? 0}
             accentColor="#f59e0b"
             info="Peticiones cuya mejor coincidencia cumple solo parte de lo pedido (resolución o source, pero no ambos)."
           />
           <StatCard
+            icon={ICON_RECLAIMED}
             label="Reclamadas"
             value={s.requests_reclaimed ?? 0}
             accentColor="#a855f7"
             info="Peticiones ya Reclamadas en eMuwarez. eMuwarez no permite saber si el reclamo es tuyo, así que es el total de reclamadas, no solo las tuyas."
           />
           <StatCard
+            icon={ICON_MINE}
             label="Mis Peticiones"
             value={s.requests_mine ?? 0}
             accentColor="#3b82f6"
@@ -449,9 +476,36 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
             </div>
             <div className="upload-panel-body" style={{ padding: '12px 16px', display: 'block', minHeight: 'auto', flex: 1, overflowY: 'auto' }}>
               {activeUploads.length === 0 ? (
-                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>
-                  No hay subidas en curso ahora mismo.
-                </p>
+                <div className="hud-projection">
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0 0 6px' }}>
+                    No hay subidas en curso ahora mismo.
+                  </p>
+                  <svg viewBox="0 0 260 196" className="hud-projection-svg">
+                    <defs>
+                      <linearGradient id="hudBeamGrad" x1="0" y1="1" x2="0" y2="0">
+                        <stop offset="0%" stopColor="#2fd8ff" stopOpacity=".95" /><stop offset="100%" stopColor="#2fd8ff" stopOpacity="0" />
+                      </linearGradient>
+                      <radialGradient id="hudFloorGrad" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stopColor="#2fd8ff" stopOpacity=".5" /><stop offset="100%" stopColor="#2fd8ff" stopOpacity="0" />
+                      </radialGradient>
+                    </defs>
+                    <ellipse cx="130" cy="150" rx="18" ry="6" fill="url(#hudFloorGrad)" />
+                    <ellipse cx="130" cy="150" rx="105" ry="20" fill="none" stroke="#2fd8ff" opacity=".18" strokeWidth="1" />
+                    <ellipse cx="130" cy="150" rx="80" ry="15" fill="none" stroke="#2fd8ff" opacity=".28" strokeWidth="1" />
+                    <ellipse cx="130" cy="150" rx="55" ry="10" fill="none" stroke="#2fd8ff" opacity=".35" strokeWidth="1" />
+                    <ellipse cx="130" cy="150" rx="28" ry="5.5" fill="none" stroke="#a9ecff" opacity=".55" strokeWidth="1.2" />
+                    <rect className="hud-bar" x="96" y="112" width="4" height="30" fill="#2fd8ff" opacity=".7" style={{ animationDelay: '.2s' }} />
+                    <rect className="hud-bar" x="106" y="100" width="4" height="42" fill="#a9ecff" opacity=".8" style={{ animationDelay: '.9s' }} />
+                    <rect className="hud-bar" x="150" y="106" width="4" height="36" fill="#2fd8ff" opacity=".75" style={{ animationDelay: '1.6s' }} />
+                    <rect className="hud-bar" x="160" y="118" width="4" height="24" fill="#a9ecff" opacity=".65" style={{ animationDelay: '.5s' }} />
+                    <line x1="130" y1="150" x2="130" y2="4" stroke="url(#hudBeamGrad)" strokeWidth="3" className="hud-beam" />
+                    <line x1="130" y1="150" x2="130" y2="10" stroke="#a9ecff" strokeWidth="1" opacity=".5" />
+                    <circle cx="130" cy="150" r="4" fill="#a9ecff" />
+                    <circle className="hud-particle" cx="112" cy="128" r="1.8" fill="#a9ecff" style={{ animationDelay: '.3s' }} />
+                    <circle className="hud-particle" cx="150" cy="132" r="1.8" fill="#a9ecff" style={{ animationDelay: '1.6s' }} />
+                    <circle className="hud-particle" cx="128" cy="118" r="1.8" fill="#a9ecff" style={{ animationDelay: '2.8s' }} />
+                  </svg>
+                </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {activeUploads.map(job => {

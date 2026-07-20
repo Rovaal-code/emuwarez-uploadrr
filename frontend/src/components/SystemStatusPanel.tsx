@@ -52,7 +52,6 @@ export function SystemStatusPanel() {
 
   return (
     <div className="sys-status">
-      <div className="sys-status-title">Estado del sistema</div>
       <div className="sys-gauge-list">
         <Gauge percent={stats.cpu_percent} label="CPU" color="var(--hud-cyan)" title={stats.cpu_name} />
         <Gauge percent={stats.ram_percent} label="RAM" color="var(--hud-cyan)"

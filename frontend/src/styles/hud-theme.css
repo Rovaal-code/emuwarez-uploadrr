@@ -379,40 +379,50 @@
 }
 
 /* ---- Sidebar System Status (CPU/RAM/disk/GPU/VRAM + network) ---- */
+/* Fills 100% of whatever room is left below the nav (no title, no
+   margin-top:auto gap) — every gauge gets an equal flex share of that
+   height, and its ring scales to fill its own share (capped by the
+   sidebar's width so it never grows wider than the column). */
+.hud-app .sidebar-nav {
+  flex: 0 0 auto;
+}
 .hud-app .sys-status {
-  margin-top: auto;
-  padding: 5px 14px 5px;
-  border-top: 1px solid rgba(30, 110, 190, .35);
-}
-.hud-app .sys-status-title {
-  font-family: var(--hud-font);
-  font-size: 10px;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  margin-bottom: 3px;
-  text-align: center;
-}
-.hud-app .sys-gauge-list {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  padding: 8px 14px 8px;
+  border-top: 1px solid rgba(30, 110, 190, .35);
+}
+.hud-app .sys-gauge-list {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 .hud-app .sys-gauge-row {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0;
   cursor: default;
 }
 .hud-app .sys-gauge {
   position: relative;
-  flex-shrink: 0;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .hud-app .sys-gauge svg {
-  width: 68px;
-  height: 68px;
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+  aspect-ratio: 1 / 1;
 }
 .hud-app .sys-gauge-track {
   fill: none;
@@ -433,11 +443,12 @@
   align-items: center;
   justify-content: center;
   font-family: var(--hud-font);
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--hud-ice);
 }
 .hud-app .sys-gauge-label {
+  flex-shrink: 0;
   font-family: var(--hud-font);
   font-size: 10px;
   font-weight: 600;
@@ -446,6 +457,7 @@
   color: var(--text-secondary);
 }
 .hud-app .sys-net-row {
+  flex-shrink: 0;
   display: flex;
   justify-content: space-between;
   margin-top: 3px;

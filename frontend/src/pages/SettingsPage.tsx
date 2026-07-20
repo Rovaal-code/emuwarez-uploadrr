@@ -18,6 +18,7 @@ import { useCooldown } from '../hooks/useCooldown'
 import { testDiscordNotification, testTelegramNotification } from '../api/notifications'
 import { ProviderPriorityPicker } from '../components/ProviderPriorityPicker'
 import { ServiceIcon } from '../components/ServiceIcon'
+import { InfoIcon } from '../components/InfoIcon'
 import { Favicon, domainOf } from '../components/Favicon'
 import { SortableList, DragHandleIcon } from '../components/SortableList'
 import { REGION_OPTIONS, LANGUAGE_OPTIONS } from '../constants/regionLanguage'
@@ -367,21 +368,23 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           )}
         </div>
         <div className="form-group" style={{ marginTop: 14 }}>
-          <label className="form-label">Mi usuario de eMuwarez</label>
+          <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            Mi usuario de eMuwarez
+            <InfoIcon text="Tu nombre de usuario en eMuwarez. Lo usamos para reconocer cuáles de todas las peticiones descargadas las has creado tú, y así poder mostrártelas en 'Mis peticiones'." />
+          </label>
           <input
             className="form-input"
             value={emuUsername}
             onChange={e => setEmuUsername(e.target.value)}
             placeholder="Tu nombre de usuario en eMuwarez"
           />
-          <span className="form-hint">
-            Sirve para saber qué peticiones son tuyas.
-          </span>
         </div>
         <div className="form-group" style={{ marginTop: 14 }}>
-          <label className="form-label">Tag del grupo de subida</label>
+          <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            Tag del grupo de subida
+            <InfoIcon text="El tag que va tras el último «-» en el nombre del torrent (tu grupo/usuario)." />
+          </label>
           <input className="form-input" value={tag} onChange={e => setTag(e.target.value)} placeholder="EMUWAREZ" />
-          <span className="form-hint">El tag que va tras el último «-» en el nombre del torrent (tu grupo/usuario).</span>
         </div>
       </div>
 

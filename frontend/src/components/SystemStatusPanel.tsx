@@ -58,7 +58,7 @@ export function SystemStatusPanel() {
         <Gauge percent={stats.ram_percent} label="RAM" color="var(--hud-cyan)"
           title={`${formatGb(stats.ram_used_gb)} / ${formatGb(stats.ram_total_gb)}`} />
         <Gauge percent={stats.disk_percent} label="Disco" color="var(--hud-ice)"
-          title={`${stats.disk_path} — ${formatGb(stats.disk_used_gb)} / ${formatGb(stats.disk_total_gb)}`} />
+          title={`Biblioteca: ${formatGb(stats.disk_used_gb)} / ${formatGb(stats.disk_total_gb)}`} />
         {stats.gpu && (
           <>
             <Gauge percent={stats.gpu.percent} label="GPU" color="var(--hud-cyan)" title={stats.gpu.name} />

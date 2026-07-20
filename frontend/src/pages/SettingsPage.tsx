@@ -327,6 +327,8 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16, alignItems: 'stretch' }}>
+      <AccountCard />
+
       <div className="placeholder-card">
         <h3 style={{ marginTop: 0, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
           <ServiceIcon type="emu" size={18} /> Emuwarez
@@ -378,6 +380,71 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
             Como eMuwarez no expone tu usuario automáticamente, escríbelo aquí para que el Panel pueda
             mostrar cuántas peticiones son tuyas ("Mis peticiones").
           </span>
+        </div>
+      </div>
+
+      <div className="placeholder-card">
+        <h3 style={{ marginTop: 0, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <ServiceIcon type="tmdb" size={18} /> TMDb
+        </h3>
+        <div className="form-group" style={{ marginBottom: 12 }}>
+          <label className="form-label">Estado de la API key</label>
+          <div style={{ fontSize: 13 }}>
+            {settings?.tmdb_api_key_configured
+              ? <><span style={{ color: '#22c55e' }}>✓ Configurada</span>{settings.tmdb_api_key_masked && <code style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>{settings.tmdb_api_key_masked}</code>}</>
+              : <span style={{ color: '#ef4444' }}>✗ No configurada</span>}
+          </div>
+        </div>
+        <div className="form-group" style={{ marginBottom: 12 }}>
+          <label className="form-label">Nueva API key <span className="form-hint">(dejar vacío para mantener la actual)</span></label>
+          <input
+            type="password"
+            className="form-input"
+            value={newKey}
+            onChange={e => setNewKey(e.target.value)}
+            placeholder="API key de TMDb"
+            autoComplete="new-password"
+          />
+          <span className="form-hint">Usada para marcar providers disponibles en TMDb.</span>
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={handleTestTmdb}
+            disabled={testingTmdb}
+            type="button"
+          >
+            {testingTmdb ? 'Probando…' : 'Probar conexión'}
+          </button>
+          {tmdbTestResult && (
+            <span style={{ marginLeft: 10, fontSize: 12, color: testResultColor(tmdbTestResult) }}>
+              {testResultLabel(tmdbTestResult)}
+            </span>
+          )}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="form-group">
+            <label className="form-label">Región</label>
+            <select className="form-input form-select" value={region} onChange={e => setRegion(e.target.value)}>
+              {REGION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label} ({o.value})</option>)}
+            </select>
+            <span className="form-hint">País para filtrar providers.</span>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Idioma</label>
+            <select className="form-input form-select" value={language} onChange={e => setLanguage(e.target.value)}>
+              {LANGUAGE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+          <label className="checkbox-label" style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 4, gridColumn: '1 / -1' }}>
+            <input type="checkbox" checked={localizeTitles} onChange={e => setLocalizeTitles(e.target.checked)} style={{ marginTop: 3 }} />
+            <span style={{ fontSize: 13 }}>
+              Traducir títulos de series con TMDb
+              <span className="form-hint" style={{ display: 'block' }}>
+                Sonarr toma los títulos de TVDB (a menudo en inglés). Con esto, las series usan el título de TMDb en el idioma de arriba (p. ej. «The Serrano» → «Los Serrano»). Se aplica en la próxima sincronización de biblioteca.
+              </span>
+            </span>
+          </label>
         </div>
       </div>
 
@@ -447,41 +514,19 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
 
       <div className="placeholder-card">
         <h3 style={{ marginTop: 0, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
-          🔗 Hardlinks
+          <svg width={18} height={18} viewBox="0 0 24 24" fill="none" aria-hidden>
+            <rect x="2.5" y="5" width="19" height="14" rx="2.5" stroke="#8b5cf6" strokeWidth="1.6" />
+            <path d="M10 9.2v5.6l4.5-2.8z" fill="#8b5cf6" />
+          </svg>
+          Providers de vídeo
         </h3>
-        <label className="checkbox-label" style={{ marginBottom: 10, display: 'block' }}>
-          <input type="checkbox" checked={useHardlinks} onChange={e => setUseHardlinks(e.target.checked)} /> Usar hardlinks al preparar la subida
-        </label>
-        {useHardlinks && !hardlinkBase.trim() && (
-          <div style={{ fontSize: 12, color: 'var(--color-error, #f87171)', marginBottom: 10 }}>
-            ⚠ No puedes activar los hardlinks sin una ruta base válida. Indica una ruta y pruébala, o desactívalos.
-          </div>
-        )}
-        <div className="form-group" style={{ marginBottom: 12, opacity: useHardlinks ? 1 : 0.5 }}>
-          <label className="form-label">Ruta base de hardlinks</label>
-          <input
-            className="form-input"
-            value={hardlinkBase}
-            onChange={e => setHardlinkBase(e.target.value)}
-            placeholder="/ruta/a/tu/carpeta/de/subidas"
-            disabled={!useHardlinks}
-          />
-        </div>
-        <div>
-          <button className="btn btn-secondary btn-sm" onClick={handleTestHardlink} disabled={testingHl || !useHardlinks} type="button">
-            {testingHl ? 'Probando…' : 'Probar hardlink'}
-          </button>
-          {hlTestResult && (
-            <span style={{ marginLeft: 10, fontSize: 12, color: hlTestResult.ok ? 'var(--color-success, #4ade80)' : 'var(--color-error, #f87171)' }}>
-              {hlTestResult.ok ? '🟢 ' : '🔴 '}{hlTestResult.message}
-            </span>
-          )}
-        </div>
-        <span className="form-hint" style={{ display: 'block', marginTop: 10 }}>
-          Los hardlinks dejan el archivo original intacto y crean un enlace con la nomenclatura de eMuwarez.
-          Requieren que la ruta base esté en el <strong>mismo sistema de ficheros</strong> que tus medios.
-          Si están desactivados o sin configurar, la comprobación de subida los marca en amarillo (se omiten).
+        <span className="form-hint" style={{ display: 'block', marginBottom: 12 }}>
+          Se usa para elegir automáticamente el provider cuando TMDb devuelve varios. Arrastra para reordenar. El icono de cada uno enlaza a su web oficial.
         </span>
+        <div className="form-group">
+          <label className="form-label">Prioridad de providers</label>
+          <ProviderPriorityPicker order={providerOrder} onChange={setProviderOrder} />
+        </div>
       </div>
 
       <div className="placeholder-card">
@@ -578,84 +623,41 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
 
       <div className="placeholder-card">
         <h3 style={{ marginTop: 0, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <ServiceIcon type="tmdb" size={18} /> TMDb
+          🔗 Hardlinks
         </h3>
-        <div className="form-group" style={{ marginBottom: 12 }}>
-          <label className="form-label">Estado de la API key</label>
-          <div style={{ fontSize: 13 }}>
-            {settings?.tmdb_api_key_configured
-              ? <><span style={{ color: '#22c55e' }}>✓ Configurada</span>{settings.tmdb_api_key_masked && <code style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>{settings.tmdb_api_key_masked}</code>}</>
-              : <span style={{ color: '#ef4444' }}>✗ No configurada</span>}
+        <label className="checkbox-label" style={{ marginBottom: 10, display: 'block' }}>
+          <input type="checkbox" checked={useHardlinks} onChange={e => setUseHardlinks(e.target.checked)} /> Usar hardlinks al preparar la subida
+        </label>
+        {useHardlinks && !hardlinkBase.trim() && (
+          <div style={{ fontSize: 12, color: 'var(--color-error, #f87171)', marginBottom: 10 }}>
+            ⚠ No puedes activar los hardlinks sin una ruta base válida. Indica una ruta y pruébala, o desactívalos.
           </div>
-        </div>
-        <div className="form-group" style={{ marginBottom: 12 }}>
-          <label className="form-label">Nueva API key <span className="form-hint">(dejar vacío para mantener la actual)</span></label>
+        )}
+        <div className="form-group" style={{ marginBottom: 12, opacity: useHardlinks ? 1 : 0.5 }}>
+          <label className="form-label">Ruta base de hardlinks</label>
           <input
-            type="password"
             className="form-input"
-            value={newKey}
-            onChange={e => setNewKey(e.target.value)}
-            placeholder="API key de TMDb"
-            autoComplete="new-password"
+            value={hardlinkBase}
+            onChange={e => setHardlinkBase(e.target.value)}
+            placeholder="/ruta/a/tu/carpeta/de/subidas"
+            disabled={!useHardlinks}
           />
-          <span className="form-hint">Usada para marcar providers disponibles en TMDb.</span>
         </div>
-        <div style={{ marginBottom: 12 }}>
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={handleTestTmdb}
-            disabled={testingTmdb}
-            type="button"
-          >
-            {testingTmdb ? 'Probando…' : 'Probar conexión'}
+        <div>
+          <button className="btn btn-secondary btn-sm" onClick={handleTestHardlink} disabled={testingHl || !useHardlinks} type="button">
+            {testingHl ? 'Probando…' : 'Probar hardlink'}
           </button>
-          {tmdbTestResult && (
-            <span style={{ marginLeft: 10, fontSize: 12, color: testResultColor(tmdbTestResult) }}>
-              {testResultLabel(tmdbTestResult)}
+          {hlTestResult && (
+            <span style={{ marginLeft: 10, fontSize: 12, color: hlTestResult.ok ? 'var(--color-success, #4ade80)' : 'var(--color-error, #f87171)' }}>
+              {hlTestResult.ok ? '🟢 ' : '🔴 '}{hlTestResult.message}
             </span>
           )}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div className="form-group">
-            <label className="form-label">Región</label>
-            <select className="form-input form-select" value={region} onChange={e => setRegion(e.target.value)}>
-              {REGION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label} ({o.value})</option>)}
-            </select>
-            <span className="form-hint">País para filtrar providers.</span>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Idioma</label>
-            <select className="form-input form-select" value={language} onChange={e => setLanguage(e.target.value)}>
-              {LANGUAGE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          </div>
-          <label className="checkbox-label" style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 4, gridColumn: '1 / -1' }}>
-            <input type="checkbox" checked={localizeTitles} onChange={e => setLocalizeTitles(e.target.checked)} style={{ marginTop: 3 }} />
-            <span style={{ fontSize: 13 }}>
-              Traducir títulos de series con TMDb
-              <span className="form-hint" style={{ display: 'block' }}>
-                Sonarr toma los títulos de TVDB (a menudo en inglés). Con esto, las series usan el título de TMDb en el idioma de arriba (p. ej. «The Serrano» → «Los Serrano»). Se aplica en la próxima sincronización de biblioteca.
-              </span>
-            </span>
-          </label>
-        </div>
-      </div>
-
-      <div className="placeholder-card">
-        <h3 style={{ marginTop: 0, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <svg width={18} height={18} viewBox="0 0 24 24" fill="none" aria-hidden>
-            <rect x="2.5" y="5" width="19" height="14" rx="2.5" stroke="#8b5cf6" strokeWidth="1.6" />
-            <path d="M10 9.2v5.6l4.5-2.8z" fill="#8b5cf6" />
-          </svg>
-          Providers de vídeo
-        </h3>
-        <span className="form-hint" style={{ display: 'block', marginBottom: 12 }}>
-          Se usa para elegir automáticamente el provider cuando TMDb devuelve varios. Arrastra para reordenar. El icono de cada uno enlaza a su web oficial.
+        <span className="form-hint" style={{ display: 'block', marginTop: 10 }}>
+          Los hardlinks dejan el archivo original intacto y crean un enlace con la nomenclatura de eMuwarez.
+          Requieren que la ruta base esté en el <strong>mismo sistema de ficheros</strong> que tus medios.
+          Si están desactivados o sin configurar, la comprobación de subida los marca en amarillo (se omiten).
         </span>
-        <div className="form-group">
-          <label className="form-label">Prioridad de providers</label>
-          <ProviderPriorityPicker order={providerOrder} onChange={setProviderOrder} />
-        </div>
       </div>
 
       <div className="placeholder-card">
@@ -725,7 +727,6 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           onClick={() => setPathMappings(p => [...p, { from: '', to: '' }])}>+ Añadir regla</button>
       </div>
 
-      <AccountCard />
     </div>
   )
 }

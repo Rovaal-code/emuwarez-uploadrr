@@ -47,6 +47,113 @@ def _cpu_name() -> str:
 # gets a meaningful number instead of a misleading 0%.
 psutil.cpu_percent(interval=None)
 
+
+# ---------------------------------------------------------------------------
+# Container-aware CPU/RAM — psutil's cpu_percent()/virtual_memory() read
+# host-wide /proc data. That's correct on bare metal, but wrong once this
+# runs inside a Docker/Podman/Kubernetes container with its own cgroup
+# limits: the host might show 8% RAM used while the container is at 90% of
+# what it was actually granted. When a real (finite) cgroup limit is
+# present, prefer it; when there's no limit (or no cgroup at all — the dev/
+# bare-host case), the host-wide view *is* the right answer, since the
+# process could use up to the whole host anyway.
+# ---------------------------------------------------------------------------
+
+def _cgroup_mem_stats() -> tuple[int, int] | None:
+    """(used_bytes, limit_bytes) from the cgroup memory controller, cgroup
+    v2 first then v1. None when unavailable or unlimited."""
+    try:
+        with open("/sys/fs/cgroup/memory.current") as f:
+            used = int(f.read().strip())
+        with open("/sys/fs/cgroup/memory.max") as f:
+            raw = f.read().strip()
+        if raw != "max":
+            limit = int(raw)
+            if 0 < limit < (1 << 62):
+                return used, limit
+    except Exception:
+        pass
+    try:
+        with open("/sys/fs/cgroup/memory/memory.usage_in_bytes") as f:
+            used = int(f.read().strip())
+        with open("/sys/fs/cgroup/memory/memory.limit_in_bytes") as f:
+            limit = int(f.read().strip())
+        # v1's "no limit" sentinel is an astronomically large number, not a
+        # real GB-scale value — same finite-and-plausible check as v2.
+        if 0 < limit < (1 << 62):
+            return used, limit
+    except Exception:
+        pass
+    return None
+
+
+def _cgroup_cpu_quota_cores() -> float | None:
+    """How many CPU cores this cgroup is actually allowed to use (may be
+    fractional, e.g. `docker run --cpus=1.5`). None when unlimited/absent —
+    the container can use every host core, so psutil's host-wide percentage
+    is already the correct number."""
+    try:
+        with open("/sys/fs/cgroup/cpu.max") as f:
+            quota_str, period_str = f.read().split()
+        if quota_str != "max":
+            return int(quota_str) / int(period_str)
+    except Exception:
+        pass
+    try:
+        with open("/sys/fs/cgroup/cpu/cpu.cfs_quota_us") as f:
+            quota = int(f.read().strip())
+        with open("/sys/fs/cgroup/cpu/cpu.cfs_period_us") as f:
+            period = int(f.read().strip())
+        if quota > 0:
+            return quota / period
+    except Exception:
+        pass
+    return None
+
+
+def _cgroup_cpu_usage_usec() -> int | None:
+    try:
+        with open("/sys/fs/cgroup/cpu.stat") as f:
+            for line in f:
+                if line.startswith("usage_usec"):
+                    return int(line.split()[1])
+    except Exception:
+        pass
+    try:
+        with open("/sys/fs/cgroup/cpuacct/cpuacct.usage") as f:
+            return int(f.read().strip()) // 1000  # ns -> µs
+    except Exception:
+        pass
+    return None
+
+
+# Cumulative-since-boot counter — same delta-over-time pattern as the
+# network rate below; a single sample can't produce a percentage.
+_cgroup_cpu_prev: tuple[float, int] | None = None
+
+
+def _cgroup_cpu_percent() -> float | None:
+    """Percent of THIS CONTAINER's own CPU allocation in use (100% =
+    saturating every core it was granted). None when there's no real quota
+    to measure against, so the caller falls back to psutil's host-wide
+    figure."""
+    quota_cores = _cgroup_cpu_quota_cores()
+    if not quota_cores:
+        return None
+    usage_usec = _cgroup_cpu_usage_usec()
+    if usage_usec is None:
+        return None
+    global _cgroup_cpu_prev
+    now = time.monotonic()
+    if _cgroup_cpu_prev is None:
+        _cgroup_cpu_prev = (now, usage_usec)
+        return 0.0
+    prev_t, prev_usage = _cgroup_cpu_prev
+    dt_usec = max((now - prev_t) * 1_000_000, 1.0)
+    delta_usage = max(usage_usec - prev_usage, 0)
+    _cgroup_cpu_prev = (now, usage_usec)
+    return min(100.0, round(delta_usage / dt_usec / quota_cores * 100, 1))
+
 # Network counters are cumulative since boot — rates need a delta between two
 # samples. Kept as module state (one process, one set of counters) rather
 # than per-request, since a single sample can't produce a rate at all.
@@ -138,6 +245,15 @@ def _library_disk_path(conn) -> str:
 
 def get_system_stats(conn) -> dict:
     vm = psutil.virtual_memory()
+    host_cpu_percent = psutil.cpu_percent(interval=None)
+
+    cgroup_mem = _cgroup_mem_stats()
+    ram_used, ram_total = cgroup_mem if cgroup_mem else (vm.used, vm.total)
+    ram_percent = round(ram_used / ram_total * 100, 1) if ram_total else 0.0
+
+    cgroup_cpu_percent = _cgroup_cpu_percent()
+    cpu_percent = cgroup_cpu_percent if cgroup_cpu_percent is not None else host_cpu_percent
+
     disk_path = _library_disk_path(conn)
     try:
         du = shutil.disk_usage(disk_path)
@@ -147,11 +263,11 @@ def get_system_stats(conn) -> dict:
     down, up = _net_rates()
     gpu = _gpu_stats()
     return {
-        "cpu_percent": psutil.cpu_percent(interval=None),
+        "cpu_percent": cpu_percent,
         "cpu_name": _cpu_name(),
-        "ram_percent": vm.percent,
-        "ram_used_gb": round(vm.used / (1024 ** 3), 2),
-        "ram_total_gb": round(vm.total / (1024 ** 3), 2),
+        "ram_percent": ram_percent,
+        "ram_used_gb": round(ram_used / (1024 ** 3), 2),
+        "ram_total_gb": round(ram_total / (1024 ** 3), 2),
         "disk_path": disk_path,
         "disk_used_gb": round(disk_used / (1024 ** 3), 2),
         "disk_total_gb": round(disk_total / (1024 ** 3), 2),

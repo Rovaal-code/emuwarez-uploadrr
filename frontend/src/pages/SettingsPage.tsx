@@ -370,7 +370,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         <div className="form-group" style={{ marginTop: 14 }}>
           <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             Mi usuario de eMuwarez
-            <InfoIcon text="Tu nombre de usuario en eMuwarez. Lo usamos para reconocer cuáles de todas las peticiones descargadas las has creado tú, y así poder mostrártelas en 'Mis peticiones'." />
+            <InfoIcon text="Tu nombre de usuario en eMuwarez. Se usa para reconocer cuáles de todas las peticiones descargadas las has creado tú, y así poder mostrártelas en 'Mis peticiones'." />
           </label>
           <input
             className="form-input"

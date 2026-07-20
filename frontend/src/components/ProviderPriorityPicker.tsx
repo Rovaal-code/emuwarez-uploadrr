@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getEmuProviders } from '../api/nomenclature'
 import { Favicon } from './Favicon'
-import { SortableList } from './SortableList'
+import { SortableList, DragHandleIcon } from './SortableList'
 
 export interface ProviderOption {
   code: string
@@ -81,8 +81,13 @@ export function ProviderPriorityPicker({ order, onChange }: ProviderPriorityPick
                 background: dragging ? 'rgba(37,99,235,0.15)' : 'rgba(139,92,246,0.06)',
                 border: `1px solid ${dragging ? 'var(--text-accent, #2563eb)' : 'var(--border)'}`,
               }}>
-                <span style={{ color: 'var(--text-muted)', fontSize: 11, width: 16 }}>{idx + 1}</span>
-                <span {...handleProps} style={{ ...handleProps.style, color: 'var(--text-muted)' }} aria-hidden>⠿</span>
+                <span style={{ color: 'var(--text-muted)', fontSize: 11, width: 16, textAlign: 'center' }}>{idx + 1}</span>
+                <span
+                  {...handleProps}
+                  className="drag-handle"
+                  style={{ ...handleProps.style, color: 'var(--text-accent)', width: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginLeft: 8, marginRight: 8 }}
+                  aria-hidden
+                ><DragHandleIcon /></span>
                 <ProviderIcon domain={opt?.domain} size={16} />
                 <span style={{ flex: 1 }}>
                   {opt?.label ?? code} <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>({code})</span>

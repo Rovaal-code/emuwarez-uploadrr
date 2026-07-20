@@ -51,7 +51,7 @@ export interface DashboardSummaryResponse {
   requests_partial?: number
   requests_filled?: number
   requests_mine?: number
-  requests_mine_reclaimed?: number
+  requests_reclaimed?: number
   requests_last_sync_at?: string | null
 }
 
@@ -112,6 +112,10 @@ export interface LibraryItemResponse {
   episode_number: number | null
   parent_id: number | null
   path: string | null
+  // Real current local file once nomenclature has been applied — prefer
+  // this over `path` for anything shown to the user (`path` stays in
+  // Radarr/Sonarr's own raw convention and can go stale).
+  prepared_path?: string | null
   quality: string | null
   resolution: string | null
   source: string | null
@@ -398,6 +402,76 @@ export interface SeasonPackPlanResponse {
 }
 
 
+// Job detail page — read-only snapshots + real phase progress
+
+export interface UploadSnapshotTrack {
+  id: number
+  type: 'video' | 'audio' | 'subtitles'
+  codec: string | null
+  language: string | null
+  current_name: string | null
+  new_name: string
+  default_before: boolean
+  default_after: boolean
+  forced: boolean
+  changed: boolean
+}
+
+export interface UploadNomenclatureSnapshot {
+  media_type?: string | null
+  proposed_title?: string | null
+  proposed_filename?: string | null
+  series_title?: string | null
+  year?: number | null
+  season_number?: number | null
+  tmdb_id?: string | null
+  resolution?: string | null
+  source?: string | null
+  provider_final?: string | null
+  video_codec?: string | null
+  audio_summary?: string | null
+  subtitle_summary?: string | null
+  release_tag?: string | null
+}
+
+export interface UploadRemuxEpisodeSnapshot {
+  episode_id: number
+  title?: string | null
+  episode_number?: number | null
+  ordered_tracks?: UploadSnapshotTrack[]
+}
+
+export interface UploadRemuxSnapshot {
+  ordered_tracks?: UploadSnapshotTrack[]
+  episodes?: UploadRemuxEpisodeSnapshot[]
+}
+
+export interface UploadCheckResult {
+  id: string
+  label: string
+  status: 'ok' | 'fail' | 'skip'
+  message?: string
+}
+
+export interface UploadChecksSnapshot {
+  checks: UploadCheckResult[]
+  ready: boolean
+}
+
+export interface UploadProgressPhase {
+  key: string
+  label: string
+  status: 'pending' | 'running' | 'done'
+  pct: number
+  started_at?: string | null
+  finished_at?: string | null
+}
+
+export interface UploadProgressState {
+  phases: UploadProgressPhase[]
+  global_pct: number
+}
+
 // Phase 6A — Upload preflight
 
 export interface UploadJob {
@@ -435,7 +509,14 @@ export interface UploadJob {
   progress_phase?: string | null
   media_type?: string | null
   poster_url?: string | null
+  instance_type?: string | null
+  instance_name?: string | null
+  request_status?: string | null
   queued_until?: string | null
+  nomenclature_snapshot?: UploadNomenclatureSnapshot | null
+  remux_snapshot?: UploadRemuxSnapshot | null
+  checks_snapshot?: UploadChecksSnapshot | null
+  progress?: UploadProgressState | null
 }
 
 // Phase 6D — Artifacts

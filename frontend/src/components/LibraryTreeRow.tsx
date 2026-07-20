@@ -4,17 +4,16 @@ import type { LibraryItemResponse, InstanceSafeResponse } from '../types/api'
 import { StatusBadge } from './StatusBadge'
 import { ServiceLabel } from './ServiceIcon'
 import { formatDate, formatItemType, formatBytes } from '../utils/format'
-import { buildDeepLink, posterUrl } from '../utils/libraryItem'
+import { buildDeepLink, posterUrl, isAporteEligible, episodeListLabel } from '../utils/libraryItem'
 import { ProviderTag } from './ProviderIcon'
 import { LibraryActionButtons } from './LibraryActionButtons'
-import { NomenclatureCheckButton } from './NomenclatureCheckButton'
 
 const NESTED_PAGE_SIZE = 25
 // Seasons per series — well under the API's max limit=500 (a season list
 // is never paginated, unlike episodes), but still bounded defensively.
 const MAX_SEASONS_PER_SERIES = 500
 
-export type LibraryActionKind = 'nomenclature' | 'fields' | 'upload' | 'request'
+export type LibraryActionKind = 'nomenclature' | 'fields' | 'upload' | 'upload-multi' | 'request'
 
 interface LibraryTreeRowProps {
   item: LibraryItemResponse
@@ -27,6 +26,10 @@ interface LibraryTreeRowProps {
   // Compact mode (used inside a Series detail): hides the Actualizado and
   // Acciones columns.
   compact?: boolean
+  // Above-the-fold rows (top of the list on initial load) — eager + high
+  // fetch priority so their poster is already there instead of popping in
+  // as the browser's own lazy-load catches up.
+  priority?: boolean
 }
 
 // Series -> Season -> Episode collapsible tree, one row per level, reused
@@ -50,9 +53,11 @@ export function EmuStatusCell({ item }: { item: LibraryItemResponse }) {
 
 // "Aportes" — what your copy would add: "Nuevo" badge if it's not on the
 // tracker at all, chips per improvement (resolution / source / codec / ESP),
-// or — when it's there and you add nothing.
+// or — when it's there and you add nothing. Only meaningful for content you
+// actually have (Disponible/Subido/Subiendo, or Parcial for a rollup) — a
+// Faltante item has nothing to contribute regardless of emu_in_catalog.
 export function EmuAportesCell({ item }: { item: LibraryItemResponse }) {
-  if (item.emu_in_catalog == null) {
+  if (item.emu_in_catalog == null || !isAporteEligible(item)) {
     return <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>
   }
   if (item.emu_in_catalog === 0) {
@@ -79,7 +84,7 @@ export function EmuAportesCell({ item }: { item: LibraryItemResponse }) {
   )
 }
 
-export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, onReload, compact = false }: LibraryTreeRowProps) {
+export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, onReload, compact = false, priority = false }: LibraryTreeRowProps) {
   const [expanded, setExpanded] = useState(false)
   const [children, setChildren] = useState<LibraryItemResponse[]>([])
   const [childTotal, setChildTotal] = useState(0)
@@ -127,13 +132,13 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, onR
 
   const deepLink = buildDeepLink(item, instances)
   const indent = depth * 20
-  const colSpan = compact ? 11 : 13
+  const colSpan = compact ? 10 : 12
 
   return (
     <>
       <tr className={canExpand ? 'clickable' : undefined} onClick={canExpand ? toggle : undefined}>
         <td>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: item.item_type === 'episode' ? 0 : indent }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: indent }}>
             {canExpand ? (
               <button
                 className="btn btn-ghost btn-sm"
@@ -158,7 +163,8 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, onR
                 <img
                   src={posterUrl(item.poster_url, 'w154')}
                   alt=""
-                  loading="lazy"
+                  loading={priority ? 'eager' : 'lazy'}
+                  fetchPriority={priority ? 'high' : 'auto'}
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
                 />
@@ -173,7 +179,7 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, onR
               onClick={e => { e.stopPropagation(); onSelect(item) }}
               title="Abrir ficha"
             >
-              {item.title}
+              {episodeListLabel(item)}
             </div>
           </div>
           {item.year ? (
@@ -192,12 +198,6 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, onR
         </td>
         <td><StatusBadge status={item.local_status} type="local" /></td>
         <td><StatusBadge status={item.request_status} type="request" /></td>
-        <td onClick={e => e.stopPropagation()}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <StatusBadge status={item.nomenclature_status} type="nomenclature" />
-            <NomenclatureCheckButton item={item} compact onChecked={onReload} />
-          </div>
-        </td>
         <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
           {formatBytes(item.size_bytes)}
         </td>

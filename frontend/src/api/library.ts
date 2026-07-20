@@ -47,6 +47,7 @@ export interface MediaInfoRow {
   field: string
   mediainfo: string
   emu: string
+  help?: string | null
 }
 
 export interface MediaInfoReport {
@@ -107,6 +108,13 @@ export async function runNomenclatureCheck(id: number, force = false): Promise<N
 export interface LibraryFilterOptions {
   providers: string[]
   qualities: string[]
+  types: string[]
+  statuses: string[]
+  request_statuses: string[]
+  nomenclature_statuses: string[]
+  instances: { id: number; type: 'radarr' | 'sonarr'; name: string }[]
+  emu_states: ('candidate' | 'present')[]
+  aporte_states: ('yes' | 'no')[]
 }
 
 export async function getLibraryFilterOptions(): Promise<LibraryFilterOptions> {

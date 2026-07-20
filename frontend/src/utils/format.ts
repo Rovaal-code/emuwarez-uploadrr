@@ -37,6 +37,26 @@ export function formatDate(dateStr: string | null | undefined): string {
   }
 }
 
+// Same as formatDate but with seconds — Subidas' Creado/Finalizado need
+// second-level precision (unlike Biblioteca/Peticiones' timestamps, where
+// minute precision is enough) since Progreso/Duración already tick in
+// seconds and jobs frequently start/finish within the same minute.
+export function formatDateTimeSeconds(dateStr: string | null | undefined): string {
+  if (!dateStr) return '–'
+  try {
+    return parseServerDate(dateStr).toLocaleString('es-ES', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    })
+  } catch {
+    return dateStr
+  }
+}
+
 export function formatDateShort(dateStr: string | null | undefined): string {
   if (!dateStr) return '—'
   try {

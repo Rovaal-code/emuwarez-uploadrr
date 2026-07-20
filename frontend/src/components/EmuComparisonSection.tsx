@@ -63,15 +63,15 @@ export function EmuComparisonSection({ itemId }: { itemId: number }) {
           notInCatalog ? (
             <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>No lo tienes descargado y no está en eMuwarez todavía</span>
           ) : (
-            <span style={{ fontWeight: 600, color: '#60a5fa' }}>⬇️ Está en eMuwarez, pero aún no lo tienes descargado</span>
+            <span style={{ fontWeight: 600, color: '#60a5fa' }}>Está en eMuwarez, pero aún no lo tienes descargado</span>
           )
         ) : notInCatalog ? (
-          <span style={{ fontWeight: 600, color: '#22c55e' }}>🟢 No está en eMuwarez — Contenido único</span>
+          <span style={{ fontWeight: 600, color: '#22c55e' }}>No está en eMuwarez · Contenido único</span>
         ) : data.only_episodes ? (
           <span style={{ fontWeight: 600, color: '#eab308' }}>
-            🟡 Los capítulos ya están en eMuwarez (sueltos), no hay season pack{' '}
+            Los capítulos ya están en eMuwarez (sueltos), no hay season pack{' '}
             {data.have_all_episodes
-              ? '— tienes todos, podrías aportar el pack de temporada.'
+              ? '· tienes todos, podrías aportar el pack de temporada.'
               : '(podrías aportar el pack si tienes todos).'}
           </span>
         ) : aportes.length > 0 ? (
@@ -82,7 +82,7 @@ export function EmuComparisonSection({ itemId }: { itemId: number }) {
             ))}
           </>
         ) : (
-          <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>⚪ Ya está en eMuwarez con igual o mejor calidad</span>
+          <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>Ya está en eMuwarez con igual o mejor calidad</span>
         )}
       </div>
 
@@ -97,7 +97,7 @@ export function EmuComparisonSection({ itemId }: { itemId: number }) {
                 <th>Códec</th>
                 <th><span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>Español <InfoIcon text="El idioma español se deduce del nombre del torrent; «?» = desconocido." /></span></th>
                 <th>Tamaño</th>
-                <th><span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>Nombre <InfoIcon text="Si todos los campos coinciden con algún candidato, se presupone que tu copia proviene de eMuwarez (se muestra su nombre en «Tu copia»)." /></span></th>
+                <th><span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>Nombre del Torrent <InfoIcon text="Si todos los campos coinciden con algún candidato, se presupone que tu copia proviene de eMuwarez." /></span></th>
               </tr>
             </thead>
             <tbody>

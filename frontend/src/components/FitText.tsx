@@ -102,7 +102,7 @@ export function FitText({
 }
 
 export interface FitTextPairItem {
-  label: string
+  label: React.ReactNode
   text: string
   labelStyle?: React.CSSProperties
 }

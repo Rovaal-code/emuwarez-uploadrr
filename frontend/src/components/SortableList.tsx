@@ -13,6 +13,25 @@ export interface DragHandleProps {
   title: string
 }
 
+// 6-dot grip icon for the drag handle — an SVG instead of a text glyph
+// ("⠿") on purpose: a Braille-pattern character's vertical metrics vary by
+// font and often sit off the text baseline, so it never quite centers
+// against a plain digit/icon next to it no matter how the surrounding box
+// is aligned. An SVG has no such ambiguity — its own geometry centers
+// exactly wherever the flex box puts it.
+export function DragHandleIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size * 0.6} height={size} viewBox="0 0 10 16" fill="currentColor" aria-hidden>
+      <circle cx="2.5" cy="2.5" r="1.5" />
+      <circle cx="7.5" cy="2.5" r="1.5" />
+      <circle cx="2.5" cy="8" r="1.5" />
+      <circle cx="7.5" cy="8" r="1.5" />
+      <circle cx="2.5" cy="13.5" r="1.5" />
+      <circle cx="7.5" cy="13.5" r="1.5" />
+    </svg>
+  )
+}
+
 // A drag-to-reorder list where rows are only grabbable from a handle, the
 // grabbed row lights up, the native ghost is hidden, and rows slide to their
 // new positions (FLIP animation) as the order changes live under the cursor.

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useTransition } from 'react'
-import { getLibrary, TOP_LEVEL_PARENT_FILTER, getLibraryFilterOptions, getLibraryItem } from '../api/library'
+import { getLibrary, TOP_LEVEL_PARENT_FILTER, getLibraryFilterOptions, getLibraryItem, type LibraryFilterOptions } from '../api/library'
 import { Tooltip } from '../components/Tooltip'
 import { useSync } from '../context/SyncContext'
 import { EmuSyncButton } from '../components/EmuSyncButton'
@@ -18,9 +18,15 @@ import { LibraryTreeRow, type LibraryActionKind } from '../components/LibraryTre
 import { LargePosterCard } from '../components/LargePosterCard'
 import { LibraryDetailPage } from '../components/LibraryDetailPage'
 import { HeaderFilter } from '../components/HeaderFilter'
-import { buildDeepLink, posterUrl } from '../utils/libraryItem'
+import { buildDeepLink, posterUrl, isAporteEligible } from '../utils/libraryItem'
 
 const LOAD_LIMIT = 20000  // show everything in one container (no pagination); backend caps here
+
+// Spanish display label for each real item_type value the Tipo filter offers
+// (only values that actually occur — see filterOptions.types).
+const TYPE_LABELS: Record<string, string> = {
+  movie: 'Película', series: 'Serie', season: 'Temporada', episode: 'Episodio',
+}
 
 const VIEW_MODE_STORAGE_KEY = 'emuwarez_uploadrr_library_view'
 
@@ -31,7 +37,17 @@ function loadViewMode(): ViewMode {
   return stored === 'list' || stored === 'grid-lg' ? stored : 'grid'
 }
 
-function PosterCard({ item, instances, onClick }: { item: LibraryItemResponse; instances: InstanceSafeResponse[]; onClick: () => void }) {
+// First N cards are above the fold on virtually any viewport at this tile
+// size — eager + high fetch priority so they're already loaded by the time
+// the grid paints, instead of visibly popping in as the browser's own
+// lazy-load IntersectionObserver catches up. Everything past that stays
+// "loading=lazy" as before (deferred until scrolled near).
+const GRID_PRIORITY_COUNT = 30
+// List rows are much shorter than poster tiles, so more of them fit above
+// the fold — same rationale, higher count.
+const LIST_PRIORITY_COUNT = 40
+
+function PosterCard({ item, instances, onClick, priority }: { item: LibraryItemResponse; instances: InstanceSafeResponse[]; onClick: () => void; priority?: boolean }) {
   const deepLink = buildDeepLink(item, instances)
   return (
     <div
@@ -47,7 +63,8 @@ function PosterCard({ item, instances, onClick }: { item: LibraryItemResponse; i
           <img
             src={posterUrl(item.poster_url, 'w342')}
             alt={item.title}
-            loading="lazy"
+            loading={priority ? 'eager' : 'lazy'}
+            fetchPriority={priority ? 'high' : 'auto'}
             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
           />
@@ -96,6 +113,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const [fieldsItem, setFieldsItem] = useState<LibraryItemResponse | null>(null)
   const [uploadItem, setUploadItem] = useState<LibraryItemResponse | null>(null)
   const [wizardItem, setWizardItem] = useState<LibraryItemResponse | null>(null)
+  const [wizardMultiSeason, setWizardMultiSeason] = useState(false)
   const [requestItem, setRequestItem] = useState<LibraryItemResponse | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode)
 
@@ -108,7 +126,10 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     if (kind === 'fields') { setFieldsItem(item); return }
     if (kind === 'request') { setRequestItem(item); return }
     // 'upload' → unified Subir wizard. For a series/season the wizard itself
-    // asks which season/episode (or the whole season) to target.
+    // asks which season/episode (or the whole season) to target. 'upload-multi'
+    // only ever comes from the series' own dedicated page (LibraryActionButtons'
+    // multiSeasonContext) — same wizard, multi-season checklist enabled.
+    setWizardMultiSeason(kind === 'upload-multi')
     setWizardItem(item)
   }
 
@@ -117,15 +138,17 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const [instances, setInstances] = useState<InstanceSafeResponse[]>([])
   useEffect(() => { getInstances().then(setInstances).catch(() => {}) }, [])
 
-  // Provider/quality options across ALL levels (a value that only exists in a
-  // mixed series' episodes wouldn't appear in the top-level list otherwise).
-  const [providerOptions, setProviderOptions] = useState<string[]>([])
-  const [qualityOptions, setQualityOptions] = useState<string[]>([])
+  // Excel-style column filters: every option list below reflects values that
+  // actually occur somewhere in the library (all levels — a value that only
+  // exists in a mixed series' episodes wouldn't appear in the top-level list
+  // otherwise), never an invented fixed list (e.g. LocalStatus has ~10
+  // possible values; only offer the ones some item actually has).
+  const [filterOptions, setFilterOptions] = useState<LibraryFilterOptions | null>(null)
   useEffect(() => {
-    getLibraryFilterOptions()
-      .then(o => { setProviderOptions(o.providers); setQualityOptions(o.qualities) })
-      .catch(() => {})
+    getLibraryFilterOptions().then(setFilterOptions).catch(() => {})
   }, [])
+  const providerOptions = filterOptions?.providers ?? []
+  const qualityOptions = filterOptions?.qualities ?? []
 
   // Diagnostic actions — relocated here from the removed standalone
   // Library + eMuwarez syncs are global (shared with the Dashboard/Peticiones
@@ -135,15 +158,25 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
 
   // Filters
   const [search, setSearch] = useState('')
+  // The input itself stays bound to `search` for instant feedback while
+  // typing; `load()` only reacts to `debouncedSearch` — with up to
+  // LOAD_LIMIT (20000) rows fetched and re-rendered per search, firing that
+  // on every keystroke made typing visibly stutter (worst right after the
+  // initial load, when the browser is still busiest).
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 350)
+    return () => clearTimeout(t)
+  }, [search])
   const [filterType, setFilterType] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [filterInstanceId, setFilterInstanceId] = useState('')
-  const [filterNomenclature, setFilterNomenclature] = useState('')
   const [filterRequest, setFilterRequest] = useState('')
   // Client-side text filters (no backend param) over the loaded items.
   const [searchProvider, setSearchProvider] = useState('')
   const [searchQuality, setSearchQuality] = useState('')
   const [filterEmu, setFilterEmu] = useState('')
+  const [filterAporte, setFilterAporte] = useState('')
   const [sortBy, setSortBy] = useState('title_asc')
   const [offset, setOffset] = useState(0)
 
@@ -155,13 +188,12 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
       // one is active we fetch ALL levels (not just top level) — otherwise a
       // mixed-provider series would hide a season whose episodes are all e.g.
       // Netflix. Without them we keep the top-level tree.
-      const flatFilter = !!(searchProvider || searchQuality || filterEmu)
+      const flatFilter = !!(searchProvider || searchQuality || filterEmu || filterAporte)
       const result = await getLibrary({
-        search: search || undefined,
+        search: debouncedSearch || undefined,
         type: filterType || undefined,
         status: filterStatus || undefined,
         instance_id: filterInstanceId ? Number(filterInstanceId) : undefined,
-        nomenclature: filterNomenclature || undefined,
         request_status: filterRequest || undefined,
         sort: sortBy,
         parent_id: flatFilter ? undefined : TOP_LEVEL_PARENT_FILTER,
@@ -174,7 +206,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     } finally {
       setLoading(false)
     }
-  }, [search, filterType, filterStatus, filterInstanceId, filterNomenclature, filterRequest, searchProvider, searchQuality, filterEmu, sortBy, offset])
+  }, [debouncedSearch, filterType, filterStatus, filterInstanceId, filterRequest, searchProvider, searchQuality, filterEmu, filterAporte, sortBy, offset])
 
   useEffect(() => { load() }, [load])
 
@@ -200,6 +232,13 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const total = data?.total ?? 0
   const qualityOf = (it: LibraryItemResponse) => [it.resolution, it.source].filter(Boolean).join(' · ')
 
+  // Same "aporte" definition EmuAportesCell renders: emu_in_catalog === 0
+  // ("Nuevo" — you'd contribute the whole thing) or === 1 with at least one
+  // emu_aportes entry (you'd contribute a specific improvement). Only counts
+  // for content you actually have — a Faltante item has nothing to give.
+  const isAporte = (it: LibraryItemResponse) =>
+    isAporteEligible(it) && (it.emu_in_catalog === 0 || (it.emu_in_catalog === 1 && (it.emu_aportes?.length ?? 0) > 0))
+
   const matchesFilter = (it: LibraryItemResponse) => {
     const provOk = !searchProvider || it.provider_label === searchProvider
     const qualOk = !searchQuality || qualityOf(it) === searchQuality
@@ -207,13 +246,16 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     // (emu_in_catalog === 2) matches neither on its own — its Sí/No seasons do,
     // so filtering surfaces those seasons instead of the misleading series row.
     const emuOk = !filterEmu || (filterEmu === 'candidate' ? it.emu_in_catalog === 0 : it.emu_in_catalog === 1)
-    return provOk && qualOk && emuOk
+    // Same rollup caveat as emuOk: an ambiguous/partial item (emu_in_catalog
+    // null or 2) matches neither "yes" nor "no" on its own.
+    const aporteOk = !filterAporte || (filterAporte === 'yes' ? isAporte(it) : (it.emu_in_catalog === 1 && !isAporte(it)))
+    return provOk && qualOk && emuOk && aporteOk
   }
-  // With a Provider/Calidad/eMuwarez filter active, `items` holds every level.
+  // With a Provider/Calidad/eMuwarez/Aporte filter active, `items` holds every level.
   // Show the matching items at the highest matching level: if a whole series
   // matches, show the series (not each of its seasons); if only some seasons
   // match (mixed series), show those seasons.
-  const flatFilter = !!(searchProvider || searchQuality || filterEmu)
+  const flatFilter = !!(searchProvider || searchQuality || filterEmu || filterAporte)
   let filteredItems: LibraryItemResponse[]
   if (flatFilter) {
     const matchIds = new Set(items.filter(matchesFilter).map(i => i.id))
@@ -237,7 +279,13 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
         <UploadPreflightModal itemId={uploadItem.id} itemTitle={uploadItem.title} onClose={() => setUploadItem(null)} />
       )}
       {wizardItem && (
-        <UploadWizardModal item={wizardItem} onClose={() => setWizardItem(null)} onDone={() => { load() }} onNavigate={onNavigate} />
+        <UploadWizardModal
+          item={wizardItem}
+          onClose={() => setWizardItem(null)}
+          onDone={() => { load() }}
+          onNavigate={onNavigate}
+          multiSeason={wizardMultiSeason}
+        />
       )}
       {requestItem && (
         <RequestFormModal item={requestItem} onClose={() => setRequestItem(null)} />
@@ -351,16 +399,16 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
       ) : viewMode === 'grid' ? (
         <div className="activity-section" style={{ padding: 20, flex: 1, minHeight: 0, overflowY: 'auto' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 16 }}>
-            {filteredItems.map(item => (
-              <PosterCard key={item.id} item={item} instances={instances} onClick={() => setSelected(item)} />
+            {filteredItems.map((item, i) => (
+              <PosterCard key={item.id} item={item} instances={instances} onClick={() => setSelected(item)} priority={i < GRID_PRIORITY_COUNT} />
             ))}
           </div>
         </div>
       ) : viewMode === 'grid-lg' ? (
         <div className="activity-section" style={{ padding: 20, flex: 1, minHeight: 0, overflowY: 'auto' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 20 }}>
-            {filteredItems.map(item => (
-              <LargePosterCard key={item.id} item={item} instances={instances} onClick={() => setSelected(item)} />
+            {filteredItems.map((item, i) => (
+              <LargePosterCard key={item.id} item={item} instances={instances} onClick={() => setSelected(item)} priority={i < GRID_PRIORITY_COUNT} />
             ))}
           </div>
         </div>
@@ -372,20 +420,17 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
                 <tr>
                   <th>Título</th>
                   <th><HeaderFilter label="Tipo" value={filterType} onChange={v => { setFilterType(v); setOffset(0) }} options={[
-                    { value: '', label: 'Todos' }, { value: 'movie', label: 'Película' }, { value: 'series', label: 'Serie' }, { value: 'episode', label: 'Episodio' },
+                    { value: '', label: 'Todos' }, ...(filterOptions?.types ?? []).map(t => ({ value: t, label: TYPE_LABELS[t] ?? t })),
                   ]} /></th>
                   <th><HeaderFilter label="Origen" value={filterInstanceId} onChange={v => { setFilterInstanceId(v); setOffset(0) }} options={[
                     { value: '', label: 'Todos' },
-                    ...instances.map(inst => ({ value: String(inst.id), label: `${inst.type === 'radarr' ? 'Radarr' : 'Sonarr'} — ${inst.name.length > 15 ? inst.name.slice(0, 15) + '…' : inst.name}` })),
+                    ...(filterOptions?.instances ?? []).map(inst => ({ value: String(inst.id), label: `${inst.type === 'radarr' ? 'Radarr' : 'Sonarr'} — ${inst.name.length > 15 ? inst.name.slice(0, 15) + '…' : inst.name}` })),
                   ]} /></th>
                   <th><HeaderFilter label="Estado" value={filterStatus} onChange={v => { setFilterStatus(v); setOffset(0) }} options={[
-                    { value: '', label: 'Todos' }, { value: 'Disponible', label: 'Disponible' }, { value: 'Parcial', label: 'Parcial' }, { value: 'Faltante', label: 'Faltante' }, { value: 'Error de importación', label: 'Error' },
+                    { value: '', label: 'Todos' }, ...(filterOptions?.statuses ?? []).map(s => ({ value: s, label: s })),
                   ]} /></th>
                   <th><HeaderFilter label="Petición" value={filterRequest} onChange={v => { setFilterRequest(v); setOffset(0) }} options={[
-                    { value: '', label: 'Todas' }, { value: 'Sin petición', label: 'Sin petición' }, { value: 'Compatible', label: 'Compatible' }, { value: 'Parcial', label: 'Parcial' }, { value: 'No compatible', label: 'No compatible' }, { value: 'Llena', label: 'Llena' },
-                  ]} /></th>
-                  <th><HeaderFilter label="Nomenclatura" value={filterNomenclature} onChange={v => { setFilterNomenclature(v); setOffset(0) }} options={[
-                    { value: '', label: 'Todas' }, { value: 'Correcta', label: 'Correcta' }, { value: 'No adaptada', label: 'No adaptada' }, { value: 'N/A', label: 'N/A' },
+                    { value: '', label: 'Todas' }, ...(filterOptions?.request_statuses ?? []).map(s => ({ value: s, label: s })),
                   ]} /></th>
                   <th>Tamaño</th>
                   <th><HeaderFilter label="Provider" value={searchProvider} onChange={setSearchProvider} options={[
@@ -395,15 +440,17 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
                     { value: '', label: 'Todas' }, ...qualityOptions.map(q => ({ value: q, label: q })),
                   ]} /></th>
                   <th><HeaderFilter label="¿En eMuwarez?" value={filterEmu} onChange={v => { setFilterEmu(v); setOffset(0) }} options={[
-                    { value: '', label: 'Todos' }, { value: 'present', label: 'Sí' }, { value: 'candidate', label: 'No' },
+                    { value: '', label: 'Todos' }, ...(filterOptions?.emu_states ?? []).map(s => ({ value: s, label: s === 'present' ? 'Sí' : 'No' })),
                   ]} /></th>
-                  <th>Aportes</th>
+                  <th><HeaderFilter label="Aportes" value={filterAporte} onChange={v => { setFilterAporte(v); setOffset(0) }} options={[
+                    { value: '', label: 'Todos' }, ...(filterOptions?.aporte_states ?? []).map(s => ({ value: s, label: s === 'yes' ? 'Aporta' : 'No aporta' })),
+                  ]} /></th>
                   <th>Actualizado</th>
                   <th className="col-actions">Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredItems.map(item => (
+                {filteredItems.map((item, i) => (
                   <LibraryTreeRow
                     key={item.id}
                     item={item}
@@ -412,6 +459,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
                     onSelect={setSelected}
                     onAction={handleTreeAction}
                     onReload={load}
+                    priority={i < LIST_PRIORITY_COUNT}
                   />
                 ))}
               </tbody>

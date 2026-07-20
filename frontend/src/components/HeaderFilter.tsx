@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
 
 export interface FilterOption { value: string; label: string }
@@ -41,6 +41,27 @@ export function HeaderFilter({ label, value, options, onChange }: {
     setOpen(o => !o)
   }
 
+  // Longer option labels (provider names, eMuwarez authors/sources — all
+  // unbounded strings from the backend) could otherwise push the menu past
+  // the right/bottom edge of the viewport, since it's positioned from the
+  // button alone with no clamping. Re-clamp once the menu has real
+  // dimensions to measure (before paint, so there's no visible jump).
+  useLayoutEffect(() => {
+    if (!open) return
+    const menu = menuRef.current
+    const btn = btnRef.current
+    if (!menu || !btn) return
+    const menuRect = menu.getBoundingClientRect()
+    const btnRect = btn.getBoundingClientRect()
+    const maxLeft = window.innerWidth - menuRect.width - 8
+    const maxTop = window.innerHeight - menuRect.height - 8
+    setPos({
+      left: Math.max(8, Math.min(btnRect.left, maxLeft)),
+      top: Math.max(8, Math.min(btnRect.bottom + 4, maxTop)),
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: active ? accent : undefined }}>
       {label}
@@ -66,7 +87,8 @@ export function HeaderFilter({ label, value, options, onChange }: {
           onClick={e => e.stopPropagation()}
           style={{
             position: 'fixed', top: pos.top, left: pos.left, zIndex: 2000,
-            minWidth: 170, maxHeight: 300, overflowY: 'auto', padding: 4,
+            minWidth: 170, maxWidth: 'min(340px, calc(100vw - 16px))',
+            maxHeight: 300, overflowY: 'auto', padding: 4,
             background: 'var(--bg-surface, #0f1420)', border: '1px solid var(--border)',
             borderRadius: 8, boxShadow: 'var(--shadow-modal, 0 10px 30px rgba(0,0,0,0.45))',
           }}
@@ -76,6 +98,7 @@ export function HeaderFilter({ label, value, options, onChange }: {
               key={o.value || '__all__'}
               type="button"
               className={`hf-option${o.value === value ? ' selected' : ''}`}
+              title={o.label}
               onClick={() => { onChange(o.value); setOpen(false) }}
             >
               {o.label}

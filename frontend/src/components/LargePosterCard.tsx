@@ -4,10 +4,11 @@ import { buildDeepLink, posterUrl } from '../utils/libraryItem'
 
 // Bigger, Overseerr/Jellyseerr-style poster card for the "Pósters grandes"
 // view — additive alongside the existing small grid, not a replacement.
-export function LargePosterCard({ item, instances, onClick }: {
+export function LargePosterCard({ item, instances, onClick, priority }: {
   item: LibraryItemResponse
   instances: InstanceSafeResponse[]
   onClick: () => void
+  priority?: boolean
 }) {
   const deepLink = buildDeepLink(item, instances)
 
@@ -26,7 +27,8 @@ export function LargePosterCard({ item, instances, onClick }: {
           <img
             src={posterUrl(item.poster_url, 'w342')}
             alt={item.title}
-            loading="lazy"
+            loading={priority ? 'eager' : 'lazy'}
+            fetchPriority={priority ? 'high' : 'auto'}
             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
           />

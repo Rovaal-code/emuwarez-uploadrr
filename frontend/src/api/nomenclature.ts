@@ -38,6 +38,25 @@ export interface FieldsPreviewResult {
   provider_options: Array<{ code: string; name: string; label: string; tmdb_available: boolean }>
 }
 
+// Name vs Radarr/Sonarr vs MediaInfo-bitrate-tool cross-check for Source.
+export interface SourceComparison {
+  from_name: string | null
+  from_radarr: string | null
+  from_mediainfo: string | null
+  // Whether from_mediainfo is a confirmed detection (no re-encode fingerprint
+  // → WEB-DL is decisive) or just a bitrate-threshold guess that can't tell a
+  // WEB-DL re-encode (WEBRip) from a disc re-encode (MicroHD/BluRay) apart.
+  mediainfo_confirmed: boolean
+  agree: boolean
+}
+
+// Reference row for the bitrate table behind the MediaInfo bitrate tool.
+export interface SourceBitrateRow {
+  source: string
+  bitrate: string
+  comment: string
+}
+
 export interface MkvTitlePreview {
   status: string
   prepared_path?: string | null
@@ -64,6 +83,8 @@ export async function getNomenclatureFields(itemId: number): Promise<{
   tmdb_available_providers?: string[]
   title_warning?: string | null
   source_warning?: string | null
+  source_comparison?: SourceComparison | null
+  source_bitrate_table?: SourceBitrateRow[] | null
   // Set when the file isn't accessible / MediaInfo can't read it: no name is
   // generated and `error` explains why.
   blocked?: boolean

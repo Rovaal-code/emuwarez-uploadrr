@@ -11,24 +11,18 @@ import { buildDeepLink, posterUrl, idVerifyUrl } from '../utils/libraryItem'
 import { ExternalIdLink } from './ExternalIdLink'
 import { ProviderTag } from './ProviderIcon'
 import { ServiceLabel } from './ServiceIcon'
-import { NomenclatureCheckButton } from './NomenclatureCheckButton'
-import { TrackRemuxButton } from './TrackRemuxButton'
-import { InfoIcon } from './InfoIcon'
+import {
+  Card, FieldRow, DetailPoster, ValueChip, ValueIcon, DETAIL_CARD_HEIGHT,
+  StatusCardIcon, TechInfoCardIcon, ExternalIdsCardIcon,
+  TypeValueIcon, ResolutionValueIcon, SourceValueIcon, VideoCodecValueIcon,
+  AudioCodecValueIcon, LanguageValueIcon, SubtitleValueIcon, SizeValueIcon,
+  FolderIcon,
+} from './DetailCard'
 
 // Full dedicated detail page (Radarr/Sonarr-style) — replaces the old small
 // modal and the large card. Rendered in place of the library list, with a
-// back button, a large poster and all the item's fields.
-function Field({ label, children, wide, help }: { label: string; children: React.ReactNode; wide?: boolean; help?: string }) {
-  return (
-    <div style={wide ? { gridColumn: '1 / -1' } : undefined}>
-      <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 5 }}>
-        {label}
-        {help && <InfoIcon text={help} />}
-      </div>
-      <div style={{ fontSize: 14, wordBreak: 'break-all' }}>{children}</div>
-    </div>
-  )
-}
+// back button, a compact header (title + actions, fixed-size poster) and the
+// item's fields grouped into semantic cards instead of one long grid.
 
 export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction }: {
   item: LibraryItemResponse
@@ -53,6 +47,8 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
   // (episode -> season -> series) and offer a "back to …" button per ancestor.
   const [parentSeason, setParentSeason] = useState<LibraryItemResponse | null>(null)
   const [parentSeries, setParentSeries] = useState<LibraryItemResponse | null>(null)
+  const [showRuta, setShowRuta] = useState(false)
+
   useEffect(() => {
     let alive = true
     setParentSeason(null)
@@ -88,75 +84,117 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
         )}
       </div>
 
-      <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap' }}>
-        <div style={{ flexShrink: 0, width: 300, maxWidth: '100%' }}>
-          <div style={{ width: '100%', aspectRatio: '2 / 3', borderRadius: 12, overflow: 'hidden', background: 'rgba(255,255,255,0.04)' }}>
-            {item.poster_url ? (
-              <img
-                src={posterUrl(item.poster_url, 'w500')}
-                alt={item.title}
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
-              />
-            ) : (
-              <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 88, opacity: 0.35 }}>
-                {item.item_type === 'series' || item.item_type === 'episode' ? '📺' : '🎬'}
-              </div>
-            )}
-          </div>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
+        <div style={{ fontWeight: 700, fontSize: 25, letterSpacing: '-0.01em' }}>
+          {item.title} {item.year ? <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>({item.year})</span> : null}
         </div>
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+          <LibraryActionButtons
+            item={item}
+            onAction={onAction}
+            title={isRollup ? 'Ver season pack' : undefined}
+            multiSeasonContext={item.item_type === 'series'}
+          />
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        <DetailPoster
+          url={item.poster_url ? posterUrl(item.poster_url, 'w500') : null}
+          alt={item.title}
+          fallbackEmoji={item.item_type === 'series' || item.item_type === 'episode' ? '📺' : '🎬'}
+        />
 
         <div style={{ flex: 1, minWidth: 300 }}>
-          <div style={{ fontWeight: 700, fontSize: 28, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            {item.title} {item.year ? <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>({item.year})</span> : null}
-          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, minHeight: DETAIL_CARD_HEIGHT }}>
+            <Card title="Estado de la biblioteca" icon={<StatusCardIcon />}>
+              <FieldRow label="Tipo">
+                <ValueChip><ValueIcon><TypeValueIcon /></ValueIcon><span className="txt">{formatItemType(item.item_type)}</span></ValueChip>
+              </FieldRow>
+              <FieldRow label="Origen">
+                {item.instance_type
+                  ? (
+                    <ValueChip linkable>
+                      {deepLink
+                        ? <a className="hover-link" href={deepLink} target="_blank" rel="noreferrer" title={`Abrir en ${item.instance_name ?? item.instance_type}`}><ServiceLabel type={item.instance_type} label={item.instance_name ?? item.instance_type} size={15} /></a>
+                        : <ServiceLabel type={item.instance_type} label={item.instance_name ?? item.instance_type} size={15} />}
+                    </ValueChip>
+                  )
+                  : <span className="muted">–</span>}
+              </FieldRow>
+              <FieldRow label="Estado"><StatusBadge status={item.local_status} type="local" /></FieldRow>
+              <FieldRow label="Petición"><StatusBadge status={item.request_status} type="request" /></FieldRow>
+              <FieldRow label="Ruta">
+                <ValueChip as="button" linkable onClick={() => setShowRuta(true)} title="Ver ruta completa">
+                  <span className="brand-icon"><FolderIcon /></span><span className="txt">Ver ruta</span>
+                </ValueChip>
+              </FieldRow>
+            </Card>
 
-          <div style={{ display: 'flex', gap: 8, margin: '20px 0', flexWrap: 'wrap' }}>
-            <LibraryActionButtons item={item} onAction={onAction} title={isRollup ? 'Ver season pack' : undefined} />
-            <TrackRemuxButton
-              item={item}
-              onApplied={async () => {
-                const updated = await getLibraryItem(item.id).catch(() => null)
-                if (updated) onSelect(updated)
-              }}
-            />
-          </div>
+            <Card title="Información técnica" icon={<TechInfoCardIcon />}>
+              <FieldRow label="Resolución" help={rollupHelp}>
+                <ValueChip><ValueIcon><ResolutionValueIcon /></ValueIcon><span className="txt">{item.resolution || '–'}</span></ValueChip>
+              </FieldRow>
+              <FieldRow label="Source" help={rollupHelp}>
+                <ValueChip><ValueIcon><SourceValueIcon /></ValueIcon><span className="txt">{item.source || '–'}</span></ValueChip>
+              </FieldRow>
+              <FieldRow label="Provider" help={rollupHelp}>
+                {item.provider
+                  ? <ValueChip linkable><ProviderTag code={item.provider} label={item.provider_label} /></ValueChip>
+                  : <span className="muted">–</span>}
+              </FieldRow>
+              <FieldRow label="Códec de vídeo" help={rollupHelp}>
+                <ValueChip><ValueIcon><VideoCodecValueIcon /></ValueIcon><span className="txt">{item.video_codec || '–'}</span></ValueChip>
+              </FieldRow>
+              <FieldRow label="Códec de audio" help={rollupHelp}>
+                <ValueChip><ValueIcon><AudioCodecValueIcon /></ValueIcon><span className="txt">{item.audio_codec || '–'}</span></ValueChip>
+              </FieldRow>
+              <FieldRow label="Idiomas de audio" help={rollupHelp}>
+                <ValueChip><ValueIcon><LanguageValueIcon /></ValueIcon><span className="txt">{item.audio_languages || '–'}</span></ValueChip>
+              </FieldRow>
+              <FieldRow label="Subtítulos" help={rollupHelp}>
+                <ValueChip><ValueIcon><SubtitleValueIcon /></ValueIcon><span className="txt">{item.subtitle_languages || '–'}</span></ValueChip>
+              </FieldRow>
+              <FieldRow label="Tamaño">
+                <ValueChip><ValueIcon><SizeValueIcon /></ValueIcon><span className="txt">{formatBytes(item.size_bytes)}</span></ValueChip>
+              </FieldRow>
+            </Card>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '16px 28px' }}>
-            <Field label="Tipo">{formatItemType(item.item_type)}</Field>
-            <Field label="Origen">
-              {item.instance_type
-                ? (deepLink
-                    ? <a className="hover-link" href={deepLink} target="_blank" rel="noreferrer" title={`Abrir en ${item.instance_name ?? item.instance_type}`}><ServiceLabel type={item.instance_type} label={item.instance_name ?? item.instance_type} size={15} /></a>
-                    : <ServiceLabel type={item.instance_type} label={item.instance_name ?? item.instance_type} size={15} />)
-                : '—'}
-            </Field>
-            <Field label="Estado"><StatusBadge status={item.local_status} type="local" /></Field>
-            <Field label="Petición"><StatusBadge status={item.request_status} type="request" /></Field>
-            <Field label="Nomenclatura">
-              <NomenclatureCheckButton
-                item={item}
-                onChecked={async () => {
-                  const updated = await getLibraryItem(item.id).catch(() => null)
-                  if (updated) onSelect(updated)
-                }}
-              />
-            </Field>
-            <Field label="Resolución" help={rollupHelp}>{item.resolution || '–'}</Field>
-            <Field label="Source" help={rollupHelp}>{item.source || '–'}</Field>
-            <Field label="Provider" help={rollupHelp}>{item.provider ? <ProviderTag code={item.provider} label={item.provider_label} /> : '–'}</Field>
-            <Field label="Códec de vídeo" help={rollupHelp}>{item.video_codec || '–'}</Field>
-            <Field label="Códec de audio" help={rollupHelp}>{item.audio_codec || '–'}</Field>
-            <Field label="Idiomas de audio" help={rollupHelp}>{item.audio_languages || '–'}</Field>
-            <Field label="Subtítulos" help={rollupHelp}>{item.subtitle_languages || '–'}</Field>
-            <Field label="Tamaño">{formatBytes(item.size_bytes)}</Field>
-            {item.tmdb_id && <Field label="TMDb"><ExternalIdLink id={item.tmdb_id} href={idVerifyUrl('tmdb', item.tmdb_id, isTv)} label="TMDb" /></Field>}
-            {item.imdb_id && <Field label="IMDb"><ExternalIdLink id={item.imdb_id} href={idVerifyUrl('imdb', item.imdb_id, isTv)} label="IMDb" /></Field>}
-            {item.tvdb_id && <Field label="TVDB"><ExternalIdLink id={item.tvdb_id} href={idVerifyUrl('tvdb', item.tvdb_id, isTv)} label="TVDB" /></Field>}
-            <Field label="Ruta" wide>{item.path ?? '—'}</Field>
+            <Card title="Identificadores externos" icon={<ExternalIdsCardIcon />}>
+              <FieldRow label="TMDb">
+                {item.tmdb_id ? <ValueChip linkable={Boolean(idVerifyUrl('tmdb', item.tmdb_id, isTv))}><ExternalIdLink id={item.tmdb_id} href={idVerifyUrl('tmdb', item.tmdb_id, isTv)} label="TMDb" /></ValueChip> : <span className="muted">–</span>}
+              </FieldRow>
+              <FieldRow label="IMDb">
+                {item.imdb_id ? <ValueChip linkable={Boolean(idVerifyUrl('imdb', item.imdb_id, isTv))}><ExternalIdLink id={item.imdb_id} href={idVerifyUrl('imdb', item.imdb_id, isTv)} label="IMDb" /></ValueChip> : <span className="muted">–</span>}
+              </FieldRow>
+              {/* Radarr no trae tvdbId para películas (TVDB es una base de series) —
+                  siempre sería un "–" fijo, así que directamente no se muestra. */}
+              {item.item_type !== 'movie' && (
+                <FieldRow label="TVDB">
+                  {item.tvdb_id ? <ValueChip linkable={Boolean(idVerifyUrl('tvdb', item.tvdb_id, isTv))}><ExternalIdLink id={item.tvdb_id} href={idVerifyUrl('tvdb', item.tvdb_id, isTv)} label="TVDB" /></ValueChip> : <span className="muted">–</span>}
+                </FieldRow>
+              )}
+              {/* library_items no tiene mal_id todavía (solo las peticiones de eMuwarez
+                  lo traen) — de momento es un hueco fijo a la espera de esa fuente. */}
+              <FieldRow label="MAL"><span className="muted">–</span></FieldRow>
+            </Card>
           </div>
         </div>
       </div>
+
+      {showRuta && (
+        <div className="modal-overlay" onClick={() => setShowRuta(false)}>
+          <div className="modal-panel" onClick={e => e.stopPropagation()} style={{ width: 'max-content', maxWidth: '90vw', minWidth: 320 }}>
+            <div className="modal-header">
+              <h2 className="modal-title">Ruta</h2>
+              <button className="modal-close" onClick={() => setShowRuta(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <div style={{ fontFamily: 'monospace', fontSize: 13, color: 'var(--text-secondary)', wordBreak: 'break-all', lineHeight: 1.6 }}>{item.prepared_path || item.path || '–'}</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {(item.item_type === 'movie' || item.item_type === 'season' || item.item_type === 'episode') && (
         <EmuComparisonSection itemId={item.id} />

@@ -19,7 +19,7 @@ import { testDiscordNotification, testTelegramNotification } from '../api/notifi
 import { ProviderPriorityPicker } from '../components/ProviderPriorityPicker'
 import { ServiceIcon } from '../components/ServiceIcon'
 import { Favicon, domainOf } from '../components/Favicon'
-import { SortableList } from '../components/SortableList'
+import { SortableList, DragHandleIcon } from '../components/SortableList'
 import { REGION_OPTIONS, LANGUAGE_OPTIONS } from '../constants/regionLanguage'
 import { testResultLabel, testResultColor, emuTestCooldownSeconds } from '../utils/integrationResult'
 
@@ -510,8 +510,13 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                       border: `1px solid ${dragging ? 'var(--text-accent, #2563eb)' : 'var(--border)'}`,
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ color: 'var(--text-muted)', fontSize: 11, width: 16 }}>{idx + 1}</span>
-                        <span {...handleProps} style={{ ...handleProps.style, color: 'var(--text-muted)' }} aria-hidden>⠿</span>
+                        <span style={{ color: 'var(--text-muted)', fontSize: 11, width: 16, textAlign: 'center' }}>{idx + 1}</span>
+                        <span
+                          {...handleProps}
+                          className="drag-handle"
+                          style={{ ...handleProps.style, color: 'var(--text-accent)', width: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginLeft: 8, marginRight: 8 }}
+                          aria-hidden
+                        ><DragHandleIcon /></span>
                         <Favicon domain={domainOf(h.url)} size={15} fallback={<ServiceIcon type="imghost" size={15} />} />
                         <span style={{ fontSize: 13, fontWeight: 500 }}>{h.label}</span>
                         {isDefault && <span className="badge status-available" style={{ fontSize: 10 }}>por defecto</span>}
@@ -682,7 +687,6 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
             <option value={0}>Sin límite</option>
             {[50, 100, 150, 200, 250, 300].map(n => <option key={n} value={n}>{n}</option>)}
           </select>
-          <span className="form-hint">Cuántos elementos muestra el panel «Recomendaciones» del dashboard.</span>
         </div>
       </div>
       </div>

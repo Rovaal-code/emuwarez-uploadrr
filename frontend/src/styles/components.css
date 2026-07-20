@@ -129,8 +129,8 @@
 .badge.req-partial         { background: rgba(245,158,11,0.22);  color: #f59e0b; }
 .badge.req-not-compatible  { background: rgba(249,115,22,0.22);  color: #f97316; }
 .badge.req-unavailable     { background: rgba(239,68,68,0.22);   color: #ef4444; }
-.badge.req-claimed         { background: rgba(234,179,8,0.22);   color: #eab308; }
-.badge.req-pending         { background: rgba(168,85,247,0.22);  color: #a855f7; }
+.badge.req-claimed         { background: rgba(168,85,247,0.22);  color: #a855f7; }
+.badge.req-pending         { background: rgba(234,179,8,0.22);   color: #eab308; }
 .badge.req-filled          { background: rgba(107,114,128,0.20); color: #9ca3af; }
 .badge.req-unknown         { background: rgba(107,114,128,0.20); color: #9ca3af; }
 
@@ -594,6 +594,22 @@ optgroup {
 .link:hover {
   text-decoration: underline;
 }
+
+/* Dedicated detail pages (Biblioteca/Peticiones/Subidas) — a thin divider
+ * between a card's FieldRows. `--row-gap` is set inline per Card instance
+ * (DetailCard.tsx) since how much spacing a card needs varies by page. The
+ * `+` sibling selector means a FieldRow that rendered null (e.g. a missing
+ * external ID) never leaves a stray empty divider — there's no DOM node for
+ * it to match against. */
+.detail-card-rows {
+  display: flex;
+  flex-direction: column;
+}
+.detail-card-rows > * + * {
+  margin-top: var(--row-gap, 14px);
+  padding-top: var(--row-gap, 14px);
+  border-top: 1px solid var(--border);
+}
 .text-muted {
   color: var(--text-muted);
 }
@@ -857,15 +873,36 @@ optgroup {
   animation: btn-unsaved-pulse 1.1s ease-in-out infinite;
 }
 
-/* Blinking "En cola" badge (Subidas) — a real flash (opacity all the way
- * down), not just a subtle pulse, so a queued job visibly stands out from
- * a job actively "Subiendo" even though both use the same blue. */
+/* "En cola" badge (Subidas) — a smooth breathing pulse (opacity ramps up and
+ * down progressively, not a hard flash) so a queued job visibly stands out
+ * from a job actively "Subiendo" even though both use the same blue. */
 @keyframes badge-blink {
   0%, 100% { opacity: 1; }
   50%      { opacity: 0.25; }
 }
 .badge-blink {
-  animation: badge-blink 1s step-start infinite;
+  animation: badge-blink 1.6s ease-in-out infinite;
+}
+
+/* Source (bitrate tool) value acting as a link to its reference table — same
+ * smooth progressive cadence as badge-blink, but a color sweep (white to
+ * accent blue) instead of an opacity pulse, so it reads as "clickable" without
+ * an extra icon. Hovering freezes it solid blue. */
+@keyframes source-link-blink {
+  0%, 100% { color: #fff; }
+  50%      { color: var(--text-accent); }
+}
+.source-bitrate-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  animation: source-link-blink 1.6s ease-in-out infinite;
+}
+.source-bitrate-link:hover {
+  color: var(--text-accent);
+  animation-play-state: paused;
 }
 
 /* Column-header (Excel-style) filter menu options. */
@@ -880,6 +917,7 @@ optgroup {
   font-size: 12.5px;
   background: transparent;
   color: var(--text-primary);
+  word-break: break-word;
 }
 .hf-option:hover {
   background: var(--bg-card-hover);
@@ -914,4 +952,91 @@ optgroup {
 .hover-link:hover svg,
 .hover-link:hover img {
   transform: scale(1.18);
+}
+
+/* Field-value mini-card (dedicated detail pages — Biblioteca/Peticiones/
+   Subidas): the FieldRow label stays plain text, but its value sits inside
+   its own small tile with a contextual icon in front. Fields that already
+   carry their own link (ServiceLabel/ProviderTag/ExternalIdLink each render
+   their own inner <a class="hover-link">, or a plain <button>/<a> IS the
+   chip itself — see "Ver ruta") get `.linkable`: the tile's whole padded
+   area lights up and the text turns accent-blue on hover, not just the
+   inner link's own tight hitbox. */
+.value-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  background: rgba(255,255,255,0.035);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 6px;
+  padding: 4px 9px;
+  font-size: 13.5px;
+  color: var(--text-primary);
+  font-family: inherit;
+  text-align: left;
+  text-decoration: none;
+  transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+.value-chip .txt {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.value-chip.linkable {
+  cursor: pointer;
+  /* Subtle blue border even before hovering, so a field with a link is
+     recognizable at a glance. */
+  border-color: rgba(59,130,246,0.3);
+}
+.value-chip.linkable:hover {
+  background: rgba(59,130,246,0.1);
+  border-color: rgba(59,130,246,0.4);
+  color: var(--text-accent);
+}
+/* Monochrome contextual icon (currentColor) — follows the chip's own text
+   color, so it turns accent-blue on hover along with it. */
+.vicon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: color 0.14s ease;
+}
+.value-chip.linkable:hover .vicon {
+  color: var(--text-accent);
+}
+/* Brand-colored icons (Radarr/Sonarr, provider tiles, TMDb/IMDb, the folder
+   icon) keep their own fixed color on hover — only grow a touch, same rule
+   already used for .hover-link's own icon. */
+.value-chip .brand-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  transition: transform 0.14s ease;
+}
+.value-chip.linkable:hover .brand-icon {
+  transform: scale(1.18);
+}
+/* When a value chip WRAPS an existing .hover-link (ServiceLabel/ProviderTag/
+   ExternalIdLink render their own inner <a> already) instead of being the
+   link itself, relay the chip's hover to it — otherwise only the inner
+   link's own snug hitbox (no chip padding) would react. */
+.value-chip.linkable:hover .hover-link {
+  color: var(--text-accent);
+}
+.value-chip.linkable:hover .hover-link svg,
+.value-chip.linkable:hover .hover-link img {
+  transform: scale(1.18);
+}
+
+/* Plain muted placeholder ("–") for a field with no value — not a chip,
+   just dimmed text, same as an empty table cell elsewhere. */
+.muted {
+  color: var(--text-muted);
+}
+
+/* Drag handle (SortableList rows — e.g. Proveedores de imágenes priority
+   list): lights up accent-blue on hover so it reads as grabbable. */
+.drag-handle:hover {
+  color: var(--text-accent) !important;
 }

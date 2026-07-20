@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import type { EmuSource, EmuProvider, NomenclatureFields, FieldsPreviewResult, TrackRemuxPreview, TrackRemuxOverride } from '../api/nomenclature'
+import type { EmuSource, EmuProvider, NomenclatureFields, FieldsPreviewResult, TrackRemuxPreview, TrackRemuxOverride, SourceComparison, SourceBitrateRow } from '../api/nomenclature'
 import {
   getEmuSources,
   getEmuProviders,
@@ -8,7 +8,10 @@ import {
   saveNomenclatureFields,
   previewTrackRemux,
 } from '../api/nomenclature'
-import { queueUpload, runUploadChecks, getUploadChecksProgress, type UploadChecksResult, type UploadCheck } from '../api/uploads'
+import {
+  queueUpload, getExistingJobForItem,
+  runUploadChecks, getUploadChecksProgress, type UploadChecksResult, type UploadCheck,
+} from '../api/uploads'
 import { getLibrary, getMediaInfoReport, suggestProvider } from '../api/library'
 import type { MediaInfoReport } from '../api/library'
 import {
@@ -16,9 +19,12 @@ import {
   getSeasonEpisodeMediaInfo, getSeasonEpisodeRemuxPreview,
   type SeasonPlanProgress, type SeasonEpisodeName, type SeasonEpisodeMediaInfo, type SeasonEpisodeRemux,
 } from '../api/seasonPack'
-import type { LibraryItemResponse, SeasonPackPlanResponse } from '../types/api'
+import type { LibraryItemResponse, SeasonPackPlanResponse, UploadJob } from '../types/api'
 import { InfoIcon } from './InfoIcon'
+import { AutoUploadSourceGate } from './AutoUploadSourceGate'
 import { FitText, FitTextPair } from './FitText'
+import { Tooltip } from './Tooltip'
+import { ACTIVE_JOB_STATUSES, statusLabel } from '../utils/uploadStatus'
 
 // Unified "Subir" wizard (replaces the separate Nomenclatura + Campos + Subir
 // buttons). For a Series/Season it first asks which season (and episode, or the
@@ -42,6 +48,10 @@ interface Props {
   // Optional pre-selection (e.g. from a request's scope): season number and,
   // for a single episode, its episode number. Used to auto-fill step 0.
   preselect?: { season?: number | null; episode?: number | null }
+  // Only true when opened from a series' own dedicated Biblioteca page — the
+  // one place multi-season selection is offered (never from the Biblioteca
+  // list/table, never from a season's own page).
+  multiSeason?: boolean
 }
 
 const labelStyle: React.CSSProperties = {
@@ -113,7 +123,12 @@ function MediaInfoTable({ report }: { report: MediaInfoReport }) {
         <tbody>
           {report.rows.map((r, i) => (
             <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
-              <td style={{ padding: '7px 12px', fontWeight: 600 }}>{r.field}</td>
+              <td style={{ padding: '7px 12px', fontWeight: 600 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  {r.field}
+                  {r.help && <InfoIcon text={r.help} />}
+                </span>
+              </td>
               <td style={{ padding: '7px 12px', fontFamily: 'monospace', color: 'var(--text-muted)', wordBreak: 'break-word' }}>{r.mediainfo}</td>
               <td style={{ padding: '7px 12px', fontFamily: 'monospace', wordBreak: 'break-word' }}>{r.emu}</td>
             </tr>
@@ -127,7 +142,7 @@ function MediaInfoTable({ report }: { report: MediaInfoReport }) {
 // Track reorder/rename table — the single-file "Ver Remux" card renders it
 // editable (inputs); the season target's per-episode accordion renders it
 // read-only (editable=false — no manual per-track overrides for seasons).
-function RemuxTable({ plan, editable, edits, onEdit }: {
+export function RemuxTable({ plan, editable, edits, onEdit }: {
   plan: TrackRemuxPreview
   editable: boolean
   edits?: Record<number, TrackRemuxOverride>
@@ -208,7 +223,7 @@ function RemuxTable({ plan, editable, edits, onEdit }: {
 
 // One collapsible episode row — used by the season target's MediaInfo/Remux
 // accordions (one entry per episode instead of a single-file table).
-function EpisodeAccordionRow({ episodeNumber, title, expanded, onToggle, children }: {
+export function EpisodeAccordionRow({ episodeNumber, title, expanded, onToggle, children }: {
   episodeNumber?: number | null
   title?: string | null
   expanded: boolean
@@ -220,14 +235,17 @@ function EpisodeAccordionRow({ episodeNumber, title, expanded, onToggle, childre
       <button
         type="button"
         onClick={onToggle}
+        title={title ?? undefined}
         style={{
           width: '100%', textAlign: 'left', padding: '8px 12px', background: 'rgba(255,255,255,0.03)',
           border: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between',
-          alignItems: 'center', color: 'inherit', fontSize: 13,
+          alignItems: 'center', gap: 8, color: 'inherit', fontSize: 13,
         }}
       >
-        <span>{episodeNumber != null ? `E${String(episodeNumber).padStart(2, '0')} — ` : ''}{title}</span>
-        <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{expanded ? '▲' : '▼'}</span>
+        <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {episodeNumber != null ? `E${String(episodeNumber).padStart(2, '0')} — ` : ''}{title}
+        </span>
+        <span style={{ color: 'var(--text-muted)', fontSize: 11, flexShrink: 0 }}>{expanded ? '▲' : '▼'}</span>
       </button>
       {expanded && <div style={{ padding: 10 }}>{children}</div>}
     </div>
@@ -259,13 +277,83 @@ function FieldLabel({ label, info }: { label: string; info?: React.ReactNode }) 
   )
 }
 
+// Source comparison — same table look as MediaInfoTable/RemuxTable, one
+// column per origin, single data row (there's only one Source field).
+function SourceCompareTable({ comparison, onShowBitrateTable }: { comparison: SourceComparison; onShowBitrateTable?: () => void }) {
+  return (
+    <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'rgba(255,255,255,0.03)' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, tableLayout: 'fixed' }}>
+        <thead>
+          <tr>
+            <th style={thStyle}>Nombre del archivo</th>
+            <th style={thStyle}>Radarr/Sonarr</th>
+            <th style={thStyle}>MediaInfo (bitrate)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style={{ borderTop: '1px solid var(--border)' }}>
+            <td style={{ padding: '7px 12px', fontFamily: 'monospace' }}>{comparison.from_name || '—'}</td>
+            <td style={{ padding: '7px 12px', fontFamily: 'monospace' }}>{comparison.from_radarr || '—'}</td>
+            <td style={{ padding: '7px 12px', fontFamily: 'monospace' }}>
+              {onShowBitrateTable && comparison.from_mediainfo ? (
+                <Tooltip content="Ver tabla de bitrate">
+                  <button type="button" className="source-bitrate-link" onClick={onShowBitrateTable}>
+                    {comparison.from_mediainfo}
+                  </button>
+                </Tooltip>
+              ) : (comparison.from_mediainfo || '—')}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+// Reference table behind the bitrate tool: every eMuwarez source, the
+// bitrate range that maps to it at this file's resolution, and why. The row
+// matching the tool's actual output for this file is highlighted green —
+// same convention as the eMuwarez comparison table's "aportas" chips.
+function SourceBitrateTable({ rows, highlight }: { rows: SourceBitrateRow[]; highlight: string | null }) {
+  return (
+    <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'rgba(255,255,255,0.03)' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, tableLayout: 'fixed' }}>
+        <colgroup>
+          <col style={{ width: '14%' }} />
+          <col style={{ width: '40%' }} />
+          <col style={{ width: '46%' }} />
+        </colgroup>
+        <thead>
+          <tr>
+            <th style={thStyle}>Source</th>
+            <th style={thStyle}>Bitrate</th>
+            <th style={thStyle}>Comentario</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(r => {
+            const active = highlight != null && r.source === highlight
+            return (
+              <tr key={r.source} style={{ borderTop: '1px solid var(--border)', background: active ? 'rgba(34,197,94,0.14)' : undefined }}>
+                <td style={{ padding: '7px 12px', fontWeight: 600, color: active ? '#22c55e' : undefined }}>{r.source}</td>
+                <td style={{ padding: '7px 12px', fontFamily: 'monospace', wordBreak: 'break-word' }}>{r.bitrate}</td>
+                <td style={{ padding: '7px 12px', color: 'var(--text-secondary)', wordBreak: 'break-word' }}>{r.comment}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 // Where each nomenclature field comes from (shown in the "?" tooltips).
 const FIELD_INFO = {
   title: 'Viene de Radarr/Sonarr y se traduce al español con TMDb.',
   year: 'Viene de Radarr/Sonarr.',
   season_episode: 'Temporada/episodio del release (SxxExx).',
   resolution: 'Viene de Radarr/Sonarr. El botón «Ver MediaInfo» muestra la del archivo real.',
-  source: 'Viene de Radarr/Sonarr (≈ el del nombre del archivo). Si falta o es inválido, se estima con MediaInfo por bitrate (tamaño/duración).',
+  source: 'Prioridad: 1) nombre del archivo, 2) Radarr/Sonarr, 3) estimado con MediaInfo por bitrate (tamaño/duración) si ninguno de los dos anteriores da un source válido.',
   provider: 'Sale del nombre del archivo. Si no lo trae y el source es WEB-DL, se sugiere con TMDb (suscripción antes que alquiler, según tu prioridad).',
   video_codec: 'Se lee con MediaInfo del archivo real.',
   audio: 'Se lee con MediaInfo del archivo real (por pista).',
@@ -286,10 +374,33 @@ function GeneratingHint() {
   )
 }
 
-export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect }: Props) {
+// Same value as the torrent name, just also used as the .mkv container's own
+// title tag — one label reused everywhere this pairing shows up (single-file
+// preview, season episode accordion, step 2 confirmation).
+const INTERNAL_TITLE_LABEL = (
+  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+    Título del archivo
+    <InfoIcon text="Es el mismo texto que el nombre del torrent — también es el título interno, el que se graba dentro del propio contenedor .mkv." />
+  </span>
+)
+
+export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect, multiSeason }: Props) {
   const isSeries = item.item_type === 'series'
   const isSeason = item.item_type === 'season'
   const needsSelection = isSeries || isSeason
+  const allowMultiSeason = !!multiSeason && isSeries
+
+  // Manual/Automático choice, made up front — gates everything else. null
+  // shows the chooser screen; nothing below runs until one is picked.
+  const [mode, setMode] = useState<'manual' | 'auto' | null>(null)
+
+  // Multi-season selection (series' own dedicated page only): a checklist
+  // instead of the single season/episode dropdowns. `seasonQueue` holds the
+  // remaining season ids to process — for Manual, doUpload() pops the next
+  // one and loops the wizard instead of closing; for Automático, all of them
+  // are queued in one go with no wizard involved from here on.
+  const [multiSelected, setMultiSelected] = useState<Set<number>>(new Set())
+  const [seasonQueue, setSeasonQueue] = useState<number[]>([])
 
   // The item the nomenclature actually runs on: a movie/episode directly, a
   // season row for a whole-season pack, or an episode picked from a series.
@@ -315,6 +426,10 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
   const [fields, setFields] = useState<NomenclatureFields>({})
   const [titleWarning, setTitleWarning] = useState<string | null>(null)
   const [sourceWarning, setSourceWarning] = useState<string | null>(null)
+  const [sourceComparison, setSourceComparison] = useState<SourceComparison | null>(null)
+  const [showSourceCompare, setShowSourceCompare] = useState(false)
+  const [sourceBitrateTable, setSourceBitrateTable] = useState<SourceBitrateRow[] | null>(null)
+  const [showBitrateTable, setShowBitrateTable] = useState(false)
   const [preview, setPreview] = useState<FieldsPreviewResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -459,8 +574,45 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
       setSelError('Selecciona un episodio o "Temporada entera"')
       return
     }
-    setStep(1)
+    // For Automático the target resolving is enough — rendering switches to
+    // <AutoUploadSourceGate>, step 1's UI never renders.
+    if (mode === 'manual') setStep(1)
   }
+
+  const toggleMultiSeason = (seasonId: number) => {
+    setMultiSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(seasonId)) next.delete(seasonId); else next.add(seasonId)
+      return next
+    })
+  }
+
+  const confirmMultiSelection = () => {
+    setSelError(null)
+    if (multiSelected.size === 0) { setSelError('Selecciona al menos una temporada'); return }
+    const ids = seasons.filter(s => multiSelected.has(s.id)).map(s => s.id)
+    setSeasonQueue(ids)
+    if (mode === 'manual') {
+      setTargetId(ids[0])
+      setTargetIsSeason(true)
+      setStep(1)
+    }
+    // For Automático, setting seasonQueue above is enough — it switches the
+    // render to <AutoUploadSourceGate>, which checks + queues each season
+    // sequentially (source-disparity gate per season, see that component).
+  }
+
+  // "Ya existe una subida" precheck — only relevant for the manual flow (the
+  // Automático path chains onto it silently server-side either way, see
+  // ACTIVE_JOB_STATUSES/_find_latest_job_for_item in upload_queue.py).
+  const [existingJob, setExistingJob] = useState<UploadJob | null>(null)
+  useEffect(() => {
+    if (mode !== 'manual' || targetId == null) { setExistingJob(null); return }
+    let alive = true
+    getExistingJobForItem(targetId).then(j => { if (alive) setExistingJob(j) }).catch(() => { if (alive) setExistingJob(null) })
+    return () => { alive = false }
+  }, [mode, targetId])
+  const existingJobBlocking = !!existingJob && ACTIVE_JOB_STATUSES.has(existingJob.status)
 
   // --- Step 1: load nomenclature for the resolved target ---
   const loadFields = useCallback(async () => {
@@ -482,6 +634,8 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
       setFields(fieldsResp.fields || {})
       setTitleWarning(fieldsResp.title_warning ?? null)
       setSourceWarning(fieldsResp.source_warning ?? null)
+      setSourceComparison(fieldsResp.source_comparison ?? null)
+      setSourceBitrateTable(fieldsResp.source_bitrate_table ?? null)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error cargando la nomenclatura')
     } finally {
@@ -653,9 +807,20 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
     setUploading(true); setUploadMsg(null)
     try {
       await saveNomenclatureFields(targetId, fields)
-      const r = await queueUpload(targetId, remuxEdits)
+      const r = await queueUpload(targetId, remuxEdits, checks)
       if (r.status !== 'queued' || !r.job?.id) {
         setUploadMsg(`✗ No se pudo encolar la subida (estado: ${r.status}). ${(r.errors || []).join(' ')}`)
+        return
+      }
+      // Manual multi-temporada: en vez de cerrar, sigue con la siguiente
+      // temporada de la cola — el wizard vuelve al paso 1 para ella.
+      const remaining = seasonQueue.slice(1)
+      if (remaining.length > 0) {
+        setSeasonQueue(remaining)
+        setTargetId(remaining[0])
+        setTargetIsSeason(true)
+        setChecks(null)
+        setStep(1)
         return
       }
       onDone?.()
@@ -667,6 +832,111 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
       setUploading(false)
     }
   }
+
+  // Step 0, single target — the original season/episode dropdowns, used
+  // whenever multi-season selection isn't offered (movie/episode directly,
+  // a season opened on its own, or a series opened from anywhere other than
+  // its own dedicated Biblioteca page).
+  const singleSelectionFields = (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
+      {isSeries && (
+        <label><span style={labelStyle}>Temporada</span>
+          <select className="form-input" value={selSeasonId} onChange={e => setSelSeasonId(e.target.value ? Number(e.target.value) : '')}>
+            <option value="">— Seleccionar —</option>
+            {seasons.map(s => <option key={s.id} value={s.id}>{s.title || `Temporada ${s.season_number}`}</option>)}
+          </select>
+        </label>
+      )}
+      <label><span style={labelStyle}>Episodio</span>
+        <select className="form-input" value={selEpisode} onChange={e => setSelEpisode(e.target.value)} disabled={isSeries && selSeasonId === ''}>
+          <option value="">— Seleccionar —</option>
+          <option value={WHOLE_SEASON}>★ Temporada entera</option>
+          {episodes.map(ep => (
+            <option key={ep.id} value={ep.id}>
+              {ep.episode_number != null ? `E${String(ep.episode_number).padStart(2, '0')} — ` : ''}{ep.title}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
+  )
+
+  // Step 0, multi-season — only reachable when the wizard was opened from a
+  // series' own dedicated Biblioteca page (allowMultiSeason).
+  // Only a season with EVERY episode Disponible can go as a season pack
+  // (build_season_pack_plan() blocks otherwise — "Temporada incompleta") —
+  // an incomplete/missing one is shown greyed out and unselectable instead
+  // of letting the user pick it and fail later.
+  const isSeasonComplete = (s: LibraryItemResponse) => s.local_status === 'Disponible'
+  const selectableSeasons = seasons.filter(isSeasonComplete)
+  // The series' own name is redundant here (already the wizard's title) —
+  // just the season part, e.g. "Temporada 1"/"Especiales".
+  const seasonCardLabel = (s: LibraryItemResponse) => {
+    const prefix = `${item.title} - `
+    if (s.title?.startsWith(prefix)) return s.title.slice(prefix.length)
+    return s.season_number === 0 ? 'Especiales' : `Temporada ${s.season_number}`
+  }
+  const multiSeasonChecklist = (
+    <div>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 10 }}>
+        <input
+          type="checkbox"
+          checked={selectableSeasons.length > 0 && multiSelected.size === selectableSeasons.length}
+          onChange={e => setMultiSelected(e.target.checked ? new Set(selectableSeasons.map(s => s.id)) : new Set())}
+        />
+        Seleccionar todas
+      </label>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10, maxHeight: 320, overflowY: 'auto' }}>
+        {seasons.map(s => {
+          const complete = isSeasonComplete(s)
+          const selected = multiSelected.has(s.id)
+          const card = (
+            <button
+              type="button"
+              disabled={!complete}
+              onClick={() => toggleMultiSeason(s.id)}
+              style={{
+                width: '100%', padding: '16px 12px', borderRadius: 8, fontSize: 13, textAlign: 'center', cursor: complete ? 'pointer' : 'not-allowed',
+                background: selected ? 'rgba(37,99,235,0.18)' : 'var(--bg-card)',
+                border: `1px solid ${selected ? '#2563eb' : 'var(--border-input)'}`,
+                color: 'var(--text-primary)', opacity: complete ? 1 : 0.45,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              <span style={{ fontWeight: 600 }}>{seasonCardLabel(s)}</span>
+            </button>
+          )
+          return complete ? (
+            <div key={s.id}>{card}</div>
+          ) : (
+            <Tooltip key={s.id} content="Temporada incompleta: no todos los capítulos están Disponibles." style={{ width: '100%' }}>
+              {card}
+            </Tooltip>
+          )
+        })}
+      </div>
+    </div>
+  )
+
+  // "Ya existe una subida" — shown at the top of step 1 once the target
+  // resolves. Never blocks continuing unless the existing job is still
+  // active (queued/staging/preparing/running); a terminal one (Completado/
+  // Fallido/Cancelado) just informs — the new job chains onto it either way
+  // (services/upload_queue.py's _find_latest_job_for_item).
+  const existingJobNotice = existingJob && (
+    <div style={{
+      marginBottom: 14, padding: '10px 14px', borderRadius: 8, fontSize: 12.5, display: 'flex',
+      alignItems: 'center', gap: 10, flexWrap: 'wrap',
+      background: existingJobBlocking ? 'rgba(248,113,113,0.1)' : 'rgba(59,130,246,0.1)',
+      border: `1px solid ${existingJobBlocking ? 'rgba(248,113,113,0.3)' : 'rgba(59,130,246,0.3)'}`,
+    }}>
+      <span>
+        {existingJobBlocking
+          ? `Ya hay una subida en curso para este contenido (${statusLabel(existingJob.status)}). Espera a que termine o cancélala antes de continuar.`
+          : `Ya existe este contenido (${statusLabel(existingJob.status)}) en Subidas. Si continúas, esta nueva subida se encadenará a su historial.`}
+      </span>
+    </div>
+  )
 
   const fieldBox = (
     <>
@@ -689,14 +959,70 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
           <input className="form-input" value={fields.resolution || ''} onChange={e => setField('resolution', e.target.value)} />
         </label>
         <label><FieldLabel label="Source" info={FIELD_INFO.source} />
-          <select className="form-input" value={fields.source || ''} onChange={e => setField('source', e.target.value)}>
-            <option value="">— Seleccionar —</option>
-            {sources.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}
-          </select>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <select className="form-input" style={{ flex: 1 }} value={fields.source || ''} onChange={e => setField('source', e.target.value)}>
+              <option value="">— Seleccionar —</option>
+              {sources.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}
+            </select>
+            {sourceComparison && (
+              <Tooltip content={sourceComparison.agree
+                ? 'Nombre, Radarr/Sonarr y MediaInfo coinciden en el source. Clic para ver el detalle.'
+                : 'El source no coincide entre el nombre del archivo, Radarr/Sonarr y MediaInfo. Clic para comparar.'}>
+                <button
+                  type="button"
+                  onClick={() => setShowSourceCompare(v => !v)}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    width: 34, height: 34, background: 'none', border: 'none', cursor: 'pointer',
+                    padding: 0, flexShrink: 0,
+                  }}
+                >
+                  <span
+                    className={sourceComparison.agree ? undefined : 'badge-blink'}
+                    style={{ display: 'inline-flex', color: sourceComparison.agree ? 'var(--text-accent)' : '#eab308' }}
+                  >
+                    <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="5" width="20" height="14" rx="4" />
+                      <path d="M10 9.3v5.4l5-2.7z" fill="currentColor" stroke="none" />
+                    </svg>
+                  </span>
+                </button>
+              </Tooltip>
+            )}
+          </div>
           {sourceWarning && (
             <span style={{ display: 'block', marginTop: 4, fontSize: 11, color: '#f59e0b' }}>⚠ {sourceWarning}</span>
           )}
         </label>
+        {showSourceCompare && sourceComparison && (
+          <div className="modal-overlay" onClick={() => setShowSourceCompare(false)}>
+            <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 620 }}>
+              <div className="modal-header">
+                <h2 className="modal-title">Comparación del Source</h2>
+                <button className="modal-close" onClick={() => setShowSourceCompare(false)}>✕</button>
+              </div>
+              <div className="modal-body">
+                <SourceCompareTable
+                  comparison={sourceComparison}
+                  onShowBitrateTable={sourceBitrateTable ? () => setShowBitrateTable(true) : undefined}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+        {showBitrateTable && sourceBitrateTable && (
+          <div className="modal-overlay" onClick={() => setShowBitrateTable(false)}>
+            <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 720 }}>
+              <div className="modal-header">
+                <h2 className="modal-title">Tabla de bitrate del source</h2>
+                <button className="modal-close" onClick={() => setShowBitrateTable(false)}>✕</button>
+              </div>
+              <div className="modal-body">
+                <SourceBitrateTable rows={sourceBitrateTable} highlight={sourceComparison?.from_mediainfo ?? null} />
+              </div>
+            </div>
+          </div>
+        )}
         {sourceRequiresProvider && (
           <label><FieldLabel label="Provider" info={FIELD_INFO.provider} />
             {detectingProvider ? (
@@ -730,14 +1056,14 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
             min={12}
             items={[
               { label: 'Nombre final del torrent (eMuwarez)', text: preview.torrent_name, labelStyle },
-              { label: 'Título Final del Archivo (También el Interno)', text: preview.internal_mkv_title, labelStyle },
+              { label: INTERNAL_TITLE_LABEL, text: preview.internal_mkv_title, labelStyle },
             ]}
           />
         ) : (
           <>
             <div style={labelStyle}>Nombre final del torrent (eMuwarez)</div>
             <GeneratingHint />
-            <div style={{ ...labelStyle, marginTop: 10 }}>Título Final del Archivo (También el Interno)</div>
+            <div style={{ ...labelStyle, marginTop: 10 }}>{INTERNAL_TITLE_LABEL}</div>
             <GeneratingHint />
           </>
         )}
@@ -784,48 +1110,105 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
 
+        {mode === null && (
+          <div className="modal-body">
+            <p className="text-muted" style={{ fontSize: 12, marginBottom: 16 }}>
+              Elige cómo quieres subir <strong>{item.title}</strong> a eMuwarez.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <button
+                className="btn btn-secondary"
+                style={{
+                  padding: '14px 14px', textAlign: 'left', display: 'flex', flexDirection: 'column',
+                  alignItems: 'flex-start', gap: 6, height: 'auto', width: '100%', minWidth: 0, whiteSpace: 'normal',
+                }}
+                onClick={() => setMode('manual')}
+                type="button"
+              >
+                <span style={{ fontSize: 15, fontWeight: 700 }}>Manual</span>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 400, whiteSpace: 'normal' }}>
+                  Revisa y ajusta la nomenclatura, el remux y las comprobaciones antes de confirmar.
+                </span>
+              </button>
+              <button
+                className="btn btn-secondary"
+                style={{
+                  padding: '14px 14px', textAlign: 'left', display: 'flex', flexDirection: 'column',
+                  alignItems: 'flex-start', gap: 6, height: 'auto', width: '100%', minWidth: 0, whiteSpace: 'normal',
+                }}
+                onClick={() => setMode('auto')}
+                type="button"
+              >
+                <span style={{ fontSize: 15, fontWeight: 700 }}>Automático</span>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 400, whiteSpace: 'normal' }}>
+                  Se envía directamente a Subidas; la nomenclatura y las comprobaciones se generan solas.
+                </span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {mode === 'auto' && allowMultiSeason && seasonQueue.length === 0 && (
+          <div className="modal-body">
+            {multiSeasonChecklist}
+            {selError && <p className="text-error" style={{ marginTop: 10 }}>{selError}</p>}
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
+              <button className="btn btn-secondary" onClick={() => setMode(null)} type="button">← Volver</button>
+              <button className="btn btn-primary" onClick={confirmMultiSelection} type="button">Continuar →</button>
+            </div>
+          </div>
+        )}
+
+        {mode === 'auto' && allowMultiSeason && seasonQueue.length > 0 && (
+          <AutoUploadSourceGate targetIds={seasonQueue} onNavigate={onNavigate} onClose={onClose} onDone={onDone} />
+        )}
+
+        {mode === 'auto' && !allowMultiSeason && needsSelection && targetId == null && (
+          <div className="modal-body">
+            <p className="text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
+              Elige qué subir de <strong>{item.title}</strong>: un episodio concreto, o la temporada entera.
+            </p>
+            {singleSelectionFields}
+            {selError && <p className="text-error" style={{ marginTop: 10 }}>{selError}</p>}
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
+              <button className="btn btn-secondary" onClick={() => setMode(null)} type="button">← Volver</button>
+              <button className="btn btn-primary" onClick={confirmSelection} type="button">Continuar →</button>
+            </div>
+          </div>
+        )}
+
+        {mode === 'auto' && !allowMultiSeason && targetId != null && (
+          <AutoUploadSourceGate targetIds={[targetId]} onNavigate={onNavigate} onClose={onClose} onDone={onDone} />
+        )}
+
+        {mode === 'manual' && (
         <div style={{ display: 'flex', gap: 8, padding: '0 20px', marginTop: 8, fontSize: 12, flexWrap: 'wrap' }}>
           {needsSelection && <><span style={{ fontWeight: step === 0 ? 700 : 400, color: step === 0 ? 'var(--text)' : 'var(--text-muted)' }}>0. Selección</span><span style={{ color: 'var(--text-muted)' }}>→</span></>}
           <span style={{ fontWeight: step === 1 ? 700 : 400, color: step === 1 ? 'var(--text)' : 'var(--text-muted)' }}>1. Nomenclatura</span>
           <span style={{ color: 'var(--text-muted)' }}>→</span>
           <span style={{ fontWeight: step === 2 ? 700 : 400, color: step === 2 ? 'var(--text)' : 'var(--text-muted)' }}>2. Subida a eMuwarez</span>
         </div>
+        )}
 
-        {step === 0 && (
+        {mode === 'manual' && step === 0 && (
           <div className="modal-body">
             <p className="text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
-              Elige qué subir de <strong>{item.title}</strong>: un episodio concreto, o la temporada entera.
+              {allowMultiSeason
+                ? <>Elige qué temporada(s) de <strong>{item.title}</strong> subir.</>
+                : <>Elige qué subir de <strong>{item.title}</strong>: un episodio concreto, o la temporada entera.</>}
             </p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
-              {isSeries && (
-                <label><span style={labelStyle}>Temporada</span>
-                  <select className="form-input" value={selSeasonId} onChange={e => setSelSeasonId(e.target.value ? Number(e.target.value) : '')}>
-                    <option value="">— Seleccionar —</option>
-                    {seasons.map(s => <option key={s.id} value={s.id}>{s.title || `Temporada ${s.season_number}`}</option>)}
-                  </select>
-                </label>
-              )}
-              <label><span style={labelStyle}>Episodio</span>
-                <select className="form-input" value={selEpisode} onChange={e => setSelEpisode(e.target.value)} disabled={isSeries && selSeasonId === ''}>
-                  <option value="">— Seleccionar —</option>
-                  <option value={WHOLE_SEASON}>★ Temporada entera</option>
-                  {episodes.map(ep => (
-                    <option key={ep.id} value={ep.id}>
-                      {ep.episode_number != null ? `E${String(ep.episode_number).padStart(2, '0')} — ` : ''}{ep.title}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
+            {allowMultiSeason ? multiSeasonChecklist : singleSelectionFields}
             {selError && <p className="text-error" style={{ marginTop: 10 }}>{selError}</p>}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
-              <button className="btn btn-primary" onClick={confirmSelection}>Continuar →</button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
+              <button className="btn btn-secondary" onClick={() => setMode(null)} type="button">← Volver</button>
+              <button className="btn btn-primary" onClick={allowMultiSeason ? confirmMultiSelection : confirmSelection} type="button">Continuar →</button>
             </div>
           </div>
         )}
 
-        {step === 1 && targetIsSeason && (
+        {mode === 'manual' && step === 1 && targetIsSeason && (
           <div className="modal-body">
+            {existingJobNotice}
             {seasonPlanLoading && (
               <div style={{ padding: '36px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
                 <span className="spinner" style={{ width: 28, height: 28, borderWidth: 3 }} />
@@ -908,7 +1291,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
                   <div className="modal-overlay" onClick={() => setShowRemuxCard(false)}>
                     <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 780 }}>
                       <div className="modal-header">
-                        <h2 className="modal-title">Remux — orden y nombre de pistas por capítulo</h2>
+                        <h2 className="modal-title">Ordenación y Nombre de las Pistas por Capítulo</h2>
                         <button className="modal-close" onClick={() => setShowRemuxCard(false)}>✕</button>
                       </div>
                       <div className="modal-body">
@@ -956,7 +1339,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
                                 min={12}
                                 items={[
                                   { label: 'Nombre del torrent', text: ep.torrent_name || '–', labelStyle: { ...labelStyle, fontSize: 10 } },
-                                  { label: 'Título interno del archivo', text: ep.internal_mkv_title || '–', labelStyle: { ...labelStyle, fontSize: 10 } },
+                                  { label: INTERNAL_TITLE_LABEL, text: ep.internal_mkv_title || '–', labelStyle: { ...labelStyle, fontSize: 10 } },
                                 ]}
                               />
                             )}
@@ -971,7 +1354,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
                   {needsSelection
                     ? <button className="btn btn-secondary" onClick={() => setStep(0)}>← Selección</button>
                     : <span />}
-                  <button className="btn btn-primary" onClick={goToUpload} disabled={preparing || seasonPlan.status !== 'valid'}>
+                  <button className="btn btn-primary" onClick={goToUpload} disabled={preparing || seasonPlan.status !== 'valid' || existingJobBlocking}>
                     {preparing ? 'Preparando…' : 'Continuar →'}
                   </button>
                 </div>
@@ -980,8 +1363,9 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
           </div>
         )}
 
-        {step === 1 && !targetIsSeason && (
+        {mode === 'manual' && step === 1 && !targetIsSeason && (
           <div className="modal-body">
+            {existingJobNotice}
             {loading && (
               <div style={{ padding: '36px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
                 <span className="spinner" style={{ width: 28, height: 28, borderWidth: 3 }} />
@@ -1008,8 +1392,9 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 600 }}>MediaInfo y Remux del archivo</div>
                       <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>
-                        «Ver Remux» muestra la reordenación y el nombre de las pistas de vídeo/audio/subtítulos del
-                        contenido (editable a mano); «Ver MediaInfo» muestra el detalle técnico real del archivo.
+                        Ver Remux: muestra la reordenación y el nombre de las pistas de vídeo/audio/subtítulos del contenido (editable).
+                        <br />
+                        Ver MediaInfo: muestra el detalle técnico real del archivo.
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
@@ -1052,7 +1437,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
                   <div className="modal-overlay" onClick={() => setShowRemuxCard(false)}>
                     <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 780 }}>
                       <div className="modal-header">
-                        <h2 className="modal-title">Remux — orden y nombre de pistas</h2>
+                        <h2 className="modal-title">Ordenación y Nombre de las Pistas</h2>
                         <button className="modal-close" onClick={() => setShowRemuxCard(false)}>✕</button>
                       </div>
                       <div className="modal-body">
@@ -1073,7 +1458,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
                   {needsSelection
                     ? <button className="btn btn-secondary" onClick={() => setStep(0)}>← Selección</button>
                     : <span />}
-                  <button className="btn btn-primary" onClick={goToUpload} disabled={preparing || !preview}>
+                  <button className="btn btn-primary" onClick={goToUpload} disabled={preparing || !preview || existingJobBlocking}>
                     {preparing ? 'Preparando…' : 'Continuar →'}
                   </button>
                 </div>
@@ -1082,7 +1467,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
           </div>
         )}
 
-        {step === 2 && (
+        {mode === 'manual' && step === 2 && (
           <div className="modal-body">
             <div style={{ marginBottom: 14, padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
               {targetIsSeason ? (
@@ -1095,7 +1480,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
                   min={12}
                   items={[
                     { label: 'Nombre final del torrent', text: preview?.torrent_name || '–', labelStyle },
-                    { label: 'Título Final del Archivo (También el Interno)', text: preview?.internal_mkv_title || '–', labelStyle },
+                    { label: INTERNAL_TITLE_LABEL, text: preview?.internal_mkv_title || '–', labelStyle },
                   ]}
                 />
               )}

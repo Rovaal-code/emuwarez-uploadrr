@@ -18,8 +18,12 @@ import { UploadWizardModal } from '../components/UploadWizardModal'
 import { RequestFormModal } from '../components/RequestFormModal'
 import { getLibraryItem } from '../api/library'
 import type { LibraryItemResponse } from '../types/api'
-import { formatBytes, formatDate, formatItemType, parseServerDate } from '../utils/format'
+import { formatBytes, formatDate, formatItemType } from '../utils/format'
 import { posterUrl } from '../utils/libraryItem'
+import {
+  ACTIVE_JOB_STATUSES, STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo,
+  progressCounter, queuedSecondsLeft, useTicker,
+} from '../utils/uploadStatus'
 
 // Phase 11G — "Recomendaciones" groups, in the order they appear. The content
 // name always links to its Biblioteca detail; the "Acción" button is
@@ -30,15 +34,15 @@ const REC_GROUP_META: Record<number, {
   action: RecAction; actionLabel: string
   color: string; bg: string; border: string
 }> = {
-  1: { category: 'Petición', recommendation: 'Cumple una petición compatible',
+  1: { category: 'Petición Compatible', recommendation: 'Revisa la petición, quizás puedas reclamarla',
        action: 'view-request', actionLabel: 'Ver Petición',
-       color: '#60a5fa', bg: 'rgba(96,165,250,0.14)', border: 'rgba(96,165,250,0.35)' },
-  2: { category: 'Contenido único', recommendation: 'Súbelo: no está en eMuwarez',
-       action: 'upload', actionLabel: 'Subir a eMuwarez',
        color: '#22c55e', bg: 'rgba(34,197,94,0.14)', border: 'rgba(34,197,94,0.35)' },
-  3: { category: 'Falta', recommendation: 'Pídelo en eMuwarez',
+  2: { category: 'Contenido único', recommendation: 'Podrías subirlo a eMuwarez',
+       action: 'upload', actionLabel: 'Subir a eMuwarez',
+       color: '#a855f7', bg: 'rgba(168,85,247,0.14)', border: 'rgba(168,85,247,0.35)' },
+  3: { category: 'Faltante', recommendation: 'Pídelo en eMuwarez',
        action: 'request', actionLabel: 'Petición a eMuwarez',
-       color: '#eab308', bg: 'rgba(234,179,8,0.14)', border: 'rgba(234,179,8,0.35)' },
+       color: '#ef4444', bg: 'rgba(239,68,68,0.14)', border: 'rgba(239,68,68,0.35)' },
 }
 
 // Phase 11F — the four sub-phases a *running* upload job can be in, in
@@ -51,6 +55,18 @@ const REC_GROUP_META: Record<number, {
 const ACTIVITY_PANEL_HEIGHT = '40vh'
 // "Últimas tareas ejecutadas" is half the height of the activity panels.
 const TASKS_PANEL_HEIGHT = '20vh'
+
+// task_runs.name is the internal task key (services/scheduler.py's
+// TASK_LIBRARY_SYNC/TASK_EMU_SYNC) — same human names Ajustes → Tareas
+// programadas already shows for these same keys (services/scheduler.py's
+// DEFAULT_TASKS). Unknown/future keys just fall back to the raw key.
+const TASK_NAME_LABEL: Record<string, string> = {
+  'sync-library': 'Sincronizar bibliotecas',
+  'sync-emu-requests': 'Sincronizar peticiones eMuwarez',
+}
+function taskNameLabel(name: string): string {
+  return TASK_NAME_LABEL[name] || name
+}
 
 // One row of the "Conexiones" card: icon + label + status badge. Only
 // actually-configured connections are rendered, so the badge reads
@@ -76,23 +92,6 @@ function ConnRow({ icon, label, href, badge = 'Configurado', tone = 'ok' }: {
   )
 }
 
-const RUNNING_PHASES = ['preflight', 'config_staging', 'running', 'finalizing'] as const
-const PHASE_LABEL: Record<string, string> = {
-  preflight: 'Preflight',
-  config_staging: 'Preparando configuración',
-  running: 'Subiendo',
-  finalizing: 'Finalizando',
-}
-
-function elapsedLabel(startedAt: string | null | undefined, now: number): string {
-  if (!startedAt) return '—'
-  const started = parseServerDate(startedAt).getTime()
-  const diffSec = Math.max(0, Math.floor((now - started) / 1000))
-  const m = Math.floor(diffSec / 60)
-  const sec = diffSec % 60
-  return m > 0 ? `${m}m ${sec}s` : `${sec}s`
-}
-
 interface DashboardPageProps {
   onNavigate?: (page: string) => void
 }
@@ -105,6 +104,13 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   const openLibraryDetail = (item: DashboardRecommendationItem) => {
     try { sessionStorage.setItem('emuwarez_open_library_item', String(item.id)) } catch { /* ignore */ }
     onNavigate?.('library')
+  }
+
+  // "Actividad de subida" title → same stash-and-navigate handoff, opening
+  // that job's own detail page in Subidas.
+  const goToUpload = (jobId: number) => {
+    try { sessionStorage.setItem('emuwarez_open_upload', String(jobId)) } catch { /* ignore */ }
+    onNavigate?.('uploads')
   }
 
   // "Acción" column, group-specific: group 1 → open the existing request;
@@ -142,12 +148,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   // triggers a data reload when any sync finishes.
   const { message: syncMsg, lastCompletedAt } = useSync()
 
-  const [now, setNow] = useState(Date.now())
-
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(t)
-  }, [])
+  useTicker(activeUploads.some(j => j.status === 'queued'))
 
   const loadData = useCallback(async () => {
     setLoadingData(true)
@@ -163,13 +164,16 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
       getDashboardSummary(),
       getDashboardActivity(),
       getDashboardRecommendations(recentLimit),
-      getUploads({ status: 'running', limit: 50 }),
+      // Unfiltered — 'running' alone would miss 'staging'/'queued'/'preparing'
+      // jobs (e.g. a job that was just retried starts 'queued', not
+      // 'running'); narrowed to the live statuses client-side below.
+      getUploads({ limit: 50 }),
     ])
     if (s.status === 'fulfilled') setSummary(s.value)
     else setDataError('No se pudieron cargar los datos del dashboard')
     if (a.status === 'fulfilled') setTaskActivity(a.value)
     if (la.status === 'fulfilled') setRecommendations(la.value.items)
-    if (up.status === 'fulfilled') setActiveUploads(up.value)
+    if (up.status === 'fulfilled') setActiveUploads(up.value.filter(j => ACTIVE_JOB_STATUSES.has(j.status)))
     setLoadingData(false)
   }, [])
 
@@ -178,12 +182,28 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   // Reload the dashboard data whenever any global sync finishes.
   useEffect(() => { if (lastCompletedAt) loadData() }, [lastCompletedAt, loadData])
 
-  // Light polling so the upload activity panel reflects real progress
-  // while the dashboard stays open.
+  // Light polling for the whole dashboard (summary/recommendations/tasks).
   useEffect(() => {
     const t = setInterval(loadData, 15000)
     return () => clearInterval(t)
   }, [loadData])
+
+  // "Actividad de subida" needs a much faster refresh than the rest of the
+  // dashboard — at 15s, a job's progress visibly jumps in big steps instead
+  // of reading as live. Same 2.5s cadence Subidas' own table uses, but
+  // scoped to just this fetch so it doesn't reload the whole dashboard.
+  const loadActiveUploads = useCallback(async () => {
+    try {
+      const up = await getUploads({ limit: 50 })
+      setActiveUploads(up.filter(j => ACTIVE_JOB_STATUSES.has(j.status)))
+    } catch { /* ignore — next tick retries */ }
+  }, [])
+  const hasLiveUpload = activeUploads.length > 0
+  useEffect(() => {
+    if (!hasLiveUpload) return
+    const t = setInterval(loadActiveUploads, 2500)
+    return () => clearInterval(t)
+  }, [hasLiveUpload, loadActiveUploads])
 
   if (loadingData && !summary) return <LoadingState label="Cargando dashboard…" />
   if (!summary) return <ErrorState message={dataError ?? 'No se pudieron cargar los datos del dashboard'} onRetry={loadData} />
@@ -240,16 +260,12 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
           value={s.missing}
           accentColor="var(--color-missing)"
           info="Contenido que Radarr/Sonarr conocen pero cuyo archivo aún no está en disco (falta, en cola o con error)."
-        >
-          <div className="stat-card-sub-row" style={{ color: 'var(--text-muted)', fontSize: 12 }}>
-            {s.last_sync_at ? `Última sync: ${formatDate(s.last_sync_at)}` : 'Sin sincronizar'}
-          </div>
-        </StatCard>
+        />
 
         <StatCard
           label="Contenido único"
           value={s.unique_content ?? 0}
-          accentColor="#22c55e"
+          accentColor="#a855f7"
           info="Contenido disponible que aún no está en eMuwarez: las películas, las temporadas completas de series o documentales y sus capítulos. Son tus oportunidades de subida."
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -277,28 +293,28 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
             info="Total de peticiones activas descargadas de eMuwarez."
           />
           <StatCard
-            label="Mis peticiones"
-            value={s.requests_mine ?? 0}
-            accentColor="#3b82f6"
-            info="Peticiones creadas por tu propio usuario de eMuwarez (según el nombre configurado en Ajustes)."
-          />
-          <StatCard
-            label="Compatibles"
+            label="Peticiones Compatibles"
             value={s.requests_compatible ?? 0}
             accentColor="#22c55e"
             info="Peticiones cuya mejor coincidencia en tu biblioteca cumple resolución y source: quizás puedas cubrirlas."
           />
           <StatCard
-            label="Parciales"
+            label="Peticiones Parciales"
             value={s.requests_partial ?? 0}
             accentColor="#f59e0b"
             info="Peticiones cuya mejor coincidencia cumple solo parte de lo pedido (resolución o source, pero no ambos)."
           />
           <StatCard
             label="Reclamadas"
-            value={s.requests_mine_reclaimed ?? 0}
-            accentColor="#9ca3af"
-            info="De tus propias peticiones (creadas por tu usuario de eMuwarez), cuántas ya están Reclamadas en eMuwarez."
+            value={s.requests_reclaimed ?? 0}
+            accentColor="#a855f7"
+            info="Peticiones ya Reclamadas en eMuwarez. eMuwarez no permite saber si el reclamo es tuyo, así que es el total de reclamadas, no solo las tuyas."
+          />
+          <StatCard
+            label="Mis Peticiones"
+            value={s.requests_mine ?? 0}
+            accentColor="#3b82f6"
+            info="Peticiones creadas por tu propio usuario de eMuwarez (según el nombre configurado en Ajustes)."
           />
         </div>
       </div>
@@ -408,7 +424,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                   <tbody>
                     {taskRuns.map(item => (
                       <tr key={item.id}>
-                        <td>{item.name}</td>
+                        <td>{taskNameLabel(item.name)}</td>
                         <td>
                           <StatusBadge status={item.status ?? ''} type="task" />
                         </td>
@@ -437,30 +453,68 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                   No hay subidas en curso ahora mismo.
                 </p>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {activeUploads.map(job => {
-                    const phase = job.progress_phase ?? 'running'
-                    const stepIdx = Math.max(0, RUNNING_PHASES.indexOf(phase as typeof RUNNING_PHASES[number]))
-                    const pct = ((stepIdx + 1) / RUNNING_PHASES.length) * 100
+                    const isPreparingOrRunning = job.status === 'preparing' || job.status === 'running'
+                    const phaseInfo = isPreparingOrRunning ? currentPhaseInfo(job) : null
+                    const phaseLabelText = phaseInfo?.label ?? (isPreparingOrRunning ? phaseLabel(job.progress_phase) : null)
+                    // Total time since the job started (not just this sub-phase) — the
+                    // number that actually answers "how long has this been going".
+                    const totalElapsedText = isPreparingOrRunning ? progressCounter(job) : null
                     return (
-                      <div key={job.id} style={{ borderBottom: '1px solid var(--border)', paddingBottom: 12 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                          <span style={{ fontSize: 13, fontWeight: 500 }}>{job.title ?? `Job #${job.id}`}</span>
-                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{elapsedLabel(job.started_at, now)}</span>
-                        </div>
-                        <div className="progress-bar" style={{ marginBottom: 4 }}>
-                          <div className="progress-fill" style={{ width: `${pct}%` }} />
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)' }}>
-                          <span>Etapa: {PHASE_LABEL[phase] ?? phase}</span>
-                          <span>Paso {stepIdx + 1}/{RUNNING_PHASES.length}</span>
-                        </div>
-                        {job.last_log_at && (
-                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                            Última actividad: {formatDate(job.last_log_at)}
-                          </div>
+                    <div key={job.id} style={{ display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid var(--border)', paddingBottom: 12 }}>
+                      <div style={{ width: 28, height: 42, borderRadius: 4, overflow: 'hidden', background: 'rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        {job.poster_url ? (
+                          <img
+                            src={posterUrl(job.poster_url, 'w154')}
+                            alt=""
+                            loading="lazy"
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                          />
+                        ) : (
+                          <span style={{ fontSize: 14, opacity: 0.35 }}>
+                            {job.media_type === 'series' || job.media_type === 'episode' ? '📺' : '🎬'}
+                          </span>
                         )}
                       </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+                          <div
+                            className="hover-link"
+                            style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}
+                            onClick={() => goToUpload(job.id!)}
+                            title="Ver progreso / detalle"
+                          >
+                            {job.title ?? `Job #${job.id}`}
+                          </div>
+                          {totalElapsedText && (
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>{totalElapsedText}</span>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 4 }}>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', minWidth: 0 }}>
+                            {job.status === 'queued' ? (
+                              <span className="badge status-queued">En cola</span>
+                            ) : isPreparingOrRunning ? (
+                              <span className={`${STATUS_CLASS[job.status] || 'badge req-unknown'} badge-blink`}>{statusLabel(job.status)}</span>
+                            ) : (
+                              <span className={STATUS_CLASS[job.status] || 'badge req-unknown'}>{statusLabel(job.status)}</span>
+                            )}
+                            {job.status === 'queued' && queuedSecondsLeft(job) != null && (
+                              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{queuedSecondsLeft(job)}s</span>
+                            )}
+                            {isPreparingOrRunning && (
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-muted)', minWidth: 0, overflow: 'hidden' }}>
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{phaseLabelText}</span>
+                                {phaseInfo?.counterText && <span style={{ flexShrink: 0 }}>{phaseInfo.counterText}</span>}
+                                <span className="spinner" style={{ width: 10, height: 10, borderWidth: 2, flexShrink: 0 }} />
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                     )
                   })}
                 </div>

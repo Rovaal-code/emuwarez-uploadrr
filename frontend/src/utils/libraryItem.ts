@@ -1,5 +1,27 @@
 import type { LibraryItemResponse, InstanceSafeResponse } from '../types/api'
 
+// "Aportes" only makes sense for content you actually have: a leaf item
+// (movie/episode) that's Disponible/Subido/Subiendo, or a series/season
+// rollup that's at least Parcial. A Faltante item has nothing to contribute,
+// even if eMuwarez's catalog happens not to have it either.
+const APORTE_ELIGIBLE_STATUS = new Set(['Disponible', 'Subido', 'Subiendo', 'Parcial'])
+export function isAporteEligible(item: LibraryItemResponse): boolean {
+  return APORTE_ELIGIBLE_STATUS.has(item.local_status ?? '')
+}
+
+// Episode title in the Biblioteca LIST/tree view: just "NombreSerie - SxEx",
+// never the per-episode title (Sonarr's own episode titles can be very
+// long and break the row layout) — the full descriptive title still shows
+// in the episode's own dedicated ficha, this only applies to the list.
+export function episodeListLabel(item: LibraryItemResponse): string {
+  if (item.item_type !== 'episode' || item.season_number == null || item.episode_number == null) {
+    return item.title
+  }
+  const code = `S${String(item.season_number).padStart(2, '0')}E${String(item.episode_number).padStart(2, '0')}`
+  const seriesName = item.title.split(/\s+S\d{2}E\d{2}\b/i)[0] || item.title
+  return `${seriesName} - ${code}`
+}
+
 export function titleMismatchesFilename(item: LibraryItemResponse): boolean {
   if (!item.original_title) return false
   const norm = (s: string) => s.trim().toLowerCase()

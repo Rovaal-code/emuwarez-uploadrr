@@ -1,9 +1,17 @@
-import { NAV_ITEMS } from '../types/domain'
+import { useState } from 'react'
+import { NAV_ITEMS, type NavItem } from '../types/domain'
 import { ServiceIcon } from './ServiceIcon'
+import { useTooltip } from './Tooltip'
 
 interface SidebarProps {
   active: string
   onNavigate: (id: string) => void
+}
+
+const SIDEBAR_COLLAPSED_KEY = 'emuwarez_uploadrr_sidebar_collapsed'
+
+function loadCollapsed(): boolean {
+  try { return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true' } catch { return false }
 }
 
 function NavIcon({ id }: { id: string }) {
@@ -59,33 +67,73 @@ function NavIcon({ id }: { id: string }) {
         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
       </svg>
     ),
+    guide: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+        <path d="M9 7h7M9 11h5" />
+      </svg>
+    ),
   }
   return <span className="nav-item-icon">{icons[id] ?? null}</span>
 }
 
-export function Sidebar({ active, onNavigate }: SidebarProps) {
+// Own component (not inlined in the .map() below) so its useTooltip() hook
+// call — one per row — stays a top-level hook call of a component instance,
+// not a hook called from inside a loop callback. Only shows the tooltip
+// while collapsed (icon-only): the label is already visible as text
+// otherwise, no need to hover for it.
+function NavItemRow({ item, active, collapsed, onNavigate }: {
+  item: NavItem
+  active: boolean
+  collapsed: boolean
+  onNavigate: (id: string) => void
+}) {
+  const { triggerProps, tooltipNode } = useTooltip(collapsed ? item.label : null)
   return (
-    <aside className="sidebar">
-      <div className="sidebar-logo">
+    <div
+      className={`nav-item${active ? ' active' : ''}`}
+      onClick={() => onNavigate(item.id)}
+      {...triggerProps}
+    >
+      <NavIcon id={item.id} />
+      {!collapsed && item.label}
+      {tooltipNode}
+    </div>
+  )
+}
+
+export function Sidebar({ active, onNavigate }: SidebarProps) {
+  const [collapsed, setCollapsed] = useState(loadCollapsed)
+  const { triggerProps: logoTip, tooltipNode: logoTooltip } =
+    useTooltip(collapsed ? 'Expandir menú' : 'Contraer menú')
+
+  function toggleCollapsed() {
+    setCollapsed(c => {
+      const next = !c
+      try { localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next)) } catch { /* ignore */ }
+      return next
+    })
+  }
+
+  return (
+    <aside className={`sidebar${collapsed ? ' collapsed' : ''}`}>
+      <div className="sidebar-logo" onClick={toggleCollapsed} {...logoTip}>
         <ServiceIcon type="emu" size={28} />
-        <div>
-          <div className="sidebar-logo-text">eMuwarez Uploadrr</div>
-          <div className="sidebar-logo-sub">Media Manager</div>
-        </div>
+        {!collapsed && <div className="sidebar-logo-text">eMuwarez Uploadrr</div>}
+        {logoTooltip}
       </div>
       <nav className="sidebar-nav">
         {NAV_ITEMS.map((item) => (
-          <div
+          <NavItemRow
             key={item.id}
-            className={`nav-item${active === item.id ? ' active' : ''}`}
-            onClick={() => onNavigate(item.id)}
-          >
-            <NavIcon id={item.id} />
-            {item.label}
-          </div>
+            item={item}
+            active={active === item.id}
+            collapsed={collapsed}
+            onNavigate={onNavigate}
+          />
         ))}
       </nav>
-      <div className="sidebar-footer">v0.1 · Fase 5A</div>
     </aside>
   )
 }

@@ -19,8 +19,21 @@ import type { LibraryItemResponse } from '../types/api'
 import { posterUrl, idVerifyUrl } from '../utils/libraryItem'
 import { ExternalIdLink } from '../components/ExternalIdLink'
 import { InfoIcon } from '../components/InfoIcon'
+import {
+  Card, FieldRow, DetailPoster, ValueChip, ValueIcon, DETAIL_CARD_HEIGHT,
+  StatusCardIcon, RequestCardIcon, ExternalIdsCardIcon,
+  UploadButtonIcon, ExternalLinkButtonIcon,
+  TypeValueIcon, AuthorValueIcon, CalendarValueIcon,
+  SeasonValueIcon, EpisodeValueIcon, ResolutionValueIcon, SourceValueIcon,
+  PointsValueIcon, ThumbsUpValueIcon, CommentValueIcon,
+} from '../components/DetailCard'
 import { HeaderFilter } from '../components/HeaderFilter'
 import { formatBytes, timeAgo, formatDate } from '../utils/format'
+
+// Fallback for "Consultar en eMuwarez" while we don't have the exact
+// per-request URL yet — points at the general requests listing instead of
+// leaving the button disabled.
+const EMU_REQUESTS_FALLBACK_URL = 'https://emuwarez.com/requests'
 
 // A request's category maps to a friendly "Tipo" with an icon.
 function tipoOf(category: string | null): { icon: string; label: string } {
@@ -52,18 +65,6 @@ function RequestPoster({ url, category, size = 'sm' }: { url: string | null; cat
     </div>
   )
 }
-
-const COMPATIBILITY_STATUSES = [
-  { value: '', label: 'Compatibilidad: Todas' },
-  { value: 'Compatible', label: 'Compatible' },
-  { value: 'No disponible', label: 'No disponible' },
-  { value: 'Parcial', label: 'Parcial' },
-  { value: 'No compatible', label: 'No compatible' },
-  { value: 'Reclamado', label: 'Reclamado' },
-  { value: 'Pendiente', label: 'Pendiente' },
-  { value: 'Llena', label: 'Llena' },
-  { value: 'Sin coincidencia', label: 'Sin coincidencia' },
-]
 
 const SORT_OPTIONS = [
   { value: 'created_desc', label: 'Orden: Más recientes' },
@@ -199,25 +200,14 @@ function CandidatesPanel({ requestId, onClose }: { requestId: number; onClose: (
   )
 }
 
-function ReqField({ label, children, info }: { label: string; children: React.ReactNode; info?: React.ReactNode }) {
-  return (
-    <div>
-      <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 4 }}>
-        {label}{info && <InfoIcon text={info} />}
-      </div>
-      <div style={{ fontSize: 14, wordBreak: 'break-word' }}>{children}</div>
-    </div>
-  )
-}
-
 // External-ID field with a mini button to open its public page. Renders nothing
 // when the ID isn't available (e.g. MAL isn't provided by Radarr/Sonarr).
 function IdField({ label, id, href }: { label: string; id: string | null; href: string | null }) {
   if (!id) return null
   return (
-    <ReqField label={label}>
-      <ExternalIdLink id={id} href={href} label={label} />
-    </ReqField>
+    <FieldRow label={label}>
+      <ValueChip linkable={Boolean(href)}><ExternalIdLink id={id} href={href} label={label} /></ValueChip>
+    </FieldRow>
   )
 }
 
@@ -252,83 +242,105 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
         <button className="btn btn-ghost btn-sm" onClick={onBack}>← Volver a peticiones</button>
       </div>
 
-      <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap' }}>
-        <div style={{ flexShrink: 0, width: 300, maxWidth: '100%' }}>
-          <div style={{ width: '100%', aspectRatio: '2 / 3', borderRadius: 12, overflow: 'hidden', background: 'rgba(255,255,255,0.04)' }}>
-            {item.poster_url ? (
-              <img
-                src={posterUrl(item.poster_url, 'w500')}
-                alt={item.title}
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
-              />
-            ) : (
-              <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 88, opacity: 0.35 }}>{t.icon}</div>
-            )}
-          </div>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
+        <div style={{ fontWeight: 700, fontSize: 25, letterSpacing: '-0.01em' }}>{item.title}</div>
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
+          <a
+            className="btn btn-primary btn-sm"
+            href={item.url || EMU_REQUESTS_FALLBACK_URL}
+            target="_blank"
+            rel="noreferrer"
+            title={item.url
+              ? 'Abrir la petición en eMuwarez (reclamarla, marcarla como llena, ver el ID del torrent…)'
+              : 'Todavía no tenemos la URL exacta de esta petición — abre el listado general de peticiones en eMuwarez'}
+            style={{ textDecoration: 'none' }}
+          >
+            <ExternalLinkButtonIcon /> Consultar en eMuwarez
+          </a>
+          <button
+            className="btn btn-primary btn-sm"
+            disabled={!libId}
+            title={libId
+              ? 'Subir el contenido de tu biblioteca a eMuwarez (mismo asistente que en Biblioteca)'
+              : 'No tienes este contenido en tu biblioteca'}
+            onClick={() => libId && onUpload(libId, {
+              season: item.req_season,
+              episode: item.req_scope === 'episode' ? item.req_episode : null,
+            })}
+          >
+            <UploadButtonIcon /> Subir a eMuwarez
+          </button>
         </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        <DetailPoster url={item.poster_url ? posterUrl(item.poster_url, 'w500') : null} alt={item.title} fallbackEmoji={t.icon} />
 
         <div style={{ flex: 1, minWidth: 300 }}>
-          <div style={{ fontWeight: 700, fontSize: 28, marginBottom: 20 }}>{item.title}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, minHeight: DETAIL_CARD_HEIGHT }}>
+            <Card title="Estado de la petición" icon={<StatusCardIcon />}>
+              <FieldRow label="Estado" help="Aunque salga «Compatible», revisa la petición: el audio y el códec no se pueden comparar del todo (suelen indicarse en la descripción del torrent), y si pide la serie completa puede que no quiera la temporada especial."><CompatibilityBadge status={effectiveStatus} /></FieldRow>
+              <FieldRow label="Tipo">
+                <ValueChip><ValueIcon><TypeValueIcon /></ValueIcon><span className="txt">{t.label}</span></ValueChip>
+              </FieldRow>
+              <FieldRow label="Autor">
+                <ValueChip><ValueIcon><AuthorValueIcon /></ValueIcon><span className="txt"><AuthorCell author={item.author} isMine={item.is_mine} /></span></ValueChip>
+              </FieldRow>
+              {item.created_at && (
+                <FieldRow label="Creada">
+                  <ValueChip><ValueIcon><CalendarValueIcon /></ValueIcon><span className="txt">{new Date(item.created_at).toLocaleDateString('es-ES')}</span></ValueChip>
+                </FieldRow>
+              )}
+            </Card>
 
-          <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
-            <a
-              className="btn btn-secondary btn-sm"
-              href={item.url ?? undefined}
-              target="_blank"
-              rel="noreferrer"
-              aria-disabled={!item.url}
-              onClick={e => { if (!item.url) e.preventDefault() }}
-              title={item.url
-                ? 'Abrir la petición en eMuwarez (reclamarla, marcarla como llena, ver el ID del torrent…)'
-                : 'La URL estará disponible cuando se sincronicen las peticiones reales de eMuwarez'}
-              style={{ textDecoration: 'none', opacity: item.url ? 1 : 0.5, pointerEvents: item.url ? 'auto' : 'none' }}
-            >
-              Consultar en eMuwarez ↗
-            </a>
-            <button
-              className="btn btn-primary btn-sm"
-              disabled={!libId}
-              title={libId
-                ? 'Subir el contenido de tu biblioteca a eMuwarez (mismo asistente que en Biblioteca)'
-                : 'No tienes este contenido en tu biblioteca'}
-              onClick={() => libId && onUpload(libId, {
-                season: item.req_season,
-                episode: item.req_scope === 'episode' ? item.req_episode : null,
-              })}
-            >
-              ⬆ Subir a eMuwarez
-            </button>
-          </div>
+            <Card title="Detalle pedido" icon={<RequestCardIcon />}>
+              {isSeriesLike && (
+                <FieldRow label="Temporada">
+                  <ValueChip><ValueIcon><SeasonValueIcon /></ValueIcon><span className="txt">{temporadaLabel}</span></ValueChip>
+                </FieldRow>
+              )}
+              {isSeriesLike && (
+                <FieldRow label="Capítulo">
+                  <ValueChip><ValueIcon><EpisodeValueIcon /></ValueIcon><span className="txt">{item.req_scope === 'episode' ? (item.req_episode ?? '?') : 'Todos'}</span></ValueChip>
+                </FieldRow>
+              )}
+              <FieldRow label="Resolución pedida">
+                <ValueChip><ValueIcon><ResolutionValueIcon /></ValueIcon><span className="txt">{noReq(item.requested_resolution)}</span></ValueChip>
+              </FieldRow>
+              <FieldRow label="Source pedido">
+                <ValueChip><ValueIcon><SourceValueIcon /></ValueIcon><span className="txt">{noReq(item.requested_source)}</span></ValueChip>
+              </FieldRow>
+              <FieldRow label="Puntos">
+                <ValueChip><ValueIcon><PointsValueIcon /></ValueIcon><span className="txt">{fmtNum(item.points)}</span></ValueChip>
+              </FieldRow>
+              <FieldRow label="Votos">
+                <ValueChip><ValueIcon><ThumbsUpValueIcon /></ValueIcon><span className="txt">{item.votes ?? 0}</span></ValueChip>
+              </FieldRow>
+              <FieldRow label="Comentarios">
+                <ValueChip><ValueIcon><CommentValueIcon /></ValueIcon><span className="txt">{item.comments ?? 0}</span></ValueChip>
+              </FieldRow>
+            </Card>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '16px 28px' }}>
-            <ReqField label="Estado" info="Aunque salga «Compatible», revisa la petición: el audio y el códec no se pueden comparar del todo (suelen indicarse en la descripción del torrent), y si pide la serie completa puede que no quiera la temporada especial."><CompatibilityBadge status={effectiveStatus} /></ReqField>
-            <ReqField label="Tipo">{t.label}</ReqField>
-            {isSeriesLike && <ReqField label="Temporada">{temporadaLabel}</ReqField>}
-            {isSeriesLike && <ReqField label="Capítulo">{item.req_scope === 'episode' ? (item.req_episode ?? '?') : 'Todos'}</ReqField>}
-            <ReqField label="Autor"><AuthorCell author={item.author} isMine={item.is_mine} /></ReqField>
-            <ReqField label="Resolución pedida">{noReq(item.requested_resolution)}</ReqField>
-            <ReqField label="Source pedido">{noReq(item.requested_source)}</ReqField>
-            <ReqField label="🪙 Puntos">{fmtNum(item.points)}</ReqField>
-            <ReqField label="👍 Votos">{item.votes ?? 0}</ReqField>
-            <ReqField label="💬 Comentarios">{item.comments ?? 0}</ReqField>
-            <IdField label="TMDb" id={tmdbId} href={idVerifyUrl('tmdb', tmdbId, isTv)} />
-            <IdField label="IMDb" id={imdbId} href={idVerifyUrl('imdb', imdbId, isTv)} />
-            <IdField label="TVDB" id={tvdbId} href={idVerifyUrl('tvdb', tvdbId, isTv)} />
-            {/* MAL always shown (mainly for anime); "—" when the request had none. */}
-            <ReqField label="MAL">
-              {malId ? <ExternalIdLink id={malId} href={idVerifyUrl('mal', malId, isTv)} label="MAL" /> : '—'}
-            </ReqField>
-            {item.created_at && <ReqField label="Creada">{new Date(item.created_at).toLocaleDateString('es-ES')}</ReqField>}
+            <Card title="Identificadores externos" icon={<ExternalIdsCardIcon />}>
+              <IdField label="TMDb" id={tmdbId} href={idVerifyUrl('tmdb', tmdbId, isTv)} />
+              <IdField label="IMDb" id={imdbId} href={idVerifyUrl('imdb', imdbId, isTv)} />
+              <IdField label="TVDB" id={tvdbId} href={idVerifyUrl('tvdb', tvdbId, isTv)} />
+              {/* MAL always shown (mainly for anime); "–" when the request had none. */}
+              <FieldRow label="MAL">
+                {malId
+                  ? <ValueChip linkable={Boolean(idVerifyUrl('mal', malId, isTv))}><ExternalIdLink id={malId} href={idVerifyUrl('mal', malId, isTv)} label="MAL" /></ValueChip>
+                  : <span className="muted">–</span>}
+              </FieldRow>
+            </Card>
           </div>
         </div>
       </div>
 
-      <div style={{ marginTop: 28 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-secondary)', marginBottom: 12 }}>
+      <div style={{ marginTop: 17 }}>
+        <div style={{ fontSize: 11.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)', marginBottom: 15 }}>
           Petición vs. tu biblioteca
         </div>
-        <div style={{ padding: '16px 18px', background: 'rgba(255,255,255,0.03)', borderRadius: 10, border: '1px solid var(--border)' }}>
+        <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: 10, padding: '21px 19px' }}>
           {!m ? (
             <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Sin coincidencia en tu biblioteca local, no tienes este contenido.</span>
           ) : effectiveStatus === 'No disponible' ? (
@@ -421,8 +433,8 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   const [sourceFilter, setSourceFilter] = useState('')
   const [authorFilter, setAuthorFilter] = useState('')
   const [sortBy, setSortBy] = useState('created_desc')
-  const [facets, setFacets] = useState<{ categories: string[]; resolutions: string[]; sources: string[]; authors: string[] }>({
-    categories: [], resolutions: [], sources: [], authors: [],
+  const [facets, setFacets] = useState<{ categories: string[]; resolutions: string[]; sources: string[]; authors: string[]; statuses: string[] }>({
+    categories: [], resolutions: [], sources: [], authors: [], statuses: [],
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -485,6 +497,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
         resolutions: uniq(res.items.map(i => i.requested_resolution)),
         sources: uniq(res.items.map(i => i.requested_source)),
         authors: uniq(res.items.map(i => i.author)),
+        statuses: uniq(res.items.map(i => i.compatibility_status)),
       })
     } catch { /* optional */ }
   }, [])
@@ -622,7 +635,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                       { value: '', label: 'Todos' }, ...facets.categories.map(c => ({ value: c, label: c })),
                     ]} /></th>
                     <th><HeaderFilter label="Compatibilidad" value={statusFilter} onChange={setStatusFilter} options={[
-                      { value: '', label: 'Todas' }, ...COMPATIBILITY_STATUSES.filter(s => s.value).map(s => ({ value: s.value, label: s.label })),
+                      { value: '', label: 'Todas' }, ...facets.statuses.map(s => ({ value: s, label: s })),
                     ]} /></th>
                     <th><HeaderFilter label="Autor" value={authorFilter} onChange={setAuthorFilter} options={[
                       { value: '', label: 'Todos' }, ...facets.authors.map(a => ({ value: a, label: a })),

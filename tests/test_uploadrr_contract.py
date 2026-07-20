@@ -7,7 +7,9 @@ functions.
 from __future__ import annotations
 
 from emuwarez_uploadrr.services.uploadrr_contract import (
+    DEFAULT_ALLOWED_ROOTS,
     build_uploadrr_emu_command,
+    get_allowed_roots,
     path_within_allowed_roots,
     redact_uploadrr_command,
     render_command_preview,
@@ -187,6 +189,35 @@ def test_path_within_allowed_roots_blocks_traversal(tmp_path):
 
 def test_path_within_allowed_roots_empty_roots_never_grants_access():
     assert not path_within_allowed_roots("/anything", [])
+
+
+# ---------------------------------------------------------------------------
+# get_allowed_roots
+# ---------------------------------------------------------------------------
+
+def test_get_allowed_roots_defaults_to_data_when_never_set(isolated_db):
+    from emuwarez_uploadrr.database import connect, init_db, db_path
+    conn = connect(db_path())
+    init_db(conn)
+    assert get_allowed_roots(conn) == DEFAULT_ALLOWED_ROOTS
+
+
+def test_get_allowed_roots_respects_explicit_empty_list(isolated_db):
+    from emuwarez_uploadrr.database import connect, init_db, db_path
+    from emuwarez_uploadrr.web.services.settings_service import set_setting
+    conn = connect(db_path())
+    init_db(conn)
+    set_setting(conn, "uploadrr.allowed_roots", "[]")
+    assert get_allowed_roots(conn) == []
+
+
+def test_get_allowed_roots_respects_explicit_value(isolated_db):
+    from emuwarez_uploadrr.database import connect, init_db, db_path
+    from emuwarez_uploadrr.web.services.settings_service import set_setting
+    conn = connect(db_path())
+    init_db(conn)
+    set_setting(conn, "uploadrr.allowed_roots", '["/movies", "/tv"]')
+    assert get_allowed_roots(conn) == ["/movies", "/tv"]
 
 
 # ---------------------------------------------------------------------------

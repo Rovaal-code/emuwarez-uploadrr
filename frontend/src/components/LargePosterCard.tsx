@@ -1,18 +1,22 @@
+import { memo } from 'react'
 import type { LibraryItemResponse } from '../types/api'
 import { PosterStatusIcon } from './PosterStatusIcon'
 import { posterUrl } from '../utils/libraryItem'
 
 // Bigger, Overseerr/Jellyseerr-style poster card for the "Pósters grandes"
 // view — additive alongside the existing small grid, not a replacement.
-export function LargePosterCard({ item, onClick, priority }: {
+// Memoized: takes a stable onSelect (setSelected) instead of a per-item
+// inline onClick closure, so the memo actually skips re-rendering rows
+// whose own item/priority props haven't changed.
+export const LargePosterCard = memo(function LargePosterCard({ item, onSelect, priority }: {
   item: LibraryItemResponse
-  onClick: () => void
+  onSelect: (item: LibraryItemResponse) => void
   priority?: boolean
 }) {
   return (
     <div
       className="clickable"
-      onClick={onClick}
+      onClick={() => onSelect(item)}
       style={{
         display: 'flex', flexDirection: 'column', borderRadius: 12, overflow: 'hidden',
         background: 'var(--bg-surface)', border: '1px solid var(--border)', cursor: 'pointer',
@@ -49,4 +53,4 @@ export function LargePosterCard({ item, onClick, priority }: {
       </div>
     </div>
   )
-}
+})

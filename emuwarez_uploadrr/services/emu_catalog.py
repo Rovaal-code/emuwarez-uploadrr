@@ -19,7 +19,7 @@ import sqlite3
 import threading
 from typing import Any, Optional
 
-from ..database import get_setting_canonical, get_state, set_state
+from ..database import get_setting_canonical, get_state, set_state, get_json_state, set_json_state
 from ..integrations import emu
 from ..integrations.base import IntegrationError
 
@@ -35,6 +35,10 @@ MAX_ID_STATE_KEY = "last_emu_catalog_max_id"
 COUNT_STATE_KEY = "last_emu_catalog_torrents"
 # Timestamp of the last FULL download, throttled apart from the incremental one.
 FULL_SYNC_STATE_KEY = "last_emu_catalog_full_utc"
+# Last {movies, seasons, episodes} "contenido único" counts we notified about —
+# so a resync that doesn't change anything doesn't re-notify (see
+# _notify_if_unique_content_changed below).
+UNIQUE_CONTENT_COUNTS_STATE_KEY = "notify.content_unique_last_counts"
 MIN_SYNC_SECONDS = 3600        # incremental: 1/hour
 MIN_FULL_SYNC_SECONDS = 86400  # full re-download: 1/day
 
@@ -618,6 +622,39 @@ def start_emu_sync_background(force: bool = False, mode: str = "incremental") ->
     return {"status": "started"}
 
 
+def _notify_if_unique_content_changed(conn: sqlite3.Connection) -> None:
+    """"Contenido único" (movies/seasons/episodes not yet on eMuwarez) just got
+    recomputed above — reuse the exact same counts already shown on the
+    Dashboard (get_dashboard_summary) so the notification always matches what
+    the user sees there, and only actually notify when they changed since the
+    last sync (comparing every sync would spam the same numbers repeatedly).
+    Best-effort — never raises, mirrors services/library.py::_notify_new_missing.
+    """
+    try:
+        from .library import get_dashboard_summary
+        from .notification_center import emit
+        summary = get_dashboard_summary(conn)
+        counts = {
+            "movies": summary["unique_movies"],
+            "seasons": summary["unique_seasons"],
+            "episodes": summary["unique_episodes"],
+        }
+        prev = get_json_state(conn, UNIQUE_CONTENT_COUNTS_STATE_KEY)
+        set_json_state(conn, UNIQUE_CONTENT_COUNTS_STATE_KEY, counts)
+        if prev == counts:
+            return
+        emit(
+            conn, "content_unique_changed",
+            "Cambio en tu contenido único",
+            f"Tu biblioteca tiene {counts['movies']} películas, {counts['seasons']} temporadas y "
+            f"{counts['episodes']} episodios que todavía no están en eMuwarez.",
+            link="/library",
+            level="info",
+        )
+    except Exception:
+        logger.exception("No se pudo emitir la notificación de contenido único")
+
+
 def sync_emu_catalog(conn: sqlite3.Connection, *, force: bool = False, mode: str = "incremental") -> dict:
     """Download the eMuwarez catalog and recompute per-item status. 1/hour.
 
@@ -695,6 +732,7 @@ def sync_emu_catalog(conn: sqlite3.Connection, *, force: bool = False, mode: str
     set_state(conn, SYNC_STATE_KEY, now_iso)
     if not incremental:  # a full pass also refreshes the 1/day full throttle
         set_state(conn, FULL_SYNC_STATE_KEY, now_iso)
+    _notify_if_unique_content_changed(conn)
     conn.commit()
     logger.info("Sincronización de eMuwarez terminada (%s): %d torrents %s, %d en catálogo, %d elementos comparados",
                 "incremental" if incremental else "completo", len(rows),

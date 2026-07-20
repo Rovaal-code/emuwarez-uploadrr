@@ -64,17 +64,24 @@ def get_runtime_settings(conn: sqlite3.Connection) -> dict:
     }
 
 
+DEFAULT_ALLOWED_ROOTS = ["/data"]
+
+
 def get_allowed_roots(conn: sqlite3.Connection) -> list[str]:
     """Return the configured allowed roots for prepared_path checks.
 
-    Must be configured explicitly (Settings > Uploadrr): an empty
-    `uploadrr.allowed_roots` means no roots at all, so
-    path_within_allowed_roots() fails closed and real uploads are blocked
-    until it's set — this is the folder(s) where THIS app's own container
-    reaches the media (e.g. "/data" if mounted the same way as Radarr/
-    Sonarr), not necessarily the same path Radarr/Sonarr themselves report.
+    This is the folder(s) where THIS app's own container reaches the media,
+    not necessarily the same path Radarr/Sonarr themselves report. Defaults
+    to DEFAULT_ALLOWED_ROOTS ("/data") when `uploadrr.allowed_roots` has
+    never been set — the same mount point convention used by Radarr/Sonarr's
+    own generic docker-compose (see Settings > Acceso a la biblioteca),
+    so a fresh install works without touching this setting. Set it
+    explicitly to override (e.g. a split /movies + /tv layout), or to an
+    empty list to fail closed and block real uploads entirely.
     """
     raw = get_setting_canonical(conn, "uploadrr.allowed_roots")
+    if raw is None:
+        return list(DEFAULT_ALLOWED_ROOTS)
     roots: list[str] = []
     if raw:
         try:

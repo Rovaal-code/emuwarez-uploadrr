@@ -19,7 +19,7 @@ from pydantic import BaseModel, field_validator
 from ..dependencies import require_auth
 from ..runtime import _db_path
 from ..services.settings_service import get_setting, mask_secret, set_setting
-from ...services.uploadrr_contract import RUNTIME_EMU, RUNTIME_GENERIC, DEFAULT_TIMEOUT_SECONDS
+from ...services.uploadrr_contract import RUNTIME_EMU, RUNTIME_GENERIC, DEFAULT_TIMEOUT_SECONDS, DEFAULT_ALLOWED_ROOTS
 from ...services.source_assistant import EMU_PROVIDERS
 from ...services.notification_center import EVENT_TYPES, channel_events, ui_enabled
 from ...database import get_setting_canonical
@@ -228,12 +228,17 @@ def _build_response(conn) -> SettingsResponse:
     telegram_token_configured = bool(telegram_token and telegram_token.strip())
 
     raw_roots = get_setting_canonical(conn, "uploadrr.allowed_roots")
-    try:
-        allowed_roots = json.loads(raw_roots) if raw_roots else []
-        if not isinstance(allowed_roots, list):
+    if raw_roots is None:
+        # Never configured — same default get_allowed_roots() enforces, so
+        # what the user sees here always matches what real uploads use.
+        allowed_roots = list(DEFAULT_ALLOWED_ROOTS)
+    else:
+        try:
+            allowed_roots = json.loads(raw_roots) if raw_roots else []
+            if not isinstance(allowed_roots, list):
+                allowed_roots = []
+        except Exception:
             allowed_roots = []
-    except Exception:
-        allowed_roots = []
 
     raw_timeout = get_setting_canonical(conn, "uploadrr.timeout")
     try:

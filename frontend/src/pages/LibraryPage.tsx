@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useTransition } from 'react'
+import { useState, useEffect, useCallback, useTransition, memo } from 'react'
 import { getLibrary, TOP_LEVEL_PARENT_FILTER, getLibraryFilterOptions, getLibraryItem, type LibraryFilterOptions } from '../api/library'
 import { Tooltip } from '../components/Tooltip'
 import { useSync } from '../context/SyncContext'
@@ -47,11 +47,14 @@ const GRID_PRIORITY_COUNT = 30
 // the fold — same rationale, higher count.
 const LIST_PRIORITY_COUNT = 40
 
-function PosterCard({ item, onClick, priority }: { item: LibraryItemResponse; onClick: () => void; priority?: boolean }) {
+// Memoized: a plain inline onClick={() => onSelect(item)} arrow would be a
+// new function identity every render, defeating memo — so this takes a
+// stable onSelect (setSelected itself) and calls it with `item` internally.
+const PosterCard = memo(function PosterCard({ item, onSelect, priority }: { item: LibraryItemResponse; onSelect: (item: LibraryItemResponse) => void; priority?: boolean }) {
   return (
     <div
       className="clickable"
-      onClick={onClick}
+      onClick={() => onSelect(item)}
       style={{
         display: 'flex', flexDirection: 'column', borderRadius: 8, overflow: 'hidden',
         background: 'var(--bg-surface)', border: '1px solid var(--border)', cursor: 'pointer',
@@ -78,7 +81,7 @@ function PosterCard({ item, onClick, priority }: { item: LibraryItemResponse; on
       </div>
     </div>
   )
-}
+})
 
 export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => void } = {}) {
   const [data, setData] = useState<LibraryListResponse | null>(null)
@@ -104,7 +107,11 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // Season/Series rows: 'upload' opens the same unified wizard too — it asks
   // which season/episode (or the whole season) to target, and handles a
   // whole-season pack internally (server-side).
-  async function handleTreeAction(kind: LibraryActionKind, item: LibraryItemResponse) {
+  // Stable reference (empty deps: only calls setState setters, which React
+  // itself guarantees are stable) — LibraryTreeRow is memoized, and a new
+  // function identity on every render here would defeat that memoization
+  // for every row's onAction prop.
+  const handleTreeAction = useCallback((kind: LibraryActionKind, item: LibraryItemResponse) => {
     if (kind === 'nomenclature') { setNomenclatureItem(item); return }
     if (kind === 'fields') { setFieldsItem(item); return }
     if (kind === 'request') { setRequestItem(item); return }
@@ -114,7 +121,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     // multiSeasonContext) — same wizard, multi-season checklist enabled.
     setWizardMultiSeason(kind === 'upload-multi')
     setWizardItem(item)
-  }
+  }, [])
 
   useEffect(() => { localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode) }, [viewMode])
 
@@ -383,7 +390,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
         <div className="activity-section" style={{ padding: 20, flex: 1, minHeight: 0, overflowY: 'auto', marginBottom: 0 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 16 }}>
             {filteredItems.map((item, i) => (
-              <PosterCard key={item.id} item={item} onClick={() => setSelected(item)} priority={i < GRID_PRIORITY_COUNT} />
+              <PosterCard key={item.id} item={item} onSelect={setSelected} priority={i < GRID_PRIORITY_COUNT} />
             ))}
           </div>
         </div>
@@ -391,7 +398,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
         <div className="activity-section" style={{ padding: 20, flex: 1, minHeight: 0, overflowY: 'auto', marginBottom: 0 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 20 }}>
             {filteredItems.map((item, i) => (
-              <LargePosterCard key={item.id} item={item} onClick={() => setSelected(item)} priority={i < GRID_PRIORITY_COUNT} />
+              <LargePosterCard key={item.id} item={item} onSelect={setSelected} priority={i < GRID_PRIORITY_COUNT} />
             ))}
           </div>
         </div>
@@ -416,7 +423,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
                     { value: '', label: 'Todas' }, ...(filterOptions?.request_statuses ?? []).map(s => ({ value: s, label: s })),
                   ]} /></th>
                   <th>Tamaño</th>
-                  <th><HeaderFilter label="Provider" value={searchProvider} onChange={setSearchProvider} options={[
+                  <th><HeaderFilter label="Proveedor" value={searchProvider} onChange={setSearchProvider} options={[
                     { value: '', label: 'Todos' }, ...providerOptions.map(p => ({ value: p, label: p })),
                   ]} /></th>
                   <th><HeaderFilter label="Calidad" value={searchQuality} onChange={setSearchQuality} options={[

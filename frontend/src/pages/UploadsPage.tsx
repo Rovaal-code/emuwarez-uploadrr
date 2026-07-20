@@ -209,21 +209,21 @@ function JobRow({ job, onOpen, indent, retryToggle, onCancel, onRetry }: {
         <div style={{ display: 'flex', gap: 6 }}>
           <button
             type="button"
-            className="btn btn-danger btn-sm"
-            disabled={!canCancel}
-            onClick={() => onCancel(job.id!)}
-            title={canCancel ? 'Cancelar subida' : 'Solo se puede cancelar mientras está preparando, en cola o subiendo'}
-          >
-            <CancelButtonIcon /> Cancelar
-          </button>
-          <button
-            type="button"
             className="btn btn-primary btn-sm"
             disabled={!canRetry}
             onClick={() => onRetry(job)}
             title={canRetry ? 'Reintentar subida' : 'Solo se puede reintentar una subida cancelada o fallida'}
           >
             <RetryButtonIcon /> Reintentar
+          </button>
+          <button
+            type="button"
+            className="btn btn-danger btn-sm"
+            disabled={!canCancel}
+            onClick={() => onCancel(job.id!)}
+            title={canCancel ? 'Cancelar subida' : 'Solo se puede cancelar mientras está preparando, en cola o subiendo'}
+          >
+            <CancelButtonIcon /> Cancelar
           </button>
         </div>
       </td>

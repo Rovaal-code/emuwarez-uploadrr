@@ -10,7 +10,7 @@ def test_get_settings_returns_uploadrr_defaults(client, auth_headers):
     data = resp.json()
     assert data["uploadrr_runtime_type"] == "uploadrr_emu"
     assert data["uploadrr_timeout"] == 7200
-    assert data["uploadrr_allowed_roots"] == []
+    assert data["uploadrr_allowed_roots"] == ["/data"]
     assert data["uploadrr_path"] is None
 
 

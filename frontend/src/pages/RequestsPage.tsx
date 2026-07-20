@@ -420,6 +420,14 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   const [total, setTotal] = useState(0)
   const [offset, setOffset] = useState(0)
   const [search, setSearch] = useState('')
+  // The input stays bound to `search` for instant typing feedback; loadItems
+  // only reacts to `debouncedSearch`, same convention as Biblioteca's search
+  // box (LibraryPage.tsx) — searching here used to require pressing Enter.
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 350)
+    return () => clearTimeout(t)
+  }, [search])
   const [statusFilter, setStatusFilter] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
   const [resolutionFilter, setResolutionFilter] = useState('')
@@ -458,7 +466,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
     setError(null)
     try {
       const res = await getRequests({
-        search: search || undefined,
+        search: debouncedSearch || undefined,
         status: statusFilter || undefined,
         category: categoryFilter || undefined,
         resolution: resolutionFilter || undefined,
@@ -476,7 +484,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
     } finally {
       setLoading(false)
     }
-  }, [search, statusFilter, categoryFilter, resolutionFilter, sourceFilter, authorFilter, sortBy])
+  }, [debouncedSearch, statusFilter, categoryFilter, resolutionFilter, sourceFilter, authorFilter, sortBy])
 
   // Populate filter dropdown options from the full (unfiltered) dataset so they
   // stay stable regardless of the active filters.
@@ -499,11 +507,12 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
     loadFacets()
   }, [loadFacets])
 
-  // Reload the table whenever a filter or the sort order changes.
+  // Reload the table whenever a filter, the search box (debounced), or the
+  // sort order changes.
   useEffect(() => {
     loadItems(0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, categoryFilter, resolutionFilter, sourceFilter, authorFilter, sortBy])
+  }, [debouncedSearch, statusFilter, categoryFilter, resolutionFilter, sourceFilter, authorFilter, sortBy])
 
   // Reload table + facets whenever a global sync (peticiones or otra) finishes.
   useEffect(() => {

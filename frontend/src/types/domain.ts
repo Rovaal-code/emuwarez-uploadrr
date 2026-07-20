@@ -62,7 +62,7 @@ export const SETUP_STEP_LABELS: Record<SetupStep, string> = {
   instances: 'Instancias',
   tmdb: 'TMDb',
   qbit: 'qBittorrent',
-  providers: 'Providers de vídeo',
+  providers: 'Proveedores de vídeo',
   imagehosts: 'Imágenes',
   complete: 'Completar',
 }

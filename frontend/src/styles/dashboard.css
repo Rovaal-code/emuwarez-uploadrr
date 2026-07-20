@@ -375,6 +375,35 @@
   overflow-y: auto;
 }
 
+/* Providers de vídeo / de imágenes: unlike every other card above (which
+   just grows and lets the WHOLE card scroll), these two want the "Añadir"
+   button always anchored to the card's bottom-left — never pushed around by
+   how many providers happen to be configured, never scrolled away with the
+   list — and the list itself capped at ~5 rows with its OWN scrollbar. */
+.settings-config-grid > .placeholder-card.provider-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.provider-card__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.provider-card__list {
+  flex-shrink: 0;
+  overflow-y: auto;
+}
+
+.provider-card__add-btn {
+  margin-top: auto;
+  align-self: flex-start;
+  flex-shrink: 0;
+}
+
 .placeholder-card ol {
   padding-left: 20px;
   color: var(--text-secondary);

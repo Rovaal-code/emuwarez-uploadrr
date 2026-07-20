@@ -219,6 +219,120 @@ def test_sync_radarr_upsert_updates(mem_conn):
     assert rows[0]["local_status"] == LocalStatus.AVAILABLE.value
 
 
+# ---------------------------------------------------------------------------
+# content_missing_new notification (status transition, not date-based)
+# ---------------------------------------------------------------------------
+
+def test_first_sync_missing_movie_does_not_notify(mem_conn):
+    """Instance's very first sync — a bulk backfill, not a fresh request —
+    must never fire content_missing_new even though the movie is Faltante."""
+    from emuwarez_uploadrr.services.library import sync_instance
+    from emuwarez_uploadrr.services.notification_center import list_notifications
+    from emuwarez_uploadrr.services.instances import list_instances
+    instance = list_instances(mem_conn)[0]
+
+    movies = [_fake_movie(50, "Brand New Instance Film", has_file=False)]
+    with (
+        patch("emuwarez_uploadrr.integrations.radarr.get_movies", return_value=movies),
+        patch("emuwarez_uploadrr.integrations.radarr.get_queue", return_value=[]),
+    ):
+        sync_instance(mem_conn, instance)
+
+    assert list_notifications(mem_conn) == []
+
+
+def test_incremental_sync_new_missing_movie_notifies(mem_conn):
+    """A movie added to Radarr AFTER the instance already has other rows —
+    the real 'just requested it, not found' scenario — must notify."""
+    from emuwarez_uploadrr.services.library import sync_instance
+    from emuwarez_uploadrr.services.notification_center import list_notifications
+    from emuwarez_uploadrr.services.instances import list_instances
+    instance = list_instances(mem_conn)[0]
+
+    # Seed the instance with one existing, available movie so it's no longer
+    # a first sync.
+    with (
+        patch("emuwarez_uploadrr.integrations.radarr.get_movies", return_value=[_fake_movie(60, "Existing Film", has_file=True)]),
+        patch("emuwarez_uploadrr.integrations.radarr.get_queue", return_value=[]),
+    ):
+        sync_instance(mem_conn, instance)
+    assert list_notifications(mem_conn) == []
+
+    # Now a brand-new movie shows up, already missing.
+    movies = [_fake_movie(60, "Existing Film", has_file=True), _fake_movie(61, "Just Requested Film", has_file=False)]
+    with (
+        patch("emuwarez_uploadrr.integrations.radarr.get_movies", return_value=movies),
+        patch("emuwarez_uploadrr.integrations.radarr.get_queue", return_value=[]),
+    ):
+        sync_instance(mem_conn, instance)
+
+    notes = list_notifications(mem_conn)
+    assert len(notes) == 1
+    assert notes[0]["event_type"] == "content_missing_new"
+    assert "Just Requested Film" in notes[0]["body"]
+
+
+def test_resyncing_already_missing_movie_does_not_renotify(mem_conn):
+    """Syncing again while a movie is STILL Faltante (no status change) must
+    not fire a second notification."""
+    from emuwarez_uploadrr.services.library import sync_instance
+    from emuwarez_uploadrr.services.notification_center import list_notifications
+    from emuwarez_uploadrr.services.instances import list_instances
+    instance = list_instances(mem_conn)[0]
+
+    with (
+        patch("emuwarez_uploadrr.integrations.radarr.get_movies", return_value=[_fake_movie(70, "Seed Film", has_file=True)]),
+        patch("emuwarez_uploadrr.integrations.radarr.get_queue", return_value=[]),
+    ):
+        sync_instance(mem_conn, instance)
+
+    movies = [_fake_movie(70, "Seed Film", has_file=True), _fake_movie(71, "Still Missing Film", has_file=False)]
+    with (
+        patch("emuwarez_uploadrr.integrations.radarr.get_movies", return_value=movies),
+        patch("emuwarez_uploadrr.integrations.radarr.get_queue", return_value=[]),
+    ):
+        sync_instance(mem_conn, instance)
+    assert len(list_notifications(mem_conn)) == 1
+
+    # Re-sync with the exact same data — still Faltante, no transition.
+    with (
+        patch("emuwarez_uploadrr.integrations.radarr.get_movies", return_value=movies),
+        patch("emuwarez_uploadrr.integrations.radarr.get_queue", return_value=[]),
+    ):
+        sync_instance(mem_conn, instance)
+    assert len(list_notifications(mem_conn)) == 1
+
+
+def test_movie_becoming_available_does_not_notify(mem_conn):
+    """The reverse transition (Faltante -> Disponible) is not what this event
+    is for — must never fire content_missing_new."""
+    from emuwarez_uploadrr.services.library import sync_instance
+    from emuwarez_uploadrr.services.notification_center import list_notifications
+    from emuwarez_uploadrr.services.instances import list_instances
+    instance = list_instances(mem_conn)[0]
+
+    with (
+        patch("emuwarez_uploadrr.integrations.radarr.get_movies", return_value=[_fake_movie(80, "Seed Film", has_file=True)]),
+        patch("emuwarez_uploadrr.integrations.radarr.get_queue", return_value=[]),
+    ):
+        sync_instance(mem_conn, instance)
+
+    with (
+        patch("emuwarez_uploadrr.integrations.radarr.get_movies", return_value=[_fake_movie(80, "Seed Film", has_file=True), _fake_movie(81, "Now Missing", has_file=False)]),
+        patch("emuwarez_uploadrr.integrations.radarr.get_queue", return_value=[]),
+    ):
+        sync_instance(mem_conn, instance)
+    assert len(list_notifications(mem_conn)) == 1
+
+    # It gets downloaded — status flips back to Disponible.
+    with (
+        patch("emuwarez_uploadrr.integrations.radarr.get_movies", return_value=[_fake_movie(80, "Seed Film", has_file=True), _fake_movie(81, "Now Missing", has_file=True)]),
+        patch("emuwarez_uploadrr.integrations.radarr.get_queue", return_value=[]),
+    ):
+        sync_instance(mem_conn, instance)
+    assert len(list_notifications(mem_conn)) == 1  # unchanged
+
+
 def test_sync_sonarr_available_series(sonarr_conn):
     from emuwarez_uploadrr.services.library import sync_instance
     from emuwarez_uploadrr.services.instances import list_instances

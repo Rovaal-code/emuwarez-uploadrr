@@ -73,7 +73,7 @@ const NOMENCLATURE_FIELD_ROWS: { key: string; label: string; hideFor?: string[] 
   { key: 'season_number', label: 'Temporada', hideFor: ['movie'] },
   { key: 'resolution', label: 'Resolución' },
   { key: 'source', label: 'Source' },
-  { key: 'provider_final', label: 'Provider' },
+  { key: 'provider_final', label: 'Proveedor' },
   { key: 'video_codec', label: 'Códec de vídeo' },
   { key: 'audio_summary', label: 'Audio' },
   { key: 'subtitle_summary', label: 'Subtítulos' },
@@ -455,13 +455,13 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
           {isRunning && <span style={{ fontSize: 11, color: '#22c55e' }}>● en vivo</span>}
         </div>
         <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
+          {job.library_item_id != null && (
+            <button className="btn btn-primary btn-sm" onClick={() => onOpenLibraryItem?.(job.library_item_id!)}><LibraryButtonIcon /> Ver en Biblioteca</button>
+          )}
           {job.status === 'ready' && <button className="btn btn-primary btn-sm" onClick={() => onStart(job)}><UploadButtonIcon /> Iniciar subida</button>}
           {['failed', 'cancelled'].includes(job.status) && <button className="btn btn-primary btn-sm" onClick={() => onRetry(job)}><RetryButtonIcon /> Reintentar</button>}
           {canCancel && <button className="btn btn-danger btn-sm" onClick={() => onCancel(jobId)}><CancelButtonIcon /> Cancelar</button>}
           {canDelete && <button className="btn btn-danger btn-sm" onClick={() => onDelete(job)}><DeleteButtonIcon /> Borrar</button>}
-          {job.library_item_id != null && (
-            <button className="btn btn-primary btn-sm" onClick={() => onOpenLibraryItem?.(job.library_item_id!)}><LibraryButtonIcon /> Ver en Biblioteca</button>
-          )}
         </div>
       </div>
 

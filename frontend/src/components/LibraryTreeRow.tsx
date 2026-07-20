@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, memo } from 'react'
 import { getLibrary } from '../api/library'
 import type { LibraryItemResponse, InstanceSafeResponse } from '../types/api'
 import { StatusBadge } from './StatusBadge'
@@ -85,7 +85,12 @@ export function EmuAportesCell({ item }: { item: LibraryItemResponse }) {
   )
 }
 
-export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, onReload, compact = false, priority = false }: LibraryTreeRowProps) {
+// Memoized: the list can hold hundreds of rows, and typing in the title
+// search box (LibraryPage's own `search` state) used to re-render every one
+// of them on every keystroke even though their own props hadn't changed —
+// this (plus onSelect/onAction/onReload staying referentially stable at the
+// call site) is what makes that skip actually happen.
+export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instances, onSelect, onAction, onReload, compact = false, priority = false }: LibraryTreeRowProps) {
   const [expanded, setExpanded] = useState(false)
   const [children, setChildren] = useState<LibraryItemResponse[]>([])
   const [childTotal, setChildTotal] = useState(0)
@@ -274,4 +279,4 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, onR
       )}
     </>
   )
-}
+})

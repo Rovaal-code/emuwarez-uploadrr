@@ -60,7 +60,7 @@ const FIELD_SOURCES: { field: string; example: string; source: string }[] = [
     source: 'Perfil de calidad de Radarr/Sonarr ("quality.name"), normalizado a la nomenclatura eMuwarez (ver tabla técnica abajo). No se recalcula con MediaInfo.',
   },
   {
-    field: 'Provider',
+    field: 'Proveedor',
     example: 'AMZN',
     source: 'Solo se busca cuando el Source es WEB-DL. 1º se busca el código en el propio nombre del archivo (AMZN, MA, DSNP, HMAX…). Si no aparece, en el asistente de subida se consulta TMDb (proveedores de streaming disponibles en tu región) y se elige según tu orden de prioridad configurado. Opcional: si no se encuentra por ningún lado, se omite.',
   },
@@ -227,10 +227,10 @@ export function GuidePage() {
       <Section title="Fórmula del nombre" defaultOpen>
         <p style={{ fontSize: 12.5, marginTop: 0 }}>
           Cada elemento se identifica entre corchetes, que se omiten en el nombre real del fichero y en el título del aporte.
-          El provider (cuando se conoce) va entre la resolución y el source.
+          El proveedor (cuando se conoce) va entre la resolución y el source.
         </p>
         <Mono>
-{`[Título] [Año] [Resolución] [Provider] [Source] [DV/HDR] [Códec vídeo] [Audio: idioma+códec+canales] [SUBS] - [Grupo/Uploader]`}
+{`[Título] [Año] [Resolución] [Proveedor] [Source] [DV/HDR] [Códec vídeo] [Audio: idioma+códec+canales] [SUBS] - [Grupo/Uploader]`}
         </Mono>
         <p style={{ fontSize: 12.5, marginTop: 10, marginBottom: 0 }}>
           Para series de TV, la temporada/episodio (<code>S01</code> o <code>S01E03</code>) se añade justo antes del año.
@@ -300,7 +300,7 @@ export function GuidePage() {
       <Section title="Reglas de nombrado de archivo">
         <ul style={{ fontSize: 12.5, margin: 0, paddingLeft: 18, lineHeight: 1.8 }}>
           <li>El título siempre va en Castellano (o como se haya publicado oficialmente en España).</li>
-          <li>El provider nunca es obligatorio en WEB-DL — si no se sabe, se omite en vez de arriesgarse a poner uno incorrecto.</li>
+          <li>El proveedor nunca es obligatorio en WEB-DL — si no se sabe, se omite en vez de arriesgarse a poner uno incorrecto.</li>
           <li>Los paréntesis y corchetes <code>( ) [ ] {'{'} {'}'}</code> se eliminan del nombre del archivo y del título interno del .mkv (el título del aporte/torrent sí los conserva).</li>
           <li>No se usan caracteres que den problemas en el sistema de archivos: <code>: / ? *</code>, etc. — se sustituyen espacios por puntos en el nombre del fichero.</li>
           <li>El grupo/uploader (lo que va tras el último guion) no afecta a si el resto del nombre es correcto o no.</li>

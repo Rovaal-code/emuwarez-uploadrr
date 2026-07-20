@@ -1047,14 +1047,14 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
           </div>
         )}
         {sourceRequiresProvider && (
-          <label><FieldLabel label="Provider" info={FIELD_INFO.provider} />
+          <label><FieldLabel label="Proveedor" info={FIELD_INFO.provider} />
             {detectingProvider ? (
               <div className="form-input" style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-muted)' }}>
                 <span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Detectando…
               </div>
             ) : (
               <select className="form-input" value={fields.provider || ''} onChange={e => setField('provider', e.target.value || null)}>
-                <option value="">— Sin provider —</option>
+                <option value="">— Sin proveedor —</option>
                 {providers.map(p => <option key={p.code} value={p.code}>{p.name} ({p.code})</option>)}
               </select>
             )}

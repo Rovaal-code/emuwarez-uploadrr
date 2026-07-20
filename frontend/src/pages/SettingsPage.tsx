@@ -384,7 +384,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
             placeholder="API key de TMDb"
             autoComplete="new-password"
           />
-          <span className="form-hint">Usada para marcar providers disponibles en TMDb.</span>
+          <span className="form-hint">Usada para marcar proveedores disponibles en TMDb.</span>
         </div>
         <div style={{ marginBottom: 12 }}>
           <button
@@ -407,7 +407,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
             <select className="form-input form-select" value={region} onChange={e => setRegion(e.target.value)}>
               {REGION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label} ({o.value})</option>)}
             </select>
-            <span className="form-hint">País para filtrar providers.</span>
+            <span className="form-hint">País para filtrar proveedores.</span>
           </div>
           <div className="form-group">
             <label className="form-label">Idioma</label>
@@ -479,31 +479,31 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         </div>
       </div>
 
-      <div className="placeholder-card">
-        <h3 style={{ marginTop: 0, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div className="placeholder-card provider-card">
+        <h3 style={{ marginTop: 0, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
           <svg width={18} height={18} viewBox="0 0 24 24" fill="none" aria-hidden>
             <rect x="2.5" y="5" width="19" height="14" rx="2.5" stroke="#8b5cf6" strokeWidth="1.6" />
             <path d="M10 9.2v5.6l4.5-2.8z" fill="#8b5cf6" />
           </svg>
-          Providers de vídeo
+          Proveedores de vídeo
         </h3>
-        <span className="form-hint" style={{ display: 'block', marginBottom: 12 }}>
-          Se usa para elegir automáticamente el provider cuando TMDb devuelve varios. Arrastra para reordenar. El icono de cada uno enlaza a su web oficial.
+        <span className="form-hint" style={{ display: 'block', marginBottom: 6 }}>
+          Se usa para elegir automáticamente el proveedor cuando TMDb devuelve varios. Arrastra para reordenar. El icono de cada uno enlaza a su web oficial.
         </span>
-        <div className="form-group">
-          <label className="form-label">Prioridad de providers</label>
+        <div className="form-group provider-card__body">
+          <label className="form-label">Prioridad de proveedores</label>
           <ProviderPriorityPicker order={providerOrder} onChange={setProviderOrder} />
         </div>
       </div>
 
-      <div className="placeholder-card">
+      <div className="placeholder-card provider-card">
         <h3 style={{ marginTop: 0, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
           <ServiceIcon type="imghost" size={18} /> Proveedores de imágenes
         </h3>
         <span className="form-hint" style={{ display: 'block', marginBottom: 12 }}>
           Para las capturas que Uploadrr sube junto al torrent. Se prueban por orden de prioridad; arrastra para reordenar. <strong>imgbox</strong> es el fallback sin API key.
         </span>
-        <label className="form-label" style={{ display: 'block', marginBottom: 8 }}>Prioridad de providers</label>
+        <label className="form-label" style={{ display: 'block', marginBottom: 8 }}>Prioridad de proveedores</label>
         {(() => {
           const avail = settings?.image_hosts_available ?? []
           const configuredIds = imgOrder()
@@ -511,7 +511,8 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           const metaOf = (id: string) => avail.find(h => h.id === id)
           return (
             <>
-              <div style={{ maxHeight: 260, overflowY: 'auto' }}>
+            <div className="provider-card__body">
+              <div className="provider-card__list" style={{ maxHeight: 234 }}>
                 <SortableList ids={configuredIds} onChange={setImgEnabled} gap={8} renderRow={(id, idx, { dragging, handleProps }) => {
                   const h = metaOf(id); if (!h) return null
                   const isDefault = id === 'imgbox'
@@ -554,10 +555,11 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                 }} />
               </div>
               {notConfigured.length > 0 && (
-                <button className="btn btn-secondary btn-sm" style={{ marginTop: 10 }} onClick={() => setShowAddImg(true)} type="button">
+                <button className="btn btn-secondary btn-sm provider-card__add-btn" onClick={() => setShowAddImg(true)} type="button">
                   + Añadir proveedor ({notConfigured.length})
                 </button>
               )}
+            </div>
               {showAddImg && (
                 <div className="modal-overlay" onClick={() => setShowAddImg(false)}>
                   <div className="modal-panel" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
@@ -590,6 +592,9 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
 
       <div className="placeholder-card">
         <h3 style={{ marginTop: 0, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="1.75" aria-hidden>
+            <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
+          </svg>
           Acceso a la biblioteca
           <InfoIcon text="Antes de subir un archivo, la app comprueba que su ruta está dentro de una de estas carpetas — una red de seguridad para que nunca se toque un archivo fuera de donde debería. Si la dejas vacía, las subidas reales se bloquearán hasta que la rellenes." />
         </h3>
@@ -610,7 +615,15 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
       </div>
 
       <div className="placeholder-card">
-        <h3 style={{ marginTop: 0, marginBottom: 14 }}>Otros</h3>
+        <h3 style={{ marginTop: 0, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="1.75" aria-hidden>
+            <line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" />
+            <line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" />
+            <line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" />
+            <line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" />
+          </svg>
+          Otros
+        </h3>
         <div className="form-group" style={{ marginBottom: 14 }}>
           <label className="form-label">Episodios especiales</label>
           <label className="checkbox-label" style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
@@ -683,7 +696,10 @@ function AccountCard() {
   return (
     <div className="placeholder-card">
       <h3 style={{ marginTop: 0, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
-        <ServiceIcon type="emu" size={18} /> Cuenta
+        <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="1.75" aria-hidden>
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
+        </svg> Cuenta
       </h3>
       <p className="form-hint" style={{ marginTop: 0, marginBottom: 14 }}>
         Cambia el usuario y/o la contraseña con la que inicias sesión en esta aplicación.

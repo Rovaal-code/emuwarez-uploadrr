@@ -137,14 +137,14 @@ export function AutoUploadSourceGate({ targetIds, onNavigate, onClose, onDone }:
         </label>
         {sourceRequiresProvider && (
           <label style={{ display: 'block', marginBottom: 16 }}>
-            <span style={{ display: 'block', fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 4 }}>Provider</span>
+            <span style={{ display: 'block', fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 4 }}>Proveedor</span>
             {detectingProvider ? (
               <div className="form-input" style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-muted)' }}>
                 <span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Detectando…
               </div>
             ) : (
               <select className="form-input" value={chosenProvider || ''} onChange={e => setChosenProvider(e.target.value || null)}>
-                <option value="">— Sin provider —</option>
+                <option value="">— Sin proveedor —</option>
                 {providers.map(p => <option key={p.code} value={p.code}>{p.name} ({p.code})</option>)}
               </select>
             )}

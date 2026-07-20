@@ -143,7 +143,7 @@ export function NomenclatureModal({ itemId, itemTitle, onClose }: Props) {
               </div>
               {proposal.provider && (
                 <div className="detail-row">
-                  <span className="text-muted">Provider:</span>
+                  <span className="text-muted">Proveedor:</span>
                   <span>{proposal.provider}</span>
                 </div>
               )}

@@ -65,14 +65,15 @@ export function ProviderPriorityPicker({ order, onChange }: ProviderPriorityPick
   const available = options.filter(p => !order.includes(p.code))
 
   return (
-    <div>
+    <>
+    <div className="provider-card__body">
       {order.length === 0 && (
         <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 8px' }}>
-          Ningún provider activado — se añadirán por orden de prioridad.
+          Ningún proveedor activado — se añadirán por orden de prioridad.
         </p>
       )}
       {order.length > 0 && (
-        <div style={{ marginBottom: 10, maxHeight: 340, overflowY: 'auto' }}>
+        <div className="provider-card__list" style={{ maxHeight: 226 }}>
           <SortableList ids={order} onChange={onChange} renderRow={(code, idx, { dragging, handleProps }) => {
             const opt = options.find(p => p.code === code)
             return (
@@ -106,16 +107,17 @@ export function ProviderPriorityPicker({ order, onChange }: ProviderPriorityPick
         </div>
       )}
       {available.length > 0 && (
-        <button className="btn btn-secondary btn-sm" type="button" onClick={() => setShowAdd(true)}>
-          + Añadir provider ({available.length})
+        <button className="btn btn-secondary btn-sm provider-card__add-btn" type="button" onClick={() => setShowAdd(true)}>
+          + Añadir proveedor ({available.length})
         </button>
       )}
+    </div>
 
       {showAdd && (
         <div className="modal-overlay" onClick={() => setShowAdd(false)}>
           <div className="modal-panel" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
             <div className="modal-header">
-              <h2 className="modal-title">Añadir provider de vídeo</h2>
+              <h2 className="modal-title">Añadir proveedor de vídeo</h2>
               <button className="modal-close" onClick={() => setShowAdd(false)}>✕</button>
             </div>
             <div className="modal-body">
@@ -141,6 +143,6 @@ export function ProviderPriorityPicker({ order, onChange }: ProviderPriorityPick
           </div>
         </div>
       )}
-    </div>
+    </>
   )
 }

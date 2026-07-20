@@ -103,6 +103,11 @@
    the topbar's height (it used to live in the page body and pushed every
    card/table down when it appeared — see SyncProgressBanner). */
 .topbar {
+  /* Anchor for .topbar-center below — it needs to sit in the middle of the
+     WHOLE bar, not just the leftover space between the title and the user
+     controls (those two are rarely the same width, so centering it as a
+     flex:1 sibling used to land it off-center). */
+  position: relative;
   height: var(--topbar-height);
   background: var(--bg-topbar);
   border-bottom: 1px solid var(--border);
@@ -115,18 +120,21 @@
 }
 
 .topbar-center {
-  flex: 1;
-  min-width: 0;
+  /* Taken out of the flex flow entirely and centered against the topbar's
+     own width, so it's unaffected by how wide the title or the user panel
+     happen to be. Capped and non-interactive so it can't cover the title/
+     user controls on a narrow window; the actual chip re-enables pointer
+     events on itself once it has real content to be clicked/hovered. */
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   display: flex;
   align-items: center;
-  /* flex-start, not center: the chip's own content (instance name, counts,
-     the progress bar) still fills in a tick after it first mounts, and with
-     justify-content:center that growth re-centers the whole row — reading
-     as the icon+label jumping left. Anchoring to the start means new width
-     only ever grows to the right, so nothing already on screen moves. */
-  justify-content: flex-start;
-  margin-left: 32px;
+  justify-content: center;
+  max-width: min(60%, 520px);
   overflow: hidden;
+  pointer-events: none;
 }
 
 .topbar-sync-row {
@@ -134,6 +142,7 @@
   align-items: center;
   gap: 22px;
   min-width: 0;
+  pointer-events: auto;
 }
 
 .sync-chip {

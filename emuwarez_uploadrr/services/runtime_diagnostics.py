@@ -74,37 +74,47 @@ def check_uploadrr_mount() -> dict:
 
 
 def check_allowed_roots_setting() -> dict:
-    """Verifica si uploadrr.allowed_roots está configurado en settings (sin
-    secretos) — sin él, las subidas reales se bloquean (ver
-    services/uploadrr_contract.py::get_allowed_roots)."""
+    """Verifica uploadrr.allowed_roots en settings (sin secretos) — cuando
+    nunca se ha configurado, get_allowed_roots() usa DEFAULT_ALLOWED_ROOTS
+    ("/data", la misma convención de montaje que Radarr/Sonarr), así que
+    esto comprueba ESE default en vez de avisar de un bloqueo que ya no
+    existe (ver services/uploadrr_contract.py::get_allowed_roots)."""
+    from .uploadrr_contract import DEFAULT_ALLOWED_ROOTS
     try:
         config_dir = os.environ.get("CONFIG_DIR", str(Path.home() / ".config" / "emuwarez-renamer"))
         db_path = Path(config_dir) / "emuwarez_uploadrr.db"
         if not db_path.exists():
-            return _check("allowed_roots", "warning", "BD no existe aún, uploadrr.allowed_roots no configurado", {})
-        conn = sqlite3.connect(str(db_path))
-        row = conn.execute("SELECT value FROM settings WHERE key='uploadrr.allowed_roots' LIMIT 1").fetchone()
-        conn.close()
-        if row and row[0]:
-            import json as _json
-            try:
-                roots = [r for r in _json.loads(row[0]) if r]
-            except Exception:
-                roots = []
-            if roots:
-                missing = [r for r in roots if not Path(r).exists()]
-                if missing:
-                    return _check(
-                        "allowed_roots", "warning",
-                        f"uploadrr.allowed_roots configurado, pero no existe: {', '.join(missing)}",
-                        {"roots": roots},
-                    )
-                return _check("allowed_roots", "ok", f"uploadrr.allowed_roots configurado: {', '.join(roots)}", {"roots": roots})
-        return _check(
-            "allowed_roots", "warning",
-            "uploadrr.allowed_roots no configurado — las subidas reales se bloquearán hasta configurarlo en Ajustes",
-            {},
-        )
+            roots = list(DEFAULT_ALLOWED_ROOTS)
+            source = "por defecto"
+        else:
+            conn = sqlite3.connect(str(db_path))
+            row = conn.execute("SELECT value FROM settings WHERE key='uploadrr.allowed_roots' LIMIT 1").fetchone()
+            conn.close()
+            if row and row[0]:
+                import json as _json
+                try:
+                    roots = [r for r in _json.loads(row[0]) if r]
+                except Exception:
+                    roots = []
+                source = "configurado"
+            else:
+                roots = list(DEFAULT_ALLOWED_ROOTS)
+                source = "por defecto"
+
+        if not roots:
+            return _check(
+                "allowed_roots", "warning",
+                "uploadrr.allowed_roots configurado como vacío — las subidas reales se bloquearán hasta configurarlo en Ajustes",
+                {},
+            )
+        missing = [r for r in roots if not Path(r).exists()]
+        if missing:
+            return _check(
+                "allowed_roots", "warning",
+                f"uploadrr.allowed_roots ({source}), pero no existe: {', '.join(missing)}",
+                {"roots": roots},
+            )
+        return _check("allowed_roots", "ok", f"uploadrr.allowed_roots ({source}): {', '.join(roots)}", {"roots": roots})
     except Exception:
         return _check("allowed_roots", "warning", "No se pudo leer uploadrr.allowed_roots de la BD", {})
 

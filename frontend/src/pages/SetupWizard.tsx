@@ -595,7 +595,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               <div className="wizard-step-desc">Los títulos y pósters vienen de Radarr/Sonarr, no de aquí. La API key de TMDb se usa para dos cosas concretas:</div>
               <div className="alert" style={{ marginBottom: 14, background: 'rgba(59,130,246,0.08)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', fontSize: 12.5, color: 'var(--text-secondary)' }}>
                 <div style={{ marginBottom: 6 }}>
-                  <strong>1. Detectar el provider al subir:</strong> cuando el Source es <strong>WEB-DL</strong> y no se detecta ningún provider en el nombre del archivo, la app consulta los <em>watch providers</em> de TMDb (para la región elegida abajo) y propone el de mayor prioridad. Sin key, ese campo se queda en «Sin provider».
+                  <strong>1. Detectar el proveedor al subir:</strong> cuando el Source es <strong>WEB-DL</strong> y no se detecta ningún proveedor en el nombre del archivo, la app consulta los <em>watch providers</em> de TMDb (para la región elegida abajo) y propone el de mayor prioridad. Sin key, ese campo se queda en «Sin proveedor».
                 </div>
                 <div>
                   <strong>2. La necesita el subidor Uploadrr-EMU:</strong> se le pasa la key para que complete los metadatos de la ficha en eMuwarez durante la subida.
@@ -618,7 +618,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                     {REGION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label} ({o.value})</option>)}
                   </select>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                    Región usada para detectar en qué plataforma (provider) está disponible cada título.
+                    Región usada para detectar en qué plataforma (proveedor) está disponible cada título.
                   </div>
                 </div>
                 <div className="form-group" style={{ gridColumn: '1 / -1' }}>
@@ -648,7 +648,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 <div className="alert alert-error" style={{ marginTop: 10 }}>
                   Todavía no has probado la key (o la prueba ha fallado). Si continúas sin verificarla, no
                   podrás: (a) obtener los nombres en español de las series y (b) detectar los posibles
-                  providers en subidas WEB-DL sin provider o mal catalogados por Radarr/Sonarr. Podrás
+                  proveedores en subidas WEB-DL sin proveedor o mal catalogados por Radarr/Sonarr. Podrás
                   configurarlo más tarde en Configuración.
                   <label className="checkbox-label" style={{ display: 'block', marginTop: 8 }}>
                     <input type="checkbox" checked={tmdbAckSkip} onChange={e => setTmdbAckSkip(e.target.checked)} /> Entiendo, continuar sin verificar

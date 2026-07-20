@@ -28,6 +28,8 @@ EVENT_TYPES: dict[str, str] = {
     "upload_completed": "Subida completada",
     "upload_failed": "Subida fallida",
     "request_match_found": "Contenido compatible con una petición",
+    "content_missing_new": "Contenido nuevo faltante",
+    "content_unique_changed": "Cambio en tu contenido único",
 }
 
 # When a channel has never been configured, default to forwarding every event

@@ -177,7 +177,7 @@ export function NomenclatureCheckButton({ item, onChecked, compact }: Props) {
                         <p style={{ color: 'var(--success, #22c55e)', margin: 0 }}>El nombre cumple la nomenclatura de eMuwarez.</p>
                       )}
                       <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>
-                        El Provider/Source se obtiene del nombre del archivo y el Tag del Grupo (lo que va tras el último «-») no se compara.
+                        El Proveedor/Source se obtiene del nombre del archivo y el Tag del Grupo (lo que va tras el último «-») no se compara.
                       </p>
                     </div>
                   )}

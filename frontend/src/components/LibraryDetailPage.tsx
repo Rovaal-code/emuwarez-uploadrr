@@ -139,7 +139,7 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
               <FieldRow label="Source" help={rollupHelp}>
                 <ValueChip><ValueIcon><SourceValueIcon /></ValueIcon><span className="txt">{item.source || '–'}</span></ValueChip>
               </FieldRow>
-              <FieldRow label="Provider" help={rollupHelp}>
+              <FieldRow label="Proveedor" help={rollupHelp}>
                 {item.provider
                   ? <ValueChip linkable><ProviderTag code={item.provider} label={item.provider_label} /></ValueChip>
                   : <span className="muted">–</span>}

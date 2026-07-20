@@ -53,7 +53,7 @@ export function LibraryChildrenSection({ parentId, childType, title, instances, 
                   <th>Estado</th>
                   <th>Petición</th>
                   <th>Tamaño</th>
-                  <th>Provider</th>
+                  <th>Proveedor</th>
                   <th>Calidad</th>
                   <th>¿En eMuwarez?</th>
                   <th>Aportes</th>

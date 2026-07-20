@@ -165,9 +165,9 @@ export function NomenclatureFieldsModal({ itemId, itemTitle, onClose, onSaved }:
                 </select>
               </label>
               {sourceRequiresProvider && (
-                <label>Provider
+                <label>Proveedor
                   <select value={fields.provider || ''} onChange={e => handleField('provider', e.target.value || null)}>
-                    <option value="">— Sin provider —</option>
+                    <option value="">— Sin proveedor —</option>
                     {providerOptions.map(p => (
                       <option key={p.code} value={p.code}>
                         {p.label}{p.tmdb_available ? ' ★' : ''}

@@ -8,9 +8,16 @@ import time
 from typing import Callable, Optional
 
 from ..integrations import radarr, sonarr
-from ..models import InstanceConfig, LibraryItem, LocalStatus, NomenclatureStatus
+from ..models import InstanceConfig, LibraryItem, LocalStatus, MediaKind, NomenclatureStatus
 from .instances import list_instances
 from .tasks import start_task, finish_task
+
+# Only these two are real, downloadable leaf rows — series/season local_status
+# is a rollup over their children (see LocalStatus.PARTIAL), so a rollup
+# flipping to "Faltante" doesn't mean anything was newly requested-and-not-
+# found, just that no child is available yet. Notifying on those would also
+# double up with the leaf-level (episode) notification anyway.
+_NOTIFIABLE_ITEM_TYPES = (MediaKind.MOVIE.value, MediaKind.EPISODE.value)
 
 logger = logging.getLogger("emuwarez.library")
 
@@ -19,7 +26,23 @@ logger = logging.getLogger("emuwarez.library")
 # Upsert
 # ---------------------------------------------------------------------------
 
-def upsert_library_item(conn: sqlite3.Connection, item: LibraryItem) -> int:
+def upsert_library_item(conn: sqlite3.Connection, item: LibraryItem, *, notify_missing: bool = True) -> int:
+    # Captured BEFORE the upsert overwrites it — this is what lets us fire a
+    # notification on the exact sync pass where the item turns Faltante,
+    # instead of guessing from a date (see services/notification_center.py's
+    # "content_missing_new" event). A row that doesn't exist yet counts as
+    # "wasn't Faltante" too, since a brand-new item that's already missing on
+    # its very first sync is exactly the case we want to catch (the user's
+    # Monday-request scenario) — not just later status flips.
+    check_transition = notify_missing and item.item_type in _NOTIFIABLE_ITEM_TYPES
+    prev_status: Optional[str] = None
+    if check_transition:
+        prev_row = conn.execute(
+            "SELECT local_status FROM library_items WHERE instance_id = ? AND item_type = ? AND external_id = ?",
+            (item.instance_id, item.item_type, item.external_id),
+        ).fetchone()
+        prev_status = prev_row["local_status"] if prev_row else None
+
     data = item.to_dict()
     columns = [
         "item_type", "title", "year", "original_title", "instance_id", "instance_type",
@@ -88,7 +111,37 @@ def upsert_library_item(conn: sqlite3.Connection, item: LibraryItem) -> int:
         (item.instance_id, item.item_type, item.external_id),
     ).fetchone()
     conn.commit()
-    return int(row["id"])
+    item_id = int(row["id"])
+
+    if (
+        check_transition
+        and item.local_status == LocalStatus.MISSING.value
+        and prev_status != LocalStatus.MISSING.value
+    ):
+        _notify_new_missing(conn, item, item_id)
+
+    return item_id
+
+
+def _notify_new_missing(conn: sqlite3.Connection, item: LibraryItem, item_id: int) -> None:
+    """Best-effort — never raises, mirrors the existing notification call
+    sites (see upload_execution.py::_notify_upload_completed)."""
+    try:
+        from .notification_center import emit
+        title = item.title or "Contenido"
+        year_part = f" ({item.year})" if item.year else ""
+        emit(
+            conn, "content_missing_new",
+            "Contenido nuevo faltante",
+            f"«{title}{year_part}» no está disponible — Radarr/Sonarr no lo ha encontrado. "
+            "Puede que quieras crear una petición en eMuwarez.",
+            link="/library",
+            level="warning",
+            entity_type="library_item",
+            entity_id=item_id,
+        )
+    except Exception:
+        logger.exception("No se pudo emitir la notificación de contenido faltante para el item %s", item_id)
 
 
 # ---------------------------------------------------------------------------
@@ -105,6 +158,7 @@ def _sync_one_series(
     ep_queue: Optional[dict] = None,
     include_episodes: bool = True,
     bump_fn=None,
+    notify_missing: bool = True,
 ) -> int:
     """Upsert one series row (+ its seasons/episodes if include_episodes) from
     a single Sonarr `series` dict. Extracted from sync_instance's own Sonarr
@@ -128,7 +182,7 @@ def _sync_one_series(
         instance_name=instance.name,
         series_queue_map=series_queue,
     )
-    series_row_id = upsert_library_item(conn, series_item)
+    series_row_id = upsert_library_item(conn, series_item, notify_missing=notify_missing)
     _bump()
     if series_item.local_status in LocalStatus.not_available():
         missing += 1
@@ -169,7 +223,7 @@ def _sync_one_series(
                 episode_count_override=None if stats_present else len(season_eps),
                 file_count_override=None if stats_present else _file_count(season_eps),
             )
-            season_row_id_by_number[season_num] = upsert_library_item(conn, season_item)
+            season_row_id_by_number[season_num] = upsert_library_item(conn, season_item, notify_missing=notify_missing)
             _bump()
             if season_item.local_status in LocalStatus.not_available():
                 missing += 1
@@ -186,7 +240,7 @@ def _sync_one_series(
                 episode_count_override=len(season_eps),
                 file_count_override=_file_count(season_eps),
             )
-            season_row_id_by_number[season_num] = upsert_library_item(conn, season_item)
+            season_row_id_by_number[season_num] = upsert_library_item(conn, season_item, notify_missing=notify_missing)
             _bump()
             if season_item.local_status in LocalStatus.not_available():
                 missing += 1
@@ -209,7 +263,7 @@ def _sync_one_series(
                 ep_queue_map=ep_queue,
                 parent_id=parent_season_id,
             )
-            upsert_library_item(conn, ep_item)
+            upsert_library_item(conn, ep_item, notify_missing=notify_missing)
             _bump()
             if ep_item.local_status != LocalStatus.AVAILABLE.value:
                 missing += 1
@@ -227,6 +281,16 @@ def sync_instance(
 ) -> tuple[int, int]:
     imported = 0
     missing = 0
+
+    # Suppress "content_missing_new" notifications during this instance's very
+    # first sync — a fresh Radarr/Sonarr connection can insert hundreds of
+    # already-missing rows in one pass, and none of those were "just
+    # requested" the way the feature is meant to catch. Later, incremental
+    # syncs (this instance already has rows) behave normally.
+    is_first_sync = conn.execute(
+        "SELECT 1 FROM library_items WHERE instance_id = ? LIMIT 1", (instance.id,)
+    ).fetchone() is None
+    notify_missing = not is_first_sync
 
     def _bump() -> None:
         nonlocal imported
@@ -246,7 +310,7 @@ def sync_instance(
                 instance_name=instance.name,
                 queue_map=queue_map,
             )
-            upsert_library_item(conn, item)
+            upsert_library_item(conn, item, notify_missing=notify_missing)
             _bump()
             if item.local_status != LocalStatus.AVAILABLE.value:
                 missing += 1
@@ -278,6 +342,7 @@ def sync_instance(
                 conn, instance, series,
                 localize_titles=localize_titles, series_queue=series_queue, ep_queue=ep_queue,
                 include_episodes=include_episodes, bump_fn=_bump,
+                notify_missing=notify_missing,
             )
     return imported, missing
 

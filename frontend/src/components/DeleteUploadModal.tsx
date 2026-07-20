@@ -39,7 +39,7 @@ export function DeleteUploadModal({ job, onClose, onDeleted }: {
             </p>
           </div>
           <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>
-            El archivo de vídeo de tu biblioteca no se toca — solo se borra el registro de este intento de subida.
+            El archivo de vídeo de tu biblioteca no se toca. Solo se borra todo el registro de este intento de subida.
           </p>
           {error && <p className="error-text" style={{ marginTop: 8 }}>{error}</p>}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>

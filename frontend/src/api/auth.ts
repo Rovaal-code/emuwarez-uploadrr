@@ -18,3 +18,16 @@ export async function logout(): Promise<void> {
 export async function getMe(): Promise<CurrentUserResponse> {
   return api.get<CurrentUserResponse>('/auth/me')
 }
+
+export interface ChangeCredentialsResponse {
+  username: string
+  message: string
+}
+
+export async function changeCredentials(body: {
+  current_password: string
+  new_username?: string
+  new_password?: string
+}): Promise<ChangeCredentialsResponse> {
+  return api.post<ChangeCredentialsResponse>('/auth/change-credentials', body)
+}

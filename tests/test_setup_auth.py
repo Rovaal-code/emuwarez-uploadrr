@@ -305,3 +305,65 @@ def test_token_not_stored_as_clear(client, isolated_db):
     assert token not in stored_hashes, "El token claro NO debe guardarse en la BD"
     expected_hash = hash_token(token)
     assert expected_hash in stored_hashes, "El hash del token debe estar en la BD"
+
+
+# ---------------------------------------------------------------------------
+# Change credentials
+# ---------------------------------------------------------------------------
+
+def test_change_password_success(client, auth_headers):
+    resp = client.post("/api/auth/change-credentials", headers=auth_headers, json={
+        "current_password": "TestPass1!secret",
+        "new_password": "NewerPass2!secret",
+    })
+    assert resp.status_code == 200, resp.text
+    # Old password no longer works, new one does.
+    old = client.post("/api/auth/login", json={"username": "testadmin", "password": "TestPass1!secret"})
+    assert old.status_code == 401
+    new = client.post("/api/auth/login", json={"username": "testadmin", "password": "NewerPass2!secret"})
+    assert new.status_code == 200
+
+
+def test_change_username_success(client, auth_headers):
+    resp = client.post("/api/auth/change-credentials", headers=auth_headers, json={
+        "current_password": "TestPass1!secret",
+        "new_username": "renamedadmin",
+    })
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["username"] == "renamedadmin"
+    new = client.post("/api/auth/login", json={"username": "renamedadmin", "password": "TestPass1!secret"})
+    assert new.status_code == 200
+
+
+def test_change_credentials_wrong_current_password(client, auth_headers):
+    resp = client.post("/api/auth/change-credentials", headers=auth_headers, json={
+        "current_password": "WrongOne1!",
+        "new_password": "NewerPass2!secret",
+    })
+    # 400, not 401 — the frontend treats any 401 as "session expired" and
+    # clears the active token, which must not happen just for a typo'd
+    # current password.
+    assert resp.status_code == 400
+
+
+def test_change_credentials_weak_new_password(client, auth_headers):
+    resp = client.post("/api/auth/change-credentials", headers=auth_headers, json={
+        "current_password": "TestPass1!secret",
+        "new_password": "weak",
+    })
+    assert resp.status_code == 422
+
+
+def test_change_credentials_nothing_to_change(client, auth_headers):
+    resp = client.post("/api/auth/change-credentials", headers=auth_headers, json={
+        "current_password": "TestPass1!secret",
+    })
+    assert resp.status_code == 400
+
+
+def test_change_credentials_requires_auth(client):
+    resp = client.post("/api/auth/change-credentials", json={
+        "current_password": "TestPass1!secret",
+        "new_password": "NewerPass2!secret",
+    })
+    assert resp.status_code == 401

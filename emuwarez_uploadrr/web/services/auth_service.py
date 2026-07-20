@@ -95,6 +95,22 @@ def get_user_by_token(conn: sqlite3.Connection, token: str) -> Optional[dict]:
     return dict(row) if row else None
 
 
+def update_username(conn: sqlite3.Connection, user_id: int, new_username: str) -> None:
+    """Rename a user. Raises sqlite3.IntegrityError if the name is taken."""
+    conn.execute(
+        "UPDATE users SET username = ? WHERE id = ?",
+        (new_username, user_id),
+    )
+
+
+def update_password(conn: sqlite3.Connection, user_id: int, new_password: str) -> None:
+    ph = hash_password(new_password)
+    conn.execute(
+        "UPDATE users SET password_hash = ? WHERE id = ?",
+        (ph, user_id),
+    )
+
+
 def revoke_session(conn: sqlite3.Connection, token: str) -> bool:
     """Mark the session for *token* as revoked. Return True if found."""
     th = hash_token(token)

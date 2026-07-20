@@ -121,6 +121,40 @@ class LogoutResponse(BaseModel):
     message: str = "Sesión cerrada correctamente"
 
 
+class ChangeCredentialsRequest(BaseModel):
+    current_password: str
+    new_username: Optional[str] = None
+    new_password: Optional[str] = None
+
+    @field_validator("new_username")
+    @classmethod
+    def username_valid(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        v = v.strip()
+        if not v:
+            return None
+        if len(v) < 3:
+            raise ValueError("El nombre de usuario debe tener al menos 3 caracteres")
+        return v
+
+    @field_validator("new_password")
+    @classmethod
+    def password_valid(cls, v: Optional[str]) -> Optional[str]:
+        if not v:
+            return None
+        from .security import validate_password_strength
+        err = validate_password_strength(v)
+        if err:
+            raise ValueError(err)
+        return v
+
+
+class ChangeCredentialsResponse(BaseModel):
+    username: str
+    message: str = "Credenciales actualizadas correctamente"
+
+
 # ---------------------------------------------------------------------------
 # Setup POST requests
 # ---------------------------------------------------------------------------

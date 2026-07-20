@@ -1,18 +1,23 @@
 """Authentication endpoints.
 
-POST /api/auth/login   — exchange credentials for a session token
-GET  /api/auth/me      — return current user (requires Bearer token)
-POST /api/auth/logout  — revoke current session token
+POST /api/auth/login              — exchange credentials for a session token
+GET  /api/auth/me                 — return current user (requires Bearer token)
+POST /api/auth/logout             — revoke current session token
+POST /api/auth/change-credentials — change username and/or password
 """
 from __future__ import annotations
 
+import sqlite3
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 
 from ..dependencies import require_auth
 from ..runtime import _db_path
-from ..schemas import CurrentUserResponse, LoginRequest, LoginResponse, LogoutResponse
+from ..schemas import (
+    ChangeCredentialsRequest, ChangeCredentialsResponse,
+    CurrentUserResponse, LoginRequest, LoginResponse, LogoutResponse,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -55,6 +60,33 @@ def me(current_user: dict = Depends(require_auth)) -> CurrentUserResponse:
         created_at=current_user["created_at"],
         last_login_at=current_user.get("last_login_at"),
     )
+
+
+@router.post("/change-credentials", response_model=ChangeCredentialsResponse)
+def change_credentials(
+    body: ChangeCredentialsRequest,
+    current_user: dict = Depends(require_auth),
+) -> ChangeCredentialsResponse:
+    from ..services.auth_service import update_password, update_username
+    from ..security import verify_password
+    if not body.new_username and not body.new_password:
+        raise HTTPException(status_code=400, detail="No hay ningún cambio que aplicar.")
+    if not verify_password(body.current_password, current_user["password_hash"]):
+        # 400, not 401 — this is "wrong current password", not an invalid
+        # session token. The frontend's global 401 handler clears the
+        # active session on any 401, which would otherwise log the user
+        # out just for mistyping their current password.
+        raise HTTPException(status_code=400, detail="La contraseña actual no es correcta.")
+    with _get_conn() as conn:
+        try:
+            if body.new_username and body.new_username != current_user["username"]:
+                update_username(conn, current_user["id"], body.new_username)
+            if body.new_password:
+                update_password(conn, current_user["id"], body.new_password)
+            conn.commit()
+        except sqlite3.IntegrityError:
+            raise HTTPException(status_code=400, detail="Ese nombre de usuario ya está en uso.")
+    return ChangeCredentialsResponse(username=body.new_username or current_user["username"])
 
 
 @router.post("/logout", response_model=LogoutResponse)

@@ -93,10 +93,10 @@ const ICON_MISSING = svgIcon(<><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 
 const ICON_UNIQUE = svgIcon(<><circle cx="12" cy="12" r="9" /><path d="M10 8l6 4-6 4V8z" /></>)
 const ICON_UPLOADS = svgIcon(<path d="M12 19V5M5 12l7-7 7 7" />)
 const ICON_REQUESTS = svgIcon(<><rect x="9" y="3" width="6" height="4" rx="1" /><path d="M9 12h6M9 16h4" /></>)
-const ICON_COMPATIBLE = svgIcon(<><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-6 8-6s8 2 8 6" /></>)
-const ICON_PARTIAL = svgIcon(<path d="M12 22s8-4.5 8-11V5l-8-3-8 3v6c0 6.5 8 11 8 11z" />)
-const ICON_RECLAIMED = svgIcon(<><path d="M21.2 15a9 9 0 1 1-2.6-11.3" /><path d="M21 3v6h-6" /></>)
-const ICON_MINE = svgIcon(<><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><path d="M3.3 7 12 12l8.7-5M12 22V12" /></>)
+const ICON_COMPATIBLE = svgIcon(<><circle cx="12" cy="12" r="9" /><path d="M8.5 12.3l2.3 2.3 4.7-4.7" /></>)
+const ICON_PARTIAL = svgIcon(<><circle cx="12" cy="12" r="9" /><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none" /></>)
+const ICON_RECLAIMED = svgIcon(<><path d="M5 21V4" /><path d="M5 4h13l-3.2 4.2L18 12.5H5" /></>)
+const ICON_MINE = svgIcon(<><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-6 8-6s8 2 8 6" /></>)
 
 interface DashboardPageProps {
   onNavigate?: (page: string) => void

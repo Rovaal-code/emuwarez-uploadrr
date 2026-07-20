@@ -50,7 +50,7 @@ function RequestPoster({ url, category, size = 'sm' }: { url: string | null; cat
     : { width: 30, height: 45, radius: 4, font: 15 }
   const t = tipoOf(category)
   return (
-    <div style={{ flexShrink: 0, width: dims.width, height: dims.height, borderRadius: dims.radius, overflow: 'hidden', background: 'rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div className="poster-thumb" style={{ flexShrink: 0, width: dims.width, height: dims.height, borderRadius: dims.radius, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       {url ? (
         <img
           src={posterUrl(url, size === 'lg' ? 'w342' : 'w154')}

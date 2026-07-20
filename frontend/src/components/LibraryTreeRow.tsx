@@ -158,7 +158,7 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, onR
               // content stays aligned one indent level deeper than the parent.
               <span style={{ width: 22, flexShrink: 0 }} />
             )}
-            <div style={{ flexShrink: 0, width: 28, height: 42, borderRadius: 4, overflow: 'hidden', background: 'rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div className="poster-thumb" style={{ flexShrink: 0, width: 28, height: 42, borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {item.poster_url ? (
                 <img
                   src={posterUrl(item.poster_url, 'w154')}

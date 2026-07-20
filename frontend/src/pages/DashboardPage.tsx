@@ -382,9 +382,9 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                       <tr key={`${item.rec_group}-${item.rec_request_id ?? item.id}`}>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <div style={{
+                            <div className="poster-thumb" style={{
                               flexShrink: 0, width: 28, height: 42, borderRadius: 4, overflow: 'hidden',
-                              background: 'rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
                             }}>
                               {item.poster_url ? (
                                 <img
@@ -517,7 +517,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                     const totalElapsedText = isPreparingOrRunning ? progressCounter(job) : null
                     return (
                     <div key={job.id} style={{ display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid var(--border)', paddingBottom: 12 }}>
-                      <div style={{ width: 28, height: 42, borderRadius: 4, overflow: 'hidden', background: 'rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <div className="poster-thumb" style={{ width: 28, height: 42, borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                         {job.poster_url ? (
                           <img
                             src={posterUrl(job.poster_url, 'w154')}

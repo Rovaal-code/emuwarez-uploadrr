@@ -117,7 +117,7 @@ function JobRow({ job, onOpen, indent, retryToggle, onCancel, onRetry }: {
   return (
     <tr style={indent ? { opacity: 0.65 } : undefined}>
       <td style={{ width: 36 }}>
-        <div style={{ width: 28, height: 42, borderRadius: 4, overflow: 'hidden', background: 'rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <div className="poster-thumb" style={{ width: 28, height: 42, borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           {job.poster_url ? (
             <img
               src={posterUrl(job.poster_url, 'w154')}

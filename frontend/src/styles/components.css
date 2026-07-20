@@ -9,6 +9,14 @@
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border-input);
 }
+
+/* Small poster thumbnails — list rows (Biblioteca/Peticiones/Subidas) and
+   the Recomendaciones/Actividad de subida tables. Same color as
+   .detail-poster, thinner border since these render much smaller. */
+.poster-thumb {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-input);
+}
 .detail-card-title {
   color: var(--text-secondary);
   border-bottom: 2px solid var(--border-hover);

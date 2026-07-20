@@ -87,7 +87,11 @@ function ConnRow({ icon, label, href, badge = 'Configurado', tone = 'ok' }: {
 // approved holographic reference; other pages' StatCard usage is unaffected
 // since the `icon` prop only renders inside `.panel-hud`'s CSS scope).
 function svgIcon(d: React.ReactNode) {
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">{d}</svg>
+  // strokeLinecap="round" is what makes ICON_MISSING's "M12 17h.01" trick (a
+  // near-zero-length segment, the standard way to draw the exclamation
+  // mark's dot) actually render as a dot instead of vanishing — without it
+  // the default "butt" cap draws nothing for a zero-length line.
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">{d}</svg>
 }
 const ICON_LIBRARY = svgIcon(<><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5" /><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" /></>)
 const ICON_AVAILABLE = svgIcon(<><path d="M21 15V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9" /><path d="M2 15h20l-2 5H4l-2-5z" /></>)

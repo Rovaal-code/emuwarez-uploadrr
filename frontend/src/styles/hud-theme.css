@@ -190,6 +190,10 @@
   color: var(--hud-ice);
   border-bottom-color: rgba(30, 110, 190, .4);
 }
+.hud-app .detail-poster {
+  border: 1.5px solid var(--hud-line);
+  box-shadow: inset 0 0 0 1px var(--hud-line-inner), 0 0 18px -8px rgba(47, 216, 255, .5);
+}
 .hud-app .placeholder-card h3,
 .hud-app .instance-card-name {
   font-family: var(--hud-font);

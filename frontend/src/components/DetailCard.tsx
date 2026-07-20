@@ -91,7 +91,7 @@ export function ValueIcon({ children }: { children: React.ReactNode }) {
 // page, next to the title/action-buttons header.
 export function DetailPoster({ url, alt, fallbackEmoji }: { url?: string | null; alt: string; fallbackEmoji: string }) {
   return (
-    <div style={{ flexShrink: 0, height: DETAIL_CARD_HEIGHT, maxWidth: '100%', aspectRatio: '2 / 3', borderRadius: 10, overflow: 'hidden', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-input)' }}>
+    <div className="detail-poster" style={{ flexShrink: 0, height: DETAIL_CARD_HEIGHT, maxWidth: '100%', aspectRatio: '2 / 3', borderRadius: 10, overflow: 'hidden' }}>
       {url ? (
         <img
           src={url}

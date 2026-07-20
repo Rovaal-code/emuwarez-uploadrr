@@ -5,6 +5,10 @@
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border);
 }
+.detail-poster {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-input);
+}
 .detail-card-title {
   color: var(--text-secondary);
   border-bottom: 2px solid var(--border-hover);

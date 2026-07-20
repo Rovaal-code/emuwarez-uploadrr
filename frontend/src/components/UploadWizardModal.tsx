@@ -252,14 +252,38 @@ export function EpisodeAccordionRow({ episodeNumber, title, expanded, onToggle, 
   )
 }
 
+// Status ring for one check: thin track + glowing ring + glyph, same visual
+// language as the sidebar's CPU/RAM gauges (see SystemStatusPanel.tsx) —
+// replaces the 🟢🟡🔴 emoji, which didn't match the rest of the UI's icon set.
+function CheckStatusIcon({ status }: { status: UploadCheck['status'] }) {
+  const color = status === 'ok' ? '#22c55e' : status === 'skip' ? '#f59e0b' : '#ef4444'
+  return (
+    <svg viewBox="0 0 24 24" width={16} height={16}
+      style={{ color, filter: `drop-shadow(0 0 4px ${color})`, flexShrink: 0, marginTop: 2 }}>
+      <circle cx="12" cy="12" r="9.5" fill="none" stroke="rgba(56,189,255,.18)" strokeWidth="2" />
+      <circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" strokeWidth="2" />
+      {status === 'ok' && (
+        <path d="M5.5 12.5l4 4L18.5 7.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+      )}
+      {status === 'skip' && (
+        <>
+          <path d="M12 7.5v5.2" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+          <circle cx="12" cy="16.3" r="1.15" fill="currentColor" />
+        </>
+      )}
+      {status !== 'ok' && status !== 'skip' && (
+        <path d="M7 7l10 10M17 7L7 17" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+      )}
+    </svg>
+  )
+}
+
 // One check's icon + label + message — used for the final full list once the
 // run is done.
 function CheckRow({ c }: { c: UploadCheck }) {
   return (
-    <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', padding: '3px 0' }}>
-      <span style={{ color: c.status === 'ok' ? '#22c55e' : c.status === 'skip' ? '#f59e0b' : '#ef4444', fontWeight: 700 }}>
-        {c.status === 'ok' ? '🟢' : c.status === 'skip' ? '🟡' : '🔴'}
-      </span>
+    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '3px 0' }}>
+      <CheckStatusIcon status={c.status} />
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: 13 }}>{c.label}</div>
         {c.message && <div style={{ fontSize: 11, color: 'var(--text-muted)', wordBreak: 'break-all' }}>{c.message}</div>}

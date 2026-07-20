@@ -33,6 +33,7 @@ export function SyncProgressBanner() {
             libProgress.missing ? `${libProgress.missing.toLocaleString('es-ES')} no disponibles` : null,
           ].filter(Boolean).join(' · ')}
           percent={!libProgress.error && libProgress.total ? Math.min(100, Math.round((libProgress.imported / libProgress.total) * 100)) : null}
+          bar
         />
       )}
 
@@ -47,22 +48,29 @@ export function SyncProgressBanner() {
           ].filter(Boolean).join(' · ')}
           percent={!catalogProgress.error && catalogProgress.total_pages
             ? Math.min(100, Math.round((catalogProgress.page / catalogProgress.total_pages) * 100)) : null}
+          bar
         />
       )}
 
       {requestsSyncing && (
-        <SyncChip error={null} icon={null} label="Peticiones" detail="Sincronizando…" percent={null} />
+        <SyncChip error={null} icon={null} label="Peticiones" detail="Sincronizando…" percent={null} bar={false} />
       )}
     </div>
   )
 }
 
-function SyncChip({ error, icon, label, detail, percent }: {
+function SyncChip({ error, icon, label, detail, percent, bar }: {
   error: string | null | undefined
   icon: React.ReactNode
   label: string
   detail: string
   percent: number | null
+  // Reserve the bar's width from the very first render (at 0%) for metrics
+  // that will eventually report a percent, so the chip doesn't visibly
+  // widen/shift once the real total lands a tick later — it used to render
+  // icon+label alone at first, then insert the bar, which re-centers
+  // .topbar-center's content and reads as everything jumping left.
+  bar: boolean
 }) {
   const { triggerProps, tooltipNode } = useTooltip(`${label}${detail ? ` — ${detail}` : ''}`)
   return (
@@ -73,9 +81,9 @@ function SyncChip({ error, icon, label, detail, percent }: {
       {icon}
       <span className="sync-chip-label">{label}</span>
       <span className="sync-chip-detail">{detail}</span>
-      {percent != null && (
+      {bar && (
         <div className="sync-chip-bar">
-          <div className="sync-chip-bar-fill" style={{ width: `${percent}%` }} />
+          <div className="sync-chip-bar-fill" style={{ width: `${percent ?? 0}%` }} />
         </div>
       )}
       {tooltipNode}

@@ -14,10 +14,14 @@ from emuwarez_uploadrr.services.upload_execution import (
     CONFIRMATION_TOKEN,
     append_upload_log,
     cancel_upload_job,
+    create_upload_artifact,
     get_upload_job,
     get_upload_job_logs,
     list_upload_jobs,
+    mark_phase_done,
+    mark_phase_started,
     start_upload_job,
+    update_phase_progress,
     validate_upload_job_start,
 )
 
@@ -233,6 +237,86 @@ def test_run_subprocess_failure_sets_failed(db_conn, tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# Post-upload trailer check + "Requiere Trailer" in the completion notification
+# ---------------------------------------------------------------------------
+
+def _notification_bodies(conn, job_id: int) -> list[str]:
+    rows = conn.execute(
+        "SELECT body FROM notifications WHERE entity_type = 'upload_job' AND entity_id = ? ORDER BY id",
+        (job_id,),
+    ).fetchall()
+    return [r["body"] for r in rows]
+
+
+def test_notify_upload_completed_flags_requiere_trailer_when_not_found(db_conn):
+    from emuwarez_uploadrr.services.upload_execution import _notify_upload_completed
+    jid = _insert_job(db_conn, status="completed")
+
+    _notify_upload_completed(jid, "https://emuwarez.com/torrents/1")
+
+    bodies = _notification_bodies(db_conn, jid)
+    assert len(bodies) == 1
+    assert "Requiere Trailer" in bodies[0]
+
+
+def test_notify_upload_completed_no_flag_when_trailer_artifact_present(db_conn):
+    from emuwarez_uploadrr.services.upload_execution import _notify_upload_completed
+    jid = _insert_job(db_conn, status="completed")
+    create_upload_artifact(jid, "trailer_url", name="Trailer", url="https://youtube.com/watch?v=abc123", conn=db_conn)
+
+    _notify_upload_completed(jid, "https://emuwarez.com/torrents/1")
+
+    bodies = _notification_bodies(db_conn, jid)
+    assert len(bodies) == 1
+    assert "Requiere Trailer" not in bodies[0]
+
+
+def test_check_trailer_and_log_records_artifact_and_logs(db_conn, tmp_path):
+    from emuwarez_uploadrr.services.upload_execution import _check_trailer_and_log, get_upload_job_artifacts
+    jid = _insert_job(db_conn)
+    _insert_settings(db_conn, uploadrr_path=str(tmp_path))
+    db_conn.execute(
+        "UPDATE upload_jobs SET nomenclature_snapshot_json = ? WHERE id = ?",
+        (json.dumps({"proposed_filename": "Movie.2024-EMUWAREZ", "proposed_title": "Movie 2024"}), jid),
+    )
+    db_conn.commit()
+    folder = tmp_path / "tmp" / "Movie.2024-EMUWAREZ"
+    folder.mkdir(parents=True)
+    (folder / "[EMU]DESCRIPTION.txt").write_text("[youtube]xyz987[/youtube]", encoding="utf-8")
+
+    _check_trailer_and_log(jid)
+
+    artifacts = get_upload_job_artifacts(jid, conn=db_conn)
+    trailer_artifacts = [a for a in artifacts if a["artifact_type"] == "trailer_url"]
+    assert len(trailer_artifacts) == 1
+    assert trailer_artifacts[0]["url"] == "https://www.youtube.com/watch?v=xyz987"
+
+    logs = get_upload_job_logs(jid, conn=db_conn)
+    assert any("Trailer incluido" in log["message"] for log in logs["logs"])
+
+
+def test_check_trailer_and_log_warns_when_not_found(db_conn, tmp_path):
+    from emuwarez_uploadrr.services.upload_execution import _check_trailer_and_log, get_upload_job_artifacts
+    jid = _insert_job(db_conn)
+    _insert_settings(db_conn, uploadrr_path=str(tmp_path))
+    db_conn.execute(
+        "UPDATE upload_jobs SET nomenclature_snapshot_json = ? WHERE id = ?",
+        (json.dumps({"proposed_filename": "Movie.2024-EMUWAREZ"}), jid),
+    )
+    db_conn.commit()
+    folder = tmp_path / "tmp" / "Movie.2024-EMUWAREZ"
+    folder.mkdir(parents=True)
+    (folder / "[EMU]DESCRIPTION.txt").write_text("sin trailer", encoding="utf-8")
+
+    _check_trailer_and_log(jid)
+
+    artifacts = get_upload_job_artifacts(jid, conn=db_conn)
+    assert not any(a["artifact_type"] == "trailer_url" for a in artifacts)
+    logs = get_upload_job_logs(jid, conn=db_conn)
+    assert any("No se encontró un trailer" in log["message"] for log in logs["logs"])
+
+
+# ---------------------------------------------------------------------------
 # Logs stored correctly and secrets redacted
 # ---------------------------------------------------------------------------
 
@@ -298,6 +382,17 @@ def test_cancel_not_found(db_conn):
     assert not result["ok"]
 
 
+def test_cancel_staging_job(db_conn):
+    """An Automático job still computing its previews (no subprocess, no
+    grace-period timer yet) can be cancelled with a plain status flip —
+    _run_staging_job() re-checks status before promoting/writing snapshots."""
+    jid = _insert_job(db_conn, status="staging")
+    result = cancel_upload_job(jid, conn=db_conn)
+    assert result["ok"] is True
+    job = db_conn.execute("SELECT status FROM upload_jobs WHERE id=?", (jid,)).fetchone()
+    assert job["status"] == "cancelled"
+
+
 # ---------------------------------------------------------------------------
 # append and retrieve logs
 # ---------------------------------------------------------------------------
@@ -312,6 +407,62 @@ def test_append_and_get_logs(db_conn):
     messages = [l["message"] for l in result["logs"]]
     assert "Test log entry" in messages
     assert "Error entry" in messages
+
+
+# ---------------------------------------------------------------------------
+# mark_phase_done / update_phase_progress (progress_json)
+# ---------------------------------------------------------------------------
+
+def test_mark_phase_done_accumulates_across_calls(db_conn):
+    jid = _insert_job(db_conn)
+    mark_phase_done(jid, "integrity")
+    mark_phase_done(jid, "nomenclature")
+
+    row = db_conn.execute("SELECT progress_json FROM upload_jobs WHERE id=?", (jid,)).fetchone()
+    state = json.loads(row["progress_json"])
+    by_key = {p["key"]: p for p in state["phases"]}
+    assert by_key["integrity"]["status"] == "done"
+    assert by_key["nomenclature"]["status"] == "done"
+    assert by_key["remux"]["status"] == "pending"
+    assert state["global_pct"] == 10  # 5 (integrity) + 5 (nomenclature)
+
+
+def test_update_phase_progress_keeps_earlier_done_phases(db_conn):
+    jid = _insert_job(db_conn)
+    mark_phase_done(jid, "integrity")
+    mark_phase_done(jid, "nomenclature")
+    update_phase_progress(jid, "remux", 40)
+
+    row = db_conn.execute("SELECT progress_json FROM upload_jobs WHERE id=?", (jid,)).fetchone()
+    state = json.loads(row["progress_json"])
+    by_key = {p["key"]: p for p in state["phases"]}
+    assert by_key["integrity"]["status"] == "done"
+    assert by_key["remux"]["status"] == "running"
+    assert by_key["remux"]["pct"] == 40
+    # 5 + 5 + 15*0.4 = 16
+    assert state["global_pct"] == 16
+
+
+def test_mark_phase_started_then_done_records_duration(db_conn):
+    jid = _insert_job(db_conn)
+    mark_phase_started(jid, "integrity")
+
+    row = db_conn.execute("SELECT progress_json FROM upload_jobs WHERE id=?", (jid,)).fetchone()
+    state = json.loads(row["progress_json"])
+    by_key = {p["key"]: p for p in state["phases"]}
+    assert by_key["integrity"]["status"] == "running"
+    assert by_key["integrity"]["started_at"] is not None
+    assert by_key["integrity"]["finished_at"] is None
+    started_at = by_key["integrity"]["started_at"]
+
+    mark_phase_done(jid, "integrity")
+    row = db_conn.execute("SELECT progress_json FROM upload_jobs WHERE id=?", (jid,)).fetchone()
+    state = json.loads(row["progress_json"])
+    by_key = {p["key"]: p for p in state["phases"]}
+    assert by_key["integrity"]["status"] == "done"
+    # started_at must survive unchanged from the earlier mark_phase_started call.
+    assert by_key["integrity"]["started_at"] == started_at
+    assert by_key["integrity"]["finished_at"] is not None
 
 
 # ---------------------------------------------------------------------------

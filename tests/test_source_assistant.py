@@ -193,3 +193,128 @@ def test_suggest_provider_no_tmdb(tmp_path):
     from emuwarez_uploadrr.services.source_assistant import suggest_provider_for_item
     result = suggest_provider_for_item(item_id, conn=conn)
     assert "suggested" in result or "error" in result or result.get("suggested") is None
+
+
+# ---------------------------------------------------------------------------
+# check_auto_upload_source — automated-upload source-disparity gate
+# ---------------------------------------------------------------------------
+
+def _mi_report(from_name, from_mediainfo):
+    return {
+        "available": True,
+        "source_signals": {"from_name": from_name, "from_mediainfo_bitrate": from_mediainfo},
+    }
+
+
+def test_check_auto_upload_source_name_wins_no_disparity(tmp_path):
+    """The file name already resolves the source (MicroHD) — Radarr saying
+    BluRay and MediaInfo estimating WEB-DL must NOT trigger a disparity,
+    since the name wins regardless in the real nomenclature build."""
+    conn = _make_conn(tmp_path)
+    item_id = _accessible_item(conn, tmp_path, title="Chappie")
+    conn.execute("UPDATE library_items SET source = 'BluRay' WHERE id = ?", (item_id,))
+    conn.commit()
+
+    from emuwarez_uploadrr.services.source_assistant import check_auto_upload_source
+    with patch(
+        "emuwarez_uploadrr.services.media_info_service.build_mediainfo_report",
+        return_value=_mi_report("MHD", "WEB-DL"),
+    ):
+        result = check_auto_upload_source(item_id, conn=conn)
+    assert result["disparity"] is False
+
+
+def test_check_auto_upload_source_agreement_no_disparity(tmp_path):
+    """Name says nothing, but Radarr and MediaInfo agree — nothing to ask."""
+    conn = _make_conn(tmp_path)
+    item_id = _accessible_item(conn, tmp_path, title="Movie")
+    conn.execute("UPDATE library_items SET source = 'WEB-DL' WHERE id = ?", (item_id,))
+    conn.commit()
+
+    from emuwarez_uploadrr.services.source_assistant import check_auto_upload_source
+    with patch(
+        "emuwarez_uploadrr.services.media_info_service.build_mediainfo_report",
+        return_value=_mi_report(None, "WEB-DL"),
+    ):
+        result = check_auto_upload_source(item_id, conn=conn)
+    assert result["disparity"] is False
+
+
+def test_check_auto_upload_source_real_disparity(tmp_path):
+    """Name says nothing AND Radarr disagrees with MediaInfo — must flag it."""
+    conn = _make_conn(tmp_path)
+    item_id = _accessible_item(conn, tmp_path, title="Movie")
+    conn.execute("UPDATE library_items SET source = 'BluRay' WHERE id = ?", (item_id,))
+    conn.commit()
+
+    from emuwarez_uploadrr.services.source_assistant import check_auto_upload_source
+    with patch(
+        "emuwarez_uploadrr.services.media_info_service.build_mediainfo_report",
+        return_value=_mi_report(None, "WEB-DL"),
+    ):
+        result = check_auto_upload_source(item_id, conn=conn)
+    assert result["disparity"] is True
+    assert result["from_radarr"] == "BluRay"
+    assert result["from_mediainfo"] == "WEB-DL"
+    assert result["from_name"] is None
+
+
+def test_check_auto_upload_source_mediainfo_unavailable_fails_open(tmp_path):
+    """MediaInfo can't read the file (no binary / unreachable) — never block
+    an automated upload just because of that."""
+    conn = _make_conn(tmp_path)
+    item_id = _accessible_item(conn, tmp_path, title="Movie")
+    conn.execute("UPDATE library_items SET source = 'BluRay' WHERE id = ?", (item_id,))
+    conn.commit()
+
+    from emuwarez_uploadrr.services.source_assistant import check_auto_upload_source
+    with patch(
+        "emuwarez_uploadrr.services.media_info_service.build_mediainfo_report",
+        return_value={"available": False, "message": "no mediainfo binary"},
+    ):
+        result = check_auto_upload_source(item_id, conn=conn)
+    assert result["disparity"] is False
+
+
+def test_check_auto_upload_source_season_checks_one_representative_episode(tmp_path):
+    """A season only checks ONE available episode — every episode must
+    already share the same source to be packable, so one stands for all."""
+    conn = _make_conn(tmp_path)
+    series_id = _insert_library_item(conn, title="Serie", tmdb_id="1")
+    conn.execute("UPDATE library_items SET item_type = 'series' WHERE id = ?", (series_id,))
+    season_id = _insert_library_item(conn, title="Serie", tmdb_id="1")
+    conn.execute(
+        "UPDATE library_items SET item_type = 'season', parent_id = ? WHERE id = ?",
+        (series_id, season_id),
+    )
+    conn.commit()
+
+    ep_path = tmp_path / "ep1.mkv"
+    ep_path.write_bytes(b"x" * 2048)
+    ep_id = _insert_library_item(conn, title="Serie S01E01", tmdb_id="1", path=str(ep_path))
+    conn.execute(
+        "UPDATE library_items SET item_type = 'episode', parent_id = ?, local_status = 'Disponible', "
+        "source = 'BluRay' WHERE id = ?",
+        (season_id, ep_id),
+    )
+    conn.commit()
+
+    from emuwarez_uploadrr.services.source_assistant import check_auto_upload_source
+    with patch(
+        "emuwarez_uploadrr.services.media_info_service.build_mediainfo_report",
+        return_value=_mi_report(None, "WEB-DL"),
+    ):
+        result = check_auto_upload_source(season_id, conn=conn)
+    assert result["disparity"] is True
+    assert result["from_radarr"] == "BluRay"
+
+
+def test_check_auto_upload_source_season_no_available_episodes(tmp_path):
+    conn = _make_conn(tmp_path)
+    season_id = _insert_library_item(conn, title="Serie")
+    conn.execute("UPDATE library_items SET item_type = 'season' WHERE id = ?", (season_id,))
+    conn.commit()
+
+    from emuwarez_uploadrr.services.source_assistant import check_auto_upload_source
+    result = check_auto_upload_source(season_id, conn=conn)
+    assert result["disparity"] is False

@@ -13,7 +13,42 @@ from emuwarez_uploadrr.services.compatibility import (
     match_request_to_library,
     classify_request_match,
     rank_request_matches,
+    emu_override_status,
 )
+
+
+# ---------------------------------------------------------------------------
+# emu_override_status
+# ---------------------------------------------------------------------------
+
+def test_emu_override_status_reclamado():
+    assert emu_override_status("Reclamado") == "Reclamado"
+    assert emu_override_status("reclamado") == "Reclamado"
+    assert emu_override_status("claimed") == "Reclamado"
+
+
+def test_emu_override_status_pendiente():
+    assert emu_override_status("Pendiente") == "Pendiente"
+    assert emu_override_status("pending") == "Pendiente"
+
+
+def test_emu_override_status_llena():
+    assert emu_override_status("Llena") == "Llena"
+    assert emu_override_status("filled") == "Llena"
+    assert emu_override_status("1") == "Llena"
+
+
+def test_emu_override_status_open_beats_llena_substring():
+    # "Sin llenar" contains "llena" as a substring — must not false-positive.
+    assert emu_override_status("Sin llenar") is None
+    assert emu_override_status("unfilled") is None
+    assert emu_override_status("open") is None
+
+
+def test_emu_override_status_none_for_empty_or_unknown():
+    assert emu_override_status(None) is None
+    assert emu_override_status("") is None
+    assert emu_override_status("some other status") is None
 
 
 # ---------------------------------------------------------------------------

@@ -83,7 +83,7 @@ def test_apply_track_remux_dry_run_no_subprocess(client, auth_headers, tmp_path)
     mkv_file.write_bytes(b"fake mkv")
     item_id = _seed_item(prepared_path=str(mkv_file))
 
-    with patch("emuwarez_uploadrr.services.mkv_remux.subprocess.run") as mock_run, \
+    with patch("emuwarez_uploadrr.services.mkv_remux.subprocess.Popen") as mock_popen, \
          patch("emuwarez_uploadrr.services.mkv_remux.check_mkvmerge_available",
                return_value={"available": True, "path": "/usr/bin/mkvmerge"}), \
          patch("emuwarez_uploadrr.services.mkv_remux.read_tracks_json",
@@ -93,7 +93,7 @@ def test_apply_track_remux_dry_run_no_subprocess(client, auth_headers, tmp_path)
             json={"dry_run": True, "apply": False, "confirmation": None},
             headers=auth_headers,
         )
-        mock_run.assert_not_called()
+        mock_popen.assert_not_called()
 
     assert resp.status_code == 200
     assert resp.json()["status"] == "ready"
@@ -104,7 +104,7 @@ def test_apply_track_remux_wrong_token_blocked(client, auth_headers, tmp_path):
     mkv_file.write_bytes(b"fake mkv")
     item_id = _seed_item(prepared_path=str(mkv_file))
 
-    with patch("emuwarez_uploadrr.services.mkv_remux.subprocess.run") as mock_run, \
+    with patch("emuwarez_uploadrr.services.mkv_remux.subprocess.Popen") as mock_popen, \
          patch("emuwarez_uploadrr.services.mkv_remux.check_mkvmerge_available",
                return_value={"available": True, "path": "/usr/bin/mkvmerge"}), \
          patch("emuwarez_uploadrr.services.mkv_remux.read_tracks_json",
@@ -114,7 +114,7 @@ def test_apply_track_remux_wrong_token_blocked(client, auth_headers, tmp_path):
             json={"dry_run": False, "apply": True, "confirmation": "WRONG"},
             headers=auth_headers,
         )
-        mock_run.assert_not_called()
+        mock_popen.assert_not_called()
 
     assert resp.status_code == 200
     assert resp.json()["status"] == "blocked"
@@ -125,17 +125,21 @@ def test_apply_track_remux_correct_token_calls_mkvmerge(client, auth_headers, tm
     mkv_file.write_bytes(b"fake mkv original")
     item_id = _seed_item(prepared_path=str(mkv_file))
 
-    def _fake_run(args, **kwargs):
-        out_idx = args.index("-o") + 1
-        with open(args[out_idx], "wb") as fh:
-            fh.write(b"fake mkv remuxed")
-        m = MagicMock()
-        m.returncode = 0
-        m.stdout = ""
-        m.stderr = ""
-        return m
+    class _FakePopen:
+        def __init__(self, args, **kwargs):
+            out_idx = args.index("-o") + 1
+            with open(args[out_idx], "wb") as fh:
+                fh.write(b"fake mkv remuxed")
+            self.stdout = iter(["#GUI#progress 100%\n"])
+            self._kwargs = kwargs
 
-    with patch("emuwarez_uploadrr.services.mkv_remux.subprocess.run", side_effect=_fake_run) as mock_run, \
+        def wait(self, timeout=None):
+            return 0
+
+        def kill(self):
+            pass
+
+    with patch("emuwarez_uploadrr.services.mkv_remux.subprocess.Popen", side_effect=_FakePopen) as mock_popen, \
          patch("emuwarez_uploadrr.services.mkv_remux.check_mkvmerge_available",
                return_value={"available": True, "path": "/usr/bin/mkvmerge"}), \
          patch("emuwarez_uploadrr.services.mkv_remux.read_tracks_json",
@@ -150,7 +154,7 @@ def test_apply_track_remux_correct_token_calls_mkvmerge(client, auth_headers, tm
     data = resp.json()
     assert data["status"] == "applied"
     assert mkv_file.read_bytes() == b"fake mkv remuxed"
-    _, kwargs = mock_run.call_args
+    _, kwargs = mock_popen.call_args
     assert not kwargs.get("shell", False)
 
 
@@ -163,18 +167,21 @@ def test_apply_track_remux_with_manual_overrides(client, auth_headers, tmp_path)
 
     captured_args = {}
 
-    def _fake_run(args, **kwargs):
-        captured_args["args"] = args
-        out_idx = args.index("-o") + 1
-        with open(args[out_idx], "wb") as fh:
-            fh.write(b"fake mkv remuxed")
-        m = MagicMock()
-        m.returncode = 0
-        m.stdout = ""
-        m.stderr = ""
-        return m
+    class _FakePopen:
+        def __init__(self, args, **kwargs):
+            captured_args["args"] = args
+            out_idx = args.index("-o") + 1
+            with open(args[out_idx], "wb") as fh:
+                fh.write(b"fake mkv remuxed")
+            self.stdout = iter(["#GUI#progress 100%\n"])
 
-    with patch("emuwarez_uploadrr.services.mkv_remux.subprocess.run", side_effect=_fake_run), \
+        def wait(self, timeout=None):
+            return 0
+
+        def kill(self):
+            pass
+
+    with patch("emuwarez_uploadrr.services.mkv_remux.subprocess.Popen", side_effect=_FakePopen), \
          patch("emuwarez_uploadrr.services.mkv_remux.check_mkvmerge_available",
                return_value={"available": True, "path": "/usr/bin/mkvmerge"}), \
          patch("emuwarez_uploadrr.services.mkv_remux.read_tracks_json",

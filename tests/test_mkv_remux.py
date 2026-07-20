@@ -168,6 +168,36 @@ def test_build_track_plan_subtitle_default_follows_language_priority_not_forced_
     assert by_id[2]["default_after"] is False   # Inglés, forced — still not default
 
 
+def test_build_track_plan_forced_track_loses_default_tie_to_regular_same_language():
+    """Two subtitle tracks of the SAME language (both Español Castellano, top
+    priority): one regular, one forced-only. They tie on language priority, so
+    without a tiebreaker Python's stable sort keeps them in the file's own
+    original order — if mkvmerge happened to list the forced track first, it
+    would win the tie and become default by accident. The regular track must
+    always win: a forced track only covers foreign-language lines, it's not
+    meant to be the general default subtitle."""
+    from emuwarez_uploadrr.services.mkv_remux import build_track_plan
+    mkv_json = {
+        "tracks": [
+            {"id": 0, "type": "video", "codec": "AVC/H.264/MPEG-4p10",
+             "properties": {"pixel_dimensions": "1920x1080"}},
+            {"id": 1, "type": "audio", "codec": "AC-3", "properties": {"language": "spa", "audio_channels": 6}},
+            # Forced Spanish listed BEFORE the regular Spanish track in the
+            # file's own order — the exact real-world case that used to win
+            # the default flag by accident.
+            {"id": 2, "type": "subtitles", "codec": "SubRip/SRT",
+             "properties": {"language": "spa", "forced_track": True}},
+            {"id": 3, "type": "subtitles", "codec": "SubRip/SRT", "properties": {"language": "spa"}},
+        ]
+    }
+    plan = build_track_plan(mkv_json)
+    by_id = {t["id"]: t for t in plan["ordered_tracks"]}
+    sub_ids_in_order = [t["id"] for t in plan["ordered_tracks"] if t["type"] == "subtitles"]
+    assert sub_ids_in_order == [3, 2]           # regular before forced
+    assert by_id[3]["default_after"] is True    # regular Español (Castellano)
+    assert by_id[2]["default_after"] is False   # forced Español (Castellano) — not default
+
+
 def test_apply_track_overrides_name_and_default():
     from emuwarez_uploadrr.services.mkv_remux import build_track_plan, apply_track_overrides
     plan = build_track_plan(_SAMPLE_MKV_JSON)
@@ -361,29 +391,37 @@ def test_apply_success_replaces_file(tmp_path):
     conn = _make_conn(tmp_path)
     item_id = _insert_library_item(conn, prepared_path=str(mkv_file))
 
-    def _fake_run(args, **kwargs):
-        # Simulate mkvmerge actually writing the -o target.
-        out_idx = args.index("-o") + 1
-        with open(args[out_idx], "wb") as fh:
-            fh.write(b"fake mkv remuxed")
-        m = MagicMock()
-        m.returncode = 0
-        m.stdout = "ok"
-        m.stderr = ""
-        return m
+    class _FakePopen:
+        def __init__(self, args, **kwargs):
+            # Simulate mkvmerge actually writing the -o target, and streaming
+            # --gui-mode progress lines on stdout.
+            out_idx = args.index("-o") + 1
+            with open(args[out_idx], "wb") as fh:
+                fh.write(b"fake mkv remuxed")
+            self.stdout = iter(["#GUI#progress 50%\n", "#GUI#progress 100%\n"])
+
+        def wait(self, timeout=None):
+            return 0
+
+        def kill(self):
+            pass
 
     with patch("emuwarez_uploadrr.services.mkv_remux.check_mkvmerge_available") as mock_chk, \
          patch("emuwarez_uploadrr.services.mkv_remux.read_tracks_json") as mock_read, \
-         patch("emuwarez_uploadrr.services.mkv_remux.subprocess.run", side_effect=_fake_run):
+         patch("emuwarez_uploadrr.services.mkv_remux.subprocess.Popen", side_effect=_FakePopen):
         mock_chk.return_value = {"available": True, "path": "/usr/bin/mkvmerge"}
         mock_read.return_value = {"ok": True, "data": _SAMPLE_MKV_JSON}
         from emuwarez_uploadrr.services.mkv_remux import apply_remux, REMUX_CONFIRMATION_TOKEN
+        progress_calls: list[int] = []
         result = apply_remux(
             item_id, dry_run=False, apply=True, confirmation=REMUX_CONFIRMATION_TOKEN, conn=conn,
+            on_progress=progress_calls.append,
         )
 
     assert result["status"] == "applied"
     assert mkv_file.read_bytes() == b"fake mkv remuxed"
+    assert 50 in progress_calls
+    assert progress_calls[-1] == 100
     row = conn.execute("SELECT track_remux_status FROM library_items WHERE id=?", (item_id,)).fetchone()
     assert row["track_remux_status"] == "aplicado"
 
@@ -394,16 +432,20 @@ def test_apply_failure_leaves_original_untouched(tmp_path):
     conn = _make_conn(tmp_path)
     item_id = _insert_library_item(conn, prepared_path=str(mkv_file))
 
-    def _fake_run(args, **kwargs):
-        m = MagicMock()
-        m.returncode = 2  # mkvmerge hard failure, no output produced
-        m.stdout = ""
-        m.stderr = "error: something broke"
-        return m
+    class _FakePopen:
+        def __init__(self, args, **kwargs):
+            # mkvmerge hard failure, no output produced
+            self.stdout = iter(["error: something broke\n"])
+
+        def wait(self, timeout=None):
+            return 2
+
+        def kill(self):
+            pass
 
     with patch("emuwarez_uploadrr.services.mkv_remux.check_mkvmerge_available") as mock_chk, \
          patch("emuwarez_uploadrr.services.mkv_remux.read_tracks_json") as mock_read, \
-         patch("emuwarez_uploadrr.services.mkv_remux.subprocess.run", side_effect=_fake_run):
+         patch("emuwarez_uploadrr.services.mkv_remux.subprocess.Popen", side_effect=_FakePopen):
         mock_chk.return_value = {"available": True, "path": "/usr/bin/mkvmerge"}
         mock_read.return_value = {"ok": True, "data": _SAMPLE_MKV_JSON}
         from emuwarez_uploadrr.services.mkv_remux import apply_remux, REMUX_CONFIRMATION_TOKEN

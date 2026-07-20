@@ -82,6 +82,41 @@ def test_requests_list_with_data(client, auth_headers, isolated_db):
     assert "Test Movie 5B" in titles
 
 
+def test_requests_list_shows_reclamado_with_no_library_match(client, auth_headers, isolated_db):
+    """A request can be Reclamado on eMuwarez with zero library candidates
+    (no request_matches row at all) — the tracker's own state must still
+    surface instead of silently reading as 'Sin coincidencia'."""
+    from emuwarez_uploadrr.database import connect, init_db
+    from emuwarez_uploadrr.services.requests import upsert_request
+    from emuwarez_uploadrr.models import RequestItem
+    import os
+    os.environ["CONFIG_DIR"] = str(isolated_db)
+    conn = connect()
+    init_db(conn)
+    item = RequestItem(
+        id=None,
+        emu_id="emu-reclamado-nomatch",
+        title="Unmatched Reclamado Movie",
+        category="Movies",
+        requested_resolution="1080p",
+        requested_source="BluRay",
+        emu_status="Reclamado",
+    )
+    upsert_request(conn, item)
+    conn.close()
+
+    resp = client.get("/api/requests", headers=auth_headers)
+    assert resp.status_code == 200
+    items = resp.json()["items"]
+    row = next(i for i in items if i["title"] == "Unmatched Reclamado Movie")
+    assert row["compatibility_status"] == "Reclamado"
+
+    # The server-side status filter must find it too, not just the unfiltered list.
+    resp2 = client.get("/api/requests?status=Reclamado", headers=auth_headers)
+    titles = [i["title"] for i in resp2.json()["items"]]
+    assert "Unmatched Reclamado Movie" in titles
+
+
 def test_requests_list_search(client, auth_headers, isolated_db):
     from emuwarez_uploadrr.database import connect, init_db
     from emuwarez_uploadrr.services.requests import upsert_request

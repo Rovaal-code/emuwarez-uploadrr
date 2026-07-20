@@ -220,6 +220,28 @@ def test_dashboard_summary_requests_mine_counts_only_visible_matching_author(cli
     assert resp.json()["requests_mine"] == 1
 
 
+def test_dashboard_summary_requests_reclaimed_is_not_author_filtered(client, auth_headers):
+    """eMuwarez doesn't expose whether a claim is yours — requests_reclaimed
+    counts every Reclamado request regardless of author, even with no
+    emu.username configured at all."""
+    from emuwarez_uploadrr.database import connect, db_path, init_db
+    conn = connect(db_path())
+    init_db(conn)
+    conn.execute(
+        "INSERT INTO request_items (emu_id, title, author, author_visible, emu_status, updated_at) "
+        "VALUES ('r1', 'Reclamado by someone', 'otheruser', 1, 'Reclamado', CURRENT_TIMESTAMP)"
+    )
+    conn.execute(
+        "INSERT INTO request_items (emu_id, title, author, author_visible, emu_status, updated_at) "
+        "VALUES ('r2', 'Open request', 'otheruser', 1, 'pending', CURRENT_TIMESTAMP)"
+    )
+    conn.commit()
+    conn.close()
+
+    resp = client.get("/api/dashboard/summary", headers=auth_headers)
+    assert resp.json()["requests_reclaimed"] == 1
+
+
 def test_dashboard_activity_empty(client, auth_headers):
     resp = client.get("/api/dashboard/activity", headers=auth_headers)
     assert resp.status_code == 200

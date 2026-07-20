@@ -230,3 +230,23 @@ def test_no_filesystem_modification(tmp_path, monkeypatch):
     build_nomenclature_proposal(item_id, conn=conn)
     conn.close()
     assert len(calls) == 0, f"Filesystem was modified: {calls}"
+
+
+def test_build_nomenclature_proposal_source_override_wins(db_conn):
+    """source_override (set by the automated-upload disparity gate once the
+    user picks by hand) must win over the usual name -> Radarr/Sonarr ->
+    loose-text inference, and must force a fresh build even if a cached
+    proposal already exists for the item."""
+    item_id = _insert_item(db_conn, path="/fake/path/movie.mkv")  # no source hint anywhere
+    cached = build_nomenclature_proposal(item_id, conn=db_conn)
+    assert cached.get("source") is None
+
+    fresh = build_nomenclature_proposal(item_id, conn=db_conn, source_override="WEB-DL", provider_override="AMZN")
+    assert fresh["source"] == "WEB-DL"
+    assert fresh["provider_final"] == "AMZN"
+
+    # Without force_refresh and without an override, a THIRD call would
+    # normally reuse the cached (first) proposal — confirm the override
+    # really persisted as the new latest, not just returned once.
+    again = build_nomenclature_proposal(item_id, conn=db_conn)
+    assert again["source"] == "WEB-DL"

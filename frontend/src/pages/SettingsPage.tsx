@@ -45,7 +45,7 @@ function formatBytes(n: number) {
 // know whether there are unsaved changes. Array order is fixed on purpose.
 function configSignature(v: {
   tag: string; providerOrder: string[]; region: string; language: string
-  localizeTitles: boolean; emuUsername: string; ignoreSpecials: boolean
+  emuUsername: string; ignoreSpecials: boolean
   recentLimit: number; qbitUrl: string; qbitPort: string; qbitUser: string
   imgEnabled: string[]; pathMappings: { from: string; to: string }[]
   useHardlinks: boolean; hardlinkBase: string
@@ -53,7 +53,7 @@ function configSignature(v: {
   imgKeys?: Record<string, string>
 }): string {
   return JSON.stringify([
-    v.tag, v.providerOrder, v.region, v.language, v.localizeTitles, v.emuUsername,
+    v.tag, v.providerOrder, v.region, v.language, v.emuUsername,
     v.ignoreSpecials, v.recentLimit, v.qbitUrl, v.qbitPort, v.qbitUser, v.imgEnabled,
     v.pathMappings, v.useHardlinks, v.hardlinkBase,
     v.newKey ?? '', v.newEmuKey ?? '', v.qbitPass ?? '', v.imgKeys ?? {},
@@ -77,7 +77,6 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const [providerOrder, setProviderOrder] = useState<string[]>([])
   const [region, setRegion] = useState('')
   const [language, setLanguage] = useState('')
-  const [localizeTitles, setLocalizeTitles] = useState(true)
   const [newKey, setNewKey] = useState('')
   const [newEmuKey, setNewEmuKey] = useState('')
   const [emuUsername, setEmuUsername] = useState('')
@@ -109,7 +108,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   // Unsaved-changes tracking: compare current form values to the loaded ones.
   const [baseline, setBaseline] = useState('')
   const currentSig = configSignature({
-    tag, providerOrder, region, language, localizeTitles, emuUsername,
+    tag, providerOrder, region, language, emuUsername,
     ignoreSpecials, recentLimit, qbitUrl, qbitPort, qbitUser, imgEnabled, pathMappings,
     useHardlinks, hardlinkBase,
     newKey, newEmuKey, qbitPass, imgKeys,
@@ -154,7 +153,6 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         setProviderOrder(s.provider_priority_order)
         setRegion(s.tmdb_watch_region)
         setLanguage(s.tmdb_language)
-        setLocalizeTitles(s.tmdb_localize_series_titles ?? true)
         setEmuUsername(s.emu_username ?? '')
         setIgnoreSpecials(s.series_ignore_specials ?? true)
         setRecentLimit(s.recent_activity_limit ?? 100)
@@ -168,7 +166,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         setBaseline(configSignature({
           tag: s.default_release_tag, providerOrder: s.provider_priority_order,
           region: s.tmdb_watch_region, language: s.tmdb_language,
-          localizeTitles: s.tmdb_localize_series_titles ?? true, emuUsername: s.emu_username ?? '',
+          emuUsername: s.emu_username ?? '',
           ignoreSpecials: s.series_ignore_specials ?? true, recentLimit: s.recent_activity_limit ?? 100,
           qbitUrl: s.qbit_url ?? '', qbitPort: s.qbit_port ?? '8080', qbitUser: s.qbit_username ?? '',
           imgEnabled: s.image_hosts_enabled ?? [], pathMappings: s.path_mappings ?? [],
@@ -253,7 +251,8 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         provider_priority_order: providerOrder,
         tmdb_watch_region: region.trim(),
         tmdb_language: language.trim(),
-        tmdb_localize_series_titles: localizeTitles,
+        // No longer a user-facing toggle — always on.
+        tmdb_localize_series_titles: true,
         emu_username: emuUsername.trim(),
         series_ignore_specials: ignoreSpecials,
         recent_activity_limit: recentLimit,
@@ -278,7 +277,6 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
       setProviderOrder(updated.provider_priority_order)
       setRegion(updated.tmdb_watch_region)
       setLanguage(updated.tmdb_language)
-      setLocalizeTitles(updated.tmdb_localize_series_titles ?? true)
       setEmuUsername(updated.emu_username ?? '')
       setIgnoreSpecials(updated.series_ignore_specials ?? true)
       setRecentLimit(updated.recent_activity_limit ?? 100)
@@ -296,7 +294,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
       setBaseline(configSignature({
         tag: updated.default_release_tag, providerOrder: updated.provider_priority_order,
         region: updated.tmdb_watch_region, language: updated.tmdb_language,
-        localizeTitles: updated.tmdb_localize_series_titles ?? true, emuUsername: updated.emu_username ?? '',
+        emuUsername: updated.emu_username ?? '',
         ignoreSpecials: updated.series_ignore_specials ?? true, recentLimit: updated.recent_activity_limit ?? 100,
         qbitUrl: updated.qbit_url ?? '', qbitPort: updated.qbit_port ?? '8080', qbitUser: updated.qbit_username ?? '',
         imgEnabled: updated.image_hosts_enabled ?? [], pathMappings: updated.path_mappings ?? [],
@@ -377,9 +375,13 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
             placeholder="Tu nombre de usuario en eMuwarez"
           />
           <span className="form-hint">
-            Como eMuwarez no expone tu usuario automáticamente, escríbelo aquí para que el Panel pueda
-            mostrar cuántas peticiones son tuyas ("Mis peticiones").
+            Sirve para saber qué peticiones son tuyas.
           </span>
+        </div>
+        <div className="form-group" style={{ marginTop: 14 }}>
+          <label className="form-label">Tag del grupo de subida</label>
+          <input className="form-input" value={tag} onChange={e => setTag(e.target.value)} placeholder="EMUWAREZ" />
+          <span className="form-hint">El tag que va tras el último «-» en el nombre del torrent (tu grupo/usuario).</span>
         </div>
       </div>
 
@@ -436,15 +438,6 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
               {LANGUAGE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
-          <label className="checkbox-label" style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 4, gridColumn: '1 / -1' }}>
-            <input type="checkbox" checked={localizeTitles} onChange={e => setLocalizeTitles(e.target.checked)} style={{ marginTop: 3 }} />
-            <span style={{ fontSize: 13 }}>
-              Traducir títulos de series con TMDb
-              <span className="form-hint" style={{ display: 'block' }}>
-                Sonarr toma los títulos de TVDB (a menudo en inglés). Con esto, las series usan el título de TMDb en el idioma de arriba (p. ej. «The Serrano» → «Los Serrano»). Se aplica en la próxima sincronización de biblioteca.
-              </span>
-            </span>
-          </label>
         </div>
       </div>
 
@@ -507,9 +500,6 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
             </span>
           )}
         </div>
-        <span className="form-hint" style={{ display: 'block', marginTop: 10 }}>
-          El cliente de torrents que usa Uploadrr para añadir el .torrent tras subir a eMuwarez.
-        </span>
       </div>
 
       <div className="placeholder-card">
@@ -663,11 +653,6 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
       <div className="placeholder-card">
         <h3 style={{ marginTop: 0, marginBottom: 14 }}>Otros</h3>
         <div className="form-group" style={{ marginBottom: 14 }}>
-          <label className="form-label">Tag del grupo de subida</label>
-          <input className="form-input" value={tag} onChange={e => setTag(e.target.value)} placeholder="EMUWAREZ" />
-          <span className="form-hint">El tag que va tras el último «-» en el nombre del torrent (tu grupo/usuario).</span>
-        </div>
-        <div className="form-group" style={{ marginBottom: 14 }}>
           <label className="form-label">Episodios especiales</label>
           <label className="checkbox-label" style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
             <input type="checkbox" checked={ignoreSpecials} onChange={e => setIgnoreSpecials(e.target.checked)} style={{ marginTop: 3 }} />
@@ -677,7 +662,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                 Excluye la temporada especial (temporada 0) de los datos globales de la serie. Con esto:
               </span>
               <ul className="form-hint" style={{ margin: '4px 0 0', paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <li>Si tienes todas las temporadas y capítulos salvo los especiales, la serie cuenta como <strong>completa</strong> en <strong>Estado</strong>, <strong>Nomenclatura</strong> y <strong>¿En eMuwarez?</strong>.</li>
+                <li>Si tienes todas las temporadas y capítulos salvo los especiales, la serie cuenta como <strong>completa</strong> en <strong>Estado</strong> y <strong>¿En eMuwarez?</strong>.</li>
                 <li>Sus atributos consolidados (<strong>resolución, source, códecs, audio y subtítulos</strong>) se calculan ignorando los especiales.</li>
                 <li>En el Panel, los capítulos faltantes de las temporadas especiales <strong>no cuentan</strong> como faltantes.</li>
               </ul>

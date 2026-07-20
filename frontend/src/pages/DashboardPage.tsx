@@ -465,7 +465,11 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
             <div className="section-header">
               <div className="section-title">Actividad de subida</div>
             </div>
-            <div className="upload-panel-body" style={{ padding: '12px 16px', display: 'block', minHeight: 'auto', flex: 1, overflowY: 'auto' }}>
+            <div className="upload-panel-body" style={{
+              padding: '12px 16px', display: 'flex', flexDirection: 'column',
+              justifyContent: activeUploads.length === 0 ? 'flex-end' : 'flex-start',
+              minHeight: 'auto', flex: 1, overflowY: 'auto',
+            }}>
               {activeUploads.length === 0 ? (
                 <div className="hud-projection">
                   <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0 0 6px' }}>

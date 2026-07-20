@@ -17,6 +17,10 @@
   overflow-y: auto;
   overflow-x: hidden;
   transition: width 0.15s ease;
+  /* Same 24px .page-container already uses as its own bottom padding on
+     every page — keeps the sidebar's bottom edge a consistent, aesthetic
+     distance from the viewport bottom instead of running flush to it. */
+  margin-bottom: 24px;
 }
 
 .sidebar.collapsed {

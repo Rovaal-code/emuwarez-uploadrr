@@ -155,6 +155,34 @@
   border-color: var(--hud-cyan);
   box-shadow: 0 0 10px -4px rgba(47, 216, 255, .6);
 }
+.hud-app .notif-dropdown {
+  background:
+    radial-gradient(120px 90px at 100% 0%, rgba(47, 216, 255, .1), transparent 60%),
+    linear-gradient(175deg, var(--hud-fill) 0%, var(--hud-fill-2) 100%);
+  border: 1px solid var(--hud-line);
+  box-shadow: inset 0 0 0 1px var(--hud-line-inner), 0 14px 30px -16px rgba(0, 0, 0, .8);
+}
+.hud-app .notif-dropdown-header {
+  border-bottom-color: rgba(30, 110, 190, .4);
+}
+.hud-app .notif-dropdown-title {
+  font-family: var(--hud-font);
+  letter-spacing: .04em;
+  color: var(--hud-ice);
+}
+.hud-app .notif-item {
+  border-bottom-color: rgba(56, 189, 255, .09);
+}
+.hud-app .notif-item.clickable:hover {
+  background: rgba(47, 216, 255, .06);
+}
+.hud-app .notif-item.unread {
+  background: rgba(47, 216, 255, .08);
+}
+.hud-app .notif-item-dot {
+  background: var(--hud-cyan);
+  box-shadow: 0 0 6px var(--hud-cyan);
+}
 .hud-app .btn-ghost {
   color: var(--hud-ice);
   border-color: transparent;

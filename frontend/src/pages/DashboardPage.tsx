@@ -218,10 +218,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   const taskRuns = (taskActivity?.items ?? []).slice(0, 50)
 
   return (
-    // height/marginBottom cancel out .page-container's own 24px bottom
-    // padding, so the last row of panels (Últimas tareas/Conexiones) ends
-    // flush with the viewport bottom — same line as the sidebar's edge.
-    <div style={{ height: 'calc(100% + 24px)', marginBottom: -24, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {wizardItem && (
         <UploadWizardModal item={wizardItem} preselect={wizardPreselect} onClose={() => setWizardItem(null)} onDone={loadData} onNavigate={onNavigate} />
       )}

@@ -48,7 +48,7 @@ function configSignature(v: {
   tag: string; providerOrder: string[]; region: string; language: string
   emuUsername: string; ignoreSpecials: boolean
   recentLimit: number; qbitUrl: string; qbitPort: string; qbitUser: string
-  imgEnabled: string[]; pathMappings: { from: string; to: string }[]
+  imgEnabled: string[]
   useHardlinks: boolean; hardlinkBase: string
   newKey?: string; newEmuKey?: string; qbitPass?: string
   imgKeys?: Record<string, string>
@@ -56,7 +56,7 @@ function configSignature(v: {
   return JSON.stringify([
     v.tag, v.providerOrder, v.region, v.language, v.emuUsername,
     v.ignoreSpecials, v.recentLimit, v.qbitUrl, v.qbitPort, v.qbitUser, v.imgEnabled,
-    v.pathMappings, v.useHardlinks, v.hardlinkBase,
+    v.useHardlinks, v.hardlinkBase,
     v.newKey ?? '', v.newEmuKey ?? '', v.qbitPass ?? '', v.imgKeys ?? {},
   ])
 }
@@ -99,7 +99,6 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   // Full displayed order of image hosts, always including imgbox (which may not
   // live in the saved list yet). imgbox is reorderable like the rest.
   const imgOrder = () => (imgEnabled.includes('imgbox') ? [...imgEnabled] : ['imgbox', ...imgEnabled])
-  const [pathMappings, setPathMappings] = useState<{ from: string; to: string }[]>([])
   // Hardlinks
   const [useHardlinks, setUseHardlinks] = useState(true)
   const [hardlinkBase, setHardlinkBase] = useState('')
@@ -110,7 +109,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const [baseline, setBaseline] = useState('')
   const currentSig = configSignature({
     tag, providerOrder, region, language, emuUsername,
-    ignoreSpecials, recentLimit, qbitUrl, qbitPort, qbitUser, imgEnabled, pathMappings,
+    ignoreSpecials, recentLimit, qbitUrl, qbitPort, qbitUser, imgEnabled,
     useHardlinks, hardlinkBase,
     newKey, newEmuKey, qbitPass, imgKeys,
   })
@@ -161,7 +160,6 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         setQbitPort(s.qbit_port ?? '8080')
         setQbitUser(s.qbit_username ?? '')
         setImgEnabled(s.image_hosts_enabled ?? [])
-        setPathMappings(s.path_mappings ?? [])
         setUseHardlinks(s.use_hardlinks ?? true)
         setHardlinkBase(s.hardlink_base ?? '')
         setBaseline(configSignature({
@@ -170,7 +168,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           emuUsername: s.emu_username ?? '',
           ignoreSpecials: s.series_ignore_specials ?? true, recentLimit: s.recent_activity_limit ?? 100,
           qbitUrl: s.qbit_url ?? '', qbitPort: s.qbit_port ?? '8080', qbitUser: s.qbit_username ?? '',
-          imgEnabled: s.image_hosts_enabled ?? [], pathMappings: s.path_mappings ?? [],
+          imgEnabled: s.image_hosts_enabled ?? [],
           useHardlinks: s.use_hardlinks ?? true, hardlinkBase: s.hardlink_base ?? '',
         }))
       })
@@ -261,7 +259,6 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         qbit_port: qbitPort.trim(),
         qbit_username: qbitUser.trim(),
         image_hosts_enabled: imgEnabled,
-        path_mappings: pathMappings.map(m => ({ from: m.from.trim(), to: m.to.trim() })).filter(m => m.from && m.to),
       }
       // Only send hardlink fields when they changed, so an unrelated save isn't
       // rejected by the "enabled needs a valid base" server-side check.
@@ -289,7 +286,6 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
       setImgKeys({})
       setNewKey('')
       setNewEmuKey('')
-      setPathMappings(updated.path_mappings ?? [])
       setUseHardlinks(updated.use_hardlinks ?? true)
       setHardlinkBase(updated.hardlink_base ?? '')
       setBaseline(configSignature({
@@ -298,7 +294,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         emuUsername: updated.emu_username ?? '',
         ignoreSpecials: updated.series_ignore_specials ?? true, recentLimit: updated.recent_activity_limit ?? 100,
         qbitUrl: updated.qbit_url ?? '', qbitPort: updated.qbit_port ?? '8080', qbitUser: updated.qbit_username ?? '',
-        imgEnabled: updated.image_hosts_enabled ?? [], pathMappings: updated.path_mappings ?? [],
+        imgEnabled: updated.image_hosts_enabled ?? [],
         useHardlinks: updated.use_hardlinks ?? true, hardlinkBase: updated.hardlink_base ?? '',
       }))
       setMsg({ ok: true, text: '✓ Configuración guardada' })
@@ -325,7 +321,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16, alignItems: 'stretch' }}>
+      <div className="settings-config-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16, alignItems: 'stretch' }}>
       <AccountCard />
 
       <div className="placeholder-card">
@@ -681,40 +677,6 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         </div>
       </div>
       </div>
-
-      <div className="placeholder-card">
-        <h3 style={{ marginTop: 0, marginBottom: 6 }}>Mapeo de rutas (biblioteca remota)</h3>
-        <p className="form-hint" style={{ marginTop: 0, marginBottom: 12 }}>
-          Traduce la ruta que reporta Radarr/Sonarr a la ruta donde la app alcanza el archivo
-          (monta la biblioteca por SSHFS/NFS/SMB donde quieras). Se aplica al leer MediaInfo,
-          verificar y subir. Sin reglas, no cambia nada.
-        </p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {pathMappings.length === 0 && (
-            <span className="form-hint">No hay reglas. Añade una para acceder a una biblioteca remota.</span>
-          )}
-          {pathMappings.map((m, i) => (
-            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <input
-                className="form-input" style={{ flex: 1, minWidth: 200 }}
-                value={m.from} placeholder="Ruta de Radarr/Sonarr — /data/media"
-                onChange={e => setPathMappings(p => p.map((x, j) => j === i ? { ...x, from: e.target.value } : x))}
-              />
-              <span style={{ color: 'var(--text-muted)' }}>→</span>
-              <input
-                className="form-input" style={{ flex: 1, minWidth: 200 }}
-                value={m.to} placeholder="Ruta local — /home/alvaro/mnt/emu-media"
-                onChange={e => setPathMappings(p => p.map((x, j) => j === i ? { ...x, to: e.target.value } : x))}
-              />
-              <button className="btn btn-ghost btn-sm" type="button" title="Quitar regla"
-                onClick={() => setPathMappings(p => p.filter((_, j) => j !== i))}>✕</button>
-            </div>
-          ))}
-        </div>
-        <button className="btn btn-secondary btn-sm" style={{ marginTop: 10 }} type="button"
-          onClick={() => setPathMappings(p => [...p, { from: '', to: '' }])}>+ Añadir regla</button>
-      </div>
-
     </div>
   )
 }
@@ -792,6 +754,94 @@ function AccountCard() {
   )
 }
 
+// ---------- Path mappings card (library.path_mappings only) ----------
+// Self-contained like AccountCard: its own load/save, untouched by
+// ConfigTab's dirty-tracking or "Guardar configuración" button. PUT /settings
+// only writes fields it's given, so saving here never touches anything else.
+function PathMappingsCard() {
+  const [mappings, setMappings] = useState<{ from: string; to: string }[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [baseline, setBaseline] = useState('[]')
+
+  useEffect(() => {
+    fetchSettings()
+      .then(s => {
+        const m = s.path_mappings ?? []
+        setMappings(m)
+        setBaseline(JSON.stringify(m))
+      })
+      .finally(() => setLoading(false))
+  }, [])
+
+  const dirty = JSON.stringify(mappings) !== baseline
+
+  async function handleSave() {
+    setSaving(true)
+    setMsg(null)
+    try {
+      const cleaned = mappings.map(m => ({ from: m.from.trim(), to: m.to.trim() })).filter(m => m.from && m.to)
+      const updated = await updateSettings({ path_mappings: cleaned })
+      const m = updated.path_mappings ?? []
+      setMappings(m)
+      setBaseline(JSON.stringify(m))
+      setMsg({ ok: true, text: '✓ Mapeo de rutas guardado' })
+    } catch (e: unknown) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : String(e) })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="placeholder-card">
+      <h3 style={{ marginTop: 0, marginBottom: 6 }}>Mapeo de rutas (biblioteca remota)</h3>
+      <p className="form-hint" style={{ marginTop: 0, marginBottom: 12 }}>
+        Traduce la ruta que reporta Radarr/Sonarr a la ruta donde la app alcanza el archivo
+        (monta la biblioteca por SSHFS/NFS/SMB donde quieras). Se aplica al leer MediaInfo,
+        verificar y subir. Sin reglas, no cambia nada.
+      </p>
+      {loading ? (
+        <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Cargando…</p>
+      ) : (
+        <>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {mappings.length === 0 && (
+              <span className="form-hint">No hay reglas. Añade una para acceder a una biblioteca remota.</span>
+            )}
+            {mappings.map((m, i) => (
+              <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <input
+                  className="form-input" style={{ flex: 1, minWidth: 200 }}
+                  value={m.from} placeholder="Ruta de Radarr/Sonarr — /data/media"
+                  onChange={e => setMappings(p => p.map((x, j) => j === i ? { ...x, from: e.target.value } : x))}
+                />
+                <span style={{ color: 'var(--text-muted)' }}>→</span>
+                <input
+                  className="form-input" style={{ flex: 1, minWidth: 200 }}
+                  value={m.to} placeholder="Ruta local — /home/alvaro/mnt/emu-media"
+                  onChange={e => setMappings(p => p.map((x, j) => j === i ? { ...x, to: e.target.value } : x))}
+                />
+                <button className="btn btn-ghost btn-sm" type="button" title="Quitar regla"
+                  onClick={() => setMappings(p => p.filter((_, j) => j !== i))}>✕</button>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10 }}>
+            <button className="btn btn-secondary btn-sm" type="button"
+              onClick={() => setMappings(p => [...p, { from: '', to: '' }])}>+ Añadir regla</button>
+            <button className="btn btn-primary btn-sm" type="button" onClick={handleSave} disabled={saving || !dirty}>
+              {saving ? 'Guardando…' : 'Guardar cambios'}
+            </button>
+            {msg && <span style={{ fontSize: 12.5, color: msg.ok ? '#22c55e' : '#ef4444' }}>{msg.text}</span>}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 // ---------- Diagnostics tab ----------
 function DiagnosticsTab({ status }: { status: MaintenanceStatus | null }) {
   const db = status?.database
@@ -836,6 +886,7 @@ function DiagnosticsTab({ status }: { status: MaintenanceStatus | null }) {
           </>
         )}
       </div>
+      <PathMappingsCard />
     </div>
   )
 }

@@ -365,6 +365,16 @@
   margin-bottom: 12px;
 }
 
+/* Configuración tab: all 8 cards share one height (Cuenta's natural size) so
+   the two rows read as a single even grid instead of a short row sitting
+   under a tall one. overflow-y is a safety net for any card whose content
+   organically outgrows that height (e.g. a long provider list), so it
+   scrolls internally instead of being silently clipped. */
+.settings-config-grid > .placeholder-card {
+  height: 494px;
+  overflow-y: auto;
+}
+
 .placeholder-card ol {
   padding-left: 20px;
   color: var(--text-secondary);

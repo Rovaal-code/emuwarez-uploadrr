@@ -146,7 +146,7 @@ function Panel({ children }: { children: React.ReactNode }) {
       <div style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-secondary)', marginBottom: 12 }}>
         Comparación con eMuwarez
       </div>
-      <div style={{ padding: '16px 18px', background: 'rgba(255,255,255,0.03)', borderRadius: 10, border: '1px solid var(--border)' }}>
+      <div className="detail-card" style={{ padding: '16px 18px', borderRadius: 10 }}>
         {children}
       </div>
     </div>

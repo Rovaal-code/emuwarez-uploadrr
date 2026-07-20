@@ -106,7 +106,7 @@ function MediaInfoTable({ report }: { report: MediaInfoReport }) {
     return <p className="text-warning" style={{ fontSize: 12, margin: 0 }}>⚠ {report.message}</p>
   }
   return (
-    <div style={{ maxHeight: 420, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 8, background: 'rgba(255,255,255,0.03)' }}>
+    <div className="detail-card" style={{ maxHeight: 420, overflow: 'auto', borderRadius: 8 }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, tableLayout: 'fixed' }}>
         <colgroup>
           <col style={{ width: '22%' }} />
@@ -157,7 +157,7 @@ export function RemuxTable({ plan, editable, edits, onEdit }: {
         <p key={i} className="text-warning" style={{ fontSize: 12, marginTop: 10 }}>⚠ {w}</p>
       ))}
       {plan.ordered_tracks && plan.ordered_tracks.length > 0 && (
-        <div style={{ marginTop: 12, maxHeight: 260, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 8, background: 'rgba(255,255,255,0.03)' }}>
+        <div className="detail-card" style={{ marginTop: 12, maxHeight: 260, overflow: 'auto', borderRadius: 8 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, tableLayout: 'fixed' }}>
             <colgroup>
               <col style={{ width: '10%' }} />
@@ -281,7 +281,7 @@ function FieldLabel({ label, info }: { label: string; info?: React.ReactNode }) 
 // column per origin, single data row (there's only one Source field).
 function SourceCompareTable({ comparison, onShowBitrateTable }: { comparison: SourceComparison; onShowBitrateTable?: () => void }) {
   return (
-    <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'rgba(255,255,255,0.03)' }}>
+    <div className="detail-card" style={{ borderRadius: 8 }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, tableLayout: 'fixed' }}>
         <thead>
           <tr>
@@ -316,7 +316,7 @@ function SourceCompareTable({ comparison, onShowBitrateTable }: { comparison: So
 // same convention as the eMuwarez comparison table's "aportas" chips.
 function SourceBitrateTable({ rows, highlight }: { rows: SourceBitrateRow[]; highlight: string | null }) {
   return (
-    <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'rgba(255,255,255,0.03)' }}>
+    <div className="detail-card" style={{ borderRadius: 8 }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, tableLayout: 'fixed' }}>
         <colgroup>
           <col style={{ width: '14%' }} />
@@ -1050,7 +1050,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
           <input className="form-input" value={fields.tag || ''} onChange={e => setField('tag', e.target.value)} />
         </label>
       </div>
-      <div style={{ marginTop: 16, padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
+      <div className="detail-card" style={{ marginTop: 16, padding: '12px 14px', borderRadius: 8 }}>
         {preview?.torrent_name && preview?.internal_mkv_title ? (
           <FitTextPair
             min={12}
@@ -1077,7 +1077,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
   // capítulos" instead) plus a summary of the episodes included.
   const seasonSummaryBox = (
     <>
-      <div style={{ marginTop: 16, padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
+      <div className="detail-card" style={{ marginTop: 16, padding: '12px 14px', borderRadius: 8 }}>
         {seasonPlan?.season_pack_title ? (
           <FitText min={12} text={seasonPlan.season_pack_title} />
         ) : (
@@ -1469,7 +1469,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
 
         {mode === 'manual' && step === 2 && (
           <div className="modal-body">
-            <div style={{ marginBottom: 14, padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
+            <div className="detail-card" style={{ marginBottom: 14, padding: '12px 14px', borderRadius: 8 }}>
               {targetIsSeason ? (
                 <>
                   <div style={labelStyle}>Nombre final del torrent (pack de temporada)</div>
@@ -1487,7 +1487,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
             </div>
 
             {/* Pre-upload checks card */}
-            <div style={{ padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
+            <div className="detail-card" style={{ padding: '12px 14px', borderRadius: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                 <div style={labelStyle}>Comprobaciones previas</div>
                 {checksLoading && <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />}

@@ -179,7 +179,7 @@ function CandidatesPanel({ requestId, onClose }: { requestId: number; onClose: (
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 0' }}>
           {candidates.map(c => (
-            <div key={c.id} style={{ padding: '10px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 6, border: '1px solid var(--border)', fontSize: 12 }}>
+            <div key={c.id} className="detail-card" style={{ padding: '10px 14px', borderRadius: 6, fontSize: 12 }}>
               <div style={{ fontWeight: 600, marginBottom: 4 }}>#{c.candidate_rank} — {c.lib_title || `Lib #${c.library_item_id}`}</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 12px', color: 'var(--text-secondary)' }}>
                 <span>Compat: <strong>{c.compatibility_score?.toFixed(0) ?? '—'}</strong></span>
@@ -340,7 +340,7 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
         <div style={{ fontSize: 11.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)', marginBottom: 15 }}>
           Petición vs. tu biblioteca
         </div>
-        <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: 10, padding: '21px 19px' }}>
+        <div className="detail-card" style={{ borderRadius: 10, padding: '21px 19px' }}>
           {!m ? (
             <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Sin coincidencia en tu biblioteca local, no tienes este contenido.</span>
           ) : effectiveStatus === 'No disponible' ? (

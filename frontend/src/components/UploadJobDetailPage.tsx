@@ -58,7 +58,7 @@ function Panel({ title, live, loading, help, collapsible, defaultExpanded = fals
         {live && <span style={{ color: '#22c55e', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(en directo)</span>}
       </div>
       {open && (
-        <div style={{ padding: '16px 18px', background: 'rgba(255,255,255,0.03)', borderRadius: 10, border: '1px solid var(--border)' }}>
+        <div className="detail-card" style={{ padding: '16px 18px', borderRadius: 10 }}>
           {children}
         </div>
       )}

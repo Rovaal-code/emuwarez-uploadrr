@@ -112,7 +112,7 @@ export function AutoUploadSourceGate({ targetIds, onNavigate, onClose, onDone }:
           {total > 1 ? `Temporada ${index + 1} de ${total}: ` : ''}
           El nombre del archivo no indica el source, y Radarr/Sonarr no coincide con lo que estima MediaInfo. Elige el source correcto para continuar.
         </p>
-        <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'rgba(255,255,255,0.03)', marginBottom: 14, overflowX: 'auto' }}>
+        <div className="detail-card" style={{ borderRadius: 8, marginBottom: 14, overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
             <thead>
               <tr>

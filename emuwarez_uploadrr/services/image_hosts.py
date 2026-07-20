@@ -16,18 +16,28 @@ import sqlite3
 import urllib.request
 from typing import Any, Optional
 
-# id, label, homepage (for the reachability check), needs_key
+# id, label, homepage (for the reachability check), needs_key, favicon (the
+# real <link rel="icon"> the site itself declares — resolved by hand once,
+# 2026-07-20, since Google's s2 favicon proxy returns a wrong/generic icon
+# for several of these low-traffic hosts instead of their real one).
 IMAGE_HOSTS: list[dict[str, Any]] = [
-    {"id": "imgbox",    "label": "Imgbox",     "url": "https://imgbox.com",    "needs_key": False},
-    {"id": "pixhost",   "label": "Pixhost",    "url": "https://pixhost.to",    "needs_key": False},
-    {"id": "fastpic",   "label": "FastPic",    "url": "https://fastpic.org",   "needs_key": False},
-    {"id": "imgbb",     "label": "ImgBB",      "url": "https://imgbb.com",     "needs_key": True},
-    {"id": "ptpimg",    "label": "PTPIMG",     "url": "https://ptpimg.me",     "needs_key": True},
-    {"id": "lensdump",  "label": "Lensdump",   "url": "https://lensdump.com",  "needs_key": True},
-    {"id": "ptscreens", "label": "PTScreens",  "url": "https://ptscreens.com", "needs_key": True},
-    {"id": "onlyimage", "label": "OnlyImage",  "url": "https://onlyimage.org", "needs_key": True},
-    {"id": "hamster",   "label": "Hamster",    "url": "https://hamster.is",    "needs_key": True},
-    {"id": "imghost",   "label": "imghost.dev", "url": "https://imghost.dev",  "needs_key": True},
+    {"id": "imgbox",    "label": "Imgbox",     "url": "https://imgbox.com",    "needs_key": False, "favicon": "https://imgbox.com/images/favicon.ico"},
+    {"id": "pixhost",   "label": "Pixhost",    "url": "https://pixhost.to",    "needs_key": False, "favicon": "https://pixhost.to/favicon.ico"},
+    {"id": "fastpic",   "label": "FastPic",    "url": "https://fastpic.org",   "needs_key": False, "favicon": "https://fastpic.org/favicon-32x32.png"},
+    {"id": "imgbb",     "label": "ImgBB",      "url": "https://imgbb.com",     "needs_key": True,  "favicon": "https://simgbb.com/images/favicon.png"},
+    # ptpimg.me: currently returning a Cloudflare 523 (origin unreachable) —
+    # couldn't resolve its real favicon; falls back to Google's s2 service.
+    {"id": "ptpimg",    "label": "PTPIMG",     "url": "https://ptpimg.me",     "needs_key": True,  "favicon": None},
+    # lensdump.com's own <link rel="icon"> points at a blank/broken CDN asset —
+    # /favicon.ico at the root domain has the real camera-lens mark instead.
+    {"id": "lensdump",  "label": "Lensdump",   "url": "https://lensdump.com",  "needs_key": True,  "favicon": "https://lensdump.com/favicon.ico"},
+    {"id": "ptscreens", "label": "PTScreens",  "url": "https://ptscreens.com", "needs_key": True,  "favicon": "https://ptscreens.com/content/images/system/favicon_1725283834396_b75cb0.png"},
+    {"id": "onlyimage", "label": "OnlyImage",  "url": "https://onlyimage.org", "needs_key": True,  "favicon": "https://onlyimage.org/content/images/system/favicon_1722402372098_802ccb.png"},
+    # hamster.is no longer resolves at all (NXDOMAIN, confirmed against
+    # Cloudflare's public resolver) — the domain looks dead. Left as-is
+    # pending the real current URL; flagged to the user.
+    {"id": "hamster",   "label": "Hamster",    "url": "https://hamster.is",    "needs_key": True,  "favicon": None},
+    {"id": "imghost",   "label": "imghost.dev", "url": "https://imghost.dev",  "needs_key": True,  "favicon": "https://imghost.dev/content/images/system/default/favicon.png"},
 ]
 
 _BY_ID = {h["id"]: h for h in IMAGE_HOSTS}

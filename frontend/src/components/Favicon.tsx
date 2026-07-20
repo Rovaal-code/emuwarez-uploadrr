@@ -1,10 +1,13 @@
 import { useState } from 'react'
 
-// Shows the real favicon of a website (via Google's favicon service, which
-// returns a normalized icon for any domain), falling back to `fallback` if the
-// domain is missing or the icon fails to load.
-export function Favicon({ domain, size = 16, fallback = null, radius = 3, background }: {
+// Shows a website's real favicon, falling back to `fallback` if nothing loads.
+// Two-step chain: `src` (a known-good direct icon URL, e.g. one resolved by
+// hand from the site's own <link rel="icon">) is tried first — Google's s2
+// favicon proxy often returns a wrong/generic icon for low-traffic sites, so
+// it's now only the fallback for domains without a verified direct URL.
+export function Favicon({ domain, src, size = 16, fallback = null, radius = 3, background }: {
   domain?: string | null
+  src?: string | null
   size?: number
   fallback?: React.ReactNode
   radius?: number
@@ -12,23 +15,24 @@ export function Favicon({ domain, size = 16, fallback = null, radius = 3, backgr
   // marks stay visible on a dark UI.
   background?: string
 }) {
-  const [failed, setFailed] = useState(false)
-  if (!domain || failed) return <>{fallback}</>
-  const src = `https://www.google.com/s2/favicons?sz=64&domain=${domain}`
-  const onError = () => setFailed(true)
+  const [stage, setStage] = useState<'direct' | 'google' | 'failed'>(src ? 'direct' : 'google')
+  const google = domain ? `https://www.google.com/s2/favicons?sz=64&domain=${domain}` : null
+  const current = stage === 'direct' ? src : stage === 'google' ? google : null
+  if (!current) return <>{fallback}</>
+  const onError = () => setStage(s => (s === 'direct' && google ? 'google' : 'failed'))
   if (background) {
     return (
       <span style={{
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         width: size, height: size, borderRadius: radius, background, flexShrink: 0, overflow: 'hidden',
       }}>
-        <img src={src} alt="" loading="lazy" onError={onError}
+        <img src={current} alt="" loading="lazy" onError={onError}
           style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 2, boxSizing: 'border-box' }} />
       </span>
     )
   }
   return (
-    <img src={src} width={size} height={size} alt="" loading="lazy" onError={onError}
+    <img src={current} width={size} height={size} alt="" loading="lazy" onError={onError}
       style={{ borderRadius: radius, display: 'block', flexShrink: 0 }} />
   )
 }

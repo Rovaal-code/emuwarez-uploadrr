@@ -13,7 +13,7 @@ export interface SettingsData {
   qbit_username: string | null
   qbit_password_configured: boolean
   qbit_configured: boolean
-  image_hosts_available: { id: string; label: string; needs_key: boolean; url?: string }[]
+  image_hosts_available: { id: string; label: string; needs_key: boolean; url?: string; favicon?: string | null }[]
   image_hosts_enabled: string[]
   image_host_keys_configured: string[]
   tmdb_api_key_configured: boolean

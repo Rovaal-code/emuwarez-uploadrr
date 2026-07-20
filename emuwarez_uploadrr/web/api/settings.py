@@ -57,7 +57,7 @@ class SettingsResponse(BaseModel):
     qbit_password_configured: bool = False
     qbit_configured: bool = False
     # Image hosts (screenshots)
-    image_hosts_available: list = []          # [{id, label, needs_key}]
+    image_hosts_available: list = []          # [{id, label, needs_key, url, favicon}]
     image_hosts_enabled: list[str] = []       # enabled ids, in fallback order
     image_host_keys_configured: list[str] = []  # ids that have a key set
     # Phase 5 (12-part batch): the user's own eMuwarez username, used by the
@@ -225,7 +225,7 @@ def _build_response(conn) -> SettingsResponse:
     qbit_configured = bool(qbit_url and qbit_url.strip())
 
     from emuwarez_uploadrr.services.image_hosts import IMAGE_HOSTS, get_enabled_hosts, get_host_key
-    img_available = [{"id": h["id"], "label": h["label"], "needs_key": h["needs_key"], "url": h["url"]} for h in IMAGE_HOSTS]
+    img_available = [{"id": h["id"], "label": h["label"], "needs_key": h["needs_key"], "url": h["url"], "favicon": h.get("favicon")} for h in IMAGE_HOSTS]
     img_enabled = get_enabled_hosts(conn)
     img_keys_configured = [h["id"] for h in IMAGE_HOSTS if (get_host_key(conn, h["id"]) or "").strip()]
 

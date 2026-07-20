@@ -552,7 +552,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                           style={{ ...handleProps.style, color: 'var(--text-accent)', width: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginLeft: 8, marginRight: 8 }}
                           aria-hidden
                         ><DragHandleIcon /></span>
-                        <Favicon domain={domainOf(h.url)} size={15} fallback={<ServiceIcon type="imghost" size={15} />} />
+                        <Favicon domain={domainOf(h.url)} src={h.favicon} size={15} background="#fff" fallback={<ServiceIcon type="imghost" size={15} />} />
                         <span style={{ fontSize: 13, fontWeight: 500 }}>{h.label}</span>
                         {isDefault && <span className="badge status-available" style={{ fontSize: 10 }}>por defecto</span>}
                         {h.needs_key && <span className="badge nom-na" style={{ fontSize: 10 }}>API key</span>}
@@ -596,7 +596,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                             <button key={h.id} className="btn btn-ghost btn-sm" type="button"
                               style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-start', justifySelf: 'start', fontSize: 12 }}
                               onClick={() => toggleImgHost(h.id)}>
-                              <Favicon domain={domainOf(h.url)} size={16} fallback={<ServiceIcon type="imghost" size={16} />} /> {h.label} {h.needs_key && <span className="badge nom-na" style={{ fontSize: 9 }}>API key</span>}
+                              <Favicon domain={domainOf(h.url)} src={h.favicon} size={16} background="#fff" fallback={<ServiceIcon type="imghost" size={16} />} /> {h.label} {h.needs_key && <span className="badge nom-na" style={{ fontSize: 9 }}>API key</span>}
                             </button>
                           ))}
                         </div>

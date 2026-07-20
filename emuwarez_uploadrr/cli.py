@@ -315,6 +315,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_create_admin = web_sub.add_parser("create-admin", help="Crear usuario administrador web")
     p_create_admin.add_argument("--username", required=True, help="Nombre de usuario admin")
 
+    p_reset_password = web_sub.add_parser("reset-password", help="Restablecer la contraseña de un usuario existente (requiere acceso al servidor)")
+    p_reset_password.add_argument("--username", required=True, help="Nombre de usuario a restablecer")
+
     p_maint = sub.add_parser("maintenance", help="Mantenimiento: backup, configuración, BD y logs")
     maint_sub = p_maint.add_subparsers(dest="maintenance_command", required=True)
 
@@ -1490,6 +1493,44 @@ def cmd_web_create_admin(args) -> int:
     return 0
 
 
+def cmd_web_reset_password(args) -> int:
+    import getpass
+    password = os.environ.get("EMUWAREZ_ADMIN_PASSWORD")
+    if not password:
+        try:
+            password = getpass.getpass("Nueva contraseña: ")
+            if not password:
+                print("✗ La contraseña no puede estar vacía")
+                return 1
+            confirm = getpass.getpass("Confirmar nueva contraseña: ")
+            if password != confirm:
+                print("✗ Las contraseñas no coinciden")
+                return 1
+        except (EOFError, KeyboardInterrupt):
+            print("\nCancelado.")
+            return 1
+    from .web.security import validate_password_strength
+    err = validate_password_strength(password)
+    if err:
+        print(f"✗ {err}")
+        return 1
+    try:
+        with connect(db_path()) as conn:
+            init_db(conn)
+            from .web.services.auth_service import get_user_by_username, update_password
+            user = get_user_by_username(conn, args.username)
+            if not user:
+                print(f"✗ No existe el usuario '{args.username}'.")
+                return 1
+            update_password(conn, user["id"], password)
+            conn.commit()
+        print(f"✓ Contraseña de '{args.username}' restablecida.")
+    except Exception as exc:
+        print(f"✗ {exc}")
+        return 1
+    return 0
+
+
 def cmd_web_info() -> int:
     print(
         "Backend: FastAPI\n"
@@ -1541,6 +1582,7 @@ def cmd_web_info() -> int:
         "── Setup desde CLI ──────────────────────────────────\n"
         "  python3 emuwarez_uploader.py web setup-status\n"
         "  python3 emuwarez_uploader.py web create-admin --username admin\n"
+        "  python3 emuwarez_uploader.py web reset-password --username admin\n"
         "\n"
         "Instalar dependencias web:\n"
         "  pip install -e \".[web]\"\n"
@@ -1792,6 +1834,8 @@ def modern_main(argv: Optional[list[str]] = None) -> int:
                 return cmd_web_doctor()
             if args.web_command == "create-admin":
                 return cmd_web_create_admin(args)
+            if args.web_command == "reset-password":
+                return cmd_web_reset_password(args)
         if args.command == "maintenance":
             return cmd_maintenance(args)
         if args.command == "arr":

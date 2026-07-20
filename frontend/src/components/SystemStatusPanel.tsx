@@ -4,7 +4,7 @@ import { formatBytes } from '../utils/format'
 import { useTooltip } from './Tooltip'
 
 const POLL_MS = 4000
-const RADIUS = 22
+const RADIUS = 44
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS
 
 function Gauge({ percent, label, color, title }: { percent: number; label: string; color: string; title?: string }) {
@@ -14,12 +14,12 @@ function Gauge({ percent, label, color, title }: { percent: number; label: strin
   return (
     <div className="sys-gauge-row" {...triggerProps}>
       <div className="sys-gauge">
-        <svg viewBox="0 0 50 50">
-          <circle cx="25" cy="25" r={RADIUS} className="sys-gauge-track" />
+        <svg viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r={RADIUS} className="sys-gauge-track" />
           <circle
-            cx="25" cy="25" r={RADIUS} className="sys-gauge-fill"
+            cx="50" cy="50" r={RADIUS} className="sys-gauge-fill"
             style={{ stroke: color, strokeDasharray: CIRCUMFERENCE, strokeDashoffset: offset }}
-            transform="rotate(-90 25 25)"
+            transform="rotate(-90 50 50)"
           />
         </svg>
         <div className="sys-gauge-pct">{Math.round(clamped)}%</div>

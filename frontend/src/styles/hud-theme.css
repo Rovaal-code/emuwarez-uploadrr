@@ -396,12 +396,14 @@
 .hud-app .sys-gauge-list {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 20px;
 }
 .hud-app .sys-gauge-row {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
+  gap: 8px;
   cursor: default;
 }
 .hud-app .sys-gauge {
@@ -409,19 +411,19 @@
   flex-shrink: 0;
 }
 .hud-app .sys-gauge svg {
-  width: 56px;
-  height: 56px;
+  width: 112px;
+  height: 112px;
 }
 .hud-app .sys-gauge-track {
   fill: none;
   stroke: rgba(56, 189, 255, .15);
-  stroke-width: 4;
+  stroke-width: 8;
 }
 .hud-app .sys-gauge-fill {
   fill: none;
-  stroke-width: 4;
+  stroke-width: 8;
   stroke-linecap: round;
-  filter: drop-shadow(0 0 3px currentColor);
+  filter: drop-shadow(0 0 4px currentColor);
   transition: stroke-dashoffset .4s ease;
 }
 .hud-app .sys-gauge-pct {
@@ -431,7 +433,7 @@
   align-items: center;
   justify-content: center;
   font-family: var(--hud-font);
-  font-size: 13px;
+  font-size: 22px;
   font-weight: 700;
   color: var(--hud-ice);
 }

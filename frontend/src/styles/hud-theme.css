@@ -96,9 +96,6 @@
   font-family: var(--hud-font);
   letter-spacing: .03em;
 }
-.hud-app .topbar-sync-row {
-  border-top: 1px solid rgba(30, 110, 190, .3);
-}
 .hud-app .sync-chip-label {
   font-family: var(--hud-font);
   letter-spacing: .05em;

@@ -97,36 +97,37 @@
   padding: 9px 0;
 }
 
-/* Topbar — fixed total height regardless of content, so the live sync row
-   (.topbar-sync-row, second child) never causes the page below to shift:
-   it's simply blank when nothing is syncing. */
+/* Topbar — fixed height regardless of content. The center slot
+   (.topbar-center) holds the live sync status on the same row as the page
+   title, so it's simply blank when nothing is syncing and never changes
+   the topbar's height (it used to live in the page body and pushed every
+   card/table down when it appeared — see SyncProgressBanner). */
 .topbar {
   height: var(--topbar-height);
   background: var(--bg-topbar);
   border-bottom: 1px solid var(--border);
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
   backdrop-filter: blur(8px);
   flex-shrink: 0;
 }
 
-.topbar-main {
-  height: var(--topbar-main-height);
-  flex-shrink: 0;
+.topbar-center {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 24px;
+  justify-content: center;
+  overflow: hidden;
 }
 
 .topbar-sync-row {
-  flex: 1;
-  min-height: 0;
   display: flex;
   align-items: center;
-  gap: 18px;
-  padding: 0 24px;
-  overflow: hidden;
+  gap: 22px;
+  min-width: 0;
 }
 
 .sync-chip {
@@ -159,7 +160,7 @@
 }
 
 .sync-chip-bar {
-  width: 64px;
+  width: 140px;
   height: 4px;
   border-radius: 2px;
   background: var(--bg-input);

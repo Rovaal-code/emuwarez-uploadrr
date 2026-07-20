@@ -10,6 +10,7 @@ interface LoginPageProps {
 export function LoginPage({ onSuccess }: LoginPageProps) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [remember, setRemember] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -19,7 +20,7 @@ export function LoginPage({ onSuccess }: LoginPageProps) {
     setError(null)
     setLoading(true)
     try {
-      await login(username.trim(), password)
+      await login(username.trim(), password, remember)
       onSuccess()
     } catch (err) {
       if (err instanceof ApiClientError) {
@@ -39,7 +40,7 @@ export function LoginPage({ onSuccess }: LoginPageProps) {
   }
 
   return (
-    <div className="login-wrap">
+    <div className="login-wrap hud-app">
       <div className="login-card">
         <div className="login-logo">
           <ServiceIcon type="emu" size={40} />
@@ -75,6 +76,9 @@ export function LoginPage({ onSuccess }: LoginPageProps) {
               disabled={loading}
             />
           </div>
+          <label className="checkbox-label">
+            <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} disabled={loading} /> Recordarme
+          </label>
           {error && <div className="alert alert-error">{error}</div>}
           <button
             type="submit"

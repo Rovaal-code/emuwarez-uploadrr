@@ -1,9 +1,9 @@
 import { api, setToken, clearToken } from './client'
 import type { LoginResponse, CurrentUserResponse } from '../types/api'
 
-export async function login(username: string, password: string): Promise<LoginResponse> {
+export async function login(username: string, password: string, remember: boolean = true): Promise<LoginResponse> {
   const resp = await api.post<LoginResponse>('/auth/login', { username, password }, { skipAuth: true })
-  setToken(resp.token)
+  setToken(resp.token, remember)
   return resp
 }
 

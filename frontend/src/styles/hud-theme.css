@@ -127,7 +127,9 @@
 .hud-app .modal,
 .hud-app .modal-panel,
 .hud-app .placeholder-card,
-.hud-app .instance-card {
+.hud-app .instance-card,
+.hud-app .login-card,
+.hud-app .wizard-card {
   background:
     radial-gradient(120px 90px at 0% 0%, rgba(47, 216, 255, .1), transparent 60%),
     linear-gradient(175deg, var(--hud-fill) 0%, var(--hud-fill-2) 100%);
@@ -137,6 +139,19 @@
 .hud-app .modal-header,
 .hud-app .modal-title {
   border-color: rgba(30, 110, 190, .4);
+}
+.hud-app .login-title,
+.hud-app .wizard-logo-title {
+  font-family: var(--hud-font);
+  letter-spacing: .04em;
+  text-shadow: 0 0 10px rgba(47, 216, 255, .5);
+}
+.hud-app .wizard-step-dot.active {
+  background: var(--hud-cyan);
+  box-shadow: 0 0 6px var(--hud-cyan);
+}
+.hud-app .wizard-step-dot.done {
+  background: var(--hud-ok);
 }
 .hud-app .btn-primary {
   background: linear-gradient(180deg, rgba(47, 216, 255, .22), rgba(28, 125, 255, .35));

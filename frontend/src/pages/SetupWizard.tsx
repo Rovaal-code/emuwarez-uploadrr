@@ -338,7 +338,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   const tmdbCanContinue = Boolean(tmdbTestResult?.ok) || tmdbAckSkip
 
   return (
-    <div className="setup-wizard-wrap">
+    <div className="setup-wizard-wrap hud-app">
       <div className="setup-wizard">
         <div className="wizard-logo">
           <ServiceIcon type="emu" size={40} />

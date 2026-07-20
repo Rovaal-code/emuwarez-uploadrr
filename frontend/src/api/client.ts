@@ -3,16 +3,26 @@
 const TOKEN_KEY = 'emuwarez_uploadrr_token'
 const BASE_URL = '/api'
 
+// "Recordarme" on LoginPage decides which storage the token lives in:
+// localStorage survives closing the browser, sessionStorage is gone as soon
+// as the tab/window closes. Only one copy ever exists at a time.
 export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY)
+  return localStorage.getItem(TOKEN_KEY) ?? sessionStorage.getItem(TOKEN_KEY)
 }
 
-export function setToken(token: string): void {
-  localStorage.setItem(TOKEN_KEY, token)
+export function setToken(token: string, remember: boolean = true): void {
+  if (remember) {
+    localStorage.setItem(TOKEN_KEY, token)
+    sessionStorage.removeItem(TOKEN_KEY)
+  } else {
+    sessionStorage.setItem(TOKEN_KEY, token)
+    localStorage.removeItem(TOKEN_KEY)
+  }
 }
 
 export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY)
+  sessionStorage.removeItem(TOKEN_KEY)
 }
 
 export class ApiClientError extends Error {

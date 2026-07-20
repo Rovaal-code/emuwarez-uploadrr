@@ -39,25 +39,6 @@
 }
 .hud-app .sidebar-logo {
   border-bottom: 1px solid rgba(30, 110, 190, .4);
-  position: relative;
-}
-.hud-app .sidebar-logo::before {
-  content: "";
-  position: absolute;
-  left: 20px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 34px;
-  height: 34px;
-  border-radius: 3px;
-  border: 1px solid rgba(47, 216, 255, .55);
-  box-shadow: 0 0 14px -3px rgba(47, 216, 255, .8), inset 0 0 8px rgba(47, 216, 255, .25);
-  pointer-events: none;
-}
-.sidebar.collapsed.hud-app .sidebar-logo::before,
-.hud-app .sidebar.collapsed .sidebar-logo::before {
-  left: 50%;
-  margin-left: -17px;
 }
 .hud-app .sidebar-logo-text {
   font-family: var(--hud-font);
@@ -173,6 +154,15 @@
 .hud-app .btn-secondary:hover:not(:disabled) {
   border-color: var(--hud-cyan);
   box-shadow: 0 0 10px -4px rgba(47, 216, 255, .6);
+}
+.hud-app .btn-ghost {
+  color: var(--hud-ice);
+  border-color: transparent;
+}
+.hud-app .btn-ghost:hover:not(:disabled) {
+  background: rgba(6, 20, 42, .6);
+  border-color: rgba(30, 110, 190, .5);
+  box-shadow: 0 0 10px -4px rgba(47, 216, 255, .5);
 }
 .hud-app input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
 .hud-app textarea,

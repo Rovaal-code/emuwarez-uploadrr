@@ -24,12 +24,15 @@
 }
 
 .sidebar-logo {
-  padding: 18px 20px;
+  height: var(--topbar-height);
+  padding: 0 20px;
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   gap: 10px;
   cursor: pointer;
+  flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .sidebar-logo:hover {
@@ -37,7 +40,7 @@
 }
 
 .sidebar.collapsed .sidebar-logo {
-  padding: 18px 0;
+  padding: 0;
   justify-content: center;
 }
 

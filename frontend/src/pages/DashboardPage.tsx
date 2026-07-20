@@ -45,17 +45,6 @@ const REC_GROUP_META: Record<number, {
        color: '#ef4444', bg: 'rgba(239,68,68,0.14)', border: 'rgba(239,68,68,0.35)' },
 }
 
-// Phase 11F — the four sub-phases a *running* upload job can be in, in
-// order. compute_progress_phase() on the backend never emits a numeric
-// percentage (Uploadrr-EMU doesn't report one) — this is a discrete-step
-// bar, not a fabricated percentage.
-// Fixed height for the "Actividad reciente" / "Actividad de subida" panels so
-// they always match, whether the library is populated or empty. 50% of the
-// viewport height, with internal scroll when the content overflows.
-const ACTIVITY_PANEL_HEIGHT = '44vh'
-// "Últimas tareas ejecutadas" is half the height of the activity panels.
-const TASKS_PANEL_HEIGHT = '22vh'
-
 // task_runs.name is the internal task key (services/scheduler.py's
 // TASK_LIBRARY_SYNC/TASK_EMU_SYNC) — same human names Ajustes → Tareas
 // programadas already shows for these same keys (services/scheduler.py's
@@ -229,7 +218,10 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   const taskRuns = (taskActivity?.items ?? []).slice(0, 50)
 
   return (
-    <div>
+    // height/marginBottom cancel out .page-container's own 24px bottom
+    // padding, so the last row of panels (Últimas tareas/Conexiones) ends
+    // flush with the viewport bottom — same line as the sidebar's edge.
+    <div style={{ height: 'calc(100% + 24px)', marginBottom: -24, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {wizardItem && (
         <UploadWizardModal item={wizardItem} preselect={wizardPreselect} onClose={() => setWizardItem(null)} onDone={loadData} onNavigate={onNavigate} />
       )}
@@ -237,7 +229,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
         <RequestFormModal item={requestItem} onClose={() => setRequestItem(null)} />
       )}
 
-      <div className="page-header">
+      <div className="page-header" style={{ flexShrink: 0 }}>
         <div>
           <div className="page-title">Panel</div>
         </div>
@@ -245,11 +237,11 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
       </div>
 
       {syncMsg && (
-        <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--text-secondary)' }}>{syncMsg}</div>
+        <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--text-secondary)', flexShrink: 0 }}>{syncMsg}</div>
       )}
 
       {/* Stat cards */}
-      <div className="stat-cards-row">
+      <div className="stat-cards-row" style={{ flexShrink: 0 }}>
         <StatCard
           icon={ICON_LIBRARY}
           label="Biblioteca sincronizada"
@@ -307,7 +299,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
       {/* eMuwarez requests — cards + a "Sincronizar peticiones" button below.
           20px bottom margin = the flex gap between the activity panels and
           their lower cards, so spacing above and below each panel matches. */}
-      <div style={{ marginBottom: 20 }}>
+      <div style={{ marginBottom: 20, flexShrink: 0 }}>
         <div className="stat-cards-row">
           <StatCard
             icon={ICON_REQUESTS}
@@ -346,13 +338,15 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
         </div>
       </div>
 
-      {/* Main grid */}
-      <div className="dashboard-grid">
+      {/* Main grid — fills the remaining height exactly (flex:1, minHeight:0)
+          so the page itself never scrolls; each panel below keeps its own
+          internal scroll via its inner `overflow: auto` div. */}
+      <div className="dashboard-grid" style={{ flex: 1, minHeight: 0 }}>
         {/* Left column — "Actividad reciente" (50vh) with "Últimas tareas
             ejecutadas" (25vh) stacked under it, so tasks sits parallel to the
             "Conexiones" card in the right column. */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <div className="activity-section" style={{ height: ACTIVITY_PANEL_HEIGHT, display: 'flex', flexDirection: 'column', marginBottom: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minHeight: 0 }}>
+          <div className="activity-section" style={{ flex: 2, minHeight: 0, display: 'flex', flexDirection: 'column', marginBottom: 0 }}>
             <div className="section-header">
               <div className="section-title">Recomendaciones</div>
             </div>
@@ -426,7 +420,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
           </div>
 
           {/* Últimas tareas ejecutadas — parallel to "Conexiones" on the right. */}
-          <div className="activity-section" style={{ height: TASKS_PANEL_HEIGHT, display: 'flex', flexDirection: 'column', marginBottom: 0 }}>
+          <div className="activity-section" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', marginBottom: 0 }}>
             <div className="section-header">
               <div className="section-title">Últimas tareas ejecutadas</div>
             </div>
@@ -469,8 +463,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
 
         {/* Right — Actividad de subida: real running upload jobs, honest data only.
             Stretches to the full height of "Actividad reciente" on its left. */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <div className="upload-panel" style={{ height: ACTIVITY_PANEL_HEIGHT, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minHeight: 0 }}>
+          <div className="upload-panel" style={{ flex: 2, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
             <div className="section-header">
               <div className="section-title">Actividad de subida</div>
             </div>
@@ -577,7 +571,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
           </div>
 
           {/* Estado de conexiones — misma altura que "Últimas tareas ejecutadas" */}
-          <div className="upload-panel" style={{ height: TASKS_PANEL_HEIGHT, display: 'flex', flexDirection: 'column' }}>
+          <div className="upload-panel" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
             <div className="section-header">
               <div className="section-title">Conexiones</div>
             </div>

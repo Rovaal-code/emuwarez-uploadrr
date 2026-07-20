@@ -509,6 +509,7 @@ export interface UploadJob {
   progress_phase?: string | null
   media_type?: string | null
   poster_url?: string | null
+  year?: number | null
   instance_type?: string | null
   instance_name?: string | null
   request_status?: string | null

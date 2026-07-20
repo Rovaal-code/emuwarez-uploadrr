@@ -142,6 +142,7 @@ function JobRow({ job, onOpen, indent, retryToggle, onCancel, onRetry }: {
         >
           {job.title || '–'}
         </span>
+        {job.year ? <span style={{ color: 'var(--text-muted)', marginLeft: 4 }}>({job.year})</span> : null}
       </td>
       <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
         {UPLOAD_TYPE_LABEL[job.media_type ?? ''] ?? '–'}

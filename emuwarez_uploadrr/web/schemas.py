@@ -943,6 +943,9 @@ class UploadJobDetail(BaseModel):
     media_type: Optional[str] = None
     # Poster thumbnail from the linked library item, for the Subidas row.
     poster_url: Optional[str] = None
+    # Year from the linked library item, shown next to the title (same
+    # format Biblioteca's detail page already uses).
+    year: Optional[int] = None
     # Origen (Radarr/Sonarr instance) and Petición status from the linked
     # library item — same fields Biblioteca already shows per content.
     instance_type: Optional[str] = None

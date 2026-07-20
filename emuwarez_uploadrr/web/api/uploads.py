@@ -114,6 +114,7 @@ def _job_to_detail(
     instance_type: str | None = None,
     instance_name: str | None = None,
     request_status: str | None = None,
+    year: int | None = None,
 ) -> UploadJobDetail:
     prepared = j.get("prepared_path")
     source = j.get("source_path") or j.get("path")
@@ -121,6 +122,7 @@ def _job_to_detail(
     return UploadJobDetail(
         media_type=media_type,
         poster_url=poster_url,
+        year=year,
         instance_type=instance_type,
         instance_name=instance_name,
         request_status=request_status,
@@ -336,10 +338,11 @@ def get_uploads(
         instance_type_by_item: dict[int, str] = {}
         instance_name_by_item: dict[int, str] = {}
         request_status_by_item: dict[int, str] = {}
+        year_by_item: dict[int, int] = {}
         if item_ids:
             placeholders = ",".join("?" * len(item_ids))
             for row in conn.execute(
-                f"SELECT id, item_type, poster_url, instance_type, instance_name, request_status "
+                f"SELECT id, item_type, poster_url, instance_type, instance_name, request_status, year "
                 f"FROM library_items WHERE id IN ({placeholders})",
                 tuple(item_ids),
             ):
@@ -352,6 +355,8 @@ def get_uploads(
                     instance_name_by_item[row["id"]] = row["instance_name"]
                 if row["request_status"]:
                     request_status_by_item[row["id"]] = row["request_status"]
+                if row["year"]:
+                    year_by_item[row["id"]] = row["year"]
     return [
         _job_to_detail(
             j,
@@ -360,6 +365,7 @@ def get_uploads(
             instance_type_by_item.get(j.get("library_item_id")),
             instance_name_by_item.get(j.get("library_item_id")),
             request_status_by_item.get(j.get("library_item_id")),
+            year_by_item.get(j.get("library_item_id")),
         )
         for j in jobs
     ]
@@ -372,10 +378,11 @@ def get_upload(job_id: int, current_user: dict = Depends(require_auth)):
         if not job:
             raise HTTPException(status_code=404, detail="Job no encontrado.")
         media_type = poster_url = instance_type = instance_name = request_status = None
+        year = None
         item_id = job.get("library_item_id")
         if item_id:
             row = conn.execute(
-                "SELECT item_type, poster_url, instance_type, instance_name, request_status "
+                "SELECT item_type, poster_url, instance_type, instance_name, request_status, year "
                 "FROM library_items WHERE id = ?",
                 (item_id,),
             ).fetchone()
@@ -385,7 +392,8 @@ def get_upload(job_id: int, current_user: dict = Depends(require_auth)):
                 instance_type = row["instance_type"]
                 instance_name = row["instance_name"]
                 request_status = row["request_status"]
-    return _job_to_detail(job, media_type, poster_url, instance_type, instance_name, request_status)
+                year = row["year"]
+    return _job_to_detail(job, media_type, poster_url, instance_type, instance_name, request_status, year)
 
 
 @router.get("/uploads/{job_id}/logs", response_model=UploadJobLogsResponse)

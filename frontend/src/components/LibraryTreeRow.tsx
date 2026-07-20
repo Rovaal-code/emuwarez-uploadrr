@@ -181,12 +181,8 @@ export function LibraryTreeRow({ item, depth, instances, onSelect, onAction, onR
             >
               {episodeListLabel(item)}
             </div>
+            {item.year ? <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 4, flexShrink: 0 }}>({item.year})</span> : null}
           </div>
-          {item.year ? (
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', paddingLeft: indent + 28 }}>
-              {item.year}
-            </div>
-          ) : null}
         </td>
         <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{formatItemType(item.item_type)}</td>
         <td>

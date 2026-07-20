@@ -52,9 +52,9 @@ const REC_GROUP_META: Record<number, {
 // Fixed height for the "Actividad reciente" / "Actividad de subida" panels so
 // they always match, whether the library is populated or empty. 50% of the
 // viewport height, with internal scroll when the content overflows.
-const ACTIVITY_PANEL_HEIGHT = '40vh'
+const ACTIVITY_PANEL_HEIGHT = '44vh'
 // "Últimas tareas ejecutadas" is half the height of the activity panels.
-const TASKS_PANEL_HEIGHT = '20vh'
+const TASKS_PANEL_HEIGHT = '22vh'
 
 // task_runs.name is the internal task key (services/scheduler.py's
 // TASK_LIBRARY_SYNC/TASK_EMU_SYNC) — same human names Ajustes → Tareas

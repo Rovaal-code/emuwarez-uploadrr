@@ -93,13 +93,18 @@
   letter-spacing: .08em;
   text-transform: uppercase;
 }
-.hud-app .topbar-btn {
+.hud-app .topbar-btn,
+.hud-app .topbar-user {
   border-color: rgba(30, 110, 190, .5);
   background: rgba(6, 20, 42, .6);
 }
 .hud-app .topbar-btn:hover {
   border-color: var(--hud-cyan);
   box-shadow: 0 0 12px -4px rgba(47, 216, 255, .7);
+}
+.hud-app .topbar-username {
+  font-family: var(--hud-font);
+  letter-spacing: .03em;
 }
 
 .hud-app .page-title {

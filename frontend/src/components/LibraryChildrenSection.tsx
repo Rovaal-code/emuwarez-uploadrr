@@ -30,8 +30,8 @@ export function LibraryChildrenSection({ parentId, childType, title, instances, 
   const emptyLabel = childType === 'season' ? 'Sin temporadas' : 'Sin capítulos'
 
   return (
-    <div style={{ marginTop: 28 }}>
-      <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>
+    <div style={{ marginTop: 28, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8, flexShrink: 0 }}>
         {title}
       </div>
       {loading ? (
@@ -39,10 +39,11 @@ export function LibraryChildrenSection({ parentId, childType, title, instances, 
       ) : children.length === 0 ? (
         <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{emptyLabel}</div>
       ) : (
-        <div className="activity-section" style={{ marginBottom: 0 }}>
-          {/* Bounded to the remaining viewport height so the table scrolls
-              inside itself and the sticky column headers stay pinned. */}
-          <div style={{ overflow: 'auto', maxHeight: 'calc(100vh - 130px)' }}>
+        <div className="activity-section" style={{ marginBottom: 0, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          {/* Fills the remaining space below the detail page's fixed-height
+              content (poster/fields/comparison) — same fill+internal-scroll
+              pattern as Biblioteca's own list table. */}
+          <div style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
             <table className="data-table">
               <thead>
                 <tr>

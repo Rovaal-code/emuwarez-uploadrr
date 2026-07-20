@@ -73,7 +73,8 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
   }, [item.id, item.item_type, item.parent_id])
 
   return (
-    <div style={{ width: '100%' }}>
+    <div style={{ width: '100%', height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flexShrink: 0 }}>
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
         <button className="btn btn-ghost btn-sm" onClick={onBack}>← Volver a la biblioteca</button>
         {parentSeason && (
@@ -199,6 +200,7 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
       {(item.item_type === 'movie' || item.item_type === 'season' || item.item_type === 'episode') && (
         <EmuComparisonSection itemId={item.id} />
       )}
+      </div>
 
       {item.item_type === 'series' && (
         <LibraryChildrenSection parentId={item.id} childType="season" title="Temporadas" instances={instances} onSelect={onSelect} onAction={onAction} />

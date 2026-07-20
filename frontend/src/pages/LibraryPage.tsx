@@ -297,7 +297,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // when an item is selected, instead of a modal/card.
   if (selected) {
     return (
-      <div>
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
         <LibraryDetailPage
           item={selected}
           instances={instances}

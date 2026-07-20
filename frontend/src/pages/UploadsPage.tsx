@@ -391,10 +391,10 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   }
 
   return (
-    <div>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {modals}
 
-      <div className="page-header">
+      <div className="page-header" style={{ flexShrink: 0 }}>
         <div>
           <div className="page-title">Subidas</div>
           <div className="page-subtitle">{visibleJobs.length} subidas</div>
@@ -404,7 +404,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
         </div>
       </div>
 
-      <div className="filters-bar">
+      <div className="filters-bar" style={{ flexShrink: 0 }}>
         <input
           className="form-input"
           placeholder="Buscar título…"
@@ -424,8 +424,8 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
       {loading ? <LoadingState label="Cargando trabajos…" /> : error ? <ErrorState message={error} onRetry={load} /> : jobs.length === 0 ? (
         <EmptyState icon="📤" title="No hay trabajos de subida." body="Usa el botón 'Subir' desde Biblioteca para generar un preflight." />
       ) : (
-        <div className="activity-section">
-          <div style={{ overflowX: 'auto' }}>
+        <div className="activity-section" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', marginBottom: 0 }}>
+          <div style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
             <table className="data-table">
               <thead>
                 <tr>

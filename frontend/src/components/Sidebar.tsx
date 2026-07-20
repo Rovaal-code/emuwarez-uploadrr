@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { NAV_ITEMS, type NavItem } from '../types/domain'
 import { ServiceIcon } from './ServiceIcon'
 import { useTooltip } from './Tooltip'
+import { SystemStatusPanel } from './SystemStatusPanel'
 
 interface SidebarProps {
   active: string
@@ -134,6 +135,7 @@ export function Sidebar({ active, onNavigate }: SidebarProps) {
           />
         ))}
       </nav>
+      {!collapsed && <SystemStatusPanel />}
     </aside>
   )
 }

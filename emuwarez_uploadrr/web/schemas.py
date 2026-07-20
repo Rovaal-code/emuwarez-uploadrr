@@ -156,6 +156,32 @@ class ChangeCredentialsResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# System stats (sidebar gauges)
+# ---------------------------------------------------------------------------
+
+class GpuStatsResponse(BaseModel):
+    name: str
+    percent: float
+    vram_used_gb: float
+    vram_total_gb: float
+    vram_percent: float
+
+
+class SystemStatsResponse(BaseModel):
+    cpu_percent: float
+    ram_percent: float
+    ram_used_gb: float
+    ram_total_gb: float
+    disk_path: str
+    disk_used_gb: float
+    disk_total_gb: float
+    disk_percent: float
+    net_down_bps: float
+    net_up_bps: float
+    gpu: Optional[GpuStatsResponse] = None
+
+
+# ---------------------------------------------------------------------------
 # Setup POST requests
 # ---------------------------------------------------------------------------
 

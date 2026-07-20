@@ -25,6 +25,7 @@ from .settings import router as settings_router
 from .integration_tests import router as integration_tests_router
 from .notifications import router as notifications_router
 from .scheduled_tasks import router as scheduled_tasks_router
+from .system import router as system_router
 
 api_router = APIRouter(prefix="/api")
 
@@ -57,3 +58,4 @@ api_router.include_router(settings_router)
 api_router.include_router(integration_tests_router)
 api_router.include_router(notifications_router)
 api_router.include_router(scheduled_tasks_router)
+api_router.include_router(system_router)

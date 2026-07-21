@@ -57,6 +57,25 @@ interface InstanceDraft {
   is_anime: boolean
 }
 
+// Same icon as its Configuración counterpart, for the 4 steps that also
+// exist as their own card there (TMDb, qBittorrent, Proveedores de vídeo,
+// Proveedores de imágenes) — the other steps (bienvenida, admin, eMuwarez,
+// instancias, completado) don't have a matching Settings card, so no icon.
+function StepTitleIcon({ step }: { step: string }) {
+  if (step === 'tmdb') return <ServiceIcon type="tmdb" size={20} />
+  if (step === 'qbit') return <ServiceIcon type="qbittorrent" size={20} />
+  if (step === 'imagehosts') return <ServiceIcon type="imghost" size={20} />
+  if (step === 'providers') {
+    return (
+      <svg width={20} height={20} viewBox="0 0 24 24" fill="none" aria-hidden>
+        <rect x="2.5" y="5" width="19" height="14" rx="2.5" stroke="#8b5cf6" strokeWidth="1.6" />
+        <path d="M10 9.2v5.6l4.5-2.8z" fill="#8b5cf6" />
+      </svg>
+    )
+  }
+  return null
+}
+
 function StepsBar({ current, steps }: { current: string; steps: readonly string[] }) {
   const currentIdx = steps.indexOf(current)
   return (
@@ -350,7 +369,8 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
         <StepsBar current={step} steps={SETUP_STEPS} />
 
         <div className="wizard-card">
-          <div className="wizard-step-title">
+          <div className="wizard-step-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <StepTitleIcon step={step} />
             {stepIdx + 1}. {SETUP_STEP_LABELS[step]}
           </div>
 
@@ -455,7 +475,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               </div>
               {!emuCanContinue && (
                 <div className="alert alert-error" style={{ marginTop: 10 }}>
-                  Necesitas una key de eMuwarez válida para continuar — pulsa "Probar conexión" y espera a
+                  Necesitas una key de eMuwarez válida para continuar: pulsa "Probar conexión" y espera a
                   que confirme que funciona. Esta integración es el núcleo de la app, así que aquí no se
                   puede saltar el paso.
                 </div>
@@ -670,8 +690,8 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
           {/* qBittorrent step */}
           {step === 'qbit' && (
             <>
-              <div className="wizard-step-desc" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <ServiceIcon type="qbittorrent" size={18} /> Cliente qBittorrent que usará Uploadrr para añadir el .torrent tras subir. Opcional — puedes configurarlo luego.
+              <div className="wizard-step-desc">
+                Cliente qBittorrent que usará Uploadrr para añadir el .torrent tras subir.
               </div>
               <div className="wizard-fields">
                 <div className="form-group">
@@ -721,7 +741,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               <div className="wizard-step-desc">
                 Cuando el mismo contenido está disponible en varias plataformas de streaming (Amazon,
                 Netflix, Disney+...), esta prioridad decide cuál recomendar automáticamente para la subida.
-                Arrastra para reordenar — los de arriba tienen preferencia. Cada proveedor tiene su propio
+                Arrastra para reordenar: los de arriba tienen preferencia. Cada proveedor tiene su propio
                 icono para reconocerlo de un vistazo.
               </div>
               <ProviderPriorityPicker order={nomProviderOrder} onChange={setNomProviderOrder} linkIcons={false} />
@@ -738,8 +758,8 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
           {/* Image hosts step */}
           {step === 'imagehosts' && (
             <>
-              <div className="wizard-step-desc" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <ServiceIcon type="imghost" size={18} /> Dónde suben las capturas que acompañan al torrent. <strong>imgbox</strong> va por defecto (sin key); activa otros si quieres. Puedes cambiarlo luego en Configuración.
+              <div className="wizard-step-desc">
+                Dónde suben las capturas que acompañan al torrent. <strong>imgbox</strong> va por defecto (sin key); activa otros si quieres. Puedes cambiarlo luego en Configuración.
               </div>
               <div className="wizard-fields" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {imgAvailable.map(h => {

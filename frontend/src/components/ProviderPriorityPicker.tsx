@@ -75,7 +75,7 @@ export function ProviderPriorityPicker({ order, onChange, linkIcons = true }: Pr
     <div className="provider-card__body">
       {order.length === 0 && (
         <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 8px' }}>
-          Ningún proveedor activado — se añadirán por orden de prioridad.
+          Ningún proveedor activado: se añadirán por orden de prioridad.
         </p>
       )}
       {order.length > 0 && (

@@ -86,7 +86,7 @@ function SyncChip({ error, icon, label, detail, percent, bar, fading }: {
   // Peticiones chip's "No implementado" flash) instead of popping out.
   fading?: boolean
 }) {
-  const { triggerProps, tooltipNode } = useTooltip(`${label}${detail ? ` — ${detail}` : ''}`)
+  const { triggerProps, tooltipNode } = useTooltip(`${label}${detail ? ` · ${detail}` : ''}`)
   return (
     <div className={`sync-chip${fading ? ' sync-chip-fading' : ''}`} {...triggerProps}>
       {error

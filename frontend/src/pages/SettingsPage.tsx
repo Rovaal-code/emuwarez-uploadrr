@@ -547,7 +547,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                       {h.needs_key && (
                         <input type="password" className="form-input" style={{ marginTop: 6 }} autoComplete="new-password"
                           value={imgKeys[id] ?? ''} onChange={e => setImgKeys(p => ({ ...p, [id]: e.target.value }))}
-                          placeholder={settings?.image_host_keys_configured?.includes(id) ? '•••••••• (guardada — vacío para mantener)' : `API key de ${h.label}`} />
+                          placeholder={settings?.image_host_keys_configured?.includes(id) ? '•••••••• (guardada, vacío para mantener)' : `API key de ${h.label}`} />
                       )}
                       {t && <div style={{ fontSize: 11, marginTop: 4, color: testResultColor(t) }}>{testResultLabel(t)}</div>}
                     </div>
@@ -790,13 +790,13 @@ function PathMappingsCard() {
               <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 <input
                   className="form-input" style={{ flex: 1, minWidth: 200 }}
-                  value={m.from} placeholder="Ruta de Radarr/Sonarr — /data/media"
+                  value={m.from} placeholder="Ruta de Radarr/Sonarr: /data/media"
                   onChange={e => setMappings(p => p.map((x, j) => j === i ? { ...x, from: e.target.value } : x))}
                 />
                 <span style={{ color: 'var(--text-muted)' }}>→</span>
                 <input
                   className="form-input" style={{ flex: 1, minWidth: 200 }}
-                  value={m.to} placeholder="Ruta local — /home/alvaro/mnt/emu-media"
+                  value={m.to} placeholder="Ruta local: /home/alvaro/mnt/emu-media"
                   onChange={e => setMappings(p => p.map((x, j) => j === i ? { ...x, to: e.target.value } : x))}
                 />
                 <button className="btn btn-ghost btn-sm" type="button" title="Quitar regla"
@@ -1089,7 +1089,7 @@ function MaintenanceTab() {
 
       <div className="placeholder-card">
         <h3>Integridad de la base de datos</h3>
-        <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: '0 0 10px' }}>Ejecuta <code>PRAGMA integrity_check</code> — solo lectura.</p>
+        <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: '0 0 10px' }}>Ejecuta <code>PRAGMA integrity_check</code> (solo lectura).</p>
         <button className="btn btn-secondary" onClick={handleIntegrity} disabled={busy}>Verificar integridad</button>
       </div>
 

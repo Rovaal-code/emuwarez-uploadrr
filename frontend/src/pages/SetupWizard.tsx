@@ -152,6 +152,14 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
     }
   }, [step, imgAvailable.length])
 
+  // Providers step: load the same real, persisted order Configuración
+  // reads (falls back to the backend's own default when nothing was ever
+  // saved) instead of a separately hand-typed copy of that default here,
+  // which could silently drift out of sync.
+  useEffect(() => {
+    fetchSettings().then(s => { if (s.provider_priority_order?.length) setNomProviderOrder(s.provider_priority_order) }).catch(() => { /* keep the built-in default */ })
+  }, [])
+
   async function handleTestImghost(hostId: string) {
     setImgTesting(hostId)
     try {

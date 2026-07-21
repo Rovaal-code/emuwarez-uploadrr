@@ -453,7 +453,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
         </select>
       </div>
 
-      {loading ? <LoadingState label="Cargando trabajos…" /> : error ? <ErrorState message={error} onRetry={load} /> : jobs.length === 0 ? (
+      {loading ? <LoadingState label="Cargando Subidas…" /> : error ? <ErrorState message={error} onRetry={load} /> : jobs.length === 0 ? (
         <EmptyState icon="📤" title="No hay trabajos de subida." body="Usa el botón 'Subir' desde Biblioteca para generar un preflight." />
       ) : (
         <div className="activity-section" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', marginBottom: 0 }}>

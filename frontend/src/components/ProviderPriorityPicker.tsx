@@ -9,10 +9,12 @@ export interface ProviderOption {
   domain?: string | null
 }
 
-// The provider's favicon, linking to its official page when the domain is known.
-function ProviderIcon({ domain, size = 16 }: { domain?: string | null; size?: number }) {
+// The provider's favicon, linking to its official page when the domain is
+// known — except in the setup wizard, where the picker is just a preview of
+// the same list Configuración has, not meant to send you off-app mid-setup.
+function ProviderIcon({ domain, size = 16, link = true }: { domain?: string | null; size?: number; link?: boolean }) {
   const icon = <Favicon domain={domain} size={size} fallback={<span aria-hidden style={{ opacity: 0.4 }}>🎬</span>} />
-  if (!domain) return icon
+  if (!domain || !link) return icon
   return (
     <a
       href={`https://${domain}`}
@@ -31,6 +33,10 @@ function ProviderIcon({ domain, size = 16 }: { domain?: string | null; size?: nu
 interface ProviderPriorityPickerProps {
   order: string[]
   onChange: (order: string[]) => void
+  // Settings links each icon out to the provider's own site; the setup
+  // wizard shows the exact same list only as a preview, so its icons stay
+  // inert instead of tempting you to leave the wizard mid-setup.
+  linkIcons?: boolean
 }
 
 // Checkbox (enable/disable) + native HTML5 drag-and-drop reorder — no new
@@ -40,7 +46,7 @@ interface ProviderPriorityPickerProps {
 // (GET /nomenclature/providers → services/source_assistant.EMU_PROVIDERS,
 // already returned sorted), so Crunchyroll and the rest stay in sync and are
 // shown alphabetically everywhere.
-export function ProviderPriorityPicker({ order, onChange }: ProviderPriorityPickerProps) {
+export function ProviderPriorityPicker({ order, onChange, linkIcons = true }: ProviderPriorityPickerProps) {
   const [options, setOptions] = useState<ProviderOption[]>([])
   const [showAdd, setShowAdd] = useState(false)
 
@@ -89,7 +95,7 @@ export function ProviderPriorityPicker({ order, onChange }: ProviderPriorityPick
                   style={{ ...handleProps.style, color: 'var(--text-accent)', width: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginLeft: 8, marginRight: 8 }}
                   aria-hidden
                 ><DragHandleIcon /></span>
-                <ProviderIcon domain={opt?.domain} size={16} />
+                <ProviderIcon domain={opt?.domain} size={16} link={linkIcons} />
                 <span style={{ flex: 1 }}>
                   {opt?.label ?? code} <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>({code})</span>
                 </span>

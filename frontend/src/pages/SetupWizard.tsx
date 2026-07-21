@@ -360,6 +360,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               <ul style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.8, paddingLeft: 20, marginTop: 8 }}>
                 <li>Gestiona y sincroniza tus bibliotecas de Radarr y Sonarr.</li>
                 <li>Prepara y sube contenido siguiendo la nomenclatura de eMuwarez.</li>
+                <li>Reordena y renombra las pistas de audio y subtítulos de forma profesional antes de subir, siguiendo la prioridad de idioma (Español → Català → Inglés → el resto).</li>
                 <li>Permite subir varios contenidos en paralelo, sin esperar a que termine uno para lanzar el siguiente.</li>
                 <li>Se conecta con eMuwarez para listar las peticiones actuales.</li>
                 <li>Obtiene el catálogo de eMuwarez y lo compara contra tu biblioteca.</li>
@@ -719,9 +720,10 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               <div className="wizard-step-desc">
                 Cuando el mismo contenido está disponible en varias plataformas de streaming (Amazon,
                 Netflix, Disney+...), esta prioridad decide cuál recomendar automáticamente para la subida.
-                Arrastra para reordenar — los de arriba tienen preferencia.
+                Arrastra para reordenar — los de arriba tienen preferencia. Cada proveedor tiene su propio
+                icono para reconocerlo de un vistazo.
               </div>
-              <ProviderPriorityPicker order={nomProviderOrder} onChange={setNomProviderOrder} />
+              <ProviderPriorityPicker order={nomProviderOrder} onChange={setNomProviderOrder} linkIcons={false} />
               {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
               <div className="wizard-actions">
                 <span />

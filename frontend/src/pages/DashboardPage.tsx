@@ -221,7 +221,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
     return () => clearInterval(t)
   }, [hasLiveUpload, loadActiveUploads])
 
-  if (loadingData && !summary) return <LoadingState label="Cargando dashboard…" />
+  if (loadingData && !summary) return <LoadingState label="Cargando Panel…" />
   if (!summary) return <ErrorState message={dataError ?? 'No se pudieron cargar los datos del dashboard'} onRetry={loadData} />
 
   const s = summary

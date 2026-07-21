@@ -384,7 +384,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
             placeholder="API key de TMDb"
             autoComplete="new-password"
           />
-          <span className="form-hint">Usada para marcar proveedores disponibles en TMDb.</span>
+          <span className="form-hint">Usada para marcar proveedores disponibles en TMDb y para traducir los títulos de las series al idioma elegido.</span>
         </div>
         <div style={{ marginBottom: 12 }}>
           <button
@@ -596,7 +596,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
             <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
           </svg>
           Acceso a la biblioteca
-          <InfoIcon text="Antes de subir un archivo, la app comprueba que su ruta está dentro de una de estas carpetas — una red de seguridad para que nunca se toque un archivo fuera de donde debería. Si la dejas vacía, las subidas reales se bloquearán hasta que la rellenes." />
+          <InfoIcon text="Antes de subir un archivo, la app comprueba que su ruta está dentro de una de estas carpetas: una red de seguridad para que nunca se toque un archivo fuera de donde debería. Si la dejas vacía, las subidas reales se bloquearán hasta que la rellenes." />
         </h3>
         <p className="form-hint" style={{ marginTop: 0, marginBottom: 12 }}>
           La carpeta donde este contenedor accede a tu biblioteca (el punto de montaje del volumen, no necesariamente

@@ -14,8 +14,8 @@ function fmtEta(s: number): string {
 // pushing the page content down — the topbar's height never changes whether
 // this is empty or full.
 export function SyncProgressBanner() {
-  const { libProgress, catalogProgress, requestsSyncing } = useSync()
-  if (!libProgress && !catalogProgress && !requestsSyncing) return null
+  const { libProgress, catalogProgress, requestsSyncing, requestsUnavailable, requestsFadingOut } = useSync()
+  if (!libProgress && !catalogProgress && !requestsSyncing && !requestsUnavailable) return null
 
   return (
     <div className="topbar-sync-row">
@@ -52,14 +52,25 @@ export function SyncProgressBanner() {
         />
       )}
 
-      {requestsSyncing && (
-        <SyncChip error={null} icon={null} label="Peticiones" detail="Sincronizando…" percent={null} bar={false} />
+      {(requestsSyncing || requestsUnavailable) && (
+        <SyncChip
+          error={requestsUnavailable ? 'unavailable' : null}
+          icon={<ServiceIcon type="emu" size={13} />}
+          label="Peticiones"
+          // No real progress to report for this one (it's a single blocking
+          // call, not a paged fetch) — the bar just simulates activity while
+          // in flight, same visual language as Biblioteca/eMuwarez.
+          detail={requestsSyncing ? 'Sincronizando…' : 'No implementado en esta versión'}
+          percent={0}
+          bar={requestsSyncing}
+          fading={requestsFadingOut}
+        />
       )}
     </div>
   )
 }
 
-function SyncChip({ error, icon, label, detail, percent, bar }: {
+function SyncChip({ error, icon, label, detail, percent, bar, fading }: {
   error: string | null | undefined
   icon: React.ReactNode
   label: string
@@ -71,16 +82,19 @@ function SyncChip({ error, icon, label, detail, percent, bar }: {
   // icon+label alone at first, then insert the bar, which re-centers
   // .topbar-center's content and reads as everything jumping left.
   bar: boolean
+  // Brief fade-to-transparent right before the chip is removed (e.g. the
+  // Peticiones chip's "No implementado" flash) instead of popping out.
+  fading?: boolean
 }) {
   const { triggerProps, tooltipNode } = useTooltip(`${label}${detail ? ` — ${detail}` : ''}`)
   return (
-    <div className="sync-chip" {...triggerProps}>
+    <div className={`sync-chip${fading ? ' sync-chip-fading' : ''}`} {...triggerProps}>
       {error
         ? <span className="sync-chip-error">✗</span>
         : <span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} />}
       {icon}
       <span className="sync-chip-label">{label}</span>
-      <span className="sync-chip-detail">{detail}</span>
+      <span className={`sync-chip-detail${error ? ' sync-chip-detail-error' : ''}`}>{detail}</span>
       {bar && (
         <div className="sync-chip-bar">
           <div className="sync-chip-bar-fill" style={{ width: `${percent ?? 0}%` }} />

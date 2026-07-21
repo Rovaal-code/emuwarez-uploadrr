@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # ── Stage 1: Build frontend ──────────────────────────────────────────────────
 FROM node:20-alpine AS frontend-builder
 
@@ -24,13 +25,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Bundle Uploadrr-EMU (the user's fork) as an internal dependency — like
-# mediainfo/ffmpeg, the user configures nothing. Installed under /opt (NOT
-# /app, or setuptools' flat-layout discovery would clash with our own package).
-# uploadrr.path defaults to /opt/Uploadrr (services/uploadrr_contract.py).
+# Bundle Uploadrr-EMU as an internal dependency — like mediainfo/ffmpeg, the
+# user configures nothing. Installed under /opt (NOT /app, or setuptools'
+# flat-layout discovery would clash with our own package). uploadrr.path
+# defaults to /opt/Uploadrr (services/uploadrr_contract.py).
+#
+# Cloned from our own private fork (Rovaal-code/Uploadrr-EMU on GitHub, not
+# the public codeberg.org/ccx94/Uploadrr-EMU upstream) so the image ships
+# our local patches — Spanish trailer preference, trailer on TV/anime too,
+# and our own signature instead of Uploadrr's default branding — instead of
+# a clean upstream checkout that silently drops all of that on a fresh
+# deploy. Private repo needs a token, passed as a BuildKit secret so it
+# never ends up baked into an image layer: `docker build --secret
+# id=github_token,env=GITHUB_TOKEN ...` (or `,src=<file>`).
+#
 # setuptools is pinned <80 because pyrobase's setup.py still imports the
 # pkg_resources module that newer setuptools dropped.
-RUN git clone --depth 1 https://codeberg.org/ccx94/Uploadrr-EMU.git /opt/Uploadrr \
+RUN --mount=type=secret,id=github_token \
+    git clone --depth 1 "https://x-access-token:$(cat /run/secrets/github_token)@github.com/Rovaal-code/Uploadrr-EMU.git" /opt/Uploadrr \
     && pip install --no-cache-dir "setuptools<80" wheel \
     && pip install --no-cache-dir --no-build-isolation -r /opt/Uploadrr/requirements.txt \
     && pip install --no-cache-dir tmdbsimple \

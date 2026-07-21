@@ -60,29 +60,50 @@ psutil.cpu_percent(interval=None)
 # process could use up to the whole host anyway.
 # ---------------------------------------------------------------------------
 
-def _cgroup_mem_stats() -> tuple[int, int] | None:
-    """(used_bytes, limit_bytes) from the cgroup memory controller, cgroup
-    v2 first then v1. None when unavailable or unlimited."""
+def _cgroup_mem_stats() -> tuple[int, int | None] | None:
+    """(used_bytes, limit_bytes_or_None) from the cgroup memory controller,
+    cgroup v2 first then v1.
+
+    `limit_bytes` is None when the cgroup has no real cap (e.g. a plain
+    `docker run`/compose service with no `mem_limit` set) — the caller then
+    falls back to the HOST's own total as the denominator for a percentage,
+    but still uses THIS cgroup's actual usage as the numerator. Without this,
+    an uncapped container fell all the way back to host-wide used/total,
+    which shows every OTHER process's memory too — not what "how much is
+    the container itself using" is asking.
+
+    The whole tuple is None only when there's no cgroup memory controller
+    at all to read from (a bare host outside any container)."""
     try:
         with open("/sys/fs/cgroup/memory.current") as f:
             used = int(f.read().strip())
-        with open("/sys/fs/cgroup/memory.max") as f:
-            raw = f.read().strip()
-        if raw != "max":
-            limit = int(raw)
-            if 0 < limit < (1 << 62):
-                return used, limit
+        limit: int | None = None
+        try:
+            with open("/sys/fs/cgroup/memory.max") as f:
+                raw = f.read().strip()
+            if raw != "max":
+                parsed = int(raw)
+                if 0 < parsed < (1 << 62):
+                    limit = parsed
+        except Exception:
+            pass
+        return used, limit
     except Exception:
         pass
     try:
         with open("/sys/fs/cgroup/memory/memory.usage_in_bytes") as f:
             used = int(f.read().strip())
-        with open("/sys/fs/cgroup/memory/memory.limit_in_bytes") as f:
-            limit = int(f.read().strip())
-        # v1's "no limit" sentinel is an astronomically large number, not a
-        # real GB-scale value — same finite-and-plausible check as v2.
-        if 0 < limit < (1 << 62):
-            return used, limit
+        limit = None
+        try:
+            with open("/sys/fs/cgroup/memory/memory.limit_in_bytes") as f:
+                raw_limit = int(f.read().strip())
+            # v1's "no limit" sentinel is an astronomically large number, not
+            # a real GB-scale value — same finite-and-plausible check as v2.
+            if 0 < raw_limit < (1 << 62):
+                limit = raw_limit
+        except Exception:
+            pass
+        return used, limit
     except Exception:
         pass
     return None
@@ -134,16 +155,18 @@ _cgroup_cpu_prev: tuple[float, int] | None = None
 
 
 def _cgroup_cpu_percent() -> float | None:
-    """Percent of THIS CONTAINER's own CPU allocation in use (100% =
-    saturating every core it was granted). None when there's no real quota
-    to measure against, so the caller falls back to psutil's host-wide
-    figure."""
-    quota_cores = _cgroup_cpu_quota_cores()
-    if not quota_cores:
-        return None
+    """Percent of CPU capacity THIS CONTAINER's own cgroup is using — of its
+    own quota when one is set (`docker run --cpus=N` / compose `cpus:`), or
+    of the whole host's core count otherwise. Either way the numerator
+    (usage_usec delta) is always THIS cgroup's own usage, never every other
+    process on the host — an uncapped container used to fall back to
+    psutil's host-wide CPU%, which reports what EVERYONE is using, not just
+    this one. None only when there's no cgroup CPU controller at all to
+    read from (a bare host outside any container)."""
     usage_usec = _cgroup_cpu_usage_usec()
     if usage_usec is None:
         return None
+    quota_cores = _cgroup_cpu_quota_cores() or (os.cpu_count() or 1)
     global _cgroup_cpu_prev
     now = time.monotonic()
     if _cgroup_cpu_prev is None:
@@ -292,7 +315,14 @@ def get_system_stats(conn) -> dict:
     host_cpu_percent = psutil.cpu_percent(interval=None)
 
     cgroup_mem = _cgroup_mem_stats()
-    ram_used, ram_total = cgroup_mem if cgroup_mem else (vm.used, vm.total)
+    if cgroup_mem is not None:
+        ram_used, cgroup_limit = cgroup_mem
+        # No real cap on this container/cgroup — fall back to the host's
+        # total as the denominator (there's no smaller one to compare
+        # against), but keep showing THIS cgroup's own usage as used.
+        ram_total = cgroup_limit if cgroup_limit is not None else vm.total
+    else:
+        ram_used, ram_total = vm.used, vm.total
     ram_percent = round(ram_used / ram_total * 100, 1) if ram_total else 0.0
 
     cgroup_cpu_percent = _cgroup_cpu_percent()

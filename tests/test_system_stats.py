@@ -146,13 +146,17 @@ def test_cgroup_mem_stats_v2():
     assert result == (2147483648, 4294967296)
 
 
-def test_cgroup_mem_stats_v2_unlimited_falls_back():
+def test_cgroup_mem_stats_v2_unlimited_still_reports_usage():
+    """No real cap (plain docker run/compose, no mem_limit) — still returns
+    THIS cgroup's actual usage, just with limit=None so the caller falls
+    back to the host's total as the denominator instead of hiding the
+    container's own number behind a full host-wide reading."""
     files = {
         "/sys/fs/cgroup/memory.current": "2147483648\n",
         "/sys/fs/cgroup/memory.max": "max\n",
     }
     with patch("builtins.open", side_effect=_fake_open(files)):
-        assert system_stats._cgroup_mem_stats() is None
+        assert system_stats._cgroup_mem_stats() == (2147483648, None)
 
 
 def test_cgroup_mem_stats_v1_used_when_v2_absent():
@@ -165,13 +169,13 @@ def test_cgroup_mem_stats_v1_used_when_v2_absent():
     assert result == (1073741824, 2147483648)
 
 
-def test_cgroup_mem_stats_v1_unlimited_sentinel_falls_back():
+def test_cgroup_mem_stats_v1_unlimited_sentinel_still_reports_usage():
     files = {
         "/sys/fs/cgroup/memory/memory.usage_in_bytes": "1073741824\n",
         "/sys/fs/cgroup/memory/memory.limit_in_bytes": "9223372036854771712\n",
     }
     with patch("builtins.open", side_effect=_fake_open(files)):
-        assert system_stats._cgroup_mem_stats() is None
+        assert system_stats._cgroup_mem_stats() == (1073741824, None)
 
 
 def test_cgroup_mem_stats_none_when_no_cgroup_files():
@@ -209,9 +213,35 @@ def test_cgroup_cpu_quota_cores_v1_unlimited_is_none():
         assert system_stats._cgroup_cpu_quota_cores() is None
 
 
-def test_cgroup_cpu_percent_none_without_quota():
+def test_cgroup_cpu_percent_none_without_any_cgroup():
+    """No cgroup CPU controller readable at all (bare host, outside any
+    container) — nothing to report, caller falls back to psutil's own
+    host-wide reading."""
     with patch("builtins.open", side_effect=_fake_open({})):
         assert system_stats._cgroup_cpu_percent() is None
+
+
+def test_cgroup_cpu_percent_uncapped_falls_back_to_host_core_count():
+    """A cgroup with usage_usec but no quota (--cpus not set) still reports
+    THIS cgroup's own usage — just measured against every host core, since
+    there's no smaller allocation to compare against."""
+    system_stats._cgroup_cpu_prev = None
+    files = {"/sys/fs/cgroup/cpu.stat": "usage_usec 1000000\nuser_usec 900000\n"}
+    with patch("builtins.open", side_effect=_fake_open(files)), \
+         patch("os.cpu_count", return_value=4), \
+         patch("time.monotonic", return_value=1000.0):
+        first = system_stats._cgroup_cpu_percent()
+    assert first == 0.0
+
+    # 1 second later, this cgroup burned 2 full core-seconds — with 4 host
+    # cores as the denominator that's 50%, not 200% (which dividing by a
+    # missing/zero quota would have produced).
+    files["/sys/fs/cgroup/cpu.stat"] = "usage_usec 3000000\nuser_usec 2700000\n"
+    with patch("builtins.open", side_effect=_fake_open(files)), \
+         patch("os.cpu_count", return_value=4), \
+         patch("time.monotonic", return_value=1001.0):
+        second = system_stats._cgroup_cpu_percent()
+    assert second == 50.0
 
 
 def test_cgroup_cpu_percent_computes_rate_against_quota():
@@ -243,6 +273,29 @@ def test_get_system_stats_uses_cgroup_values_when_available(isolated_db):
     assert stats["cpu_percent"] == 42.0
     assert stats["ram_percent"] == 50.0
     assert round(stats["ram_used_gb"], 2) == round(1_000_000_000 / 1024**3, 2)
+
+
+def test_get_system_stats_uncapped_cgroup_uses_own_usage_over_host_total(isolated_db):
+    """An uncapped container/cgroup (no mem_limit/--cpus set — the common
+    case for a plain `docker run`/compose service) must still show ITS OWN
+    memory usage as "used", just measured against the host's total as the
+    denominator — not the host's own used/total, which would count every
+    other process too."""
+    from emuwarez_uploadrr.database import connect, init_db, db_path
+    with patch.object(system_stats, "_cgroup_mem_stats", return_value=(1_000_000_000, None)), \
+         patch.object(system_stats, "_cgroup_cpu_percent", return_value=3.5), \
+         patch("psutil.virtual_memory") as mock_vm:
+        mock_vm.return_value.used = 20_000_000_000
+        mock_vm.return_value.total = 4_000_000_000
+        with connect(db_path()) as conn:
+            init_db(conn)
+            stats = system_stats.get_system_stats(conn)
+    assert stats["cpu_percent"] == 3.5
+    # used = the cgroup's own 1GB, NOT the host's 20GB.
+    assert round(stats["ram_used_gb"], 2) == round(1_000_000_000 / 1024**3, 2)
+    # total = the host's 4GB (no cgroup limit to use instead).
+    assert round(stats["ram_total_gb"], 2) == round(4_000_000_000 / 1024**3, 2)
+    assert stats["ram_percent"] == 25.0
 
 
 def test_get_system_stats_falls_back_to_host_without_cgroup(isolated_db):

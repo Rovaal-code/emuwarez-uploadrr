@@ -24,12 +24,12 @@ _log = logging.getLogger("emuwarez.notifications")
 # code -> human label (shown in the Settings checkbox matrix and used as the
 # default enabled set). Keep in sync with the frontend EVENT_TYPES list.
 EVENT_TYPES: dict[str, str] = {
-    "request_published": "Petición publicada en eMuwarez",
+    "request_published": "Petición publicada",
     "upload_completed": "Subida completada",
     "upload_failed": "Subida fallida",
-    "request_match_found": "Contenido compatible con una petición",
+    "request_match_found": "Contenido compatible",
     "content_missing_new": "Contenido nuevo faltante",
-    "content_unique_changed": "Cambio en tu contenido único",
+    "content_unique_changed": "Nuevo contenido único",
 }
 
 # When a channel has never been configured, default to forwarding every event
@@ -79,6 +79,8 @@ def _row_to_dict(row: sqlite3.Row) -> dict:
         "level": row["level"],
         "entity_type": row["entity_type"],
         "entity_id": row["entity_id"],
+        "poster_url": row["poster_url"],
+        "content_title": row["content_title"],
         "created_at": row["created_at"],
         "read_at": row["read_at"],
         "read": row["read_at"] is not None,
@@ -124,8 +126,10 @@ def delete_all_notifications(conn: sqlite3.Connection) -> None:
 
 # --- Emit --------------------------------------------------------------------
 
-def _format_message(title: str, body: Optional[str], link: Optional[str]) -> str:
+def _format_message(title: str, body: Optional[str], link: Optional[str], content_title: Optional[str] = None) -> str:
     parts = [f"📢 {title}"]
+    if content_title:
+        parts.append(f"«{content_title}»")
     if body:
         parts.append(body)
     if link:
@@ -133,12 +137,12 @@ def _format_message(title: str, body: Optional[str], link: Optional[str]) -> str
     return "\n".join(parts)
 
 
-def _dispatch(conn: sqlite3.Connection, event_type: str, message: str) -> None:
+def _dispatch(conn: sqlite3.Connection, event_type: str, message: str, poster_url: Optional[str] = None) -> None:
     """Best-effort fan-out to Discord/Telegram. Never raises."""
     try:
         if _channel_enabled(conn, "discord") and event_type in channel_events(conn, "discord"):
             webhook = get_setting_canonical(conn, "notify.discord.webhook_url")
-            res = send_discord(webhook, message)
+            res = send_discord(webhook, message, poster_url=poster_url)
             if not res.get("ok"):
                 _log.warning("Discord notify falló (%s): %s", event_type, res.get("message"))
     except Exception:
@@ -148,7 +152,7 @@ def _dispatch(conn: sqlite3.Connection, event_type: str, message: str) -> None:
         if _channel_enabled(conn, "telegram") and event_type in channel_events(conn, "telegram"):
             token = get_setting_canonical(conn, "notify.telegram.bot_token")
             chat = get_setting_canonical(conn, "notify.telegram.chat_id")
-            res = send_telegram(token, chat, message)
+            res = send_telegram(token, chat, message, poster_url=poster_url)
             if not res.get("ok"):
                 _log.warning("Telegram notify falló (%s): %s", event_type, res.get("message"))
     except Exception:
@@ -165,11 +169,22 @@ def emit(
     level: str = "info",
     entity_type: Optional[str] = None,
     entity_id: Optional[int] = None,
+    poster_url: Optional[str] = None,
+    content_title: Optional[str] = None,
     dispatch: bool = True,
     commit: bool = True,
 ) -> int:
     """Store an in-app notification and (optionally) forward it to the enabled
     external channels. Returns the new notification id.
+
+    `poster_url` is the content's poster (a fully-qualified, publicly loadable
+    URL — Radarr/Sonarr's own `remoteUrl`), shown as a small thumbnail in the
+    bell and at full size in Discord/Telegram. `content_title` is the plain
+    item name (e.g. "Dune: Parte Dos (2024)") shown next to that poster — pair
+    it with a `body` that's just the reason/action ("Se ha subido a eMuwarez
+    correctamente."), not the item name again. Omit both for notifications
+    with no single associated item (e.g. an aggregate summary) — the bell
+    falls back to its plain title/body layout for those.
 
     `commit=True` commits the insert immediately so the bell reflects it even
     when the caller's own transaction is long-lived; pass False to fold it into
@@ -181,10 +196,10 @@ def emit(
     if _ui_stores(conn, event_type):
         cur = conn.execute(
             """
-            INSERT INTO notifications (event_type, title, body, link, level, entity_type, entity_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO notifications (event_type, title, body, link, level, entity_type, entity_id, poster_url, content_title)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (event_type, title, body, link, level, entity_type, entity_id),
+            (event_type, title, body, link, level, entity_type, entity_id, poster_url, content_title),
         )
         notif_id = int(cur.lastrowid)
         if commit:
@@ -192,7 +207,7 @@ def emit(
     # Discord/Telegram fan-out is independent of the bell (each has its own
     # enabled flag + event selection).
     if dispatch:
-        _dispatch(conn, event_type, _format_message(title, body, link))
+        _dispatch(conn, event_type, _format_message(title, body, link, content_title), poster_url=poster_url)
     return notif_id
 
 

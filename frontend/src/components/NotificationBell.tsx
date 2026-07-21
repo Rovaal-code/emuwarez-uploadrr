@@ -7,8 +7,100 @@ import {
   deleteAllNotifications,
   type NotificationItem,
 } from '../api/notifications'
+import { posterUrl } from '../utils/libraryItem'
+import { UploadButtonIcon, CancelButtonIcon, RequestCardIcon } from './DetailCard'
 
 const POLL_MS = 30000
+
+// Same icon+color as the Dashboard's "Contenido único" stat card
+// (DashboardPage.tsx's ICON_UNIQUE/StatCard).
+function UniqueContentIconSvg({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M10 8l6 4-6 4V8z" />
+    </svg>
+  )
+}
+
+// "Contenido compatible" — a checkmark-in-circle (no existing button icon
+// quite fits "match found").
+function MatchFoundIcon() {
+  return (
+    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="12" cy="12" r="10" /><path d="M8 12.5l2.5 2.5L16 9.5" />
+    </svg>
+  )
+}
+
+// "Contenido nuevo faltante" — same red-alert-triangle language as the rest
+// of the app's warning states.
+function MissingWarningIcon() {
+  return (
+    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12 3 1 21h22L12 3z" /><line x1="12" y1="10" x2="12" y2="14" /><line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+  )
+}
+
+// Small icon to the left of the notification's status title, colored by its
+// severity `level` and matching the event's meaning — reusing the app's own
+// action-button icons (DetailCard.tsx) where one already fits.
+function NotifTitleIcon({ eventType, level }: { eventType: string; level: string }) {
+  const color = level === 'success' ? '#22c55e' : level === 'error' ? '#ef4444' : level === 'warning' ? '#f59e0b' : '#6366f1'
+  const icon =
+    eventType === 'upload_completed' ? <UploadButtonIcon /> :
+    eventType === 'upload_failed' ? <CancelButtonIcon /> :
+    eventType === 'request_published' ? <RequestCardIcon /> :
+    eventType === 'request_match_found' ? <MatchFoundIcon /> :
+    eventType === 'content_missing_new' ? <MissingWarningIcon /> :
+    eventType === 'content_unique_changed' ? <UniqueContentIconSvg size={14} /> :
+    null
+  if (!icon) return null
+  return <span style={{ display: 'inline-flex', color, marginRight: 5, verticalAlign: -2 }}>{icon}</span>
+}
+
+// Same 28x42 shape as the Dashboard's "Actividad de subida" poster thumbs —
+// shared by the real poster and the "simulated poster" box below, so both
+// read as the same visual family.
+function PosterBox({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="poster-thumb" style={{ width: 28, height: 42, borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+      {children}
+    </div>
+  )
+}
+
+// Real poster for a notification about one specific piece of content.
+function NotifPoster({ url }: { url: string | null }) {
+  return (
+    <PosterBox>
+      {url ? (
+        <img
+          src={posterUrl(url, 'w154')}
+          alt=""
+          loading="lazy"
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+        />
+      ) : (
+        <span aria-hidden style={{ fontSize: 14, opacity: 0.35 }}>🎬</span>
+      )}
+    </PosterBox>
+  )
+}
+
+// content_unique_changed has no single item (it's a totals summary), so
+// nothing to put a real poster of — a poster-shaped box with the same
+// "Contenido único" icon centered inside reads as part of the same family
+// instead of looking like a missing/broken image.
+function NotifUniqueContentPoster() {
+  return (
+    <PosterBox>
+      <UniqueContentIconSvg size={16} />
+    </PosterBox>
+  )
+}
 
 function relativeTime(iso: string): string {
   const then = new Date(iso).getTime()
@@ -32,6 +124,53 @@ function navigateTo(link: string) {
   // Internal SPA path — push and let AppShell's popstate listener react.
   window.history.pushState({}, '', link)
   window.dispatchEvent(new PopStateEvent('popstate'))
+}
+
+// Where a notification click should actually go: the specific item's own
+// dedicated page whenever we know which one. Two handoffs fire together:
+// - sessionStorage (same one Dashboard already uses to deep-link into
+//   Biblioteca/Subidas/Peticiones) for when the target page isn't mounted
+//   yet — its own mount effect reads + clears it.
+// - a same-tick custom event for when the target page is ALREADY the open
+//   one — pushState+popstate is a no-op then (same route, React bails out,
+//   nothing remounts), so a plain mount effect would never fire again.
+// Falls back to `link` (an external eMuwarez URL, or nothing) otherwise.
+// `n.link` stays as-is for Discord/Telegram — those can't act on
+// sessionStorage or DOM events, so the backend keeps sending them a plain URL.
+function goToNotification(n: NotificationItem) {
+  if (n.entity_type === 'library_item' && n.entity_id != null) {
+    try { sessionStorage.setItem('emuwarez_open_library_item', String(n.entity_id)) } catch { /* ignore */ }
+    window.dispatchEvent(new CustomEvent('emuwarez:open-library-item', { detail: n.entity_id }))
+    navigateTo('/library')
+    return
+  }
+  if (n.entity_type === 'upload_job' && n.entity_id != null) {
+    try { sessionStorage.setItem('emuwarez_open_upload', String(n.entity_id)) } catch { /* ignore */ }
+    window.dispatchEvent(new CustomEvent('emuwarez:open-upload', { detail: n.entity_id }))
+    navigateTo('/uploads')
+    return
+  }
+  if (n.entity_type === 'request_item' && n.entity_id != null) {
+    try { sessionStorage.setItem('emuwarez_open_request', String(n.entity_id)) } catch { /* ignore */ }
+    window.dispatchEvent(new CustomEvent('emuwarez:open-request', { detail: n.entity_id }))
+    navigateTo('/requests')
+    return
+  }
+  if (n.event_type === 'content_unique_changed') {
+    // Aportes = Aporta — same "¿nuevo contenido único?" set this
+    // notification's counts describe, via the Aportes column's own filter.
+    try { sessionStorage.setItem('emuwarez_library_filter_aporte', 'yes') } catch { /* ignore */ }
+    window.dispatchEvent(new CustomEvent('emuwarez:library-filter-aporte', { detail: 'yes' }))
+    navigateTo('/library')
+    return
+  }
+  if (n.link) navigateTo(n.link)
+}
+
+function isNotificationClickable(n: NotificationItem): boolean {
+  return !!n.link
+    || (!!n.entity_type && n.entity_id != null)
+    || n.event_type === 'content_unique_changed'
 }
 
 export function NotificationBell() {
@@ -89,9 +228,9 @@ export function NotificationBell() {
       setItems(prev => prev.map(i => (i.id === n.id ? { ...i, read: true } : i)))
       try { await markNotificationRead(n.id) } catch { /* ignore */ }
     }
-    if (n.link) {
+    if (isNotificationClickable(n)) {
       setOpen(false)
-      navigateTo(n.link)
+      goToNotification(n)
     }
   }
 
@@ -144,16 +283,27 @@ export function NotificationBell() {
               <div className="notif-empty">No tienes notificaciones todavía.</div>
             )}
             {items.map(n => (
-              <div key={n.id} className={`notif-item ${n.read ? 'read' : 'unread'} ${n.link ? 'clickable' : ''}`}>
+              <div key={n.id} className={`notif-item ${n.read ? 'read' : 'unread'} ${isNotificationClickable(n) ? 'clickable' : ''}`}>
                 <button
                   type="button"
                   className="notif-item-main"
                   onClick={() => handleItemClick(n)}
                 >
-                  <span className="notif-item-dot" aria-hidden />
                   <span className="notif-item-body">
-                    <span className="notif-item-title">{n.title}</span>
-                    {n.body && <span className="notif-item-text">{n.body}</span>}
+                    {/* Line 1: the notification's status. */}
+                    <span className="notif-item-title"><NotifTitleIcon eventType={n.event_type} level={n.level} />{n.title}</span>
+                    {/* Line 2: poster (or a simulated one) + content name + reason. */}
+                    {(n.content_title || n.event_type === 'content_unique_changed') ? (
+                      <span className="notif-item-content-row">
+                        {n.content_title ? <NotifPoster url={n.poster_url} /> : <NotifUniqueContentPoster />}
+                        <span className="notif-item-content-col">
+                          {n.content_title && <span className="notif-item-content-title">{n.content_title}</span>}
+                          {n.body && <span className="notif-item-text">{n.body}</span>}
+                        </span>
+                      </span>
+                    ) : (
+                      n.body && <span className="notif-item-text">{n.body}</span>
+                    )}
                     <span className="notif-item-time">{relativeTime(n.created_at)}</span>
                   </span>
                 </button>

@@ -68,10 +68,20 @@ export function SystemStatusPanel({ collapsed = false }: { collapsed?: boolean }
 
   useEffect(() => {
     let alive = true
-    const load = () => getSystemStats().then(s => { if (alive) setStats(s) }).catch(() => { /* ignore — next tick retries */ })
+    let timer: ReturnType<typeof setTimeout> | undefined
+    // A plain setInterval would fire the next poll even while the previous
+    // one is still in flight — if the backend ever takes longer than
+    // POLL_MS (e.g. a cold disk-path cache, see system_stats.py), several
+    // requests pile up in parallel instead of one at a time. Scheduling the
+    // next call only after the current one settles avoids that entirely.
+    const load = () => {
+      getSystemStats()
+        .then(s => { if (alive) setStats(s) })
+        .catch(() => { /* ignore — next tick retries */ })
+        .finally(() => { if (alive) timer = setTimeout(load, POLL_MS) })
+    }
     load()
-    const t = setInterval(load, POLL_MS)
-    return () => { alive = false; clearInterval(t) }
+    return () => { alive = false; if (timer) clearTimeout(timer) }
   }, [])
 
   if (!stats) return null

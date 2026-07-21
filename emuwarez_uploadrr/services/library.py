@@ -133,12 +133,13 @@ def _notify_new_missing(conn: sqlite3.Connection, item: LibraryItem, item_id: in
         emit(
             conn, "content_missing_new",
             "Contenido nuevo faltante",
-            f"«{title}{year_part}» no está disponible — Radarr/Sonarr no lo ha encontrado. "
-            "Puede que quieras crear una petición en eMuwarez.",
+            "No está disponible. Puede que quieras crear una petición en eMuwarez.",
             link="/library",
             level="warning",
             entity_type="library_item",
             entity_id=item_id,
+            poster_url=item.poster_url,
+            content_title=f"{title}{year_part}",
         )
     except Exception:
         logger.exception("No se pudo emitir la notificación de contenido faltante para el item %s", item_id)

@@ -455,14 +455,26 @@ def _notify_new_compatible_matches(conn: sqlite3.Connection, before_ids: set[int
                 "SELECT title, url FROM request_items WHERE id = ?", (rid,)
             ).fetchone()
             title = (row["title"] if row else None) or f"Petición #{rid}"
+            # request_items has no poster of its own — the matched
+            # library_item does, via the same 'Compatible' match this
+            # notification is about.
+            poster_row = conn.execute(
+                """SELECT li.poster_url AS poster_url
+                   FROM request_matches rm JOIN library_items li ON li.id = rm.library_item_id
+                   WHERE rm.request_item_id = ? AND rm.status = 'Compatible'
+                   LIMIT 1""",
+                (rid,),
+            ).fetchone()
             emit(
                 conn, "request_match_found",
-                "Contenido compatible con una petición",
-                f"Tienes contenido compatible con la petición «{title}».",
+                "Contenido compatible",
+                "Tienes contenido compatible con esta petición.",
                 link=(row["url"] if row and row["url"] else "/requests"),
                 level="info",
                 entity_type="request_item",
                 entity_id=rid,
+                poster_url=poster_row["poster_url"] if poster_row else None,
+                content_title=title,
             )
     except Exception:
         logging.getLogger("emuwarez.notifications").exception(

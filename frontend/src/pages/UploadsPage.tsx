@@ -136,17 +136,20 @@ function JobRow({ job, onOpen, indent, retryToggle, onCancel, onRetry }: {
           )}
         </div>
       </td>
-      <td style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingLeft: indent ? 24 : undefined }}>
-        {indent && <span style={{ color: 'var(--text-muted)', marginRight: 4 }}>↳</span>}
-        <span
-          className="lib-title-link"
-          onClick={onOpen}
-          {...titleTip}
-        >
-          {job.title || '–'}
-          {titleTooltip}
-        </span>
-        {job.year ? <span style={{ color: 'var(--text-muted)', marginLeft: 4 }}>({job.year})</span> : null}
+      <td style={{ maxWidth: 220, paddingLeft: indent ? 24 : undefined }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, minWidth: 0 }}>
+          {indent && <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>↳</span>}
+          <span
+            className="lib-title-link"
+            style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}
+            onClick={onOpen}
+            {...titleTip}
+          >
+            {job.title || '–'}
+            {titleTooltip}
+          </span>
+          {job.year ? <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>({job.year})</span> : null}
+        </div>
       </td>
       <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
         {UPLOAD_TYPE_LABEL[job.media_type ?? ''] ?? '–'}
@@ -272,6 +275,22 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
     try { sessionStorage.removeItem('emuwarez_open_upload') } catch { /* ignore */ }
     setSelectedJobId(Number(pending))
   }, [jobs])
+
+  // Same hand-off, but live — the sessionStorage read above only re-checks
+  // when `jobs` changes, so clicking a notification while Subidas is
+  // ALREADY the open page (no reload, `jobs` unchanged) would otherwise do
+  // nothing. NotificationBell dispatches this same-tick, in addition to
+  // stashing sessionStorage for the cross-page case.
+  useEffect(() => {
+    const onOpenUpload = (e: Event) => {
+      const id = (e as CustomEvent<number>).detail
+      if (id == null) return
+      try { sessionStorage.removeItem('emuwarez_open_upload') } catch { /* ignore */ }
+      setSelectedJobId(id)
+    }
+    window.addEventListener('emuwarez:open-upload', onOpenUpload)
+    return () => window.removeEventListener('emuwarez:open-upload', onOpenUpload)
+  }, [])
 
   // Poll every 2.5s while at least one job is live (staging/queued/preparing/
   // running), so status/progress/logs — and the staging→queued→preparing→

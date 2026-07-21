@@ -11,6 +11,7 @@ Safety rules:
 from __future__ import annotations
 
 import json
+import re
 import socket
 import urllib.error
 import urllib.request
@@ -19,6 +20,18 @@ from typing import Optional
 _TIMEOUT = 10  # seconds — short timeout, matches services/integration_tests.py
 
 _TEST_MESSAGE = "eMuwarez Uploadrr — notificación de prueba. Si ves esto, la configuración es correcta."
+
+# Poster URLs are TMDb CDN links (or Radarr/Sonarr's own remoteUrl) shaped
+# like ".../t/p/w500/xxxx.jpg" — swap the size segment for a normal/large one
+# instead of whatever small thumbnail size the caller happened to store.
+# No-ops (returns the URL unchanged) for anything that isn't shaped like that.
+_POSTER_SIZE_RE = re.compile(r"/t/p/(?:original|w\d+)/")
+
+
+def _poster_url_large(url: Optional[str]) -> Optional[str]:
+    if not url:
+        return None
+    return _POSTER_SIZE_RE.sub("/t/p/w500/", url)
 
 
 def _ok(service: str, message: str = "Notificación enviada correctamente") -> dict:
@@ -29,9 +42,10 @@ def _fail(service: str, status: str, message: str) -> dict:
     return {"ok": False, "service": service, "status": status, "message": message, "details": {}}
 
 
-def send_discord(webhook_url: Optional[str], message: str) -> dict:
+def send_discord(webhook_url: Optional[str], message: str, *, poster_url: Optional[str] = None) -> dict:
     """Send an arbitrary message to a Discord webhook. Read-only w.r.t. app
-    data — the caller supplies the already-formatted text."""
+    data — the caller supplies the already-formatted text. `poster_url`, if
+    given, is attached as a full-size embed image below the message."""
     if not webhook_url or not webhook_url.strip():
         return _fail("discord", "not_configured", "Webhook de Discord no configurado")
 
@@ -39,7 +53,11 @@ def send_discord(webhook_url: Optional[str], message: str) -> dict:
     if not url.startswith(("http://", "https://")):
         return _fail("discord", "invalid_url", "URL de webhook de Discord inválida")
 
-    payload = json.dumps({"content": message}).encode("utf-8")
+    body: dict = {"content": message}
+    large_poster = _poster_url_large(poster_url)
+    if large_poster:
+        body["embeds"] = [{"image": {"url": large_poster}}]
+    payload = json.dumps(body).encode("utf-8")
     req = urllib.request.Request(
         url, data=payload, method="POST",
         headers={"Content-Type": "application/json", "User-Agent": "emuwarez-uploadrr/3"},
@@ -62,16 +80,23 @@ def send_discord(webhook_url: Optional[str], message: str) -> dict:
         return _fail("discord", "unexpected_error", f"Error inesperado: {type(exc).__name__}")
 
 
-def send_telegram(bot_token: Optional[str], chat_id: Optional[str], message: str) -> dict:
-    """Send an arbitrary message via a Telegram bot. Read-only w.r.t. app data."""
+def send_telegram(bot_token: Optional[str], chat_id: Optional[str], message: str, *, poster_url: Optional[str] = None) -> dict:
+    """Send an arbitrary message via a Telegram bot. Read-only w.r.t. app data.
+    `poster_url`, if given, switches this to sendPhoto (full-size image +
+    caption) instead of a plain sendMessage."""
     if not bot_token or not bot_token.strip():
         return _fail("telegram", "not_configured", "Bot token de Telegram no configurado")
     if not chat_id or not chat_id.strip():
         return _fail("telegram", "not_configured", "Chat ID de Telegram no configurado")
 
     token = bot_token.strip()
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = json.dumps({"chat_id": chat_id.strip(), "text": message}).encode("utf-8")
+    large_poster = _poster_url_large(poster_url)
+    if large_poster:
+        url = f"https://api.telegram.org/bot{token}/sendPhoto"
+        payload = json.dumps({"chat_id": chat_id.strip(), "photo": large_poster, "caption": message[:1024]}).encode("utf-8")
+    else:
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        payload = json.dumps({"chat_id": chat_id.strip(), "text": message}).encode("utf-8")
     req = urllib.request.Request(
         url, data=payload, method="POST",
         headers={"Content-Type": "application/json", "User-Agent": "emuwarez-uploadrr/3"},

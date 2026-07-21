@@ -645,7 +645,7 @@ def _notify_if_unique_content_changed(conn: sqlite3.Connection) -> None:
             return
         emit(
             conn, "content_unique_changed",
-            "Cambio en tu contenido único",
+            "Nuevo contenido único",
             f"Tu biblioteca tiene {counts['movies']} películas, {counts['seasons']} temporadas y "
             f"{counts['episodes']} episodios que todavía no están en eMuwarez.",
             link="/library",

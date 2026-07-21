@@ -248,7 +248,140 @@ def _child_quality_rollup(conn, item_id: int, item_type: str, ignore_specials: b
     }
 
 
-def _to_lib_response(row: dict, conn=None) -> LibraryItemResponse:
+# ---------------------------------------------------------------------------
+# Batched rollups for library_list() — the single-id helpers above are still
+# used as-is for the single-item lookup (GET /api/library/{id}, one row, no
+# N+1 concern), but calling them once PER season/series row in a list of many
+# was the real cost behind a slow /api/library: ~5 extra queries per row, so
+# a page with a few hundred series meant a few hundred round trips. These
+# fetch every relevant episode row for ALL ids in the page in a couple of
+# queries total, then do the exact same aggregation in Python, keyed by id.
+# ---------------------------------------------------------------------------
+
+def _aggregate_nomenclature(statuses: list) -> Optional[str]:
+    counts: dict = {}
+    for s in statuses:
+        counts[s] = counts.get(s, 0) + 1
+    if sum(counts.values()) == 0:
+        return None
+    correct = counts.get("Correcta", 0)
+    not_adapted = counts.get("No adaptada", 0)
+    unchecked = counts.get("No comprobada", 0)
+    available = correct + not_adapted + unchecked
+    if available == 0:
+        return "N/A"
+    if unchecked > 0:
+        return "No comprobada"
+    if correct == available:
+        return "Correcta"
+    if not_adapted == available:
+        return "No adaptada"
+    return "Parcial"
+
+
+def _aggregate_local_status(statuses: list) -> Optional[str]:
+    counts: dict = {}
+    for s in statuses:
+        counts[s] = counts.get(s, 0) + 1
+    total = sum(counts.values())
+    if total == 0:
+        return None
+    available = counts.get("Disponible", 0)
+    if available == total:
+        return "Disponible"
+    if available == 0:
+        return "Faltante"
+    return "Parcial"
+
+
+def _aggregate_size(sizes: list) -> Optional[int]:
+    if not any(s is not None for s in sizes):
+        return None
+    return sum(s for s in sizes if s is not None)
+
+
+def _aggregate_quality(rows: list[dict]) -> dict:
+    if not rows:
+        return dict(_ROLLUP_EMPTY)
+
+    def uniq(key: str):
+        vals = {r[key] for r in rows}
+        return next(iter(vals)) if len(vals) == 1 else None
+
+    providers: set = set()
+    for r in rows:
+        providers.add(infer_provider_from_item({"path": r["path"], "source": r["source"]}))
+        if len(providers) > 1:
+            break
+    return {
+        "provider": next(iter(providers)) if len(providers) == 1 else None,
+        "resolution": uniq("resolution"),
+        "source": uniq("source"),
+        "video_codec": uniq("video_codec"),
+        "audio_codec": uniq("audio_codec"),
+        "audio_languages": uniq("audio_languages"),
+        "subtitle_languages": uniq("subtitle_languages"),
+    }
+
+
+def _aggregate_path(rows: list[dict]) -> Optional[str]:
+    paths = [r["path"] for r in rows if r["path"]]
+    if not paths:
+        return None
+    dirs = {os.path.dirname(p) for p in paths}
+    if len(dirs) == 1:
+        return next(iter(dirs))
+    try:
+        return os.path.commonpath(paths)
+    except ValueError:
+        return None
+
+
+def _batch_rollups(conn, series_ids: list[int], season_ids: list[int], ignore_specials: bool) -> dict[int, dict]:
+    """{item_id: {"nomenclature", "size", "local_status", "quality", "path"}}
+    for every id in series_ids/season_ids, computed from at most 2 queries
+    total (one per grouping depth) instead of ~5 queries per id."""
+    groups: dict[int, list[dict]] = {}
+
+    if season_ids:
+        placeholders = ",".join("?" * len(season_ids))
+        rows = conn.execute(
+            "SELECT parent_id AS gid, path, resolution, source, video_codec, audio_codec, "
+            "audio_languages, subtitle_languages, nomenclature_status, local_status, size_bytes "
+            f"FROM library_items WHERE parent_id IN ({placeholders}) AND item_type = 'episode'",
+            season_ids,
+        ).fetchall()
+        for r in rows:
+            groups.setdefault(r["gid"], []).append(dict(r))
+
+    if series_ids:
+        placeholders = ",".join("?" * len(series_ids))
+        rows = conn.execute(
+            "SELECT se.parent_id AS gid, e.path AS path, e.resolution AS resolution, e.source AS source, "
+            "e.video_codec AS video_codec, e.audio_codec AS audio_codec, "
+            "e.audio_languages AS audio_languages, e.subtitle_languages AS subtitle_languages, "
+            "e.nomenclature_status AS nomenclature_status, e.local_status AS local_status, e.size_bytes AS size_bytes "
+            "FROM library_items e JOIN library_items se ON e.parent_id = se.id "
+            f"WHERE se.parent_id IN ({placeholders}) AND e.item_type = 'episode'"
+            + _specials_clause("se", ignore_specials),
+            series_ids,
+        ).fetchall()
+        for r in rows:
+            groups.setdefault(r["gid"], []).append(dict(r))
+
+    result: dict[int, dict] = {}
+    for gid, episode_rows in groups.items():
+        result[gid] = {
+            "nomenclature": _aggregate_nomenclature([r["nomenclature_status"] for r in episode_rows]),
+            "size": _aggregate_size([r["size_bytes"] for r in episode_rows]),
+            "local_status": _aggregate_local_status([r["local_status"] for r in episode_rows]),
+            "quality": _aggregate_quality(episode_rows),
+            "path": _aggregate_path(episode_rows),
+        }
+    return result
+
+
+def _to_lib_response(row: dict, conn=None, rollups: Optional[dict] = None) -> LibraryItemResponse:
     file_exists_raw = row.get("file_exists")
     nomenclature_status = row["nomenclature_status"]
     local_status = row["local_status"]
@@ -263,22 +396,36 @@ def _to_lib_response(row: dict, conn=None) -> LibraryItemResponse:
     audio_languages = row.get("audio_languages")
     subtitle_languages = row.get("subtitle_languages")
     if row["item_type"] in ("season", "series"):
-        ignore_specials = _ignore_specials(conn)
-        rollup = _nomenclature_rollup(conn, row["id"], row["item_type"], ignore_specials)
+        if rollups is not None:
+            # library_list() already batched every season/series' rollup in
+            # a couple of queries total — reuse it instead of hitting the DB
+            # again for this one row (this dict simply won't have an entry
+            # for an id with no episodes at all, same as the live helpers
+            # below returning None/empty for it).
+            precomputed = rollups.get(row["id"], {})
+        else:
+            ignore_specials = _ignore_specials(conn)
+            precomputed = {
+                "nomenclature": _nomenclature_rollup(conn, row["id"], row["item_type"], ignore_specials),
+                "size": _size_rollup(conn, row["id"], row["item_type"]),
+                # Availability now rolls up from real episodes (Sonarr's own
+                # status reports 'Disponible' even with missing episodes).
+                "local_status": _local_status_rollup(conn, row["id"], row["item_type"], ignore_specials),
+                "quality": _child_quality_rollup(conn, row["id"], row["item_type"], ignore_specials),
+                "path": _rollup_path(conn, row["id"], row["item_type"], ignore_specials) if not path else None,
+            }
+        rollup = precomputed.get("nomenclature")
         if rollup is not None:
             nomenclature_status = rollup
-        rolled_size = _size_rollup(conn, row["id"], row["item_type"])
+        rolled_size = precomputed.get("size")
         if rolled_size is not None:
             size_bytes = rolled_size
-        # Availability now rolls up from real episodes (Sonarr's own status
-        # reports 'Disponible' even with missing episodes) — for both seasons
-        # and series.
-        loc = _local_status_rollup(conn, row["id"], row["item_type"], ignore_specials)
+        loc = precomputed.get("local_status")
         if loc is not None:
             local_status = loc
         # Provider/quality/codecs/audio/subs: show the value shared by every
         # episode (else blank), so a uniform season/series reflects it.
-        rq = _child_quality_rollup(conn, row["id"], row["item_type"], ignore_specials)
+        rq = precomputed.get("quality") or dict(_ROLLUP_EMPTY)
         provider = provider or rq["provider"]
         resolution = resolution or rq["resolution"]
         source = source or rq["source"]
@@ -289,7 +436,7 @@ def _to_lib_response(row: dict, conn=None) -> LibraryItemResponse:
         # A season/series rollup has no file of its own — show its folder path
         # derived from the episodes (e.g. '…/Attack on Titan/Season 2').
         if not path:
-            path = _rollup_path(conn, row["id"], row["item_type"], ignore_specials)
+            path = precomputed.get("path")
     return LibraryItemResponse(
         id=row["id"],
         item_type=row["item_type"],
@@ -470,7 +617,13 @@ def library_list(
             parent_id=parent_id,
             search=search,
         )
-        items = [_to_lib_response(r, conn) for r in rows]
+        series_ids = [r["id"] for r in rows if r["item_type"] == "series"]
+        season_ids = [r["id"] for r in rows if r["item_type"] == "season"]
+        rollups = (
+            _batch_rollups(conn, series_ids, season_ids, _ignore_specials(conn))
+            if (series_ids or season_ids) else {}
+        )
+        items = [_to_lib_response(r, conn, rollups) for r in rows]
     return LibraryListResponse(
         items=items,
         total=total,

@@ -11,6 +11,7 @@ import os
 import platform
 import shutil
 import subprocess
+import threading
 import time
 
 import psutil
@@ -213,12 +214,49 @@ def _gpu_stats() -> dict | None:
         return None
 
 
+# Resolving this walks stale library rows' paths up to an existing ancestor
+# directory — each os.path.exists() on a dead prefix under a network mount
+# (SSHFS/NFS) can cost seconds, not milliseconds, since a negative lookup
+# still needs a full round trip. Which filesystem the library lives on
+# essentially never changes mid-session, so the result is cached instead of
+# re-walked on every 4s sidebar poll (see SystemStatusPanel.tsx's POLL_MS).
+_disk_path_cache: tuple[float, str] | None = None
+_DISK_PATH_CACHE_TTL = 300.0  # 5 minutes
+# The sidebar polls every 4s without waiting for the previous request to
+# finish (SystemStatusPanel.tsx), so several requests can land while the
+# cache is still cold right after it expires. Without this lock every one of
+# them would independently re-run the same multi-second filesystem walk;
+# with it, only the first pays the cost and the rest just wait for its result.
+_disk_path_lock = threading.Lock()
+
+
 def _library_disk_path(conn) -> str:
     """Directory of some real, currently-reachable library file — measuring
     disk usage there answers "how full is the disk the library lives on",
     which can be a completely different filesystem than the app's own
     CONFIG_DIR (e.g. a media library mounted over SSHFS/NFS). Falls back to
     CONFIG_DIR when the library is empty or nothing is reachable yet."""
+    global _disk_path_cache
+    now = time.monotonic()
+    if _disk_path_cache is not None:
+        resolved_at, cached_path = _disk_path_cache
+        if now - resolved_at < _DISK_PATH_CACHE_TTL:
+            return cached_path
+
+    with _disk_path_lock:
+        # Another thread may have already finished the walk while we were
+        # waiting for the lock — re-check before redoing the expensive work.
+        now = time.monotonic()
+        if _disk_path_cache is not None:
+            resolved_at, cached_path = _disk_path_cache
+            if now - resolved_at < _DISK_PATH_CACHE_TTL:
+                return cached_path
+        path = _resolve_library_disk_path(conn)
+        _disk_path_cache = (now, path)
+        return path
+
+
+def _resolve_library_disk_path(conn) -> str:
     from .path_mapping import resolve_local_path
     try:
         rows = conn.execute(
@@ -227,6 +265,7 @@ def _library_disk_path(conn) -> str:
         ).fetchall()
     except Exception:
         rows = []
+    path = str(CONFIG_DIR)
     for row in rows:
         raw = row["prepared_path"] or row["path"]
         local = resolve_local_path(raw, conn)
@@ -236,11 +275,16 @@ def _library_disk_path(conn) -> str:
         # Walk up to the nearest existing ancestor — the file itself may
         # have moved/been deleted since the last sync, but its mount point
         # almost certainly still exists.
+        found = False
         while p and p not in ("/", ""):
             if os.path.exists(p):
-                return p
+                path = p
+                found = True
+                break
             p = os.path.dirname(p)
-    return str(CONFIG_DIR)
+        if found:
+            break
+    return path
 
 
 def get_system_stats(conn) -> dict:

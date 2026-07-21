@@ -64,11 +64,11 @@ export function ServiceIcon({ type, size = 16 }: ServiceIconProps) {
   }
 
   if (type === 'emu') {
-    // Stylized E — purple/blue
+    // Stylized E — HUD cyan, matching the app's own holographic signature banner.
     return (
       <svg width={s} height={s} viewBox="0 0 24 24" fill="none" aria-label="eMuwarez">
-        <rect x="4" y="4" width="16" height="16" rx="4" fill="#6366f1" opacity="0.15" />
-        <path d="M8 7h8M8 12h6M8 17h8" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" />
+        <rect x="4" y="4" width="16" height="16" rx="4" fill="#2fd8ff" opacity="0.15" />
+        <path d="M8 7h8M8 12h6M8 17h8" stroke="#2fd8ff" strokeWidth="2" strokeLinecap="round" />
       </svg>
     )
   }

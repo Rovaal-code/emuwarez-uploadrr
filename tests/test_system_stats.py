@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import io
+import threading
+import time
 from unittest.mock import patch
 
 from emuwarez_uploadrr.services import system_stats
@@ -35,10 +37,59 @@ def test_get_system_stats_shape(isolated_db):
 def test_library_disk_path_falls_back_when_empty(isolated_db):
     from emuwarez_uploadrr.database import connect, init_db, db_path
     from emuwarez_uploadrr.constants import CONFIG_DIR
+    system_stats._disk_path_cache = None
     with connect(db_path()) as conn:
         init_db(conn)
         path = system_stats._library_disk_path(conn)
     assert path == str(CONFIG_DIR)
+
+
+class _ExplodingConn:
+    def execute(self, *a, **k):
+        raise AssertionError("should not re-query the DB while the cache is still fresh")
+
+
+def test_library_disk_path_single_flights_concurrent_cold_calls(isolated_db):
+    """Several requests landing while the cache is cold (the sidebar polls
+    every 4s without waiting for the previous call) must not each redo the
+    expensive filesystem walk — only the first should, the rest wait on it."""
+    from emuwarez_uploadrr.database import connect, init_db, db_path
+    system_stats._disk_path_cache = None
+    call_count = 0
+
+    def _slow_resolve(conn):
+        nonlocal call_count
+        call_count += 1
+        time.sleep(0.2)
+        return "/some/resolved/path"
+
+    with connect(db_path()) as conn:
+        init_db(conn)
+        with patch.object(system_stats, "_resolve_library_disk_path", side_effect=_slow_resolve):
+            results = []
+            threads = [
+                threading.Thread(target=lambda: results.append(system_stats._library_disk_path(conn)))
+                for _ in range(5)
+            ]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+
+    assert call_count == 1
+    assert results == ["/some/resolved/path"] * 5
+
+
+def test_library_disk_path_is_cached_across_calls(isolated_db):
+    from emuwarez_uploadrr.database import connect, init_db, db_path
+    system_stats._disk_path_cache = None
+    with connect(db_path()) as conn:
+        init_db(conn)
+        first = system_stats._library_disk_path(conn)
+    # A second call within the TTL must serve the cached value without
+    # touching the connection at all — a broken/closed conn would still work.
+    second = system_stats._library_disk_path(_ExplodingConn())
+    assert first == second
 
 
 def test_gpu_stats_none_when_nvidia_smi_missing():

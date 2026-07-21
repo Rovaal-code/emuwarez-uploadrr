@@ -580,6 +580,16 @@ def _check_trailer_and_log(job_id: int) -> None:
         logger.exception("Error comprobando el trailer (job %s)", job_id)
 
 
+def _job_poster_url(conn, job: dict | None) -> str | None:
+    """upload_jobs has no poster of its own — look it up via the job's linked
+    library_item, same join used elsewhere (web/api/uploads.py)."""
+    item_id = (job or {}).get("library_item_id")
+    if not item_id:
+        return None
+    row = conn.execute("SELECT poster_url FROM library_items WHERE id = ?", (item_id,)).fetchone()
+    return row["poster_url"] if row else None
+
+
 def _notify_upload_completed(job_id: int, result_url: str | None) -> None:
     """Emit a 'subida completada' notification. Best-effort: never lets a
     notification failure affect the upload result."""
@@ -591,7 +601,7 @@ def _notify_upload_completed(job_id: int, result_url: str | None) -> None:
             title = (job or {}).get("title") or "Subida"
             artifacts = get_upload_job_artifacts(job_id, conn=conn)
             has_trailer = any(a.get("artifact_type") == "trailer_url" for a in artifacts)
-            body = f"«{title}» se ha subido a eMuwarez correctamente."
+            body = "Se ha subido a eMuwarez correctamente."
             if not has_trailer:
                 body += " Requiere Trailer."
             emit(
@@ -602,6 +612,8 @@ def _notify_upload_completed(job_id: int, result_url: str | None) -> None:
                 level="success",
                 entity_type="upload_job",
                 entity_id=job_id,
+                poster_url=_job_poster_url(conn, job),
+                content_title=title,
             )
         finally:
             conn.close()
@@ -622,7 +634,7 @@ def _notify_upload_failed(job_id: int, error_message: str | None) -> None:
         try:
             job = get_upload_job(job_id, conn=conn)
             title = (job or {}).get("title") or "Subida"
-            body = f"«{title}» ha fallado al subirse a eMuwarez."
+            body = "Ha fallado al subirse a eMuwarez."
             if error_message:
                 body += f" {error_message.strip()[:300]}"
             emit(
@@ -632,6 +644,8 @@ def _notify_upload_failed(job_id: int, error_message: str | None) -> None:
                 level="error",
                 entity_type="upload_job",
                 entity_id=job_id,
+                poster_url=_job_poster_url(conn, job),
+                content_title=title,
             )
         finally:
             conn.close()

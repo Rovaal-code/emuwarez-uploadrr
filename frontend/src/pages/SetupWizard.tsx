@@ -360,6 +360,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               <ul style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.8, paddingLeft: 20, marginTop: 8 }}>
                 <li>Gestiona y sincroniza tus bibliotecas de Radarr y Sonarr.</li>
                 <li>Prepara y sube contenido siguiendo la nomenclatura de eMuwarez.</li>
+                <li>Permite subir varios contenidos en paralelo, sin esperar a que termine uno para lanzar el siguiente.</li>
                 <li>Se conecta con eMuwarez para listar las peticiones actuales.</li>
                 <li>Obtiene el catálogo de eMuwarez y lo compara contra tu biblioteca.</li>
                 <li>Muestra el contenido único de tu biblioteca, aquel que todavía no esté en eMuwarez.</li>

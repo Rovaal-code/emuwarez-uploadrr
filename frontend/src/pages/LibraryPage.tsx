@@ -210,6 +210,45 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     getLibraryItem(Number(pending)).then(setSelected).catch(() => { /* ignore */ })
   }, [])
 
+  // Opened from the "Nuevo contenido único" notification: pre-apply the
+  // Aportes = Aporta filter so the list lands already showing exactly what
+  // that notification was about, instead of the unfiltered list.
+  useEffect(() => {
+    let pending: string | null = null
+    try { pending = sessionStorage.getItem('emuwarez_library_filter_aporte') } catch { /* ignore */ }
+    if (!pending) return
+    try { sessionStorage.removeItem('emuwarez_library_filter_aporte') } catch { /* ignore */ }
+    setFilterAporte(pending)
+    setOffset(0)
+  }, [])
+
+  // Same two hand-offs as above, but live — the sessionStorage reads only
+  // fire once, on mount, so clicking a notification while Biblioteca is
+  // ALREADY the open page (no remount happens) would otherwise do nothing.
+  // NotificationBell dispatches these same-tick, in addition to stashing
+  // sessionStorage for the cross-page case.
+  useEffect(() => {
+    const onOpenItem = (e: Event) => {
+      const id = (e as CustomEvent<number>).detail
+      if (id == null) return
+      try { sessionStorage.removeItem('emuwarez_open_library_item') } catch { /* ignore */ }
+      getLibraryItem(id).then(setSelected).catch(() => { /* ignore */ })
+    }
+    const onFilterAporte = (e: Event) => {
+      const value = (e as CustomEvent<string>).detail
+      if (!value) return
+      try { sessionStorage.removeItem('emuwarez_library_filter_aporte') } catch { /* ignore */ }
+      setFilterAporte(value)
+      setOffset(0)
+    }
+    window.addEventListener('emuwarez:open-library-item', onOpenItem)
+    window.addEventListener('emuwarez:library-filter-aporte', onFilterAporte)
+    return () => {
+      window.removeEventListener('emuwarez:open-library-item', onOpenItem)
+      window.removeEventListener('emuwarez:library-filter-aporte', onFilterAporte)
+    }
+  }, [])
+
   // Refresh the list whenever any global sync finishes (library or eMuwarez).
   useEffect(() => { if (lastCompletedAt) load() }, [lastCompletedAt, load])
 

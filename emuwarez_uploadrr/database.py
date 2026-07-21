@@ -921,12 +921,21 @@ def _migrate_notifications_table(conn: sqlite3.Connection) -> None:
             level TEXT NOT NULL DEFAULT 'info',
             entity_type TEXT,
             entity_id INTEGER,
+            poster_url TEXT,
+            content_title TEXT,
             created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
             read_at TEXT
         )
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at DESC)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(read_at)")
+    # Existing installs predate poster_url/content_title — CREATE TABLE IF NOT
+    # EXISTS above is a no-op for them, so add the columns here too.
+    for col in ("poster_url", "content_title"):
+        try:
+            conn.execute(f"ALTER TABLE notifications ADD COLUMN {col} TEXT")
+        except sqlite3.OperationalError:
+            pass
 
 
 def _migrate_nomenclature_phase10a(conn: sqlite3.Connection) -> None:

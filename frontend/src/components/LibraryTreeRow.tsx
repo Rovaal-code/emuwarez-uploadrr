@@ -53,10 +53,12 @@ export function EmuStatusCell({ item }: { item: LibraryItemResponse }) {
 }
 
 // "Aportes" — what your copy would add: "Nuevo" badge if it's not on the
-// tracker at all, chips per improvement (resolution / source / codec / ESP),
-// or — when it's there and you add nothing. Only meaningful for content you
-// actually have (Disponible/Subido/Subiendo, or Parcial for a rollup) — a
-// Faltante item has nothing to contribute regardless of emu_in_catalog.
+// tracker at all, "Sí" if it's already there but you'd still improve it
+// (resolution / source / codec / ESP — the exact breakdown only shows on the
+// item's own page, via EmuComparisonSection), or — when it's there and you
+// add nothing. Only meaningful for content you actually have (Disponible/
+// Subido/Subiendo, or Parcial for a rollup) — a Faltante item has nothing to
+// contribute regardless of emu_in_catalog.
 export function EmuAportesCell({ item }: { item: LibraryItemResponse }) {
   if (item.emu_in_catalog == null || !isAporteEligible(item)) {
     return <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>
@@ -68,21 +70,7 @@ export function EmuAportesCell({ item }: { item: LibraryItemResponse }) {
   if (aportes.length === 0) {
     return <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>
   }
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-      {aportes.map((a, i) => (
-        <span
-          key={i}
-          style={{
-            fontSize: 10.5, padding: '1px 6px', borderRadius: 4, whiteSpace: 'nowrap',
-            background: 'rgba(34,197,94,0.14)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)',
-          }}
-        >
-          {a.detail}
-        </span>
-      ))}
-    </div>
-  )
+  return <StatusBadge status="Sí" type="emu" />
 }
 
 // Memoized: the list can hold hundreds of rows, and typing in the title
@@ -144,8 +132,8 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
   return (
     <>
       <tr className={canExpand ? 'clickable' : undefined} onClick={canExpand ? toggle : undefined}>
-        <td>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: indent }}>
+        <td style={{ maxWidth: 340 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: indent, minWidth: 0 }}>
             {canExpand ? (
               <button
                 className="btn btn-ghost btn-sm"
@@ -181,15 +169,18 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
                 </span>
               )}
             </div>
-            <div
-              className="lib-title-link"
-              onClick={e => { e.stopPropagation(); onSelect(item) }}
-              {...titleTip}
-            >
-              {episodeListLabel(item)}
-              {titleTooltip}
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, minWidth: 0, flex: 1 }}>
+              <div
+                className="lib-title-link"
+                style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}
+                onClick={e => { e.stopPropagation(); onSelect(item) }}
+                {...titleTip}
+              >
+                {episodeListLabel(item)}
+                {titleTooltip}
+              </div>
+              {item.year ? <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>({item.year})</span> : null}
             </div>
-            {item.year ? <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 4, flexShrink: 0 }}>({item.year})</span> : null}
           </div>
         </td>
         <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{formatItemType(item.item_type)}</td>

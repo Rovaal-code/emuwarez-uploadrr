@@ -9,7 +9,7 @@ import socket
 import urllib.error
 from unittest.mock import MagicMock, patch
 
-from emuwarez_uploadrr.services.notifications import send_discord_test, send_telegram_test
+from emuwarez_uploadrr.services.notifications import send_discord, send_discord_test, send_telegram, send_telegram_test
 
 
 def _mock_response(status: int = 204, body: bytes = b"") -> MagicMock:
@@ -138,3 +138,56 @@ class TestSendTelegramTest:
         with patch("urllib.request.urlopen", side_effect=_http_error(401)):
             result = send_telegram_test(secret, "-100123")
         assert secret not in json.dumps(result)
+
+
+class TestSendDiscordPoster:
+    def test_without_poster_no_embed(self):
+        with patch("urllib.request.urlopen", return_value=_mock_response(204)) as mock_urlopen:
+            send_discord("https://discord.com/api/webhooks/123/abc", "hola")
+        sent = json.loads(mock_urlopen.call_args[0][0].data)
+        assert sent == {"content": "hola"}
+
+    def test_with_poster_adds_embed_image(self):
+        with patch("urllib.request.urlopen", return_value=_mock_response(204)) as mock_urlopen:
+            send_discord(
+                "https://discord.com/api/webhooks/123/abc", "hola",
+                poster_url="https://image.tmdb.org/t/p/w154/abc.jpg",
+            )
+        sent = json.loads(mock_urlopen.call_args[0][0].data)
+        assert sent["content"] == "hola"
+        # Resized to a normal/large size, not left at the small UI thumbnail size.
+        assert sent["embeds"] == [{"image": {"url": "https://image.tmdb.org/t/p/w500/abc.jpg"}}]
+
+    def test_poster_url_not_matching_tmdb_shape_passed_through(self):
+        with patch("urllib.request.urlopen", return_value=_mock_response(204)) as mock_urlopen:
+            send_discord(
+                "https://discord.com/api/webhooks/123/abc", "hola",
+                poster_url="https://example.com/poster.jpg",
+            )
+        sent = json.loads(mock_urlopen.call_args[0][0].data)
+        assert sent["embeds"] == [{"image": {"url": "https://example.com/poster.jpg"}}]
+
+
+class TestSendTelegramPoster:
+    def test_without_poster_uses_sendmessage(self):
+        body = json.dumps({"ok": True, "result": {}}).encode("utf-8")
+        with patch("urllib.request.urlopen", return_value=_mock_response(200, body)) as mock_urlopen:
+            send_telegram("123456:ABC", "-100123", "hola")
+        req = mock_urlopen.call_args[0][0]
+        assert req.full_url.endswith("/sendMessage")
+        sent = json.loads(req.data)
+        assert sent == {"chat_id": "-100123", "text": "hola"}
+
+    def test_with_poster_uses_sendphoto(self):
+        body = json.dumps({"ok": True, "result": {}}).encode("utf-8")
+        with patch("urllib.request.urlopen", return_value=_mock_response(200, body)) as mock_urlopen:
+            send_telegram(
+                "123456:ABC", "-100123", "hola",
+                poster_url="https://image.tmdb.org/t/p/w154/abc.jpg",
+            )
+        req = mock_urlopen.call_args[0][0]
+        assert req.full_url.endswith("/sendPhoto")
+        sent = json.loads(req.data)
+        assert sent["chat_id"] == "-100123"
+        assert sent["photo"] == "https://image.tmdb.org/t/p/w500/abc.jpg"
+        assert sent["caption"] == "hola"

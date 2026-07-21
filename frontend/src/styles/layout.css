@@ -117,6 +117,13 @@
   padding: 0 24px;
   backdrop-filter: blur(8px);
   flex-shrink: 0;
+  /* backdrop-filter alone creates a new stacking context for .topbar — so
+     without an explicit z-index here, the notif-dropdown's own z-index
+     (2100) only wins WITHIN that context; the whole topbar (as a unit)
+     still sits at the same "auto" level as .main-content and loses to it
+     in DOM order, which is why the notification panel painted behind page
+     tables/cards. Giving the topbar itself a z-index fixes that for real. */
+  z-index: 50;
 }
 
 .topbar-center {
@@ -265,7 +272,10 @@
   border: 1px solid var(--border);
   border-radius: 10px;
   box-shadow: var(--shadow-card, 0 8px 30px rgba(0, 0, 0, 0.35));
-  z-index: 200;
+  /* Above .modal-overlay (1000, components.css) AND the other 2000-level
+     floating layers (Tooltip.tsx, HeaderFilter.tsx) — notifications must
+     stay on top of literally anything else in the UI. */
+  z-index: 2100;
   overflow: hidden;
 }
 
@@ -389,6 +399,33 @@
   font-size: 13px;
   color: var(--text-primary);
   font-weight: 600;
+}
+
+/* Line 2 of the notification: the poster (or a simulated one, for
+   content_unique_changed) next to the content's name + reason — everything
+   .notif-item-title (line 1, the event's status) is NOT. */
+.notif-item-content-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin-top: 4px;
+}
+
+.notif-item-content-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The content's own name (e.g. "The Batman (2022)") — one step down from
+   .notif-item-title (the event's status, "Subida fallida"), one step up
+   from .notif-item-text (the reason). */
+.notif-item-content-title {
+  display: block;
+  font-size: 12.5px;
+  color: var(--text-primary);
+  font-weight: 500;
 }
 
 .notif-item-text {

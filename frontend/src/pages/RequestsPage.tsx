@@ -461,6 +461,23 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
     } catch { /* ignore — button only enabled when a match exists */ }
   }, [])
 
+  const computeFacets = (list: RequestItemResponse[]) => {
+    const uniq = (vals: (string | null | undefined)[]) =>
+      Array.from(new Set(vals.filter((v): v is string => !!v && v.trim() !== ''))).sort()
+    return {
+      categories: uniq(list.map(i => i.category)),
+      resolutions: uniq(list.map(i => i.requested_resolution)),
+      sources: uniq(list.map(i => i.requested_source)),
+      authors: uniq(list.map(i => i.author)),
+      statuses: uniq(list.map(i => i.compatibility_status)),
+    }
+  }
+
+  // No filter active — loadItems' own response IS the full unfiltered
+  // dataset, so it can double as the facets source (see loadItems below)
+  // instead of loadFacets firing a second, identical request for it.
+  const isUnfiltered = !debouncedSearch && !statusFilter && !categoryFilter && !resolutionFilter && !sourceFilter && !authorFilter
+
   const loadItems = useCallback(async (off = 0) => {
     setLoading(true)
     setError(null)
@@ -479,36 +496,29 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
       setItems(res.items)
       setTotal(res.total)
       setOffset(off)
+      if (isUnfiltered && off === 0) setFacets(computeFacets(res.items))
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error cargando peticiones')
     } finally {
       setLoading(false)
     }
-  }, [debouncedSearch, statusFilter, categoryFilter, resolutionFilter, sourceFilter, authorFilter, sortBy])
+  }, [debouncedSearch, statusFilter, categoryFilter, resolutionFilter, sourceFilter, authorFilter, sortBy, isUnfiltered])
 
   // Populate filter dropdown options from the full (unfiltered) dataset so they
-  // stay stable regardless of the active filters.
+  // stay stable regardless of the active filters. Only needed when a filter
+  // IS currently active — otherwise loadItems' own unfiltered response
+  // already covers it (see isUnfiltered above), and calling this too would
+  // just fire the exact same request twice.
   const loadFacets = useCallback(async () => {
     try {
       const res = await getRequests({ sort: 'created_desc', limit: PAGE_SIZE, offset: 0 })
-      const uniq = (vals: (string | null | undefined)[]) =>
-        Array.from(new Set(vals.filter((v): v is string => !!v && v.trim() !== ''))).sort()
-      setFacets({
-        categories: uniq(res.items.map(i => i.category)),
-        resolutions: uniq(res.items.map(i => i.requested_resolution)),
-        sources: uniq(res.items.map(i => i.requested_source)),
-        authors: uniq(res.items.map(i => i.author)),
-        statuses: uniq(res.items.map(i => i.compatibility_status)),
-      })
+      setFacets(computeFacets(res.items))
     } catch { /* optional */ }
   }, [])
 
-  useEffect(() => {
-    loadFacets()
-  }, [loadFacets])
-
   // Reload the table whenever a filter, the search box (debounced), or the
-  // sort order changes.
+  // sort order changes. On mount this IS the unfiltered load (all filters
+  // start empty), so there's no separate loadFacets() call needed here.
   useEffect(() => {
     loadItems(0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -516,7 +526,10 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
 
   // Reload table + facets whenever a global sync (peticiones or otra) finishes.
   useEffect(() => {
-    if (lastCompletedAt) { loadItems(0); loadFacets() }
+    if (lastCompletedAt) {
+      loadItems(0)
+      if (!isUnfiltered) loadFacets()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastCompletedAt])
 
@@ -552,6 +565,21 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
     } catch { /* ignore */ }
     const id = stashed ? parseInt(stashed, 10) : NaN
     if (!Number.isNaN(id)) handleRowClick(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Same hand-off, but live — the sessionStorage read above only fires on
+  // mount, so clicking a notification while Peticiones is ALREADY the open
+  // page (no remount happens) would otherwise do nothing.
+  useEffect(() => {
+    const onOpenRequest = (e: Event) => {
+      const id = (e as CustomEvent<number>).detail
+      if (id == null) return
+      try { sessionStorage.removeItem('emuwarez_open_request') } catch { /* ignore */ }
+      handleRowClick(id)
+    }
+    window.addEventListener('emuwarez:open-request', onOpenRequest)
+    return () => window.removeEventListener('emuwarez:open-request', onOpenRequest)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

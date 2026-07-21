@@ -269,7 +269,7 @@ def test_incremental_sync_new_missing_movie_notifies(mem_conn):
     notes = list_notifications(mem_conn)
     assert len(notes) == 1
     assert notes[0]["event_type"] == "content_missing_new"
-    assert "Just Requested Film" in notes[0]["body"]
+    assert "Just Requested Film" in notes[0]["content_title"]
 
 
 def test_resyncing_already_missing_movie_does_not_renotify(mem_conn):
@@ -331,6 +331,33 @@ def test_movie_becoming_available_does_not_notify(mem_conn):
     ):
         sync_instance(mem_conn, instance)
     assert len(list_notifications(mem_conn)) == 1  # unchanged
+
+
+def test_incremental_sync_new_missing_movie_notification_includes_poster(mem_conn):
+    """The notification should carry the movie's own poster_url through, for
+    the UI thumbnail / Discord-Telegram full-size image."""
+    from emuwarez_uploadrr.services.library import sync_instance
+    from emuwarez_uploadrr.services.notification_center import list_notifications
+    from emuwarez_uploadrr.services.instances import list_instances
+    instance = list_instances(mem_conn)[0]
+
+    with (
+        patch("emuwarez_uploadrr.integrations.radarr.get_movies", return_value=[_fake_movie(90, "Seed Film", has_file=True)]),
+        patch("emuwarez_uploadrr.integrations.radarr.get_queue", return_value=[]),
+    ):
+        sync_instance(mem_conn, instance)
+
+    movie_with_poster = _fake_movie(91, "Poster Film", has_file=False)
+    movie_with_poster["images"] = [{"coverType": "poster", "remoteUrl": "https://image.tmdb.org/t/p/original/poster.jpg"}]
+    with (
+        patch("emuwarez_uploadrr.integrations.radarr.get_movies", return_value=[_fake_movie(90, "Seed Film", has_file=True), movie_with_poster]),
+        patch("emuwarez_uploadrr.integrations.radarr.get_queue", return_value=[]),
+    ):
+        sync_instance(mem_conn, instance)
+
+    notes = list_notifications(mem_conn)
+    assert len(notes) == 1
+    assert notes[0]["poster_url"] == "https://image.tmdb.org/t/p/original/poster.jpg"
 
 
 def test_sync_sonarr_available_series(sonarr_conn):

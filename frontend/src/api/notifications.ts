@@ -20,6 +20,8 @@ export interface NotificationItem {
   level: string
   entity_type: string | null
   entity_id: number | null
+  poster_url: string | null
+  content_title: string | null
   created_at: string
   read_at: string | null
   read: boolean

@@ -94,9 +94,10 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   const [tmdbLocalizeTitles, setTmdbLocalizeTitles] = useState(true)
   const [tmdbAckSkip, setTmdbAckSkip] = useState(false)
 
-  // EMU step state
+  // EMU step state — no skip option: eMuwarez integration is the core of
+  // this app, so a validated key is mandatory to finish setup (see
+  // emuCanContinue below).
   const [emuKey, setEmuKey] = useState('')
-  const [emuAckSkip, setEmuAckSkip] = useState(false)
   const [emuUsername, setEmuUsername] = useState('')
 
   // qBittorrent step state
@@ -201,7 +202,6 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
       const r = await testEmuwarezConnection({ api_key: emuKey || undefined })
       setEmuTestResult(r)
       emuCooldown.start(emuTestCooldownSeconds(r))
-      if (r.ok) setEmuAckSkip(false)
     } catch {
       setEmuTestResult({ ok: false, service: 'emuwarez', status: 'connection_error', message: 'Error al contactar con el servidor' })
       emuCooldown.start(60)
@@ -246,7 +246,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
     // configuring this now", so whatever was typed must be discarded — it
     // must not show up as configured later in Settings. (setup_emu also
     // rejects an empty string, which would block skipping entirely.)
-    if (emuKey.trim() && !emuAckSkip) {
+    if (emuKey.trim()) {
       await setupEmu(emuKey)
     }
     // Username/tag are independent of the API key itself — worth keeping
@@ -331,7 +331,10 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
 
   const stepIdx = SETUP_STEPS.indexOf(step)
   const adminPasswordValid = PASSWORD_RULES.every(rule => rule.test(adminPass))
-  const emuCanContinue = Boolean(emuTestResult?.ok) || emuAckSkip
+  // No skip escape hatch here (unlike TMDb/instances/qBit below) — an
+  // unverified or invalid eMuwarez key would let setup finish while every
+  // eMuwarez-dependent feature (sync, requests, catalog) silently can't work.
+  const emuCanContinue = Boolean(emuTestResult?.ok)
   const instancesCanContinue = instances.length > 0 || instAckSkip
   const tmdbCanContinue = Boolean(tmdbTestResult?.ok) || tmdbAckSkip
 
@@ -426,7 +429,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               <div className="wizard-fields">
                 <div className="form-group">
                   <label className="form-label">API key eMuwarez</label>
-                  <input className="form-input" value={emuKey} onChange={e => { setEmuKey(e.target.value); setEmuAckSkip(false) }} placeholder="Tu API key de eMuwarez" />
+                  <input className="form-input" value={emuKey} onChange={e => { setEmuKey(e.target.value); setEmuTestResult(null) }} placeholder="Tu API key de eMuwarez" />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Mi usuario de eMuwarez</label>
@@ -452,11 +455,9 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               </div>
               {!emuCanContinue && (
                 <div className="alert alert-error" style={{ marginTop: 10 }}>
-                  Todavía no has probado la key (o la prueba ha fallado). Si continúas sin verificarla,
-                  las funciones que dependen de eMuwarez no funcionarán hasta que la corrijas más tarde en Configuración.
-                  <label className="checkbox-label" style={{ display: 'block', marginTop: 8 }}>
-                    <input type="checkbox" checked={emuAckSkip} onChange={e => setEmuAckSkip(e.target.checked)} /> Entiendo, continuar sin verificar
-                  </label>
+                  Necesitas una key de eMuwarez válida para continuar — pulsa "Probar conexión" y espera a
+                  que confirme que funciona. Esta integración es el núcleo de la app, así que aquí no se
+                  puede saltar el paso.
                 </div>
               )}
               <div className="wizard-actions">

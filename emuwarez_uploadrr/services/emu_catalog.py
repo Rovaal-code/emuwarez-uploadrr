@@ -458,6 +458,15 @@ def get_item_comparison(conn: sqlite3.Connection, item_id: int) -> dict:
     item = dict(item)
     itype = item["item_type"]
 
+    # The catalog table is empty both when it's genuinely never been synced
+    # AND (indistinguishably, by row count alone) when it HAS been synced but
+    # this specific title just isn't there — an empty `matches` list further
+    # down can't tell those apart. Check the sync marker itself first, so a
+    # never-synced install says so instead of confidently claiming "contenido
+    # único" for every single item.
+    if not get_state(conn, SYNC_STATE_KEY):
+        return {"available": False, "message": "Sincroniza con eMuwarez para ver la comparación.", "matches": []}
+
     if itype == "movie":
         rows = conn.execute(
             "SELECT * FROM emu_catalog WHERE tmdb_id = ? AND category != 'Series'",

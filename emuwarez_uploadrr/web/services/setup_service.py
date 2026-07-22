@@ -142,9 +142,15 @@ def setup_add_instance(
     is_4k: bool = False,
     is_anime: bool = False,
 ) -> int:
-    """Add a Radarr/Sonarr instance during setup."""
+    """Add a Radarr/Sonarr instance during setup.
+
+    Verifies the connection before persisting, same as the main app's
+    POST /instances (services/instances.py::add_instance) — the wizard's
+    frontend already re-tests before calling this, but this is the real
+    guarantee: a well-formed but unreachable/unauthorized instance must
+    never be saved, from either entry point."""
     from emuwarez_uploadrr.services.instances import add_instance
-    instance_id = add_instance(conn, instance_type, name, url, api_key)
+    instance_id = add_instance(conn, instance_type, name, url, api_key, test_connection=True)
     if is_4k or is_anime:
         conn.execute(
             """

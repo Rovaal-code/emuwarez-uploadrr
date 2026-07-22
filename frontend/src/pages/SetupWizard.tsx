@@ -4,7 +4,7 @@ import {
   setupQbit, setupImghosts, setupComplete,
 } from '../api/setup'
 import { login } from '../api/auth'
-import { syncAll } from '../api/library'
+import { startLibrarySync } from '../api/library'
 import { fetchSettings, updateSettings } from '../api/settings'
 import { testTmdbConnection, testEmuwarezConnection, testArrConnection, testQbitConnection, testImghostConnection, type IntegrationTestResult } from '../api/integrationTests'
 import { ServiceIcon } from '../components/ServiceIcon'
@@ -62,6 +62,27 @@ interface InstanceDraft {
 // Proveedores de imágenes) — the other steps (bienvenida, admin, eMuwarez,
 // instancias, completado) don't have a matching Settings card, so no icon.
 function StepTitleIcon({ step }: { step: string }) {
+  if (step === 'admin') {
+    // Same gear shape as the Configuración nav icon (Sidebar.tsx's NavIcon
+    // 'settings' case), but in the app's own blue accent color instead of
+    // currentColor — here there's no "active nav" state to turn it blue on
+    // its own, and the wizard's other step icons are all fixed-color too.
+    return (
+      <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="1.75" aria-hidden>
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+      </svg>
+    )
+  }
+  if (step === 'emu') return <ServiceIcon type="emu" size={20} />
+  if (step === 'instances') {
+    return (
+      <span style={{ display: 'inline-flex', gap: 6 }}>
+        <ServiceIcon type="radarr" size={20} />
+        <ServiceIcon type="sonarr" size={20} />
+      </span>
+    )
+  }
   if (step === 'tmdb') return <ServiceIcon type="tmdb" size={20} />
   if (step === 'qbit') return <ServiceIcon type="qbittorrent" size={20} />
   if (step === 'imagehosts') return <ServiceIcon type="imghost" size={20} />
@@ -166,7 +187,6 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   const [tmdbKey, setTmdbKey] = useState('')
   const [tmdbLang, setTmdbLang] = useState('es-ES')
   const [tmdbRegion, setTmdbRegion] = useState('ES')
-  const [tmdbLocalizeTitles, setTmdbLocalizeTitles] = useState(true)
   const [tmdbAckSkip, setTmdbAckSkip] = useState(false)
 
   // EMU step state — no skip option: eMuwarez integration is the core of
@@ -343,11 +363,32 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
     setStep('instances')
   })
 
-  function addInstance() {
+  async function addInstance() {
     setInstError(null)
     if (!instDraft.name?.trim()) { setInstError('El nombre es obligatorio'); return }
     if (!instDraft.url?.trim()) { setInstError('La URL es obligatoria'); return }
     if (!instDraft.api_key?.trim()) { setInstError('La API key es obligatoria'); return }
+    // Always re-test right before adding (not just when "Probar conexión" was
+    // clicked separately) — otherwise a well-formed but unreachable/wrong
+    // instance got added silently, only failing much later when a sync ran.
+    setInstTesting(true)
+    setInstTestResult(null)
+    let result: IntegrationTestResult
+    try {
+      result = await testArrConnection({
+        kind: instDraft.type ?? 'radarr',
+        base_url: instDraft.url!.trim(),
+        api_key: instDraft.api_key!.trim(),
+      })
+    } catch {
+      result = { ok: false, service: instDraft.type ?? 'arr', status: 'connection_error', message: 'Error al contactar con el servidor' }
+    }
+    setInstTestResult(result)
+    setInstTesting(false)
+    if (!result.ok) {
+      setInstError(result.message || 'No se pudo conectar con la instancia.')
+      return
+    }
     setInstances(prev => [...prev, {
       id: Date.now(),
       type: instDraft.type ?? 'radarr',
@@ -358,6 +399,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
       is_anime: instDraft.is_anime ?? false,
     }])
     setInstDraft({ type: 'radarr', is_4k: false, is_anime: false })
+    setInstTestResult(null)
   }
 
   const handleInstances = wrap(async () => {
@@ -373,7 +415,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
     // explicitly skipping. Text + "continuar sin verificar" must be discarded
     // so it never shows as configured in Settings afterwards.
     if (tmdbKey.trim() && !tmdbAckSkip) {
-      await setupTmdb(tmdbKey, tmdbLang, tmdbRegion, tmdbLocalizeTitles)
+      await setupTmdb(tmdbKey, tmdbLang, tmdbRegion)
     }
     setStep('qbit')
   })
@@ -400,14 +442,15 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   const handleComplete = wrap(async () => {
     await setupComplete()
     if (instances.length > 0) {
-      // Best-effort: the Dashboard shows the real state either way (and has
-      // its own manual "Sincronizar biblioteca" button), so a failure here
-      // shouldn't block finishing setup. Deliberately NOT gated on
-      // last_sync_at/summary state — the scheduler (Phase 11D) can run its
-      // own sync-library tick before the user even finishes this wizard,
-      // which would make any "has it ever synced" check for the Dashboard's
-      // own sake constantly self-report success with an empty library.
-      try { await syncAll(true) } catch { /* dashboard will show the real state */ }
+      // Fire-and-forget: a full sync can take a while (or even a few
+      // minutes on a real library), and awaiting it here used to leave this
+      // screen looking frozen — only the button's own label quietly changed
+      // to "Inicializando…" with no other feedback. This now flows through
+      // the same active/done lifecycle as the manual "sincronizar
+      // biblioteca" button (services/library.py::_lib_sync_guard), so once
+      // AppShell mounts, SyncContext picks it up on its own and shows it
+      // live in the top-bar banner — no need to block finishing setup on it.
+      startLibrarySync(true).catch(() => { /* the Dashboard's own sync button covers a failed kick-off */ })
     }
     onComplete()
   })
@@ -623,8 +666,8 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 </div>
                 {instError && <div className="form-error" style={{ marginTop: 8 }}>{instError}</div>}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
-                  <button className="btn btn-secondary btn-sm" onClick={addInstance} type="button">
-                    + Añadir instancia
+                  <button className="btn btn-secondary btn-sm" onClick={addInstance} disabled={instTesting} type="button">
+                    {instTesting ? 'Comprobando…' : '+ Añadir instancia'}
                   </button>
                   <button className="btn btn-secondary btn-sm" onClick={handleTestInst} disabled={instTesting} type="button">
                     {instTesting ? 'Probando…' : 'Probar conexión'}
@@ -683,8 +726,11 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 <div style={{ marginBottom: 6 }}>
                   <strong>1. Detectar el proveedor al subir:</strong> cuando el Source es <strong>WEB-DL</strong> y no se detecta ningún proveedor en el nombre del archivo, la app consulta los <em>watch providers</em> de TMDb (para la región elegida abajo) y propone el de mayor prioridad. Sin key, ese campo se queda en «Sin proveedor».
                 </div>
-                <div>
+                <div style={{ marginBottom: 6 }}>
                   <strong>2. La necesita el subidor Uploadrr-EMU:</strong> se le pasa la key para que complete los metadatos de la ficha en eMuwarez durante la subida.
+                </div>
+                <div>
+                  <strong>3. Traducir títulos de series:</strong> Sonarr toma los títulos de TVDB, a menudo en inglés (p. ej. «Los Serrano» → «The Serrano»). Con la key, las series usan el título de TMDb en el idioma elegido abajo, como ya hace Radarr con las películas. Se consulta a TMDb una vez por serie y se cachea.
                 </div>
               </div>
               <div className="wizard-fields">
@@ -706,17 +752,6 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
                     Región usada para detectar en qué plataforma (proveedor) está disponible cada título.
                   </div>
-                </div>
-                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                  <label className="checkbox-label" style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                    <input type="checkbox" checked={tmdbLocalizeTitles} onChange={e => setTmdbLocalizeTitles(e.target.checked)} style={{ marginTop: 3 }} />
-                    <span>
-                      Traducir títulos de series con TMDb
-                      <span className="form-hint" style={{ display: 'block' }}>
-                        Sonarr toma los títulos de TVDB, a menudo en inglés (p. ej. «Los Serrano» → «The Serrano»). Con esto, las series usan el título de TMDb en el idioma elegido arriba, como ya hace Radarr con las películas. Se consulta a TMDb una vez por serie y se cachea.
-                      </span>
-                    </span>
-                  </label>
                 </div>
               </div>
               {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
@@ -872,7 +907,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 Haz clic en Completar para inicializar la aplicación y entrar al dashboard.
               </div>
               <div className="alert alert-info">
-                Cualquier paso que hayas saltado (eMuwarez, instancias, TMDb) se puede configurar más tarde
+                Cualquier paso que hayas saltado (Instancias, TMDb, qBittorent...) se puede configurar más tarde
                 desde Configuración. Si has añadido instancias Radarr/Sonarr, la primera sincronización se
                 ejecutará desde el dashboard.
               </div>

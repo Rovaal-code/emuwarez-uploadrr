@@ -84,11 +84,14 @@
   text-transform: uppercase;
 }
 .hud-app .topbar-btn,
-.hud-app .topbar-user {
+.hud-app .topbar-user,
+.hud-app .topbar-eye {
   border-color: rgba(30, 110, 190, .5);
   background: rgba(6, 20, 42, .6);
+  box-shadow: 0 0 8px -4px rgba(47, 216, 255, .5);
 }
-.hud-app .topbar-btn:hover {
+.hud-app .topbar-btn:hover,
+.hud-app .topbar-eye:hover {
   border-color: var(--hud-cyan);
   box-shadow: 0 0 12px -4px rgba(47, 216, 255, .7);
 }

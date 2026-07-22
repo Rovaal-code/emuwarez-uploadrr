@@ -52,10 +52,10 @@ export function Topbar({ user, pageTitle, onLogout }: TopbarProps) {
           aria-label="Ver el tour guiado"
           onClick={() => startTour(TOUR_STEPS)}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="11" x2="12" y2="16.5" />
-            <circle cx="12" cy="7.5" r="0.75" fill="currentColor" stroke="none" />
+            <path d="M9.1 9a2.9 2.9 0 0 1 5.7 1c0 1.9-2.7 2-2.8 3.8" />
+            <circle cx="12" cy="17.2" r="0.85" fill="currentColor" stroke="none" />
           </svg>
         </button>
         {/* Notifications */}

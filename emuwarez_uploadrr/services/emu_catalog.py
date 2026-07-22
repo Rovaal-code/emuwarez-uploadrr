@@ -26,6 +26,13 @@ from ..integrations.base import IntegrationError
 logger = logging.getLogger("emuwarez.emu")
 
 SYNC_STATE_KEY = "last_emu_catalog_sync_utc"
+# Written only when a sync genuinely finishes (unlike SYNC_STATE_KEY, which is
+# stamped at the START of a sync — before anything is downloaded — so a page
+# refresh can't relaunch a stalled one). get_item_comparison() must check THIS
+# key, not SYNC_STATE_KEY: otherwise a sync that started but got stuck/crashed
+# before finishing still reads as "synced", and every item confidently shows
+# "no está en eMuwarez" against a catalog table that's actually still empty.
+SYNC_COMPLETED_STATE_KEY = "last_emu_catalog_completed_utc"
 # Highest torrent id stored, so the next sync only fetches newer torrents
 # (incremental). Empty/unset → the catalog has never been fully downloaded, so
 # the next sync is a full pass.
@@ -461,10 +468,11 @@ def get_item_comparison(conn: sqlite3.Connection, item_id: int) -> dict:
     # The catalog table is empty both when it's genuinely never been synced
     # AND (indistinguishably, by row count alone) when it HAS been synced but
     # this specific title just isn't there — an empty `matches` list further
-    # down can't tell those apart. Check the sync marker itself first, so a
-    # never-synced install says so instead of confidently claiming "contenido
-    # único" for every single item.
-    if not get_state(conn, SYNC_STATE_KEY):
+    # down can't tell those apart. Check the *completed* marker (not the
+    # attempt-started throttle timestamp), so a never-finished sync (stuck,
+    # crashed, or still running) reads as "not yet synced" instead of
+    # confidently claiming "contenido único" for every single item.
+    if not get_state(conn, SYNC_COMPLETED_STATE_KEY):
         return {"available": False, "message": "Sincroniza con eMuwarez para ver la comparación.", "matches": []}
 
     if itype == "movie":
@@ -679,6 +687,16 @@ def sync_emu_catalog(conn: sqlite3.Connection, *, force: bool = False, mode: str
     if not api_key:
         raise IntegrationError("No hay API Key de eMuwarez configurada")
 
+    # Fail fast (and clearly) if eMuwarez itself is unreachable, instead of only
+    # discovering it mid-download — this is a single cheap request (perPage=1)
+    # bound by request_json's own timeout, so a down/unreachable tracker surfaces
+    # as an error within seconds rather than the sync silently hanging.
+    _set_progress(phase="Comprobando conexión con eMuwarez…", page=0, total_pages=None, eta_seconds=None)
+    try:
+        emu.emu_test_connection(api_key)
+    except IntegrationError as exc:
+        raise IntegrationError(f"No se pudo conectar con eMuwarez: {exc}") from exc
+
     import time
     # Incremental: only fetch torrents newer than the highest id we already have.
     # First sync ever (no stored max) → full download.
@@ -739,6 +757,7 @@ def sync_emu_catalog(conn: sqlite3.Connection, *, force: bool = False, mode: str
     _set_progress(phase="Listo", items=items)
     now_iso = _utcnow().isoformat()
     set_state(conn, SYNC_STATE_KEY, now_iso)
+    set_state(conn, SYNC_COMPLETED_STATE_KEY, now_iso)
     if not incremental:  # a full pass also refreshes the 1/day full throttle
         set_state(conn, FULL_SYNC_STATE_KEY, now_iso)
     _notify_if_unique_content_changed(conn)

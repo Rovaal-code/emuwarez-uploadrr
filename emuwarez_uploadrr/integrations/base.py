@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import ssl
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -95,30 +96,58 @@ def request_json(
     timeout: int = 20,
     verify_ssl: bool = True,
 ) -> Any:
-    body: bytes | None = None
-    req_headers = {"Accept": "application/json", "User-Agent": "emuwarez-uploadrr-cli/2"}
-    if headers:
-        req_headers.update(headers)
-    if api_key:
-        req_headers["X-Api-Key"] = api_key
-    if data is not None:
-        body = json.dumps(data).encode("utf-8")
-        req_headers["Content-Type"] = "application/json"
-    req = urllib.request.Request(url, data=body, headers=req_headers, method=method.upper())
-    context = None if verify_ssl else ssl._create_unverified_context()
-    try:
+    def _do_request() -> Any:
+        body: bytes | None = None
+        req_headers = {"Accept": "application/json", "User-Agent": "emuwarez-uploadrr-cli/2"}
+        if headers:
+            req_headers.update(headers)
+        if api_key:
+            req_headers["X-Api-Key"] = api_key
+        if data is not None:
+            body = json.dumps(data).encode("utf-8")
+            req_headers["Content-Type"] = "application/json"
+        req = urllib.request.Request(url, data=body, headers=req_headers, method=method.upper())
+        context = None if verify_ssl else ssl._create_unverified_context()
         with urllib.request.urlopen(req, timeout=timeout, context=context) as resp:
             raw = resp.read().decode("utf-8", errors="replace")
             if not raw:
                 return {}
             return json.loads(raw)
-    except urllib.error.HTTPError as exc:
-        raw = exc.read().decode("utf-8", errors="replace")
-        raise IntegrationError(f"HTTP {exc.code} en {url}: {raw[:500]}") from exc
-    except urllib.error.URLError as exc:
-        raise IntegrationError(f"No se pudo conectar con {url}: {exc.reason}") from exc
-    except json.JSONDecodeError as exc:
-        raise IntegrationError(f"Respuesta no JSON desde {url}") from exc
+
+    # `timeout` above only bounds the connect/read phases once a socket
+    # exists (it's threaded through to socket.create_connection); DNS
+    # resolution (getaddrinfo, called first) runs before that and is NOT
+    # covered by it — a stuck/misconfigured resolver (common in Docker) can
+    # hang past `timeout` indefinitely with no exception ever raised. Running
+    # the call on a *daemon* thread and joining it with a hard deadline bounds
+    # the whole call — DNS included — no matter what's actually stuck, while
+    # still letting the process exit cleanly if the call never returns (a
+    # non-daemon executor would otherwise block shutdown forever joining it).
+    result: dict[str, Any] = {}
+
+    def _worker() -> None:
+        try:
+            result["value"] = _do_request()
+        except BaseException as exc:  # noqa: BLE001 — forwarded to the caller below
+            result["error"] = exc
+
+    thread = threading.Thread(target=_worker, daemon=True)
+    thread.start()
+    thread.join(timeout=timeout + 5)
+    if thread.is_alive():
+        raise IntegrationError(f"Tiempo de espera agotado conectando con {url}")
+
+    exc = result.get("error")
+    if exc is not None:
+        if isinstance(exc, urllib.error.HTTPError):
+            raw = exc.read().decode("utf-8", errors="replace")
+            raise IntegrationError(f"HTTP {exc.code} en {url}: {raw[:500]}") from exc
+        if isinstance(exc, urllib.error.URLError):
+            raise IntegrationError(f"No se pudo conectar con {url}: {exc.reason}") from exc
+        if isinstance(exc, json.JSONDecodeError):
+            raise IntegrationError(f"Respuesta no JSON desde {url}") from exc
+        raise exc
+    return result["value"]
 
 
 def build_url(base_url: str, path: str, params: Optional[dict[str, Any]] = None) -> str:

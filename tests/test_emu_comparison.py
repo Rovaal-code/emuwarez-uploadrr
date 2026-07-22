@@ -10,7 +10,11 @@ from __future__ import annotations
 import pytest
 
 from emuwarez_uploadrr.database import set_state
-from emuwarez_uploadrr.services.emu_catalog import SYNC_STATE_KEY, get_item_comparison
+from emuwarez_uploadrr.services.emu_catalog import (
+    SYNC_COMPLETED_STATE_KEY,
+    SYNC_STATE_KEY,
+    get_item_comparison,
+)
 
 
 @pytest.fixture
@@ -61,7 +65,7 @@ def test_never_synced_reports_unavailable_not_unique(db_conn):
 
 def test_synced_and_genuinely_not_in_catalog(db_conn):
     item_id = _movie(db_conn, "Unique Movie", tmdb_id=556)
-    set_state(db_conn, SYNC_STATE_KEY, "2026-01-01T00:00:00Z")
+    set_state(db_conn, SYNC_COMPLETED_STATE_KEY, "2026-01-01T00:00:00Z")
     db_conn.commit()
     result = get_item_comparison(db_conn, item_id)
     assert result["available"] is True
@@ -72,10 +76,26 @@ def test_synced_and_genuinely_not_in_catalog(db_conn):
 def test_synced_and_match_found(db_conn):
     item_id = _movie(db_conn, "Matched Movie", tmdb_id=557)
     _catalog_movie(db_conn, tmdb_id=557)
-    set_state(db_conn, SYNC_STATE_KEY, "2026-01-01T00:00:00Z")
+    set_state(db_conn, SYNC_COMPLETED_STATE_KEY, "2026-01-01T00:00:00Z")
     db_conn.commit()
     result = get_item_comparison(db_conn, item_id)
     assert result["available"] is True
     assert result["in_catalog"] == 1
     assert len(result["matches"]) == 1
     assert result["matches"][0]["name"] == "Movie 1080p WEB-DL"
+
+
+def test_started_but_never_finished_reports_unavailable_not_unique(db_conn):
+    """The exact real-world bug: a sync that STARTS (stamping the throttle
+    marker immediately, before downloading anything) but then stalls/crashes
+    mid-download must NOT be read as "synced" just because SYNC_STATE_KEY is
+    set — that key only means "an attempt began", not "one finished". Every
+    item must keep showing "not yet compared", not a false "contenido único"
+    against a catalog table that's still empty."""
+    item_id = _movie(db_conn, "Some Movie", tmdb_id=558)
+    set_state(db_conn, SYNC_STATE_KEY, "2026-01-01T00:00:00Z")  # attempt started...
+    db_conn.commit()                                             # ...but never finished
+    result = get_item_comparison(db_conn, item_id)
+    assert result["available"] is False
+    assert "sincroniza" in result["message"].lower()
+    assert result["matches"] == []

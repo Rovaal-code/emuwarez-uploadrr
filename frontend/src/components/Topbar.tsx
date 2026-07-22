@@ -63,7 +63,7 @@ export function Topbar({ user, pageTitle, onLogout }: TopbarProps) {
         {/* User info — username only, with a toggle to obfuscate it */}
         {user && (
           <div className="topbar-user">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="1.75">
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
               <circle cx="12" cy="7" r="4" />
             </svg>

@@ -166,7 +166,13 @@ def create_app() -> FastAPI:
             if full_path:
                 candidate = (_FRONTEND_DIST / full_path).resolve()
                 if candidate.is_file() and _dist_resolved in candidate.parents:
-                    return FileResponse(str(candidate))
+                    # CORS: lets a third-party dashboard (Homarr, Homepage...) on a
+                    # different origin fetch this app's own icon/manifest to preview
+                    # it — those tools' icon pickers commonly validate a pasted URL
+                    # via a cross-origin fetch() first, which the browser silently
+                    # blocks without this header (a plain curl/img tag wouldn't show
+                    # the problem, since CORS is enforced by the browser, not by us).
+                    return FileResponse(str(candidate), headers={"Access-Control-Allow-Origin": "*"})
             index = _FRONTEND_DIST / "index.html"
             # The SPA shell must never be cached: it points at hash-named bundles
             # in /assets, so a stale index.html leaves the browser running old

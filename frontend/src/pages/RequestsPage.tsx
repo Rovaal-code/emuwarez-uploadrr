@@ -31,6 +31,7 @@ import {
 } from '../components/DetailCard'
 import { HeaderFilter } from '../components/HeaderFilter'
 import { formatBytes, timeAgo, formatDate } from '../utils/format'
+import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
 
 // Fallback for "Consultar en eMuwarez" while we don't have the exact
 // per-request URL yet — points at the general requests listing instead of
@@ -533,14 +534,17 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastCompletedAt])
 
-  const handleRowClick = async (id: number) => {
-    if (selectedId === id) {
-      setSelectedId(null)
-      setDetail(null)
-      setReadiness(null)
-      setShowCandidates(false)
-      return
-    }
+  // Keeps /requests/:id in sync with whichever request's detail is open.
+  const closeRequestDetail = () => {
+    closeDetailPath('requests')
+    setSelectedId(null)
+    setDetail(null)
+    setReadiness(null)
+    setShowCandidates(false)
+  }
+
+  const openRequestDetail = async (id: number) => {
+    pushDetailPath('requests', id)
     setSelectedId(id)
     setShowCandidates(false)
     setDetailLoading(true)
@@ -553,6 +557,11 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
       setReadiness(rr.status === 'fulfilled' && rr.value !== null ? rr.value as RequestReadinessResponse : null)
     } catch { setDetail(null) }
     finally { setDetailLoading(false) }
+  }
+
+  const handleRowClick = async (id: number) => {
+    if (selectedId === id) { closeRequestDetail(); return }
+    await openRequestDetail(id)
   }
 
   // Deep link from the Dashboard "Recomendaciones" panel: open a specific
@@ -583,6 +592,26 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Deep link: /requests/:id. On mount this only OPENS (never force-closes on
+  // a bare /requests) — the sessionStorage/CustomEvent hand-offs above land
+  // on a bare /requests path themselves and may resolve the same tick, so
+  // unconditionally closing here on mount would win the race and wipe out
+  // whatever they just opened. Closing on a bare path is left to real
+  // back/forward navigation (popstate), which happens well after mount.
+  useEffect(() => {
+    const id = getDetailIdFromPath('requests')
+    if (id != null) openRequestDetail(id)
+
+    const onPopState = () => {
+      const popId = getDetailIdFromPath('requests')
+      if (popId == null) closeRequestDetail()
+      else openRequestDetail(popId)
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const displayItems = items
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
@@ -597,7 +626,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
           <RequestDetailPage
             item={detail}
             readiness={readiness}
-            onBack={() => { setSelectedId(null); setDetail(null); setReadiness(null); setShowCandidates(false) }}
+            onBack={closeRequestDetail}
             onShowCandidates={() => setShowCandidates(true)}
             onUpload={openUpload}
             onOpenLibraryItem={goToLibraryItem}

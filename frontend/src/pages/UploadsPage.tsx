@@ -13,6 +13,7 @@ import { CancelButtonIcon, RetryButtonIcon } from '../components/DetailCard'
 import { useTooltip } from '../components/Tooltip'
 import { formatDateTimeSeconds } from '../utils/format'
 import { posterUrl } from '../utils/libraryItem'
+import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
 import {
   UPLOAD_TYPE_LABEL, STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo,
   progressCounter, queuedSecondsLeft, useTicker,
@@ -243,6 +244,16 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const [sortBy, setSortBy] = useState('created_desc')
   const [typeFilter, setTypeFilter] = useState('')
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null)
+
+  // Keeps /uploads/:id in sync with whichever job's detail page is open.
+  function openUpload(id: number) {
+    pushDetailPath('uploads', id)
+    setSelectedJobId(id)
+  }
+  function closeUpload() {
+    closeDetailPath('uploads')
+    setSelectedJobId(null)
+  }
   const [startJob, setStartJob] = useState<UploadJob | null>(null)
   const [deleteJob, setDeleteJob] = useState<UploadJob | null>(null)
   // Retry chains: which terminal (latest-attempt) job ids currently have
@@ -273,8 +284,26 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
     if (!pending) return
     if (!jobs.some(j => j.id === Number(pending))) return
     try { sessionStorage.removeItem('emuwarez_open_upload') } catch { /* ignore */ }
-    setSelectedJobId(Number(pending))
+    openUpload(Number(pending))
   }, [jobs])
+
+  // Deep link: /uploads/:id — resolve straight from the URL. selectedJob's
+  // own `jobs.find(...)` gracefully returns undefined until `jobs` finishes
+  // loading, so this doesn't need to wait on it like the sessionStorage
+  // hand-off above does. On mount this only OPENS (never force-closes on a
+  // bare /uploads) — the sessionStorage/CustomEvent hand-offs above land on a
+  // bare /uploads path themselves and may resolve the same tick, so
+  // unconditionally clearing here on mount would win the race and wipe out
+  // whatever they just opened. Closing on a bare path is left to real
+  // back/forward navigation (popstate), which happens well after mount.
+  useEffect(() => {
+    const id = getDetailIdFromPath('uploads')
+    if (id != null) setSelectedJobId(id)
+
+    const onPopState = () => setSelectedJobId(getDetailIdFromPath('uploads'))
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
 
   // Same hand-off, but live — the sessionStorage read above only re-checks
   // when `jobs` changes, so clicking a notification while Subidas is
@@ -286,7 +315,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
       const id = (e as CustomEvent<number>).detail
       if (id == null) return
       try { sessionStorage.removeItem('emuwarez_open_upload') } catch { /* ignore */ }
-      setSelectedJobId(id)
+      openUpload(id)
     }
     window.addEventListener('emuwarez:open-upload', onOpenUpload)
     return () => window.removeEventListener('emuwarez:open-upload', onOpenUpload)
@@ -320,7 +349,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
     try {
       const r = await retryUploadJobQueued(job.id!)
       await load()
-      if (r.job?.id != null) setSelectedJobId(r.job.id)
+      if (r.job?.id != null) openUpload(r.job.id)
     } catch (e: unknown) {
       setRetryError(e instanceof Error ? e.message : 'No se pudo reintentar la subida.')
     }
@@ -396,7 +425,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
         <DeleteUploadModal
           job={deleteJob}
           onClose={() => setDeleteJob(null)}
-          onDeleted={() => { setDeleteJob(null); setSelectedJobId(null); load() }}
+          onDeleted={() => { setDeleteJob(null); closeUpload(); load() }}
         />
       )}
     </>
@@ -409,7 +438,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
       <div>
         <UploadJobDetailPage
           job={selectedJob}
-          onBack={() => setSelectedJobId(null)}
+          onBack={closeUpload}
           onStart={j => setStartJob(j)}
           onRetry={j => handleRetryQueued(j)}
           onCancel={id => handleCancel(id)}
@@ -487,13 +516,13 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
                     <Fragment key={job.id}>
                       <JobRow
                         job={job}
-                        onOpen={() => setSelectedJobId(job.id!)}
+                        onOpen={() => openUpload(job.id!)}
                         retryToggle={ancestors.length > 0 ? { count: ancestors.length, expanded, onClick: () => toggleChain(job.id!) } : undefined}
                         onCancel={handleCancel}
                         onRetry={handleRetryQueued}
                       />
                       {expanded && ancestors.map(a => (
-                        <JobRow key={a.id} job={a} indent onOpen={() => setSelectedJobId(a.id!)} onCancel={handleCancel} onRetry={handleRetryQueued} />
+                        <JobRow key={a.id} job={a} indent onOpen={() => openUpload(a.id!)} onCancel={handleCancel} onRetry={handleRetryQueued} />
                       ))}
                     </Fragment>
                   )

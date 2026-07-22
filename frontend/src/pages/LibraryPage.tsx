@@ -19,6 +19,7 @@ import { LargePosterCard } from '../components/LargePosterCard'
 import { LibraryDetailPage } from '../components/LibraryDetailPage'
 import { HeaderFilter } from '../components/HeaderFilter'
 import { posterUrl, isAporteEligible } from '../utils/libraryItem'
+import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
 
 const LOAD_LIMIT = 20000  // show everything in one container (no pagination); backend caps here
 
@@ -49,7 +50,7 @@ const LIST_PRIORITY_COUNT = 40
 
 // Memoized: a plain inline onClick={() => onSelect(item)} arrow would be a
 // new function identity every render, defeating memo — so this takes a
-// stable onSelect (setSelected itself) and calls it with `item` internally.
+// stable onSelect (openDetail, itself wrapping setSelected) and calls it with `item` internally.
 const PosterCard = memo(function PosterCard({ item, onSelect, priority }: { item: LibraryItemResponse; onSelect: (item: LibraryItemResponse) => void; priority?: boolean }) {
   return (
     <div
@@ -94,6 +95,18 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<LibraryItemResponse | null>(null)
+
+  // Keeps /library/:id in sync with whichever item's detail page is open —
+  // works uniformly for a movie, series, season, or episode row, since they
+  // all share the same library_items.id regardless of item_type.
+  const openDetail = useCallback((item: LibraryItemResponse) => {
+    pushDetailPath('library', item.id)
+    setSelected(item)
+  }, [])
+  const closeDetail = useCallback(() => {
+    closeDetailPath('library')
+    setSelected(null)
+  }, [])
   // Only opened from the "Pósters grandes" view — the small modal (grid/list) stays as-is.
   const [nomenclatureItem, setNomenclatureItem] = useState<LibraryItemResponse | null>(null)
   const [fieldsItem, setFieldsItem] = useState<LibraryItemResponse | null>(null)
@@ -207,7 +220,30 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     try { pending = sessionStorage.getItem('emuwarez_open_library_item') } catch { /* ignore */ }
     if (!pending) return
     try { sessionStorage.removeItem('emuwarez_open_library_item') } catch { /* ignore */ }
-    getLibraryItem(Number(pending)).then(setSelected).catch(() => { /* ignore */ })
+    getLibraryItem(Number(pending)).then(openDetail).catch(() => { /* ignore */ })
+  }, [])
+
+  // Deep link: /library/:id (bookmark, reload, or a link shared elsewhere) —
+  // resolve the id straight from the URL, same as the sessionStorage hand-off
+  // above. On mount this only OPENS (never force-closes on a bare /library) —
+  // the sessionStorage/CustomEvent hand-offs above land on a bare /library
+  // path themselves and may resolve on the very same tick, so unconditionally
+  // closing here on mount would win the race and wipe out whatever they just
+  // opened. Closing on a bare path is left entirely to real back/forward
+  // navigation (popstate never fires from our own pushDetailPath/
+  // closeDetailPath calls, only from the user actually using the browser's
+  // back/forward buttons), which happens well after mount.
+  useEffect(() => {
+    const id = getDetailIdFromPath('library')
+    if (id != null) getLibraryItem(id).then(setSelected).catch(() => { /* ignore */ })
+
+    const onPopState = () => {
+      const popId = getDetailIdFromPath('library')
+      if (popId == null) { setSelected(null); return }
+      getLibraryItem(popId).then(setSelected).catch(() => { /* ignore */ })
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
   }, [])
 
   // Opened from the "Nuevo contenido único" notification: pre-apply the
@@ -232,7 +268,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
       const id = (e as CustomEvent<number>).detail
       if (id == null) return
       try { sessionStorage.removeItem('emuwarez_open_library_item') } catch { /* ignore */ }
-      getLibraryItem(id).then(setSelected).catch(() => { /* ignore */ })
+      getLibraryItem(id).then(openDetail).catch(() => { /* ignore */ })
     }
     const onFilterAporte = (e: Event) => {
       const value = (e as CustomEvent<string>).detail
@@ -330,8 +366,8 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
         <LibraryDetailPage
           item={selected}
           instances={instances}
-          onBack={() => setSelected(null)}
-          onSelect={setSelected}
+          onBack={closeDetail}
+          onSelect={openDetail}
           onAction={handleTreeAction}
         />
         {modals}
@@ -429,7 +465,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
         <div className="activity-section" style={{ padding: 20, flex: 1, minHeight: 0, overflowY: 'auto', marginBottom: 0 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 16 }}>
             {filteredItems.map((item, i) => (
-              <PosterCard key={item.id} item={item} onSelect={setSelected} priority={i < GRID_PRIORITY_COUNT} />
+              <PosterCard key={item.id} item={item} onSelect={openDetail} priority={i < GRID_PRIORITY_COUNT} />
             ))}
           </div>
         </div>
@@ -437,7 +473,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
         <div className="activity-section" style={{ padding: 20, flex: 1, minHeight: 0, overflowY: 'auto', marginBottom: 0 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 20 }}>
             {filteredItems.map((item, i) => (
-              <LargePosterCard key={item.id} item={item} onSelect={setSelected} priority={i < GRID_PRIORITY_COUNT} />
+              <LargePosterCard key={item.id} item={item} onSelect={openDetail} priority={i < GRID_PRIORITY_COUNT} />
             ))}
           </div>
         </div>
@@ -485,7 +521,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
                     item={item}
                     depth={0}
                     instances={instances}
-                    onSelect={setSelected}
+                    onSelect={openDetail}
                     onAction={handleTreeAction}
                     onReload={load}
                     priority={i < LIST_PRIORITY_COUNT}

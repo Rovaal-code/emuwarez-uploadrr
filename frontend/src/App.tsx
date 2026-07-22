@@ -11,6 +11,18 @@ import { SyncProvider } from './context/SyncContext'
 
 type AppState = 'loading' | 'setup' | 'login' | 'app'
 
+// The backend's SPA fallback serves index.html for any non-/api path, so
+// visiting an arbitrary URL (or a normal deep link like /library) while the
+// app isn't set up yet used to show the wizard with whatever path the user
+// typed left in the address bar untouched. Normalizing it to a dedicated
+// path makes it clear the wizard IS the page you're on, not an override
+// glued on top of wherever you happened to land.
+function normalizePath(path: string) {
+  if (window.location.pathname !== path) {
+    window.history.replaceState(null, '', path)
+  }
+}
+
 export function App() {
   const [state, setState] = useState<AppState>('loading')
   const [setupStatus, setSetupStatus] = useState<SetupStatusResponse | null>(null)
@@ -24,6 +36,7 @@ export function App() {
 
       // No admin yet → setup wizard (admin step)
       if (!status.admin_configured) {
+        normalizePath('/setup')
         setState('setup')
         return
       }
@@ -35,8 +48,15 @@ export function App() {
           const me = await getMe()
           setUser(me)
           if (!status.initialized) {
+            normalizePath('/setup')
             setState('setup')
           } else {
+            // Leftover from a previous incomplete setup — once we're fully
+            // in the app, /setup isn't a real tab, so send it back to the
+            // dashboard instead of leaving a dead URL in the address bar.
+            if (window.location.pathname === '/setup') {
+              normalizePath('/')
+            }
             setState('app')
           }
           return

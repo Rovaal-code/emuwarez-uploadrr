@@ -447,8 +447,8 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               <div className="wizard-feature-grid">
                 <FeatureCard icon={FEATURE_ICONS.sync} text="Gestiona y sincroniza tus bibliotecas de Radarr y Sonarr" />
                 <FeatureCard icon={FEATURE_ICONS.upload} text="Prepara y sube contenido siguiendo la nomenclatura de eMuwarez" />
-                <FeatureCard icon={FEATURE_ICONS.audio} text="Reordena y renombra las pistas de audio y subtítulos" />
-                <FeatureCard icon={FEATURE_ICONS.parallel} text="Sube varios contenidos en paralelo, sin esperar a que termine uno" />
+                <FeatureCard icon={FEATURE_ICONS.audio} text="Reordena y renombra las pistas de video, audio y subtítulos adecuadamente" />
+                <FeatureCard icon={FEATURE_ICONS.parallel} text="Cualquier subida se puede ejecutar en paralelo" />
                 <FeatureCard icon={FEATURE_ICONS.unique} text="Muestra el contenido único que aún no está en eMuwarez" />
                 <FeatureCard icon={FEATURE_ICONS.requests} text="Se conecta con eMuwarez para listar las peticiones actuales" />
                 <FeatureCard icon={FEATURE_ICONS.recommendUpload} text="Recomienda subir contenido compatible con una petición existente" />

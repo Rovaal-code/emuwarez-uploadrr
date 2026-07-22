@@ -17,10 +17,11 @@ LABEL org.opencontainers.image.title="eMuwarez Uploadrr"
 LABEL org.opencontainers.image.description="Upload manager for eMuwarez with Radarr/Sonarr integration"
 
 # System dependencies. mediainfo/ffmpeg/mktorrent are needed by the bundled
-# Uploadrr-EMU (mediainfo also by our own nomenclature); git is used to fetch
-# the Uploadrr-EMU fork at build time.
+# Uploadrr-EMU (mediainfo also by our own nomenclature); mkvtoolnix (mkvmerge)
+# is what our own nomenclature uses to reorder/rename tracks; git is used to
+# fetch the Uploadrr-EMU fork at build time.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    mediainfo ffmpeg mktorrent git \
+    mediainfo ffmpeg mktorrent mkvtoolnix git \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

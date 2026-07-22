@@ -4,6 +4,15 @@ import { Topbar } from './Topbar'
 import type { CurrentUserResponse } from '../types/api'
 import { guardedLeave, hasUnsavedChanges } from '../utils/unsavedGuard'
 import { UnsavedChangesModal } from './UnsavedChangesModal'
+import { TourOverlay } from './TourOverlay'
+import { useTour } from '../context/TourContext'
+import { TOUR_STEPS } from '../tour/steps'
+
+// The very first time the app is ready to use (right after finishing setup,
+// or on any later reload before it's been seen), the guided tour launches on
+// its own and can't be skipped — every reload counts, not just the setup
+// hand-off, so nobody dodges it just by reloading mid-tour.
+const TOUR_SEEN_KEY = 'emuwarez_uploadrr_tour_seen'
 
 // Pages
 import { DashboardPage } from '../pages/DashboardPage'
@@ -60,6 +69,17 @@ function pageFromPath(): string {
 
 export function AppShell({ user, onLogout }: AppShellProps) {
   const [activePage, setActivePage] = useState<string>(pageFromPath)
+  const { start: startTour } = useTour()
+
+  useEffect(() => {
+    if (localStorage.getItem(TOUR_SEEN_KEY) !== '1') {
+      startTour(TOUR_STEPS, {
+        skippable: false,
+        onClose: () => localStorage.setItem(TOUR_SEEN_KEY, '1'),
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const navigate = useCallback((page: string) => {
     if (page === pageFromPath()) return
@@ -106,6 +126,7 @@ export function AppShell({ user, onLogout }: AppShellProps) {
           <PageContent page={activePage} onNavigate={navigate} />
         </main>
       </div>
+      <TourOverlay activePage={activePage} navigate={navigate} />
     </div>
   )
 }

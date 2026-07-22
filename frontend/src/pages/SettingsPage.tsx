@@ -287,7 +287,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   if (loading) return <p style={{ padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>Cargando…</p>
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div data-tour="settings-content" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {msg && (
         <div style={{
           padding: '10px 14px', borderRadius: 6, fontSize: 13,

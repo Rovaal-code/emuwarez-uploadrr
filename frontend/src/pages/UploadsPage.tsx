@@ -452,7 +452,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   }
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div data-tour="uploads-content" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {modals}
 
       <div className="page-header" style={{ flexShrink: 0 }}>

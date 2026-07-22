@@ -87,7 +87,7 @@ export function SystemStatusPanel({ collapsed = false }: { collapsed?: boolean }
   if (!stats) return null
 
   return (
-    <div className={`sys-status${collapsed ? ' collapsed' : ''}`}>
+    <div data-tour="sidebar-gauges" className={`sys-status${collapsed ? ' collapsed' : ''}`}>
       <div className="sys-gauge-list">
         <Gauge percent={stats.cpu_percent} label="CPU" color="var(--hud-cyan)" title={stats.cpu_name} />
         <Gauge percent={stats.ram_percent} label="RAM" color="var(--hud-cyan)"

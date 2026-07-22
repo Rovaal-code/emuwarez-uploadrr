@@ -248,6 +248,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
       )}
 
       {/* Stat cards */}
+      <div data-tour="dashboard-stats">
       <div className="stat-cards-row" style={{ flexShrink: 0 }}>
         <StatCard
           icon={ICON_LIBRARY}
@@ -344,6 +345,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
           />
         </div>
       </div>
+      </div>
 
       {/* Main grid — fills the remaining height exactly (flex:1, minHeight:0)
           so the page itself never scrolls; each panel below keeps its own
@@ -353,7 +355,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
             ejecutadas" (25vh) stacked under it, so tasks sits parallel to the
             "Conexiones" card in the right column. */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minHeight: 0 }}>
-          <div className="activity-section" style={{ flex: 2, minHeight: 0, display: 'flex', flexDirection: 'column', marginBottom: 0 }}>
+          <div data-tour="dashboard-recommendations" className="activity-section" style={{ flex: 2, minHeight: 0, display: 'flex', flexDirection: 'column', marginBottom: 0 }}>
             <div className="section-header">
               <div className="section-title">Recomendaciones</div>
             </div>
@@ -427,7 +429,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
           </div>
 
           {/* Últimas tareas ejecutadas — parallel to "Conexiones" on the right. */}
-          <div className="activity-section" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', marginBottom: 0 }}>
+          <div data-tour="dashboard-tasks" className="activity-section" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', marginBottom: 0 }}>
             <div className="section-header">
               <div className="section-title">Últimas tareas ejecutadas</div>
             </div>
@@ -471,7 +473,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
         {/* Right — Actividad de subida: real running upload jobs, honest data only.
             Stretches to the full height of "Actividad reciente" on its left. */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minHeight: 0 }}>
-          <div className="upload-panel" style={{ flex: 2, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          <div data-tour="dashboard-uploads" className="upload-panel" style={{ flex: 2, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
             <div className="section-header">
               <div className="section-title">Actividad de subida</div>
             </div>
@@ -581,7 +583,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
           </div>
 
           {/* Estado de conexiones — misma altura que "Últimas tareas ejecutadas" */}
-          <div className="upload-panel" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          <div data-tour="dashboard-connections" className="upload-panel" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
             <div className="section-header">
               <div className="section-title">Conexiones</div>
             </div>

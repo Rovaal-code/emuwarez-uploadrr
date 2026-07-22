@@ -252,7 +252,7 @@ export function TasksPage() {
       </div>
 
       {loading ? <LoadingState label="Cargando tareas…" /> : error ? <ErrorState message={error} onRetry={load} /> : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div data-tour="tasks-content" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {tasks.map(task => (
             <TaskCard key={task.task_key} task={task} onChanged={load} />
           ))}

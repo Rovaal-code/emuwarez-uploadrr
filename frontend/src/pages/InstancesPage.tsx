@@ -219,7 +219,7 @@ export function InstancesPage() {
   }
 
   return (
-    <div>
+    <div data-tour="instances-content">
       <div className="page-header">
         <div>
           <div className="page-title">Instancias</div>

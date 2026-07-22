@@ -376,7 +376,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div data-tour="library-content" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div className="page-header">
         <div>
           <div className="page-title">Biblioteca</div>

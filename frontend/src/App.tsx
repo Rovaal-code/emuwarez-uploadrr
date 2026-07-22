@@ -8,6 +8,7 @@ import { SetupWizard } from './pages/SetupWizard'
 import { AppShell } from './components/AppShell'
 import { LoadingState } from './components/LoadingState'
 import { SyncProvider } from './context/SyncContext'
+import { TourProvider } from './context/TourContext'
 
 type AppState = 'loading' | 'setup' | 'login' | 'app'
 
@@ -124,7 +125,9 @@ export function App() {
 
   return (
     <SyncProvider>
-      <AppShell user={user} onLogout={handleLogout} />
+      <TourProvider>
+        <AppShell user={user} onLogout={handleLogout} />
+      </TourProvider>
     </SyncProvider>
   )
 }

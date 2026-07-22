@@ -1,0 +1,82 @@
+/* Guided onboarding tour — spotlight overlay (TourOverlay.tsx). */
+
+.tour-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  pointer-events: auto;
+}
+
+.tour-backdrop.no-target {
+  background: rgba(4, 16, 31, 0.82);
+}
+
+.tour-cutout {
+  position: fixed;
+  box-shadow: 0 0 0 9999px rgba(4, 16, 31, 0.82);
+  border: 1.5px solid var(--text-accent);
+  border-radius: 10px;
+  transition: top 0.25s ease, left 0.25s ease, width 0.25s ease, height 0.25s ease;
+  pointer-events: none;
+}
+
+.tour-bubble {
+  position: fixed;
+  z-index: 2001;
+  width: 300px;
+  max-width: calc(100vw - 32px);
+  background: var(--bg-card);
+  background-color: #0f1420;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-modal);
+  padding: 18px;
+  transition: top 0.25s ease, left 0.25s ease;
+}
+
+.tour-bubble-title {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.tour-bubble-desc {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+}
+
+.tour-bubble-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tour-bubble-counter {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.tour-bubble-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.tour-skip-link {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+  margin-top: 10px;
+  text-decoration: underline;
+}
+
+.tour-skip-link:hover {
+  color: var(--text-secondary);
+}

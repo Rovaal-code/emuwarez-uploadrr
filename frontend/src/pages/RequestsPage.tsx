@@ -618,7 +618,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div data-tour="requests-content" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {selectedId !== null ? (
         (detailLoading || !detail) ? (
           <div style={{ padding: 24 }}><LoadingState label="Cargando petición…" /></div>

@@ -1,0 +1,116 @@
+import type { TourStep } from '../context/TourContext'
+
+// The full guided tour, in order. `tab` navigates AppShell there before the
+// step shows (matching VALID_PAGES ids); steps without one target something
+// visible on any page (the sidebar's system-status gauges, the topbar).
+export const TOUR_STEPS: TourStep[] = [
+  {
+    id: 'dashboard-stats',
+    tab: 'dashboard',
+    selector: '[data-tour="dashboard-stats"]',
+    title: 'Tus números de un vistazo',
+    description: 'Cuánto de tu biblioteca está sincronizado, disponible o falta, cuánto contenido único tienes para subir, y el resumen de tus peticiones en eMuwarez.',
+  },
+  {
+    id: 'dashboard-recommendations',
+    tab: 'dashboard',
+    selector: '[data-tour="dashboard-recommendations"]',
+    title: 'Recomendaciones',
+    description: 'Contenido que te conviene subir o pedir: coincide con una petición de eMuwarez, o es algo único que aún no está en la plataforma.',
+  },
+  {
+    id: 'dashboard-tasks',
+    tab: 'dashboard',
+    selector: '[data-tour="dashboard-tasks"]',
+    title: 'Últimas tareas ejecutadas',
+    description: 'El resultado de las últimas veces que se sincronizó Radarr/Sonarr u otras tareas programadas, automáticas o manuales.',
+  },
+  {
+    id: 'dashboard-uploads',
+    tab: 'dashboard',
+    selector: '[data-tour="dashboard-uploads"]',
+    title: 'Actividad de subida',
+    description: 'Tus subidas en curso ahora mismo, con su progreso en vivo.',
+  },
+  {
+    id: 'dashboard-connections',
+    tab: 'dashboard',
+    selector: '[data-tour="dashboard-connections"]',
+    title: 'Conexiones',
+    description: 'Un vistazo rápido a qué servicios tienes conectados: Radarr, Sonarr, eMuwarez, TMDb, qBittorrent, hosts de imágenes...',
+  },
+  {
+    id: 'library',
+    tab: 'library',
+    selector: '[data-tour="library-content"]',
+    title: 'Biblioteca',
+    description: 'Todo tu contenido de Radarr y Sonarr en tarjetas: películas, series, temporadas y episodios. Haz clic en una para ver su ficha completa.',
+  },
+  {
+    id: 'requests',
+    tab: 'requests',
+    selector: '[data-tour="requests-content"]',
+    title: 'Peticiones',
+    description: 'Las peticiones abiertas en eMuwarez, comparadas contra tu biblioteca para saber cuáles podrías cubrir.',
+  },
+  {
+    id: 'uploads',
+    tab: 'uploads',
+    selector: '[data-tour="uploads-content"]',
+    title: 'Subidas',
+    description: 'El historial de tus subidas a eMuwarez, con su estado y progreso.',
+  },
+  {
+    id: 'guide',
+    tab: 'guide',
+    selector: '[data-tour="guide-content"]',
+    title: 'Guía',
+    description: 'La referencia de nomenclatura oficial de eMuwarez: cómo se nombra un archivo correctamente, campo a campo.',
+  },
+  {
+    id: 'tasks',
+    tab: 'tasks',
+    selector: '[data-tour="tasks-content"]',
+    title: 'Tareas',
+    description: 'Las tareas programadas (como la sincronización de Radarr/Sonarr): cuándo se ejecutan y con qué frecuencia.',
+  },
+  {
+    id: 'instances',
+    tab: 'instances',
+    selector: '[data-tour="instances-content"]',
+    title: 'Instancias',
+    description: 'Tus instancias de Radarr y Sonarr conectadas a la app.',
+  },
+  {
+    id: 'logs',
+    tab: 'logs',
+    selector: '[data-tour="logs-content"]',
+    title: 'Logs',
+    description: 'El registro interno de la aplicación, útil para depurar si algo falla.',
+  },
+  {
+    id: 'settings',
+    tab: 'settings',
+    selector: '[data-tour="settings-content"]',
+    title: 'Configuración',
+    description: 'Todas tus claves de API, proveedores, rutas y demás ajustes en un solo sitio.',
+  },
+  {
+    id: 'sidebar-gauges',
+    selector: '[data-tour="sidebar-gauges"]',
+    title: 'CPU, RAM y disco',
+    description: 'El consumo de recursos del propio contenedor, siempre visible en la barra lateral.',
+  },
+  {
+    id: 'topbar-buttons',
+    selector: '[data-tour="topbar-buttons"]',
+    title: 'Notificaciones y cuenta',
+    description: 'La campana de notificaciones, tu usuario, y cerrar sesión — siempre a mano desde cualquier pestaña.',
+  },
+  {
+    id: 'end',
+    selector: '[data-tour="topbar-buttons"]',
+    title: 'Eso es todo',
+    description: 'Ya conoces la app entera. ¡A sincronizar y subir contenido!',
+  },
+]

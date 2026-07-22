@@ -3,6 +3,8 @@ import { logout } from '../api/auth'
 import type { CurrentUserResponse } from '../types/api'
 import { NotificationBell } from './NotificationBell'
 import { SyncProgressBanner } from './SyncProgressBanner'
+import { useTour } from '../context/TourContext'
+import { TOUR_STEPS } from '../tour/steps'
 
 interface TopbarProps {
   user: CurrentUserResponse | null
@@ -13,6 +15,7 @@ interface TopbarProps {
 const HIDE_NAME_KEY = 'emuwarez_uploadrr_hide_username'
 
 export function Topbar({ user, pageTitle, onLogout }: TopbarProps) {
+  const { start: startTour } = useTour()
   // Persisted so obfuscation survives a reload — the name only reappears when
   // the user explicitly toggles it back on.
   const [hideName, setHideName] = useState(() => localStorage.getItem(HIDE_NAME_KEY) === '1')
@@ -40,7 +43,21 @@ export function Topbar({ user, pageTitle, onLogout }: TopbarProps) {
       <div className="topbar-center">
         <SyncProgressBanner />
       </div>
-      <div className="topbar-right">
+      <div className="topbar-right" data-tour="topbar-buttons">
+        {/* Guided tour — always skippable when launched manually */}
+        <button
+          type="button"
+          className="topbar-btn"
+          title="Ver el tour guiado"
+          aria-label="Ver el tour guiado"
+          onClick={() => startTour(TOUR_STEPS, { skippable: true })}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="11" x2="12" y2="16.5" />
+            <circle cx="12" cy="7.5" r="0.75" fill="currentColor" stroke="none" />
+          </svg>
+        </button>
         {/* Notifications */}
         <NotificationBell />
         {/* User info — username only, with a toggle to obfuscate it */}

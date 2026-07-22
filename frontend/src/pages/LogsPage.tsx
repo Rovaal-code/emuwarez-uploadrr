@@ -39,7 +39,7 @@ export function LogsPage() {
   }, [auto, load])
 
   return (
-    <div>
+    <div data-tour="logs-content">
       <div className="page-header">
         <div>
           <div className="page-title">Logs</div>

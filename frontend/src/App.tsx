@@ -23,6 +23,23 @@ function normalizePath(path: string) {
   }
 }
 
+// Same idea as /setup, but the login screen also needs to remember what you
+// were actually trying to reach (e.g. a bookmark to /library while logged
+// out) so a successful login can still take you there instead of always
+// landing on the dashboard.
+function normalizeToLogin() {
+  if (window.location.pathname === '/login') return
+  const current = window.location.pathname + window.location.search
+  const next = current === '/' ? '' : `?next=${encodeURIComponent(current)}`
+  window.history.replaceState(null, '', `/login${next}`)
+}
+
+function restoreFromLogin() {
+  if (window.location.pathname !== '/login') return
+  const next = new URLSearchParams(window.location.search).get('next')
+  window.history.replaceState(null, '', next || '/')
+}
+
 export function App() {
   const [state, setState] = useState<AppState>('loading')
   const [setupStatus, setSetupStatus] = useState<SetupStatusResponse | null>(null)
@@ -56,6 +73,8 @@ export function App() {
             // dashboard instead of leaving a dead URL in the address bar.
             if (window.location.pathname === '/setup') {
               normalizePath('/')
+            } else {
+              restoreFromLogin()
             }
             setState('app')
           }
@@ -66,9 +85,11 @@ export function App() {
       }
 
       // No valid token
+      normalizeToLogin()
       setState('login')
     } catch {
       // Backend not available — show login and let it fail with an error
+      normalizeToLogin()
       setState('login')
     }
   }
@@ -85,6 +106,7 @@ export function App() {
 
   function handleLogout() {
     setUser(null)
+    normalizeToLogin()
     setState('login')
   }
 

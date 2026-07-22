@@ -214,7 +214,7 @@ function TwoColTable({ head, rows }: { head: [string, string]; rows: [string, st
 
 export function GuidePage() {
   return (
-    <div data-tour="guide-content">
+    <div data-tour="guide-content" style={{ height: '100%' }}>
       <div className="page-header">
         <div>
           <div className="page-title">Guía</div>

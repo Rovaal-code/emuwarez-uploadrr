@@ -219,7 +219,7 @@ export function InstancesPage() {
   }
 
   return (
-    <div data-tour="instances-content">
+    <div data-tour="instances-content" style={{ height: '100%' }}>
       <div className="page-header">
         <div>
           <div className="page-title">Instancias</div>

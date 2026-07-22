@@ -16,7 +16,7 @@ export function SyncCard() {
   const requestsWait = requestsStatus && !requestsStatus.can_sync ? Math.ceil(requestsStatus.wait_seconds / 60) : 0
 
   return (
-    <div className="sync-card">
+    <div className="sync-card" data-tour="dashboard-sync-buttons">
         <Tooltip content="Consulta tus instancias de Radarr/Sonarr y actualiza la biblioteca local (títulos, rutas, estado en disco y nomenclatura).">
           <button className="btn btn-primary btn-sm" onClick={startLibrarySync} disabled={isAnySyncing}>
             {libSyncing

@@ -5,6 +5,13 @@ import type { TourStep } from '../context/TourContext'
 // visible on any page (the sidebar's system-status gauges, the topbar).
 export const TOUR_STEPS: TourStep[] = [
   {
+    id: 'dashboard-sync-buttons',
+    tab: 'dashboard',
+    selector: '[data-tour="dashboard-sync-buttons"]',
+    title: 'Sincronizar',
+    description: 'Biblioteca trae los cambios de Radarr/Sonarr, eMuwarez descarga su catálogo para comparar, y Peticiones trae las peticiones abiertas.',
+  },
+  {
     id: 'dashboard-stats',
     tab: 'dashboard',
     selector: '[data-tour="dashboard-stats"]',
@@ -44,6 +51,7 @@ export const TOUR_STEPS: TourStep[] = [
     tab: 'library',
     selector: '[data-tour="library-content"]',
     title: 'Biblioteca',
+    placement: 'top-center',
     description: 'Todo tu contenido de Radarr y Sonarr en tarjetas: películas, series, temporadas y episodios. Haz clic en una para ver su ficha completa.',
   },
   {
@@ -51,6 +59,7 @@ export const TOUR_STEPS: TourStep[] = [
     tab: 'requests',
     selector: '[data-tour="requests-content"]',
     title: 'Peticiones',
+    placement: 'top-center',
     description: 'Las peticiones abiertas en eMuwarez, comparadas contra tu biblioteca para saber cuáles podrías cubrir.',
   },
   {
@@ -58,6 +67,7 @@ export const TOUR_STEPS: TourStep[] = [
     tab: 'uploads',
     selector: '[data-tour="uploads-content"]',
     title: 'Subidas',
+    placement: 'top-center',
     description: 'El historial de tus subidas a eMuwarez, con su estado y progreso.',
   },
   {
@@ -65,6 +75,7 @@ export const TOUR_STEPS: TourStep[] = [
     tab: 'guide',
     selector: '[data-tour="guide-content"]',
     title: 'Guía',
+    placement: 'top-center',
     description: 'La referencia de nomenclatura oficial de eMuwarez: cómo se nombra un archivo correctamente, campo a campo.',
   },
   {
@@ -79,6 +90,7 @@ export const TOUR_STEPS: TourStep[] = [
     tab: 'instances',
     selector: '[data-tour="instances-content"]',
     title: 'Instancias',
+    placement: 'top-center',
     description: 'Tus instancias de Radarr y Sonarr conectadas a la app.',
   },
   {
@@ -86,6 +98,7 @@ export const TOUR_STEPS: TourStep[] = [
     tab: 'logs',
     selector: '[data-tour="logs-content"]',
     title: 'Logs',
+    placement: 'top-center',
     description: 'El registro interno de la aplicación, útil para depurar si algo falla.',
   },
   {
@@ -93,6 +106,7 @@ export const TOUR_STEPS: TourStep[] = [
     tab: 'settings',
     selector: '[data-tour="settings-content"]',
     title: 'Configuración',
+    placement: 'top-center',
     description: 'Todas tus claves de API, proveedores, rutas y demás ajustes en un solo sitio.',
   },
   {
@@ -105,10 +119,11 @@ export const TOUR_STEPS: TourStep[] = [
     id: 'topbar-buttons',
     selector: '[data-tour="topbar-buttons"]',
     title: 'Notificaciones y cuenta',
-    description: 'La campana de notificaciones, tu usuario, y cerrar sesión — siempre a mano desde cualquier pestaña.',
+    description: 'La campana de notificaciones, tu usuario, y cerrar sesión: siempre a mano desde cualquier pestaña.',
   },
   {
     id: 'end',
+    tab: 'dashboard',
     selector: '[data-tour="topbar-buttons"]',
     title: 'Eso es todo',
     description: 'Ya conoces la app entera. ¡A sincronizar y subir contenido!',

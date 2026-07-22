@@ -23,8 +23,9 @@
 .tour-bubble {
   position: fixed;
   z-index: 2001;
-  width: 300px;
+  width: 340px;
   max-width: calc(100vw - 32px);
+  box-sizing: border-box;
   background: var(--bg-card);
   background-color: #0f1420;
   border: 1px solid var(--border);
@@ -50,8 +51,8 @@
 
 .tour-bubble-footer {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: stretch;
   gap: 10px;
 }
 
@@ -63,20 +64,7 @@
 
 .tour-bubble-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
-}
-
-.tour-skip-link {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  font-size: 12px;
-  cursor: pointer;
-  padding: 0;
-  margin-top: 10px;
-  text-decoration: underline;
-}
-
-.tour-skip-link:hover {
-  color: var(--text-secondary);
 }

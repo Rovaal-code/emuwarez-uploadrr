@@ -10,8 +10,9 @@ import { TOUR_STEPS } from '../tour/steps'
 
 // The very first time the app is ready to use (right after finishing setup,
 // or on any later reload before it's been seen), the guided tour launches on
-// its own and can't be skipped — every reload counts, not just the setup
-// hand-off, so nobody dodges it just by reloading mid-tour.
+// its own — closing it (even without finishing) marks it seen, so it never
+// launches again on its own; it can still be relaunched any time from the
+// Info button in the topbar.
 const TOUR_SEEN_KEY = 'emuwarez_uploadrr_tour_seen'
 
 // Pages
@@ -74,7 +75,6 @@ export function AppShell({ user, onLogout }: AppShellProps) {
   useEffect(() => {
     if (localStorage.getItem(TOUR_SEEN_KEY) !== '1') {
       startTour(TOUR_STEPS, {
-        skippable: false,
         onClose: () => localStorage.setItem(TOUR_SEEN_KEY, '1'),
       })
     }

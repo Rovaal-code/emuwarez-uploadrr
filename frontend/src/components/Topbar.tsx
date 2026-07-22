@@ -44,13 +44,13 @@ export function Topbar({ user, pageTitle, onLogout }: TopbarProps) {
         <SyncProgressBanner />
       </div>
       <div className="topbar-right" data-tour="topbar-buttons">
-        {/* Guided tour — always skippable when launched manually */}
+        {/* Guided tour — relaunch any time */}
         <button
           type="button"
           className="topbar-btn"
           title="Ver el tour guiado"
           aria-label="Ver el tour guiado"
-          onClick={() => startTour(TOUR_STEPS, { skippable: true })}
+          onClick={() => startTour(TOUR_STEPS)}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
             <circle cx="12" cy="12" r="10" />

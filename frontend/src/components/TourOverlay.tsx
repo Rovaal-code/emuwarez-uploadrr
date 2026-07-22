@@ -6,7 +6,7 @@ interface TourOverlayProps {
   navigate: (page: string) => void
 }
 
-const BUBBLE_WIDTH = 300
+const BUBBLE_WIDTH = 340
 const BUBBLE_MARGIN = 14
 const WAIT_TIMEOUT_MS = 4000
 
@@ -37,7 +37,10 @@ function waitForRect(selector: string, onFound: (rect: DOMRect) => void): () => 
   return () => { cancelled = true }
 }
 
-function placeBubble(rect: DOMRect | null): { top: number; left: number } {
+function placeBubble(rect: DOMRect | null, placement?: 'top-center'): { top: number; left: number } {
+  if (placement === 'top-center') {
+    return { top: BUBBLE_MARGIN + 56, left: window.innerWidth / 2 - BUBBLE_WIDTH / 2 }
+  }
   if (!rect) {
     return { top: window.innerHeight / 2 - 90, left: window.innerWidth / 2 - BUBBLE_WIDTH / 2 }
   }
@@ -58,7 +61,7 @@ function placeBubble(rect: DOMRect | null): { top: number; left: number } {
 }
 
 export function TourOverlay({ activePage, navigate }: TourOverlayProps) {
-  const { active, stepIndex, steps, skippable, next, prev, close } = useTour()
+  const { active, stepIndex, steps, next, prev, close } = useTour()
   const [rect, setRect] = useState<DOMRect | null>(null)
   const step = steps[stepIndex]
 
@@ -86,15 +89,15 @@ export function TourOverlay({ activePage, navigate }: TourOverlayProps) {
   useEffect(() => {
     if (!active) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && skippable) close()
+      if (e.key === 'Escape') close()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [active, skippable, close])
+  }, [active, close])
 
   if (!active || !step) return null
 
-  const { top, left } = placeBubble(rect)
+  const { top, left } = placeBubble(rect, step.placement)
   const isLast = stepIndex === steps.length - 1
 
   return (
@@ -111,6 +114,7 @@ export function TourOverlay({ activePage, navigate }: TourOverlayProps) {
         <div className="tour-bubble-footer">
           <span className="tour-bubble-counter">Paso {stepIndex + 1} de {steps.length}</span>
           <div className="tour-bubble-actions">
+            <button className="btn btn-danger btn-sm" onClick={close}>Cerrar</button>
             {stepIndex > 0 && (
               <button className="btn btn-sm" onClick={prev}>Atrás</button>
             )}
@@ -119,9 +123,6 @@ export function TourOverlay({ activePage, navigate }: TourOverlayProps) {
             </button>
           </div>
         </div>
-        {skippable && !isLast && (
-          <button className="tour-skip-link" onClick={close}>Saltar tour</button>
-        )}
       </div>
     </div>
   )

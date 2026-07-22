@@ -76,6 +76,62 @@ function StepTitleIcon({ step }: { step: string }) {
   return null
 }
 
+// One-line "eMuwarez Uploadrr es una aplicación que:" cards on the welcome
+// step — icon + a single line of text each, replacing the old plain bullet
+// list so the page reads at a glance instead of as a wall of text.
+function FeatureCard({ icon, text }: { icon: React.ReactNode; text: string }) {
+  return (
+    <div className="wizard-feature-card">
+      <div className="wizard-feature-icon">{icon}</div>
+      <div className="wizard-feature-text">{text}</div>
+    </div>
+  )
+}
+
+const FEATURE_ICONS = {
+  sync: (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M21 2v6h-6" /><path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+      <path d="M3 22v-6h6" /><path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+    </svg>
+  ),
+  upload: (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12 19V6M6 12l6-6 6 6" /><path d="M5 21h14" />
+    </svg>
+  ),
+  audio: (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M3 10v4M7 6v12M11 3v18M15 6v12M19 10v4" />
+    </svg>
+  ),
+  parallel: (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" />
+    </svg>
+  ),
+  unique: (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12 2l2.4 7.2H22l-6 4.6 2.3 7.2-6.3-4.6-6.3 4.6 2.3-7.2-6-4.6h7.6z" />
+    </svg>
+  ),
+  requests: (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M8 6h13M8 12h13M8 18h13" /><path d="M3 6h.01M3 12h.01M3 18h.01" />
+    </svg>
+  ),
+  recommendUpload: (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7" /><path d="M16 6l-4-4-4 4" /><path d="M12 2v14" />
+    </svg>
+  ),
+  recommendRequest: (
+    <svg viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  ),
+}
+
 function StepsBar({ current, steps }: { current: string; steps: readonly string[] }) {
   const currentIdx = steps.indexOf(current)
   return (
@@ -385,20 +441,19 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
           {/* Welcome step */}
           {step === 'welcome' && (
             <>
-              <div className="wizard-step-desc" style={{ marginBottom: 4 }}>
-                eMuwarez Uploadrr es una aplicación autoalojada que:
+              <div className="wizard-step-desc" style={{ marginBottom: 12 }}>
+                eMuwarez Uploadrr es una aplicación que:
               </div>
-              <ul style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.8, paddingLeft: 20, marginTop: 8 }}>
-                <li>Gestiona y sincroniza tus bibliotecas de Radarr y Sonarr.</li>
-                <li>Prepara y sube contenido siguiendo la nomenclatura de eMuwarez.</li>
-                <li>Reordena y renombra las pistas de audio y subtítulos de forma profesional antes de subir, siguiendo la prioridad de idioma (Español → Català → Inglés → el resto).</li>
-                <li>Permite subir varios contenidos en paralelo, sin esperar a que termine uno para lanzar el siguiente.</li>
-                <li>Se conecta con eMuwarez para listar las peticiones actuales.</li>
-                <li>Obtiene el catálogo de eMuwarez y lo compara contra tu biblioteca.</li>
-                <li>Muestra el contenido único de tu biblioteca, aquel que todavía no esté en eMuwarez.</li>
-                <li>Si tienes contenido compatible con una petición existente en eMuwarez, te recomienda subirlo a la plataforma.</li>
-                <li>Te recomienda crear una petición si tienes contenido faltante en tu biblioteca.</li>
-              </ul>
+              <div className="wizard-feature-grid">
+                <FeatureCard icon={FEATURE_ICONS.sync} text="Gestiona y sincroniza tus bibliotecas de Radarr y Sonarr" />
+                <FeatureCard icon={FEATURE_ICONS.upload} text="Prepara y sube contenido siguiendo la nomenclatura de eMuwarez" />
+                <FeatureCard icon={FEATURE_ICONS.audio} text="Reordena y renombra las pistas de audio y subtítulos" />
+                <FeatureCard icon={FEATURE_ICONS.parallel} text="Sube varios contenidos en paralelo, sin esperar a que termine uno" />
+                <FeatureCard icon={FEATURE_ICONS.unique} text="Muestra el contenido único que aún no está en eMuwarez" />
+                <FeatureCard icon={FEATURE_ICONS.requests} text="Se conecta con eMuwarez para listar las peticiones actuales" />
+                <FeatureCard icon={FEATURE_ICONS.recommendUpload} text="Recomienda subir contenido compatible con una petición existente" />
+                <FeatureCard icon={FEATURE_ICONS.recommendRequest} text="Te recomienda crear una petición si tienes contenido faltante nuevo" />
+              </div>
               <div className="wizard-actions">
                 <span />
                 <button className="btn btn-primary" onClick={() => setStep('admin')}>

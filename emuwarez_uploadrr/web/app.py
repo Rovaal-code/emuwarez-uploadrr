@@ -148,14 +148,7 @@ def create_app() -> FastAPI:
         if _assets.exists():
             app.mount("/assets", StaticFiles(directory=str(_assets)), name="assets")
 
-        _favicon = _FRONTEND_DIST / "favicon.svg"
-        if _favicon.exists():
-            # Registered before spa_fallback below — without this, /favicon.svg
-            # falls through the catch-all and gets index.html (text/html) back,
-            # which browsers reject as a tab icon.
-            @app.get("/favicon.svg", include_in_schema=False)
-            async def favicon() -> FileResponse:
-                return FileResponse(str(_favicon), media_type="image/svg+xml")
+        _dist_resolved = _FRONTEND_DIST.resolve()
 
         @app.get("/{full_path:path}", include_in_schema=False)
         async def spa_fallback(full_path: str) -> FileResponse:
@@ -163,6 +156,17 @@ def create_app() -> FastAPI:
             if full_path.startswith("api/") or full_path == "api":
                 from fastapi import HTTPException
                 raise HTTPException(status_code=404)
+            # Any real static file sitting at the repo root of dist/ (favicon.ico,
+            # the various icon PNGs, site.webmanifest, robots.txt, ...) gets
+            # served directly with its real content-type — instead of only
+            # favicon.svg as a one-off special case, which silently left every
+            # OTHER root-level static file falling through to index.html
+            # (wrong content-type: text/html for a PNG/manifest/ico is rejected
+            # by browsers and any tool auto-discovering these icons).
+            if full_path:
+                candidate = (_FRONTEND_DIST / full_path).resolve()
+                if candidate.is_file() and _dist_resolved in candidate.parents:
+                    return FileResponse(str(candidate))
             index = _FRONTEND_DIST / "index.html"
             # The SPA shell must never be cached: it points at hash-named bundles
             # in /assets, so a stale index.html leaves the browser running old

@@ -43,7 +43,15 @@ export function SyncProgressBanner() {
           icon={<ServiceIcon type="emu" size={13} />}
           label="eMuwarez"
           detail={catalogProgress.error ?? [
-            catalogProgress.total_pages ? `pág. ${catalogProgress.page}/${catalogProgress.total_pages}` : null,
+            catalogProgress.total_pages
+              ? `pág. ${catalogProgress.page}/${catalogProgress.total_pages}`
+              // Total pages isn't known yet (still waiting on page 1's own
+              // response) — the torrent count is real progress too, and
+              // showing it beats a bar that looks frozen with no text at all.
+              // Before even that (still on the pre-flight check, or between
+              // phases), fall back to the phase label itself — so the chip
+              // never shows literally nothing while something is happening.
+              : catalogProgress.torrents ? `${catalogProgress.torrents} torrents` : catalogProgress.phase || null,
             catalogProgress.eta_seconds != null ? `~${fmtEta(catalogProgress.eta_seconds)}` : null,
           ].filter(Boolean).join(' · ')}
           percent={!catalogProgress.error && catalogProgress.total_pages

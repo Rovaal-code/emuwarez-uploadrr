@@ -1,4 +1,5 @@
 import { InfoIcon } from './InfoIcon'
+import { useTooltip } from './Tooltip'
 
 // Shared building blocks for the "dedicated detail page" visual style
 // (Radarr/Sonarr-style: back button, compact header with fixed-size poster,
@@ -73,11 +74,12 @@ export function ValueChip({ children, linkable = false, as = 'span', onClick, ti
   onClick?: () => void
   title?: string
 }) {
+  const { triggerProps, tooltipNode } = useTooltip(title ?? null)
   const className = `value-chip${linkable ? ' linkable' : ''}`
   if (as === 'button') {
-    return <button type="button" className={className} onClick={onClick} title={title}>{children}</button>
+    return <button type="button" className={className} onClick={onClick} {...triggerProps}>{children}{tooltipNode}</button>
   }
-  return <span className={className} title={title}>{children}</span>
+  return <span className={className} {...triggerProps}>{children}{tooltipNode}</span>
 }
 
 // Wraps a plain contextual icon (currentColor) placed before a field value —

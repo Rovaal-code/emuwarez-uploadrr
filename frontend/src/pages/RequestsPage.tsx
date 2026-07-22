@@ -13,7 +13,7 @@ import { ErrorState } from '../components/ErrorState'
 import { EmptyState } from '../components/EmptyState'
 import { SyncInfo } from '../components/SyncInfo'
 import { StatusBadge } from '../components/StatusBadge'
-import { HoverTitle } from '../components/Tooltip'
+import { HoverTitle, useTooltip } from '../components/Tooltip'
 import { useSync } from '../context/SyncContext'
 import { UploadWizardModal } from '../components/UploadWizardModal'
 import { getLibraryItem } from '../api/library'
@@ -205,6 +205,16 @@ function IdField({ label, id, href }: { label: string; id: string | null; href: 
   )
 }
 
+function CreatedAtCell({ createdAt }: { createdAt: string | null | undefined }) {
+  const { triggerProps, tooltipNode } = useTooltip(createdAt ? formatDate(createdAt) : null)
+  return (
+    <td style={{ fontSize: 12, whiteSpace: 'nowrap', color: 'var(--text-secondary)' }} {...triggerProps}>
+      {timeAgo(createdAt)}
+      {tooltipNode}
+    </td>
+  )
+}
+
 // Full dedicated request page — same visual format as the library item detail
 // page (back button, big poster left, title + fields grid right).
 function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload, onOpenLibraryItem }: {
@@ -230,6 +240,15 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
   const malId = item.mal_id || null
   const hasSeason = item.req_scope === 'season' || item.req_scope === 'episode'
   const temporadaLabel = hasSeason ? String(item.req_season ?? '?') : 'Todas'
+  const consultarTip = useTooltip(item.url
+    ? 'Abrir la petición en eMuwarez (reclamarla, marcarla como llena, ver el ID del torrent…)'
+    : 'Todavía no tenemos la URL exacta de esta petición — abre el listado general de peticiones en eMuwarez')
+  const subirTip = useTooltip(libId
+    ? 'Subir el contenido de tu biblioteca a eMuwarez (mismo asistente que en Biblioteca)'
+    : 'No tienes este contenido en tu biblioteca')
+  const reqNameTip = useTooltip(m?.content_name || null)
+  const libNameTip = useTooltip(m?.content_name || baseName(m?.local_path ?? null) || m?.library_title || null)
+  const openLibTip = useTooltip('Ver ficha del contenido')
   return (
     <div style={{ width: '100%', flex: 1, minHeight: 0, overflowY: 'auto' }}>
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -244,25 +263,23 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
             href={item.url || EMU_REQUESTS_FALLBACK_URL}
             target="_blank"
             rel="noreferrer"
-            title={item.url
-              ? 'Abrir la petición en eMuwarez (reclamarla, marcarla como llena, ver el ID del torrent…)'
-              : 'Todavía no tenemos la URL exacta de esta petición — abre el listado general de peticiones en eMuwarez'}
             style={{ textDecoration: 'none' }}
+            {...consultarTip.triggerProps}
           >
             <ExternalLinkButtonIcon /> Consultar en eMuwarez
+            {consultarTip.tooltipNode}
           </a>
           <button
             className="btn btn-primary btn-sm"
             disabled={!libId}
-            title={libId
-              ? 'Subir el contenido de tu biblioteca a eMuwarez (mismo asistente que en Biblioteca)'
-              : 'No tienes este contenido en tu biblioteca'}
             onClick={() => libId && onUpload(libId, {
               season: item.req_season,
               episode: item.req_scope === 'episode' ? item.req_episode : null,
             })}
+            {...subirTip.triggerProps}
           >
             <UploadButtonIcon /> Subir a eMuwarez
+            {subirTip.tooltipNode}
           </button>
         </div>
       </div>
@@ -359,7 +376,7 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
                       <td style={{ color: 'var(--text-muted)' }}>—</td>
                       <td style={{ color: 'var(--text-muted)' }}>—</td>
                       <td style={{ color: 'var(--text-muted)' }}>—</td>
-                      <td style={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }} title={m.content_name || ''}>{m.content_name || '—'}</td>
+                      <td style={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }} {...reqNameTip.triggerProps}>{m.content_name || '—'}{reqNameTip.tooltipNode}</td>
                     </tr>
                     <tr style={{ background: 'rgba(34,197,94,0.06)' }}>
                       <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>Tu biblioteca</td>
@@ -368,10 +385,11 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
                       <td>{m.local_video_codec || '—'}</td>
                       <td>{m.local_audio_languages || '—'}</td>
                       <td style={{ whiteSpace: 'nowrap' }}>{m.local_size ? formatBytes(m.local_size) : '—'}</td>
-                      <td style={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={m.content_name || baseName(m.local_path) || m.library_title || ''}>
+                      <td style={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} {...libNameTip.triggerProps}>
                         {libId
-                          ? <span className="lib-title-link" onClick={() => onOpenLibraryItem?.(libId)} title="Ver ficha del contenido">{m.content_name || baseName(m.local_path) || m.library_title || '—'}</span>
+                          ? <span className="lib-title-link" onClick={() => onOpenLibraryItem?.(libId)} {...openLibTip.triggerProps}>{m.content_name || baseName(m.local_path) || m.library_title || '—'}{openLibTip.tooltipNode}</span>
                           : <span style={{ color: 'var(--text-secondary)' }}>{m.content_name || baseName(m.local_path) || m.library_title || '—'}</span>}
+                        {libNameTip.tooltipNode}
                       </td>
                     </tr>
                   </tbody>
@@ -450,6 +468,9 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   const [showCandidates, setShowCandidates] = useState(false)
   const [wizardItem, setWizardItem] = useState<LibraryItemResponse | null>(null)
   const [wizardPreselect, setWizardPreselect] = useState<{ season?: number | null; episode?: number | null } | undefined>(undefined)
+  const votesHeaderTip = useTooltip('Votos (otros usuarios que la quieren)')
+  const commentsHeaderTip = useTooltip('Comentarios')
+  const pointsHeaderTip = useTooltip('Puntos / recompensa')
 
   // "Subir a eMuwarez" — reuse the exact same upload wizard as Biblioteca by
   // loading the matched library item and handing it to UploadWizardModal, with
@@ -706,9 +727,9 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                     <th><HeaderFilter label="Source" value={sourceFilter} onChange={setSourceFilter} options={[
                       { value: '', label: 'Todos' }, ...facets.sources.map(s => ({ value: s, label: s })),
                     ]} /></th>
-                    <th title="Votos (otros usuarios que la quieren)" style={{ textAlign: 'center' }}><VotesIcon /></th>
-                    <th title="Comentarios" style={{ textAlign: 'center' }}><CommentsIcon /></th>
-                    <th title="Puntos / recompensa" style={{ textAlign: 'center' }}><PointsIcon /></th>
+                    <th style={{ textAlign: 'center' }} {...votesHeaderTip.triggerProps}><VotesIcon />{votesHeaderTip.tooltipNode}</th>
+                    <th style={{ textAlign: 'center' }} {...commentsHeaderTip.triggerProps}><CommentsIcon />{commentsHeaderTip.tooltipNode}</th>
+                    <th style={{ textAlign: 'center' }} {...pointsHeaderTip.triggerProps}><PointsIcon />{pointsHeaderTip.tooltipNode}</th>
                     <th>Creada</th>
                   </tr>
                 </thead>
@@ -745,7 +766,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                         <td style={{ textAlign: 'center', fontSize: 12 }}>{item.votes ?? 0}</td>
                         <td style={{ textAlign: 'center', fontSize: 12 }}>{item.comments ?? 0}</td>
                         <td style={{ textAlign: 'center', fontSize: 12, whiteSpace: 'nowrap' }}>{fmtNum(item.points)}</td>
-                        <td style={{ fontSize: 12, whiteSpace: 'nowrap', color: 'var(--text-secondary)' }} title={item.created_at ? formatDate(item.created_at) : ''}>{timeAgo(item.created_at)}</td>
+                        <CreatedAtCell createdAt={item.created_at} />
                       </tr>
                     )
                   })}

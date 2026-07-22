@@ -1,4 +1,5 @@
 import { useRef, useLayoutEffect, useState } from 'react'
+import { useTooltip } from './Tooltip'
 
 // Binary-searches the LARGEST font size in [min,max] that makes `el`'s own
 // text content fit on one line within `el`'s current width — mutates
@@ -190,22 +191,25 @@ function SizeControls({ value, auto, onChange }: {
   auto: number
   onChange: (updater: (s: number | null) => number | null) => void
 }) {
+  const decTip = useTooltip('Reducir tamaño de letra')
+  const incTip = useTooltip('Aumentar tamaño de letra')
+  const resetTip = useTooltip('Volver al ajuste automático')
   return (
     <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginTop: 4 }}>
       <button
         type="button"
         onClick={() => onChange(s => Math.max(4, Math.round((s ?? auto) - 1)))}
-        title="Reducir tamaño de letra"
         style={debugBtnStyle}
-      >−</button>
+        {...decTip.triggerProps}
+      >−{decTip.tooltipNode}</button>
       <button
         type="button"
         onClick={() => onChange(s => Math.min(40, Math.round((s ?? auto) + 1)))}
-        title="Aumentar tamaño de letra"
         style={debugBtnStyle}
-      >+</button>
+        {...incTip.triggerProps}
+      >+{incTip.tooltipNode}</button>
       {value != null && (
-        <button type="button" onClick={() => onChange(() => null)} title="Volver al ajuste automático" style={debugBtnStyle}>↺</button>
+        <button type="button" onClick={() => onChange(() => null)} style={debugBtnStyle} {...resetTip.triggerProps}>↺{resetTip.tooltipNode}</button>
       )}
       <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
         {value != null ? `${value}px (manual)` : `${auto.toFixed(1)}px (auto)`}

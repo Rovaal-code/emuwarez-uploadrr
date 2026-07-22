@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import type { NomenclatureProposal, NomenclatureApplyResult } from '../types/api'
 import { previewNomenclature, adaptNomenclature } from '../api/nomenclature'
+import { useTooltip } from './Tooltip'
 
 interface Props {
   itemId: number
@@ -38,6 +39,7 @@ export function NomenclatureModal({ itemId, itemTitle, onClose }: Props) {
   const [applyError, setApplyError] = useState<string | null>(null)
   const [confirmInput, setConfirmInput] = useState('')
   const [showApplySection, setShowApplySection] = useState(false)
+  const closeTip = useTooltip('Cerrar')
 
   const load = async (force = false) => {
     setLoading(true)
@@ -102,7 +104,7 @@ export function NomenclatureModal({ itemId, itemTitle, onClose }: Props) {
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2 className="modal-title">Nomenclatura eMuwarez</h2>
-          <button className="btn-icon" onClick={onClose} title="Cerrar">✕</button>
+          <button className="btn-icon" onClick={onClose} {...closeTip.triggerProps}>✕{closeTip.tooltipNode}</button>
         </div>
         <div className="modal-body">
           <p className="text-muted" style={{ marginBottom: 12 }}>{itemTitle}</p>

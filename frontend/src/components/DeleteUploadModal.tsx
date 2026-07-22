@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { UploadJob } from '../types/api'
 import { deleteUploadJob } from '../api/uploads'
+import { useTooltip } from './Tooltip'
 
 // Styled confirmation card for deleting an upload job from its own dedicated
 // detail page — only ever opened for a 'failed'/'cancelled' job (the backend
@@ -12,6 +13,7 @@ export function DeleteUploadModal({ job, onClose, onDeleted }: {
 }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const closeTip = useTooltip('Cerrar')
 
   const handleDelete = async () => {
     setLoading(true); setError(null)
@@ -29,7 +31,7 @@ export function DeleteUploadModal({ job, onClose, onDeleted }: {
       <div className="modal" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2 className="modal-title">Borrar subida</h2>
-          <button className="btn-icon" onClick={onClose} title="Cerrar">✕</button>
+          <button className="btn-icon" onClick={onClose} {...closeTip.triggerProps}>✕{closeTip.tooltipNode}</button>
         </div>
         <div className="modal-body">
           <p style={{ margin: 0, fontWeight: 600 }}>{job.title || `Job ${job.id}`}</p>

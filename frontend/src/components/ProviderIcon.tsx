@@ -8,6 +8,7 @@
 // short code. If you drop a curated square SVG into src/assets/providers/
 // <code>.svg it is used instead.
 import { Favicon } from './Favicon'
+import { useTooltip } from './Tooltip'
 
 const PROVIDER_SVGS = (import.meta as unknown as {
   glob: (pattern: string, opts: object) => Record<string, string>
@@ -61,8 +62,14 @@ function textOn(hex: string): string {
 }
 
 export function ProviderIcon({ code, size = 18, link = true }: { code: string | null | undefined; size?: number; link?: boolean }) {
+  // Hooks must run unconditionally every render — computed with safe
+  // fallbacks so they're legal even when `code` is null (the early return
+  // below happens after every hook call, never before).
+  const key = (code ?? '').trim().toLowerCase()
+  const domain = DOMAINS[key]
+  const codeTip = useTooltip(code ?? null)
+  const openTip = useTooltip(domain && link ? `Abrir ${domain}` : null)
   if (!code) return null
-  const key = code.trim().toLowerCase()
   const box: React.CSSProperties = {
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
     width: size, height: size, borderRadius: 4, flexShrink: 0, overflow: 'hidden',
@@ -72,19 +79,20 @@ export function ProviderIcon({ code, size = 18, link = true }: { code: string | 
   const bg = BRAND[key] ?? fallbackColor(key)
   const short = code.replace(/[^A-Za-z0-9+]/g, '').slice(0, 2).toUpperCase()
   const codeTile = (
-    <span style={{ ...box, background: bg, color: textOn(bg), fontSize: size * 0.44, fontWeight: 700, letterSpacing: '-0.03em' }} title={code}>
+    <span style={{ ...box, background: bg, color: textOn(bg), fontSize: size * 0.44, fontWeight: 700, letterSpacing: '-0.03em' }} {...codeTip.triggerProps}>
       {short}
+      {codeTip.tooltipNode}
     </span>
   )
 
-  const domain = DOMAINS[key]
   // A curated square SVG (dropped in assets/providers/) wins over everything;
   // otherwise the provider's real favicon, falling back to the coloured tile.
   const url = BY_CODE[key]
   const visual = url
     ? (
-      <span style={{ ...box, background: '#fff' }} title={code}>
+      <span style={{ ...box, background: '#fff' }} {...codeTip.triggerProps}>
         <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 2 }} />
+        {codeTip.tooltipNode}
       </span>
     )
     : domain
@@ -101,12 +109,13 @@ export function ProviderIcon({ code, size = 18, link = true }: { code: string | 
         href={`https://${domain}`}
         target="_blank"
         rel="noreferrer"
-        title={`Abrir ${domain}`}
         onClick={e => e.stopPropagation()}
         draggable={false}
         style={{ display: 'inline-flex', flexShrink: 0 }}
+        {...openTip.triggerProps}
       >
         {visual}
+        {openTip.tooltipNode}
       </a>
     )
   }
@@ -116,8 +125,9 @@ export function ProviderIcon({ code, size = 18, link = true }: { code: string | 
 // Icon + name inline (e.g. "🅰 Amazon (AMZN)"). The whole thing (icon AND name)
 // is the link to the provider's site, so hovering the text counts too.
 export function ProviderTag({ code, label, size = 18 }: { code: string | null | undefined; label?: string | null; size?: number }) {
+  const domain = code ? DOMAINS[code.trim().toLowerCase()] : undefined
+  const { triggerProps, tooltipNode } = useTooltip(domain ? `Abrir ${domain}` : null)
   if (!code) return <>{label ?? '—'}</>
-  const domain = DOMAINS[code.trim().toLowerCase()]
   const inner = (
     <>
       <ProviderIcon code={code} size={size} link={false} />
@@ -126,6 +136,6 @@ export function ProviderTag({ code, label, size = 18 }: { code: string | null | 
   )
   const style: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }
   return domain
-    ? <a className="hover-link" href={`https://${domain}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} title={`Abrir ${domain}`} style={style}>{inner}</a>
+    ? <a className="hover-link" href={`https://${domain}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={style} {...triggerProps}>{inner}{tooltipNode}</a>
     : <span style={style}>{inner}</span>
 }

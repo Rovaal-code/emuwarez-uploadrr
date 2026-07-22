@@ -5,6 +5,7 @@ import { NotificationBell } from './NotificationBell'
 import { SyncProgressBanner } from './SyncProgressBanner'
 import { useTour } from '../context/TourContext'
 import { TOUR_STEPS } from '../tour/steps'
+import { useTooltip } from './Tooltip'
 
 interface TopbarProps {
   user: CurrentUserResponse | null
@@ -22,6 +23,9 @@ export function Topbar({ user, pageTitle, onLogout }: TopbarProps) {
   useEffect(() => {
     localStorage.setItem(HIDE_NAME_KEY, hideName ? '1' : '0')
   }, [hideName])
+  const tourTip = useTooltip('Ver el tour guiado')
+  const eyeTip = useTooltip(hideName ? 'Mostrar usuario' : 'Ocultar usuario')
+  const logoutTip = useTooltip('Cerrar sesión')
 
   async function handleLogout() {
     try {
@@ -48,15 +52,16 @@ export function Topbar({ user, pageTitle, onLogout }: TopbarProps) {
         <button
           type="button"
           className="topbar-btn"
-          title="Ver el tour guiado"
           aria-label="Ver el tour guiado"
           onClick={() => startTour(TOUR_STEPS)}
+          {...tourTip.triggerProps}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10" />
             <path d="M9.1 9a2.9 2.9 0 0 1 5.7 1c0 1.9-2.7 2-2.8 3.8" />
             <circle cx="12" cy="17.2" r="0.85" fill="currentColor" stroke="none" />
           </svg>
+          {tourTip.tooltipNode}
         </button>
         {/* Notifications */}
         <NotificationBell />
@@ -74,8 +79,8 @@ export function Topbar({ user, pageTitle, onLogout }: TopbarProps) {
               type="button"
               className="topbar-eye"
               onClick={() => setHideName(h => !h)}
-              title={hideName ? 'Mostrar usuario' : 'Ocultar usuario'}
               aria-label={hideName ? 'Mostrar usuario' : 'Ocultar usuario'}
+              {...eyeTip.triggerProps}
             >
               {hideName ? (
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
@@ -88,16 +93,18 @@ export function Topbar({ user, pageTitle, onLogout }: TopbarProps) {
                   <circle cx="12" cy="12" r="3" />
                 </svg>
               )}
+              {eyeTip.tooltipNode}
             </button>
           </div>
         )}
         {/* Logout */}
-        <button className="topbar-btn" title="Cerrar sesión" onClick={handleLogout} aria-label="Cerrar sesión">
+        <button className="topbar-btn" onClick={handleLogout} aria-label="Cerrar sesión" {...logoutTip.triggerProps}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
             <polyline points="16,17 21,12 16,7" />
             <line x1="21" y1="12" x2="9" y2="12" />
           </svg>
+          {logoutTip.tooltipNode}
         </button>
       </div>
     </header>

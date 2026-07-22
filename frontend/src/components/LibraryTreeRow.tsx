@@ -84,7 +84,10 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
   const [childTotal, setChildTotal] = useState(0)
   const [childOffset, setChildOffset] = useState(0)
   const [loadingChildren, setLoadingChildren] = useState(false)
+  const deepLink = buildDeepLink(item, instances)
   const { triggerProps: titleTip, tooltipNode: titleTooltip } = useTooltip('Abrir ficha')
+  const { triggerProps: expandTip, tooltipNode: expandTooltip } = useTooltip(expanded ? 'Ocultar' : 'Desplegar')
+  const { triggerProps: originTip, tooltipNode: originTooltip } = useTooltip(deepLink ? `Abrir en ${item.instance_name ?? item.instance_type}` : null)
 
   const isSeries = item.item_type === 'series'
   const isSeason = item.item_type === 'season'
@@ -125,7 +128,6 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
     if (expandable && children.length === 0) loadChildren(0)
   }
 
-  const deepLink = buildDeepLink(item, instances)
   const indent = depth * 20
   const colSpan = compact ? 10 : 12
 
@@ -139,9 +141,10 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
                 className="btn btn-ghost btn-sm"
                 onClick={e => { e.stopPropagation(); toggle() }}
                 style={{ width: 22, height: 22, padding: 0, fontSize: 10, flexShrink: 0 }}
-                title={expanded ? 'Ocultar' : 'Desplegar'}
+                {...expandTip}
               >
                 {expanded ? '▼' : '▶'}
+                {expandTooltip}
               </button>
             ) : item.item_type === 'episode' && item.episode_number != null ? (
               // Episodes use the chevron's slot to show their episode number.
@@ -187,7 +190,7 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
         <td>
           {item.instance_type
             ? (deepLink
-                ? <a className="hover-link" href={deepLink} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} title={`Abrir en ${item.instance_name ?? item.instance_type}`}><ServiceLabel type={item.instance_type} label={item.instance_name ?? item.instance_type} size={13} /></a>
+                ? <a className="hover-link" href={deepLink} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} {...originTip}><ServiceLabel type={item.instance_type} label={item.instance_name ?? item.instance_type} size={13} />{originTooltip}</a>
                 : <ServiceLabel type={item.instance_type} label={item.instance_name ?? item.instance_type} size={13} />)
             : <span style={{ color: 'var(--text-muted)' }}>—</span>}
         </td>

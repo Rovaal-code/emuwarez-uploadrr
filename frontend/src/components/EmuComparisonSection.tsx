@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { getEmuComparison, type EmuComparison } from '../api/library'
 import { formatBytes } from '../utils/format'
 import { InfoIcon } from './InfoIcon'
+import { useTooltip } from './Tooltip'
 
 // Detail-card comparison: your copy vs every eMuwarez torrent that matches this
 // movie/season, plus the summary of what you'd add ("Aportes"). Only rendered
@@ -21,6 +22,29 @@ export function EmuComparisonSection({ itemId }: { itemId: number }) {
     return () => { alive = false }
   }, [itemId])
 
+  const notInCatalog = !!data && (data.in_catalog === 0 || data.matches.length === 0)
+  const aportes = data?.aportes ?? []
+  const mine = data?.mine
+  // You only have a real copy to compare if the file is on disk. For a
+  // "Faltante" item there's nothing local, so the "Tu copia" row is hidden and
+  // the verdict changes accordingly.
+  const hasLocal = data?.mine_available ?? (mine?.size != null)
+
+  // If your copy matches a candidate on EVERY visible field (resolution,
+  // source, codec, Spanish, size), it's presumed to come from eMuwarez — show
+  // that candidate's name on the "Tu copia" row.
+  const norm = (v?: string | null) => (v ?? '').trim().toLowerCase()
+  const matchedCandidate = mine
+    ? data?.matches.find(m =>
+        norm(m.resolution) === norm(mine.resolution) &&
+        norm(m.source) === norm(mine.source) &&
+        norm(m.codec) === norm(mine.codec) &&
+        (m.has_spanish === 1) === !!mine.has_es &&
+        mine.size != null && m.size != null && formatBytes(mine.size) === formatBytes(m.size),
+      )
+    : null
+  const matchedNameTip = useTooltip(matchedCandidate?.name ?? null)
+
   if (loading) {
     return <Panel><span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Cargando comparación…</span></Panel>
   }
@@ -33,28 +57,6 @@ export function EmuComparisonSection({ itemId }: { itemId: number }) {
       </Panel>
     )
   }
-
-  const notInCatalog = data.in_catalog === 0 || data.matches.length === 0
-  const aportes = data.aportes ?? []
-  const mine = data.mine
-  // You only have a real copy to compare if the file is on disk. For a
-  // "Faltante" item there's nothing local, so the "Tu copia" row is hidden and
-  // the verdict changes accordingly.
-  const hasLocal = data.mine_available ?? (mine?.size != null)
-
-  // If your copy matches a candidate on EVERY visible field (resolution,
-  // source, codec, Spanish, size), it's presumed to come from eMuwarez — show
-  // that candidate's name on the "Tu copia" row.
-  const norm = (v?: string | null) => (v ?? '').trim().toLowerCase()
-  const matchedCandidate = mine
-    ? data.matches.find(m =>
-        norm(m.resolution) === norm(mine.resolution) &&
-        norm(m.source) === norm(mine.source) &&
-        norm(m.codec) === norm(mine.codec) &&
-        (m.has_spanish === 1) === !!mine.has_es &&
-        mine.size != null && m.size != null && formatBytes(mine.size) === formatBytes(m.size),
-      )
-    : null
 
   return (
     <Panel>
@@ -110,7 +112,13 @@ export function EmuComparisonSection({ itemId }: { itemId: number }) {
                   <td>{mine.has_es ? 'Sí' : '–'}</td>
                   <td style={{ whiteSpace: 'nowrap' }}>{formatBytes(mine.size)}</td>
                   {matchedCandidate ? (
-                    <td style={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }} title={matchedCandidate.name}>{matchedCandidate.name}</td>
+                    <td
+                      style={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}
+                      {...matchedNameTip.triggerProps}
+                    >
+                      {matchedCandidate.name}
+                      {matchedNameTip.tooltipNode}
+                    </td>
                   ) : (
                     <td style={{ color: 'var(--text-muted)' }}>—</td>
                   )}
@@ -124,7 +132,7 @@ export function EmuComparisonSection({ itemId }: { itemId: number }) {
                   <td>{m.codec || '–'}</td>
                   <td>{m.has_spanish === 1 ? 'Sí' : m.has_spanish === 0 ? 'No' : '?'}</td>
                   <td style={{ whiteSpace: 'nowrap' }}>{formatBytes(m.size)}</td>
-                  <td style={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }} title={m.name}>{m.name}</td>
+                  <TorrentNameCell name={m.name} />
                 </tr>
               ))}
             </tbody>
@@ -132,6 +140,19 @@ export function EmuComparisonSection({ itemId }: { itemId: number }) {
         </div>
       )}
     </Panel>
+  )
+}
+
+function TorrentNameCell({ name }: { name: string | null | undefined }) {
+  const { triggerProps, tooltipNode } = useTooltip(name ?? null)
+  return (
+    <td
+      style={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}
+      {...triggerProps}
+    >
+      {name}
+      {tooltipNode}
+    </td>
   )
 }
 

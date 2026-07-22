@@ -11,6 +11,7 @@ import { buildDeepLink, posterUrl, idVerifyUrl } from '../utils/libraryItem'
 import { ExternalIdLink } from './ExternalIdLink'
 import { ProviderTag } from './ProviderIcon'
 import { ServiceLabel } from './ServiceIcon'
+import { useTooltip } from './Tooltip'
 import {
   Card, FieldRow, DetailPoster, ValueChip, ValueIcon, DETAIL_CARD_HEIGHT,
   StatusCardIcon, TechInfoCardIcon, ExternalIdsCardIcon,
@@ -48,6 +49,7 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
   const [parentSeason, setParentSeason] = useState<LibraryItemResponse | null>(null)
   const [parentSeries, setParentSeries] = useState<LibraryItemResponse | null>(null)
   const [showRuta, setShowRuta] = useState(false)
+  const originTip = useTooltip(deepLink ? `Abrir en ${item.instance_name ?? item.instance_type}` : null)
 
   useEffect(() => {
     let alive = true
@@ -117,7 +119,7 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
                   ? (
                     <ValueChip linkable>
                       {deepLink
-                        ? <a className="hover-link" href={deepLink} target="_blank" rel="noreferrer" title={`Abrir en ${item.instance_name ?? item.instance_type}`}><ServiceLabel type={item.instance_type} label={item.instance_name ?? item.instance_type} size={15} /></a>
+                        ? <a className="hover-link" href={deepLink} target="_blank" rel="noreferrer" {...originTip.triggerProps}><ServiceLabel type={item.instance_type} label={item.instance_name ?? item.instance_type} size={15} />{originTip.tooltipNode}</a>
                         : <ServiceLabel type={item.instance_type} label={item.instance_name ?? item.instance_type} size={15} />}
                     </ValueChip>
                   )

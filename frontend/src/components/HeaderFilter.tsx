@@ -1,7 +1,26 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { useTooltip } from './Tooltip'
 
 export interface FilterOption { value: string; label: string }
+
+// Its own component (not inlined in the .map() below) so useTooltip's hook
+// call is legal — the option list is a plain callback invoked once per row,
+// not a separate component instance.
+function FilterOptionButton({ option, selected, onClick }: { option: FilterOption; selected: boolean; onClick: () => void }) {
+  const { triggerProps, tooltipNode } = useTooltip(option.label)
+  return (
+    <button
+      type="button"
+      className={`hf-option${selected ? ' selected' : ''}`}
+      onClick={onClick}
+      {...triggerProps}
+    >
+      {option.label}
+      {tooltipNode}
+    </button>
+  )
+}
 
 // Excel-style column-header filter: the column title with a small dropdown
 // caret; clicking opens a menu of options. When a filter is active the title
@@ -18,6 +37,9 @@ export function HeaderFilter({ label, value, options, onChange }: {
   const menuRef = useRef<HTMLDivElement>(null)
   const active = value !== ''
   const accent = '#3b82f6'
+  const { triggerProps: caretTip, tooltipNode: caretTooltip } = useTooltip(
+    active ? `Filtrado: ${options.find(o => o.value === value)?.label ?? value}` : 'Filtrar',
+  )
 
   useEffect(() => {
     if (!open) return
@@ -69,7 +91,6 @@ export function HeaderFilter({ label, value, options, onChange }: {
         ref={btnRef}
         type="button"
         onClick={e => { e.stopPropagation(); toggle() }}
-        title={active ? `Filtrado: ${options.find(o => o.value === value)?.label ?? value}` : 'Filtrar'}
         aria-label={`Filtrar ${label}`}
         style={{
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -77,8 +98,10 @@ export function HeaderFilter({ label, value, options, onChange }: {
           border: 'none', background: 'transparent',
           color: active ? accent : 'var(--text-muted)', fontSize: 10,
         }}
+        {...caretTip}
       >
         ▼
+        {caretTooltip}
       </button>
 
       {open && createPortal(
@@ -94,15 +117,12 @@ export function HeaderFilter({ label, value, options, onChange }: {
           }}
         >
           {options.map(o => (
-            <button
+            <FilterOptionButton
               key={o.value || '__all__'}
-              type="button"
-              className={`hf-option${o.value === value ? ' selected' : ''}`}
-              title={o.label}
+              option={o}
+              selected={o.value === value}
               onClick={() => { onChange(o.value); setOpen(false) }}
-            >
-              {o.label}
-            </button>
+            />
           ))}
         </div>,
         document.body,

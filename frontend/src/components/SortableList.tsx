@@ -10,7 +10,6 @@ export interface DragHandleProps {
   onMouseDown: () => void
   onMouseUp: () => void
   style: React.CSSProperties
-  title: string
 }
 
 // 6-dot grip icon for the drag handle — an SVG instead of a text glyph
@@ -114,7 +113,6 @@ export function SortableList({ ids, onChange, renderRow, gap = 6 }: {
           onMouseDown: () => setGrabbedId(id),
           onMouseUp: () => setGrabbedId(null),
           style: { cursor: 'grab', userSelect: 'none' },
-          title: 'Arrastrar para reordenar',
         }
         return (
           <div

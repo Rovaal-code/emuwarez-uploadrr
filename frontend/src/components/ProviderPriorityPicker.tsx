@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { getEmuProviders } from '../api/nomenclature'
 import { Favicon } from './Favicon'
 import { SortableList, DragHandleIcon } from './SortableList'
+import { useTooltip, HoverTitle } from './Tooltip'
 
 export interface ProviderOption {
   code: string
@@ -13,6 +14,7 @@ export interface ProviderOption {
 // known — except in the setup wizard, where the picker is just a preview of
 // the same list Configuración has, not meant to send you off-app mid-setup.
 function ProviderIcon({ domain, size = 16, link = true }: { domain?: string | null; size?: number; link?: boolean }) {
+  const { triggerProps, tooltipNode } = useTooltip(domain && link ? `Abrir ${domain}` : null)
   const icon = <Favicon domain={domain} size={size} fallback={<span aria-hidden style={{ opacity: 0.4 }}>🎬</span>} />
   if (!domain || !link) return icon
   return (
@@ -20,13 +22,32 @@ function ProviderIcon({ domain, size = 16, link = true }: { domain?: string | nu
       href={`https://${domain}`}
       target="_blank"
       rel="noreferrer"
-      title={`Abrir ${domain}`}
       onClick={e => e.stopPropagation()}
       draggable={false}
       style={{ display: 'flex', flexShrink: 0 }}
+      {...triggerProps}
     >
       {icon}
+      {tooltipNode}
     </a>
+  )
+}
+
+// Its own component (not inlined in renderRow below) so useTooltip's hook
+// call is legal — renderRow is a plain callback invoked once per row, not a
+// separate component instance.
+function RemoveProviderButton({ onClick }: { onClick: () => void }) {
+  const { triggerProps, tooltipNode } = useTooltip('Quitar')
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 13, padding: '2px 6px' }}
+      {...triggerProps}
+    >
+      ✕
+      {tooltipNode}
+    </button>
   )
 }
 
@@ -89,24 +110,19 @@ export function ProviderPriorityPicker({ order, onChange, linkIcons = true }: Pr
                 border: `1px solid ${dragging ? 'var(--text-accent, #2563eb)' : 'var(--border)'}`,
               }}>
                 <span style={{ color: 'var(--text-muted)', fontSize: 11, width: 16, textAlign: 'center' }}>{idx + 1}</span>
-                <span
-                  {...handleProps}
+                <HoverTitle
+                  as="span"
+                  tip="Arrastrar para reordenar"
+                  onMouseDown={handleProps.onMouseDown}
+                  onMouseUp={handleProps.onMouseUp}
                   className="drag-handle"
                   style={{ ...handleProps.style, color: 'var(--text-accent)', width: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginLeft: 8, marginRight: 8 }}
-                  aria-hidden
-                ><DragHandleIcon /></span>
+                ><DragHandleIcon /></HoverTitle>
                 <ProviderIcon domain={opt?.domain} size={16} link={linkIcons} />
                 <span style={{ flex: 1 }}>
                   {opt?.label ?? code} <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>({code})</span>
                 </span>
-                <button
-                  type="button"
-                  onClick={() => disable(code)}
-                  title="Quitar"
-                  style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 13, padding: '2px 6px' }}
-                >
-                  ✕
-                </button>
+                <RemoveProviderButton onClick={() => disable(code)} />
               </div>
             )
           }} />

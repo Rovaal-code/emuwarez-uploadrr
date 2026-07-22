@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import type { UploadPreflightResponse, UploadStartResult } from '../types/api'
 import { uploadPreflight, startUploadJob } from '../api/uploads'
+import { useTooltip } from './Tooltip'
 
 interface Props {
   itemId: number
@@ -77,13 +78,16 @@ export function UploadPreflightModal({ itemId, itemTitle, requestId, onClose }: 
   const statusClass = result?.status === 'ready' ? 'badge req-compatible' : 'badge req-not-compatible'
   const statusLabel = result?.status === 'ready' ? 'Listo' : 'Bloqueado'
   const canStart = result?.status === 'ready' && !!jobId
+  const closeTip = useTooltip('Cerrar')
+  const dryRunTip = useTooltip('Previsualizar el comando sin ejecutar Uploadrr')
+  const startTip = useTooltip(canStart ? `Escribe ${CONFIRMATION_TOKEN} para habilitar` : 'El preflight no está listo')
 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 680 }}>
         <div className="modal-header">
           <h2 className="modal-title">Preflight Uploadrr</h2>
-          <button className="btn-icon" onClick={onClose} title="Cerrar">✕</button>
+          <button className="btn-icon" onClick={onClose} {...closeTip.triggerProps}>✕{closeTip.tooltipNode}</button>
         </div>
         <div className="modal-body">
           <p className="text-muted" style={{ marginBottom: 12 }}>{itemTitle}</p>
@@ -245,18 +249,20 @@ export function UploadPreflightModal({ itemId, itemTitle, requestId, onClose }: 
               className="btn btn-secondary"
               onClick={handleDryRun}
               disabled={startLoading}
-              title="Previsualizar el comando sin ejecutar Uploadrr"
+              {...dryRunTip.triggerProps}
             >
               {startLoading ? 'Procesando…' : 'Dry-run'}
+              {dryRunTip.tooltipNode}
             </button>
           )}
           <button
             className="btn btn-primary"
             disabled={!canStart || confirmInput !== CONFIRMATION_TOKEN || startLoading}
             onClick={handleStart}
-            title={canStart ? `Escribe ${CONFIRMATION_TOKEN} para habilitar` : 'El preflight no está listo'}
+            {...startTip.triggerProps}
           >
             {startLoading ? 'Iniciando…' : 'Iniciar subida'}
+            {startTip.tooltipNode}
           </button>
           <button className="btn btn-secondary" onClick={onClose}>Cerrar</button>
         </div>

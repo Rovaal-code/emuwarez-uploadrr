@@ -111,18 +111,20 @@ export function Tooltip({ content, children, style, maxWidth }: {
 // inside a `.map()` (where a hook can't be called directly) still gets one:
 // this is a real component instance per row, so its own useTooltip() call
 // is perfectly legal.
-export function HoverTitle({ as = 'div', className, style, onClick, tip, children }: {
+export function HoverTitle({ as = 'div', className, style, onClick, onMouseDown, onMouseUp, tip, children }: {
   as?: 'div' | 'span'
   className?: string
   style?: React.CSSProperties
   onClick?: (e: React.MouseEvent) => void
+  onMouseDown?: (e: React.MouseEvent) => void
+  onMouseUp?: (e: React.MouseEvent) => void
   tip: string
   children: React.ReactNode
 }) {
   const { triggerProps, tooltipNode } = useTooltip(tip)
   const Tag = as as 'div'
   return (
-    <Tag className={className} style={style} onClick={onClick} {...triggerProps}>
+    <Tag className={className} style={style} onClick={onClick} onMouseDown={onMouseDown} onMouseUp={onMouseUp} {...triggerProps}>
       {children}
       {tooltipNode}
     </Tag>

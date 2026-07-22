@@ -118,6 +118,9 @@ function JobRow({ job, onOpen, indent, retryToggle, onCancel, onRetry }: {
   const phaseLabelText = phaseInfo?.label ?? (isPreparingOrRunning ? phaseLabel(job.progress_phase) : null)
   const phaseElapsedText = isPreparingOrRunning ? progressCounter(job) : null
   const { triggerProps: titleTip, tooltipNode: titleTooltip } = useTooltip('Ver progreso / detalle')
+  const retryToggleTip = useTooltip(retryToggle ? (retryToggle.expanded ? 'Ocultar intentos anteriores' : 'Ver intentos anteriores') : null)
+  const retryBtnTip = useTooltip(canRetry ? 'Reintentar subida' : 'Solo se puede reintentar una subida cancelada o fallida')
+  const cancelBtnTip = useTooltip(canCancel ? 'Cancelar subida' : 'Solo se puede cancelar mientras está preparando, en cola o subiendo')
   return (
     <tr style={indent ? { opacity: 0.65 } : undefined}>
       <td style={{ width: 36 }}>
@@ -194,10 +197,11 @@ function JobRow({ job, onOpen, indent, retryToggle, onCancel, onRetry }: {
           <span
             className="lib-title-link"
             onClick={retryToggle.onClick}
-            title={retryToggle.expanded ? 'Ocultar intentos anteriores' : 'Ver intentos anteriores'}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}
+            {...retryToggleTip.triggerProps}
           >
             x{job.retry_count} <span style={{ fontSize: 10 }}>{retryToggle.expanded ? '▾' : '▸'}</span>
+            {retryToggleTip.tooltipNode}
           </span>
         ) : (job.retry_count ?? 0) > 0 ? `x${job.retry_count}` : '–'}
       </td>
@@ -216,18 +220,20 @@ function JobRow({ job, onOpen, indent, retryToggle, onCancel, onRetry }: {
             className="btn btn-primary btn-sm"
             disabled={!canRetry}
             onClick={() => onRetry(job)}
-            title={canRetry ? 'Reintentar subida' : 'Solo se puede reintentar una subida cancelada o fallida'}
+            {...retryBtnTip.triggerProps}
           >
             <RetryButtonIcon /> Reintentar
+            {retryBtnTip.tooltipNode}
           </button>
           <button
             type="button"
             className="btn btn-danger btn-sm"
             disabled={!canCancel}
             onClick={() => onCancel(job.id!)}
-            title={canCancel ? 'Cancelar subida' : 'Solo se puede cancelar mientras está preparando, en cola o subiendo'}
+            {...cancelBtnTip.triggerProps}
           >
             <CancelButtonIcon /> Cancelar
+            {cancelBtnTip.tooltipNode}
           </button>
         </div>
       </td>

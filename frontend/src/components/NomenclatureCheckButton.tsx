@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { StatusBadge } from './StatusBadge'
 import { FitText } from './FitText'
+import { useTooltip } from './Tooltip'
 import { ApiClientError } from '../api/client'
 import {
   getNomenclatureCheckInfo,
@@ -119,6 +120,8 @@ export function NomenclatureCheckButton({ item, onChecked, compact }: Props) {
   const result = info?.result ?? null
   const canRun = !!info && info.available > 0
   const forceRerun = !!info && info.available > 0 && info.pending === 0
+  const openTip = useTooltip('Comprobar nomenclatura')
+  const closeTip = useTooltip('Cerrar')
 
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -127,7 +130,6 @@ export function NomenclatureCheckButton({ item, onChecked, compact }: Props) {
         <button
           type="button"
           onClick={e => { e.stopPropagation(); setOpen(true) }}
-          title="Comprobar nomenclatura"
           aria-label="Comprobar nomenclatura"
           style={{
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -135,8 +137,10 @@ export function NomenclatureCheckButton({ item, onChecked, compact }: Props) {
             borderRadius: 4, border: '1px solid var(--border)',
             background: 'transparent', color: 'var(--text-secondary)',
           }}
+          {...openTip.triggerProps}
         >
           ↗
+          {openTip.tooltipNode}
         </button>
       )}
 
@@ -145,7 +149,7 @@ export function NomenclatureCheckButton({ item, onChecked, compact }: Props) {
           <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 720 }}>
             <div className="modal-header">
               <h2 className="modal-title">Nomenclatura eMuwarez</h2>
-              <button className="btn-icon" onClick={close} title="Cerrar">✕</button>
+              <button className="btn-icon" onClick={close} {...closeTip.triggerProps}>✕{closeTip.tooltipNode}</button>
             </div>
             <div className="modal-body">
               {loading && <div style={{ color: 'var(--text-muted)' }}>Cargando…</div>}

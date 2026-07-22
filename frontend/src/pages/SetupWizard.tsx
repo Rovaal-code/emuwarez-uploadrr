@@ -15,6 +15,7 @@ import type { SetupStep } from '../types/domain'
 import type { SetupStatusResponse } from '../types/api'
 import { testResultLabel, testResultColor, emuTestCooldownSeconds } from '../utils/integrationResult'
 import { useCooldown } from '../hooks/useCooldown'
+import { HoverTitle } from '../components/Tooltip'
 
 // Mirrors validate_password_strength() in web/security.py exactly (same
 // regexes) so the checklist never drifts from what the backend enforces.
@@ -158,11 +159,13 @@ function StepsBar({ current, steps }: { current: string; steps: readonly string[
   return (
     <div className="wizard-steps-bar">
       {steps.map((s, i) => (
-        <div
+        <HoverTitle
           key={s}
           className={`wizard-step-dot${i < currentIdx ? ' done' : i === currentIdx ? ' active' : ''}`}
-          title={SETUP_STEP_LABELS[s as SetupStep]}
-        />
+          tip={SETUP_STEP_LABELS[s as SetupStep]}
+        >
+          {null}
+        </HoverTitle>
       ))}
     </div>
   )

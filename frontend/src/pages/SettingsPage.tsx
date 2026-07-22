@@ -24,6 +24,7 @@ import { SortableList, DragHandleIcon } from '../components/SortableList'
 import { REGION_OPTIONS, LANGUAGE_OPTIONS } from '../constants/regionLanguage'
 import { testResultLabel, testResultColor, emuTestCooldownSeconds } from '../utils/integrationResult'
 import { getMe, changeCredentials } from '../api/auth'
+import { useTooltip, HoverTitle } from '../components/Tooltip'
 
 type Tab = 'config' | 'notifications' | 'diagnostics' | 'backup' | 'maintenance'
 
@@ -59,6 +60,21 @@ function configSignature(v: {
   ])
 }
 
+function RemoveImgHostButton({ onClick }: { onClick: () => void }) {
+  const { triggerProps, tooltipNode } = useTooltip('Quitar')
+  return (
+    <button className="btn btn-ghost btn-sm" style={{ fontSize: 13, padding: '2px 6px', color: 'var(--text-muted)' }}
+      onClick={onClick} type="button" {...triggerProps}>✕{tooltipNode}</button>
+  )
+}
+
+function RemoveMappingRuleButton({ onClick }: { onClick: () => void }) {
+  const { triggerProps, tooltipNode } = useTooltip('Quitar regla')
+  return (
+    <button className="btn btn-ghost btn-sm" type="button" onClick={onClick} {...triggerProps}>✕{tooltipNode}</button>
+  )
+}
+
 // ---------- Config tab ----------
 function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => void }) {
   const [settings, setSettings] = useState<SettingsData | null>(null)
@@ -88,6 +104,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const [testingQbit, setTestingQbit] = useState(false)
   const [qbitTestResult, setQbitTestResult] = useState<IntegrationTestResult | null>(null)
   const [showQbitUser, setShowQbitUser] = useState(false)
+  const qbitUserEyeTip = useTooltip(showQbitUser ? 'Ocultar usuario' : 'Mostrar usuario')
   // Image hosts
   const [imgEnabled, setImgEnabled] = useState<string[]>([])
   const [imgKeys, setImgKeys] = useState<Record<string, string>>({})
@@ -445,10 +462,11 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
             <button
               type="button"
               onClick={() => setShowQbitUser(s => !s)}
-              title={showQbitUser ? 'Ocultar usuario' : 'Mostrar usuario'}
               aria-label={showQbitUser ? 'Ocultar usuario' : 'Mostrar usuario'}
               style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', padding: 2 }}
+              {...qbitUserEyeTip.triggerProps}
             >
+              {qbitUserEyeTip.tooltipNode}
               {showQbitUser ? (
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
                   <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
@@ -525,12 +543,14 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span style={{ color: 'var(--text-muted)', fontSize: 11, width: 16, textAlign: 'center' }}>{idx + 1}</span>
-                        <span
-                          {...handleProps}
+                        <HoverTitle
+                          as="span"
+                          tip="Arrastrar para reordenar"
+                          onMouseDown={handleProps.onMouseDown}
+                          onMouseUp={handleProps.onMouseUp}
                           className="drag-handle"
                           style={{ ...handleProps.style, color: 'var(--text-accent)', width: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginLeft: 8, marginRight: 8 }}
-                          aria-hidden
-                        ><DragHandleIcon /></span>
+                        ><DragHandleIcon /></HoverTitle>
                         <Favicon domain={domainOf(h.url)} src={h.favicon} size={15} background="#fff" fallback={<ServiceIcon type="imghost" size={15} />} />
                         <span style={{ fontSize: 13, fontWeight: 500 }}>{h.label}</span>
                         {isDefault && <span className="badge status-available" style={{ fontSize: 10 }}>por defecto</span>}
@@ -540,8 +560,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                           {imgTesting === id ? 'Probando…' : 'Probar'}
                         </button>
                         {!isDefault && (
-                          <button className="btn btn-ghost btn-sm" style={{ fontSize: 13, padding: '2px 6px', color: 'var(--text-muted)' }}
-                            title="Quitar" onClick={() => toggleImgHost(id)} type="button">✕</button>
+                          <RemoveImgHostButton onClick={() => toggleImgHost(id)} />
                         )}
                       </div>
                       {h.needs_key && (
@@ -799,8 +818,7 @@ function PathMappingsCard() {
                   value={m.to} placeholder="Ruta local: /home/alvaro/mnt/emu-media"
                   onChange={e => setMappings(p => p.map((x, j) => j === i ? { ...x, to: e.target.value } : x))}
                 />
-                <button className="btn btn-ghost btn-sm" type="button" title="Quitar regla"
-                  onClick={() => setMappings(p => p.filter((_, j) => j !== i))}>✕</button>
+                <RemoveMappingRuleButton onClick={() => setMappings(p => p.filter((_, j) => j !== i))} />
               </div>
             ))}
           </div>

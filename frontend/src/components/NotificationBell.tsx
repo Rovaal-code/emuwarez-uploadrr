@@ -9,6 +9,7 @@ import {
 } from '../api/notifications'
 import { posterUrl } from '../utils/libraryItem'
 import { UploadButtonIcon, CancelButtonIcon, RequestCardIcon } from './DetailCard'
+import { useTooltip } from './Tooltip'
 
 const POLL_MS = 30000
 
@@ -173,12 +174,29 @@ function isNotificationClickable(n: NotificationItem): boolean {
     || n.event_type === 'content_unique_changed'
 }
 
+function DeleteNotificationButton({ onClick }: { onClick: () => void }) {
+  const { triggerProps, tooltipNode } = useTooltip('Borrar notificación')
+  return (
+    <button
+      type="button"
+      className="notif-item-delete"
+      aria-label="Borrar notificación"
+      onClick={onClick}
+      {...triggerProps}
+    >
+      ✕
+      {tooltipNode}
+    </button>
+  )
+}
+
 export function NotificationBell() {
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState<NotificationItem[]>([])
   const [unread, setUnread] = useState(0)
   const [loading, setLoading] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
+  const bellTip = useTooltip('Notificaciones')
 
   const refresh = useCallback(async () => {
     try {
@@ -254,12 +272,13 @@ export function NotificationBell() {
 
   return (
     <div className="notif-bell" ref={rootRef}>
-      <button className="topbar-btn" title="Notificaciones" aria-label="Notificaciones" onClick={toggle}>
+      <button className="topbar-btn" aria-label="Notificaciones" onClick={toggle} {...bellTip.triggerProps}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
         </svg>
         {unread > 0 && <span className="notif-badge">{unread > 99 ? '99+' : unread}</span>}
+        {bellTip.tooltipNode}
       </button>
 
       {open && (
@@ -307,15 +326,7 @@ export function NotificationBell() {
                     <span className="notif-item-time">{relativeTime(n.created_at)}</span>
                   </span>
                 </button>
-                <button
-                  type="button"
-                  className="notif-item-delete"
-                  title="Borrar notificación"
-                  aria-label="Borrar notificación"
-                  onClick={() => handleDelete(n)}
-                >
-                  ✕
-                </button>
+                <DeleteNotificationButton onClick={() => handleDelete(n)} />
               </div>
             ))}
           </div>

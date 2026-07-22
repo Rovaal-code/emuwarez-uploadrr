@@ -23,7 +23,7 @@ import type { LibraryItemResponse, SeasonPackPlanResponse, UploadJob } from '../
 import { InfoIcon } from './InfoIcon'
 import { AutoUploadSourceGate } from './AutoUploadSourceGate'
 import { FitText, FitTextPair } from './FitText'
-import { Tooltip } from './Tooltip'
+import { Tooltip, useTooltip } from './Tooltip'
 import { ACTIVE_JOB_STATUSES, statusLabel } from '../utils/uploadStatus'
 
 // Unified "Subir" wizard (replaces the separate Nomenclatura + Campos + Subir
@@ -229,22 +229,24 @@ export function EpisodeAccordionRow({ episodeNumber, title, expanded, onToggle, 
   onToggle: () => void
   children: React.ReactNode
 }) {
+  const { triggerProps, tooltipNode } = useTooltip(title ?? null)
   return (
     <div style={{ border: '1px solid var(--border)', borderRadius: 8, marginBottom: 8, overflow: 'hidden' }}>
       <button
         type="button"
         onClick={onToggle}
-        title={title ?? undefined}
         style={{
           width: '100%', textAlign: 'left', padding: '8px 12px', background: 'rgba(255,255,255,0.03)',
           border: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between',
           alignItems: 'center', gap: 8, color: 'inherit', fontSize: 13,
         }}
+        {...triggerProps}
       >
         <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {episodeNumber != null ? `E${String(episodeNumber).padStart(2, '0')} — ` : ''}{title}
         </span>
         <span style={{ color: 'var(--text-muted)', fontSize: 11, flexShrink: 0 }}>{expanded ? '▲' : '▼'}</span>
+        {tooltipNode}
       </button>
       {expanded && <div style={{ padding: 10 }}>{children}</div>}
     </div>
@@ -821,6 +823,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
   }
 
   const canUpload = !!checks?.ready
+  const uploadBtnTip = useTooltip(canUpload ? null : 'Alguna comprobación ha fallado o aún está en curso')
   // Queues the upload and hands off to Subidas immediately — nomenclature
   // rename, track remux, and the actual Uploadrr start all run server-side
   // afterwards (services/upload_queue.py), against the SAME job the user
@@ -1560,9 +1563,10 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
                 className="btn btn-primary"
                 onClick={doUpload}
                 disabled={!canUpload || uploading || checksLoading}
-                title={canUpload ? '' : 'Alguna comprobación ha fallado o aún está en curso'}
+                {...uploadBtnTip.triggerProps}
               >
                 {uploading ? 'Subiendo…' : 'Subir a eMuwarez'}
+                {uploadBtnTip.tooltipNode}
               </button>
             </div>
           </div>

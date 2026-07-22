@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { LibraryItemResponse } from '../types/api'
+import { useTooltip } from './Tooltip'
 
 // eMuwarez "Petición" (request) creation form. Built from the field spec the
 // user captured from eMuwarez's web form. Submission is intentionally gated:
@@ -86,6 +87,7 @@ export function RequestFormModal({ item, onClose }: Props) {
   const rewardNum = parseInt(reward || '0', 10)
   const rewardTooLow = rewardNum < MIN_REWARD
   const canSubmit = title.trim().length > 0 && !rewardTooLow
+  const submitTip = useTooltip(canSubmit ? null : 'Completa el título y una recompensa válida')
 
   const handleSubmit = () => {
     // No real endpoint yet — validate and preview the payload only.
@@ -195,8 +197,9 @@ export function RequestFormModal({ item, onClose }: Props) {
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
             <button className="btn btn-secondary" onClick={onClose}>Cancelar</button>
-            <button className="btn btn-primary" onClick={handleSubmit} disabled={!canSubmit} title={canSubmit ? '' : 'Completa el título y una recompensa válida'}>
+            <button className="btn btn-primary" onClick={handleSubmit} disabled={!canSubmit} {...submitTip.triggerProps}>
               Enviar petición
+              {submitTip.tooltipNode}
             </button>
           </div>
         </div>
@@ -210,6 +213,7 @@ function IdRow({ label, checked, onToggle, value, onChange, href }: {
   href?: string | null
 }) {
   const canVerify = checked && !!href
+  const verifyTip = useTooltip(canVerify ? 'Verificar: abrir la ficha en su web' : 'Introduce un ID para verificarlo')
   return (
     <div>
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, marginBottom: 4 }}>
@@ -230,7 +234,6 @@ function IdRow({ label, checked, onToggle, value, onChange, href }: {
           href={canVerify ? href! : undefined}
           target="_blank"
           rel="noreferrer"
-          title={canVerify ? 'Verificar: abrir la ficha en su web' : 'Introduce un ID para verificarlo'}
           aria-disabled={!canVerify}
           onClick={e => { if (!canVerify) e.preventDefault() }}
           style={{
@@ -238,8 +241,10 @@ function IdRow({ label, checked, onToggle, value, onChange, href }: {
             padding: '0 10px', height: 34, display: 'flex', alignItems: 'center',
             opacity: canVerify ? 1 : 0.4, pointerEvents: canVerify ? 'auto' : 'none',
           }}
+          {...verifyTip.triggerProps}
         >
           ↗
+          {verifyTip.tooltipNode}
         </a>
       </div>
     </div>

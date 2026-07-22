@@ -216,11 +216,13 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       })
   }, [bumpCompleted, refreshRequestsStatus, flashRequestsUnavailable])
 
-  // Load throttle statuses once, and resume any sync already running in the
-  // background (e.g. started on another tab, or before a page reload).
-  useEffect(() => {
-    refreshCatalogStatus()
-    refreshRequestsStatus()
+  // Checks for a library (Radarr/Sonarr) sync already running server-side and
+  // hands off to the normal follow loop if one is found — reused both on
+  // mount (resuming one started before a page reload) and by the ambient
+  // poll below (catching one a scheduled task started later, with nobody
+  // having clicked anything in this tab).
+  const checkAndResumeLibrarySync = useCallback(() => {
+    if (libBusy.current) return
     getLibrarySyncProgress().then(p => {
       if (p.active && !p.done && !libBusy.current) {
         libBusy.current = true
@@ -229,6 +231,14 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         followLibrary()
       }
     }).catch(() => { /* ignore */ })
+  }, [followLibrary])
+
+  // Load throttle statuses once, and resume any sync already running in the
+  // background (e.g. started on another tab, or before a page reload).
+  useEffect(() => {
+    refreshCatalogStatus()
+    refreshRequestsStatus()
+    checkAndResumeLibrarySync()
     getEmuSyncProgress().then(p => {
       if (p.active && !p.done && !catalogBusy.current) {
         catalogBusy.current = true
@@ -237,7 +247,17 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         followCatalog()
       }
     }).catch(() => { /* ignore */ })
-  }, [refreshCatalogStatus, refreshRequestsStatus, followLibrary, followCatalog])
+  }, [refreshCatalogStatus, refreshRequestsStatus, checkAndResumeLibrarySync, followCatalog])
+
+  // Ambient poll: a scheduled task (the automatic tick, or "Ejecutar ahora" in
+  // Tareas) can start a library sync without the user ever clicking anything
+  // in this tab — the mount-time check above only catches one already running
+  // at that moment. Poll slowly for one that started later; once detected,
+  // the normal 800ms follow loop takes over from there.
+  useEffect(() => {
+    const timer = setInterval(() => { if (!libBusy.current) checkAndResumeLibrarySync() }, 8000)
+    return () => clearInterval(timer)
+  }, [checkAndResumeLibrarySync])
 
   const value: SyncContextValue = {
     libSyncing, libProgress, startLibrarySync,

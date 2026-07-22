@@ -552,11 +552,15 @@ def sync_all(
     body: Optional[SyncRequest] = None,
     current_user: dict = Depends(require_auth),
 ) -> SyncResponse:
+    from emuwarez_uploadrr.services.library import SyncAlreadyRunning, _lib_sync_guard
     from emuwarez_uploadrr.services.library import sync_all as _sync_all
     include_episodes = body.include_episodes if body else True
     with _get_conn() as conn:
         try:
-            result = _sync_all(conn, include_episodes=include_episodes)
+            with _lib_sync_guard():
+                result = _sync_all(conn, include_episodes=include_episodes)
+        except SyncAlreadyRunning:
+            raise HTTPException(status_code=429, detail="Ya hay una sincronización de biblioteca en marcha")
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"Error en sync: {exc}")
     return SyncResponse(

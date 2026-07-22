@@ -97,8 +97,16 @@ def set_task_interval(conn: sqlite3.Connection, task_key: str, interval_minutes:
 
 
 def _run_library_sync(conn: sqlite3.Connection) -> tuple[str, str]:
-    from .library import sync_all
-    result = sync_all(conn, include_episodes=True)
+    from .library import SyncAlreadyRunning, _lib_sync_guard, sync_all
+    try:
+        with _lib_sync_guard():
+            result = sync_all(conn, include_episodes=True)
+    except SyncAlreadyRunning:
+        # The manual "sincronizar biblioteca" button (or another run of this
+        # same task) is already in flight — sharing one active/done lifecycle
+        # (see _lib_sync_guard) means they can't run concurrently. Skipping
+        # this tick is harmless: the next one picks it up in min_interval_minutes.
+        return "skipped", "Ya hay una sincronización de biblioteca en marcha"
     summary = f"{result['imported']} elementos importados, {result['missing']} no disponibles"
     if result.get("errors"):
         summary += f" ({len(result['errors'])} instancia(s) con error)"

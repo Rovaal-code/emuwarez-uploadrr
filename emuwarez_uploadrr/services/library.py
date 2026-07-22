@@ -5,7 +5,8 @@ import logging
 import sqlite3
 import threading
 import time
-from typing import Callable, Optional
+from contextlib import contextmanager
+from typing import Callable, Iterator, Optional
 
 from ..integrations import radarr, sonarr
 from ..models import InstanceConfig, LibraryItem, LocalStatus, MediaKind, NomenclatureStatus
@@ -365,24 +366,53 @@ def _set_lib_progress(**kw) -> None:
         _LIB_SYNC_PROGRESS.update(kw)
 
 
+class SyncAlreadyRunning(Exception):
+    """Raised by _lib_sync_guard() when a library sync is already active."""
+
+
+@contextmanager
+def _lib_sync_guard() -> Iterator[None]:
+    """Claims _LIB_SYNC_PROGRESS for the duration of a sync_all() call, so
+    every caller — the background "sincronizar biblioteca" button, the
+    scheduled sync-library task (automatic tick or manual "Ejecutar ahora"),
+    and the setup wizard's blocking /sync right after finishing — shares the
+    exact same active/done lifecycle. Previously only the background-button
+    path set `active`, so a sync triggered by the other two never showed up
+    in the UI's sync banner and never blocked the manual button, and nothing
+    stopped them running concurrently and interleaving writes into the same
+    shared dict. Raises SyncAlreadyRunning instead of starting a second
+    overlapping sync_all() if one is already in flight — every caller decides
+    for itself how to report that (skip this tick, tell the user, etc.)."""
+    with _LIB_SYNC_LOCK:
+        if _LIB_SYNC_PROGRESS.get("active"):
+            raise SyncAlreadyRunning()
+        _LIB_SYNC_PROGRESS.update(active=True, done=False, error=None, phase="Iniciando…",
+                                  imported=0, missing=0, total=0, instance="", instance_type="")
+    try:
+        yield
+    except Exception as exc:  # noqa: BLE001 — surfaced to the progress card
+        _set_lib_progress(error=str(exc), phase="Error")
+        raise
+    finally:
+        _set_lib_progress(active=False, done=True)
+
+
 def start_library_sync_background(include_episodes: bool = True) -> dict:
     """Run sync_all in a background thread so the UI can poll the element count."""
     from ..database import connect, db_path
     with _LIB_SYNC_LOCK:
         if _LIB_SYNC_PROGRESS.get("active"):
-            return {"status": "started"}
-    _set_lib_progress(active=True, done=False, error=None, phase="Iniciando…",
-                      imported=0, missing=0, total=0, instance="", instance_type="")
+            return {"status": "started"}  # one already running — just watch it
 
     def _run() -> None:
         c = connect(db_path())
         try:
-            sync_all(c, include_episodes=include_episodes)
-        except Exception as exc:  # noqa: BLE001
-            _set_lib_progress(error=str(exc), phase="Error")
+            with _lib_sync_guard():
+                sync_all(c, include_episodes=include_episodes)
+        except SyncAlreadyRunning:
+            pass  # lost the race between the check above and here — fine
         finally:
             c.close()
-            _set_lib_progress(active=False, done=True)
 
     threading.Thread(target=_run, daemon=True).start()
     return {"status": "started"}

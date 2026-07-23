@@ -26,7 +26,7 @@ import {
   StatusCardIcon, RequestCardIcon, ExternalIdsCardIcon,
   UploadButtonIcon, ExternalLinkButtonIcon,
   TypeValueIcon, AuthorValueIcon, CalendarValueIcon,
-  SeasonValueIcon, EpisodeValueIcon, ResolutionValueIcon, SourceValueIcon,
+  SeasonValueIcon, EpisodeValueIcon, ResolutionValueIcon, SourceValueIcon, AnyValueIcon,
   PointsValueIcon, ThumbsUpValueIcon, CommentValueIcon,
 } from '../components/DetailCard'
 import { HeaderFilter } from '../components/HeaderFilter'
@@ -113,6 +113,15 @@ const isAny = (v: string | null | undefined) =>
 
 function noReq(v: string | null): string {
   return isAny(v) ? 'Cualquiera' : (v as string)
+}
+
+// Resolución/Source pedidos — same mini-tarjeta as the dedicated detail page
+// (ValueChip + field icon), swapping in AnyValueIcon (∞) instead of the
+// Resolución/Source glyph when the request has no real restriction, so
+// "Cualquiera" reads as "no restriction" rather than "no data".
+function SpecValueChip({ value, icon: BaseIcon }: { value: string | null; icon: React.ComponentType }) {
+  const Icon = isAny(value) ? AnyValueIcon : BaseIcon
+  return <ValueChip><ValueIcon><Icon /></ValueIcon><span className="txt">{noReq(value)}</span></ValueChip>
 }
 
 // Whether your library value satisfies the request. If the request has no
@@ -230,14 +239,15 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
   const libId = m?.library_item_id ?? item.library_item_id
   const t = tipoOf(item.category)
   // External IDs: prefer the request's own, fall back to the matched library
-  // item (Radarr/Sonarr). TVDB only comes from the library item; MAL isn't
-  // provided by Radarr/Sonarr yet.
+  // item. TVDB only ever comes from the library item (Radarr/Sonarr); MAL
+  // comes from eMuwarez on the request side, or from the library item's own
+  // Fribb/anime-lists resolution (see services/anime_lists.py) otherwise.
   const isTv = /serie/i.test(item.category || '')
   const isSeriesLike = /serie|docu/i.test(item.category || '')
   const tmdbId = item.tmdb_id || m?.local_tmdb_id || null
   const imdbId = item.imdb_id || m?.local_imdb_id || null
   const tvdbId = item.tvdb_id || m?.local_tvdb_id || null
-  const malId = item.mal_id || null
+  const malId = item.mal_id || m?.local_mal_id || null
   const hasSeason = item.req_scope === 'season' || item.req_scope === 'episode'
   const temporadaLabel = hasSeason ? String(item.req_season ?? '?') : 'Todas'
   const consultarTip = useTooltip(item.url
@@ -316,10 +326,10 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
                 </FieldRow>
               )}
               <FieldRow label="Resolución pedida">
-                <ValueChip><ValueIcon><ResolutionValueIcon /></ValueIcon><span className="txt">{noReq(item.requested_resolution)}</span></ValueChip>
+                <SpecValueChip value={item.requested_resolution} icon={ResolutionValueIcon} />
               </FieldRow>
               <FieldRow label="Source pedido">
-                <ValueChip><ValueIcon><SourceValueIcon /></ValueIcon><span className="txt">{noReq(item.requested_source)}</span></ValueChip>
+                <SpecValueChip value={item.requested_source} icon={SourceValueIcon} />
               </FieldRow>
               <FieldRow label="Puntos">
                 <ValueChip><ValueIcon><PointsValueIcon /></ValueIcon><span className="txt">{fmtNum(item.points)}</span></ValueChip>
@@ -354,8 +364,6 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
         <div className="detail-card" style={{ borderRadius: 10, padding: '21px 19px' }}>
           {!m ? (
             <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Sin coincidencia en tu biblioteca local, no tienes este contenido.</span>
-          ) : effectiveStatus === 'No disponible' ? (
-            <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Tienes una entrada para este contenido en tu biblioteca, pero el archivo no está disponible (falta, en cola o con error), así que no hay nada que comparar. Vuelve a descargarlo para poder cotejarlo con la petición.</span>
           ) : (
             <>
               <div style={{ overflowX: 'auto' }}>
@@ -761,8 +769,8 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                         <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{tipoOf(item.category).label}</td>
                         <td><CompatibilityBadge status={item.compatibility_status} /></td>
                         <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}><AuthorCell author={item.author} isMine={item.is_mine} /></td>
-                        <td>{item.requested_resolution || '—'}</td>
-                        <td>{item.requested_source || '—'}</td>
+                        <td style={{ whiteSpace: 'nowrap' }}><SpecValueChip value={item.requested_resolution} icon={ResolutionValueIcon} /></td>
+                        <td style={{ whiteSpace: 'nowrap' }}><SpecValueChip value={item.requested_source} icon={SourceValueIcon} /></td>
                         <td style={{ textAlign: 'center', fontSize: 12 }}>{item.votes ?? 0}</td>
                         <td style={{ textAlign: 'center', fontSize: 12 }}>{item.comments ?? 0}</td>
                         <td style={{ textAlign: 'center', fontSize: 12, whiteSpace: 'nowrap' }}>{fmtNum(item.points)}</td>

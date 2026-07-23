@@ -230,6 +230,13 @@ export function SourceValueIcon() {
   return <Icon size={14}><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="3" /></Icon>
 }
 
+// "Cualquiera" — an unrestricted Resolución/Source request (no specific
+// value asked for), shown instead of ResolutionValueIcon/SourceValueIcon so
+// it reads as "no restriction" rather than "no data". Infinity glyph.
+export function AnyValueIcon() {
+  return <Icon size={14}><path d="M9.5 8c-1.5 0-3 1.5-3 4s1.5 4 3 4c1.5 0 2.5-1.5 4-4c1.5-2.5 2.5-4 4-4c1.5 0 3 1.5 3 4s-1.5 4-3 4c-1.5 0-2.5-1.5-4-4c-1.5-2.5-2.5-4-4-4z" /></Icon>
+}
+
 export function VideoCodecValueIcon() {
   return <Icon size={14}><path d="M23 7l-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" /></Icon>
 }

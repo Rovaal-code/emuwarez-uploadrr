@@ -165,7 +165,9 @@
 .badge.req-none            { background: rgba(107,114,128,0.20); color: #9ca3af; }
 .badge.req-compatible      { background: rgba(34,197,94,0.22);   color: #22c55e; }
 .badge.req-partial         { background: rgba(245,158,11,0.22);  color: #f59e0b; }
-.badge.req-not-compatible  { background: rgba(249,115,22,0.22);  color: #f97316; }
+.badge.req-not-compatible  { background: rgba(239,68,68,0.22);   color: #ef4444; }
+/* .req-unavailable is unused now — 'No disponible' shows as a plain dash
+   (see StatusBadge's dash-fallback for type 'request'), never a badge. */
 .badge.req-unavailable     { background: rgba(239,68,68,0.22);   color: #ef4444; }
 .badge.req-claimed         { background: rgba(168,85,247,0.22);  color: #a855f7; }
 .badge.req-pending         { background: rgba(234,179,8,0.22);   color: #eab308; }

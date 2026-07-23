@@ -28,7 +28,17 @@ export function titleMismatchesFilename(item: LibraryItemResponse): boolean {
   return norm(item.title) !== norm(item.original_title)
 }
 
-export function buildDeepLink(item: LibraryItemResponse, instances: InstanceSafeResponse[]): string | null {
+// Narrower than LibraryItemResponse on purpose — UploadJob carries these same
+// 4 fields (from its linked library item) to build the identical Origen deep
+// link Biblioteca's own column uses, without needing a full library item.
+interface DeepLinkable {
+  instance_id?: number | null
+  instance_type?: string | null
+  tmdb_id?: string | null
+  title_slug?: string | null
+}
+
+export function buildDeepLink(item: DeepLinkable, instances: InstanceSafeResponse[]): string | null {
   if (!item.instance_id) return null
   const instance = instances.find(i => i.id === item.instance_id)
   if (!instance) return null

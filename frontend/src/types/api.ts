@@ -509,6 +509,9 @@ export interface UploadJob {
   year?: number | null
   instance_type?: string | null
   instance_name?: string | null
+  instance_id?: number | null
+  tmdb_id?: string | null
+  title_slug?: string | null
   request_status?: string | null
   queued_until?: string | null
   nomenclature_snapshot?: UploadNomenclatureSnapshot | null

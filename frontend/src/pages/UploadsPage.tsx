@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react'
 import { getUploads, startUploadJob, retryUploadJobQueued, cancelUploadJob } from '../api/uploads'
-import type { UploadJob } from '../types/api'
+import { getInstances } from '../api/instances'
+import type { UploadJob, InstanceSafeResponse } from '../types/api'
 import { EmptyState } from '../components/EmptyState'
 import { LoadingState } from '../components/LoadingState'
 import { ErrorState } from '../components/ErrorState'
@@ -9,10 +10,10 @@ import { UploadJobDetailPage } from '../components/UploadJobDetailPage'
 import { DeleteUploadModal } from '../components/DeleteUploadModal'
 import { StatusBadge } from '../components/StatusBadge'
 import { ServiceLabel } from '../components/ServiceIcon'
-import { CancelButtonIcon, RetryButtonIcon } from '../components/DetailCard'
+import { CancelButtonIcon, RetryButtonIcon, ValueChip } from '../components/DetailCard'
 import { useTooltip } from '../components/Tooltip'
 import { formatDateTimeSeconds } from '../utils/format'
-import { posterUrl } from '../utils/libraryItem'
+import { posterUrl, buildDeepLink } from '../utils/libraryItem'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
 import {
   UPLOAD_TYPE_LABEL, STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo,
@@ -103,8 +104,9 @@ function StartModal({ job, onClose, onDone }: { job: UploadJob; onClose: () => v
 // One table row — used both for the latest attempt in a retry chain (normal
 // row) and for its older attempts (indented/muted, revealed by expanding the
 // Reintentos toggle). `retryToggle` is only passed on the latest-attempt row.
-function JobRow({ job, onOpen, indent, retryToggle, onCancel, onRetry }: {
+function JobRow({ job, instances, onOpen, indent, retryToggle, onCancel, onRetry }: {
   job: UploadJob
+  instances: InstanceSafeResponse[]
   onOpen: () => void
   indent?: boolean
   retryToggle?: { count: number; expanded: boolean; onClick: () => void }
@@ -117,7 +119,9 @@ function JobRow({ job, onOpen, indent, retryToggle, onCancel, onRetry }: {
   const phaseInfo = isPreparingOrRunning ? currentPhaseInfo(job) : null
   const phaseLabelText = phaseInfo?.label ?? (isPreparingOrRunning ? phaseLabel(job.progress_phase) : null)
   const phaseElapsedText = isPreparingOrRunning ? progressCounter(job) : null
+  const deepLink = buildDeepLink(job, instances)
   const { triggerProps: titleTip, tooltipNode: titleTooltip } = useTooltip('Ver progreso / detalle')
+  const { triggerProps: originTip, tooltipNode: originTooltip } = useTooltip(deepLink ? `Abrir en ${job.instance_name ?? job.instance_type}` : null)
   const retryToggleTip = useTooltip(retryToggle ? (retryToggle.expanded ? 'Ocultar intentos anteriores' : 'Ver intentos anteriores') : null)
   const retryBtnTip = useTooltip(canRetry ? 'Reintentar subida' : 'Solo se puede reintentar una subida cancelada o fallida')
   const cancelBtnTip = useTooltip(canCancel ? 'Cancelar subida' : 'Solo se puede cancelar mientras está preparando, en cola o subiendo')
@@ -159,7 +163,18 @@ function JobRow({ job, onOpen, indent, retryToggle, onCancel, onRetry }: {
         {UPLOAD_TYPE_LABEL[job.media_type ?? ''] ?? '–'}
       </td>
       <td style={{ whiteSpace: 'nowrap' }}>
-        {job.instance_type ? <ServiceLabel type={job.instance_type} label={job.instance_name ?? job.instance_type} size={14} /> : <span style={{ color: 'var(--text-muted)' }}>–</span>}
+        {job.instance_type
+          ? (
+            <ValueChip linkable={!!deepLink}>
+              {deepLink
+                ? <a className="hover-link" href={deepLink} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} {...originTip}><ServiceLabel type={job.instance_type} label={job.instance_name ?? job.instance_type} size={14} />{originTooltip}</a>
+                : <ServiceLabel type={job.instance_type} label={job.instance_name ?? job.instance_type} size={14} />}
+            </ValueChip>
+          )
+          : <span style={{ color: 'var(--text-muted)' }}>–</span>}
+      </td>
+      <td style={{ whiteSpace: 'nowrap' }}>
+        <StatusBadge status={job.request_status || 'Sin petición'} type="request" />
       </td>
       <td>
         {job.status === 'queued' ? (
@@ -192,6 +207,11 @@ function JobRow({ job, onOpen, indent, retryToggle, onCancel, onRetry }: {
           </span>
         ) : '–'}
       </td>
+      <td style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{formatDateTimeSeconds(job.created_at ?? null)}</td>
+      <td style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{formatDateTimeSeconds(job.finished_at ?? null)}</td>
+      <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+        {job.duration_seconds != null ? `${job.duration_seconds}s` : '–'}
+      </td>
       <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
         {retryToggle ? (
           <span
@@ -205,15 +225,7 @@ function JobRow({ job, onOpen, indent, retryToggle, onCancel, onRetry }: {
           </span>
         ) : (job.retry_count ?? 0) > 0 ? `x${job.retry_count}` : '–'}
       </td>
-      <td style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{formatDateTimeSeconds(job.created_at ?? null)}</td>
-      <td style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{formatDateTimeSeconds(job.finished_at ?? null)}</td>
-      <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-        {job.duration_seconds != null ? `${job.duration_seconds}s` : '–'}
-      </td>
-      <td style={{ whiteSpace: 'nowrap' }}>
-        <StatusBadge status={job.request_status || 'Sin petición'} type="request" />
-      </td>
-      <td style={{ whiteSpace: 'nowrap' }}>
+      <td className="col-actions">
         <div style={{ display: 'flex', gap: 6 }}>
           <button
             type="button"
@@ -243,6 +255,9 @@ function JobRow({ job, onOpen, indent, retryToggle, onCancel, onRetry }: {
 
 export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => void } = {}) {
   const [jobs, setJobs] = useState<UploadJob[]>([])
+  // Only needed to build the Origen deep link (same as Biblioteca's own column).
+  const [instances, setInstances] = useState<InstanceSafeResponse[]>([])
+  useEffect(() => { getInstances().then(setInstances).catch(() => {}) }, [])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState('')
@@ -506,21 +521,21 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
               <thead>
                 <tr>
                   <th></th>
-                  <th>Título</th>
+                  <th style={{ width: '100%' }}>Título</th>
                   <th><HeaderFilter label="Tipo" value={typeFilter} onChange={setTypeFilter} options={[
                     { value: '', label: 'Todos' }, { value: 'movie', label: 'Película' }, { value: 'series', label: 'Serie' }, { value: 'season', label: 'Temporada' }, { value: 'episode', label: 'Episodio' },
                   ]} /></th>
                   <th>Origen</th>
+                  <th>Petición</th>
                   <th><HeaderFilter label="Estado" value={statusFilter} onChange={setStatusFilter} options={[
                     { value: '', label: 'Todos' }, ...STATUS_OPTIONS.filter(Boolean).map(s => ({ value: s, label: statusLabel(s) })),
                   ]} /></th>
                   <th>Progreso</th>
-                  <th>Reintentos</th>
                   <th>Creado</th>
                   <th>Finalizado</th>
                   <th>Duración</th>
-                  <th>Petición</th>
-                  <th>Acciones</th>
+                  <th>Reintentos</th>
+                  <th className="col-actions" style={{ width: '1%' }}>Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -531,13 +546,14 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
                     <Fragment key={job.id}>
                       <JobRow
                         job={job}
+                        instances={instances}
                         onOpen={() => openUpload(job.id!)}
                         retryToggle={ancestors.length > 0 ? { count: ancestors.length, expanded, onClick: () => toggleChain(job.id!) } : undefined}
                         onCancel={handleCancel}
                         onRetry={handleRetryQueued}
                       />
                       {expanded && ancestors.map(a => (
-                        <JobRow key={a.id} job={a} indent onOpen={() => openUpload(a.id!)} onCancel={handleCancel} onRetry={handleRetryQueued} />
+                        <JobRow key={a.id} job={a} instances={instances} indent onOpen={() => openUpload(a.id!)} onCancel={handleCancel} onRetry={handleRetryQueued} />
                       ))}
                     </Fragment>
                   )

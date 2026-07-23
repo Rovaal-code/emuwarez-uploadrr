@@ -118,6 +118,9 @@ def _job_to_detail(
     instance_name: str | None = None,
     request_status: str | None = None,
     year: int | None = None,
+    instance_id: int | None = None,
+    tmdb_id: str | None = None,
+    title_slug: str | None = None,
 ) -> UploadJobDetail:
     prepared = j.get("prepared_path")
     source = j.get("source_path") or j.get("path")
@@ -128,6 +131,9 @@ def _job_to_detail(
         year=year,
         instance_type=instance_type,
         instance_name=instance_name,
+        instance_id=instance_id,
+        tmdb_id=tmdb_id,
+        title_slug=title_slug,
         request_status=request_status,
         id=j.get("id"),
         library_item_id=j.get("library_item_id"),
@@ -342,10 +348,14 @@ def get_uploads(
         instance_name_by_item: dict[int, str] = {}
         request_status_by_item: dict[int, str] = {}
         year_by_item: dict[int, int] = {}
+        instance_id_by_item: dict[int, int] = {}
+        tmdb_id_by_item: dict[int, str] = {}
+        title_slug_by_item: dict[int, str] = {}
         if item_ids:
             placeholders = ",".join("?" * len(item_ids))
             for row in conn.execute(
-                f"SELECT id, item_type, poster_url, instance_type, instance_name, request_status, year "
+                f"SELECT id, item_type, poster_url, instance_type, instance_name, request_status, year, "
+                f"instance_id, tmdb_id, title_slug "
                 f"FROM library_items WHERE id IN ({placeholders})",
                 tuple(item_ids),
             ):
@@ -360,6 +370,12 @@ def get_uploads(
                     request_status_by_item[row["id"]] = row["request_status"]
                 if row["year"]:
                     year_by_item[row["id"]] = row["year"]
+                if row["instance_id"]:
+                    instance_id_by_item[row["id"]] = row["instance_id"]
+                if row["tmdb_id"]:
+                    tmdb_id_by_item[row["id"]] = row["tmdb_id"]
+                if row["title_slug"]:
+                    title_slug_by_item[row["id"]] = row["title_slug"]
     return [
         _job_to_detail(
             j,
@@ -369,6 +385,9 @@ def get_uploads(
             instance_name_by_item.get(j.get("library_item_id")),
             request_status_by_item.get(j.get("library_item_id")),
             year_by_item.get(j.get("library_item_id")),
+            instance_id_by_item.get(j.get("library_item_id")),
+            tmdb_id_by_item.get(j.get("library_item_id")),
+            title_slug_by_item.get(j.get("library_item_id")),
         )
         for j in jobs
     ]
@@ -382,10 +401,12 @@ def get_upload(job_id: int, current_user: dict = Depends(require_auth)):
             raise HTTPException(status_code=404, detail="Job no encontrado.")
         media_type = poster_url = instance_type = instance_name = request_status = None
         year = None
+        instance_id = tmdb_id = title_slug = None
         item_id = job.get("library_item_id")
         if item_id:
             row = conn.execute(
-                "SELECT item_type, poster_url, instance_type, instance_name, request_status, year "
+                "SELECT item_type, poster_url, instance_type, instance_name, request_status, year, "
+                "instance_id, tmdb_id, title_slug "
                 "FROM library_items WHERE id = ?",
                 (item_id,),
             ).fetchone()
@@ -396,7 +417,11 @@ def get_upload(job_id: int, current_user: dict = Depends(require_auth)):
                 instance_name = row["instance_name"]
                 request_status = row["request_status"]
                 year = row["year"]
-    return _job_to_detail(job, media_type, poster_url, instance_type, instance_name, request_status, year)
+                instance_id = row["instance_id"]
+                tmdb_id = row["tmdb_id"]
+                title_slug = row["title_slug"]
+    return _job_to_detail(job, media_type, poster_url, instance_type, instance_name, request_status, year,
+                           instance_id, tmdb_id, title_slug)
 
 
 @router.get("/uploads/{job_id}/logs", response_model=UploadJobLogsResponse)

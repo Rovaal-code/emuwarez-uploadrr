@@ -984,6 +984,12 @@ class UploadJobDetail(BaseModel):
     # library item — same fields Biblioteca already shows per content.
     instance_type: Optional[str] = None
     instance_name: Optional[str] = None
+    # instance_id/tmdb_id/title_slug — also from the linked library item,
+    # only needed to build the same Origen deep link Biblioteca's own column
+    # uses (see buildDeepLink in frontend/src/utils/libraryItem.ts).
+    instance_id: Optional[int] = None
+    tmdb_id: Optional[str] = None
+    title_slug: Optional[str] = None
     request_status: Optional[str] = None
     # Grace-period deadline while status='queued' — lets the UI show a
     # countdown + Cancel before the server starts renaming/remuxing/uploading.

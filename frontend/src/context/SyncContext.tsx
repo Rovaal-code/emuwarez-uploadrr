@@ -45,9 +45,15 @@ interface SyncContextValue {
   // OTHER sync types use this to disable themselves, since running two syncs
   // at once caused a visual glitch in the top bar.
   isAnySyncing: boolean
-  // last completion message + a monotonically increasing marker so pages can
-  // reload their own data when any sync finishes.
+  // Last completion message, shown as a toast in the topbar's sync row (see
+  // SyncProgressBanner) — green on success, red on error, auto-dismissed
+  // after 5s. Shared by Biblioteca/eMuwarez/Peticiones syncs alike, so it's
+  // a single value rather than one per sync type.
   message: string | null
+  messageIsError: boolean
+  messageFadingOut: boolean
+  // Monotonically increasing marker so pages can reload their own data when
+  // any sync finishes.
   lastCompletedAt: number
 }
 
@@ -69,11 +75,41 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   const [requestsStatus, setRequestsStatus] = useState<RequestSyncStatusResponse | null>(null)
   const [requestsUnavailable, setRequestsUnavailable] = useState(false)
   const [requestsFadingOut, setRequestsFadingOut] = useState(false)
-  const [message, setMessage] = useState<string | null>(null)
+  const [message, setMessageText] = useState<string | null>(null)
+  const [messageIsError, setMessageIsError] = useState(false)
+  const [messageFadingOut, setMessageFadingOut] = useState(false)
   const [lastCompletedAt, setLastCompletedAt] = useState(0)
 
   const requestsUnavailableTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const requestsFadeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const messageTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const messageFadeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Shows a completion toast for 5s (then a 300ms fade, same feel as
+  // flashRequestsUnavailable below) — green on success, red on error.
+  const showMessage = useCallback((text: string, isError: boolean) => {
+    if (messageTimer.current) clearTimeout(messageTimer.current)
+    if (messageFadeTimer.current) clearTimeout(messageFadeTimer.current)
+    setMessageFadingOut(false)
+    setMessageIsError(isError)
+    setMessageText(text)
+    messageTimer.current = setTimeout(() => {
+      setMessageFadingOut(true)
+      messageFadeTimer.current = setTimeout(() => {
+        setMessageText(null)
+        setMessageFadingOut(false)
+      }, 300)
+    }, 5000)
+  }, [])
+
+  // Clears any toast still showing/fading right as a NEW sync starts, so it
+  // can't linger on top of (or alongside) the fresh progress chip.
+  const hideMessage = useCallback(() => {
+    if (messageTimer.current) clearTimeout(messageTimer.current)
+    if (messageFadeTimer.current) clearTimeout(messageFadeTimer.current)
+    setMessageFadingOut(false)
+    setMessageText(null)
+  }, [])
 
   // Shows the "No implementado en esta versión" chip for a beat, then fades
   // it out — same brief flash regardless of why this particular attempt
@@ -114,9 +150,9 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         const p = await getLibrarySyncProgress()
         setLibProgress(p)
         if (p.done || !p.active) {
-          setMessage(p.error
+          showMessage(p.error
             ? `Error durante la sincronización: ${p.error}`
-            : `Sincronizado: ${p.imported} elementos · ${p.missing} no disponibles`)
+            : `Sincronizado: ${p.imported} elementos · ${p.missing} no disponibles`, !!p.error)
           bumpCompleted()
           break
         }
@@ -127,23 +163,23 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       setLibSyncing(false)
       libBusy.current = false
     }
-  }, [bumpCompleted])
+  }, [bumpCompleted, showMessage])
 
   const startLibrarySync = useCallback(() => {
     if (libBusy.current) return
     libBusy.current = true
     setLibSyncing(true)
-    setMessage(null)
+    hideMessage()
     setLibProgress({ active: true, done: false, phase: 'Iniciando…', imported: 0, missing: 0, total: 0, instance: '', instance_type: '', error: null })
     apiStartLibrarySync(true)
       .then(() => followLibrary())
       .catch(() => {
-        setMessage('Error durante la sincronización')
+        showMessage('Error durante la sincronización', true)
         setLibProgress(null)
         setLibSyncing(false)
         libBusy.current = false
       })
-  }, [followLibrary])
+  }, [followLibrary, hideMessage, showMessage])
 
   // ---- eMuwarez catalog sync ----
   const followCatalog = useCallback(async () => {
@@ -152,9 +188,9 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         const p = await getEmuSyncProgress()
         setCatalogProgress(p)
         if (p.done || !p.active) {
-          setMessage(p.error
+          showMessage(p.error
             ? `Error al sincronizar eMuwarez: ${p.error}`
-            : `Catálogo eMuwarez: ${p.torrents} torrents, ${p.items} elementos comparados`)
+            : `Catálogo eMuwarez: ${p.torrents} torrents, ${p.items} elementos comparados`, !!p.error)
           bumpCompleted()
           break
         }
@@ -166,31 +202,31 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       catalogBusy.current = false
       refreshCatalogStatus()
     }
-  }, [bumpCompleted, refreshCatalogStatus])
+  }, [bumpCompleted, refreshCatalogStatus, showMessage])
 
   const startCatalogSync = useCallback((mode: EmuSyncMode = 'incremental') => {
     if (catalogBusy.current) return
     catalogBusy.current = true
     setCatalogSyncing(true)
-    setMessage(null)
+    hideMessage()
     setCatalogProgress({ active: true, done: false, phase: 'Iniciando…', torrents: 0, items: 0, page: 0, total_pages: null, eta_seconds: null, error: null })
     emuSync(mode)
       .then(() => followCatalog())
       .catch((e: unknown) => {
-        setMessage(e instanceof Error ? e.message : 'Error al sincronizar con eMuwarez')
+        showMessage(e instanceof Error ? e.message : 'Error al sincronizar con eMuwarez', true)
         setCatalogProgress(null)
         setCatalogSyncing(false)
         catalogBusy.current = false
         refreshCatalogStatus()
       })
-  }, [followCatalog, refreshCatalogStatus])
+  }, [followCatalog, refreshCatalogStatus, hideMessage, showMessage])
 
   // ---- eMuwarez requests sync (blocking call, no progress card) ----
   const startRequestsSync = useCallback((force: boolean) => {
     if (requestsBusy.current) return
     requestsBusy.current = true
     setRequestsSyncing(true)
-    setMessage(null)
+    hideMessage()
     if (requestsUnavailableTimer.current) clearTimeout(requestsUnavailableTimer.current)
     if (requestsFadeTimer.current) clearTimeout(requestsFadeTimer.current)
     setRequestsUnavailable(false)
@@ -202,7 +238,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         // of it is a real error worth surfacing as text; only a genuine
         // success gets the generic message banner.
         if (res.ok) {
-          setMessage(res.message)
+          showMessage(res.message, false)
           bumpCompleted()
         } else {
           flashRequestsUnavailable()
@@ -214,7 +250,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         requestsBusy.current = false
         refreshRequestsStatus()
       })
-  }, [bumpCompleted, refreshRequestsStatus, flashRequestsUnavailable])
+  }, [bumpCompleted, refreshRequestsStatus, flashRequestsUnavailable, hideMessage, showMessage])
 
   // Checks for a library (Radarr/Sonarr) sync already running server-side and
   // hands off to the normal follow loop if one is found — reused both on
@@ -264,7 +300,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     catalogSyncing, catalogProgress, catalogStatus, startCatalogSync, refreshCatalogStatus,
     requestsSyncing, requestsStatus, startRequestsSync, refreshRequestsStatus, requestsUnavailable, requestsFadingOut,
     isAnySyncing: libSyncing || catalogSyncing || requestsSyncing,
-    message, lastCompletedAt,
+    message, messageIsError, messageFadingOut, lastCompletedAt,
   }
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>
 }

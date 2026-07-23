@@ -207,6 +207,31 @@
   transition: width 0.3s ease;
 }
 
+/* Completion toast — replaces a sync's progress chip once it finishes,
+   shown for 5s (see SyncContext's showMessage) then faded out. Green on
+   success, red on error, same as the rest of the app's status language. */
+.sync-toast {
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 1;
+  transition: opacity 300ms ease;
+}
+
+.sync-toast-fading {
+  opacity: 0;
+}
+
+.sync-toast-ok {
+  color: #22c55e;
+}
+
+.sync-toast-error {
+  color: var(--color-missing, #ef4444);
+}
+
 .topbar-left {
   display: flex;
   align-items: center;

@@ -157,9 +157,10 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   const [wizardPreselect, setWizardPreselect] = useState<{ season?: number | null; episode?: number | null } | undefined>(undefined)
   const [requestItem, setRequestItem] = useState<LibraryItemResponse | null>(null)
   // Global sync state (shared with Biblioteca/Peticiones and the progress
-  // banner). `message` shows the last completion result; `lastCompletedAt`
-  // triggers a data reload when any sync finishes.
-  const { message: syncMsg, lastCompletedAt } = useSync()
+  // banner). `lastCompletedAt` triggers a data reload when any sync finishes
+  // — the completion message itself is shown centrally in the topbar (see
+  // SyncProgressBanner), not duplicated here.
+  const { lastCompletedAt } = useSync()
   // The empty-state hologram has no room for a caption of its own — the
   // explanation lives in a hover tooltip instead, styled like the rest of
   // the app's tooltips (not a native title box).
@@ -243,10 +244,6 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
         </div>
         <SyncCard />
       </div>
-
-      {syncMsg && (
-        <div style={{ marginBottom: 12, fontSize: 12, color: 'var(--text-secondary)', flexShrink: 0 }}>{syncMsg}</div>
-      )}
 
       {/* Stat cards */}
       <div data-tour="dashboard-stats">

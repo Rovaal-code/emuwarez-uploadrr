@@ -14,11 +14,20 @@ function fmtEta(s: number): string {
 // pushing the page content down — the topbar's height never changes whether
 // this is empty or full.
 export function SyncProgressBanner() {
-  const { libProgress, catalogProgress, requestsSyncing, requestsUnavailable, requestsFadingOut } = useSync()
-  if (!libProgress && !catalogProgress && !requestsSyncing && !requestsUnavailable) return null
+  const {
+    libProgress, catalogProgress, requestsSyncing, requestsUnavailable, requestsFadingOut,
+    message, messageIsError, messageFadingOut,
+  } = useSync()
+  if (!libProgress && !catalogProgress && !requestsSyncing && !requestsUnavailable && !message) return null
 
   return (
     <div className="topbar-sync-row">
+      {message && (
+        <div className={`sync-toast${messageIsError ? ' sync-toast-error' : ' sync-toast-ok'}${messageFadingOut ? ' sync-toast-fading' : ''}`}>
+          {message}
+        </div>
+      )}
+
       {libProgress && (
         <SyncChip
           error={libProgress.error}

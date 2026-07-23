@@ -169,6 +169,22 @@ def test_update_instance_name_and_url(client, auth_headers):
     assert data["id"] == inst["id"]  # same ID preserved, not recreated
 
 
+def test_update_instance_rejects_invalid_url(client, auth_headers):
+    """Editing an instance's URL must reject non-http(s)/garbage values, same
+    as creating a new one already did — this endpoint used to only check
+    the URL wasn't blank."""
+    inst = _add_instance(client, auth_headers, name="Original")
+    resp = client.put(
+        f"/api/instances/{inst['id']}",
+        json={"url": "not a real url"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 422
+    # URL is unchanged in the DB.
+    unchanged = client.get("/api/instances", headers=auth_headers).json()
+    assert next(i for i in unchanged if i["id"] == inst["id"])["url"] == "http://x:7878"
+
+
 def test_update_instance_blank_api_key_keeps_existing(client, auth_headers):
     inst = _add_instance(client, auth_headers, api_key="original-secret-key")
     original_masked = inst["api_key_masked"]

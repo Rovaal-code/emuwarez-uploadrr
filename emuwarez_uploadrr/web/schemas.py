@@ -252,9 +252,12 @@ class SetupInstanceRequest(BaseModel):
     @field_validator("url")
     @classmethod
     def url_not_empty(cls, v: str) -> str:
-        if not v.strip():
+        v = v.strip()
+        if not v:
             raise ValueError("La URL no puede estar vacía")
-        return v.strip()
+        if not re.match(r"^https?://[^\s/]+", v):
+            raise ValueError("La URL debe empezar por http:// o https:// e incluir un host válido")
+        return v
 
     @field_validator("api_key")
     @classmethod
@@ -391,8 +394,13 @@ class UpdateInstanceRequest(BaseModel):
     @field_validator("url")
     @classmethod
     def url_not_blank(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None and not v.strip():
+        if v is None:
+            return v
+        v = v.strip()
+        if not v:
             raise ValueError("La URL no puede estar vacía")
+        if not re.match(r"^https?://[^\s/]+", v):
+            raise ValueError("La URL debe empezar por http:// o https:// e incluir un host válido")
         return v
 
     @field_validator("api_key")

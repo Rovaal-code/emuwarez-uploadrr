@@ -9,6 +9,7 @@ import { EmptyState } from '../components/EmptyState'
 import { ApiClientError } from '../api/client'
 import { formatDate } from '../utils/format'
 import { testResultLabel, testResultColor } from '../utils/integrationResult'
+import { isValidHttpUrl } from '../utils/validation'
 
 type InstanceKind = 'radarr' | 'sonarr'
 
@@ -81,6 +82,10 @@ export function InstancesPage() {
     setAddError(null)
     if (!form.name.trim() || !form.url.trim() || !form.api_key.trim()) {
       setAddError('Nombre, URL y API key son obligatorios')
+      return
+    }
+    if (!isValidHttpUrl(form.url)) {
+      setAddError('La URL debe empezar por http:// o https:// e incluir un host válido')
       return
     }
     setAdding(true)
@@ -178,6 +183,10 @@ export function InstancesPage() {
     setEditError(null)
     if (!editForm.name.trim() || !editForm.url.trim()) {
       setEditError('Nombre y URL son obligatorios')
+      return
+    }
+    if (!isValidHttpUrl(editForm.url)) {
+      setEditError('La URL debe empezar por http:// o https:// e incluir un host válido')
       return
     }
     setEditSaving(true)

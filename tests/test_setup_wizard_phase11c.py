@@ -47,6 +47,18 @@ def test_next_step_order_after_instances(client, auth_headers):
     assert resp.json()["next_step"] == "tmdb"
 
 
+def test_setup_instances_rejects_invalid_url(client, auth_headers):
+    """The onboarding wizard's Instancias step used to only check the URL
+    wasn't blank — a real http(s) URL is required, same as the Instancias
+    tab in Configuración already enforces."""
+    resp = client.post(
+        "/api/setup/instances",
+        json={"type": "radarr", "name": "R1", "url": "solo un texto cualquiera", "api_key": "k"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 422
+
+
 def test_next_step_order_after_tmdb(client, auth_headers):
     client.post("/api/setup/emu", json={"api_key": "emukey"}, headers=auth_headers)
     client.post(

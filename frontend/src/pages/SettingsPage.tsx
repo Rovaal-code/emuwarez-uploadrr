@@ -25,6 +25,7 @@ import { REGION_OPTIONS, LANGUAGE_OPTIONS } from '../constants/regionLanguage'
 import { testResultLabel, testResultColor, emuTestCooldownSeconds } from '../utils/integrationResult'
 import { getMe, changeCredentials } from '../api/auth'
 import { useTooltip, HoverTitle } from '../components/Tooltip'
+import { isValidHttpUrl } from '../utils/validation'
 
 type Tab = 'config' | 'notifications' | 'diagnostics' | 'backup' | 'maintenance'
 
@@ -241,6 +242,10 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   }
 
   async function handleSave() {
+    if (qbitUrl.trim() && !isValidHttpUrl(qbitUrl)) {
+      setMsg({ ok: false, text: 'La URL de qBittorrent debe empezar por http:// o https:// e incluir un host válido' })
+      return
+    }
     setSaving(true)
     setMsg(null)
     try {

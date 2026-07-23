@@ -14,6 +14,7 @@ import { SETUP_STEPS, SETUP_STEP_LABELS } from '../types/domain'
 import type { SetupStep } from '../types/domain'
 import type { SetupStatusResponse } from '../types/api'
 import { testResultLabel, testResultColor, emuTestCooldownSeconds } from '../utils/integrationResult'
+import { isValidHttpUrl } from '../utils/validation'
 import { useCooldown } from '../hooks/useCooldown'
 import { HoverTitle } from '../components/Tooltip'
 
@@ -370,6 +371,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
     setInstError(null)
     if (!instDraft.name?.trim()) { setInstError('El nombre es obligatorio'); return }
     if (!instDraft.url?.trim()) { setInstError('La URL es obligatoria'); return }
+    if (!isValidHttpUrl(instDraft.url)) { setInstError('La URL debe empezar por http:// o https:// e incluir un host válido'); return }
     if (!instDraft.api_key?.trim()) { setInstError('La API key es obligatoria'); return }
     // Always re-test right before adding (not just when "Probar conexión" was
     // clicked separately) — otherwise a well-formed but unreachable/wrong
@@ -426,6 +428,9 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   const handleQbit = wrap(async () => {
     // Optional/skippable: an empty URL just moves on without configuring qBit.
     if (qbitUrl.trim()) {
+      if (!isValidHttpUrl(qbitUrl)) {
+        throw new Error('La URL de qBittorrent debe empezar por http:// o https:// e incluir un host válido')
+      }
       await setupQbit(qbitUrl.trim(), qbitPort.trim() || '8080', qbitUser.trim(), qbitPass)
     }
     setStep('providers')

@@ -3,7 +3,7 @@ import type { LibraryItemResponse, InstanceSafeResponse } from '../types/api'
 import { getLibraryItem } from '../api/library'
 import { StatusBadge } from './StatusBadge'
 import { LibraryChildrenSection } from './LibraryChildrenSection'
-import { EmuComparisonSection } from './EmuComparisonSection'
+import { EmuFieldChip } from './EmuComparisonSection'
 import { LibraryActionButtons } from './LibraryActionButtons'
 import type { LibraryActionKind } from './LibraryTreeRow'
 import { formatBytes, formatItemType } from '../utils/format'
@@ -35,6 +35,10 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
   const deepLink = buildDeepLink(item, instances)
   const isRollup = item.item_type === 'series' || item.item_type === 'season'
   const isTv = item.item_type !== 'movie'
+  // Same restriction the old standalone "Comparación con eMuwarez" section
+  // used: series is a rollup (drill into seasons instead), episodes roll
+  // into their season — only movie/season/episode have a real comparison.
+  const isEmuComparable = item.item_type === 'movie' || item.item_type === 'season' || item.item_type === 'episode'
   // Consolidated fields (quality, provider, codecs, audio, subs) only appear on
   // a rollup when every child shares the value — the "?" explains that.
   const rollupHelp = item.item_type === 'series'
@@ -161,6 +165,11 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
               <FieldRow label="Tamaño">
                 <ValueChip><ValueIcon><SizeValueIcon /></ValueIcon><span className="txt">{formatBytes(item.size_bytes)}</span></ValueChip>
               </FieldRow>
+              {isEmuComparable && (
+                <FieldRow label="eMuwarez">
+                  <EmuFieldChip itemId={item.id} />
+                </FieldRow>
+              )}
             </Card>
 
             <Card title="Identificadores externos" icon={<ExternalIdsCardIcon />}>
@@ -197,10 +206,6 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
             </div>
           </div>
         </div>
-      )}
-
-      {(item.item_type === 'movie' || item.item_type === 'season' || item.item_type === 'episode') && (
-        <EmuComparisonSection itemId={item.id} />
       )}
       </div>
 

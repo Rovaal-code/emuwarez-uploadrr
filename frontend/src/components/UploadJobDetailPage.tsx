@@ -10,6 +10,7 @@ import {
   Card, FieldRow, DetailPoster, ValueChip, ValueIcon, DETAIL_CARD_HEIGHT,
   StatusCardIcon, ClockCardIcon, UploadButtonIcon, LibraryButtonIcon, RetryButtonIcon, CancelButtonIcon, DeleteButtonIcon,
   TypeValueIcon, CalendarValueIcon, ProgressValueIcon,
+  NomenclatureValueIcon, AudioCodecValueIcon, ChecksValueIcon, LogsValueIcon,
 } from './DetailCard'
 import { RemuxTable, EpisodeAccordionRow } from './UploadWizardModal'
 import {
@@ -429,6 +430,20 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
   useTicker(isQueued)
   const secondsLeft = queuedSecondsLeft(job)
 
+  // The 4 sections that used to be their own collapsible Panel below now
+  // live as mini-card fields in "Estado de la subida" (same visual pattern
+  // as Proveedor/Origen) — clicking one opens its content in a modal instead
+  // of expanding an accordion. "Progreso de la subida" stays its own
+  // always-expanded section (see the Panel usage further down, now with no
+  // `collapsible` prop at all).
+  const [showNomenclatura, setShowNomenclatura] = useState(false)
+  const [showRemux, setShowRemux] = useState(false)
+  const [showChecks, setShowChecks] = useState(false)
+  const [showActividad, setShowActividad] = useState(false)
+  const checksReady = job.checks_snapshot?.ready
+  const checksFailed = job.checks_snapshot != null && checksReady === false
+  const checksLabel = !job.checks_snapshot ? 'Pendiente' : checksReady ? 'OK' : 'Error'
+
   const [logs, setLogs] = useState<UploadJobLog[]>([])
   const [loadingLogs, setLoadingLogs] = useState(true)
   const loadLogs = async () => {
@@ -514,6 +529,36 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
                   </span>
                 </ValueChip>
               </FieldRow>
+              <FieldRow label="Nomenclatura" help="Los campos que componen el nombre final del torrent, del archivo y de su título interno.">
+                <ValueChip as="button" linkable onClick={() => setShowNomenclatura(true)} title="Ver nomenclatura">
+                  {stagingLoadingNomenclature
+                    ? <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2, flexShrink: 0 }} />
+                    : <ValueIcon><NomenclatureValueIcon /></ValueIcon>}
+                  <span className="txt">{job.nomenclature_snapshot ? 'Ver' : 'Pendiente'}</span>
+                </ValueChip>
+              </FieldRow>
+              <FieldRow label="Reordenación/Renombrado" help="Antes de subir se hace un remux para reordenar las pistas de audio y subtítulos y ponerles el nombre adecuado, siguiendo la prioridad de idioma: Español (Castellano) → Català → Inglés → el resto.">
+                <ValueChip as="button" linkable onClick={() => setShowRemux(true)} title="Ver reordenación de pistas">
+                  {stagingLoadingRemux
+                    ? <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2, flexShrink: 0 }} />
+                    : <ValueIcon><AudioCodecValueIcon /></ValueIcon>}
+                  <span className="txt">{job.remux_snapshot ? 'Ver' : 'Pendiente'}</span>
+                </ValueChip>
+              </FieldRow>
+              <FieldRow label="Verificación pre-subida" help="Las comprobaciones que se hacen antes de subir: que el archivo se pueda renombrar o enlazar, que el directorio de salida sea escribible, y que qBittorrent, el repositorio de imágenes y eMuwarez estén disponibles. Si alguna falla (no las que se omiten), la subida no continúa.">
+                <ValueChip as="button" linkable blink={checksFailed ? 'alert' : undefined} onClick={() => setShowChecks(true)} title="Ver verificación pre-subida">
+                  {stagingLoadingChecks
+                    ? <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2, flexShrink: 0 }} />
+                    : <ValueIcon><ChecksValueIcon /></ValueIcon>}
+                  <span className="txt">{checksLabel}</span>
+                </ValueChip>
+              </FieldRow>
+              <FieldRow label="Actividad" help="El registro de lo que va haciendo la subida en tiempo real: si se ha cancelado, si ha dado error en alguna fase y por qué, o si se ha completado con éxito.">
+                <ValueChip as="button" linkable onClick={() => setShowActividad(true)} title="Ver registro de actividad">
+                  <ValueIcon><LogsValueIcon /></ValueIcon>
+                  <span className="txt">Ver Logs</span>
+                </ValueChip>
+              </FieldRow>
             </Card>
 
             <Card title="Tiempos" icon={<ClockCardIcon />}>
@@ -534,33 +579,14 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
         </div>
       </div>
 
+      {/* Only "Progreso de la subida" keeps its own always-expanded section —
+          no `collapsible` prop at all, same fixed pattern Temporadas/
+          Capítulos use in Biblioteca (LibraryChildrenSection). The other 4
+          (Nomenclatura, Reordenación/Renombrado, Verificación pre-subida,
+          Actividad) moved into "Estado de la subida" above as mini-card
+          fields — each opens its own modal below instead. */}
       <Panel
-        title="Nomenclatura" collapsible defaultExpanded={false} loading={stagingLoadingNomenclature}
-        help="Los campos que componen el nombre final del torrent, del archivo y de su título interno."
-      >
-        <NomenclatureSection snapshot={job.nomenclature_snapshot} mediaType={job.media_type} isStaging={isStaging} />
-      </Panel>
-
-      <Panel
-        title="Reordenación de pistas" collapsible defaultExpanded={false} loading={stagingLoadingRemux}
-        help="Antes de subir se hace un remux para reordenar las pistas de audio y subtítulos y ponerles el nombre adecuado, siguiendo la prioridad de idioma: Español (Castellano) → Català → Inglés → el resto."
-      >
-        <RemuxSection snapshot={job.remux_snapshot} isStaging={isStaging} />
-      </Panel>
-
-      <Panel
-        title="Verificación pre-subida" collapsible defaultExpanded={false} loading={stagingLoadingChecks}
-        help="Las comprobaciones que se hacen antes de subir: que el archivo se pueda renombrar o enlazar, que el directorio de salida sea escribible, y que qBittorrent, el repositorio de imágenes y eMuwarez estén disponibles. Si alguna falla (no las que se omiten), la subida no continúa."
-      >
-        <ChecksSection
-          snapshot={job.checks_snapshot}
-          mediaType={job.media_type}
-          isActive={isQueued || isPreparing || isRunning || isStaging}
-        />
-      </Panel>
-
-      <Panel
-        title="Progreso de la subida" collapsible defaultExpanded={false} loading={progressIsActive}
+        title="Progreso de la subida" loading={progressIsActive}
         help="Cada fase por la que pasa la subida (comprobación de integridad, nomenclatura, remux, subida a eMuwarez…), con su estado, cuándo empezó y terminó, y el porcentaje global de la subida completa."
       >
         {isStaging ? (
@@ -570,17 +596,70 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
         )}
       </Panel>
 
-      <Panel
-        title="Actividad" live={isRunning} collapsible defaultExpanded={false}
-        help="El registro de lo que va haciendo la subida en tiempo real: si se ha cancelado, si ha dado error en alguna fase y por qué, o si se ha completado con éxito."
-      >
-        <pre style={{ margin: 0, maxHeight: 260, overflowY: 'auto', fontSize: '0.76rem', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-          {loadingLogs ? 'Cargando…' : tail.length === 0 ? 'Sin actividad registrada todavía.' : tail.map(log => {
-            const ts = log.created_at.slice(11, 19)
-            return `[${ts}] ${log.message}\n`
-          })}
-        </pre>
-      </Panel>
+      {showNomenclatura && (
+        <div className="modal-overlay" onClick={() => setShowNomenclatura(false)}>
+          <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 720 }}>
+            <div className="modal-header">
+              <h2 className="modal-title">Nomenclatura</h2>
+              <button className="modal-close" onClick={() => setShowNomenclatura(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <NomenclatureSection snapshot={job.nomenclature_snapshot} mediaType={job.media_type} isStaging={isStaging} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showRemux && (
+        <div className="modal-overlay" onClick={() => setShowRemux(false)}>
+          <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 780 }}>
+            <div className="modal-header">
+              <h2 className="modal-title">Reordenación/Renombrado</h2>
+              <button className="modal-close" onClick={() => setShowRemux(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <RemuxSection snapshot={job.remux_snapshot} isStaging={isStaging} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showChecks && (
+        <div className="modal-overlay" onClick={() => setShowChecks(false)}>
+          <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 720 }}>
+            <div className="modal-header">
+              <h2 className="modal-title">Verificación pre-subida</h2>
+              <button className="modal-close" onClick={() => setShowChecks(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <ChecksSection
+                snapshot={job.checks_snapshot}
+                mediaType={job.media_type}
+                isActive={isQueued || isPreparing || isRunning || isStaging}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showActividad && (
+        <div className="modal-overlay" onClick={() => setShowActividad(false)}>
+          <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 680 }}>
+            <div className="modal-header">
+              <h2 className="modal-title">Actividad{isRunning ? ' (en directo)' : ''}</h2>
+              <button className="modal-close" onClick={() => setShowActividad(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <pre style={{ margin: 0, maxHeight: 420, overflowY: 'auto', fontSize: '0.76rem', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                {loadingLogs ? 'Cargando…' : tail.length === 0 ? 'Sin actividad registrada todavía.' : tail.map(log => {
+                  const ts = log.created_at.slice(11, 19)
+                  return `[${ts}] ${log.message}\n`
+                })}
+              </pre>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

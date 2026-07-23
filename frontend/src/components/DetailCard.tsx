@@ -67,15 +67,19 @@ export function FieldRow({ label, children, help }: { label: string; children: R
 // action — a link or the "Ver ruta" button) light up their whole padded
 // area and turn the text accent-blue on hover, not just an inner element's
 // own tight hitbox; static fields (plain specs, badges) stay put.
-export function ValueChip({ children, linkable = false, as = 'span', onClick, title }: {
+export function ValueChip({ children, linkable = false, as = 'span', onClick, title, blink }: {
   children: React.ReactNode
   linkable?: boolean
   as?: 'span' | 'button'
   onClick?: () => void
   title?: string
+  // Pulses the chip's own border/glow between `blink` (green "new"/actionable,
+  // red "failed") and its normal linkable-blue — see .chip-blink-new/
+  // .chip-blink-alert in components.css.
+  blink?: 'new' | 'alert'
 }) {
   const { triggerProps, tooltipNode } = useTooltip(title ?? null)
-  const className = `value-chip${linkable ? ' linkable' : ''}`
+  const className = `value-chip${linkable ? ' linkable' : ''}${blink ? ` chip-blink-${blink}` : ''}`
   if (as === 'button') {
     return <button type="button" className={className} onClick={onClick} {...triggerProps}>{children}{tooltipNode}</button>
   }
@@ -276,6 +280,27 @@ export function CommentValueIcon() {
 
 export function ProgressValueIcon() {
   return <Icon size={14}><polyline points="2 12 7 12 9 6 13 18 15 12 22 12" /></Icon>
+}
+
+// "Nomenclatura" (Subidas) — a pencil, for the generated/editable name.
+export function NomenclatureValueIcon() {
+  return <Icon size={14}><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></Icon>
+}
+
+// "Verificación pre-subida" (Subidas) — same checkmark-in-clipboard as
+// Sidebar's "Tareas" nav icon, for consistency (both are "checks passed").
+export function ChecksValueIcon() {
+  return <Icon size={14}><path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></Icon>
+}
+
+// "Actividad" (Subidas) — same document-with-lines as Sidebar's "Logs" nav icon.
+export function LogsValueIcon() {
+  return (
+    <Icon size={14}>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14,2 14,8 20,8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" />
+    </Icon>
+  )
 }
 
 // Filled brand-blue folder icon for "Ver ruta" — fixed color (not

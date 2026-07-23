@@ -3,14 +3,36 @@ import { getEmuComparison, type EmuComparison } from '../api/library'
 import { formatBytes } from '../utils/format'
 import { InfoIcon } from './InfoIcon'
 import { useTooltip } from './Tooltip'
+import { ValueChip } from './DetailCard'
+import { ServiceIcon } from './ServiceIcon'
 
-// Detail-card comparison: your copy vs every eMuwarez torrent that matches this
-// movie/season, plus the summary of what you'd add ("Aportes"). Only rendered
-// for movies and seasons — series is a rollup (drill into seasons), episodes
-// roll into their season.
-export function EmuComparisonSection({ itemId }: { itemId: number }) {
+// Three-state summary shown in the "eMuwarez" field chip (Información
+// técnica card) — collapses EmuComparison's several branches (not in
+// catalog, only-loose-episodes, aportes, exact match) down to the three
+// words the user actually wants to see at a glance.
+export type EmuFieldStatus = 'si' | 'no' | 'aportas'
+
+function summarize(data: EmuComparison | null): EmuFieldStatus | null {
+  if (!data || !data.available) return null
+  const notInCatalog = data.in_catalog === 0 || data.matches.length === 0
+  if (notInCatalog) return 'no'
+  if (data.only_episodes) return data.have_all_episodes ? 'aportas' : 'si'
+  if ((data.aportes ?? []).length > 0) return 'aportas'
+  return 'si'
+}
+
+const STATUS_LABEL: Record<EmuFieldStatus, string> = { si: 'Sí', no: 'No', aportas: 'Aportas' }
+
+// The "eMuwarez" field in Información técnica — fetches the comparison
+// itself (same call EmuComparisonContent's data comes from) and shows a
+// three-state chip (Sí/No/Aportas). Blinks green whenever there's something
+// actionable (not in the catalog, or you'd contribute something new) — a
+// plain "Sí" (already there, nothing better to add) stays the normal static
+// blue border every other linkable field chip uses.
+export function EmuFieldChip({ itemId }: { itemId: number }) {
   const [data, setData] = useState<EmuComparison | null>(null)
   const [loading, setLoading] = useState(true)
+  const [showModal, setShowModal] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -22,6 +44,44 @@ export function EmuComparisonSection({ itemId }: { itemId: number }) {
     return () => { alive = false }
   }, [itemId])
 
+  const status = summarize(data)
+
+  if (loading || status === null) {
+    return <span className="muted">–</span>
+  }
+
+  const blink = (status === 'no' || status === 'aportas') ? 'new' : undefined
+
+  return (
+    <>
+      <ValueChip as="button" linkable blink={blink} onClick={() => setShowModal(true)} title="Ver comparación con eMuwarez">
+        <span className="brand-icon" style={{ display: 'inline-flex' }}>
+          <ServiceIcon type="emu" size={15} />
+        </span>
+        <span className="txt">{STATUS_LABEL[status]}</span>
+      </ValueChip>
+      {showModal && (
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 820 }}>
+            <div className="modal-header">
+              <h2 className="modal-title">Comparación con eMuwarez</h2>
+              <button className="modal-close" onClick={() => setShowModal(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <EmuComparisonContent data={data} />
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+// Detail-card comparison content: your copy vs every eMuwarez torrent that
+// matches this movie/season, plus the summary of what you'd add ("Aportes").
+// Pure — takes already-fetched data, no fetch of its own (EmuFieldChip above
+// owns that) — so it can be dropped into a modal without a second request.
+export function EmuComparisonContent({ data }: { data: EmuComparison | null }) {
   const notInCatalog = !!data && (data.in_catalog === 0 || data.matches.length === 0)
   const aportes = data?.aportes ?? []
   const mine = data?.mine
@@ -45,21 +105,16 @@ export function EmuComparisonSection({ itemId }: { itemId: number }) {
     : null
   const matchedNameTip = useTooltip(matchedCandidate?.name ?? null)
 
-  if (loading) {
-    return <Panel><span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Cargando comparación…</span></Panel>
-  }
   if (!data || !data.available) {
     return (
-      <Panel>
-        <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>
-          {data?.message ?? 'Sincroniza con eMuwarez para ver la comparación.'}
-        </span>
-      </Panel>
+      <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>
+        {data?.message ?? 'Sincroniza con eMuwarez para ver la comparación.'}
+      </span>
     )
   }
 
   return (
-    <Panel>
+    <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
         {!hasLocal ? (
           notInCatalog ? (
@@ -139,7 +194,7 @@ export function EmuComparisonSection({ itemId }: { itemId: number }) {
           </table>
         </div>
       )}
-    </Panel>
+    </>
   )
 }
 
@@ -159,17 +214,4 @@ function TorrentNameCell({ name }: { name: string | null | undefined }) {
 const chipStyle: React.CSSProperties = {
   fontSize: 11.5, padding: '2px 8px', borderRadius: 4, whiteSpace: 'nowrap',
   background: 'rgba(34,197,94,0.14)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)',
-}
-
-function Panel({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{ marginTop: 28 }}>
-      <div style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-secondary)', marginBottom: 12 }}>
-        Comparación con eMuwarez
-      </div>
-      <div className="detail-card" style={{ padding: '16px 18px', borderRadius: 10 }}>
-        {children}
-      </div>
-    </div>
-  )
 }

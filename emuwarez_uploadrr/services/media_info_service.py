@@ -183,8 +183,9 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
     # doesn't confirm WEB-DL, and by source_comparison's mediainfo_confirmed.
     _reencoded = legacy.looks_reencoded(video)
     add("Source", _bitrate_source, _final_source,
-        help_text="MediaInfo: se calcula por audio + bitrate (tamaño/duración), sin mirar el nombre del archivo. "
-                   "eMuwarez: nombre del archivo → Radarr/Sonarr → MediaInfo (bitrate).")
+        help_text="MediaInfo: se calcula a través de una tool interna de la aplicación (analiza audio y "
+                   "bitrate del archivo), sin mirar el nombre del archivo. "
+                   "eMuwarez: nombre del archivo → Radarr/Sonarr → tool interna de la aplicación.")
 
     # Bitrate reference table (Ver MediaInfo's "MediaInfo (bitrate)" link):
     # every eMuwarez source code and the bitrate range that maps to it at

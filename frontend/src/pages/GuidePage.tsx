@@ -302,8 +302,8 @@ const SECTIONS: GuideSection[] = [
 ]
 
 export function GuidePage() {
-  const [openId, setOpenId] = useState<string | null>(null)
-  const openSection = SECTIONS.find(s => s.id === openId) ?? null
+  const [openId, setOpenId] = useState<string>('formula')
+  const openSection = SECTIONS.find(s => s.id === openId) ?? SECTIONS[0]
 
   return (
     <div data-tour="guide-content" style={{ height: '100%' }}>
@@ -316,56 +316,47 @@ export function GuidePage() {
         </div>
       </div>
 
-      {/* One row, one column per section — click any to open its full content
-          in a modal instead of expanding an inline accordion, so the page
-          itself stays short and scannable. */}
+      {/* One row, one column per section — click any to select it, marking
+          that column as active and showing its content in the panel below
+          (inline, not a modal). Fórmula del nombre is selected by default. */}
       <div className="detail-card" style={{ borderRadius: 10, overflowX: 'auto', marginTop: 20 }}>
         <table className="data-table" style={{ tableLayout: 'fixed', width: '100%' }}>
           <tbody>
             <tr>
-              {SECTIONS.map(s => (
-                <td key={s.id} style={{ padding: 0, textAlign: 'center', verticalAlign: 'middle' }}>
-                  <button
-                    type="button"
-                    onClick={() => setOpenId(s.id)}
-                    className="btn btn-ghost"
-                    style={{
-                      width: '100%', height: '100%', minHeight: 64, borderRadius: 0,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      textAlign: 'center', fontSize: 13, fontWeight: 600, lineHeight: 1.35,
-                      padding: '12px 14px', whiteSpace: 'normal',
-                    }}
-                  >
-                    {s.label}
-                  </button>
-                </td>
-              ))}
+              {SECTIONS.map(s => {
+                const active = s.id === openId
+                return (
+                  <td key={s.id} style={{ padding: 0, textAlign: 'center', verticalAlign: 'middle' }}>
+                    <button
+                      type="button"
+                      onClick={() => setOpenId(s.id)}
+                      className="btn btn-ghost"
+                      style={{
+                        width: '100%', height: '100%', minHeight: 64, borderRadius: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        textAlign: 'center', fontSize: 13, fontWeight: active ? 700 : 600, lineHeight: 1.35,
+                        padding: '12px 14px', whiteSpace: 'normal',
+                        background: active ? 'var(--bg-card)' : undefined,
+                        color: active ? 'var(--text-accent)' : undefined,
+                        borderBottom: active ? '2px solid var(--text-accent)' : '2px solid transparent',
+                      }}
+                    >
+                      {s.label}
+                    </button>
+                  </td>
+                )
+              })}
             </tr>
           </tbody>
         </table>
       </div>
 
-      {openSection && (
-        <div className="modal-overlay" onClick={() => setOpenId(null)}>
-          <div
-            className="modal-panel modal-wide"
-            onClick={e => e.stopPropagation()}
-            style={{ maxWidth: '95vw', width: 'max-content', display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}
-          >
-            <div className="modal-header" style={{ flexShrink: 0 }}>
-              <h2 className="modal-title">{openSection.title}</h2>
-              <button className="modal-close" onClick={() => setOpenId(null)}>✕</button>
-            </div>
-            {/* The body (not the whole panel) scrolls, so the table can
-                stretch all the way down near the viewport's bottom edge
-                (with the modal's own consistent margin) instead of the page
-                growing arbitrarily tall. */}
-            <div className="modal-body" style={{ overflowY: 'auto', minWidth: 480 }}>
-              {openSection.render()}
-            </div>
-          </div>
-        </div>
-      )}
+      <div className="detail-card" style={{ borderRadius: 10, marginTop: 16, padding: '16px 18px' }}>
+        <h3 style={{ margin: '0 0 14px', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+          {openSection.title}
+        </h3>
+        {openSection.render()}
+      </div>
     </div>
   )
 }

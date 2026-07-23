@@ -25,7 +25,7 @@ import {
 // EmuComparisonSection/RequestDetailPage's "Petición vs. tu biblioteca" use
 // (uppercase section title + bordered/padded box). Tables always show their
 // header shell, even with no data yet, rather than a "no data" paragraph.
-function Panel({ title, live, loading, help, collapsible, defaultExpanded = false, children }: {
+function Panel({ title, live, loading, help, collapsible, defaultExpanded = false, fill, children }: {
   title: string
   live?: boolean
   // Shown as a spinning icon at the RIGHT edge of the header, visible even
@@ -36,12 +36,17 @@ function Panel({ title, live, loading, help, collapsible, defaultExpanded = fals
   help?: string
   collapsible?: boolean
   defaultExpanded?: boolean
+  // Fills the remaining vertical space below it and lets its content scroll
+  // internally — same fill+internal-scroll pattern LibraryChildrenSection
+  // uses for Temporadas/Capítulos, so this section's table never grows the
+  // whole page and its bottom edge keeps the page's usual bottom margin.
+  fill?: boolean
   children: React.ReactNode
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded)
   const open = !collapsible || expanded
   return (
-    <div style={{ marginTop: 28 }}>
+    <div style={{ marginTop: 28, ...(fill ? { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' } : {}) }}>
       <div
         onClick={collapsible ? () => setExpanded(e => !e) : undefined}
         style={{
@@ -52,6 +57,7 @@ function Panel({ title, live, loading, help, collapsible, defaultExpanded = fals
           fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em',
           color: 'var(--text-secondary)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6,
           cursor: collapsible ? 'pointer' : undefined, userSelect: collapsible ? 'none' : undefined,
+          flexShrink: 0,
         }}
       >
         {collapsible && (
@@ -63,7 +69,13 @@ function Panel({ title, live, loading, help, collapsible, defaultExpanded = fals
         {live && <span style={{ color: '#22c55e', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(en directo)</span>}
       </div>
       {open && (
-        <div className="detail-card" style={{ padding: '16px 18px', borderRadius: 10 }}>
+        <div
+          className="detail-card"
+          style={{
+            padding: '16px 18px', borderRadius: 10,
+            ...(fill ? { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' } : {}),
+          }}
+        >
           {children}
         </div>
       )}
@@ -349,7 +361,7 @@ function PhasesSection({ phases, globalPct, job }: { phases: UploadProgressPhase
   // too instead of leaving it looking like it's still going.
   const overrideStatus = JOB_TERMINAL_PHASE_STATUS[job.status]
   return (
-    <div style={{ overflowX: 'auto' }}>
+    <div style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
       <table className="data-table" style={{ fontSize: 12.5, tableLayout: 'fixed' }}>
         <colgroup>
           <col style={{ width: 200 }} />
@@ -469,7 +481,8 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
   const mediaEmoji = job.media_type === 'series' || job.media_type === 'episode' ? '📺' : '🎬'
 
   return (
-    <div style={{ width: '100%' }}>
+    <div style={{ width: '100%', height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flexShrink: 0 }}>
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
         <button className="btn btn-ghost btn-sm" onClick={onBack}>← Volver a Subidas</button>
       </div>
@@ -582,6 +595,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
           </div>
         </div>
       </div>
+      </div>
 
       {/* Only "Progreso de la subida" keeps its own always-expanded section —
           no `collapsible` prop at all, same fixed pattern Temporadas/
@@ -590,7 +604,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
           Actividad) moved into "Estado de la subida" above as mini-card
           fields — each opens its own modal below instead. */}
       <Panel
-        title="Progreso de la subida" loading={progressIsActive}
+        title="Progreso de la subida" loading={progressIsActive} fill
         help="Cada fase por la que pasa la subida (comprobación de integridad, nomenclatura, remux, subida a eMuwarez…), con su estado, cuándo empezó y terminó, y el porcentaje global de la subida completa."
       >
         {isStaging ? (

@@ -441,7 +441,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // selected, instead of the old JobProgressPanel modal.
   if (selectedJob) {
     return (
-      <div>
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
         <UploadJobDetailPage
           job={selectedJob}
           onBack={closeUpload}

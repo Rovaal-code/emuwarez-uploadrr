@@ -3,7 +3,10 @@ import { getEmuComparison, type EmuComparison } from '../api/library'
 import { formatBytes } from '../utils/format'
 import { InfoIcon } from './InfoIcon'
 import { useTooltip } from './Tooltip'
-import { ValueChip } from './DetailCard'
+import {
+  ValueChip, TechChip, ResolutionValueIcon, SourceValueIcon,
+  VideoCodecValueIcon, LanguageValueIcon, SizeValueIcon,
+} from './DetailCard'
 import { ServiceIcon } from './ServiceIcon'
 
 // Three-state summary shown in the "eMuwarez" field chip (Información
@@ -145,7 +148,7 @@ export function EmuComparisonContent({ data }: { data: EmuComparison | null }) {
 
       {!notInCatalog && (
         <div style={{ overflowX: 'auto' }}>
-          <table className="data-table" style={{ fontSize: 12.5 }}>
+          <table className="data-table" style={{ fontSize: 12.5, width: 'calc(100% - 1px)' }}>
             <thead>
               <tr>
                 <th>Contenido</th>
@@ -161,14 +164,14 @@ export function EmuComparisonContent({ data }: { data: EmuComparison | null }) {
               {mine && hasLocal && (
                 <tr style={{ background: 'rgba(34,197,94,0.06)' }}>
                   <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>Tu copia</td>
-                  <td>{mine.resolution || '–'}</td>
-                  <td>{mine.source || '–'}</td>
-                  <td>{mine.codec || '–'}</td>
-                  <td>{mine.has_es ? 'Sí' : '–'}</td>
-                  <td style={{ whiteSpace: 'nowrap' }}>{formatBytes(mine.size)}</td>
+                  <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={ResolutionValueIcon} value={mine.resolution} /></td>
+                  <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={SourceValueIcon} value={mine.source} /></td>
+                  <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={VideoCodecValueIcon} value={mine.codec} /></td>
+                  <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={LanguageValueIcon} value={mine.has_es ? 'Sí' : null} /></td>
+                  <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={SizeValueIcon} value={formatBytes(mine.size)} /></td>
                   {matchedCandidate ? (
                     <td
-                      style={{ maxWidth: 560, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}
+                      style={{ maxWidth: 1000, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)', textAlign: 'left' }}
                       {...matchedNameTip.triggerProps}
                     >
                       {matchedCandidate.name}
@@ -182,11 +185,11 @@ export function EmuComparisonContent({ data }: { data: EmuComparison | null }) {
               {data.matches.map((m, i) => (
                 <tr key={i} style={m === matchedCandidate ? { background: 'rgba(59,130,246,0.08)' } : undefined}>
                   <td style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>eMuwarez</td>
-                  <td>{m.resolution || '–'}</td>
-                  <td>{m.source || '–'}</td>
-                  <td>{m.codec || '–'}</td>
-                  <td>{m.has_spanish === 1 ? 'Sí' : m.has_spanish === 0 ? 'No' : '?'}</td>
-                  <td style={{ whiteSpace: 'nowrap' }}>{formatBytes(m.size)}</td>
+                  <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={ResolutionValueIcon} value={m.resolution} /></td>
+                  <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={SourceValueIcon} value={m.source} /></td>
+                  <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={VideoCodecValueIcon} value={m.codec} /></td>
+                  <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={LanguageValueIcon} value={m.has_spanish === 1 ? 'Sí' : m.has_spanish === 0 ? 'No' : '?'} /></td>
+                  <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={SizeValueIcon} value={formatBytes(m.size)} /></td>
                   <TorrentNameCell name={m.name} />
                 </tr>
               ))}
@@ -202,7 +205,7 @@ function TorrentNameCell({ name }: { name: string | null | undefined }) {
   const { triggerProps, tooltipNode } = useTooltip(name ?? null)
   return (
     <td
-      style={{ maxWidth: 560, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}
+      style={{ maxWidth: 1000, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)', textAlign: 'left' }}
       {...triggerProps}
     >
       {name}

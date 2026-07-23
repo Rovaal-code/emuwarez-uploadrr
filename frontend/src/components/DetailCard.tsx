@@ -93,6 +93,44 @@ export function ValueIcon({ children }: { children: React.ReactNode }) {
   return <span className="vicon">{children}</span>
 }
 
+// Same mini-tarjeta (icon + value) the "Información técnica" card uses,
+// reused in comparison tables (eMuwarez vs. tu copia, Petición vs. tu
+// biblioteca) so their cells read the same way instead of plain text. Falls
+// back to plain muted text for "no value"/"unknown" (—, ?, empty) instead of
+// an empty-looking chip.
+export function TechChip({ icon: Icon, value }: { icon: React.ComponentType; value: string | null | undefined }) {
+  if (!value || value === '—' || value === '?') {
+    return <span style={{ color: 'var(--text-muted)' }}>{value || '–'}</span>
+  }
+  return <ValueChip><ValueIcon><Icon /></ValueIcon><span className="txt">{value}</span></ValueChip>
+}
+
+// Glowing circular status icon — shared by the "Verificar subida" checklist
+// (UploadWizardModal) and any other pass/fail/skip indicator that should
+// read as the same affordance (e.g. a comparison table's ✓/✗ marks).
+export function CheckStatusIcon({ status }: { status: 'ok' | 'fail' | 'skip' }) {
+  const color = status === 'ok' ? '#22c55e' : status === 'skip' ? '#f59e0b' : '#ef4444'
+  return (
+    <svg viewBox="0 0 24 24" width={16} height={16}
+      style={{ color, filter: `drop-shadow(0 0 4px ${color})`, flexShrink: 0 }}>
+      <circle cx="12" cy="12" r="9.5" fill="none" stroke="rgba(56,189,255,.18)" strokeWidth="2" />
+      <circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" strokeWidth="2" />
+      {status === 'ok' && (
+        <path d="M5.5 12.5l4 4L18.5 7.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+      )}
+      {status === 'skip' && (
+        <>
+          <path d="M12 7.5v5.2" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+          <circle cx="12" cy="16.3" r="1.15" fill="currentColor" />
+        </>
+      )}
+      {status === 'fail' && (
+        <path d="M7 7l10 10M17 7L7 17" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+      )}
+    </svg>
+  )
+}
+
 // Fixed-size poster (300px, 2:3) used at the top of every dedicated detail
 // page, next to the title/action-buttons header.
 export function DetailPoster({ url, alt, fallbackEmoji }: { url?: string | null; alt: string; fallbackEmoji: string }) {

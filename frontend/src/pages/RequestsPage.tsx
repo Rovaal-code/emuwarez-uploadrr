@@ -22,11 +22,12 @@ import { posterUrl, idVerifyUrl } from '../utils/libraryItem'
 import { ExternalIdLink } from '../components/ExternalIdLink'
 import { InfoIcon } from '../components/InfoIcon'
 import {
-  Card, FieldRow, DetailPoster, ValueChip, ValueIcon, DETAIL_CARD_HEIGHT,
+  Card, FieldRow, DetailPoster, ValueChip, ValueIcon, TechChip, CheckStatusIcon, DETAIL_CARD_HEIGHT,
   StatusCardIcon, RequestCardIcon, ExternalIdsCardIcon,
-  UploadButtonIcon, ExternalLinkButtonIcon,
+  UploadButtonIcon, ExternalLinkButtonIcon, LibraryButtonIcon,
   TypeValueIcon, AuthorValueIcon, CalendarValueIcon,
   SeasonValueIcon, EpisodeValueIcon, ResolutionValueIcon, SourceValueIcon, AnyValueIcon,
+  VideoCodecValueIcon, LanguageValueIcon, SizeValueIcon,
   PointsValueIcon, ThumbsUpValueIcon, CommentValueIcon,
 } from '../components/DetailCard'
 import { HeaderFilter } from '../components/HeaderFilter'
@@ -134,9 +135,8 @@ function satisfies(requested: string | null, local: string | null, specMatch: bo
 
 // Small ✓/✗ shown inside a comparison cell.
 function cellMark(v: boolean | null) {
-  if (v === true) return <span style={{ color: '#22c55e', fontWeight: 700 }}> ✓</span>
-  if (v === false) return <span style={{ color: '#ef4444', fontWeight: 700 }}> ✗</span>
-  return null
+  if (v === null) return null
+  return <span style={{ display: 'inline-flex', marginLeft: 5, verticalAlign: 'middle' }}><CheckStatusIcon status={v ? 'ok' : 'fail'} /></span>
 }
 
 const baseName = (path: string | null) => (path ? path.split('/').pop() || null : null)
@@ -258,7 +258,6 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
     : 'No tienes este contenido en tu biblioteca')
   const reqNameTip = useTooltip(m?.content_name || null)
   const libNameTip = useTooltip(m?.content_name || baseName(m?.local_path ?? null) || m?.library_title || null)
-  const openLibTip = useTooltip('Ver ficha del contenido')
   return (
     <div style={{ width: '100%', flex: 1, minHeight: 0, overflowY: 'auto' }}>
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -370,35 +369,51 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
                 <table className="data-table" style={{ fontSize: 12.5 }}>
                   <thead>
                     <tr>
-                      <th>Contenido</th><th>Resolución</th><th>Source</th>
+                      <th>Contenido</th><th>Título</th><th>Resolución</th><th>Source</th>
                       <th><span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>Códec <InfoIcon text="El códec no se puede comparar de forma fiable: en eMuwarez suele indicarse en la descripción del torrent, no en los campos." /></span></th>
                       <th><span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>Idiomas <InfoIcon text="El audio/idiomas no se pueden comparar de forma fiable: suelen indicarse en la descripción del torrent." /></span></th>
-                      <th>Tamaño</th><th>Nombre</th>
+                      <th>Tamaño</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr>
                       <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>Petición</td>
-                      <td>{noReq(item.requested_resolution)}</td>
-                      <td>{noReq(item.requested_source)}</td>
+                      <td style={{ maxWidth: 320 }} {...reqNameTip.triggerProps}>
+                        <ValueChip>
+                          <ValueIcon><LibraryButtonIcon /></ValueIcon>
+                          <span className="txt" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.content_name || '—'}</span>
+                        </ValueChip>
+                        {reqNameTip.tooltipNode}
+                      </td>
+                      <td style={{ whiteSpace: 'nowrap' }}><SpecValueChip value={item.requested_resolution} icon={ResolutionValueIcon} /></td>
+                      <td style={{ whiteSpace: 'nowrap' }}><SpecValueChip value={item.requested_source} icon={SourceValueIcon} /></td>
                       <td style={{ color: 'var(--text-muted)' }}>—</td>
                       <td style={{ color: 'var(--text-muted)' }}>—</td>
                       <td style={{ color: 'var(--text-muted)' }}>—</td>
-                      <td style={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }} {...reqNameTip.triggerProps}>{m.content_name || '—'}{reqNameTip.tooltipNode}</td>
                     </tr>
                     <tr style={{ background: 'rgba(34,197,94,0.06)' }}>
                       <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>Tu biblioteca</td>
-                      <td style={{ whiteSpace: 'nowrap' }}>{m.local_resolution || '—'}{cellMark(satisfies(item.requested_resolution, m.local_resolution, m.resolution_match))}</td>
-                      <td style={{ whiteSpace: 'nowrap' }}>{m.local_source || '—'}{cellMark(satisfies(item.requested_source, m.local_source, m.source_match))}</td>
-                      <td>{m.local_video_codec || '—'}</td>
-                      <td>{m.local_audio_languages || '—'}</td>
-                      <td style={{ whiteSpace: 'nowrap' }}>{m.local_size ? formatBytes(m.local_size) : '—'}</td>
-                      <td style={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} {...libNameTip.triggerProps}>
+                      <td style={{ maxWidth: 320 }} {...libNameTip.triggerProps}>
                         {libId
-                          ? <span className="lib-title-link" onClick={() => onOpenLibraryItem?.(libId)} {...openLibTip.triggerProps}>{m.content_name || baseName(m.local_path) || m.library_title || '—'}{openLibTip.tooltipNode}</span>
-                          : <span style={{ color: 'var(--text-secondary)' }}>{m.content_name || baseName(m.local_path) || m.library_title || '—'}</span>}
+                          ? (
+                            <ValueChip as="button" linkable onClick={() => onOpenLibraryItem?.(libId)} title="Ver ficha del contenido">
+                              <ValueIcon><LibraryButtonIcon /></ValueIcon>
+                              <span className="txt" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.content_name || baseName(m.local_path) || m.library_title || '—'}</span>
+                            </ValueChip>
+                          )
+                          : (
+                            <ValueChip>
+                              <ValueIcon><LibraryButtonIcon /></ValueIcon>
+                              <span className="txt" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.content_name || baseName(m.local_path) || m.library_title || '—'}</span>
+                            </ValueChip>
+                          )}
                         {libNameTip.tooltipNode}
                       </td>
+                      <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={ResolutionValueIcon} value={m.local_resolution} />{cellMark(satisfies(item.requested_resolution, m.local_resolution, m.resolution_match))}</td>
+                      <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={SourceValueIcon} value={m.local_source} />{cellMark(satisfies(item.requested_source, m.local_source, m.source_match))}</td>
+                      <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={VideoCodecValueIcon} value={m.local_video_codec} /></td>
+                      <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={LanguageValueIcon} value={m.local_audio_languages} /></td>
+                      <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={SizeValueIcon} value={m.local_size ? formatBytes(m.local_size) : null} /></td>
                     </tr>
                   </tbody>
                 </table>

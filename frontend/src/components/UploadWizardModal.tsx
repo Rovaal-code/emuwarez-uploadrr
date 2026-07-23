@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import type { EmuSource, EmuProvider, NomenclatureFields, FieldsPreviewResult, TrackRemuxPreview, TrackRemuxOverride, SourceComparison, SourceBitrateRow, SourceEngineResult } from '../api/nomenclature'
+import type { EmuSource, EmuProvider, NomenclatureFields, FieldsPreviewResult, TrackRemuxPreview, TrackRemuxOverride, SourceComparison, SourceEngineResult } from '../api/nomenclature'
 import {
   getEmuSources,
   getEmuProviders,
@@ -14,6 +14,7 @@ import {
 } from '../api/uploads'
 import { getLibrary, getMediaInfoReport, suggestProvider } from '../api/library'
 import type { MediaInfoReport } from '../api/library'
+import { CheckStatusIcon } from './DetailCard'
 import {
   previewSeasonPack, getSeasonPlanProgress, getSeasonEpisodeNames,
   getSeasonEpisodeMediaInfo, getSeasonEpisodeRemuxPreview,
@@ -276,35 +277,12 @@ export function EpisodeAccordionRow({ episodeNumber, title, expanded, onToggle, 
 // Status ring for one check: thin track + glowing ring + glyph, same visual
 // language as the sidebar's CPU/RAM gauges (see SystemStatusPanel.tsx) —
 // replaces the 🟢🟡🔴 emoji, which didn't match the rest of the UI's icon set.
-function CheckStatusIcon({ status }: { status: UploadCheck['status'] }) {
-  const color = status === 'ok' ? '#22c55e' : status === 'skip' ? '#f59e0b' : '#ef4444'
-  return (
-    <svg viewBox="0 0 24 24" width={16} height={16}
-      style={{ color, filter: `drop-shadow(0 0 4px ${color})`, flexShrink: 0, marginTop: 2 }}>
-      <circle cx="12" cy="12" r="9.5" fill="none" stroke="rgba(56,189,255,.18)" strokeWidth="2" />
-      <circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" strokeWidth="2" />
-      {status === 'ok' && (
-        <path d="M5.5 12.5l4 4L18.5 7.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-      )}
-      {status === 'skip' && (
-        <>
-          <path d="M12 7.5v5.2" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
-          <circle cx="12" cy="16.3" r="1.15" fill="currentColor" />
-        </>
-      )}
-      {status !== 'ok' && status !== 'skip' && (
-        <path d="M7 7l10 10M17 7L7 17" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-      )}
-    </svg>
-  )
-}
-
 // One check's icon + label + message — used for the final full list once the
 // run is done.
 function CheckRow({ c }: { c: UploadCheck }) {
   return (
     <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '3px 0' }}>
-      <CheckStatusIcon status={c.status} />
+      <span style={{ marginTop: 2 }}><CheckStatusIcon status={c.status} /></span>
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: 13 }}>{c.label}</div>
         {c.message && <div style={{ fontSize: 11, color: 'var(--text-muted)', wordBreak: 'break-all' }}>{c.message}</div>}
@@ -324,7 +302,7 @@ function FieldLabel({ label, info }: { label: string; info?: React.ReactNode }) 
 
 // Source comparison — same table look as MediaInfoTable/RemuxTable, one
 // column per origin, single data row (there's only one Source field).
-function SourceCompareTable({ comparison, onShowBitrateTable }: { comparison: SourceComparison; onShowBitrateTable?: () => void }) {
+function SourceCompareTable({ comparison, onShowEngineDetail }: { comparison: SourceComparison; onShowEngineDetail?: () => void }) {
   return (
     <div className="detail-card" style={{ borderRadius: 8 }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, tableLayout: 'fixed' }}>
@@ -340,9 +318,9 @@ function SourceCompareTable({ comparison, onShowBitrateTable }: { comparison: So
             <td style={{ padding: '7px 12px', fontFamily: 'monospace' }}>{comparison.from_name || '—'}</td>
             <td style={{ padding: '7px 12px', fontFamily: 'monospace' }}>{comparison.from_radarr || '—'}</td>
             <td style={{ padding: '7px 12px', fontFamily: 'monospace' }}>
-              {onShowBitrateTable && comparison.from_mediainfo ? (
-                <Tooltip content="Ver tabla de bitrate">
-                  <button type="button" className="source-bitrate-link" onClick={onShowBitrateTable}>
+              {onShowEngineDetail && comparison.from_mediainfo ? (
+                <Tooltip content="Ver comparación detallada">
+                  <button type="button" className="source-bitrate-link" onClick={onShowEngineDetail}>
                     {comparison.from_mediainfo}
                   </button>
                 </Tooltip>
@@ -490,43 +468,6 @@ function SourceEngineDetail({ result }: { result: SourceEngineResult }) {
   )
 }
 
-// Reference table behind the bitrate tool: every eMuwarez source, the
-// bitrate range that maps to it at this file's resolution, and why. The row
-// matching the tool's actual output for this file is highlighted green —
-// same convention as the eMuwarez comparison table's "aportas" chips.
-function SourceBitrateTable({ rows, highlight }: { rows: SourceBitrateRow[]; highlight: string | null }) {
-  return (
-    <div className="detail-card" style={{ borderRadius: 8 }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, tableLayout: 'fixed' }}>
-        <colgroup>
-          <col style={{ width: '14%' }} />
-          <col style={{ width: '40%' }} />
-          <col style={{ width: '46%' }} />
-        </colgroup>
-        <thead>
-          <tr>
-            <th style={thStyle}>Source</th>
-            <th style={thStyle}>Bitrate</th>
-            <th style={thStyle}>Comentario</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(r => {
-            const active = highlight != null && r.source === highlight
-            return (
-              <tr key={r.source} style={{ borderTop: '1px solid var(--border)', background: active ? 'rgba(34,197,94,0.14)' : undefined }}>
-                <td style={{ padding: '7px 12px', fontWeight: 600, color: active ? '#22c55e' : undefined }}>{r.source}</td>
-                <td style={{ padding: '7px 12px', fontFamily: 'monospace', wordBreak: 'break-word' }}>{r.bitrate}</td>
-                <td style={{ padding: '7px 12px', color: 'var(--text-secondary)', wordBreak: 'break-word' }}>{r.comment}</td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
 // Where each nomenclature field comes from (shown in the "?" tooltips).
 const FIELD_INFO = {
   title: 'Viene de Radarr/Sonarr y se traduce al español con TMDb.',
@@ -608,8 +549,12 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
   const [sourceWarning, setSourceWarning] = useState<string | null>(null)
   const [sourceComparison, setSourceComparison] = useState<SourceComparison | null>(null)
   const [showSourceCompare, setShowSourceCompare] = useState(false)
-  const [sourceBitrateTable, setSourceBitrateTable] = useState<SourceBitrateRow[] | null>(null)
-  const [showBitrateTable, setShowBitrateTable] = useState(false)
+  // The detailed 9-candidate engine breakdown (SourceEngineDetail) only
+  // shows when the modal was opened from the blinking Internal Source Tool
+  // value inside "Ver MediaInfo" — the plain badge next to the Source field
+  // below opens the same modal for the simpler name/Radarr/MediaInfo
+  // 3-way check, without the extended breakdown.
+  const [showEngineDetail, setShowEngineDetail] = useState(false)
   const [preview, setPreview] = useState<FieldsPreviewResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -815,7 +760,6 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
       setTitleWarning(fieldsResp.title_warning ?? null)
       setSourceWarning(fieldsResp.source_warning ?? null)
       setSourceComparison(fieldsResp.source_comparison ?? null)
-      setSourceBitrateTable(fieldsResp.source_bitrate_table ?? null)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error cargando la nomenclatura')
     } finally {
@@ -1151,7 +1095,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
                 : 'El source no coincide entre el nombre del archivo, Radarr/Sonarr y MediaInfo. Clic para comparar.'}>
                 <button
                   type="button"
-                  onClick={() => setShowSourceCompare(v => !v)}
+                  onClick={() => { setShowEngineDetail(false); setShowSourceCompare(v => !v) }}
                   style={{
                     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                     width: 34, height: 34, background: 'none', border: 'none', cursor: 'pointer',
@@ -1177,7 +1121,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
         </label>
         {showSourceCompare && sourceComparison && (
           <div className="modal-overlay" onClick={() => setShowSourceCompare(false)}>
-            <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: sourceComparison.engine ? 980 : 620 }}>
+            <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: showEngineDetail && sourceComparison.engine ? 980 : 620 }}>
               <div className="modal-header">
                 <h2 className="modal-title">Comparación del Source</h2>
                 <button className="modal-close" onClick={() => setShowSourceCompare(false)}>✕</button>
@@ -1185,24 +1129,11 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
               <div className="modal-body">
                 <SourceCompareTable
                   comparison={sourceComparison}
-                  onShowBitrateTable={sourceBitrateTable ? () => setShowBitrateTable(true) : undefined}
+                  onShowEngineDetail={sourceComparison.engine ? () => setShowEngineDetail(true) : undefined}
                 />
-                {sourceComparison.engine && !sourceComparison.engine.error && (
+                {showEngineDetail && sourceComparison.engine && !sourceComparison.engine.error && (
                   <SourceEngineDetail result={sourceComparison.engine} />
                 )}
-              </div>
-            </div>
-          </div>
-        )}
-        {showBitrateTable && sourceBitrateTable && (
-          <div className="modal-overlay" onClick={() => setShowBitrateTable(false)}>
-            <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 720 }}>
-              <div className="modal-header">
-                <h2 className="modal-title">Tabla de bitrate del source</h2>
-                <button className="modal-close" onClick={() => setShowBitrateTable(false)}>✕</button>
-              </div>
-              <div className="modal-body">
-                <SourceBitrateTable rows={sourceBitrateTable} highlight={sourceComparison?.from_mediainfo ?? null} />
               </div>
             </div>
           </div>
@@ -1617,7 +1548,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
                             // Closes this card before opening the comparison one — both are
                             // modal-overlays at the same z-index, so having two open at once
                             // would bury the newly-opened one behind this still-open card.
-                            onSourceToolClick={sourceComparison ? () => { setShowMiCard(false); setShowSourceCompare(true) } : undefined}
+                            onSourceToolClick={sourceComparison ? () => { setShowMiCard(false); setShowEngineDetail(true); setShowSourceCompare(true) } : undefined}
                           />
                         )}
                       </div>

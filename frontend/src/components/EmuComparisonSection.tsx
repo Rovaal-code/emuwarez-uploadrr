@@ -62,7 +62,7 @@ export function EmuFieldChip({ itemId }: { itemId: number }) {
       </ValueChip>
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 820 }}>
+          <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: '95vw', width: 'max-content' }}>
             <div className="modal-header">
               <h2 className="modal-title">Comparación con eMuwarez</h2>
               <button className="modal-close" onClick={() => setShowModal(false)}>✕</button>
@@ -168,7 +168,7 @@ export function EmuComparisonContent({ data }: { data: EmuComparison | null }) {
                   <td style={{ whiteSpace: 'nowrap' }}>{formatBytes(mine.size)}</td>
                   {matchedCandidate ? (
                     <td
-                      style={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}
+                      style={{ maxWidth: 560, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}
                       {...matchedNameTip.triggerProps}
                     >
                       {matchedCandidate.name}
@@ -202,7 +202,7 @@ function TorrentNameCell({ name }: { name: string | null | undefined }) {
   const { triggerProps, tooltipNode } = useTooltip(name ?? null)
   return (
     <td
-      style={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}
+      style={{ maxWidth: 560, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}
       {...triggerProps}
     >
       {name}

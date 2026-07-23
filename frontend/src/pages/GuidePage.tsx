@@ -2,33 +2,10 @@
 // upload guidelines, PLUS — for each field — exactly where THIS APP gets
 // that value from (Radarr/Sonarr, TMDb, the real file via MediaInfo,
 // filename inference, or a Settings value), so a user can understand why a
-// generated name looks the way it does. Purely informational, no state.
+// generated name looks the way it does. Purely informational, no state
+// beyond which section's modal is currently open.
 
 import { useState } from 'react'
-
-function Section({ title, defaultOpen = false, children }: { title: string; defaultOpen?: boolean; children: React.ReactNode }) {
-  const [open, setOpen] = useState(defaultOpen)
-  return (
-    <div style={{ marginTop: 28 }}>
-      <div
-        onClick={() => setOpen(o => !o)}
-        style={{
-          fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em',
-          color: 'var(--text-secondary)', marginBottom: 12, cursor: 'pointer', userSelect: 'none',
-          display: 'flex', alignItems: 'center', gap: 8,
-        }}
-      >
-        <span style={{ display: 'inline-flex', fontSize: 10, transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>▶</span>
-        {title}
-      </div>
-      {open && (
-        <div className="detail-card" style={{ padding: '16px 18px', borderRadius: 10 }}>
-          {children}
-        </div>
-      )}
-    </div>
-  )
-}
 
 function Mono({ children }: { children: React.ReactNode }) {
   return (
@@ -67,7 +44,7 @@ const FIELD_SOURCES: { field: string; example: string; source: string }[] = [
   {
     field: 'Source',
     example: 'WEB-DL',
-    source: 'Perfil de calidad de Radarr/Sonarr. Si falta o no es válido, el asistente de subida lo estima leyendo el archivo real: primero por patrón en el nombre, si no por bitrate/duración (MediaInfo), como último recurso por tamaño; se avisa cuando el valor viene estimado.',
+    source: 'Perfil de calidad de Radarr/Sonarr. Si falta o no es válido, el asistente de subida lo estima leyendo el archivo real con la Internal Source Tool (MediaInfo + FFprobe + MKVToolNix); se avisa cuando el valor viene estimado.',
   },
   {
     field: 'DV / HDR',
@@ -212,7 +189,122 @@ function TwoColTable({ head, rows }: { head: [string, string]; rows: [string, st
   )
 }
 
+function FormulaContent() {
+  return (
+    <>
+      <p style={{ fontSize: 12.5, marginTop: 0 }}>
+        Cada elemento se identifica entre corchetes, que se omiten en el nombre real del fichero y en el título del aporte.
+        El proveedor (cuando se conoce) va entre la resolución y el source.
+      </p>
+      <Mono>
+{`[Título] [Año] [Resolución] [Proveedor] [Source] [DV/HDR] [Códec vídeo] [Audio: idioma+códec+canales] [SUBS] - [Grupo/Uploader]`}
+      </Mono>
+      <p style={{ fontSize: 12.5, marginTop: 10, marginBottom: 0 }}>
+        Para series de TV, la temporada/episodio (<code>S01</code> o <code>S01E03</code>) se añade justo antes del año.
+        Para el nombre del archivo <code>.mkv</code> se usa el mismo esquema cambiando los espacios por puntos.
+      </p>
+    </>
+  )
+}
+
+function FieldSourcesContent() {
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table className="data-table" style={{ fontSize: 12.5 }}>
+        <thead><tr><th>Campo</th><th>Ejemplo</th><th>De dónde lo obtiene la aplicación</th></tr></thead>
+        <tbody>
+          {FIELD_SOURCES.map(f => (
+            <tr key={f.field}>
+              <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{f.field}</td>
+              <td style={{ fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{f.example}</td>
+              <td>{f.source}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function TechSpecsContent() {
+  return (
+    <>
+      <p style={{ fontSize: 12.5, marginTop: 0 }}>
+        Tablas oficiales del tracker. La aplicación aplica estas mismas equivalencias al leer MediaInfo del archivo real
+        (o el dato de Radarr/Sonarr cuando el archivo no es accesible).
+      </p>
+
+      <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--text-muted)', marginTop: 18, marginBottom: 8 }}>Resolución</p>
+      <TwoColTable head={['MediaInfo', 'Nombre']} rows={RESOLUTION_ROWS} />
+
+      <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--text-muted)', marginTop: 18, marginBottom: 8 }}>Formato (Source)</p>
+      <TwoColTable head={['MediaInfo', 'Nombre']} rows={SOURCE_ROWS} />
+
+      <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--text-muted)', marginTop: 18, marginBottom: 8 }}>Códec de vídeo</p>
+      <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 0, marginBottom: 8 }}>
+        Ojo: H264→AVC y x264→x264 son distintos (códec genérico vs. encoder concreto). Igual con H265→HEVC vs. x265→x265.
+      </p>
+      <TwoColTable head={['MediaInfo', 'Nombre']} rows={VIDEO_CODEC_ROWS} />
+
+      <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--text-muted)', marginTop: 18, marginBottom: 8 }}>Dolby Vision / HDR</p>
+      <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 0, marginBottom: 8 }}>Se coloca delante del códec de vídeo.</p>
+      <TwoColTable head={['MediaInfo', 'Nombre']} rows={HDR_ROWS} />
+
+      <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--text-muted)', marginTop: 18, marginBottom: 8 }}>Idioma de audio</p>
+      <TwoColTable head={['MediaInfo', 'Nombre']} rows={LANGUAGE_ROWS} />
+
+      <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--text-muted)', marginTop: 18, marginBottom: 8 }}>Códec de audio</p>
+      <TwoColTable head={['MediaInfo', 'Nombre']} rows={AUDIO_CODEC_ROWS} />
+
+      <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--text-muted)', marginTop: 18, marginBottom: 8 }}>Canales de audio</p>
+      <TwoColTable head={['MediaInfo', 'Nombre']} rows={CHANNEL_ROWS} />
+
+      <p style={{ fontSize: 12.5, marginTop: 18, marginBottom: 0 }}>
+        <strong>Subtítulos:</strong> cualquier pista de subtítulos, en cualquier idioma, se indica simplemente como <code>SUBS</code>.
+      </p>
+    </>
+  )
+}
+
+function ExamplesContent() {
+  return (
+    <div style={{ display: 'grid', gap: 6 }}>
+      {EXAMPLES.map((ex, i) => <Mono key={i}>{ex}</Mono>)}
+    </div>
+  )
+}
+
+function RulesContent() {
+  return (
+    <ul style={{ fontSize: 12.5, margin: 0, paddingLeft: 18, lineHeight: 1.8 }}>
+      <li>El título siempre va en Castellano (o como se haya publicado oficialmente en España).</li>
+      <li>El proveedor nunca es obligatorio en WEB-DL — si no se sabe, se omite en vez de arriesgarse a poner uno incorrecto.</li>
+      <li>Los paréntesis y corchetes <code>( ) [ ] {'{'} {'}'}</code> se eliminan del nombre del archivo y del título interno del .mkv (el título del aporte/torrent sí los conserva).</li>
+      <li>No se usan caracteres que den problemas en el sistema de archivos: <code>: / ? *</code>, etc. — se sustituyen espacios por puntos en el nombre del fichero.</li>
+      <li>El grupo/uploader (lo que va tras el último guion) no afecta a si el resto del nombre es correcto o no.</li>
+    </ul>
+  )
+}
+
+interface GuideSection {
+  id: string
+  label: string
+  title: string
+  render: () => React.ReactNode
+}
+
+const SECTIONS: GuideSection[] = [
+  { id: 'formula', label: 'Fórmula del nombre', title: 'Fórmula del nombre', render: FormulaContent },
+  { id: 'fields', label: 'Campos y de dónde los obtiene la aplicación', title: 'Campos y de dónde los obtiene la aplicación', render: FieldSourcesContent },
+  { id: 'tech', label: 'Especificaciones técnicas (MediaInfo → Nombre)', title: 'Especificaciones técnicas (MediaInfo → Nombre)', render: TechSpecsContent },
+  { id: 'examples', label: 'Ejemplos completos', title: 'Ejemplos completos', render: ExamplesContent },
+  { id: 'rules', label: 'Reglas de nombrado de archivo', title: 'Reglas de nombrado de archivo', render: RulesContent },
+]
+
 export function GuidePage() {
+  const [openId, setOpenId] = useState<string | null>(null)
+  const openSection = SECTIONS.find(s => s.id === openId) ?? null
+
   return (
     <div data-tour="guide-content" style={{ height: '100%' }}>
       <div className="page-header">
@@ -224,88 +316,56 @@ export function GuidePage() {
         </div>
       </div>
 
-      <Section title="Fórmula del nombre" defaultOpen>
-        <p style={{ fontSize: 12.5, marginTop: 0 }}>
-          Cada elemento se identifica entre corchetes, que se omiten en el nombre real del fichero y en el título del aporte.
-          El proveedor (cuando se conoce) va entre la resolución y el source.
-        </p>
-        <Mono>
-{`[Título] [Año] [Resolución] [Proveedor] [Source] [DV/HDR] [Códec vídeo] [Audio: idioma+códec+canales] [SUBS] - [Grupo/Uploader]`}
-        </Mono>
-        <p style={{ fontSize: 12.5, marginTop: 10, marginBottom: 0 }}>
-          Para series de TV, la temporada/episodio (<code>S01</code> o <code>S01E03</code>) se añade justo antes del año.
-          Para el nombre del archivo <code>.mkv</code> se usa el mismo esquema cambiando los espacios por puntos.
-        </p>
-      </Section>
-
-      <Section title="Campos y de dónde los obtiene la aplicación">
-        <div style={{ overflowX: 'auto' }}>
-          <table className="data-table" style={{ fontSize: 12.5 }}>
-            <thead><tr><th>Campo</th><th>Ejemplo</th><th>De dónde lo obtiene la aplicación</th></tr></thead>
-            <tbody>
-              {FIELD_SOURCES.map(f => (
-                <tr key={f.field}>
-                  <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{f.field}</td>
-                  <td style={{ fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{f.example}</td>
-                  <td>{f.source}</td>
-                </tr>
+      {/* One row, one column per section — click any to open its full content
+          in a modal instead of expanding an inline accordion, so the page
+          itself stays short and scannable. */}
+      <div className="detail-card" style={{ borderRadius: 10, overflowX: 'auto', marginTop: 20 }}>
+        <table className="data-table" style={{ tableLayout: 'fixed', width: '100%' }}>
+          <tbody>
+            <tr>
+              {SECTIONS.map(s => (
+                <td key={s.id} style={{ padding: 0, textAlign: 'center', verticalAlign: 'middle' }}>
+                  <button
+                    type="button"
+                    onClick={() => setOpenId(s.id)}
+                    className="btn btn-ghost"
+                    style={{
+                      width: '100%', height: '100%', minHeight: 64, borderRadius: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      textAlign: 'center', fontSize: 13, fontWeight: 600, lineHeight: 1.35,
+                      padding: '12px 14px', whiteSpace: 'normal',
+                    }}
+                  >
+                    {s.label}
+                  </button>
+                </td>
               ))}
-            </tbody>
-          </table>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {openSection && (
+        <div className="modal-overlay" onClick={() => setOpenId(null)}>
+          <div
+            className="modal-panel modal-wide"
+            onClick={e => e.stopPropagation()}
+            style={{ maxWidth: '95vw', width: 'max-content', display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}
+          >
+            <div className="modal-header" style={{ flexShrink: 0 }}>
+              <h2 className="modal-title">{openSection.title}</h2>
+              <button className="modal-close" onClick={() => setOpenId(null)}>✕</button>
+            </div>
+            {/* The body (not the whole panel) scrolls, so the table can
+                stretch all the way down near the viewport's bottom edge
+                (with the modal's own consistent margin) instead of the page
+                growing arbitrarily tall. */}
+            <div className="modal-body" style={{ overflowY: 'auto', minWidth: 480 }}>
+              {openSection.render()}
+            </div>
+          </div>
         </div>
-      </Section>
-
-      <Section title="Especificaciones técnicas (MediaInfo → Nombre)">
-        <p style={{ fontSize: 12.5, marginTop: 0 }}>
-          Tablas oficiales del tracker. La aplicación aplica estas mismas equivalencias al leer MediaInfo del archivo real
-          (o el dato de Radarr/Sonarr cuando el archivo no es accesible).
-        </p>
-
-        <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--text-muted)', marginTop: 18, marginBottom: 8 }}>Resolución</p>
-        <TwoColTable head={['MediaInfo', 'Nombre']} rows={RESOLUTION_ROWS} />
-
-        <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--text-muted)', marginTop: 18, marginBottom: 8 }}>Formato (Source)</p>
-        <TwoColTable head={['MediaInfo', 'Nombre']} rows={SOURCE_ROWS} />
-
-        <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--text-muted)', marginTop: 18, marginBottom: 8 }}>Códec de vídeo</p>
-        <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 0, marginBottom: 8 }}>
-          Ojo: H264→AVC y x264→x264 son distintos (códec genérico vs. encoder concreto). Igual con H265→HEVC vs. x265→x265.
-        </p>
-        <TwoColTable head={['MediaInfo', 'Nombre']} rows={VIDEO_CODEC_ROWS} />
-
-        <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--text-muted)', marginTop: 18, marginBottom: 8 }}>Dolby Vision / HDR</p>
-        <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 0, marginBottom: 8 }}>Se coloca delante del códec de vídeo.</p>
-        <TwoColTable head={['MediaInfo', 'Nombre']} rows={HDR_ROWS} />
-
-        <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--text-muted)', marginTop: 18, marginBottom: 8 }}>Idioma de audio</p>
-        <TwoColTable head={['MediaInfo', 'Nombre']} rows={LANGUAGE_ROWS} />
-
-        <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--text-muted)', marginTop: 18, marginBottom: 8 }}>Códec de audio</p>
-        <TwoColTable head={['MediaInfo', 'Nombre']} rows={AUDIO_CODEC_ROWS} />
-
-        <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--text-muted)', marginTop: 18, marginBottom: 8 }}>Canales de audio</p>
-        <TwoColTable head={['MediaInfo', 'Nombre']} rows={CHANNEL_ROWS} />
-
-        <p style={{ fontSize: 12.5, marginTop: 18, marginBottom: 0 }}>
-          <strong>Subtítulos:</strong> cualquier pista de subtítulos, en cualquier idioma, se indica simplemente como <code>SUBS</code>.
-        </p>
-      </Section>
-
-      <Section title="Ejemplos completos">
-        <div style={{ display: 'grid', gap: 6 }}>
-          {EXAMPLES.map((ex, i) => <Mono key={i}>{ex}</Mono>)}
-        </div>
-      </Section>
-
-      <Section title="Reglas de nombrado de archivo">
-        <ul style={{ fontSize: 12.5, margin: 0, paddingLeft: 18, lineHeight: 1.8 }}>
-          <li>El título siempre va en Castellano (o como se haya publicado oficialmente en España).</li>
-          <li>El proveedor nunca es obligatorio en WEB-DL — si no se sabe, se omite en vez de arriesgarse a poner uno incorrecto.</li>
-          <li>Los paréntesis y corchetes <code>( ) [ ] {'{'} {'}'}</code> se eliminan del nombre del archivo y del título interno del .mkv (el título del aporte/torrent sí los conserva).</li>
-          <li>No se usan caracteres que den problemas en el sistema de archivos: <code>: / ? *</code>, etc. — se sustituyen espacios por puntos en el nombre del fichero.</li>
-          <li>El grupo/uploader (lo que va tras el último guion) no afecta a si el resto del nombre es correcto o no.</li>
-        </ul>
-      </Section>
+      )}
     </div>
   )
 }

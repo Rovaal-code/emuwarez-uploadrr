@@ -45,7 +45,11 @@ function Panel({ title, live, loading, help, collapsible, defaultExpanded = fals
       <div
         onClick={collapsible ? () => setExpanded(e => !e) : undefined}
         style={{
-          fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em',
+          // Same size as Biblioteca's Temporadas/Capítulos section titles
+          // (LibraryChildrenSection) — this is now the only other "fixed,
+          // always-expanded section title" in the app, so they should read
+          // the same size at a glance.
+          fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em',
           color: 'var(--text-secondary)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6,
           cursor: collapsible ? 'pointer' : undefined, userSelect: collapsible ? 'none' : undefined,
         }}
@@ -508,27 +512,6 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
                   : <span className="muted">–</span>}
               </FieldRow>
               <FieldRow label="Petición"><StatusBadge status={job.request_status || 'Sin petición'} type="request" /></FieldRow>
-              <FieldRow label="Progreso">
-                <ValueChip>
-                  {progressValueLoading
-                    ? <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2, flexShrink: 0 }} />
-                    : <ValueIcon><ProgressValueIcon /></ValueIcon>}
-                  <span className="txt">
-                    {isStaging
-                      ? 'Generando nomenclatura'
-                      : isQueued
-                      ? (secondsLeft != null ? `En cola · ${secondsLeft}s` : 'En cola')
-                      : (job.status === 'preparing' || job.status === 'running')
-                      ? (() => {
-                          const info = currentPhaseInfo(job)
-                          const label = info?.label ?? phaseLabel(job.progress_phase)
-                          const elapsed = progressCounter(job)
-                          return `${label}${elapsed ? ` · ${elapsed}` : ''}`
-                        })()
-                      : '–'}
-                  </span>
-                </ValueChip>
-              </FieldRow>
               <FieldRow label="Nomenclatura" help="Los campos que componen el nombre final del torrent, del archivo y de su título interno.">
                 <ValueChip as="button" linkable onClick={() => setShowNomenclatura(true)} title="Ver nomenclatura">
                   {stagingLoadingNomenclature
@@ -562,6 +545,27 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
             </Card>
 
             <Card title="Tiempos" icon={<ClockCardIcon />}>
+              <FieldRow label="Progreso">
+                <ValueChip>
+                  {progressValueLoading
+                    ? <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2, flexShrink: 0 }} />
+                    : <ValueIcon><ProgressValueIcon /></ValueIcon>}
+                  <span className="txt">
+                    {isStaging
+                      ? 'Generando nomenclatura'
+                      : isQueued
+                      ? (secondsLeft != null ? `En cola · ${secondsLeft}s` : 'En cola')
+                      : (job.status === 'preparing' || job.status === 'running')
+                      ? (() => {
+                          const info = currentPhaseInfo(job)
+                          const label = info?.label ?? phaseLabel(job.progress_phase)
+                          const elapsed = progressCounter(job)
+                          return `${label}${elapsed ? ` · ${elapsed}` : ''}`
+                        })()
+                      : '–'}
+                  </span>
+                </ValueChip>
+              </FieldRow>
               <FieldRow label="Creado">
                 <ValueChip><ValueIcon><CalendarValueIcon /></ValueIcon><span className="txt">{formatDateTimeSeconds(job.created_at ?? null)}</span></ValueChip>
               </FieldRow>

@@ -136,6 +136,11 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
                   <span className="brand-icon"><FolderIcon /></span><span className="txt">Ver ruta</span>
                 </ValueChip>
               </FieldRow>
+              {isEmuComparable && (
+                <FieldRow label="eMuwarez">
+                  <EmuFieldChip itemId={item.id} />
+                </FieldRow>
+              )}
             </Card>
 
             <Card title="Información técnica" icon={<TechInfoCardIcon />}>
@@ -165,11 +170,6 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
               <FieldRow label="Tamaño">
                 <ValueChip><ValueIcon><SizeValueIcon /></ValueIcon><span className="txt">{formatBytes(item.size_bytes)}</span></ValueChip>
               </FieldRow>
-              {isEmuComparable && (
-                <FieldRow label="eMuwarez">
-                  <EmuFieldChip itemId={item.id} />
-                </FieldRow>
-              )}
             </Card>
 
             <Card title="Identificadores externos" icon={<ExternalIdsCardIcon />}>

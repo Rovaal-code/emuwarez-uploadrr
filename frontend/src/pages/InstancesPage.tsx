@@ -247,15 +247,15 @@ export function InstancesPage() {
               </div>
               <div className="form-group">
                 <label className="form-label">Nombre</label>
-                <input className="form-input" placeholder={form.type === 'sonarr' ? 'Sonarr principal' : 'Radarr principal'} value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} maxLength={15} required />
+                <input className="form-input" placeholder={form.type === 'sonarr' ? 'Sonarr principal' : 'Radarr principal'} value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} maxLength={15} />
               </div>
               <div className="form-group">
                 <label className="form-label">URL</label>
-                <input className="form-input" placeholder={form.type === 'sonarr' ? 'http://192.168.1.100:8989' : 'http://192.168.1.100:7878'} value={form.url} onChange={e => setForm(p => ({ ...p, url: e.target.value }))} required />
+                <input className="form-input" placeholder={form.type === 'sonarr' ? 'http://192.168.1.100:8989' : 'http://192.168.1.100:7878'} value={form.url} onChange={e => setForm(p => ({ ...p, url: e.target.value }))} />
               </div>
               <div className="form-group">
                 <label className="form-label">API key</label>
-                <input className="form-input" type="password" placeholder="API key" value={form.api_key} onChange={e => setForm(p => ({ ...p, api_key: e.target.value }))} required />
+                <input className="form-input" type="password" placeholder="API key" value={form.api_key} onChange={e => setForm(p => ({ ...p, api_key: e.target.value }))} />
               </div>
             </div>
             <div style={{ display: 'flex', gap: 16, marginBottom: 14 }}>

@@ -174,9 +174,21 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
         _size_bytes = p.stat().st_size
     except OSError:
         _size_bytes = 0
-    _bitrate_source = legacy.estimate_source_from_bitrate(_size_bytes, _duration, _audio_codecs, resolution, video=video)
-    if _bitrate_source is None:
-        _bitrate_source = legacy.heuristic_source(_audio_codecs, _size_bytes / (1024 ** 3), resolution)
+
+    # Internal Source Tool (services/source_engine) — multi-tool (MediaInfo +
+    # FFprobe + MKVToolNix), bitrate normalized by resolution/fps, always
+    # scores all 9 eMuwarez source candidates. Falls back to the old simple
+    # bitrate/audio heuristic only if the engine couldn't run at all (missing
+    # tools, unreadable file) so this row never goes empty.
+    from . import source_engine
+    _engine_result = source_engine.analyze_for_app(str(p), radarr_source=radarr_source)
+    _engine_source = source_engine.winning_app_source(_engine_result)
+    if _engine_source is not None:
+        _bitrate_source = _engine_source
+    else:
+        _bitrate_source = legacy.estimate_source_from_bitrate(_size_bytes, _duration, _audio_codecs, resolution, video=video)
+        if _bitrate_source is None:
+            _bitrate_source = legacy.heuristic_source(_audio_codecs, _size_bytes / (1024 ** 3), resolution)
     _final_source = _name_source or radarr_source or _bitrate_source
     # Whether the video has a hand-encoder fingerprint — used by the bitrate
     # reference table (below) to explain why a given bitrate range does or
@@ -222,6 +234,9 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
         "from_mediainfo_bitrate": _bitrate_source,
         "mediainfo_reencoded": _reencoded,
         "bitrate_table": bitrate_table,
+        # Full Internal Source Tool result (9-candidate ranking, evidence,
+        # explanation) — None when the engine couldn't run at all.
+        "engine": _engine_result,
     }
     # HDR / Dolby Vision
     hdr = legacy.detect_hdr(video) if video else []

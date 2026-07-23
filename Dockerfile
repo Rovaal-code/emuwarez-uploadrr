@@ -19,7 +19,10 @@ LABEL org.opencontainers.image.description="Upload manager for eMuwarez with Rad
 # System dependencies. mediainfo/ffmpeg/mktorrent are needed by the bundled
 # Uploadrr-EMU (mediainfo also by our own nomenclature); mkvtoolnix (mkvmerge)
 # is what our own nomenclature uses to reorder/rename tracks; git is used to
-# fetch the Uploadrr-EMU fork at build time.
+# fetch the Uploadrr-EMU fork at build time. These same three (mediainfo,
+# ffmpeg's ffprobe, mkvtoolnix's mkvmerge) are also the whole toolset behind
+# services/source_engine (see docs/source_engine.md) — no extra package
+# needed for it.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     mediainfo ffmpeg mktorrent mkvtoolnix git \
     && rm -rf /var/lib/apt/lists/*

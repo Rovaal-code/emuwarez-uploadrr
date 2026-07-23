@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import type { EmuSource, EmuProvider, NomenclatureFields, FieldsPreviewResult, TrackRemuxPreview, TrackRemuxOverride, SourceComparison, SourceBitrateRow } from '../api/nomenclature'
+import type { EmuSource, EmuProvider, NomenclatureFields, FieldsPreviewResult, TrackRemuxPreview, TrackRemuxOverride, SourceComparison, SourceBitrateRow, SourceEngineResult } from '../api/nomenclature'
 import {
   getEmuSources,
   getEmuProviders,
@@ -351,6 +351,109 @@ function SourceCompareTable({ comparison, onShowBitrateTable }: { comparison: So
           </tr>
         </tbody>
       </table>
+    </div>
+  )
+}
+
+const CERTAINTY_COLOR: Record<string, string> = { alto: '#22c55e', medio: '#eab308', bajo: '#ef4444' }
+
+// Full Internal Source Tool breakdown, shown below the plain 3-column
+// comparison inside the same "Comparación del Source" modal — same
+// detail-card/thStyle/monospace language as every other table in this file,
+// just with 9 candidate columns instead of 1. Never shown if the engine
+// couldn't run (comparison.engine is null) — the plain table above still
+// works standalone in that case.
+function SourceEngineDetail({ result }: { result: SourceEngineResult }) {
+  const { prediction, ranking, evidence, explanation, contradictions, performance } = result
+  const certaintyColor = CERTAINTY_COLOR[prediction.certainty] ?? 'var(--text-accent)'
+  const orderedLabels = ranking.map(r => r.label)
+
+  return (
+    <div style={{ marginTop: 14 }}>
+      <div className="detail-card" style={{ borderRadius: 8, padding: '12px 14px', marginBottom: 12 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 20px', fontSize: 12.5 }}>
+          <span>Source estimado: <strong>{prediction.label}</strong></span>
+          <span>Confianza: <strong>{(prediction.confidence_score * 100).toFixed(1)}%</strong></span>
+          <span>Segundo candidato: <strong>{prediction.runner_up}</strong> ({(prediction.runner_up_score * 100).toFixed(1)}%)</span>
+          <span>Margen: <strong>{(prediction.margin * 100).toFixed(1)} pts</strong></span>
+          <span>Nivel de evidencia: <strong style={{ color: certaintyColor }}>{prediction.certainty}</strong></span>
+          <span>Tiempo de análisis: <strong>{(performance.duration_ms / 1000).toFixed(1)}s</strong></span>
+        </div>
+        <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', margin: '10px 0 0' }}>{explanation.winner}</p>
+        <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', margin: '6px 0 0' }}>{explanation.winner_vs_runner_up}</p>
+        {contradictions.length > 0 && (
+          <div style={{ marginTop: 8 }}>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Contradicciones detectadas</span>
+            {contradictions.map((c, i) => (
+              <p key={i} style={{ fontSize: 12, color: '#eab308', margin: '4px 0 0' }}>⚠ {c}</p>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="detail-card" style={{ borderRadius: 8, overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11.5, minWidth: 820 }}>
+          <thead>
+            <tr>
+              <th style={{ ...thStyle, minWidth: 160 }}>Evidencia</th>
+              {orderedLabels.map(label => (
+                <th key={label} style={{
+                  ...thStyle, textAlign: 'right', minWidth: 68,
+                  color: label === prediction.label ? '#22c55e' : thStyle.color,
+                }}>
+                  {label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {evidence.map((ev, i) => (
+              <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
+                <td style={{ padding: '6px 10px' }}>
+                  <Tooltip content={ev.explanation} maxWidth={340}>
+                    <span style={{ borderBottom: '1px dotted var(--text-muted)', cursor: 'help' }}>{ev.feature}</span>
+                  </Tooltip>
+                </td>
+                {orderedLabels.map(label => {
+                  const v = ev.contributions[label]
+                  return (
+                    <td key={label} style={{
+                      padding: '6px 10px', textAlign: 'right', fontFamily: 'monospace',
+                      color: !v ? 'var(--text-muted)' : v > 0 ? '#4ade80' : '#f87171',
+                      background: label === prediction.label ? 'rgba(34,197,94,0.06)' : undefined,
+                    }}>
+                      {v ? (v > 0 ? `+${v.toFixed(1)}` : v.toFixed(1)) : '0'}
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+            <tr style={{ borderTop: '2px solid var(--border-hover)', fontWeight: 700 }}>
+              <td style={{ padding: '7px 10px' }}>SCORE TOTAL</td>
+              {ranking.map(c => (
+                <td key={c.label} style={{
+                  padding: '7px 10px', textAlign: 'right', fontFamily: 'monospace',
+                  color: c.label === prediction.label ? '#22c55e' : undefined,
+                  background: c.label === prediction.label ? 'rgba(34,197,94,0.1)' : undefined,
+                }}>
+                  {c.raw_score.toFixed(1)}
+                </td>
+              ))}
+            </tr>
+            <tr>
+              <td style={{ padding: '5px 10px', fontSize: 11, color: 'var(--text-muted)' }}>Confianza normalizada</td>
+              {ranking.map(c => (
+                <td key={c.label} style={{
+                  padding: '5px 10px', textAlign: 'right', fontFamily: 'monospace', fontSize: 11,
+                  color: c.label === prediction.label ? '#22c55e' : 'var(--text-muted)',
+                }}>
+                  {(c.normalized_score * 100).toFixed(1)}%
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
@@ -1042,7 +1145,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
         </label>
         {showSourceCompare && sourceComparison && (
           <div className="modal-overlay" onClick={() => setShowSourceCompare(false)}>
-            <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 620 }}>
+            <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: sourceComparison.engine ? 980 : 620 }}>
               <div className="modal-header">
                 <h2 className="modal-title">Comparación del Source</h2>
                 <button className="modal-close" onClick={() => setShowSourceCompare(false)}>✕</button>
@@ -1052,6 +1155,9 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
                   comparison={sourceComparison}
                   onShowBitrateTable={sourceBitrateTable ? () => setShowBitrateTable(true) : undefined}
                 />
+                {sourceComparison.engine && !sourceComparison.engine.error && (
+                  <SourceEngineDetail result={sourceComparison.engine} />
+                )}
               </div>
             </div>
           </div>

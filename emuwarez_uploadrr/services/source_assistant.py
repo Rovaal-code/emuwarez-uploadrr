@@ -12,6 +12,13 @@ from typing import Any
 from ..database import connect
 
 # --- Official EMU sources ---
+# Matches references/nomenclatura-emuwarez.md's "Formato (Source)" table.
+# "Full BluRay" and "WEBRip" keep their existing app-internal spelling (data
+# already stored under those codes) rather than the guide's literal "FBD"/
+# "WEBRIP" — see services/source_engine/integration.py for the mapping
+# between the new detector's vocabulary and this one. FDVD/SD were missing
+# entirely until the source-detection engine made the gap obvious (it can
+# legitimately predict either and there was no dropdown value to hold it).
 EMU_SOURCES: list[dict] = [
     {"code": "Full BluRay", "label": "Full BluRay"},
     {"code": "BDRemux",     "label": "BDRemux"},
@@ -20,6 +27,8 @@ EMU_SOURCES: list[dict] = [
     {"code": "WEB-DL",      "label": "WEB-DL"},
     {"code": "WEBRip",      "label": "WEBRip"},
     {"code": "HDTV",        "label": "HDTV"},
+    {"code": "FDVD",        "label": "FDVD"},
+    {"code": "SD",          "label": "SD"},
 ]
 
 # sources that accept a provider prefix
@@ -624,6 +633,10 @@ def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
             # guess that can't tell a WEB-DL re-encode from a disc re-encode
             # (MicroHD/BluRay-encode) apart.
             "mediainfo_confirmed": _sig_early.get("from_mediainfo_bitrate") is not None and not _sig_early.get("mediainfo_reencoded", True),
+            # Full Internal Source Tool result (9-candidate ranking, evidence,
+            # explanation) — None when the engine couldn't run at all, in
+            # which case the UI falls back to the plain 3-column comparison.
+            "engine": _sig_early.get("engine"),
         }
         _vals = [source_comparison["from_name"], source_comparison["from_radarr"], source_comparison["from_mediainfo"]]
         source_comparison["agree"] = all(_vals) and len(set(_vals)) == 1

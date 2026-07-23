@@ -38,6 +38,45 @@ export interface FieldsPreviewResult {
   provider_options: Array<{ code: string; name: string; label: string; tmdb_available: boolean }>
 }
 
+// Internal Source Tool (services/source_engine) full result — always scores
+// all 9 eMuwarez source candidates, never returns "unknown".
+export interface SourceEngineCandidate {
+  label: string
+  raw_score: number
+  normalized_score: number
+  rank: number
+}
+
+export interface SourceEngineEvidence {
+  feature: string
+  value: unknown
+  strength: 'weak' | 'medium' | 'strong' | 'very_strong'
+  reliability: number
+  explanation: string
+  contributions: Record<string, number>
+}
+
+export interface SourceEngineResult {
+  prediction: {
+    label: string
+    raw_score: number
+    confidence_score: number
+    certainty: 'alto' | 'medio' | 'bajo'
+    runner_up: string
+    runner_up_score: number
+    margin: number
+    evidence_strength: number
+  }
+  performance: { duration_ms: number; timeout_ms: number; cache_hit: boolean; sample_coverage: number }
+  ranking: SourceEngineCandidate[]
+  evidence: SourceEngineEvidence[]
+  contradictions: string[]
+  explanation: { winner: string; winner_vs_runner_up: string }
+  tools: Record<string, { available: boolean; version?: string | null; used?: boolean; error?: string | null }>
+  engine_version: string
+  error?: string
+}
+
 // Name vs Radarr/Sonarr vs MediaInfo-bitrate-tool cross-check for Source.
 export interface SourceComparison {
   from_name: string | null
@@ -48,6 +87,8 @@ export interface SourceComparison {
   // WEB-DL re-encode (WEBRip) from a disc re-encode (MicroHD/BluRay) apart.
   mediainfo_confirmed: boolean
   agree: boolean
+  // Full Internal Source Tool result, when the engine could run.
+  engine?: SourceEngineResult | null
 }
 
 // Reference row for the bitrate table behind the MediaInfo bitrate tool.

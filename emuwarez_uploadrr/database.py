@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 23
+SCHEMA_VERSION = 24
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -859,6 +859,24 @@ def _migrate_tmdb_title_cache(conn: sqlite3.Connection) -> None:
     """)
 
 
+def _migrate_source_engine_cache(conn: sqlite3.Connection) -> None:
+    """Cache for services/source_engine (the multi-tool source detector) —
+    keyed by the file's own identity (path+size+mtime) plus the engine's own
+    version, so a code/rule change invalidates old rows automatically.
+    Purely additive."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS source_engine_cache (
+            path TEXT NOT NULL,
+            size_bytes INTEGER NOT NULL,
+            mtime INTEGER NOT NULL,
+            engine_version TEXT NOT NULL,
+            result_json TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (path, size_bytes, mtime, engine_version)
+        )
+    """)
+
+
 def _migrate_library_items_track_remux(conn: sqlite3.Connection) -> None:
     """Track reorder/rename via mkvmerge (Phase 12A) — status of the last
     remux applied to this item's file, so the UI can show a badge without
@@ -1272,6 +1290,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_upload_jobs_snapshots(conn)
         _migrate_upload_jobs_checks_snapshot(conn)
         _migrate_nomenclature_year_series(conn)
+        _migrate_source_engine_cache(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

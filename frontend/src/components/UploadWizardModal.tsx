@@ -102,13 +102,13 @@ const CHECK_STEP_PENDING_LABEL: Record<string, string> = {
 // card and the season target's per-episode accordion. `onSourceToolClick`
 // (only wired from the single-file card, which has the comparison data) makes
 // the Source row's "MediaInfo" cell — the internal source-detection tool's own
-// output — clickable, opening the same Source comparison modal as the field's
-// own blinking button; `sourceToolBlink` mirrors that button's blink state so
-// both point at the same disagreement.
-function MediaInfoTable({ report, onSourceToolClick, sourceToolBlink }: {
+// output — clickable, opening the Source comparison modal; styled with the
+// same `.source-bitrate-link` white-to-blue color sweep already used inside
+// that modal for the "from_mediainfo" value linking to the bitrate table, so
+// both blinking links read as the same affordance.
+function MediaInfoTable({ report, onSourceToolClick }: {
   report: MediaInfoReport
   onSourceToolClick?: () => void
-  sourceToolBlink?: boolean
 }) {
   if (!report.available) {
     return <p className="text-warning" style={{ fontSize: 12, margin: 0 }}>⚠ {report.message}</p>
@@ -142,15 +142,7 @@ function MediaInfoTable({ report, onSourceToolClick, sourceToolBlink }: {
                 <td style={{ padding: '7px 12px', fontFamily: 'monospace', color: 'var(--text-muted)', wordBreak: 'break-word' }}>
                   {isSourceRow && onSourceToolClick ? (
                     <Tooltip content="Ver comparación del source">
-                      <button
-                        type="button"
-                        className={sourceToolBlink ? 'badge-blink' : undefined}
-                        onClick={onSourceToolClick}
-                        style={{
-                          background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-                          font: 'inherit', color: sourceToolBlink ? '#eab308' : 'inherit',
-                        }}
-                      >
+                      <button type="button" className="source-bitrate-link" onClick={onSourceToolClick}>
                         {r.mediainfo}
                       </button>
                     </Tooltip>
@@ -1484,7 +1476,6 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
                         {miReport && (
                           <MediaInfoTable
                             report={miReport}
-                            sourceToolBlink={sourceComparison ? !sourceComparison.agree : false}
                             // Closes this card before opening the comparison one — both are
                             // modal-overlays at the same z-index, so having two open at once
                             // would bury the newly-opened one behind this still-open card.

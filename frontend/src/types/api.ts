@@ -105,6 +105,7 @@ export interface LibraryItemResponse {
   tmdb_id: string | null
   imdb_id: string | null
   tvdb_id: string | null
+  mal_id: string | null
   title_slug: string | null
   // Series/Season/Episode hierarchy — parent_id points at the containing
   // row's id (episode -> season, season -> series); null for movies/series.
@@ -222,6 +223,7 @@ export interface RequestMatchResponse {
   local_tmdb_id: string | null
   local_imdb_id: string | null
   local_tvdb_id: string | null
+  local_mal_id: string | null
   local_path: string | null
   content_name: string | null
   nomenclature_status: string | null

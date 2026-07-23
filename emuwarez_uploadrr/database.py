@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 24
+SCHEMA_VERSION = 25
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -893,6 +893,34 @@ def _migrate_library_items_track_remux(conn: sqlite3.Connection) -> None:
             pass
 
 
+def _migrate_library_items_mal_id(conn: sqlite3.Connection) -> None:
+    """MAL (MyAnimeList) id, resolved from the Fribb/anime-lists table against
+    tvdb_id/tmdb_id at upsert time (see services/anime_lists.py) — Radarr/
+    Sonarr never provide this themselves. Purely additive."""
+    try:
+        conn.execute("ALTER TABLE library_items ADD COLUMN mal_id TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+
+def _migrate_anime_id_map(conn: sqlite3.Connection) -> None:
+    """Local mirror of the Fribb/anime-lists table (tvdb_id/season -> mal_id,
+    tmdb movie id -> mal_id) — see services/anime_lists.py. Downloaded/
+    refreshed on demand, same "external catalog mirrored into a local table"
+    shape as emu_catalog above. Purely additive."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS anime_id_map (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tvdb_id TEXT,
+            season_number INTEGER,
+            tmdb_movie_id TEXT,
+            mal_id TEXT NOT NULL
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_anime_id_map_tvdb ON anime_id_map(tvdb_id, season_number)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_anime_id_map_tmdb_movie ON anime_id_map(tmdb_movie_id)")
+
+
 def _migrate_emu_catalog(conn: sqlite3.Connection) -> None:
     """eMuwarez torrent catalog index (populated by the on-demand eMuwarez
     sync) + the per-library-item comparison result. Purely additive."""
@@ -1291,6 +1319,8 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_upload_jobs_checks_snapshot(conn)
         _migrate_nomenclature_year_series(conn)
         _migrate_source_engine_cache(conn)
+        _migrate_library_items_mal_id(conn)
+        _migrate_anime_id_map(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

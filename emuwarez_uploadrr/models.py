@@ -115,6 +115,10 @@ class LibraryItem:
     tmdb_id: Optional[str] = None
     imdb_id: Optional[str] = None
     tvdb_id: Optional[str] = None
+    # Resolved from the Fribb/anime-lists table (see services/anime_lists.py)
+    # against tvdb_id/tmdb_id at upsert time — Radarr/Sonarr never provide
+    # this themselves, unlike the three IDs above.
+    mal_id: Optional[str] = None
     title_slug: Optional[str] = None
     # Series/Season/Episode hierarchy — parent_id points at the containing
     # row's id (episode -> its season, season -> its series); NULL for

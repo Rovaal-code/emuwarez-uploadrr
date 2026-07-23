@@ -528,6 +528,9 @@ class LibraryItemResponse(BaseModel):
     tmdb_id: Optional[str] = None
     imdb_id: Optional[str] = None
     tvdb_id: Optional[str] = None
+    # Resolved from the Fribb/anime-lists table (see services/anime_lists.py)
+    # — Radarr/Sonarr never provide this themselves, unlike the 3 IDs above.
+    mal_id: Optional[str] = None
     title_slug: Optional[str] = None
     # Series/Season/Episode hierarchy — parent_id points at the containing
     # row's id (episode -> season, season -> series); None for movies/series.
@@ -625,6 +628,7 @@ class RequestMatchResponse(BaseModel):
     local_tmdb_id: Optional[str] = None
     local_imdb_id: Optional[str] = None
     local_tvdb_id: Optional[str] = None
+    local_mal_id: Optional[str] = None
     local_path: Optional[str] = None
     content_name: Optional[str] = None
     nomenclature_status: Optional[str] = None

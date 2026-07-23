@@ -186,9 +186,9 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
                   {item.tvdb_id ? <ValueChip linkable={Boolean(idVerifyUrl('tvdb', item.tvdb_id, isTv))}><ExternalIdLink id={item.tvdb_id} href={idVerifyUrl('tvdb', item.tvdb_id, isTv)} label="TVDB" /></ValueChip> : <span className="muted">–</span>}
                 </FieldRow>
               )}
-              {/* library_items no tiene mal_id todavía (solo las peticiones de eMuwarez
-                  lo traen) — de momento es un hueco fijo a la espera de esa fuente. */}
-              <FieldRow label="MAL"><span className="muted">–</span></FieldRow>
+              <FieldRow label="MAL">
+                {item.mal_id ? <ValueChip linkable={Boolean(idVerifyUrl('mal', item.mal_id, isTv))}><ExternalIdLink id={item.mal_id} href={idVerifyUrl('mal', item.mal_id, isTv)} label="MAL" /></ValueChip> : <span className="muted">–</span>}
+              </FieldRow>
             </Card>
           </div>
         </div>

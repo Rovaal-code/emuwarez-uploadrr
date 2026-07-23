@@ -45,6 +45,19 @@ def upsert_library_item(conn: sqlite3.Connection, item: LibraryItem, *, notify_m
         prev_status = prev_row["local_status"] if prev_row else None
 
     data = item.to_dict()
+    # mal_id: Radarr/Sonarr never provide this — resolve it against the local
+    # Fribb/anime-lists mirror instead (see services/anime_lists.py). Runs on
+    # every upsert (not just new rows), so a mal_id that disappears from a
+    # later refresh of that table self-corrects back to None on the next
+    # sync instead of staying permanently stale.
+    has_relevant_id = item.tmdb_id if item.item_type == MediaKind.MOVIE.value else item.tvdb_id
+    if has_relevant_id:
+        from .anime_lists import ensure_anime_id_map, get_mal_id as _get_mal_id
+        ensure_anime_id_map(conn)
+        data["mal_id"] = _get_mal_id(
+            conn, item_type=item.item_type, tvdb_id=item.tvdb_id,
+            tmdb_id=item.tmdb_id, season_number=item.season_number,
+        )
     columns = [
         "item_type", "title", "year", "original_title", "instance_id", "instance_type",
         "instance_name", "external_id", "tmdb_id", "imdb_id", "tvdb_id", "title_slug",
@@ -52,7 +65,7 @@ def upsert_library_item(conn: sqlite3.Connection, item: LibraryItem, *, notify_m
         "quality", "resolution", "source", "video_codec", "audio_codec", "audio_languages",
         "audio_channels", "dynamic_range", "subtitle_languages", "size_bytes", "local_status",
         "request_status", "nomenclature_status", "request_id", "added_at", "raw_json",
-        "poster_url",
+        "poster_url", "mal_id",
     ]
     values = [data.get(col) for col in columns]
     conn.execute(
@@ -103,6 +116,7 @@ def upsert_library_item(conn: sqlite3.Connection, item: LibraryItem, *, notify_m
                 THEN library_items.nomenclature_checked_at ELSE NULL END,
             raw_json = excluded.raw_json,
             poster_url = excluded.poster_url,
+            mal_id = excluded.mal_id,
             updated_at = CURRENT_TIMESTAMP
         """,
         values,

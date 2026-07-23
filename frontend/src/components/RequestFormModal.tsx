@@ -62,8 +62,8 @@ export function RequestFormModal({ item, onClose }: Props) {
   const [tmdbId, setTmdbId] = useState(onlyDigits(item.tmdb_id || ''))
   const [useImdb, setUseImdb] = useState(!!item.imdb_id)
   const [imdbId, setImdbId] = useState(onlyDigits(item.imdb_id || ''))  // digits only (no tt)
-  const [useMal, setUseMal] = useState(false)
-  const [malId, setMalId] = useState('')
+  const [useMal, setUseMal] = useState(!!item.mal_id)
+  const [malId, setMalId] = useState(onlyDigits(item.mal_id || ''))
 
   const [useTvdb, setUseTvdb] = useState(!!item.tvdb_id)
   const [tvdbId, setTvdbId] = useState(onlyDigits(item.tvdb_id || ''))

@@ -226,16 +226,34 @@ def bluray_compat_flag(profile: dict) -> list[Evidence]:
 
 # (low, high) "sweet spot" of bits-per-pixel-per-frame per tier — the
 # (p25, p75) percentiles observed over ~1300 real, name-labeled library
-# files (calibration pass, 2026-07; see docs/source_engine.md). BDRemux/
-# FBD/FDVD/SD had zero real samples in that library and keep their original
-# rough estimate, flagged below.
+# files (calibration pass, 2026-07; see docs/source_engine.md). BDRemux had
+# zero real samples in that library and keeps its original rough estimate.
 #
-# The calibration's main finding: these ranges overlap heavily in practice
-# (e.g. BluRay's own p25-p75 is 0.035-0.188, almost the whole practical
-# range) — bpppf alone is a much weaker discriminator than initially
-# assumed, which is why `peak`/reliability were both turned down from the
-# pre-calibration version. It still helps (confirmed by the same pass), it
-# just shouldn't dominate the way a single "strong" signal would.
+# FBD/FDVD/SD are deliberately absent from this table (bpppf contributes
+# nothing for them, always 0) rather than filled with an unvalidated guess:
+# - FBD/FDVD: a Full BD/DVD image can't even be represented by the single
+#   file this engine analyzes — `structural_single_file` above already
+#   penalizes them hard on that basis alone; their video bitrate itself is
+#   irrelevant to telling them apart from BDRemux/DVD-SD (a Full BD's main
+#   feature stream IS essentially the same bitrate as a BDRemux of it —
+#   they differ by disc structure, not bitrate).
+# - SD: MPEG-2 (the DVD-era codec) is markedly less efficient than AVC/HEVC
+#   — a genuine untouched DVD rip commonly lands at a MODERATE-TO-HIGH
+#   bpppf despite its low absolute Mbps, because bpppf only normalizes for
+#   pixel count/fps, not codec efficiency. A first version of this range
+#   assumed "old format = low bitrate", which is backwards once normalized.
+#   Rather than guess a corrected number with zero real SD samples to check
+#   it against, SD detection is left entirely to `resolution_signal` (SD
+#   height) and `video_codec_signal` (MPEG-2/DivX/Xvid) below, which don't
+#   have this confound.
+#
+# The calibration's main finding for the tiers that DO have real samples:
+# these ranges overlap heavily in practice (e.g. BluRay's own p25-p75 is
+# 0.035-0.188, almost the whole practical range) — bpppf alone is a much
+# weaker discriminator than initially assumed, which is why `peak`/
+# reliability were both turned down from the pre-calibration version. It
+# still helps (confirmed by the same pass), it just shouldn't dominate the
+# way a single "strong" signal would.
 _BPPF_RANGES = {
     "BDRemux": (0.20, 0.55),      # unvalidated — no real sample in the calibration set
     "BluRay": (0.035, 0.188),
@@ -243,7 +261,6 @@ _BPPF_RANGES = {
     "WEB-DL": (0.041, 0.130),
     "WEBRIP": (0.050, 0.090),     # calibration's WEBRIP p25==p50==p75==0.062; widened slightly, still tight
     "HDTV": (0.086, 0.239),
-    "SD": (0.015, 0.06),          # unvalidated — no real sample in the calibration set
 }
 # MHD's calibration sample was only 8 files — give it a gentler falloff than
 # the rest so a handful of outliers can't tank it to zero.

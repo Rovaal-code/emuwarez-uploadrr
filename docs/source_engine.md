@@ -186,13 +186,28 @@ Confusiones que quedan (minoritarias): WEBRip clasificado como WEB-DL
 (117 casos) y BluRay/WEB-DL confundidos entre sí con BDRemux en el rango
 alto de bitrate (cuentan con muestra real pequeña o nula — ver
 limitaciones). `BDRemux`/`FBD`/`FDVD`/`SD` no tenían ninguna muestra real
-en esta biblioteca concreta (0 archivos con ese source en el nombre), así
-que sus rangos siguen siendo la estimación original sin validar.
+en esta biblioteca concreta (0 archivos con ese source en el nombre).
+
+**Corrección conceptual adicional (misma fecha, sin datos reales de
+respaldo — pura razón técnica)**: `SD` se quitó de `_BPPF_RANGES`. La
+primera versión asumía "formato antiguo = bitrate bajo", pero normalizado
+por resolución es al revés — MPEG-2 (el códec de DVD) es mucho menos
+eficiente que AVC/HEVC, así que un DVD real normalizado da un bpppf
+moderado-alto pese a su Mbps absoluto modesto (pocos píxeles). `FBD`/
+`FDVD` tampoco tienen rango de bpppf: un Blu-ray/DVD completo no se
+distingue de un BDRemux/DVD-SD por bitrate — la película en sí tiene el
+mismo bitrate, la diferencia es la estructura de disco completa (menús,
+varios streams) frente a un único archivo, y eso ya lo decide
+`structural_single_file` con fuerza. La detección de SD queda enteramente
+en manos de `resolution_signal` (altura SD) y `video_codec_signal`
+(MPEG-2/DivX/Xvid), que no tienen ese problema de confusión con la
+eficiencia del códec.
 
 ## Cómo seguir calibrando
 
-1. Recolectar (o pedir) archivos con `BDRemux`/`FBD`/`FDVD`/`SD` reales
-   (0 muestras en la pasada de 2026-07) y repetir el mismo proceso.
+1. Recolectar (o pedir) archivos con `BDRemux`/`SD` reales (0 muestras en
+   la pasada de 2026-07) y repetir el mismo proceso — especialmente para
+   confirmar o corregir el razonamiento anterior sobre SD con datos reales.
 2. Para los fallos restantes (`result["evidence"]` trae la contribución de
    cada señal), ajustar `contributions`/`reliability` del detector que más
    pesó en el error.
@@ -213,8 +228,10 @@ que sus rangos siguen siendo la estimación original sin validar.
   almacenamiento — sobre un montaje de red lento (ej. SSHFS saturado)
   puede no completarse nunca; se salta con seguridad (ver "Presupuesto de
   tiempo"), nunca bloquea el resultado.
-- `BDRemux`/`FBD`/`FDVD`/`SD` no tenían ninguna muestra real en la
-  calibración de 2026-07 — sus rangos de bitrate siguen sin validar.
+- `BDRemux` no tenía ninguna muestra real en la calibración de 2026-07 —
+  su rango de bitrate sigue sin validar. `FBD`/`FDVD`/`SD` no usan bpppf
+  en absoluto (ver "Corrección conceptual" arriba) por diseño, no por
+  falta de datos.
 - No distingue un WEBRip re-encodeado de un MicroHD re-encodeado por
   bitrate en el rango medio — ambos dejan la misma huella de encoder de
   mano (limitación también reconocida explícitamente en la spec original).

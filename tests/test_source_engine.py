@@ -181,11 +181,23 @@ def test_bitrate_normalization_favors_bdremux_at_high_bpppf():
     assert contrib["BDRemux"] > contrib["HDTV"]
 
 
-def test_bitrate_normalization_favors_sd_hdtv_at_low_bpppf():
-    profile_dict = _base_profile(normalization={"bits_per_pixel_per_frame": 0.02, "video_share_of_file": 0.8})
+def test_bitrate_normalization_favors_webrip_over_bdremux_at_low_bpppf():
+    profile_dict = _base_profile(normalization={"bits_per_pixel_per_frame": 0.06, "video_share_of_file": 0.8})
     result = ev.bitrate_normalization_signal(profile_dict)
     contrib = result[0].contributions
-    assert contrib["SD"] > contrib["BDRemux"]
+    assert contrib["WEBRIP"] > contrib["BDRemux"]
+
+
+def test_bitrate_normalization_never_favors_sd():
+    """SD is deliberately absent from _BPPF_RANGES — MPEG-2 (DVD-era codec)
+    is inefficient enough that a genuine DVD rip commonly lands at a
+    moderate-to-high bpppf despite its low absolute Mbps once normalized for
+    resolution/fps, so a low-bpppf reading is NOT evidence of SD. SD
+    detection is left to resolution_signal/video_codec_signal instead."""
+    for bpppf in (0.02, 0.1, 0.3, 0.5):
+        profile_dict = _base_profile(normalization={"bits_per_pixel_per_frame": bpppf, "video_share_of_file": 0.8})
+        result = ev.bitrate_normalization_signal(profile_dict)
+        assert result[0].contributions["SD"] == 0.0
 
 
 def test_no_evidence_when_bpppf_missing():

@@ -224,18 +224,30 @@ def bluray_compat_flag(profile: dict) -> list[Evidence]:
 # resolution/fps-aware, never a flat Mbps cutoff.
 # ---------------------------------------------------------------------------
 
-# (low, high) "sweet spot" of bits-per-pixel-per-frame per tier. Deliberately
-# heuristic and documented as such (spec section 17/26) — not derived from a
-# calibrated dataset. See docs/source_engine.md for how to recalibrate these.
+# (low, high) "sweet spot" of bits-per-pixel-per-frame per tier — the
+# (p25, p75) percentiles observed over ~1300 real, name-labeled library
+# files (calibration pass, 2026-07; see docs/source_engine.md). BDRemux/
+# FBD/FDVD/SD had zero real samples in that library and keep their original
+# rough estimate, flagged below.
+#
+# The calibration's main finding: these ranges overlap heavily in practice
+# (e.g. BluRay's own p25-p75 is 0.035-0.188, almost the whole practical
+# range) — bpppf alone is a much weaker discriminator than initially
+# assumed, which is why `peak`/reliability were both turned down from the
+# pre-calibration version. It still helps (confirmed by the same pass), it
+# just shouldn't dominate the way a single "strong" signal would.
 _BPPF_RANGES = {
-    "BDRemux": (0.20, 0.55),
-    "BluRay": (0.09, 0.24),
-    "MHD": (0.030, 0.085),
-    "WEB-DL": (0.035, 0.16),
-    "WEBRIP": (0.020, 0.10),
-    "HDTV": (0.012, 0.05),
-    "SD": (0.015, 0.06),
+    "BDRemux": (0.20, 0.55),      # unvalidated — no real sample in the calibration set
+    "BluRay": (0.035, 0.188),
+    "MHD": (0.112, 0.125),        # n=8 only — wide tail decay compensates below
+    "WEB-DL": (0.041, 0.130),
+    "WEBRIP": (0.050, 0.090),     # calibration's WEBRIP p25==p50==p75==0.062; widened slightly, still tight
+    "HDTV": (0.086, 0.239),
+    "SD": (0.015, 0.06),          # unvalidated — no real sample in the calibration set
 }
+# MHD's calibration sample was only 8 files — give it a gentler falloff than
+# the rest so a handful of outliers can't tank it to zero.
+_BPPF_TAIL_OVERRIDE = {"MHD": 0.7}
 
 
 def bitrate_normalization_signal(profile: dict) -> list[Evidence]:
@@ -244,13 +256,15 @@ def bitrate_normalization_signal(profile: dict) -> list[Evidence]:
         return []
     contrib = _zero()
     for cand, (lo, hi) in _BPPF_RANGES.items():
-        contrib[cand] = _range_score(bpppf, lo, hi, peak=22.0)
+        contrib[cand] = _range_score(bpppf, lo, hi, peak=14.0, tail=_BPPF_TAIL_OVERRIDE.get(cand, 0.55))
     return [Evidence(
         feature="bits_per_pixel_per_frame", value=round(bpppf, 4),
         contributions=contrib,
-        strength="strong", reliability=0.7,
+        strength="medium", reliability=0.5,
         explanation=(f"Bitrate de vídeo normalizado a {bpppf:.3f} bits/píxel/frame — comparado contra el rango "
-                     "típico de cada tier a esta resolución y framerate, no contra un umbral fijo de Mbps."),
+                     "típico de cada tier a esta resolución y framerate (calibrado con archivos reales), no contra "
+                     "un umbral fijo de Mbps. Los rangos se solapan bastante entre tiers, así que esta señal por sí "
+                     "sola no decide — se combina con el resto."),
     )]
 
 
@@ -315,6 +329,33 @@ def audio_profile_signal(profile: dict) -> list[Evidence]:
     return ev
 
 
+def subtitle_language_breadth_signal(profile: dict) -> list[Evidence]:
+    """Weak signal added after calibration against ~1300 real library files
+    (2026-07): big platforms tend to bundle subtitles for many regions in
+    their own WEB-DL master (median ~4-7 languages in that sample), while
+    disc/broadcast releases typically carry just 1-3 (or none for HDTV).
+    Confirmed weak on its own (medians overlap between WEB-DL and WEBRip),
+    kept at "weak" strength on purpose — a nudge, not a decision."""
+    subs = profile["subtitle_tracks"]
+    languages = {t.get("language") for t in subs if t.get("language") and t.get("language") != "und"}
+    n = len(languages) or len(subs)
+    if n >= 6:
+        return [Evidence(
+            feature="subtitle_language_breadth", value=n,
+            contributions=_c(**{"WEB-DL": 4, "WEBRIP": 2}, MHD=2, **{"BluRay": -2, "HDTV": -3}),
+            strength="weak", reliability=0.35,
+            explanation=f"{n} idiomas de subtítulos — las plataformas grandes suelen empaquetar muchas regiones en su propio WEB-DL.",
+        )]
+    if n <= 1 and subs:
+        return [Evidence(
+            feature="subtitle_language_breadth", value=n,
+            contributions=_c(BluRay=2, HDTV=2, **{"WEB-DL": -2}),
+            strength="weak", reliability=0.3,
+            explanation="Solo 1 idioma de subtítulos — más típico de un disco o una emisión que de un WEB-DL de plataforma grande.",
+        )]
+    return []
+
+
 def subtitle_profile_signal(profile: dict) -> list[Evidence]:
     subs = profile["subtitle_tracks"]
     if not subs:
@@ -354,16 +395,43 @@ def subtitle_profile_signal(profile: dict) -> list[Evidence]:
 
 def transcode_signal(profile: dict, signals) -> list[Evidence]:
     p = signals.video_transcode_probability
-    ev = [Evidence(
-        feature="video_transcode_probability", value=round(p, 2),
-        contributions=_c(
-            BDRemux=-40 * p, **{"FBD": -10 * p, "FDVD": -10 * p},
-            BluRay=18 * p, MHD=14 * p, WEBRIP=20 * p,
-            **{"WEB-DL": -25 * p}, HDTV=6 * p, SD=6 * p,
-        ),
-        strength="strong", reliability=0.65,
-        explanation="; ".join(signals.notes) or "Señales de recodificación evaluadas sobre el propio stream.",
-    )]
+    explanation = "; ".join(signals.notes) or "Señales de recodificación evaluadas sobre el propio stream."
+
+    if signals.two_pass:
+        # Calibrated (2026-07): two-pass is a genuinely strong, fairly
+        # unambiguous re-encode signal — streaming platforms' own delivery
+        # pipelines use single-pass CRF/VBR, not classic two-pass.
+        ev = [Evidence(
+            feature="video_transcode_probability", value=round(p, 2),
+            contributions=_c(
+                BDRemux=-40 * p, **{"FBD": -10 * p, "FDVD": -10 * p},
+                BluRay=18 * p, MHD=14 * p, WEBRIP=20 * p,
+                **{"WEB-DL": -25 * p}, HDTV=6 * p, SD=6 * p,
+            ),
+            strength="strong", reliability=0.65, explanation=explanation,
+        )]
+    elif signals.has_encoder_fingerprint:
+        # Calibrated (2026-07, ~1300 real library files): a bare x264/x265
+        # settings string WITHOUT two-pass is genuinely ambiguous — several
+        # streaming platforms' own WEB-DL masters carry the exact same
+        # single-pass CRF fingerprint as a scene re-encode. Kept as a small
+        # nudge only; see transcode.py's docstring for the full finding.
+        ev = [Evidence(
+            feature="video_transcode_probability", value=round(p, 2),
+            contributions=_c(BluRay=4 * p, MHD=3 * p, WEBRIP=4 * p, **{"WEB-DL": -3 * p}),
+            strength="weak", reliability=0.3, explanation=explanation,
+        )]
+    else:
+        # No fingerprint at all is still a fairly strong "untouched" signal —
+        # calibration didn't contradict this case (it's rare in the dataset,
+        # most files there do carry a libx264/libx265 fingerprint one way
+        # or another), so it keeps its original weight.
+        ev = [Evidence(
+            feature="video_transcode_probability", value=round(p, 2),
+            contributions=_c(BDRemux=-15 * p, **{"WEB-DL": 20 * p}, WEBRIP=-10 * p, BluRay=-5 * p, MHD=-5 * p),
+            strength="strong", reliability=0.6, explanation=explanation,
+        )]
+
     if signals.screen_capture_probability > 0:
         ev.append(Evidence(
             feature="screen_capture_probability", value=round(signals.screen_capture_probability, 2),
@@ -438,6 +506,7 @@ def collect_all_evidence(profile: dict, transcode_signals, sample_result) -> lis
         video_share_signal(profile),
         audio_profile_signal(profile),
         subtitle_profile_signal(profile),
+        subtitle_language_breadth_signal(profile),
         transcode_signal(profile, transcode_signals),
         sampling_signal(sample_result),
     ]

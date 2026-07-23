@@ -74,12 +74,25 @@ def analyze_transcode_signals(video: dict) -> TranscodeSignals:
         crop_evidence = 2.3 <= ratio <= 2.45
 
     if has_fingerprint:
-        video_transcode_p = 0.85 if settings else 0.6
-        if crf is not None or two_pass is not None:
-            video_transcode_p = 0.95
+        # Calibrated against 1300+ real, name-labeled library files (2026-07):
+        # a plain x264/x265 settings string — even with a CRF value — is
+        # NOT reliable evidence of a hand/scene re-encode. Several major
+        # streaming platforms' own delivery pipelines run libx264/libx265
+        # internally and leave an identical-looking settings dump (CRF,
+        # single-pass rc=crf included) on their OWN original WEB-DL masters.
+        # Before calibration this alone pushed WEB-DL's transcode
+        # probability to 0.95, which misclassified the large majority of
+        # real WEB-DL files in that dataset as WEBRip/BluRay. Two-pass
+        # encoding remains a much stronger signal — streaming platforms'
+        # own pipelines use single-pass CRF/VBR, not classic two-pass.
+        video_transcode_p = 0.45 if settings else 0.35
+        if two_pass:
+            video_transcode_p = 0.85
         notes.append(f"Encoder de mano detectado ({encoder or 'desconocido'})" +
                       (f", CRF {crf}" if crf is not None else "") +
-                      (", two-pass" if two_pass else ""))
+                      (", two-pass" if two_pass else "") +
+                      " — por sí solo no distingue un WEB-DL genuino (varias plataformas "
+                      "usan x264/x265 internamente) de un re-encode; two-pass sí es más propio de un re-encode")
     else:
         video_transcode_p = 0.15
         notes.append("Sin huella de encoder de mano en los metadatos (no concluyente por sí solo)")

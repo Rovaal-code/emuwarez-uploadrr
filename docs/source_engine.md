@@ -109,8 +109,10 @@ entrada correspondiente.
 - **normalized_score / confidence_score**: `raw_score` pasado por una
   softmax (temperatura 18) — siempre suma ~100% entre los 9 candidatos.
   Es una puntuación de confianza relativa entre estos 9 candidatos
-  concretos, **no** una probabilidad estadística calibrada contra un
-  dataset real (no existe ese dataset todavía — ver "Cómo calibrar").
+  concretos, **no** una probabilidad estadística en sentido frecuentista
+  estricto (no hay un dataset externo etiquetado por terceros contra el
+  que calibrarla formalmente) — aunque sí está calibrada contra una
+  muestra real grande (ver "Calibración realizada" abajo).
 - **margin**: diferencia de `normalized_score` entre el 1º y el 2º,
   en puntos porcentuales.
 - **certainty** ("alto"/"medio"/"bajo"): etiqueta puramente descriptiva
@@ -138,35 +140,81 @@ entrada correspondiente.
 5. Añadir un test unitario en `test_source_engine.py` con un
    `MediaProfile` de ejemplo construido a mano (sin tocar subprocess).
 
-## Cómo calibrar las probabilidades con datos reales
+## Calibración realizada (2026-07-23)
 
-Hoy los rangos de `bits_per_pixel_per_frame` por candidato
-(`evidence.py::_BPPF_RANGES`) y los pesos de `STRENGTH_WEIGHT`/
-`_TEMPERATURE` (`scoring.py`) son heurísticos, documentados como tales
-(`confidence_score`, nunca "probability"). Para calibrarlos con un
-dataset real y etiquetado:
-1. Recolectar archivos con source conocido (no solo por nombre — con
-   verificación humana) y ejecutar `analyze()` sobre cada uno con
-   `use_cache=False`.
-2. Comparar el candidato ganador contra la etiqueta real; para los fallos,
-   mirar qué evidencias pesaron más (`result["evidence"]`) y ajustar sus
-   `contributions`/`reliability` en el detector correspondiente.
-3. Ajustar `_BPPF_RANGES` con los percentiles reales de
-   `bits_per_pixel_per_frame` observados por tier, en vez de las
-   estimaciones actuales.
-4. Subir `ENGINE_VERSION` — invalida la caché automáticamente.
+Se hizo una pasada de calibración real contra el informe de MediaInfo de
+toda la biblioteca del usuario (`mediainfo_report_20260717_144848.txt`,
+2802 archivos). Metodología: la "verdad" usada es el source que indica el
+propio **nombre de archivo** (vía `legacy._detect_source_by_name`, la misma
+regex que ya usa el resto de la app como primera prioridad — no un dataset
+etiquetado externamente, pero sí una base razonable dado que son releases
+ya seleccionados/nombrados según la guía oficial). El script vive en
+`/tmp/.../scratchpad/calibrate.py` de esa sesión (no forma parte del
+repo — procesa un fichero privado del usuario fuera de él); se parseó el
+texto de MediaInfo directamente (sin red, sin releer los archivos) y se
+corrió `evidence.py`/`scoring.py` de forma "name-blind" (las evidencias
+nunca ven el nombre del archivo, solo lo técnico) para comparar contra esa
+etiqueta.
+
+De 2802 archivos, 1410 tenían un source reconocible por nombre (el resto,
+sin etiqueta, se ignoraron). Resultado **antes** de la calibración: 21.2%
+de acierto top-1 (30.6% top-2). Hallazgo clave: la señal
+`video_transcode_probability` (huella de encoder x264/x265) estaba
+prácticamente siempre presente — tanto en WEB-DL genuinos de Netflix como
+en re-encodes — porque **varias plataformas de streaming usan libx264/
+libx265 internamente y dejan la misma cadena de `Encoded_Library_Settings`
+que un encoder manual**, algo que la primera versión asumía que NO pasaba.
+Eso hacía que casi cualquier WEB-DL real se puntuara como WEBRip/BluRay.
+
+Corrección aplicada (`transcode.py` + `evidence.py::transcode_signal`):
+solo el marcador **two-pass** (`pass=2` en los ajustes del encoder) se
+trata ahora como señal fuerte de recodificación de mano — las plataformas
+de streaming usan CRF/VBR de una sola pasada, no two-pass clásico. Un
+fingerprint x264/x265 sin two-pass pasó de pesar como señal "fuerte" a
+pesar como señal "débil" (nudge pequeño, no decisivo). También se
+recalibraron los rangos de `bits_per_pixel_per_frame` por tier
+(`evidence.py::_BPPF_RANGES`) con los percentiles p25/p75 reales
+observados (MediaInfo ya calcula ese campo, no hubo que recalcularlo), y
+se añadió una señal nueva y débil (`subtitle_language_breadth`): las
+plataformas grandes tienden a empaquetar subtítulos de muchos idiomas en
+su propio WEB-DL.
+
+**Resultado después de la calibración: 76.6% de acierto top-1 (86.5%
+top-2)** sobre los mismos 1410 archivos — sin haber tocado nunca el
+nombre del archivo durante el análisis, solo evidencia técnica.
+Confusiones que quedan (minoritarias): WEBRip clasificado como WEB-DL
+(117 casos) y BluRay/WEB-DL confundidos entre sí con BDRemux en el rango
+alto de bitrate (cuentan con muestra real pequeña o nula — ver
+limitaciones). `BDRemux`/`FBD`/`FDVD`/`SD` no tenían ninguna muestra real
+en esta biblioteca concreta (0 archivos con ese source en el nombre), así
+que sus rangos siguen siendo la estimación original sin validar.
+
+## Cómo seguir calibrando
+
+1. Recolectar (o pedir) archivos con `BDRemux`/`FBD`/`FDVD`/`SD` reales
+   (0 muestras en la pasada de 2026-07) y repetir el mismo proceso.
+2. Para los fallos restantes (`result["evidence"]` trae la contribución de
+   cada señal), ajustar `contributions`/`reliability` del detector que más
+   pesó en el error.
+3. Subir `ENGINE_VERSION` tras cualquier cambio de reglas — invalida la
+   caché automáticamente.
 
 ## Limitaciones conocidas
 
 - No usa Bento4 ni GPAC/MP4Box (parsing profundo de boxes MP4) — MediaInfo
   + ffprobe ya cubren fragmentación/brands para el nivel de detalle que
-  necesita el scoring actual; queda como mejora futura si se necesita
-  inspeccionar boxes concretas (ej. `mdat`/`moof` a mano).
+  necesita el scoring actual; impacto bajo (la mayoría de aportes de la
+  guía son MKV, donde mkvmerge ya da todo esto). Mejora futura si algún
+  día hace falta inspeccionar boxes concretas de MP4 sin decodificar
+  (tabla de keyframes `stss`, fragmentación `moof` exacta) — especialmente
+  útil para acelerar el muestreo de bitstream en redes lentas. GPAC
+  (MP4Box) está en repos oficiales (Debian y Arch/CachyOS); Bento4 no.
 - El muestreo de bitstream (`sampling.py`) depende del backend de
-  almacenamiento — sobre un montaje de red lento puede no completarse
-  nunca (se salta con seguridad, ver "Presupuesto de tiempo").
-- Las probabilidades de recodificación (`transcode.py`) y los rangos de
-  bpppf son heurísticos, no calibrados contra un dataset etiquetado real.
+  almacenamiento — sobre un montaje de red lento (ej. SSHFS saturado)
+  puede no completarse nunca; se salta con seguridad (ver "Presupuesto de
+  tiempo"), nunca bloquea el resultado.
+- `BDRemux`/`FBD`/`FDVD`/`SD` no tenían ninguna muestra real en la
+  calibración de 2026-07 — sus rangos de bitrate siguen sin validar.
 - No distingue un WEBRip re-encodeado de un MicroHD re-encodeado por
   bitrate en el rango medio — ambos dejan la misma huella de encoder de
   mano (limitación también reconocida explícitamente en la spec original).

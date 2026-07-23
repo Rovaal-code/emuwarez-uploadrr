@@ -306,8 +306,8 @@ export function GuidePage() {
   const openSection = SECTIONS.find(s => s.id === openId) ?? SECTIONS[0]
 
   return (
-    <div data-tour="guide-content" style={{ height: '100%' }}>
-      <div className="page-header">
+    <div data-tour="guide-content" style={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      <div className="page-header" style={{ flexShrink: 0 }}>
         <div>
           <div className="page-title">Guía</div>
           <p style={{ fontSize: 12.5, color: 'var(--text-muted)', margin: '4px 0 0' }}>
@@ -319,7 +319,7 @@ export function GuidePage() {
       {/* One row, one column per section — click any to select it, marking
           that column as active and showing its content in the panel below
           (inline, not a modal). Fórmula del nombre is selected by default. */}
-      <div className="detail-card" style={{ borderRadius: 10, overflowX: 'auto', marginTop: 20 }}>
+      <div className="detail-card" style={{ borderRadius: 10, overflowX: 'auto', marginTop: 20, flexShrink: 0 }}>
         <table className="data-table" style={{ tableLayout: 'fixed', width: '100%' }}>
           <tbody>
             <tr>
@@ -351,11 +351,20 @@ export function GuidePage() {
         </table>
       </div>
 
-      <div className="detail-card" style={{ borderRadius: 10, marginTop: 16, padding: '16px 18px' }}>
-        <h3 style={{ margin: '0 0 14px', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+      {/* Fills the remaining vertical space and scrolls internally — same
+          fill+internal-scroll pattern as Biblioteca's Temporadas/Capítulos
+          and Subidas' "Progreso de la subida", so long content (like the
+          técnicas tables) never grows the page past the usual bottom margin. */}
+      <div
+        className="detail-card"
+        style={{ borderRadius: 10, marginTop: 16, padding: '16px 18px', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
+      >
+        <h3 style={{ margin: '0 0 14px', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', flexShrink: 0 }}>
           {openSection.title}
         </h3>
-        {openSection.render()}
+        <div style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
+          {openSection.render()}
+        </div>
       </div>
     </div>
   )

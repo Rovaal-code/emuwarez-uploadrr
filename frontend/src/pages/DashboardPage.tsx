@@ -53,6 +53,7 @@ const REC_GROUP_META: Record<number, {
 const TASK_NAME_LABEL: Record<string, string> = {
   'sync-library': 'Sincronizar bibliotecas',
   'sync-emu-requests': 'Sincronizar peticiones eMuwarez',
+  'sync-emu-catalog': 'Sincronizar catálogo eMuwarez',
 }
 function taskNameLabel(name: string): string {
   return TASK_NAME_LABEL[name] || name

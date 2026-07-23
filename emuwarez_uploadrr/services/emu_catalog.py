@@ -22,6 +22,7 @@ from typing import Any, Optional
 from ..database import get_setting_canonical, get_state, set_state, get_json_state, set_json_state
 from ..integrations import emu
 from ..integrations.base import IntegrationError
+from .tasks import start_task, finish_task
 
 logger = logging.getLogger("emuwarez.emu")
 
@@ -683,86 +684,93 @@ def sync_emu_catalog(conn: sqlite3.Connection, *, force: bool = False, mode: str
     if wait > 0 and not force:
         return {"status": "throttled", "wait_seconds": wait, "torrents": 0, "items": 0}
 
-    api_key = get_setting_canonical(conn, "emu.api_key")
-    if not api_key:
-        raise IntegrationError("No hay API Key de eMuwarez configurada")
-
-    # Fail fast (and clearly) if eMuwarez itself is unreachable, instead of only
-    # discovering it mid-download — this is a single cheap request (perPage=1)
-    # bound by request_json's own timeout, so a down/unreachable tracker surfaces
-    # as an error within seconds rather than the sync silently hanging.
-    _set_progress(phase="Comprobando conexión con eMuwarez…", page=0, total_pages=None, eta_seconds=None)
+    task_id = start_task(conn, "sync-emu-catalog", f"Sincronizando catálogo eMuwarez ({'completo' if mode == 'full' else 'nuevo'})")
     try:
-        emu.emu_test_connection(api_key)
-    except IntegrationError as exc:
-        raise IntegrationError(f"No se pudo conectar con eMuwarez: {exc}") from exc
+        api_key = get_setting_canonical(conn, "emu.api_key")
+        if not api_key:
+            raise IntegrationError("No hay API Key de eMuwarez configurada")
 
-    import time
-    # Incremental: only fetch torrents newer than the highest id we already have.
-    # First sync ever (no stored max) → full download.
-    try:
-        known_max_id = int(get_state(conn, MAX_ID_STATE_KEY) or 0)
-    except (TypeError, ValueError):
-        known_max_id = 0
-    # Incremental unless a full pass is requested (or there's no baseline yet).
-    incremental = (mode != "full") and known_max_id > 0
-    # Estimate the page total (the API doesn't send last_page): a full pass is
-    # ~ceil(previous_count / 100). Only meaningful for a full re-download.
-    try:
-        prev_count = int(get_state(conn, COUNT_STATE_KEY) or 0)
-    except (TypeError, ValueError):
-        prev_count = 0
-    if not prev_count:
-        # Fall back to whatever is already stored (e.g. a catalog downloaded
-        # before this bookkeeping existed) so the first full bar has an estimate.
-        prev_count = int(conn.execute("SELECT COUNT(*) AS n FROM emu_catalog").fetchone()["n"])
-    est_full_pages = ((prev_count + 99) // 100) if (prev_count and not incremental) else None
+        # Fail fast (and clearly) if eMuwarez itself is unreachable, instead of only
+        # discovering it mid-download — this is a single cheap request (perPage=1)
+        # bound by request_json's own timeout, so a down/unreachable tracker surfaces
+        # as an error within seconds rather than the sync silently hanging.
+        _set_progress(phase="Comprobando conexión con eMuwarez…", page=0, total_pages=None, eta_seconds=None)
+        try:
+            emu.emu_test_connection(api_key)
+        except IntegrationError as exc:
+            raise IntegrationError(f"No se pudo conectar con eMuwarez: {exc}") from exc
 
-    phase_label = "Buscando torrents nuevos en eMuwarez…" if incremental else "Descargando catálogo de eMuwarez…"
-    logger.info("Sincronización de eMuwarez iniciada (modo %s)", "incremental" if incremental else "completo")
-    _set_progress(phase=phase_label, page=0, total_pages=None, eta_seconds=None)
-    _dl_start = time.time()
+        import time
+        # Incremental: only fetch torrents newer than the highest id we already have.
+        # First sync ever (no stored max) → full download.
+        try:
+            known_max_id = int(get_state(conn, MAX_ID_STATE_KEY) or 0)
+        except (TypeError, ValueError):
+            known_max_id = 0
+        # Incremental unless a full pass is requested (or there's no baseline yet).
+        incremental = (mode != "full") and known_max_id > 0
+        # Estimate the page total (the API doesn't send last_page): a full pass is
+        # ~ceil(previous_count / 100). Only meaningful for a full re-download.
+        try:
+            prev_count = int(get_state(conn, COUNT_STATE_KEY) or 0)
+        except (TypeError, ValueError):
+            prev_count = 0
+        if not prev_count:
+            # Fall back to whatever is already stored (e.g. a catalog downloaded
+            # before this bookkeeping existed) so the first full bar has an estimate.
+            prev_count = int(conn.execute("SELECT COUNT(*) AS n FROM emu_catalog").fetchone()["n"])
+        est_full_pages = ((prev_count + 99) // 100) if (prev_count and not incremental) else None
 
-    def _on_page(page: int, total_pages, items_so_far: int, total_items) -> None:
-        tp = total_pages or est_full_pages
-        elapsed = time.time() - _dl_start
-        eta = None
-        if tp and page > 0 and page < tp:
-            eta = max(0, int(elapsed / page * (tp - page)))
-        _set_progress(phase=phase_label, page=page,
-                      total_pages=tp, torrents=items_so_far, eta_seconds=eta)
+        phase_label = "Buscando torrents nuevos en eMuwarez…" if incremental else "Descargando catálogo de eMuwarez…"
+        logger.info("Sincronización de eMuwarez iniciada (modo %s)", "incremental" if incremental else "completo")
+        _set_progress(phase=phase_label, page=0, total_pages=None, eta_seconds=None)
+        _dl_start = time.time()
 
-    torrents = emu.emu_fetch_all_torrents(
-        api_key, progress=_on_page,
-        stop_after_id=known_max_id if incremental else None,
-    )
-    rows = _index_catalog(torrents)
+        def _on_page(page: int, total_pages, items_so_far: int, total_items) -> None:
+            tp = total_pages or est_full_pages
+            elapsed = time.time() - _dl_start
+            eta = None
+            if tp and page > 0 and page < tp:
+                eta = max(0, int(elapsed / page * (tp - page)))
+            _set_progress(phase=phase_label, page=page,
+                          total_pages=tp, torrents=items_so_far, eta_seconds=eta)
 
-    if incremental:
-        _set_progress(phase="Guardando torrents nuevos…", torrents=len(rows), eta_seconds=None)
-        _append_catalog(conn, rows)
-    else:
-        _set_progress(phase="Guardando catálogo…", torrents=len(rows), eta_seconds=None)
-        _store_catalog(conn, rows)
+        torrents = emu.emu_fetch_all_torrents(
+            api_key, progress=_on_page,
+            stop_after_id=known_max_id if incremental else None,
+        )
+        rows = _index_catalog(torrents)
 
-    # Track the highest id + total count for the next incremental / estimate.
-    new_max_id = max(known_max_id, _max_torrent_id(rows))
-    total_now = int(conn.execute("SELECT COUNT(*) AS n FROM emu_catalog").fetchone()["n"])
-    if new_max_id > 0:
-        set_state(conn, MAX_ID_STATE_KEY, str(new_max_id))
-    set_state(conn, COUNT_STATE_KEY, str(total_now))
+        if incremental:
+            _set_progress(phase="Guardando torrents nuevos…", torrents=len(rows), eta_seconds=None)
+            _append_catalog(conn, rows)
+        else:
+            _set_progress(phase="Guardando catálogo…", torrents=len(rows), eta_seconds=None)
+            _store_catalog(conn, rows)
 
-    _set_progress(phase="Calculando comparaciones con tu biblioteca…")
-    items = _compute_and_store_item_status(conn)
-    _set_progress(phase="Listo", items=items)
-    now_iso = _utcnow().isoformat()
-    set_state(conn, SYNC_STATE_KEY, now_iso)
-    set_state(conn, SYNC_COMPLETED_STATE_KEY, now_iso)
-    if not incremental:  # a full pass also refreshes the 1/day full throttle
-        set_state(conn, FULL_SYNC_STATE_KEY, now_iso)
-    _notify_if_unique_content_changed(conn)
-    conn.commit()
-    logger.info("Sincronización de eMuwarez terminada (%s): %d torrents %s, %d en catálogo, %d elementos comparados",
-                "incremental" if incremental else "completo", len(rows),
-                "nuevos" if incremental else "descargados", total_now, items)
-    return {"status": "ok", "torrents": len(rows), "items": items, "incremental": incremental}
+        # Track the highest id + total count for the next incremental / estimate.
+        new_max_id = max(known_max_id, _max_torrent_id(rows))
+        total_now = int(conn.execute("SELECT COUNT(*) AS n FROM emu_catalog").fetchone()["n"])
+        if new_max_id > 0:
+            set_state(conn, MAX_ID_STATE_KEY, str(new_max_id))
+        set_state(conn, COUNT_STATE_KEY, str(total_now))
+
+        _set_progress(phase="Calculando comparaciones con tu biblioteca…")
+        items = _compute_and_store_item_status(conn)
+        _set_progress(phase="Listo", items=items)
+        now_iso = _utcnow().isoformat()
+        set_state(conn, SYNC_STATE_KEY, now_iso)
+        set_state(conn, SYNC_COMPLETED_STATE_KEY, now_iso)
+        if not incremental:  # a full pass also refreshes the 1/day full throttle
+            set_state(conn, FULL_SYNC_STATE_KEY, now_iso)
+        _notify_if_unique_content_changed(conn)
+        conn.commit()
+        summary = f"{len(rows)} torrents {'nuevos' if incremental else 'descargados'}, {total_now} en catálogo, {items} elementos comparados"
+        finish_task(conn, task_id, "completed", summary)
+        logger.info("Sincronización de eMuwarez terminada (%s): %d torrents %s, %d en catálogo, %d elementos comparados",
+                    "incremental" if incremental else "completo", len(rows),
+                    "nuevos" if incremental else "descargados", total_now, items)
+        return {"status": "ok", "torrents": len(rows), "items": items, "incremental": incremental}
+    except Exception as exc:
+        finish_task(conn, task_id, "failed", str(exc))
+        raise

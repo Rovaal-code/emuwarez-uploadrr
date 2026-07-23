@@ -125,7 +125,7 @@ def chapters_signal(profile: dict) -> list[Evidence]:
             feature="chapter_count", value=0,
             contributions=_c(**{"WEB-DL": 4, "WEBRIP": 4, "HDTV": 3, "SD": 2}),
             strength="weak", reliability=0.4,
-            explanation="Sin capítulos — más habitual en rips web o de emisión que en fuentes de disco.",
+            explanation="Sin capítulos, más habitual en rips web o de emisión que en fuentes de disco.",
         )]
     return []
 
@@ -175,7 +175,7 @@ def hdr_dv_signal(profile: dict) -> list[Evidence]:
         feature="hdr_or_dv", value=label,
         contributions=_c(**{"WEB-DL": 6, "BDRemux": 6, "BluRay": 4, "SD": -20, "HDTV": -20, "FDVD": -20}),
         strength="medium", reliability=0.75,
-        explanation=f"{label} es propio de masters 4K/premium modernos — incompatible con SD/HDTV/DVD.",
+        explanation=f"{label} es propio de masters 4K/premium modernos, incompatible con SD/HDTV/DVD.",
     )]
 
 
@@ -214,7 +214,7 @@ def bluray_compat_flag(profile: dict) -> list[Evidence]:
             feature="x264_bluray_compat", value=True,
             contributions=_c(BluRay=14, MHD=10, **{"FBD": 4}),
             strength="strong", reliability=0.85,
-            explanation="El propio encoder x264 marca `bluray_compat=1` — el encode se generó explícitamente para cumplir el estándar Blu-ray.",
+            explanation="El propio encoder x264 marca `bluray_compat=1`: el encode se generó explícitamente para cumplir el estándar Blu-ray.",
         )]
     return []
 
@@ -291,10 +291,10 @@ def bitrate_normalization_signal(profile: dict) -> list[Evidence]:
         feature="bits_per_pixel_per_frame", value=round(bpppf, 4),
         contributions=contrib,
         strength="medium", reliability=0.5,
-        explanation=(f"Bitrate de vídeo normalizado a {bpppf:.3f} bits/píxel/frame — comparado contra el rango "
+        explanation=(f"Bitrate de vídeo normalizado a {bpppf:.3f} bits/píxel/frame, comparado contra el rango "
                      "típico de cada tier a esta resolución y framerate (calibrado con archivos reales), no contra "
                      "un umbral fijo de Mbps. Los rangos se solapan bastante entre tiers, así que esta señal por sí "
-                     "sola no decide — se combina con el resto."),
+                     "sola no decide: se combina con el resto."),
     )]
 
 
@@ -310,7 +310,7 @@ def video_share_signal(profile: dict) -> list[Evidence]:
             feature="video_share_of_file", value=round(share, 2),
             contributions=_c(**{"BDRemux": -8, "BluRay": -3}),
             strength="weak", reliability=0.5,
-            explanation=f"El vídeo es solo el {share*100:.0f}% del bitrate total — el tamaño del archivo puede estar inflado por el audio, no por un vídeo de bitrate real alto.",
+            explanation=f"El vídeo es solo el {share*100:.0f}% del bitrate total, el tamaño del archivo puede estar inflado por el audio, no por un vídeo de bitrate real alto.",
         )]
     return []
 
@@ -340,14 +340,14 @@ def audio_profile_signal(profile: dict) -> list[Evidence]:
             feature="premium_object_audio", value=premium_n,
             contributions=_c(BDRemux=8, BluRay=5, **{"WEB-DL": 5}),
             strength="weak", reliability=0.5,
-            explanation="Atmos/DTS:X aparece tanto en discos UHD como en algunos WEB-DL premium — orienta hacia fuentes de gama alta sin decidir entre ellas.",
+            explanation="Atmos/DTS:X aparece tanto en discos UHD como en algunos WEB-DL premium, orienta hacia fuentes de gama alta sin decidir entre ellas.",
         ))
     if any(c in lossy_codecs for c in ("e-ac-3", "eac3", "dd+", "ddp")):
         ev.append(Evidence(
             feature="eac3_ddplus_audio", value=True,
             contributions=_c(**{"WEB-DL": 7, "WEBRIP": 5}, BluRay=1),
             strength="weak", reliability=0.45,
-            explanation="E-AC-3/DD+ es habitual en streaming, pero también aparece remultiplexado desde disco — señal débil por sí sola.",
+            explanation="E-AC-3/DD+ es habitual en streaming, pero también aparece remultiplexado desde disco: señal débil por sí sola.",
         ))
     if any(c in lossy_codecs for c in ("mpeg audio", "mp2", "ac-3")) and profile["video"].get("height", 0) and profile["video"]["height"] <= 576:
         ev.append(Evidence(
@@ -374,14 +374,14 @@ def subtitle_language_breadth_signal(profile: dict) -> list[Evidence]:
             feature="subtitle_language_breadth", value=n,
             contributions=_c(**{"WEB-DL": 4, "WEBRIP": 2}, MHD=2, **{"BluRay": -2, "HDTV": -3}),
             strength="weak", reliability=0.35,
-            explanation=f"{n} idiomas de subtítulos — las plataformas grandes suelen empaquetar muchas regiones en su propio WEB-DL.",
+            explanation=f"{n} idiomas de subtítulos, las plataformas grandes suelen empaquetar muchas regiones en su propio WEB-DL.",
         )]
     if n <= 1 and subs:
         return [Evidence(
             feature="subtitle_language_breadth", value=n,
             contributions=_c(BluRay=2, HDTV=2, **{"WEB-DL": -2}),
             strength="weak", reliability=0.3,
-            explanation="Solo 1 idioma de subtítulos — más típico de un disco o una emisión que de un WEB-DL de plataforma grande.",
+            explanation="Solo 1 idioma de subtítulos, más típico de un disco o una emisión que de un WEB-DL de plataforma grande.",
         )]
     return []
 
@@ -400,7 +400,7 @@ def subtitle_profile_signal(profile: dict) -> list[Evidence]:
             feature="pgs_subtitles", value=pgs_n,
             contributions=_c(BDRemux=9, BluRay=7, MHD=3, **{"WEB-DL": -4, "WEBRIP": -4}),
             strength="medium", reliability=0.7,
-            explanation=f"{pgs_n} pista(s) PGS (subtítulo de imagen HDMV) son compatibles con un origen Blu-ray — no concluyentes en solitario.",
+            explanation=f"{pgs_n} pista(s) PGS (subtítulo de imagen HDMV) son compatibles con un origen Blu-ray, no concluyentes en solitario.",
         ))
     if vobsub_n:
         ev.append(Evidence(
@@ -442,13 +442,20 @@ def transcode_signal(profile: dict, signals) -> list[Evidence]:
         )]
     elif signals.has_encoder_fingerprint:
         # Calibrated (2026-07, ~1300 real library files): a bare x264/x265
-        # settings string WITHOUT two-pass is genuinely ambiguous — several
-        # streaming platforms' own WEB-DL masters carry the exact same
-        # single-pass CRF fingerprint as a scene re-encode. Kept as a small
-        # nudge only; see transcode.py's docstring for the full finding.
+        # settings string WITHOUT two-pass is genuinely ambiguous for
+        # WEB-DL specifically — several streaming platforms' own masters
+        # carry the exact same single-pass CRF fingerprint as a scene
+        # re-encode. It is NOT ambiguous for BDRemux/FBD, though: those are
+        # a byte-for-byte copy of the disc's own video stream, and
+        # commercial Blu-ray discs are mastered with proprietary/hardware
+        # encoders, never with an open-source x264/x265 CLI dump — so any
+        # such fingerprint at all is real (if not overwhelming) evidence
+        # against them, unlike the platform-encode ambiguity that applies
+        # to WEB-DL. See transcode.py's docstring for the full finding.
         ev = [Evidence(
             feature="video_transcode_probability", value=round(p, 2),
-            contributions=_c(BluRay=4 * p, MHD=3 * p, WEBRIP=4 * p, **{"WEB-DL": -3 * p}),
+            contributions=_c(BDRemux=-12 * p, **{"FBD": -6 * p}, BluRay=4 * p, MHD=3 * p,
+                              WEBRIP=4 * p, **{"WEB-DL": -3 * p}),
             strength="weak", reliability=0.3, explanation=explanation,
         )]
     else:
@@ -467,7 +474,7 @@ def transcode_signal(profile: dict, signals) -> list[Evidence]:
             feature="screen_capture_probability", value=round(signals.screen_capture_probability, 2),
             contributions=_c(WEBRIP=8),
             strength="weak", reliability=0.4,
-            explanation="Redimensionado sin huella de encoder — leve indicio de una captura de pantalla en vez de un rip directo.",
+            explanation="Redimensionado sin huella de encoder: leve indicio de una captura de pantalla en vez de un rip directo.",
         ))
     return ev
 
@@ -491,14 +498,14 @@ def sampling_signal(sample_result) -> list[Evidence]:
                 feature="sampled_bitrate_variability", value=round(cv, 2),
                 contributions=_c(BDRemux=6, BluRay=4, **{"WEB-DL": 2}),
                 strength="weak", reliability=0.45 * sample_result.coverage,
-                explanation=f"Variabilidad de bitrate entre muestras alta (CV={cv:.2f}) — más propio de un stream VBR sin recomprimir.",
+                explanation=f"Variabilidad de bitrate entre muestras alta (CV={cv:.2f}), más propio de un stream VBR sin recomprimir.",
             ))
         elif cv < 0.12:
             ev.append(Evidence(
                 feature="sampled_bitrate_variability", value=round(cv, 2),
                 contributions=_c(**{"WEB-DL": 4, "WEBRIP": 4, "HDTV": 3}),
                 strength="weak", reliability=0.4 * sample_result.coverage,
-                explanation=f"Bitrate muy uniforme entre muestras (CV={cv:.2f}) — compatible con un encode a bitrate objetivo (CBR/VBR acotado).",
+                explanation=f"Bitrate muy uniforme entre muestras (CV={cv:.2f}), compatible con un encode a bitrate objetivo (CBR/VBR acotado).",
             ))
 
     gop_lengths = [g for w in ok_windows for g in w.gop_lengths]
@@ -509,14 +516,14 @@ def sampling_signal(sample_result) -> list[Evidence]:
                 feature="sampled_gop_length", value=round(avg_gop, 1),
                 contributions=_c(BDRemux=5, BluRay=3),
                 strength="weak", reliability=0.4 * sample_result.coverage,
-                explanation=f"GOP muestreado largo (~{avg_gop:.0f} frames) — encaja con un stream de disco sin recomprimir para streaming adaptativo.",
+                explanation=f"GOP muestreado largo (~{avg_gop:.0f} frames), encaja con un stream de disco sin recomprimir para streaming adaptativo.",
             ))
         elif avg_gop <= 60:
             ev.append(Evidence(
                 feature="sampled_gop_length", value=round(avg_gop, 1),
                 contributions=_c(**{"WEB-DL": 3, "WEBRIP": 3, "HDTV": 2}),
                 strength="weak", reliability=0.35 * sample_result.coverage,
-                explanation=f"GOP muestreado corto (~{avg_gop:.0f} frames) — típico de un encode pensado para streaming/seek rápido.",
+                explanation=f"GOP muestreado corto (~{avg_gop:.0f} frames), típico de un encode pensado para streaming/seek rápido.",
             ))
     return ev
 

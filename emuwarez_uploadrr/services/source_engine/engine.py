@@ -68,7 +68,7 @@ def analyze(path: str, *, radarr_source: Optional[str] = None,
 
     if mediainfo_json is None and ffprobe_json is None and mkvmerge_json is None:
         return _error_result(
-            "Ninguna herramienta (MediaInfo/FFprobe/MKVToolNix) pudo leer el archivo — "
+            "Ninguna herramienta (MediaInfo/FFprobe/MKVToolNix) pudo leer el archivo: "
             + (mi_result.error or ff_result.error or "error desconocido")
         )
 

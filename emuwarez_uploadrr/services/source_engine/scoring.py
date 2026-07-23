@@ -134,7 +134,7 @@ def build_explanation(evidence: list[Evidence], result: ScoringResult) -> dict:
         )
     else:
         vs_text = (
-            f"El margen sobre {runner_label} es pequeño ({result.margin_pp:.1f} puntos) — "
+            f"El margen sobre {runner_label} es pequeño ({result.margin_pp:.1f} puntos): "
             "la evidencia disponible no distingue con claridad entre ambos."
         )
 

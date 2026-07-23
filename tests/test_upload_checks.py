@@ -36,6 +36,25 @@ def test_stops_at_unrenameable_when_path_missing(db_conn):
     assert r["checks"][0]["id"] == "renameable" and r["checks"][0]["status"] == "fail"
 
 
+def test_output_check_falls_back_to_bundled_uploadrr_path(db_conn, tmp_path, monkeypatch):
+    """Regression: the bundled runtime (RUNTIME_EMU, the default) needs no
+    configuration at all — DEFAULT_UPLOADRR_PATH (/opt/Uploadrr, or
+    UPLOADRR_PATH) must be used when `uploadrr.path` was never set by hand,
+    the same way uploadrr_contract.py::get_runtime_settings() already does
+    for the actual upload command. Previously this check read the setting
+    directly with no fallback, so it failed with "no configurado" even
+    though the runtime it validates for doesn't require configuring it."""
+    from emuwarez_uploadrr.services import uploadrr_contract as ctr
+    monkeypatch.setattr(ctr, "DEFAULT_UPLOADRR_PATH", str(tmp_path))
+
+    f = tmp_path / "movie.mkv"
+    f.write_bytes(b"x" * 2048)
+    iid = _movie_with_path(db_conn, str(f))
+    r = uc.run_upload_checks(db_conn, iid)
+    output_check = next(c for c in r["checks"] if c["id"] == "output")
+    assert output_check["status"] == "ok"
+
+
 def test_all_green_when_everything_passes(db_conn, tmp_path, monkeypatch):
     from emuwarez_uploadrr.web.services.settings_service import set_setting
     f = tmp_path / "movie.mkv"

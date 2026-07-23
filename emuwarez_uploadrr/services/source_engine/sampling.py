@@ -23,11 +23,11 @@ log = logging.getLogger("emuwarez.source_engine")
 # Per-call timeout for one sampling window — short on purpose; a call that
 # doesn't return in this long is abandoned (proc.py kills the subprocess),
 # and that sample position is simply missing from the result.
-PER_SAMPLE_TIMEOUT_S = 2.5
+PER_SAMPLE_TIMEOUT_S = 3.0
 # Never spend more of the global budget on sampling than this, even if the
 # rest of the analysis finished early — sampling is a refinement, not the
 # primary signal.
-MAX_SAMPLING_BUDGET_S = 4.0
+MAX_SAMPLING_BUDGET_S = 5.0
 
 
 @dataclass

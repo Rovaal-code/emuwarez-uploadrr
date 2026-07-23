@@ -36,6 +36,7 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int) -> dict:
     from .library import get_library_item
     from .integration_tests import test_qbit_connection, test_emuwarez_connection
     from .image_hosts import fallback_order, get_host_key, test_image_host, host_meta
+    from .uploadrr_contract import get_runtime_settings
     from ..database import get_setting_canonical
 
     checks: list[dict] = []
@@ -115,7 +116,11 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int) -> dict:
             return done()
 
     # 2. Output directory writable — where Uploadrr stages the .torrent + images.
-    out_dir = get_setting_canonical(conn, "uploadrr.path")
+    # Falls back to the bundled runtime's own default (/opt/Uploadrr, or
+    # UPLOADRR_PATH) the same way uploadrr_contract.py::get_runtime_settings
+    # already does — the bundled runtime needs no configuration at all, so
+    # this check must not require `uploadrr.path` to have been set by hand.
+    out_dir = get_runtime_settings(conn)["uploadrr_path"]
     if not add("output", "Directorio de salida escribible", "Directorio de salida no escribible",
                bool(out_dir) and os.path.isdir(out_dir) and os.access(out_dir, os.W_OK),
                out_dir or "uploadrr.path no configurado"):

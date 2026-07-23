@@ -30,9 +30,13 @@ DEFAULT_BUDGET_S = 10.0
 TOOL_TIMEOUT_S = 6.0
 
 # Bitstream sampling: 5 relative positions across the video, each a short
-# window of frames — never a full decode (spec section 13).
+# window of frames — never a full decode (spec section 13). On real local
+# storage this whole engine typically finishes in ~2s of its 10s budget
+# (confirmed against production hardware, 2026-07), so the window is sized
+# for that headroom rather than the bare minimum — still bounded and still
+# skipped entirely on a slow/degraded mount (see sampling.py's own budget).
 SAMPLE_POSITIONS = (0.02, 0.25, 0.50, 0.75, 0.95)
-SAMPLE_FRAMES_PER_WINDOW = 96
+SAMPLE_FRAMES_PER_WINDOW = 180
 
 # Certainty labels by normalized-score margin (percentage points between
 # winner and runner-up). Purely descriptive — the winner is chosen by raw

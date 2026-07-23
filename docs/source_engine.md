@@ -230,6 +230,30 @@ un análisis real (audio sin pérdida, PGS, capítulos, scan type), así que
 la mayor confusión aquí (BluRay→WEB-DL, 1193 casos) es en buena parte un
 artefacto de esta prueba reducida, no necesariamente del motor completo.
 
+## Corrección adicional: BDRemux nunca debería llevar huella x264/x265
+
+Detectado en un caso real (Geostorm, 2026-07-24): con `has_encoder_
+fingerprint=True` pero sin two-pass, la rama "ambigua" de
+`transcode_signal` no penalizaba BDRemux en absoluto (no estaba ni
+mencionado en su dict de contribuciones). Eso es un error real, no solo de
+calibración: un BDRemux es una copia byte a byte del stream de vídeo del
+disco, y un Blu-ray comercial jamás se masteriza con un CLI abierto de
+x264/x265 (eso deja una huella de ajustes que solo aparece en encodes de
+mano o en algunas plataformas de streaming, nunca en un disco físico). Se
+añadió una penalización moderada a BDRemux (y una pequeña a FBD) en esa
+rama. Confirmado sin regresión en ambas pasadas de calibración (77.6%→
+77.7% en la biblioteca personal; sin cambio en el catálogo, que no
+modela encoder_settings).
+
+## Profundidad del muestreo de bitstream
+
+`SAMPLE_FRAMES_PER_WINDOW` subió de 96 a 180 frames por ventana (y el
+presupuesto de muestreo de 4s a 5s) tras confirmar en el servidor de
+producción del usuario que el análisis completo tarda solo ~2s de los 10s
+de presupuesto por defecto sobre almacenamiento local real — hay margen de
+sobra para una señal de muestreo más robusta sin arriesgar el límite de
+tiempo. Sigue siendo opcional y se salta igual en una red lenta.
+
 ## Cómo seguir calibrando
 
 1. Recolectar (o pedir) archivos con `SD` reales (1 sola muestra en ambas

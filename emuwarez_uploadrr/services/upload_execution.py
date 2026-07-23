@@ -251,7 +251,9 @@ def validate_upload_job_start(job_id: int, conn=None) -> dict:
             elif p.suffix.lower() not in VIDEO_EXTENSIONS:
                 warnings.append(f"El archivo no tiene extensión de vídeo reconocida: {p.suffix}")
 
-        uploadrr_path = get_setting_canonical(conn, "uploadrr.path")
+        # Falls back to the bundled runtime's own default the same way
+        # get_runtime_settings() always does — it needs no configuration.
+        uploadrr_path = get_runtime_settings(conn)["uploadrr_path"]
         if not uploadrr_path:
             errors.append("Ruta de Uploadrr no configurada (uploadrr.path).")
         else:
@@ -549,7 +551,7 @@ def _check_trailer_and_log(job_id: int) -> None:
             job = get_upload_job(job_id, conn=conn)
             if not job:
                 return
-            uploadrr_path = get_setting_canonical(conn, "uploadrr.path")
+            uploadrr_path = get_runtime_settings(conn)["uploadrr_path"]
             snapshot = {}
             try:
                 snapshot = json.loads(job.get("nomenclature_snapshot_json") or "{}") or {}

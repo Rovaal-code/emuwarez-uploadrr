@@ -357,6 +357,37 @@ function SourceCompareTable({ comparison, onShowBitrateTable }: { comparison: So
 
 const CERTAINTY_COLOR: Record<string, string> = { alto: '#22c55e', medio: '#eab308', bajo: '#ef4444' }
 
+// Spanish display names for the Internal Source Tool's evidence feature
+// keys (the `feature` field itself stays the internal snake_case id — this
+// is presentation-only). The full reasoning for each one is in its own
+// per-row explanation, shown via the "?" InfoIcon, not in the label itself.
+const EVIDENCE_LABELS: Record<string, string> = {
+  single_file_container: 'Archivo único (no disco completo)',
+  container_format: 'Formato del contenedor',
+  fragmented_mp4: 'MP4 fragmentado',
+  chapter_count: 'Capítulos',
+  resolution_sd: 'Resolución SD',
+  resolution_uhd: 'Resolución UHD',
+  scan_type: 'Tipo de escaneo',
+  hdr_or_dv: 'HDR / Dolby Vision',
+  video_codec: 'Códec de vídeo',
+  x264_bluray_compat: 'Flag bluray_compat (x264)',
+  bits_per_pixel_per_frame: 'Bitrate normalizado',
+  video_share_of_file: 'Proporción de vídeo en el archivo',
+  lossless_audio_tracks: 'Audio sin pérdida',
+  premium_object_audio: 'Audio Atmos / DTS:X',
+  eac3_ddplus_audio: 'Audio E-AC-3 / DD+',
+  broadcast_audio_at_sd: 'Audio de emisión en SD',
+  pgs_subtitles: 'Subtítulos PGS',
+  vobsub_subtitles: 'Subtítulos VobSub',
+  text_only_subtitles: 'Solo subtítulos de texto',
+  subtitle_language_breadth: 'Nº de idiomas de subtítulos',
+  video_transcode_probability: 'Probabilidad de recodificación',
+  screen_capture_probability: 'Probabilidad de captura de pantalla',
+  sampled_bitrate_variability: 'Variabilidad de bitrate (muestreo)',
+  sampled_gop_length: 'Duración de GOP (muestreo)',
+}
+
 // Full Internal Source Tool breakdown, shown below the plain 3-column
 // comparison inside the same "Comparación del Source" modal — same
 // detail-card/thStyle/monospace language as every other table in this file,
@@ -410,9 +441,10 @@ function SourceEngineDetail({ result }: { result: SourceEngineResult }) {
             {evidence.map((ev, i) => (
               <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
                 <td style={{ padding: '6px 10px' }}>
-                  <Tooltip content={ev.explanation} maxWidth={340}>
-                    <span style={{ borderBottom: '1px dotted var(--text-muted)', cursor: 'help' }}>{ev.feature}</span>
-                  </Tooltip>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                    {EVIDENCE_LABELS[ev.feature] ?? ev.feature}
+                    <InfoIcon text={ev.explanation} />
+                  </span>
                 </td>
                 {orderedLabels.map(label => {
                   const v = ev.contributions[label]

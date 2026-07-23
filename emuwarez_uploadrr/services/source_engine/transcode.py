@@ -91,7 +91,7 @@ def analyze_transcode_signals(video: dict) -> TranscodeSignals:
         notes.append(f"Encoder de mano detectado ({encoder or 'desconocido'})" +
                       (f", CRF {crf}" if crf is not None else "") +
                       (", two-pass" if two_pass else "") +
-                      " — por sí solo no distingue un WEB-DL genuino (varias plataformas "
+                      ", por sí solo no distingue un WEB-DL genuino (varias plataformas "
                       "usan x264/x265 internamente) de un re-encode; two-pass sí es más propio de un re-encode")
     else:
         video_transcode_p = 0.15
@@ -105,7 +105,7 @@ def analyze_transcode_signals(video: dict) -> TranscodeSignals:
         # A resize with no encoder fingerprint at all is unusual for a normal
         # re-encode pipeline and mildly suggests a capture tool instead.
         screen_capture_p = 0.2
-        notes.append("Redimensionado sin huella de encoder — señal débil de captura")
+        notes.append("Redimensionado sin huella de encoder, señal débil de captura")
 
     return TranscodeSignals(
         has_encoder_fingerprint=has_fingerprint,

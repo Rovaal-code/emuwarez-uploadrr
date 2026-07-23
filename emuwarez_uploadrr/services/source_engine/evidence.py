@@ -254,16 +254,29 @@ def bluray_compat_flag(profile: dict) -> list[Evidence]:
 # reliability were both turned down from the pre-calibration version. It
 # still helps (confirmed by the same pass), it just shouldn't dominate the
 # way a single "strong" signal would.
+#
+# BDRemux and MHD's ranges below come from a SECOND calibration pass (same
+# date) against the full eMuwarez torrent catalog (~11k torrents, name +
+# resolution + size only, no MediaInfo) — the personal-library pass had
+# zero BDRemux samples and only 8 for MHD. That catalog has no duration
+# field, so bpppf there is an ESTIMATE (movies only, assumed 110min@24fps),
+# noisier than the personal library's real MediaInfo-measured values —
+# used only to fill gaps, not to override WEB-DL/WEBRIP/BluRay/HDTV (which
+# keep the more precise personal-library numbers). BDRemux's real p25-p75
+# (n=199) turned out to be 0.401-0.716 — much higher than the original
+# unvalidated guess (0.20-0.55), confirming it's the highest-bitrate tier
+# of all (essentially tied with FBD, which doesn't use this signal at all
+# — see the note above on FBD/FDVD).
 _BPPF_RANGES = {
-    "BDRemux": (0.20, 0.55),      # unvalidated — no real sample in the calibration set
+    "BDRemux": (0.40, 0.72),      # catalog-calibrated, n=199 (estimated duration — see above)
     "BluRay": (0.035, 0.188),
-    "MHD": (0.112, 0.125),        # n=8 only — wide tail decay compensates below
+    "MHD": (0.07, 0.13),          # widened to cover both calibration passes (library n=8, catalog n=25)
     "WEB-DL": (0.041, 0.130),
     "WEBRIP": (0.050, 0.090),     # calibration's WEBRIP p25==p50==p75==0.062; widened slightly, still tight
     "HDTV": (0.086, 0.239),
 }
-# MHD's calibration sample was only 8 files — give it a gentler falloff than
-# the rest so a handful of outliers can't tank it to zero.
+# MHD's calibration samples were small (8 and 25) — give it a gentler
+# falloff than the rest so a handful of outliers can't tank it to zero.
 _BPPF_TAIL_OVERRIDE = {"MHD": 0.7}
 
 

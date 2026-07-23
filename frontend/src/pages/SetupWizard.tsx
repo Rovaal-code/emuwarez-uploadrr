@@ -58,20 +58,20 @@ interface InstanceDraft {
   is_anime: boolean
 }
 
-// Same icon as its Configuración counterpart, for the 4 steps that also
-// exist as their own card there (TMDb, qBittorrent, Proveedores de vídeo,
-// Proveedores de imágenes) — the other steps (bienvenida, admin, eMuwarez,
+// Same icon as its Configuración counterpart, for the steps that also exist
+// as their own card there (Cuenta, TMDb, qBittorrent, Proveedores de vídeo,
+// Proveedores de imágenes) — the other steps (bienvenida, eMuwarez,
 // instancias, completado) don't have a matching Settings card, so no icon.
 function StepTitleIcon({ step }: { step: string }) {
   if (step === 'admin') {
-    // Same gear shape as the Configuración nav icon (Sidebar.tsx's NavIcon
-    // 'settings' case), but in the app's own blue accent color instead of
-    // currentColor — here there's no "active nav" state to turn it blue on
-    // its own, and the wizard's other step icons are all fixed-color too.
+    // Same person shape (and blue) as the Configuración > Cuenta card's own
+    // icon (SettingsPage.tsx) — this step IS that same card (creating/
+    // naming the admin account), so it should read as the same thing, not
+    // as the general Configuración gear.
     return (
       <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="1.75" aria-hidden>
-        <circle cx="12" cy="12" r="3" />
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+        <circle cx="12" cy="7" r="4" />
       </svg>
     )
   }

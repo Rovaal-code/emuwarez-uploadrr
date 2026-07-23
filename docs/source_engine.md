@@ -203,10 +203,37 @@ en manos de `resolution_signal` (altura SD) y `video_codec_signal`
 (MPEG-2/DivX/Xvid), que no tienen ese problema de confusión con la
 eficiencia del códec.
 
+## Segunda pasada de calibración: catálogo completo de eMuwarez (2026-07-23)
+
+Se repitió el mismo tipo de calibración contra el catálogo completo de
+torrents de eMuwarez ya sincronizado (`emu_catalog`, 11338 filas — ver
+`services/emu_catalog.py`), muchísimo más grande que la biblioteca personal
+pero con mucha menos profundidad: solo nombre, resolución y tamaño, **sin
+duración, sin audio/subtítulos/capítulos, sin encoder**. Se filtró a solo
+películas (7816, sin patrón de serie `SxxEyy` ni `season_number`) porque
+permiten asumir una duración razonable (110 min a 24 fps) para poder
+estimar bpppf — el catálogo no trae la duración real, así que este bpppf
+es una **estimación**, más ruidosa que la de MediaInfo real.
+
+Aportó justo lo que faltaba: **BDRemux tenía 0 muestras** en la biblioteca
+personal; aquí hay 199, con p25-p75 real de **0.401-0.716** — mucho más
+alto que la estimación original sin validar (0.20-0.55), confirmando que
+BDRemux es, junto con FBD, el tier de mayor bitrate normalizado de todos.
+MHD pasó de 8 a 25 muestras combinadas; su rango se ensanchó para cubrir
+ambas pasadas (0.07-0.13).
+
+Validación cruzada con el pipeline completo (evidencia + scoring, sin ver
+el nombre) sobre las 7816 películas: **75.8% de acierto top-1 (82.7%
+top-2)** — consistente con el 77.6%/87.7% de la biblioteca personal, pero
+es un **límite inferior**: al catálogo le faltan señales que si ayudan en
+un análisis real (audio sin pérdida, PGS, capítulos, scan type), así que
+la mayor confusión aquí (BluRay→WEB-DL, 1193 casos) es en buena parte un
+artefacto de esta prueba reducida, no necesariamente del motor completo.
+
 ## Cómo seguir calibrando
 
-1. Recolectar (o pedir) archivos con `BDRemux`/`SD` reales (0 muestras en
-   la pasada de 2026-07) y repetir el mismo proceso — especialmente para
+1. Recolectar (o pedir) archivos con `SD` reales (1 sola muestra en ambas
+   pasadas de 2026-07) y repetir el mismo proceso — especialmente para
    confirmar o corregir el razonamiento anterior sobre SD con datos reales.
 2. Para los fallos restantes (`result["evidence"]` trae la contribución de
    cada señal), ajustar `contributions`/`reliability` del detector que más

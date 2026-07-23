@@ -389,6 +389,11 @@ def _run_staging_job(
 
         _write_snapshot(job_id, "checks_snapshot_json", checks, conn=conn)
 
+        if not checks.get("ready"):
+            failed = [c.get("message") or c.get("label") for c in checks.get("checks", []) if c.get("status") == "fail"]
+            _fail(job_id, "; ".join(failed) or "Las comprobaciones previas a la subida no se han superado.")
+            return
+
         now = datetime.now(timezone.utc)
         queued_until = (now + timedelta(seconds=QUEUE_GRACE_SECONDS)).isoformat()
         conn.execute(

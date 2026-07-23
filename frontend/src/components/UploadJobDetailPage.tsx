@@ -260,7 +260,10 @@ function ChecksSection({ snapshot, mediaType, isActive }: {
                 <td>{t.label}</td>
                 <td>
                   {c ? (
-                    <span className={CHECK_STATUS_BADGE[c.status] || 'badge status-unknown'} style={{ fontSize: '0.72rem' }}>
+                    <span
+                      className={`${CHECK_STATUS_BADGE[c.status] || 'badge status-unknown'}${c.status === 'fail' ? ' badge-blink' : ''}`}
+                      style={{ fontSize: '0.72rem' }}
+                    >
                       {CHECK_STATUS_TEXT[c.status] || c.status}
                     </span>
                   ) : (
@@ -364,7 +367,10 @@ function PhasesSection({ phases, globalPct, job }: { phases: UploadProgressPhase
             <tr key={p.key}>
               <td>{p.label}</td>
               <td>
-                <span className={PHASE_STATUS_BADGE[status] || 'badge status-unknown'} style={{ fontSize: '0.72rem' }}>
+                <span
+                  className={`${PHASE_STATUS_BADGE[status] || 'badge status-unknown'}${status === 'failed' ? ' badge-blink' : ''}`}
+                  style={{ fontSize: '0.72rem' }}
+                >
                   {PHASE_STATUS_TEXT[status] || status}
                 </span>
               </td>

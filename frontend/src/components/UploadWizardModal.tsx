@@ -560,7 +560,7 @@ function GeneratingHint() {
 const INTERNAL_TITLE_LABEL = (
   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
     Título del archivo
-    <InfoIcon text="Es el mismo texto que el nombre del torrent — también es el título interno, el que se graba dentro del propio contenedor .mkv." />
+    <InfoIcon text="Es el mismo texto que el nombre del torrent: también es el título interno, el que se graba dentro del propio contenedor .mkv." />
   </span>
 )
 

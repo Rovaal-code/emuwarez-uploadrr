@@ -164,7 +164,7 @@ function JobRow({ job, onOpen, indent, retryToggle, onCancel, onRetry }: {
       <td>
         {job.status === 'queued' ? (
           <span className="badge status-queued">En cola</span>
-        ) : (job.status === 'preparing' || job.status === 'running') ? (
+        ) : (job.status === 'preparing' || job.status === 'running' || job.status === 'failed') ? (
           <span className={`${STATUS_CLASS[job.status] || 'badge req-unknown'} badge-blink`}>
             {statusLabel(job.status)}
           </span>

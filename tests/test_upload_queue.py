@@ -394,6 +394,48 @@ def test_run_staging_job_promotes_to_queued_with_snapshots(db_conn, tmp_path, mo
         uq.cancel_queued_timer(job_id)
 
 
+def test_run_staging_job_fails_when_checks_are_not_ready(db_conn, tmp_path, monkeypatch):
+    """Regression: a staging job used to be promoted to 'queued' regardless
+    of run_upload_checks()'s own `ready` flag — the checks snapshot could
+    say "failed" while the job itself sat in Subidas looking fine. The job
+    must land in 'failed' with the check's own error message instead."""
+    f = tmp_path / "movie.mkv"
+    f.write_bytes(b"x" * 100)
+    iid = _movie_with_path(db_conn, str(f))
+    job_id = uq._insert_staging_job(db_conn, {"id": iid, "title": "X", "path": str(f)})
+
+    import emuwarez_uploadrr.services.nomenclature as nomenclature_mod
+    import emuwarez_uploadrr.services.mkv_remux as mkv_remux_mod
+    import emuwarez_uploadrr.services.upload_checks as upload_checks_mod
+
+    monkeypatch.setattr(
+        nomenclature_mod, "apply_nomenclature_proposal",
+        lambda item_id, conn=None, **kwargs: {"status": "applied", "proposal": {"proposed_filename": "Movie.2024-TAG"}},
+    )
+    monkeypatch.setattr(
+        mkv_remux_mod, "build_remux_plan",
+        lambda item_id, conn=None: {"status": "ready", "ordered_tracks": []},
+    )
+    monkeypatch.setattr(
+        upload_checks_mod, "run_upload_checks",
+        lambda conn, item_id: {
+            "checks": [{"id": "output", "label": "Directorio de salida no escribible", "status": "fail",
+                        "message": "uploadrr.path no configurado"}],
+            "ready": False,
+        },
+    )
+
+    uq._run_staging_job(job_id)
+
+    from emuwarez_uploadrr.services.upload_execution import get_upload_job
+    job = get_upload_job(job_id, conn=db_conn)
+    assert job["status"] == "failed"
+    assert "uploadrr.path" in (job["error_message"] or "")
+    # The checks snapshot itself must still be saved (so the job/detail page
+    # can show exactly which check failed), even though the job failed.
+    assert json.loads(job["checks_snapshot_json"])["ready"] is False
+
+
 def test_run_staging_job_advances_stage_incrementally(db_conn, tmp_path, monkeypatch):
     """Each staging sub-step's snapshot must be written, and `stage` advanced,
     BEFORE the next one starts — the job detail page's per-section spinner

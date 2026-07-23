@@ -97,7 +97,7 @@ export function AutoUploadSourceGate({ targetIds, onNavigate, onClose, onDone }:
       <div className="modal-body">
         <div style={{ padding: '20px 0', textAlign: 'center' }}>
           <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>
-            {total > 1 ? `${okCount} de ${total} subida(s) preparada(s) en Subidas` : 'Todo OK — subida preparada en Subidas'}
+            {total > 1 ? `${okCount} de ${total} subida(s) añadida(s) a la cola de subidas` : 'Subida añadida a la cola de subidas'}
           </div>
           <button className="btn btn-primary" onClick={goToUploads} type="button">Ir a Subidas</button>
         </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, Fragment } from 'react'
+import { useState, useEffect, useMemo, useRef, Fragment } from 'react'
 import { getUploads, startUploadJob, retryUploadJobQueued, cancelUploadJob } from '../api/uploads'
 import type { UploadJob } from '../types/api'
 import { EmptyState } from '../components/EmptyState'
@@ -266,15 +266,24 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // their older attempts expanded below them.
   const [expandedChains, setExpandedChains] = useState<Set<number>>(new Set())
 
+  // Guards against out-of-order responses: the 2.5s background poll (below)
+  // and an explicit load() (e.g. right after deleting a job) can both be
+  // in-flight at once, and network timing doesn't guarantee the one that
+  // started first also RESOLVES first. Without this, a slower poll that
+  // started before a delete can resolve after it and overwrite `jobs` with
+  // stale pre-delete data — the deleted job "comes back" until the next
+  // refresh. Only ever apply the response from the most recently ISSUED call.
+  const loadSeqRef = useRef(0)
   const load = async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) { setLoading(true); setError(null) }
+    const seq = ++loadSeqRef.current
     try {
       // The "Subiendo" filter option (value 'running') must also catch
       // 'preparing' jobs — they display identically as "Subiendo" now (see
       // STATUS_LABEL) — so it can't be a single exact server-side match;
       // fetch unfiltered and narrow client-side in visibleJobs instead.
       const data = await getUploads(statusFilter && statusFilter !== 'running' ? { status: statusFilter } : undefined)
-      setJobs(data)
+      if (seq === loadSeqRef.current) setJobs(data)
     } catch { if (!opts?.silent) setError('Error al cargar los trabajos de subida.') }
     finally { if (!opts?.silent) setLoading(false) }
   }

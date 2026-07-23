@@ -75,10 +75,10 @@ export interface AutoUploadSourceCheck {
   from_mediainfo: string | null
 }
 
-// Quick pre-flight check run right before an "Automático" upload: does the
-// file's own name resolve the source, or is Radarr/Sonarr's reported source
-// at odds with what MediaInfo's bitrate tool estimates? Only flags that
-// specific disagreement — see services/source_assistant.py::check_auto_upload_source.
+// Quick pre-flight check run right before an "Automático" upload: do the
+// file's name, Radarr/Sonarr, and the Internal Source Tool all agree on the
+// source? Flags a disparity whenever any two of the (present) values
+// disagree — see services/source_assistant.py::check_auto_upload_source.
 export async function checkAutoUploadSource(itemId: number): Promise<AutoUploadSourceCheck> {
   return api.get<AutoUploadSourceCheck>(`/library/${itemId}/upload/auto/source-check`)
 }

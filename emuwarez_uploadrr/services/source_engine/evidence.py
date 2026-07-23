@@ -427,31 +427,26 @@ def transcode_signal(profile: dict, signals) -> list[Evidence]:
     p = signals.video_transcode_probability
     explanation = "; ".join(signals.notes) or "Señales de recodificación evaluadas sobre el propio stream."
 
-    if signals.two_pass:
-        # Calibrated (2026-07): two-pass is a genuinely strong, fairly
-        # unambiguous re-encode signal — streaming platforms' own delivery
-        # pipelines use single-pass CRF/VBR, not classic two-pass.
-        ev = [Evidence(
-            feature="video_transcode_probability", value=round(p, 2),
-            contributions=_c(
-                BDRemux=-40 * p, **{"FBD": -10 * p, "FDVD": -10 * p},
-                BluRay=18 * p, MHD=14 * p, WEBRIP=20 * p,
-                **{"WEB-DL": -25 * p}, HDTV=6 * p, SD=6 * p,
-            ),
-            strength="strong", reliability=0.65, explanation=explanation,
-        )]
-    elif signals.has_encoder_fingerprint:
+    if signals.has_encoder_fingerprint:
         # Calibrated (2026-07, ~1300 real library files): a bare x264/x265
-        # settings string WITHOUT two-pass is genuinely ambiguous for
-        # WEB-DL specifically — several streaming platforms' own masters
-        # carry the exact same single-pass CRF fingerprint as a scene
-        # re-encode. It is NOT ambiguous for BDRemux/FBD, though: those are
-        # a byte-for-byte copy of the disc's own video stream, and
-        # commercial Blu-ray discs are mastered with proprietary/hardware
-        # encoders, never with an open-source x264/x265 CLI dump — so any
-        # such fingerprint at all is real (if not overwhelming) evidence
-        # against them, unlike the platform-encode ambiguity that applies
-        # to WEB-DL. See transcode.py's docstring for the full finding.
+        # settings string is genuinely ambiguous for WEB-DL specifically —
+        # several streaming platforms' own masters carry the exact same
+        # fingerprint as a scene re-encode. This was first found for
+        # single-pass CRF; a second pass (same library) then caught a
+        # CONFIRMED genuine Netflix WEB-DL (Sirens S01, "NF" platform tag)
+        # reporting `rc=2pass` in its own settings dump — so two-pass isn't
+        # a reliable tell either, and no longer gets special strong-penalty
+        # treatment (an earlier version of this code did, and measurably
+        # regressed accuracy on this exact dataset once corrected to detect
+        # x264's real "Npass" format instead of a "pass=N" pattern that
+        # never actually matched anything).
+        #
+        # It is NOT ambiguous for BDRemux/FBD, though: those are a
+        # byte-for-byte copy of the disc's own video stream, and commercial
+        # Blu-ray discs are mastered with proprietary/hardware encoders,
+        # never with an open-source x264/x265 CLI dump — so any such
+        # fingerprint at all is real (if not overwhelming) evidence against
+        # them, unlike the platform-encode ambiguity that applies to WEB-DL.
         ev = [Evidence(
             feature="video_transcode_probability", value=round(p, 2),
             contributions=_c(BDRemux=-12 * p, **{"FBD": -6 * p}, BluRay=4 * p, MHD=3 * p,

@@ -112,7 +112,24 @@ def test_transcode_signals_detect_x264_fingerprint():
     assert sig.crf == 18.0
     assert sig.two_pass is True
     assert sig.keyint == 250
-    assert sig.video_transcode_probability > 0.8
+    # Deliberately NOT > 0.8: a confirmed genuine Netflix WEB-DL reporting
+    # rc=2pass proved two-pass isn't a reliable re-encode tell either (see
+    # transcode.py's docstring) — it gets the same modest weight as a plain
+    # single-pass fingerprint now, not extra confidence.
+    assert 0.3 < sig.video_transcode_probability < 0.6
+
+
+def test_transcode_signals_detect_real_x264_twopass_format():
+    """x264 reports its own rate-control mode as "rc=2pass"/"rc=1pass" — NOT
+    "pass=2". The original regex only matched the latter (never seen in a
+    real x264 dump) and so never actually detected two-pass at all."""
+    video = {"encoder": "x264 - core 164", "encoder_settings": "rc=2pass / bitrate=8000 / keyint=96"}
+    sig = transcode.analyze_transcode_signals(video)
+    assert sig.two_pass is True
+
+    video_1pass = {"encoder": "x264", "encoder_settings": "rc=1pass / crf=18.0"}
+    sig_1pass = transcode.analyze_transcode_signals(video_1pass)
+    assert sig_1pass.two_pass is False
 
 
 def test_transcode_signals_no_fingerprint_favors_untouched():

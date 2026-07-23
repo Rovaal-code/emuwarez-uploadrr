@@ -8,11 +8,12 @@ const PROVIDER_SOURCES = new Set(['WEB-DL'])
 
 // Gate in front of an "Automático" upload (or a sequential batch of them, one
 // per season): before each target is actually queued, does a quick source
-// check (name vs Radarr/Sonarr vs MediaInfo-bitrate — see
+// check (name vs Radarr/Sonarr vs Internal Source Tool — see
 // services/source_assistant.py::check_auto_upload_source). Silent and
-// instant when the 3 agree (or the name already resolves it); pauses and
-// asks the user to pick the source (and provider, if WEB-DL) only when
-// Radarr/Sonarr and MediaInfo actually disagree with no name to break the tie.
+// instant when every available value agrees; pauses and asks the user to
+// pick the source (and provider, if WEB-DL) as soon as any two disagree —
+// the name is often just absent, so this doesn't wait for all three to be
+// present before comparing.
 export function AutoUploadSourceGate({ targetIds, onNavigate, onClose, onDone }: {
   targetIds: number[]
   onNavigate?: (page: string) => void
@@ -110,18 +111,20 @@ export function AutoUploadSourceGate({ targetIds, onNavigate, onClose, onDone }:
       <div className="modal-body">
         <p className="text-muted" style={{ fontSize: 12, marginTop: 0, marginBottom: 12 }}>
           {total > 1 ? `Temporada ${index + 1} de ${total}: ` : ''}
-          El nombre del archivo no indica el source, y Radarr/Sonarr no coincide con lo que estima MediaInfo. Elige el source correcto para continuar.
+          El nombre del archivo, Radarr/Sonarr y la Internal Source Tool no coinciden en el source. Elige el source correcto para continuar.
         </p>
         <div className="detail-card" style={{ borderRadius: 8, marginBottom: 14, overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
             <thead>
               <tr>
+                <th style={{ textAlign: 'left', padding: '7px 12px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid var(--border)' }}>Nombre del archivo</th>
                 <th style={{ textAlign: 'left', padding: '7px 12px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid var(--border)' }}>Radarr/Sonarr</th>
-                <th style={{ textAlign: 'left', padding: '7px 12px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid var(--border)' }}>MediaInfo (bitrate)</th>
+                <th style={{ textAlign: 'left', padding: '7px 12px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid var(--border)' }}>Internal Source Tool</th>
               </tr>
             </thead>
             <tbody>
               <tr>
+                <td style={{ padding: '7px 12px', fontFamily: 'monospace' }}>{check.from_name || '—'}</td>
                 <td style={{ padding: '7px 12px', fontFamily: 'monospace' }}>{check.from_radarr || '—'}</td>
                 <td style={{ padding: '7px 12px', fontFamily: 'monospace' }}>{check.from_mediainfo || '—'}</td>
               </tr>

@@ -206,10 +206,12 @@ def _mi_report(from_name, from_mediainfo):
     }
 
 
-def test_check_auto_upload_source_name_wins_no_disparity(tmp_path):
-    """The file name already resolves the source (MicroHD) — Radarr saying
-    BluRay and MediaInfo estimating WEB-DL must NOT trigger a disparity,
-    since the name wins regardless in the real nomenclature build."""
+def test_check_auto_upload_source_disagreement_flagged_even_with_a_name(tmp_path):
+    """All three present and disagreeing (name: MicroHD, Radarr: BluRay,
+    Internal Source Tool: WEB-DL) must flag a disparity — even though the
+    name would still "win" in the real nomenclature build, the user gets a
+    chance to catch a case where the file's actual source doesn't look like
+    any of the three agree on it."""
     conn = _make_conn(tmp_path)
     item_id = _accessible_item(conn, tmp_path, title="Chappie")
     conn.execute("UPDATE library_items SET source = 'BluRay' WHERE id = ?", (item_id,))
@@ -219,6 +221,43 @@ def test_check_auto_upload_source_name_wins_no_disparity(tmp_path):
     with patch(
         "emuwarez_uploadrr.services.media_info_service.build_mediainfo_report",
         return_value=_mi_report("MHD", "WEB-DL"),
+    ):
+        result = check_auto_upload_source(item_id, conn=conn)
+    assert result["disparity"] is True
+
+
+def test_check_auto_upload_source_name_radarr_agree_tool_disagrees(tmp_path):
+    """Name and Radarr both say BluRay, but the Internal Source Tool's own
+    evidence says BDRemux — this is the exact case that motivated widening
+    the check: previously a disparity was only checked when the name gave
+    NOTHING, so this agreement-on-two-out-of-three slipped through silently."""
+    conn = _make_conn(tmp_path)
+    item_id = _accessible_item(conn, tmp_path, title="Geostorm")
+    conn.execute("UPDATE library_items SET source = 'BluRay' WHERE id = ?", (item_id,))
+    conn.commit()
+
+    from emuwarez_uploadrr.services.source_assistant import check_auto_upload_source
+    with patch(
+        "emuwarez_uploadrr.services.media_info_service.build_mediainfo_report",
+        return_value=_mi_report("BluRay", "BDRemux"),
+    ):
+        result = check_auto_upload_source(item_id, conn=conn)
+    assert result["disparity"] is True
+    assert result["from_name"] == "BluRay"
+    assert result["from_radarr"] == "BluRay"
+    assert result["from_mediainfo"] == "BDRemux"
+
+
+def test_check_auto_upload_source_all_three_agree_no_disparity(tmp_path):
+    conn = _make_conn(tmp_path)
+    item_id = _accessible_item(conn, tmp_path, title="Chappie")
+    conn.execute("UPDATE library_items SET source = 'BluRay' WHERE id = ?", (item_id,))
+    conn.commit()
+
+    from emuwarez_uploadrr.services.source_assistant import check_auto_upload_source
+    with patch(
+        "emuwarez_uploadrr.services.media_info_service.build_mediainfo_report",
+        return_value=_mi_report("BluRay", "BluRay"),
     ):
         result = check_auto_upload_source(item_id, conn=conn)
     assert result["disparity"] is False

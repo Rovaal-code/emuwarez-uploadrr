@@ -254,6 +254,54 @@ de presupuesto por defecto sobre almacenamiento local real — hay margen de
 sobra para una señal de muestreo más robusta sin arriesgar el límite de
 tiempo. Sigue siendo opcional y se salta igual en una red lenta.
 
+## Corrección: el regex de two-pass nunca detectaba nada real, y luego se
+## descubrió que tampoco importa
+
+Detectado en un caso real (One Piece S23E10, 2026-07-24): el regex original
+de `two_pass` buscaba literalmente `pass=2`, un formato que x264 **no usa**
+— su propio volcado de ajustes reporta el modo de control de tasa como
+`rc=2pass`/`rc=1pass` (dígito ANTES de "pass", sin "="). El regex nunca
+había detectado two-pass de verdad en ningún archivo real.
+
+Al corregirlo para detectar el formato real (`\b(\d)[-\s]?pass\b`), la
+precisión de la biblioteca personal **bajó** de 77.7% a 74.1% — porque
+ahora sí detectaba two-pass en archivos reales, y el código lo trataba
+como señal fuerte de recodificación (penalización dura a WEB-DL/BDRemux).
+Investigando el porqué: uno de los archivos afectados era un **WEB-DL
+confirmado de Netflix** (`Sirens.2025.S01E04...NF.WEB-DL...`) que reporta
+literalmente `rc=2pass` en su propio volcado de ajustes. Es decir: Netflix
+también usa two-pass en su propio pipeline de encoding, igual que ya se
+había descubierto que usan CRF de una sola pasada. **No hay ninguna
+combinación de ajustes de encoder que distinga de forma fiable un WEB-DL
+genuino de plataforma de un re-encode de escena** con las herramientas
+actuales — ambos pueden usar cualquier técnica de x264/x265.
+
+Se revirtió el trato especial de two-pass (ahora pesa igual que cualquier
+huella de encoder simple, señal débil), recuperando 77.7%/88.0%. El regex
+sigue corregido (detecta two-pass correctamente), simplemente ya no se le
+da peso extra por hacerlo.
+
+## Limitación descubierta: sin calibración por tipo de contenido (anime)
+
+El mismo caso (One Piece, anime, Crunchyroll WEB-DL re-encodeado a 8 Mbps
+2-pass) reveló que el motor da un resultado muy reñido (HDTV/BluRay/WEB-DL
+en un margen de menos de 1 punto, certeza "bajo") en vez de acertar
+WEB-DL/WEBRIP. Motivo: el anime comprime de forma mucho más eficiente que
+la imagen real (menos grano, colores planos, movimiento más simple), así
+que el mismo bpppf que en un WEB-DL de imagen real sería normal, en anime
+se lee como "demasiado alto para ser web" y empuja hacia BluRay/HDTV. Los
+rangos de `_BPPF_RANGES` están calibrados casi enteramente con contenido
+de imagen real (películas), sin una muestra de anime real para ajustarlos
+por separado. El sistema al menos **no se equivoca con falsa confianza**:
+un margen de 0.08 puntos con certeza "bajo" refleja honestamente que es un
+caso ambiguo, no que WEB-DL esté descartado con seguridad.
+
+Pendiente: recalibrar (o segmentar) `_BPPF_RANGES` con una muestra real de
+anime cuando se pueda reunir una — el propio catálogo de eMuwarez
+(`emu_catalog`) podría tener suficientes torrents de anime etiquetados por
+nombre para repetir el mismo proceso de calibración usado con las
+películas.
+
 ## Cómo seguir calibrando
 
 1. Recolectar (o pedir) archivos con `SD` reales (1 sola muestra en ambas

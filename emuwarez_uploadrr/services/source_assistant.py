@@ -344,14 +344,18 @@ def suggest_provider_for_item(library_item_id: int, conn=None) -> dict:
 
 def check_auto_upload_source(item_id: int, conn=None) -> dict:
     """Quick pre-flight check run right before an "Automático" upload is
-    queued: does the file's own name already resolve the source, or is
-    Radarr/Sonarr's reported source at odds with what MediaInfo's bitrate
-    tool would estimate? Only THAT specific case ("nombre no dice nada Y
-    Radarr/Sonarr != MediaInfo") is worth interrupting an otherwise fully
-    automated flow for — if the name already resolves it, the name wins
-    regardless (see nomenclature.py::_infer_source_from_item), so a
-    Radarr/MediaInfo disagreement wouldn't change the outcome and isn't
-    worth asking about.
+    queued: do the file's name, Radarr/Sonarr, and the Internal Source Tool
+    all agree on the source? At minimum, Radarr/Sonarr must agree with the
+    Internal Source Tool — the name is the most reliable signal when it's
+    there, but it's often just plain absent (a rip with no source keyword in
+    its filename), so requiring all three to be PRESENT before comparing
+    would silently skip exactly the disagreements worth surfacing. Any two
+    (or three) values that are both present and don't match counts as a
+    disparity — even when the name already "won" and would still be applied
+    (nomenclature.py::_infer_source_from_item name-first priority is
+    unaffected either way), the user gets a chance to catch a case like the
+    one that motivated this: name and Radarr both say BluRay, but the
+    Internal Source Tool's own evidence points at BDRemux instead.
 
     For a season, checks ONE representative available episode — every
     episode in a pack must already share the same source to be uploadable
@@ -397,7 +401,8 @@ def check_auto_upload_source(item_id: int, conn=None) -> dict:
         sig = report.get("source_signals") or {}
         from_name = sig.get("from_name")
         from_mediainfo = sig.get("from_mediainfo_bitrate")
-        disparity = bool(from_name is None and radarr_source and from_mediainfo and radarr_source != from_mediainfo)
+        present_values = {v for v in (from_name, radarr_source, from_mediainfo) if v}
+        disparity = len(present_values) > 1
         return {
             "disparity": disparity,
             "from_name": from_name,

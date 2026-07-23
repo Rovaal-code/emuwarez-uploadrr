@@ -19,7 +19,11 @@ from dataclasses import dataclass, field
 _REENCODE_LIBS = ("x264", "x265", "x266", "svt-av1", "aomenc", "rav1e", "libvpx")
 _CRF_RE = re.compile(r"\bcrf=([\d.]+)", re.I)
 _BITRATE_RE = re.compile(r"\bbitrate=(\d+)", re.I)
-_PASS_RE = re.compile(r"\bpass=(\d)", re.I)
+# x264's own settings dump reports its rate-control mode as "rc=2pass" (also
+# seen as "rc=1pass") — NOT "pass=2", which was this regex's original (and
+# wrong) assumption; it never matched a real x264 two-pass encode. Catch
+# both that real form and the "pass=N" form some other tools/dumps use.
+_PASS_RE = re.compile(r"\b(\d)[-\s]?pass\b|\bpass=(\d)\b", re.I)
 _KEYINT_RE = re.compile(r"\bkeyint=(\d+)", re.I)
 
 
@@ -52,7 +56,7 @@ def analyze_transcode_signals(video: dict) -> TranscodeSignals:
     bitrate_m = _BITRATE_RE.search(settings)
     target_bitrate = int(bitrate_m.group(1)) * 1000 if bitrate_m else None
     pass_m = _PASS_RE.search(settings)
-    two_pass = (pass_m.group(1) == "2") if pass_m else None
+    two_pass = ((pass_m.group(1) or pass_m.group(2)) == "2") if pass_m else None
     keyint_m = _KEYINT_RE.search(settings)
     keyint = int(keyint_m.group(1)) if keyint_m else None
 
@@ -82,17 +86,17 @@ def analyze_transcode_signals(video: dict) -> TranscodeSignals:
         # single-pass rc=crf included) on their OWN original WEB-DL masters.
         # Before calibration this alone pushed WEB-DL's transcode
         # probability to 0.95, which misclassified the large majority of
-        # real WEB-DL files in that dataset as WEBRip/BluRay. Two-pass
-        # encoding remains a much stronger signal — streaming platforms'
-        # own pipelines use single-pass CRF/VBR, not classic two-pass.
+        # real WEB-DL files in that dataset as WEBRip/BluRay. Two-pass was
+        # initially treated as a much stronger tell (streaming platforms
+        # supposedly using single-pass CRF/VBR only) until a confirmed
+        # genuine Netflix WEB-DL turned up reporting `rc=2pass` in its own
+        # dump — so two-pass gets no special weight either now.
         video_transcode_p = 0.45 if settings else 0.35
-        if two_pass:
-            video_transcode_p = 0.85
         notes.append(f"Encoder de mano detectado ({encoder or 'desconocido'})" +
                       (f", CRF {crf}" if crf is not None else "") +
                       (", two-pass" if two_pass else "") +
-                      ", por sí solo no distingue un WEB-DL genuino (varias plataformas "
-                      "usan x264/x265 internamente) de un re-encode; two-pass sí es más propio de un re-encode")
+                      ", por sí solo no distingue un WEB-DL genuino de un re-encode (varias "
+                      "plataformas de streaming usan x264/x265 internamente, con o sin two-pass)")
     else:
         video_transcode_p = 0.15
         notes.append("Sin huella de encoder de mano en los metadatos (no concluyente por sí solo)")

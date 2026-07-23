@@ -108,6 +108,7 @@ export async function runNomenclatureCheck(id: number, force = false): Promise<N
 export interface LibraryFilterOptions {
   providers: string[]
   qualities: string[]
+  sources: string[]
   types: string[]
   statuses: string[]
   request_statuses: string[]

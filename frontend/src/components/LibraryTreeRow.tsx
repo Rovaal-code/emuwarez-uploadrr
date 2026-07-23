@@ -4,10 +4,11 @@ import type { LibraryItemResponse, InstanceSafeResponse } from '../types/api'
 import { StatusBadge } from './StatusBadge'
 import { ServiceLabel } from './ServiceIcon'
 import { formatDate, formatItemType, formatBytes } from '../utils/format'
-import { buildDeepLink, posterUrl, isAporteEligible, episodeListLabel } from '../utils/libraryItem'
+import { buildDeepLink, posterUrl, episodeListLabel } from '../utils/libraryItem'
 import { ProviderTag } from './ProviderIcon'
 import { LibraryActionButtons } from './LibraryActionButtons'
 import { useTooltip } from './Tooltip'
+import { ValueChip, ValueIcon, ResolutionValueIcon, SourceValueIcon } from './DetailCard'
 
 const NESTED_PAGE_SIZE = 25
 // Seasons per series — well under the API's max limit=500 (a season list
@@ -50,27 +51,6 @@ export function EmuStatusCell({ item }: { item: LibraryItemResponse }) {
   // 0 = No, 1 = Sí, 2 = Parcial (series with some seasons on eMuwarez, some not).
   const status = item.emu_in_catalog === 0 ? 'No' : item.emu_in_catalog === 2 ? 'Parcial' : 'Sí'
   return <StatusBadge status={status} type="emu" />
-}
-
-// "Aportes" — what your copy would add: "Nuevo" badge if it's not on the
-// tracker at all, "Sí" if it's already there but you'd still improve it
-// (resolution / source / codec / ESP — the exact breakdown only shows on the
-// item's own page, via EmuComparisonSection), or — when it's there and you
-// add nothing. Only meaningful for content you actually have (Disponible/
-// Subido/Subiendo, or Parcial for a rollup) — a Faltante item has nothing to
-// contribute regardless of emu_in_catalog.
-export function EmuAportesCell({ item }: { item: LibraryItemResponse }) {
-  if (item.emu_in_catalog == null || !isAporteEligible(item)) {
-    return <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>
-  }
-  if (item.emu_in_catalog === 0) {
-    return <StatusBadge status="Nuevo" type="emu" />
-  }
-  const aportes = item.emu_aportes ?? []
-  if (aportes.length === 0) {
-    return <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>
-  }
-  return <StatusBadge status="Sí" type="emu" />
 }
 
 // Memoized: the list can hold hundreds of rows, and typing in the title
@@ -187,11 +167,15 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
           </div>
         </td>
         <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{formatItemType(item.item_type)}</td>
-        <td>
+        <td style={{ whiteSpace: 'nowrap' }}>
           {item.instance_type
-            ? (deepLink
-                ? <a className="hover-link" href={deepLink} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} {...originTip}><ServiceLabel type={item.instance_type} label={item.instance_name ?? item.instance_type} size={13} />{originTooltip}</a>
-                : <ServiceLabel type={item.instance_type} label={item.instance_name ?? item.instance_type} size={13} />)
+            ? (
+              <ValueChip linkable={!!deepLink}>
+                {deepLink
+                  ? <a className="hover-link" href={deepLink} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} {...originTip}><ServiceLabel type={item.instance_type} label={item.instance_name ?? item.instance_type} size={13} />{originTooltip}</a>
+                  : <ServiceLabel type={item.instance_type} label={item.instance_name ?? item.instance_type} size={13} />}
+              </ValueChip>
+            )
             : <span style={{ color: 'var(--text-muted)' }}>—</span>}
         </td>
         <td><StatusBadge status={item.local_status} type="local" /></td>
@@ -199,14 +183,22 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
         <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
           {formatBytes(item.size_bytes)}
         </td>
-        <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-          {item.provider ? <ProviderTag code={item.provider} label={item.provider_label} size={16} /> : '—'}
+        <td style={{ whiteSpace: 'nowrap' }}>
+          {item.provider
+            ? <ValueChip linkable><ProviderTag code={item.provider} label={item.provider_label} size={16} /></ValueChip>
+            : <span style={{ color: 'var(--text-muted)' }}>—</span>}
         </td>
-        <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-          {[item.resolution, item.source].filter(Boolean).join(' · ') || '—'}
+        <td style={{ whiteSpace: 'nowrap' }}>
+          {item.resolution
+            ? <ValueChip><ValueIcon><ResolutionValueIcon /></ValueIcon><span className="txt">{item.resolution}</span></ValueChip>
+            : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+        </td>
+        <td style={{ whiteSpace: 'nowrap' }}>
+          {item.source
+            ? <ValueChip><ValueIcon><SourceValueIcon /></ValueIcon><span className="txt">{item.source}</span></ValueChip>
+            : <span style={{ color: 'var(--text-muted)' }}>—</span>}
         </td>
         <td style={{ whiteSpace: 'nowrap' }}><EmuStatusCell item={item} /></td>
-        <td><EmuAportesCell item={item} /></td>
         {!compact && (
           <td style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
             {formatDate(item.updated_at)}

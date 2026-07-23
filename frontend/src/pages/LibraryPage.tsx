@@ -87,7 +87,7 @@ const PosterCard = memo(function PosterCard({ item, onSelect, priority }: { item
 export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => void } = {}) {
   const [data, setData] = useState<LibraryListResponse | null>(null)
   const [loading, setLoading] = useState(true)
-  // Applying a Provider/Calidad filter fetches every level (up to LOAD_LIMIT)
+  // Applying a Provider/Resolución filter fetches every level (up to LOAD_LIMIT)
   // and re-renders a large list — a synchronous commit that briefly froze the
   // UI after `loading` had already flipped back to false. Committing the data
   // (and the client-side filter changes) inside a transition keeps `isPending`
@@ -152,6 +152,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   }, [])
   const providerOptions = filterOptions?.providers ?? []
   const qualityOptions = filterOptions?.qualities ?? []
+  const sourceOptions = filterOptions?.sources ?? []
 
   // Diagnostic actions — relocated here from the removed standalone
   // Library + eMuwarez syncs are global (shared with the Dashboard/Peticiones
@@ -178,6 +179,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // Client-side text filters (no backend param) over the loaded items.
   const [searchProvider, setSearchProvider] = useState('')
   const [searchQuality, setSearchQuality] = useState('')
+  const [searchSource, setSearchSource] = useState('')
   const [filterEmu, setFilterEmu] = useState('')
   const [filterAporte, setFilterAporte] = useState('')
   const [sortBy, setSortBy] = useState('title_asc')
@@ -191,7 +193,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
       // one is active we fetch ALL levels (not just top level) — otherwise a
       // mixed-provider series would hide a season whose episodes are all e.g.
       // Netflix. Without them we keep the top-level tree.
-      const flatFilter = !!(searchProvider || searchQuality || filterEmu || filterAporte)
+      const flatFilter = !!(searchProvider || searchQuality || searchSource || filterEmu || filterAporte)
       const result = await getLibrary({
         search: debouncedSearch || undefined,
         type: filterType || undefined,
@@ -209,7 +211,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     } finally {
       setLoading(false)
     }
-  }, [debouncedSearch, filterType, filterStatus, filterInstanceId, filterRequest, searchProvider, searchQuality, filterEmu, filterAporte, sortBy, offset])
+  }, [debouncedSearch, filterType, filterStatus, filterInstanceId, filterRequest, searchProvider, searchQuality, searchSource, filterEmu, filterAporte, sortBy, offset])
 
   useEffect(() => { load() }, [load])
 
@@ -295,18 +297,20 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
 
   const items = data?.items ?? []
   const total = data?.total ?? 0
-  const qualityOf = (it: LibraryItemResponse) => [it.resolution, it.source].filter(Boolean).join(' · ')
 
-  // Same "aporte" definition EmuAportesCell renders: emu_in_catalog === 0
-  // ("Nuevo" — you'd contribute the whole thing) or === 1 with at least one
-  // emu_aportes entry (you'd contribute a specific improvement). Only counts
-  // for content you actually have — a Faltante item has nothing to give.
+  // Same "aporte" definition the eMuwarez filter/notification hand-off use:
+  // emu_in_catalog === 0 ("Nuevo" — you'd contribute the whole thing) or
+  // === 1 with at least one emu_aportes entry (you'd contribute a specific
+  // improvement). Only counts for content you actually have — a Faltante
+  // item has nothing to give. The "Aportes" column itself was removed from
+  // the list view, but this still backs the notification-driven filter.
   const isAporte = (it: LibraryItemResponse) =>
     isAporteEligible(it) && (it.emu_in_catalog === 0 || (it.emu_in_catalog === 1 && (it.emu_aportes?.length ?? 0) > 0))
 
   const matchesFilter = (it: LibraryItemResponse) => {
     const provOk = !searchProvider || it.provider_label === searchProvider
-    const qualOk = !searchQuality || qualityOf(it) === searchQuality
+    const qualOk = !searchQuality || it.resolution === searchQuality
+    const sourceOk = !searchSource || it.source === searchSource
     // "candidate" = No (not on eMuwarez), "present" = Sí. A partial series
     // (emu_in_catalog === 2) matches neither on its own — its Sí/No seasons do,
     // so filtering surfaces those seasons instead of the misleading series row.
@@ -314,13 +318,13 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     // Same rollup caveat as emuOk: an ambiguous/partial item (emu_in_catalog
     // null or 2) matches neither "yes" nor "no" on its own.
     const aporteOk = !filterAporte || (filterAporte === 'yes' ? isAporte(it) : (it.emu_in_catalog === 1 && !isAporte(it)))
-    return provOk && qualOk && emuOk && aporteOk
+    return provOk && qualOk && sourceOk && emuOk && aporteOk
   }
-  // With a Provider/Calidad/eMuwarez/Aporte filter active, `items` holds every level.
+  // With a Provider/Resolución/Source/eMuwarez/Aporte filter active, `items` holds every level.
   // Show the matching items at the highest matching level: if a whole series
   // matches, show the series (not each of its seasons); if only some seasons
   // match (mixed series), show those seasons.
-  const flatFilter = !!(searchProvider || searchQuality || filterEmu || filterAporte)
+  const flatFilter = !!(searchProvider || searchQuality || searchSource || filterEmu || filterAporte)
   let filteredItems: LibraryItemResponse[]
   if (flatFilter) {
     const matchIds = new Set(items.filter(matchesFilter).map(i => i.id))
@@ -483,7 +487,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Título</th>
+                  <th style={{ width: '100%' }}>Título</th>
                   <th><HeaderFilter label="Tipo" value={filterType} onChange={v => { setFilterType(v); setOffset(0) }} options={[
                     { value: '', label: 'Todos' }, ...(filterOptions?.types ?? []).map(t => ({ value: t, label: TYPE_LABELS[t] ?? t })),
                   ]} /></th>
@@ -501,14 +505,14 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
                   <th><HeaderFilter label="Proveedor" value={searchProvider} onChange={setSearchProvider} options={[
                     { value: '', label: 'Todos' }, ...providerOptions.map(p => ({ value: p, label: p })),
                   ]} /></th>
-                  <th><HeaderFilter label="Calidad" value={searchQuality} onChange={setSearchQuality} options={[
+                  <th><HeaderFilter label="Resolución" value={searchQuality} onChange={setSearchQuality} options={[
                     { value: '', label: 'Todas' }, ...qualityOptions.map(q => ({ value: q, label: q })),
                   ]} /></th>
-                  <th><HeaderFilter label="¿En eMuwarez?" value={filterEmu} onChange={v => { setFilterEmu(v); setOffset(0) }} options={[
-                    { value: '', label: 'Todos' }, ...(filterOptions?.emu_states ?? []).map(s => ({ value: s, label: s === 'present' ? 'Sí' : 'No' })),
+                  <th><HeaderFilter label="Source" value={searchSource} onChange={setSearchSource} options={[
+                    { value: '', label: 'Todos' }, ...sourceOptions.map(s => ({ value: s, label: s })),
                   ]} /></th>
-                  <th><HeaderFilter label="Aportes" value={filterAporte} onChange={v => { setFilterAporte(v); setOffset(0) }} options={[
-                    { value: '', label: 'Todos' }, ...(filterOptions?.aporte_states ?? []).map(s => ({ value: s, label: s === 'yes' ? 'Aporta' : 'No aporta' })),
+                  <th><HeaderFilter label="EMuwarez" value={filterEmu} onChange={v => { setFilterEmu(v); setOffset(0) }} options={[
+                    { value: '', label: 'Todos' }, ...(filterOptions?.emu_states ?? []).map(s => ({ value: s, label: s === 'present' ? 'Sí' : 'No' })),
                   ]} /></th>
                   <th>Actualizado</th>
                   <th className="col-actions">Acciones</th>

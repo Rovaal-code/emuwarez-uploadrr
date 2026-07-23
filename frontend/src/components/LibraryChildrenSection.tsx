@@ -47,16 +47,16 @@ export function LibraryChildrenSection({ parentId, childType, title, instances, 
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Título</th>
+                  <th style={{ width: '100%' }}>Título</th>
                   <th>Tipo</th>
                   <th>Origen</th>
                   <th>Estado</th>
                   <th>Petición</th>
                   <th>Tamaño</th>
                   <th>Proveedor</th>
-                  <th>Calidad</th>
-                  <th>¿En eMuwarez?</th>
-                  <th>Aportes</th>
+                  <th>Resolución</th>
+                  <th>Source</th>
+                  <th>EMuwarez</th>
                 </tr>
               </thead>
               <tbody>

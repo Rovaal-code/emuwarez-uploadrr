@@ -656,18 +656,16 @@ def library_filter_options(current_user: dict = Depends(require_auth)) -> dict:
             "SELECT DISTINCT resolution, source FROM library_items "
             "WHERE resolution IS NOT NULL OR source IS NOT NULL"
         ).fetchall()
-        seen = {
-            (r["resolution"], r["source"])
-            for r in qrows
-            if (r["resolution"] or r["source"])
-        }
         # Order by real quality: resolution first (higher → better), then source.
         _RES_RANK = {"4320p": 8, "2160p": 7, "1080p": 6, "1080i": 5, "720p": 4, "576p": 3, "540p": 2, "480p": 1}
         _SRC_RANK = {"BDRemux": 6, "Remux": 6, "BluRay": 5, "WEB-DL": 4, "WEBRip": 3, "HDTV": 2, "DVD": 1}
-        qualities = [
-            " · ".join([x for x in (res, src) if x])
-            for res, src in sorted(seen, key=lambda p: (_RES_RANK.get(p[0], 0), _SRC_RANK.get(p[1], 0)), reverse=True)
-        ]
+        # Calidad and Source are now their own table columns/filters (see
+        # Biblioteca's list view) — each needs its own distinct-values list
+        # instead of the old single "resolution · source" combined string.
+        resolutions = {r["resolution"] for r in qrows if r["resolution"]}
+        sources_seen = {r["source"] for r in qrows if r["source"]}
+        qualities = sorted(resolutions, key=lambda r: _RES_RANK.get(r, 0), reverse=True)
+        sources = sorted(sources_seen, key=lambda s: _SRC_RANK.get(s, 0), reverse=True)
         prows = conn.execute(
             "SELECT path, source FROM library_items "
             "WHERE item_type IN ('movie', 'episode') AND path IS NOT NULL"
@@ -728,6 +726,7 @@ def library_filter_options(current_user: dict = Depends(require_auth)) -> dict:
     return {
         "providers": providers,
         "qualities": qualities,
+        "sources": sources,
         "types": types,
         "statuses": statuses,
         "request_statuses": request_statuses,

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from emuwarez_uploadrr.legacy import (
     _detect_source_by_name, detect_source, heuristic_source, detect_source_smart,
+    estimate_source_from_bitrate,
 )
 
 
@@ -48,3 +49,36 @@ def test_smart_flags_guess(tmp_path):
     # No keyword + ambiguous audio → last-resort BluRay, still a guess.
     src2, guess2 = detect_source_smart(plain, ["AAC"], "1080p")
     assert src2 == "BluRay" and guess2 is True
+
+
+def test_bitrate_reencoded_lossy_never_returns_webdl():
+    # WEB-DL means "untouched platform rip" by definition — a re-encoded
+    # stream (x264 fingerprint present) can never genuinely be one, no
+    # matter the bitrate.
+    reencoded_video = {"Encoded_Library_Settings": "cabac=1 ref=3 ..."}
+    # ~16.3 Mbps at 1080p: a real case (Geostorm, AC3+DTS audio, 12.93 GB /
+    # ~109 min) that a naive "reencoded + above the WEB-DL floor" check used
+    # to mislabel WEB-DL, even though that bitrate sits solidly in BluRay
+    # tier (>= the 9 Mbps threshold) — regressed to MHD, the disc-encode tier.
+    size_bytes = int(12.93 * 1024 ** 3)
+    duration_s = 109 * 60
+    assert estimate_source_from_bitrate(
+        size_bytes, duration_s, ["AC-3"], "1080p", video=reencoded_video,
+    ) == "MHD"
+
+    # Same re-encode fingerprint, but mid bitrate (between the WEB-DL floor
+    # and the BluRay threshold) → still WEBRip/HDTV by bitrate, same as before.
+    mid_size_bytes = int(6.0 * duration_s * 1_000_000 / 8)  # ~6 Mbps
+    assert estimate_source_from_bitrate(
+        mid_size_bytes, duration_s, ["AC-3"], "1080p", video=reencoded_video,
+    ) == "WEBRip"
+    very_low_size_bytes = int(0.3 * 1024 ** 3)
+    assert estimate_source_from_bitrate(
+        very_low_size_bytes, duration_s, ["AC-3"], "1080p", video=reencoded_video,
+    ) == "HDTV"
+
+    # NOT re-encoded (no fingerprint) → still confidently WEB-DL regardless
+    # of bitrate, unaffected by this fix.
+    assert estimate_source_from_bitrate(
+        size_bytes, duration_s, ["AC-3"], "1080p", video={},
+    ) == "WEB-DL"

@@ -2994,9 +2994,12 @@ def estimate_source_from_bitrate(
     - Lossless audio → disc: BDRemux if bitrate is near-untouched, else BluRay.
     - Lossy audio, NOT hand re-encoded (no x264/x265 fingerprint) → confidently
       WEB-DL: an untouched platform rip, regardless of its bitrate.
-    - Lossy audio, hand re-encoded (or unknown) → WEB-DL/WEBRip by bitrate, or
-      HDTV when it's very low. Can't be told apart from a BluRay/MicroHD
-      re-encode this way — both leave an identical encoder fingerprint.
+    - Lossy audio, hand re-encoded (or unknown) → by definition NOT a WEB-DL
+      (that name means untouched), so never returned here. At disc-tier
+      bitrate (≥ the BluRay threshold — streaming 1080p/2160p rarely gets
+      that high) it's almost certainly a hand encode of a disc: MHD. Below
+      that it's WEBRip-or-HDTV by bitrate — can't be told apart from a
+      MicroHD re-encode this way, both leave an identical encoder fingerprint.
     """
     if not size_bytes or not duration_s or duration_s <= 0:
         return None
@@ -3007,7 +3010,9 @@ def estimate_source_from_bitrate(
         return "BDRemux" if mbps >= remux_thr else "BluRay"
     if video is not None and not looks_reencoded(video):
         return "WEB-DL"
-    return "WEB-DL" if mbps >= webdl_thr else "HDTV"
+    if mbps >= bluray_thr:
+        return "MHD"
+    return "WEBRip" if mbps >= webdl_thr else "HDTV"
 
 
 def detect_source_smart(

@@ -73,6 +73,8 @@ export interface AutoUploadSourceCheck {
   from_name: string | null
   from_radarr: string | null
   from_mediainfo: string | null
+  accessible: boolean
+  message: string | null
 }
 
 // Quick pre-flight check run right before an "Automático" upload: do the

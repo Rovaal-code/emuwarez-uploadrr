@@ -1261,6 +1261,8 @@ class AutoUploadSourceCheckResponse(BaseModel):
     from_name: Optional[str] = None
     from_radarr: Optional[str] = None
     from_mediainfo: Optional[str] = None
+    accessible: bool = True
+    message: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------

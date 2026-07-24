@@ -361,12 +361,17 @@ def check_auto_upload_source(item_id: int, conn=None) -> dict:
     episode in a pack must already share the same source to be uploadable
     (season_pack.py::_consistency_errors), so one stands in for all.
 
-    Never blocks: MediaInfo being unavailable, or the file being
-    unreachable, just returns disparity=False (fail-open) — same philosophy
-    as _refresh_media_info_from_real_file elsewhere in this codebase."""
+    Does NOT fail open on an inaccessible file: `accessible` comes back False
+    (with a human-readable `message`) when the path is missing or MediaInfo
+    couldn't read it, so the caller can pause the batch there instead of
+    silently queuing a job doomed to fail later in upload_queue.py's own
+    accessibility check — same failure the manual wizard would otherwise
+    surface first, just moved earlier for the "Automático" path since nothing
+    else stops to show it beforehand there."""
     own = conn is None
     conn = conn or connect()
-    no_disparity = {"disparity": False, "from_name": None, "from_radarr": None, "from_mediainfo": None}
+    no_disparity = {"disparity": False, "from_name": None, "from_radarr": None, "from_mediainfo": None,
+                     "accessible": True, "message": None}
     try:
         row = conn.execute("SELECT * FROM library_items WHERE id = ?", (item_id,)).fetchone()
         if not row:
@@ -388,7 +393,7 @@ def check_auto_upload_source(item_id: int, conn=None) -> dict:
 
         path = representative.get("path")
         if not path:
-            return no_disparity
+            return {**no_disparity, "accessible": False, "message": "El elemento no tiene ruta de archivo."}
 
         from .path_mapping import resolve_local_path
         from .media_info_service import build_mediainfo_report
@@ -396,7 +401,8 @@ def check_auto_upload_source(item_id: int, conn=None) -> dict:
         radarr_source = representative.get("source")
         report = build_mediainfo_report(local_path, radarr_source=radarr_source)
         if not report.get("available"):
-            return {**no_disparity, "from_radarr": radarr_source}
+            return {**no_disparity, "from_radarr": radarr_source, "accessible": False,
+                     "message": report.get("message") or "No se pudo leer el archivo."}
 
         sig = report.get("source_signals") or {}
         from_name = sig.get("from_name")
@@ -407,6 +413,8 @@ def check_auto_upload_source(item_id: int, conn=None) -> dict:
             "disparity": disparity,
             "from_name": from_name,
             "from_radarr": radarr_source,
+            "accessible": True,
+            "message": None,
             "from_mediainfo": from_mediainfo,
         }
     finally:

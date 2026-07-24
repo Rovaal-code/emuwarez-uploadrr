@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { checkAutoUploadSource, queueAutoUpload, type AutoUploadSourceCheck } from '../api/uploads'
 import { suggestProvider } from '../api/library'
-import { getEmuSources, getEmuProviders } from '../api/nomenclature'
-import type { EmuSource, EmuProvider } from '../api/nomenclature'
+import { getEmuSources, getEmuProviders, getNomenclatureFields } from '../api/nomenclature'
+import type { EmuSource, EmuProvider, SourceComparison } from '../api/nomenclature'
+import { Tooltip } from './Tooltip'
+import { SourceComparisonModal } from './SourceComparisonModal'
 
 const PROVIDER_SOURCES = new Set(['WEB-DL'])
 
@@ -21,14 +23,22 @@ export function AutoUploadSourceGate({ targetIds, onNavigate, onClose, onDone }:
   onDone?: () => void
 }) {
   const [index, setIndex] = useState(0)
-  const [phase, setPhase] = useState<'checking' | 'disparity' | 'queuing' | 'done'>('checking')
+  const [phase, setPhase] = useState<'checking' | 'disparity' | 'inaccessible' | 'queuing' | 'done'>('checking')
   const [check, setCheck] = useState<AutoUploadSourceCheck | null>(null)
+  const [inaccessibleMsg, setInaccessibleMsg] = useState<string | null>(null)
   const [okCount, setOkCount] = useState(0)
   const [sources, setSources] = useState<EmuSource[]>([])
   const [providers, setProviders] = useState<EmuProvider[]>([])
   const [chosenSource, setChosenSource] = useState('')
   const [chosenProvider, setChosenProvider] = useState<string | null>(null)
   const [detectingProvider, setDetectingProvider] = useState(false)
+  // Full Internal Source Tool breakdown (evidence/ranking) — checkAutoUploadSource
+  // only returns the 3 plain values needed for the disparity table itself, so
+  // this is fetched lazily, only if the user actually clicks the blinking
+  // value to see the detailed comparison (same one the manual wizard shows).
+  const [comparisonDetail, setComparisonDetail] = useState<SourceComparison | null>(null)
+  const [loadingDetail, setLoadingDetail] = useState(false)
+  const [showComparisonModal, setShowComparisonModal] = useState(false)
 
   const total = targetIds.length
   const currentId = targetIds[index]
@@ -49,6 +59,16 @@ export function AutoUploadSourceGate({ targetIds, onNavigate, onClose, onDone }:
     checkAutoUploadSource(targetIds[index])
       .then(async result => {
         if (!alive) return
+        if (!result.accessible) {
+          // Don't queue a job we already know will fail once upload_queue.py
+          // tries to read the file for real — pause here and let the user
+          // see why and skip it, same failure the manual wizard would
+          // otherwise surface first (see check_auto_upload_source's own
+          // docstring for why this isn't fail-open like a plain disparity).
+          setInaccessibleMsg(result.message || 'No se puede acceder al archivo.')
+          setPhase('inaccessible')
+          return
+        }
         if (!result.disparity) {
           await proceedQueue(targetIds[index])
           if (alive) setIndex(i => i + 1)
@@ -90,8 +110,43 @@ export function AutoUploadSourceGate({ targetIds, onNavigate, onClose, onDone }:
     setIndex(i => i + 1)
   }
 
+  // No overrides can fix an unreadable file — the only way forward is to
+  // leave it out of the batch (not counted in okCount) and move on.
+  const skipInaccessible = () => setIndex(i => i + 1)
+
   const sourceRequiresProvider = PROVIDER_SOURCES.has(chosenSource)
   const goToUploads = () => { onDone?.(); onNavigate?.('uploads'); onClose() }
+
+  const openComparisonDetail = async () => {
+    setLoadingDetail(true)
+    try {
+      const fields = await getNomenclatureFields(currentId)
+      if (fields.source_comparison) {
+        setComparisonDetail(fields.source_comparison)
+        setShowComparisonModal(true)
+      }
+    } catch { /* ignore — the value just stays non-clickable-looking for this attempt */ }
+    finally { setLoadingDetail(false) }
+  }
+
+  if (phase === 'inaccessible') {
+    return (
+      <div className="modal-body">
+        <p className="text-muted" style={{ fontSize: 12, marginTop: 0, marginBottom: 12 }}>
+          {total > 1 ? `Temporada ${index + 1} de ${total}: ` : ''}
+          No se puede comprobar el source porque el archivo no es accesible.
+        </p>
+        <div className="detail-card" style={{ borderRadius: 8, padding: '12px 14px', marginBottom: 14, color: '#ef4444' }}>
+          ✗ {inaccessibleMsg}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button className="btn btn-primary" onClick={skipInaccessible} type="button">
+            {total > 1 ? 'Omitir y continuar' : 'Entendido'}
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   if (phase === 'done') {
     return (
@@ -126,7 +181,20 @@ export function AutoUploadSourceGate({ targetIds, onNavigate, onClose, onDone }:
               <tr>
                 <td style={{ padding: '7px 12px', fontFamily: 'monospace' }}>{check.from_name || '—'}</td>
                 <td style={{ padding: '7px 12px', fontFamily: 'monospace' }}>{check.from_radarr || '—'}</td>
-                <td style={{ padding: '7px 12px', fontFamily: 'monospace' }}>{check.from_mediainfo || '—'}</td>
+                <td style={{ padding: '7px 12px', fontFamily: 'monospace' }}>
+                  {check.from_mediainfo ? (
+                    <Tooltip content="Ver comparación detallada">
+                      <button
+                        type="button"
+                        className="source-bitrate-link badge-blink"
+                        onClick={openComparisonDetail}
+                        disabled={loadingDetail}
+                      >
+                        {check.from_mediainfo}
+                      </button>
+                    </Tooltip>
+                  ) : '—'}
+                </td>
               </tr>
             </tbody>
           </table>
@@ -158,6 +226,13 @@ export function AutoUploadSourceGate({ targetIds, onNavigate, onClose, onDone }:
             Confirmar y subir
           </button>
         </div>
+        {showComparisonModal && comparisonDetail && (
+          <SourceComparisonModal
+            comparison={comparisonDetail}
+            initialShowDetail
+            onClose={() => setShowComparisonModal(false)}
+          />
+        )}
       </div>
     )
   }

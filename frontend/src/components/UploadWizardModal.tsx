@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import type { EmuSource, EmuProvider, NomenclatureFields, FieldsPreviewResult, TrackRemuxPreview, TrackRemuxOverride, SourceComparison, SourceEngineResult } from '../api/nomenclature'
+import type { EmuSource, EmuProvider, NomenclatureFields, FieldsPreviewResult, TrackRemuxPreview, TrackRemuxOverride, SourceComparison } from '../api/nomenclature'
 import {
   getEmuSources,
   getEmuProviders,
@@ -15,6 +15,7 @@ import {
 import { getLibrary, getMediaInfoReport, suggestProvider } from '../api/library'
 import type { MediaInfoReport } from '../api/library'
 import { CheckStatusIcon } from './DetailCard'
+import { SourceComparisonModal } from './SourceComparisonModal'
 import {
   previewSeasonPack, getSeasonPlanProgress, getSeasonEpisodeNames,
   getSeasonEpisodeMediaInfo, getSeasonEpisodeRemuxPreview,
@@ -285,7 +286,7 @@ function CheckRow({ c }: { c: UploadCheck }) {
       <span style={{ marginTop: 2 }}><CheckStatusIcon status={c.status} /></span>
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: 13 }}>{c.label}</div>
-        {c.message && <div style={{ fontSize: 11, color: 'var(--text-muted)', wordBreak: 'break-all' }}>{c.message}</div>}
+        {c.message && <div style={{ fontSize: 11, color: 'var(--text-muted)', wordBreak: 'break-all', marginTop: 2, marginBottom: 4 }}>{c.message}</div>}
       </div>
     </div>
   )
@@ -297,174 +298,6 @@ function FieldLabel({ label, info }: { label: string; info?: React.ReactNode }) 
     <span style={{ ...labelStyle, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
       {label}{info && <InfoIcon text={info} />}
     </span>
-  )
-}
-
-// Source comparison — same table look as MediaInfoTable/RemuxTable, one
-// column per origin, single data row (there's only one Source field).
-function SourceCompareTable({ comparison, onShowEngineDetail }: { comparison: SourceComparison; onShowEngineDetail?: () => void }) {
-  return (
-    <div className="detail-card" style={{ borderRadius: 8 }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, tableLayout: 'fixed' }}>
-        <thead>
-          <tr>
-            <th style={thStyle}>Nombre del archivo</th>
-            <th style={thStyle}>Radarr/Sonarr</th>
-            <th style={thStyle}>Internal Source Tool</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr style={{ borderTop: '1px solid var(--border)' }}>
-            <td style={{ padding: '7px 12px', fontFamily: 'monospace' }}>{comparison.from_name || '—'}</td>
-            <td style={{ padding: '7px 12px', fontFamily: 'monospace' }}>{comparison.from_radarr || '—'}</td>
-            <td style={{ padding: '7px 12px', fontFamily: 'monospace' }}>
-              {onShowEngineDetail && comparison.from_mediainfo ? (
-                <Tooltip content="Ver comparación detallada">
-                  <button type="button" className="source-bitrate-link" onClick={onShowEngineDetail}>
-                    {comparison.from_mediainfo}
-                  </button>
-                </Tooltip>
-              ) : (comparison.from_mediainfo || '—')}
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
-const CERTAINTY_COLOR: Record<string, string> = { alto: '#22c55e', medio: '#eab308', bajo: '#ef4444' }
-
-// Spanish display names for the Internal Source Tool's evidence feature
-// keys (the `feature` field itself stays the internal snake_case id — this
-// is presentation-only). The full reasoning for each one is in its own
-// per-row explanation, shown via the "?" InfoIcon, not in the label itself.
-const EVIDENCE_LABELS: Record<string, string> = {
-  single_file_container: 'Archivo único (no disco completo)',
-  container_format: 'Formato del contenedor',
-  fragmented_mp4: 'MP4 fragmentado',
-  chapter_count: 'Capítulos',
-  resolution_sd: 'Resolución SD',
-  resolution_uhd: 'Resolución UHD',
-  scan_type: 'Tipo de escaneo',
-  hdr_or_dv: 'HDR / Dolby Vision',
-  video_codec: 'Códec de vídeo',
-  x264_bluray_compat: 'Flag bluray_compat (x264)',
-  bits_per_pixel_per_frame: 'Bitrate normalizado',
-  video_share_of_file: 'Proporción de vídeo en el archivo',
-  lossless_audio_tracks: 'Audio sin pérdida',
-  premium_object_audio: 'Audio Atmos / DTS:X',
-  eac3_ddplus_audio: 'Audio E-AC-3 / DD+',
-  broadcast_audio_at_sd: 'Audio de emisión en SD',
-  pgs_subtitles: 'Subtítulos PGS',
-  vobsub_subtitles: 'Subtítulos VobSub',
-  text_only_subtitles: 'Solo subtítulos de texto',
-  subtitle_language_breadth: 'Nº de idiomas de subtítulos',
-  video_transcode_probability: 'Probabilidad de recodificación',
-  screen_capture_probability: 'Probabilidad de captura de pantalla',
-  sampled_bitrate_variability: 'Variabilidad de bitrate (muestreo)',
-  sampled_gop_length: 'Duración de GOP (muestreo)',
-}
-
-// Full Internal Source Tool breakdown, shown below the plain 3-column
-// comparison inside the same "Comparación del Source" modal — same
-// detail-card/thStyle/monospace language as every other table in this file,
-// just with 9 candidate columns instead of 1. Never shown if the engine
-// couldn't run (comparison.engine is null) — the plain table above still
-// works standalone in that case.
-function SourceEngineDetail({ result }: { result: SourceEngineResult }) {
-  const { prediction, ranking, evidence, explanation, contradictions, performance } = result
-  const certaintyColor = CERTAINTY_COLOR[prediction.certainty] ?? 'var(--text-accent)'
-  const orderedLabels = ranking.map(r => r.label)
-
-  return (
-    <div style={{ marginTop: 14 }}>
-      <div className="detail-card" style={{ borderRadius: 8, padding: '12px 14px', marginBottom: 12 }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 20px', fontSize: 12.5 }}>
-          <span>Source estimado: <strong>{prediction.label}</strong></span>
-          <span>Confianza: <strong>{(prediction.confidence_score * 100).toFixed(1)}%</strong></span>
-          <span>Segundo candidato: <strong>{prediction.runner_up}</strong> ({(prediction.runner_up_score * 100).toFixed(1)}%)</span>
-          <span>Margen: <strong>{(prediction.margin * 100).toFixed(1)} pts</strong></span>
-          <span>Nivel de evidencia: <strong style={{ color: certaintyColor }}>{prediction.certainty}</strong></span>
-          <span>Tiempo de análisis: <strong>{(performance.duration_ms / 1000).toFixed(1)}s</strong></span>
-        </div>
-        <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', margin: '10px 0 0' }}>{explanation.winner}</p>
-        <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', margin: '6px 0 0' }}>{explanation.winner_vs_runner_up}</p>
-        {contradictions.length > 0 && (
-          <div style={{ marginTop: 8 }}>
-            <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Contradicciones detectadas</span>
-            {contradictions.map((c, i) => (
-              <p key={i} style={{ fontSize: 12, color: '#eab308', margin: '4px 0 0' }}>⚠ {c}</p>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="detail-card" style={{ borderRadius: 8, overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11.5, minWidth: 820 }}>
-          <thead>
-            <tr>
-              <th style={{ ...thStyle, minWidth: 160 }}>Evidencia</th>
-              {orderedLabels.map(label => (
-                <th key={label} style={{
-                  ...thStyle, textAlign: 'right', minWidth: 68,
-                  color: label === prediction.label ? '#22c55e' : thStyle.color,
-                }}>
-                  {label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {evidence.map((ev, i) => (
-              <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
-                <td style={{ padding: '6px 10px' }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                    {EVIDENCE_LABELS[ev.feature] ?? ev.feature}
-                    <InfoIcon text={ev.explanation} />
-                  </span>
-                </td>
-                {orderedLabels.map(label => {
-                  const v = ev.contributions[label]
-                  return (
-                    <td key={label} style={{
-                      padding: '6px 10px', textAlign: 'right', fontFamily: 'monospace',
-                      color: !v ? 'var(--text-muted)' : v > 0 ? '#4ade80' : '#f87171',
-                      background: label === prediction.label ? 'rgba(34,197,94,0.06)' : undefined,
-                    }}>
-                      {v ? (v > 0 ? `+${v.toFixed(1)}` : v.toFixed(1)) : '0'}
-                    </td>
-                  )
-                })}
-              </tr>
-            ))}
-            <tr style={{ borderTop: '2px solid var(--border-hover)', fontWeight: 700 }}>
-              <td style={{ padding: '7px 10px' }}>SCORE TOTAL</td>
-              {ranking.map(c => (
-                <td key={c.label} style={{
-                  padding: '7px 10px', textAlign: 'right', fontFamily: 'monospace',
-                  color: c.label === prediction.label ? '#22c55e' : undefined,
-                  background: c.label === prediction.label ? 'rgba(34,197,94,0.1)' : undefined,
-                }}>
-                  {c.raw_score.toFixed(1)}
-                </td>
-              ))}
-            </tr>
-            <tr>
-              <td style={{ padding: '5px 10px', fontSize: 11, color: 'var(--text-muted)' }}>Confianza normalizada</td>
-              {ranking.map(c => (
-                <td key={c.label} style={{
-                  padding: '5px 10px', textAlign: 'right', fontFamily: 'monospace', fontSize: 11,
-                  color: c.label === prediction.label ? '#22c55e' : 'var(--text-muted)',
-                }}>
-                  {(c.normalized_score * 100).toFixed(1)}%
-                </td>
-              ))}
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
   )
 }
 
@@ -1120,23 +953,11 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
           )}
         </label>
         {showSourceCompare && sourceComparison && (
-          <div className="modal-overlay" onClick={() => setShowSourceCompare(false)}>
-            <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: showEngineDetail && sourceComparison.engine ? 980 : 620 }}>
-              <div className="modal-header">
-                <h2 className="modal-title">Comparación del Source</h2>
-                <button className="modal-close" onClick={() => setShowSourceCompare(false)}>✕</button>
-              </div>
-              <div className="modal-body">
-                <SourceCompareTable
-                  comparison={sourceComparison}
-                  onShowEngineDetail={sourceComparison.engine ? () => setShowEngineDetail(true) : undefined}
-                />
-                {showEngineDetail && sourceComparison.engine && !sourceComparison.engine.error && (
-                  <SourceEngineDetail result={sourceComparison.engine} />
-                )}
-              </div>
-            </div>
-          </div>
+          <SourceComparisonModal
+            comparison={sourceComparison}
+            initialShowDetail={showEngineDetail}
+            onClose={() => setShowSourceCompare(false)}
+          />
         )}
         {sourceRequiresProvider && (
           <label><FieldLabel label="Proveedor" info={FIELD_INFO.provider} />
@@ -1168,7 +989,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
       <div className="detail-card" style={{ marginTop: 16, padding: '12px 14px', borderRadius: 8 }}>
         {preview?.torrent_name && preview?.internal_mkv_title ? (
           <FitTextPair
-            min={12}
+            min={9}
             items={[
               { label: 'Nombre final del torrent (eMuwarez)', text: preview.torrent_name, labelStyle },
               { label: INTERNAL_TITLE_LABEL, text: preview.internal_mkv_title, labelStyle },
@@ -1194,7 +1015,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
     <>
       <div className="detail-card" style={{ marginTop: 16, padding: '12px 14px', borderRadius: 8 }}>
         {seasonPlan?.season_pack_title ? (
-          <FitText min={12} text={seasonPlan.season_pack_title} />
+          <FitText min={9} text={seasonPlan.season_pack_title} />
         ) : (
           <>
             <div style={labelStyle}>Nombre final del torrent (eMuwarez)</div>
@@ -1219,7 +1040,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 720 }}>
+      <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 900 }}>
         <div className="modal-header">
           <h2 className="modal-title">Subir a eMuwarez — {item.title}</h2>
           <button className="modal-close" onClick={onClose}>✕</button>
@@ -1373,7 +1194,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
 
                 {showMiCard && (
                   <div className="modal-overlay" onClick={() => setShowMiCard(false)}>
-                    <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 720 }}>
+                    <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 900 }}>
                       <div className="modal-header">
                         <h2 className="modal-title">MediaInfo de los capítulos</h2>
                         <button className="modal-close" onClick={() => setShowMiCard(false)}>✕</button>
@@ -1435,7 +1256,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
 
                 {showSeasonNamesCard && (
                   <div className="modal-overlay" onClick={() => setShowSeasonNamesCard(false)}>
-                    <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 720 }}>
+                    <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 900 }}>
                       <div className="modal-header">
                         <h2 className="modal-title">Nombre de todos los capítulos</h2>
                         <button className="modal-close" onClick={() => setShowSeasonNamesCard(false)}>✕</button>
@@ -1451,7 +1272,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
                               <p className="text-error" style={{ fontSize: 12, margin: 0 }}>✗ {ep.error}</p>
                             ) : (
                               <FitTextPair
-                                min={12}
+                                min={9}
                                 items={[
                                   { label: 'Nombre del torrent', text: ep.torrent_name || '–', labelStyle: { ...labelStyle, fontSize: 10 } },
                                   { label: INTERNAL_TITLE_LABEL, text: ep.internal_mkv_title || '–', labelStyle: { ...labelStyle, fontSize: 10 } },
@@ -1529,7 +1350,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
 
                 {showMiCard && (
                   <div className="modal-overlay" onClick={() => setShowMiCard(false)}>
-                    <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 720 }}>
+                    <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 900 }}>
                       <div className="modal-header">
                         <h2 className="modal-title">MediaInfo del archivo</h2>
                         <button className="modal-close" onClick={() => setShowMiCard(false)}>✕</button>
@@ -1596,11 +1417,11 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
               {targetIsSeason ? (
                 <>
                   <div style={labelStyle}>Nombre final del torrent (pack de temporada)</div>
-                  <FitText min={12} text={seasonPlan?.season_pack_title || '–'} />
+                  <FitText min={9} text={seasonPlan?.season_pack_title || '–'} />
                 </>
               ) : (
                 <FitTextPair
-                  min={12}
+                  min={9}
                   items={[
                     { label: 'Nombre final del torrent', text: preview?.torrent_name || '–', labelStyle },
                     { label: INTERNAL_TITLE_LABEL, text: preview?.internal_mkv_title || '–', labelStyle },
@@ -1629,12 +1450,12 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
                 checks?.checks.map(c => <CheckRow key={c.id} c={c} />)
               )}
               {!checksLoading && checks && (
-                <div style={{ marginTop: 10, fontWeight: 600, color: checks.ready ? '#22c55e' : '#ef4444' }}>
+                <div style={{ marginTop: 14, fontWeight: 600, color: checks.ready ? '#22c55e' : '#ef4444' }}>
                   {checks.ready ? '✓ Todo listo para subir' : '✗ La subida no se puede realizar'}
                 </div>
               )}
               {!checksLoading && (
-                <button className="btn btn-secondary btn-sm" style={{ marginTop: 10, fontSize: 12 }} onClick={runChecks} type="button">
+                <button className="btn btn-secondary btn-sm" style={{ marginTop: 12, fontSize: 12 }} onClick={runChecks} type="button">
                   ↻ Volver a comprobar
                 </button>
               )}

@@ -13,8 +13,21 @@ function measureFitSize(el: HTMLElement, min: number, max: number): number {
   // a hair wider than that rounded value — a font size that measures as
   // "exactly touching" the boundary can then clip at paint time.
   const target = avail - 1
+  // `el` is normally `width: 100%` (fills its parent) — with that in force,
+  // `scrollWidth` can never read BELOW the box's own width, only above it
+  // once content genuinely overflows. That makes "does it fit at this size"
+  // unanswerable whenever it truly does fit: scrollWidth just reports back
+  // the box's full width instead of the shorter natural text width, so the
+  // comparison below was always false and the result always collapsed to
+  // `min` (confirmed live: a string measuring 717px fit fine in an 809px
+  // box, yet the old code still returned `min` for it). Switching to
+  // `width: max-content` for the duration of the measurement lets the box
+  // size itself to the text instead, so `scrollWidth` becomes the text's
+  // real natural width at each candidate size — then it's restored after.
+  const prevWidth = el.style.width
+  el.style.width = 'max-content'
   el.style.fontSize = `${max}px`
-  if (el.scrollWidth <= target) return max // fits at max → keep it big
+  if (el.scrollWidth <= target) { el.style.width = prevWidth; return max } // fits at max → keep it big
   // Measure each candidate (scrollWidth) rather than estimate from a ratio:
   // monospace glyph advances don't scale perfectly linearly, so an estimate
   // can overflow by a sub-pixel and get clipped. Measuring guarantees the
@@ -27,6 +40,7 @@ function measureFitSize(el: HTMLElement, min: number, max: number): number {
     else hi = mid
   }
   el.style.fontSize = `${lo}px`
+  el.style.width = prevWidth
   return lo
 }
 

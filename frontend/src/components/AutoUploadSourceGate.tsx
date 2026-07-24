@@ -4,7 +4,8 @@ import { suggestProvider } from '../api/library'
 import { getEmuSources, getEmuProviders, getNomenclatureFields } from '../api/nomenclature'
 import type { EmuSource, EmuProvider, SourceComparison } from '../api/nomenclature'
 import { Tooltip } from './Tooltip'
-import { SourceComparisonModal } from './SourceComparisonModal'
+import { SourceComparisonModal, INTERNAL_SOURCE_TOOL_INFO } from './SourceComparisonModal'
+import { InfoIcon } from './InfoIcon'
 
 const PROVIDER_SOURCES = new Set(['WEB-DL'])
 
@@ -174,7 +175,7 @@ export function AutoUploadSourceGate({ targetIds, onNavigate, onClose, onDone }:
               <tr>
                 <th style={{ textAlign: 'left', padding: '7px 12px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid var(--border)' }}>Nombre del archivo</th>
                 <th style={{ textAlign: 'left', padding: '7px 12px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid var(--border)' }}>Radarr/Sonarr</th>
-                <th style={{ textAlign: 'left', padding: '7px 12px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid var(--border)' }}>Internal Source Tool</th>
+                <th style={{ textAlign: 'left', padding: '7px 12px', color: 'var(--text-muted)', fontWeight: 600, borderBottom: '1px solid var(--border)' }}>Internal Source Tool <InfoIcon text={INTERNAL_SOURCE_TOOL_INFO} /></th>
               </tr>
             </thead>
             <tbody>

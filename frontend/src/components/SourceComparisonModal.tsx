@@ -13,6 +13,12 @@ const thStyle: React.CSSProperties = {
   position: 'sticky', top: 0, background: 'var(--bg-surface, #0f1420)',
 }
 
+// Shown next to every "Internal Source Tool" column header (this modal's own
+// table and AutoUploadSourceGate's disparity table) — same wording both
+// places so it doesn't read as two different explanations of the same thing.
+export const INTERNAL_SOURCE_TOOL_INFO =
+  'Herramienta interna que calcula el source de un vídeo analizando el archivo real. Todavía está en desarrollo y puede ser inexacta.'
+
 // Source comparison — same table look as the rest of the wizard's tables, one
 // column per origin, single data row (there's only one Source field).
 function SourceCompareTable({ comparison, onShowEngineDetail }: { comparison: SourceComparison; onShowEngineDetail?: () => void }) {
@@ -23,7 +29,7 @@ function SourceCompareTable({ comparison, onShowEngineDetail }: { comparison: So
           <tr>
             <th style={thStyle}>Nombre del archivo</th>
             <th style={thStyle}>Radarr/Sonarr</th>
-            <th style={thStyle}>Internal Source Tool</th>
+            <th style={thStyle}>Internal Source Tool <InfoIcon text={INTERNAL_SOURCE_TOOL_INFO} /></th>
           </tr>
         </thead>
         <tbody>

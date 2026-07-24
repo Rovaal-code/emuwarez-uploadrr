@@ -1,20 +1,20 @@
 import { useState } from 'react'
 import type { LibraryItemResponse } from '../types/api'
 import { useTooltip } from './Tooltip'
+import { episodeListLabel } from '../utils/libraryItem'
+import { Favicon, domainOf } from './Favicon'
 
 // eMuwarez "Petición" (request) creation form. Built from the field spec the
 // user captured from eMuwarez's web form. Submission is intentionally gated:
 // the real create/edit endpoints haven't been captured yet, so "Enviar"
 // validates and previews the payload but does not POST. The form is prefilled
 // from the library item so peticiones start from content you already track.
-const CATEGORIES: { value: string; label: string; enabled: boolean }[] = [
-  { value: 'movie', label: 'Películas', enabled: true },
-  { value: 'tv', label: 'Series', enabled: true },
-  { value: 'doc', label: 'Documentales', enabled: true },
-  { value: 'music', label: 'Música', enabled: false },
-  { value: 'games', label: 'Juegos', enabled: false },
-  { value: 'software', label: 'Software', enabled: false },
-]
+// category/scope aren't user choices — both are fixed by the library item
+// the request was opened from, just shown here for context.
+const CATEGORY_LABELS: Record<string, string> = { movie: 'Películas', tv: 'Series', doc: 'Documentales' }
+const SCOPE_LABELS: Record<'all' | 'season' | 'episode', string> = {
+  all: 'Todas las temporadas', season: 'Una temporada', episode: 'Un episodio',
+}
 const TYPES = ['Any', 'Full Disc', 'Remux', 'Encode', 'WEB-DL', 'WEBRIP', 'HDTV', 'SD', 'STEAMRIP']
 const RESOLUTIONS = ['Any', '4320p', '2160p', '1080p', '1080i', '720p', '540p', '576p', '480p', 'Otras']
 const MIN_REWARD = 100
@@ -45,36 +45,41 @@ const labelStyle: React.CSSProperties = {
 export function RequestFormModal({ item, onClose }: Props) {
   const isSeriesLike = item.item_type === 'series' || item.item_type === 'season' || item.item_type === 'episode'
 
-  const [category, setCategory] = useState(isSeriesLike ? 'tv' : 'movie')
-  // eMuwarez expects the year in the title: "Título (AÑO)". Prefill it from the
-  // item's year when known (>0), without duplicating an already-present year.
-  const [title, setTitle] = useState(() => {
-    const base = item.title || ''
-    return item.year && item.year > 0 && !/\(\d{4}\)\s*$/.test(base)
+  // Everything below is fixed by the library item the request was opened
+  // from — a petición always targets that exact title/season/episode, so
+  // none of it is a user choice (only Tipo/Resolución/Descripción/
+  // Recompensa/Anónimo are editable, further down).
+  const category: string = isSeriesLike ? 'tv' : 'movie'
+  // eMuwarez expects the year right after the series/movie name:
+  // "Título (AÑO)" for a movie/series, "Serie (AÑO) - Temporada X" or
+  // "Serie (AÑO) - SxxExx" for a season/episode — not tacked onto the very
+  // end, since `item.title` for those already carries a suffix that has to
+  // stay last. An episode's own `item.title` also carries Sonarr's
+  // descriptive subtitle after the SxxExx code ("Serie SxxExx - Episode
+  // Name…") — episodeListLabel() strips that down to "Serie - SxxExx" first,
+  // same as the Biblioteca list already shows, so only the code survives.
+  const title = (() => {
+    const base = item.item_type === 'episode' ? episodeListLabel(item) : (item.title || '')
+    if (!item.year || item.year <= 0 || /\(\d{4}\)/.test(base)) return base
+    const sepIdx = (item.item_type === 'season' || item.item_type === 'episode') ? base.lastIndexOf(' - ') : -1
+    return sepIdx === -1
       ? `${base} (${item.year})`
-      : base
-  })
+      : `${base.slice(0, sepIdx)} (${item.year})${base.slice(sepIdx)}`
+  })()
+  const tmdbId = onlyDigits(item.tmdb_id || '')
+  const imdbId = onlyDigits(item.imdb_id || '')  // digits only (no tt)
+  const malId = onlyDigits(item.mal_id || '')
+  const tvdbId = onlyDigits(item.tvdb_id || '')
+  const season = item.season_number != null ? String(item.season_number) : ''
+  const episode = item.episode_number != null ? String(item.episode_number) : ''
+  // A request targets every season, one season, or a single episode,
+  // depending on the granularity of the item it was opened from.
+  const scope: 'all' | 'season' | 'episode' =
+    item.episode_number != null ? 'episode' : item.season_number != null ? 'season' : 'all'
+
   // Tipo por defecto "Any" (una petición no suele exigir un source concreto).
   const [type, setType] = useState('Any')
   const [resolution, setResolution] = useState(item.resolution && RESOLUTIONS.includes(item.resolution) ? item.resolution : 'Any')
-
-  const [useTmdb, setUseTmdb] = useState(!!item.tmdb_id)
-  const [tmdbId, setTmdbId] = useState(onlyDigits(item.tmdb_id || ''))
-  const [useImdb, setUseImdb] = useState(!!item.imdb_id)
-  const [imdbId, setImdbId] = useState(onlyDigits(item.imdb_id || ''))  // digits only (no tt)
-  const [useMal, setUseMal] = useState(!!item.mal_id)
-  const [malId, setMalId] = useState(onlyDigits(item.mal_id || ''))
-
-  const [useTvdb, setUseTvdb] = useState(!!item.tvdb_id)
-  const [tvdbId, setTvdbId] = useState(onlyDigits(item.tvdb_id || ''))
-  const [season, setSeason] = useState(item.season_number != null ? String(item.season_number) : '')
-  const [episode, setEpisode] = useState(item.episode_number != null ? String(item.episode_number) : '')
-  // A series/doc request can target every season, one season, or a single
-  // episode. Prefill the scope from the item's granularity.
-  const [scope, setScope] = useState<'all' | 'season' | 'episode'>(
-    item.episode_number != null ? 'episode' : item.season_number != null ? 'season' : 'all'
-  )
-
   const [description, setDescription] = useState('')
   const [reward, setReward] = useState(String(MIN_REWARD))
   const [anon, setAnon] = useState(false)
@@ -86,25 +91,13 @@ export function RequestFormModal({ item, onClose }: Props) {
   const isSeries = category === 'tv' || category === 'doc'
   const rewardNum = parseInt(reward || '0', 10)
   const rewardTooLow = rewardNum < MIN_REWARD
-  const canSubmit = title.trim().length > 0 && !rewardTooLow
-  const submitTip = useTooltip(canSubmit ? null : 'Completa el título y una recompensa válida')
+  const canSubmit = !rewardTooLow
+  const submitTip = useTooltip(canSubmit ? null : 'Introduce una recompensa válida')
 
   const handleSubmit = () => {
-    // No real endpoint yet — validate and preview the payload only.
-    const payload = {
-      category, title: title.trim(), type, resolution,
-      tmdb_id: useTmdb ? tmdbId : null,
-      imdb_id: useImdb ? imdbId : null,
-      mal_id: useMal ? malId : null,
-      ...(isSeries ? {
-        tvdb_id: useTvdb ? tvdbId : null,
-        scope,
-        season: scope === 'all' ? '0' : (onlyDigits(season) || '0'),
-        episode: scope === 'episode' ? (onlyDigits(episode) || '0') : '0',
-      } : {}),
-      description, reward: rewardNum, anonymous: anon,
-    }
-    setMsg('La creación de peticiones está pendiente del endpoint real de eMuwarez (aún por capturar). Payload validado: ' + JSON.stringify(payload))
+    // No real endpoint yet — eMuwarez's create-request endpoint hasn't been
+    // captured, so there's nothing to actually POST to.
+    setMsg('No implementado')
   }
 
   return (
@@ -116,19 +109,9 @@ export function RequestFormModal({ item, onClose }: Props) {
         </div>
         <div className="modal-body">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
-            <label style={{ gridColumn: '1 / -1' }}><span style={labelStyle}>Título</span>
-              <input className="form-input" value={title} onChange={e => setTitle(e.target.value)} placeholder="Título (AÑO) — p. ej. Origen (2010)" />
-            </label>
-
-            <label><span style={labelStyle}>Categoría</span>
-              <select className="form-input" value={category} onChange={e => setCategory(e.target.value)}>
-                {CATEGORIES.map(c => (
-                  <option key={c.value} value={c.value} disabled={!c.enabled}>
-                    {c.label}{c.enabled ? '' : ' (próximamente)'}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <ReadOnlyField label="Título" value={title} gridColumn="1 / -1" />
+            <ReadOnlyField label="Categoría" value={CATEGORY_LABELS[category] ?? category} gridColumn={isSeries ? undefined : '1 / -1'} />
+            {isSeries && <ReadOnlyField label="Alcance de la petición" value={SCOPE_LABELS[scope]} />}
 
             <label><span style={labelStyle}>Tipo</span>
               <select className="form-input" value={type} onChange={e => setType(e.target.value)}>
@@ -144,34 +127,19 @@ export function RequestFormModal({ item, onClose }: Props) {
 
             {isSeries && (
               <>
-                <label style={{ gridColumn: '1 / -1' }}><span style={labelStyle}>Alcance de la petición</span>
-                  <select className="form-input" value={scope} onChange={e => setScope(e.target.value as 'all' | 'season' | 'episode')}>
-                    <option value="all">Todas las temporadas</option>
-                    <option value="season">Una temporada</option>
-                    <option value="episode">Un episodio</option>
-                  </select>
-                </label>
-                {scope !== 'all' && (
-                  <label><span style={labelStyle}>Nº de temporada</span>
-                    <input className="form-input" value={season} onChange={e => setSeason(onlyDigits(e.target.value))} inputMode="numeric" placeholder="1" />
-                  </label>
-                )}
-                {scope === 'episode' && (
-                  <label><span style={labelStyle}>Nº de episodio</span>
-                    <input className="form-input" value={episode} onChange={e => setEpisode(onlyDigits(e.target.value))} inputMode="numeric" placeholder="1" />
-                  </label>
-                )}
+                {scope !== 'all' && <ReadOnlyField label="Nº de temporada" value={season} />}
+                {scope === 'episode' && <ReadOnlyField label="Nº de episodio" value={episode} />}
               </>
             )}
           </div>
 
-          {/* ID checkboxes */}
+          {/* External IDs — read-only: whatever the library item already has. */}
           <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 16px' }}>
-            <IdRow label="TMDB ID" checked={useTmdb} onToggle={setUseTmdb} value={tmdbId} onChange={v => setTmdbId(onlyDigits(v))} href={idVerifyUrl('tmdb', tmdbId, isSeries)} />
-            <IdRow label="IMDB ID" checked={useImdb} onToggle={setUseImdb} value={imdbId} onChange={v => setImdbId(onlyDigits(v))} href={idVerifyUrl('imdb', imdbId, isSeries)} />
-            <IdRow label="MAL ID (anime)" checked={useMal} onToggle={setUseMal} value={malId} onChange={v => setMalId(onlyDigits(v))} href={idVerifyUrl('mal', malId, isSeries)} />
+            <IdRow label="TMDB ID" value={tmdbId} href={idVerifyUrl('tmdb', tmdbId, isSeries)} />
+            <IdRow label="IMDB ID" value={imdbId} href={idVerifyUrl('imdb', imdbId, isSeries)} />
+            <IdRow label="MAL ID (anime)" value={malId} href={idVerifyUrl('mal', malId, isSeries)} />
             {isSeries && (
-              <IdRow label="TVDB ID" checked={useTvdb} onToggle={setUseTvdb} value={tvdbId} onChange={v => setTvdbId(onlyDigits(v))} href={idVerifyUrl('tvdb', tvdbId, isSeries)} />
+              <IdRow label="TVDB ID" value={tvdbId} href={idVerifyUrl('tvdb', tvdbId, isSeries)} />
             )}
           </div>
 
@@ -189,11 +157,7 @@ export function RequestFormModal({ item, onClose }: Props) {
             </label>
           </div>
 
-          <div style={{ marginTop: 8, fontSize: 11 }} className="text-muted">
-            Nota: validar la recompensa contra tu saldo de puntos requiere el endpoint de usuario de eMuwarez (pendiente).
-          </div>
-
-          {msg && <p style={{ fontSize: 12, marginTop: 10, wordBreak: 'break-all' }} className="text-warning">{msg}</p>}
+          {msg && <p style={{ fontSize: 12, marginTop: 10, fontWeight: 600 }} className="text-error">{msg}</p>}
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
             <button className="btn btn-secondary" onClick={onClose}>Cancelar</button>
@@ -208,29 +172,34 @@ export function RequestFormModal({ item, onClose }: Props) {
   )
 }
 
-function IdRow({ label, checked, onToggle, value, onChange, href }: {
-  label: string; checked: boolean; onToggle: (v: boolean) => void; value: string; onChange: (v: string) => void
-  href?: string | null
-}) {
-  const canVerify = checked && !!href
-  const verifyTip = useTooltip(canVerify ? 'Verificar: abrir la ficha en su web' : 'Introduce un ID para verificarlo')
+// Read-only stand-in for a plain <label><input> pair — used for every field
+// that's fixed by the library item (Título/Categoría/Alcance/Temporada/
+// Episodio) instead of a real form control the user could edit.
+function ReadOnlyField({ label, value, gridColumn }: { label: string; value: string; gridColumn?: string }) {
+  return (
+    <label style={gridColumn ? { gridColumn } : undefined}>
+      <span style={labelStyle}>{label}</span>
+      <input className="form-input" value={value || '–'} disabled readOnly style={{ opacity: 0.7 }} />
+    </label>
+  )
+}
+
+function IdRow({ label, value, href }: { label: string; value: string; href?: string | null }) {
+  const canVerify = !!href
+  const verifyTip = useTooltip(canVerify ? 'Verificar: abrir la ficha en su web' : 'Este campo no tiene un valor disponible')
   return (
     <div>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, marginBottom: 4 }}>
-        <input type="checkbox" checked={checked} onChange={e => onToggle(e.target.checked)} /> {label}
-      </label>
+      <span style={{ display: 'block', fontSize: 12, marginBottom: 4 }}>{label}</span>
       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
         <input
           className="form-input"
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          disabled={!checked}
-          inputMode="numeric"
-          placeholder="solo dígitos"
-          style={{ opacity: checked ? 1 : 0.5, flex: 1, minWidth: 0 }}
+          value={value || '–'}
+          disabled
+          readOnly
+          style={{ flex: 1, minWidth: 0, opacity: 0.7 }}
         />
         <a
-          className="btn btn-secondary btn-sm"
+          className="btn btn-secondary btn-sm hover-link"
           href={canVerify ? href! : undefined}
           target="_blank"
           rel="noreferrer"
@@ -243,7 +212,7 @@ function IdRow({ label, checked, onToggle, value, onChange, href }: {
           }}
           {...verifyTip.triggerProps}
         >
-          ↗
+          <Favicon domain={domainOf(href)} size={16} radius={3} fallback={<span style={{ fontSize: 12 }}>↗</span>} />
           {verifyTip.tooltipNode}
         </a>
       </div>

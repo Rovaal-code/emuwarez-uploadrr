@@ -352,6 +352,28 @@ optgroup {
   box-shadow: inset 0 -1px 0 var(--border);
 }
 
+/* Pin a summary/total row to the bottom of the scroll container instead of
+   the top (e.g. the upload phases table's "Progreso global" row) — same
+   opaque-background + inset-shadow-as-border trick as the sticky header. */
+.data-table tr.sticky-footer-row td {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: var(--bg-surface);
+  box-shadow: inset 0 1px 0 var(--border);
+  /* A touch more room above the row's own content than the default cell
+     padding gives, so it doesn't read as jammed right under the divider
+     line/last phase row above it. */
+  padding-top: 16px;
+}
+/* .data-table tr:hover td (below) would otherwise win on hover and swap the
+   solid background above for a translucent one — since this row is sticky,
+   that let the phase rows scrolling underneath show through it. Beats that
+   rule on specificity (extra class) regardless of source order. */
+.data-table tr.sticky-footer-row:hover td {
+  background: var(--bg-surface);
+}
+
 .data-table td {
   padding: 10px 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);

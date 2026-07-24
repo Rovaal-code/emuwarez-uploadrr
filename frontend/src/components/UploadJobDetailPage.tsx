@@ -354,6 +354,20 @@ function formatPhaseDuration(startedAt?: string | null, finishedAt?: string | nu
 
 const JOB_TERMINAL_PHASE_STATUS: Record<string, string> = { failed: 'failed', cancelled: 'cancelled' }
 
+// Percentage + a bar, same look as the topbar's own sync progress
+// (.sync-chip-bar/.sync-chip-bar-fill) — the bar fills the rest of the
+// (wide) Progreso column instead of the topbar's own fixed 140px.
+function ProgressCell({ pct, bold }: { pct: number; bold?: boolean }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <span style={{ fontWeight: bold ? 700 : undefined, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{pct}%</span>
+      <div className="sync-chip-bar" style={{ width: 'auto', flex: 1 }}>
+        <div className="sync-chip-bar-fill" style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  )
+}
+
 function PhasesSection({ phases, globalPct, job }: { phases: UploadProgressPhase[]; globalPct: number; job: UploadJob }) {
   // If the job itself has stopped (failed/cancelled) but a phase snapshot was
   // never updated past "running" (e.g. mkvmerge's timeout kills the job
@@ -364,24 +378,26 @@ function PhasesSection({ phases, globalPct, job }: { phases: UploadProgressPhase
     <div style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
       <table className="data-table" style={{ fontSize: 12.5, tableLayout: 'fixed' }}>
         <colgroup>
+          <col style={{ width: 34 }} />
           <col style={{ width: 200 }} />
           <col style={{ width: 90 }} />
-          <col style={{ width: 50 }} />
+          <col style={{ width: 360 }} />
           <col style={{ width: 143 }} />
           <col style={{ width: 143 }} />
           <col style={{ width: 75 }} />
         </colgroup>
         <thead>
           <tr>
-            <th>Fase</th><th>Estado</th><th style={{ textAlign: 'right' }}>%</th>
+            <th>#</th><th>Fase</th><th>Estado</th><th>Progreso</th>
             <th>Creado</th><th>Finalizado</th><th>Duración</th>
           </tr>
         </thead>
         <tbody>
-          {phases.map(p => {
+          {phases.map((p, i) => {
             const status = (p.status === 'running' && overrideStatus) ? overrideStatus : p.status
             return (
             <tr key={p.key}>
+              <td style={{ color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{i + 1}</td>
               <td>{p.label}</td>
               <td>
                 <span
@@ -391,16 +407,21 @@ function PhasesSection({ phases, globalPct, job }: { phases: UploadProgressPhase
                   {PHASE_STATUS_TEXT[status] || status}
                 </span>
               </td>
-              <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{p.pct}%</td>
+              <td><ProgressCell pct={p.pct} /></td>
               <td style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.started_at ? formatDate(p.started_at) : '–'}</td>
               <td style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.finished_at ? formatDate(p.finished_at) : (overrideStatus ? formatDate(job.finished_at) : '–')}</td>
               <td style={{ fontVariantNumeric: 'tabular-nums' }}>{formatPhaseDuration(p.started_at, p.finished_at, overrideStatus ? job.finished_at : null)}</td>
             </tr>
             )
           })}
-          <tr style={{ borderTop: '2px solid var(--border)' }}>
+          {/* Sticky footer row (see .sticky-footer-row in components.css) — the
+              job's overall progress, always visible at the bottom of the
+              scroll area instead of requiring a scroll past every phase to
+              see it, same idea as the header staying pinned at the top. */}
+          <tr className="sticky-footer-row" style={{ borderTop: '2px solid var(--border)' }}>
+            <td />
             <td style={{ fontWeight: 700 }} colSpan={2}>Progreso global</td>
-            <td style={{ textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{globalPct}%</td>
+            <td><ProgressCell pct={globalPct} bold /></td>
             <td style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 700 }}>{formatDate(job.started_at ?? job.created_at ?? null)}</td>
             <td style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 700 }}>{job.finished_at ? formatDate(job.finished_at) : '–'}</td>
             <td style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{formatPhaseDuration(job.started_at ?? job.created_at, job.finished_at)}</td>

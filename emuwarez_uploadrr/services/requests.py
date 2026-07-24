@@ -189,10 +189,10 @@ def sync_emu_requests(
         # SKIPPED with a clear message instead of a scary raw HTTP 404.
         _restore_throttle()
         if _is_requests_endpoint_missing(exc):
-            msg = "eMuwarez no expone el endpoint de peticiones (/api/requests); función no disponible aún."
-            finish_task(conn, task_id, TaskStatus.SKIPPED.value, msg)
-            logger.info("Sincronización de peticiones omitida: %s", msg)
-            return {"status": "unavailable", "imported": 0, "matched": 0, "message": msg}
+            detail = "eMuwarez no expone el endpoint de peticiones (/api/requests); función no disponible aún."
+            finish_task(conn, task_id, TaskStatus.SKIPPED.value, "No implementado")
+            logger.info("Sincronización de peticiones omitida: %s", detail)
+            return {"status": "unavailable", "imported": 0, "matched": 0, "message": detail}
         finish_task(conn, task_id, TaskStatus.FAILED.value, str(exc))
         logger.warning("Sincronización de peticiones fallida: %s", exc)
         raise

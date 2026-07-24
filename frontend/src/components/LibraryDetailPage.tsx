@@ -13,7 +13,7 @@ import { ProviderTag } from './ProviderIcon'
 import { ServiceLabel } from './ServiceIcon'
 import { useTooltip } from './Tooltip'
 import {
-  Card, FieldRow, DetailPoster, ValueChip, ValueIcon, DETAIL_CARD_HEIGHT,
+  Card, FieldRow, DetailPoster, ValueChip, ValueIcon, DETAIL_CARD_HEIGHT, DetailHero,
   StatusCardIcon, TechInfoCardIcon, ExternalIdsCardIcon,
   TypeValueIcon, ResolutionValueIcon, SourceValueIcon, VideoCodecValueIcon,
   AudioCodecValueIcon, LanguageValueIcon, SubtitleValueIcon, SizeValueIcon,
@@ -81,6 +81,7 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
   return (
     <div style={{ width: '100%', height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <div style={{ flexShrink: 0 }}>
+      <DetailHero backdropUrl={item.backdrop_url}>
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
         <button className="btn btn-ghost btn-sm" onClick={onBack}>← Volver a la biblioteca</button>
         {parentSeason && (
@@ -193,6 +194,7 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
           </div>
         </div>
       </div>
+      </DetailHero>
 
       {showRuta && (
         <div className="modal-overlay" onClick={() => setShowRuta(false)}>

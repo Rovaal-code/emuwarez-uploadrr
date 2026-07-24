@@ -114,6 +114,7 @@ def _job_to_detail(
     j: dict,
     media_type: str | None = None,
     poster_url: str | None = None,
+    backdrop_url: str | None = None,
     instance_type: str | None = None,
     instance_name: str | None = None,
     request_status: str | None = None,
@@ -128,6 +129,7 @@ def _job_to_detail(
     return UploadJobDetail(
         media_type=media_type,
         poster_url=poster_url,
+        backdrop_url=backdrop_url,
         year=year,
         instance_type=instance_type,
         instance_name=instance_name,
@@ -344,6 +346,7 @@ def get_uploads(
         item_ids = {j.get("library_item_id") for j in jobs if j.get("library_item_id")}
         media_by_item: dict[int, str] = {}
         poster_by_item: dict[int, str] = {}
+        backdrop_by_item: dict[int, str] = {}
         instance_type_by_item: dict[int, str] = {}
         instance_name_by_item: dict[int, str] = {}
         request_status_by_item: dict[int, str] = {}
@@ -354,7 +357,7 @@ def get_uploads(
         if item_ids:
             placeholders = ",".join("?" * len(item_ids))
             for row in conn.execute(
-                f"SELECT id, item_type, poster_url, instance_type, instance_name, request_status, year, "
+                f"SELECT id, item_type, poster_url, backdrop_url, instance_type, instance_name, request_status, year, "
                 f"instance_id, tmdb_id, title_slug "
                 f"FROM library_items WHERE id IN ({placeholders})",
                 tuple(item_ids),
@@ -362,6 +365,8 @@ def get_uploads(
                 media_by_item[row["id"]] = row["item_type"]
                 if row["poster_url"]:
                     poster_by_item[row["id"]] = row["poster_url"]
+                if row["backdrop_url"]:
+                    backdrop_by_item[row["id"]] = row["backdrop_url"]
                 if row["instance_type"]:
                     instance_type_by_item[row["id"]] = row["instance_type"]
                 if row["instance_name"]:
@@ -381,6 +386,7 @@ def get_uploads(
             j,
             media_by_item.get(j.get("library_item_id")),
             poster_by_item.get(j.get("library_item_id")),
+            backdrop_by_item.get(j.get("library_item_id")),
             instance_type_by_item.get(j.get("library_item_id")),
             instance_name_by_item.get(j.get("library_item_id")),
             request_status_by_item.get(j.get("library_item_id")),
@@ -399,13 +405,13 @@ def get_upload(job_id: int, current_user: dict = Depends(require_auth)):
         job = exec_get_job(job_id, conn=conn)
         if not job:
             raise HTTPException(status_code=404, detail="Job no encontrado.")
-        media_type = poster_url = instance_type = instance_name = request_status = None
+        media_type = poster_url = backdrop_url = instance_type = instance_name = request_status = None
         year = None
         instance_id = tmdb_id = title_slug = None
         item_id = job.get("library_item_id")
         if item_id:
             row = conn.execute(
-                "SELECT item_type, poster_url, instance_type, instance_name, request_status, year, "
+                "SELECT item_type, poster_url, backdrop_url, instance_type, instance_name, request_status, year, "
                 "instance_id, tmdb_id, title_slug "
                 "FROM library_items WHERE id = ?",
                 (item_id,),
@@ -413,6 +419,7 @@ def get_upload(job_id: int, current_user: dict = Depends(require_auth)):
             if row:
                 media_type = row["item_type"]
                 poster_url = row["poster_url"]
+                backdrop_url = row["backdrop_url"]
                 instance_type = row["instance_type"]
                 instance_name = row["instance_name"]
                 request_status = row["request_status"]
@@ -420,7 +427,7 @@ def get_upload(job_id: int, current_user: dict = Depends(require_auth)):
                 instance_id = row["instance_id"]
                 tmdb_id = row["tmdb_id"]
                 title_slug = row["title_slug"]
-    return _job_to_detail(job, media_type, poster_url, instance_type, instance_name, request_status, year,
+    return _job_to_detail(job, media_type, poster_url, backdrop_url, instance_type, instance_name, request_status, year,
                            instance_id, tmdb_id, title_slug)
 
 

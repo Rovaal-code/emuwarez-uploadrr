@@ -60,6 +60,7 @@ def _row_to_item(r: dict, my_username: str | None = None) -> RequestItemResponse
         library_title=r.get("library_title"),
         local_status=r.get("local_status"),
         poster_url=r.get("poster_url"),
+        backdrop_url=r.get("backdrop_url"),
         reviewed_at=r.get("reviewed_at"),
         updated_at=r.get("updated_at"),
         # Phase 8B readiness fields

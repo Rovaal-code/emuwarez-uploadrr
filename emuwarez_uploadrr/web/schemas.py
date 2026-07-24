@@ -577,6 +577,9 @@ class LibraryItemResponse(BaseModel):
     arr_history_status: Optional[str] = None
     # Phase 11E — poster extracted from Radarr/Sonarr's raw images[] at sync time
     poster_url: Optional[str] = None
+    # Fanart/backdrop counterpart to poster_url, same source — used as the
+    # dedicated page's hero background.
+    backdrop_url: Optional[str] = None
     # eMuwarez catalog comparison — 1 = already on eMuwarez, 0 = not, None = not synced.
     # emu_aportes: list of {dim, detail} describing what your copy would add.
     emu_in_catalog: Optional[int] = None
@@ -679,6 +682,7 @@ class RequestItemResponse(BaseModel):
     library_title: Optional[str] = None
     local_status: Optional[str] = None
     poster_url: Optional[str] = None
+    backdrop_url: Optional[str] = None
     reviewed_at: Optional[str] = None
     updated_at: Optional[str] = None
     # Phase 8B — readiness fields (optional, not populated if readiness not yet evaluated)
@@ -991,6 +995,9 @@ class UploadJobDetail(BaseModel):
     media_type: Optional[str] = None
     # Poster thumbnail from the linked library item, for the Subidas row.
     poster_url: Optional[str] = None
+    # Fanart/backdrop from the linked library item — hero background on the
+    # job's own dedicated page.
+    backdrop_url: Optional[str] = None
     # Year from the linked library item, shown next to the title (same
     # format Biblioteca's detail page already uses).
     year: Optional[int] = None

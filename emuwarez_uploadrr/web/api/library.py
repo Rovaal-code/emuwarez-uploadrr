@@ -479,6 +479,7 @@ def _to_lib_response(row: dict, conn=None, rollups: Optional[dict] = None) -> Li
         arr_queue_status=row.get("arr_queue_status"),
         arr_history_status=row.get("arr_history_status"),
         poster_url=row.get("poster_url"),
+        backdrop_url=row.get("backdrop_url"),
         emu_in_catalog=row.get("emu_in_catalog"),
         emu_aportes=_parse_aportes(row.get("emu_aportes")),
     )

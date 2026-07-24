@@ -65,7 +65,7 @@ def upsert_library_item(conn: sqlite3.Connection, item: LibraryItem, *, notify_m
         "quality", "resolution", "source", "video_codec", "audio_codec", "audio_languages",
         "audio_channels", "dynamic_range", "subtitle_languages", "size_bytes", "local_status",
         "request_status", "nomenclature_status", "request_id", "added_at", "raw_json",
-        "poster_url", "mal_id",
+        "poster_url", "backdrop_url", "mal_id",
     ]
     values = [data.get(col) for col in columns]
     conn.execute(
@@ -116,6 +116,7 @@ def upsert_library_item(conn: sqlite3.Connection, item: LibraryItem, *, notify_m
                 THEN library_items.nomenclature_checked_at ELSE NULL END,
             raw_json = excluded.raw_json,
             poster_url = excluded.poster_url,
+            backdrop_url = excluded.backdrop_url,
             mal_id = excluded.mal_id,
             updated_at = CURRENT_TIMESTAMP
         """,

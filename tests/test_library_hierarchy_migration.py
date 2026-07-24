@@ -15,11 +15,11 @@ def test_library_items_has_hierarchy_columns():
     conn.close()
 
 
-def test_schema_version_is_25():
+def test_schema_version_is_26():
     conn = connect(":memory:")
     init_db(conn)
-    assert SCHEMA_VERSION == 25
-    assert get_state(conn, "schema_version") == "25"
+    assert SCHEMA_VERSION == 26
+    assert get_state(conn, "schema_version") == "26"
     conn.close()
 
 

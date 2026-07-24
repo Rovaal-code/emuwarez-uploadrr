@@ -656,7 +656,8 @@ def list_request_items(
             rm.library_item_id,
             li.title AS library_title,
             li.local_status,
-            li.poster_url AS poster_url
+            li.poster_url AS poster_url,
+            li.backdrop_url AS backdrop_url
         FROM request_items ri
         LEFT JOIN request_matches rm ON rm.request_item_id = ri.id
           AND rm.id = (
@@ -739,7 +740,7 @@ def get_request_detail(conn: sqlite3.Connection, request_id: int) -> Optional[di
         """
         SELECT rm.*, li.title AS library_title, li.local_status, li.resolution AS local_resolution,
                li.source AS local_source, li.path AS local_path, li.nomenclature_status,
-               li.poster_url AS poster_url, li.video_codec AS local_video_codec,
+               li.poster_url AS poster_url, li.backdrop_url AS backdrop_url, li.video_codec AS local_video_codec,
                li.audio_languages AS local_audio_languages, li.size_bytes AS local_size,
                li.tmdb_id AS local_tmdb_id, li.imdb_id AS local_imdb_id, li.tvdb_id AS local_tvdb_id,
                li.mal_id AS local_mal_id
@@ -755,6 +756,7 @@ def get_request_detail(conn: sqlite3.Connection, request_id: int) -> Optional[di
         md = dict(match_row)
         reasons = md.get("reasons") or ""
         result["poster_url"] = md.get("poster_url")
+        result["backdrop_url"] = md.get("backdrop_url")
         result["match"] = {
             "id": md["id"],
             "library_item_id": md["library_item_id"],

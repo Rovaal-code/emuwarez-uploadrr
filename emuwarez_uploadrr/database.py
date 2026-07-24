@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 25
+SCHEMA_VERSION = 26
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -903,6 +903,17 @@ def _migrate_library_items_mal_id(conn: sqlite3.Connection) -> None:
         pass
 
 
+def _migrate_library_items_backdrop_url(conn: sqlite3.Connection) -> None:
+    """Add backdrop_url to library_items — the fanart/backdrop counterpart to
+    poster_url (Phase 11E), same Radarr/Sonarr `images` array, just
+    coverType=fanart instead of poster (see integrations/base.py::
+    extract_backdrop_url). Used as the dedicated page's hero background."""
+    try:
+        conn.execute("ALTER TABLE library_items ADD COLUMN backdrop_url TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+
 def _migrate_anime_id_map(conn: sqlite3.Connection) -> None:
     """Local mirror of the Fribb/anime-lists table (tvdb_id/season -> mal_id,
     tmdb movie id -> mal_id) — see services/anime_lists.py. Downloaded/
@@ -1321,6 +1332,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_source_engine_cache(conn)
         _migrate_library_items_mal_id(conn)
         _migrate_anime_id_map(conn)
+        _migrate_library_items_backdrop_url(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

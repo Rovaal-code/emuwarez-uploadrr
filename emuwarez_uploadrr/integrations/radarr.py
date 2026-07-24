@@ -8,7 +8,7 @@ from .arr_base import (
     ArrClientError, ArrConnectionError, ArrAuthError,
     arr_request, join_api_path, safe_api_key,
 )
-from .base import build_url, extract_media_info, extract_poster_url, request_json
+from .base import build_url, extract_backdrop_url, extract_media_info, extract_poster_url, request_json
 from ..models import LibraryItem, LocalStatus, MediaKind, NomenclatureStatus
 from ..legacy import DEFAULT_TAG
 
@@ -274,4 +274,5 @@ def movie_to_library_item(
         nomenclature_status=_nomenclature(path, has_file),
         raw_json=json.dumps(movie, ensure_ascii=False),
         poster_url=extract_poster_url(movie.get("images")),
+        backdrop_url=extract_backdrop_url(movie.get("images")),
     )

@@ -22,7 +22,7 @@ import { posterUrl, idVerifyUrl } from '../utils/libraryItem'
 import { ExternalIdLink } from '../components/ExternalIdLink'
 import { InfoIcon } from '../components/InfoIcon'
 import {
-  Card, FieldRow, DetailPoster, ValueChip, ValueIcon, TechChip, CheckStatusIcon, DETAIL_CARD_HEIGHT,
+  Card, FieldRow, DetailPoster, ValueChip, ValueIcon, TechChip, CheckStatusIcon, DETAIL_CARD_HEIGHT, DetailHero,
   StatusCardIcon, RequestCardIcon, ExternalIdsCardIcon,
   UploadButtonIcon, ExternalLinkButtonIcon, LibraryButtonIcon,
   TypeValueIcon, AuthorValueIcon, CalendarValueIcon,
@@ -278,6 +278,7 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
   const libNameTip = useTooltip(m?.content_name || baseName(m?.local_path ?? null) || m?.library_title || null)
   return (
     <div style={{ width: '100%', flex: 1, minHeight: 0, overflowY: 'auto' }}>
+      <DetailHero backdropUrl={item.backdrop_url}>
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
         <button className="btn btn-ghost btn-sm" onClick={onBack}>← Volver a peticiones</button>
       </div>
@@ -373,6 +374,7 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
           </div>
         </div>
       </div>
+      </DetailHero>
 
       <div style={{ marginTop: 17 }}>
         <div style={{ fontSize: 11.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)', marginBottom: 15 }}>

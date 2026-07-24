@@ -16,6 +16,22 @@ import { useTooltip } from './Tooltip'
 // needs more) and as the poster's fixed height, so both always agree.
 export const DETAIL_CARD_HEIGHT = 480
 
+// Wraps the header + poster/cards row in a hero banner using the content's
+// own fanart/backdrop (Radarr/Sonarr's `images[coverType=fanart].remoteUrl`,
+// same origin as the poster) as background, fading to the normal page
+// background by the bottom edge — same wrapper on all three dedicated pages
+// (Biblioteca/Subidas/Peticiones) so they get it identically. Renders
+// children with no wrapper at all when there's no backdrop, so a page
+// without one is laid out exactly as it always was.
+export function DetailHero({ backdropUrl, children }: { backdropUrl?: string | null; children: React.ReactNode }) {
+  if (!backdropUrl) return <>{children}</>
+  return (
+    <div className="detail-hero" style={{ '--hero-image': `url(${JSON.stringify(backdropUrl)})` } as React.CSSProperties}>
+      {children}
+    </div>
+  )
+}
+
 // padding/gap/titleGap are overridable per page, but every current usage
 // sticks to the defaults — tuned to fit 8 value-chip rows inside
 // DETAIL_CARD_HEIGHT.

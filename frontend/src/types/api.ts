@@ -141,6 +141,7 @@ export interface LibraryItemResponse {
   arr_history_status: string | null
   // Phase 11E
   poster_url: string | null
+  backdrop_url: string | null
   // eMuwarez catalog comparison: 1 = already on eMuwarez, 0 = not, null = not synced.
   emu_in_catalog: number | null
   emu_aportes: EmuAporte[] | null
@@ -263,6 +264,7 @@ export interface RequestItemResponse {
   library_title: string | null
   local_status: string | null
   poster_url: string | null
+  backdrop_url: string | null
   reviewed_at: string | null
   updated_at: string | null
   // Phase 8B
@@ -508,6 +510,7 @@ export interface UploadJob {
   progress_phase?: string | null
   media_type?: string | null
   poster_url?: string | null
+  backdrop_url?: string | null
   year?: number | null
   instance_type?: string | null
   instance_name?: string | null

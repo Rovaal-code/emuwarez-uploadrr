@@ -146,6 +146,7 @@ class LibraryItem:
     updated_at: Optional[str] = None
     raw_json: Optional[str] = None
     poster_url: Optional[str] = None
+    backdrop_url: Optional[str] = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

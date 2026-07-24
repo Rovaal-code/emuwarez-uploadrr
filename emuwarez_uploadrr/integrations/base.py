@@ -14,24 +14,35 @@ class IntegrationError(RuntimeError):
     pass
 
 
-def extract_poster_url(images: Any) -> Optional[str]:
-    """Pick a poster URL out of a Radarr/Sonarr `images` array (Phase 11E).
-
-    Each entry looks like {"coverType": "poster", "url": "/MediaCover/...",
-    "remoteUrl": "https://..."}. `remoteUrl` is preferred — it's a fully
-    qualified, publicly loadable URL, unlike the relative `url` field, which
-    normally requires the instance's own API key/session to load through
-    `/MediaCover/...`. Returns None if there's no poster entry or no
-    remoteUrl on it (never raises — this is best-effort metadata, not
-    something sync should ever fail over)."""
+def _extract_cover_url(images: Any, cover_type: str) -> Optional[str]:
+    """Pick a cover URL of the given type out of a Radarr/Sonarr `images`
+    array. Each entry looks like {"coverType": "poster"|"fanart", "url":
+    "/MediaCover/...", "remoteUrl": "https://..."}. `remoteUrl` is preferred
+    — it's a fully qualified, publicly loadable URL, unlike the relative
+    `url` field, which normally requires the instance's own API key/session
+    to load through `/MediaCover/...`. Returns None if there's no matching
+    entry or no remoteUrl on it (never raises — this is best-effort
+    metadata, not something sync should ever fail over)."""
     if not isinstance(images, list):
         return None
     for image in images:
-        if isinstance(image, dict) and image.get("coverType") == "poster":
+        if isinstance(image, dict) and image.get("coverType") == cover_type:
             remote_url = image.get("remoteUrl")
             if isinstance(remote_url, str) and remote_url.strip():
                 return remote_url.strip()
     return None
+
+
+def extract_poster_url(images: Any) -> Optional[str]:
+    """Pick a poster URL out of a Radarr/Sonarr `images` array (Phase 11E)."""
+    return _extract_cover_url(images, "poster")
+
+
+def extract_backdrop_url(images: Any) -> Optional[str]:
+    """Pick a fanart/backdrop URL out of a Radarr/Sonarr `images` array —
+    same shape and origin as the poster, just the wide background art
+    instead of the cover (used as the dedicated page's hero background)."""
+    return _extract_cover_url(images, "fanart")
 
 
 class MediaInfoSummary(dict):

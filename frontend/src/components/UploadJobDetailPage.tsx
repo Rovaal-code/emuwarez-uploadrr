@@ -7,7 +7,7 @@ import { InfoIcon } from './InfoIcon'
 import { StatusBadge } from './StatusBadge'
 import { ServiceLabel } from './ServiceIcon'
 import {
-  Card, FieldRow, DetailPoster, ValueChip, ValueIcon, DETAIL_CARD_HEIGHT,
+  Card, FieldRow, DetailPoster, ValueChip, ValueIcon, DETAIL_CARD_HEIGHT, DetailHero,
   StatusCardIcon, ClockCardIcon, UploadButtonIcon, LibraryButtonIcon, RetryButtonIcon, CancelButtonIcon, DeleteButtonIcon,
   TypeValueIcon, CalendarValueIcon, ProgressValueIcon,
   NomenclatureValueIcon, AudioCodecValueIcon, ChecksValueIcon, LogsValueIcon,
@@ -504,6 +504,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
   return (
     <div style={{ width: '100%', height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <div style={{ flexShrink: 0 }}>
+      <DetailHero backdropUrl={job.backdrop_url}>
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
         <button className="btn btn-ghost btn-sm" onClick={onBack}>← Volver a Subidas</button>
       </div>
@@ -616,6 +617,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
           </div>
         </div>
       </div>
+      </DetailHero>
       </div>
 
       {/* Only "Progreso de la subida" keeps its own always-expanded section —

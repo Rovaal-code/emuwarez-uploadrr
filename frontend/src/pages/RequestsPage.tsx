@@ -40,6 +40,24 @@ import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/d
 const EMU_REQUESTS_FALLBACK_URL = 'https://emuwarez.com/requests'
 
 // A request's category maps to a friendly "Tipo" with an icon.
+// The raw eMuwarez title is whatever the requester typed there — for a
+// season/episode-scoped request it doesn't reliably say WHICH one, so the
+// suffix is appended here, same format as the one this app itself builds
+// when creating a petición (RequestFormModal): " - Temporada X" / " - SxxExx".
+// Skipped if the title already ends in something matching that pattern (the
+// requester already spelled it out on eMuwarez's own site).
+function requestDisplayTitle(item: RequestItemResponse): string {
+  const base = item.title || ''
+  if (item.req_scope === 'season' && item.req_season != null && !/temporada\s*\d+\s*$/i.test(base)) {
+    return `${base} - Temporada ${item.req_season}`
+  }
+  if (item.req_scope === 'episode' && item.req_season != null && item.req_episode != null && !/S\d{1,2}E\d{1,3}\s*$/i.test(base)) {
+    const code = `S${String(item.req_season).padStart(2, '0')}E${String(item.req_episode).padStart(2, '0')}`
+    return `${base} - ${code}`
+  }
+  return base
+}
+
 function tipoOf(category: string | null): { icon: string; label: string } {
   const c = (category || '').toLowerCase()
   if (c.includes('serie')) return { icon: '📺', label: category || 'Serie' }
@@ -776,7 +794,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                                 tip="Abrir ficha"
                                 style={{ fontWeight: 500 }}
                               >
-                                {item.title}
+                                {requestDisplayTitle(item)}
                               </HoverTitle>
                             </div>
                           </div>

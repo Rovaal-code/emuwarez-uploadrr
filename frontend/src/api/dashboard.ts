@@ -18,6 +18,8 @@ export interface DashboardRecommendationItem {
   resolution: string | null
   source: string | null
   instance_type: string | null
+  instance_id: number | null
+  title_slug: string | null
   missing_count: number | null
   rec_request_id: number | null
 }

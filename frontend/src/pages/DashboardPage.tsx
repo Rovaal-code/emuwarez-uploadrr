@@ -20,7 +20,30 @@ import { useTooltip, HoverTitle } from '../components/Tooltip'
 import { getLibraryItem } from '../api/library'
 import type { LibraryItemResponse } from '../types/api'
 import { formatBytes, formatDate, formatItemType } from '../utils/format'
-import { posterUrl } from '../utils/libraryItem'
+import { posterUrl, buildDeepLink } from '../utils/libraryItem'
+import { ValueChip, ValueIcon, SizeValueIcon } from '../components/DetailCard'
+
+// The recommendations item doesn't carry the configured instance name
+// (unlike a full LibraryItemResponse), only the raw instance_type — capitalize
+// it for display so it reads the same as the Biblioteca list's Origen column.
+const INSTANCE_TYPE_LABEL: Record<string, string> = { radarr: 'Radarr', sonarr: 'Sonarr' }
+
+// Same look and behaviour as the Biblioteca list's own Origen column
+// (ValueChip + hover-link + ServiceLabel) — extracted so the per-item
+// useTooltip() call stays valid despite living inside a table .map().
+function RecOriginCell({ item, instances }: { item: DashboardRecommendationItem; instances: InstanceSafeResponse[] }) {
+  const deepLink = buildDeepLink(item, instances)
+  const label = INSTANCE_TYPE_LABEL[item.instance_type ?? ''] ?? item.instance_type ?? ''
+  const { triggerProps, tooltipNode } = useTooltip(deepLink ? `Abrir en ${label}` : null)
+  if (!item.instance_type) return <span style={{ color: 'var(--text-muted)' }}>—</span>
+  return (
+    <ValueChip linkable={!!deepLink}>
+      {deepLink
+        ? <a className="hover-link" href={deepLink} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} {...triggerProps}><ServiceLabel type={item.instance_type} label={label} size={13} />{tooltipNode}</a>
+        : <ServiceLabel type={item.instance_type} label={label} size={13} />}
+    </ValueChip>
+  )
+}
 import {
   ACTIVE_JOB_STATUSES, STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo,
   progressCounter, queuedSecondsLeft, useTicker,
@@ -368,8 +391,9 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>Nombre</th>
+                      <th>Título</th>
                       <th>Tipo</th>
+                      <th>Origen</th>
                       <th>Categoría</th>
                       <th>Recomendación</th>
                       <th>Tamaño</th>
@@ -405,13 +429,18 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                           </div>
                         </td>
                         <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{formatItemType(item.item_type)}</td>
+                        <td style={{ whiteSpace: 'nowrap' }}><RecOriginCell item={item} instances={connInstances} /></td>
                         <td>
                           <span className="badge" style={{
                             color: meta.color, background: meta.bg, border: `1px solid ${meta.border}`, whiteSpace: 'nowrap',
                           }}>{meta.category}</span>
                         </td>
                         <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{meta.recommendation}</td>
-                        <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{formatBytes(item.size_bytes)}</td>
+                        <td style={{ whiteSpace: 'nowrap' }}>
+                          {item.size_bytes
+                            ? <ValueChip><ValueIcon><SizeValueIcon /></ValueIcon><span className="txt">{formatBytes(item.size_bytes)}</span></ValueChip>
+                            : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                        </td>
                         <td className="col-actions">
                           <button className="btn btn-primary btn-sm" style={{ whiteSpace: 'nowrap' }} onClick={() => handleRecAction(item)}>
                             {meta.actionLabel}

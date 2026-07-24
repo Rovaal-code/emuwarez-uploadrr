@@ -511,6 +511,8 @@ class DashboardRecommendationItem(BaseModel):
     resolution: Optional[str] = None
     source: Optional[str] = None
     instance_type: Optional[str] = None
+    instance_id: Optional[int] = None
+    title_slug: Optional[str] = None
     missing_count: Optional[int] = None
     rec_request_id: Optional[int] = None
 

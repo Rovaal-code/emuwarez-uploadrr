@@ -975,11 +975,14 @@ def _rec_series_title_year(conn: sqlite3.Connection, row: dict) -> tuple:
 def _rec_content_name(
     conn: sqlite3.Connection, row: dict, *,
     season: int | None = None, episode: int | None = None,
-    scope: str | None = None, missing_count: int | None = None,
+    scope: str | None = None,
 ) -> str:
-    """Friendly display name. Movies: "Título (año)". Series/season/episode:
-    "Serie (año) - Season N [- SxxEyy]" using the given request scope (or the
-    row's own season_number/episode_number when no scope is passed)."""
+    """Friendly display name, same convention the Petición form itself uses
+    (see RequestFormModal): "Título (Año)" for a movie, "Serie (Año) -
+    Temporada X" for a whole season, "Serie (Año) - SxxEyy" for one episode
+    — never both suffixes at once. Uses the given request scope/season/
+    episode (falls back to the row's own season_number/episode_number when
+    none is passed, e.g. a season/episode library row)."""
     it = row.get("item_type")
     sn = season if season is not None else row.get("season_number")
     ep = episode if episode is not None else row.get("episode_number")
@@ -992,17 +995,15 @@ def _rec_content_name(
     name = title or row.get("title") or ""
     if year:
         name += f" ({year})"
-    if sn is not None:
-        name += f" - Season {sn}"
-        is_episode = (scope == "episode") or (scope is None and it == "episode")
-        if is_episode and ep is not None:
-            try:
-                name += f" - S{int(sn):02d}E{int(ep):02d}"
-            except (TypeError, ValueError):
-                pass
-    if missing_count:
-        name += f" · {missing_count} cap. faltante" + ("s" if missing_count != 1 else "")
-    return name
+    if sn is None:
+        return name
+    is_episode = (scope == "episode") or (scope is None and (it == "episode" or ep is not None))
+    if is_episode and ep is not None:
+        try:
+            return name + f" - S{int(sn):02d}E{int(ep):02d}"
+        except (TypeError, ValueError):
+            pass
+    return name + f" - Temporada {sn}"
 
 
 def _rec_rolled_size(conn: sqlite3.Connection, row: dict, *, season: int | None = None, episode: int | None = None):
@@ -1058,7 +1059,8 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
 
     cols = ("id, item_type, title, year, poster_url, local_status, added_at, "
             "season_number, episode_number, parent_id, size_bytes, "
-            "resolution, source, tmdb_id, imdb_id, tvdb_id, instance_type")
+            "resolution, source, tmdb_id, imdb_id, tvdb_id, instance_type, "
+            "instance_id, title_slug")
 
     # Group 1 — every *compatible* eMuwarez request, sourced from the match
     # table (library_items.request_status only records one request per item, so
@@ -1178,8 +1180,27 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
         (now_iso,),
     ).fetchall():
         row = dict(row)
-        _push(row, 3, name=_rec_content_name(conn, row, missing_count=row.get("missing_count")),
-              missing_count=row.get("missing_count"))
+        missing_count = row.get("missing_count")
+        # Exactly one monitored episode missing from an otherwise-complete
+        # season → name it as that specific episode (Serie (Año) - SxxEyy),
+        # same as if you'd request just that one; more than one missing
+        # still means "the whole season" (Serie (Año) - Temporada X).
+        single_missing_episode = None
+        if missing_count == 1:
+            ep_row = conn.execute(
+                """SELECT episode_number FROM library_items
+                   WHERE parent_id = ? AND item_type = 'episode' AND local_status = 'Faltante'
+                     AND emu_in_catalog = 0
+                     AND json_extract(raw_json, '$.episode.monitored') = 1
+                     AND json_extract(raw_json, '$.episode.airDateUtc') IS NOT NULL
+                     AND json_extract(raw_json, '$.episode.airDateUtc') <= ?
+                     AND UPPER(COALESCE(json_extract(raw_json, '$.episode.title'), '')) <> 'TBA'
+                   LIMIT 1""",
+                (row["id"], now_iso),
+            ).fetchone()
+            single_missing_episode = ep_row["episode_number"] if ep_row else None
+        _push(row, 3, name=_rec_content_name(conn, row, episode=single_missing_episode),
+              missing_count=missing_count)
 
     # Newest-first within each group (stable sort: order by recency, then by
     # group so the three blocks stay in order 1 → 2 → 3).

@@ -131,29 +131,29 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
               </FieldRow>
               <FieldRow label="Estado"><StatusBadge status={item.local_status} type="local" /></FieldRow>
               <FieldRow label="Petición"><StatusBadge status={item.request_status} type="request" /></FieldRow>
-              <FieldRow label="Ruta">
-                <ValueChip as="button" linkable onClick={() => setShowRuta(true)} title="Ver ruta completa">
-                  <span className="brand-icon"><FolderIcon /></span><span className="txt">Ver ruta</span>
-                </ValueChip>
-              </FieldRow>
               {isEmuComparable && (
                 <FieldRow label="eMuwarez">
                   <EmuFieldChip itemId={item.id} />
                 </FieldRow>
               )}
+              <FieldRow label="Ruta">
+                <ValueChip as="button" linkable onClick={() => setShowRuta(true)} title="Ver ruta completa">
+                  <span className="brand-icon"><FolderIcon /></span><span className="txt">Ver ruta</span>
+                </ValueChip>
+              </FieldRow>
             </Card>
 
             <Card title="Información técnica" icon={<TechInfoCardIcon />}>
               <FieldRow label="Resolución" help={rollupHelp}>
                 <ValueChip><ValueIcon><ResolutionValueIcon /></ValueIcon><span className="txt">{item.resolution || '–'}</span></ValueChip>
               </FieldRow>
-              <FieldRow label="Source" help={rollupHelp}>
-                <ValueChip><ValueIcon><SourceValueIcon /></ValueIcon><span className="txt">{item.source || '–'}</span></ValueChip>
-              </FieldRow>
               <FieldRow label="Proveedor" help={rollupHelp}>
                 {item.provider
                   ? <ValueChip linkable><ProviderTag code={item.provider} label={item.provider_label} /></ValueChip>
                   : <span className="muted">–</span>}
+              </FieldRow>
+              <FieldRow label="Source" help={rollupHelp}>
+                <ValueChip><ValueIcon><SourceValueIcon /></ValueIcon><span className="txt">{item.source || '–'}</span></ValueChip>
               </FieldRow>
               <FieldRow label="Códec de vídeo" help={rollupHelp}>
                 <ValueChip><ValueIcon><VideoCodecValueIcon /></ValueIcon><span className="txt">{item.video_codec || '–'}</span></ValueChip>

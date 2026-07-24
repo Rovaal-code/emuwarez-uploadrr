@@ -8,7 +8,7 @@ import { buildDeepLink, posterUrl, episodeListLabel } from '../utils/libraryItem
 import { ProviderTag } from './ProviderIcon'
 import { LibraryActionButtons } from './LibraryActionButtons'
 import { useTooltip } from './Tooltip'
-import { ValueChip, ValueIcon, ResolutionValueIcon, SourceValueIcon } from './DetailCard'
+import { ValueChip, ValueIcon, ResolutionValueIcon, SourceValueIcon, SizeValueIcon } from './DetailCard'
 
 const NESTED_PAGE_SIZE = 25
 // Seasons per series — well under the API's max limit=500 (a season list
@@ -180,17 +180,14 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
         </td>
         <td><StatusBadge status={item.local_status} type="local" /></td>
         <td><StatusBadge status={item.request_status} type="request" /></td>
-        <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-          {formatBytes(item.size_bytes)}
+        <td style={{ whiteSpace: 'nowrap' }}>
+          {item.resolution
+            ? <ValueChip><ValueIcon><ResolutionValueIcon /></ValueIcon><span className="txt">{item.resolution}</span></ValueChip>
+            : <span style={{ color: 'var(--text-muted)' }}>—</span>}
         </td>
         <td style={{ whiteSpace: 'nowrap' }}>
           {item.provider
             ? <ValueChip linkable><ProviderTag code={item.provider} label={item.provider_label} size={16} /></ValueChip>
-            : <span style={{ color: 'var(--text-muted)' }}>—</span>}
-        </td>
-        <td style={{ whiteSpace: 'nowrap' }}>
-          {item.resolution
-            ? <ValueChip><ValueIcon><ResolutionValueIcon /></ValueIcon><span className="txt">{item.resolution}</span></ValueChip>
             : <span style={{ color: 'var(--text-muted)' }}>—</span>}
         </td>
         <td style={{ whiteSpace: 'nowrap' }}>
@@ -199,6 +196,11 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
             : <span style={{ color: 'var(--text-muted)' }}>—</span>}
         </td>
         <td style={{ whiteSpace: 'nowrap' }}><EmuStatusCell item={item} /></td>
+        <td style={{ whiteSpace: 'nowrap' }}>
+          {item.size_bytes
+            ? <ValueChip><ValueIcon><SizeValueIcon /></ValueIcon><span className="txt">{formatBytes(item.size_bytes)}</span></ValueChip>
+            : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+        </td>
         {!compact && (
           <td style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
             {formatDate(item.updated_at)}

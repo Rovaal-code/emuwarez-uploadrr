@@ -501,12 +501,11 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
                   <th><HeaderFilter label="Petición" value={filterRequest} onChange={v => { setFilterRequest(v); setOffset(0) }} options={[
                     { value: '', label: 'Todas' }, ...(filterOptions?.request_statuses ?? []).map(s => ({ value: s, label: s })),
                   ]} /></th>
-                  <th>Tamaño</th>
-                  <th><HeaderFilter label="Proveedor" value={searchProvider} onChange={setSearchProvider} options={[
-                    { value: '', label: 'Todos' }, ...providerOptions.map(p => ({ value: p, label: p })),
-                  ]} /></th>
                   <th><HeaderFilter label="Resolución" value={searchQuality} onChange={setSearchQuality} options={[
                     { value: '', label: 'Todas' }, ...qualityOptions.map(q => ({ value: q, label: q })),
+                  ]} /></th>
+                  <th><HeaderFilter label="Proveedor" value={searchProvider} onChange={setSearchProvider} options={[
+                    { value: '', label: 'Todos' }, ...providerOptions.map(p => ({ value: p, label: p })),
                   ]} /></th>
                   <th><HeaderFilter label="Source" value={searchSource} onChange={setSearchSource} options={[
                     { value: '', label: 'Todos' }, ...sourceOptions.map(s => ({ value: s, label: s })),
@@ -514,6 +513,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
                   <th><HeaderFilter label="EMuwarez" value={filterEmu} onChange={v => { setFilterEmu(v); setOffset(0) }} options={[
                     { value: '', label: 'Todos' }, ...(filterOptions?.emu_states ?? []).map(s => ({ value: s, label: s === 'present' ? 'Sí' : 'No' })),
                   ]} /></th>
+                  <th>Tamaño</th>
                   <th>Actualizado</th>
                   <th className="col-actions">Acciones</th>
                 </tr>

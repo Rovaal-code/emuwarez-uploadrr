@@ -24,25 +24,77 @@ interfaz web, sin tocar la terminal.
 
 ## Arranque rápido (Docker Compose)
 
-Requiere Docker 24+ con Compose v2.
+Requiere Docker 24+ con Compose v2. No hace falta clonar el repo: copia esto
+en un `docker-compose.yml`, ajusta las rutas de los volúmenes a tu entorno y
+levántalo. Usa la imagen ya publicada en
+`ghcr.io/rovaal-code/emuwarez-uploadrr`, así que no compila nada.
+
+```yaml
+services:
+  emuwarez-uploadrr:
+    image: ghcr.io/rovaal-code/emuwarez-uploadrr:${EMUWAREZ_UPLOADRR_TAG:-latest}
+    container_name: emuwarez-uploadrr
+    restart: unless-stopped
+
+    ports:
+      - "${EMUWAREZ_UPLOADRR_PORT:-9494}:9494"
+
+    # Ajusta PUID/PGID al UID/GID del usuario propietario de los archivos de media
+    user: "${PUID:-1000}:${PGID:-1000}"
+
+    environment:
+      TZ: ${TZ:-Europe/Madrid}
+      CONFIG_DIR: /config
+
+    volumes:
+      # Configuración persistente: base de datos SQLite y settings
+      - /srv/emuwarez-uploadrr/config:/config
+
+      # Uploadrr-EMU como bind mount externo — NUNCA va dentro de la imagen.
+      # Código en :ro; data/ y tmp/ montados aparte en rw. Después del primer
+      # arranque, configura la ruta /opt/Uploadrr en el setup web (uploadrr.path).
+      - ${UPLOADRR_PATH:-/srv/Uploadrr}:/opt/Uploadrr:ro
+      - ${UPLOADRR_DATA_PATH:-/srv/emuwarez-uploadrr/uploadrr-data}:/opt/Uploadrr/data:rw
+      - ${UPLOADRR_TMP_PATH:-/srv/emuwarez-uploadrr/uploadrr-tmp}:/opt/Uploadrr/tmp:rw
+
+      # Raíz de datos compartida para media + uploads — una sola raíz evita
+      # el error EXDEV al crear hardlinks entre origen y destino.
+      # Configura en el setup web: Raíz media → /data/media,
+      # hardlink_base → /data/uploads/emu
+      - /srv/data:/data
+```
+
+Opcionalmente, junto a él crea un `.env` para no editar el compose directamente:
+
+```env
+PUID=1000
+PGID=1000
+TZ=Europe/Madrid
+EMUWAREZ_UPLOADRR_PORT=9494
+UPLOADRR_PATH=/srv/Uploadrr
+UPLOADRR_DATA_PATH=/srv/emuwarez-uploadrr/uploadrr-data
+UPLOADRR_TMP_PATH=/srv/emuwarez-uploadrr/uploadrr-tmp
+```
+
+Y levanta el contenedor:
+
+```bash
+docker compose up -d
+```
+
+Abre `http://localhost:9494` — el asistente de configuración inicial se abre
+solo.
+
+> API keys (TMDb, eMuwarez, Radarr/Sonarr...) se configuran desde el propio
+> asistente web o desde Configuración — nunca en el compose ni en el `.env`.
+
+Si prefieres clonar el repo (por ejemplo para construir la imagen tú mismo
+en vez de usar la publicada), usa `docker-compose.example.yml`:
 
 ```bash
 git clone https://github.com/Rovaal-code/emuwarez-uploadrr.git
 cd emuwarez-uploadrr
 cp .env.example .env
-nano .env   # ajusta PUID/PGID/TZ y las rutas de Uploadrr-EMU
-
-docker compose up -d
-```
-
-Abre `http://localhost:9494` — el asistente de configuración inicial se abre
-solo. `docker-compose.yml` usa la imagen ya construida en
-`ghcr.io/rovaal-code/emuwarez-uploadrr`; no hace falta compilar nada.
-
-Para construir la imagen tú mismo en vez de usar la publicada (por ejemplo,
-para probar cambios locales), usa `docker-compose.example.yml`:
-
-```bash
 docker compose -f docker-compose.example.yml up -d --build
 ```
 

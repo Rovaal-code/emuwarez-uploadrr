@@ -52,11 +52,11 @@ export function LibraryChildrenSection({ parentId, childType, title, instances, 
                   <th>Origen</th>
                   <th>Estado</th>
                   <th>Petición</th>
-                  <th>Tamaño</th>
-                  <th>Proveedor</th>
                   <th>Resolución</th>
+                  <th>Proveedor</th>
                   <th>Source</th>
                   <th>EMuwarez</th>
+                  <th>Tamaño</th>
                 </tr>
               </thead>
               <tbody>

@@ -40,6 +40,7 @@ export interface SettingsData {
   notify_telegram_events: string[]
   series_ignore_specials: boolean
   recent_activity_limit: number
+  upload_max_concurrent: number
   path_mappings: { from: string; to: string }[]
 }
 
@@ -74,6 +75,7 @@ export interface SettingsUpdatePayload {
   notify_telegram_events?: string[]
   series_ignore_specials?: boolean
   recent_activity_limit?: number
+  upload_max_concurrent?: number
   path_mappings?: { from: string; to: string }[]
 }
 

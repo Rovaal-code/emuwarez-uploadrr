@@ -22,6 +22,9 @@ from ..services.settings_service import get_setting, mask_secret, set_setting
 from ...services.uploadrr_contract import RUNTIME_EMU, RUNTIME_GENERIC, DEFAULT_TIMEOUT_SECONDS, DEFAULT_ALLOWED_ROOTS
 from ...services.source_assistant import EMU_PROVIDERS
 from ...services.notification_center import EVENT_TYPES, channel_events, ui_enabled
+from ...services.upload_execution import (
+    UPLOAD_MAX_CONCURRENT_SETTING_KEY, UPLOAD_MAX_CONCURRENT_CHOICES, get_upload_max_concurrent,
+)
 from ...database import get_setting_canonical
 
 router = APIRouter(tags=["settings"])
@@ -86,6 +89,7 @@ class SettingsResponse(BaseModel):
     # "Otros"
     series_ignore_specials: bool = True
     recent_activity_limit: int = 100
+    upload_max_concurrent: int = 3
     # Remote path mappings: [{"from": "/data/media", "to": "/mnt/emu-media"}]
     path_mappings: list[dict] = []
 
@@ -128,6 +132,7 @@ class SettingsUpdateRequest(BaseModel):
     notify_telegram_events: Optional[list[str]] = None
     series_ignore_specials: Optional[bool] = None
     recent_activity_limit: Optional[int] = None
+    upload_max_concurrent: Optional[int] = None
     path_mappings: Optional[list[dict]] = None
 
     @field_validator("qbit_url")
@@ -284,6 +289,7 @@ def _build_response(conn) -> SettingsResponse:
         notify_telegram_events=sorted(channel_events(conn, "telegram")),
         series_ignore_specials=(get_setting_canonical(conn, "series.ignore_specials") or "true") != "false",
         recent_activity_limit=_read_recent_activity_limit(conn),
+        upload_max_concurrent=get_upload_max_concurrent(conn),
         path_mappings=_read_path_mappings(conn),
     )
 
@@ -421,6 +427,11 @@ def update_settings(
             if body.recent_activity_limit not in _RECENT_ACTIVITY_CHOICES:
                 raise HTTPException(status_code=422, detail=f"recent_activity_limit debe ser uno de {_RECENT_ACTIVITY_CHOICES}")
             set_setting(conn, "dashboard.recent_activity_limit", str(body.recent_activity_limit))
+
+        if body.upload_max_concurrent is not None:
+            if body.upload_max_concurrent not in UPLOAD_MAX_CONCURRENT_CHOICES:
+                raise HTTPException(status_code=422, detail=f"upload_max_concurrent debe ser uno de {UPLOAD_MAX_CONCURRENT_CHOICES}")
+            set_setting(conn, UPLOAD_MAX_CONCURRENT_SETTING_KEY, str(body.upload_max_concurrent))
 
         if body.path_mappings is not None:
             import json as _json

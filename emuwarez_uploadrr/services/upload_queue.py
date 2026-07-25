@@ -845,5 +845,17 @@ def _run_queued_job(job_id: int) -> None:
         result = start_upload_job(job_id, dry_run=False, start=True, confirmation=START_TOKEN, conn=conn)
         if result.get("error"):
             _fail(job_id, result.get("message") or "; ".join(result.get("errors") or []) or "No se pudo iniciar la subida.")
+    except Exception as exc:
+        # Last-resort net: every step above already has its own try/except
+        # that fails the job with a specific reason, but anything genuinely
+        # unanticipated here (a bug in the orchestration itself, a DB hiccup
+        # under concurrent jobs, a KeyError from unexpected data shape...)
+        # must still end with the job marked failed and the real traceback
+        # in Activity — not a job silently stuck forever with nothing but a
+        # stderr traceback nobody but the server console ever sees. Same
+        # safety net _run_staging_job() and _run_uploadrr_subprocess()
+        # already have; this was the one orchestrator missing it.
+        logger.exception("Job %s: excepción inesperada en _run_queued_job", job_id)
+        _fail(job_id, f"Error inesperado: {exc}")
     finally:
         conn.close()

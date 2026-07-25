@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getSystemStats, type SystemStats } from '../api/system'
 import { formatBytes } from '../utils/format'
-import { useTooltip } from './Tooltip'
+import { Tooltip, useTooltip } from './Tooltip'
 
 const POLL_MS = 4000
 const RADIUS = 44
@@ -43,7 +43,12 @@ function Gauge({ percent, label, color, title }: { percent: number; label: strin
 // as text side by side, so it collapses to a single icon whose tooltip
 // carries both values — same reveal-on-hover pattern as the nav items.
 function NetRow({ down, up, collapsed }: { down: number; up: number; collapsed: boolean }) {
-  const { triggerProps, tooltipNode } = useTooltip(collapsed ? `↓ ${formatBytes(down)}/s · ↑ ${formatBytes(up)}/s` : null)
+  const { triggerProps, tooltipNode } = useTooltip(collapsed ? (
+    <>
+      <div>Velocidad de bajada: {formatBytes(down)}/s</div>
+      <div>Velocidad de subida: {formatBytes(up)}/s</div>
+    </>
+  ) : null)
   if (collapsed) {
     return (
       <div className="sys-net-row collapsed" {...triggerProps}>
@@ -57,8 +62,12 @@ function NetRow({ down, up, collapsed }: { down: number; up: number; collapsed: 
   }
   return (
     <div className="sys-net-row">
-      <span className="sys-net-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M6 13l6 6 6-6" /></svg>{formatBytes(down)}/s</span>
-      <span className="sys-net-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 19V5M6 11l6-6 6 6" /></svg>{formatBytes(up)}/s</span>
+      <Tooltip content="Velocidad de bajada">
+        <span className="sys-net-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M6 13l6 6 6-6" /></svg>{formatBytes(down)}/s</span>
+      </Tooltip>
+      <Tooltip content="Velocidad de subida">
+        <span className="sys-net-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 19V5M6 11l6-6 6 6" /></svg>{formatBytes(up)}/s</span>
+      </Tooltip>
     </div>
   )
 }

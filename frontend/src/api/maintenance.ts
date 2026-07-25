@@ -139,7 +139,7 @@ export async function createBackup(opts: { include_secrets?: boolean; confirmati
   })
 }
 
-export async function listBackups(): Promise<{ ok: boolean; backups: BackupInfo[]; count: number }> {
+export async function listBackups(): Promise<{ ok: boolean; backups: BackupInfo[]; count: number; backup_dir: string }> {
   return api.get('/maintenance/backups')
 }
 

@@ -24,6 +24,11 @@ def _get_backup_dir(base: Path | None = None) -> Path:
     return d
 
 
+def get_backup_dir() -> Path:
+    """Public accessor for the directory backups are read from/written to."""
+    return _get_backup_dir()
+
+
 def get_config_inventory() -> dict:
     """Returns a summary of config files — counts only, no secret values."""
     config_dir = _get_config_dir()

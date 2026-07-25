@@ -767,6 +767,71 @@ def _release_staged_config(job_id: int, config_path: Path | None) -> None:
             append_upload_log(job_id, "info", "config.yaml sigue en uso por otra subida; no se restaura todavía.", stream="system")
 
 
+# "Subidas en paralelo" (Configuración → Otros): caps how many jobs run their
+# actual Uploadrr-EMU subprocess at once — hashing the torrent, generating
+# and uploading screenshots, transferring to eMuwarez, the genuinely CPU/
+# network-heavy tail — regardless of which entry point queued them (the
+# normal 60s-countdown flow, a retry, or the legacy direct-start endpoints).
+# The earlier local pipeline (integrity/nomenclature/remux) is comparatively
+# light and stays ungated. 0 = sin límite.
+UPLOAD_MAX_CONCURRENT_SETTING_KEY = "uploads.max_concurrent"
+UPLOAD_MAX_CONCURRENT_CHOICES = tuple(range(0, 11))  # 0, 1, 2, … 10
+UPLOAD_MAX_CONCURRENT_DEFAULT = 3
+
+
+def get_upload_max_concurrent(conn=None) -> int:
+    own = conn is None
+    conn = conn or _get_db_conn()
+    try:
+        raw = get_setting_canonical(conn, UPLOAD_MAX_CONCURRENT_SETTING_KEY)
+    finally:
+        if own:
+            conn.close()
+    try:
+        val = int(raw) if raw else UPLOAD_MAX_CONCURRENT_DEFAULT
+    except (TypeError, ValueError):
+        return UPLOAD_MAX_CONCURRENT_DEFAULT
+    return val if val in UPLOAD_MAX_CONCURRENT_CHOICES else UPLOAD_MAX_CONCURRENT_DEFAULT
+
+
+class _UploadConcurrencyGate:
+    """Re-reads the configured limit on every wait loop instead of capturing
+    it once at acquire time — so lowering/raising the setting takes effect
+    immediately for whichever job is next in line, with no need to touch
+    jobs already past the gate and no need to block changing the setting
+    while uploads are running: shrinking the limit just makes new jobs wait
+    longer, it never kills or pauses one already running."""
+
+    def __init__(self) -> None:
+        self._cond = threading.Condition()
+        self._active = 0
+
+    def acquire(self, job_id: int) -> None:
+        with self._cond:
+            announced = False
+            while True:
+                limit = get_upload_max_concurrent()
+                if limit == 0 or self._active < limit:
+                    self._active += 1
+                    return
+                if not announced:
+                    append_upload_log(
+                        job_id, "info",
+                        f"Esperando turno para empezar la subida real: {self._active} en curso, límite {limit}.",
+                        stream="system",
+                    )
+                    announced = True
+                self._cond.wait(timeout=3)
+
+    def release(self) -> None:
+        with self._cond:
+            self._active = max(0, self._active - 1)
+            self._cond.notify_all()
+
+
+_upload_concurrency_gate = _UploadConcurrencyGate()
+
+
 def _read_progress_state(job_id: int) -> dict:
     conn = _get_db_conn()
     try:
@@ -849,6 +914,18 @@ def advance_running_phase(job_id: int, phase_key: str, pct: int) -> None:
 
 def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str]) -> None:
     """Execute Uploadrr in a background thread. Updates job status, logs, and result artifacts."""
+    # Waits here (not before) if "Subidas en paralelo" is already at its
+    # configured limit — everything before this point (building the command,
+    # staging config) is cheap; the subprocess this gates is the actual
+    # hashing/screenshots/eMuwarez-transfer work.
+    _upload_concurrency_gate.acquire(job_id)
+    try:
+        _run_uploadrr_subprocess_body(job_id, cmd, secrets)
+    finally:
+        _upload_concurrency_gate.release()
+
+
+def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) -> None:
     executable = cmd["executable"]
     args = cmd["args"]
     cwd = cmd.get("cwd") or "."

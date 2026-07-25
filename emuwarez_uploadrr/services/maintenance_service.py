@@ -94,14 +94,19 @@ def run_database_vacuum(
 
     if dry_run or not do_apply:
         status = get_database_maintenance_status()
+        freelist_count = status.get("freelist_count", 0)
+        page_size = status.get("page_size", 0)
+        estimated_bytes_freeable = freelist_count * page_size
         return {
             "ok": True,
             "dry_run": True,
             "action": "preview",
             "db_path": str(db),
             "size_bytes_before": before,
-            "freelist_count": status.get("freelist_count", 0),
-            "message": "Previsualización — VACUUM no ejecutado",
+            "freelist_count": freelist_count,
+            "page_size": page_size,
+            "estimated_bytes_freeable": estimated_bytes_freeable,
+            "message": f"Previsualización — ~{estimated_bytes_freeable:,} bytes liberables ({freelist_count:,} páginas libres). VACUUM no ejecutado.",
         }
 
     try:

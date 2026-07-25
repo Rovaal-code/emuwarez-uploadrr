@@ -74,9 +74,9 @@ def create_backup(
 @router.get("/backups")
 def list_backups(current_user: dict = Depends(require_auth)) -> dict:
     """Lista los backups existentes (nombre, ruta, tamaño, fecha)."""
-    from emuwarez_uploadrr.services.backup_service import list_config_backups
+    from emuwarez_uploadrr.services.backup_service import get_backup_dir, list_config_backups
     backups = list_config_backups()
-    return {"ok": True, "backups": backups, "count": len(backups)}
+    return {"ok": True, "backups": backups, "count": len(backups), "backup_dir": str(get_backup_dir())}
 
 
 @router.post("/restore")

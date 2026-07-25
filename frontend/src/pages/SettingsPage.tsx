@@ -49,14 +49,14 @@ function formatBytes(n: number) {
 function configSignature(v: {
   tag: string; providerOrder: string[]; region: string; language: string
   emuUsername: string; ignoreSpecials: boolean
-  recentLimit: number; qbitUrl: string; qbitPort: string; qbitUser: string
+  recentLimit: number; uploadMaxConcurrent: number; qbitUrl: string; qbitPort: string; qbitUser: string
   imgEnabled: string[]; allowedRoots: string
   newKey?: string; newEmuKey?: string; qbitPass?: string
   imgKeys?: Record<string, string>
 }): string {
   return JSON.stringify([
     v.tag, v.providerOrder, v.region, v.language, v.emuUsername,
-    v.ignoreSpecials, v.recentLimit, v.qbitUrl, v.qbitPort, v.qbitUser, v.imgEnabled, v.allowedRoots,
+    v.ignoreSpecials, v.recentLimit, v.uploadMaxConcurrent, v.qbitUrl, v.qbitPort, v.qbitUser, v.imgEnabled, v.allowedRoots,
     v.newKey ?? '', v.newEmuKey ?? '', v.qbitPass ?? '', v.imgKeys ?? {},
   ])
 }
@@ -98,6 +98,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const [emuUsername, setEmuUsername] = useState('')
   const [ignoreSpecials, setIgnoreSpecials] = useState(true)
   const [recentLimit, setRecentLimit] = useState(100)
+  const [uploadMaxConcurrent, setUploadMaxConcurrent] = useState(3)
   const [qbitUrl, setQbitUrl] = useState('')
   const [qbitPort, setQbitPort] = useState('8080')
   const [qbitUser, setQbitUser] = useState('')
@@ -123,7 +124,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const [baseline, setBaseline] = useState('')
   const currentSig = configSignature({
     tag, providerOrder, region, language, emuUsername,
-    ignoreSpecials, recentLimit, qbitUrl, qbitPort, qbitUser, imgEnabled, allowedRoots,
+    ignoreSpecials, recentLimit, uploadMaxConcurrent, qbitUrl, qbitPort, qbitUser, imgEnabled, allowedRoots,
     newKey, newEmuKey, qbitPass, imgKeys,
   })
   const dirty = baseline !== '' && currentSig !== baseline
@@ -169,6 +170,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         setEmuUsername(s.emu_username ?? '')
         setIgnoreSpecials(s.series_ignore_specials ?? true)
         setRecentLimit(s.recent_activity_limit ?? 100)
+        setUploadMaxConcurrent(s.upload_max_concurrent ?? 3)
         setQbitUrl(s.qbit_url ?? '')
         setQbitPort(s.qbit_port ?? '8080')
         setQbitUser(s.qbit_username ?? '')
@@ -179,6 +181,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           region: s.tmdb_watch_region, language: s.tmdb_language,
           emuUsername: s.emu_username ?? '',
           ignoreSpecials: s.series_ignore_specials ?? true, recentLimit: s.recent_activity_limit ?? 100,
+          uploadMaxConcurrent: s.upload_max_concurrent ?? 3,
           qbitUrl: s.qbit_url ?? '', qbitPort: s.qbit_port ?? '8080', qbitUser: s.qbit_username ?? '',
           imgEnabled: s.image_hosts_enabled ?? [],
           allowedRoots: (s.uploadrr_allowed_roots ?? []).join(', '),
@@ -259,6 +262,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         emu_username: emuUsername.trim(),
         series_ignore_specials: ignoreSpecials,
         recent_activity_limit: recentLimit,
+        upload_max_concurrent: uploadMaxConcurrent,
         qbit_url: qbitUrl.trim(),
         qbit_port: qbitPort.trim(),
         qbit_username: qbitUser.trim(),
@@ -279,6 +283,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
       setEmuUsername(updated.emu_username ?? '')
       setIgnoreSpecials(updated.series_ignore_specials ?? true)
       setRecentLimit(updated.recent_activity_limit ?? 100)
+      setUploadMaxConcurrent(updated.upload_max_concurrent ?? 3)
       setQbitUrl(updated.qbit_url ?? '')
       setQbitPort(updated.qbit_port ?? '8080')
       setQbitUser(updated.qbit_username ?? '')
@@ -293,6 +298,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         region: updated.tmdb_watch_region, language: updated.tmdb_language,
         emuUsername: updated.emu_username ?? '',
         ignoreSpecials: updated.series_ignore_specials ?? true, recentLimit: updated.recent_activity_limit ?? 100,
+        uploadMaxConcurrent: updated.upload_max_concurrent ?? 3,
         qbitUrl: updated.qbit_url ?? '', qbitPort: updated.qbit_port ?? '8080', qbitUser: updated.qbit_username ?? '',
         imgEnabled: updated.image_hosts_enabled ?? [],
         allowedRoots: (updated.uploadrr_allowed_roots ?? []).join(', '),
@@ -648,28 +654,34 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           </svg>
           Otros
         </h3>
-        <div className="form-group" style={{ marginBottom: 14 }}>
-          <label className="form-label">Episodios especiales</label>
-          <label className="checkbox-label" style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-            <input type="checkbox" checked={ignoreSpecials} onChange={e => setIgnoreSpecials(e.target.checked)} style={{ marginTop: 3 }} />
-            <span>
-              Ignorar episodios especiales en el estado de una serie
-              <span className="form-hint" style={{ display: 'block', marginTop: 4 }}>
-                Excluye la temporada especial (temporada 0) de los datos globales de la serie. Con esto:
-              </span>
-              <ul className="form-hint" style={{ margin: '4px 0 0', paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <li>Si tienes todas las temporadas y capítulos salvo los especiales, la serie cuenta como <strong>completa</strong> en <strong>Estado</strong> y <strong>¿En eMuwarez?</strong>.</li>
-                <li>Sus atributos consolidados (<strong>resolución, source, códecs, audio y subtítulos</strong>) se calculan ignorando los especiales.</li>
-                <li>En el Panel, los capítulos faltantes de las temporadas especiales <strong>no cuentan</strong> como faltantes.</li>
-              </ul>
-            </span>
+        <div className="form-group">
+          <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            Máximo de Subidas en Paralelo
+            <InfoIcon text="Cuántas subidas pueden hacer a la vez el hasheo del torrent y la transferencia a eMuwarez, la parte más pesada del proceso. Las demás esperan su turno en cola y arrancan solas en cuanto se libera un hueco. Sin límite las deja correr todas a la vez." />
           </label>
+          <select className="form-input form-select" value={uploadMaxConcurrent} onChange={e => setUploadMaxConcurrent(Number(e.target.value))}>
+            <option value={0}>Sin límite</option>
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
         </div>
         <div className="form-group">
-          <label className="form-label">Elementos en Recomendaciones</label>
+          <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            Máximo de Elementos en Recomendaciones
+            <InfoIcon text="Cuántos elementos como máximo se muestran en Recomendaciones. Sin límite los muestra todos." />
+          </label>
           <select className="form-input form-select" value={recentLimit} onChange={e => setRecentLimit(Number(e.target.value))}>
             <option value={0}>Sin límite</option>
             {[50, 100, 150, 200, 250, 300].map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>
+        <div className="form-group">
+          <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            Ignorar Temporadas especiales
+            <InfoIcon text="Excluye la temporada especial (temporada 0) del estado global de una serie. Si tienes todas las temporadas y capítulos salvo los especiales, la serie aparece como completa en las columnas Estado y eMuwarez de la Biblioteca. Sus atributos consolidados (resolución, source, códecs, audio y subtítulos) se calculan ignorando los especiales, y en el Panel sus capítulos faltantes no cuentan como faltantes." />
+          </label>
+          <select className="form-input form-select" value={ignoreSpecials ? 'true' : 'false'} onChange={e => setIgnoreSpecials(e.target.value === 'true')}>
+            <option value="true">Sí</option>
+            <option value="false">No</option>
           </select>
         </div>
       </div>
@@ -893,6 +905,7 @@ function DiagnosticsTab({ status }: { status: MaintenanceStatus | null }) {
 // ---------- Backup tab ----------
 function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | null; onRefresh: () => void }) {
   const [backups, setBackups] = useState<BackupInfo[]>([])
+  const [backupDir, setBackupDir] = useState('')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
   const [restorePath, setRestorePath] = useState('')
@@ -909,6 +922,7 @@ function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | null; on
     try {
       const r = await listBackups()
       setBackups(r.backups)
+      setBackupDir(r.backup_dir)
     } catch { /* ignore */ }
   }, [])
 
@@ -968,6 +982,11 @@ function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | null; on
 
       <div className="placeholder-card">
         <h3>Backups existentes ({status?.backups_count ?? backups.length})</h3>
+        {backupDir && (
+          <p style={{ color: 'var(--text-secondary)', fontSize: 12, margin: '0 0 10px' }}>
+            Ubicación: <code>{backupDir}</code>
+          </p>
+        )}
         {backups.length === 0 ? (
           <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>No hay backups.</p>
         ) : (
@@ -995,15 +1014,19 @@ function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | null; on
       <div className="placeholder-card">
         <h3>Restaurar backup</h3>
         <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: '0 0 10px' }}>
-          Introduce la ruta completa del archivo <code>.tar.gz</code> a restaurar.
+          Elige uno de los backups existentes en <code>{backupDir || '…'}</code>.
         </p>
-        <input
-          type="text"
-          placeholder="Ruta del backup, p.ej. /config/backups/emuwarez_config_….tar.gz"
+        <select
+          className="form-input form-select"
           value={restorePath}
           onChange={e => setRestorePath(e.target.value)}
-          style={{ width: '100%', marginBottom: 8, padding: '6px 10px', fontSize: 13, boxSizing: 'border-box' }}
-        />
+          style={{ width: '100%', marginBottom: 8 }}
+        >
+          <option value="">Selecciona un backup…</option>
+          {backups.map(b => (
+            <option key={b.path} value={b.path}>{b.name} ({formatBytes(b.size_bytes)})</option>
+          ))}
+        </select>
         <input
           type="text"
           placeholder="Confirmación: RESTAURAR_CONFIG (solo para restauración real)"

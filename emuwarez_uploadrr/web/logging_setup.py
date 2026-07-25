@@ -8,12 +8,13 @@ so HTTP access/errors are logged as well.
 from __future__ import annotations
 
 import logging
-import os
 import time
 from collections import deque
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Optional
+
+from .runtime import get_config_dir
 
 _RING_MAX = 5000
 _ring: deque[dict] = deque(maxlen=_RING_MAX)
@@ -71,7 +72,7 @@ def setup_app_logging() -> None:
     if not any(isinstance(h, RingBufferHandler) for h in root.handlers):
         root.addHandler(RingBufferHandler())
 
-    log_dir = Path(os.environ.get("CONFIG_DIR", ".")) / "logs"
+    log_dir = Path(get_config_dir()) / "logs"
     try:
         log_dir.mkdir(parents=True, exist_ok=True)
         if not any(isinstance(h, RotatingFileHandler) for h in root.handlers):

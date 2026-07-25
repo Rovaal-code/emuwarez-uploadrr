@@ -51,11 +51,19 @@ id $(whoami)  # muestra tu UID y GID
 
 ## 4. Levantar con Compose
 
+Con la imagen ya publicada en `ghcr.io/rovaal-code/emuwarez-uploadrr` (no compila nada):
+
+```bash
+docker compose up -d
+```
+
+Para construir la imagen tú mismo a partir del código local (incluye el build del frontend React, puede tardar 1-3 minutos) usa `docker-compose.example.yml` en su lugar:
+
 ```bash
 docker compose -f docker-compose.example.yml up -d --build
 ```
 
-La primera vez construye la imagen (incluye el build del frontend React). Puede tardar 1-3 minutos.
+El resto de esta guía usa `docker compose` (sin `-f`) para los comandos; si estás construyendo localmente añade `-f docker-compose.example.yml`.
 
 ---
 
@@ -95,7 +103,7 @@ En el setup web, en la sección **Uploadrr**, indica la ruta dentro del contened
 /opt/Uploadrr
 ```
 
-Esta ruta corresponde al bind mount definido en `docker-compose.example.yml`:
+Esta ruta corresponde al bind mount definido en `docker-compose.yml` (o `docker-compose.example.yml` si construyes localmente):
 
 ```yaml
 - /srv/Uploadrr:/opt/Uploadrr
@@ -307,7 +315,16 @@ tar czf emuwarez-backup-$(date +%Y%m%d).tar.gz /srv/emuwarez-uploadrr/config
 
 ## 20. Actualización
 
-Para actualizar a una nueva versión del código:
+Para actualizar a una nueva versión, con la imagen publicada:
+
+```bash
+cd ~/emuwarez_uploadrr_cli_ready_v2
+git pull
+docker compose pull
+docker compose up -d
+```
+
+O, si construyes localmente:
 
 ```bash
 cd ~/emuwarez_uploadrr_cli_ready_v2
@@ -349,8 +366,8 @@ Solución:
 # Ajusta PUID/PGID en .env al propietario real de los archivos
 id $(whoami)
 # Luego reinicia
-docker compose -f docker-compose.example.yml down
-docker compose -f docker-compose.example.yml up -d
+docker compose down
+docker compose up -d
 ```
 
 ---
@@ -434,7 +451,16 @@ validar una key antes de guardarla (Phase 10C).
 
 ### El frontend no carga (pantalla en blanco o 404)
 
-El frontend debe estar construido dentro de la imagen Docker. Reconstruye:
+El frontend debe estar construido dentro de la imagen Docker.
+
+Con la imagen publicada, vuelve a tirar de la última versión:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+Si construyes localmente, reconstruye:
 
 ```bash
 docker compose -f docker-compose.example.yml up -d --build

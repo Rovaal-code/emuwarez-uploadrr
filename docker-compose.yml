@@ -1,0 +1,84 @@
+# docker-compose.yml — despliegue con la imagen publicada
+#
+# Usa la imagen ya construida en ghcr.io/rovaal-code/emuwarez-uploadrr, así
+# que "docker compose up -d" no necesita compilar nada (ni el frontend ni
+# clonar Uploadrr-EMU en build time). Para construir la imagen tú mismo a
+# partir del código local, usa docker-compose.example.yml en su lugar.
+#
+# NOTAS IMPORTANTES:
+#
+# 1. Uploadrr-EMU debe montarse como directorio externo bajo /opt/Uploadrr.
+#    NUNCA se incluye ni se vendoriza dentro de la imagen Docker.
+#
+#    Desde la Fase 10F, Uploadrr-EMU necesita escribir en su propio
+#    directorio (config.yaml se stagea/restaura antes/después de cada
+#    ejecución, y el fork escribe temporales en tmp/) — por eso el código
+#    de Uploadrr-EMU se monta :ro, pero data/ y tmp/ se montan aparte en rw:
+#
+#      /opt/Uploadrr       → código de Uploadrr-EMU (:ro)
+#      /opt/Uploadrr/data   → data/config.yaml, staged/restored (rw)
+#      /opt/Uploadrr/tmp    → temporales de Uploadrr-EMU (torrents, capturas, descripciones) (rw)
+#
+#    Configura la ruta /opt/Uploadrr desde el setup web o CLI tras el
+#    primer arranque (setting uploadrr.path).
+#
+# 2. Hardlinks y EXDEV:
+#    Para que la creación de hardlinks funcione, el directorio fuente
+#    (media de Radarr/Sonarr) y el hardlink_base deben estar en el
+#    MISMO filesystem/dispositivo físico.
+#
+#    Ejemplo con raíz común /data para evitar EXDEV:
+#      /data/media        → fuente (Radarr/Sonarr)
+#      /data/uploads/emu  → hardlink_base (preparado para subida eMuwarez)
+#
+#    Si montas /media y /uploads en dispositivos o discos distintos,
+#    la creación de hardlinks fallará con error EXDEV (cross-device link).
+#    Usa siempre una raíz de datos compartida.
+#
+# 3. API keys: Configúralas desde el setup web (http://localhost:9494)
+#    o con: python3 emuwarez_uploader.py web create-admin
+#    No las pongas en este fichero ni en .env.
+
+services:
+  emuwarez-uploadrr:
+    image: ghcr.io/rovaal-code/emuwarez-uploadrr:${EMUWAREZ_UPLOADRR_TAG:-latest}
+    container_name: emuwarez-uploadrr
+    restart: unless-stopped
+
+    ports:
+      - "${EMUWAREZ_UPLOADRR_PORT:-9494}:9494"
+
+    # Ajusta PUID/PGID al UID/GID del usuario propietario de los archivos de media
+    user: "${PUID:-1000}:${PGID:-1000}"
+
+    environment:
+      TZ: ${TZ:-Europe/Madrid}
+      CONFIG_DIR: /config
+
+    volumes:
+      # Configuración persistente: base de datos SQLite y settings
+      - /srv/emuwarez-uploadrr/config:/config
+
+      # Uploadrr-EMU como bind mount externo — NUNCA va dentro de la imagen.
+      # Código en :ro; data/ y tmp/ montados aparte en rw (ver notas arriba).
+      # Después del primer arranque, configura la ruta /opt/Uploadrr
+      # en el setup web bajo "Ruta de Uploadrr" (uploadrr.path).
+      - ${UPLOADRR_PATH:-/srv/Uploadrr}:/opt/Uploadrr:ro
+      - ${UPLOADRR_DATA_PATH:-/srv/emuwarez-uploadrr/uploadrr-data}:/opt/Uploadrr/data:rw
+      - ${UPLOADRR_TMP_PATH:-/srv/emuwarez-uploadrr/uploadrr-tmp}:/opt/Uploadrr/tmp:rw
+
+      # Raíz de datos compartida para media + uploads
+      # Usar una sola raíz garantiza que hardlinks funcionan sin EXDEV.
+      # Configura en el setup web:
+      #   Raíz media (Radarr/Sonarr): /data/media
+      #   hardlink_base:               /data/uploads/emu
+      - /srv/data:/data
+
+    # Red compartida con Radarr/Sonarr si corren en Docker.
+    # Descomenta y ajusta si usas red interna Docker:
+    # networks:
+    #   - media_net
+
+# networks:
+#   media_net:
+#     external: true

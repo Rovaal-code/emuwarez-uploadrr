@@ -801,7 +801,9 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                             </div>
                           </div>
                         </td>
-                        <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{tipoOf(item.category).label}</td>
+                        <td style={{ whiteSpace: 'nowrap' }}>
+                          <ValueChip><ValueIcon><TypeValueIcon /></ValueIcon><span className="txt">{tipoOf(item.category).label}</span></ValueChip>
+                        </td>
                         <td><CompatibilityBadge status={item.compatibility_status} /></td>
                         <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}><AuthorCell author={item.author} isMine={item.is_mine} /></td>
                         <td style={{ whiteSpace: 'nowrap' }}><SpecValueChip value={item.requested_resolution} icon={ResolutionValueIcon} /></td>

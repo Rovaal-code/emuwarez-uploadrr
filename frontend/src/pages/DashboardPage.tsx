@@ -21,7 +21,7 @@ import { getLibraryItem } from '../api/library'
 import type { LibraryItemResponse } from '../types/api'
 import { formatBytes, formatDate, formatItemType } from '../utils/format'
 import { posterUrl, buildDeepLink } from '../utils/libraryItem'
-import { ValueChip, ValueIcon, SizeValueIcon } from '../components/DetailCard'
+import { ValueChip, ValueIcon, SizeValueIcon, TypeValueIcon, RecommendationValueIcon } from '../components/DetailCard'
 
 // The recommendations item doesn't carry the configured instance name
 // (unlike a full LibraryItemResponse), only the raw instance_type — capitalize
@@ -428,14 +428,18 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                             <HoverTitle className="hover-link" style={{ fontWeight: 500, minWidth: 0 }} onClick={() => openLibraryDetail(item)} tip="Ver ficha del contenido">{item.content_name}</HoverTitle>
                           </div>
                         </td>
-                        <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{formatItemType(item.item_type)}</td>
+                        <td style={{ whiteSpace: 'nowrap' }}>
+                          <ValueChip><ValueIcon><TypeValueIcon /></ValueIcon><span className="txt">{formatItemType(item.item_type)}</span></ValueChip>
+                        </td>
                         <td style={{ whiteSpace: 'nowrap' }}><RecOriginCell item={item} instances={connInstances} /></td>
                         <td>
                           <span className="badge" style={{
                             color: meta.color, background: meta.bg, border: `1px solid ${meta.border}`, whiteSpace: 'nowrap',
                           }}>{meta.category}</span>
                         </td>
-                        <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{meta.recommendation}</td>
+                        <td style={{ whiteSpace: 'nowrap' }}>
+                          <ValueChip><ValueIcon><RecommendationValueIcon /></ValueIcon><span className="txt">{meta.recommendation}</span></ValueChip>
+                        </td>
                         <td style={{ whiteSpace: 'nowrap' }}>
                           {item.size_bytes
                             ? <ValueChip><ValueIcon><SizeValueIcon /></ValueIcon><span className="txt">{formatBytes(item.size_bytes)}</span></ValueChip>

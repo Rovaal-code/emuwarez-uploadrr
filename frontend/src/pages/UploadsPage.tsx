@@ -10,7 +10,7 @@ import { UploadJobDetailPage } from '../components/UploadJobDetailPage'
 import { DeleteUploadModal } from '../components/DeleteUploadModal'
 import { StatusBadge } from '../components/StatusBadge'
 import { ServiceLabel } from '../components/ServiceIcon'
-import { CancelButtonIcon, RetryButtonIcon, ValueChip } from '../components/DetailCard'
+import { CancelButtonIcon, RetryButtonIcon, ValueChip, ValueIcon, TypeValueIcon } from '../components/DetailCard'
 import { useTooltip } from '../components/Tooltip'
 import { formatDateTimeSeconds } from '../utils/format'
 import { posterUrl, buildDeepLink } from '../utils/libraryItem'
@@ -159,8 +159,10 @@ function JobRow({ job, instances, onOpen, indent, retryToggle, onCancel, onRetry
           {job.year ? <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>({job.year})</span> : null}
         </div>
       </td>
-      <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-        {UPLOAD_TYPE_LABEL[job.media_type ?? ''] ?? '–'}
+      <td style={{ whiteSpace: 'nowrap' }}>
+        {job.media_type
+          ? <ValueChip><ValueIcon><TypeValueIcon /></ValueIcon><span className="txt">{UPLOAD_TYPE_LABEL[job.media_type] ?? job.media_type}</span></ValueChip>
+          : <span style={{ color: 'var(--text-muted)' }}>–</span>}
       </td>
       <td style={{ whiteSpace: 'nowrap' }}>
         {job.instance_type

@@ -327,6 +327,17 @@ export function EpisodeValueIcon() {
   return <Icon size={14}><circle cx="12" cy="12" r="10" /><polygon points="10 8 16 12 10 16 10 8" fill="currentColor" /></Icon>
 }
 
+// Filled star, always yellow regardless of context — unlike the other
+// value icons (muted, inherit .vicon's color), a rating/recommendation star
+// reads as "star" specifically because of that color.
+export function RecommendationValueIcon() {
+  return (
+    <span style={{ color: '#facc15' }}>
+      <Icon size={14}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" fill="currentColor" /></Icon>
+    </span>
+  )
+}
+
 export function PointsValueIcon() {
   return <Icon size={14}><polygon points="12 2 15 9 22 9 16.5 13.5 18.5 21 12 16.5 5.5 21 7.5 13.5 2 9 9 9 12 2" fill="currentColor" stroke="none" /></Icon>
 }

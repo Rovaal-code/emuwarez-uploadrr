@@ -6,7 +6,7 @@ import { LibraryChildrenSection } from './LibraryChildrenSection'
 import { EmuFieldChip } from './EmuComparisonSection'
 import { LibraryActionButtons } from './LibraryActionButtons'
 import type { LibraryActionKind } from './LibraryTreeRow'
-import { formatBytes, formatItemType } from '../utils/format'
+import { formatBytes, formatDate, formatItemType } from '../utils/format'
 import { buildDeepLink, posterUrl, idVerifyUrl } from '../utils/libraryItem'
 import { ExternalIdLink } from './ExternalIdLink'
 import { ProviderTag } from './ProviderIcon'
@@ -17,7 +17,7 @@ import {
   StatusCardIcon, TechInfoCardIcon, ExternalIdsCardIcon,
   TypeValueIcon, ResolutionValueIcon, SourceValueIcon, VideoCodecValueIcon,
   AudioCodecValueIcon, LanguageValueIcon, SubtitleValueIcon, SizeValueIcon,
-  FolderIcon,
+  FolderIcon, CalendarValueIcon,
 } from './DetailCard'
 
 // Full dedicated detail page (Radarr/Sonarr-style) — replaces the old small
@@ -141,6 +141,9 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
                 <ValueChip as="button" linkable onClick={() => setShowRuta(true)} title="Ver ruta completa">
                   <span className="brand-icon"><FolderIcon /></span><span className="txt">Ver ruta</span>
                 </ValueChip>
+              </FieldRow>
+              <FieldRow label="Actualizado">
+                <ValueChip><ValueIcon><CalendarValueIcon /></ValueIcon><span className="txt">{formatDate(item.updated_at)}</span></ValueChip>
               </FieldRow>
             </Card>
 

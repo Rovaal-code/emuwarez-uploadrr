@@ -3,12 +3,12 @@ import { getLibrary } from '../api/library'
 import type { LibraryItemResponse, InstanceSafeResponse } from '../types/api'
 import { StatusBadge } from './StatusBadge'
 import { ServiceLabel } from './ServiceIcon'
-import { formatDate, formatItemType, formatBytes } from '../utils/format'
+import { formatItemType, formatBytes } from '../utils/format'
 import { buildDeepLink, posterUrl, episodeListLabel } from '../utils/libraryItem'
 import { ProviderTag } from './ProviderIcon'
 import { LibraryActionButtons } from './LibraryActionButtons'
 import { useTooltip } from './Tooltip'
-import { ValueChip, ValueIcon, ResolutionValueIcon, SourceValueIcon, SizeValueIcon } from './DetailCard'
+import { ValueChip, ValueIcon, TypeValueIcon, ResolutionValueIcon, SourceValueIcon, SizeValueIcon } from './DetailCard'
 
 const NESTED_PAGE_SIZE = 25
 // Seasons per series — well under the API's max limit=500 (a season list
@@ -109,7 +109,7 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
   }
 
   const indent = depth * 20
-  const colSpan = compact ? 10 : 12
+  const colSpan = compact ? 10 : 11
 
   return (
     <>
@@ -166,7 +166,9 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
             </div>
           </div>
         </td>
-        <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{formatItemType(item.item_type)}</td>
+        <td style={{ whiteSpace: 'nowrap' }}>
+          <ValueChip><ValueIcon><TypeValueIcon /></ValueIcon><span className="txt">{formatItemType(item.item_type)}</span></ValueChip>
+        </td>
         <td style={{ whiteSpace: 'nowrap' }}>
           {item.instance_type
             ? (
@@ -201,11 +203,6 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
             ? <ValueChip><ValueIcon><SizeValueIcon /></ValueIcon><span className="txt">{formatBytes(item.size_bytes)}</span></ValueChip>
             : <span style={{ color: 'var(--text-muted)' }}>—</span>}
         </td>
-        {!compact && (
-          <td style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-            {formatDate(item.updated_at)}
-          </td>
-        )}
         {!compact && (
           <td className="col-actions" onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-start', alignItems: 'center' }}>

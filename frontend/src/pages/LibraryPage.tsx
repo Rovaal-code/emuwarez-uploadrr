@@ -514,7 +514,6 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
                     { value: '', label: 'Todos' }, ...(filterOptions?.emu_states ?? []).map(s => ({ value: s, label: s === 'present' ? 'Sí' : 'No' })),
                   ]} /></th>
                   <th>Tamaño</th>
-                  <th>Actualizado</th>
                   <th className="col-actions">Acciones</th>
                 </tr>
               </thead>

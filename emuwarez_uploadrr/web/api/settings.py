@@ -25,6 +25,7 @@ from ...services.notification_center import EVENT_TYPES, channel_events, ui_enab
 from ...services.upload_execution import (
     UPLOAD_MAX_CONCURRENT_SETTING_KEY, UPLOAD_MAX_CONCURRENT_CHOICES, get_upload_max_concurrent,
 )
+from ...services.integration_tests import test_tmdb_connection, test_emuwarez_connection
 from ...database import get_setting_canonical
 
 router = APIRouter(tags=["settings"])
@@ -38,7 +39,6 @@ _VALID_PROVIDER_CODES: frozenset[str] = frozenset(p["code"] for p in EMU_PROVIDE
 
 _DEFAULT_PRIORITY: list[str] = ["AMZN", "NF", "DSNP", "MAX", "ATVP"]
 _DEFAULT_REGION = "ES"
-_DEFAULT_LANGUAGE = "es-ES"
 _DEFAULT_TAG = "EMUWAREZ"
 
 
@@ -46,7 +46,6 @@ class SettingsResponse(BaseModel):
     default_release_tag: str
     provider_priority_order: list[str]
     tmdb_watch_region: str
-    tmdb_language: str
     tmdb_localize_series_titles: bool = True
     tmdb_api_key_configured: bool
     tmdb_api_key_masked: Optional[str] = None
@@ -98,7 +97,6 @@ class SettingsUpdateRequest(BaseModel):
     default_release_tag: Optional[str] = None
     provider_priority_order: Optional[list[str]] = None
     tmdb_watch_region: Optional[str] = None
-    tmdb_language: Optional[str] = None
     tmdb_localize_series_titles: Optional[bool] = None
     tmdb_api_key: Optional[str] = None
     # Phase 11A
@@ -255,7 +253,6 @@ def _build_response(conn) -> SettingsResponse:
         default_release_tag=get_setting(conn, "default_release_tag") or _DEFAULT_TAG,
         provider_priority_order=priority,
         tmdb_watch_region=get_setting(conn, "tmdb_watch_region") or _DEFAULT_REGION,
-        tmdb_language=get_setting(conn, "tmdb_language") or _DEFAULT_LANGUAGE,
         tmdb_localize_series_titles=(get_setting_canonical(conn, "tmdb.localize_series_titles") or "true") != "false",
         tmdb_api_key_configured=configured,
         tmdb_api_key_masked=masked,
@@ -329,6 +326,14 @@ def update_settings(
     if body.uploadrr_timeout is not None and body.uploadrr_timeout <= 0:
         errors.append("uploadrr_timeout debe ser un entero positivo")
 
+    # TMDb y eMuwarez son integraciones obligatorias: si se manda el campo,
+    # no puede quedar vacío (borrar la key sin poner una nueva no está permitido).
+    if body.tmdb_api_key is not None and not body.tmdb_api_key.strip():
+        errors.append("La API key de TMDb es obligatoria: no se puede guardar vacía")
+
+    if body.emu_api_key is not None and not body.emu_api_key.strip():
+        errors.append("La API key de eMuwarez es obligatoria: no se puede guardar vacía")
+
     if errors:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -336,6 +341,30 @@ def update_settings(
         )
 
     with _get_conn() as conn:
+        # Live-validate any new TMDb/eMuwarez key BEFORE writing anything else —
+        # an invalid key must abort the whole save, not just that field.
+        key_errors: list[str] = []
+
+        tmdb_candidate = body.tmdb_api_key.strip() if body.tmdb_api_key else None
+        if tmdb_candidate:
+            result = test_tmdb_connection(api_key=tmdb_candidate, conn=conn)
+            if not result.get("ok"):
+                key_errors.append(f"API key de TMDb inválida: {result.get('message')}")
+
+        emu_candidate = body.emu_api_key.strip() if body.emu_api_key else None
+        if emu_candidate:
+            # enforce_rate_limit=False: this is a save precondition, not the
+            # "Probar conexión" button — it must not collide with its throttle.
+            result = test_emuwarez_connection(api_key=emu_candidate, conn=conn, enforce_rate_limit=False)
+            if not result.get("ok"):
+                key_errors.append(f"API key de eMuwarez inválida: {result.get('message')}")
+
+        if key_errors:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="; ".join(key_errors),
+            )
+
         if body.default_release_tag is not None:
             set_setting(conn, "default_release_tag", body.default_release_tag.strip())
 
@@ -346,18 +375,15 @@ def update_settings(
         if body.tmdb_watch_region is not None:
             set_setting(conn, "tmdb_watch_region", body.tmdb_watch_region.strip())
 
-        if body.tmdb_language is not None:
-            set_setting(conn, "tmdb_language", body.tmdb_language.strip())
-
         if body.tmdb_localize_series_titles is not None:
             set_setting(conn, "tmdb.localize_series_titles",
                         "true" if body.tmdb_localize_series_titles else "false")
 
-        if body.tmdb_api_key is not None and body.tmdb_api_key.strip():
-            set_setting(conn, "tmdb.api_key", body.tmdb_api_key.strip())
+        if tmdb_candidate:
+            set_setting(conn, "tmdb.api_key", tmdb_candidate)
 
-        if body.emu_api_key is not None and body.emu_api_key.strip():
-            set_setting(conn, "emu.api_key", body.emu_api_key.strip())
+        if emu_candidate:
+            set_setting(conn, "emu.api_key", emu_candidate)
 
         if body.emu_username is not None:
             set_setting(conn, "emu.username", body.emu_username.strip())

@@ -16,6 +16,16 @@ from emuwarez_uploadrr.web.services.setup_service import setup_emu, setup_tmdb
 from emuwarez_uploadrr.web.services.settings_service import get_configured, set_setting
 
 
+@pytest.fixture(autouse=True)
+def _mock_integration_tests(monkeypatch):
+    """setup_tmdb()/setup_emu() now live-test the key before persisting it —
+    irrelevant to what this file actually tests (dotted vs. legacy setting
+    keys), so just make the probe always succeed."""
+    ok = lambda *a, **k: {"ok": True, "service": "x", "status": "connected", "message": "ok"}
+    monkeypatch.setattr("emuwarez_uploadrr.services.integration_tests.test_tmdb_connection", ok)
+    monkeypatch.setattr("emuwarez_uploadrr.services.integration_tests.test_emuwarez_connection", ok)
+
+
 @pytest.fixture
 def db_conn(tmp_path, monkeypatch):
     monkeypatch.setenv("CONFIG_DIR", str(tmp_path))

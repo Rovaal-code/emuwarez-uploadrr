@@ -91,7 +91,7 @@ def setup_tmdb(
     from ..services.setup_service import SetupError, setup_tmdb as _setup_tmdb
     with _get_conn() as conn:
         try:
-            _setup_tmdb(conn, body.api_key, body.language or "es-ES", body.region or "ES",
+            _setup_tmdb(conn, body.api_key, body.region or "ES",
                         localize_series_titles=body.localize_series_titles)
             conn.commit()
         except SetupError as exc:

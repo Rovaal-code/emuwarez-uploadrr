@@ -14,7 +14,6 @@ SETTINGS_SCHEMA: dict[str, dict] = {
     "timezone": {"secret": False},
     "uploadrr_path": {"secret": False},
     "tmdb_api_key": {"secret": True},
-    "tmdb_language": {"secret": False},
     "tmdb_region": {"secret": False},
     "emu_base_url": {"secret": False},
     "emu_api_key": {"secret": True},

@@ -25,7 +25,9 @@ def series_titles_localized(conn: sqlite3.Connection) -> bool:
 
 
 def _configured_language(conn: sqlite3.Connection) -> str:
-    return (get_setting_canonical(conn, "tmdb_language") or "es-ES").strip() or "es-ES"
+    # eMuwarez requires titles always in Spanish (see references/nomenclatura-emuwarez.md)
+    # — this is intentionally not a user setting.
+    return "es-ES"
 
 
 def resolve_series_title(

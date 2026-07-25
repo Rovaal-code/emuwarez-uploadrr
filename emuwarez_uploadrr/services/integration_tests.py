@@ -163,11 +163,17 @@ def test_emuwarez_connection(
     base_url: Optional[str] = None,
     *,
     conn=None,
+    enforce_rate_limit: bool = True,
 ) -> dict:
     """Probe eMuwarez using GET /api/torrents/filter?perPage=1 (read-only).
 
     If api_key/base_url are None, reads stored values from DB.
     Never creates requests. Never uploads torrents.
+
+    enforce_rate_limit=False skips the 1/minute throttle below — used when
+    this is called as an internal precondition (e.g. validating a key before
+    saving it in Settings) rather than from the user-facing "Probar conexión"
+    button, which is what the throttle is meant to protect against.
     """
     _key = api_key
     _base = base_url
@@ -195,7 +201,7 @@ def test_emuwarez_connection(
     # when we have a DB connection to persist the timestamp; the early
     # not_configured/invalid_url returns above never reach the network and are
     # deliberately not throttled.
-    if conn is not None:
+    if conn is not None and enforce_rate_limit:
         wait = _emu_test_wait_seconds(conn)
         if wait > 0:
             return _fail(

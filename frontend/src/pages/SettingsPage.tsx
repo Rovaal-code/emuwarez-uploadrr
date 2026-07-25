@@ -21,7 +21,7 @@ import { ServiceIcon } from '../components/ServiceIcon'
 import { InfoIcon } from '../components/InfoIcon'
 import { Favicon, domainOf } from '../components/Favicon'
 import { SortableList, DragHandleIcon } from '../components/SortableList'
-import { REGION_OPTIONS, LANGUAGE_OPTIONS } from '../constants/regionLanguage'
+import { REGION_OPTIONS } from '../constants/regionLanguage'
 import { testResultLabel, testResultColor, emuTestCooldownSeconds } from '../utils/integrationResult'
 import { getMe, changeCredentials } from '../api/auth'
 import { useTooltip, HoverTitle } from '../components/Tooltip'
@@ -47,7 +47,7 @@ function formatBytes(n: number) {
 // Serialize the Config form's values so we can compare current vs. loaded and
 // know whether there are unsaved changes. Array order is fixed on purpose.
 function configSignature(v: {
-  tag: string; providerOrder: string[]; region: string; language: string
+  tag: string; providerOrder: string[]; region: string
   emuUsername: string; ignoreSpecials: boolean
   recentLimit: number; uploadMaxConcurrent: number; qbitUrl: string; qbitPort: string; qbitUser: string
   imgEnabled: string[]; allowedRoots: string
@@ -55,7 +55,7 @@ function configSignature(v: {
   imgKeys?: Record<string, string>
 }): string {
   return JSON.stringify([
-    v.tag, v.providerOrder, v.region, v.language, v.emuUsername,
+    v.tag, v.providerOrder, v.region, v.emuUsername,
     v.ignoreSpecials, v.recentLimit, v.uploadMaxConcurrent, v.qbitUrl, v.qbitPort, v.qbitUser, v.imgEnabled, v.allowedRoots,
     v.newKey ?? '', v.newEmuKey ?? '', v.qbitPass ?? '', v.imgKeys ?? {},
   ])
@@ -92,7 +92,6 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const [tag, setTag] = useState('')
   const [providerOrder, setProviderOrder] = useState<string[]>([])
   const [region, setRegion] = useState('')
-  const [language, setLanguage] = useState('')
   const [newKey, setNewKey] = useState('')
   const [newEmuKey, setNewEmuKey] = useState('')
   const [emuUsername, setEmuUsername] = useState('')
@@ -123,7 +122,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   // Unsaved-changes tracking: compare current form values to the loaded ones.
   const [baseline, setBaseline] = useState('')
   const currentSig = configSignature({
-    tag, providerOrder, region, language, emuUsername,
+    tag, providerOrder, region, emuUsername,
     ignoreSpecials, recentLimit, uploadMaxConcurrent, qbitUrl, qbitPort, qbitUser, imgEnabled, allowedRoots,
     newKey, newEmuKey, qbitPass, imgKeys,
   })
@@ -166,7 +165,6 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         setTag(s.default_release_tag)
         setProviderOrder(s.provider_priority_order)
         setRegion(s.tmdb_watch_region)
-        setLanguage(s.tmdb_language)
         setEmuUsername(s.emu_username ?? '')
         setIgnoreSpecials(s.series_ignore_specials ?? true)
         setRecentLimit(s.recent_activity_limit ?? 100)
@@ -178,7 +176,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         setAllowedRoots((s.uploadrr_allowed_roots ?? []).join(', '))
         setBaseline(configSignature({
           tag: s.default_release_tag, providerOrder: s.provider_priority_order,
-          region: s.tmdb_watch_region, language: s.tmdb_language,
+          region: s.tmdb_watch_region,
           emuUsername: s.emu_username ?? '',
           ignoreSpecials: s.series_ignore_specials ?? true, recentLimit: s.recent_activity_limit ?? 100,
           uploadMaxConcurrent: s.upload_max_concurrent ?? 3,
@@ -195,9 +193,8 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
     setTestingTmdb(true)
     setTmdbTestResult(null)
     try {
-      const params: { api_key?: string; language?: string; region?: string } = {}
+      const params: { api_key?: string; region?: string } = {}
       if (newKey.trim()) params.api_key = newKey.trim()
-      if (language.trim()) params.language = language.trim()
       if (region.trim()) params.region = region.trim()
       const r = await testTmdbConnection(params)
       setTmdbTestResult(r)
@@ -256,7 +253,6 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         default_release_tag: tag.trim(),
         provider_priority_order: providerOrder,
         tmdb_watch_region: region.trim(),
-        tmdb_language: language.trim(),
         // No longer a user-facing toggle — always on.
         tmdb_localize_series_titles: true,
         emu_username: emuUsername.trim(),
@@ -279,7 +275,6 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
       setTag(updated.default_release_tag)
       setProviderOrder(updated.provider_priority_order)
       setRegion(updated.tmdb_watch_region)
-      setLanguage(updated.tmdb_language)
       setEmuUsername(updated.emu_username ?? '')
       setIgnoreSpecials(updated.series_ignore_specials ?? true)
       setRecentLimit(updated.recent_activity_limit ?? 100)
@@ -295,7 +290,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
       setAllowedRoots((updated.uploadrr_allowed_roots ?? []).join(', '))
       setBaseline(configSignature({
         tag: updated.default_release_tag, providerOrder: updated.provider_priority_order,
-        region: updated.tmdb_watch_region, language: updated.tmdb_language,
+        region: updated.tmdb_watch_region,
         emuUsername: updated.emu_username ?? '',
         ignoreSpecials: updated.series_ignore_specials ?? true, recentLimit: updated.recent_activity_limit ?? 100,
         uploadMaxConcurrent: updated.upload_max_concurrent ?? 3,
@@ -412,7 +407,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
             placeholder="API key de TMDb"
             autoComplete="new-password"
           />
-          <span className="form-hint">Usada para marcar proveedores disponibles en TMDb y para traducir los títulos de las series al idioma elegido.</span>
+          <span className="form-hint">Usada para marcar proveedores disponibles en TMDb y para traducir los títulos de las series al español (eMuwarez exige el título siempre en español).</span>
         </div>
         <div style={{ marginBottom: 12 }}>
           <button
@@ -429,20 +424,12 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
             </span>
           )}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div className="form-group">
-            <label className="form-label">Región</label>
-            <select className="form-input form-select" value={region} onChange={e => setRegion(e.target.value)}>
-              {REGION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label} ({o.value})</option>)}
-            </select>
-            <span className="form-hint">País para filtrar proveedores.</span>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Idioma</label>
-            <select className="form-input form-select" value={language} onChange={e => setLanguage(e.target.value)}>
-              {LANGUAGE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          </div>
+        <div className="form-group">
+          <label className="form-label">Región</label>
+          <select className="form-input form-select" value={region} onChange={e => setRegion(e.target.value)}>
+            {REGION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label} ({o.value})</option>)}
+          </select>
+          <span className="form-hint">País para filtrar proveedores.</span>
         </div>
       </div>
 

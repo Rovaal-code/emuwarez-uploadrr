@@ -9,8 +9,8 @@ export async function setupAdmin(username: string, password: string): Promise<Ok
   return api.post<OkResponse>('/setup/admin', { username, password }, { skipAuth: true })
 }
 
-export async function setupTmdb(api_key: string, language = 'es-ES', region = 'ES', localize_series_titles = true): Promise<OkResponse> {
-  return api.post<OkResponse>('/setup/tmdb', { api_key, language, region, localize_series_titles })
+export async function setupTmdb(api_key: string, region = 'ES', localize_series_titles = true): Promise<OkResponse> {
+  return api.post<OkResponse>('/setup/tmdb', { api_key, region, localize_series_titles })
 }
 
 export async function setupEmu(api_key: string, endpoint_url: string | null = null): Promise<OkResponse> {

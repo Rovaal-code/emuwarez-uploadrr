@@ -9,7 +9,9 @@ import { fetchSettings, updateSettings } from '../api/settings'
 import { testTmdbConnection, testEmuwarezConnection, testArrConnection, testQbitConnection, testImghostConnection, type IntegrationTestResult } from '../api/integrationTests'
 import { ServiceIcon } from '../components/ServiceIcon'
 import { ProviderPriorityPicker } from '../components/ProviderPriorityPicker'
-import { REGION_OPTIONS, LANGUAGE_OPTIONS } from '../constants/regionLanguage'
+import { InfoIcon } from '../components/InfoIcon'
+import { ExternalLinkButtonIcon } from '../components/DetailCard'
+import { REGION_OPTIONS } from '../constants/regionLanguage'
 import { SETUP_STEPS, SETUP_STEP_LABELS } from '../types/domain'
 import type { SetupStep } from '../types/domain'
 import type { SetupStatusResponse } from '../types/api'
@@ -187,11 +189,10 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   const [adminPass, setAdminPass] = useState('')
   const [adminPass2, setAdminPass2] = useState('')
 
-  // TMDb step state
+  // TMDb step state — no skip option: a validated key is mandatory to
+  // finish setup (see tmdbCanContinue below), same as eMuwarez.
   const [tmdbKey, setTmdbKey] = useState('')
-  const [tmdbLang, setTmdbLang] = useState('es-ES')
   const [tmdbRegion, setTmdbRegion] = useState('ES')
-  const [tmdbAckSkip, setTmdbAckSkip] = useState(false)
 
   // EMU step state — no skip option: eMuwarez integration is the core of
   // this app, so a validated key is mandatory to finish setup (see
@@ -291,9 +292,8 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
     setTmdbTesting(true)
     setTmdbTestResult(null)
     try {
-      const r = await testTmdbConnection({ api_key: tmdbKey || undefined, language: tmdbLang || undefined, region: tmdbRegion || undefined })
+      const r = await testTmdbConnection({ api_key: tmdbKey || undefined, region: tmdbRegion || undefined })
       setTmdbTestResult(r)
-      if (r.ok) setTmdbAckSkip(false)
     } catch {
       setTmdbTestResult({ ok: false, service: 'tmdb', status: 'connection_error', message: 'Error al contactar con el servidor' })
     } finally {
@@ -416,12 +416,9 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   })
 
   const handleTmdb = wrap(async () => {
-    // Same as eMuwarez: persist only when there's text AND the user is not
-    // explicitly skipping. Text + "continuar sin verificar" must be discarded
-    // so it never shows as configured in Settings afterwards.
-    if (tmdbKey.trim() && !tmdbAckSkip) {
-      await setupTmdb(tmdbKey, tmdbLang, tmdbRegion)
-    }
+    // No skip path: the "Continuar" button is disabled unless tmdbCanContinue
+    // (a passing live test), so tmdbKey is always non-empty and valid here.
+    await setupTmdb(tmdbKey, tmdbRegion)
     setStep('qbit')
   })
 
@@ -470,7 +467,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   // eMuwarez-dependent feature (sync, requests, catalog) silently can't work.
   const emuCanContinue = Boolean(emuTestResult?.ok)
   const instancesCanContinue = instances.length > 0 || instAckSkip
-  const tmdbCanContinue = Boolean(tmdbTestResult?.ok) || tmdbAckSkip
+  const tmdbCanContinue = Boolean(tmdbTestResult?.ok)
 
   return (
     <div className="setup-wizard-wrap hud-app">
@@ -556,13 +553,19 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
           {step === 'emu' && (
             <>
               <div className="wizard-step-desc">Credenciales de eMuwarez.</div>
-              <div className="form-warning" style={{ marginBottom: 14 }}>
-                El refresco manual y automático de peticiones eMuwarez tiene un mínimo de 1 hora para
-                evitar saturar el servicio.
-              </div>
               <div className="wizard-fields">
                 <div className="form-group">
-                  <label className="form-label">API key eMuwarez</label>
+                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    API key eMuwarez
+                    <a
+                      href="https://emuwarez.com"
+                      target="_blank" rel="noreferrer" className="hover-link"
+                      title="Abrir eMuwarez"
+                      style={{ display: 'inline-flex' }}
+                    >
+                      <ExternalLinkButtonIcon />
+                    </a>
+                  </label>
                   <input className="form-input" value={emuKey} onChange={e => { setEmuKey(e.target.value); setEmuTestResult(null) }} placeholder="Tu API key de eMuwarez" />
                 </div>
                 <div className="form-group">
@@ -590,8 +593,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               {!emuCanContinue && (
                 <div className="alert alert-error" style={{ marginTop: 10 }}>
                   Necesitas una key de eMuwarez válida para continuar: pulsa "Probar conexión" y espera a
-                  que confirme que funciona. Esta integración es el núcleo de la app, así que aquí no se
-                  puede saltar el paso.
+                  que confirme que funciona.
                 </div>
               )}
               <div className="wizard-actions">
@@ -729,28 +731,38 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
           {/* TMDb step */}
           {step === 'tmdb' && (
             <>
-              <div className="wizard-step-desc">Los títulos y pósters vienen de Radarr/Sonarr, no de aquí. La API key de TMDb se usa para dos cosas concretas:</div>
+              <div className="wizard-step-desc">Los títulos y pósters vienen de Radarr/Sonarr, no de aquí. La API key de TMDb se usa para tres cosas concretas:</div>
               <div className="alert" style={{ marginBottom: 14, background: 'rgba(59,130,246,0.08)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', fontSize: 12.5, color: 'var(--text-secondary)' }}>
                 <div style={{ marginBottom: 6 }}>
-                  <strong>1. Detectar el proveedor al subir:</strong> cuando el Source es <strong>WEB-DL</strong> y no se detecta ningún proveedor en el nombre del archivo, la app consulta los <em>watch providers</em> de TMDb (para la región elegida abajo) y propone el de mayor prioridad. Sin key, ese campo se queda en «Sin proveedor».
+                  <strong>1. Traducir títulos de series al español:</strong> según la guía de eMuwarez, si el título existe en español debe usarse en español. Sonarr toma los títulos de TVDB, a menudo en inglés («Los Serrano» → «The Serrano»); con la key se traducen, como ya hace Radarr con las películas.
                 </div>
                 <div style={{ marginBottom: 6 }}>
-                  <strong>2. La necesita el subidor Uploadrr-EMU:</strong> se le pasa la key para que complete los metadatos de la ficha en eMuwarez durante la subida.
+                  <strong>2. Detectar el proveedor al subir:</strong> si se detecta que el Source es <strong>WEB-DL</strong> sin proveedor, se consulta en TMDb (según la región) y se propone el de mayor prioridad.
                 </div>
                 <div>
-                  <strong>3. Traducir títulos de series:</strong> Sonarr toma los títulos de TVDB, a menudo en inglés (p. ej. «Los Serrano» → «The Serrano»). Con la key, las series usan el título de TMDb en el idioma elegido abajo, como ya hace Radarr con las películas. Se consulta a TMDb una vez por serie y se cachea.
+                  <strong>3. La necesita Uploadrr-EMU:</strong> es necesaria para completar los metadatos de la ficha en eMuwarez durante la subida.
                 </div>
               </div>
               <div className="wizard-fields">
                 <div className="form-group">
-                  <label className="form-label">API key TMDb</label>
-                  <input className="form-input" value={tmdbKey} onChange={e => { setTmdbKey(e.target.value); setTmdbAckSkip(false) }} placeholder="API key de TMDb" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Idioma</label>
-                  <select className="form-input form-select" value={tmdbLang} onChange={e => setTmdbLang(e.target.value)}>
-                    {LANGUAGE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
+                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    API key TMDb
+                    <a
+                      href="https://www.themoviedb.org/settings/api"
+                      target="_blank" rel="noreferrer" className="hover-link"
+                      title="Abrir la página de API de TMDb"
+                      style={{ display: 'inline-flex' }}
+                    >
+                      <ExternalLinkButtonIcon />
+                    </a>
+                  </label>
+                  <input className="form-input" value={tmdbKey} onChange={e => { setTmdbKey(e.target.value); setTmdbTestResult(null) }} placeholder="API key de TMDb" />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                    <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noreferrer" className="hover-link" style={{ fontSize: 11.5 }}>
+                      Cómo obtener una API KEY en TMDB
+                    </a>
+                    <InfoIcon text="1. Crea una cuenta gratuita en themoviedb.org. 2. Ve a Configuración → API (el enlace de arriba). 3. Solicita una key de tipo 'Developer' rellenando el formulario (uso personal/no comercial). 4. Copia la 'Clave de API (v3 auth)' y pégala aquí." />
+                  </div>
                 </div>
                 <div className="form-group">
                   <label className="form-label">Región</label>
@@ -775,13 +787,9 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               </div>
               {!tmdbCanContinue && (
                 <div className="alert alert-error" style={{ marginTop: 10 }}>
-                  Todavía no has probado la key (o la prueba ha fallado). Si continúas sin verificarla, no
-                  podrás: (a) obtener los nombres en español de las series y (b) detectar los posibles
-                  proveedores en subidas WEB-DL sin proveedor o mal catalogados por Radarr/Sonarr. Podrás
-                  configurarlo más tarde en Configuración.
-                  <label className="checkbox-label" style={{ display: 'block', marginTop: 8 }}>
-                    <input type="checkbox" checked={tmdbAckSkip} onChange={e => setTmdbAckSkip(e.target.checked)} /> Entiendo, continuar sin verificar
-                  </label>
+                  Necesitas una key de TMDb válida para continuar: pulsa "Probar conexión" y espera a
+                  que confirme que funciona. Esta integración es obligatoria, así que aquí no se puede
+                  saltar el paso.
                 </div>
               )}
               <div className="wizard-actions">

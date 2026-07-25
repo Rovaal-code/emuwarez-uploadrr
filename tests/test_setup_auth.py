@@ -209,7 +209,20 @@ def test_create_emu_request_stub_with_auth(client, auth_headers):
 # Setup steps (requires auth)
 # ---------------------------------------------------------------------------
 
-def test_setup_tmdb_success(client, auth_headers):
+def _ok_test_result(service: str) -> dict:
+    return {"ok": True, "service": service, "status": "connected", "message": "Conexión correcta"}
+
+
+def _fail_test_result(service: str) -> dict:
+    return {"ok": False, "service": service, "status": "invalid_key", "message": f"API key de {service} inválida"}
+
+
+def test_setup_tmdb_success(client, auth_headers, monkeypatch):
+    # TMDb is mandatory now: setup_tmdb() live-tests the key before saving it.
+    monkeypatch.setattr(
+        "emuwarez_uploadrr.services.integration_tests.test_tmdb_connection",
+        lambda *a, **k: _ok_test_result("tmdb"),
+    )
     resp = client.post(
         "/api/setup/tmdb",
         json={"api_key": "abc123tmdb"},
@@ -222,7 +235,24 @@ def test_setup_tmdb_success(client, auth_headers):
     assert status_resp.json()["tmdb_configured"] is True
 
 
-def test_setup_emu_success(client, auth_headers):
+def test_setup_tmdb_rejects_invalid_key(client, auth_headers, monkeypatch):
+    monkeypatch.setattr(
+        "emuwarez_uploadrr.services.integration_tests.test_tmdb_connection",
+        lambda *a, **k: _fail_test_result("tmdb"),
+    )
+    resp = client.post("/api/setup/tmdb", json={"api_key": "bad"}, headers=auth_headers)
+    assert resp.status_code == 400
+
+    status_resp = client.get("/api/setup/status")
+    assert status_resp.json()["tmdb_configured"] is False
+
+
+def test_setup_emu_success(client, auth_headers, monkeypatch):
+    # eMuwarez is mandatory: setup_emu() live-tests the key before saving it.
+    monkeypatch.setattr(
+        "emuwarez_uploadrr.services.integration_tests.test_emuwarez_connection",
+        lambda *a, **k: _ok_test_result("emuwarez"),
+    )
     resp = client.post(
         "/api/setup/emu",
         json={"api_key": "abc123emu", "endpoint_url": "https://emu.example.com/api"},
@@ -233,6 +263,18 @@ def test_setup_emu_success(client, auth_headers):
 
     status_resp = client.get("/api/setup/status")
     assert status_resp.json()["emu_configured"] is True
+
+
+def test_setup_emu_rejects_invalid_key(client, auth_headers, monkeypatch):
+    monkeypatch.setattr(
+        "emuwarez_uploadrr.services.integration_tests.test_emuwarez_connection",
+        lambda *a, **k: _fail_test_result("emuwarez"),
+    )
+    resp = client.post("/api/setup/emu", json={"api_key": "bad"}, headers=auth_headers)
+    assert resp.status_code == 400
+
+    status_resp = client.get("/api/setup/status")
+    assert status_resp.json()["emu_configured"] is False
 
 
 def test_setup_instance_success(client, auth_headers):
@@ -257,15 +299,25 @@ def test_setup_instance_invalid_type(client, auth_headers):
     assert resp.status_code == 422
 
 
-def test_setup_complete_succeeds_without_tmdb_or_emu(client, auth_headers):
-    # Every step besides admin is skippable — completing without TMDb/EMU/
-    # instances/Uploadrr configured must succeed, not block with 400.
+def test_setup_complete_fails_without_tmdb_or_emu(client, auth_headers):
+    # TMDb and eMuwarez are mandatory — instances/Uploadrr stay skippable,
+    # but completing without a validated TMDb/eMuwarez key must be blocked.
     resp = client.post("/api/setup/complete", headers=auth_headers)
-    assert resp.status_code == 200
+    assert resp.status_code == 400
+    assert "emu" in resp.json()["detail"]
+    assert "tmdb" in resp.json()["detail"]
 
 
-def test_full_setup_flow(client, auth_headers):
+def test_full_setup_flow(client, auth_headers, monkeypatch):
     """Complete the entire setup wizard end to end."""
+    monkeypatch.setattr(
+        "emuwarez_uploadrr.services.integration_tests.test_tmdb_connection",
+        lambda *a, **k: _ok_test_result("tmdb"),
+    )
+    monkeypatch.setattr(
+        "emuwarez_uploadrr.services.integration_tests.test_emuwarez_connection",
+        lambda *a, **k: _ok_test_result("emuwarez"),
+    )
     client.post("/api/setup/tmdb",
                 json={"api_key": "tmdb_key_e2e"}, headers=auth_headers)
     client.post("/api/setup/emu",

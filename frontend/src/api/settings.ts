@@ -6,7 +6,6 @@ export interface SettingsData {
   default_release_tag: string
   provider_priority_order: string[]
   tmdb_watch_region: string
-  tmdb_language: string
   tmdb_localize_series_titles: boolean
   qbit_url: string | null
   qbit_port: string | null
@@ -48,7 +47,6 @@ export interface SettingsUpdatePayload {
   default_release_tag?: string
   provider_priority_order?: string[]
   tmdb_watch_region?: string
-  tmdb_language?: string
   tmdb_localize_series_titles?: boolean
   qbit_url?: string
   qbit_port?: string

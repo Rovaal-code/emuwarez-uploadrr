@@ -1160,7 +1160,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
             )}
             {seasonPlanError && !seasonPlanLoading && (
               <div style={{ padding: '20px 0' }}>
-                <p className="text-error" style={{ marginTop: 0 }}>⚠ {seasonPlanError}</p>
+                <p className="text-error" style={{ marginTop: 0, marginBottom: 10 }}>⚠ {seasonPlanError}</p>
                 <button className="btn btn-secondary btn-sm" type="button" onClick={loadSeasonPlan}>↻ Reintentar</button>
               </div>
             )}
@@ -1203,7 +1203,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
                         {seasonMiLoading && !seasonMi && <TableLoadingSpinner label="Leyendo MediaInfo de cada capítulo…" />}
                         {seasonMiError && !seasonMiLoading && (
                           <>
-                            <p className="text-error" style={{ fontSize: 12, marginTop: 0 }}>✗ {seasonMiError}</p>
+                            <p className="text-error" style={{ fontSize: 12, marginTop: 0, marginBottom: 10 }}>✗ {seasonMiError}</p>
                             <button className="btn btn-secondary btn-sm" type="button" onClick={loadSeasonMi}>↻ Reintentar</button>
                           </>
                         )}
@@ -1234,7 +1234,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
                         {seasonRemuxLoading && !seasonRemux && <TableLoadingSpinner label="Calculando el remux de cada capítulo…" />}
                         {seasonRemuxError && !seasonRemuxLoading && (
                           <>
-                            <p className="text-error" style={{ fontSize: 12, marginTop: 0 }}>✗ {seasonRemuxError}</p>
+                            <p className="text-error" style={{ fontSize: 12, marginTop: 0, marginBottom: 10 }}>✗ {seasonRemuxError}</p>
                             <button className="btn btn-secondary btn-sm" type="button" onClick={loadSeasonRemux}>↻ Reintentar</button>
                           </>
                         )}
@@ -1310,7 +1310,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
             )}
             {error && !loading && (
               <div style={{ padding: '20px 0' }}>
-                <p className="text-error" style={{ marginTop: 0 }}>⚠ {error}</p>
+                <p className="text-error" style={{ marginTop: 0, marginBottom: 10 }}>⚠ {error}</p>
                 <button className="btn btn-secondary btn-sm" type="button" onClick={loadFields}>↻ Reintentar</button>
               </div>
             )}
@@ -1359,7 +1359,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
                         {miLoading && !miReport && <TableLoadingSpinner label="Cargando MediaInfo…" />}
                         {miError && !miLoading && (
                           <>
-                            <p className="text-error" style={{ fontSize: 12, marginTop: 0 }}>✗ {miError}</p>
+                            <p className="text-error" style={{ fontSize: 12, marginTop: 0, marginBottom: 10 }}>✗ {miError}</p>
                             <button className="btn btn-secondary btn-sm" type="button" onClick={runMediaInfo}>↻ Reintentar</button>
                           </>
                         )}
@@ -1388,7 +1388,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
                         {remuxLoading && !remuxPreview && <TableLoadingSpinner label="Cargando pistas del archivo…" />}
                         {remuxError && !remuxLoading && (
                           <>
-                            <p className="text-error" style={{ fontSize: 12, marginTop: 0 }}>✗ {remuxError}</p>
+                            <p className="text-error" style={{ fontSize: 12, marginTop: 0, marginBottom: 10 }}>✗ {remuxError}</p>
                             <button className="btn btn-secondary btn-sm" type="button" onClick={runTrackRemux}>↻ Reintentar</button>
                           </>
                         )}

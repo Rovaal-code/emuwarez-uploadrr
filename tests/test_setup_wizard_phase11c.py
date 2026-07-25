@@ -6,6 +6,20 @@ its own step now, both frontend-only via PUT /settings (see SetupWizard.tsx).
 """
 from __future__ import annotations
 
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _mock_integration_tests(monkeypatch):
+    """eMuwarez/TMDb keys are now live-tested before being saved. That
+    validation isn't what this file is about (step ordering), so make the
+    probe always succeed. setup_service.py imports these lazily, so patching
+    the integration_tests module is enough for the POST /setup/* endpoints
+    exercised here."""
+    ok = lambda *a, **k: {"ok": True, "service": "x", "status": "connected", "message": "ok"}
+    monkeypatch.setattr("emuwarez_uploadrr.services.integration_tests.test_tmdb_connection", ok)
+    monkeypatch.setattr("emuwarez_uploadrr.services.integration_tests.test_emuwarez_connection", ok)
+
 
 # ---------------------------------------------------------------------------
 # next_step() reordering
@@ -16,18 +30,18 @@ def test_next_step_order_after_admin(client, auth_headers):
     assert resp.json()["next_step"] == "emu"
 
 
-def test_complete_succeeds_with_nothing_else_configured(client, auth_headers):
-    """Every step besides creating the admin is skippable — completing
-    setup right after admin creation, with eMuwarez/instances/TMDb/Uploadrr
-    all left unconfigured, must succeed rather than block with 'Pasos
-    pendientes'."""
+def test_complete_fails_with_nothing_else_configured(client, auth_headers):
+    """eMuwarez and TMDb are mandatory — completing setup right after admin
+    creation, with them left unconfigured, must be blocked with 'Pasos
+    pendientes', not succeed. Instances/Uploadrr stay optional."""
     resp = client.post("/api/setup/complete", headers=auth_headers)
-    assert resp.status_code == 200
+    assert resp.status_code == 400
+    assert "emu" in resp.json()["detail"]
+    assert "tmdb" in resp.json()["detail"]
 
     status_resp = client.get("/api/setup/status")
     data = status_resp.json()
-    assert data["initialized"] is True
-    assert data["next_step"] is None
+    assert data["initialized"] is False
 
 
 def test_next_step_order_after_emu(client, auth_headers):

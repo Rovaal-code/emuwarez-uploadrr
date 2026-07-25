@@ -6,6 +6,15 @@ from __future__ import annotations
 import json
 
 
+def _mock_emu_ok(monkeypatch):
+    """emu_api_key is mandatory and live-tested before being saved in
+    PUT /settings (emuwarez_uploadrr/web/api/settings.py imports the probe
+    at module load time, so patch it there, not just in integration_tests)."""
+    ok = lambda *a, **k: {"ok": True, "service": "emuwarez", "status": "connected", "message": "Conexión correcta"}
+    monkeypatch.setattr("emuwarez_uploadrr.services.integration_tests.test_emuwarez_connection", ok)
+    monkeypatch.setattr("emuwarez_uploadrr.web.api.settings.test_emuwarez_connection", ok)
+
+
 # ---------------------------------------------------------------------------
 # Emuwarez API key
 # ---------------------------------------------------------------------------
@@ -18,7 +27,8 @@ def test_get_settings_emu_defaults(client, auth_headers):
     assert data["emu_api_key_masked"] is None
 
 
-def test_put_settings_saves_emu_api_key(client, auth_headers):
+def test_put_settings_saves_emu_api_key(client, auth_headers, monkeypatch):
+    _mock_emu_ok(monkeypatch)
     resp = client.put("/api/settings", json={"emu_api_key": "emu_secret_key_1234567890"}, headers=auth_headers)
     assert resp.status_code == 200
     data = resp.json()
@@ -27,11 +37,16 @@ def test_put_settings_saves_emu_api_key(client, auth_headers):
     assert "emu_secret_key_1234567890" not in json.dumps(data)
 
 
-def test_put_settings_blank_emu_api_key_does_not_clear_existing(client, auth_headers):
+def test_put_settings_blank_emu_api_key_is_rejected(client, auth_headers, monkeypatch):
+    # eMuwarez is mandatory: an explicit empty key must be rejected outright,
+    # not silently ignored, and must not touch the existing key.
+    _mock_emu_ok(monkeypatch)
     client.put("/api/settings", json={"emu_api_key": "emu_secret_key_1234567890"}, headers=auth_headers)
     resp = client.put("/api/settings", json={"emu_api_key": ""}, headers=auth_headers)
-    assert resp.status_code == 200
-    assert resp.json()["emu_api_key_configured"] is True
+    assert resp.status_code == 422
+
+    get_resp = client.get("/api/settings", headers=auth_headers)
+    assert get_resp.json()["emu_api_key_configured"] is True
 
 
 # ---------------------------------------------------------------------------

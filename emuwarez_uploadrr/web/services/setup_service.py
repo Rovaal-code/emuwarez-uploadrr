@@ -39,11 +39,12 @@ def get_setup_state(conn: sqlite3.Connection) -> dict:
 def next_step(state: dict) -> Optional[str]:
     """Resume order: admin -> emu -> instances -> tmdb -> complete.
     'welcome' is frontend-only (shown once before an admin exists).
-    eMuwarez/instances/TMDb/nomenclature are all skippable steps (each has
-    its own skip control in the UI) — none of them, nor Uploadrr (no
-    dedicated wizard step; configurable later from Settings), block
-    completing setup. This resume order only decides which unconfigured
-    step to land on if the wizard is reopened mid-flow.
+    eMuwarez and TMDb are mandatory — both setup_emu()/setup_tmdb() and
+    setup_complete() require a live-tested, working key, so neither can be
+    skipped or bypassed. Instances and Uploadrr (no dedicated wizard step;
+    configurable later from Settings) remain optional/skippable. This
+    resume order only decides which unconfigured step to land on if the
+    wizard is reopened mid-flow.
 
     `initialized` is checked right after `admin_configured` (not last) —
     once setup has actually been completed, it must never route back into
@@ -75,15 +76,17 @@ def setup_admin(conn: sqlite3.Connection, username: str, password: str) -> int:
 def setup_tmdb(
     conn: sqlite3.Connection,
     api_key: str,
-    language: str = "es-ES",
     region: str = "ES",
     localize_series_titles: Optional[bool] = None,
 ) -> None:
     if not api_key.strip():
         raise SetupError("La API key de TMDb no puede estar vacía")
-    set_setting(conn, "tmdb.api_key", api_key.strip())
-    if language and language.strip():
-        set_setting(conn, "tmdb_language", language.strip())
+    api_key = api_key.strip()
+    from emuwarez_uploadrr.services.integration_tests import test_tmdb_connection
+    result = test_tmdb_connection(api_key=api_key, conn=conn)
+    if not result.get("ok"):
+        raise SetupError(result.get("message") or "API key de TMDb inválida")
+    set_setting(conn, "tmdb.api_key", api_key)
     if region and region.strip():
         set_setting(conn, "tmdb_watch_region", region.strip())
     if localize_series_titles is not None:
@@ -126,7 +129,12 @@ def setup_emu(
 ) -> None:
     if not api_key.strip():
         raise SetupError("La API key de eMuwarez no puede estar vacía")
-    set_setting(conn, "emu.api_key", api_key.strip())
+    api_key = api_key.strip()
+    from emuwarez_uploadrr.services.integration_tests import test_emuwarez_connection
+    result = test_emuwarez_connection(api_key=api_key, base_url=endpoint_url, conn=conn, enforce_rate_limit=False)
+    if not result.get("ok"):
+        raise SetupError(result.get("message") or "API key de eMuwarez inválida")
+    set_setting(conn, "emu.api_key", api_key)
     if endpoint_url and endpoint_url.strip():
         set_setting(conn, "emu.endpoint_url", endpoint_url.strip())
         # Also update the app_state key used by the CLI requests sync
@@ -166,11 +174,20 @@ def setup_add_instance(
 
 
 def setup_complete(conn: sqlite3.Connection) -> None:
-    """Mark setup as complete. The admin account is the only hard
-    requirement — every other step (eMuwarez, instances, TMDb, Uploadrr,
-    nomenclature) is optional/skippable and has its own skip control in
-    the wizard UI, so none of them block finishing setup."""
+    """Mark setup as complete. admin/eMuwarez/TMDb are hard requirements —
+    setup_tmdb()/setup_emu() already live-test the key before it's ever
+    marked configured, so this is a second, server-side guarantee that
+    can't be bypassed by calling this endpoint directly without going
+    through those steps. Instances/Uploadrr/nomenclature stay optional,
+    each with its own skip control in the wizard UI."""
     state = get_setup_state(conn)
-    if not state["admin_configured"]:
-        raise SetupError("Pasos pendientes: admin")
+    missing = [
+        name for name, ok in (
+            ("admin", state["admin_configured"]),
+            ("emu", state["emu_configured"]),
+            ("tmdb", state["tmdb_configured"]),
+        ) if not ok
+    ]
+    if missing:
+        raise SetupError(f"Pasos pendientes: {', '.join(missing)}")
     set_state(conn, "initialized", "true")

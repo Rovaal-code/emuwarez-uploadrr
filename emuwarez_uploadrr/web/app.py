@@ -54,7 +54,6 @@ contenido usando Uploadrr.
 
 ## Documentación
 
-- [Contrato funcional JSON](/api/contract/json)
 - [Health](/api/health)
 - [Setup status](/api/setup/status)
 

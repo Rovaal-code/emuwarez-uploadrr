@@ -58,18 +58,6 @@ class SetupStatusResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Contract
-# ---------------------------------------------------------------------------
-
-class ContractSummaryResponse(BaseModel):
-    message: str
-    md_path: str
-    json_path: str
-    sections: list[str]
-    docs_url: str
-
-
-# ---------------------------------------------------------------------------
 # Auth requests / responses
 # ---------------------------------------------------------------------------
 

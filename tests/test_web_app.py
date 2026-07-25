@@ -60,28 +60,6 @@ def test_setup_status_endpoint(client):
 
 
 # ---------------------------------------------------------------------------
-# Contract — public, no auth
-# ---------------------------------------------------------------------------
-
-def test_contract_summary_endpoint(client):
-    response = client.get("/api/contract")
-    assert response.status_code == 200
-    data = response.json()
-    assert "sections" in data
-    assert isinstance(data["sections"], list)
-    assert len(data["sections"]) > 0
-
-
-def test_contract_json_endpoint(client):
-    response = client.get("/api/contract/json")
-    assert response.status_code in (200, 404)
-    if response.status_code == 200:
-        data = response.json()
-        assert "product" in data
-        assert "api_endpoints" in data
-
-
-# ---------------------------------------------------------------------------
 # Protected placeholders — return 401 without token (Phase 3 behavior)
 # ---------------------------------------------------------------------------
 

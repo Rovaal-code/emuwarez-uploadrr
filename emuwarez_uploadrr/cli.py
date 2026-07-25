@@ -23,7 +23,7 @@ from .services import tasks as task_service
 MODERN_COMMANDS = {
     "configure", "doctor", "test-apis", "instances", "sync", "library",
     "requests", "missing", "prepare", "upload", "tasks", "logs", "legacy",
-    "web-contract", "db", "web", "nomenclature", "maintenance", "arr", "queue",
+    "db", "web", "nomenclature", "maintenance", "arr", "queue",
     "demo", "mkv-title",
 }
 
@@ -300,8 +300,6 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_legacy = sub.add_parser("legacy", help="Pasar argumentos directamente al uploader heredado")
     p_legacy.add_argument("legacy_args", nargs=argparse.REMAINDER)
-
-    sub.add_parser("web-contract", help="Mostrar contrato funcional para la futura interfaz")
 
     p_web = sub.add_parser("web", help="Servidor web backend FastAPI")
     web_sub = p_web.add_subparsers(dest="web_command", required=True)
@@ -1393,44 +1391,6 @@ def cmd_logs(args) -> int:
     return 0
 
 
-def cmd_web_contract() -> int:
-    print("""eMuwarez Uploadrr — Contrato funcional UI/Backend (v1.0)
-
-Documentación completa:
-  docs/ui_backend_contract.md   — especificación detallada de UI, estados, API y flujo
-  docs/ui_backend_contract.json — contrato estructurado en JSON (validado)
-
-Secciones de la UI:
-  Dashboard · Biblioteca · Faltantes · Peticiones · Subidas · Tareas · Instancias · Logs · Configuración
-
-Estados definitivos:
-  LocalStatus:        available · missing · queued · downloading · pending_import
-                      import_error · search_error · uploading · uploaded · error · unknown
-  RequestStatus:      none · compatible · partial · not_compatible · filled · active_unmatched
-  NomenclatureStatus: correct · not_adapted · not_applicable
-  EmuExistenceStatus: not_checked · exists · not_exists · possible_duplicate · duplicate_confirmed
-
-Equivalencia CLI ↔ UI:
-  sync                          → Dashboard: Sincronizar biblioteca
-  requests sync [--force]       → Dashboard: Sincronizar peticiones
-  library list/show             → Biblioteca
-  missing list                  → Faltantes
-  requests list/show/match      → Peticiones
-  instances add/list/test       → Instancias
-  prepare <id>                  → Adaptar nomenclatura
-  upload <id>                   → Subir
-  tasks list                    → Tareas
-
-Stubs activos (pendientes de implementación real):
-  requests create <id>                → endpoint POST de eMuwarez pendiente de capturar
-  missing create-request <id>         → mismo motivo
-
-Puerto web futuro: 9494
-Healthcheck: GET /api/health
-""")
-    return 0
-
-
 def cmd_web_setup_status() -> int:
     try:
         with connect(db_path()) as conn:
@@ -1822,8 +1782,6 @@ def modern_main(argv: Optional[list[str]] = None) -> int:
             return cmd_logs(args)
         if args.command == "legacy":
             return legacy.main(args.legacy_args or [])
-        if args.command == "web-contract":
-            return cmd_web_contract()
         if args.command == "web":
             if args.web_command == "info":
                 return cmd_web_info()

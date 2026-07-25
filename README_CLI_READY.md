@@ -28,7 +28,6 @@ python3 emuwarez_uploader.py missing list
 python3 emuwarez_uploader.py requests list
 python3 emuwarez_uploader.py requests sync
 python3 emuwarez_uploader.py tasks list
-python3 emuwarez_uploader.py web-contract
 ```
 
 ## Conceptos cerrados para la web
@@ -119,7 +118,6 @@ python3 -m py_compile emuwarez_uploader.py
 find emuwarez_uploadrr -name "*.py" -print0 | xargs -0 python3 -m py_compile
 python3 emuwarez_uploader.py --help
 python3 emuwarez_uploader.py db init
-python3 emuwarez_uploader.py web-contract
 python3 emuwarez_uploader.py "/ruta/a/prueba.mkv" --dry-run
 ```
 

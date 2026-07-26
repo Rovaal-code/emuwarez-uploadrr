@@ -170,6 +170,15 @@ class SystemStatsResponse(BaseModel):
     gpu: Optional[GpuStatsResponse] = None
 
 
+class UploadConcurrencyEstimateResponse(BaseModel):
+    recommended: int
+    ram_limited_to: int
+    cpu_limited_to: int
+    available_ram_gb: float
+    cpu_cores: float
+    assumed_ram_gb_per_slot: float
+
+
 # ---------------------------------------------------------------------------
 # Setup POST requests
 # ---------------------------------------------------------------------------

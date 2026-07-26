@@ -27,6 +27,7 @@ import { testResultLabel, testResultColor, emuTestCooldownSeconds } from '../uti
 import { getMe, changeCredentials } from '../api/auth'
 import { useTooltip, HoverTitle } from '../components/Tooltip'
 import { isValidHttpUrl } from '../utils/validation'
+import { getUploadConcurrencyEstimate, type UploadConcurrencyEstimate } from '../api/system'
 
 type Tab = 'config' | 'notifications' | 'diagnostics' | 'backup' | 'maintenance'
 
@@ -98,7 +99,9 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const [emuUsername, setEmuUsername] = useState('')
   const [ignoreSpecials, setIgnoreSpecials] = useState(true)
   const [recentLimit, setRecentLimit] = useState(100)
-  const [uploadMaxConcurrent, setUploadMaxConcurrent] = useState(3)
+  const [uploadMaxConcurrent, setUploadMaxConcurrent] = useState(1)
+  const [testingConcurrency, setTestingConcurrency] = useState(false)
+  const [concurrencyEstimate, setConcurrencyEstimate] = useState<UploadConcurrencyEstimate | null>(null)
   const [qbitUrl, setQbitUrl] = useState('')
   const [qbitPort, setQbitPort] = useState('8080')
   const [qbitUser, setQbitUser] = useState('')
@@ -189,6 +192,20 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
       .catch(() => setMsg({ ok: false, text: 'Error cargando configuración' }))
       .finally(() => setLoading(false))
   }, [])
+
+  async function handleTestConcurrency() {
+    setTestingConcurrency(true)
+    setConcurrencyEstimate(null)
+    try {
+      const r = await getUploadConcurrencyEstimate()
+      setConcurrencyEstimate(r)
+    } catch {
+      // Silently give up — the button itself just goes back to idle, same
+      // as any other "Probar…" button here when the request fails.
+    } finally {
+      setTestingConcurrency(false)
+    }
+  }
 
   async function handleTestTmdb() {
     setTestingTmdb(true)
@@ -649,12 +666,38 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         <div className="form-group">
           <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             Máximo de Subidas en Paralelo
-            <InfoIcon text="Cuántas subidas pueden hacer a la vez el hasheo del torrent y la transferencia a eMuwarez, la parte más pesada del proceso. Las demás esperan su turno en cola y arrancan solas en cuanto se libera un hueco. Sin límite las deja correr todas a la vez." />
+            <InfoIcon text="Cuántas subidas pueden estar en curso a la vez, de principio a fin (verificación previa, nomenclatura, remux, hasheo del torrent y transferencia a eMuwarez) — no es solo una cola visual: las demás no dan ni un paso hasta que se libera un hueco. Sin límite las deja correr todas a la vez. El botón «Ver Máximo» estima cuántas puede aguantar este equipo según su RAM y CPU disponibles." />
           </label>
-          <select className="form-input form-select" value={uploadMaxConcurrent} onChange={e => setUploadMaxConcurrent(Number(e.target.value))}>
-            <option value={0}>Sin límite</option>
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => <option key={n} value={n}>{n}</option>)}
-          </select>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <select className="form-input form-select" style={{ width: 'auto', minWidth: 120 }} value={uploadMaxConcurrent} onChange={e => setUploadMaxConcurrent(Number(e.target.value))}>
+              <option value={0}>Sin límite</option>
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+            <button
+              className="btn btn-secondary btn-sm"
+              type="button"
+              onClick={handleTestConcurrency}
+              disabled={testingConcurrency}
+            >
+              {testingConcurrency ? 'Consultando…' : 'Ver Máximo'}
+            </button>
+          </div>
+          {concurrencyEstimate && (
+            <span className="form-hint" style={{ display: 'block', marginTop: 6 }}>
+              Recomendado: <strong>{concurrencyEstimate.recommended}</strong>{' '}
+              (RAM disponible {concurrencyEstimate.available_ram_gb} GB → hasta {concurrencyEstimate.ram_limited_to};
+              {' '}{concurrencyEstimate.cpu_cores} núcleos → hasta {concurrencyEstimate.cpu_limited_to}).
+              {' '}Estimación orientativa (~{concurrencyEstimate.assumed_ram_gb_per_slot} GB por subida) — no tiene en cuenta la velocidad del disco o de la red.
+              {' '}<button
+                className="btn btn-ghost btn-sm"
+                type="button"
+                style={{ padding: '2px 8px', fontSize: 11 }}
+                onClick={() => setUploadMaxConcurrent(concurrencyEstimate.recommended)}
+              >
+                Usar {concurrencyEstimate.recommended}
+              </button>
+            </span>
+          )}
         </div>
         <div className="form-group">
           <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

@@ -26,3 +26,16 @@ export interface SystemStats {
 export async function getSystemStats(): Promise<SystemStats> {
   return api.get<SystemStats>('/system/stats')
 }
+
+export interface UploadConcurrencyEstimate {
+  recommended: number
+  ram_limited_to: number
+  cpu_limited_to: number
+  available_ram_gb: number
+  cpu_cores: number
+  assumed_ram_gb_per_slot: number
+}
+
+export async function getUploadConcurrencyEstimate(): Promise<UploadConcurrencyEstimate> {
+  return api.get<UploadConcurrencyEstimate>('/system/upload-concurrency-estimate')
+}

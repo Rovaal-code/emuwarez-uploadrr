@@ -310,6 +310,51 @@ def _resolve_library_disk_path(conn) -> str:
     return path
 
 
+# Rough per-slot resource assumptions for "Subidas en paralelo" — there's no
+# in-repo profiling data for these, just informed estimates of how the heavy
+# tail of one queued upload (screenshots via ffmpeg frame extraction,
+# mkvmerge's track remux, torrent hashing, the eMuwarez transfer itself)
+# actually behaves: mkvmerge/hashing are low-RAM and mostly I/O-bound or
+# briefly saturate a single core, so RAM headroom and spare CPU cores are
+# the two limits that matter, not raw CPU% or disk speed (neither of which
+# this can predict without actually running a job).
+_EST_RAM_GB_PER_SLOT = 0.8
+_EST_RESERVED_CORES = 1  # left for the web server / the rest of the host
+
+
+def estimate_max_concurrent_uploads() -> dict:
+    """Best-effort recommendation for "Subidas en paralelo" from the host's
+    (or container's, if cgroup-limited) currently available RAM and CPU
+    cores. NOT a guarantee — disk/network throughput and how many
+    screenshots a given file needs aren't accounted for — just a rough
+    starting point for the Settings page's "Test" button, better than a
+    blind guess for someone who's never touched this setting."""
+    vm = psutil.virtual_memory()
+    cgroup_mem = _cgroup_mem_stats()
+    if cgroup_mem is not None:
+        used, limit = cgroup_mem
+        total = limit if limit is not None else vm.total
+        available = max(0, total - used)
+    else:
+        available = vm.available
+    available_gb = available / (1024 ** 3)
+
+    quota_cores = _cgroup_cpu_quota_cores()
+    total_cores = quota_cores if quota_cores is not None else float(os.cpu_count() or 1)
+
+    ram_limited_to = max(1, int(available_gb // _EST_RAM_GB_PER_SLOT))
+    cpu_limited_to = max(1, int(total_cores - _EST_RESERVED_CORES)) if total_cores > _EST_RESERVED_CORES else 1
+
+    return {
+        "recommended": min(ram_limited_to, cpu_limited_to, 10),
+        "ram_limited_to": min(ram_limited_to, 10),
+        "cpu_limited_to": min(cpu_limited_to, 10),
+        "available_ram_gb": round(available_gb, 2),
+        "cpu_cores": round(total_cores, 1),
+        "assumed_ram_gb_per_slot": _EST_RAM_GB_PER_SLOT,
+    }
+
+
 def get_system_stats(conn) -> dict:
     vm = psutil.virtual_memory()
     host_cpu_percent = psutil.cpu_percent(interval=None)

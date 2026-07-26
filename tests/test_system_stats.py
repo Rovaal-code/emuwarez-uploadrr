@@ -308,3 +308,86 @@ def test_get_system_stats_falls_back_to_host_without_cgroup(isolated_db):
     # Host-wide values, same shape as before — no container detected.
     assert 0 <= stats["cpu_percent"] <= 100
     assert 0 <= stats["ram_percent"] <= 100
+
+
+# ---------------------------------------------------------------------------
+# estimate_max_concurrent_uploads — "Subidas en paralelo" Test button
+# ---------------------------------------------------------------------------
+
+def test_estimate_concurrent_uploads_shape():
+    result = system_stats.estimate_max_concurrent_uploads()
+    assert result["recommended"] >= 1
+    assert result["ram_limited_to"] >= 1
+    assert result["cpu_limited_to"] >= 1
+    assert result["available_ram_gb"] >= 0
+    assert result["cpu_cores"] >= 1
+    assert result["recommended"] == min(result["ram_limited_to"], result["cpu_limited_to"])
+
+
+def test_estimate_concurrent_uploads_ram_limited():
+    with patch.object(system_stats, "_cgroup_mem_stats", return_value=None), \
+         patch.object(system_stats, "_cgroup_cpu_quota_cores", return_value=None), \
+         patch("psutil.virtual_memory") as mock_vm, \
+         patch("os.cpu_count", return_value=64):
+        mock_vm.return_value.available = int(2.5 * 1024 ** 3)  # 2.5 GB free
+        result = system_stats.estimate_max_concurrent_uploads()
+    # floor(2.5 / 0.8) = 3 slots by RAM, way more than that by CPU (63 cores).
+    assert result["ram_limited_to"] == 3
+    assert result["cpu_limited_to"] == 10  # capped at the setting's own max
+    assert result["recommended"] == 3
+
+
+def test_estimate_concurrent_uploads_cpu_limited():
+    with patch.object(system_stats, "_cgroup_mem_stats", return_value=None), \
+         patch.object(system_stats, "_cgroup_cpu_quota_cores", return_value=None), \
+         patch("psutil.virtual_memory") as mock_vm, \
+         patch("os.cpu_count", return_value=3):
+        mock_vm.return_value.available = 64 * 1024 ** 3  # plenty of RAM
+        result = system_stats.estimate_max_concurrent_uploads()
+    # 3 cores - 1 reserved for the host/web server = 2.
+    assert result["cpu_limited_to"] == 2
+    assert result["recommended"] == 2
+
+
+def test_estimate_concurrent_uploads_never_below_one():
+    """Even on a tiny single-core box with almost no free RAM, the estimate
+    must still recommend at least 1 — never 0 (that means "sin límite",
+    the opposite of what a resource-constrained host needs)."""
+    with patch.object(system_stats, "_cgroup_mem_stats", return_value=None), \
+         patch.object(system_stats, "_cgroup_cpu_quota_cores", return_value=None), \
+         patch("psutil.virtual_memory") as mock_vm, \
+         patch("os.cpu_count", return_value=1):
+        mock_vm.return_value.available = 100 * 1024 ** 2  # 100 MB free
+        result = system_stats.estimate_max_concurrent_uploads()
+    assert result["recommended"] == 1
+    assert result["ram_limited_to"] == 1
+    assert result["cpu_limited_to"] == 1
+
+
+def test_estimate_concurrent_uploads_uses_cgroup_limits_when_present():
+    """Inside a capped container, the estimate must respect ITS OWN quota
+    (e.g. `docker run --cpus=2 --memory=3g`), not the host's full capacity —
+    same "cgroup-aware" principle get_system_stats already applies."""
+    with patch.object(system_stats, "_cgroup_mem_stats", return_value=(1 * 1024 ** 3, 3 * 1024 ** 3)), \
+         patch.object(system_stats, "_cgroup_cpu_quota_cores", return_value=2.0), \
+         patch("os.cpu_count", return_value=64):
+        result = system_stats.estimate_max_concurrent_uploads()
+    # 2 GB available (3 GB limit - 1 GB used) / 0.8 GB per slot = 2 slots by RAM.
+    assert result["ram_limited_to"] == 2
+    # 2 quota cores - 1 reserved = 1 by CPU.
+    assert result["cpu_limited_to"] == 1
+    assert result["recommended"] == 1
+
+
+def test_upload_concurrency_estimate_endpoint_requires_auth(client):
+    resp = client.get("/api/system/upload-concurrency-estimate")
+    assert resp.status_code == 401
+
+
+def test_upload_concurrency_estimate_endpoint_authenticated(client, auth_headers):
+    resp = client.get("/api/system/upload-concurrency-estimate", headers=auth_headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "recommended" in data
+    assert "ram_limited_to" in data
+    assert "cpu_limited_to" in data

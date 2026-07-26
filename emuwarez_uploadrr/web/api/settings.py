@@ -88,7 +88,7 @@ class SettingsResponse(BaseModel):
     # "Otros"
     series_ignore_specials: bool = True
     recent_activity_limit: int = 100
-    upload_max_concurrent: int = 3
+    upload_max_concurrent: int = 1
     # Remote path mappings: [{"from": "/data/media", "to": "/mnt/emu-media"}]
     path_mappings: list[dict] = []
 

@@ -169,7 +169,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         setEmuUsername(s.emu_username ?? '')
         setIgnoreSpecials(s.series_ignore_specials ?? true)
         setRecentLimit(s.recent_activity_limit ?? 100)
-        setUploadMaxConcurrent(s.upload_max_concurrent ?? 3)
+        setUploadMaxConcurrent(s.upload_max_concurrent ?? 1)
         setQbitUrl(s.qbit_url ?? '')
         setQbitPort(s.qbit_port ?? '8080')
         setQbitUser(s.qbit_username ?? '')
@@ -180,7 +180,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           region: s.tmdb_watch_region,
           emuUsername: s.emu_username ?? '',
           ignoreSpecials: s.series_ignore_specials ?? true, recentLimit: s.recent_activity_limit ?? 100,
-          uploadMaxConcurrent: s.upload_max_concurrent ?? 3,
+          uploadMaxConcurrent: s.upload_max_concurrent ?? 1,
           qbitUrl: s.qbit_url ?? '', qbitPort: s.qbit_port ?? '8080', qbitUser: s.qbit_username ?? '',
           imgEnabled: s.image_hosts_enabled ?? [],
           allowedRoots: (s.uploadrr_allowed_roots ?? []).join(', '),
@@ -279,7 +279,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
       setEmuUsername(updated.emu_username ?? '')
       setIgnoreSpecials(updated.series_ignore_specials ?? true)
       setRecentLimit(updated.recent_activity_limit ?? 100)
-      setUploadMaxConcurrent(updated.upload_max_concurrent ?? 3)
+      setUploadMaxConcurrent(updated.upload_max_concurrent ?? 1)
       setQbitUrl(updated.qbit_url ?? '')
       setQbitPort(updated.qbit_port ?? '8080')
       setQbitUser(updated.qbit_username ?? '')
@@ -294,7 +294,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         region: updated.tmdb_watch_region,
         emuUsername: updated.emu_username ?? '',
         ignoreSpecials: updated.series_ignore_specials ?? true, recentLimit: updated.recent_activity_limit ?? 100,
-        uploadMaxConcurrent: updated.upload_max_concurrent ?? 3,
+        uploadMaxConcurrent: updated.upload_max_concurrent ?? 1,
         qbitUrl: updated.qbit_url ?? '', qbitPort: updated.qbit_port ?? '8080', qbitUser: updated.qbit_username ?? '',
         imgEnabled: updated.image_hosts_enabled ?? [],
         allowedRoots: (updated.uploadrr_allowed_roots ?? []).join(', '),

@@ -794,7 +794,7 @@ def _release_staged_config(job_id: int, config_path: Path | None) -> None:
 # light and stays ungated. 0 = sin límite.
 UPLOAD_MAX_CONCURRENT_SETTING_KEY = "uploads.max_concurrent"
 UPLOAD_MAX_CONCURRENT_CHOICES = tuple(range(0, 11))  # 0, 1, 2, … 10
-UPLOAD_MAX_CONCURRENT_DEFAULT = 3
+UPLOAD_MAX_CONCURRENT_DEFAULT = 1
 
 
 def get_upload_max_concurrent(conn=None) -> int:

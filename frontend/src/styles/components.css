@@ -987,6 +987,16 @@ optgroup {
 }
 .value-chip.chip-blink-alert { animation: chip-blink-alert 1.6s ease-in-out infinite; }
 
+/* Blue = live/in-progress (e.g. "Ver Logs" while a job is actively writing
+ * to Actividad) — same breathing cadence, just intensifying the chip's own
+ * normal linkable-blue instead of introducing a new color, since nothing is
+ * "new" or "failed" here, just actively happening right now. */
+@keyframes chip-blink-live {
+  0%, 100% { border-color: rgba(59,130,246,0.95); box-shadow: 0 0 6px -1px rgba(59,130,246,0.7); }
+  50%      { border-color: rgba(59,130,246,0.3); box-shadow: none; }
+}
+.value-chip.chip-blink-live { animation: chip-blink-live 1.6s ease-in-out infinite; }
+
 /* Column-header (Excel-style) filter menu options. */
 .hf-option {
   display: block;

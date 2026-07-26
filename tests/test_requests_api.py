@@ -221,6 +221,62 @@ def test_requests_detail_not_found(client, auth_headers):
     assert resp.status_code == 404
 
 
+def _seed_matched_request(isolated_db, *, title="One Piece", year=1999, req_scope="season", req_season=1):
+    """Seed a library item + request + request_matches row linking them —
+    same shape as a real request matched against Biblioteca content."""
+    from emuwarez_uploadrr.database import connect, init_db
+    from emuwarez_uploadrr.services.requests import upsert_request
+    from emuwarez_uploadrr.models import RequestItem
+    import os
+    os.environ["CONFIG_DIR"] = str(isolated_db)
+    conn = connect()
+    init_db(conn)
+    conn.execute(
+        "INSERT INTO library_items (title, item_type, local_status, year) VALUES (?,?,?,?)",
+        (title, "series", "Disponible", year),
+    )
+    conn.commit()
+    lib_id = conn.execute("SELECT id FROM library_items ORDER BY id DESC LIMIT 1").fetchone()["id"]
+    req_id = upsert_request(conn, RequestItem(
+        id=None, emu_id="matched-year-test", title=title,
+        requested_resolution="1080p", requested_source="WEB-DL",
+    ))
+    conn.execute(
+        "UPDATE request_items SET req_scope = ?, req_season = ? WHERE id = ?",
+        (req_scope, req_season, req_id),
+    )
+    conn.execute(
+        "INSERT INTO request_matches (library_item_id, request_item_id, status, confidence) VALUES (?,?,?,?)",
+        (lib_id, req_id, "Compatible", 0.9),
+    )
+    conn.commit()
+    conn.close()
+    return req_id
+
+
+def test_requests_list_includes_library_year_for_matched_item(client, auth_headers, isolated_db):
+    """Regression: _row_to_item() (web/api/requests.py) used to rebuild
+    RequestItemResponse field-by-field without library_year, so the API
+    response silently dropped it even though the SQL query and the schema
+    both already had it — the year never reached the frontend."""
+    _seed_matched_request(isolated_db, title="One Piece", year=1999)
+
+    resp = client.get("/api/requests", headers=auth_headers)
+    assert resp.status_code == 200
+    row = next(i for i in resp.json()["items"] if i["title"] == "One Piece")
+    assert row["library_year"] == 1999
+
+
+def test_requests_detail_includes_library_year_and_display_title(client, auth_headers, isolated_db):
+    req_id = _seed_matched_request(isolated_db, title="One Piece", year=1999, req_scope="season", req_season=1)
+
+    resp = client.get(f"/api/requests/{req_id}", headers=auth_headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["library_year"] == 1999
+    assert data["display_title"] == "One Piece (1999) - Temporada 1"
+
+
 def test_requests_detail_found(client, auth_headers, isolated_db):
     from emuwarez_uploadrr.database import connect, init_db
     from emuwarez_uploadrr.services.requests import upsert_request

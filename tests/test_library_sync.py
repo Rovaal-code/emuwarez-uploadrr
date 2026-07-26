@@ -272,6 +272,66 @@ def test_incremental_sync_new_missing_movie_notifies(mem_conn):
     assert "Just Requested Film" in notes[0]["content_title"]
 
 
+def test_new_missing_notification_explains_when_not_released_yet(mem_conn):
+    """A movie added to Radarr while still "inCinemas" (not released in a
+    downloadable form) can't actually be requested on eMuwarez yet — same
+    gate get_dashboard_recommendations' "Faltante" group already applies.
+    The notification must say so instead of unconditionally suggesting
+    "you may want to create a request"."""
+    from emuwarez_uploadrr.services.library import sync_instance
+    from emuwarez_uploadrr.services.notification_center import list_notifications
+    from emuwarez_uploadrr.services.instances import list_instances
+    instance = list_instances(mem_conn)[0]
+
+    with (
+        patch("emuwarez_uploadrr.integrations.radarr.get_movies", return_value=[_fake_movie(90, "Seed Film", has_file=True)]),
+        patch("emuwarez_uploadrr.integrations.radarr.get_queue", return_value=[]),
+    ):
+        sync_instance(mem_conn, instance)
+
+    in_cinemas_movie = _fake_movie(91, "Still In Cinemas", has_file=False)
+    in_cinemas_movie["status"] = "inCinemas"
+    with (
+        patch("emuwarez_uploadrr.integrations.radarr.get_movies",
+              return_value=[_fake_movie(90, "Seed Film", has_file=True), in_cinemas_movie]),
+        patch("emuwarez_uploadrr.integrations.radarr.get_queue", return_value=[]),
+    ):
+        sync_instance(mem_conn, instance)
+
+    notes = list_notifications(mem_conn)
+    note = next(n for n in notes if "Still In Cinemas" in n["content_title"])
+    assert "estrenado" in note["body"].lower()
+    assert "petición" not in note["body"].lower()
+
+
+def test_new_missing_notification_suggests_request_when_released(mem_conn):
+    """The default wording (suggesting a request) still applies once Radarr
+    marks the movie 'released' — this must not regress."""
+    from emuwarez_uploadrr.services.library import sync_instance
+    from emuwarez_uploadrr.services.notification_center import list_notifications
+    from emuwarez_uploadrr.services.instances import list_instances
+    instance = list_instances(mem_conn)[0]
+
+    with (
+        patch("emuwarez_uploadrr.integrations.radarr.get_movies", return_value=[_fake_movie(92, "Seed Film 2", has_file=True)]),
+        patch("emuwarez_uploadrr.integrations.radarr.get_queue", return_value=[]),
+    ):
+        sync_instance(mem_conn, instance)
+
+    released_movie = _fake_movie(93, "Released Missing Film", has_file=False)
+    released_movie["status"] = "released"
+    with (
+        patch("emuwarez_uploadrr.integrations.radarr.get_movies",
+              return_value=[_fake_movie(92, "Seed Film 2", has_file=True), released_movie]),
+        patch("emuwarez_uploadrr.integrations.radarr.get_queue", return_value=[]),
+    ):
+        sync_instance(mem_conn, instance)
+
+    notes = list_notifications(mem_conn)
+    note = next(n for n in notes if "Released Missing Film" in n["content_title"])
+    assert "petición" in note["body"].lower()
+
+
 def test_resyncing_already_missing_movie_does_not_renotify(mem_conn):
     """Syncing again while a movie is STILL Faltante (no status change) must
     not fire a second notification."""

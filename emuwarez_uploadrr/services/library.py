@@ -1,6 +1,7 @@
 """Library synchronization and querying."""
 from __future__ import annotations
 
+import json
 import logging
 import re
 import sqlite3
@@ -162,10 +163,24 @@ def _notify_new_missing(conn: sqlite3.Connection, item: LibraryItem, item_id: in
         from .notification_center import emit
         title = item.title or "Contenido"
         year_part = f" ({item.year})" if item.year else ""
+        # A movie added to Radarr before it's actually released (still
+        # "inCinemas"/"announced") can't be requested on eMuwarez yet — same
+        # status='released' gate get_dashboard_recommendations' "Faltante"
+        # group already requires. Say so instead of unconditionally
+        # suggesting "you may want to create a request" for something with
+        # no downloadable release to request in the first place.
+        body = "No está disponible. Puede que quieras crear una petición en eMuwarez."
+        if item.item_type == MediaKind.MOVIE.value and item.raw_json:
+            try:
+                radarr_status = json.loads(item.raw_json).get("status")
+            except (TypeError, ValueError):
+                radarr_status = None
+            if radarr_status and radarr_status != "released":
+                body = "Todavía no se ha estrenado (según Radarr) — no se puede pedir en eMuwarez hasta que salga."
         emit(
             conn, "content_missing_new",
             "Contenido nuevo faltante",
-            "No está disponible. Puede que quieras crear una petición en eMuwarez.",
+            body,
             link="/library",
             level="warning",
             entity_type="library_item",

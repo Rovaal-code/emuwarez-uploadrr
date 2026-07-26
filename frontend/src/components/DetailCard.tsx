@@ -127,9 +127,9 @@ export function ValueChip({ children, linkable = false, as = 'span', onClick, ti
   onClick?: () => void
   title?: string
   // Pulses the chip's own border/glow between `blink` (green "new"/actionable,
-  // red "failed") and its normal linkable-blue — see .chip-blink-new/
-  // .chip-blink-alert in components.css.
-  blink?: 'new' | 'alert'
+  // red "failed", blue "live"/in-progress) and its normal linkable-blue —
+  // see .chip-blink-new/.chip-blink-alert/.chip-blink-live in components.css.
+  blink?: 'new' | 'alert' | 'live'
 }) {
   const { triggerProps, tooltipNode } = useTooltip(title ?? null)
   const className = `value-chip${linkable ? ' linkable' : ''}${blink ? ` chip-blink-${blink}` : ''}`

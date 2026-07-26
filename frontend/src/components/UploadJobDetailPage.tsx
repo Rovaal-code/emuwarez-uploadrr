@@ -568,7 +568,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
                 </ValueChip>
               </FieldRow>
               <FieldRow label="Actividad" help="El registro de lo que va haciendo la subida en tiempo real: si se ha cancelado, si ha dado error en alguna fase y por qué, o si se ha completado con éxito.">
-                <ValueChip as="button" linkable onClick={() => setShowActividad(true)} title="Ver registro de actividad">
+                <ValueChip as="button" linkable blink={isRunning ? 'live' : undefined} onClick={() => setShowActividad(true)} title="Ver registro de actividad">
                   <ValueIcon><LogsValueIcon /></ValueIcon>
                   <span className="txt">Ver Logs</span>
                 </ValueChip>

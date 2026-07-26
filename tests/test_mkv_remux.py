@@ -385,6 +385,46 @@ def test_apply_requires_confirmation(tmp_path):
     assert any("confirmar" in e.lower() for e in result["errors"])
 
 
+def test_apply_skips_mkvmerge_when_no_changes(tmp_path):
+    """Tracks already in the right order with the right names — apply_remux
+    must not run mkvmerge at all (a full rewrite of the file for nothing,
+    same runtime as a real remux), just mark it applied instantly."""
+    mkv_file = tmp_path / "Film.2024.mkv"
+    original_bytes = b"fake mkv original, never touched"
+    mkv_file.write_bytes(original_bytes)
+    conn = _make_conn(tmp_path)
+    item_id = _insert_library_item(conn, prepared_path=str(mkv_file))
+
+    already_ok = {
+        "tracks": [
+            {"id": 0, "type": "video", "codec": "AVC/H.264",
+             "properties": {"pixel_dimensions": "1920x1080", "track_name": "1080p AVC"}},
+            {"id": 1, "type": "audio", "codec": "AC-3",
+             "properties": {"language": "spa", "audio_channels": 2,
+                             "track_name": "Español (Castellano) - DD 2.0", "default_track": True}},
+        ]
+    }
+
+    with patch("emuwarez_uploadrr.services.mkv_remux.check_mkvmerge_available") as mock_chk, \
+         patch("emuwarez_uploadrr.services.mkv_remux.read_tracks_json") as mock_read, \
+         patch("emuwarez_uploadrr.services.mkv_remux.subprocess.Popen") as mock_popen:
+        mock_chk.return_value = {"available": True, "path": "/usr/bin/mkvmerge"}
+        mock_read.return_value = {"ok": True, "data": already_ok}
+        from emuwarez_uploadrr.services.mkv_remux import apply_remux, REMUX_CONFIRMATION_TOKEN
+        progress_calls: list[int] = []
+        result = apply_remux(
+            item_id, dry_run=False, apply=True, confirmation=REMUX_CONFIRMATION_TOKEN, conn=conn,
+            on_progress=progress_calls.append,
+        )
+
+    mock_popen.assert_not_called()
+    assert result["status"] == "applied"
+    assert mkv_file.read_bytes() == original_bytes  # untouched
+    assert progress_calls == [100]
+    row = conn.execute("SELECT track_remux_status FROM library_items WHERE id=?", (item_id,)).fetchone()
+    assert row["track_remux_status"] == "aplicado"
+
+
 def test_apply_success_replaces_file(tmp_path):
     mkv_file = tmp_path / "Film.2024.mkv"
     mkv_file.write_bytes(b"fake mkv original")

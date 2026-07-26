@@ -611,6 +611,21 @@ def apply_remux(
         plan = build_track_plan(read["data"], known_resolution=_get_known_resolution(library_item_id, conn))
         plan = apply_track_overrides(plan, overrides)
 
+        if not plan["any_changed"]:
+            # Tracks already in the right order with the right names (even
+            # after overrides) — skip mkvmerge entirely instead of doing a
+            # full rewrite of the file for nothing (same total runtime as a
+            # real remux, just to produce an ~identical file).
+            now = datetime.now(timezone.utc).isoformat()
+            _update_status(conn, library_item_id, "aplicado", None, applied_at=now)
+            logger.info("Reordenar/renombrar pistas: sin cambios que aplicar (item %s), mkvmerge omitido.", library_item_id)
+            if on_progress:
+                on_progress(100)
+            return {
+                **preview, "status": "applied", "dry_run": False, "apply": True,
+                "applied_at": now, "exit_code": 0,
+            }
+
         # Write to a temp file in the SAME directory (same filesystem — works
         # over SSHFS/NFS), then atomically replace the original.
         fd, tmp_path = tempfile.mkstemp(suffix=".mkv.part", dir=str(p.parent))

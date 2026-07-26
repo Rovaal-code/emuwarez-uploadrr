@@ -8,6 +8,7 @@ import { startLibrarySync } from '../api/library'
 import { fetchSettings, updateSettings } from '../api/settings'
 import { testTmdbConnection, testEmuwarezConnection, testArrConnection, testQbitConnection, testImghostConnection, type IntegrationTestResult } from '../api/integrationTests'
 import { ServiceIcon } from '../components/ServiceIcon'
+import { Favicon, domainOf } from '../components/Favicon'
 import { ProviderPriorityPicker } from '../components/ProviderPriorityPicker'
 import { InfoIcon } from '../components/InfoIcon'
 import { ExternalLinkButtonIcon } from '../components/DetailCard'
@@ -221,7 +222,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   }
 
   // Image hosts step state
-  const [imgAvailable, setImgAvailable] = useState<{ id: string; label: string; needs_key: boolean }[]>([])
+  const [imgAvailable, setImgAvailable] = useState<{ id: string; label: string; needs_key: boolean; url?: string; favicon?: string | null }[]>([])
   const [imgEnabled, setImgEnabled] = useState<string[]>([])
   const [imgKeys, setImgKeys] = useState<Record<string, string>>({})
   const [imgTest, setImgTest] = useState<Record<string, IntegrationTestResult>>({})
@@ -885,7 +886,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <input type="checkbox" checked={enabled || isDefault} disabled={isDefault}
                           onChange={() => setImgEnabled(p => p.includes(h.id) ? p.filter(x => x !== h.id) : [...p, h.id])} />
-                        <ServiceIcon type="imghost" size={14} />
+                        <Favicon domain={domainOf(h.url)} src={h.favicon} size={14} background="#fff" fallback={<ServiceIcon type="imghost" size={14} />} />
                         <span style={{ fontSize: 13 }}>{h.label}</span>
                         {isDefault && <span className="badge status-available" style={{ fontSize: 10 }}>por defecto</span>}
                         {h.needs_key && <span className="badge nom-na" style={{ fontSize: 10 }}>API key</span>}

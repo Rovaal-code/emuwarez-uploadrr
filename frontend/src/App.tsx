@@ -111,13 +111,19 @@ export function App() {
     setState('login')
   }
 
-  // Any 401 from any request, anywhere in the app, means the session just
-  // died server-side — bounce to login immediately instead of leaving the
-  // page looking half-logged-in with a local error until a manual refresh.
+  // A 401 while state === 'app' means a session that WAS working just died
+  // server-side — bounce to login immediately instead of leaving the page
+  // looking half-logged-in with a local error until a manual refresh. Gated
+  // on 'app': the setup wizard's early (pre-admin) steps make their own
+  // best-effort authenticated prefetches expecting a 401 there and already
+  // handle it locally (e.g. its provider-order prefetch) — those must not
+  // also bounce the whole app to /login.
   useEffect(() => {
-    setUnauthorizedHandler(() => handleLogout())
+    setUnauthorizedHandler(() => {
+      if (state === 'app') handleLogout()
+    })
     return () => setUnauthorizedHandler(null)
-  }, [])
+  }, [state])
 
   if (state === 'loading') {
     return <LoadingState label="Conectando con el servidor…" />

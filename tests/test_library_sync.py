@@ -727,3 +727,30 @@ def test_missing_since_backfilled_from_added_at_on_migration(mem_conn):
         "SELECT missing_since FROM library_items WHERE title = ?", ("Old Missing Movie",)
     ).fetchone()
     assert row["missing_since"] == "2023-05-01T00:00:00"
+
+
+def test_missing_since_backfill_runs_even_when_column_already_exists(mem_conn):
+    """Regression: an earlier deploy of this migration only added the
+    missing_since column (no backfill yet). Anyone who already ran THAT
+    version has the column but every Faltante row still stuck at NULL — the
+    backfill must not skip itself just because the ALTER TABLE now fails
+    (column already there)."""
+    from emuwarez_uploadrr.database import init_db
+
+    mem_conn.execute(
+        "INSERT INTO library_items (title, item_type, local_status, added_at) VALUES (?,?,?,?)",
+        ("Stuck Null Movie", "movie", "Faltante", "2022-11-11T00:00:00"),
+    )
+    # missing_since column already exists (mem_conn ran init_db in its own
+    # fixture setup) — only force the migration cascade to run again,
+    # without dropping the column, simulating "deployed the column-only
+    # version already".
+    mem_conn.execute("DELETE FROM app_state WHERE key = 'schema_version'")
+    mem_conn.commit()
+
+    init_db(mem_conn)
+
+    row = mem_conn.execute(
+        "SELECT missing_since FROM library_items WHERE title = ?", ("Stuck Null Movie",)
+    ).fetchone()
+    assert row["missing_since"] == "2022-11-11T00:00:00"

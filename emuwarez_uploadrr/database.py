@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 28
+SCHEMA_VERSION = 29
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -947,14 +947,22 @@ def _migrate_library_items_missing_since(conn: sqlite3.Connection) -> None:
     try:
         conn.execute("ALTER TABLE library_items ADD COLUMN missing_since TEXT")
     except sqlite3.OperationalError:
-        return  # Column already existed — never re-run the one-time backfill below.
+        pass
 
-    # One-time backfill for content that was already Faltante before this
-    # column existed: added_at (when we first synced/inserted this row) is
-    # an imperfect but far better proxy than leaving it NULL, which would
-    # keep falling back to Radarr/Sonarr's own "added" date — an unrelated
-    # event (see get_dashboard_recommendations). From here on,
-    # upsert_library_item keeps it accurate on every real transition.
+    # Backfill for content that was already Faltante before this column
+    # existed: added_at (when we first synced/inserted this row) is an
+    # imperfect but far better proxy than leaving it NULL, which would keep
+    # falling back to Radarr/Sonarr's own "added" date — an unrelated event
+    # (see get_dashboard_recommendations). From here on, upsert_library_item
+    # keeps it accurate on every real transition.
+    #
+    # Deliberately NOT gated behind "column didn't already exist" — this ran
+    # once already on a deploy that only had the ALTER TABLE above (no
+    # backfill yet), so the column already existing here must NOT skip this
+    # UPDATE, or anyone who deployed that version first would have their
+    # Faltante rows stuck at missing_since=NULL forever. The WHERE clause
+    # alone (only rows still NULL) already makes this safe to run on every
+    # migration pass.
     conn.execute(
         "UPDATE library_items SET missing_since = added_at "
         "WHERE local_status = 'Faltante' AND missing_since IS NULL"

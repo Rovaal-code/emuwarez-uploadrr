@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { getSetupStatus } from './api/setup'
 import { getMe } from './api/auth'
-import { getToken, clearToken } from './api/client'
+import { getToken, clearToken, setUnauthorizedHandler } from './api/client'
 import type { SetupStatusResponse, CurrentUserResponse } from './types/api'
 import { LoginPage } from './pages/LoginPage'
 import { SetupWizard } from './pages/SetupWizard'
@@ -110,6 +110,14 @@ export function App() {
     normalizeToLogin()
     setState('login')
   }
+
+  // Any 401 from any request, anywhere in the app, means the session just
+  // died server-side — bounce to login immediately instead of leaving the
+  // page looking half-logged-in with a local error until a manual refresh.
+  useEffect(() => {
+    setUnauthorizedHandler(() => handleLogout())
+    return () => setUnauthorizedHandler(null)
+  }, [])
 
   if (state === 'loading') {
     return <LoadingState label="Conectando con el servidor…" />

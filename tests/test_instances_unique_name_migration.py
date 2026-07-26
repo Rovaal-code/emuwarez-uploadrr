@@ -40,6 +40,11 @@ def _seed_old_schema_with_conflict(conn: sqlite3.Connection) -> None:
     conn.execute("INSERT INTO instances (id, type, name, url, api_key) VALUES (1, 'radarr', 'Main', 'http://r', 'k1')")
     conn.execute("INSERT INTO instances (id, type, name, url, api_key) VALUES (2, 'sonarr', 'Main', 'http://s', 'k2')")
     conn.execute("INSERT INTO instances (id, type, name, url, api_key) VALUES (3, 'radarr', 'Unique', 'http://r2', 'k3')")
+    # init_db() short-circuits once app_state.schema_version matches
+    # SCHEMA_VERSION (see database.py) — a real pre-migration DB wouldn't
+    # have that stamp yet, so clear it to make init_db() actually re-run
+    # the migration cascade below instead of no-op'ing on the next call.
+    conn.execute("DELETE FROM app_state WHERE key = 'schema_version'")
     conn.commit()
 
 

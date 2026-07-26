@@ -47,15 +47,10 @@ services:
       CONFIG_DIR: /config
 
     volumes:
-      # Configuración persistente: base de datos SQLite y settings
+      # Configuración persistente: base de datos SQLite, settings, y el
+      # config.yaml/temporales de Uploadrr-EMU (bajo /config/Uploadrr —
+      # Uploadrr-EMU va empaquetado en la imagen, no es un mount aparte).
       - /srv/emuwarez-uploadrr/config:/config
-
-      # Uploadrr-EMU como bind mount externo — NUNCA va dentro de la imagen.
-      # Código en :ro; data/ y tmp/ montados aparte en rw. Después del primer
-      # arranque, configura la ruta /opt/Uploadrr en el setup web (uploadrr.path).
-      - ${UPLOADRR_PATH:-/srv/Uploadrr}:/opt/Uploadrr:ro
-      - ${UPLOADRR_DATA_PATH:-/srv/emuwarez-uploadrr/uploadrr-data}:/opt/Uploadrr/data:rw
-      - ${UPLOADRR_TMP_PATH:-/srv/emuwarez-uploadrr/uploadrr-tmp}:/opt/Uploadrr/tmp:rw
 
       # Raíz de datos compartida para media + uploads — una sola raíz evita
       # el error EXDEV al crear hardlinks entre origen y destino.
@@ -71,9 +66,6 @@ PUID=1000
 PGID=1000
 TZ=Europe/Madrid
 EMUWAREZ_UPLOADRR_PORT=9494
-UPLOADRR_PATH=/srv/Uploadrr
-UPLOADRR_DATA_PATH=/srv/emuwarez-uploadrr/uploadrr-data
-UPLOADRR_TMP_PATH=/srv/emuwarez-uploadrr/uploadrr-tmp
 ```
 
 Y levanta el contenedor:
@@ -98,12 +90,12 @@ cp .env.example .env
 docker compose -f docker-compose.example.yml up -d --build
 ```
 
-**Guía de despliegue completa** (mounts de Uploadrr-EMU, hardlinks/EXDEV,
-primer usuario admin, troubleshooting): [`docs/DEPLOYMENT_DOCKER.md`](docs/DEPLOYMENT_DOCKER.md).
+**Guía de despliegue completa** (hardlinks/EXDEV, primer usuario admin,
+troubleshooting): [`docs/DEPLOYMENT_DOCKER.md`](docs/DEPLOYMENT_DOCKER.md).
 
-> `Uploadrr-EMU` **nunca** se empaqueta dentro de la imagen: se monta como
-> directorio externo (`:ro` el código, `rw` sus `data/` y `tmp/`). Ver la
-> guía de despliegue para el porqué y el mount exacto.
+> `Uploadrr-EMU` va empaquetado dentro de la imagen — no hay que montar ni
+> configurar nada aparte para él. Su `config.yaml` y sus temporales de subida
+> persisten automáticamente bajo el propio volumen `/config`.
 
 ## Uso sin Docker (CLI local)
 
@@ -120,7 +112,6 @@ el modelo de datos en SQLite.
 ## Documentación
 
 - [`docs/DEPLOYMENT_DOCKER.md`](docs/DEPLOYMENT_DOCKER.md) — despliegue Docker paso a paso y troubleshooting.
-- [`docs/ui_backend_contract.md`](docs/ui_backend_contract.md) — contrato entre frontend y API.
 - [`docs/source_engine.md`](docs/source_engine.md) — motor de detección de source/nomenclatura.
 - [`references/`](references) — nomenclatura y guía de subida de eMuwarez.
 - [`README_CLI_READY.md`](README_CLI_READY.md) — referencia extendida de la CLI y el modelo SQLite.

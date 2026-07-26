@@ -115,12 +115,18 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int) -> dict:
                    parent or (path or "El elemento no tiene ruta de archivo")):
             return done()
 
-    # 2. Output directory writable — where Uploadrr stages the .torrent + images.
-    # Falls back to the bundled runtime's own default (/opt/Uploadrr, or
-    # UPLOADRR_PATH) the same way uploadrr_contract.py::get_runtime_settings
-    # already does — the bundled runtime needs no configuration at all, so
-    # this check must not require `uploadrr.path` to have been set by hand.
-    out_dir = get_runtime_settings(conn)["uploadrr_path"]
+    # 2. Output directory writable — where Uploadrr-EMU stages the .torrent +
+    # images (torrents/screenshots/descriptions) is <uploadrr_path>/tmp, NOT
+    # the top-level uploadrr_path itself: in the documented Docker deployment
+    # (docker-compose.yml) the code root is mounted :ro on purpose and only
+    # its data/ and tmp/ subdirs are mounted rw. Checking the top-level path
+    # here always failed under that exact, recommended setup. Falls back to
+    # the bundled runtime's own default (/opt/Uploadrr, or UPLOADRR_PATH) the
+    # same way uploadrr_contract.py::get_runtime_settings already does — the
+    # bundled runtime needs no configuration at all, so this check must not
+    # require `uploadrr.path` to have been set by hand.
+    base_dir = get_runtime_settings(conn)["uploadrr_path"]
+    out_dir = os.path.join(base_dir, "tmp") if base_dir else None
     if not add("output", "Directorio de salida escribible", "Directorio de salida no escribible",
                bool(out_dir) and os.path.isdir(out_dir) and os.access(out_dir, os.W_OK),
                out_dir or "uploadrr.path no configurado"):

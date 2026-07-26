@@ -46,6 +46,7 @@ def test_output_check_falls_back_to_bundled_uploadrr_path(db_conn, tmp_path, mon
     though the runtime it validates for doesn't require configuring it."""
     from emuwarez_uploadrr.services import uploadrr_contract as ctr
     monkeypatch.setattr(ctr, "DEFAULT_UPLOADRR_PATH", str(tmp_path))
+    (tmp_path / "tmp").mkdir()  # Uploadrr-EMU stages output under <path>/tmp, not the root
 
     f = tmp_path / "movie.mkv"
     f.write_bytes(b"x" * 2048)
@@ -59,6 +60,7 @@ def test_all_green_when_everything_passes(db_conn, tmp_path, monkeypatch):
     from emuwarez_uploadrr.web.services.settings_service import set_setting
     f = tmp_path / "movie.mkv"
     f.write_bytes(b"x" * 2048)
+    (tmp_path / "tmp").mkdir()  # Uploadrr-EMU stages output under <path>/tmp, not the root
     set_setting(db_conn, "qbit.url", "http://localhost:8080")     # so qBittorrent runs
     set_setting(db_conn, "uploadrr.path", str(tmp_path))           # writable output dir
 
@@ -82,6 +84,7 @@ def test_skips_unconfigured_qbit(db_conn, tmp_path, monkeypatch):
     is still ready."""
     from emuwarez_uploadrr.web.services.settings_service import set_setting
     f = tmp_path / "movie.mkv"; f.write_bytes(b"x" * 2048)
+    (tmp_path / "tmp").mkdir()  # Uploadrr-EMU stages output under <path>/tmp, not the root
     set_setting(db_conn, "uploadrr.path", str(tmp_path))
     # qbit.url intentionally not set → qbittorrent skip
     import emuwarez_uploadrr.services.integration_tests as it
@@ -99,6 +102,7 @@ def test_skips_unconfigured_qbit(db_conn, tmp_path, monkeypatch):
 def test_stops_at_qbit_before_emuwarez(db_conn, tmp_path, monkeypatch):
     from emuwarez_uploadrr.web.services.settings_service import set_setting
     f = tmp_path / "m.mkv"; f.write_bytes(b"x" * 2048)
+    (tmp_path / "tmp").mkdir()  # Uploadrr-EMU stages output under <path>/tmp, not the root
     set_setting(db_conn, "qbit.url", "http://localhost:8080")   # configured → qbit runs
     set_setting(db_conn, "uploadrr.path", str(tmp_path))
     import emuwarez_uploadrr.services.integration_tests as it

@@ -1133,9 +1133,29 @@ def _migrate_scheduled_tasks_table(conn: sqlite3.Connection) -> None:
 
 
 def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
+    """Create tables and run the migration cascade — idempotent, but NOT
+    cheap: ~35 migration functions, several of which rebuild whole tables.
+
+    Called on every authenticated request (require_auth/get_current_user
+    each open their own connection and call this before touching anything
+    else), so once the schema is already current this MUST short-circuit
+    before doing any writes. Without this check, concurrent requests (e.g.
+    several fired at once when the upload wizard modal opens) each start
+    their own migration pass at the same time — even idempotent migrations
+    take a write lock while checking, and under real concurrency that has
+    caused `database is locked`-type errors that require_auth silently
+    turned into "invalid token", wiping the frontend's session on a request
+    that had nothing to do with auth (see the comment in dependencies.py).
+    """
     own = conn is None
     conn = conn or connect()
     try:
+        try:
+            row = conn.execute("SELECT value FROM app_state WHERE key = 'schema_version'").fetchone()
+        except sqlite3.OperationalError:
+            row = None  # app_state doesn't exist yet — fresh DB, run the full cascade below
+        if row is not None and row["value"] == str(SCHEMA_VERSION):
+            return
         conn.executescript(
             """
             CREATE TABLE IF NOT EXISTS app_state (

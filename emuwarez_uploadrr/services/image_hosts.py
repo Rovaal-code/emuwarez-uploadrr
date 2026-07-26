@@ -22,7 +22,9 @@ from typing import Any, Optional
 # for several of these low-traffic hosts instead of their real one).
 IMAGE_HOSTS: list[dict[str, Any]] = [
     {"id": "imgbox",    "label": "Imgbox",     "url": "https://imgbox.com",    "needs_key": False, "favicon": "https://imgbox.com/images/favicon.ico"},
-    {"id": "pixhost",   "label": "Pixhost",    "url": "https://pixhost.to",    "needs_key": False, "favicon": "https://pixhost.to/favicon.ico"},
+    # pixhost.to stopped resolving (NXDOMAIN, confirmed 2026-07-26) — pixhost.cc
+    # is the live domain now.
+    {"id": "pixhost",   "label": "Pixhost",    "url": "https://pixhost.cc",    "needs_key": False, "favicon": "https://pixhost.cc/favicon.ico"},
     {"id": "fastpic",   "label": "FastPic",    "url": "https://fastpic.org",   "needs_key": False, "favicon": "https://fastpic.org/favicon-32x32.png"},
     {"id": "imgbb",     "label": "ImgBB",      "url": "https://imgbb.com",     "needs_key": True,  "favicon": "https://simgbb.com/images/favicon.png"},
     # ptpimg.me: currently returning a Cloudflare 523 (origin unreachable) —

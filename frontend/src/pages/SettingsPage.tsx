@@ -549,7 +549,11 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                           className="drag-handle"
                           style={{ ...handleProps.style, color: 'var(--text-accent)', width: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginLeft: 8, marginRight: 8 }}
                         ><DragHandleIcon /></HoverTitle>
-                        <Favicon domain={domainOf(h.url)} src={h.favicon} size={15} background="#fff" fallback={<ServiceIcon type="imghost" size={15} />} />
+                        <a href={h.url} target="_blank" rel="noreferrer" title={`Abrir ${h.label}`}
+                          onClick={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()}
+                          style={{ display: 'inline-flex' }}>
+                          <Favicon domain={domainOf(h.url)} src={h.favicon} size={15} background="#fff" fallback={<ServiceIcon type="imghost" size={15} />} />
+                        </a>
                         <span style={{ fontSize: 13, fontWeight: 500 }}>{h.label}</span>
                         {isDefault && <span className="badge status-available" style={{ fontSize: 10 }}>por defecto</span>}
                         {h.needs_key && <span className="badge nom-na" style={{ fontSize: 10 }}>API key</span>}

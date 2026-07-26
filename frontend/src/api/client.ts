@@ -25,6 +25,19 @@ export function clearToken(): void {
   sessionStorage.removeItem(TOKEN_KEY)
 }
 
+// A 401 from ANY request wipes the token below — but until this handler was
+// added, nothing told the rest of the app the session had just died: App.tsx
+// only checks auth once at boot, so a component whose own request 401'd kept
+// showing its own local "no autorizado" error while the rest of the SPA sat
+// there as if still logged in, until a manual refresh re-ran the boot check
+// and finally bounced to /login. Registered by App.tsx so any 401, anywhere,
+// bounces to the login screen right away instead of leaving a half-dead page.
+let unauthorizedHandler: (() => void) | null = null
+
+export function setUnauthorizedHandler(fn: (() => void) | null): void {
+  unauthorizedHandler = fn
+}
+
 export class ApiClientError extends Error {
   status: number
   body: unknown
@@ -85,6 +98,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   if (resp.status === 401) {
     clearToken()
+    unauthorizedHandler?.()
     throw new ApiClientError('No autorizado', 401, null)
   }
 

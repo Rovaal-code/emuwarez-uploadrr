@@ -30,9 +30,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Bundle Uploadrr-EMU as an internal dependency — like mediainfo/ffmpeg, the
-# user configures nothing. Installed under /opt (NOT /app, or setuptools'
-# flat-layout discovery would clash with our own package). uploadrr.path
-# defaults to /opt/Uploadrr (services/uploadrr_contract.py).
+# user configures nothing, and it is NEVER an external bind mount. Installed
+# under /opt (NOT /app, or setuptools' flat-layout discovery would clash with
+# our own package). uploadrr.path defaults to /opt/Uploadrr
+# (services/uploadrr_contract.py). Its data/ and tmp/ subdirs are replaced at
+# container start (docker-entrypoint.sh) with symlinks into /config/Uploadrr,
+# so what Uploadrr-EMU writes there survives a rebuild/recreate without the
+# user mounting anything beyond the /config volume they already have.
 #
 # Cloned from our own private fork (Rovaal-code/Uploadrr-EMU on GitHub, not
 # the public codeberg.org/ccx94/Uploadrr-EMU upstream) so the image ships
@@ -50,7 +54,11 @@ RUN --mount=type=secret,id=github_token \
     && pip install --no-cache-dir "setuptools<80" wheel \
     && pip install --no-cache-dir --no-build-isolation -r /opt/Uploadrr/requirements.txt \
     && pip install --no-cache-dir tmdbsimple \
-    && rm -rf /opt/Uploadrr/.git
+    && rm -rf /opt/Uploadrr/.git \
+    && chmod -R a+rwX /opt/Uploadrr
+# world-writable: the container's runtime UID (PUID/PGID, docker-compose's
+# `user:`) isn't known at build time, but docker-entrypoint.sh still needs to
+# replace /opt/Uploadrr/{data,tmp} with symlinks under whatever UID it runs as.
 
 # Install Python dependencies first (better layer caching)
 COPY pyproject.toml ./
@@ -58,6 +66,9 @@ COPY emuwarez_uploader.py ./
 COPY emuwarez_uploadrr/ ./emuwarez_uploadrr/
 
 RUN pip install --no-cache-dir -e ".[web]"
+
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Copy built frontend — app.py resolves frontend/dist relative to its own
 # location: Path(__file__).parent.parent.parent / "frontend" / "dist"
@@ -78,4 +89,5 @@ EXPOSE 9494
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9494/api/health', timeout=5).read()" || exit 1
 
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["python3", "emuwarez_uploader.py", "web", "serve", "--host", "0.0.0.0", "--port", "9494"]

@@ -421,8 +421,7 @@ La interfaz web estará disponible en `http://localhost:9494`.
 
 | Ruta en contenedor | Descripción |
 |---|---|
-| `/config` | Configuración persistente (SQLite, settings). Montar como volumen. |
-| `/opt/Uploadrr` | Directorio de Uploadrr externo (bind mount). **Nunca va dentro de la imagen.** |
+| `/config` | Configuración persistente (SQLite, settings, y `Uploadrr/{data,tmp}`). Montar como volumen. |
 | `/data` | Raíz de datos (media + uploads). Usar raíz común para evitar EXDEV. |
 
 ### Hardlinks y EXDEV
@@ -436,20 +435,17 @@ apuntando dentro del mismo montaje que el media.
 
 ### Configuración de Uploadrr
 
-Monta Uploadrr-EMU como bind mount externo — nunca se incluye ni se vendoriza
-en la imagen Docker. Desde la Fase 10F, la ejecución controlada real stagea/
-restaura `data/config.yaml` y el fork escribe temporales en `tmp/`, así que
-el código puede ir `:ro` pero `data/` y `tmp/` necesitan `rw`:
+Uploadrr-EMU va empaquetado dentro de la imagen (`/opt/Uploadrr`) — no es un
+bind mount externo, no hay nada que montar ni configurar para él. La
+ejecución controlada real stagea/restaura `data/config.yaml` y el fork
+escribe temporales en `tmp/`; ambos subdirectorios se reemplazan al arrancar
+el contenedor (`docker-entrypoint.sh`) por symlinks a `/config/Uploadrr/data`
+y `/config/Uploadrr/tmp`, así que persisten en el mismo volumen `/config` que
+ya montas para la base de datos.
 
-```yaml
-- ${UPLOADRR_PATH:-/srv/Uploadrr}:/opt/Uploadrr:ro
-- ${UPLOADRR_DATA_PATH:-/srv/emuwarez-uploadrr/uploadrr-data}:/opt/Uploadrr/data:rw
-- ${UPLOADRR_TMP_PATH:-/srv/emuwarez-uploadrr/uploadrr-tmp}:/opt/Uploadrr/tmp:rw
-```
-
-Configura la ruta (`/opt/Uploadrr`) y el resto de settings de runtime desde
-el setup web, o desde **Configuración → Uploadrr** en la UI, tras el primer
-arranque. Ver `docs/DEPLOYMENT_DOCKER.md` sección 7b para el detalle completo.
+El resto de settings de runtime se configuran desde el setup web, o desde
+**Configuración → Uploadrr** en la UI, tras el primer arranque. Ver
+`docs/DEPLOYMENT_DOCKER.md` sección 7b para el detalle completo.
 
 ### Gestión del contenedor
 

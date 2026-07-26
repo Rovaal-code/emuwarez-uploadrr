@@ -16,16 +16,13 @@ Guía paso a paso para desplegar eMuwarez Uploadrr como contenedor Docker en un 
 ## 2. Preparar carpetas
 
 ```bash
-# Directorio de configuración persistente
+# Directorio de configuración persistente (aquí vive también, automáticamente,
+# el config.yaml y los temporales de Uploadrr-EMU, bajo config/Uploadrr)
 mkdir -p /srv/emuwarez-uploadrr/config
 
 # Raíz de datos — media y uploads en el MISMO filesystem para hardlinks
 mkdir -p /srv/data/media
 mkdir -p /srv/data/uploads/emu
-
-# Directorio donde está instalado Uploadrr (externo, bind mount)
-# Ajusta la ruta a tu instalación real de Uploadrr
-# mkdir -p /srv/Uploadrr  # solo si aún no existe
 ```
 
 > **Importante para hardlinks**: `/srv/data/media` y `/srv/data/uploads/emu` deben estar en el mismo dispositivo/partición para evitar el error `EXDEV (cross-device link)`. Usa una raíz común como `/srv/data` o `/data`.
@@ -95,21 +92,17 @@ docker exec emuwarez-uploadrr python3 emuwarez_uploader.py web create-admin --us
 
 ---
 
-## 7. Configurar la ruta de Uploadrr
+## 7. Uploadrr-EMU: nada que montar
 
-En el setup web, en la sección **Uploadrr**, indica la ruta dentro del contenedor:
+Uploadrr-EMU va empaquetado dentro de la imagen (`/opt/Uploadrr`) — no es un
+bind mount externo, y no hay que crear ni indicar ninguna ruta para él. Lo
+único que necesita ser escribible y persistente (`data/config.yaml` y los
+temporales de cada subida) se guarda automáticamente bajo el propio volumen
+`/config` que ya montaste (`/config/Uploadrr/data` y `/config/Uploadrr/tmp`)
+— `docker-entrypoint.sh` deja esas dos rutas listas al arrancar el contenedor.
 
-```
-/opt/Uploadrr
-```
-
-Esta ruta corresponde al bind mount definido en `docker-compose.yml` (o `docker-compose.example.yml` si construyes localmente):
-
-```yaml
-- /srv/Uploadrr:/opt/Uploadrr
-```
-
-Ajusta `/srv/Uploadrr` a la ruta real de tu instalación de Uploadrr en el host.
+`uploadrr.path` (Configuración → Uploadrr) ya viene puesto a `/opt/Uploadrr`
+por defecto; no hace falta tocarlo salvo que sepas lo que haces.
 
 ---
 
@@ -122,7 +115,7 @@ por API/CLI):
 
 | Setting | Valor por defecto | Notas |
 |---|---|---|
-| `uploadrr.path` | _(sin valor)_ | Ruta dentro del contenedor al directorio de Uploadrr-EMU, p.ej. `/opt/Uploadrr`. |
+| `uploadrr.path` | `/opt/Uploadrr` | Ruta dentro del contenedor al directorio de Uploadrr-EMU (bundled — no es un mount). |
 | `uploadrr.runtime_type` | `uploadrr_emu` | Perfil de flags a usar. El único runtime con ejecución controlada real soportada en la Fase 10F es `uploadrr_emu`; `uploadrr_generic` solo genera una previsualización best-effort y bloquea el inicio real. |
 | `uploadrr.python_path` | `/usr/local/bin/python` | Asume la imagen base Python del contenedor. Uploadrr-EMU necesita su **propio venv** con sus dependencias (`requirements.txt` del fork) — instálalo en un volumen propio y ajusta este setting a `<venv>/bin/python`. **Nunca reutilices el intérprete del backend** (`sys.executable`). |
 | `uploadrr.timeout` | `7200` (segundos) | Timeout del subproceso de subida. Si se excede, el job pasa a `failed`/`stage=timeout` y el proceso recibe `SIGKILL`. |
@@ -136,35 +129,22 @@ Estos settings se leen con fallback automático a la forma legacy sin punto
 (`uploadrr_path`, etc.) pero solo el setup wizard/API escriben la forma con
 punto — no hace falta migrar nada manualmente.
 
-### Mounts necesarios (Fase 10F)
+### Dónde escribe Uploadrr-EMU (automático, nada que montar)
 
-Antes de ejecutar una subida real, Uploadrr-EMU necesita:
+Antes de ejecutar una subida real, Uploadrr-EMU necesita dos subdirectorios
+escribibles bajo su propia ruta (`/opt/Uploadrr`):
 
-1. **Código** (`/opt/Uploadrr`): puede ser `:ro`, no se modifica en ejecución.
-2. **`data/`** (`/opt/Uploadrr/data`): debe ser **`rw`** — antes de cada
-   ejecución se hace backup de `data/config.yaml` y se stagean ahí
-   `DEFAULT.tmdb` y `TRACKERS.EMU.api_key`/`anon`; al terminar (éxito, fallo,
-   timeout o cancelación) se **restaura siempre** el `config.yaml` original.
-3. **`tmp/`** (`/opt/Uploadrr/tmp`): debe ser **`rw`** — el fork escribe ahí
-   temporales (torrents, capturas, descripciones) durante la subida.
+1. **`data/`**: antes de cada ejecución se hace backup de `data/config.yaml`
+   y se stagean ahí `DEFAULT.tmdb` y `TRACKERS.EMU.api_key`/`anon`; al
+   terminar (éxito, fallo, timeout o cancelación) se **restaura siempre** el
+   `config.yaml` original.
+2. **`tmp/`**: el fork escribe ahí temporales (torrents, capturas,
+   descripciones) durante la subida.
 
-Ver `docker-compose.example.yml` para el mount de ejemplo (variables
-`UPLOADRR_PATH` / `UPLOADRR_DATA_PATH` / `UPLOADRR_TMP_PATH` en `.env`). Si tu
-fork de Uploadrr-EMU necesita otros directorios escribibles, documéntalos y
-añade mounts específicos siguiendo el mismo patrón — nunca montes el árbol
-completo en `rw` si el código en sí no necesita escribirse.
-
-> **Importante**: `data/` y `tmp/` deben existir ya como directorios dentro
-> de `$UPLOADRR_PATH` (el checkout de Uploadrr-EMU en el host) **antes** de
-> arrancar el contenedor. Un mount anidado en `rw` dentro de un mount padre
-> `:ro` falla con `Read-only file system` si Docker tiene que crear el
-> directorio destino en el momento del montaje — solo puede montarse sobre
-> un directorio que ya existe. Git no trackea directorios vacíos, así que si
-> tu checkout de Uploadrr-EMU tiene un `tmp/` vacío (a diferencia de `data/`,
-> que normalmente ya contiene `config.yaml`), créalo a mano una vez:
-> `mkdir -p $UPLOADRR_PATH/tmp`.
-
-**Nunca se vendoriza Uploadrr-EMU dentro de la imagen principal.**
+`docker-entrypoint.sh` reemplaza esos dos subdirectorios por symlinks a
+`/config/Uploadrr/data` y `/config/Uploadrr/tmp` al arrancar el contenedor —
+viven dentro del volumen `/config` que ya montas, así que sobreviven a un
+`docker compose up -d --build`/recreación sin que montes nada aparte.
 
 ---
 
@@ -383,25 +363,25 @@ PGID=1001
 
 ---
 
-### Uploadrr no está montado
+### "Directorio de salida no escribible" / Uploadrr-EMU no encontrado
 
-Verifica los bind mounts en el compose (código `:ro`, `data/` y `tmp/` en `rw`):
-
-```yaml
-- ${UPLOADRR_PATH:-/srv/Uploadrr}:/opt/Uploadrr:ro
-- ${UPLOADRR_DATA_PATH:-/srv/emuwarez-uploadrr/uploadrr-data}:/opt/Uploadrr/data:rw
-- ${UPLOADRR_TMP_PATH:-/srv/emuwarez-uploadrr/uploadrr-tmp}:/opt/Uploadrr/tmp:rw
-```
-
-Comprueba que las rutas existen en el host:
+Uploadrr-EMU va empaquetado dentro de la imagen — no hay ningún mount que
+revisar. Si el diagnóstico o el checklist de subida se quejan de que
+`/opt/Uploadrr` (o su `data`/`tmp`) no es escribible, comprueba que
+`docker-entrypoint.sh` corrió sin errores al arrancar:
 
 ```bash
-ls /srv/Uploadrr
-ls /srv/emuwarez-uploadrr/uploadrr-data
-ls /srv/emuwarez-uploadrr/uploadrr-tmp
+docker logs emuwarez-uploadrr | head -20
+ls -la /config/Uploadrr   # visto desde el host, en tu ruta de /config
+docker exec emuwarez-uploadrr ls -la /opt/Uploadrr
 ```
 
-El diagnóstico lo detecta:
+`/opt/Uploadrr/data` y `/opt/Uploadrr/tmp` deben verse como symlinks
+apuntando a `/config/Uploadrr/data` y `/config/Uploadrr/tmp`. Si no existen,
+revisa que el volumen `/config` esté montado y sea escribible por el
+PUID/PGID del contenedor.
+
+El diagnóstico también lo detecta:
 
 ```bash
 docker exec emuwarez-uploadrr python3 emuwarez_uploader.py web doctor

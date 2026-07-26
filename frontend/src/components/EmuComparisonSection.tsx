@@ -30,9 +30,11 @@ const STATUS_LABEL: Record<EmuFieldStatus, string> = { si: 'Sí', no: 'No', apor
 // The "eMuwarez" field in Información técnica — fetches the comparison
 // itself (same call EmuComparisonContent's data comes from) and shows a
 // three-state chip (Sí/No/Aportas). Blinks green whenever there's something
-// actionable (not in the catalog, or you'd contribute something new) — a
-// plain "Sí" (already there, nothing better to add) stays the normal static
-// blue border every other linkable field chip uses.
+// you could actually act on right now: "Aportas" always (you'd contribute
+// something new), "No" only if you HAVE a local copy to upload — a "No" for
+// content you don't even have yet (Faltante) isn't actionable at all (there's
+// nothing to upload), so it stays the normal static blue border, same as a
+// plain "Sí" (already there, nothing better to add).
 export function EmuFieldChip({ itemId }: { itemId: number }) {
   const [data, setData] = useState<EmuComparison | null>(null)
   const [loading, setLoading] = useState(true)
@@ -54,7 +56,8 @@ export function EmuFieldChip({ itemId }: { itemId: number }) {
     return <span className="muted">–</span>
   }
 
-  const blink = (status === 'no' || status === 'aportas') ? 'new' : undefined
+  const hasLocal = data?.mine_available ?? (data?.mine?.size != null)
+  const blink = (status === 'no' && hasLocal) || status === 'aportas' ? 'new' : undefined
 
   return (
     <>

@@ -7,6 +7,7 @@ import sqlite3
 import threading
 import time
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from typing import Callable, Iterator, Optional
 
 from ..integrations import radarr, sonarr
@@ -59,6 +60,13 @@ def upsert_library_item(conn: sqlite3.Connection, item: LibraryItem, *, notify_m
             conn, item_type=item.item_type, tvdb_id=item.tvdb_id,
             tmdb_id=item.tmdb_id, season_number=item.season_number,
         )
+    # Only meaningful on the INSERT path (a brand-new row) — the DO UPDATE
+    # SET clause below overrides it with a CASE that only bumps it on a
+    # genuine transition INTO Faltante, never on a resync that leaves an
+    # already-missing item missing (see _migrate_library_items_missing_since).
+    data["missing_since"] = (
+        datetime.now(timezone.utc).isoformat() if item.local_status == LocalStatus.MISSING.value else None
+    )
     columns = [
         "item_type", "title", "year", "original_title", "instance_id", "instance_type",
         "instance_name", "external_id", "tmdb_id", "imdb_id", "tvdb_id", "title_slug",
@@ -66,7 +74,7 @@ def upsert_library_item(conn: sqlite3.Connection, item: LibraryItem, *, notify_m
         "quality", "resolution", "source", "video_codec", "audio_codec", "audio_languages",
         "audio_channels", "dynamic_range", "subtitle_languages", "size_bytes", "local_status",
         "request_status", "nomenclature_status", "request_id", "added_at", "raw_json",
-        "poster_url", "backdrop_url", "mal_id",
+        "poster_url", "backdrop_url", "mal_id", "missing_since",
     ]
     values = [data.get(col) for col in columns]
     conn.execute(
@@ -119,6 +127,13 @@ def upsert_library_item(conn: sqlite3.Connection, item: LibraryItem, *, notify_m
             poster_url = excluded.poster_url,
             backdrop_url = excluded.backdrop_url,
             mal_id = excluded.mal_id,
+            -- Only bump on a genuine transition INTO Faltante — an item that
+            -- was already Faltante and stays Faltante keeps its original
+            -- missing_since, so a resync never makes it look freshly missing.
+            missing_since = CASE
+                WHEN excluded.local_status = 'Faltante' AND library_items.local_status IS NOT 'Faltante'
+                THEN excluded.missing_since
+                ELSE library_items.missing_since END,
             updated_at = CURRENT_TIMESTAMP
         """,
         values,
@@ -1092,7 +1107,7 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
     seen_lib: set[int] = set()  # library ids already shown (so a piece of
     # content isn't repeated across groups 2 & 3 or after appearing in group 1)
 
-    cols = ("id, item_type, title, year, poster_url, local_status, added_at, "
+    cols = ("id, item_type, title, year, poster_url, local_status, added_at, missing_since, "
             "season_number, episode_number, parent_id, size_bytes, "
             "resolution, source, tmdb_id, imdb_id, tvdb_id, instance_type, "
             "instance_id, title_slug")
@@ -1158,9 +1173,12 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
         d["size_bytes"] = size if size is not None else _rec_rolled_size(conn, d)
         d["rec_request_id"] = None
         d["missing_count"] = missing_count
-        # Recency = when Radarr/Sonarr added the content (falls back to when we
-        # first recorded it). Used to order each group newest-first.
-        d["_added"] = row.get("arr_added") or row.get("added_at") or ""
+        # Recency: for a Faltante candidate (group 3), when it actually BECAME
+        # missing (missing_since) is what "newest first" should mean — falls
+        # back to Radarr/Sonarr's own "added" date (when Radarr/Sonarr first
+        # saw it) for group 2 (missing_since is never set for a Disponible
+        # row) and for any Faltante row synced before missing_since existed.
+        d["_added"] = row.get("missing_since") or row.get("arr_added") or row.get("added_at") or ""
         recs.append(d)
 
     # Group 2 — available content not in eMuwarez ("Contenido único"): movies,

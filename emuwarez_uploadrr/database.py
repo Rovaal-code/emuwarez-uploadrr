@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 27
+SCHEMA_VERSION = 28
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -934,6 +934,22 @@ def _migrate_library_items_backdrop_url(conn: sqlite3.Connection) -> None:
         pass
 
 
+def _migrate_library_items_missing_since(conn: sqlite3.Connection) -> None:
+    """Add missing_since to library_items — the timestamp of the most recent
+    transition INTO local_status='Faltante' (set by upsert_library_item,
+    never bumped by a resync that leaves it Faltante). Recomendaciones'
+    "Faltante" group used to sort by Radarr/Sonarr's own `added` date (when
+    the item was added to Radarr/Sonarr), which can be much older than when
+    it actually became a missing/recommendable candidate (e.g. added months
+    ago as an unreleased pre-order, only just released) — an item added
+    recently for an unrelated reason could then wrongly outrank a genuinely
+    newer missing detection."""
+    try:
+        conn.execute("ALTER TABLE library_items ADD COLUMN missing_since TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+
 def _migrate_anime_id_map(conn: sqlite3.Connection) -> None:
     """Local mirror of the Fribb/anime-lists table (tvdb_id/season -> mal_id,
     tmdb movie id -> mal_id) — see services/anime_lists.py. Downloaded/
@@ -1374,6 +1390,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_library_items_mal_id(conn)
         _migrate_anime_id_map(conn)
         _migrate_library_items_backdrop_url(conn)
+        _migrate_library_items_missing_since(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

@@ -22,6 +22,7 @@ import { InfoIcon } from '../components/InfoIcon'
 import { Favicon, domainOf } from '../components/Favicon'
 import { SortableList, DragHandleIcon } from '../components/SortableList'
 import { REGION_OPTIONS } from '../constants/regionLanguage'
+import { CheckStatusIcon } from '../components/DetailCard'
 import { testResultLabel, testResultColor, emuTestCooldownSeconds } from '../utils/integrationResult'
 import { getMe, changeCredentials } from '../api/auth'
 import { useTooltip, HoverTitle } from '../components/Tooltip'
@@ -333,7 +334,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           <label className="form-label">Estado de la API key</label>
           <div style={{ fontSize: 13 }}>
             {settings?.emu_api_key_configured
-              ? <><span style={{ color: '#22c55e' }}>✓ Configurada</span>{settings.emu_api_key_masked && <code style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>{settings.emu_api_key_masked}</code>}</>
+              ? <><span style={{ color: '#22c55e', display: 'inline-flex', alignItems: 'center', gap: 5 }}><CheckStatusIcon status="ok" /> Configurada</span>{settings.emu_api_key_masked && <code style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>{settings.emu_api_key_masked}</code>}</>
               : <span style={{ color: '#ef4444' }}>✗ No configurada</span>}
           </div>
         </div>
@@ -393,7 +394,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           <label className="form-label">Estado de la API key</label>
           <div style={{ fontSize: 13 }}>
             {settings?.tmdb_api_key_configured
-              ? <><span style={{ color: '#22c55e' }}>✓ Configurada</span>{settings.tmdb_api_key_masked && <code style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>{settings.tmdb_api_key_masked}</code>}</>
+              ? <><span style={{ color: '#22c55e', display: 'inline-flex', alignItems: 'center', gap: 5 }}><CheckStatusIcon status="ok" /> Configurada</span>{settings.tmdb_api_key_masked && <code style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>{settings.tmdb_api_key_masked}</code>}</>
               : <span style={{ color: '#ef4444' }}>✗ No configurada</span>}
           </div>
         </div>
@@ -1414,7 +1415,7 @@ function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | nul
           <label className="form-label">Webhook URL</label>
           <div style={{ fontSize: 13, marginBottom: 6 }}>
             {settings?.notify_discord_webhook_configured
-              ? <><span style={{ color: '#22c55e' }}>✓ Configurado</span>{settings.notify_discord_webhook_masked && <code style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>{settings.notify_discord_webhook_masked}</code>}</>
+              ? <><span style={{ color: '#22c55e', display: 'inline-flex', alignItems: 'center', gap: 5 }}><CheckStatusIcon status="ok" /> Configurado</span>{settings.notify_discord_webhook_masked && <code style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>{settings.notify_discord_webhook_masked}</code>}</>
               : <span style={{ color: '#ef4444' }}>✗ No configurado</span>}
           </div>
           <input
@@ -1450,7 +1451,7 @@ function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | nul
           <label className="form-label">Bot token</label>
           <div style={{ fontSize: 13, marginBottom: 6 }}>
             {settings?.notify_telegram_bot_token_configured
-              ? <><span style={{ color: '#22c55e' }}>✓ Configurado</span>{settings.notify_telegram_bot_token_masked && <code style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>{settings.notify_telegram_bot_token_masked}</code>}</>
+              ? <><span style={{ color: '#22c55e', display: 'inline-flex', alignItems: 'center', gap: 5 }}><CheckStatusIcon status="ok" /> Configurado</span>{settings.notify_telegram_bot_token_masked && <code style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>{settings.notify_telegram_bot_token_masked}</code>}</>
               : <span style={{ color: '#ef4444' }}>✗ No configurado</span>}
           </div>
           <input

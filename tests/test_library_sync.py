@@ -627,3 +627,75 @@ def test_sync_all_leaves_emu_status_null_before_any_emu_sync(mem_conn):
         "SELECT emu_in_catalog FROM library_items WHERE title = ?", ("Another Missing Film",)
     ).fetchone()
     assert row["emu_in_catalog"] is None
+
+
+def test_upsert_sets_missing_since_only_on_transition_into_faltante(mem_conn):
+    """missing_since must be stamped the moment an item first becomes
+    Faltante, kept unchanged while it stays Faltante across resyncs (so an
+    old missing item never looks freshly-missing just because it was
+    resynced), and left alone on a resync that doesn't change status."""
+    from emuwarez_uploadrr.services.library import sync_instance
+    from emuwarez_uploadrr.services.instances import list_instances
+    instance = list_instances(mem_conn)[0]
+
+    movie = _fake_movie(30, "Becomes Missing", has_file=True)
+    with (
+        patch("emuwarez_uploadrr.integrations.radarr.get_movies", return_value=[movie]),
+        patch("emuwarez_uploadrr.integrations.radarr.get_queue", return_value=[]),
+    ):
+        sync_instance(mem_conn, instance)
+    row = mem_conn.execute(
+        "SELECT missing_since FROM library_items WHERE title = ?", ("Becomes Missing",)
+    ).fetchone()
+    assert row["missing_since"] is None  # available — never missing yet
+
+    missing_movie = _fake_movie(30, "Becomes Missing", has_file=False)
+    with (
+        patch("emuwarez_uploadrr.integrations.radarr.get_movies", return_value=[missing_movie]),
+        patch("emuwarez_uploadrr.integrations.radarr.get_queue", return_value=[]),
+    ):
+        sync_instance(mem_conn, instance)
+    row = mem_conn.execute(
+        "SELECT missing_since FROM library_items WHERE title = ?", ("Becomes Missing",)
+    ).fetchone()
+    first_missing_since = row["missing_since"]
+    assert first_missing_since is not None
+
+    # Resyncing while still missing must not bump missing_since.
+    with (
+        patch("emuwarez_uploadrr.integrations.radarr.get_movies", return_value=[missing_movie]),
+        patch("emuwarez_uploadrr.integrations.radarr.get_queue", return_value=[]),
+    ):
+        sync_instance(mem_conn, instance)
+    row = mem_conn.execute(
+        "SELECT missing_since FROM library_items WHERE title = ?", ("Becomes Missing",)
+    ).fetchone()
+    assert row["missing_since"] == first_missing_since
+
+
+def test_faltante_group_orders_by_missing_since_not_arr_added(mem_conn):
+    """Recomendaciones' "Faltante" group must rank by when an item actually
+    became missing (missing_since), not by Radarr/Sonarr's own "added" date
+    (when it was added to Radarr/Sonarr) — an item added recently for an
+    unrelated reason (e.g. a fresh request) shouldn't outrank one that
+    genuinely became missing more recently but was added long ago."""
+    import json
+    from emuwarez_uploadrr.services.library import get_dashboard_recommendations
+
+    old_add_new_missing = json.dumps({"monitored": True, "status": "released", "added": "2020-01-01T00:00:00Z"})
+    new_add_old_missing = json.dumps({"monitored": True, "status": "released", "added": "2026-01-01T00:00:00Z"})
+    mem_conn.execute(
+        "INSERT INTO library_items (title, item_type, local_status, tmdb_id, emu_in_catalog, missing_since, raw_json) "
+        "VALUES (?,?,?,?,?,?,?)",
+        ("Recently Missing", "movie", "Faltante", "101", 0, "2026-07-26T12:00:00+00:00", old_add_new_missing),
+    )
+    mem_conn.execute(
+        "INSERT INTO library_items (title, item_type, local_status, tmdb_id, emu_in_catalog, missing_since, raw_json) "
+        "VALUES (?,?,?,?,?,?,?)",
+        ("Old Missing Recently Added", "movie", "Faltante", "102", 0, None, new_add_old_missing),
+    )
+    mem_conn.commit()
+
+    recs = get_dashboard_recommendations(mem_conn)
+    faltante_titles = [r["title"] for r in recs if r["rec_group"] == 3]
+    assert faltante_titles == ["Recently Missing", "Old Missing Recently Added"]

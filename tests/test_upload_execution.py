@@ -453,6 +453,25 @@ def test_append_and_get_logs(db_conn):
     assert "Error entry" in messages
 
 
+def test_get_upload_logs_tail_returns_last_lines_not_first(db_conn):
+    """Regression: "Ver Logs" always fetched offset=0 with a fixed limit —
+    fine while a job has few log lines, but a noisy one (several retries
+    across multiple image hosts, each logging multiple lines) can easily
+    produce more than that, and the modal was frozen on the SAME oldest
+    window forever, never showing anything logged after it. tail=True must
+    return the last `limit` lines instead."""
+    jid = _insert_job(db_conn)
+    for i in range(10):
+        append_upload_log(jid, "info", f"line {i}", stream="system", conn=db_conn)
+
+    head = get_upload_job_logs(jid, limit=3, offset=0, conn=db_conn)
+    assert [l["message"] for l in head["logs"]] == ["line 0", "line 1", "line 2"]
+
+    tail = get_upload_job_logs(jid, limit=3, tail=True, conn=db_conn)
+    assert [l["message"] for l in tail["logs"]] == ["line 7", "line 8", "line 9"]
+    assert tail["total"] == 10
+
+
 # ---------------------------------------------------------------------------
 # mark_phase_done / update_phase_progress (progress_json)
 # ---------------------------------------------------------------------------

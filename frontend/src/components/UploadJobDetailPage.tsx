@@ -479,7 +479,12 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
   const [loadingLogs, setLoadingLogs] = useState(true)
   const loadLogs = async () => {
     try {
-      const r = await getUploadJobLogs(jobId, 300, 0)
+      // tail=true: the LAST 300 lines, not the first — a noisy job (several
+      // retries across multiple image hosts, each logging many lines) can
+      // easily produce more than 300 total, and always fetching offset=0
+      // froze this on the same oldest window forever, never showing
+      // anything logged after it.
+      const r = await getUploadJobLogs(jobId, 300, 0, true)
       setLogs([...r.logs].sort((a, b) => a.created_at.localeCompare(b.created_at)))
     } catch { /* ignore */ } finally { setLoadingLogs(false) }
   }

@@ -402,7 +402,14 @@ def append_upload_log(
             conn.close()
 
 
-def get_upload_job_logs(job_id: int, limit: int = 500, offset: int = 0, conn=None) -> dict:
+def get_upload_job_logs(job_id: int, limit: int = 500, offset: int = 0, *, tail: bool = False, conn=None) -> dict:
+    """tail=True overrides `offset` to fetch the LAST `limit` lines instead
+    of the first — a noisy job (many retries across several image hosts,
+    each logging multiple lines) can easily produce more lines than a fixed
+    small `limit`, and a caller that always passes offset=0 would otherwise
+    be frozen on the SAME oldest window forever, never seeing anything
+    logged after it — exactly what made "Ver Logs" look stuck/stale during
+    a real per-host upload failure storm."""
     own = conn is None
     conn = conn or _get_db_conn()
     try:
@@ -410,6 +417,8 @@ def get_upload_job_logs(job_id: int, limit: int = 500, offset: int = 0, conn=Non
             "SELECT COUNT(*) FROM upload_job_logs WHERE upload_job_id = ?", (job_id,)
         ).fetchone()
         total = total_row[0] if total_row else 0
+        if tail:
+            offset = max(0, total - limit)
         rows = conn.execute(
             "SELECT * FROM upload_job_logs WHERE upload_job_id = ? ORDER BY id ASC LIMIT ? OFFSET ?",
             (job_id, limit, offset),

@@ -443,13 +443,14 @@ def get_upload_logs(
     job_id: int,
     limit: int = Query(default=500, ge=1, le=2000),
     offset: int = Query(default=0, ge=0),
+    tail: bool = Query(default=False),
     current_user: dict = Depends(require_auth),
 ):
     with _get_conn() as conn:
         job = exec_get_job(job_id, conn=conn)
         if not job:
             raise HTTPException(status_code=404, detail="Job no encontrado.")
-        result = get_upload_job_logs(job_id, limit=limit, offset=offset, conn=conn)
+        result = get_upload_job_logs(job_id, limit=limit, offset=offset, tail=tail, conn=conn)
 
     logs = [
         UploadJobLog(

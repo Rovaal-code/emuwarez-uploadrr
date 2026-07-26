@@ -112,6 +112,25 @@ def test_parse_uploadrr_progress_screenshots_with_counter():
     assert ok3 is False
 
 
+def test_parse_uploadrr_progress_screenshots_upload_real_colon_format():
+    """Regression: Uploadrr-EMU's real output (src/progress.py's
+    ProgressManager.screen_start/screen_up) is "Uploading screenshots: 0/3"
+    — WITH a colon — which the parenthesized-count pattern didn't account
+    for at all, so this phase was never recognized as running during a real
+    upload (including the whole per-host retry storm when a host fails),
+    falling back to the generic "En progreso" label instead of showing the
+    phase + its counter."""
+    phase, pct, ok = parse_uploadrr_progress("Uploading screenshots: 0/3")
+    assert phase == "screenshots_upload"
+    assert pct == 0
+    assert ok is False
+
+    phase2, pct2, ok2 = parse_uploadrr_progress("Uploading screenshots: 3/3")
+    assert phase2 == "screenshots_upload"
+    assert ok2 is True
+    assert pct2 == 100
+
+
 def test_parse_uploadrr_progress_hashing_and_torrent():
     phase, pct, ok = parse_uploadrr_progress("Hashing: 50.0%")
     assert phase == "hashing"

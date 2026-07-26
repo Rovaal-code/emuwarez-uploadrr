@@ -173,8 +173,15 @@ def parse_uploadrr_progress(fragment: str) -> Optional[tuple[str, int, Optional[
     if re.search(r"\bGenerating\s+(?:screenshots|screens|images)\b", clean, re.I):
         return "screenshots_generate", 0, None
 
-    # Subida de capturas: con o sin paréntesis.
-    m = re.search(r"\bUploading\s+(?:screenshots|screens|images)\s*\(?\s*(\d+)\s*/\s*(\d+)\s*\)?", clean, re.I)
+    # Subida de capturas: con o sin paréntesis, y con o sin ":" — el fork real
+    # (src/progress.py's ProgressManager.screen_start/screen_up) imprime
+    # literalmente "Uploading screenshots: 0/3" (con dos puntos), que el
+    # patrón anterior no reconocía en absoluto — la fase se quedaba sin
+    # ninguna running phase detectada durante TODA la subida/reintento real
+    # de capturas (incluida la tormenta de reintentos por host que falla),
+    # cayendo al texto genérico "En progreso" en vez de mostrar la fase y
+    # su contador real.
+    m = re.search(r"\bUploading\s+(?:screenshots|screens|images)\s*:?\s*\(?\s*(\d+)\s*/\s*(\d+)\s*\)?", clean, re.I)
     if m:
         cur, total = int(m.group(1)), max(1, int(m.group(2)))
         pct = int((cur / total) * 100)

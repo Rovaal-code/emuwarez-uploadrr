@@ -107,8 +107,9 @@ export async function getUploadJobLogs(
   jobId: number,
   limit = 500,
   offset = 0,
+  tail = false,
 ): Promise<UploadJobLogsResponse> {
-  return api.get<UploadJobLogsResponse>(`/uploads/${jobId}/logs?limit=${limit}&offset=${offset}`)
+  return api.get<UploadJobLogsResponse>(`/uploads/${jobId}/logs?limit=${limit}&offset=${offset}&tail=${tail}`)
 }
 
 export async function getUploadJobArtifacts(jobId: number): Promise<UploadArtifactsResponse> {

@@ -669,7 +669,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
             <InfoIcon text="Cuántas subidas pueden estar en curso a la vez, de principio a fin (verificación previa, nomenclatura, remux, hasheo del torrent y transferencia a eMuwarez) — no es solo una cola visual: las demás no dan ni un paso hasta que se libera un hueco. Sin límite las deja correr todas a la vez. El botón «Ver Máximo» estima cuántas puede aguantar este equipo según su RAM y CPU disponibles." />
           </label>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <select className="form-input form-select" style={{ width: 'auto', minWidth: 120 }} value={uploadMaxConcurrent} onChange={e => setUploadMaxConcurrent(Number(e.target.value))}>
+            <select className="form-input form-select" style={{ flex: 1 }} value={uploadMaxConcurrent} onChange={e => setUploadMaxConcurrent(Number(e.target.value))}>
               <option value={0}>Sin límite</option>
               {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => <option key={n} value={n}>{n}</option>)}
             </select>
@@ -683,20 +683,43 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
             </button>
           </div>
           {concurrencyEstimate && (
-            <span className="form-hint" style={{ display: 'block', marginTop: 6 }}>
-              Recomendado: <strong>{concurrencyEstimate.recommended}</strong>{' '}
-              (RAM disponible {concurrencyEstimate.available_ram_gb} GB → hasta {concurrencyEstimate.ram_limited_to};
-              {' '}{concurrencyEstimate.cpu_cores} núcleos → hasta {concurrencyEstimate.cpu_limited_to}).
-              {' '}Estimación orientativa (~{concurrencyEstimate.assumed_ram_gb_per_slot} GB por subida) — no tiene en cuenta la velocidad del disco o de la red.
-              {' '}<button
-                className="btn btn-ghost btn-sm"
-                type="button"
-                style={{ padding: '2px 8px', fontSize: 11 }}
-                onClick={() => setUploadMaxConcurrent(concurrencyEstimate.recommended)}
-              >
-                Usar {concurrencyEstimate.recommended}
-              </button>
-            </span>
+            <div className="card card-sm" style={{ marginTop: 10 }}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Recurso</th>
+                    <th>Disponible</th>
+                    <th>Subidas soportadas</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>RAM</td>
+                    <td>{concurrencyEstimate.available_ram_gb} GB</td>
+                    <td>{concurrencyEstimate.ram_limited_to}</td>
+                  </tr>
+                  <tr>
+                    <td>CPU</td>
+                    <td>{concurrencyEstimate.cpu_cores} núcleos</td>
+                    <td>{concurrencyEstimate.cpu_limited_to}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 12 }}>
+                <span className="form-hint">
+                  Recomendado: <strong style={{ color: 'var(--text-primary)' }}>{concurrencyEstimate.recommended}</strong>
+                  {' '}— estimación orientativa (~{concurrencyEstimate.assumed_ram_gb_per_slot} GB por subida), no tiene en cuenta la velocidad del disco o de la red.
+                </span>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  type="button"
+                  style={{ flexShrink: 0 }}
+                  onClick={() => setUploadMaxConcurrent(concurrencyEstimate.recommended)}
+                >
+                  Establecer {concurrencyEstimate.recommended}
+                </button>
+              </div>
+            </div>
           )}
         </div>
         <div className="form-group">

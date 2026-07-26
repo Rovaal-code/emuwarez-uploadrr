@@ -1231,6 +1231,12 @@ class UploadQueueBody(BaseModel):
     # Manual edits the user made in the wizard's "Ver Remux" card, carried
     # through to the server-side remux step that runs after the grace period.
     remux_overrides: Optional[Dict[str, TrackRemuxOverride]] = None
+    # The wizard's already-merged (base plan + remux_overrides) track table —
+    # persisted verbatim as remux_snapshot_json at job creation so the detail
+    # page shows it immediately instead of "Pendiente" until the pipeline
+    # actually runs the remux step (which then overwrites it with the real
+    # applied result — this is purely for display continuity in between).
+    remux_snapshot: Optional[dict] = None
     # The pre-upload checks result the wizard already computed and showed
     # the user before they confirmed — persisted verbatim on the new job so
     # its detail page's "Verificación pre-subida" section can show exactly

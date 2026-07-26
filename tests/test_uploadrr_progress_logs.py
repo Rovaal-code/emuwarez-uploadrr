@@ -21,9 +21,9 @@ from emuwarez_uploadrr.services.upload_execution import (
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("status,stage,expected", [
-    ("draft", None, "preflight"),
-    ("preflight", "preflight", "preflight"),
-    ("ready", None, "preflight"),
+    ("draft", None, "verificacion_presubida"),
+    ("preflight", "preflight", "verificacion_presubida"),
+    ("ready", None, "verificacion_presubida"),
     ("running", "config_staging", "config_staging"),
     ("running", "running", "running"),
     ("running", "finalizing", "finalizing"),
@@ -75,7 +75,7 @@ def _insert_job(conn, *, prepared_path, title="Test Movie"):
         """INSERT INTO upload_jobs
            (library_item_id, title, path, status, stage, source_path, prepared_path,
             uploadrr_command_json, created_at, updated_at)
-           VALUES (NULL, ?, ?, 'ready', 'preflight', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""",
+           VALUES (NULL, ?, ?, 'ready', 'verificacion_presubida', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""",
         (title, prepared_path, prepared_path, prepared_path, cmd_json),
     )
     conn.commit()
@@ -91,7 +91,7 @@ def test_upload_job_detail_api_exposes_progress_fields(client, auth_headers, db_
     resp = client.get(f"/api/uploads/{jid}", headers=auth_headers)
     assert resp.status_code == 200
     data = resp.json()
-    assert data["progress_phase"] == "preflight"
+    assert data["progress_phase"] == "verificacion_presubida"
     assert data["runtime_type"] == "uploadrr_emu"
     assert data["command_preview"] == "preview text"
 

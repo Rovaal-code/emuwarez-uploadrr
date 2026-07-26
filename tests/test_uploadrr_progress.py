@@ -4,11 +4,15 @@ mkvmerge --gui-mode parser, and the fixed-weight phase state builder."""
 from __future__ import annotations
 
 from emuwarez_uploadrr.services.uploadrr_progress import (
+    PHASE_KEY_ALIASES,
     PHASES,
+    RAW_SUBPHASE_WEIGHTS,
+    RUNNING_DISPLAY_ORDER,
     RUNNING_SUB_PHASE_ORDER,
     build_phase_state,
     parse_mkvmerge_gui_progress,
     parse_uploadrr_progress,
+    resolve_display_progress,
     with_phase_timestamps,
 )
 
@@ -17,10 +21,62 @@ def test_phase_weights_sum_to_100():
     assert sum(weight for _key, _label, weight in PHASES) == 100
 
 
-def test_running_sub_phases_match_phases_table():
+def test_running_display_order_keys_match_phases_table():
+    # RUNNING_SUB_PHASE_ORDER holds raw (pre-merge) keys, several of which no
+    # longer have their own PHASES row (see PHASE_KEY_ALIASES) — the merged/
+    # displayed sequence is what must line up with PHASES.
     phase_keys = [key for key, _label, _weight in PHASES]
-    for key in RUNNING_SUB_PHASE_ORDER:
+    for key in RUNNING_DISPLAY_ORDER:
         assert key in phase_keys
+
+
+def test_raw_subphase_weights_cover_every_running_sub_phase():
+    for key in RUNNING_SUB_PHASE_ORDER:
+        assert key in RAW_SUBPHASE_WEIGHTS
+
+
+def test_merged_group_raw_weights_sum_to_displayed_weight():
+    # Each merged phase's own PHASES weight must equal the sum of its raw
+    # members' weights — otherwise resolve_display_progress()'s interpolation
+    # would change the job-wide global_pct total versus the old, unmerged list.
+    phase_weights = {key: weight for key, _label, weight in PHASES}
+    groups: dict[str, list[str]] = {}
+    for raw_key in RUNNING_SUB_PHASE_ORDER:
+        display_key = PHASE_KEY_ALIASES.get(raw_key, raw_key)
+        groups.setdefault(display_key, []).append(raw_key)
+    for display_key, members in groups.items():
+        if len(members) <= 1:
+            continue
+        assert sum(RAW_SUBPHASE_WEIGHTS[m] for m in members) == phase_weights[display_key]
+
+
+def test_resolve_display_progress_unmerged_passthrough():
+    assert resolve_display_progress("queue_processing", 100) == ("queue_processing", 100)
+    assert resolve_display_progress("uploading_emu", 0) == ("uploading_emu", 0)
+
+
+def test_resolve_display_progress_metadata_processing_group():
+    # video_processing(2) + mediainfo_export(3) + video_metadata(2) + duplicates(3) = 10
+    assert resolve_display_progress("video_processing", 100) == ("metadata_processing", 20)
+    assert resolve_display_progress("mediainfo_export", 100) == ("metadata_processing", 50)
+    assert resolve_display_progress("video_metadata", 100) == ("metadata_processing", 70)
+    assert resolve_display_progress("duplicates", 50) == ("metadata_processing", 85)
+    assert resolve_display_progress("duplicates", 100) == ("metadata_processing", 100)
+
+
+def test_resolve_display_progress_screenshots_group():
+    # screenshots_generate(10) + screenshots_upload(10) = 20, equal shares.
+    assert resolve_display_progress("screenshots_generate", 0) == ("screenshots", 0)
+    assert resolve_display_progress("screenshots_generate", 100) == ("screenshots", 50)
+    assert resolve_display_progress("screenshots_upload", 0) == ("screenshots", 50)
+    assert resolve_display_progress("screenshots_upload", 100) == ("screenshots", 100)
+
+
+def test_resolve_display_progress_hash_torrent_group():
+    # hashing(20) + torrent_create(8) = 28.
+    assert resolve_display_progress("hashing", 0) == ("hash_torrent", 0)
+    assert resolve_display_progress("hashing", 100) == ("hash_torrent", round(100 * 20 / 28))
+    assert resolve_display_progress("torrent_create", 100) == ("hash_torrent", 100)
 
 
 def test_parse_uploadrr_progress_ignores_unrelated_text():
@@ -89,29 +145,29 @@ def test_build_phase_state_all_pending():
 
 
 def test_build_phase_state_partial_progress():
-    state = build_phase_state(["integrity", "nomenclature"], current="remux", current_pct=50)
+    state = build_phase_state(["verificacion_presubida", "nomenclature"], current="remux", current_pct=50)
     by_key = {p["key"]: p for p in state["phases"]}
-    assert by_key["integrity"]["status"] == "done" and by_key["integrity"]["pct"] == 100
+    assert by_key["verificacion_presubida"]["status"] == "done" and by_key["verificacion_presubida"]["pct"] == 100
     assert by_key["nomenclature"]["status"] == "done"
     assert by_key["remux"]["status"] == "running" and by_key["remux"]["pct"] == 50
-    assert by_key["preflight"]["status"] == "pending" and by_key["preflight"]["pct"] == 0
-    assert by_key["queue_processing"]["status"] == "pending"
-    # 5 + 5 + (15 * 0.5) = 17.5 -> rounds to 18
-    assert state["global_pct"] == 18
+    assert by_key["queue_processing"]["status"] == "pending" and by_key["queue_processing"]["pct"] == 0
+    assert by_key["metadata_processing"]["status"] == "pending"
+    # 10 + 5 + (15 * 0.5) = 22.5 -> banker's rounding -> 22
+    assert state["global_pct"] == 22
 
 
 def test_build_phase_state_running_sub_phase_advances():
-    # queue_processing/video_processing/mediainfo_export already done, hashing
-    # in progress at 50%: (5+5+15+5) wrapper phases + (2+2+3) earlier running
-    # sub-phases + 20*0.5 hashing = 30 + 7 + 10 = 47
+    # verificación presubida/nomenclatura/remux/inicio de uploader already
+    # done, procesamiento de metadatos in progress at 50%:
+    # (10+5+15+2) + 10*0.5 = 32 + 5 = 37
     state = build_phase_state(
-        ["integrity", "nomenclature", "remux", "preflight", "queue_processing", "video_processing", "mediainfo_export"],
-        current="hashing", current_pct=50,
+        ["verificacion_presubida", "nomenclature", "remux", "queue_processing"],
+        current="metadata_processing", current_pct=50,
     )
-    assert state["global_pct"] == 47
+    assert state["global_pct"] == 37
     by_key = {p["key"]: p for p in state["phases"]}
-    assert by_key["hashing"]["status"] == "running"
-    assert by_key["torrent_create"]["status"] == "pending"
+    assert by_key["metadata_processing"]["status"] == "running"
+    assert by_key["screenshots"]["status"] == "pending"
 
 
 def test_build_phase_state_all_done():
@@ -126,32 +182,32 @@ def test_build_phase_state_all_done():
 # ---------------------------------------------------------------------------
 
 def test_with_phase_timestamps_stamps_running_and_done():
-    state = build_phase_state([], current="integrity", current_pct=0)
+    state = build_phase_state([], current="verificacion_presubida", current_pct=0)
     stamped = with_phase_timestamps(state, None, now="2026-01-01T00:00:00+00:00")
     by_key = {p["key"]: p for p in stamped["phases"]}
-    assert by_key["integrity"]["started_at"] == "2026-01-01T00:00:00+00:00"
-    assert by_key["integrity"]["finished_at"] is None
+    assert by_key["verificacion_presubida"]["started_at"] == "2026-01-01T00:00:00+00:00"
+    assert by_key["verificacion_presubida"]["finished_at"] is None
     assert by_key["nomenclature"]["started_at"] is None
 
 
 def test_with_phase_timestamps_carries_forward_started_at():
-    # First call: integrity starts.
-    state1 = build_phase_state([], current="integrity", current_pct=0)
+    # First call: verificación presubida starts.
+    state1 = build_phase_state([], current="verificacion_presubida", current_pct=0)
     stamped1 = with_phase_timestamps(state1, None, now="2026-01-01T00:00:00+00:00")
 
-    # Later call: integrity is now done — started_at must be preserved from
-    # the first call, not overwritten to the second call's "now".
-    state2 = build_phase_state(["integrity"])
+    # Later call: it's now done — started_at must be preserved from the
+    # first call, not overwritten to the second call's "now".
+    state2 = build_phase_state(["verificacion_presubida"])
     stamped2 = with_phase_timestamps(state2, stamped1["phases"], now="2026-01-01T00:00:10+00:00")
 
     by_key = {p["key"]: p for p in stamped2["phases"]}
-    assert by_key["integrity"]["started_at"] == "2026-01-01T00:00:00+00:00"
-    assert by_key["integrity"]["finished_at"] == "2026-01-01T00:00:10+00:00"
+    assert by_key["verificacion_presubida"]["started_at"] == "2026-01-01T00:00:00+00:00"
+    assert by_key["verificacion_presubida"]["finished_at"] == "2026-01-01T00:00:10+00:00"
 
 
 def test_with_phase_timestamps_pending_phase_has_no_timestamps():
-    state = build_phase_state([], current="integrity", current_pct=0)
+    state = build_phase_state([], current="verificacion_presubida", current_pct=0)
     stamped = with_phase_timestamps(state, None, now="2026-01-01T00:00:00+00:00")
     by_key = {p["key"]: p for p in stamped["phases"]}
-    assert by_key["hashing"]["started_at"] is None
-    assert by_key["hashing"]["finished_at"] is None
+    assert by_key["hash_torrent"]["started_at"] is None
+    assert by_key["hash_torrent"]["finished_at"] is None

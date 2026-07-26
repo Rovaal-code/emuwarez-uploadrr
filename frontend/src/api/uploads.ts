@@ -33,10 +33,15 @@ export async function queueUpload(
   itemId: number,
   remuxOverrides?: Record<number, TrackRemuxOverride>,
   checks?: UploadChecksResult | null,
+  // The wizard's already-merged (base plan + remuxOverrides) track table —
+  // persisted immediately so the job detail page doesn't show "Pendiente"
+  // until the pipeline actually runs the remux step.
+  remuxSnapshot?: { ordered_tracks: unknown[] } | null,
 ): Promise<UploadQueueResult> {
   return api.post<UploadQueueResult>(`/library/${itemId}/upload/queue`, {
     remux_overrides: remuxOverrides ?? null,
     checks: checks ?? null,
+    remux_snapshot: remuxSnapshot ?? null,
   })
 }
 

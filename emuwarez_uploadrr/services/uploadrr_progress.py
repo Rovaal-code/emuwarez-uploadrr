@@ -23,28 +23,25 @@ import re
 from typing import Optional
 
 # (stage key, display label, weight-out-of-100). Order matters — the running
-# sub-phases (everything after "preflight") are also the sequence Uploadrr-EMU
-# itself reports them in, used by advance_running_phase() to mark every
-# earlier running sub-phase done once a later one is seen.
+# sub-phases (everything after "verificacion_presubida") are also the
+# sequence Uploadrr-EMU itself reports them in, used by
+# advance_running_phase() to mark every earlier running sub-phase done once
+# a later one is seen.
+#
+# Several rows here are a merge of what used to be multiple separate phases
+# (see PHASE_KEY_ALIASES below) — "duplicates" was dropped as its own row
+# (nothing else in the codebase branches on its result, it was purely a
+# progress marker) and its weight folded into "metadata_processing", the
+# group it chronologically sits inside.
 PHASES: list[tuple[str, str, int]] = [
-    ("integrity", "Comprobación de integridad", 5),
+    ("verificacion_presubida", "Verificación presubida", 10),  # integrity(5) + preflight(5)
     ("nomenclature", "Aplicación de nomenclatura", 5),
     ("remux", "Reordenación de pistas", 15),
-    ("preflight", "Verificación previa", 5),
-    ("queue_processing", "Inicio de Uploadrr", 2),
-    ("video_processing", "Procesamiento de vídeo", 2),
-    ("mediainfo_export", "Exportación de MediaInfo", 3),
-    ("video_metadata", "Procesamiento de metadatos", 2),
-    ("duplicates", "Búsqueda de duplicados", 3),
-    ("screenshots_generate", "Generación de capturas", 10),
-    ("screenshots_upload", "Subida de capturas", 10),
-    ("hashing", "Cálculo del hash del torrent", 20),
-    ("torrent_create", "Creación del torrent", 8),
+    ("queue_processing", "Inicio de Uploader", 2),
+    ("metadata_processing", "Procesamiento de metadatos", 10),  # video_processing(2)+mediainfo_export(3)+video_metadata(2)+duplicates(3)
+    ("screenshots", "Generación y subida de capturas", 20),  # screenshots_generate(10)+screenshots_upload(10)
+    ("hash_torrent", "Cálculo de hash del torrent", 28),  # hashing(20)+torrent_create(8)
     ("uploading_emu", "Subida a eMuwarez", 7),
-    # Uploadrr only reaches this once the eMuwarez upload itself succeeded —
-    # adding the finished torrent to qBittorrent for seeding. Weight taken
-    # from uploading_emu (was 10): that time already covered this tail end
-    # silently before this phase existed as its own row.
     ("qbittorrent_add", "Subida a qBittorrent", 3),
 ]
 
@@ -53,12 +50,80 @@ PHASE_LABELS = {key: label for key, label, _weight in PHASES}
 PHASE_WEIGHTS = {key: weight for key, _label, weight in PHASES}
 
 # The sub-phases Uploadrr-EMU's own subprocess output walks through, in
-# order — everything parse_uploadrr_progress() can identify.
+# order — everything parse_uploadrr_progress() can identify. These are RAW
+# keys (one per regex trigger) — parse_uploadrr_progress() is unchanged and
+# still reports at this granularity; PHASE_KEY_ALIASES below is what rolls
+# several of them up into a single displayed PHASES row.
 RUNNING_SUB_PHASE_ORDER = [
     "queue_processing", "video_processing", "mediainfo_export", "video_metadata",
     "duplicates", "screenshots_generate", "screenshots_upload", "hashing",
     "torrent_create", "uploading_emu", "qbittorrent_add",
 ]
+
+# Raw sub-phase -> merged, displayed PHASES key. A raw key absent from this
+# map displays as itself (queue_processing/uploading_emu/qbittorrent_add are
+# not merged with anything).
+PHASE_KEY_ALIASES: dict[str, str] = {
+    "video_processing": "metadata_processing",
+    "mediainfo_export": "metadata_processing",
+    "video_metadata": "metadata_processing",
+    "duplicates": "metadata_processing",
+    "screenshots_generate": "screenshots",
+    "screenshots_upload": "screenshots",
+    "hashing": "hash_torrent",
+    "torrent_create": "hash_torrent",
+}
+
+# Original per-raw-sub-phase weights (pre-merge) — used only to interpolate
+# a merged phase's displayed 0-100 pct as its raw members fire in sequence;
+# never rendered directly. Each merged group's members sum to exactly that
+# group's own PHASE_WEIGHTS entry, so this interpolation never changes the
+# job-wide global_pct total versus the old, unmerged phase list.
+RAW_SUBPHASE_WEIGHTS: dict[str, int] = {
+    "queue_processing": 2,
+    "video_processing": 2,
+    "mediainfo_export": 3,
+    "video_metadata": 2,
+    "duplicates": 3,
+    "screenshots_generate": 10,
+    "screenshots_upload": 10,
+    "hashing": 20,
+    "torrent_create": 8,
+    "uploading_emu": 7,
+    "qbittorrent_add": 3,
+}
+
+# Deduped, first-appearance order of DISPLAYED (merged) phase keys within
+# the Uploadrr-EMU running window — what advance_running_phase() marks
+# started/done against, instead of the raw per-trigger keys.
+RUNNING_DISPLAY_ORDER: list[str] = []
+for _raw_key in RUNNING_SUB_PHASE_ORDER:
+    _display_key = PHASE_KEY_ALIASES.get(_raw_key, _raw_key)
+    if _display_key not in RUNNING_DISPLAY_ORDER:
+        RUNNING_DISPLAY_ORDER.append(_display_key)
+
+
+def resolve_display_progress(raw_key: str, raw_pct: int) -> tuple[str, int]:
+    """Map a raw Uploadrr-EMU sub-phase key + its own 0-100 pct to the
+    merged, displayed phase key and an interpolated 0-100 pct within that
+    merged phase.
+
+    For an unmerged raw key this is a no-op passthrough. For a merged group
+    (e.g. hashing+torrent_create), the group's first raw trigger starts the
+    displayed phase near 0% and only the LAST raw member reaching 100%
+    completes it — weighted by each raw member's own share of the group,
+    so progress within the group still advances smoothly instead of
+    jumping between fixed fractions.
+    """
+    display_key = PHASE_KEY_ALIASES.get(raw_key, raw_key)
+    group = [k for k in RUNNING_SUB_PHASE_ORDER if PHASE_KEY_ALIASES.get(k, k) == display_key]
+    if len(group) <= 1:
+        return display_key, max(0, min(100, raw_pct))
+    group_total = sum(RAW_SUBPHASE_WEIGHTS[k] for k in group)
+    before = sum(RAW_SUBPHASE_WEIGHTS[k] for k in group[: group.index(raw_key)])
+    this_weight = RAW_SUBPHASE_WEIGHTS[raw_key]
+    display_pct = round(100 * (before + this_weight * (raw_pct / 100.0)) / group_total)
+    return display_key, max(0, min(100, display_pct))
 
 
 def _strip_ansi(text: str) -> str:

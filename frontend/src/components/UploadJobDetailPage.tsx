@@ -319,19 +319,13 @@ const PHASE_STATUS_TEXT: Record<string, string> = {
 // yet. Uploadrr-EMU's own internal phases (queue -> ... -> uploading to
 // eMuwarez) are each their own row, not collapsed into one "Subiendo" bucket.
 const DEFAULT_PHASES: UploadProgressPhase[] = [
-  { key: 'integrity', label: 'Comprobación de integridad', status: 'pending', pct: 0 },
+  { key: 'verificacion_presubida', label: 'Verificación presubida', status: 'pending', pct: 0 },
   { key: 'nomenclature', label: 'Aplicación de nomenclatura', status: 'pending', pct: 0 },
   { key: 'remux', label: 'Reordenación de pistas', status: 'pending', pct: 0 },
-  { key: 'preflight', label: 'Verificación previa', status: 'pending', pct: 0 },
-  { key: 'queue_processing', label: 'Inicio de Uploadrr', status: 'pending', pct: 0 },
-  { key: 'video_processing', label: 'Procesamiento de vídeo', status: 'pending', pct: 0 },
-  { key: 'mediainfo_export', label: 'Exportación de MediaInfo', status: 'pending', pct: 0 },
-  { key: 'video_metadata', label: 'Procesamiento de metadatos', status: 'pending', pct: 0 },
-  { key: 'duplicates', label: 'Búsqueda de duplicados', status: 'pending', pct: 0 },
-  { key: 'screenshots_generate', label: 'Generación de capturas', status: 'pending', pct: 0 },
-  { key: 'screenshots_upload', label: 'Subida de capturas', status: 'pending', pct: 0 },
-  { key: 'hashing', label: 'Cálculo del hash del torrent', status: 'pending', pct: 0 },
-  { key: 'torrent_create', label: 'Creación del torrent', status: 'pending', pct: 0 },
+  { key: 'queue_processing', label: 'Inicio de Uploader', status: 'pending', pct: 0 },
+  { key: 'metadata_processing', label: 'Procesamiento de metadatos', status: 'pending', pct: 0 },
+  { key: 'screenshots', label: 'Generación y subida de capturas', status: 'pending', pct: 0 },
+  { key: 'hash_torrent', label: 'Cálculo de hash del torrent', status: 'pending', pct: 0 },
   { key: 'uploading_emu', label: 'Subida a eMuwarez', status: 'pending', pct: 0 },
   { key: 'qbittorrent_add', label: 'Subida a qBittorrent', status: 'pending', pct: 0 },
 ]
@@ -594,8 +588,9 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
                       ? (() => {
                           const info = currentPhaseInfo(job)
                           const label = info?.label ?? phaseLabel(job.progress_phase)
+                          const counter = info?.counterText ? ` (${info.counterText})` : ''
                           const elapsed = progressCounter(job)
-                          return `${label}${elapsed ? ` · ${elapsed}` : ''}`
+                          return `${label}${counter}${elapsed ? ` · ${elapsed}` : ''}`
                         })()
                       : '–'}
                   </span>

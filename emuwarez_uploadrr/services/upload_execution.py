@@ -26,9 +26,11 @@ from typing import Any
 from ..database import connect, init_db, row_to_dict, rows_to_dicts, get_setting_canonical
 from .upload_result_parser import classify_upload_result, build_error_summary
 from .uploadrr_progress import (
+    RUNNING_DISPLAY_ORDER,
     RUNNING_SUB_PHASE_ORDER,
     build_phase_state,
     parse_uploadrr_progress,
+    resolve_display_progress,
     with_phase_timestamps,
 )
 from .uploadrr_contract import (
@@ -38,13 +40,16 @@ from .uploadrr_contract import (
     render_command_preview,
 )
 from .uploadrr_config_staging import (
+    SCREENS_API_KEY_HOSTS,
     default_uploadrr_config_path,
     read_config_lines,
     restore_config_from_backup,
     stage_emu_config,
+    stage_image_hosts,
     stage_tmdb_key,
     write_staged_config,
 )
+from .image_hosts import fallback_order, get_host_key
 
 logger = logging.getLogger("emuwarez.upload")
 
@@ -56,7 +61,7 @@ DELETE_CONFIRMATION_TOKEN = "BORRAR_SUBIDA"
 # upload_jobs.progress_json — see mark_phase_done/update_phase_progress below
 # and uploadrr_progress.py's PHASES table.
 PROGRESS_PHASES = (
-    "staging", "queued", "integrity", "nomenclature", "remux", "preflight",
+    "staging", "queued", "verificacion_presubida", "nomenclature", "remux",
     "config_staging", "running", "finalizing", "succeeded", "failed",
     "cancelled", "timeout",
 )
@@ -77,11 +82,12 @@ def compute_progress_phase(status: str, stage: str | None) -> str:
         return "staging"
     if status == "preparing":
         # Server-side prep queued jobs go through before the real Uploadrr
-        # subprocess: integrity check -> nomenclature rename -> track remux
-        # -> preflight, all against the SAME job row the user is watching.
-        if stage in ("integrity", "nomenclature", "remux"):
+        # subprocess: verificación presubida (integrity + generic preconditions)
+        # -> nomenclature rename -> track remux -> final preflight, all
+        # against the SAME job row the user is watching.
+        if stage in ("verificacion_presubida", "nomenclature", "remux"):
             return stage
-        return "preflight"
+        return "verificacion_presubida"
     if status == "running":
         if stage == "config_staging":
             return "config_staging"
@@ -89,9 +95,9 @@ def compute_progress_phase(status: str, stage: str | None) -> str:
             return "finalizing"
         return "running"
     if status == "ready":
-        return "preflight"
+        return "verificacion_presubida"
     if status in ("draft", "preflight"):
-        return "preflight"
+        return "verificacion_presubida"
     return "queued"
 
 VIDEO_EXTENSIONS = {
@@ -679,6 +685,11 @@ def _stage_uploadrr_config(job_id: int, cwd: str) -> Path | None:
     try:
         tmdb_key = get_setting_canonical(conn, "tmdb.api_key")
         emu_key = get_setting_canonical(conn, "emu.api_key")
+        img_hosts = fallback_order(conn)
+        img_api_keys = {
+            host_id: key for host_id in SCREENS_API_KEY_HOSTS
+            if (key := get_host_key(conn, host_id))
+        }
     finally:
         conn.close()
 
@@ -691,6 +702,13 @@ def _stage_uploadrr_config(job_id: int, cwd: str) -> Path | None:
         if emu_key:
             lines, _msg = stage_emu_config(lines, api_key=emu_key)
             changed = True
+        if img_hosts:
+            # Always staged (imgbox is always in fallback_order()'s result,
+            # even with nothing else enabled) — this is what makes the
+            # configured preference (e.g. Pixhost) actually reach Uploadrr-EMU
+            # instead of it silently defaulting to its own img_hosts order.
+            lines, _msg = stage_image_hosts(lines, img_hosts=img_hosts, api_keys=img_api_keys)
+            changed = True
         if not changed:
             append_upload_log(
                 job_id, "warning",
@@ -701,7 +719,7 @@ def _stage_uploadrr_config(job_id: int, cwd: str) -> Path | None:
         write_staged_config(config_path, lines)
         append_upload_log(
             job_id, "info",
-            "config.yaml stageado (DEFAULT.tmdb / TRACKERS.EMU.api_key). Backup creado.",
+            "config.yaml stageado (DEFAULT.tmdb / TRACKERS.EMU.api_key / SCREENS.img_hosts). Backup creado.",
             stream="system",
         )
         return config_path
@@ -898,17 +916,28 @@ def update_phase_progress(job_id: int, stage_key: str, pct: int) -> None:
 def advance_running_phase(job_id: int, phase_key: str, pct: int) -> None:
     """Update progress_json as Uploadrr-EMU's own output reports a new
     internal sub-phase (queue -> video processing -> MediaInfo -> ... ->
-    uploading to eMuwarez). Uploadrr-EMU reports these strictly in order, so
-    every sub-phase before `phase_key` is marked done, and `phase_key` itself
-    becomes the current one."""
+    uploading to eMuwarez). Uploadrr-EMU reports these strictly in order.
+
+    Several raw sub-phases now share one displayed PHASES row (see
+    uploadrr_progress.PHASE_KEY_ALIASES) — resolve_display_progress() maps
+    `phase_key`'s raw progress to that merged key + an interpolated pct, and
+    every DISPLAYED phase before it is marked done, same retroactive
+    safety net as before (just over merged keys instead of raw ones)."""
     if phase_key not in RUNNING_SUB_PHASE_ORDER:
         return
+    display_key, display_pct = resolve_display_progress(phase_key, pct)
     state = _read_progress_state(job_id)
     completed = {p["key"] for p in state.get("phases", []) if p.get("status") == "done"}
-    idx = RUNNING_SUB_PHASE_ORDER.index(phase_key)
-    completed.update(RUNNING_SUB_PHASE_ORDER[:idx])
-    completed.discard(phase_key)
-    new_state = build_phase_state(list(completed), current=phase_key, current_pct=pct)
+    idx = RUNNING_DISPLAY_ORDER.index(display_key)
+    completed.update(RUNNING_DISPLAY_ORDER[:idx])
+    completed.discard(display_key)
+    # Never regress the merged phase's displayed pct — a later raw member
+    # firing at a lower interpolated pct than an earlier one already showed
+    # (shouldn't normally happen, but stay defensive) must not roll it back.
+    current_row = next((p for p in state.get("phases", []) if p["key"] == display_key), None)
+    if current_row and current_row.get("status") == "running":
+        display_pct = max(display_pct, current_row.get("pct", 0))
+    new_state = build_phase_state(list(completed), current=display_key, current_pct=display_pct)
     _write_progress_json(job_id, with_phase_timestamps(new_state, state.get("phases")))
 
 

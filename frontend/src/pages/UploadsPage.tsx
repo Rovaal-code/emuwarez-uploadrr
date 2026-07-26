@@ -205,7 +205,7 @@ function JobRow({ job, instances, onOpen, indent, retryToggle, onCancel, onRetry
         ) : (job.status === 'preparing' || job.status === 'running') ? (
           <span className="badge status-queued" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
             <span className="spinner" style={{ width: 10, height: 10, borderWidth: 2 }} />
-            {phaseLabelText}{phaseElapsedText ? ` · ${phaseElapsedText}` : ''}
+            {phaseLabelText}{phaseInfo?.counterText ? ` (${phaseInfo.counterText})` : ''}{phaseElapsedText ? ` · ${phaseElapsedText}` : ''}
           </span>
         ) : '–'}
       </td>

@@ -72,14 +72,17 @@ export function latestInChain(jobs: UploadJob[]): UploadJob | null {
 
 // Human labels for the computed progress_phase (the coarse string, not the %).
 const PHASE_LABEL: Record<string, string> = {
-  preflight: 'Verificando (preflight)',
   staging: 'Generando nomenclatura',
   queued: 'En cola',
-  integrity: 'Comprobando integridad del archivo',
+  verificacion_presubida: 'Verificación presubida',
   nomenclature: 'Aplicando nomenclatura',
   remux: 'Reordenando/renombrando pistas',
   config_staging: 'Preparando configuración',
-  running: 'Subiendo a eMuwarez',
+  // Repliegue genérico cuando no hay ninguna fase "running" detectable (p.ej.
+  // Uploadrr-EMU atascado reintentando en silencio) — deliberadamente NO usa
+  // el mismo texto que la fase real "Subida a eMuwarez" (uploading_emu), o
+  // parece que el job saltó de fase cuando en realidad no se detectó ninguna.
+  running: 'En progreso',
   finalizing: 'Finalizando',
   succeeded: 'Completado',
   failed: 'Fallido',
@@ -100,19 +103,13 @@ export function phaseLabel(phase?: string | null): string {
 // a narrow column/panel, so none of these run longer than the previous
 // longest phase label ("Reordenando/renombrando pistas", 31 chars).
 const PROGRESS_ACTION_LABEL: Record<string, string> = {
-  integrity: 'Comprobando integridad',
+  verificacion_presubida: 'Verificando',
   nomenclature: 'Aplicando nomenclatura',
   remux: 'Reordenando pistas',
-  preflight: 'Verificando',
-  queue_processing: 'Iniciando Uploadrr',
-  video_processing: 'Procesando vídeo',
-  mediainfo_export: 'Exportando MediaInfo',
-  video_metadata: 'Procesando metadatos',
-  duplicates: 'Buscando duplicados',
-  screenshots_generate: 'Generando capturas',
-  screenshots_upload: 'Subiendo capturas',
-  hashing: 'Calculando hash del torrent',
-  torrent_create: 'Creando torrent',
+  queue_processing: 'Iniciando Uploader',
+  metadata_processing: 'Procesando metadatos',
+  screenshots: 'Generando/subiendo capturas',
+  hash_torrent: 'Calculando hash del torrent',
   uploading_emu: 'Subiendo a eMuwarez',
   qbittorrent_add: 'Subiendo a qBittorrent',
 }

@@ -268,7 +268,9 @@ def queue_upload(
                 continue
     checks = body.checks.model_dump() if body.checks else None
     with _get_conn() as conn:
-        result = queue_upload_for_item(item_id, remux_overrides=overrides, checks=checks, conn=conn)
+        result = queue_upload_for_item(
+            item_id, remux_overrides=overrides, remux_snapshot=body.remux_snapshot, checks=checks, conn=conn,
+        )
 
     job = result.get("job")
     return UploadQueueResponse(

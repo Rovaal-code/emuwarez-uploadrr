@@ -6,6 +6,7 @@ tests) never touch a real Uploadrr/ installation.
 from __future__ import annotations
 
 from emuwarez_uploadrr.services.uploadrr_config_staging import (
+    SCREENS_API_KEY_HOSTS,
     backup_config,
     build_redacted_preview,
     diff_staged_changes,
@@ -13,6 +14,7 @@ from emuwarez_uploadrr.services.uploadrr_config_staging import (
     read_config_lines,
     restore_config_from_backup,
     stage_emu_config,
+    stage_image_hosts,
     stage_tmdb_key,
     write_staged_config,
 )
@@ -42,6 +44,39 @@ def test_stage_emu_config_sets_api_key_and_anon():
     text = "\n".join(staged)
     assert "EMU_REAL_KEY" in text
     assert "anon: True" in text or "anon: true" in text.lower()
+
+
+def test_stage_image_hosts_sets_ordered_img_hosts_list():
+    lines = ["SCREENS:", "  img_hosts: [imgbox]"]
+    staged, message = stage_image_hosts(lines, img_hosts=["pixhost", "imgbb", "imgbox"])
+    text = "\n".join(staged)
+    assert "img_hosts: [pixhost, imgbb, imgbox]" in text
+    assert "creado" in message or "actualizado" in message
+
+
+def test_stage_image_hosts_sets_api_keys_inline_mapping():
+    lines: list[str] = []
+    staged, _ = stage_image_hosts(lines, api_keys={"imgbb": "IMGBB_REAL_KEY", "ptpimg": "PTPIMG_REAL_KEY"})
+    text = "\n".join(staged)
+    assert "IMGBB_REAL_KEY" in text
+    assert "PTPIMG_REAL_KEY" in text
+    assert "API_KEYS" in text
+
+
+def test_stage_image_hosts_skips_untouched_sections_when_nothing_given():
+    lines = ["SCREENS:", "  img_hosts: [imgbox]"]
+    staged, message = stage_image_hosts(lines)
+    assert staged == lines
+    assert message == "SCREENS sin cambios"
+
+
+def test_stage_image_hosts_only_stages_known_key_hosts():
+    # hamster/imghost.dev take a key in our own catalog but aren't part of
+    # SCREENS.API_KEYS in the real fork config — callers must filter to
+    # SCREENS_API_KEY_HOSTS before calling this (upload_execution.py does).
+    assert "hamster" not in SCREENS_API_KEY_HOSTS
+    assert "imghost" not in SCREENS_API_KEY_HOSTS
+    assert set(SCREENS_API_KEY_HOSTS) == {"imgbb", "ptpimg", "lensdump", "ptscreens", "onlyimage"}
 
 
 def test_backup_config_creates_bak_file(tmp_path):

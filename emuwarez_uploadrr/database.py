@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 26
+SCHEMA_VERSION = 27
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -469,6 +469,26 @@ def _migrate_upload_jobs_snapshots(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE upload_jobs ADD COLUMN {col} {col_def}")
         except sqlite3.OperationalError:
             pass
+
+
+def _migrate_upload_jobs_manual_refs(conn: sqlite3.Connection) -> None:
+    """Add nomenclature_proposal_id/remux_overrides_json to upload_jobs — for
+    a manual upload, these pin the exact nomenclature proposal the user
+    confirmed in the wizard (so a retry can reuse it instead of falling back
+    to "whichever is latest") and persist the per-track remux overrides
+    (previously only kept in the in-memory _PENDING_REMUX_OVERRIDES dict,
+    lost on a process restart and unavailable to a retry's new job row).
+    An automatic (staging-pipeline) job never sets nomenclature_proposal_id —
+    its absence is what queue_retry_for_job() uses to tell manual from
+    automatic jobs apart."""
+    try:
+        conn.execute("ALTER TABLE upload_jobs ADD COLUMN nomenclature_proposal_id INTEGER")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE upload_jobs ADD COLUMN remux_overrides_json TEXT")
+    except sqlite3.OperationalError:
+        pass
 
 
 def _migrate_upload_jobs_checks_snapshot(conn: sqlite3.Connection) -> None:
@@ -1347,6 +1367,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_library_items_track_remux(conn)
         _migrate_upload_jobs_queue(conn)
         _migrate_upload_jobs_snapshots(conn)
+        _migrate_upload_jobs_manual_refs(conn)
         _migrate_upload_jobs_checks_snapshot(conn)
         _migrate_nomenclature_year_series(conn)
         _migrate_source_engine_cache(conn)

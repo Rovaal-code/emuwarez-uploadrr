@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import type { EmuSource, EmuProvider, NomenclatureFields, FieldsPreviewResult, TrackRemuxPreview, TrackRemuxOverride, SourceComparison } from '../api/nomenclature'
+import type { EmuSource, EmuProvider, NomenclatureFields, FieldsPreviewResult, TrackRemuxPreview, TrackRemuxOverride, TrackRemuxTrack, SourceComparison } from '../api/nomenclature'
 import {
   getEmuSources,
   getEmuProviders,
@@ -83,9 +83,9 @@ function TableLoadingSpinner({ label = 'Cargando…' }: { label?: string }) {
 // accesible…") while its own result hasn't landed yet, since liveChecks only
 // grows with COMPLETED checks: its length is the index of the one running now.
 // Accessibility/integrity are no longer checked here — they're checked for
-// real once the upload is queued (services/upload_queue.py's "integrity"
-// stage, which already runs MediaInfo/mkvmerge on the file for the
-// nomenclature/remux steps), so a failure lands with a specific reason
+// real once the upload is queued (services/upload_queue.py's
+// "verificacion_presubida" stage, which already runs MediaInfo/mkvmerge on
+// the file for the nomenclature/remux steps), so a failure lands with a specific reason
 // instead of duplicating that work upfront.
 // A season target collapses "renameable" into one "season_pack" check
 // (run_upload_checks' season branch — see upload_checks.py).
@@ -160,6 +160,25 @@ function MediaInfoTable({ report, onSourceToolClick }: {
   )
 }
 
+// Fuses a remux plan's base tracks with the user's manual edits — same
+// merge RemuxTable renders inline, extracted so doUpload() can send the
+// exact same "effective" table as remux_snapshot (see queueUpload()) instead
+// of duplicating this logic and risking it drifting from what's on screen.
+export function mergeRemuxTracks(
+  plan: TrackRemuxPreview,
+  edits?: Record<number, TrackRemuxOverride>,
+): TrackRemuxTrack[] {
+  return (plan.ordered_tracks ?? []).map(t => {
+    const edit = edits?.[t.id]
+    if (!edit) return t
+    return {
+      ...t,
+      new_name: edit.new_name ?? t.new_name,
+      default_after: edit.default_after ?? t.default_after,
+    }
+  })
+}
+
 // Track reorder/rename table — the single-file "Ver Remux" card renders it
 // editable (inputs); the season target's per-episode accordion renders it
 // read-only (editable=false — no manual per-track overrides for seasons).
@@ -197,10 +216,9 @@ export function RemuxTable({ plan, editable, edits, onEdit }: {
               </tr>
             </thead>
             <tbody>
-              {plan.ordered_tracks.map(t => {
-                const edit = edits?.[t.id]
-                const effectiveName = edit?.new_name ?? t.new_name
-                const effectiveDefault = edit?.default_after ?? t.default_after
+              {mergeRemuxTracks(plan, edits).map(t => {
+                const effectiveName = t.new_name
+                const effectiveDefault = t.default_after
                 return (
                   <tr key={t.id} style={{ borderTop: '1px solid var(--border)' }}>
                     <td style={{ padding: '6px 10px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{TRACK_TYPE_LABEL[t.type] ?? t.type}</td>
@@ -765,7 +783,10 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
     setUploading(true); setUploadMsg(null)
     try {
       await saveNomenclatureFields(targetId, fields)
-      const r = await queueUpload(targetId, remuxEdits, checks)
+      const remuxSnapshot = remuxPreview
+        ? { ordered_tracks: mergeRemuxTracks(remuxPreview, remuxEdits) }
+        : null
+      const r = await queueUpload(targetId, remuxEdits, checks, remuxSnapshot)
       if (r.status !== 'queued' || !r.job?.id) {
         setUploadMsg(`✗ No se pudo encolar la subida (estado: ${r.status}). ${(r.errors || []).join(' ')}`)
         return

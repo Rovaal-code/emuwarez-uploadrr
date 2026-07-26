@@ -29,9 +29,19 @@ from ..legacy import (
     get_emu_anon,
     get_emu_api_key,
     set_block_key,
+    set_child_inline_mapping,
     set_emu_config,
     yaml_scalar,
 )
+
+# The hosts Uploadrr-EMU's own SCREENS.API_KEYS block supports, confirmed
+# against a real config.yaml from the bundled fork. Notably `hamster` and
+# `imghost.dev` (which DO take a key in our own IMAGE_HOSTS catalog) are
+# absent from this section — their keys appear to live under a separate
+# ADULT.API_KEYS block for a different purpose in the fork, unconfirmed —
+# so those two are deliberately left unstaged (best-effort) rather than
+# guessed at.
+SCREENS_API_KEY_HOSTS = ("imgbb", "ptpimg", "lensdump", "ptscreens", "onlyimage")
 
 _SECRET_LINE_PATTERNS = [
     re.compile(r"^(\s*api_key\s*:\s*).+$"),
@@ -95,6 +105,29 @@ def stage_tmdb_key(lines: list[str], api_key: str) -> tuple[list[str], str]:
     return staged, message
 
 
+def stage_image_hosts(
+    lines: list[str], *, img_hosts: Optional[list[str]] = None, api_keys: Optional[dict[str, str]] = None,
+) -> tuple[list[str], str]:
+    """Stage SCREENS.img_hosts (the ordered fallback preference — same order
+    Settings → Proveedores de imágenes already computes via
+    image_hosts.fallback_order()) and SCREENS.API_KEYS (only the hosts that
+    section actually supports, see SCREENS_API_KEY_HOSTS) in memory.
+
+    Without this, Uploadrr-EMU only ever used whatever img_hosts order/keys
+    already happened to be in its own config.yaml (its own default, imgbox
+    first) — the app's own configured preference was never transmitted to
+    the real upload subprocess, only used for the pre-flight reachability
+    check. Returns (new_lines, change_message)."""
+    staged = list(lines)
+    messages = []
+    if img_hosts:
+        order_literal = "[" + ", ".join(img_hosts) + "]"
+        messages.append(set_block_key(staged, "SCREENS", "img_hosts", order_literal))
+    if api_keys:
+        messages.append(set_child_inline_mapping(staged, "SCREENS", "API_KEYS", api_keys))
+    return staged, "; ".join(messages) if messages else "SCREENS sin cambios"
+
+
 def stage_emu_config(
     lines: list[str], *, api_key: Optional[str] = None, anon: Optional[bool] = None
 ) -> tuple[list[str], str]:
@@ -154,6 +187,8 @@ __all__ = [
     "get_tmdb_key",
     "stage_tmdb_key",
     "stage_emu_config",
+    "stage_image_hosts",
+    "SCREENS_API_KEY_HOSTS",
     "get_emu_api_key",
     "get_emu_anon",
     "build_redacted_preview",

@@ -417,54 +417,54 @@ def test_append_and_get_logs(db_conn):
 
 def test_mark_phase_done_accumulates_across_calls(db_conn):
     jid = _insert_job(db_conn)
-    mark_phase_done(jid, "integrity")
+    mark_phase_done(jid, "verificacion_presubida")
     mark_phase_done(jid, "nomenclature")
 
     row = db_conn.execute("SELECT progress_json FROM upload_jobs WHERE id=?", (jid,)).fetchone()
     state = json.loads(row["progress_json"])
     by_key = {p["key"]: p for p in state["phases"]}
-    assert by_key["integrity"]["status"] == "done"
+    assert by_key["verificacion_presubida"]["status"] == "done"
     assert by_key["nomenclature"]["status"] == "done"
     assert by_key["remux"]["status"] == "pending"
-    assert state["global_pct"] == 10  # 5 (integrity) + 5 (nomenclature)
+    assert state["global_pct"] == 15  # 10 (verificacion_presubida) + 5 (nomenclature)
 
 
 def test_update_phase_progress_keeps_earlier_done_phases(db_conn):
     jid = _insert_job(db_conn)
-    mark_phase_done(jid, "integrity")
+    mark_phase_done(jid, "verificacion_presubida")
     mark_phase_done(jid, "nomenclature")
     update_phase_progress(jid, "remux", 40)
 
     row = db_conn.execute("SELECT progress_json FROM upload_jobs WHERE id=?", (jid,)).fetchone()
     state = json.loads(row["progress_json"])
     by_key = {p["key"]: p for p in state["phases"]}
-    assert by_key["integrity"]["status"] == "done"
+    assert by_key["verificacion_presubida"]["status"] == "done"
     assert by_key["remux"]["status"] == "running"
     assert by_key["remux"]["pct"] == 40
-    # 5 + 5 + 15*0.4 = 16
-    assert state["global_pct"] == 16
+    # 10 + 5 + 15*0.4 = 21
+    assert state["global_pct"] == 21
 
 
 def test_mark_phase_started_then_done_records_duration(db_conn):
     jid = _insert_job(db_conn)
-    mark_phase_started(jid, "integrity")
+    mark_phase_started(jid, "verificacion_presubida")
 
     row = db_conn.execute("SELECT progress_json FROM upload_jobs WHERE id=?", (jid,)).fetchone()
     state = json.loads(row["progress_json"])
     by_key = {p["key"]: p for p in state["phases"]}
-    assert by_key["integrity"]["status"] == "running"
-    assert by_key["integrity"]["started_at"] is not None
-    assert by_key["integrity"]["finished_at"] is None
-    started_at = by_key["integrity"]["started_at"]
+    assert by_key["verificacion_presubida"]["status"] == "running"
+    assert by_key["verificacion_presubida"]["started_at"] is not None
+    assert by_key["verificacion_presubida"]["finished_at"] is None
+    started_at = by_key["verificacion_presubida"]["started_at"]
 
-    mark_phase_done(jid, "integrity")
+    mark_phase_done(jid, "verificacion_presubida")
     row = db_conn.execute("SELECT progress_json FROM upload_jobs WHERE id=?", (jid,)).fetchone()
     state = json.loads(row["progress_json"])
     by_key = {p["key"]: p for p in state["phases"]}
-    assert by_key["integrity"]["status"] == "done"
+    assert by_key["verificacion_presubida"]["status"] == "done"
     # started_at must survive unchanged from the earlier mark_phase_started call.
-    assert by_key["integrity"]["started_at"] == started_at
-    assert by_key["integrity"]["finished_at"] is not None
+    assert by_key["verificacion_presubida"]["started_at"] == started_at
+    assert by_key["verificacion_presubida"]["finished_at"] is not None
 
 
 # ---------------------------------------------------------------------------

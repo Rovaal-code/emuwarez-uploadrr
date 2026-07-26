@@ -35,12 +35,13 @@ QUEUE_GRACE_SECONDS = 60
 ACTIVE_JOB_STATUSES = {"queued", "staging", "preparing", "running"}
 
 # job_id -> pending threading.Timer, so a cancel during the grace period can
-# stop it before it fires. job_id -> remux overrides the user edited in the
-# wizard's "Ver Remux" card, applied when the remux step actually runs.
-# Single-process app, in-memory is enough (matches upload_checks.py's pattern).
+# stop it before it fires. Single-process app, in-memory is enough (matches
+# upload_checks.py's pattern). Remux overrides the user edited in the
+# wizard's "Ver Remux" card are persisted on the job row itself
+# (remux_overrides_json) instead of kept here — they need to survive a
+# process restart during the grace window and be readable by a later retry.
 _LOCK = threading.Lock()
 _QUEUE_TIMERS: dict[int, threading.Timer] = {}
-_PENDING_REMUX_OVERRIDES: dict[int, dict] = {}
 
 
 def _now_iso() -> str:
@@ -67,7 +68,10 @@ def _insert_and_start_queued_job(
     retry_of_job_id: int | None = None,
     retry_count: int = 0,
     remux_overrides: dict | None = None,
+    remux_snapshot: dict | None = None,
     checks: dict | None = None,
+    nomenclature_proposal_id: int | None = None,
+    nomenclature_snapshot: dict | None = None,
 ) -> dict:
     """Shared by queue_upload_for_item() and queue_retry_for_job(): insert a
     fresh 'queued' row for `item` and arm its 60s grace-period timer.
@@ -75,7 +79,23 @@ def _insert_and_start_queued_job(
     `checks` — the pre-upload checks result ({"checks": [...], "ready": bool})
     already computed by the manual wizard before the user confirmed, persisted
     verbatim as checks_snapshot_json so the job detail page can show exactly
-    what the user saw and approved, without re-running anything."""
+    what the user saw and approved, without re-running anything.
+
+    `nomenclature_proposal_id`/`nomenclature_snapshot` — for a manual upload,
+    the exact nomenclature_proposals row the user confirmed in the wizard
+    (looked up by the caller, queue_upload_for_item()): the id pins
+    _run_queued_job()'s apply_nomenclature_proposal() call to THIS proposal
+    instead of "whichever is latest", and the snapshot is written immediately
+    so the job detail page doesn't show "Pendiente" until the pipeline
+    actually reaches the nomenclature step. Left None for an automatic
+    (staging-pipeline) job — that absence is what queue_retry_for_job() uses
+    to tell manual from automatic jobs apart when carrying values forward.
+
+    `remux_overrides`/`remux_snapshot` — same idea for the per-track manual
+    edits (renamed persisted column, replacing the old in-memory
+    _PENDING_REMUX_OVERRIDES dict) and the wizard's already-merged
+    (base plan + edits) track table.
+    """
     now = datetime.now(timezone.utc)
     queued_until = (now + timedelta(seconds=QUEUE_GRACE_SECONDS)).isoformat()
     now_iso = now.isoformat()
@@ -84,8 +104,10 @@ def _insert_and_start_queued_job(
         """
         INSERT INTO upload_jobs (
             library_item_id, request_item_id, status, stage, title, path, source_path,
-            queued_until, retry_of_job_id, retry_count, checks_snapshot_json, created_at, updated_at
-        ) VALUES (?, ?, 'queued', 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            queued_until, retry_of_job_id, retry_count, checks_snapshot_json,
+            nomenclature_proposal_id, nomenclature_snapshot_json,
+            remux_overrides_json, remux_snapshot_json, created_at, updated_at
+        ) VALUES (?, ?, 'queued', 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             item["id"], request_item_id,
@@ -95,15 +117,16 @@ def _insert_and_start_queued_job(
             queued_until,
             retry_of_job_id, retry_count,
             json.dumps(checks, ensure_ascii=False) if checks else None,
+            nomenclature_proposal_id,
+            json.dumps(nomenclature_snapshot, ensure_ascii=False, default=str) if nomenclature_snapshot else None,
+            json.dumps(remux_overrides, ensure_ascii=False) if remux_overrides else None,
+            json.dumps(remux_snapshot, ensure_ascii=False) if remux_snapshot else None,
             now_iso, now_iso,
         ),
     )
     conn.commit()
     job_id = cursor.lastrowid
 
-    with _LOCK:
-        if remux_overrides:
-            _PENDING_REMUX_OVERRIDES[job_id] = remux_overrides
     _arm_queue_timer(job_id)
 
     from .upload_execution import get_upload_job
@@ -123,7 +146,11 @@ def _arm_queue_timer(job_id: int) -> None:
 
 
 def queue_upload_for_item(
-    item_id: int, *, remux_overrides: dict | None = None, checks: dict | None = None, conn=None
+    item_id: int, *,
+    remux_overrides: dict | None = None,
+    remux_snapshot: dict | None = None,
+    checks: dict | None = None,
+    conn=None,
 ) -> dict:
     own = conn is None
     conn = conn or connect()
@@ -142,8 +169,20 @@ def queue_upload_for_item(
             }
         retry_of_job_id = latest["id"] if latest else None
         retry_count = (latest.get("retry_count") or 0) + 1 if latest else 0
+
+        # Manual upload: pin whichever nomenclature proposal the wizard's
+        # nomenclature step already saved (saveNomenclatureFields(), before
+        # queueUpload() is even called) — so _run_queued_job() applies THIS
+        # exact one instead of "whichever is latest", and the job detail page
+        # shows it immediately instead of "Pendiente" until the pipeline runs.
+        from .nomenclature import get_latest_nomenclature_proposal
+        proposal = get_latest_nomenclature_proposal(item_id, conn=conn)
+
         return _insert_and_start_queued_job(
-            conn, item, remux_overrides=remux_overrides, checks=checks,
+            conn, item,
+            remux_overrides=remux_overrides, remux_snapshot=remux_snapshot, checks=checks,
+            nomenclature_proposal_id=proposal.get("id") if proposal else None,
+            nomenclature_snapshot=proposal,
             retry_of_job_id=retry_of_job_id, retry_count=retry_count,
         )
     finally:
@@ -175,11 +214,27 @@ def queue_retry_for_job(original_job_id: int, conn=None) -> dict:
         if not item:
             return {"status": "blocked", "errors": ["El elemento ya no existe en la biblioteca."], "job": None}
 
+        # Carry forward the original job's manual choices, if it had any.
+        # nomenclature_proposal_id is only ever set for a MANUAL upload
+        # (queue_upload_for_item) — its absence here means the original was
+        # automatic, so leaving it None makes this retry auto-detect from
+        # scratch too, same as today. remux_snapshot/checks are copied purely
+        # for display continuity (the pipeline always rewrites them for real
+        # once it runs) — they play no part in re-derivation.
+        def _load_json(column: str):
+            raw = original.get(column)
+            return json.loads(raw) if raw else None
+
         return _insert_and_start_queued_job(
             conn, item,
             request_item_id=original.get("request_item_id"),
             retry_of_job_id=original_job_id,
             retry_count=(original.get("retry_count") or 0) + 1,
+            nomenclature_proposal_id=original.get("nomenclature_proposal_id"),
+            nomenclature_snapshot=_load_json("nomenclature_snapshot_json"),
+            remux_overrides=_load_json("remux_overrides_json"),
+            remux_snapshot=_load_json("remux_snapshot_json"),
+            checks=_load_json("checks_snapshot_json"),
         )
     finally:
         if own:
@@ -415,7 +470,6 @@ def cancel_queued_timer(job_id: int) -> bool:
     still flip the job's status regardless)."""
     with _LOCK:
         timer = _QUEUE_TIMERS.pop(job_id, None)
-        _PENDING_REMUX_OVERRIDES.pop(job_id, None)
     if timer:
         timer.cancel()
         return True
@@ -493,6 +547,33 @@ def _season_upload_preconditions(conn) -> list[str]:
     if not get_setting_canonical(conn, "tmdb.api_key"):
         errors.append("API key de TMDb no configurada.")
     return errors
+
+
+def _check_generic_upload_preconditions(job_id: int, item_id: int, is_season: bool, conn) -> bool:
+    """Fail-fast subset of what _populate_ready() checks later, restricted to
+    the parts that do NOT depend on the file already being renamed/remuxed —
+    Uploadrr path/config, eMuwarez/TMDb keys (via _season_upload_preconditions,
+    generic despite its name — reused here for both branches) and, for a
+    single file, whether its current nomenclature proposal is blocked.
+
+    Runs right after the integrity check, before nomenclature/remux, as part
+    of the merged "verificacion_presubida" phase — so missing configuration
+    fails immediately instead of after spending time on nomenclature/remux.
+    The remaining, path-dependent checks (file existence, prepared_path,
+    command preview) still run later, unchanged, in _populate_ready()."""
+    errors = _season_upload_preconditions(conn)
+    if not is_season:
+        proposal_row = conn.execute(
+            "SELECT status FROM nomenclature_proposals WHERE library_item_id = ? AND status != 'expired' "
+            "ORDER BY created_at DESC LIMIT 1",
+            (item_id,),
+        ).fetchone()
+        if proposal_row and proposal_row["status"] == "blocked":
+            errors.append("Hay errores en la propuesta de nomenclatura que bloquean la subida.")
+    if errors:
+        _fail(job_id, "; ".join(errors))
+        return False
+    return True
 
 
 def _populate_ready(job_id: int, item_id: int, conn) -> bool:
@@ -672,7 +753,6 @@ def _run_season_remux(job_id: int, season_id: int, conn) -> tuple[bool, list[dic
 def _run_queued_job(job_id: int) -> None:
     with _LOCK:
         _QUEUE_TIMERS.pop(job_id, None)
-        overrides = _PENDING_REMUX_OVERRIDES.pop(job_id, None)
 
     from .upload_execution import (
         get_upload_job, start_upload_job, append_upload_log,
@@ -703,15 +783,17 @@ def _run_queued_job(job_id: int) -> None:
             _fail(job_id, "El elemento ya no existe en la biblioteca.")
             return
         is_season = item.get("item_type") == "season"
+        overrides = json.loads(job["remux_overrides_json"]) if job.get("remux_overrides_json") else None
 
-        # --- 1. Integrity: accessible, MediaInfo reads it, mkvtoolnix reads it.
-        # These used to be separate pre-upload checks, but the nomenclature
-        # and remux steps right below already invoke MediaInfo/mkvmerge on
-        # each real file — running the check here means real (not
-        # duplicated) work, and a failure lands with a specific reason
-        # instead of a generic "no accesible".
-        _mark(job_id, stage="integrity", started_at=_now_iso())
-        mark_phase_started(job_id, "integrity")
+        # --- 1. Verificación presubida: integrity (accessible, MediaInfo reads
+        # it, mkvtoolnix reads it) + generic preconditions (Uploadrr path/
+        # config, eMuwarez/TMDb keys, blocked nomenclature) — everything that
+        # does NOT depend on the file already being renamed/remuxed. Stays
+        # "running" through nomenclature/remux below; only marked done once
+        # the final, path-dependent check (_populate_ready) passes, right
+        # before the real Uploadrr-EMU subprocess starts.
+        _mark(job_id, stage="verificacion_presubida", started_at=_now_iso())
+        mark_phase_started(job_id, "verificacion_presubida")
         append_upload_log(job_id, "info", "Comprobando integridad del archivo…", stream="system", conn=conn)
         if is_season:
             if not _check_season_integrity(job_id, item_id, conn=conn):
@@ -737,7 +819,10 @@ def _run_queued_job(job_id: int) -> None:
                 if not tracks.get("ok"):
                     _fail(job_id, f"mkvtoolnix no pudo leer el fichero: {tracks.get('error') or 'error desconocido'}")
                     return
-        mark_phase_done(job_id, "integrity")
+
+        append_upload_log(job_id, "info", "Comprobando configuración y requisitos previos…", stream="system", conn=conn)
+        if not _check_generic_upload_preconditions(job_id, item_id, is_season, conn=conn):
+            return
 
         # --- 2. Nomenclature (rename to the final eMuwarez name).
         _mark(job_id, stage="nomenclature")
@@ -773,7 +858,8 @@ def _run_queued_job(job_id: int) -> None:
         else:
             try:
                 applied = apply_nomenclature_proposal(
-                    item_id, apply=True, dry_run=False, confirmation=NOM_TOKEN, conn=conn,
+                    item_id, proposal_id=job.get("nomenclature_proposal_id"),
+                    apply=True, dry_run=False, confirmation=NOM_TOKEN, conn=conn,
                 )
             except Exception as exc:
                 _fail(job_id, f"Error aplicando la nomenclatura: {exc}")
@@ -834,13 +920,15 @@ def _run_queued_job(job_id: int) -> None:
                 return
         mark_phase_done(job_id, "remux")
 
-        # --- 4. Preflight (fresh preconditions + command preview) then start.
-        _mark(job_id, stage="preflight")
-        mark_phase_started(job_id, "preflight")
+        # --- 4. Final preflight (fresh preconditions + command preview,
+        # against the now-final renamed/remuxed file) then start. Still part
+        # of the "verificacion_presubida" displayed phase — this is what
+        # actually closes it.
+        _mark(job_id, stage="verificacion_presubida")
         append_upload_log(job_id, "info", "Preparando la subida…", stream="system", conn=conn)
         if not _populate_ready(job_id, item_id, conn=conn):
             return  # _populate_ready already recorded the failure reason
-        mark_phase_done(job_id, "preflight")
+        mark_phase_done(job_id, "verificacion_presubida")
 
         result = start_upload_job(job_id, dry_run=False, start=True, confirmation=START_TOKEN, conn=conn)
         if result.get("error"):

@@ -85,6 +85,58 @@ def test_queue_persists_checks_snapshot(db_conn, tmp_path):
         uq.cancel_queued_timer(job_id)
 
 
+def _insert_proposal(conn, item_id, title="Movie.2024.1080p"):
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    cur = conn.execute(
+        """INSERT INTO nomenclature_proposals
+           (library_item_id, status, proposed_filename, proposed_title, created_at, updated_at)
+           VALUES (?,?,?,?,?,?)""",
+        (item_id, "valid", title, title, now, now),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def test_queue_pins_and_persists_latest_nomenclature_proposal(db_conn, tmp_path):
+    f = tmp_path / "movie.mkv"
+    f.write_bytes(b"x" * 100)
+    iid = _movie_with_path(db_conn, str(f))
+    proposal_id = _insert_proposal(db_conn, iid)
+
+    result = uq.queue_upload_for_item(iid, conn=db_conn)
+    job_id = result["job"]["id"]
+    try:
+        row = db_conn.execute(
+            "SELECT nomenclature_proposal_id, nomenclature_snapshot_json FROM upload_jobs WHERE id=?",
+            (job_id,),
+        ).fetchone()
+        assert row["nomenclature_proposal_id"] == proposal_id
+        assert json.loads(row["nomenclature_snapshot_json"])["id"] == proposal_id
+    finally:
+        uq.cancel_queued_timer(job_id)
+
+
+def test_queue_persists_remux_overrides_and_snapshot(db_conn, tmp_path):
+    f = tmp_path / "movie.mkv"
+    f.write_bytes(b"x" * 100)
+    iid = _movie_with_path(db_conn, str(f))
+    overrides = {5: {"new_name": "Custom.Track.Name", "default_after": True}}
+    snapshot = {"ordered_tracks": [{"id": 5, "new_name": "Custom.Track.Name"}]}
+
+    result = uq.queue_upload_for_item(iid, remux_overrides=overrides, remux_snapshot=snapshot, conn=db_conn)
+    job_id = result["job"]["id"]
+    try:
+        row = db_conn.execute(
+            "SELECT remux_overrides_json, remux_snapshot_json FROM upload_jobs WHERE id=?",
+            (job_id,),
+        ).fetchone()
+        assert json.loads(row["remux_overrides_json"]) == {"5": {"new_name": "Custom.Track.Name", "default_after": True}}
+        assert json.loads(row["remux_snapshot_json"]) == snapshot
+    finally:
+        uq.cancel_queued_timer(job_id)
+
+
 def test_queue_blocked_when_item_missing(db_conn):
     result = uq.queue_upload_for_item(999999, conn=db_conn)
     assert result["status"] == "blocked"
@@ -179,6 +231,50 @@ def test_queue_retry_for_job_creates_new_queued_row(db_conn, tmp_path):
         # Original job untouched.
         original = db_conn.execute("SELECT status FROM upload_jobs WHERE id=?", (original_id,)).fetchone()
         assert original["status"] == "failed"
+    finally:
+        uq.cancel_queued_timer(result["job"]["id"])
+
+
+def test_queue_retry_carries_forward_manual_nomenclature_and_remux(db_conn, tmp_path):
+    f = tmp_path / "movie.mkv"
+    f.write_bytes(b"x" * 100)
+    iid = _movie_with_path(db_conn, str(f))
+    proposal_id = _insert_proposal(db_conn, iid)
+    original_id = _failed_job_row(db_conn, iid, status="failed")
+    db_conn.execute(
+        "UPDATE upload_jobs SET nomenclature_proposal_id = ?, remux_overrides_json = ? WHERE id = ?",
+        (proposal_id, json.dumps({"5": {"new_name": "Custom", "default_after": True}}), original_id),
+    )
+    db_conn.commit()
+
+    result = uq.queue_retry_for_job(original_id, conn=db_conn)
+    try:
+        row = db_conn.execute(
+            "SELECT nomenclature_proposal_id, remux_overrides_json FROM upload_jobs WHERE id=?",
+            (result["job"]["id"],),
+        ).fetchone()
+        assert row["nomenclature_proposal_id"] == proposal_id
+        assert json.loads(row["remux_overrides_json"]) == {"5": {"new_name": "Custom", "default_after": True}}
+    finally:
+        uq.cancel_queued_timer(result["job"]["id"])
+
+
+def test_queue_retry_does_not_backfill_nomenclature_for_automatic_job(db_conn, tmp_path):
+    """An automatic (staging-pipeline) job never sets nomenclature_proposal_id
+    — its absence is the signal a retry uses to keep auto-detecting from
+    scratch instead of pinning a specific proposal."""
+    f = tmp_path / "movie.mkv"
+    f.write_bytes(b"x" * 100)
+    iid = _movie_with_path(db_conn, str(f))
+    _insert_proposal(db_conn, iid)  # a proposal exists, but was never pinned to the job
+    original_id = _failed_job_row(db_conn, iid, status="failed")
+
+    result = uq.queue_retry_for_job(original_id, conn=db_conn)
+    try:
+        row = db_conn.execute(
+            "SELECT nomenclature_proposal_id FROM upload_jobs WHERE id=?", (result["job"]["id"],),
+        ).fetchone()
+        assert row["nomenclature_proposal_id"] is None
     finally:
         uq.cancel_queued_timer(result["job"]["id"])
 

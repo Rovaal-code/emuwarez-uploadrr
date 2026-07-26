@@ -734,7 +734,7 @@ function AccountCard() {
       </p>
       <div className="form-group" style={{ marginBottom: 12 }}>
         <label className="form-label">Usuario actual</label>
-        <div style={{ fontSize: 13 }}>{username || '…'}</div>
+        <input className="form-input" value={username || '…'} disabled />
       </div>
       <div className="form-group" style={{ marginBottom: 12 }}>
         <label className="form-label">Nuevo usuario <span className="form-hint">(dejar vacío para no cambiarlo)</span></label>

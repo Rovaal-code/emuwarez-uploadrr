@@ -757,6 +757,7 @@ def _run_queued_job(job_id: int) -> None:
     from .upload_execution import (
         get_upload_job, start_upload_job, append_upload_log,
         mark_phase_started, mark_phase_done, update_phase_progress,
+        _upload_concurrency_gate,
     )
     from .upload_execution import CONFIRMATION_TOKEN as START_TOKEN
     from .nomenclature import apply_nomenclature_proposal, CONFIRMATION_TOKEN as NOM_TOKEN
@@ -766,6 +767,18 @@ def _run_queued_job(job_id: int) -> None:
     )
     from .media_info_service import mediainfo_available, read_media_info_summary
     from .path_mapping import resolve_local_path
+
+    # Full serialization of "Subidas en paralelo": a queued job takes its
+    # concurrency slot HERE, before any preprocessing (verificación
+    # pre-subida/nomenclatura/remux) — not just around the heavy Uploadrr-EMU
+    # subprocess like before. Ownership transfers to that subprocess's own
+    # thread once it's actually spawned (owns_gate flips to False right
+    # after start_upload_job succeeds, and pre_gated=True below tells that
+    # thread not to double-acquire); every failure path before that point
+    # falls through to the `finally` below and releases it immediately, so
+    # a job that never gets that far can't deadlock the queue.
+    _upload_concurrency_gate.acquire(job_id)
+    owns_gate = True
 
     conn = connect()
     try:
@@ -930,9 +943,11 @@ def _run_queued_job(job_id: int) -> None:
             return  # _populate_ready already recorded the failure reason
         mark_phase_done(job_id, "verificacion_presubida")
 
-        result = start_upload_job(job_id, dry_run=False, start=True, confirmation=START_TOKEN, conn=conn)
+        result = start_upload_job(job_id, dry_run=False, start=True, confirmation=START_TOKEN, conn=conn, pre_gated=True)
         if result.get("error"):
             _fail(job_id, result.get("message") or "; ".join(result.get("errors") or []) or "No se pudo iniciar la subida.")
+        else:
+            owns_gate = False  # transferred to the spawned Uploadrr-EMU subprocess thread
     except Exception as exc:
         # Last-resort net: every step above already has its own try/except
         # that fails the job with a specific reason, but anything genuinely
@@ -947,3 +962,5 @@ def _run_queued_job(job_id: int) -> None:
         _fail(job_id, f"Error inesperado: {exc}")
     finally:
         conn.close()
+        if owns_gate:
+            _upload_concurrency_gate.release()

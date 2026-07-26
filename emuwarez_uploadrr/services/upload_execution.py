@@ -941,13 +941,20 @@ def advance_running_phase(job_id: int, phase_key: str, pct: int) -> None:
     _write_progress_json(job_id, with_phase_timestamps(new_state, state.get("phases")))
 
 
-def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str]) -> None:
-    """Execute Uploadrr in a background thread. Updates job status, logs, and result artifacts."""
-    # Waits here (not before) if "Subidas en paralelo" is already at its
-    # configured limit — everything before this point (building the command,
-    # staging config) is cheap; the subprocess this gates is the actual
-    # hashing/screenshots/eMuwarez-transfer work.
-    _upload_concurrency_gate.acquire(job_id)
+def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str], *, pre_gated: bool = False) -> None:
+    """Execute Uploadrr in a background thread. Updates job status, logs, and result artifacts.
+
+    pre_gated=True means the caller (the queued-job pipeline, upload_queue.py's
+    _run_queued_job) already holds this job's concurrency slot from before its
+    own preprocessing (verificación pre-subida/nomenclatura/remux) — so this
+    function must NOT acquire again (that would double-count the same job
+    against the limit), only release once the real work here is done. Every
+    other entry point (CLI, direct retry, the legacy direct-start endpoint)
+    calls this on an already-"ready" job with no preprocessing to gate, so it
+    still acquires here itself, right at the actual heavy work, same as before.
+    """
+    if not pre_gated:
+        _upload_concurrency_gate.acquire(job_id)
     try:
         _run_uploadrr_subprocess_body(job_id, cmd, secrets)
     finally:
@@ -1221,8 +1228,13 @@ def start_upload_job(
     start: bool = False,
     confirmation: str | None = None,
     conn=None,
+    pre_gated: bool = False,
 ) -> dict:
     """Start or preview a job.
+
+    pre_gated=True: the caller already holds this job's concurrency slot
+    (see _run_uploadrr_subprocess) — passed through unchanged to the spawned
+    thread, not acted on here.
 
     - dry_run=True (default): validate and return command preview, do not execute.
     - dry_run=False, start=True, confirmation=INICIAR_UPLOADRR: execute real Uploadrr.
@@ -1317,6 +1329,7 @@ def start_upload_job(
         t = threading.Thread(
             target=_run_uploadrr_subprocess,
             args=(job_id, cmd, secrets),
+            kwargs={"pre_gated": pre_gated},
             daemon=True,
         )
         t.start()

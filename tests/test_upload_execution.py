@@ -239,6 +239,48 @@ def test_run_subprocess_failure_sets_failed(db_conn, tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# _run_uploadrr_subprocess — pre_gated hand-off ("Subidas en paralelo" full
+# serialization: upload_queue.py's _run_queued_job acquires the concurrency
+# slot before its own preprocessing and passes pre_gated=True through here,
+# so this must not acquire a second time (double-counting the same job
+# against the limit) — it only ever releases the slot once real work ends.
+# ---------------------------------------------------------------------------
+
+def test_run_subprocess_pre_gated_does_not_double_acquire(db_conn, tmp_path):
+    from emuwarez_uploadrr.services.upload_execution import _run_uploadrr_subprocess, _upload_concurrency_gate
+    src = tmp_path / "movie.mkv"
+    src.write_bytes(b"\x00" * 10)
+    jid = _insert_job(db_conn, source_path=str(src))
+    mock_proc = _make_mock_proc(returncode=0, stdout_lines=["Upload successful"])
+
+    # Simulate the caller (the queued-job pipeline) already holding this
+    # job's slot from before its own preprocessing.
+    _upload_concurrency_gate._active = 1
+    try:
+        with patch("subprocess.Popen", return_value=mock_proc):
+            _run_uploadrr_subprocess(
+                jid,
+                {
+                    "executable": "/usr/bin/python3",
+                    "args": ["/fake/upload.py", str(src)],
+                    "cwd": str(tmp_path),
+                    "command_preview": "python3 upload.py movie.mkv",
+                },
+                [],
+                pre_gated=True,
+            )
+        # If this had acquired again first, _active would have hit 2 before
+        # dropping to 1 (still holding the caller's own slot) — pre_gated
+        # must skip straight to releasing the one slot that exists.
+        assert _upload_concurrency_gate._active == 0
+    finally:
+        _upload_concurrency_gate._active = 0
+
+    job = get_upload_job(jid, conn=db_conn)
+    assert job["status"] == "completed"
+
+
+# ---------------------------------------------------------------------------
 # Post-upload trailer check + "Requiere Trailer" in the completion notification
 # ---------------------------------------------------------------------------
 

@@ -175,6 +175,24 @@ def test_run_queued_job_fails_fast_when_file_inaccessible(db_conn):
     assert "no es accesible" in (job["error_message"] or "")
 
 
+def test_run_queued_job_releases_concurrency_slot_on_early_failure(db_conn):
+    """"Subidas en paralelo" full serialization: _run_queued_job now takes its
+    concurrency slot before any preprocessing (not just around the real
+    Uploadrr-EMU subprocess like before) — a job that fails during that very
+    first integrity check (well before ever reaching start_upload_job) must
+    still release it, or every failed queued job would permanently eat one
+    slot and eventually deadlock the whole queue."""
+    from emuwarez_uploadrr.services.upload_execution import _upload_concurrency_gate
+    assert _upload_concurrency_gate._active == 0
+
+    iid = _movie_with_path(db_conn, "/nope/does/not/exist.mkv")
+    job_id = _queued_job_row(db_conn, iid, path="/nope/does/not/exist.mkv")
+
+    uq._run_queued_job(job_id)
+
+    assert _upload_concurrency_gate._active == 0
+
+
 def test_run_queued_job_skipped_when_job_not_queued_anymore(db_conn, tmp_path, monkeypatch):
     """Simulates the cancel-race: if the job's status isn't 'queued' anymore
     by the time the timer fires (e.g. cancelled a moment earlier), the

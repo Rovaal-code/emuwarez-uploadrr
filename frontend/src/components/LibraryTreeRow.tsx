@@ -4,11 +4,11 @@ import type { LibraryItemResponse, InstanceSafeResponse } from '../types/api'
 import { StatusBadge } from './StatusBadge'
 import { ServiceLabel } from './ServiceIcon'
 import { formatItemType, formatBytes } from '../utils/format'
-import { buildDeepLink, posterUrl, episodeListLabel } from '../utils/libraryItem'
+import { buildDeepLink, posterUrl, listDisplayTitle } from '../utils/libraryItem'
 import { ProviderTag } from './ProviderIcon'
 import { LibraryActionButtons } from './LibraryActionButtons'
 import { useTooltip } from './Tooltip'
-import { ValueChip, ValueIcon, TypeValueIcon, ResolutionValueIcon, SourceValueIcon, SizeValueIcon } from './DetailCard'
+import { ValueChip, ValueIcon, TypeValueIcon, ResolutionValueIcon, SourceValueIcon, SizeValueIcon, DetailTitleText } from './DetailCard'
 
 const NESTED_PAGE_SIZE = 25
 // Seasons per series — well under the API's max limit=500 (a season list
@@ -159,10 +159,9 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
                 onClick={e => { e.stopPropagation(); onSelect(item) }}
                 {...titleTip}
               >
-                {episodeListLabel(item)}
+                <DetailTitleText title={listDisplayTitle(item)} />
                 {titleTooltip}
               </div>
-              {item.year ? <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>({item.year})</span> : null}
             </div>
           </div>
         </td>

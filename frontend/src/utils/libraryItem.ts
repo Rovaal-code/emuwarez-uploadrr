@@ -22,6 +22,30 @@ export function episodeListLabel(item: LibraryItemResponse): string {
   return `${seriesName} - ${code}`
 }
 
+// List/tree row title with the year placed right after the series name —
+// "NombreSerie (Año) - Temporada X" / "NombreSerie (Año) - SxxEyy" — instead
+// of at the very end of the whole label. Purely local (no parent-walk DB
+// query, unlike display_title on the single-item detail response): the
+// series name for a season/episode row is recovered from that row's own
+// title text (built at sync time as "{series} - Temporada N"/"{series}
+// SxxEyy - Nombre" — see season_to_library_item/episode_to_library_item),
+// so this works for every row already loaded by the list.
+export function listDisplayTitle(item: LibraryItemResponse): string {
+  const year = item.year ? ` (${item.year})` : ''
+  if (item.item_type === 'episode' && item.season_number != null && item.episode_number != null) {
+    const code = `S${String(item.season_number).padStart(2, '0')}E${String(item.episode_number).padStart(2, '0')}`
+    const seriesName = item.title.split(/\s+S\d{2}E\d{2}\b/i)[0] || item.title
+    return `${seriesName}${year} - ${code}`
+  }
+  if (item.item_type === 'season') {
+    const idx = item.title.indexOf(' - ')
+    if (idx !== -1) {
+      return `${item.title.slice(0, idx)}${year} - ${item.title.slice(idx + 3)}`
+    }
+  }
+  return `${item.title}${year}`
+}
+
 export function titleMismatchesFilename(item: LibraryItemResponse): boolean {
   if (!item.original_title) return false
   const norm = (s: string) => s.trim().toLowerCase()

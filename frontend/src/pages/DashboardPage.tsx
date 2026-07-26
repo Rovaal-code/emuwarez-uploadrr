@@ -21,7 +21,7 @@ import { getLibraryItem } from '../api/library'
 import type { LibraryItemResponse } from '../types/api'
 import { formatBytes, formatDate, formatItemType } from '../utils/format'
 import { posterUrl, buildDeepLink } from '../utils/libraryItem'
-import { ValueChip, ValueIcon, SizeValueIcon, TypeValueIcon, RecommendationValueIcon } from '../components/DetailCard'
+import { ValueChip, ValueIcon, SizeValueIcon, TypeValueIcon, RecommendationValueIcon, DetailTitleText } from '../components/DetailCard'
 
 // The recommendations item doesn't carry the configured instance name
 // (unlike a full LibraryItemResponse), only the raw instance_type — capitalize
@@ -425,7 +425,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                                 </span>
                               )}
                             </div>
-                            <HoverTitle className="hover-link" style={{ fontWeight: 500, minWidth: 0 }} onClick={() => openLibraryDetail(item)} tip="Ver ficha del contenido">{item.content_name}</HoverTitle>
+                            <HoverTitle className="hover-link" style={{ fontWeight: 500, minWidth: 0 }} onClick={() => openLibraryDetail(item)} tip="Ver ficha del contenido"><DetailTitleText title={item.content_name} /></HoverTitle>
                           </div>
                         </td>
                         <td style={{ whiteSpace: 'nowrap' }}>

@@ -19,6 +19,7 @@ export interface DashboardRecommendationItem {
   source: string | null
   instance_type: string | null
   instance_id: number | null
+  tmdb_id: string | null
   title_slug: string | null
   missing_count: number | null
   rec_request_id: number | null

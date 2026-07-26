@@ -499,6 +499,12 @@ class DashboardRecommendationItem(BaseModel):
     source: Optional[str] = None
     instance_type: Optional[str] = None
     instance_id: Optional[int] = None
+    # tmdb_id: needed for the Origen column's Radarr deep link (buildDeepLink()
+    # requires it for radarr, title_slug for sonarr) — was missing here even
+    # though the underlying query already selects it, so only Sonarr rows in
+    # Recomendaciones ever got a clickable Origen (Radarr rows had nothing to
+    # build the link from and silently fell back to plain, non-clickable text).
+    tmdb_id: Optional[str] = None
     title_slug: Optional[str] = None
     missing_count: Optional[int] = None
     rec_request_id: Optional[int] = None

@@ -154,3 +154,26 @@ def test_save_fields_creates_proposal(client, auth_headers):
     assert data.get("ok") is True
     assert "torrent_name" in data
     assert "AMZN" not in data.get("torrent_name", "")
+
+    # Regression: save-fields used to leave year/resolution/source/video_codec/
+    # audio_summary/subtitle_summary/release_tag NULL on the new proposal row
+    # (only proposed_title/proposed_filename/provider_final were set), so a
+    # manual upload's "Nomenclatura" card showed every one of these as "–"
+    # even though the user had just filled them in. It also wrote `source`
+    # into a `source_final` column nobody reads instead of the real `source`
+    # column build_nomenclature_proposal()/the job detail page both use.
+    from emuwarez_uploadrr.database import connect, init_db
+    from emuwarez_uploadrr.web.runtime import _db_path
+    with connect(_db_path()) as conn:
+        init_db(conn)
+        row = conn.execute(
+            "SELECT * FROM nomenclature_proposals WHERE library_item_id = ? ORDER BY id DESC LIMIT 1",
+            (item_id,),
+        ).fetchone()
+    assert row["year"] == "2024"
+    assert row["resolution"] == "1080p"
+    assert row["source"] == "BluRay"
+    assert row["video_codec"] == "H.265"
+    assert row["audio_summary"] == "DTS-HD"
+    assert row["subtitle_summary"] == "SPA"
+    assert row["release_tag"] == "EMUWAREZ"

@@ -319,7 +319,7 @@ const PHASE_STATUS_TEXT: Record<string, string> = {
 // yet. Uploadrr-EMU's own internal phases (queue -> ... -> uploading to
 // eMuwarez) are each their own row, not collapsed into one "Subiendo" bucket.
 const DEFAULT_PHASES: UploadProgressPhase[] = [
-  { key: 'verificacion_presubida', label: 'Verificación presubida', status: 'pending', pct: 0 },
+  { key: 'verificacion_presubida', label: 'Verificación pre-subida', status: 'pending', pct: 0 },
   { key: 'nomenclature', label: 'Aplicación de nomenclatura', status: 'pending', pct: 0 },
   { key: 'remux', label: 'Reordenación de pistas', status: 'pending', pct: 0 },
   { key: 'queue_processing', label: 'Inicio de Uploader', status: 'pending', pct: 0 },

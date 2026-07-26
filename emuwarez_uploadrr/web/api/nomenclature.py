@@ -280,15 +280,28 @@ def save_nomenclature_fields(
         conn.execute(
             """INSERT INTO nomenclature_proposals
                (library_item_id, status, proposed_filename, proposed_title,
-                fields_json, source_final, provider_final,
+                fields_json, year, resolution, source, provider_final,
+                video_codec, audio_summary, subtitle_summary, release_tag,
                 internal_mkv_title, created_at, updated_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 item_id, "valid", torrent_name,
                 body.fields.get("title"),
                 _json.dumps(body.fields, ensure_ascii=False),
+                body.fields.get("year"),
+                body.fields.get("resolution"),
+                # Same `source` column build_nomenclature_proposal()/
+                # save_nomenclature_proposal() write and the job detail page's
+                # "Nomenclatura" card reads — NOT the separate source_final
+                # column (an orphan nobody else reads), which this used to
+                # write into by mistake, leaving `source` (and every other
+                # technical field below) NULL for a manually-edited proposal.
                 body.fields.get("source"),
                 body.fields.get("provider"),
+                body.fields.get("video_codec"),
+                body.fields.get("audio_summary"),
+                body.fields.get("subs"),
+                body.fields.get("tag"),
                 internal_mkv_title,
                 now, now,
             ),

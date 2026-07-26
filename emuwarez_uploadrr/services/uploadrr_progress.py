@@ -34,7 +34,7 @@ from typing import Optional
 # progress marker) and its weight folded into "metadata_processing", the
 # group it chronologically sits inside.
 PHASES: list[tuple[str, str, int]] = [
-    ("verificacion_presubida", "Verificación presubida", 10),  # integrity(5) + preflight(5)
+    ("verificacion_presubida", "Verificación pre-subida", 10),  # integrity(5) + preflight(5)
     ("nomenclature", "Aplicación de nomenclatura", 5),
     ("remux", "Reordenación de pistas", 15),
     ("queue_processing", "Inicio de Uploader", 2),

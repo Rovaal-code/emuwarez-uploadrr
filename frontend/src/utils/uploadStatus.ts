@@ -74,7 +74,7 @@ export function latestInChain(jobs: UploadJob[]): UploadJob | null {
 const PHASE_LABEL: Record<string, string> = {
   staging: 'Generando nomenclatura',
   queued: 'En cola',
-  verificacion_presubida: 'Verificación presubida',
+  verificacion_presubida: 'Verificación pre-subida',
   nomenclature: 'Aplicando nomenclatura',
   remux: 'Reordenando/renombrando pistas',
   config_staging: 'Preparando configuración',

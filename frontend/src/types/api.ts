@@ -96,6 +96,10 @@ export interface LibraryItemResponse {
   id: number
   item_type: string
   title: string
+  // Canonical "Serie (Año)" / "Serie (Año) - Temporada X" / "Serie (Año) -
+  // SxxEyy[ - Nombre del capítulo]" title — only set on the single-item
+  // detail response, not on list rows.
+  display_title: string | null
   year: number | null
   original_title: string | null
   instance_type: string | null
@@ -262,6 +266,8 @@ export interface RequestItemResponse {
   compatibility_confidence: number | null
   library_item_id: number | null
   library_title: string | null
+  library_year: number | null
+  display_title: string | null
   local_status: string | null
   poster_url: string | null
   backdrop_url: string | null
@@ -512,6 +518,9 @@ export interface UploadJob {
   poster_url?: string | null
   backdrop_url?: string | null
   year?: number | null
+  // Canonical "Serie (Año)" / "Serie (Año) - Temporada X" / "Serie (Año) -
+  // SxxEyy" display title — only set on the single-job GET, not the list.
+  display_title?: string | null
   instance_type?: string | null
   instance_name?: string | null
   instance_id?: number | null

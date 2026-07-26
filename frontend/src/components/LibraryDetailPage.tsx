@@ -82,21 +82,17 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
     <div style={{ width: '100%', height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <div style={{ flexShrink: 0 }}>
       <DetailHero backdropUrl={item.backdrop_url}>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        <button className="btn btn-ghost btn-sm" onClick={onBack}>← Volver a la biblioteca</button>
-        {parentSeason && (
-          <button className="btn btn-ghost btn-sm" onClick={() => onSelect(parentSeason)}>← Volver a la temporada</button>
-        )}
-        {parentSeries && (
-          <button className="btn btn-ghost btn-sm" onClick={() => onSelect(parentSeries)}>← Volver a la serie</button>
-        )}
-      </div>
-
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
-        <DetailTitle>
-          {item.title} {item.year ? <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>({item.year})</span> : null}
-        </DetailTitle>
-        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="btn btn-ghost btn-sm" onClick={onBack}>← Volver a la biblioteca</button>
+          {parentSeason && (
+            <button className="btn btn-ghost btn-sm" onClick={() => onSelect(parentSeason)}>← Volver a la temporada</button>
+          )}
+          {parentSeries && (
+            <button className="btn btn-ghost btn-sm" onClick={() => onSelect(parentSeries)}>← Volver a la serie</button>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
           <LibraryActionButtons
             item={item}
             onAction={onAction}
@@ -104,6 +100,10 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
             multiSeasonContext={item.item_type === 'series'}
           />
         </div>
+      </div>
+
+      <div style={{ marginBottom: 20 }}>
+        <DetailTitle>{item.display_title || item.title}</DetailTitle>
       </div>
 
       <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>

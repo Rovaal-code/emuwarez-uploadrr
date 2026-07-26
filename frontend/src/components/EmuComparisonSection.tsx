@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { getEmuComparison, type EmuComparison } from '../api/library'
 import { formatBytes } from '../utils/format'
 import { InfoIcon } from './InfoIcon'
@@ -63,7 +64,7 @@ export function EmuFieldChip({ itemId }: { itemId: number }) {
         </span>
         <span className="txt">{STATUS_LABEL[status]}</span>
       </ValueChip>
-      {showModal && (
+      {showModal && createPortal(
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: '95vw', width: 'max-content' }}>
             <div className="modal-header">
@@ -74,7 +75,8 @@ export function EmuFieldChip({ itemId }: { itemId: number }) {
               <EmuComparisonContent data={data} />
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   )

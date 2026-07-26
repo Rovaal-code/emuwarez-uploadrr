@@ -499,15 +499,10 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
     <div style={{ width: '100%', height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <div style={{ flexShrink: 0 }}>
       <DetailHero backdropUrl={job.backdrop_url}>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        <button className="btn btn-ghost btn-sm" onClick={onBack}>← Volver a Subidas</button>
-      </div>
-
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
-        <DetailTitle>
-          {job.title || `Job ${jobId}`}
-          {isRunning && <span style={{ fontSize: 11, color: '#22c55e' }}>● en vivo</span>}
-        </DetailTitle>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="btn btn-ghost btn-sm" onClick={onBack}>← Volver a Subidas</button>
+        </div>
         <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
           {job.library_item_id != null && (
             <button className="btn btn-primary btn-sm" onClick={() => onOpenLibraryItem?.(job.library_item_id!)}><LibraryButtonIcon /> Ver en Biblioteca</button>
@@ -517,6 +512,13 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
           {canCancel && <button className="btn btn-danger btn-sm" onClick={() => onCancel(jobId)}><CancelButtonIcon /> Cancelar</button>}
           {canDelete && <button className="btn btn-danger btn-sm" onClick={() => onDelete(job)}><DeleteButtonIcon /> Borrar</button>}
         </div>
+      </div>
+
+      <div style={{ marginBottom: 20 }}>
+        <DetailTitle>
+          {job.display_title || job.title || `Job ${jobId}`}
+          {isRunning && <span style={{ fontSize: 11, color: '#22c55e' }}>● en vivo</span>}
+        </DetailTitle>
       </div>
 
       <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>

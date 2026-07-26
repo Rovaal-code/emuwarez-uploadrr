@@ -522,6 +522,11 @@ class LibraryItemResponse(BaseModel):
     id: int
     item_type: str
     title: str
+    # Canonical "Serie (Año)" / "Serie (Año) - Temporada X" / "Serie (Año) -
+    # SxxEyy" display title (services.library.content_display_title) — only
+    # populated on the single-item detail response (GET /library/{id}), not
+    # on list rows, to avoid an extra parent-walk query per row.
+    display_title: Optional[str] = None
     year: Optional[int] = None
     original_title: Optional[str] = None
     instance_type: Optional[str] = None
@@ -673,6 +678,12 @@ class RequestItemResponse(BaseModel):
     compatibility_confidence: Optional[float] = None
     library_item_id: Optional[int] = None
     library_title: Optional[str] = None
+    library_year: Optional[int] = None
+    # Canonical "Serie (Año) - SxxEyy"-style title (services.library.
+    # content_display_title), using the request's own season/episode scope —
+    # only set when matched to a library item; only populated on the single
+    # request GET (get_request_detail), not the list.
+    display_title: Optional[str] = None
     local_status: Optional[str] = None
     poster_url: Optional[str] = None
     backdrop_url: Optional[str] = None
@@ -994,6 +1005,11 @@ class UploadJobDetail(BaseModel):
     # Year from the linked library item, shown next to the title (same
     # format Biblioteca's detail page already uses).
     year: Optional[int] = None
+    # Canonical "Serie (Año)" / "Serie (Año) - Temporada X" / "Serie (Año) -
+    # SxxEyy" display title (services.library.content_display_title), same
+    # format as Biblioteca's own dedicated page — only populated on the
+    # single-job GET, not the list, to avoid a parent-walk query per row.
+    display_title: Optional[str] = None
     # Origen (Radarr/Sonarr instance) and Petición status from the linked
     # library item — same fields Biblioteca already shows per content.
     instance_type: Optional[str] = None

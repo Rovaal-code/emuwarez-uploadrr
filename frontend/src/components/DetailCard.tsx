@@ -32,17 +32,17 @@ export function DetailHero({ backdropUrl, children }: { backdropUrl?: string | n
   )
 }
 
-// Wraps a dedicated page's title in a solid card using the app's own default
-// (dark) background — some content backdrops are very light/bright, and the
-// title text (light-on-transparent by default) becomes unreadable sitting
-// directly on top of one. Used identically by LibraryDetailPage,
-// RequestsPage's detail view and UploadJobDetailPage.
+// Wraps a dedicated page's title in the same card look as the other
+// dedicated-page cards (e.g. "Estado de la biblioteca") via .detail-card —
+// some content backdrops are very light/bright, and the title text
+// (light-on-transparent by default) becomes unreadable sitting directly on
+// top of one. Used identically by LibraryDetailPage, RequestsPage's detail
+// view and UploadJobDetailPage.
 export function DetailTitle({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{
+    <div className="detail-card" style={{
       display: 'inline-flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-      background: 'var(--bg-base)', border: '1px solid var(--border)',
-      borderRadius: 'var(--radius-card)', padding: '8px 16px',
+      borderRadius: 10, padding: '10px 18px',
       fontWeight: 700, fontSize: 25, letterSpacing: '-0.01em',
     }}>
       {children}

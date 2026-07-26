@@ -279,12 +279,10 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
   return (
     <div style={{ width: '100%', flex: 1, minHeight: 0, overflowY: 'auto' }}>
       <DetailHero backdropUrl={item.backdrop_url}>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        <button className="btn btn-ghost btn-sm" onClick={onBack}>← Volver a peticiones</button>
-      </div>
-
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
-        <DetailTitle>{item.title}</DetailTitle>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="btn btn-ghost btn-sm" onClick={onBack}>← Volver a peticiones</button>
+        </div>
         <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
           <a
             className="btn btn-primary btn-sm"
@@ -310,6 +308,10 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
             {subirTip.tooltipNode}
           </button>
         </div>
+      </div>
+
+      <div style={{ marginBottom: 20 }}>
+        <DetailTitle>{item.display_title || requestDisplayTitle(item)}</DetailTitle>
       </div>
 
       <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>

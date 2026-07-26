@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import sqlite3
 import threading
 import time
@@ -1005,6 +1006,29 @@ def _rec_content_name(
         except (TypeError, ValueError):
             pass
     return name + f" - Temporada {sn}"
+
+
+def content_display_title(
+    conn: sqlite3.Connection, row: dict, *,
+    season: int | None = None, episode: int | None = None,
+    scope: str | None = None,
+) -> str:
+    """Public entry point for _rec_content_name's canonical display title
+    ("Serie (Año)" / "Serie (Año) - Temporada X" / "Serie (Año) - SxxEyy",
+    "Título (Año)" for a movie) — reused by Biblioteca/Subidas/Peticiones'
+    own dedicated pages so they all agree on the same format."""
+    return _rec_content_name(conn, row, season=season, episode=episode, scope=scope)
+
+
+def episode_own_name(row: dict) -> str | None:
+    """Sonarr's own per-episode title (e.g. "Cat's in the Bag...") — not a
+    separate column, only ever baked into the raw stored title as
+    "{series} SxxEyy - {episode title}" (episode_to_library_item,
+    integrations/sonarr.py), so it's extracted back out here. Used only by
+    Biblioteca's own episode ficha, the one place the canonical
+    "Serie (Año) - SxxEyy" display title still appends it."""
+    m = re.search(r"S\d{2}E\d{2,3}\s*-\s*(.+)$", row.get("title") or "")
+    return m.group(1).strip() if m else None
 
 
 def _rec_rolled_size(conn: sqlite3.Connection, row: dict, *, season: int | None = None, episode: int | None = None):

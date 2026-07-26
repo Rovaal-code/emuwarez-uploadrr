@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from ..dependencies import require_auth
 from ..runtime import _db_path
 from emuwarez_uploadrr.services.nomenclature import infer_provider_from_item
+from emuwarez_uploadrr.services.library import content_display_title, episode_own_name
 from emuwarez_uploadrr.services.source_assistant import EMU_PROVIDERS
 
 _PROVIDER_NAME_BY_CODE = {p["code"]: p["name"] for p in EMU_PROVIDERS}
@@ -437,10 +438,20 @@ def _to_lib_response(row: dict, conn=None, rollups: Optional[dict] = None) -> Li
         # derived from the episodes (e.g. '…/Attack on Titan/Season 2').
         if not path:
             path = precomputed.get("path")
+    # Only computed for the single-item detail response (rollups is None) —
+    # a per-row parent-walk query for every list row would be wasteful there.
+    display_title = None
+    if rollups is None and conn is not None:
+        display_title = content_display_title(conn, row)
+        if row["item_type"] == "episode":
+            own_name = episode_own_name(row)
+            if own_name:
+                display_title = f"{display_title} - {own_name}"
     return LibraryItemResponse(
         id=row["id"],
         item_type=row["item_type"],
         title=row["title"],
+        display_title=display_title,
         year=row.get("year"),
         original_title=row.get("original_title"),
         instance_type=row.get("instance_type"),

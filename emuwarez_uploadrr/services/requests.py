@@ -15,7 +15,7 @@ from ..database import get_setting_canonical, get_state, set_state
 from ..integrations import emu
 from ..integrations.base import IntegrationError
 from ..models import RequestItem, RequestStatus, TaskStatus
-from .library import update_request_status
+from .library import update_request_status, content_display_title
 from .tasks import start_task, finish_task
 from .compatibility import (
     match_request_to_library,
@@ -655,6 +655,7 @@ def list_request_items(
             rm.reasons AS match_reasons,
             rm.library_item_id,
             li.title AS library_title,
+            li.year AS library_year,
             li.local_status,
             li.poster_url AS poster_url,
             li.backdrop_url AS backdrop_url
@@ -738,7 +739,7 @@ def get_request_detail(conn: sqlite3.Connection, request_id: int) -> Optional[di
     result = _safe_request_dict(dict(req_row))
     match_row = conn.execute(
         """
-        SELECT rm.*, li.title AS library_title, li.local_status, li.resolution AS local_resolution,
+        SELECT rm.*, li.title AS library_title, li.year AS library_year, li.local_status, li.resolution AS local_resolution,
                li.source AS local_source, li.path AS local_path, li.nomenclature_status,
                li.poster_url AS poster_url, li.backdrop_url AS backdrop_url, li.video_codec AS local_video_codec,
                li.audio_languages AS local_audio_languages, li.size_bytes AS local_size,
@@ -757,6 +758,7 @@ def get_request_detail(conn: sqlite3.Connection, request_id: int) -> Optional[di
         reasons = md.get("reasons") or ""
         result["poster_url"] = md.get("poster_url")
         result["backdrop_url"] = md.get("backdrop_url")
+        result["library_year"] = md.get("library_year")
         result["match"] = {
             "id": md["id"],
             "library_item_id": md["library_item_id"],
@@ -791,6 +793,15 @@ def get_request_detail(conn: sqlite3.Connection, request_id: int) -> Optional[di
         ).fetchone()
         if lib_row:
             result["match"]["content_name"] = _comparison_content_name(conn, dict(lib_row), result)
+            # Same canonical "Serie (Año) - SxxEyy" title Biblioteca/Subidas'
+            # own dedicated pages use — request's own scope (not the matched
+            # row's) so a request matched against a series/season rollup still
+            # shows the exact season/episode it's actually asking for.
+            result["display_title"] = content_display_title(
+                conn, dict(lib_row),
+                season=result.get("req_season"), episode=result.get("req_episode"),
+                scope=result.get("req_scope"),
+            )
         if lib_row and dict(lib_row).get("item_type") in ("series", "season"):
             eff = _effective_target(conn, dict(lib_row), result)
             cls = classify_request_match(

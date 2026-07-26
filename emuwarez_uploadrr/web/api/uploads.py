@@ -6,6 +6,7 @@ import json
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ...database import connect, init_db
+from ...services.library import content_display_title
 from ...services.upload_preflight import (
     build_upload_preflight,
     get_upload_job as preflight_get_job,
@@ -122,6 +123,7 @@ def _job_to_detail(
     instance_id: int | None = None,
     tmdb_id: str | None = None,
     title_slug: str | None = None,
+    display_title: str | None = None,
 ) -> UploadJobDetail:
     prepared = j.get("prepared_path")
     source = j.get("source_path") or j.get("path")
@@ -131,6 +133,7 @@ def _job_to_detail(
         poster_url=poster_url,
         backdrop_url=backdrop_url,
         year=year,
+        display_title=display_title,
         instance_type=instance_type,
         instance_name=instance_name,
         instance_id=instance_id,
@@ -410,11 +413,12 @@ def get_upload(job_id: int, current_user: dict = Depends(require_auth)):
         media_type = poster_url = backdrop_url = instance_type = instance_name = request_status = None
         year = None
         instance_id = tmdb_id = title_slug = None
+        display_title = None
         item_id = job.get("library_item_id")
         if item_id:
             row = conn.execute(
                 "SELECT item_type, poster_url, backdrop_url, instance_type, instance_name, request_status, year, "
-                "instance_id, tmdb_id, title_slug "
+                "instance_id, tmdb_id, title_slug, title, season_number, episode_number, parent_id "
                 "FROM library_items WHERE id = ?",
                 (item_id,),
             ).fetchone()
@@ -429,8 +433,9 @@ def get_upload(job_id: int, current_user: dict = Depends(require_auth)):
                 instance_id = row["instance_id"]
                 tmdb_id = row["tmdb_id"]
                 title_slug = row["title_slug"]
+                display_title = content_display_title(conn, dict(row))
     return _job_to_detail(job, media_type, poster_url, backdrop_url, instance_type, instance_name, request_status, year,
-                           instance_id, tmdb_id, title_slug)
+                           instance_id, tmdb_id, title_slug, display_title)
 
 
 @router.get("/uploads/{job_id}/logs", response_model=UploadJobLogsResponse)

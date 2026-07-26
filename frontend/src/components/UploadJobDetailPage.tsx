@@ -7,7 +7,7 @@ import { InfoIcon } from './InfoIcon'
 import { StatusBadge } from './StatusBadge'
 import { ServiceLabel } from './ServiceIcon'
 import {
-  Card, FieldRow, DetailPoster, ValueChip, ValueIcon, DETAIL_CARD_HEIGHT, DetailHero,
+  Card, FieldRow, DetailPoster, ValueChip, ValueIcon, DETAIL_CARD_HEIGHT, DetailHero, DetailTitle,
   StatusCardIcon, ClockCardIcon, UploadButtonIcon, LibraryButtonIcon, RetryButtonIcon, CancelButtonIcon, DeleteButtonIcon,
   TypeValueIcon, CalendarValueIcon, ProgressValueIcon,
   NomenclatureValueIcon, AudioCodecValueIcon, ChecksValueIcon, LogsValueIcon,
@@ -504,10 +504,10 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
       </div>
 
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
-        <div style={{ fontWeight: 700, fontSize: 25, letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <DetailTitle>
           {job.title || `Job ${jobId}`}
           {isRunning && <span style={{ fontSize: 11, color: '#22c55e' }}>● en vivo</span>}
-        </div>
+        </DetailTitle>
         <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
           {job.library_item_id != null && (
             <button className="btn btn-primary btn-sm" onClick={() => onOpenLibraryItem?.(job.library_item_id!)}><LibraryButtonIcon /> Ver en Biblioteca</button>

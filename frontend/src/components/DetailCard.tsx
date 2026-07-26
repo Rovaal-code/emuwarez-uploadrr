@@ -32,6 +32,24 @@ export function DetailHero({ backdropUrl, children }: { backdropUrl?: string | n
   )
 }
 
+// Wraps a dedicated page's title in a solid card using the app's own default
+// (dark) background — some content backdrops are very light/bright, and the
+// title text (light-on-transparent by default) becomes unreadable sitting
+// directly on top of one. Used identically by LibraryDetailPage,
+// RequestsPage's detail view and UploadJobDetailPage.
+export function DetailTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{
+      display: 'inline-flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+      background: 'var(--bg-base)', border: '1px solid var(--border)',
+      borderRadius: 'var(--radius-card)', padding: '8px 16px',
+      fontWeight: 700, fontSize: 25, letterSpacing: '-0.01em',
+    }}>
+      {children}
+    </div>
+  )
+}
+
 // padding/gap/titleGap are overridable per page, but every current usage
 // sticks to the defaults — tuned to fit 8 value-chip rows inside
 // DETAIL_CARD_HEIGHT.

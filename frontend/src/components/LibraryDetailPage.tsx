@@ -13,7 +13,7 @@ import { ProviderTag } from './ProviderIcon'
 import { ServiceLabel } from './ServiceIcon'
 import { useTooltip } from './Tooltip'
 import {
-  Card, FieldRow, DetailPoster, ValueChip, ValueIcon, DETAIL_CARD_HEIGHT, DetailHero,
+  Card, FieldRow, DetailPoster, ValueChip, ValueIcon, DETAIL_CARD_HEIGHT, DetailHero, DetailTitle,
   StatusCardIcon, TechInfoCardIcon, ExternalIdsCardIcon,
   TypeValueIcon, ResolutionValueIcon, SourceValueIcon, VideoCodecValueIcon,
   AudioCodecValueIcon, LanguageValueIcon, SubtitleValueIcon, SizeValueIcon,
@@ -93,9 +93,9 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
       </div>
 
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
-        <div style={{ fontWeight: 700, fontSize: 25, letterSpacing: '-0.01em' }}>
+        <DetailTitle>
           {item.title} {item.year ? <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>({item.year})</span> : null}
-        </div>
+        </DetailTitle>
         <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
           <LibraryActionButtons
             item={item}

@@ -222,19 +222,14 @@
   cursor: not-allowed;
 }
 
-/* Custom chevron — stroke is --text-primary (#e5e7eb), not --text-muted:
-   the muted gray used to render nearly invisible against --bg-input in
-   practice (confirmed by rendering both side by side), much fainter than
-   the browser's own native <select> arrow (which is what a plain
-   .form-input-only select, with no .form-select, falls back to) — making
-   custom-chevron selects look like they had no dropdown indicator at all. */
+/* No custom appearance/chevron here on purpose: a hand-drawn SVG chevron
+   (tried previously) always rendered fainter than the browser's own native
+   <select> arrow, no matter the stroke color — the native arrow (kept via
+   `color-scheme: dark` below, already global on `select`) is what Source/
+   Proveedor looked like before .form-select existed, and is the visible
+   reference the rest of the selects (Región, Otros, Orden, etc.) should match. */
 .form-select {
-  appearance: none;
   color-scheme: dark;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23e5e7eb' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-  padding-right: 32px;
 }
 
 /* Chrome/Blink render the native <option> popup against the select's own

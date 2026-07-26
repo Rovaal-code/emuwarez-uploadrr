@@ -947,7 +947,18 @@ def _migrate_library_items_missing_since(conn: sqlite3.Connection) -> None:
     try:
         conn.execute("ALTER TABLE library_items ADD COLUMN missing_since TEXT")
     except sqlite3.OperationalError:
-        pass
+        return  # Column already existed — never re-run the one-time backfill below.
+
+    # One-time backfill for content that was already Faltante before this
+    # column existed: added_at (when we first synced/inserted this row) is
+    # an imperfect but far better proxy than leaving it NULL, which would
+    # keep falling back to Radarr/Sonarr's own "added" date — an unrelated
+    # event (see get_dashboard_recommendations). From here on,
+    # upsert_library_item keeps it accurate on every real transition.
+    conn.execute(
+        "UPDATE library_items SET missing_since = added_at "
+        "WHERE local_status = 'Faltante' AND missing_since IS NULL"
+    )
 
 
 def _migrate_anime_id_map(conn: sqlite3.Connection) -> None:

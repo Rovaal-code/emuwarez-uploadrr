@@ -699,3 +699,31 @@ def test_faltante_group_orders_by_missing_since_not_arr_added(mem_conn):
     recs = get_dashboard_recommendations(mem_conn)
     faltante_titles = [r["title"] for r in recs if r["rec_group"] == 3]
     assert faltante_titles == ["Recently Missing", "Old Missing Recently Added"]
+
+
+def test_missing_since_backfilled_from_added_at_on_migration(mem_conn):
+    """Content that was already Faltante before missing_since existed must
+    not be stuck at NULL forever (falling back to Radarr/Sonarr's own
+    "added" date) — the one-time migration backfill uses added_at (when we
+    first synced this row) as its best available proxy."""
+    from emuwarez_uploadrr.database import init_db
+
+    mem_conn.execute(
+        "INSERT INTO library_items (title, item_type, local_status, added_at) VALUES (?,?,?,?)",
+        ("Old Missing Movie", "movie", "Faltante", "2023-05-01T00:00:00"),
+    )
+    mem_conn.commit()
+    # Simulate "before this migration ever ran": drop the column and force
+    # init_db to redo the whole migration cascade (see
+    # test_instances_unique_name_migration.py's _seed_old_schema_with_conflict
+    # for the same DELETE-schema_version trick).
+    mem_conn.execute("ALTER TABLE library_items DROP COLUMN missing_since")
+    mem_conn.execute("DELETE FROM app_state WHERE key = 'schema_version'")
+    mem_conn.commit()
+
+    init_db(mem_conn)
+
+    row = mem_conn.execute(
+        "SELECT missing_since FROM library_items WHERE title = ?", ("Old Missing Movie",)
+    ).fetchone()
+    assert row["missing_since"] == "2023-05-01T00:00:00"

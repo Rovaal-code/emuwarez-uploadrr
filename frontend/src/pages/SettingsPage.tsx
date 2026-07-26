@@ -716,8 +716,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                   </table>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 14 }}>
                     <span className="form-hint">
-                      Recomendado: <strong style={{ color: 'var(--text-primary)' }}>{concurrencyEstimate.recommended}</strong>
-                      {' '}— estimación orientativa, no tiene en cuenta la velocidad del disco o de la red.
+                      Estimación orientativa, no tiene en cuenta la velocidad del disco o de la red.
                     </span>
                     <button
                       className="btn btn-secondary btn-sm"

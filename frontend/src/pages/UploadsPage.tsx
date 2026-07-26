@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react'
-import { getUploads, startUploadJob, retryUploadJobQueued, cancelUploadJob } from '../api/uploads'
+import { getUploads, getUploadJob, startUploadJob, retryUploadJobQueued, cancelUploadJob } from '../api/uploads'
 import { getInstances } from '../api/instances'
 import type { UploadJob, InstanceSafeResponse } from '../types/api'
 import { EmptyState } from '../components/EmptyState'
@@ -450,6 +450,22 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
 
   const selectedJob = selectedJobId != null ? jobs.find(j => j.id === selectedJobId) : undefined
 
+  // The list row (above) never carries display_title — only the single-job
+  // GET computes the canonical "Serie (Año)"-style title, to avoid a
+  // parent-walk query per list row — so fetch it once per selection and
+  // merge just that field into the (still live-polled) list-derived job,
+  // instead of replacing it outright and losing further progress updates.
+  const [selectedTitle, setSelectedTitle] = useState<{ id: number; display_title: string | null } | null>(null)
+  useEffect(() => {
+    if (selectedJobId == null) { setSelectedTitle(null); return }
+    let alive = true
+    getUploadJob(selectedJobId).then(j => { if (alive) setSelectedTitle({ id: selectedJobId, display_title: j.display_title ?? null }) }).catch(() => {})
+    return () => { alive = false }
+  }, [selectedJobId])
+  const selectedJobWithTitle = selectedJob && selectedTitle && selectedTitle.id === selectedJob.id
+    ? { ...selectedJob, display_title: selectedTitle.display_title }
+    : selectedJob
+
   const modals = (
     <>
       {startJob && <StartModal job={startJob} onClose={() => setStartJob(null)} onDone={() => { setStartJob(null); load() }} />}
@@ -465,11 +481,11 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
 
   // Dedicated detail page — shown in place of the list when a job is
   // selected, instead of the old JobProgressPanel modal.
-  if (selectedJob) {
+  if (selectedJobWithTitle) {
     return (
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
         <UploadJobDetailPage
-          job={selectedJob}
+          job={selectedJobWithTitle}
           onBack={closeUpload}
           onStart={j => setStartJob(j)}
           onRetry={j => handleRetryQueued(j)}

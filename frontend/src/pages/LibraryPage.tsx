@@ -102,6 +102,13 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const openDetail = useCallback((item: LibraryItemResponse) => {
     pushDetailPath('library', item.id)
     setSelected(item)
+    // A row clicked straight from the list/grid never carries display_title
+    // (only the single-item GET computes the canonical "Serie (Año)"-style
+    // title, to avoid a parent-walk query per list row) — refresh once so
+    // the dedicated page ends up with the full title instead of the raw one.
+    getLibraryItem(item.id).then(full => {
+      setSelected(prev => (prev && prev.id === item.id ? full : prev))
+    }).catch(() => {})
   }, [])
   const closeDetail = useCallback(() => {
     closeDetailPath('library')

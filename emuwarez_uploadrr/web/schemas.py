@@ -177,6 +177,7 @@ class UploadConcurrencyEstimateResponse(BaseModel):
     available_ram_gb: float
     cpu_cores: float
     assumed_ram_gb_per_slot: float
+    assumed_cpu_cores_per_slot: float
 
 
 # ---------------------------------------------------------------------------

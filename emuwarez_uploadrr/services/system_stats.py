@@ -320,6 +320,12 @@ def _resolve_library_disk_path(conn) -> str:
 # this can predict without actually running a job).
 _EST_RAM_GB_PER_SLOT = 0.8
 _EST_RESERVED_CORES = 1  # left for the web server / the rest of the host
+# Separate constant from _EST_RESERVED_CORES on purpose, even though it's
+# currently the same number — one is "cores held back for the host", the
+# other is "how much of a core one active upload is assumed to need" (its
+# hashing step briefly saturates a single core); they just happen to
+# coincide today.
+_EST_CPU_CORES_PER_SLOT = 1.0
 
 
 def estimate_max_concurrent_uploads() -> dict:
@@ -352,6 +358,7 @@ def estimate_max_concurrent_uploads() -> dict:
         "available_ram_gb": round(available_gb, 2),
         "cpu_cores": round(total_cores, 1),
         "assumed_ram_gb_per_slot": _EST_RAM_GB_PER_SLOT,
+        "assumed_cpu_cores_per_slot": _EST_CPU_CORES_PER_SLOT,
     }
 
 

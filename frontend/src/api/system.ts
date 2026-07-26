@@ -34,6 +34,7 @@ export interface UploadConcurrencyEstimate {
   available_ram_gb: number
   cpu_cores: number
   assumed_ram_gb_per_slot: number
+  assumed_cpu_cores_per_slot: number
 }
 
 export async function getUploadConcurrencyEstimate(): Promise<UploadConcurrencyEstimate> {

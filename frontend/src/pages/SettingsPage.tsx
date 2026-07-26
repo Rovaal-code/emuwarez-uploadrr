@@ -683,41 +683,52 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
             </button>
           </div>
           {concurrencyEstimate && (
-            <div className="card card-sm" style={{ marginTop: 10 }}>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Recurso</th>
-                    <th>Disponible</th>
-                    <th>Subidas soportadas</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>RAM</td>
-                    <td>{concurrencyEstimate.available_ram_gb} GB</td>
-                    <td>{concurrencyEstimate.ram_limited_to}</td>
-                  </tr>
-                  <tr>
-                    <td>CPU</td>
-                    <td>{concurrencyEstimate.cpu_cores} núcleos</td>
-                    <td>{concurrencyEstimate.cpu_limited_to}</td>
-                  </tr>
-                </tbody>
-              </table>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 12 }}>
-                <span className="form-hint">
-                  Recomendado: <strong style={{ color: 'var(--text-primary)' }}>{concurrencyEstimate.recommended}</strong>
-                  {' '}— estimación orientativa (~{concurrencyEstimate.assumed_ram_gb_per_slot} GB por subida), no tiene en cuenta la velocidad del disco o de la red.
-                </span>
-                <button
-                  className="btn btn-secondary btn-sm"
-                  type="button"
-                  style={{ flexShrink: 0 }}
-                  onClick={() => setUploadMaxConcurrent(concurrencyEstimate.recommended)}
-                >
-                  Establecer {concurrencyEstimate.recommended}
-                </button>
+            <div className="modal-overlay" onClick={() => setConcurrencyEstimate(null)}>
+              <div className="modal-panel" onClick={e => e.stopPropagation()} style={{ maxWidth: 560 }}>
+                <div className="modal-header">
+                  <h2 className="modal-title">Máximo de subidas en paralelo</h2>
+                  <button className="modal-close" onClick={() => setConcurrencyEstimate(null)}>✕</button>
+                </div>
+                <div className="modal-body">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Recurso</th>
+                        <th>Disponible</th>
+                        <th>Uso estimado por 1 subida</th>
+                        <th>Subidas soportadas</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>RAM</td>
+                        <td>{concurrencyEstimate.available_ram_gb} GB</td>
+                        <td>{concurrencyEstimate.assumed_ram_gb_per_slot} GB</td>
+                        <td>{concurrencyEstimate.ram_limited_to}</td>
+                      </tr>
+                      <tr>
+                        <td>CPU</td>
+                        <td>{concurrencyEstimate.cpu_cores} núcleos</td>
+                        <td>{concurrencyEstimate.assumed_cpu_cores_per_slot} núcleo</td>
+                        <td>{concurrencyEstimate.cpu_limited_to}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 14 }}>
+                    <span className="form-hint">
+                      Recomendado: <strong style={{ color: 'var(--text-primary)' }}>{concurrencyEstimate.recommended}</strong>
+                      {' '}— estimación orientativa, no tiene en cuenta la velocidad del disco o de la red.
+                    </span>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      type="button"
+                      style={{ flexShrink: 0 }}
+                      onClick={() => { setUploadMaxConcurrent(concurrencyEstimate.recommended); setConcurrencyEstimate(null) }}
+                    >
+                      Establecer {concurrencyEstimate.recommended}
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}

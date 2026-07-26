@@ -709,7 +709,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                       <tr>
                         <td>CPU</td>
                         <td>{concurrencyEstimate.cpu_cores} núcleos</td>
-                        <td>{concurrencyEstimate.assumed_cpu_cores_per_slot} núcleo</td>
+                        <td>1 núcleo</td>
                         <td>{concurrencyEstimate.cpu_limited_to}</td>
                       </tr>
                     </tbody>

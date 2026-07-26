@@ -41,6 +41,13 @@ services:
     # Ajusta PUID/PGID al UID/GID del usuario propietario de los archivos de media
     user: "${PUID:-1000}:${PGID:-1000}"
 
+    # Límite de recursos del contenedor — ajusta a lo que tenga disponible tu
+    # equipo. Relevante sobre todo para "Subidas en Paralelo" (Configuración):
+    # cada subida activa puede llegar a saturar un núcleo entero (hasheo del
+    # torrent) y usar ~0.8 GB de RAM (capturas/remux/transferencia).
+    cpus: "4"
+    mem_limit: "8g"
+
     environment:
       TZ: ${TZ:-Europe/Madrid}
       CONFIG_DIR: /config

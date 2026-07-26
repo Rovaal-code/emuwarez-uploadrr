@@ -396,6 +396,11 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
   const [sources, setSources] = useState<EmuSource[]>([])
   const [providers, setProviders] = useState<EmuProvider[]>([])
   const [fields, setFields] = useState<NomenclatureFields>({})
+  // Tag becomes a locked dropdown (Título/Año/Resolución/Códec/Audio/Subs are
+  // also locked) — this captures the resolved value at load time so the
+  // dropdown always offers it as an option alongside the "EMUWAREZ" fallback,
+  // even after the user picks the other one.
+  const [initialTag, setInitialTag] = useState('')
   const [titleWarning, setTitleWarning] = useState<string | null>(null)
   const [sourceWarning, setSourceWarning] = useState<string | null>(null)
   const [sourceComparison, setSourceComparison] = useState<SourceComparison | null>(null)
@@ -605,9 +610,11 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
       if (fieldsResp.blocked) {
         setError(fieldsResp.error || 'No se puede generar la nomenclatura.')
         setFields({})
+        setInitialTag('')
         return
       }
       setFields(fieldsResp.fields || {})
+      setInitialTag(fieldsResp.fields?.tag || 'EMUWAREZ')
       setTitleWarning(fieldsResp.title_warning ?? null)
       setSourceWarning(fieldsResp.source_warning ?? null)
       setSourceComparison(fieldsResp.source_comparison ?? null)
@@ -820,14 +827,14 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
       {isSeries && (
         <label><span style={labelStyle}>Temporada</span>
-          <select className="form-input" value={selSeasonId} onChange={e => setSelSeasonId(e.target.value ? Number(e.target.value) : '')}>
+          <select className="form-input form-select" value={selSeasonId} onChange={e => setSelSeasonId(e.target.value ? Number(e.target.value) : '')}>
             <option value="">— Seleccionar —</option>
             {seasons.map(s => <option key={s.id} value={s.id}>{s.title || `Temporada ${s.season_number}`}</option>)}
           </select>
         </label>
       )}
       <label><span style={labelStyle}>Episodio</span>
-        <select className="form-input" value={selEpisode} onChange={e => setSelEpisode(e.target.value)} disabled={isSeries && selSeasonId === ''}>
+        <select className="form-input form-select" value={selEpisode} onChange={e => setSelEpisode(e.target.value)} disabled={isSeries && selSeasonId === ''}>
           <option value="">— Seleccionar —</option>
           <option value={WHOLE_SEASON}>★ Temporada entera</option>
           {episodes.map(ep => (
@@ -921,13 +928,13 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
     <>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
         <label><FieldLabel label="Título" info={FIELD_INFO.title} />
-          <input className="form-input" value={fields.title || ''} onChange={e => setField('title', e.target.value)} />
+          <input className="form-input" value={fields.title || ''} disabled />
           {titleWarning && (
             <span style={{ display: 'block', marginTop: 4, fontSize: 11, color: '#f59e0b' }}>⚠ {titleWarning}</span>
           )}
         </label>
         <label><FieldLabel label="Año" info={FIELD_INFO.year} />
-          <input className="form-input" value={fields.year || ''} onChange={e => setField('year', e.target.value)} />
+          <input className="form-input" value={fields.year || ''} disabled />
         </label>
         {fields.season_episode != null && (
           <label><FieldLabel label="Temporada / Episodio" info={FIELD_INFO.season_episode} />
@@ -935,11 +942,11 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
           </label>
         )}
         <label><FieldLabel label="Resolución" info={FIELD_INFO.resolution} />
-          <input className="form-input" value={fields.resolution || ''} onChange={e => setField('resolution', e.target.value)} />
+          <input className="form-input" value={fields.resolution || ''} disabled />
         </label>
         <label><FieldLabel label="Source" info={FIELD_INFO.source} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <select className="form-input" style={{ flex: 1 }} value={fields.source || ''} onChange={e => setField('source', e.target.value)}>
+            <select className="form-input form-select" style={{ flex: 1 }} value={fields.source || ''} onChange={e => setField('source', e.target.value)}>
               <option value="">— Seleccionar —</option>
               {sources.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}
             </select>
@@ -987,7 +994,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
                 <span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Detectando…
               </div>
             ) : (
-              <select className="form-input" value={fields.provider || ''} onChange={e => setField('provider', e.target.value || null)}>
+              <select className="form-input form-select" value={fields.provider || ''} onChange={e => setField('provider', e.target.value || null)}>
                 <option value="">— Sin proveedor —</option>
                 {providers.map(p => <option key={p.code} value={p.code}>{p.name} ({p.code})</option>)}
               </select>
@@ -995,16 +1002,20 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
           </label>
         )}
         <label><FieldLabel label="Códec de vídeo" info={FIELD_INFO.video_codec} />
-          <input className="form-input" value={fields.video_codec || ''} onChange={e => setField('video_codec', e.target.value)} />
+          <input className="form-input" value={fields.video_codec || ''} disabled />
         </label>
         <label><FieldLabel label="Audio" info={FIELD_INFO.audio} />
-          <input className="form-input" value={fields.audio_summary || ''} onChange={e => setField('audio_summary', e.target.value)} />
+          <input className="form-input" value={fields.audio_summary || ''} disabled />
         </label>
         <label><FieldLabel label="Subtítulos" info={FIELD_INFO.subs} />
-          <input className="form-input" value={fields.subs || ''} onChange={e => setField('subs', e.target.value)} />
+          <input className="form-input" value={fields.subs || ''} disabled />
         </label>
         <label><FieldLabel label="Tag" info={FIELD_INFO.tag} />
-          <input className="form-input" value={fields.tag || ''} onChange={e => setField('tag', e.target.value)} />
+          <select className="form-input form-select" value={fields.tag || ''} onChange={e => setField('tag', e.target.value)}>
+            {Array.from(new Set([initialTag, 'EMUWAREZ'].filter(Boolean))).map(t => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
         </label>
       </div>
       <div className="detail-card" style={{ marginTop: 16, padding: '12px 14px', borderRadius: 8 }}>

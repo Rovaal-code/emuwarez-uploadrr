@@ -576,3 +576,54 @@ def test_dashboard_summary_after_sync(mem_conn):
     assert summary["available"] == 1
     assert summary["missing"] == 1
     assert summary["radarr_items"] == 2
+
+
+# ---------------------------------------------------------------------------
+# sync_all() recomputing emu_in_catalog for newly-synced items (Recomendaciones
+# Group 2/3 need it resolved to exactly 0/1, not NULL, right after a plain
+# library sync — otherwise a new item stays invisible there until someone
+# happens to also run a full eMuwarez catalog sync).
+# ---------------------------------------------------------------------------
+
+def test_sync_all_recomputes_emu_status_for_new_movie(mem_conn):
+    from emuwarez_uploadrr.database import set_state
+    from emuwarez_uploadrr.services.emu_catalog import SYNC_COMPLETED_STATE_KEY
+    from emuwarez_uploadrr.services.library import sync_all
+
+    movie = _fake_movie(20, "Missing Film", has_file=False)
+    mem_conn.execute(
+        "INSERT INTO emu_catalog (torrent_id, name, tmdb_id, category) VALUES (?,?,?,?)",
+        ("1", "Some Other Film 2019", str(movie["tmdbId"]), "Películas"),
+    )
+    set_state(mem_conn, SYNC_COMPLETED_STATE_KEY, "2024-01-01T00:00:00+00:00")
+    mem_conn.commit()
+
+    with (
+        patch("emuwarez_uploadrr.integrations.radarr.get_movies", return_value=[movie]),
+        patch("emuwarez_uploadrr.integrations.radarr.get_queue", return_value=[]),
+    ):
+        sync_all(mem_conn, include_episodes=False)
+
+    row = mem_conn.execute(
+        "SELECT emu_in_catalog FROM library_items WHERE title = ?", ("Missing Film",)
+    ).fetchone()
+    assert row["emu_in_catalog"] == 1
+
+
+def test_sync_all_leaves_emu_status_null_before_any_emu_sync(mem_conn):
+    """No eMuwarez catalog sync has ever completed — recompute must no-op
+    instead of confidently marking everything "not on eMuwarez" against an
+    empty catalog table."""
+    from emuwarez_uploadrr.services.library import sync_all
+
+    movie = _fake_movie(21, "Another Missing Film", has_file=False)
+    with (
+        patch("emuwarez_uploadrr.integrations.radarr.get_movies", return_value=[movie]),
+        patch("emuwarez_uploadrr.integrations.radarr.get_queue", return_value=[]),
+    ):
+        sync_all(mem_conn, include_episodes=False)
+
+    row = mem_conn.execute(
+        "SELECT emu_in_catalog FROM library_items WHERE title = ?", ("Another Missing Film",)
+    ).fetchone()
+    assert row["emu_in_catalog"] is None

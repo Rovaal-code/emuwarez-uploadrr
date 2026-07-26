@@ -7,7 +7,7 @@ import { InfoIcon } from './InfoIcon'
 import { StatusBadge } from './StatusBadge'
 import { ServiceLabel } from './ServiceIcon'
 import {
-  Card, FieldRow, DetailPoster, ValueChip, ValueIcon, DETAIL_CARD_HEIGHT, DetailHero, DetailTitle,
+  Card, FieldRow, DetailPoster, ValueChip, ValueIcon, DETAIL_CARD_HEIGHT, DetailHero, DetailTitle, DetailTitleText,
   StatusCardIcon, ClockCardIcon, UploadButtonIcon, LibraryButtonIcon, RetryButtonIcon, CancelButtonIcon, DeleteButtonIcon,
   TypeValueIcon, CalendarValueIcon, ProgressValueIcon,
   NomenclatureValueIcon, AudioCodecValueIcon, ChecksValueIcon, LogsValueIcon,
@@ -516,7 +516,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
 
       <div style={{ marginBottom: 20 }}>
         <DetailTitle>
-          {job.display_title || job.title || `Job ${jobId}`}
+          <DetailTitleText title={job.display_title || job.title || `Job ${jobId}`} />
           {isRunning && <span style={{ fontSize: 11, color: '#22c55e' }}>● en vivo</span>}
         </DetailTitle>
       </div>

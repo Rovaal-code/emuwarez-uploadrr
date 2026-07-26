@@ -22,7 +22,7 @@ import { posterUrl, idVerifyUrl } from '../utils/libraryItem'
 import { ExternalIdLink } from '../components/ExternalIdLink'
 import { InfoIcon } from '../components/InfoIcon'
 import {
-  Card, FieldRow, DetailPoster, ValueChip, ValueIcon, TechChip, CheckStatusIcon, DETAIL_CARD_HEIGHT, DetailHero, DetailTitle,
+  Card, FieldRow, DetailPoster, ValueChip, ValueIcon, TechChip, CheckStatusIcon, DETAIL_CARD_HEIGHT, DetailHero, DetailTitle, DetailTitleText,
   StatusCardIcon, RequestCardIcon, ExternalIdsCardIcon,
   UploadButtonIcon, ExternalLinkButtonIcon, LibraryButtonIcon,
   TypeValueIcon, AuthorValueIcon, CalendarValueIcon,
@@ -311,7 +311,7 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
       </div>
 
       <div style={{ marginBottom: 20 }}>
-        <DetailTitle>{item.display_title || requestDisplayTitle(item)}</DetailTitle>
+        <DetailTitle><DetailTitleText title={item.display_title || requestDisplayTitle(item)} /></DetailTitle>
       </div>
 
       <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>

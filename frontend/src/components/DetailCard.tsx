@@ -50,6 +50,25 @@ export function DetailTitle({ children }: { children: React.ReactNode }) {
   )
 }
 
+// Renders a canonical "Serie (Año)" / "Serie (Año) - Temporada X" / "Serie
+// (Año) - SxxEyy[ - Nombre]" display title (services.library.
+// content_display_title) with the "(Año)" segment muted, same as every other
+// secondary/year annotation in the app — everything else stays full-weight.
+// Falls back to plain text unchanged if no "(YYYY)" is found (e.g. a raw,
+// un-canonicalized title used before the single-item fetch resolves).
+export function DetailTitleText({ title }: { title: string }) {
+  const m = title.match(/^(.*?)(\(\d{4}\))(.*)$/)
+  if (!m) return <>{title}</>
+  const [, before, year, after] = m
+  return (
+    <>
+      {before}
+      <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>{year}</span>
+      {after}
+    </>
+  )
+}
+
 // padding/gap/titleGap are overridable per page, but every current usage
 // sticks to the defaults — tuned to fit 8 value-chip rows inside
 // DETAIL_CARD_HEIGHT.

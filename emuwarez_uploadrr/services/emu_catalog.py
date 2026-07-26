@@ -297,6 +297,23 @@ def _episode_lang_has_es(langs: Optional[str]) -> bool:
     return any(tok in up for tok in ("ESP", "ES ", "SPA", "CAST", "DUAL", "MULTI", "LATINO"))
 
 
+def recompute_emu_catalog_status(conn: sqlite3.Connection) -> int:
+    """Re-run the (purely local, no network) eMuwarez comparison against
+    whatever catalog snapshot is already stored — safe to call after a plain
+    Radarr/Sonarr library sync so newly-added/changed items get emu_in_catalog
+    computed right away, instead of staying NULL (and so invisible to
+    Recomendaciones' Group 2/3, which require it resolved to exactly 0) until
+    someone happens to also run a full eMuwarez catalog sync.
+
+    No-ops (returns 0) if eMuwarez has never actually finished a catalog sync
+    — same SYNC_COMPLETED_STATE_KEY guard get_item_comparison() uses — so a
+    fresh install with no eMu API key yet doesn't get every single item
+    confidently marked "not on eMuwarez" against an empty catalog table."""
+    if not get_state(conn, SYNC_COMPLETED_STATE_KEY):
+        return 0
+    return _compute_and_store_item_status(conn)
+
+
 def _compute_and_store_item_status(conn: sqlite3.Connection) -> int:
     """Compute emu_in_catalog/emu_aportes for every movie, season and series."""
     # Load the catalog into in-memory indexes.

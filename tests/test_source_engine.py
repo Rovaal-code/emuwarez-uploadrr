@@ -243,6 +243,34 @@ def test_pgs_alone_does_not_dominate_bdremux():
     assert 0 < contrib < 15
 
 
+def test_pgs_subtitles_does_not_heavily_favor_bluray_over_mhd():
+    """Regression: PGS presence used to give BluRay more than double MHD's
+    credit (7 vs 3) with no technical justification — an MHD re-encode
+    keeps the disc's original PGS track just as readily as a "regular"
+    BluRay re-encode (subs are tiny, re-encoders rarely re-author them
+    regardless of how hard they compress the video). This alone explained
+    a real misclassification (Chappie, 2026-07-28) where PGS was the ONLY
+    signal separating the two candidates by any meaningful margin."""
+    profile_dict = _base_profile(
+        subtitle_tracks=[{"kind": "bitmap", "codec": "PGS"}, {"kind": "bitmap", "codec": "PGS"}],
+        topology={"chapter_count": 0, "pgs_count": 2, "vobsub_count": 0, "text_subtitle_count": 0},
+    )
+    contrib = ev.subtitle_profile_signal(profile_dict)[0].contributions
+    assert contrib["BluRay"] > contrib["MHD"] > 0
+    assert contrib["BluRay"] - contrib["MHD"] <= 1
+
+
+def test_transcode_fingerprint_weighs_bluray_and_mhd_equally():
+    """Regression: the weak/ambiguous encoder-fingerprint signal gave BluRay
+    4x weight vs MHD's 3x with no justification — both are re-encodes by
+    definition, so a bare fingerprint can't discriminate between re-encode
+    tiers, only "re-encoded at all" vs "genuinely untouched"."""
+    video = {"encoder": "x264 - core 165", "encoder_settings": "crf=18.0 / keyint=250"}
+    sig = transcode.analyze_transcode_signals(video)
+    contrib = ev.transcode_signal(_base_profile(), sig)[0].contributions
+    assert contrib["BluRay"] == contrib["MHD"]
+
+
 def test_video_codec_mpeg2_favors_sd_hdtv():
     result = ev.video_codec_signal(_base_profile(video={"codec": "MPEG-2 Video"}))
     contrib = result[0].contributions

@@ -7,42 +7,44 @@ exactly which of Uploadrr-EMU's own internal phases is running. That parser
 was never carried over when the upload flow moved into `upload_execution.py`,
 so the modern job detail view had no real progress at all until now.
 
-Unlike legacy.py (which fed everything into a single CLI progress bar),
-each of Uploadrr-EMU's internal phases gets its OWN row in PHASES below —
-queue -> video processing -> MediaInfo export -> video metadata -> dupe
-check -> screenshots generate -> screenshots upload -> hashing -> torrent
-creation -> uploading to eMuwarez — plus this app's own pipeline stages
-that run before Uploadrr-EMU is even invoked (integrity -> nomenclature ->
-remux -> preflight). Each phase has a fixed weight based on typical
-wall-clock duration, so a single job-wide percentage can be computed as
-phases complete.
+Unlike legacy.py (which fed everything into a single CLI progress bar), each
+group of related sub-phases gets its own row in PHASES below, in DISPLAY
+order: nomenclature -> remux -> "Inicio de Uploadrr" (this app's own
+integrity/preflight checks, plus Uploadrr-EMU's own queue/video-processing/
+MediaInfo/duplicates output — one continuous "getting ready, then starting"
+phase even though the app-level part runs before nomenclature/remux in real
+execution order) -> screenshots generate+upload -> hashing+torrent creation
+-> uploading to eMuwarez -> adding to qBittorrent. Each phase has a fixed
+weight based on typical wall-clock duration, so a single job-wide percentage
+can be computed as phases complete.
 """
 from __future__ import annotations
 
 import re
 from typing import Optional
 
-# (stage key, display label, weight-out-of-100). Order matters — the running
-# sub-phases (everything after "verificacion_presubida") are also the
-# sequence Uploadrr-EMU itself reports them in, used by
-# advance_running_phase() to mark every earlier running sub-phase done once
-# a later one is seen.
+# (stage key, display label, weight-out-of-100). DISPLAY order only —
+# advance_running_phase()'s retroactive done-marking is driven by
+# RUNNING_DISPLAY_ORDER (derived from RUNNING_SUB_PHASE_ORDER, Uploadrr-
+# EMU's own real sequence), not by this list's order, so reordering these
+# rows for the UI never affects when a phase actually gets marked done.
 #
 # Several rows here are a merge of what used to be multiple separate phases
 # (see PHASE_KEY_ALIASES below) — "duplicates" was dropped as its own row
 # (nothing else in the codebase branches on its result, it was purely a
-# progress marker) and its weight folded into "metadata_processing", the
+# progress marker) and its weight folded into "verificacion_presubida", the
 # group it chronologically sits inside.
 PHASES: list[tuple[str, str, int]] = [
-    # integrity(5) + preflight(5) + queue_processing(2) — this phase now
-    # stays "running" from before Uploadrr-EMU is even invoked through to
-    # its own "Starting queue processing" line, since that's genuinely one
-    # continuous "getting ready to upload" stretch from the user's point of
-    # view (see PHASE_KEY_ALIASES below for how queue_processing folds in).
-    ("verificacion_presubida", "Verificación e Inicio de Uploadrr", 12),
     ("nomenclature", "Aplicación de nomenclatura", 5),
-    ("remux", "Reordenación de pistas", 15),
-    ("metadata_processing", "Procesamiento de metadatos", 10),  # video_processing(2)+mediainfo_export(3)+video_metadata(2)+duplicates(3)
+    ("remux", "Reordenación y renombrado de pistas", 15),
+    # integrity(5) + preflight(5) + queue_processing(2) + video_processing(2)
+    # + mediainfo_export(3) + video_metadata(2) + duplicates(3) = 22. Stays
+    # "running" from before Uploadrr-EMU is even invoked (starts before
+    # nomenclature/remux, in real execution order) through to the point its
+    # own metadata-processing output finishes — one continuous "getting
+    # ready, then actually starting Uploadrr" stretch from the user's point
+    # of view (see PHASE_KEY_ALIASES below for how the raw triggers fold in).
+    ("verificacion_presubida", "Inicio de Uploadrr", 22),
     ("screenshots", "Generación y subida de capturas", 20),  # screenshots_generate(10)+screenshots_upload(10)
     ("hash_torrent", "Cálculo de hash del torrent", 28),  # hashing(20)+torrent_create(8)
     ("uploading_emu", "Subida a eMuwarez", 7),
@@ -66,17 +68,22 @@ RUNNING_SUB_PHASE_ORDER = [
 
 # Raw sub-phase -> merged, displayed PHASES key. A raw key absent from this
 # map displays as itself (uploading_emu/qbittorrent_add are not merged with
-# anything). queue_processing folds into verificacion_presubida — the ONLY
-# raw trigger in that group, so resolve_display_progress() passes its pct
-# straight through (no group-weighted interpolation needed); this phase is
-# only ever marked done retroactively once the NEXT raw trigger
-# (video_processing) fires, same safety net every other merged phase uses.
+# anything). queue_processing/video_processing/mediainfo_export/
+# video_metadata/duplicates all fold into verificacion_presubida ("Inicio
+# de Uploadrr") — this phase is only ever marked done retroactively once
+# the NEXT raw trigger (screenshots_generate) fires, same safety net every
+# other merged phase uses. Note this group's RAW_SUBPHASE_WEIGHTS below only
+# sum to 12, not its full PHASES weight of 22 — the other 10 points are the
+# app-level integrity/preflight work that happens before Uploadrr-EMU is
+# even invoked, with no raw trigger of its own (see resolve_display_progress
+# — group interpolation is self-contained to its own raw members' total,
+# independent of the displayed phase's overall weight).
 PHASE_KEY_ALIASES: dict[str, str] = {
     "queue_processing": "verificacion_presubida",
-    "video_processing": "metadata_processing",
-    "mediainfo_export": "metadata_processing",
-    "video_metadata": "metadata_processing",
-    "duplicates": "metadata_processing",
+    "video_processing": "verificacion_presubida",
+    "mediainfo_export": "verificacion_presubida",
+    "video_metadata": "verificacion_presubida",
+    "duplicates": "verificacion_presubida",
     "screenshots_generate": "screenshots",
     "screenshots_upload": "screenshots",
     "hashing": "hash_torrent",
@@ -85,9 +92,16 @@ PHASE_KEY_ALIASES: dict[str, str] = {
 
 # Original per-raw-sub-phase weights (pre-merge) — used only to interpolate
 # a merged phase's displayed 0-100 pct as its raw members fire in sequence;
-# never rendered directly. Each merged group's members sum to exactly that
-# group's own PHASE_WEIGHTS entry, so this interpolation never changes the
-# job-wide global_pct total versus the old, unmerged phase list.
+# never rendered directly. For screenshots/hash_torrent, each merged group's
+# members sum to exactly that group's own PHASES weight, so the group's own
+# 0-100% interpolation lines up 1:1 with its share of the job-wide total.
+# verificacion_presubida is the one exception: its raw members
+# (queue_processing..duplicates) only sum to 12, not its full PHASES weight
+# of 22 — the remaining 10 is app-level work with no raw trigger at all.
+# That's still correct: resolve_display_progress()'s interpolation is
+# self-contained to a group's own raw-member total (whatever that is), and
+# build_phase_state() scales the resulting 0-100% by the PHASES weight
+# separately — the two numbers don't need to match for the math to hold.
 RAW_SUBPHASE_WEIGHTS: dict[str, int] = {
     "queue_processing": 2,
     "video_processing": 2,

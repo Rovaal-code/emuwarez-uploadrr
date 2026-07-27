@@ -74,7 +74,7 @@ export function latestInChain(jobs: UploadJob[]): UploadJob | null {
 const PHASE_LABEL: Record<string, string> = {
   staging: 'Generando nomenclatura',
   queued: 'En cola',
-  verificacion_presubida: 'Verificación pre-subida',
+  verificacion_presubida: 'Inicio de Uploadrr',
   nomenclature: 'Aplicando nomenclatura',
   remux: 'Reordenando/renombrando pistas',
   config_staging: 'Preparando configuración',
@@ -103,11 +103,9 @@ export function phaseLabel(phase?: string | null): string {
 // a narrow column/panel, so none of these run longer than the previous
 // longest phase label ("Reordenando/renombrando pistas", 31 chars).
 const PROGRESS_ACTION_LABEL: Record<string, string> = {
-  verificacion_presubida: 'Verificando',
+  verificacion_presubida: 'Iniciando Uploadrr',
   nomenclature: 'Aplicando nomenclatura',
-  remux: 'Reordenando pistas',
-  queue_processing: 'Iniciando Uploader',
-  metadata_processing: 'Procesando metadatos',
+  remux: 'Reordenando/renombrando pistas',
   screenshots: 'Generando/subiendo capturas',
   hash_torrent: 'Calculando hash del torrent',
   uploading_emu: 'Subiendo a eMuwarez',

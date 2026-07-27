@@ -364,6 +364,30 @@ Limitación: n=28 para MHD sigue siendo pequeño (es todo lo que hay en el
 catálogo con ese patrón de nombre) — el rango podría ajustarse más si en
 el futuro aparecen más muestras reales.
 
+## Caso real: Chappie (2026-07-28) — PGS favorecía BluRay sobre MHD sin motivo
+
+Con el detalle de evidencia real de una subida (Chappie, MicroHD confirmado
+por el propio nombre del archivo), el motor dio BluRay 9.4 vs MHD 7.3
+(margen 2.1 pts, certeza "bajo"). Desglosando evidencia por evidencia,
+**toda la diferencia** venía de una sola señal: `pgs_subtitles` daba a
+BluRay más del doble de crédito que a MHD (7 vs 3, en bruto) — el resto de
+señales estaban prácticamente empatadas entre ambos.
+
+Ese reparto 7/3 nunca tuvo datos de calibración detrás (la calibración de
+MHD solo validó su rango de bpppf global, no el desglose por tipo de
+evidencia) y no hay ninguna razón técnica que lo sostenga: un re-encode
+MicroHD conserva la pista PGS original del disco con la misma facilidad
+que un BluRay "normal" — los subtítulos apenas pesan, así que ni los
+grupos más obsesionados con el tamaño del archivo suelen molestarse en
+volver a autorarlos. Se estrechó a `BluRay=6, MHD=5` (sigue dando algo más
+de crédito a BluRay, pero sin dominar la decisión). De paso se igualó
+`video_transcode_probability` (BluRay=4x vs MHD=3x, mismo problema: ambos
+son re-encodes por definición, esa señal no puede ni debe discriminar
+entre ellos). Con ambos cambios, el margen del caso Chappie baja de 2.1 a
+~0.6 puntos — sigue sin ganar MHD con esta única muestra, pero refleja
+mucho mejor lo reñido que está de verdad, en vez de un margen inflado por
+una asimetría sin respaldo.
+
 ## Cómo seguir calibrando
 
 1. Recolectar (o pedir) archivos con `SD` reales (1 sola muestra en ambas

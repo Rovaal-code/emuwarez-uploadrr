@@ -319,10 +319,9 @@ const PHASE_STATUS_TEXT: Record<string, string> = {
 // yet. Uploadrr-EMU's own internal phases (queue -> ... -> uploading to
 // eMuwarez) are each their own row, not collapsed into one "Subiendo" bucket.
 const DEFAULT_PHASES: UploadProgressPhase[] = [
-  { key: 'verificacion_presubida', label: 'Verificación e Inicio de Uploadrr', status: 'pending', pct: 0 },
   { key: 'nomenclature', label: 'Aplicación de nomenclatura', status: 'pending', pct: 0 },
-  { key: 'remux', label: 'Reordenación de pistas', status: 'pending', pct: 0 },
-  { key: 'metadata_processing', label: 'Procesamiento de metadatos', status: 'pending', pct: 0 },
+  { key: 'remux', label: 'Reordenación y renombrado de pistas', status: 'pending', pct: 0 },
+  { key: 'verificacion_presubida', label: 'Inicio de Uploadrr', status: 'pending', pct: 0 },
   { key: 'screenshots', label: 'Generación y subida de capturas', status: 'pending', pct: 0 },
   { key: 'hash_torrent', label: 'Cálculo de hash del torrent', status: 'pending', pct: 0 },
   { key: 'uploading_emu', label: 'Subida a eMuwarez', status: 'pending', pct: 0 },
@@ -361,7 +360,7 @@ function ProgressCell({ pct, bold }: { pct: number; bold?: boolean }) {
   )
 }
 
-function PhasesSection({ phases, globalPct, job }: { phases: UploadProgressPhase[]; globalPct: number; job: UploadJob }) {
+function PhasesSection({ phases, job }: { phases: UploadProgressPhase[]; job: UploadJob }) {
   // If the job itself has stopped (failed/cancelled) but a phase snapshot was
   // never updated past "running" (e.g. mkvmerge's timeout kills the job
   // without touching progress_json), show that phase as failed/cancelled
@@ -407,18 +406,6 @@ function PhasesSection({ phases, globalPct, job }: { phases: UploadProgressPhase
             </tr>
             )
           })}
-          {/* Sticky footer row (see .sticky-footer-row in components.css) — the
-              job's overall progress, always visible at the bottom of the
-              scroll area instead of requiring a scroll past every phase to
-              see it, same idea as the header staying pinned at the top. */}
-          <tr className="sticky-footer-row" style={{ borderTop: '2px solid var(--border)' }}>
-            <td />
-            <td style={{ fontWeight: 700 }} colSpan={2}>Progreso global</td>
-            <td><ProgressCell pct={globalPct} bold /></td>
-            <td style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 700 }}>{formatDate(job.started_at ?? job.created_at ?? null)}</td>
-            <td style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 700 }}>{job.finished_at ? formatDate(job.finished_at) : '–'}</td>
-            <td style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{formatPhaseDuration(job.started_at ?? job.created_at, job.finished_at)}</td>
-          </tr>
         </tbody>
       </table>
     </div>
@@ -647,7 +634,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
         {isStaging ? (
           <GeneratingSpinner text="Esperando a que termine la verificación previa…" />
         ) : (
-          <PhasesSection phases={progress?.phases?.length ? progress.phases : DEFAULT_PHASES} globalPct={progress?.global_pct ?? 0} job={job} />
+          <PhasesSection phases={progress?.phases?.length ? progress.phases : DEFAULT_PHASES} job={job} />
         )}
       </Panel>
 

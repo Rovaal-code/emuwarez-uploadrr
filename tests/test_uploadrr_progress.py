@@ -38,14 +38,20 @@ def test_raw_subphase_weights_cover_every_running_sub_phase():
 def test_merged_group_raw_weights_sum_to_displayed_weight():
     # Each merged phase's own PHASES weight must equal the sum of its raw
     # members' weights — otherwise resolve_display_progress()'s interpolation
-    # would change the job-wide global_pct total versus the old, unmerged list.
+    # would change the job-wide global_pct total versus the old, unmerged
+    # list. verificacion_presubida ("Inicio de Uploadrr") is the deliberate
+    # exception: 10 of its 22 points are app-level integrity/preflight work
+    # with no raw trigger at all — its raw members only ever need to sum to
+    # THEIR OWN total (12), not the full displayed weight (see
+    # resolve_display_progress's own docstring/uploadrr_progress.py's
+    # RAW_SUBPHASE_WEIGHTS comment for why that's still correct).
     phase_weights = {key: weight for key, _label, weight in PHASES}
     groups: dict[str, list[str]] = {}
     for raw_key in RUNNING_SUB_PHASE_ORDER:
         display_key = PHASE_KEY_ALIASES.get(raw_key, raw_key)
         groups.setdefault(display_key, []).append(raw_key)
     for display_key, members in groups.items():
-        if len(members) <= 1:
+        if len(members) <= 1 or display_key == "verificacion_presubida":
             continue
         assert sum(RAW_SUBPHASE_WEIGHTS[m] for m in members) == phase_weights[display_key]
 
@@ -54,19 +60,18 @@ def test_resolve_display_progress_unmerged_passthrough():
     assert resolve_display_progress("uploading_emu", 0) == ("uploading_emu", 0)
 
 
-def test_resolve_display_progress_queue_processing_folds_into_verificacion():
-    # queue_processing is the only raw member of this group, so its own pct
-    # passes straight through (no group-weighted interpolation needed).
-    assert resolve_display_progress("queue_processing", 100) == ("verificacion_presubida", 100)
-
-
-def test_resolve_display_progress_metadata_processing_group():
-    # video_processing(2) + mediainfo_export(3) + video_metadata(2) + duplicates(3) = 10
-    assert resolve_display_progress("video_processing", 100) == ("metadata_processing", 20)
-    assert resolve_display_progress("mediainfo_export", 100) == ("metadata_processing", 50)
-    assert resolve_display_progress("video_metadata", 100) == ("metadata_processing", 70)
-    assert resolve_display_progress("duplicates", 50) == ("metadata_processing", 85)
-    assert resolve_display_progress("duplicates", 100) == ("metadata_processing", 100)
+def test_resolve_display_progress_verificacion_group():
+    # queue_processing(2) + video_processing(2) + mediainfo_export(3) +
+    # video_metadata(2) + duplicates(3) = 12 (NOT the phase's own full
+    # PHASES weight of 22 — see test_merged_group_raw_weights_sum_to_
+    # displayed_weight's docstring). Only the LAST member (duplicates)
+    # reaching 100% closes the displayed phase at 100.
+    assert resolve_display_progress("queue_processing", 100) == ("verificacion_presubida", 17)
+    assert resolve_display_progress("video_processing", 100) == ("verificacion_presubida", 33)
+    assert resolve_display_progress("mediainfo_export", 100) == ("verificacion_presubida", 58)
+    assert resolve_display_progress("video_metadata", 100) == ("verificacion_presubida", 75)
+    assert resolve_display_progress("duplicates", 50) == ("verificacion_presubida", 88)
+    assert resolve_display_progress("duplicates", 100) == ("verificacion_presubida", 100)
 
 
 def test_resolve_display_progress_screenshots_group():
@@ -174,22 +179,22 @@ def test_build_phase_state_partial_progress():
     assert by_key["verificacion_presubida"]["status"] == "done" and by_key["verificacion_presubida"]["pct"] == 100
     assert by_key["nomenclature"]["status"] == "done"
     assert by_key["remux"]["status"] == "running" and by_key["remux"]["pct"] == 50
-    assert by_key["metadata_processing"]["status"] == "pending"
-    # 12 + 5 + (15 * 0.5) = 24.5 -> banker's rounding -> 24
-    assert state["global_pct"] == 24
+    assert by_key["screenshots"]["status"] == "pending"
+    # 22 + 5 + (15 * 0.5) = 34.5 -> banker's rounding -> 34
+    assert state["global_pct"] == 34
 
 
 def test_build_phase_state_running_sub_phase_advances():
-    # verificación e inicio de uploadrr/nomenclatura/remux already done,
-    # procesamiento de metadatos in progress at 50%:
-    # (12+5+15) + 10*0.5 = 32 + 5 = 37
+    # nomenclatura/remux already done, "Inicio de Uploadrr"
+    # (verificacion_presubida) in progress at 50%:
+    # (5+15) + 22*0.5 = 20 + 11 = 31
     state = build_phase_state(
-        ["verificacion_presubida", "nomenclature", "remux"],
-        current="metadata_processing", current_pct=50,
+        ["nomenclature", "remux"],
+        current="verificacion_presubida", current_pct=50,
     )
-    assert state["global_pct"] == 37
+    assert state["global_pct"] == 31
     by_key = {p["key"]: p for p in state["phases"]}
-    assert by_key["metadata_processing"]["status"] == "running"
+    assert by_key["verificacion_presubida"]["status"] == "running"
     assert by_key["screenshots"]["status"] == "pending"
 
 

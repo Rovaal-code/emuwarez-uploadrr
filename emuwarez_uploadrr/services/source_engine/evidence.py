@@ -405,9 +405,21 @@ def subtitle_profile_signal(profile: dict) -> list[Evidence]:
     text_n = profile["topology"].get("text_subtitle_count", 0)
 
     if pgs_n:
+        # BluRay used to get more than double MHD's credit here (7 vs 3, no
+        # calibration data behind the split — MHD had no per-evidence-type
+        # validation, only its overall bpppf range did). No technical reason
+        # supports that gap: an MHD re-encode keeps the disc's original PGS
+        # track just as readily as a "regular" BluRay re-encode does (subs
+        # are tiny, re-encoders rarely bother re-authoring them regardless of
+        # how aggressively they compress the video) — confirmed as the sole
+        # driver of a real misclassification (Chappie, 2026-07-28): PGS
+        # alone explained the entire BluRay-over-MHD margin. Narrowed so it
+        # still favors BluRay somewhat (full-quality encoders are marginally
+        # likelier to leave premium subtitle formats untouched than the most
+        # size-conscious MHD groups) without dominating the decision.
         ev.append(Evidence(
             feature="pgs_subtitles", value=pgs_n,
-            contributions=_c(BDRemux=9, BluRay=7, MHD=3, **{"WEB-DL": -4, "WEBRIP": -4}),
+            contributions=_c(BDRemux=9, BluRay=6, MHD=5, **{"WEB-DL": -4, "WEBRIP": -4}),
             strength="medium", reliability=0.7,
             explanation=f"{pgs_n} pista(s) PGS (subtítulo de imagen HDMV) son compatibles con un origen Blu-ray, no concluyentes en solitario.",
         ))
@@ -456,9 +468,16 @@ def transcode_signal(profile: dict, signals) -> list[Evidence]:
         # never with an open-source x264/x265 CLI dump — so any such
         # fingerprint at all is real (if not overwhelming) evidence against
         # them, unlike the platform-encode ambiguity that applies to WEB-DL.
+        # BluRay/MHD get the SAME weight here (both are re-encodes by
+        # definition — this signal can't and shouldn't discriminate between
+        # re-encode tiers, only "re-encoded at all" vs "genuinely untouched
+        # source"). An earlier version favored BluRay over MHD (4x vs 3x)
+        # with no justification; narrowed alongside pgs_subtitles above
+        # after both together fully explained a real misclassification
+        # (Chappie, 2026-07-28).
         ev = [Evidence(
             feature="video_transcode_probability", value=round(p, 2),
-            contributions=_c(BDRemux=-12 * p, **{"FBD": -6 * p}, BluRay=4 * p, MHD=3 * p,
+            contributions=_c(BDRemux=-12 * p, **{"FBD": -6 * p}, BluRay=4 * p, MHD=4 * p,
                               WEBRIP=4 * p, **{"WEB-DL": -3 * p}),
             strength="weak", reliability=0.3, explanation=explanation,
         )]

@@ -332,6 +332,38 @@ anime cuando se pueda reunir una — el propio catálogo de eMuwarez
 nombre para repetir el mismo proceso de calibración usado con las
 películas.
 
+## Recalibración de MHD con duración real de TMDb (2026-07)
+
+La segunda pasada de calibración (catálogo completo) asumía una duración
+fija de 110 min/24fps para toda película, porque el catálogo no trae
+duración real. Eso distorsiona el bpppf estimado para cualquier película
+cuya duración real difiera mucho de 110 min — y, casualmente, hacía que el
+rango de MHD (0.07-0.13) quedase ENTERO dentro del de BluRay (0.035-0.188),
+sin aportar ninguna separación real entre ambos.
+
+Se repitió el cálculo para 28 películas MHD (todas las que hay en el
+catálogo, filtro por nombre corregido: "MicroHD" o "MHD" como palabra
+suelta, sin packs de temporada) y 149 BluRay (muestra aleatoria de 150),
+esta vez consultando la duración real de cada una vía TMDb (`tmdb_id`, que
+el catálogo sí guarda) en vez de asumir 110 min. Resultado:
+
+- MHD: min 0.069, mediana 0.101, máx 0.151 (n=28).
+- BluRay: p25 0.116, mediana 0.128, p75 0.191, y bastante más alto en
+  re-encodes grandes reales (hasta 0.3-0.48) — mucho más ancho y con una
+  mediana claramente por encima de la de MHD.
+
+Con duración real sí hay separación genuina (medianas ~21% distintas), a
+diferencia de la estimación con duración asumida. Se actualizó
+`_BPPF_RANGES["MHD"]` a `(0.065, 0.155)` — más estrecho y desplazado hacia
+abajo respecto al `(0.07, 0.13)` anterior, y ya no completamente contenido
+dentro del rango de BluRay. `BluRay` no se tocó: su calibración ya incluía
+duración real de MediaInfo de la biblioteca personal en la primera pasada,
+no depende solo de la estimación de 110 min.
+
+Limitación: n=28 para MHD sigue siendo pequeño (es todo lo que hay en el
+catálogo con ese patrón de nombre) — el rango podría ajustarse más si en
+el futuro aparecen más muestras reales.
+
 ## Cómo seguir calibrando
 
 1. Recolectar (o pedir) archivos con `SD` reales (1 sola muestra en ambas

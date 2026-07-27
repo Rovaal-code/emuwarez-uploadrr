@@ -270,7 +270,16 @@ def bluray_compat_flag(profile: dict) -> list[Evidence]:
 _BPPF_RANGES = {
     "BDRemux": (0.40, 0.72),      # catalog-calibrated, n=199 (estimated duration — see above)
     "BluRay": (0.035, 0.188),
-    "MHD": (0.07, 0.13),          # widened to cover both calibration passes (library n=8, catalog n=25)
+    # Re-calibrated (2026-07) against 28 real MHD + 149 real BluRay catalog
+    # movies using ACTUAL TMDb runtimes instead of the flat 110min/24fps
+    # assumption above — that assumption inflated bpppf for any movie whose
+    # real length differs a lot from 110min, which is exactly what made MHD's
+    # estimated range (0.07-0.13) fit entirely inside BluRay's (contributing
+    # nothing). With real runtimes: MHD min/median/max = 0.069/0.101/0.151;
+    # BluRay's own p25/median/p75 = 0.116/0.128/0.191 (and legitimately much
+    # higher for large premium re-encodes) — real separation, not just an
+    # artifact of the duration estimate.
+    "MHD": (0.065, 0.155),
     "WEB-DL": (0.041, 0.130),
     "WEBRIP": (0.050, 0.090),     # calibration's WEBRIP p25==p50==p75==0.062; widened slightly, still tight
     "HDTV": (0.086, 0.239),

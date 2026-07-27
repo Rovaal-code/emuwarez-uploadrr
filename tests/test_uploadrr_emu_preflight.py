@@ -69,6 +69,44 @@ def test_command_args_use_real_flags(tmp_path, db_conn):
     assert "--tracker" not in joined
     assert "--category" not in joined
     assert "--resolution" not in joined
+
+
+def test_mt_uses_full_proposed_filename_not_bare_title(tmp_path, db_conn):
+    """Regression: -mt is Uploadrr-EMU's --manual-title, which OVERRIDES
+    the generated name outright (its own --help says so, and UNIT3D.py
+    confirms manual_name wins over anything auto-generated) — it's not just
+    a display label. Using proposal["proposed_title"] (the bare title,
+    e.g. "Chappie") made the torrent appear on eMuwarez literally named
+    "Chappie" instead of the full release name. Must use proposed_filename,
+    the complete already-computed nomenclature string."""
+    uploadrr_dir = tmp_path / "Uploadrr"
+    uploadrr_dir.mkdir()
+    (uploadrr_dir / "upload.py").write_text("# fake")
+    _set(db_conn, "uploadrr.path", str(uploadrr_dir))
+    _set(db_conn, "uploadrr.python_path", "/usr/bin/python3")
+
+    root = tmp_path / "library"
+    root.mkdir()
+    prepared = root / "Chappie.2015.1080p.MHD.x264.DUAL.DD.5.1.SUBS-EMUWAREZ.mkv"
+    prepared.write_bytes(b"\x00")
+    _set(db_conn, "uploadrr.allowed_roots", f'["{root}"]')
+
+    item = {
+        "title": "Chappie", "local_status": "Disponible", "path": str(prepared),
+        "prepared_path": str(prepared), "item_type": "movie",
+        "tmdb_id": "198184", "resolution": "1080p",
+    }
+    proposal = {
+        "proposed_title": "Chappie",
+        "proposed_filename": "Chappie.2015.1080p.MHD.x264.DUAL.DD.5.1.SUBS-EMUWAREZ",
+        "resolution": "1080p",
+    }
+    result = build_uploadrr_command_preview(item, proposal, conn=db_conn)
+
+    args = result["command_args"]
+    mt_value = args[args.index("-mt") + 1]
+    assert mt_value == "Chappie.2015.1080p.MHD.x264.DUAL.DD.5.1.SUBS-EMUWAREZ"
+    assert mt_value != "Chappie"
     assert result["contract_valid"] is True
 
 

@@ -935,13 +935,18 @@ def _run_queued_job(job_id: int) -> None:
 
         # --- 4. Final preflight (fresh preconditions + command preview,
         # against the now-final renamed/remuxed file) then start. Still part
-        # of the "verificacion_presubida" displayed phase — this is what
-        # actually closes it.
+        # of the "verificacion_presubida" displayed phase ("Verificación e
+        # Inicio de Uploadrr") — no mark_phase_done here anymore: since
+        # queue_processing (Uploadrr-EMU's own "Starting queue processing"
+        # line) is now folded into this same displayed phase
+        # (uploadrr_progress.PHASE_KEY_ALIASES), it only actually closes once
+        # that real subprocess output is seen — advance_running_phase()
+        # marks it done retroactively when the NEXT raw trigger
+        # (video_processing) fires, same as every other merged phase.
         _mark(job_id, stage="verificacion_presubida")
         append_upload_log(job_id, "info", "Preparando la subida…", stream="system", conn=conn)
         if not _populate_ready(job_id, item_id, conn=conn):
             return  # _populate_ready already recorded the failure reason
-        mark_phase_done(job_id, "verificacion_presubida")
 
         result = start_upload_job(job_id, dry_run=False, start=True, confirmation=START_TOKEN, conn=conn, pre_gated=True)
         if result.get("error"):

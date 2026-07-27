@@ -116,7 +116,21 @@ def build_uploadrr_command_preview(
         runtime = get_runtime_settings(conn)
         runtime_type = runtime["runtime_type"]
 
-        title = (proposal or {}).get("proposed_title") or library_item.get("title") or "Sin título"
+        # Uploadrr-EMU's -mt/--manual-title is NOT just a display label — its
+        # own argparse help says "Override generated name", and UNIT3D.py
+        # confirms it wins outright over anything Uploadrr-EMU would
+        # otherwise generate (src/trackers/UNIT3D.py: "manual_name > edit_name
+        # > meta['name']"). proposed_title is only the bare title ("Chappie"),
+        # never meant to stand alone as the whole release name — using it
+        # here made the torrent appear on eMuwarez literally named "Chappie"
+        # instead of the full nomenclature. proposed_filename is the complete,
+        # already-computed release name (just filesystem-sanitized).
+        title = (
+            (proposal or {}).get("proposed_filename")
+            or (proposal or {}).get("proposed_title")
+            or library_item.get("title")
+            or "Sin título"
+        )
         media_type = library_item.get("item_type") or "movie"
         tmdb_id = library_item.get("tmdb_id")
         resolution = (proposal or {}).get("resolution") or library_item.get("resolution") or ""

@@ -34,10 +34,14 @@ from typing import Optional
 # progress marker) and its weight folded into "metadata_processing", the
 # group it chronologically sits inside.
 PHASES: list[tuple[str, str, int]] = [
-    ("verificacion_presubida", "Verificación pre-subida", 10),  # integrity(5) + preflight(5)
+    # integrity(5) + preflight(5) + queue_processing(2) — this phase now
+    # stays "running" from before Uploadrr-EMU is even invoked through to
+    # its own "Starting queue processing" line, since that's genuinely one
+    # continuous "getting ready to upload" stretch from the user's point of
+    # view (see PHASE_KEY_ALIASES below for how queue_processing folds in).
+    ("verificacion_presubida", "Verificación e Inicio de Uploadrr", 12),
     ("nomenclature", "Aplicación de nomenclatura", 5),
     ("remux", "Reordenación de pistas", 15),
-    ("queue_processing", "Inicio de Uploader", 2),
     ("metadata_processing", "Procesamiento de metadatos", 10),  # video_processing(2)+mediainfo_export(3)+video_metadata(2)+duplicates(3)
     ("screenshots", "Generación y subida de capturas", 20),  # screenshots_generate(10)+screenshots_upload(10)
     ("hash_torrent", "Cálculo de hash del torrent", 28),  # hashing(20)+torrent_create(8)
@@ -61,9 +65,14 @@ RUNNING_SUB_PHASE_ORDER = [
 ]
 
 # Raw sub-phase -> merged, displayed PHASES key. A raw key absent from this
-# map displays as itself (queue_processing/uploading_emu/qbittorrent_add are
-# not merged with anything).
+# map displays as itself (uploading_emu/qbittorrent_add are not merged with
+# anything). queue_processing folds into verificacion_presubida — the ONLY
+# raw trigger in that group, so resolve_display_progress() passes its pct
+# straight through (no group-weighted interpolation needed); this phase is
+# only ever marked done retroactively once the NEXT raw trigger
+# (video_processing) fires, same safety net every other merged phase uses.
 PHASE_KEY_ALIASES: dict[str, str] = {
+    "queue_processing": "verificacion_presubida",
     "video_processing": "metadata_processing",
     "mediainfo_export": "metadata_processing",
     "video_metadata": "metadata_processing",

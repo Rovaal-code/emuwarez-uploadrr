@@ -51,8 +51,13 @@ def test_merged_group_raw_weights_sum_to_displayed_weight():
 
 
 def test_resolve_display_progress_unmerged_passthrough():
-    assert resolve_display_progress("queue_processing", 100) == ("queue_processing", 100)
     assert resolve_display_progress("uploading_emu", 0) == ("uploading_emu", 0)
+
+
+def test_resolve_display_progress_queue_processing_folds_into_verificacion():
+    # queue_processing is the only raw member of this group, so its own pct
+    # passes straight through (no group-weighted interpolation needed).
+    assert resolve_display_progress("queue_processing", 100) == ("verificacion_presubida", 100)
 
 
 def test_resolve_display_progress_metadata_processing_group():
@@ -169,18 +174,17 @@ def test_build_phase_state_partial_progress():
     assert by_key["verificacion_presubida"]["status"] == "done" and by_key["verificacion_presubida"]["pct"] == 100
     assert by_key["nomenclature"]["status"] == "done"
     assert by_key["remux"]["status"] == "running" and by_key["remux"]["pct"] == 50
-    assert by_key["queue_processing"]["status"] == "pending" and by_key["queue_processing"]["pct"] == 0
     assert by_key["metadata_processing"]["status"] == "pending"
-    # 10 + 5 + (15 * 0.5) = 22.5 -> banker's rounding -> 22
-    assert state["global_pct"] == 22
+    # 12 + 5 + (15 * 0.5) = 24.5 -> banker's rounding -> 24
+    assert state["global_pct"] == 24
 
 
 def test_build_phase_state_running_sub_phase_advances():
-    # verificación presubida/nomenclatura/remux/inicio de uploader already
-    # done, procesamiento de metadatos in progress at 50%:
-    # (10+5+15+2) + 10*0.5 = 32 + 5 = 37
+    # verificación e inicio de uploadrr/nomenclatura/remux already done,
+    # procesamiento de metadatos in progress at 50%:
+    # (12+5+15) + 10*0.5 = 32 + 5 = 37
     state = build_phase_state(
-        ["verificacion_presubida", "nomenclature", "remux", "queue_processing"],
+        ["verificacion_presubida", "nomenclature", "remux"],
         current="metadata_processing", current_pct=50,
     )
     assert state["global_pct"] == 37

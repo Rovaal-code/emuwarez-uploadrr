@@ -487,7 +487,7 @@ def test_mark_phase_done_accumulates_across_calls(db_conn):
     assert by_key["verificacion_presubida"]["status"] == "done"
     assert by_key["nomenclature"]["status"] == "done"
     assert by_key["remux"]["status"] == "pending"
-    assert state["global_pct"] == 15  # 10 (verificacion_presubida) + 5 (nomenclature)
+    assert state["global_pct"] == 17  # 12 (verificacion_presubida) + 5 (nomenclature)
 
 
 def test_update_phase_progress_keeps_earlier_done_phases(db_conn):
@@ -502,8 +502,8 @@ def test_update_phase_progress_keeps_earlier_done_phases(db_conn):
     assert by_key["verificacion_presubida"]["status"] == "done"
     assert by_key["remux"]["status"] == "running"
     assert by_key["remux"]["pct"] == 40
-    # 10 + 5 + 15*0.4 = 21
-    assert state["global_pct"] == 21
+    # 12 + 5 + 15*0.4 = 23
+    assert state["global_pct"] == 23
 
 
 def test_mark_phase_started_then_done_records_duration(db_conn):

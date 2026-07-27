@@ -833,6 +833,45 @@ def test_faltante_group_orders_by_missing_since_not_arr_added(mem_conn):
     assert faltante_titles == ["Recently Missing", "Old Missing Recently Added"]
 
 
+def test_unique_content_excludes_season_with_inconsistent_episodes(mem_conn):
+    """Group 2 ("Contenido único") must not recommend a season whose own
+    rollup fields aren't all filled in — that only happens when every
+    episode agrees (_update_season_rollup) — since build_season_pack_plan
+    would block the actual upload anyway. Genuinely unique, but not
+    actually uploadable, so it shouldn't be recommended as if it were."""
+    from emuwarez_uploadrr.services.library import get_dashboard_recommendations
+
+    mem_conn.execute(
+        "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog) "
+        "VALUES ('Ready Show', 'series', 'Disponible', 1)"
+    )
+    series_id = mem_conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    # Consistent season: every rollup field filled in — must appear.
+    mem_conn.execute(
+        "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, parent_id, "
+        "resolution, source, video_codec, audio_codec, audio_languages, subtitle_languages) "
+        "VALUES ('Ready Show - Temporada 1', 'season', 'Disponible', 0, ?, "
+        "'1080p', 'WEB-DL', 'x264', 'AAC', 'jpn', 'spa')",
+        (series_id,),
+    )
+    # Inconsistent season: complete (Disponible) but episodes disagreed on
+    # something, so its own rollup field (subtitle_languages) is None —
+    # must NOT appear even though it's technically "unique" content.
+    mem_conn.execute(
+        "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, parent_id, "
+        "resolution, source, video_codec, audio_codec, audio_languages, subtitle_languages) "
+        "VALUES ('Ready Show - Temporada 2', 'season', 'Disponible', 0, ?, "
+        "'1080p', 'WEB-DL', 'x264', 'AAC', 'jpn', NULL)",
+        (series_id,),
+    )
+    mem_conn.commit()
+
+    recs = get_dashboard_recommendations(mem_conn)
+    unique_titles = [r["title"] for r in recs if r["rec_group"] == 2]
+    assert "Ready Show - Temporada 1" in unique_titles
+    assert "Ready Show - Temporada 2" not in unique_titles
+
+
 def test_missing_since_backfilled_from_added_at_on_migration(mem_conn):
     """Content that was already Faltante before missing_since existed must
     not be stuck at NULL forever (falling back to Radarr/Sonarr's own

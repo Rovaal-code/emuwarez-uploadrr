@@ -1241,6 +1241,11 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
     # Group 2 — available content not in eMuwarez ("Contenido único"): movies,
     # whole unique series, and unique seasons whose parent series isn't itself
     # flagged unique (avoids listing a series and all its seasons twice).
+    # A season also needs every episode to actually agree on resolution/
+    # source/codecs/audio/subs (services/library.py's _update_season_rollup
+    # only fills these in when they do) — otherwise it's genuinely unique
+    # but not actually uploadable as a pack (build_season_pack_plan blocks
+    # it), so it shouldn't be recommended as if it were ready to go.
     for row in conn.execute(
         f"""SELECT {cols},
               COALESCE(json_extract(li.raw_json, '$.added'),
@@ -1251,7 +1256,12 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
               AND li.item_type IN ('movie', 'series', 'season')
               AND NOT (li.item_type = 'season' AND EXISTS (
                   SELECT 1 FROM library_items s
-                  WHERE s.id = li.parent_id AND s.emu_in_catalog = 0))"""
+                  WHERE s.id = li.parent_id AND s.emu_in_catalog = 0))
+              AND (li.item_type != 'season' OR (
+                  li.resolution IS NOT NULL AND li.source IS NOT NULL
+                  AND li.video_codec IS NOT NULL AND li.audio_codec IS NOT NULL
+                  AND li.audio_languages IS NOT NULL AND li.subtitle_languages IS NOT NULL
+              ))"""
     ).fetchall():
         _push(dict(row), 2)
 

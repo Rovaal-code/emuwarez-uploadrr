@@ -56,6 +56,23 @@ def test_pack_preview_valid(client, auth_headers, isolated_db, tmp_path):
     assert data["season_pack_title"].startswith("One Piece S01")
 
 
+def test_pack_preview_exposes_field_breakdown(client, auth_headers, isolated_db, tmp_path):
+    """Regression: build_season_pack_plan() already computed series_title/
+    year/resolution/source/video_codec/audio_summary/subtitle_summary/
+    release_tag internally, but SeasonPackPlanResponse (the Pydantic
+    response_model) silently dropped every one of them before this — the
+    wizard's season view had no way to show the same field-by-field
+    confirmation grid a movie/episode gets, because the API response never
+    carried the data at all."""
+    season_id = _seed_season_with_episode(isolated_db, tmp_path)
+    resp = client.get(f"/api/library/season/{season_id}/pack-preview", headers=auth_headers)
+    data = resp.json()
+    assert data["series_title"] == "One Piece"
+    assert data["year"] == 1999
+    assert data["resolution"] == "1080p"
+    assert data["release_tag"]
+
+
 def test_pack_preview_progress_requires_auth(client):
     resp = client.get("/api/library/season/1/pack-preview/progress")
     assert resp.status_code == 401

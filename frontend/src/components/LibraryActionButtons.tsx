@@ -2,6 +2,7 @@ import type { LibraryItemResponse } from '../types/api'
 import type { LibraryActionKind } from './LibraryTreeRow'
 import { Tooltip } from './Tooltip'
 import { UploadButtonIcon, RequestButtonIcon } from './DetailCard'
+import { seasonNotReadyReason } from '../utils/libraryItem'
 
 // Single source of truth for the per-item action buttons, shared by the detail
 // page and the tree. Same visual format as the "Sincronizar biblioteca" button
@@ -25,6 +26,7 @@ export function LibraryActionButtons({ item, onAction, title, multiSeasonContext
 }) {
   const missing = item.local_status === 'Faltante'
   const seasonIncomplete = item.item_type === 'season' && item.local_status === 'Parcial'
+  const seasonInconsistentReason = seasonNotReadyReason(item)
   const multiSeason = !!multiSeasonContext && item.item_type === 'series'
   return (
     <>
@@ -32,11 +34,12 @@ export function LibraryActionButtons({ item, onAction, title, multiSeasonContext
         ? 'No se puede subir: contenido faltante (no lo tienes en disco).'
         : seasonIncomplete
         ? 'No se puede subir: temporada incompleta (faltan episodios por estar Disponibles).'
-        : (title ?? 'Prepara y sube este contenido a eMuwarez (nomenclatura, comprobaciones y subida).')}>
+        : seasonInconsistentReason
+        ?? (title ?? 'Prepara y sube este contenido a eMuwarez (nomenclatura, comprobaciones y subida).')}>
         <button
           className="btn btn-primary btn-sm"
           onClick={() => onAction(multiSeason ? 'upload-multi' : 'upload', item)}
-          disabled={missing || seasonIncomplete}
+          disabled={missing || seasonIncomplete || !!seasonInconsistentReason}
         >
           <UploadButtonIcon /> Subir
         </button>

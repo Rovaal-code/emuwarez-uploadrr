@@ -406,6 +406,16 @@ export interface SeasonPackPlanResponse {
   pack_folder?: string | null
   episodes: SeasonPackEpisodePlan[]
   provider?: string | null
+  // Field-by-field breakdown — same fields a movie/episode's nomenclature
+  // grid shows, read-only here (no per-field manual editing for a season).
+  series_title?: string | null
+  year?: number | null
+  resolution?: string | null
+  source?: string | null
+  video_codec?: string | null
+  audio_summary?: string | null
+  subtitle_summary?: string | null
+  release_tag?: string | null
 }
 
 

@@ -46,6 +46,44 @@ export function listDisplayTitle(item: LibraryItemResponse): string {
   return `${item.title}${year}`
 }
 
+// A season with EVERY episode Disponible can still fail
+// build_season_pack_plan()'s per-episode consistency check (codec/audio/
+// idiomas/subs/resolución/source must all match) — the season row's own
+// rollup fields (services/library.py's _update_season_rollup, populated at
+// sync time) are None precisely when episodes disagree on one of them, so
+// this is the same signal wherever a "Subir" trigger needs it (the upload
+// wizard's multi-season picker, and the season's own action button),
+// without duplicating the check or running the heavier per-episode plan
+// just to grey out a button/card.
+const SEASON_CONSISTENCY_FIELDS: { key: keyof LibraryItemResponse; label: string }[] = [
+  { key: 'resolution', label: 'la resolución' },
+  { key: 'source', label: 'el source' },
+  { key: 'video_codec', label: 'el códec de vídeo' },
+  { key: 'audio_codec', label: 'el códec de audio' },
+  { key: 'audio_languages', label: 'los idiomas de audio' },
+  { key: 'subtitle_languages', label: 'los subtítulos' },
+]
+
+function seasonInconsistentField(item: LibraryItemResponse) {
+  return SEASON_CONSISTENCY_FIELDS.find(f => !item[f.key])
+}
+
+export function isSeasonReady(item: LibraryItemResponse): boolean {
+  if (item.item_type !== 'season') return true
+  return item.local_status === 'Disponible' && !seasonInconsistentField(item)
+}
+
+// null when the season IS ready (or isn't a season) — a truthy reason string
+// otherwise, for a disabled button/card's tooltip.
+export function seasonNotReadyReason(item: LibraryItemResponse): string | null {
+  if (item.item_type !== 'season') return null
+  if (item.local_status !== 'Disponible') return null // caller already has its own "incomplete" message
+  const field = seasonInconsistentField(item)
+  return field
+    ? `Los capítulos de esta temporada no coinciden en ${field.label} — revísalos antes de subir el pack.`
+    : null
+}
+
 export function titleMismatchesFilename(item: LibraryItemResponse): boolean {
   if (!item.original_title) return false
   const norm = (s: string) => s.trim().toLowerCase()

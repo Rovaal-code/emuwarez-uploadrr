@@ -22,6 +22,7 @@ import {
   type SeasonPlanProgress, type SeasonEpisodeName, type SeasonEpisodeMediaInfo, type SeasonEpisodeRemux,
 } from '../api/seasonPack'
 import type { LibraryItemResponse, SeasonPackPlanResponse, UploadJob } from '../types/api'
+import { isSeasonReady, seasonNotReadyReason } from '../utils/libraryItem'
 import { InfoIcon } from './InfoIcon'
 import { AutoUploadSourceGate } from './AutoUploadSourceGate'
 import { FitText, FitTextPair } from './FitText'
@@ -849,35 +850,17 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
 
   // Step 0, multi-season — only reachable when the wizard was opened from a
   // series' own dedicated Biblioteca page (allowMultiSeason).
-  // Only a season with EVERY episode Disponible can go as a season pack
-  // (build_season_pack_plan() blocks otherwise — "Temporada incompleta") —
-  // an incomplete/missing one is shown greyed out and unselectable instead
-  // of letting the user pick it and fail later.
-  const isSeasonComplete = (s: LibraryItemResponse) => s.local_status === 'Disponible'
-  // A complete season can still fail build_season_pack_plan()'s per-episode
-  // consistency check (codec/audio/idiomas/subs/resolución/source must all
-  // match) — the season row's own rollup fields (services/library.py's
-  // _update_season_rollup, populated at sync time) are None precisely when
-  // episodes disagree on one of them, so this is the same signal without
-  // having to run the heavier per-episode plan just to grey out a card.
-  const SEASON_CONSISTENCY_FIELDS: { key: keyof LibraryItemResponse; label: string }[] = [
-    { key: 'resolution', label: 'la resolución' },
-    { key: 'source', label: 'el source' },
-    { key: 'video_codec', label: 'el códec de vídeo' },
-    { key: 'audio_codec', label: 'el códec de audio' },
-    { key: 'audio_languages', label: 'los idiomas de audio' },
-    { key: 'subtitle_languages', label: 'los subtítulos' },
-  ]
-  const seasonInconsistentField = (s: LibraryItemResponse) =>
-    SEASON_CONSISTENCY_FIELDS.find(f => !s[f.key])
-  const isSeasonReady = (s: LibraryItemResponse) => isSeasonComplete(s) && !seasonInconsistentField(s)
-  const seasonNotReadyReason = (s: LibraryItemResponse) => {
-    if (!isSeasonComplete(s)) return 'Temporada incompleta: no todos los capítulos están Disponibles.'
-    const field = seasonInconsistentField(s)
-    return field
-      ? `Los capítulos de esta temporada no coinciden en ${field.label} — revísalos antes de subir el pack.`
-      : null
-  }
+  // Only a season with EVERY episode Disponible AND every episode agreeing
+  // on codec/audio/idiomas/subs/resolución/source can go as a season pack
+  // (build_season_pack_plan() blocks otherwise) — incomplete/inconsistent
+  // ones are shown greyed out and unselectable instead of letting the user
+  // pick one and fail later. isSeasonReady/seasonNotReadyReason (shared with
+  // LibraryActionButtons' own "Subir" button) only know about the
+  // consistency check; the "incomplete" message is layered on here.
+  const seasonCardReason = (s: LibraryItemResponse) =>
+    s.local_status !== 'Disponible'
+      ? 'Temporada incompleta: no todos los capítulos están Disponibles.'
+      : seasonNotReadyReason(s)
   const selectableSeasons = seasons.filter(isSeasonReady)
   // The series' own name is redundant here (already the wizard's title) —
   // just the season part, e.g. "Temporada 1"/"Especiales".
@@ -899,7 +882,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10, maxHeight: 320, overflowY: 'auto' }}>
         {seasons.map(s => {
           const ready = isSeasonReady(s)
-          const reason = seasonNotReadyReason(s)
+          const reason = seasonCardReason(s)
           const selected = multiSelected.has(s.id)
           const card = (
             <button
@@ -1064,10 +1047,47 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
     </>
   )
 
-  // Season target: no editable fields (they come from each episode's own
-  // proposal, already computed) — just the single pack torrent name (no
-  // per-file "internal title" at season level, see "Ver nombre de todos los
-  // capítulos" instead) plus a summary of the episodes included.
+  // Season target: same field-by-field confirmation grid a movie/episode
+  // shows (Título/Año/Resolución/Source/Proveedor/Códec/Audio/Subtítulos/
+  // Tag), but read-only — every episode already has to agree on these
+  // (build_season_pack_plan blocks otherwise), so there's nothing to
+  // individually adjust at the pack level, same reasoning as track remux
+  // already being non-editable for a season.
+  const seasonFieldBox = (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
+      <label><FieldLabel label="Título" info={FIELD_INFO.title} />
+        <input className="form-input" value={seasonPlan?.series_title || ''} disabled />
+      </label>
+      <label><FieldLabel label="Año" info={FIELD_INFO.year} />
+        <input className="form-input" value={seasonPlan?.year ?? ''} disabled />
+      </label>
+      <label><FieldLabel label="Resolución" info={FIELD_INFO.resolution} />
+        <input className="form-input" value={seasonPlan?.resolution || ''} disabled />
+      </label>
+      <label><FieldLabel label="Source" info={FIELD_INFO.source} />
+        <input className="form-input" value={seasonPlan?.source || ''} disabled />
+      </label>
+      <label><FieldLabel label="Proveedor" info={FIELD_INFO.provider} />
+        <input className="form-input" value={seasonPlan?.provider || ''} disabled />
+      </label>
+      <label><FieldLabel label="Códec de vídeo" info={FIELD_INFO.video_codec} />
+        <input className="form-input" value={seasonPlan?.video_codec || ''} disabled />
+      </label>
+      <label><FieldLabel label="Audio" info={FIELD_INFO.audio} />
+        <input className="form-input" value={seasonPlan?.audio_summary || ''} disabled />
+      </label>
+      <label><FieldLabel label="Subtítulos" info={FIELD_INFO.subs} />
+        <input className="form-input" value={seasonPlan?.subtitle_summary || ''} disabled />
+      </label>
+      <label><FieldLabel label="Tag" info={FIELD_INFO.tag} />
+        <input className="form-input" value={seasonPlan?.release_tag || ''} disabled />
+      </label>
+    </div>
+  )
+
+  // Just the single pack torrent name (no per-file "internal title" at
+  // season level, see "Ver nombre de todos los capítulos" instead) plus a
+  // summary of the episodes included.
   const seasonSummaryBox = (
     <>
       <div className="detail-card" style={{ marginTop: 16, padding: '12px 14px', borderRadius: 8 }}>
@@ -1207,8 +1227,8 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
                 <span className="spinner" style={{ width: 28, height: 28, borderWidth: 3 }} />
                 <div style={{ fontSize: 15, fontWeight: 600 }}>
                   {seasonProgress.total > 0
-                    ? `Comprobando ${seasonProgress.done} de ${seasonProgress.total} capítulos…`
-                    : 'Comprobando los capítulos de la temporada…'}
+                    ? `Generando Nomenclatura para eMuwarez… (${seasonProgress.done} de ${seasonProgress.total} capítulos)`
+                    : 'Generando Nomenclatura para eMuwarez…'}
                 </div>
                 {seasonProgress.current_title && (
                   <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{seasonProgress.current_title}</div>
@@ -1225,8 +1245,10 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
               <>
                 <p className="text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
                   Se sube como un único pack de temporada. Todos los capítulos deben tener el mismo códec
-                  de audio/vídeo, los mismos idiomas de audio/subtítulos, la misma resolución y source.
+                  de audio/vídeo, los mismos idiomas de audio/subtítulos, la misma resolución y source —
+                  estos campos confirman que todos coinciden; no son editables para una temporada.
                 </p>
+                {seasonFieldBox}
                 {seasonSummaryBox}
 
                 <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>

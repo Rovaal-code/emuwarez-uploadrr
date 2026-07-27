@@ -909,6 +909,19 @@ class SeasonPackPlanResponse(BaseModel):
     # Resolved provider (filename-detected across episodes, or the single
     # TMDb fallback when none revealed one and source is WEB-DL).
     provider: Optional[str] = None
+    # Field-by-field breakdown backing the same "these are the fields that
+    # will confirm the nomenclature" grid a movie/episode shows — computed
+    # from the first episode's own proposal (every episode already has to
+    # agree, or build_season_pack_plan blocks first), read-only for a season
+    # (no per-field manual editing, same as track remux).
+    series_title: Optional[str] = None
+    year: Optional[int] = None
+    resolution: Optional[str] = None
+    source: Optional[str] = None
+    video_codec: Optional[str] = None
+    audio_summary: Optional[str] = None
+    subtitle_summary: Optional[str] = None
+    release_tag: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------

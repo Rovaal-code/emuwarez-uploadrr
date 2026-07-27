@@ -5,7 +5,9 @@ tests) never touch a real Uploadrr/ installation.
 """
 from __future__ import annotations
 
+from emuwarez_uploadrr.legacy import get_child_inline_mapping
 from emuwarez_uploadrr.services.uploadrr_config_staging import (
+    QBIT_CLIENT_KEY,
     SCREENS_API_KEY_HOSTS,
     backup_config,
     build_redacted_preview,
@@ -15,6 +17,7 @@ from emuwarez_uploadrr.services.uploadrr_config_staging import (
     restore_config_from_backup,
     stage_emu_config,
     stage_image_hosts,
+    stage_qbittorrent_config,
     stage_tmdb_key,
     write_staged_config,
 )
@@ -77,6 +80,55 @@ def test_stage_image_hosts_only_stages_known_key_hosts():
     assert "hamster" not in SCREENS_API_KEY_HOSTS
     assert "imghost" not in SCREENS_API_KEY_HOSTS
     assert set(SCREENS_API_KEY_HOSTS) == {"imgbb", "ptpimg", "lensdump", "ptscreens", "onlyimage"}
+
+
+def test_stage_qbittorrent_config_sets_credentials_and_default_client():
+    lines: list[str] = []
+    staged, message = stage_qbittorrent_config(
+        lines, url="http://192.168.1.10", port="8080", username="admin", password="secret",
+    )
+    mapping = get_child_inline_mapping(staged, "TORRENT_CLIENTS", QBIT_CLIENT_KEY)
+    assert mapping["qbit_url"] == "http://192.168.1.10"
+    assert mapping["qbit_port"] == "8080"
+    assert mapping["qbit_user"] == "admin"
+    assert mapping["qbit_pass"] == "secret"
+    assert mapping["torrent_client"] == "qbit"
+    text = "\n".join(staged)
+    assert "default_torrent_client: 'qbit'" in text
+    assert "creado" in message or "actualizado" in message
+
+
+def test_stage_qbittorrent_config_overrides_stale_default_torrent_client():
+    # Confirmed against the fork's own bundled example config.yaml: it ships
+    # with "watch", not "qbit" — this is the actual bug that made a job
+    # finish "successfully" while silently never touching qBittorrent's API.
+    lines = ["DEFAULT:", "  default_torrent_client: watch"]
+    staged, _ = stage_qbittorrent_config(lines, url="http://x", port="8080", username="u", password="p")
+    text = "\n".join(staged)
+    assert "default_torrent_client: watch" not in text
+    assert "default_torrent_client: 'qbit'" in text
+
+
+def test_stage_qbittorrent_config_preserves_unmanaged_existing_keys():
+    # torrent_storage_dir/content_layout/enable_search aren't fields we
+    # manage — overwriting the whole inline mapping wholesale would silently
+    # wipe out whatever the user (or the fork's own template) already had
+    # configured there.
+    lines = [
+        "TORRENT_CLIENTS:",
+        "  qbit: {'torrent_client': 'qbit', 'enable_search': True, 'qbit_url': 'http://old', "
+        "'torrent_storage_dir': '/downloads', 'content_layout': 'Original'}",
+    ]
+    staged, _ = stage_qbittorrent_config(lines, url="http://new", port="9090", username="u2", password="p2")
+    mapping = get_child_inline_mapping(staged, "TORRENT_CLIENTS", QBIT_CLIENT_KEY)
+    assert mapping["qbit_url"] == "http://new"
+    assert mapping["enable_search"] is True
+    assert mapping["torrent_storage_dir"] == "/downloads"
+    assert mapping["content_layout"] == "Original"
+
+
+def test_get_child_inline_mapping_returns_empty_when_absent():
+    assert get_child_inline_mapping([], "TORRENT_CLIENTS", "qbit") == {}
 
 
 def test_backup_config_creates_bak_file(tmp_path):

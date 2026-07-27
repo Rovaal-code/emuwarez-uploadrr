@@ -1080,6 +1080,28 @@ def find_child_block(lines: list[str], top_block: str, child: str, indent: int =
     return child_start, child_end
 
 
+def get_child_inline_mapping(lines: list[str], top_block: str, child: str, indent: int = 2) -> dict[str, Any]:
+    """Parse an existing `child: {...}` inline mapping (Python-literal dict
+    syntax, as written by render_inline_mapping) back into a dict. Returns {}
+    if the child is absent or its value isn't a parseable inline mapping —
+    callers that only want to ADD/OVERRIDE specific keys without wiping out
+    unrelated ones (e.g. torrent_storage_dir, content_layout) read this
+    first, update() their own keys, then pass the merged dict to
+    set_child_inline_mapping()."""
+    start, end = find_child_block(lines, top_block, child, indent=indent)
+    if start < 0:
+        return {}
+    text = " ".join(lines[start:end])
+    m = re.match(rf"^\s*{re.escape(child)}\s*:\s*(\{{.*\}})\s*(?:#.*)?$", text)
+    if not m:
+        return {}
+    try:
+        value = ast.literal_eval(m.group(1))
+    except (ValueError, SyntaxError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
 def set_child_inline_mapping(lines: list[str], top_block: str, child: str, mapping: dict[str, Any], indent: int = 2) -> str:
     top_start, top_end = find_top_block(lines, top_block)
     entry = " " * indent + f"{child}: {render_inline_mapping(mapping)}"

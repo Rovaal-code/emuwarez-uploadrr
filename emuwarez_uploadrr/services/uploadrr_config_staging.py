@@ -26,6 +26,7 @@ from typing import Any, Optional
 
 from ..legacy import (
     get_block_key,
+    get_child_inline_mapping,
     get_emu_anon,
     get_emu_api_key,
     set_block_key,
@@ -33,6 +34,11 @@ from ..legacy import (
     set_emu_config,
     yaml_scalar,
 )
+
+# The TORRENT_CLIENTS entry name we manage ourselves — matches the fork's own
+# example config.yaml convention. Fixed (not read from the user's config) so
+# DEFAULT.default_torrent_client always has a predictable target to point at.
+QBIT_CLIENT_KEY = "qbit"
 
 # The hosts Uploadrr-EMU's own SCREENS.API_KEYS block supports, confirmed
 # against a real config.yaml from the bundled fork. Notably `hamster` and
@@ -128,6 +134,37 @@ def stage_image_hosts(
     return staged, "; ".join(messages) if messages else "SCREENS sin cambios"
 
 
+def stage_qbittorrent_config(
+    lines: list[str], *, url: str, port: str, username: str, password: str,
+) -> tuple[list[str], str]:
+    """Stage TORRENT_CLIENTS.qbit (host/port/user/pass, merged into whatever
+    that entry already had — torrent_storage_dir/content_layout/enable_search
+    etc. are left untouched) and force DEFAULT.default_torrent_client to
+    point at it.
+
+    Without this, Uploadrr-EMU falls back to whatever default_torrent_client
+    happens to ship in its own config.yaml — confirmed against the fork's
+    bundled example config, that default is "watch" (a watch-folder client),
+    NOT "qbit" — so a job could finish "successfully" while never touching
+    qBittorrent's API at all, with no visible error (the skip is a debug-only
+    log line in the fork, invisible in captured stdout). Settings' own
+    qbit.url/port/username/password were, until now, only used for the
+    pre-flight "¿conecta?" ping — never transmitted to the real subprocess."""
+    staged = list(lines)
+    existing = get_child_inline_mapping(staged, "TORRENT_CLIENTS", QBIT_CLIENT_KEY)
+    merged = {
+        **existing,
+        "torrent_client": "qbit",
+        "qbit_url": url,
+        "qbit_port": str(port),
+        "qbit_user": username,
+        "qbit_pass": password,
+    }
+    msg1 = set_child_inline_mapping(staged, "TORRENT_CLIENTS", QBIT_CLIENT_KEY, merged)
+    msg2 = set_block_key(staged, "DEFAULT", "default_torrent_client", yaml_scalar(QBIT_CLIENT_KEY))
+    return staged, f"{msg1}; {msg2}"
+
+
 def stage_emu_config(
     lines: list[str], *, api_key: Optional[str] = None, anon: Optional[bool] = None
 ) -> tuple[list[str], str]:
@@ -188,6 +225,8 @@ __all__ = [
     "stage_tmdb_key",
     "stage_emu_config",
     "stage_image_hosts",
+    "stage_qbittorrent_config",
+    "QBIT_CLIENT_KEY",
     "SCREENS_API_KEY_HOSTS",
     "get_emu_api_key",
     "get_emu_anon",

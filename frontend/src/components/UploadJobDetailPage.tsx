@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { UploadJob, UploadJobLog, UploadProgressPhase } from '../types/api'
 import { getUploadJobLogs } from '../api/uploads'
 import { posterUrl } from '../utils/libraryItem'
@@ -495,7 +495,20 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
     return () => clearInterval(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId, isRunning, isPreparing, isStaging])
-  const tail = logs.slice(-40)
+  // No artificial cap here: `logs` is already the last 300 lines (tail=true
+  // above). Slicing further to a small window (e.g. -40) used to discard
+  // everything older every 2s poll, even though the scrollable <pre> below
+  // has room to show much more — the user just couldn't scroll back to it.
+  const logsBoxRef = useRef<HTMLPreElement | null>(null)
+  useEffect(() => {
+    const el = logsBoxRef.current
+    if (!el) return
+    // Only auto-follow the tail if the user hasn't scrolled up to read
+    // history — otherwise a live-updating job would keep yanking them back
+    // to the bottom every 2s.
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40
+    if (atBottom) el.scrollTop = el.scrollHeight
+  }, [logs])
 
   const progress = job.progress
   const mediaEmoji = job.media_type === 'series' || job.media_type === 'episode' ? '📺' : '🎬'
@@ -693,8 +706,8 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
               <button className="modal-close" onClick={() => setShowActividad(false)}>✕</button>
             </div>
             <div className="modal-body">
-              <pre style={{ margin: 0, maxHeight: 420, overflowY: 'auto', fontSize: '0.76rem', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-                {loadingLogs ? 'Cargando…' : tail.length === 0 ? 'Sin actividad registrada todavía.' : tail.map(log => {
+              <pre ref={logsBoxRef} style={{ margin: 0, maxHeight: 420, overflowY: 'auto', fontSize: '0.76rem', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                {loadingLogs ? 'Cargando…' : logs.length === 0 ? 'Sin actividad registrada todavía.' : logs.map(log => {
                   const ts = log.created_at.slice(11, 19)
                   return `[${ts}] ${log.message}\n`
                 })}

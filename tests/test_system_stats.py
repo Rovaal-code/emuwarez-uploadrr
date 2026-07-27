@@ -183,6 +183,36 @@ def test_cgroup_mem_stats_none_when_no_cgroup_files():
         assert system_stats._cgroup_mem_stats() is None
 
 
+def test_cgroup_mem_stats_v2_excludes_reclaimable_page_cache():
+    """Regression: a job that reads/hashes a lot (torrent hashing, MediaInfo,
+    screenshots) leaves memory.current inflated with reclaimable page cache
+    long after the actual work is done — this used to get reported as real
+    "used" memory, showing e.g. 20% used in the sidebar gauge while
+    `docker stats`/`docker top` (which already exclude it) showed only a few
+    hundred MB for the one real process. Must subtract inactive_file, same
+    as docker stats does, so both agree."""
+    files = {
+        "/sys/fs/cgroup/memory.current": "4294967296\n",  # 4 GiB raw
+        "/sys/fs/cgroup/memory.max": "max\n",
+        "/sys/fs/cgroup/memory.stat": "inactive_file 3758096384\nactive_file 0\nanon 536870912\n",
+    }
+    with patch("builtins.open", side_effect=_fake_open(files)):
+        result = system_stats._cgroup_mem_stats()
+    # 4 GiB - ~3.5 GiB reclaimable cache = 512 MiB real usage.
+    assert result == (536870912, None)
+
+
+def test_cgroup_mem_stats_v1_excludes_reclaimable_page_cache():
+    files = {
+        "/sys/fs/cgroup/memory/memory.usage_in_bytes": "4294967296\n",
+        "/sys/fs/cgroup/memory/memory.limit_in_bytes": "9223372036854771712\n",
+        "/sys/fs/cgroup/memory/memory.stat": "total_inactive_file 3758096384\ntotal_active_file 0\n",
+    }
+    with patch("builtins.open", side_effect=_fake_open(files)):
+        result = system_stats._cgroup_mem_stats()
+    assert result == (536870912, None)
+
+
 def test_cgroup_cpu_quota_cores_v2_two_cores():
     files = {"/sys/fs/cgroup/cpu.max": "200000 100000\n"}
     with patch("builtins.open", side_effect=_fake_open(files)):

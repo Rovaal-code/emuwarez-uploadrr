@@ -60,9 +60,35 @@ psutil.cpu_percent(interval=None)
 # process could use up to the whole host anyway.
 # ---------------------------------------------------------------------------
 
+def _cgroup_stat_field(stat_path: str, field: str) -> int:
+    """One `key value` line out of a cgroup `*.stat` file, or 0 if the file
+    or field is missing (best-effort — callers only use this to subtract a
+    reclaimable amount, so 0 just means "nothing to subtract")."""
+    try:
+        with open(stat_path) as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) == 2 and parts[0] == field:
+                    return int(parts[1])
+    except Exception:
+        pass
+    return 0
+
+
 def _cgroup_mem_stats() -> tuple[int, int | None] | None:
     """(used_bytes, limit_bytes_or_None) from the cgroup memory controller,
     cgroup v2 first then v1.
+
+    `used_bytes` excludes reclaimable page cache (`inactive_file` v2 /
+    `total_inactive_file` v1) — same subtraction Docker's own `docker stats`
+    does. Without it, `memory.current`/`usage_in_bytes` alone counts every
+    page the container ever read from disk as "used" and never lets go of
+    it until memory pressure forces a reclaim — a job that reads/hashes a
+    lot of data (torrent hashing, MediaInfo, screenshots) inflates this
+    number for a long time afterwards even though the kernel would free it
+    instantly if anything else needed the RAM. This gauge showing "20%
+    used" while `docker stats`/`docker top` show a few hundred MB for the
+    one real process is exactly that — not a leak, just uncounted cache.
 
     `limit_bytes` is None when the cgroup has no real cap (e.g. a plain
     `docker run`/compose service with no `mem_limit` set) — the caller then
@@ -77,6 +103,7 @@ def _cgroup_mem_stats() -> tuple[int, int | None] | None:
     try:
         with open("/sys/fs/cgroup/memory.current") as f:
             used = int(f.read().strip())
+        used = max(0, used - _cgroup_stat_field("/sys/fs/cgroup/memory.stat", "inactive_file"))
         limit: int | None = None
         try:
             with open("/sys/fs/cgroup/memory.max") as f:
@@ -93,6 +120,7 @@ def _cgroup_mem_stats() -> tuple[int, int | None] | None:
     try:
         with open("/sys/fs/cgroup/memory/memory.usage_in_bytes") as f:
             used = int(f.read().strip())
+        used = max(0, used - _cgroup_stat_field("/sys/fs/cgroup/memory/memory.stat", "total_inactive_file"))
         limit = None
         try:
             with open("/sys/fs/cgroup/memory/memory.limit_in_bytes") as f:

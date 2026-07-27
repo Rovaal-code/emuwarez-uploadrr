@@ -146,3 +146,28 @@ def test_build_mediainfo_report_rows_and_emu_mapping(tmp_path):
     # Each row exposes both the raw MediaInfo value and the eMuwarez value.
     assert "Subtítulos" in by_field
     assert by_field["Subtítulos"]["emu"] == "SUBS"
+
+
+def test_build_mediainfo_report_codec_row_shows_encoder_fingerprint_alongside_format(tmp_path):
+    """Regression: the raw MediaInfo column used to show bare "AVC" next to
+    an eMuwarez "x264" value with no visible connection between the two —
+    confusing, since both are true at once (generic Format vs. the specific
+    hand encoder that produced it). Real case: One Piece S23E01, Format=AVC,
+    Writing_library="x264 core 164"."""
+    f = tmp_path / "One Piece - S23E01 [1080p].mkv"
+    f.write_text("fake")
+    info = {"media": {"track": [
+        {"@type": "General"},
+        {"@type": "Video", "Format": "AVC", "Width": "1920", "Height": "1080",
+         "Writing_library": "x264 core 164",
+         "Encoded_Library_Settings": "cabac=1 / ref=4 / rc=2pass / bitrate=8000"},
+        {"@type": "Audio", "Format": "AAC", "Language": "ja"},
+    ]}}
+    with (
+        patch.object(svc, "mediainfo_available", return_value=True),
+        patch.object(svc.legacy, "run_mediainfo_json", return_value=info),
+    ):
+        r = svc.build_mediainfo_report(str(f))
+    by_field = {row["field"]: row for row in r["rows"]}
+    assert by_field["Códec de vídeo"]["mediainfo"] == "AVC (x264)"
+    assert by_field["Códec de vídeo"]["emu"] == "x264"

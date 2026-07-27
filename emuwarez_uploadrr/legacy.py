@@ -3067,7 +3067,7 @@ def detect_video_codec(video: dict[str, Any], path: Path) -> str:
     # "x264" baked into its (possibly already-renamed) name keep reporting
     # x264 forever, even once MediaInfo's own Format/encoder fields showed
     # plain, untouched AVC/HEVC with no encoder fingerprint at all.
-    text = f"{video.get('WritingLibrary','')} {video.get('Encoded_Library','')}".lower()
+    text = f"{video.get('Writing_library','')} {video.get('Encoded_Library','')}".lower()
     fmt = str(video.get("Format") or video.get("CodecID") or "").lower()
 
     if "x264" in text:

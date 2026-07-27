@@ -241,9 +241,16 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
     # HDR / Dolby Vision
     hdr = legacy.detect_hdr(video) if video else []
     add("HDR/DV", video.get("HDR_Format") or video.get("HDR_Format_String"), " ".join(hdr) or None)
-    # Video codec
-    add("Códec de vídeo", video.get("Format") or video.get("CodecID"),
-        legacy.detect_video_codec(video, p) if video else None)
+    # Video codec — when the real encoder fingerprint says x264/x265 (the
+    # eMuwarez value below), the raw MediaInfo Format alone (AVC/HEVC, the
+    # generic codec family) looks contradictory next to it. Showing "AVC
+    # (x264)" here makes both true facts visible at once instead of one
+    # column apparently disagreeing with the other.
+    _video_codec_label = legacy.detect_video_codec(video, p) if video else None
+    _mi_video_codec = video.get("Format") or video.get("CodecID")
+    if _mi_video_codec and _video_codec_label in ("x264", "x265") and _video_codec_label not in str(_mi_video_codec).lower():
+        _mi_video_codec = f"{_mi_video_codec} ({_video_codec_label})"
+    add("Códec de vídeo", _mi_video_codec, _video_codec_label)
 
     # Audio tracks (one row each) + combined eMuwarez segment
     audio_tracks = [t for t in legacy.media_tracks(info) if t.get("@type") == "Audio"]

@@ -50,6 +50,15 @@ def test_detect_video_codec_prefers_hevc_over_generic_format_string():
     assert detect_video_codec(video, Path("Movie.mkv")) == "x265"
 
 
+def test_detect_video_codec_reads_writing_library_key_with_underscore():
+    # Regression: this used to look up "WritingLibrary" (no underscore),
+    # which never matches MediaInfo's real JSON key ("Writing_library") —
+    # detection silently depended on Encoded_Library alone. Real case: One
+    # Piece S23E01 reports the encoder only under Writing_library.
+    video = {"Format": "AVC", "Writing_library": "x264 core 164"}
+    assert detect_video_codec(video, Path("One Piece - S23E01 [1080p].mkv")) == "x264"
+
+
 def test_heuristic_ambiguous_returns_none():
     assert heuristic_source(["DD", "AAC"], size_gb=4, resolution="1080p") is None
 

@@ -57,11 +57,12 @@ export function LibraryChildrenSection({ parentId, childType, title, instances, 
                   <th>Source</th>
                   <th>EMuwarez</th>
                   <th>Tamaño</th>
+                  <th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {children.map(child => (
-                  <LibraryTreeRow key={child.id} item={child} depth={0} instances={instances} onSelect={onSelect} onAction={onAction} onReload={() => setReloadKey(k => k + 1)} compact />
+                  <LibraryTreeRow key={child.id} item={child} depth={0} instances={instances} onSelect={onSelect} onAction={onAction} onReload={() => setReloadKey(k => k + 1)} />
                 ))}
               </tbody>
             </table>

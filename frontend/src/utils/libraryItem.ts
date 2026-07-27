@@ -80,7 +80,7 @@ export function seasonNotReadyReason(item: LibraryItemResponse): string | null {
   if (item.local_status !== 'Disponible') return null // caller already has its own "incomplete" message
   const field = seasonInconsistentField(item)
   return field
-    ? `Los capítulos de esta temporada no coinciden en ${field.label} — revísalos antes de subir el pack.`
+    ? `Los capítulos de esta temporada no coinciden en ${field.label}. Revísalos antes de subir el pack.`
     : null
 }
 

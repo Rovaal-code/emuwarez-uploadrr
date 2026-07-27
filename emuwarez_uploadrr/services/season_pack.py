@@ -476,18 +476,42 @@ def get_season_episode_mediainfo(season_id: int, conn=None) -> dict:
     try:
         from .media_info_service import build_mediainfo_report
         from .path_mapping import resolve_local_path
+        from .source_assistant import build_editable_nomenclature_fields
 
         all_episodes = _get_season_episodes(season_id, conn=conn)
         available = [e for e in all_episodes if e.get("local_status") == LocalStatus.AVAILABLE.value]
         out = []
+        # Name vs Radarr/Sonarr vs MediaInfo-bitrate cross-check (the
+        # "Internal Source Tool" blinking link movies get) — computed ONCE,
+        # from the first available episode, and reused for every episode
+        # below. A season pack can only ever reach this screen when every
+        # episode already agrees on source (build_season_pack_plan's
+        # consistency check blocks the upload otherwise), so recomputing
+        # this per episode would be redundant and re-run the engine's
+        # (potentially slow) analysis needlessly.
+        source_comparison = None
+        if available:
+            source_comparison = build_editable_nomenclature_fields(
+                available[0]["id"], conn=conn,
+            ).get("source_comparison")
         for ep in available:
-            local_path = resolve_local_path(ep.get("path"), conn=conn) or ep.get("path")
+            # Prefer prepared_path over the raw path — same convention
+            # nomenclature.py/mkv_remux.py/mkv_title.py already follow: once
+            # nomenclature has been applied before (e.g. a prior retry),
+            # `path` may be stale (still the pre-rename name) while
+            # prepared_path is the real current file. Reading raw `path`
+            # here showed a stale Source (e.g. "WEBRIP" from the original
+            # name) that disagreed with the actually-applied name (e.g.
+            # "BluRay", from prepared_path) shown everywhere else.
+            candidate_path = ep.get("prepared_path") or ep.get("path")
+            local_path = resolve_local_path(candidate_path, conn=conn) or candidate_path
             report = build_mediainfo_report(local_path or "")
             out.append({
                 "episode_id": ep["id"],
                 "episode_number": ep.get("episode_number"),
                 "title": ep.get("title"),
                 "report": report,
+                "source_comparison": source_comparison,
             })
         return {"episodes": out}
     finally:

@@ -1,7 +1,7 @@
 import { api } from './client'
 import type { SeasonPackPlanResponse } from '../types/api'
 import type { MediaInfoReport } from './library'
-import type { TrackRemuxPreview } from './nomenclature'
+import type { TrackRemuxPreview, SourceComparison } from './nomenclature'
 
 export function previewSeasonPack(seasonId: number): Promise<SeasonPackPlanResponse> {
   return api.get<SeasonPackPlanResponse>(`/library/season/${seasonId}/pack-preview`)
@@ -40,6 +40,10 @@ export interface SeasonEpisodeMediaInfo {
   episode_number?: number | null
   title?: string | null
   report: MediaInfoReport
+  // Computed once from the first available episode and reused for every
+  // episode — a season pack can only reach this screen once every episode
+  // already agrees on source (build_season_pack_plan blocks otherwise).
+  source_comparison?: SourceComparison | null
 }
 
 export function getSeasonEpisodeMediaInfo(seasonId: number): Promise<{ episodes: SeasonEpisodeMediaInfo[] }> {

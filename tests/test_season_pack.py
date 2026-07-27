@@ -9,7 +9,10 @@ conftest.py provides isolated_db (autouse) pointing CONFIG_DIR to a tmp dir.
 """
 from __future__ import annotations
 
+from unittest.mock import patch
+
 from emuwarez_uploadrr.database import init_db, connect
+from emuwarez_uploadrr.services import media_info_service
 from emuwarez_uploadrr.services.season_pack import (
     build_season_pack_plan,
     apply_season_pack,
@@ -275,6 +278,73 @@ def test_get_season_episode_mediainfo_reports_unavailable_for_bad_path(isolated_
 
     assert len(result["episodes"]) == 1
     assert result["episodes"][0]["report"]["available"] is False
+    conn.close()
+
+
+def test_get_season_episode_mediainfo_prefers_prepared_path_over_stale_path(isolated_db, tmp_path):
+    """Regression: this read a raw `path` (the Radarr/Sonarr-reported, ORIGINAL
+    filename) that goes stale once nomenclature has already been applied once
+    (e.g. a prior retry) — "Ver MediaInfo" showed the Source from the OLD
+    name (e.g. "WEBRIP") while the real applied/uploaded name (which reads
+    prepared_path, the current renamed file) showed something else entirely
+    (e.g. "BluRay"). Every other per-episode reader in this module
+    (nomenclature.py, mkv_remux.py) already prefers prepared_path — this one
+    didn't."""
+    conn = _open(isolated_db)
+    _series_id, season_id = _seed_series_season(conn)
+    # `path` doesn't exist at all (simulating a stale, already-renamed-away
+    # Radarr/Sonarr path) — only prepared_path points at a real file. If the
+    # fix reads path instead, this must come back unavailable.
+    stale_path = str(tmp_path / "One.Piece.S01E01.WEBRIP.mkv")
+    current = tmp_path / "One Piece - S01E01 [1080p].mkv"
+    current.write_bytes(b"fake")
+    ep_id = _seed_episode(conn, season_id, number=1, title="One Piece S01E01", path=stale_path)
+    conn.execute("UPDATE library_items SET prepared_path = ? WHERE id = ?", (str(current), ep_id))
+    conn.commit()
+
+    info = {"media": {"track": [
+        {"@type": "General"},
+        {"@type": "Video", "Format": "AVC", "Width": "1920", "Height": "1080"},
+    ]}}
+    with (
+        patch.object(media_info_service, "mediainfo_available", return_value=True),
+        patch.object(media_info_service.legacy, "run_mediainfo_json", return_value=info),
+    ):
+        result = get_season_episode_mediainfo(season_id, conn=conn)
+
+    assert result["episodes"][0]["report"]["available"] is True
+    conn.close()
+
+
+def test_get_season_episode_mediainfo_computes_source_comparison_once_and_shares_it(isolated_db, tmp_path):
+    """A season pack can only reach this screen once every episode already
+    agrees on source (build_season_pack_plan's consistency check blocks the
+    upload otherwise) — so the name/Radarr/MediaInfo cross-check (the
+    "Internal Source Tool" blinking link) is computed once, from the first
+    available episode, and reused for every episode instead of re-running
+    the engine's analysis per chapter."""
+    conn = _open(isolated_db)
+    _series_id, season_id = _seed_series_season(conn)
+    for i in (1, 2):
+        src = tmp_path / f"S01E0{i}.mkv"
+        src.write_bytes(b"video")
+        _seed_episode(conn, season_id, number=i, title=f"One Piece S01E0{i}", path=str(src))
+
+    fake_comparison = {"from_name": "BluRay", "from_radarr": "BluRay", "from_mediainfo": "BluRay",
+                        "mediainfo_confirmed": True, "agree": True, "engine": None}
+    info = {"media": {"track": [{"@type": "Video", "Format": "AVC"}]}}
+    with (
+        patch("emuwarez_uploadrr.services.source_assistant.build_editable_nomenclature_fields",
+              return_value={"source_comparison": fake_comparison}) as mocked_fields,
+        patch.object(media_info_service, "mediainfo_available", return_value=True),
+        patch.object(media_info_service.legacy, "run_mediainfo_json", return_value=info),
+    ):
+        result = get_season_episode_mediainfo(season_id, conn=conn)
+
+    assert mocked_fields.call_count == 1
+    assert len(result["episodes"]) == 2
+    assert result["episodes"][0]["source_comparison"] == fake_comparison
+    assert result["episodes"][1]["source_comparison"] == fake_comparison
     conn.close()
 
 

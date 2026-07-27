@@ -1247,12 +1247,26 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
                             expanded={expandedMiEp === ep.episode_id}
                             onToggle={() => setExpandedMiEp(expandedMiEp === ep.episode_id ? null : ep.episode_id)}
                           >
-                            <MediaInfoTable report={ep.report} />
+                            <MediaInfoTable
+                              report={ep.report}
+                              onSourceToolClick={ep.source_comparison ? () => {
+                                setSourceComparison(ep.source_comparison!)
+                                setShowEngineDetail(true)
+                                setShowSourceCompare(true)
+                              } : undefined}
+                            />
                           </EpisodeAccordionRow>
                         ))}
                       </div>
                     </div>
                   </div>
+                )}
+                {showSourceCompare && sourceComparison && (
+                  <SourceComparisonModal
+                    comparison={sourceComparison}
+                    initialShowDetail={showEngineDetail}
+                    onClose={() => setShowSourceCompare(false)}
+                  />
                 )}
 
                 {showRemuxCard && (

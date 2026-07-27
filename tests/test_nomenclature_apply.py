@@ -244,6 +244,49 @@ def test_apply_plan_prefers_real_media_info_over_synced_values(isolated_db, tmp_
     conn.close()
 
 
+def test_apply_plan_preserves_manually_edited_source_despite_mediainfo_mismatch(isolated_db, tmp_path):
+    # Real production bug: a file named "...BDRemux..." always re-detects
+    # source=BDReMux from the raw filename. A user who manually edited the
+    # source to "BluRay" via the field editor (save_nomenclature_fields(),
+    # which stamps fields_json) had that edit silently discarded the next
+    # time the job ran, because _refresh_media_info_from_real_file() force-
+    # refreshed the WHOLE proposal from scratch whenever ANY of
+    # video_codec/audio_codec/audio_languages/subtitle_languages disagreed
+    # with a fresh MediaInfo read — completely unrelated to `source`.
+    src = tmp_path / "Movie 2017 1080p BDRemux x264-GRP.mkv"
+    src.write_bytes(b"video")
+    conn = _open(isolated_db)
+    item_id = _insert_item(conn, title="Some Movie", path=str(src))
+    conn.execute(
+        "UPDATE library_items SET video_codec = 'AVC', tmdb_id = '1', year = 2017 WHERE id = ?",
+        (item_id,),
+    )
+    now = "2024-01-01T00:00:00+00:00"
+    conn.execute(
+        """INSERT INTO nomenclature_proposals
+           (library_item_id, status, source, fields_json, created_at, updated_at)
+           VALUES (?, 'valid', 'BluRay', '{"source": "BluRay"}', ?, ?)""",
+        (item_id, now, now),
+    )
+    conn.commit()
+
+    real_media_info = {
+        "video_codec": "HEVC", "audio_codec": "DD+",
+        "audio_languages": "ING / ESP", "subtitle_languages": "ING / ESP",
+    }
+    with patch(
+        "emuwarez_uploadrr.services.media_info_service.read_media_info_summary",
+        return_value=real_media_info,
+    ):
+        plan = build_nomenclature_apply_plan(item_id, conn=conn)
+
+    assert plan["proposal"]["source"] == "BluRay"
+    # The unrelated codec correction still lands on library_items.
+    row = conn.execute("SELECT video_codec FROM library_items WHERE id = ?", (item_id,)).fetchone()
+    assert row["video_codec"] == "HEVC"
+    conn.close()
+
+
 def test_apply_plan_falls_back_when_mediainfo_unavailable(isolated_db, tmp_path):
     src = tmp_path / "movie.mkv"
     src.write_bytes(b"video")

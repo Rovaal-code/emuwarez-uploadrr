@@ -602,6 +602,17 @@ def _refresh_media_info_from_real_file(item: dict, *, conn) -> None:
          real.get("audio_languages"), real.get("subtitle_languages"), item.get("id")),
     )
     conn.commit()
+
+    # A manually-edited proposal (fields_json is only ever written by the
+    # field editor's save_nomenclature_fields()) must not be silently
+    # discarded just because the corrected codec/audio metadata differs from
+    # what was stored — force_refresh=True below recomputes EVERY field from
+    # scratch, including `source` from the raw filename, which overwrote a
+    # user's own manual "BluRay" choice back to "BDReMux" in production the
+    # moment any of the four narrow fields above disagreed even slightly.
+    latest = get_latest_nomenclature_proposal(item.get("id"), conn=conn)
+    if latest and latest.get("fields_json"):
+        return
     build_nomenclature_proposal(item.get("id"), force_refresh=True, conn=conn)
 
 

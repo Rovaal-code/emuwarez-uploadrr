@@ -245,6 +245,36 @@ rama. Confirmado sin regresión en ambas pasadas de calibración (77.6%→
 77.7% en la biblioteca personal; sin cambio en el catálogo, que no
 modela encoder_settings).
 
+## Corrección: la penalización de BDRemux del 2026-07-24 se diluía a casi nada
+
+El mismo Geostorm volvió a puntuarse como BDRemux (2026-07-27) pese a la
+corrección anterior. Motivo: la penalización moderada añadida entonces
+(`BDRemux=-12*p`, `FBD=-6*p`) se metió DENTRO de la misma entrada de
+`Evidence` que la señal ambigua de WEB-DL — con `strength="weak"` y
+`reliability=0.3`. `Evidence.effective()` multiplica la contribución por
+`STRENGTH_WEIGHT[strength] * reliability` antes de sumarla en el scoring
+(`0.35 * 0.3 = 0.105` para "weak"), así que aquel `-12*p` (con p≈0.45, un
+valor bruto de ≈-5.4) llegaba al scoring real como apenas ≈-0.57 — invisible
+frente a señales "medium"/"strong" de otros detectores (p.ej. el bitrate
+normalizado, que sobre su propio pico de 14 llega a ≈4.9 efectivo). El
+número "moderado" mencionado en la corrección anterior nunca tuvo el peso
+real que su propio razonamiento reclamaba.
+
+Arreglado separando esta señal en su propia entrada de `Evidence`
+(`disc_tier_encoder_fingerprint`) con `strength="strong"`, `reliability=0.75`
+— contribución efectiva ≈-22.5 sobre `BDRemux=-30`, muy por encima de
+cualquier señal de bitrate/audio/subtítulos individual, sin tocar la entrada
+compartida con WEB-DL (que sigue tan ambigua/débil como la calibración de
+2026-07-24 decidió con datos reales).
+
+Nota sobre la pregunta "¿por qué no lo detectó el catálogo de 11338 torrents
+de eMuwarez (`emu_catalog`)?": ese catálogo es name/resolución/tamaño
+solamente — no trae MediaInfo real, así que no tiene ningún dato de
+`encoder_settings`/huella de encoder. Ninguna calibración contra ese catálogo
+puede validar (ni refutar) esta señal en absoluto; hace falta MediaInfo real
+por archivo, que es justo lo que faltó (0 muestras BDRemux reales) en la
+calibración de la biblioteca personal también.
+
 ## Profundidad del muestreo de bitstream
 
 `SAMPLE_FRAMES_PER_WINDOW` subió de 96 a 180 frames por ventana (y el

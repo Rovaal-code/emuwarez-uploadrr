@@ -5,7 +5,7 @@ from pathlib import Path
 
 from emuwarez_uploadrr.legacy import (
     _detect_source_by_name, detect_source, heuristic_source, detect_source_smart,
-    estimate_source_from_bitrate,
+    estimate_source_from_bitrate, detect_video_codec,
 )
 
 
@@ -28,6 +28,26 @@ def test_heuristic_lossless_is_disc():
 def test_heuristic_ddplus_is_webdl():
     assert heuristic_source(["DD+", "DD+"], size_gb=5, resolution="1080p") == "WEB-DL"
     assert heuristic_source(["E-AC-3"], size_gb=4, resolution="1080p") == "WEB-DL"
+
+
+def test_detect_video_codec_ignores_filename_uses_real_encoder_fields():
+    # Regression: the filename used to be checked alongside the real
+    # WritingLibrary/Encoded_Library MediaInfo fields, in a single combined
+    # string — a file whose (possibly already-renamed) name merely contains
+    # the substring "x264" kept reporting codec=x264 forever, even once
+    # MediaInfo's own Format/encoder fields showed plain, untouched AVC with
+    # no encoder fingerprint at all.
+    video_plain_avc = {"Format": "AVC"}
+    path_with_x264_in_name = Path("Movie 2017 1080p BDRemux x264-GRP.mkv")
+    assert detect_video_codec(video_plain_avc, path_with_x264_in_name) == "AVC"
+
+    video_real_x264 = {"Format": "AVC", "Encoded_Library": "x264 - core 165"}
+    assert detect_video_codec(video_real_x264, Path("Movie 2017 1080p BluRay.mkv")) == "x264"
+
+
+def test_detect_video_codec_prefers_hevc_over_generic_format_string():
+    video = {"Format": "HEVC", "Encoded_Library": "x265 - 3.4"}
+    assert detect_video_codec(video, Path("Movie.mkv")) == "x265"
 
 
 def test_heuristic_ambiguous_returns_none():

@@ -3059,7 +3059,15 @@ def detect_source_smart(
 
 
 def detect_video_codec(video: dict[str, Any], path: Path) -> str:
-    text = f"{path.name} {video.get('WritingLibrary','')} {video.get('Encoded_Library','')}".lower()
+    # Real MediaInfo encoder fields ONLY — never the filename. The guide
+    # itself draws a hard line between "H264 → AVC" (generic codec) and
+    # "x264 → x264" (the specific hand encoder was actually used), which is
+    # a claim about the real video stream, not about what some past release
+    # happened to call itself. Trusting the filename here let a file with
+    # "x264" baked into its (possibly already-renamed) name keep reporting
+    # x264 forever, even once MediaInfo's own Format/encoder fields showed
+    # plain, untouched AVC/HEVC with no encoder fingerprint at all.
+    text = f"{video.get('WritingLibrary','')} {video.get('Encoded_Library','')}".lower()
     fmt = str(video.get("Format") or video.get("CodecID") or "").lower()
 
     if "x264" in text:

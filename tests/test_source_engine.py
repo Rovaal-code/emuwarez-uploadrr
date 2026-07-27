@@ -250,6 +250,46 @@ def test_video_codec_mpeg2_favors_sd_hdtv():
     assert contrib["BDRemux"] < 0
 
 
+def test_transcode_signal_adds_strong_dedicated_bdremux_penalty_when_fingerprint_present():
+    """A hand-encoder fingerprint is only ambiguous for WEB-DL (see
+    transcode.py's docstring) — for BDRemux/FBD it's near-decisive, since a
+    genuine disc remux/full-disc copy should never carry one at all. Must be
+    its OWN strong/high-reliability entry, not just a bump to the existing
+    weak WEB-DL-shared one (that would also loosen the deliberately weak
+    WEB-DL calibration)."""
+    video = {"encoder": "x264 - core 165", "encoder_settings": "crf=18.0 / keyint=250"}
+    signals = transcode.analyze_transcode_signals(video)
+    assert signals.has_encoder_fingerprint is True
+
+    result = ev.transcode_signal(_base_profile(), signals)
+    assert len(result) == 2
+    fingerprint_entry = result[1]
+    assert fingerprint_entry.strength == "strong"
+    assert fingerprint_entry.contributions["BDRemux"] <= -25
+    assert fingerprint_entry.contributions["FBD"] <= -15
+
+
+def test_encoder_fingerprint_can_flip_winner_away_from_bdremux():
+    """Regression: in production, a file literally named "...BDRemux x264..."
+    (a re-encode, per its own encoder fingerprint) kept winning BDRemux
+    because a realistic in-range bitrate reading easily outweighed the old,
+    very weak fingerprint penalty. The new dedicated strong penalty must be
+    able to overrule that on its own."""
+    video = {"encoder": "x264 - core 165", "encoder_settings": "crf=18.0 / keyint=250"}
+    signals = transcode.analyze_transcode_signals(video)
+    transcode_evidence = ev.transcode_signal(_base_profile(), signals)
+
+    # A realistic "perfectly in BDRemux's range" bitrate-normalization
+    # reading (peak=14, same as bitrate_normalization_signal's own peak).
+    bitrate_evidence = ev.Evidence(
+        feature="bits_per_pixel_per_frame", value=0.3,
+        contributions=ev._c(BDRemux=14, BluRay=6),
+        strength="medium", reliability=0.5, explanation="test bitrate signal",
+    )
+    result = scoring.score_candidates([*transcode_evidence, bitrate_evidence])
+    assert result.winner.label != "BDRemux"
+
+
 def test_bluray_compat_flag_detected():
     profile_dict = _base_profile(video={"encoder_settings": "cabac=1 / bluray_compat=1 / crf=18.0"})
     result = ev.bluray_compat_flag(profile_dict)

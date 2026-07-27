@@ -453,6 +453,26 @@ def transcode_signal(profile: dict, signals) -> list[Evidence]:
                               WEBRIP=4 * p, **{"WEB-DL": -3 * p}),
             strength="weak", reliability=0.3, explanation=explanation,
         )]
+        # Unlike WEB-DL above, a hand-encoder fingerprint is NOT ambiguous
+        # for BDRemux/FBD: those are supposed to be a byte-for-byte copy of
+        # the disc's own video stream, and commercial Blu-ray/DVD discs are
+        # authored with proprietary/hardware encoders — never an open-source
+        # x264/x265 CLI dump. So this fingerprint alone is strong, near-
+        # decisive evidence the stream was actually re-encoded, no matter how
+        # close the bitrate otherwise looks to a genuine remux (confirmed in
+        # production: a file with "BDRemux" in its own name and an x264
+        # fingerprint, whose bitrate still scored in-range, kept winning
+        # BDRemux because the weak evidence above wasn't enough to overrule
+        # it on its own). A separate, stronger entry — rather than raising
+        # the weak one above — keeps the WEB-DL calibration untouched.
+        ev.append(Evidence(
+            feature="disc_tier_encoder_fingerprint", value=1.0,
+            contributions=_c(BDRemux=-30, FBD=-20),
+            strength="strong", reliability=0.75,
+            explanation=(f"Huella de encoder de mano ({signals.encoder_name or 'x264/x265'}) detectada: "
+                         "un remux o disco completo genuino no debería llevarla nunca, así que descarta con "
+                         "fuerza que sea un remux real, con independencia de lo cerca que esté el bitrate."),
+        ))
     else:
         # No fingerprint at all is still a fairly strong "untouched" signal —
         # calibration didn't contradict this case (it's rare in the dataset,

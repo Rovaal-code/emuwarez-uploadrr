@@ -854,7 +854,31 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
   // an incomplete/missing one is shown greyed out and unselectable instead
   // of letting the user pick it and fail later.
   const isSeasonComplete = (s: LibraryItemResponse) => s.local_status === 'Disponible'
-  const selectableSeasons = seasons.filter(isSeasonComplete)
+  // A complete season can still fail build_season_pack_plan()'s per-episode
+  // consistency check (codec/audio/idiomas/subs/resolución/source must all
+  // match) — the season row's own rollup fields (services/library.py's
+  // _update_season_rollup, populated at sync time) are None precisely when
+  // episodes disagree on one of them, so this is the same signal without
+  // having to run the heavier per-episode plan just to grey out a card.
+  const SEASON_CONSISTENCY_FIELDS: { key: keyof LibraryItemResponse; label: string }[] = [
+    { key: 'resolution', label: 'la resolución' },
+    { key: 'source', label: 'el source' },
+    { key: 'video_codec', label: 'el códec de vídeo' },
+    { key: 'audio_codec', label: 'el códec de audio' },
+    { key: 'audio_languages', label: 'los idiomas de audio' },
+    { key: 'subtitle_languages', label: 'los subtítulos' },
+  ]
+  const seasonInconsistentField = (s: LibraryItemResponse) =>
+    SEASON_CONSISTENCY_FIELDS.find(f => !s[f.key])
+  const isSeasonReady = (s: LibraryItemResponse) => isSeasonComplete(s) && !seasonInconsistentField(s)
+  const seasonNotReadyReason = (s: LibraryItemResponse) => {
+    if (!isSeasonComplete(s)) return 'Temporada incompleta: no todos los capítulos están Disponibles.'
+    const field = seasonInconsistentField(s)
+    return field
+      ? `Los capítulos de esta temporada no coinciden en ${field.label} — revísalos antes de subir el pack.`
+      : null
+  }
+  const selectableSeasons = seasons.filter(isSeasonReady)
   // The series' own name is redundant here (already the wizard's title) —
   // just the season part, e.g. "Temporada 1"/"Especiales".
   const seasonCardLabel = (s: LibraryItemResponse) => {
@@ -874,28 +898,29 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
       </label>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10, maxHeight: 320, overflowY: 'auto' }}>
         {seasons.map(s => {
-          const complete = isSeasonComplete(s)
+          const ready = isSeasonReady(s)
+          const reason = seasonNotReadyReason(s)
           const selected = multiSelected.has(s.id)
           const card = (
             <button
               type="button"
-              disabled={!complete}
+              disabled={!ready}
               onClick={() => toggleMultiSeason(s.id)}
               style={{
-                width: '100%', padding: '16px 12px', borderRadius: 8, fontSize: 13, textAlign: 'center', cursor: complete ? 'pointer' : 'not-allowed',
+                width: '100%', padding: '16px 12px', borderRadius: 8, fontSize: 13, textAlign: 'center', cursor: ready ? 'pointer' : 'not-allowed',
                 background: selected ? 'rgba(37,99,235,0.18)' : 'var(--bg-card)',
                 border: `1px solid ${selected ? '#2563eb' : 'var(--border-input)'}`,
-                color: 'var(--text-primary)', opacity: complete ? 1 : 0.45,
+                color: 'var(--text-primary)', opacity: ready ? 1 : 0.45,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}
             >
               <span style={{ fontWeight: 600 }}>{seasonCardLabel(s)}</span>
             </button>
           )
-          return complete ? (
+          return ready ? (
             <div key={s.id}>{card}</div>
           ) : (
-            <Tooltip key={s.id} content="Temporada incompleta: no todos los capítulos están Disponibles." style={{ width: '100%' }}>
+            <Tooltip key={s.id} content={reason} style={{ width: '100%' }}>
               {card}
             </Tooltip>
           )

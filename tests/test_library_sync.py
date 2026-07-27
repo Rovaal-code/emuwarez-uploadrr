@@ -559,6 +559,78 @@ def test_sync_sonarr_partial_series_and_season(sonarr_conn):
     assert missing == 1
 
 
+def test_sync_sonarr_season_rollup_set_when_episodes_agree(sonarr_conn):
+    """The season row's own resolution/source/codec/audio/subs must be
+    filled in when every available episode shares the same value — this
+    never happened at all before (season_to_library_item unconditionally
+    left these None), so the wizard's "Información técnica"/consistency
+    checks always saw a blank field regardless of real agreement."""
+    from emuwarez_uploadrr.services.library import sync_instance
+    from emuwarez_uploadrr.services.instances import list_instances
+    instance = list_instances(sonarr_conn)[0]
+
+    series_data = _fake_series(30, "Rollup Show", has_episodes=False)
+    episodes = [_fake_episode(1, 30, has_file=True), _fake_episode(2, 30, has_file=True)]
+    media_info = {"videoCodec": "x264", "audioCodec": "AAC", "audioLanguages": "jpn", "subtitles": "spa"}
+    ep_files = [
+        {"id": 10, "path": "/tv/S/S01E01.mkv", "size": 500, "quality": {"quality": {"name": "WEBRip-1080p"}}, "mediaInfo": media_info},
+        {"id": 20, "path": "/tv/S/S01E02.mkv", "size": 700, "quality": {"quality": {"name": "WEBRip-1080p"}}, "mediaInfo": media_info},
+    ]
+
+    with (
+        patch("emuwarez_uploadrr.integrations.sonarr.get_series", return_value=[series_data]),
+        patch("emuwarez_uploadrr.integrations.sonarr.get_queue", return_value=[]),
+        patch("emuwarez_uploadrr.integrations.sonarr.get_episodes", return_value=episodes),
+        patch("emuwarez_uploadrr.integrations.sonarr.get_episode_files", return_value=ep_files),
+    ):
+        sync_instance(sonarr_conn, instance, include_episodes=True)
+
+    season_row = sonarr_conn.execute("SELECT * FROM library_items WHERE item_type = 'season'").fetchone()
+    assert season_row["resolution"] == "1080p"
+    assert season_row["source"] == "WEBRip"
+    assert season_row["video_codec"] == "x264"
+    assert season_row["audio_codec"] == "AAC"
+    assert season_row["audio_languages"] == "jpn"
+    assert season_row["subtitle_languages"] == "spa"
+    # Tamaño is a SUM, not an agreement rollup — episodes are naturally
+    # different sizes, that's not a "disagreement" to hide.
+    assert season_row["size_bytes"] == 1200
+
+
+def test_sync_sonarr_season_rollup_none_when_episodes_disagree(sonarr_conn):
+    """Real case that motivated this: episodes agree on codec/audio but NOT
+    on subtitles (one has SUBS, the other doesn't) — the season row's
+    subtitle_languages must stay None (not silently pick one episode's
+    value), while the fields that DO agree still roll up normally."""
+    from emuwarez_uploadrr.services.library import sync_instance
+    from emuwarez_uploadrr.services.instances import list_instances
+    instance = list_instances(sonarr_conn)[0]
+
+    series_data = _fake_series(31, "Disagreement Show", has_episodes=False)
+    episodes = [_fake_episode(1, 31, has_file=True), _fake_episode(2, 31, has_file=True)]
+    # _fake_episode(ep_id, ...) hardcodes episodeFileId = ep_id * 10 — the
+    # fake file "id" here must match that exactly or files_by_id.get(...)
+    # silently misses and the episode looks like it has no file at all.
+    ep_files = [
+        {"id": 10, "path": "/tv/D/S01E01.mkv", "size": 1, "quality": {"quality": {"name": "HDTV-1080p"}},
+         "mediaInfo": {"videoCodec": "x264", "audioCodec": "AAC", "audioLanguages": "jpn", "subtitles": "spa"}},
+        {"id": 20, "path": "/tv/D/S01E02.mkv", "size": 1, "quality": {"quality": {"name": "HDTV-1080p"}},
+         "mediaInfo": {"videoCodec": "x264", "audioCodec": "AAC", "audioLanguages": "jpn", "subtitles": None}},
+    ]
+
+    with (
+        patch("emuwarez_uploadrr.integrations.sonarr.get_series", return_value=[series_data]),
+        patch("emuwarez_uploadrr.integrations.sonarr.get_queue", return_value=[]),
+        patch("emuwarez_uploadrr.integrations.sonarr.get_episodes", return_value=episodes),
+        patch("emuwarez_uploadrr.integrations.sonarr.get_episode_files", return_value=ep_files),
+    ):
+        sync_instance(sonarr_conn, instance, include_episodes=True)
+
+    season_row = sonarr_conn.execute("SELECT * FROM library_items WHERE item_type = 'season'").fetchone()
+    assert season_row["video_codec"] == "x264"
+    assert season_row["subtitle_languages"] is None
+
+
 def test_sync_sonarr_progress_total_counts_seasons(sonarr_conn):
     """on_total() must count every level _bump()/on_progress() fires for —
     series + seasons + episodes — or the live "done" counter runs past

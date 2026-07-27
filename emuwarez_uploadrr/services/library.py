@@ -196,6 +196,36 @@ def _notify_new_missing(conn: sqlite3.Connection, item: LibraryItem, item_id: in
 # Sync
 # ---------------------------------------------------------------------------
 
+# The season-level "Información técnica" fields — a value only appears when
+# every AVAILABLE episode agrees on it, same idea as the movie-level fields
+# but rolled up across a season's episodes instead of read from one file.
+_SEASON_ROLLUP_FIELDS = (
+    "resolution", "source", "video_codec", "audio_codec",
+    "audio_languages", "subtitle_languages",
+)
+
+
+def _update_season_rollup(conn: sqlite3.Connection, season_row_id: int, episode_items: list[LibraryItem]) -> None:
+    available = [e for e in episode_items if e.local_status == LocalStatus.AVAILABLE.value]
+    values: dict[str, str | None] = {}
+    for field in _SEASON_ROLLUP_FIELDS:
+        distinct = {getattr(e, field) for e in available}
+        values[field] = next(iter(distinct)) if len(distinct) == 1 and None not in distinct else None
+    # Tamaño (size_bytes) is a SUM, not an agreement rollup — episodes are
+    # naturally different sizes, that's not a "disagreement" to hide.
+    sizes = [e.size_bytes for e in available if e.size_bytes is not None]
+    total_size = sum(sizes) if sizes else None
+    conn.execute(
+        "UPDATE library_items SET resolution = ?, source = ?, video_codec = ?, "
+        "audio_codec = ?, audio_languages = ?, subtitle_languages = ?, size_bytes = ? WHERE id = ?",
+        (
+            values["resolution"], values["source"], values["video_codec"],
+            values["audio_codec"], values["audio_languages"], values["subtitle_languages"],
+            total_size, season_row_id,
+        ),
+    )
+
+
 def _sync_one_series(
     conn: sqlite3.Connection,
     instance: InstanceConfig,
@@ -293,6 +323,7 @@ def _sync_one_series(
             if season_item.local_status in LocalStatus.not_available():
                 missing += 1
 
+        ep_items_by_season: dict[int, list[LibraryItem]] = {}
         for episode in episodes:
             ep_file = (
                 files_by_id.get(episode.get("episodeFileId"))
@@ -315,6 +346,17 @@ def _sync_one_series(
             _bump()
             if ep_item.local_status != LocalStatus.AVAILABLE.value:
                 missing += 1
+            if season_num is not None:
+                ep_items_by_season.setdefault(int(season_num), []).append(ep_item)
+
+        # Season-level rollup (resolution/source/codecs/audio/subs): only
+        # set when every AVAILABLE episode agrees, so the "Información
+        # técnica" card's "–" genuinely means "these episodes disagree"
+        # instead of the field simply never having been computed at all
+        # (season_to_library_item never sets these — they defaulted to None
+        # unconditionally, for every season, agreeing or not).
+        for season_num, season_row_id in season_row_id_by_number.items():
+            _update_season_rollup(conn, season_row_id, ep_items_by_season.get(season_num, []))
 
     return missing
 

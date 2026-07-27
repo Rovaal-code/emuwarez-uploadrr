@@ -82,7 +82,10 @@ export function ProviderPriorityPicker({ order, onChange, linkIcons = true }: Pr
   }, [])
 
   function enable(code: string) {
-    if (!order.includes(code)) onChange([...order, code])
+    // Newly-added provider goes FIRST — it's presumably being added because
+    // it should now be preferred, not silently tacked on at the bottom of
+    // the priority order where it would rarely if ever get picked.
+    if (!order.includes(code)) onChange([code, ...order])
   }
 
   function disable(code: string) {

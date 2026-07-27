@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   setupAdmin, setupTmdb, setupEmu, setupInstances,
   setupQbit, setupImghosts, setupComplete,
@@ -238,9 +238,19 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   // reads (falls back to the backend's own default when nothing was ever
   // saved) instead of a separately hand-typed copy of that default here,
   // which could silently drift out of sync.
+  //
+  // The fetch is async and races with the user: if they start dragging
+  // before it resolves, applying its result afterwards would silently
+  // overwrite their in-progress reorder (visually: the item jumps, then
+  // "snaps back" to the fetched order). nomOrderTouchedRef blocks that.
+  const nomOrderTouchedRef = useRef(false)
   useEffect(() => {
-    fetchSettings().then(s => { if (s.provider_priority_order?.length) setNomProviderOrder(s.provider_priority_order) }).catch(() => { /* keep the built-in default */ })
+    fetchSettings().then(s => { if (!nomOrderTouchedRef.current && s.provider_priority_order?.length) setNomProviderOrder(s.provider_priority_order) }).catch(() => { /* keep the built-in default */ })
   }, [])
+  function handleNomProviderOrderChange(next: string[]) {
+    nomOrderTouchedRef.current = true
+    setNomProviderOrder(next)
+  }
 
   async function handleTestImghost(hostId: string) {
     setImgTesting(hostId)
@@ -859,7 +869,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 Arrastra para reordenar: los de arriba tienen preferencia. Cada proveedor tiene su propio
                 icono para reconocerlo de un vistazo.
               </div>
-              <ProviderPriorityPicker order={nomProviderOrder} onChange={setNomProviderOrder} linkIcons={false} />
+              <ProviderPriorityPicker order={nomProviderOrder} onChange={handleNomProviderOrderChange} linkIcons={false} />
               {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
               <div className="wizard-actions">
                 <span />
@@ -885,7 +895,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                     <div key={h.id} style={{ padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <input type="checkbox" checked={enabled || isDefault} disabled={isDefault}
-                          onChange={() => setImgEnabled(p => p.includes(h.id) ? p.filter(x => x !== h.id) : [...p, h.id])} />
+                          onChange={() => setImgEnabled(p => p.includes(h.id) ? p.filter(x => x !== h.id) : [h.id, ...p])} />
                         <Favicon domain={domainOf(h.url)} src={h.favicon} size={14} background="#fff" fallback={<ServiceIcon type="imghost" size={14} />} />
                         <span style={{ fontSize: 13 }}>{h.label}</span>
                         {isDefault && <span className="badge status-available" style={{ fontSize: 10 }}>por defecto</span>}

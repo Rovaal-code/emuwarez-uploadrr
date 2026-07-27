@@ -159,7 +159,11 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   }
 
   function toggleImgHost(hostId: string) {
-    setImgEnabled(p => p.includes(hostId) ? p.filter(x => x !== hostId) : [...p, hostId])
+    // Newly-enabled host goes FIRST in priority — same reasoning as
+    // ProviderPriorityPicker.enable(): it's presumably being added because
+    // it should now be preferred, not appended where fallback_order() would
+    // rarely if ever actually pick it.
+    setImgEnabled(p => p.includes(hostId) ? p.filter(x => x !== hostId) : [hostId, ...p])
   }
 
   useEffect(() => {

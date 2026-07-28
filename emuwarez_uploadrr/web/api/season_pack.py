@@ -18,10 +18,11 @@ from ...services.season_pack import (
     get_season_episode_names,
     get_season_episode_remux_previews,
     get_season_plan_progress,
+    preview_season_pack_title,
 )
 from ..dependencies import require_auth
 from ..runtime import _db_path
-from ..schemas import SeasonPackPlanResponse
+from ..schemas import SeasonPackFieldsPreviewBody, SeasonPackPlanResponse
 
 router = APIRouter(tags=["season-pack"])
 
@@ -41,6 +42,17 @@ def preview_season_pack(season_id: int, current_user: dict = Depends(require_aut
     if plan["status"] == "blocked" and plan["errors"] == ["Temporada no encontrada."]:
         raise HTTPException(status_code=404, detail="Temporada no encontrada.")
     return SeasonPackPlanResponse(**plan)
+
+
+@router.post("/library/season/{season_id}/pack-preview-fields")
+def preview_season_pack_fields(
+    season_id: int, body: SeasonPackFieldsPreviewBody, current_user: dict = Depends(require_auth),
+) -> dict:
+    """Cheap live preview of the season pack title while editing Source/
+    Proveedor/Tag in the wizard (season_id unused — every value needed is
+    already in the request body, no DB/disk work at all; kept in the URL
+    only for consistency with the rest of this file's per-season routes)."""
+    return preview_season_pack_title(body.model_dump())
 
 
 @router.get("/library/season/{season_id}/pack-preview/progress")

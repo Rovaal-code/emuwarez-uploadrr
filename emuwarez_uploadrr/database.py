@@ -504,6 +504,19 @@ def _migrate_upload_jobs_checks_snapshot(conn: sqlite3.Connection) -> None:
         pass
 
 
+def _migrate_upload_jobs_season_overrides(conn: sqlite3.Connection) -> None:
+    """Add season_overrides_json — Source/Proveedor/Tag edited by hand for a
+    season pack (either in the manual wizard's now-editable season fields, or
+    by the Automático source-disparity gate), applied uniformly across every
+    episode. Previously this choice only ever reached the staging preview
+    snapshot — the real apply step (season_pack.apply_season_pack) recomputed
+    from scratch with no override at all, silently discarding it."""
+    try:
+        conn.execute("ALTER TABLE upload_jobs ADD COLUMN season_overrides_json TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+
 def _migrate_requests(conn: sqlite3.Connection) -> None:
     """Add Phase 5B columns to request_items and request_matches."""
     for col, col_def in [
@@ -1404,6 +1417,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_upload_jobs_snapshots(conn)
         _migrate_upload_jobs_manual_refs(conn)
         _migrate_upload_jobs_checks_snapshot(conn)
+        _migrate_upload_jobs_season_overrides(conn)
         _migrate_nomenclature_year_series(conn)
         _migrate_source_engine_cache(conn)
         _migrate_library_items_mal_id(conn)

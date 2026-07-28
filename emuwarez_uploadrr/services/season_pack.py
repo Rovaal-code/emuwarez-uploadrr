@@ -98,18 +98,25 @@ def _build_season_pack_title(
     audio_summary: Optional[str],
     subtitle_summary: Optional[str],
     release_tag: Optional[str],
+    provider: Optional[str] = None,
 ) -> str:
     """Modern equivalent of legacy.py::build_emu_title(..., pack=True) — one
     representative title for the whole pack (season only, no per-episode
     numbering)."""
+    from .source_assistant import _build_source_string
     prefix = f"{title} S{season_number:02d}" if season_number is not None else title
     parts = [prefix]
     if year:
         parts.append(str(year))
     if resolution:
         parts.append(resolution)
-    if source:
-        parts.append(source)
+    # Provider (AMZN/NF/DSNP...) attaches to Source, in front of it — same
+    # combiner the single-file builder uses (nomenclature.py's
+    # _build_proposed_filename) — without this a season pack's title never
+    # showed the provider even when its source was WEB-DL from a platform.
+    source_str = _build_source_string(source, provider)
+    if source_str:
+        parts.append(source_str)
     if video_codec:
         parts.append(video_codec)
     if audio_summary:
@@ -118,6 +125,31 @@ def _build_season_pack_title(
         parts.append(subtitle_summary)
     text = " ".join(p for p in parts if p)
     return f"{text}-{release_tag}" if release_tag else text
+
+
+def preview_season_pack_title(fields: dict) -> dict:
+    """Recompute just the season pack title string from already-known field
+    values — no disk/DB I/O, no re-running build_nomenclature_proposal per
+    episode. Mirrors source_assistant.update_nomenclature_fields_preview()'s
+    role for a single item: backs the wizard's live preview while editing
+    Source/Proveedor/Tag, called on every debounced keystroke, so it must
+    stay cheap. `fields` carries the season's own already-loaded base values
+    (title/year/season_number/resolution/video_codec/audio_summary/
+    subtitle_summary) plus whatever the user is currently editing
+    (source/provider/tag)."""
+    title = _build_season_pack_title(
+        title=fields.get("title") or "",
+        year=fields.get("year"),
+        season_number=fields.get("season_number"),
+        resolution=fields.get("resolution"),
+        source=fields.get("source"),
+        provider=fields.get("provider"),
+        video_codec=fields.get("video_codec"),
+        audio_summary=fields.get("audio_summary"),
+        subtitle_summary=fields.get("subtitle_summary"),
+        release_tag=fields.get("tag"),
+    )
+    return {"torrent_name": title}
 
 
 # The 6 properties every available episode of a season pack must share.
@@ -161,6 +193,7 @@ def _consistency_errors(episode_entries: list[dict]) -> list[str]:
 def build_season_pack_plan(
     season_id: int, conn=None,
     source_override: str | None = None, provider_override: str | None = None,
+    tag_override: str | None = None,
 ) -> dict[str, Any]:
     """Build a dry-run plan for a season-pack upload. Never modifies the
     filesystem. Blocks (status="blocked") on: season not found, no episode
@@ -168,8 +201,9 @@ def build_season_pack_plan(
     an episode-vs-episode consistency mismatch — a season pack has no
     "warning, upload anyway" state, unlike a single file.
 
-    `source_override`/`provider_override` (set by the automated-upload
-    source-disparity gate once the user picks by hand) are applied to every
+    `source_override`/`provider_override`/`tag_override` (set either by the
+    automated-upload source-disparity gate, or by hand in the manual
+    wizard's now-editable Source/Proveedor/Tag fields) are applied to every
     episode's own proposal — a pack requires every episode to share the same
     source anyway, so the override applies uniformly."""
     own = conn is None
@@ -259,6 +293,7 @@ def build_season_pack_plan(
             proposal = build_nomenclature_proposal(
                 ep["id"], conn=conn,
                 source_override=source_override, provider_override=provider_override,
+                tag_override=tag_override,
             )
             episode_entries.append({"episode": ep, "proposal": proposal})
             _set_season_plan_progress(season_id, done=i + 1, total=total, current_title=ep.get("title"))
@@ -266,7 +301,18 @@ def build_season_pack_plan(
         errors.extend(_consistency_errors(episode_entries))
 
         first_proposal = episode_entries[0]["proposal"]
-        release_tag = _get_release_tag(conn=conn)
+        release_tag = tag_override or _get_release_tag(conn=conn)
+
+        # Internal Source Tool comparison (name vs Radarr/Sonarr vs
+        # MediaInfo-bitrate), computed once from the first available episode
+        # — every episode already has to agree on source for the pack to be
+        # valid at all, so this is representative of the whole season. Lets
+        # the wizard show the same "blinking" alert + comparison link a
+        # movie/episode gets right next to the season's own Source field.
+        from .source_assistant import build_editable_nomenclature_fields
+        source_comparison = build_editable_nomenclature_fields(
+            available_episodes[0]["id"], conn=conn,
+        ).get("source_comparison")
 
         # Provider: each episode's own proposal already tried the filename
         # first (nomenclature.py's _infer_provider_from_item); if NONE
@@ -288,6 +334,7 @@ def build_season_pack_plan(
             audio_summary=first_proposal.get("audio_summary"),
             subtitle_summary=first_proposal.get("subtitle_summary"),
             release_tag=release_tag,
+            provider=provider,
         )
 
         # Rename-in-place: the episodes' own shared folder IS the pack folder,
@@ -352,13 +399,18 @@ def build_season_pack_plan(
             "release_tag": release_tag,
             "series_title": series_title,
             "year": year,
+            "source_comparison": source_comparison,
         }
     finally:
         if own:
             conn.close()
 
 
-def apply_season_pack(season_id: int, conn, *, job_id: int | None = None) -> dict[str, Any]:
+def apply_season_pack(
+    season_id: int, conn, *, job_id: int | None = None,
+    source_override: str | None = None, provider_override: str | None = None,
+    tag_override: str | None = None,
+) -> dict[str, Any]:
     """Rename every available episode in place to its final pack filename AND
     record each episode's prepared_path on its own library_items row —
     mirrors what nomenclature.py::apply_nomenclature_proposal does for a
@@ -371,8 +423,18 @@ def apply_season_pack(season_id: int, conn, *, job_id: int | None = None) -> dic
 
     No confirmation-token gate here — the caller (upload_queue.py) already
     gates the whole prep sequence once, same as it does for a single file's
-    apply_nomenclature_proposal call."""
-    plan = build_season_pack_plan(season_id, conn=conn)
+    apply_nomenclature_proposal call.
+
+    `source_override`/`provider_override`/`tag_override`: the job's stored
+    field overrides (upload_jobs.season_overrides_json), if the user edited
+    Source/Proveedor/Tag by hand in the wizard — previously this function
+    silently ignored them and recomputed everything from scratch, so a
+    chosen override never actually reached the real renamed files."""
+    plan = build_season_pack_plan(
+        season_id, conn=conn,
+        source_override=source_override, provider_override=provider_override,
+        tag_override=tag_override,
+    )
     if plan["status"] != "valid":
         return {
             "status": "blocked", "errors": plan["errors"], "episodes": [],

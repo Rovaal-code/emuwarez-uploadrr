@@ -278,6 +278,7 @@ def queue_upload(
     with _get_conn() as conn:
         result = queue_upload_for_item(
             item_id, remux_overrides=overrides, remux_snapshot=body.remux_snapshot, checks=checks, conn=conn,
+            source_override=body.source, provider_override=body.provider, tag_override=body.tag,
         )
 
     job = result.get("job")

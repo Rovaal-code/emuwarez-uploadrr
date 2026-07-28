@@ -37,11 +37,18 @@ export async function queueUpload(
   // persisted immediately so the job detail page doesn't show "Pendiente"
   // until the pipeline actually runs the remux step.
   remuxSnapshot?: { ordered_tracks: unknown[] } | null,
+  // Season-pack-only: Source/Proveedor/Tag confirmed in the wizard's
+  // editable season fields, applied uniformly across every episode.
+  // Undefined/omitted for a single movie/episode.
+  seasonOverrides?: { source?: string | null; provider?: string | null; tag?: string | null },
 ): Promise<UploadQueueResult> {
   return api.post<UploadQueueResult>(`/library/${itemId}/upload/queue`, {
     remux_overrides: remuxOverrides ?? null,
     checks: checks ?? null,
     remux_snapshot: remuxSnapshot ?? null,
+    source: seasonOverrides?.source ?? null,
+    provider: seasonOverrides?.provider ?? null,
+    tag: seasonOverrides?.tag ?? null,
   })
 }
 

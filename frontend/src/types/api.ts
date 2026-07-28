@@ -407,7 +407,8 @@ export interface SeasonPackPlanResponse {
   episodes: SeasonPackEpisodePlan[]
   provider?: string | null
   // Field-by-field breakdown — same fields a movie/episode's nomenclature
-  // grid shows, read-only here (no per-field manual editing for a season).
+  // grid shows. Source/Proveedor/Tag are editable here too, same as a
+  // movie/episode (applied uniformly across every episode).
   series_title?: string | null
   year?: number | null
   resolution?: string | null
@@ -416,6 +417,7 @@ export interface SeasonPackPlanResponse {
   audio_summary?: string | null
   subtitle_summary?: string | null
   release_tag?: string | null
+  source_comparison?: import('../api/nomenclature').SourceComparison | null
 }
 
 

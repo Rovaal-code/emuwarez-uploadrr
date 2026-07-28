@@ -20,6 +20,7 @@ from emuwarez_uploadrr.services.season_pack import (
     get_season_episode_names,
     get_season_episode_mediainfo,
     get_season_episode_remux_previews,
+    preview_season_pack_title,
 )
 
 
@@ -190,6 +191,68 @@ def test_plan_blocked_when_episodes_scattered(isolated_db, tmp_path):
     conn.close()
 
 
+def test_plan_tag_override_used_in_title(isolated_db, tmp_path):
+    conn = _open(isolated_db)
+    _series_id, season_id = _seed_series_season(conn)
+    season_dir = tmp_path / "Season 1"
+    season_dir.mkdir()
+    for i in (1, 2):
+        src = season_dir / f"S01E0{i}.mkv"
+        src.write_bytes(b"video")
+        _seed_episode(conn, season_id, number=i, title=f"One Piece S01E0{i}", path=str(src), quality="WEBDL-1080p")
+
+    plan = build_season_pack_plan(season_id, conn=conn, tag_override="MYTAG")
+
+    assert plan["status"] == "valid"
+    assert plan["release_tag"] == "MYTAG"
+    assert plan["season_pack_title"].endswith("-MYTAG")
+    conn.close()
+
+
+def test_plan_title_includes_provider_with_source_override(isolated_db, tmp_path):
+    """_build_season_pack_title() previously never combined provider with
+    source at all — a season pack's title never showed AMZN/NF/DSNP… even
+    when its source was WEB-DL from a specific platform, unlike a single
+    movie/episode's own title builder."""
+    conn = _open(isolated_db)
+    _series_id, season_id = _seed_series_season(conn)
+    season_dir = tmp_path / "Season 1"
+    season_dir.mkdir()
+    for i in (1, 2):
+        src = season_dir / f"S01E0{i}.mkv"
+        src.write_bytes(b"video")
+        _seed_episode(conn, season_id, number=i, title=f"One Piece S01E0{i}", path=str(src), quality="WEBDL-1080p")
+
+    plan = build_season_pack_plan(season_id, conn=conn, source_override="WEB-DL", provider_override="AMZN")
+
+    assert plan["status"] == "valid"
+    assert "AMZN WEB-DL" in plan["season_pack_title"]
+    conn.close()
+
+
+def test_plan_includes_source_comparison_from_first_episode(isolated_db, tmp_path):
+    """Backs the wizard's Source field blinking "compare" link at the season
+    level too (previously only shown once you opened "Ver MediaInfo")."""
+    conn = _open(isolated_db)
+    _series_id, season_id = _seed_series_season(conn)
+    season_dir = tmp_path / "Season 1"
+    season_dir.mkdir()
+    for i in (1, 2):
+        src = season_dir / f"S01E0{i}.mkv"
+        src.write_bytes(b"video")
+        _seed_episode(conn, season_id, number=i, title=f"One Piece S01E0{i}", path=str(src), quality="WEBDL-1080p")
+
+    fake_comparison = {"from_name": "WEB-DL", "from_radarr": "WEB-DL", "from_mediainfo": "WEB-DL",
+                        "mediainfo_confirmed": True, "agree": True, "engine": None}
+    with patch("emuwarez_uploadrr.services.source_assistant.build_editable_nomenclature_fields",
+               return_value={"source_comparison": fake_comparison}) as mocked:
+        plan = build_season_pack_plan(season_id, conn=conn)
+
+    assert mocked.call_count == 1
+    assert plan["source_comparison"] == fake_comparison
+    conn.close()
+
+
 def test_plan_progress_reaches_total(isolated_db, tmp_path):
     conn = _open(isolated_db)
     _series_id, season_id = _seed_series_season(conn)
@@ -250,6 +313,31 @@ def test_apply_pack_renames_files_in_place_and_updates_path(isolated_db, tmp_pat
 # Per-episode read views (backing the wizard's "Ver nombre de todos los
 # capítulos" / "Ver MediaInfo" / "Ver Remux" for a season target)
 # ---------------------------------------------------------------------------
+
+def test_apply_pack_forwards_overrides_to_real_files(isolated_db, tmp_path):
+    """Regression: apply_season_pack() used to call build_season_pack_plan()
+    with NO overrides at all, silently discarding whatever source/provider/
+    tag the caller had already resolved — so even the Automático
+    source-disparity gate's choice never actually reached the renamed
+    files, only a preview snapshot."""
+    conn = _open(isolated_db)
+    _series_id, season_id = _seed_series_season(conn)
+    season_dir = tmp_path / "Season 1"
+    season_dir.mkdir()
+    for i in (1, 2):
+        src = season_dir / f"S01E0{i}.mkv"
+        src.write_bytes(b"video")
+        _seed_episode(conn, season_id, number=i, title=f"One Piece S01E0{i}", path=str(src), quality="WEBDL-1080p")
+
+    result = apply_season_pack(season_id, conn, source_override="BluRay", tag_override="MYTAG")
+
+    assert result["status"] == "applied"
+    assert result["source"] == "BluRay"
+    assert result["release_tag"] == "MYTAG"
+    assert result["season_pack_title"].endswith("-MYTAG")
+    assert "BluRay" in result["season_pack_title"]
+    conn.close()
+
 
 def test_get_season_episode_names_returns_one_entry_per_available_episode(isolated_db, tmp_path):
     conn = _open(isolated_db)
@@ -360,3 +448,31 @@ def test_get_season_episode_remux_previews_one_per_episode(isolated_db, tmp_path
     assert len(result["episodes"]) == 1
     assert "plan" in result["episodes"][0]
     conn.close()
+
+
+# ---------------------------------------------------------------------------
+# preview_season_pack_title — cheap live-preview while editing Source/
+# Proveedor/Tag in the wizard (no DB/disk I/O at all).
+# ---------------------------------------------------------------------------
+
+def test_preview_season_pack_title_basic():
+    result = preview_season_pack_title({
+        "title": "One Piece", "year": 1999, "season_number": 1,
+        "resolution": "1080p", "source": "BluRay", "video_codec": "x264",
+        "audio_summary": "DUAL DD 5.1", "subtitle_summary": "SUBS", "tag": "CCX94",
+    })
+    assert result == {"torrent_name": "One Piece S01 1999 1080p BluRay x264 DUAL DD 5.1 SUBS-CCX94"}
+
+
+def test_preview_season_pack_title_combines_provider_with_web_dl_source():
+    result = preview_season_pack_title({
+        "title": "One Piece", "season_number": 1,
+        "source": "WEB-DL", "provider": "AMZN", "video_codec": "x264", "tag": "CCX94",
+    })
+    assert "AMZN WEB-DL" in result["torrent_name"]
+
+
+def test_preview_season_pack_title_no_season_number_omits_sxx():
+    result = preview_season_pack_title({"title": "Movie-ish", "source": "BluRay"})
+    assert "S0" not in result["torrent_name"]
+    assert result["torrent_name"].startswith("Movie-ish")

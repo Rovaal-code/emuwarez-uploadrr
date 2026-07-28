@@ -7,6 +7,28 @@ export function previewSeasonPack(seasonId: number): Promise<SeasonPackPlanRespo
   return api.get<SeasonPackPlanResponse>(`/library/season/${seasonId}/pack-preview`)
 }
 
+export interface SeasonPackFieldsPreviewFields {
+  title?: string | null
+  year?: number | null
+  season_number?: number | null
+  resolution?: string | null
+  source?: string | null
+  provider?: string | null
+  video_codec?: string | null
+  audio_summary?: string | null
+  subtitle_summary?: string | null
+  tag?: string | null
+}
+
+// Cheap live preview of the season pack title while editing Source/
+// Proveedor/Tag — no DB/disk work server-side, so safe to call on every
+// debounced keystroke (mirrors previewNomenclatureFields for a single item).
+export function previewSeasonPackFields(
+  seasonId: number, fields: SeasonPackFieldsPreviewFields,
+): Promise<{ torrent_name: string | null }> {
+  return api.post<{ torrent_name: string | null }>(`/library/season/${seasonId}/pack-preview-fields`, fields)
+}
+
 export interface SeasonPlanProgress {
   done: number
   total: number

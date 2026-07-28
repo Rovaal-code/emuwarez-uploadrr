@@ -912,8 +912,9 @@ class SeasonPackPlanResponse(BaseModel):
     # Field-by-field breakdown backing the same "these are the fields that
     # will confirm the nomenclature" grid a movie/episode shows — computed
     # from the first episode's own proposal (every episode already has to
-    # agree, or build_season_pack_plan blocks first), read-only for a season
-    # (no per-field manual editing, same as track remux).
+    # agree, or build_season_pack_plan blocks first). Source/Proveedor/Tag
+    # are editable here too, same as a movie/episode (source_override/
+    # provider_override/tag_override applied uniformly across every episode).
     series_title: Optional[str] = None
     year: Optional[int] = None
     resolution: Optional[str] = None
@@ -922,6 +923,11 @@ class SeasonPackPlanResponse(BaseModel):
     audio_summary: Optional[str] = None
     subtitle_summary: Optional[str] = None
     release_tag: Optional[str] = None
+    # Internal Source Tool comparison (name vs Radarr/Sonarr vs MediaInfo-
+    # bitrate) for the representative (first) episode — backs the same
+    # blinking "compare source" link/modal a movie/episode's Source field
+    # gets. None when the engine couldn't run at all.
+    source_comparison: Optional[dict] = None
 
 
 # ---------------------------------------------------------------------------
@@ -1243,6 +1249,23 @@ class NomenclatureFieldsPreviewBody(BaseModel):
     fields: dict[str, Any]
 
 
+class SeasonPackFieldsPreviewBody(BaseModel):
+    """Cheap live-preview request for a season pack's title while editing
+    Source/Proveedor/Tag — the season's own already-loaded base values plus
+    whatever the user is currently editing. See season_pack.py's
+    preview_season_pack_title (no DB/disk work at all)."""
+    title: Optional[str] = None
+    year: Optional[int] = None
+    season_number: Optional[int] = None
+    resolution: Optional[str] = None
+    source: Optional[str] = None
+    provider: Optional[str] = None
+    video_codec: Optional[str] = None
+    audio_summary: Optional[str] = None
+    subtitle_summary: Optional[str] = None
+    tag: Optional[str] = None
+
+
 class NomenclatureFieldsSaveBody(BaseModel):
     fields: dict[str, Any]
 
@@ -1293,6 +1316,14 @@ class UploadQueueBody(BaseModel):
     # its detail page's "Verificación pre-subida" section can show exactly
     # what was checked, without re-running anything server-side.
     checks: Optional[UploadChecksSnapshot] = None
+    # Season-pack-only: Source/Proveedor/Tag edited by hand in the wizard's
+    # now-editable season fields (None for a single movie/episode, whose
+    # edits already flow through nomenclature_proposals instead). Applied
+    # uniformly across every episode — see season_pack.py's
+    # build_season_pack_plan/apply_season_pack overrides.
+    source: Optional[str] = None
+    provider: Optional[str] = None
+    tag: Optional[str] = None
 
 
 class UploadQueueResponse(BaseModel):

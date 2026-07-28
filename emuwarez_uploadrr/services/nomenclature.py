@@ -274,19 +274,21 @@ def validate_nomenclature_preconditions(library_item: dict, conn=None) -> dict:
 def build_nomenclature_proposal(
     item_id: int, *, force_refresh: bool = False, conn=None,
     source_override: str | None = None, provider_override: str | None = None,
+    tag_override: str | None = None,
 ) -> dict:
     """Generate a nomenclature proposal for a library item. Never modifies the
     filesystem.
 
-    `source_override`/`provider_override` let a caller that already resolved
-    an ambiguity by hand (the automated-upload source-disparity gate) force
+    `source_override`/`provider_override`/`tag_override` let a caller that
+    already resolved an ambiguity by hand (the automated-upload
+    source-disparity gate, or a season pack's own field overrides) force
     that choice instead of the usual name -> Radarr/Sonarr -> bitrate-tool
     inference — an override always forces a fresh build (a cached proposal
     predates the user's choice and must not be reused)."""
     own = conn is None
     conn = conn or connect()
     try:
-        if source_override is not None or provider_override is not None:
+        if source_override is not None or provider_override is not None or tag_override is not None:
             force_refresh = True
         if not force_refresh:
             existing = get_latest_nomenclature_proposal(item_id, conn=conn)
@@ -342,7 +344,7 @@ def build_nomenclature_proposal(
 
         resolution = _infer_resolution_from_item(item)
         source = source_override or _infer_source_from_item(item)
-        release_tag = _get_release_tag(conn=conn)
+        release_tag = tag_override or _get_release_tag(conn=conn)
 
         stat_info = safe_stat(path) if path else {}
         current_name = stat_info.get("name") or (path.split("/")[-1] if path else None)

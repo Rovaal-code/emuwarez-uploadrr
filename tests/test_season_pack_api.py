@@ -114,6 +114,47 @@ def test_episode_remux_preview_endpoint(client, auth_headers, isolated_db, tmp_p
     assert "plan" in data["episodes"][0]
 
 
+def test_pack_preview_fields_endpoint(client, auth_headers, isolated_db, tmp_path):
+    """Cheap live preview while editing Source/Proveedor/Tag — no DB/disk
+    work, season_id in the URL only for route consistency."""
+    season_id = _seed_season_with_episode(isolated_db, tmp_path)
+    resp = client.post(
+        f"/api/library/season/{season_id}/pack-preview-fields",
+        json={
+            "title": "One Piece", "year": 1999, "season_number": 1,
+            "resolution": "1080p", "source": "BluRay", "video_codec": "x264",
+            "audio_summary": "DUAL DD 5.1", "subtitle_summary": "SUBS", "tag": "CCX94",
+        },
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["torrent_name"] == "One Piece S01 1999 1080p BluRay x264 DUAL DD 5.1 SUBS-CCX94"
+
+
+def test_upload_queue_endpoint_persists_season_overrides(client, auth_headers, isolated_db, tmp_path):
+    """Confirms UploadQueueBody's new source/provider/tag fields actually
+    reach the DB for a season target, end to end through the real endpoint —
+    the service layer already covers queue_upload_for_item() directly."""
+    from emuwarez_uploadrr.services import upload_queue as uq
+
+    season_id = _seed_season_with_episode(isolated_db, tmp_path)
+    resp = client.post(
+        f"/api/library/{season_id}/upload/queue",
+        json={"source": "BluRay", "provider": None, "tag": "MYTAG"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    job_id = resp.json()["job"]["id"]
+    try:
+        conn = connect(isolated_db / "emuwarez_uploadrr.db")
+        row = conn.execute("SELECT season_overrides_json FROM upload_jobs WHERE id=?", (job_id,)).fetchone()
+        conn.close()
+        import json as _json
+        assert _json.loads(row["season_overrides_json"]) == {"source": "BluRay", "provider": None, "tag": "MYTAG"}
+    finally:
+        uq.cancel_queued_timer(job_id)
+
+
 def test_adapt_pack_endpoint_removed(client, auth_headers, isolated_db, tmp_path):
     # Retired along with SeasonPackModal.tsx — applying a season now only
     # happens through the queued-upload pipeline (POST /library/{id}/upload/queue).

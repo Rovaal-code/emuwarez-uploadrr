@@ -18,7 +18,7 @@ import { CheckStatusIcon } from './DetailCard'
 import { SourceComparisonModal } from './SourceComparisonModal'
 import {
   previewSeasonPack, getSeasonPlanProgress, getSeasonEpisodeNames,
-  getSeasonEpisodeMediaInfo, getSeasonEpisodeRemuxPreview,
+  getSeasonEpisodeMediaInfo, getSeasonEpisodeRemuxPreview, previewSeasonPackFields,
   type SeasonPlanProgress, type SeasonEpisodeName, type SeasonEpisodeMediaInfo, type SeasonEpisodeRemux,
 } from '../api/seasonPack'
 import type { LibraryItemResponse, SeasonPackPlanResponse, UploadJob } from '../types/api'
@@ -437,6 +437,10 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
   const [seasonPlanLoading, setSeasonPlanLoading] = useState(false)
   const [seasonPlanError, setSeasonPlanError] = useState<string | null>(null)
   const [seasonProgress, setSeasonProgress] = useState<SeasonPlanProgress>({ done: 0, total: 0, current_title: null })
+  // Live-recomputed pack title while editing Source/Proveedor/Tag (null
+  // until the first edit-triggered recompute lands — seasonPlan's own
+  // season_pack_title covers display until then).
+  const [seasonTitlePreview, setSeasonTitlePreview] = useState<string | null>(null)
 
   // Season target — per-episode final names ("Ver nombre de todos los
   // capítulos"), on demand.
@@ -634,12 +638,35 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
     if (targetId == null) return
     setSeasonPlanLoading(true); setSeasonPlanError(null)
     setSeasonProgress({ done: 0, total: 0, current_title: null })
+    setSeasonTitlePreview(null)
     const poll = window.setInterval(async () => {
       try { setSeasonProgress(await getSeasonPlanProgress(targetId)) } catch { /* transient poll failure — next tick retries */ }
     }, 400)
     try {
-      const plan = await previewSeasonPack(targetId)
+      const [plan, srcResp, prvResp] = await Promise.all([
+        previewSeasonPack(targetId), getEmuSources(), getEmuProviders(),
+      ])
       setSeasonPlan(plan)
+      setSources(srcResp.sources)
+      setProviders(prvResp.providers)
+      // Source/Proveedor/Tag now editable (same dropdowns a movie/episode
+      // shows) — seed `fields` from the pack's own resolved values so
+      // setField('source'|'provider'|'tag', ...) below works the same way.
+      // `season_episode` deliberately left unset (a season pack has no
+      // single SxxExx, unlike one episode).
+      setFields({
+        title: plan.series_title ?? undefined,
+        year: plan.year != null ? String(plan.year) : undefined,
+        resolution: plan.resolution ?? undefined,
+        source: plan.source ?? undefined,
+        provider: plan.provider ?? undefined,
+        video_codec: plan.video_codec ?? undefined,
+        audio_summary: plan.audio_summary ?? undefined,
+        subs: plan.subtitle_summary ?? undefined,
+        tag: plan.release_tag ?? undefined,
+      })
+      setInitialTag(plan.release_tag || 'EMUWAREZ')
+      setSourceComparison(plan.source_comparison ?? null)
       if (plan.status !== 'valid') setSeasonPlanError(plan.errors.join(' '))
     } catch (e: unknown) {
       setSeasonPlan(null)
@@ -753,6 +780,27 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
     return () => clearTimeout(t)
   }, [targetId, targetIsSeason, fields])
 
+  // Season target: same debounced live recompute, but cheap (no disk/DB
+  // work — just the title string, given the pack's own already-loaded base
+  // values plus whatever Source/Proveedor/Tag the user is editing).
+  useEffect(() => {
+    if (!targetIsSeason) return
+    if (targetId == null || !Object.keys(fields).length) return
+    const t = setTimeout(async () => {
+      try {
+        const r = await previewSeasonPackFields(targetId, {
+          title: fields.title, year: fields.year ? Number(fields.year) : null,
+          season_number: item.season_number ?? null,
+          resolution: fields.resolution, source: fields.source, provider: fields.provider,
+          video_codec: fields.video_codec, audio_summary: fields.audio_summary,
+          subtitle_summary: fields.subs, tag: fields.tag,
+        })
+        setSeasonTitlePreview(r.torrent_name)
+      } catch { /* non-blocking */ }
+    }, 400)
+    return () => clearTimeout(t)
+  }, [targetId, targetIsSeason, fields, item.season_number])
+
   const setField = (key: string, value: string | null) => {
     setFields(prev => {
       const updated = { ...prev, [key]: value }
@@ -769,9 +817,10 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
   const goToUpload = async () => {
     if (targetId == null) return
     setPreparing(true); setUploadMsg(null)
-    // Editable fields (title/year/resolution/…) only exist for a single
-    // file — a season pack's fields come from build_season_pack_plan()
-    // (per-episode, already computed), nothing to save here.
+    // saveNomenclatureFields persists into nomenclature_proposals, keyed by
+    // a single library item — a season pack has no proposal row of its own
+    // (source/provider/tag edits there flow through queueUpload's own
+    // seasonOverrides param instead, applied uniformly across episodes).
     if (!targetIsSeason) {
       try { await saveNomenclatureFields(targetId, fields) } catch { /* non-blocking */ }
     }
@@ -794,7 +843,10 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
       const remuxSnapshot = remuxPreview
         ? { ordered_tracks: mergeRemuxTracks(remuxPreview, remuxEdits) }
         : null
-      const r = await queueUpload(targetId, remuxEdits, checks, remuxSnapshot)
+      const r = await queueUpload(
+        targetId, remuxEdits, checks, remuxSnapshot,
+        targetIsSeason ? { source: fields.source, provider: fields.provider, tag: fields.tag } : undefined,
+      )
       if (r.status !== 'queued' || !r.job?.id) {
         setUploadMsg(`✗ No se pudo encolar la subida (estado: ${r.status}). ${(r.errors || []).join(' ')}`)
         return
@@ -1048,11 +1100,13 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
   )
 
   // Season target: same field-by-field confirmation grid a movie/episode
-  // shows (Título/Año/Resolución/Source/Proveedor/Códec/Audio/Subtítulos/
-  // Tag), but read-only — every episode already has to agree on these
-  // (build_season_pack_plan blocks otherwise), so there's nothing to
-  // individually adjust at the pack level, same reasoning as track remux
-  // already being non-editable for a season.
+  // shows. Título/Año/Resolución/Códec/Audio/Subtítulos stay read-only (read
+  // straight from the actual files — every episode already has to agree, or
+  // build_season_pack_plan blocks otherwise). Source/Proveedor/Tag are
+  // editable exactly like a movie/episode: applied uniformly across every
+  // episode (source_override/provider_override/tag_override) instead of
+  // being stuck with whatever the filename/Radarr-Sonarr happened to say —
+  // the same kind of misdetection the Internal Source Tool exists to catch.
   const seasonFieldBox = (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
       <label><FieldLabel label="Título" info={FIELD_INFO.title} />
@@ -1065,11 +1119,53 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
         <input className="form-input" value={seasonPlan?.resolution || ''} disabled />
       </label>
       <label><FieldLabel label="Source" info={FIELD_INFO.source} />
-        <input className="form-input" value={seasonPlan?.source || ''} disabled />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <select className="form-input form-select" style={{ flex: 1 }} value={fields.source || ''} onChange={e => setField('source', e.target.value)}>
+            <option value="">— Seleccionar —</option>
+            {sources.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}
+          </select>
+          {sourceComparison && (
+            <Tooltip content={sourceComparison.agree
+              ? 'Nombre, Radarr/Sonarr y MediaInfo coinciden en el source (capítulo representativo). Clic para ver el detalle.'
+              : 'El source no coincide entre el nombre del archivo, Radarr/Sonarr y MediaInfo (capítulo representativo). Clic para comparar.'}>
+              <button
+                type="button"
+                onClick={() => { setShowEngineDetail(false); setShowSourceCompare(v => !v) }}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: 34, height: 34, background: 'none', border: 'none', cursor: 'pointer',
+                  padding: 0, flexShrink: 0,
+                }}
+              >
+                <span
+                  className={sourceComparison.agree ? undefined : 'badge-blink'}
+                  style={{ display: 'inline-flex', color: sourceComparison.agree ? 'var(--text-accent)' : '#eab308' }}
+                >
+                  <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="5" width="20" height="14" rx="4" />
+                    <path d="M10 9.3v5.4l5-2.7z" fill="currentColor" stroke="none" />
+                  </svg>
+                </span>
+              </button>
+            </Tooltip>
+          )}
+        </div>
       </label>
-      <label><FieldLabel label="Proveedor" info={FIELD_INFO.provider} />
-        <input className="form-input" value={seasonPlan?.provider || ''} disabled />
-      </label>
+      {showSourceCompare && sourceComparison && (
+        <SourceComparisonModal
+          comparison={sourceComparison}
+          initialShowDetail={showEngineDetail}
+          onClose={() => setShowSourceCompare(false)}
+        />
+      )}
+      {sourceRequiresProvider && (
+        <label><FieldLabel label="Proveedor" info={FIELD_INFO.provider} />
+          <select className="form-input form-select" value={fields.provider || ''} onChange={e => setField('provider', e.target.value || null)}>
+            <option value="">— Sin proveedor —</option>
+            {providers.map(p => <option key={p.code} value={p.code}>{p.name} ({p.code})</option>)}
+          </select>
+        </label>
+      )}
       <label><FieldLabel label="Códec de vídeo" info={FIELD_INFO.video_codec} />
         <input className="form-input" value={seasonPlan?.video_codec || ''} disabled />
       </label>
@@ -1080,7 +1176,11 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
         <input className="form-input" value={seasonPlan?.subtitle_summary || ''} disabled />
       </label>
       <label><FieldLabel label="Tag" info={FIELD_INFO.tag} />
-        <input className="form-input" value={seasonPlan?.release_tag || ''} disabled />
+        <select className="form-input form-select" value={fields.tag || ''} onChange={e => setField('tag', e.target.value)}>
+          {Array.from(new Set([initialTag, 'EMUWAREZ'].filter(Boolean))).map(t => (
+            <option key={t} value={t}>{t}</option>
+          ))}
+        </select>
       </label>
     </div>
   )
@@ -1088,11 +1188,12 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
   // Just the single pack torrent name (no per-file "internal title" at
   // season level, see "Ver nombre de todos los capítulos" instead) plus a
   // summary of the episodes included.
+  const seasonDisplayTitle = seasonTitlePreview ?? seasonPlan?.season_pack_title
   const seasonSummaryBox = (
     <>
       <div className="detail-card" style={{ marginTop: 16, padding: '12px 14px', borderRadius: 8 }}>
-        {seasonPlan?.season_pack_title ? (
-          <FitText min={9} text={seasonPlan.season_pack_title} />
+        {seasonDisplayTitle ? (
+          <FitText min={9} text={seasonDisplayTitle} />
         ) : (
           <>
             <div style={labelStyle}>Nombre final del torrent (eMuwarez)</div>

@@ -85,6 +85,7 @@ def _insert_and_start_queued_job(
     checks: dict | None = None,
     nomenclature_proposal_id: int | None = None,
     nomenclature_snapshot: dict | None = None,
+    season_overrides: dict | None = None,
 ) -> dict:
     """Shared by queue_upload_for_item() and queue_retry_for_job(): insert a
     fresh 'queued' row for `item` and arm its 60s grace-period timer.
@@ -108,6 +109,12 @@ def _insert_and_start_queued_job(
     edits (renamed persisted column, replacing the old in-memory
     _PENDING_REMUX_OVERRIDES dict) and the wizard's already-merged
     (base plan + edits) track table.
+
+    `season_overrides` — {"source": ..., "provider": ..., "tag": ...} edited
+    by hand in the wizard's now-editable season Source/Proveedor/Tag fields
+    (None for a single movie/episode). _run_queued_job() reads this back and
+    forwards it to season_pack.apply_season_pack() so the choice actually
+    reaches the real renamed files, not just the staging preview.
     """
     now = datetime.now(timezone.utc)
     queued_until = (now + timedelta(seconds=QUEUE_GRACE_SECONDS)).isoformat()
@@ -119,8 +126,9 @@ def _insert_and_start_queued_job(
             library_item_id, request_item_id, status, stage, title, path, source_path,
             queued_until, retry_of_job_id, retry_count, checks_snapshot_json,
             nomenclature_proposal_id, nomenclature_snapshot_json,
-            remux_overrides_json, remux_snapshot_json, created_at, updated_at
-        ) VALUES (?, ?, 'queued', 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            remux_overrides_json, remux_snapshot_json, season_overrides_json,
+            created_at, updated_at
+        ) VALUES (?, ?, 'queued', 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             item["id"], request_item_id,
@@ -134,6 +142,7 @@ def _insert_and_start_queued_job(
             json.dumps(nomenclature_snapshot, ensure_ascii=False, default=str) if nomenclature_snapshot else None,
             json.dumps(remux_overrides, ensure_ascii=False) if remux_overrides else None,
             json.dumps(remux_snapshot, ensure_ascii=False) if remux_snapshot else None,
+            json.dumps(season_overrides, ensure_ascii=False) if season_overrides else None,
             now_iso, now_iso,
         ),
     )
@@ -163,6 +172,9 @@ def queue_upload_for_item(
     remux_overrides: dict | None = None,
     remux_snapshot: dict | None = None,
     checks: dict | None = None,
+    source_override: str | None = None,
+    provider_override: str | None = None,
+    tag_override: str | None = None,
     conn=None,
 ) -> dict:
     own = conn is None
@@ -188,8 +200,15 @@ def queue_upload_for_item(
         # queueUpload() is even called) — so _run_queued_job() applies THIS
         # exact one instead of "whichever is latest", and the job detail page
         # shows it immediately instead of "Pendiente" until the pipeline runs.
-        from .nomenclature import get_latest_nomenclature_proposal
-        proposal = get_latest_nomenclature_proposal(item_id, conn=conn)
+        is_season = item.get("item_type") == "season"
+        proposal = None
+        if not is_season:
+            from .nomenclature import get_latest_nomenclature_proposal
+            proposal = get_latest_nomenclature_proposal(item_id, conn=conn)
+
+        season_overrides = None
+        if is_season and (source_override or provider_override or tag_override):
+            season_overrides = {"source": source_override, "provider": provider_override, "tag": tag_override}
 
         return _insert_and_start_queued_job(
             conn, item,
@@ -197,6 +216,7 @@ def queue_upload_for_item(
             nomenclature_proposal_id=proposal.get("id") if proposal else None,
             nomenclature_snapshot=proposal,
             retry_of_job_id=retry_of_job_id, retry_count=retry_count,
+            season_overrides=season_overrides,
         )
     finally:
         if own:
@@ -385,6 +405,17 @@ def _run_staging_job(
                 if plan.get("status") != "valid":
                     _fail(job_id, "; ".join(plan.get("errors") or ["No se pudo preparar el pack de temporada."]))
                     return
+                if source_override or provider_override:
+                    # Previously this choice only ever affected THIS preview
+                    # snapshot — the real apply step later (apply_season_pack,
+                    # in _run_queued_job) recomputed from scratch with no
+                    # override at all, silently discarding it. Persist it on
+                    # the job row so it actually reaches the renamed files.
+                    conn.execute(
+                        "UPDATE upload_jobs SET season_overrides_json = ? WHERE id = ?",
+                        (json.dumps({"source": source_override, "provider": provider_override}), job_id),
+                    )
+                    conn.commit()
                 nomenclature_snapshot = {
                     "media_type": "season",
                     "proposed_title": plan.get("season_pack_title"),
@@ -810,6 +841,7 @@ def _run_queued_job(job_id: int) -> None:
             return
         is_season = item.get("item_type") == "season"
         overrides = json.loads(job["remux_overrides_json"]) if job.get("remux_overrides_json") else None
+        season_overrides = json.loads(job["season_overrides_json"]) if job.get("season_overrides_json") else {}
 
         # --- 1. Verificación presubida: integrity (accessible, MediaInfo reads
         # it, mkvtoolnix reads it) + generic preconditions (Uploadrr path/
@@ -857,7 +889,12 @@ def _run_queued_job(job_id: int) -> None:
         if is_season:
             from .season_pack import apply_season_pack
             try:
-                applied = apply_season_pack(item_id, conn=conn, job_id=job_id)
+                applied = apply_season_pack(
+                    item_id, conn=conn, job_id=job_id,
+                    source_override=season_overrides.get("source"),
+                    provider_override=season_overrides.get("provider"),
+                    tag_override=season_overrides.get("tag"),
+                )
             except Exception as exc:
                 _fail(job_id, f"Error aplicando la nomenclatura del pack de temporada: {exc}")
                 return

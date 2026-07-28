@@ -357,6 +357,80 @@ def test_write_snapshot_persists_json(db_conn):
     assert json.loads(row["nomenclature_snapshot_json"]) == {"proposed_filename": "Movie.2024-TAG"}
 
 
+# ---------------------------------------------------------------------------
+# Season Source/Proveedor/Tag overrides (manual wizard's now-editable season
+# fields, no longer read-only) — get_queue_positions comes first alphabetically
+# but these fit better next to the other season-only tests below.
+# ---------------------------------------------------------------------------
+
+def test_queue_upload_for_item_persists_season_overrides(db_conn, tmp_path):
+    f = tmp_path / "movie.mkv"
+    f.write_bytes(b"x" * 10)
+    iid = _movie_with_path(db_conn, str(f))
+    result = uq.queue_upload_for_item(iid, source_override="BluRay", conn=db_conn)
+    job_id = result["job"]["id"]
+    try:
+        row = db_conn.execute("SELECT season_overrides_json FROM upload_jobs WHERE id=?", (job_id,)).fetchone()
+        # Not a season — the override is simply ignored (a movie/episode's
+        # edits already flow through nomenclature_proposals instead).
+        assert row["season_overrides_json"] is None
+    finally:
+        uq.cancel_queued_timer(job_id)
+
+
+def test_queue_upload_for_item_persists_season_overrides_for_season(db_conn):
+    season_id, _episode_ids = _seed_season_with_episodes(db_conn, n=1)
+    result = uq.queue_upload_for_item(
+        season_id, source_override="BluRay", tag_override="MYTAG", conn=db_conn,
+    )
+    job_id = result["job"]["id"]
+    try:
+        row = db_conn.execute("SELECT season_overrides_json FROM upload_jobs WHERE id=?", (job_id,)).fetchone()
+        assert json.loads(row["season_overrides_json"]) == {
+            "source": "BluRay", "provider": None, "tag": "MYTAG",
+        }
+    finally:
+        uq.cancel_queued_timer(job_id)
+
+
+def test_run_queued_job_season_forwards_stored_overrides_to_apply(db_conn, tmp_path, monkeypatch):
+    """Regression: apply_season_pack() previously ignored any override —
+    even one the Automático source-disparity gate had already resolved by
+    hand — recomputing the pack from scratch with no override at all, so the
+    real renamed files never reflected the user's choice."""
+    season_id, episode_ids = _seed_season_with_episodes(db_conn, n=1)
+    f = tmp_path / "S01E01.mkv"
+    f.write_bytes(b"x" * 100)
+    db_conn.execute("UPDATE library_items SET path = ? WHERE id = ?", (str(f), episode_ids[0]))
+    db_conn.commit()
+
+    job_id = _queued_job_row(db_conn, season_id, path="")
+    db_conn.execute(
+        "UPDATE upload_jobs SET season_overrides_json = ? WHERE id = ?",
+        (json.dumps({"source": "BluRay", "provider": None, "tag": "MYTAG"}), job_id),
+    )
+    db_conn.commit()
+
+    monkeypatch.setattr(uq, "_check_season_integrity", lambda *a, **k: True)
+    monkeypatch.setattr(uq, "_check_generic_upload_preconditions", lambda *a, **k: True)
+
+    captured = {}
+    import emuwarez_uploadrr.services.season_pack as season_pack_mod
+
+    def fake_apply_season_pack(season_id_arg, conn, *, job_id=None,
+                                source_override=None, provider_override=None, tag_override=None):
+        captured["source_override"] = source_override
+        captured["provider_override"] = provider_override
+        captured["tag_override"] = tag_override
+        return {"status": "blocked", "errors": ["stop here on purpose"], "episodes": []}
+
+    monkeypatch.setattr(season_pack_mod, "apply_season_pack", fake_apply_season_pack)
+
+    uq._run_queued_job(job_id)
+
+    assert captured == {"source_override": "BluRay", "provider_override": None, "tag_override": "MYTAG"}
+
+
 def _seed_season_with_episodes(conn, n=2):
     cur = conn.execute(
         """INSERT INTO library_items (item_type, title, year, local_status, request_status, nomenclature_status, updated_at)

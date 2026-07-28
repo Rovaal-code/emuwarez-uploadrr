@@ -72,6 +72,10 @@ export interface SeasonEpisodeMediaInfo {
   episode_id: number
   episode_number?: number | null
   title?: string | null
+  // "Serie (Año) - SxxEyy - Título del capítulo" — same canonical format
+  // Biblioteca/Subidas/Peticiones already use (services/library.py's
+  // content_display_title), backs the accordion header.
+  display_title?: string | null
   report: MediaInfoReport
   // Computed once from the first available episode and reused for every
   // episode — a season pack can only reach this screen once every episode
@@ -87,6 +91,7 @@ export interface SeasonEpisodeRemux {
   episode_id: number
   episode_number?: number | null
   title?: string | null
+  display_title?: string | null
   plan: TrackRemuxPreview
 }
 

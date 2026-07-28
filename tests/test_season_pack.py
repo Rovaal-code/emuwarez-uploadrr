@@ -508,6 +508,30 @@ def test_get_season_episode_remux_previews_one_per_episode(isolated_db, tmp_path
     conn.close()
 
 
+def test_episode_display_title_matches_canonical_format(isolated_db, tmp_path):
+    """"Ver MediaInfo"/"Ver Remux" accordion headers must use the exact same
+    "Serie (Año) - SxxEyy - Título" format Biblioteca/Subidas/Peticiones
+    already use (library.py's content_display_title + episode_own_name) —
+    previously they showed the raw stored title verbatim instead."""
+    conn = _open(isolated_db)
+    _series_id, season_id = _seed_series_season(conn, series_title="One Piece", year=1999)
+    src1 = tmp_path / "S01E05.mkv"
+    src1.write_bytes(b"video")
+    _seed_episode(
+        conn, season_id, number=5,
+        title="One Piece S01E05 - El Placer De Su Majestad",
+        path=str(src1), quality="WEBDL-1080p",
+    )
+
+    mi_result = get_season_episode_mediainfo(season_id, conn=conn)
+    remux_result = get_season_episode_remux_previews(season_id, conn=conn)
+
+    expected = "One Piece (1999) - S01E05 - El Placer De Su Majestad"
+    assert mi_result["episodes"][0]["display_title"] == expected
+    assert remux_result["episodes"][0]["display_title"] == expected
+    conn.close()
+
+
 # ---------------------------------------------------------------------------
 # preview_season_pack_title — cheap live-preview while editing Source/
 # Proveedor/Tag in the wizard (no DB/disk I/O at all).

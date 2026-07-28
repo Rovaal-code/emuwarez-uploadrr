@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 29
+SCHEMA_VERSION = 30
 
 # Phase 10E: canonical settings namespace fix.
 #

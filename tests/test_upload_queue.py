@@ -505,6 +505,36 @@ def test_queue_upload_for_item_persists_season_overrides_for_season(db_conn):
         uq.cancel_queued_timer(job_id)
 
 
+def test_season_overrides_column_survives_schema_version_short_circuit(db_conn):
+    """Regression: init_db() skips its ENTIRE migration cascade once
+    app_state.schema_version already matches the current SCHEMA_VERSION
+    (a deliberate perf guard — see init_db's own docstring). Adding
+    _migrate_upload_jobs_season_overrides without also bumping
+    SCHEMA_VERSION meant any server already on the current version never
+    ran it at all — confirmed in production: "table upload_jobs has no
+    column named season_overrides_json" on every upload (movie, episode,
+    AND season, since the column is in that INSERT unconditionally).
+    Forcing the cascade to run again (by clearing schema_version, same
+    simulation the analogous missing_since regression test uses) must
+    still add the column."""
+    from emuwarez_uploadrr.database import init_db
+
+    db_conn.execute("DELETE FROM app_state WHERE key = 'schema_version'")
+    db_conn.commit()
+
+    init_db(db_conn)
+
+    cols = {row["name"] for row in db_conn.execute("PRAGMA table_info(upload_jobs)").fetchall()}
+    assert "season_overrides_json" in cols
+
+    # And queuing a plain movie (not just a season) must not blow up on the
+    # column being missing — the real production symptom.
+    iid = _movie_with_path(db_conn, "/x/movie.mkv")
+    result = uq.queue_upload_for_item(iid, conn=db_conn)
+    assert result["status"] == "queued"
+    uq.cancel_queued_timer(result["job"]["id"])
+
+
 def test_run_queued_job_season_forwards_stored_overrides_to_apply(db_conn, tmp_path, monkeypatch):
     """Regression: apply_season_pack() previously ignored any override —
     even one the Automático source-disparity gate had already resolved by

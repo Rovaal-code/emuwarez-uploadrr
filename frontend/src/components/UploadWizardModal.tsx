@@ -1416,8 +1416,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
                         {seasonMi?.map(ep => (
                           <EpisodeAccordionRow
                             key={ep.episode_id}
-                            episodeNumber={ep.episode_number}
-                            title={episodeOnlyTitle(ep.title)}
+                            title={ep.display_title ?? episodeOnlyTitle(ep.title)}
                             expanded={expandedMiEp === ep.episode_id}
                             onToggle={() => setExpandedMiEp(expandedMiEp === ep.episode_id ? null : ep.episode_id)}
                           >
@@ -1461,8 +1460,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
                         {seasonRemux?.map(ep => (
                           <EpisodeAccordionRow
                             key={ep.episode_id}
-                            episodeNumber={ep.episode_number}
-                            title={episodeOnlyTitle(ep.title)}
+                            title={ep.display_title ?? episodeOnlyTitle(ep.title)}
                             expanded={expandedRemuxEp === ep.episode_id}
                             onToggle={() => setExpandedRemuxEp(expandedRemuxEp === ep.episode_id ? null : ep.episode_id)}
                           >

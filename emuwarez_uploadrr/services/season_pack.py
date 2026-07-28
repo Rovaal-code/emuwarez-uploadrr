@@ -501,6 +501,20 @@ def apply_season_pack(
     }
 
 
+def _episode_display_title(conn, ep: dict) -> str:
+    """"Serie (Año) - SxxEyy - Título del capítulo" — the exact same
+    canonical format Biblioteca/Subidas/Peticiones already use
+    (library.py's content_display_title), plus the episode's own title
+    (episode_own_name). Backs the wizard's per-episode "Ver MediaInfo"/
+    "Ver Remux" accordion headers, which previously showed the raw stored
+    title verbatim ("Serie SxxEyy - Título"), inconsistent with this format
+    used everywhere else."""
+    from .library import content_display_title, episode_own_name
+    base = content_display_title(conn, ep, scope="episode")
+    own_name = episode_own_name(ep)
+    return f"{base} - {own_name}" if own_name else base
+
+
 def get_season_episode_names(
     season_id: int, conn=None,
     source_override: str | None = None, provider_override: str | None = None,
@@ -593,6 +607,7 @@ def get_season_episode_mediainfo(season_id: int, conn=None) -> dict:
                 "episode_id": ep["id"],
                 "episode_number": ep.get("episode_number"),
                 "title": ep.get("title"),
+                "display_title": _episode_display_title(conn, ep),
                 "report": report,
                 "source_comparison": source_comparison,
             })
@@ -621,6 +636,7 @@ def get_season_episode_remux_previews(season_id: int, conn=None) -> dict:
                 "episode_id": ep["id"],
                 "episode_number": ep.get("episode_number"),
                 "title": ep.get("title"),
+                "display_title": _episode_display_title(conn, ep),
                 "plan": plan,
             })
         return {"episodes": out}

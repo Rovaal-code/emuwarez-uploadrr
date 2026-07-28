@@ -79,6 +79,35 @@ def test_all_green_when_everything_passes(db_conn, tmp_path, monkeypatch):
     assert r["ready"] is True
 
 
+def test_emuwarez_check_does_not_enforce_rate_limit(db_conn, tmp_path, monkeypatch):
+    """Regression: two uploads (manual or automático) queued within the same
+    minute must not make the second one's "eMuwarez disponible" check fail
+    with the 1/minute "Probar conexión" throttle — that throttle exists for
+    the user-facing Settings button, not for this automated precondition."""
+    from emuwarez_uploadrr.web.services.settings_service import set_setting
+    f = tmp_path / "movie.mkv"
+    f.write_bytes(b"x" * 2048)
+    (tmp_path / "tmp").mkdir()
+    set_setting(db_conn, "qbit.url", "http://localhost:8080")
+    set_setting(db_conn, "uploadrr.path", str(tmp_path))
+
+    import emuwarez_uploadrr.services.integration_tests as it
+    monkeypatch.setattr(it, "test_qbit_connection", lambda **k: {"ok": True, "message": "ok"})
+    calls = []
+
+    def _spy(**kwargs):
+        calls.append(kwargs)
+        return {"ok": True, "message": "ok"}
+    monkeypatch.setattr(it, "test_emuwarez_connection", _spy)
+    import emuwarez_uploadrr.services.image_hosts as ih
+    monkeypatch.setattr(ih, "test_image_host", lambda hid, key=None, **k: {"ok": True})
+
+    iid = _movie_with_path(db_conn, str(f))
+    uc.run_upload_checks(db_conn, iid)
+    assert len(calls) == 1
+    assert calls[0].get("enforce_rate_limit") is False
+
+
 def test_skips_unconfigured_qbit(db_conn, tmp_path, monkeypatch):
     """qBittorrent not configured → yellow 'skip', non-blocking: the upload
     is still ready."""

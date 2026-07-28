@@ -156,6 +156,12 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int) -> dict:
         return done()
 
     # 5. eMuwarez — last, so we don't hit it unless everything else passed.
-    r = test_emuwarez_connection(conn=conn)
+    # enforce_rate_limit=False: the 1/minute throttle exists to stop someone
+    # mashing Configuración's "Probar conexión" button, not to block this
+    # automated per-upload precondition — without it, two uploads (manual or
+    # automático) queued within the same minute would always make the second
+    # one's "eMuwarez disponible" check fail with "Espera Ns…" even though
+    # eMuwarez itself was never actually asked twice in a way it would mind.
+    r = test_emuwarez_connection(conn=conn, enforce_rate_limit=False)
     add("emuwarez", "eMuwarez disponible", "eMuwarez no disponible", bool(r.get("ok")), r.get("message", ""))
     return done()

@@ -9,6 +9,7 @@ conftest.py provides isolated_db (autouse) pointing CONFIG_DIR to a tmp dir.
 """
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import patch
 
 from emuwarez_uploadrr.database import init_db, connect
@@ -21,6 +22,9 @@ from emuwarez_uploadrr.services.season_pack import (
     get_season_episode_mediainfo,
     get_season_episode_remux_previews,
     preview_season_pack_title,
+    _build_safe_folder_rename_plan,
+    _apply_folder_rename,
+    _sanitize_pack_folder_name,
 )
 
 
@@ -300,7 +304,14 @@ def test_apply_pack_renames_files_in_place_and_updates_path(isolated_db, tmp_pat
     result = apply_season_pack(season_id, conn)
 
     assert result["status"] == "applied"
-    renamed_files = list(season_dir.glob("*.mkv"))
+    # The shared folder itself gets renamed to the pack's own release title
+    # as the final step (so the torrent Uploadrr-EMU builds from it isn't
+    # literally named "Season 1") — files end up under that NEW folder, not
+    # the original Sonarr-named one.
+    new_pack_folder = Path(result["pack_folder"])
+    assert new_pack_folder != season_dir
+    assert not season_dir.exists()
+    renamed_files = list(new_pack_folder.glob("*.mkv"))
     assert len(renamed_files) == 2  # originals renamed in place, none duplicated
     for ep_id in ep_ids:
         row = conn.execute("SELECT path, prepared_path, nomenclature_status FROM library_items WHERE id = ?", (ep_id,)).fetchone()
@@ -308,6 +319,97 @@ def test_apply_pack_renames_files_in_place_and_updates_path(isolated_db, tmp_pat
         assert row["prepared_path"] == row["path"]
         assert row["nomenclature_status"] == "Correcta"
     conn.close()
+
+
+def test_apply_pack_folder_name_matches_release_title(isolated_db, tmp_path):
+    """Regression: qBittorrent showed the torrent as literally "Season 2"
+    (Sonarr's own folder name) while eMuwarez itself got the correct release
+    name — because only the FILES were renamed in place, never the folder
+    Uploadrr-EMU is pointed at (torf.Torrent() defaults its name to
+    os.path.basename(path))."""
+    conn = _open(isolated_db)
+    _series_id, season_id = _seed_series_season(conn)
+    season_dir = tmp_path / "Season 1"
+    season_dir.mkdir()
+    for i in (1, 2):
+        src = season_dir / f"S01E0{i}.mkv"
+        src.write_bytes(b"video")
+        _seed_episode(conn, season_id, number=i, title=f"One Piece S01E0{i}", path=str(src), quality="WEBDL-1080p")
+
+    result = apply_season_pack(season_id, conn)
+
+    assert result["status"] == "applied"
+    new_pack_folder = Path(result["pack_folder"])
+    assert new_pack_folder.parent == season_dir.parent  # renamed in place, not moved elsewhere
+    assert new_pack_folder.name == _sanitize_pack_folder_name(result["season_pack_title"])
+    conn.close()
+
+
+def test_apply_pack_leaves_folder_untouched_when_a_file_rename_fails(isolated_db, tmp_path):
+    """The folder rename is deliberately the LAST step — if any episode file
+    fails to rename, the shared folder must be left exactly as it was, so a
+    retry doesn't find episodes pointing at a folder name that no longer
+    exists on disk."""
+    conn = _open(isolated_db)
+    _series_id, season_id = _seed_series_season(conn)
+    season_dir = tmp_path / "Season 1"
+    season_dir.mkdir()
+    ep_ids = []
+    for i in (1, 2):
+        src = season_dir / f"S01E0{i}.mkv"
+        src.write_bytes(b"video")
+        ep_ids.append(_seed_episode(conn, season_id, number=i, title=f"One Piece S01E0{i}", path=str(src), quality="WEBDL-1080p"))
+
+    plan = build_season_pack_plan(season_id, conn=conn)
+    assert plan["status"] == "valid"
+    # Pre-create the second episode's own destination filename so its rename
+    # is blocked (destination already exists) — simulates a real mid-loop
+    # failure without needing to mock the rename primitives.
+    colliding_dst = plan["episodes"][1]["destination_path"]
+    Path(colliding_dst).write_bytes(b"already here")
+
+    result = apply_season_pack(season_id, conn)
+
+    assert result["status"] == "failed"
+    assert season_dir.exists()  # folder rename never attempted
+    assert result["pack_folder"] == str(season_dir)
+    conn.close()
+
+
+def test_build_safe_folder_rename_plan(tmp_path):
+    src = tmp_path / "Season 1"
+    src.mkdir()
+    other_parent = tmp_path / "other"
+    other_parent.mkdir()
+
+    ok = _build_safe_folder_rename_plan(str(src), str(tmp_path / "Renamed Title"))
+    assert ok["status"] == "ready"
+
+    missing = _build_safe_folder_rename_plan(str(tmp_path / "missing"), str(tmp_path / "x"))
+    assert missing["status"] == "blocked"
+
+    wrong_parent = _build_safe_folder_rename_plan(str(src), str(other_parent / "Renamed Title"))
+    assert wrong_parent["status"] == "blocked"
+
+    dst_exists = tmp_path / "Already Here"
+    dst_exists.mkdir()
+    collision = _build_safe_folder_rename_plan(str(src), str(dst_exists))
+    assert collision["status"] == "blocked"
+
+
+def test_apply_folder_rename(tmp_path):
+    src = tmp_path / "Season 1"
+    src.mkdir()
+    (src / "file.mkv").write_bytes(b"video")
+    dst = tmp_path / "Renamed Title"
+
+    plan = _build_safe_folder_rename_plan(str(src), str(dst))
+    result = _apply_folder_rename(plan)
+
+    assert result["status"] == "applied"
+    assert dst.is_dir()
+    assert (dst / "file.mkv").exists()
+    assert not src.exists()
 
 
 # ---------------------------------------------------------------------------

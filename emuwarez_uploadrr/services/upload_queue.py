@@ -880,12 +880,21 @@ def _run_queued_job(job_id: int) -> None:
         # --- 1. Verificación presubida: integrity (accessible, MediaInfo reads
         # it, mkvtoolnix reads it) + generic preconditions (Uploadrr path/
         # config, eMuwarez/TMDb keys, blocked nomenclature) — everything that
-        # does NOT depend on the file already being renamed/remuxed. Stays
-        # "running" through nomenclature/remux below; only marked done once
-        # the final, path-dependent check (_populate_ready) passes, right
-        # before the real Uploadrr-EMU subprocess starts.
+        # does NOT depend on the file already being renamed/remuxed. Runs
+        # first for a fail-fast benefit (bad config fails before spending time
+        # on nomenclature/remux), but is NOT displayed as "running" yet: the
+        # Fases table's "Inicio de Uploadrr" row is only marked started later,
+        # right before it actually becomes the current step (see below) — a
+        # single job can only have one "current" phase at a time
+        # (build_phase_state), so marking this one started here would just
+        # get silently un-currented the moment nomenclature's own
+        # mark_phase_started() fires next, leaving it stuck on "Pendiente"
+        # with a stale started_at/Duración from this early, brief moment
+        # (the exact contradiction reported 2026-07-28: shown as Pendiente
+        # while still carrying a real Creado timestamp and a growing
+        # Duración). The job's own stage/status column still reflects this
+        # step immediately via _mark() below, unrelated to the Fases table.
         _mark(job_id, stage="verificacion_presubida", started_at=_now_iso())
-        mark_phase_started(job_id, "verificacion_presubida")
         append_upload_log(job_id, "info", "Comprobando integridad del archivo…", stream="system", conn=conn)
         if is_season:
             if not _check_season_integrity(job_id, item_id, conn=conn):
@@ -1041,17 +1050,20 @@ def _run_queued_job(job_id: int) -> None:
         mark_phase_done(job_id, "remux")
 
         # --- 4. Final preflight (fresh preconditions + command preview,
-        # against the now-final renamed/remuxed file) then start. Still part
-        # of the "verificacion_presubida" displayed phase ("Inicio de
-        # Uploadrr") — no mark_phase_done here anymore: since
-        # queue_processing/video_processing/mediainfo_export/video_metadata/
-        # duplicates (Uploadrr-EMU's own real output through its metadata-
-        # processing step) are all folded into this same displayed phase
-        # (uploadrr_progress.PHASE_KEY_ALIASES), it only actually closes once
-        # that real subprocess output is seen — advance_running_phase()
-        # marks it done retroactively when the NEXT raw trigger
-        # (screenshots_generate) fires, same as every other merged phase.
+        # against the now-final renamed/remuxed file) then start. This is
+        # where "Inicio de Uploadrr" actually becomes the current step (see
+        # the note on the early integrity/preconditions check above for why
+        # it isn't marked started any earlier) — no mark_phase_done here:
+        # since queue_processing/video_processing/mediainfo_export/
+        # video_metadata/duplicates (Uploadrr-EMU's own real output through
+        # its metadata-processing step) are all folded into this same
+        # displayed phase (uploadrr_progress.PHASE_KEY_ALIASES), it only
+        # actually closes once that real subprocess output is seen —
+        # advance_running_phase() marks it done retroactively when the NEXT
+        # raw trigger (screenshots_generate) fires, same as every other
+        # merged phase.
         _mark(job_id, stage="verificacion_presubida")
+        mark_phase_started(job_id, "verificacion_presubida")
         append_upload_log(job_id, "info", "Preparando la subida…", stream="system", conn=conn)
         if not _populate_ready(job_id, item_id, conn=conn):
             return  # _populate_ready already recorded the failure reason

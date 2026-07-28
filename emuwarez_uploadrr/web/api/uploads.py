@@ -452,7 +452,11 @@ def get_upload(job_id: int, current_user: dict = Depends(require_auth)):
 @router.get("/uploads/{job_id}/logs", response_model=UploadJobLogsResponse)
 def get_upload_logs(
     job_id: int,
-    limit: int = Query(default=500, ge=1, le=2000),
+    # A season with many episodes (real Uploadrr-EMU output per chapter —
+    # hashing/screenshot progress, per-host retries) easily produces many
+    # more than 2000 lines; the old cap silently hid everything before the
+    # last 2000, with no way for "Ver Logs" to ever show the full activity.
+    limit: int = Query(default=500, ge=1, le=200000),
     offset: int = Query(default=0, ge=0),
     tail: bool = Query(default=False),
     current_user: dict = Depends(require_auth),

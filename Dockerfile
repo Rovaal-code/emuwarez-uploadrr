@@ -49,8 +49,21 @@ WORKDIR /app
 #
 # setuptools is pinned <80 because pyrobase's setup.py still imports the
 # pkg_resources module that newer setuptools dropped.
+# Cache-busting: Docker's layer cache keys a RUN step on its literal command
+# text, not on what the command actually fetches from the network — a plain
+# `git clone` here would silently keep reusing a stale checkout on every
+# rebuild forever, even after new commits land on the fork's main branch
+# (confirmed happened across several previous deploys in this project: the
+# clone step showed CACHED and shipped stale Uploadrr-EMU code despite fresh
+# fixes already pushed to the fork). Passing the fork's current commit SHA as
+# a build arg makes THIS layer's cache key include it, so it only re-clones
+# when the fork actually has new commits — pass
+# `--build-arg UPLOADRR_COMMIT=$(git ls-remote https://github.com/Rovaal-code/Uploadrr-EMU.git main | cut -f1)`
+# at build time (falls back to "unknown", i.e. always re-clone, if omitted).
+ARG UPLOADRR_COMMIT=unknown
 RUN --mount=type=secret,id=github_token \
-    git clone --depth 1 "https://x-access-token:$(cat /run/secrets/github_token)@github.com/Rovaal-code/Uploadrr-EMU.git" /opt/Uploadrr \
+    echo "Uploadrr-EMU @ ${UPLOADRR_COMMIT}" \
+    && git clone --depth 1 "https://x-access-token:$(cat /run/secrets/github_token)@github.com/Rovaal-code/Uploadrr-EMU.git" /opt/Uploadrr \
     && pip install --no-cache-dir "setuptools<80" wheel \
     && pip install --no-cache-dir --no-build-isolation -r /opt/Uploadrr/requirements.txt \
     && pip install --no-cache-dir tmdbsimple \

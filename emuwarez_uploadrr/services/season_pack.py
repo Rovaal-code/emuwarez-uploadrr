@@ -381,9 +381,11 @@ def build_season_pack_plan(
             "season_pack_title": season_pack_title,
             "pack_folder": pack_folder,
             "episodes": episodes_out,
-            # Not part of the public API schema — used internally to build
-            # the upload_jobs row's Uploadrr command once queued for real
-            # (services/upload_queue.py's season branch).
+            # Used internally to build the upload_jobs row's Uploadrr command
+            # once queued for real (upload_queue.py's season branch), AND
+            # part of the public schema now — the wizard's live title-preview
+            # call needs it (a season opened from its series' own ficha has
+            # no season_number on the wizard's `item` prop, only the plan has it).
             "season_number": season.get("season_number"),
             "resolution": first_proposal.get("resolution"),
             "source": first_proposal.get("source"),

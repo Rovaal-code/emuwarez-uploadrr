@@ -411,6 +411,10 @@ export interface SeasonPackPlanResponse {
   // movie/episode (applied uniformly across every episode).
   series_title?: string | null
   year?: number | null
+  // Needed by the live title-preview call — a season opened from its
+  // series' own ficha has no season_number of its own on the wizard's
+  // `item` prop (that's the series), only the plan has it.
+  season_number?: number | null
   resolution?: string | null
   source?: string | null
   video_codec?: string | null

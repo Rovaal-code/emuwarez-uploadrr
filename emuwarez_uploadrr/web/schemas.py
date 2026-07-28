@@ -917,6 +917,11 @@ class SeasonPackPlanResponse(BaseModel):
     # provider_override/tag_override applied uniformly across every episode).
     series_title: Optional[str] = None
     year: Optional[int] = None
+    # Needed by the wizard's live title-preview call (previewSeasonPackFields)
+    # — a season opened from its SERIES' own ficha (single or multi-season
+    # picker) has no season_number of its own on the wizard's `item` prop
+    # (that's the series), so it can't be reconstructed frontend-side.
+    season_number: Optional[int] = None
     resolution: Optional[str] = None
     source: Optional[str] = None
     video_codec: Optional[str] = None

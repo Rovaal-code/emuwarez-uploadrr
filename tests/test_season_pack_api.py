@@ -73,6 +73,18 @@ def test_pack_preview_exposes_field_breakdown(client, auth_headers, isolated_db,
     assert data["release_tag"]
 
 
+def test_pack_preview_exposes_season_number(client, auth_headers, isolated_db, tmp_path):
+    """Regression: season_number was computed internally but never exposed
+    in the response — the wizard's live title-preview call (fired whenever
+    the user edits Source/Proveedor/Tag) has no other way to know it when
+    the season was opened from its series' own ficha (the wizard's `item`
+    prop is the series there, which has no season_number of its own),
+    silently dropping the "Sxx" from the recomputed title in that case."""
+    season_id = _seed_season_with_episode(isolated_db, tmp_path)
+    resp = client.get(f"/api/library/season/{season_id}/pack-preview", headers=auth_headers)
+    assert resp.json()["season_number"] == 1
+
+
 def test_pack_preview_progress_requires_auth(client):
     resp = client.get("/api/library/season/1/pack-preview/progress")
     assert resp.status_code == 401

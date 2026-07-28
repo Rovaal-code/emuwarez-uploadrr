@@ -892,9 +892,21 @@ def _run_queued_job(job_id: int) -> None:
         # with a stale started_at/Duración from this early, brief moment
         # (the exact contradiction reported 2026-07-28: shown as Pendiente
         # while still carrying a real Creado timestamp and a growing
-        # Duración). The job's own stage/status column still reflects this
-        # step immediately via _mark() below, unrelated to the Fases table.
-        _mark(job_id, stage="verificacion_presubida", started_at=_now_iso())
+        # Duración).
+        #
+        # The job's `stage` column below feeds a SEPARATE, older display
+        # pipeline (compute_progress_phase() in upload_execution.py, read by
+        # every "current activity" label in the frontend as a fallback
+        # whenever progress_json has no phase in "running" state yet — see
+        # uploadStatus.ts's PHASE_LABEL/PROGRESS_ACTION_LABEL). Setting it to
+        # "verificacion_presubida" here reintroduced the exact same bug this
+        # comment describes above, just in that other pipeline: a queued job
+        # would flash "Iniciando Uploadrr" the instant it left the queue,
+        # before nomenclature had even started (reported 2026-07-28, right
+        # after the progress_json fix above shipped). Set it to
+        # "nomenclature" instead — nomenclature is genuinely the next real
+        # named step once this brief pre-check window ends.
+        _mark(job_id, stage="nomenclature", started_at=_now_iso())
         append_upload_log(job_id, "info", "Comprobando integridad del archivo…", stream="system", conn=conn)
         if is_season:
             if not _check_season_integrity(job_id, item_id, conn=conn):

@@ -4,6 +4,7 @@ integrity/nomenclature/remux/start)."""
 from __future__ import annotations
 
 import json
+from unittest.mock import patch
 
 import pytest
 
@@ -219,6 +220,35 @@ def test_run_queued_job_releases_concurrency_slot_on_early_failure(db_conn):
     uq._run_queued_job(job_id)
 
     assert _upload_concurrency_gate._active == 0
+
+
+def test_run_queued_job_stage_is_nomenclature_before_nomenclature_starts(db_conn, tmp_path):
+    """Regression: `upload_jobs.stage` (a separate, older display pipeline
+    from progress_json — see upload_execution.compute_progress_phase(), read
+    by every "current activity" label as a fallback whenever progress_json
+    has no phase in "running" state yet) used to be set to
+    "verificacion_presubida" the instant a queued job left the queue, before
+    nomenclature had even started — so the UI flashed "Iniciando Uploadrr"
+    first instead of "Aplicando nomenclatura" (reported 2026-07-28, right
+    after the progress_json phase-order fix shipped for the same underlying
+    bug in the Fases table)."""
+    f = tmp_path / "movie.mkv"
+    f.write_bytes(b"x" * 100)
+    iid = _movie_with_path(db_conn, str(f))
+    job_id = _queued_job_row(db_conn, iid, path=str(f))
+
+    from emuwarez_uploadrr.services.upload_execution import get_upload_job
+    real_check = uq._check_generic_upload_preconditions
+    captured = {}
+
+    def spy_check(*args, **kwargs):
+        captured["stage"] = get_upload_job(job_id, conn=db_conn)["stage"]
+        return real_check(*args, **kwargs)
+
+    with patch.object(uq, "_check_generic_upload_preconditions", side_effect=spy_check):
+        uq._run_queued_job(job_id)
+
+    assert captured["stage"] == "nomenclature"
 
 
 # ---------------------------------------------------------------------------

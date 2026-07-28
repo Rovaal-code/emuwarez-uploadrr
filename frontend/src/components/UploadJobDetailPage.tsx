@@ -693,7 +693,13 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
             <div className="modal-body">
               <pre ref={logsBoxRef} style={{ margin: 0, maxHeight: 420, overflowY: 'auto', fontSize: '0.76rem', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
                 {loadingLogs ? 'Cargando…' : logs.length === 0 ? 'Sin actividad registrada todavía.' : logs.map(log => {
-                  const ts = log.created_at.slice(11, 19)
+                  // created_at is stored/sent in UTC — naively slicing the raw
+                  // string (the old approach) showed the UTC hour verbatim,
+                  // disagreeing with Creado/Finalizado above (which DO convert
+                  // to the browser's local time via parseServerDate).
+                  const ts = parseServerDate(log.created_at).toLocaleTimeString('es-ES', {
+                    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+                  })
                   return `[${ts}] ${log.message}\n`
                 })}
               </pre>

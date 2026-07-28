@@ -84,6 +84,8 @@ const EVIDENCE_LABELS: Record<string, string> = {
   text_only_subtitles: 'Solo subtítulos de texto',
   subtitle_language_breadth: 'Nº de idiomas de subtítulos',
   video_transcode_probability: 'Probabilidad de recodificación',
+  disc_tier_encoder_fingerprint: 'Huella de encoder en un remux/disco',
+  fast_effort_preset_signature: 'Perfil de codificación rápido/de bajo esfuerzo',
   screen_capture_probability: 'Probabilidad de captura de pantalla',
   sampled_bitrate_variability: 'Variabilidad de bitrate (muestreo)',
   sampled_gop_length: 'Duración de GOP (muestreo)',

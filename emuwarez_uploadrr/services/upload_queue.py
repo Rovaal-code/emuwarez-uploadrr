@@ -571,6 +571,40 @@ def _fail(job_id: int, message: str) -> None:
     _notify_upload_failed(job_id, message)
 
 
+def _apply_mkv_title_best_effort(job_id: int, library_item_id: int, conn) -> None:
+    """Set the MKV's own internal title (mkvpropedit) on the final renamed/
+    remuxed file. Best-effort — logged either way, never fails the job over
+    it: the video itself is fine regardless of whether this secondary
+    metadata step succeeds, same principle as the Arr refresh in
+    _run_queued_job. A non-.mkv file or a missing prepared_path (both
+    reported as "blocked") is expected/skippable, not an error."""
+    from .mkv_title import apply_internal_title_update, MKV_CONFIRMATION_TOKEN
+    from .upload_execution import append_upload_log
+    try:
+        result = apply_internal_title_update(
+            library_item_id, apply=True, dry_run=False,
+            confirmation=MKV_CONFIRMATION_TOKEN, conn=conn,
+        )
+    except Exception as exc:
+        append_upload_log(
+            job_id, "warning", f"Error actualizando el título interno del MKV: {exc}",
+            stream="system", conn=conn,
+        )
+        return
+    status = result.get("status")
+    if status == "applied":
+        append_upload_log(
+            job_id, "info", f"Título interno del MKV actualizado: {result.get('internal_mkv_title')}",
+            stream="system", conn=conn,
+        )
+    elif status not in ("blocked",):
+        append_upload_log(
+            job_id, "warning",
+            f"No se pudo actualizar el título interno del MKV: {'; '.join(result.get('errors') or []) or status}",
+            stream="system", conn=conn,
+        )
+
+
 def _season_upload_preconditions(conn) -> list[str]:
     """The generic (not season-specific) preconditions
     upload_preflight.validate_upload_preconditions() checks for a single
@@ -981,6 +1015,29 @@ def _run_queued_job(job_id: int) -> None:
             except Exception as exc:
                 _fail(job_id, f"Error reordenando/renombrando las pistas: {exc}")
                 return
+
+        # --- Internal MKV title (mkvpropedit) — must run AFTER remux, not
+        # before/instead: mkvmerge's remux rewrites the whole container and
+        # atomically replaces the file, which would silently discard a title
+        # set beforehand. Previously this was never wired into the real
+        # pipeline at all (only reachable from Biblioteca's separate
+        # "Adaptar nomenclatura" modal) — every real upload kept the
+        # source release's own embedded title untouched (confirmed in
+        # production: Chappie, 2026-07-30, still showed "Chappie
+        # [www.newpct1.com]"). Best-effort like the Arr refresh above: logged
+        # either way, never blocks an otherwise-successful upload over this
+        # secondary metadata step. For a season, applied to every episode
+        # individually (each has its own MKV file).
+        append_upload_log(job_id, "info", "Aplicando título interno del MKV…", stream="system", conn=conn)
+        if is_season:
+            from ..models import LocalStatus
+            from .season_pack import _get_season_episodes
+            for ep in _get_season_episodes(item_id, conn=conn):
+                if ep.get("local_status") == LocalStatus.AVAILABLE.value:
+                    _apply_mkv_title_best_effort(job_id, ep["id"], conn=conn)
+        else:
+            _apply_mkv_title_best_effort(job_id, item_id, conn=conn)
+
         mark_phase_done(job_id, "remux")
 
         # --- 4. Final preflight (fresh preconditions + command preview,

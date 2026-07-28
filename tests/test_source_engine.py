@@ -318,6 +318,67 @@ def test_encoder_fingerprint_can_flip_winner_away_from_bdremux():
     assert result.winner.label != "BDRemux"
 
 
+def test_transcode_signals_detect_fast_effort_preset():
+    """x264's veryfast-or-faster preset tier (ref<=1, subme<=2 — verified
+    against x264's own published preset defaults). Real case (Los Tudor
+    S02, 2026-07-30): tied WEB-DL with WEBRIP before this existed."""
+    video = {"encoder": "x264 core 120", "encoder_settings": (
+        "cabac=1 / ref=1 / deblock=1:0:0 / analyse=0x1:0x111 / me=hex / subme=2 / "
+        "trellis=0 / 8x8dct=0 / mixed_ref=0 / weightp=1 / rc=2pass / mbtree=1 / bitrate=3500"
+    )}
+    sig = transcode.analyze_transcode_signals(video)
+    assert sig.fast_effort_preset_signature is True
+    assert sig.video_transcode_probability >= 0.8
+
+
+def test_transcode_signals_slow_preset_not_flagged_as_fast():
+    """A confirmed genuine "NF WEB-DL" release (Sirens S01) uses a slow/
+    high-quality preset (ref=3-4, subme=10) even on its own 2-pass-with-
+    bitrate episodes — must NOT be flagged as a fast/low-effort re-encode
+    (CRF-vs-two-pass alone was already checked and found unreliable)."""
+    video = {"encoder": "x264 core 148", "encoder_settings": (
+        "cabac=1 / ref=3 / deblock=1:0:0 / analyse=0x1:0x111 / me=umh / subme=10 / "
+        "trellis=2 / 8x8dct=0 / mixed_ref=1 / weightp=2 / rc=2pass / mbtree=1 / bitrate=5000"
+    )}
+    sig = transcode.analyze_transcode_signals(video)
+    assert sig.fast_effort_preset_signature is False
+
+
+def test_transcode_signal_adds_strong_dedicated_webdl_penalty_for_fast_preset():
+    video = {"encoder": "x264 core 120", "encoder_settings": (
+        "cabac=1 / ref=1 / subme=2 / trellis=0 / 8x8dct=0 / me=hex / rc=2pass / bitrate=3500"
+    )}
+    signals = transcode.analyze_transcode_signals(video)
+    assert signals.fast_effort_preset_signature is True
+
+    result = ev.transcode_signal(_base_profile(), signals)
+    assert len(result) == 3
+    fast_preset_entry = result[2]
+    assert fast_preset_entry.strength == "strong"
+    assert fast_preset_entry.contributions["WEB-DL"] <= -25
+
+
+def test_fast_effort_preset_flips_winner_away_from_webdl():
+    """Real case (Los Tudor S02, 2026-07-30): a fast/low-effort encoder
+    preset (x264 "veryfast" tier) tied WEB-DL with WEBRIP even though a
+    genuine WEB-DL structurally can't be encoded that way — the new
+    dedicated strong penalty must be able to overrule an otherwise-similar
+    bitrate reading on its own."""
+    video = {"encoder": "x264 core 120", "encoder_settings": (
+        "cabac=1 / ref=1 / subme=2 / trellis=0 / 8x8dct=0 / me=hex / rc=2pass / bitrate=3500"
+    )}
+    signals = transcode.analyze_transcode_signals(video)
+    transcode_evidence = ev.transcode_signal(_base_profile(), signals)
+
+    bitrate_evidence = ev.Evidence(
+        feature="bits_per_pixel_per_frame", value=0.3,
+        contributions=ev._c(**{"WEB-DL": 14, "WEBRIP": 12}),
+        strength="medium", reliability=0.5, explanation="test bitrate signal",
+    )
+    result = scoring.score_candidates([*transcode_evidence, bitrate_evidence])
+    assert result.winner.label != "WEB-DL"
+
+
 def test_bluray_compat_flag_detected():
     profile_dict = _base_profile(video={"encoder_settings": "cabac=1 / bluray_compat=1 / crf=18.0"})
     result = ev.bluray_compat_flag(profile_dict)

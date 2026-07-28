@@ -388,6 +388,41 @@ entre ellos). Con ambos cambios, el margen del caso Chappie baja de 2.1 a
 mucho mejor lo reñido que está de verdad, en vez de un margen inflado por
 una asimetría sin respaldo.
 
+## Caso real: Los Tudor S02 (2026-07-30) — WEB-DL empatado con WEBRIP por una huella de encoder ambigua
+
+Con MediaInfo real de los 10 capítulos de la temporada 2, el motor daba a
+WEB-DL y WEBRIP la misma puntuación. Los 10 capítulos comparten exactamente
+esta cadena `Encoding settings`: `ref=1 / subme=2 / trellis=0 / 8x8dct=0 /
+me=hex / mixed_ref=0 / weightp=1 / rc=2pass / mbtree=1 / bitrate=3500`.
+
+Antes de este cambio, cualquier huella de encoder de mano (x264/x265) solo
+daba un empate débil (`video_transcode_probability`, fuerza "weak") porque
+la calibración de 2026-07 ya había comprobado que una huella de encoder por
+sí sola (CRF o two-pass, cualquier bitrate) **no** distingue un WEB-DL
+genuino de un re-encode — varias plataformas de streaming corren
+libx264/libx265 internamente. Un WEB-DL confirmado real en el dataset de
+calibración (Sirens S01, tag "NF") lo demuestra: usa `rc=2pass /
+bitrate=5000` en dos de sus episodios, exactamente el mismo modo de
+control de tasa que Los Tudor.
+
+Pero mirando el PERFIL de codificación, no el modo de control de tasa, la
+diferencia es total: Sirens usa `ref=3-4 / subme=10 / trellis=2 / me=umh`
+(equivalente al preset `slow`/`veryslow` de x264) en **todos** sus
+episodios, mientras que Los Tudor usa `ref=1 / subme=2 / trellis=0 /
+8x8dct=0 / me=hex` — que coincide EXACTAMENTE con los valores por defecto
+del preset `veryfast` de x264. Ninguna plataforma de streaming ni disco
+original tiene motivo para codificar a un preset tan rápido/de bajo
+esfuerzo — solo un re-encode de grupo/escena buscando velocidad sobre
+calidad lo hace.
+
+Se añadió una señal nueva, `fast_effort_preset_signature` (`ref<=1 y
+subme<=2`, verificado contra la tabla de presets pública de x264),
+verificada contra el propio WEB-DL confirmado del dataset (Sirens no la
+dispara en ningún episodio) para no repetir el mismo error de la señal de
+CRF/two-pass. Cuando salta, añade una entrada `strong` propia (WEB-DL=-30,
+igual de decisiva que la que ya tenía BDRemux/FBD para cualquier huella),
+sin tocar la calibración deliberadamente débil de la huella "a secas".
+
 ## Cómo seguir calibrando
 
 1. Recolectar (o pedir) archivos con `SD` reales (1 sola muestra en ambas

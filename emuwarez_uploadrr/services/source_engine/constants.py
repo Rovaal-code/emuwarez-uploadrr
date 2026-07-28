@@ -16,7 +16,7 @@ CANDIDATES: tuple[str, ...] = (
 
 # Bumped whenever scoring rules or the extracted feature set change in a way
 # that could change past results — invalidates the on-disk cache (cache.py).
-ENGINE_VERSION = "1.4.0"
+ENGINE_VERSION = "1.5.0"
 
 # Global wall-clock budget for one full analysis (spec section 5). Individual
 # tool/sampling steps carry their own smaller sub-budgets (see proc.py callers)

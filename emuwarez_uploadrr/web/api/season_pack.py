@@ -9,7 +9,7 @@ services/upload_queue.py's season branch drives services/season_pack.py's
 apply_season_pack() internally after the grace period."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ...database import connect, init_db
 from ...services.season_pack import (
@@ -64,12 +64,26 @@ def preview_season_pack_progress(season_id: int, current_user: dict = Depends(re
 
 
 @router.get("/library/season/{season_id}/episode-names")
-def season_episode_names(season_id: int, current_user: dict = Depends(require_auth)) -> dict:
+def season_episode_names(
+    season_id: int,
+    source: str | None = Query(default=None),
+    provider: str | None = Query(default=None),
+    tag: str | None = Query(default=None),
+    current_user: dict = Depends(require_auth),
+) -> dict:
     """Per-episode final torrent name + internal MKV title — backs "Ver
     nombre de todos los capítulos" (a season pack has no single "título del
-    archivo interno", each episode file has its own)."""
+    archivo interno", each episode file has its own).
+
+    `source`/`provider`/`tag` — the season's own fields as currently edited
+    in the wizard, so every episode's individual name reflects the same
+    choice as the season pack's own title instead of its own auto-detected
+    values."""
     with _get_conn() as conn:
-        return get_season_episode_names(season_id, conn=conn)
+        return get_season_episode_names(
+            season_id, conn=conn,
+            source_override=source, provider_override=provider, tag_override=tag,
+        )
 
 
 @router.get("/library/season/{season_id}/episode-mediainfo")

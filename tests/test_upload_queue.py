@@ -221,6 +221,118 @@ def test_run_queued_job_releases_concurrency_slot_on_early_failure(db_conn):
     assert _upload_concurrency_gate._active == 0
 
 
+# ---------------------------------------------------------------------------
+# Internal MKV title (mkvpropedit) — previously never wired into the real
+# pipeline at all (only reachable from Biblioteca's separate "Adaptar
+# nomenclatura" modal), so no real upload ever actually changed the file's
+# own embedded title. Confirmed in production: Chappie, 2026-07-30, still
+# showed "Chappie [www.newpct1.com]" (the source release's own title) after
+# a real upload.
+# ---------------------------------------------------------------------------
+
+def test_apply_mkv_title_best_effort_logs_success(db_conn, monkeypatch):
+    iid = _movie_with_path(db_conn, "/x/movie.mkv")
+    job_id = _queued_job_row(db_conn, iid, path="/x/movie.mkv")
+
+    import emuwarez_uploadrr.services.mkv_title as mkv_title_mod
+    monkeypatch.setattr(
+        mkv_title_mod, "apply_internal_title_update",
+        lambda *a, **k: {"status": "applied", "internal_mkv_title": "Movie.2024-TAG"},
+    )
+
+    uq._apply_mkv_title_best_effort(job_id, iid, conn=db_conn)
+
+    from emuwarez_uploadrr.services.upload_execution import get_upload_job_logs
+    logs = get_upload_job_logs(job_id, conn=db_conn)
+    assert any("Título interno del MKV actualizado" in log["message"] for log in logs["logs"])
+
+
+def test_apply_mkv_title_best_effort_skips_silently_when_blocked(db_conn, monkeypatch):
+    """A non-.mkv file or a missing prepared_path ("blocked") is expected/
+    skippable, not something worth alarming the user about in the log."""
+    iid = _movie_with_path(db_conn, "/x/movie.mkv")
+    job_id = _queued_job_row(db_conn, iid, path="/x/movie.mkv")
+
+    import emuwarez_uploadrr.services.mkv_title as mkv_title_mod
+    monkeypatch.setattr(
+        mkv_title_mod, "apply_internal_title_update",
+        lambda *a, **k: {"status": "blocked", "errors": ["no es .mkv"]},
+    )
+
+    uq._apply_mkv_title_best_effort(job_id, iid, conn=db_conn)
+
+    from emuwarez_uploadrr.services.upload_execution import get_upload_job_logs
+    logs = get_upload_job_logs(job_id, conn=db_conn)
+    assert not any("MKV" in log["message"] for log in logs["logs"])
+
+
+def test_apply_mkv_title_best_effort_logs_warning_on_real_failure(db_conn, monkeypatch):
+    """A genuine mkvpropedit failure must be visible (unlike "blocked" above)
+    but must NOT fail the job — the video itself is fine either way."""
+    iid = _movie_with_path(db_conn, "/x/movie.mkv")
+    job_id = _queued_job_row(db_conn, iid, path="/x/movie.mkv")
+
+    import emuwarez_uploadrr.services.mkv_title as mkv_title_mod
+    monkeypatch.setattr(
+        mkv_title_mod, "apply_internal_title_update",
+        lambda *a, **k: {"status": "error", "errors": ["mkvpropedit exit 1"]},
+    )
+
+    uq._apply_mkv_title_best_effort(job_id, iid, conn=db_conn)
+
+    from emuwarez_uploadrr.services.upload_execution import get_upload_job, get_upload_job_logs
+    logs = get_upload_job_logs(job_id, conn=db_conn)
+    assert any("No se pudo actualizar el título interno del MKV" in log["message"] for log in logs["logs"])
+    # Confirms this really is best-effort: no status column touched.
+    assert get_upload_job(job_id, conn=db_conn)["status"] == "queued"
+
+
+def test_apply_mkv_title_best_effort_survives_exception(db_conn, monkeypatch):
+    iid = _movie_with_path(db_conn, "/x/movie.mkv")
+    job_id = _queued_job_row(db_conn, iid, path="/x/movie.mkv")
+
+    import emuwarez_uploadrr.services.mkv_title as mkv_title_mod
+
+    def _raise(*a, **k):
+        raise RuntimeError("boom")
+    monkeypatch.setattr(mkv_title_mod, "apply_internal_title_update", _raise)
+
+    uq._apply_mkv_title_best_effort(job_id, iid, conn=db_conn)  # must not raise
+
+    from emuwarez_uploadrr.services.upload_execution import get_upload_job_logs
+    logs = get_upload_job_logs(job_id, conn=db_conn)
+    assert any("Error actualizando el título interno del MKV" in log["message"] for log in logs["logs"])
+
+
+def test_run_queued_job_season_applies_mkv_title_per_episode(db_conn, tmp_path, monkeypatch):
+    """The user's explicit requirement: for a season, the internal title
+    must be applied to EVERY episode individually, not just once for the
+    season as a whole (each episode is its own separate MKV file)."""
+    season_id, episode_ids = _seed_season_with_episodes(db_conn, n=3)
+    job_id = _queued_job_row(db_conn, season_id, path="")
+
+    monkeypatch.setattr(uq, "_check_season_integrity", lambda *a, **k: True)
+    monkeypatch.setattr(uq, "_check_generic_upload_preconditions", lambda *a, **k: True)
+
+    import emuwarez_uploadrr.services.season_pack as season_pack_mod
+    monkeypatch.setattr(
+        season_pack_mod, "apply_season_pack",
+        lambda *a, **k: {"status": "applied", "episodes": [], "season_pack_title": "Serie X S01"},
+    )
+    monkeypatch.setattr(uq, "_run_season_remux", lambda job_id, season_id, conn: (True, []))
+
+    calls = []
+    import emuwarez_uploadrr.services.mkv_title as mkv_title_mod
+    monkeypatch.setattr(
+        mkv_title_mod, "apply_internal_title_update",
+        lambda library_item_id, **k: calls.append(library_item_id) or {"status": "blocked"},
+    )
+
+    uq._run_queued_job(job_id)
+
+    assert sorted(calls) == sorted(episode_ids)
+
+
 def test_run_queued_job_skipped_when_job_not_queued_anymore(db_conn, tmp_path, monkeypatch):
     """Simulates the cancel-race: if the job's status isn't 'queued' anymore
     by the time the timer fires (e.g. cancelled a moment earlier), the

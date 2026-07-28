@@ -501,6 +501,30 @@ def transcode_signal(profile: dict, signals) -> list[Evidence]:
                          "un remux o disco completo genuino no debería llevarla nunca, así que descarta con "
                          "fuerza que sea un remux real, con independencia de lo cerca que esté el bitrate."),
         ))
+        if signals.fast_effort_preset_signature:
+            # A bare fingerprint (CRF or two-pass, any bitrate) is ambiguous
+            # for WEB-DL specifically — see the weak entry above and
+            # TranscodeSignals' own docstring. This is NOT: ref<=1 and
+            # subme<=2 is x264's "veryfast"-or-faster preset tier, verified
+            # against the calibration dataset's own confirmed genuine "NF
+            # WEB-DL" release (Sirens S01) — which uses ref=3-4/subme=10
+            # throughout, including its own 2-pass-with-bitrate episodes, so
+            # this isn't just "any fast rate-control mode" either. No
+            # streaming platform or disc author has a reason to trade away
+            # quality for encode speed; a fast/low-effort preset is a scene/
+            # group re-encode's signature, so it rules out WEB-DL (and
+            # BDRemux/FBD, already ruled out above by the bare fingerprint)
+            # just as hard as the disc-tier check does. Real case (Los
+            # Tudor S02, 2026-07-30): ref=1/subme=2 tied WEB-DL with WEBRIP
+            # before this.
+            ev.append(Evidence(
+                feature="fast_effort_preset_signature", value=1.0,
+                contributions=_c(**{"WEB-DL": -30}),
+                strength="strong", reliability=0.7,
+                explanation="Perfil de codificación rápido/de bajo esfuerzo (equivalente a 'veryfast' o más "
+                            "rápido de x264): ninguna plataforma de streaming codifica así para entregar "
+                            "contenido, así que descarta con fuerza que sea un WEB-DL genuino.",
+            ))
     else:
         # No fingerprint at all is still a fairly strong "untouched" signal —
         # calibration didn't contradict this case (it's rare in the dataset,

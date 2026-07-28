@@ -261,6 +261,20 @@ export function RemuxTable({ plan, editable, edits, onEdit }: {
   )
 }
 
+// library_items.title for an episode is built (integrations/sonarr.py's
+// episode_to_library_item) as "{Serie} SxxExx - {título del capítulo}" —
+// needed for Biblioteca's own listing, but redundant inside a season
+// target's own MediaInfo/Remux accordion (EpisodeAccordionRow already
+// prepends "Exx — " itself, and you're already looking at that one
+// season). Strips everything up to and including the first " - ", keeping
+// only the episode's own title; falls back to the full string if there's
+// no " - " at all (an episode with no per-episode title in Sonarr).
+function episodeOnlyTitle(fullTitle?: string | null): string | undefined {
+  if (!fullTitle) return fullTitle ?? undefined
+  const idx = fullTitle.indexOf(' - ')
+  return idx === -1 ? fullTitle : fullTitle.slice(idx + 3)
+}
+
 // One collapsible episode row — used by the season target's MediaInfo/Remux
 // accordions (one entry per episode instead of a single-file table).
 export function EpisodeAccordionRow({ episodeNumber, title, expanded, onToggle, children }: {
@@ -682,10 +696,13 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
   const loadSeasonNames = useCallback(async () => {
     if (targetId == null) return
     setSeasonNamesLoading(true)
-    try { setSeasonNames((await getSeasonEpisodeNames(targetId)).episodes) }
+    try {
+      const overrides = { source: fields.source, provider: fields.provider, tag: fields.tag }
+      setSeasonNames((await getSeasonEpisodeNames(targetId, overrides)).episodes)
+    }
     catch { setSeasonNames(null) }
     finally { setSeasonNamesLoading(false) }
-  }, [targetId])
+  }, [targetId, fields.source, fields.provider, fields.tag])
 
   const loadSeasonMi = useCallback(async () => {
     if (targetId == null) return
@@ -713,6 +730,15 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
     setSeasonMi(null); setSeasonMiError(null); setExpandedMiEp(null)
     setSeasonRemux(null); setSeasonRemuxError(null); setExpandedRemuxEp(null)
   }, [targetId])
+
+  // Season target: invalidate the cached per-episode names list whenever
+  // Source/Proveedor/Tag change, so a stale (pre-edit) list isn't shown next
+  // time "Ver nombre de todos los capítulos" is reopened — it must always
+  // reflect the same override the season pack's own title uses.
+  useEffect(() => {
+    if (!targetIsSeason) return
+    setSeasonNames(null)
+  }, [targetIsSeason, fields.source, fields.provider, fields.tag])
 
   // Auto-detect the provider via TMDB when Source is WEB-DL and none was
   // detected from the filename. Debounced 500ms and fired at most once per
@@ -1391,7 +1417,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
                           <EpisodeAccordionRow
                             key={ep.episode_id}
                             episodeNumber={ep.episode_number}
-                            title={ep.title}
+                            title={episodeOnlyTitle(ep.title)}
                             expanded={expandedMiEp === ep.episode_id}
                             onToggle={() => setExpandedMiEp(expandedMiEp === ep.episode_id ? null : ep.episode_id)}
                           >
@@ -1436,7 +1462,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
                           <EpisodeAccordionRow
                             key={ep.episode_id}
                             episodeNumber={ep.episode_number}
-                            title={ep.title}
+                            title={episodeOnlyTitle(ep.title)}
                             expanded={expandedRemuxEp === ep.episode_id}
                             onToggle={() => setExpandedRemuxEp(expandedRemuxEp === ep.episode_id ? null : ep.episode_id)}
                           >

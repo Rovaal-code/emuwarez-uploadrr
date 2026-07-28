@@ -501,10 +501,20 @@ def apply_season_pack(
     }
 
 
-def get_season_episode_names(season_id: int, conn=None) -> dict:
+def get_season_episode_names(
+    season_id: int, conn=None,
+    source_override: str | None = None, provider_override: str | None = None,
+    tag_override: str | None = None,
+) -> dict:
     """Per-episode final torrent name + internal MKV title — backs the
     wizard's "Ver nombre de todos los capítulos" button (a season pack has
-    no single "título del archivo interno", each episode file has its own)."""
+    no single "título del archivo interno", each episode file has its own).
+
+    `source_override`/`provider_override`/`tag_override` — the season's own
+    Source/Proveedor/Tag fields, if the user edited them by hand — applied
+    uniformly to every episode, same as build_season_pack_plan(). Without
+    this, each episode kept showing its own auto-detected values even after
+    overriding the season pack's title, so they visibly disagreed."""
     own = conn is None
     conn = conn or connect()
     try:
@@ -514,7 +524,11 @@ def get_season_episode_names(season_id: int, conn=None) -> dict:
         available = [e for e in all_episodes if e.get("local_status") == LocalStatus.AVAILABLE.value]
         out = []
         for ep in available:
-            fields = build_editable_nomenclature_fields(ep["id"], conn=conn)
+            fields = build_editable_nomenclature_fields(
+                ep["id"], conn=conn,
+                source_override=source_override, provider_override=provider_override,
+                tag_override=tag_override,
+            )
             blocked = bool(fields.get("blocked"))
             out.append({
                 "episode_id": ep["id"],
@@ -567,7 +581,14 @@ def get_season_episode_mediainfo(season_id: int, conn=None) -> dict:
             # "BluRay", from prepared_path) shown everywhere else.
             candidate_path = ep.get("prepared_path") or ep.get("path")
             local_path = resolve_local_path(candidate_path, conn=conn) or candidate_path
-            report = build_mediainfo_report(local_path or "")
+            # radarr_source: without it, the Source row's "eMuwarez" column
+            # skips straight from "nombre del archivo" to the bitrate tool's
+            # own estimate, silently disagreeing with the actually-applied
+            # nomenclature (nomenclature.py::_infer_source_from_item, which
+            # DOES fall back to Radarr/Sonarr before the bitrate tool) —
+            # confirmed with real data (Los Tudor S02, 2026-07-30): showed
+            # "WEBRip" here while the real season title said "BluRay".
+            report = build_mediainfo_report(local_path or "", radarr_source=ep.get("source"))
             out.append({
                 "episode_id": ep["id"],
                 "episode_number": ep.get("episode_number"),

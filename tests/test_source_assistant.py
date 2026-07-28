@@ -139,6 +139,34 @@ def test_build_editable_nomenclature_fields_basic(tmp_path):
     assert "internal_mkv_title" in result
 
 
+def test_build_editable_nomenclature_fields_applies_overrides(tmp_path):
+    """Regression: a season pack's Source/Proveedor/Tag overrides (applied
+    uniformly to every episode via build_season_pack_plan/apply_season_pack)
+    never reached this function at all, so "Ver nombre de todos los
+    capítulos" kept showing each episode's own auto-detected values even
+    after overriding the season pack's title."""
+    conn = _make_conn(tmp_path)
+    item_id = _accessible_item(conn, tmp_path, title="Dune", tmdb_id="438631")
+    _insert_proposal(conn, item_id, "Dune.2021.1080p.BluRay.x264-EMUWAREZ")
+
+    with patch(
+        "emuwarez_uploadrr.services.source_assistant._get_tmdb_available_providers_raw",
+        return_value=[],
+    ), patch(
+        "emuwarez_uploadrr.services.media_info_service.build_mediainfo_report",
+        return_value=_MI_OK,
+    ):
+        from emuwarez_uploadrr.services.source_assistant import build_editable_nomenclature_fields
+        result = build_editable_nomenclature_fields(
+            item_id, conn=conn,
+            source_override="WEB-DL", provider_override="NF", tag_override="MYTAG",
+        )
+
+    assert result["fields"]["source"] == "WEB-DL"
+    assert result["fields"]["provider"] == "NF"
+    assert result["fields"]["tag"] == "MYTAG"
+
+
 def test_update_nomenclature_fields_preview_webdl(tmp_path):
     conn = _make_conn(tmp_path)
     item_id = _insert_library_item(conn, title="Pelicula", tmdb_id=None)

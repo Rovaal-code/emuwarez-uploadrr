@@ -448,8 +448,20 @@ def _resolve_series_title(item: dict, conn) -> str | None:
     return row.get("title") if row else None
 
 
-def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
-    """Build the editable field set for the nomenclature modal."""
+def build_editable_nomenclature_fields(
+    library_item_id: int, conn=None,
+    source_override: str | None = None, provider_override: str | None = None,
+    tag_override: str | None = None,
+) -> dict:
+    """Build the editable field set for the nomenclature modal.
+
+    `source_override`/`provider_override`/`tag_override` let a caller that
+    already resolved these by hand (a season pack's own Source/Proveedor/Tag
+    fields, applied uniformly across every episode) force that choice
+    instead of the usual name -> Radarr/Sonarr -> bitrate-tool inference —
+    without this, "Ver nombre de todos los capítulos" kept showing each
+    episode's own auto-detected values even after overriding the season
+    pack's title, so the individual names disagreed with it."""
     own = conn is None
     conn = conn or connect()
     try:
@@ -499,7 +511,7 @@ def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
         media_type = item.get("item_type") or "movie"
         tmdb_id = item.get("tmdb_id")
         resolution = _infer_resolution_from_item(item)
-        source = _infer_source_from_item(item)
+        source = source_override or _infer_source_from_item(item)
 
         # For episodes/seasons the eMuwarez title must be the SERIES name (not
         # the per-episode title like "Serie S01E01 - Nombre"), with the
@@ -532,7 +544,7 @@ def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
             resolution = resolution or proposal.get("resolution")
             source = source or proposal.get("source")
 
-        tag = _get_default_tag(conn)
+        tag = tag_override or _get_default_tag(conn)
 
         season_episode = None
         if media_type in ("season", "episode"):
@@ -663,7 +675,7 @@ def build_editable_nomenclature_fields(library_item_id: int, conn=None) -> dict:
             "source": source,
             # Provider: from the file name first; only if the name has none (and
             # the source is WEB-DL) fall back to the TMDb suggestion.
-            "provider": infer_provider_from_item(item) or suggested_provider,
+            "provider": provider_override or infer_provider_from_item(item) or suggested_provider,
             "dynamic_range": mi_hdr,
             "video_codec": mi_video,
             "audio_summary": mi_audio,

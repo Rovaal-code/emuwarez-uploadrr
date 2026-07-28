@@ -25,6 +25,8 @@ _BITRATE_RE = re.compile(r"\bbitrate=(\d+)", re.I)
 # both that real form and the "pass=N" form some other tools/dumps use.
 _PASS_RE = re.compile(r"\b(\d)[-\s]?pass\b|\bpass=(\d)\b", re.I)
 _KEYINT_RE = re.compile(r"\bkeyint=(\d+)", re.I)
+_REF_RE = re.compile(r"\bref=(\d+)", re.I)
+_SUBME_RE = re.compile(r"\bsubme=(\d+)", re.I)
 
 
 @dataclass
@@ -40,6 +42,23 @@ class TranscodeSignals:
     video_transcode_probability: float
     video_stream_untouched_probability: float
     screen_capture_probability: float
+    # x264's "veryfast"-or-faster preset tier (ref<=1 AND subme<=2 — matches
+    # ultrafast/superfast/veryfast's own defaults, verified against x264's
+    # published preset table). Unlike CRF-vs-two-pass (checked and found NOT
+    # reliable — see below), this genuinely never shows up on a real
+    # streaming platform's own delivery encode or a disc author's master:
+    # both use a slow/high-quality preset even when they do target a fixed
+    # bitrate (a confirmed genuine "NF WEB-DL" release in this engine's
+    # calibration dataset, Sirens S01, uses ref=3-4/subme=10 throughout,
+    # including its own 2-pass-with-bitrate episodes). A fast/low-effort
+    # preset is a scene/group re-encode workflow — nobody re-encodes at
+    # "veryfast" for quality, only for speed, which a platform's own
+    # pipeline or a disc's own hardware encoder has no reason to do.
+    # Real case (Los Tudor S02, 2026-07-30): ref=1/subme=2/trellis=0/
+    # 8x8dct=0/me=hex (x264 veryfast's exact defaults) tied WEB-DL with
+    # WEBRIP even though a legitimate WEB-DL/BDRemux structurally can't be a
+    # fast/low-effort re-encode.
+    fast_effort_preset_signature: bool
     notes: list[str] = field(default_factory=list)
 
 
@@ -59,6 +78,11 @@ def analyze_transcode_signals(video: dict) -> TranscodeSignals:
     two_pass = ((pass_m.group(1) or pass_m.group(2)) == "2") if pass_m else None
     keyint_m = _KEYINT_RE.search(settings)
     keyint = int(keyint_m.group(1)) if keyint_m else None
+    ref_m = _REF_RE.search(settings)
+    ref = int(ref_m.group(1)) if ref_m else None
+    subme_m = _SUBME_RE.search(settings)
+    subme = int(subme_m.group(1)) if subme_m else None
+    fast_preset = ref is not None and subme is not None and ref <= 1 and subme <= 2
 
     coded_w, coded_h = video.get("coded_width"), video.get("coded_height")
     disp_w, disp_h = video.get("width"), video.get("height")
@@ -97,6 +121,15 @@ def analyze_transcode_signals(video: dict) -> TranscodeSignals:
                       (", two-pass" if two_pass else "") +
                       ", por sí solo no distingue un WEB-DL genuino de un re-encode (varias "
                       "plataformas de streaming usan x264/x265 internamente, con o sin two-pass)")
+        if fast_preset:
+            # Unlike a bare fingerprint, this DOES distinguish — see the
+            # dataclass field's own comment for the full rationale.
+            video_transcode_p = 0.85
+            notes.append(
+                f"Perfil de codificación rápido/de bajo esfuerzo (ref={ref}, subme={subme}, "
+                "equivalente al preset 'veryfast' o más rápido de x264) — ninguna plataforma de "
+                "streaming ni disco original codifica así, es propio de un re-encode rápido de grupo/escena."
+            )
     else:
         video_transcode_p = 0.15
         notes.append("Sin huella de encoder de mano en los metadatos (no concluyente por sí solo)")
@@ -116,6 +149,7 @@ def analyze_transcode_signals(video: dict) -> TranscodeSignals:
         encoder_name=encoder or None,
         crf=crf, target_bitrate_bps=target_bitrate, two_pass=two_pass, keyint=keyint,
         resize_evidence=resize_evidence, crop_evidence=crop_evidence,
+        fast_effort_preset_signature=fast_preset,
         video_transcode_probability=video_transcode_p,
         video_stream_untouched_probability=untouched_p,
         screen_capture_probability=screen_capture_p,

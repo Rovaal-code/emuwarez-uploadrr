@@ -57,16 +57,17 @@ def _seed_series_season(conn, *, series_title="One Piece", year=1999):
 
 
 def _seed_episode(conn, season_id, *, number, title, path=None, available=True, quality=None,
-                   video_codec=None, audio_codec=None, audio_languages=None, subtitle_languages=None):
+                   video_codec=None, audio_codec=None, audio_languages=None, subtitle_languages=None,
+                   source=None):
     status = "Disponible" if available else "Faltante"
     cur = conn.execute(
         """INSERT INTO library_items
            (item_type, title, year, local_status, request_status, nomenclature_status,
             parent_id, season_number, episode_number, path, quality,
-            video_codec, audio_codec, audio_languages, subtitle_languages, updated_at)
-           VALUES ('episode', ?, 1999, ?, 'Sin petición', 'No adaptada', ?, 1, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)""",
+            video_codec, audio_codec, audio_languages, subtitle_languages, source, updated_at)
+           VALUES ('episode', ?, 1999, ?, 'Sin petición', 'No adaptada', ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)""",
         (title, status, season_id, number, path, quality,
-         video_codec, audio_codec, audio_languages, subtitle_languages),
+         video_codec, audio_codec, audio_languages, subtitle_languages, source),
     )
     conn.commit()
     return cur.lastrowid
@@ -339,6 +340,29 @@ def test_apply_pack_forwards_overrides_to_real_files(isolated_db, tmp_path):
     conn.close()
 
 
+def test_get_season_episode_names_applies_overrides_to_every_episode(isolated_db, tmp_path):
+    """Regression: editing Source/Proveedor/Tag in the season wizard changed
+    the season pack's own title but NOT each episode's individual name in
+    "Ver nombre de todos los capítulos" — every episode kept showing its
+    own auto-detected value, visibly disagreeing with the pack title."""
+    conn = _open(isolated_db)
+    _series_id, season_id = _seed_series_season(conn)
+    for i in (1, 2):
+        src = tmp_path / f"S01E0{i}.mkv"
+        src.write_bytes(b"video")
+        _seed_episode(conn, season_id, number=i, title=f"One Piece S01E0{i}", path=str(src), quality="WEBDL-1080p")
+
+    result = get_season_episode_names(
+        season_id, conn=conn, source_override="BluRay", tag_override="MYTAG",
+    )
+
+    assert len(result["episodes"]) == 2
+    for ep in result["episodes"]:
+        assert "BluRay" in (ep["torrent_name"] or "")
+        assert (ep["torrent_name"] or "").endswith("-MYTAG")
+    conn.close()
+
+
 def test_get_season_episode_names_returns_one_entry_per_available_episode(isolated_db, tmp_path):
     conn = _open(isolated_db)
     _series_id, season_id = _seed_series_season(conn)
@@ -401,6 +425,40 @@ def test_get_season_episode_mediainfo_prefers_prepared_path_over_stale_path(isol
         result = get_season_episode_mediainfo(season_id, conn=conn)
 
     assert result["episodes"][0]["report"]["available"] is True
+    conn.close()
+
+
+def test_get_season_episode_mediainfo_uses_radarr_source_not_just_bitrate_guess(isolated_db, tmp_path):
+    """Regression: get_season_episode_mediainfo() called build_mediainfo_report()
+    without radarr_source at all, so the Source row's "eMuwarez" column
+    skipped straight from "nombre del archivo" to the bitrate tool's own
+    estimate — disagreeing with the actually-applied nomenclature, which
+    DOES fall back to Radarr/Sonarr before the bitrate tool
+    (nomenclature.py::_infer_source_from_item). Real case (Los Tudor S02,
+    2026-07-30): showed "WEBRip" here while the real season title said
+    "BluRay"."""
+    conn = _open(isolated_db)
+    _series_id, season_id = _seed_series_season(conn)
+    # No source token in the filename, so the name-based check alone can't
+    # resolve anything — it has to fall back to Radarr/Sonarr's own value.
+    src = tmp_path / "Los_Tudor_2x05_1080p.mkv"
+    src.write_bytes(b"video")
+    _seed_episode(conn, season_id, number=5, title="Los Tudor 2x05", path=str(src), source="BluRay")
+
+    info = {"media": {"track": [
+        {"@type": "General"},
+        {"@type": "Video", "Format": "AVC", "Width": "1920", "Height": "1080"},
+    ]}}
+    with (
+        patch.object(media_info_service, "mediainfo_available", return_value=True),
+        patch.object(media_info_service.legacy, "run_mediainfo_json", return_value=info),
+        patch("emuwarez_uploadrr.services.source_engine.analyze_for_app", return_value=None),
+        patch("emuwarez_uploadrr.services.source_engine.winning_app_source", return_value="WEBRip"),
+    ):
+        result = get_season_episode_mediainfo(season_id, conn=conn)
+
+    source_row = next(r for r in result["episodes"][0]["report"]["rows"] if r["field"] == "Source")
+    assert source_row["emu"] == "BluRay"
     conn.close()
 
 

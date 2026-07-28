@@ -53,8 +53,19 @@ export interface SeasonEpisodeName {
 
 // Backs "Ver nombre de todos los capítulos" — a season pack has no single
 // "título del archivo interno", each episode file has its own.
-export function getSeasonEpisodeNames(seasonId: number): Promise<{ episodes: SeasonEpisodeName[] }> {
-  return api.get<{ episodes: SeasonEpisodeName[] }>(`/library/season/${seasonId}/episode-names`)
+// `overrides` — the season's own Source/Proveedor/Tag as currently edited in
+// the wizard, so every episode's name reflects the same choice as the
+// season pack's own title instead of its own auto-detected values.
+export function getSeasonEpisodeNames(
+  seasonId: number,
+  overrides?: { source?: string | null; provider?: string | null; tag?: string | null },
+): Promise<{ episodes: SeasonEpisodeName[] }> {
+  const qs = new URLSearchParams()
+  if (overrides?.source) qs.set('source', overrides.source)
+  if (overrides?.provider) qs.set('provider', overrides.provider)
+  if (overrides?.tag) qs.set('tag', overrides.tag)
+  const query = qs.toString()
+  return api.get<{ episodes: SeasonEpisodeName[] }>(`/library/season/${seasonId}/episode-names${query ? `?${query}` : ''}`)
 }
 
 export interface SeasonEpisodeMediaInfo {

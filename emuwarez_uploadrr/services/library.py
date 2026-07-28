@@ -909,6 +909,16 @@ def get_dashboard_summary(conn: sqlite3.Connection) -> dict:
     # temporada completa de serie/documental, y sus capítulos. emu_in_catalog
     # se calcula a nivel de película y de serie/temporada (nunca por episodio),
     # así que los capítulos se cuentan por su temporada única.
+    #
+    # Una temporada solo cuenta como "subible" si además de local_status =
+    # Disponible, sus 6 campos de rollup (services/library.py's
+    # _update_season_rollup, sync-time) NO son NULL — null en cualquiera de
+    # ellos significa justo que sus capítulos no coinciden entre sí (resolución/
+    # source/códecs/idiomas/subs), el mismo requisito de build_season_pack_plan
+    # para poder subirla como pack (isSeasonReady/seasonNotReadyReason en el
+    # frontend usan la misma señal). Sin este filtro, esta tarjeta contaba
+    # temporadas completas pero técnicamente inconsistentes como si se
+    # pudieran subir.
     avail = LocalStatus.AVAILABLE.value
     uniq = conn.execute(
         """
@@ -917,6 +927,10 @@ def get_dashboard_summary(conn: sqlite3.Connection) -> dict:
             SUM(CASE WHEN item_type = 'season' THEN 1 ELSE 0 END) AS seasons
         FROM library_items
         WHERE emu_in_catalog = 0 AND local_status = ?
+          AND (item_type != 'season' OR (
+                resolution IS NOT NULL AND source IS NOT NULL AND video_codec IS NOT NULL
+                AND audio_codec IS NOT NULL AND audio_languages IS NOT NULL AND subtitle_languages IS NOT NULL
+              ))
         """,
         [avail],
     ).fetchone()
@@ -927,6 +941,8 @@ def get_dashboard_summary(conn: sqlite3.Connection) -> dict:
         JOIN library_items s ON e.parent_id = s.id
         WHERE e.item_type = 'episode' AND e.local_status = ?
           AND s.item_type = 'season' AND s.emu_in_catalog = 0
+          AND s.resolution IS NOT NULL AND s.source IS NOT NULL AND s.video_codec IS NOT NULL
+          AND s.audio_codec IS NOT NULL AND s.audio_languages IS NOT NULL AND s.subtitle_languages IS NOT NULL
         """,
         [avail],
     ).fetchone()
@@ -1238,9 +1254,12 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
         d["_added"] = row.get("missing_since") or row.get("arr_added") or row.get("added_at") or ""
         recs.append(d)
 
-    # Group 2 — available content not in eMuwarez ("Contenido único"): movies,
-    # whole unique series, and unique seasons whose parent series isn't itself
-    # flagged unique (avoids listing a series and all its seasons twice).
+    # Group 2 — available content not in eMuwarez ("Contenido único"): movies
+    # and unique seasons — never the whole series as one collapsed row, even
+    # when every one of its seasons is unique: eMuwarez uploads happen per
+    # season pack (or episode), never "a series" as a single unit, and each
+    # season can have its own readiness independent of its siblings, which a
+    # single combined "series" row would hide.
     # A season also needs every episode to actually agree on resolution/
     # source/codecs/audio/subs (services/library.py's _update_season_rollup
     # only fills these in when they do) — otherwise it's genuinely unique
@@ -1253,10 +1272,7 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
                         FROM library_items p WHERE p.id = li.parent_id)) AS arr_added
             FROM library_items li
             WHERE li.local_status = 'Disponible' AND li.emu_in_catalog = 0
-              AND li.item_type IN ('movie', 'series', 'season')
-              AND NOT (li.item_type = 'season' AND EXISTS (
-                  SELECT 1 FROM library_items s
-                  WHERE s.id = li.parent_id AND s.emu_in_catalog = 0))
+              AND li.item_type IN ('movie', 'season')
               AND (li.item_type != 'season' OR (
                   li.resolution IS NOT NULL AND li.source IS NOT NULL
                   AND li.video_codec IS NOT NULL AND li.audio_codec IS NOT NULL

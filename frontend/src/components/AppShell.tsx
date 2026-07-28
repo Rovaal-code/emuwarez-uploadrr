@@ -86,7 +86,7 @@ export function AppShell({ user, onLogout }: AppShellProps) {
     // Ask (styled modal) before leaving a form with unsaved changes.
     guardedLeave(() => {
       setActivePage(page)
-      const path = page === 'dashboard' ? '/' : `/${page}`
+      const path = `/${page}`
       if (window.location.pathname !== path) {
         window.history.pushState({}, '', path)
       }

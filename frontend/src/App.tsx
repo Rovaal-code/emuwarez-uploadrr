@@ -38,7 +38,7 @@ function normalizeToLogin() {
 function restoreFromLogin() {
   if (window.location.pathname !== '/login') return
   const next = new URLSearchParams(window.location.search).get('next')
-  window.history.replaceState(null, '', next || '/')
+  window.history.replaceState(null, '', next || '/dashboard')
 }
 
 export function App() {
@@ -69,11 +69,13 @@ export function App() {
             normalizePath('/setup')
             setState('setup')
           } else {
-            // Leftover from a previous incomplete setup — once we're fully
-            // in the app, /setup isn't a real tab, so send it back to the
-            // dashboard instead of leaving a dead URL in the address bar.
-            if (window.location.pathname === '/setup') {
-              normalizePath('/')
+            // Leftover from a previous incomplete setup, or a bare "/" — once
+            // we're fully in the app, /setup isn't a real tab and "/" has no
+            // dedicated address of its own the way every other tab does, so
+            // both send it to /dashboard instead of leaving an inconsistent
+            // URL in the address bar.
+            if (window.location.pathname === '/setup' || window.location.pathname === '/') {
+              normalizePath('/dashboard')
             } else {
               restoreFromLogin()
             }

@@ -127,36 +127,36 @@ function JobRow({ job, instances, onOpen, indent, retryToggle, onCancel, onRetry
   const cancelBtnTip = useTooltip(canCancel ? 'Cancelar subida' : 'Solo se puede cancelar mientras está preparando, en cola o subiendo')
   return (
     <tr style={indent ? { opacity: 0.65 } : undefined}>
-      <td style={{ width: 36 }}>
-        <div className="poster-thumb" style={{ width: 28, height: 42, borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          {job.poster_url ? (
-            <img
-              src={posterUrl(job.poster_url, 'w154')}
-              alt=""
-              loading="lazy"
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
-            />
-          ) : (
-            <span style={{ fontSize: 14, opacity: 0.35 }}>
-              {job.media_type === 'series' || job.media_type === 'episode' ? '📺' : '🎬'}
+      <td style={{ maxWidth: 220 }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', minWidth: 0, paddingLeft: indent ? 24 : undefined }}>
+          <div className="poster-thumb" style={{ width: 28, height: 42, borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            {job.poster_url ? (
+              <img
+                src={posterUrl(job.poster_url, 'w154')}
+                alt=""
+                loading="lazy"
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+              />
+            ) : (
+              <span style={{ fontSize: 14, opacity: 0.35 }}>
+                {job.media_type === 'series' || job.media_type === 'episode' ? '📺' : '🎬'}
+              </span>
+            )}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, minWidth: 0 }}>
+            {indent && <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>↳</span>}
+            <span
+              className="lib-title-link"
+              style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}
+              onClick={onOpen}
+              {...titleTip}
+            >
+              {job.title || '–'}
+              {titleTooltip}
             </span>
-          )}
-        </div>
-      </td>
-      <td style={{ maxWidth: 220, paddingLeft: indent ? 24 : undefined }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, minWidth: 0 }}>
-          {indent && <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>↳</span>}
-          <span
-            className="lib-title-link"
-            style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}
-            onClick={onOpen}
-            {...titleTip}
-          >
-            {job.title || '–'}
-            {titleTooltip}
-          </span>
-          {job.year ? <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>({job.year})</span> : null}
+            {job.year ? <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>({job.year})</span> : null}
+          </div>
         </div>
       </td>
       <td style={{ whiteSpace: 'nowrap' }}>
@@ -538,7 +538,6 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
             <table className="data-table">
               <thead>
                 <tr>
-                  <th></th>
                   <th style={{ width: '100%' }}>Título</th>
                   <th><HeaderFilter label="Tipo" value={typeFilter} onChange={setTypeFilter} options={[
                     { value: '', label: 'Todos' }, { value: 'movie', label: 'Película' }, { value: 'series', label: 'Serie' }, { value: 'season', label: 'Temporada' }, { value: 'episode', label: 'Episodio' },

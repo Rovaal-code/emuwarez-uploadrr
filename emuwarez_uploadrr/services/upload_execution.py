@@ -841,28 +841,41 @@ class _UploadConcurrencyGate:
     immediately for whichever job is next in line, with no need to touch
     jobs already past the gate and no need to block changing the setting
     while uploads are running: shrinking the limit just makes new jobs wait
-    longer, it never kills or pauses one already running."""
+    longer, it never kills or pauses one already running.
+
+    Admission order is by job_id ascending (== creation order), never by
+    whichever waiting thread happens to wake up first from notify_all() —
+    threading.Condition doesn't guarantee FIFO wakeup order, and the UI's
+    "Esperando (2/4)" position (upload_queue.get_queue_positions, also
+    ordered by id) would otherwise sometimes lie about which job starts
+    next."""
 
     def __init__(self) -> None:
         self._cond = threading.Condition()
         self._active = 0
+        self._waiting: set[int] = set()
 
     def acquire(self, job_id: int) -> None:
         with self._cond:
+            self._waiting.add(job_id)
             announced = False
-            while True:
-                limit = get_upload_max_concurrent()
-                if limit == 0 or self._active < limit:
-                    self._active += 1
-                    return
-                if not announced:
-                    append_upload_log(
-                        job_id, "info",
-                        f"Esperando turno para empezar la subida real: {self._active} en curso, límite {limit}.",
-                        stream="system",
-                    )
-                    announced = True
-                self._cond.wait(timeout=3)
+            try:
+                while True:
+                    limit = get_upload_max_concurrent()
+                    is_next = job_id == min(self._waiting)
+                    if limit == 0 or (self._active < limit and is_next):
+                        self._active += 1
+                        return
+                    if not announced:
+                        append_upload_log(
+                            job_id, "info",
+                            f"Esperando turno para empezar la subida real: {self._active} en curso, límite {limit}.",
+                            stream="system",
+                        )
+                        announced = True
+                    self._cond.wait(timeout=3)
+            finally:
+                self._waiting.discard(job_id)
 
     def release(self) -> None:
         with self._cond:
@@ -1057,7 +1070,7 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
         stderr_lines: list[str] = []
 
         progress_lock = threading.Lock()
-        progress_state = {"phase": None, "pct": 0, "last_sig": None}
+        progress_state = {"phase": None, "pct": 0, "last_sig": None, "qbittorrent_add_failed": False}
 
         def _track_uploadrr_progress(line: str) -> None:
             parsed = parse_uploadrr_progress(line)
@@ -1073,7 +1086,23 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
                 progress_state["phase"] = phase_key
                 progress_state["pct"] = pct
                 progress_state["last_sig"] = sig
+                if phase_key == "qbittorrent_add":
+                    if ok_state is False:
+                        progress_state["qbittorrent_add_failed"] = True
+                    elif ok_state is True:
+                        progress_state["qbittorrent_add_failed"] = False
             advance_running_phase(job_id, phase_key, pct)
+            # Distinct, clearly-flagged line beyond the raw stdout passthrough
+            # already captured above — otherwise this only shows up as one
+            # more anonymous line among hundreds in Ver Logs.
+            if phase_key == "qbittorrent_add" and ok_state is True:
+                append_upload_log(job_id, "info", "qBittorrent: torrent añadido correctamente.", stream="system")
+            elif phase_key == "qbittorrent_add" and ok_state is False:
+                append_upload_log(
+                    job_id, "error",
+                    "qBittorrent: no se pudo añadir el torrent (credenciales incorrectas). Revisa la configuración de qBittorrent en Ajustes.",
+                    stream="system",
+                )
 
         def _read_stream(stream, level, stream_name, buf):
             for line in stream:
@@ -1182,7 +1211,11 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
             # "qbittorrent_add" would otherwise stay stuck "pending" forever
             # on an otherwise-successful job — mark it done here regardless
             # of whether the real add_to_client() output was actually seen.
-            mark_phase_done(job_id, "qbittorrent_add")
+            # But NOT if we actually saw it fail (bad qBittorrent login) —
+            # that's a real, detected failure, not silence, and force-marking
+            # it "done" would hide it behind a fully green Fases table.
+            if not progress_state.get("qbittorrent_add_failed"):
+                mark_phase_done(job_id, "qbittorrent_add")
             append_upload_log(
                 job_id, "info",
                 f"Proceso finalizado correctamente (exit code 0). Duración: {duration_seconds}s",

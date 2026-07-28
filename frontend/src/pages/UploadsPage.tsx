@@ -17,7 +17,7 @@ import { posterUrl, buildDeepLink } from '../utils/libraryItem'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
 import {
   UPLOAD_TYPE_LABEL, STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo,
-  progressCounter, queuedSecondsLeft, useTicker,
+  progressCounter, queuedWaitText, useTicker,
 } from '../utils/uploadStatus'
 
 // Backend-real gates — mirror cancel_upload_job()/queue_retry_for_job() in
@@ -200,7 +200,7 @@ function JobRow({ job, instances, onOpen, indent, retryToggle, onCancel, onRetry
         ) : job.status === 'queued' ? (
           <span className="badge status-queued" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
             <span className="spinner" style={{ width: 10, height: 10, borderWidth: 2 }} />
-            {queuedSecondsLeft(job) ?? '–'}s
+            {queuedWaitText(job)}
           </span>
         ) : (job.status === 'preparing' || job.status === 'running') ? (
           <span className="badge status-queued" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>

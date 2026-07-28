@@ -14,7 +14,7 @@ import {
 } from './DetailCard'
 import { RemuxTable, EpisodeAccordionRow } from './UploadWizardModal'
 import {
-  UPLOAD_TYPE_LABEL, STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo, progressCounter, formatElapsed, queuedSecondsLeft, useTicker, formatSecondsHM,
+  UPLOAD_TYPE_LABEL, STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo, progressCounter, formatElapsed, queuedWaitText, useTicker, formatSecondsHM,
 } from '../utils/uploadStatus'
 
 // Dedicated page for one upload job (replaces the old JobProgressPanel modal)
@@ -445,7 +445,6 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
   // left to show progress of.
   const progressValueLoading = isStaging || isQueued || isPreparing || isRunning
   useTicker(isQueued)
-  const secondsLeft = queuedSecondsLeft(job)
 
   // The 4 sections that used to be their own collapsible Panel below now
   // live as mini-card fields in "Estado de la subida" (same visual pattern
@@ -589,7 +588,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
                     {isStaging
                       ? 'Generando nomenclatura'
                       : isQueued
-                      ? (secondsLeft != null ? `En cola · ${secondsLeft}s` : 'En cola')
+                      ? `En cola · ${queuedWaitText(job)}`
                       : (job.status === 'preparing' || job.status === 'running')
                       ? (() => {
                           const info = currentPhaseInfo(job)

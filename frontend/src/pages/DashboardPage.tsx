@@ -46,7 +46,7 @@ function RecOriginCell({ item, instances }: { item: DashboardRecommendationItem;
 }
 import {
   ACTIVE_JOB_STATUSES, STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo,
-  progressCounter, queuedSecondsLeft, useTicker,
+  progressCounter, queuedWaitText, useTicker,
 } from '../utils/uploadStatus'
 
 // Phase 11G — "Recomendaciones" groups, in the order they appear. The content
@@ -592,8 +592,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                             ) : (
                               <span className={STATUS_CLASS[job.status] || 'badge req-unknown'}>{statusLabel(job.status)}</span>
                             )}
-                            {job.status === 'queued' && queuedSecondsLeft(job) != null && (
-                              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{queuedSecondsLeft(job)}s</span>
+                            {job.status === 'queued' && (
+                              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{queuedWaitText(job)}</span>
                             )}
                             {isPreparingOrRunning && (
                               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-muted)', minWidth: 0, overflow: 'hidden' }}>

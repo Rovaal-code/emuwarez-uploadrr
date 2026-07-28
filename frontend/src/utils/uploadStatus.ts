@@ -181,6 +181,22 @@ export function queuedSecondsLeft(job: UploadJob): number | null {
   return Math.max(0, Math.round((parseServerDate(job.queued_until).getTime() - Date.now()) / 1000))
 }
 
+// Countdown text for a queued job. Once the grace period timer hits 0, the
+// job doesn't necessarily start right away — it may still be stuck behind
+// another upload already running (upload_execution.py's concurrency gate
+// has no visible countdown of its own). Showing "0s" forever there reads
+// like the job is stuck; "Esperando" makes clear it's just waiting its turn.
+// When several jobs are queued at once, appends its rank — "Esperando
+// (2/4)" — computed server-side (upload_queue.get_queue_positions) in the
+// same id order the concurrency gate actually admits jobs in, so this is
+// never just cosmetic guesswork about which one starts next.
+export function queuedWaitText(job: UploadJob): string {
+  const secs = queuedSecondsLeft(job)
+  const base = secs != null && secs > 0 ? `${secs}s` : 'Esperando'
+  const { queue_position: pos, queue_total: total } = job
+  return pos != null && total != null && total > 1 ? `${base} (${pos}/${total})` : base
+}
+
 // Forces a re-render every `intervalMs` while `active` — used to keep the
 // queued countdown ticking without depending on the next server poll.
 export function useTicker(active: boolean, intervalMs = 1000) {

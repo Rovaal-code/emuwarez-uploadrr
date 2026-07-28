@@ -63,6 +63,34 @@ def test_queue_creates_queued_job_and_registers_timer(db_conn, tmp_path):
         uq.cancel_queued_timer(job_id)  # no-op safety net if the assert above failed
 
 
+def test_get_queue_positions_orders_by_id(db_conn, tmp_path):
+    f = tmp_path / "movie.mkv"
+    f.write_bytes(b"x" * 10)
+    iid = _movie_with_path(db_conn, str(f))
+    j1 = _queued_job_row(db_conn, iid)
+    j2 = _queued_job_row(db_conn, iid)
+    j3 = _queued_job_row(db_conn, iid)
+
+    positions = uq.get_queue_positions(db_conn)
+    assert positions[j1] == (1, 3)
+    assert positions[j2] == (2, 3)
+    assert positions[j3] == (3, 3)
+
+
+def test_get_queue_positions_ignores_non_queued_jobs(db_conn, tmp_path):
+    f = tmp_path / "movie.mkv"
+    f.write_bytes(b"x" * 10)
+    iid = _movie_with_path(db_conn, str(f))
+    j1 = _queued_job_row(db_conn, iid)
+    j2 = _queued_job_row(db_conn, iid)
+    db_conn.execute("UPDATE upload_jobs SET status = 'running' WHERE id = ?", (j1,))
+    db_conn.commit()
+
+    positions = uq.get_queue_positions(db_conn)
+    assert j1 not in positions
+    assert positions[j2] == (1, 1)
+
+
 def test_queue_persists_checks_snapshot(db_conn, tmp_path):
     f = tmp_path / "movie.mkv"
     f.write_bytes(b"x" * 100)

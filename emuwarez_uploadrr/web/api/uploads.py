@@ -23,6 +23,7 @@ from ...services.upload_execution import (
     retry_upload_job,
     compute_progress_phase,
 )
+from ...services.upload_queue import get_queue_positions
 from ..dependencies import require_auth
 from ..runtime import _db_path
 from ..schemas import (
@@ -124,6 +125,8 @@ def _job_to_detail(
     tmdb_id: str | None = None,
     title_slug: str | None = None,
     display_title: str | None = None,
+    queue_position: int | None = None,
+    queue_total: int | None = None,
 ) -> UploadJobDetail:
     prepared = j.get("prepared_path")
     source = j.get("source_path") or j.get("path")
@@ -172,6 +175,8 @@ def _job_to_detail(
         command_preview=_extract_command_preview(j),
         progress_phase=compute_progress_phase(j.get("status", ""), j.get("stage")),
         queued_until=j.get("queued_until"),
+        queue_position=queue_position,
+        queue_total=queue_total,
         nomenclature_snapshot=_extract_json_dict(j, "nomenclature_snapshot_json"),
         remux_snapshot=_extract_json_dict(j, "remux_snapshot_json"),
         checks_snapshot=_extract_json_dict(j, "checks_snapshot_json"),
@@ -345,6 +350,7 @@ def get_uploads(
     }
     with _get_conn() as conn:
         jobs = exec_list_jobs(filters=filters, conn=conn)
+        queue_positions = get_queue_positions(conn)
         # Resolve each job's media type (movie/series/…), poster, Origen
         # (Radarr/Sonarr instance) and Petición status in a single query —
         # same fields Biblioteca already shows per content.
@@ -399,6 +405,8 @@ def get_uploads(
             instance_id_by_item.get(j.get("library_item_id")),
             tmdb_id_by_item.get(j.get("library_item_id")),
             title_slug_by_item.get(j.get("library_item_id")),
+            queue_position=queue_positions.get(j.get("id"), (None, None))[0],
+            queue_total=queue_positions.get(j.get("id"), (None, None))[1],
         )
         for j in jobs
     ]
@@ -410,6 +418,7 @@ def get_upload(job_id: int, current_user: dict = Depends(require_auth)):
         job = exec_get_job(job_id, conn=conn)
         if not job:
             raise HTTPException(status_code=404, detail="Job no encontrado.")
+        queue_position, queue_total = get_queue_positions(conn).get(job_id, (None, None))
         media_type = poster_url = backdrop_url = instance_type = instance_name = request_status = None
         year = None
         instance_id = tmdb_id = title_slug = None
@@ -435,7 +444,8 @@ def get_upload(job_id: int, current_user: dict = Depends(require_auth)):
                 title_slug = row["title_slug"]
                 display_title = content_display_title(conn, dict(row))
     return _job_to_detail(job, media_type, poster_url, backdrop_url, instance_type, instance_name, request_status, year,
-                           instance_id, tmdb_id, title_slug, display_title)
+                           instance_id, tmdb_id, title_slug, display_title,
+                           queue_position=queue_position, queue_total=queue_total)
 
 
 @router.get("/uploads/{job_id}/logs", response_model=UploadJobLogsResponse)

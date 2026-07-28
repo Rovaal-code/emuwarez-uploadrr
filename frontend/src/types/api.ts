@@ -538,6 +538,8 @@ export interface UploadJob {
   title_slug?: string | null
   request_status?: string | null
   queued_until?: string | null
+  queue_position?: number | null
+  queue_total?: number | null
   nomenclature_snapshot?: UploadNomenclatureSnapshot | null
   remux_snapshot?: UploadRemuxSnapshot | null
   checks_snapshot?: UploadChecksSnapshot | null

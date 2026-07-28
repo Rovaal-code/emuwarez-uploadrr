@@ -1047,6 +1047,12 @@ class UploadJobDetail(BaseModel):
     # Grace-period deadline while status='queued' — lets the UI show a
     # countdown + Cancel before the server starts renaming/remuxing/uploading.
     queued_until: Optional[str] = None
+    # This job's 1-based rank among every currently status='queued' job
+    # (ordered by id, i.e. by creation order) and how many are queued in
+    # total — lets the UI show "Esperando (2/4)" instead of leaving several
+    # simultaneously-queued jobs indistinguishable from one another.
+    queue_position: Optional[int] = None
+    queue_total: Optional[int] = None
     # Read-only snapshots taken at apply time — the nomenclature field
     # breakdown and the applied remux track plan, neither of which survive
     # anywhere else once nomenclature.py/mkv_remux.py return. Backs the job

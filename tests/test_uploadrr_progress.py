@@ -161,6 +161,16 @@ def test_parse_uploadrr_progress_success_and_failure():
     assert parse_uploadrr_progress('{"success":false}') == ("uploading_emu", 100, False)
 
 
+def test_parse_uploadrr_progress_qbittorrent_bad_login():
+    # clients.py's _add_to_qbittorrent prints this and returns without
+    # raising on a bad login — pct stays 0 (not 100) so it's never mistaken
+    # for a completed phase by advance_running_phase.
+    phase, pct, ok = parse_uploadrr_progress("INCORRECT QBIT LOGIN CREDENTIALS")
+    assert phase == "qbittorrent_add"
+    assert pct == 0
+    assert ok is False
+
+
 def test_parse_mkvmerge_gui_progress():
     assert parse_mkvmerge_gui_progress("#GUI#progress 42%") == 42
     assert parse_mkvmerge_gui_progress("#GUI#progress 100%") == 100

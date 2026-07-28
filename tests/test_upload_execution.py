@@ -238,6 +238,79 @@ def test_run_subprocess_failure_sets_failed(db_conn, tmp_path):
     assert job["error_message"] is not None
 
 
+def test_run_subprocess_qbittorrent_success_logs_and_marks_done(db_conn, tmp_path):
+    src = tmp_path / "movie.mkv"
+    src.write_bytes(b"\x00" * 10)
+    jid = _insert_job(db_conn, source_path=str(src))
+
+    mock_proc = _make_mock_proc(returncode=0, stdout_lines=[
+        "Torrent uploaded successfully",
+        "Adding and rechecking torrent",
+        "Added to: /downloads/",
+    ])
+
+    with patch("subprocess.Popen", return_value=mock_proc):
+        from emuwarez_uploadrr.services.upload_execution import _run_uploadrr_subprocess
+        _run_uploadrr_subprocess(
+            jid,
+            {
+                "executable": "/usr/bin/python3",
+                "args": ["/fake/upload.py", str(src)],
+                "cwd": str(tmp_path),
+                "command_preview": "python3 upload.py movie.mkv",
+            },
+            [],
+        )
+
+    logs = get_upload_job_logs(jid, conn=db_conn)
+    assert any("torrent añadido correctamente" in log["message"] for log in logs["logs"])
+
+    row = db_conn.execute("SELECT progress_json FROM upload_jobs WHERE id=?", (jid,)).fetchone()
+    state = json.loads(row["progress_json"])
+    by_key = {p["key"]: p for p in state["phases"]}
+    assert by_key["qbittorrent_add"]["status"] == "done"
+
+
+def test_run_subprocess_qbittorrent_bad_login_logs_and_skips_done(db_conn, tmp_path):
+    """clients.py's _add_to_qbittorrent doesn't raise on a failed login — it
+    just prints this line and the whole process still exits 0, which used to
+    make the safety net silently mark "Subida a qBittorrent" as done even
+    though nothing was actually added."""
+    src = tmp_path / "movie.mkv"
+    src.write_bytes(b"\x00" * 10)
+    jid = _insert_job(db_conn, source_path=str(src))
+
+    mock_proc = _make_mock_proc(returncode=0, stdout_lines=[
+        "Torrent uploaded successfully",
+        "Adding and rechecking torrent",
+        "INCORRECT QBIT LOGIN CREDENTIALS",
+    ])
+
+    with patch("subprocess.Popen", return_value=mock_proc):
+        from emuwarez_uploadrr.services.upload_execution import _run_uploadrr_subprocess
+        _run_uploadrr_subprocess(
+            jid,
+            {
+                "executable": "/usr/bin/python3",
+                "args": ["/fake/upload.py", str(src)],
+                "cwd": str(tmp_path),
+                "command_preview": "python3 upload.py movie.mkv",
+            },
+            [],
+        )
+
+    job = get_upload_job(jid, conn=db_conn)
+    assert job["status"] == "completed"  # the eMuwarez upload itself did succeed
+
+    logs = get_upload_job_logs(jid, conn=db_conn)
+    assert any("no se pudo añadir el torrent" in log["message"].lower() for log in logs["logs"])
+
+    row = db_conn.execute("SELECT progress_json FROM upload_jobs WHERE id=?", (jid,)).fetchone()
+    state = json.loads(row["progress_json"])
+    by_key = {p["key"]: p for p in state["phases"]}
+    assert by_key["qbittorrent_add"]["status"] != "done"
+
+
 # ---------------------------------------------------------------------------
 # _run_uploadrr_subprocess — pre_gated hand-off ("Subidas en paralelo" full
 # serialization: upload_queue.py's _run_queued_job acquires the concurrency
@@ -278,6 +351,51 @@ def test_run_subprocess_pre_gated_does_not_double_acquire(db_conn, tmp_path):
 
     job = get_upload_job(jid, conn=db_conn)
     assert job["status"] == "completed"
+
+
+def test_gate_admits_waiting_jobs_in_id_order(db_conn, tmp_path):
+    """Admission order must be deterministic by job_id (== creation order),
+    not whichever thread happens to wake first from notify_all() — otherwise
+    upload_queue.get_queue_positions's "Esperando (2/4)" (also ordered by id)
+    could lie about which job actually starts next. Uses real job rows
+    because acquire() logs "esperando turno" against the job_id, which needs
+    to exist for the FK on upload_job_logs."""
+    import threading
+    import time
+    from emuwarez_uploadrr.services.upload_execution import _UploadConcurrencyGate
+
+    src = tmp_path / "movie.mkv"
+    src.write_bytes(b"\x00" * 10)
+    j_holder = _insert_job(db_conn, source_path=str(src))
+    j_a = _insert_job(db_conn, source_path=str(src))  # lowest id among the waiters
+    j_b = _insert_job(db_conn, source_path=str(src))
+    j_c = _insert_job(db_conn, source_path=str(src))  # highest id among the waiters
+
+    gate = _UploadConcurrencyGate()
+    admitted: list[int] = []
+    admitted_lock = threading.Lock()
+
+    with patch("emuwarez_uploadrr.services.upload_execution.get_upload_max_concurrent", return_value=1):
+        gate.acquire(j_holder)  # holds the only slot so j_c/j_b/j_a all queue up behind it
+
+        def worker(jid):
+            gate.acquire(jid)
+            with admitted_lock:
+                admitted.append(jid)
+            gate.release()
+
+        # Start threads in reverse-id order to prove admission order is by
+        # id, not by which thread happened to call acquire() first.
+        threads = [threading.Thread(target=worker, args=(jid,)) for jid in (j_c, j_b, j_a)]
+        for t in threads:
+            t.start()
+        time.sleep(0.3)  # let all three register themselves as waiting first
+
+        gate.release()  # free j_holder's slot — lowest waiting id must go first
+        for t in threads:
+            t.join(timeout=5)
+
+    assert admitted == [j_a, j_b, j_c]
 
 
 # ---------------------------------------------------------------------------

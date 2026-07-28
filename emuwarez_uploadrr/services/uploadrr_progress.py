@@ -236,6 +236,12 @@ def parse_uploadrr_progress(fragment: str) -> Optional[tuple[str, int, Optional[
         return "qbittorrent_add", 0, None
     if re.match(r"^Added to:", clean):
         return "qbittorrent_add", 100, True
+    # clients.py's _add_to_qbittorrent doesn't raise on a bad login — it
+    # just prints this and returns, so the process still exits 0 and would
+    # otherwise look like a normal success. pct stays 0 (not 100) so this
+    # doesn't get treated as a completed phase by advance_running_phase.
+    if "INCORRECT QBIT LOGIN CREDENTIALS" in clean:
+        return "qbittorrent_add", 0, False
     return None
 
 

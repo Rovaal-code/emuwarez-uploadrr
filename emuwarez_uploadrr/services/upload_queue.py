@@ -48,6 +48,19 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def get_queue_positions(conn) -> dict[int, tuple[int, int]]:
+    """1-based rank (and total) of every job currently in status='queued',
+    ordered by id — i.e. creation order, which is also the order
+    upload_execution._upload_concurrency_gate hands out slots in. Lets the
+    UI show "Esperando (2/4)" instead of leaving several simultaneously-
+    queued jobs indistinguishable from one another."""
+    rows = conn.execute(
+        "SELECT id FROM upload_jobs WHERE status = 'queued' ORDER BY id ASC"
+    ).fetchall()
+    total = len(rows)
+    return {row["id"]: (i + 1, total) for i, row in enumerate(rows)}
+
+
 def _find_latest_job_for_item(conn, item_id: int) -> dict | None:
     """The tip of this item's retry chain: the job nobody else's
     retry_of_job_id points at. Every "Subir"/Automático click chains onto

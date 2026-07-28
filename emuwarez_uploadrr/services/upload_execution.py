@@ -1098,11 +1098,25 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
             if phase_key == "qbittorrent_add" and ok_state is True:
                 append_upload_log(job_id, "info", "qBittorrent: torrent añadido correctamente.", stream="system")
             elif phase_key == "qbittorrent_add" and ok_state is False:
-                append_upload_log(
-                    job_id, "error",
-                    "qBittorrent: no se pudo añadir el torrent (credenciales incorrectas). Revisa la configuración de qBittorrent en Ajustes.",
-                    stream="system",
-                )
+                if "Torrent upload succeeded, but failed to" in line:
+                    # UNIT3D.py's re-download-after-upload step 403'd (or
+                    # otherwise failed) — no [tracker]{name}.torrent ever
+                    # gets written, so add_to_client() has nothing to add.
+                    # Not a qBittorrent problem at all; the eMuwarez upload
+                    # itself did succeed.
+                    append_upload_log(
+                        job_id, "error",
+                        "qBittorrent: no se añadió ningún torrent porque no se pudo descargar el .torrent firmado "
+                        "desde eMuwarez justo después de subir (ver la línea \"Torrent upload succeeded, but failed "
+                        "to...\" más arriba). La subida a eMuwarez sí se completó.",
+                        stream="system",
+                    )
+                else:
+                    append_upload_log(
+                        job_id, "error",
+                        "qBittorrent: no se pudo añadir el torrent (credenciales incorrectas). Revisa la configuración de qBittorrent en Ajustes.",
+                        stream="system",
+                    )
 
         def _read_stream(stream, level, stream_name, buf):
             for line in stream:

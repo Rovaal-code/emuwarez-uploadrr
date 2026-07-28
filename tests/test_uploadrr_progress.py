@@ -171,6 +171,18 @@ def test_parse_uploadrr_progress_qbittorrent_bad_login():
     assert ok is False
 
 
+def test_parse_uploadrr_progress_torrent_redownload_failed():
+    # UNIT3D.py's follow-up GET for the tracker-signed .torrent 403'd — the
+    # eMuwarez upload itself still succeeded, but no [tracker]{name}.torrent
+    # file exists for add_to_client() to hand to qBittorrent.
+    phase, pct, ok = parse_uploadrr_progress(
+        "Torrent upload succeeded, but failed to download the torrent file: 403 Forbidden"
+    )
+    assert phase == "qbittorrent_add"
+    assert pct == 0
+    assert ok is False
+
+
 def test_parse_mkvmerge_gui_progress():
     assert parse_mkvmerge_gui_progress("#GUI#progress 42%") == 42
     assert parse_mkvmerge_gui_progress("#GUI#progress 100%") == 100

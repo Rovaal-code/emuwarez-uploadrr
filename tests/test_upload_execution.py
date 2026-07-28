@@ -311,6 +311,49 @@ def test_run_subprocess_qbittorrent_bad_login_logs_and_skips_done(db_conn, tmp_p
     assert by_key["qbittorrent_add"]["status"] != "done"
 
 
+def test_run_subprocess_torrent_redownload_403_logs_and_skips_done(db_conn, tmp_path):
+    """Regression for a real production case (Chappie, 2026-07-28):
+    UNIT3D.py's follow-up GET for the tracker-signed .torrent 403'd right
+    after a successful upload, so [tracker]{name}.torrent never got written
+    and add_to_client() silently returned without ever printing "Adding and
+    rechecking torrent" at all — the whole process still exited 0."""
+    src = tmp_path / "movie.mkv"
+    src.write_bytes(b"\x00" * 10)
+    jid = _insert_job(db_conn, source_path=str(src))
+
+    mock_proc = _make_mock_proc(returncode=0, stdout_lines=[
+        "Torrent upload succeeded, but failed to download the torrent file: "
+        "Client error '403 Forbidden' for url 'https://emuwarez.com/torrent/download/16209.abc'",
+    ])
+
+    with patch("subprocess.Popen", return_value=mock_proc):
+        from emuwarez_uploadrr.services.upload_execution import _run_uploadrr_subprocess
+        _run_uploadrr_subprocess(
+            jid,
+            {
+                "executable": "/usr/bin/python3",
+                "args": ["/fake/upload.py", str(src)],
+                "cwd": str(tmp_path),
+                "command_preview": "python3 upload.py movie.mkv",
+            },
+            [],
+        )
+
+    job = get_upload_job(jid, conn=db_conn)
+    assert job["status"] == "completed"  # the eMuwarez upload itself did succeed
+
+    logs = get_upload_job_logs(jid, conn=db_conn)
+    assert any(
+        "no se pudo descargar el .torrent firmado" in log["message"].lower()
+        for log in logs["logs"]
+    )
+
+    row = db_conn.execute("SELECT progress_json FROM upload_jobs WHERE id=?", (jid,)).fetchone()
+    state = json.loads(row["progress_json"])
+    by_key = {p["key"]: p for p in state["phases"]}
+    assert by_key["qbittorrent_add"]["status"] != "done"
+
+
 # ---------------------------------------------------------------------------
 # _run_uploadrr_subprocess — pre_gated hand-off ("Subidas en paralelo" full
 # serialization: upload_queue.py's _run_queued_job acquires the concurrency

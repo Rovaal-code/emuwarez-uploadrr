@@ -242,6 +242,14 @@ def parse_uploadrr_progress(fragment: str) -> Optional[tuple[str, int, Optional[
     # doesn't get treated as a completed phase by advance_running_phase.
     if "INCORRECT QBIT LOGIN CREDENTIALS" in clean:
         return "qbittorrent_add", 0, False
+    # UNIT3D.py's re-download-after-upload step (fetching the tracker-signed
+    # .torrent right after a successful POST) failed — e.g. a 403 from
+    # eMuwarez's own download endpoint. No [tracker]{name}.torrent file ever
+    # gets written, so add_to_client() has nothing to hand to qBittorrent —
+    # this is the real, observed cause of a "successful" job whose torrent
+    # never reaches qBittorrent (2026-07-28 Chappie re-upload).
+    if "Torrent upload succeeded, but failed to" in clean:
+        return "qbittorrent_add", 0, False
     return None
 
 

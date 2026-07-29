@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 31
+SCHEMA_VERSION = 32
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -1033,15 +1033,18 @@ def _migrate_emu_catalog(conn: sqlite3.Connection) -> None:
 
 
 def _migrate_library_items_spanish_audio(conn: sqlite3.Connection) -> None:
-    """Per-item "does this have Castilian audio" flag, shown as the Español
-    column in Biblioteca. Rolled up for seasons/series (see
-    services/library.py::recompute_spanish_audio), so it can't be a plain
-    expression over audio_languages — only movie/episode leaves have that
-    field. Purely additive."""
-    try:
-        conn.execute("ALTER TABLE library_items ADD COLUMN has_spanish_audio INTEGER")
-    except sqlite3.OperationalError:
-        pass  # 1 yes, 0 no, NULL unknown/not computed
+    """Per-item "does this have Castilian audio / subtitles" flags. The audio
+    one is the Español column in Biblioteca; the subtitle one is what lets a
+    season pack through when its episodes disagree on subtitle tracks (see
+    services/season_pack.py). Both are rolled up for seasons/series (see
+    services/library.py::recompute_spanish_flags), so neither can be a plain
+    expression over the *_languages columns — only movie/episode leaves carry
+    those. Purely additive."""
+    for col in ("has_spanish_audio", "has_spanish_subs"):
+        try:
+            conn.execute(f"ALTER TABLE library_items ADD COLUMN {col} INTEGER")
+        except sqlite3.OperationalError:
+            pass  # 1 yes, 0 no, NULL unknown/not computed
 
 
 def _migrate_notifications_table(conn: sqlite3.Connection) -> None:

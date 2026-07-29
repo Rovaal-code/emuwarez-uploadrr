@@ -175,6 +175,7 @@ def queue_upload_for_item(
     source_override: str | None = None,
     provider_override: str | None = None,
     tag_override: str | None = None,
+    title_override: str | None = None,
     conn=None,
 ) -> dict:
     own = conn is None
@@ -207,8 +208,11 @@ def queue_upload_for_item(
             proposal = get_latest_nomenclature_proposal(item_id, conn=conn)
 
         season_overrides = None
-        if is_season and (source_override or provider_override or tag_override):
-            season_overrides = {"source": source_override, "provider": provider_override, "tag": tag_override}
+        if is_season and (source_override or provider_override or tag_override or title_override):
+            season_overrides = {
+                "source": source_override, "provider": provider_override,
+                "tag": tag_override, "title": title_override,
+            }
 
         return _insert_and_start_queued_job(
             conn, item,
@@ -949,6 +953,7 @@ def _run_queued_job(job_id: int) -> None:
                     source_override=season_overrides.get("source"),
                     provider_override=season_overrides.get("provider"),
                     tag_override=season_overrides.get("tag"),
+                    title_override=season_overrides.get("title"),
                 )
             except Exception as exc:
                 _fail(job_id, f"Error aplicando la nomenclatura del pack de temporada: {exc}")

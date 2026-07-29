@@ -18,10 +18,11 @@ is no way to unify episodes scattered across different folders into one
 pack; the folder they already share IS the pack folder.
 
 The whole season is required to be consistent (same video/audio codec,
-audio/subtitle languages, resolution, source across every available
-episode) and complete (every episode of the season must be Disponible) —
-both are hard blocks, not warnings, since a mismatched or partial pack
-would be a broken release.
+audio languages, resolution, source across every available episode) and
+complete (every episode of the season must be Disponible) — both are hard
+blocks, not warnings, since a mismatched or partial pack would be a broken
+release. Subtitles are the one exception: they may differ between episodes
+as long as every one of them carries Castilian (see _subtitle_errors).
 
 SAFETY CONTRACT: identical to filesystem_apply.py — this module never
 moves/deletes a source file, only renames it in place. It only calls the
@@ -152,17 +153,21 @@ def preview_season_pack_title(fields: dict) -> dict:
     return {"torrent_name": title}
 
 
-# The 6 properties every available episode of a season pack must share.
+# The 5 properties every available episode of a season pack must share.
 # Compared on the RAW library_items columns (not the nomenclature
 # proposal's already-combined display strings like audio_summary) for
-# video_codec/audio_codec/audio_languages/subtitle_languages, and on the
-# proposal's own resolved values for resolution/source (each episode's
-# proposal already ran _infer_resolution_from_item/_infer_source_from_item).
+# video_codec/audio_codec/audio_languages, and on the proposal's own resolved
+# values for resolution/source (each episode's proposal already ran
+# _infer_resolution_from_item/_infer_source_from_item).
+#
+# subtitle_languages is deliberately NOT in this list: eMuwarez accepts a
+# season pack whose episodes carry different subtitle tracks as long as every
+# one of them has Castilian, so requiring them to be identical blocked packs
+# the tracker would have taken. That looser rule is _subtitle_errors() below.
 _CONSISTENCY_FIELDS: list[tuple[str, str, Any]] = [
     ("video_codec", "códec de vídeo", lambda ep, prop: ep.get("video_codec")),
     ("audio_codec", "códec de audio", lambda ep, prop: ep.get("audio_codec")),
     ("audio_languages", "idiomas de audio", lambda ep, prop: ep.get("audio_languages")),
-    ("subtitle_languages", "idiomas de subtítulos", lambda ep, prop: ep.get("subtitle_languages")),
     ("resolution", "resolución", lambda ep, prop: prop.get("resolution")),
     ("source", "source", lambda ep, prop: prop.get("source")),
 ]
@@ -190,10 +195,44 @@ def _consistency_errors(episode_entries: list[dict]) -> list[str]:
     return errors
 
 
+def _season_title_options(series: dict | None, season: dict, conn) -> list[dict]:
+    """Título dropdown choices for a pack: the series' Spanish name and its
+    original one. Built from the STORED titles, deliberately not re-resolved
+    through TMDb here — build_season_pack_plan runs per episode over a whole
+    season and must stay cheap/offline."""
+    from .source_assistant import build_title_options
+    spanish = (series or {}).get("title") or season.get("title")
+    original = (series or {}).get("original_title") or season.get("original_title")
+    return build_title_options(spanish, original)
+
+
+def _subtitle_errors(episode_entries: list[dict]) -> list[str]:
+    """Subtitles don't have to match across episodes, they just have to include
+    Castilian in every one of them. Reports the episodes that don't, naming
+    what they actually carry so it's obvious what to fix.
+
+    An episode with no subtitle info at all fails too: this is a rule the pack
+    has to satisfy, and "we never read its subtitles" is not evidence that it
+    meets it."""
+    from .emu_format import has_castellano
+
+    errors: list[str] = []
+    for entry in episode_entries:
+        ep = entry["episode"]
+        if has_castellano(ep.get("subtitle_languages")) == 1:
+            continue
+        subs = ep.get("subtitle_languages")
+        errors.append(
+            f"El capítulo {ep.get('episode_number')} no tiene subtítulos en castellano "
+            f"({subs or 'sin subtítulos detectados'})."
+        )
+    return errors
+
+
 def build_season_pack_plan(
     season_id: int, conn=None,
     source_override: str | None = None, provider_override: str | None = None,
-    tag_override: str | None = None,
+    tag_override: str | None = None, title_override: str | None = None,
 ) -> dict[str, Any]:
     """Build a dry-run plan for a season-pack upload. Never modifies the
     filesystem. Blocks (status="blocked") on: season not found, no episode
@@ -205,7 +244,11 @@ def build_season_pack_plan(
     automated-upload source-disparity gate, or by hand in the manual
     wizard's now-editable Source/Proveedor/Tag fields) are applied to every
     episode's own proposal — a pack requires every episode to share the same
-    source anyway, so the override applies uniformly."""
+    source anyway, so the override applies uniformly.
+
+    `title_override` is the Título dropdown's pick (Spanish by default, or the
+    original). A season has no nomenclature proposal row of its own to save it
+    into, unlike a movie/episode, so it travels with the other overrides."""
     own = conn is None
     conn = conn or connect()
     try:
@@ -220,7 +263,10 @@ def build_season_pack_plan(
             return empty
 
         series = _get_series_row(season["parent_id"], conn=conn) if season.get("parent_id") else None
-        series_title = (series or {}).get("title") or season.get("title") or "Serie"
+        series_title = (
+            (title_override or "").strip()
+            or (series or {}).get("title") or season.get("title") or "Serie"
+        )
         year = (series or {}).get("year") or season.get("year")
 
         all_episodes = _get_season_episodes(season_id, conn=conn)
@@ -293,12 +339,13 @@ def build_season_pack_plan(
             proposal = build_nomenclature_proposal(
                 ep["id"], conn=conn,
                 source_override=source_override, provider_override=provider_override,
-                tag_override=tag_override,
+                tag_override=tag_override, title_override=title_override,
             )
             episode_entries.append({"episode": ep, "proposal": proposal})
             _set_season_plan_progress(season_id, done=i + 1, total=total, current_title=ep.get("title"))
 
         errors.extend(_consistency_errors(episode_entries))
+        errors.extend(_subtitle_errors(episode_entries))
 
         first_proposal = episode_entries[0]["proposal"]
         release_tag = tag_override or _get_release_tag(conn=conn)
@@ -400,6 +447,7 @@ def build_season_pack_plan(
             "subtitle_summary": first_proposal.get("subtitle_summary"),
             "release_tag": release_tag,
             "series_title": series_title,
+            "title_options": _season_title_options(series, season, conn),
             "year": year,
             "source_comparison": source_comparison,
         }
@@ -472,7 +520,7 @@ def _apply_folder_rename(plan: dict[str, Any]) -> dict[str, Any]:
 def apply_season_pack(
     season_id: int, conn, *, job_id: int | None = None,
     source_override: str | None = None, provider_override: str | None = None,
-    tag_override: str | None = None,
+    tag_override: str | None = None, title_override: str | None = None,
 ) -> dict[str, Any]:
     """Rename every available episode in place to its final pack filename AND
     record each episode's prepared_path on its own library_items row —
@@ -488,15 +536,15 @@ def apply_season_pack(
     gates the whole prep sequence once, same as it does for a single file's
     apply_nomenclature_proposal call.
 
-    `source_override`/`provider_override`/`tag_override`: the job's stored
-    field overrides (upload_jobs.season_overrides_json), if the user edited
-    Source/Proveedor/Tag by hand in the wizard — previously this function
-    silently ignored them and recomputed everything from scratch, so a
-    chosen override never actually reached the real renamed files."""
+    `source_override`/`provider_override`/`tag_override`/`title_override`: the
+    job's stored field overrides (upload_jobs.season_overrides_json), if the
+    user edited Título/Source/Proveedor/Tag by hand in the wizard — previously
+    this function silently ignored them and recomputed everything from scratch,
+    so a chosen override never actually reached the real renamed files."""
     plan = build_season_pack_plan(
         season_id, conn=conn,
         source_override=source_override, provider_override=provider_override,
-        tag_override=tag_override,
+        tag_override=tag_override, title_override=title_override,
     )
     if plan["status"] != "valid":
         return {

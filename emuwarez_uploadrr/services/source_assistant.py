@@ -431,7 +431,8 @@ def _resolve_series_row(item: dict, conn) -> dict | None:
     while pid and pid not in seen:
         seen.add(pid)
         row = conn.execute(
-            "SELECT title, tmdb_id, item_type, parent_id FROM library_items WHERE id = ?", (pid,)
+            "SELECT title, original_title, tmdb_id, item_type, parent_id "
+            "FROM library_items WHERE id = ?", (pid,)
         ).fetchone()
         if not row:
             break
@@ -440,6 +441,27 @@ def _resolve_series_row(item: dict, conn) -> dict | None:
             return row
         pid = row.get("parent_id")
     return None
+
+
+def build_title_options(spanish: str | None, original: str | None) -> list[dict]:
+    """Options for the Título dropdown, Spanish first (it is the default the
+    tracker wants) then the original.
+
+    Returns a single entry when both resolve to the same string: a series that
+    was never retitled in Spanish (One Piece) would otherwise show the same
+    text twice and make the user think there's a real choice to make. Blank
+    values are dropped, so a library row with no original_title simply offers
+    the one option."""
+    options: list[dict] = []
+    for value, kind, label in (
+        (spanish, "spanish", "Español"),
+        (original, "original", "Original"),
+    ):
+        value = (value or "").strip()
+        if not value or any(o["value"] == value for o in options):
+            continue
+        options.append({"value": value, "kind": kind, "label": label})
+    return options
 
 
 def _resolve_series_title(item: dict, conn) -> str | None:
@@ -523,13 +545,19 @@ def build_editable_nomenclature_fields(
         # library-sync localize setting). For series, resolve the series row so
         # we localize with the series' own TMDb id.
         title_tmdb_id = tmdb_id
+        # The original (usually English) name, offered as the second option of
+        # the Título dropdown. Comes from the SERIES row for an episode/season,
+        # same walk the localized title uses, never the per-episode name.
+        original_title = item.get("original_title")
         if media_type in ("season", "episode"):
             srow = _resolve_series_row(item, conn)
             if srow:
                 title = srow.get("title") or title
+                original_title = srow.get("original_title") or original_title
                 title_tmdb_id = srow.get("tmdb_id") or title_tmdb_id
         from .tmdb_titles import resolve_localized_title
         title, title_warning = resolve_localized_title(conn, media_type, title_tmdb_id, title)
+        title_options = build_title_options(title, original_title)
 
         def _se_token() -> str | None:
             if season_num is None:
@@ -696,6 +724,11 @@ def build_editable_nomenclature_fields(
             # Set when the title couldn't be confirmed in Spanish via TMDb, so
             # the wizard can flag the Title field.
             "title_warning": title_warning,
+            # Choices for the Título dropdown: the Spanish one first (the
+            # default), the original second. One single entry when they are the
+            # same string, which is the normal case for a series that was never
+            # retitled in Spanish (One Piece).
+            "title_options": title_options,
             # Set when the source had to be estimated from MediaInfo.
             "source_warning": source_warning,
             # Name vs Radarr/Sonarr vs MediaInfo-bitrate cross-check for the

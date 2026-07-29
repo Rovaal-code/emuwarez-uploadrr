@@ -217,7 +217,11 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
         {!compact && (
           <td className="col-actions" onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-start', alignItems: 'center' }}>
-              <LibraryActionButtons item={item} onAction={onAction} />
+              {/* Same multi-season wizard the series' own page opens: the
+                  two used to disagree, and "Subir" on a series meaning two
+                  different things depending on where you clicked it was the
+                  bug, not the feature. */}
+              <LibraryActionButtons item={item} onAction={onAction} multiSeasonContext={item.item_type === 'series'} />
             </div>
           </td>
         )}

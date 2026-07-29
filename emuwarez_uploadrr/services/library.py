@@ -552,13 +552,14 @@ def sync_all(conn: sqlite3.Connection, *, include_episodes: bool = False) -> dic
             recompute_emu_catalog_status(conn)
         except Exception:
             logger.warning("No se pudo recalcular el estado de eMuwarez tras la sincronización de biblioteca", exc_info=True)
-        # Same reasoning for the Español column: audio_languages just changed
-        # for whatever came in, and the season/series rollups above it can only
-        # be recomputed once every episode of the pass is stored.
+        # Same reasoning for the Castilian flags: audio_languages and
+        # subtitle_languages just changed for whatever came in, and the season/
+        # series rollups above them can only be recomputed once every episode
+        # of the pass is stored.
         try:
-            recompute_spanish_audio(conn)
+            recompute_spanish_flags(conn)
         except Exception:
-            logger.warning("No se pudo recalcular el audio en castellano tras la sincronización de biblioteca", exc_info=True)
+            logger.warning("No se pudo recalcular el castellano (audio/subtítulos) tras la sincronización de biblioteca", exc_info=True)
         summary = f"{total} elementos sincronizados; {missing} no disponibles"
         finish_task(conn, task_id, "completed", summary, "\n".join(details))
         logger.info("Sincronización de biblioteca terminada: %d elementos, %d no disponibles%s",
@@ -577,12 +578,21 @@ def sync_all(conn: sqlite3.Connection, *, include_episodes: bool = False) -> dic
 _MISSING_STATUSES = LocalStatus.not_available()
 
 # ---------------------------------------------------------------------------
-# Castilian audio ("Español" column)
+# Castilian audio and subtitles
 # ---------------------------------------------------------------------------
 
 # Statuses that mean "you actually hold this file", so it counts towards the
 # season/series rollup. Same trio the eMuwarez comparison uses.
 _HELD_STATUSES = (LocalStatus.AVAILABLE.value, LocalStatus.UPLOADED.value, LocalStatus.UPLOADING.value)
+
+# (stored column, source column on the leaf rows). The audio flag drives the
+# Español column in Biblioteca; the subtitle one is what lets a season pack
+# through even when its episodes carry different subtitle tracks, as long as
+# every one of them has Castilian (see services/season_pack.py).
+_SPANISH_FLAGS = (
+    ("has_spanish_audio", "audio_languages"),
+    ("has_spanish_subs", "subtitle_languages"),
+)
 
 
 def _rollup_spanish(yes: int, no: int, unknown: int) -> Optional[int]:
@@ -596,68 +606,69 @@ def _rollup_spanish(yes: int, no: int, unknown: int) -> Optional[int]:
     return 1 if yes else None  # nothing held → unknown, not a vacuous "Sí"
 
 
-def recompute_spanish_audio(conn: sqlite3.Connection) -> int:
-    """Recompute library_items.has_spanish_audio for every row, and return how
-    many rows ended up with a known (non-NULL) value.
+def recompute_spanish_flags(conn: sqlite3.Connection) -> int:
+    """Recompute has_spanish_audio/has_spanish_subs for every row, and return
+    how many rows ended up with a known (non-NULL) audio value.
 
-    Three levels: movie/episode leaves read their own audio_languages; a season
-    folds its held episodes; a series folds the held episodes of all its
-    seasons. Folding the series over episodes rather than over its seasons'
-    stored values is deliberate and equivalent: a season with no held episodes
-    is unknown, and letting it propagate would turn the whole series unknown
-    instead of just skipping it."""
-    from .emu_format import has_castellano_audio
+    Three levels per flag: movie/episode leaves read their own *_languages
+    column; a season folds its held episodes; a series folds the held episodes
+    of all its seasons. Folding the series over episodes rather than over its
+    seasons' stored values is deliberate and equivalent: a season with no held
+    episodes is unknown, and letting it propagate would turn the whole series
+    unknown instead of just skipping it."""
+    from .emu_format import has_castellano
 
     held = ",".join("?" * len(_HELD_STATUSES))
 
-    # 1) Leaves — the only rows that carry audio_languages of their own.
-    leaves = conn.execute(
-        "SELECT id, audio_languages FROM library_items WHERE item_type IN ('movie','episode')"
-    ).fetchall()
-    conn.executemany(
-        "UPDATE library_items SET has_spanish_audio = ? WHERE id = ?",
-        [(has_castellano_audio(r["audio_languages"]), r["id"]) for r in leaves],
-    )
+    for flag, source in _SPANISH_FLAGS:
+        # 1) Leaves — the only rows carrying a language list of their own.
+        leaves = conn.execute(
+            f"SELECT id, {source} AS langs FROM library_items WHERE item_type IN ('movie','episode')"
+        ).fetchall()
+        conn.executemany(
+            f"UPDATE library_items SET {flag} = ? WHERE id = ?",
+            [(has_castellano(r["langs"]), r["id"]) for r in leaves],
+        )
 
-    # 2) Seasons — fold their own held episodes.
-    conn.execute(
-        "UPDATE library_items SET has_spanish_audio = NULL WHERE item_type IN ('series','season')"
-    )
-    season_rows = conn.execute(
-        f"""
-        SELECT parent_id AS pid,
-               SUM(CASE WHEN has_spanish_audio = 1 THEN 1 ELSE 0 END) AS yes,
-               SUM(CASE WHEN has_spanish_audio = 0 THEN 1 ELSE 0 END) AS no,
-               SUM(CASE WHEN has_spanish_audio IS NULL THEN 1 ELSE 0 END) AS unk
-          FROM library_items
-         WHERE item_type = 'episode' AND parent_id IS NOT NULL AND local_status IN ({held})
-         GROUP BY parent_id
-        """,
-        _HELD_STATUSES,
-    ).fetchall()
-    conn.executemany(
-        "UPDATE library_items SET has_spanish_audio = ? WHERE id = ? AND item_type = 'season'",
-        [(_rollup_spanish(r["yes"], r["no"], r["unk"]), r["pid"]) for r in season_rows],
-    )
+        # 2) Seasons — fold their own held episodes.
+        conn.execute(
+            f"UPDATE library_items SET {flag} = NULL WHERE item_type IN ('series','season')"
+        )
+        season_rows = conn.execute(
+            f"""
+            SELECT parent_id AS pid,
+                   SUM(CASE WHEN {flag} = 1 THEN 1 ELSE 0 END) AS yes,
+                   SUM(CASE WHEN {flag} = 0 THEN 1 ELSE 0 END) AS no,
+                   SUM(CASE WHEN {flag} IS NULL THEN 1 ELSE 0 END) AS unk
+              FROM library_items
+             WHERE item_type = 'episode' AND parent_id IS NOT NULL AND local_status IN ({held})
+             GROUP BY parent_id
+            """,
+            _HELD_STATUSES,
+        ).fetchall()
+        conn.executemany(
+            f"UPDATE library_items SET {flag} = ? WHERE id = ? AND item_type = 'season'",
+            [(_rollup_spanish(r["yes"], r["no"], r["unk"]), r["pid"]) for r in season_rows],
+        )
 
-    # 3) Series — fold every held episode hanging off any of its seasons.
-    series_rows = conn.execute(
-        f"""
-        SELECT s.parent_id AS pid,
-               SUM(CASE WHEN e.has_spanish_audio = 1 THEN 1 ELSE 0 END) AS yes,
-               SUM(CASE WHEN e.has_spanish_audio = 0 THEN 1 ELSE 0 END) AS no,
-               SUM(CASE WHEN e.has_spanish_audio IS NULL THEN 1 ELSE 0 END) AS unk
-          FROM library_items e
-          JOIN library_items s ON e.parent_id = s.id AND s.item_type = 'season'
-         WHERE e.item_type = 'episode' AND s.parent_id IS NOT NULL AND e.local_status IN ({held})
-         GROUP BY s.parent_id
-        """,
-        _HELD_STATUSES,
-    ).fetchall()
-    conn.executemany(
-        "UPDATE library_items SET has_spanish_audio = ? WHERE id = ? AND item_type = 'series'",
-        [(_rollup_spanish(r["yes"], r["no"], r["unk"]), r["pid"]) for r in series_rows],
-    )
+        # 3) Series — fold every held episode hanging off any of its seasons.
+        series_rows = conn.execute(
+            f"""
+            SELECT s.parent_id AS pid,
+                   SUM(CASE WHEN e.{flag} = 1 THEN 1 ELSE 0 END) AS yes,
+                   SUM(CASE WHEN e.{flag} = 0 THEN 1 ELSE 0 END) AS no,
+                   SUM(CASE WHEN e.{flag} IS NULL THEN 1 ELSE 0 END) AS unk
+              FROM library_items e
+              JOIN library_items s ON e.parent_id = s.id AND s.item_type = 'season'
+             WHERE e.item_type = 'episode' AND s.parent_id IS NOT NULL AND e.local_status IN ({held})
+             GROUP BY s.parent_id
+            """,
+            _HELD_STATUSES,
+        ).fetchall()
+        conn.executemany(
+            f"UPDATE library_items SET {flag} = ? WHERE id = ? AND item_type = 'series'",
+            [(_rollup_spanish(r["yes"], r["no"], r["unk"]), r["pid"]) for r in series_rows],
+        )
 
     conn.commit()
     row = conn.execute(

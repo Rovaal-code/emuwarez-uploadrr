@@ -395,7 +395,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
   // Source/Proveedor/Tag edits per season, keyed by season id — persists
   // across dropdown switches (loadSeasonPlan would otherwise overwrite them
   // with the season's own auto-detected values every time you switch back).
-  const [seasonOverridesById, setSeasonOverridesById] = useState<Map<number, { source?: string | null; provider?: string | null; tag?: string | null }>>(new Map())
+  const [seasonOverridesById, setSeasonOverridesById] = useState<Map<number, { source?: string | null; provider?: string | null; tag?: string | null; title?: string | null }>>(new Map())
   // "Subir todas" (multi-season) batch state.
   const [batchPhase, setBatchPhase] = useState<'idle' | 'processing' | 'done'>('idle')
   const [batchIndex, setBatchIndex] = useState(0)
@@ -429,6 +429,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
   // even after the user picks the other one.
   const [initialTag, setInitialTag] = useState('')
   const [titleWarning, setTitleWarning] = useState<string | null>(null)
+  const [titleOptions, setTitleOptions] = useState<{ value: string; kind: string; label: string }[]>([])
   const [sourceWarning, setSourceWarning] = useState<string | null>(null)
   const [sourceComparison, setSourceComparison] = useState<SourceComparison | null>(null)
   const [showSourceCompare, setShowSourceCompare] = useState(false)
@@ -647,6 +648,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
       setFields(fieldsResp.fields || {})
       setInitialTag(fieldsResp.fields?.tag || 'EMUWAREZ')
       setTitleWarning(fieldsResp.title_warning ?? null)
+      setTitleOptions(fieldsResp.title_options ?? [])
       setSourceWarning(fieldsResp.source_warning ?? null)
       setSourceComparison(fieldsResp.source_comparison ?? null)
     } catch (e: unknown) {
@@ -686,7 +688,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
       // auto-detected values.
       const saved = seasonOverridesById.get(targetId)
       setFields({
-        title: plan.series_title ?? undefined,
+        title: saved?.title ?? plan.series_title ?? undefined,
         year: plan.year != null ? String(plan.year) : undefined,
         resolution: plan.resolution ?? undefined,
         source: saved?.source ?? plan.source ?? undefined,
@@ -717,7 +719,9 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
     if (targetId != null && targetId !== newSeasonId) {
       setSeasonOverridesById(prev => {
         const next = new Map(prev)
-        next.set(targetId, { source: fields.source, provider: fields.provider, tag: fields.tag })
+        next.set(targetId, {
+          source: fields.source, provider: fields.provider, tag: fields.tag, title: fields.title,
+        })
         return next
       })
     }
@@ -893,7 +897,9 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
     if (targetIsSeason && seasonQueue.length > 1) {
       setSeasonOverridesById(prev => {
         const next = new Map(prev)
-        next.set(targetId, { source: fields.source, provider: fields.provider, tag: fields.tag })
+        next.set(targetId, {
+          source: fields.source, provider: fields.provider, tag: fields.tag, title: fields.title,
+        })
         return next
       })
     }
@@ -921,7 +927,9 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
         : null
       const r = await queueUpload(
         targetId, remuxEdits, checks, remuxSnapshot,
-        targetIsSeason ? { source: fields.source, provider: fields.provider, tag: fields.tag } : undefined,
+        targetIsSeason
+          ? { source: fields.source, provider: fields.provider, tag: fields.tag, title: fields.title }
+          : undefined,
       )
       if (r.status !== 'queued' || !r.job?.id) {
         setUploadMsg(`✗ No se pudo encolar la subida (estado: ${r.status}). ${(r.errors || []).join(' ')}`)
@@ -946,7 +954,19 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
   const uploadAllSeasons = async () => {
     const overridesMap = new Map(seasonOverridesById)
     if (targetId != null) {
-      overridesMap.set(targetId, { source: fields.source, provider: fields.provider, tag: fields.tag })
+      overridesMap.set(targetId, {
+        source: fields.source, provider: fields.provider, tag: fields.tag, title: fields.title,
+      })
+    }
+    // Título is a property of the SERIES, and every season in this batch
+    // belongs to the same one — so the pick applies to all of them, including
+    // seasons the user never opened via the dropdown. Without this, choosing
+    // the original title would silently upload season 1 as "The Tudors" and
+    // the rest as "Los Tudor".
+    if (fields.title) {
+      for (const seasonId of seasonQueue) {
+        overridesMap.set(seasonId, { ...(overridesMap.get(seasonId) ?? {}), title: fields.title })
+      }
     }
 
     setBatchPhase('processing'); setBatchIndex(0); setBatchResults([])
@@ -1093,7 +1113,24 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
     <>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
         <label><FieldLabel label="Título" info={FIELD_INFO.title} />
-          <input className="form-input" value={fields.title || ''} disabled />
+          {/* Spanish by default (it leads title_options), original as the
+              alternative. Falls back to the old read-only input when the
+              backend couldn't offer a choice at all, so the field never
+              silently turns into an empty select. */}
+          {titleOptions.length > 0 ? (
+            <select
+              className="form-input form-select"
+              value={fields.title || ''}
+              onChange={e => setField('title', e.target.value)}
+              disabled={titleOptions.length < 2}
+            >
+              {titleOptions.map(o => (
+                <option key={o.value} value={o.value}>{o.label}: {o.value}</option>
+              ))}
+            </select>
+          ) : (
+            <input className="form-input" value={fields.title || ''} disabled />
+          )}
           {titleWarning && (
             <span style={{ display: 'block', marginTop: 4, fontSize: 11, color: '#f59e0b' }}>⚠ {titleWarning}</span>
           )}
@@ -1212,10 +1249,25 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
   // episode (source_override/provider_override/tag_override) instead of
   // being stuck with whatever the filename/Radarr-Sonarr happened to say —
   // the same kind of misdetection the Internal Source Tool exists to catch.
+  const seasonTitleOptions = seasonPlan?.title_options ?? []
+
   const seasonFieldBox = (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
       <label><FieldLabel label="Título" info={FIELD_INFO.title} />
-        <input className="form-input" value={seasonPlan?.series_title || ''} disabled />
+        {seasonTitleOptions.length > 0 ? (
+          <select
+            className="form-input form-select"
+            value={fields.title || seasonPlan?.series_title || ''}
+            onChange={e => setField('title', e.target.value)}
+            disabled={seasonTitleOptions.length < 2}
+          >
+            {seasonTitleOptions.map(o => (
+              <option key={o.value} value={o.value}>{o.label}: {o.value}</option>
+            ))}
+          </select>
+        ) : (
+          <input className="form-input" value={seasonPlan?.series_title || ''} disabled />
+        )}
       </label>
       <label><FieldLabel label="Año" info={FIELD_INFO.year} />
         <input className="form-input" value={seasonPlan?.year ?? ''} disabled />

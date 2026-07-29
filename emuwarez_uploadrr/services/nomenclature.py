@@ -274,21 +274,27 @@ def validate_nomenclature_preconditions(library_item: dict, conn=None) -> dict:
 def build_nomenclature_proposal(
     item_id: int, *, force_refresh: bool = False, conn=None,
     source_override: str | None = None, provider_override: str | None = None,
-    tag_override: str | None = None,
+    tag_override: str | None = None, title_override: str | None = None,
 ) -> dict:
     """Generate a nomenclature proposal for a library item. Never modifies the
     filesystem.
 
-    `source_override`/`provider_override`/`tag_override` let a caller that
-    already resolved an ambiguity by hand (the automated-upload
+    `source_override`/`provider_override`/`tag_override`/`title_override` let a
+    caller that already resolved an ambiguity by hand (the automated-upload
     source-disparity gate, or a season pack's own field overrides) force
     that choice instead of the usual name -> Radarr/Sonarr -> bitrate-tool
     inference — an override always forces a fresh build (a cached proposal
-    predates the user's choice and must not be reused)."""
+    predates the user's choice and must not be reused).
+
+    `title_override` is the Título dropdown's pick. A season pack passes it to
+    EVERY episode so the files inside end up named after the same title as the
+    pack itself — without it the torrent read "The Tudors S02" while the files
+    inside stayed "Los.Tudor.S02E01"."""
     own = conn is None
     conn = conn or connect()
     try:
-        if source_override is not None or provider_override is not None or tag_override is not None:
+        if (source_override is not None or provider_override is not None
+                or tag_override is not None or title_override is not None):
             force_refresh = True
         if not force_refresh:
             existing = get_latest_nomenclature_proposal(item_id, conn=conn)
@@ -336,6 +342,10 @@ def build_nomenclature_proposal(
         title, _title_warning = resolve_localized_title(conn, media_type, tmdb_id, title)
         if _title_warning:
             warnings.append(_title_warning)
+        # An explicit pick wins over whatever TMDb resolved: the user chose it
+        # in the Título dropdown precisely to override the default.
+        if (title_override or "").strip():
+            title = title_override.strip()
         # `title` above is already the series name for season/episode (see the
         # resolution above) — surfaced again under its own key so consumers
         # that show "Serie" and "Título propuesto" as separate rows (the
@@ -605,16 +615,17 @@ def _refresh_media_info_from_real_file(item: dict, *, conn) -> None:
     )
     conn.commit()
 
-    # audio_languages just changed from a real file read, which is exactly the
-    # value the Español column is derived from — refresh it (and the season/
-    # series rollups above this item) instead of leaving them stale until the
-    # next library sync. Best-effort: a failure here must not break the
-    # nomenclature proposal that's actually being built.
+    # audio_languages/subtitle_languages just changed from a real file read,
+    # which is exactly what the Español column and the season pack's subtitle
+    # rule are derived from — refresh them (and the season/series rollups above
+    # this item) instead of leaving them stale until the next library sync.
+    # Best-effort: a failure here must not break the nomenclature proposal
+    # that's actually being built.
     try:
-        from .library import recompute_spanish_audio
-        recompute_spanish_audio(conn)
+        from .library import recompute_spanish_flags
+        recompute_spanish_flags(conn)
     except Exception:
-        logger.warning("No se pudo recalcular el audio en castellano tras leer el MediaInfo real", exc_info=True)
+        logger.warning("No se pudo recalcular el castellano (audio/subtítulos) tras leer el MediaInfo real", exc_info=True)
 
     # A manually-edited proposal (fields_json is only ever written by the
     # field editor's save_nomenclature_fields()) must not be silently

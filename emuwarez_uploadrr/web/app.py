@@ -34,29 +34,30 @@ async def _scheduler_loop() -> None:
         await asyncio.sleep(_SCHEDULER_TICK_SECONDS)
 
 
-def _backfill_spanish_audio() -> None:
-    """Fill in the Español column on boot so an already-populated library shows
-    it right away, instead of every row reading "—" until the next Radarr/
-    Sonarr sync happens to run. It's a handful of aggregate queries over
-    library_items, and it keeps the column correct after an upgrade even if
-    nothing else changes. Best-effort: never blocks startup."""
+def _backfill_spanish_flags() -> None:
+    """Fill in the Castilian audio/subtitle flags on boot so an already
+    populated library shows the Español column right away (and lets a season
+    pack through on its subtitles) instead of waiting for the next Radarr/
+    Sonarr sync. It's a handful of aggregate queries over library_items, and it
+    keeps both flags correct after an upgrade even if nothing else changes.
+    Best-effort: never blocks startup."""
     try:
         from emuwarez_uploadrr.database import connect, db_path, init_db
-        from emuwarez_uploadrr.services.library import recompute_spanish_audio
+        from emuwarez_uploadrr.services.library import recompute_spanish_flags
         conn = connect(db_path())
         try:
             init_db(conn)
-            recompute_spanish_audio(conn)
+            recompute_spanish_flags(conn)
         finally:
             conn.close()
     except Exception:
         logging.getLogger("emuwarez.web").warning(
-            "No se pudo recalcular el audio en castellano al arrancar", exc_info=True)
+            "No se pudo recalcular el castellano (audio/subtítulos) al arrancar", exc_info=True)
 
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
-    _backfill_spanish_audio()
+    _backfill_spanish_flags()
     scheduler_task = None
     # EMUWAREZ_DISABLE_SCHEDULER=1 — escape hatch for scripted Docker
     # smoke/E2E runs that don't want a background scheduler tick firing

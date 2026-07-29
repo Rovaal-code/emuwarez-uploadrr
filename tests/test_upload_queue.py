@@ -529,7 +529,7 @@ def test_queue_upload_for_item_persists_season_overrides_for_season(db_conn):
     try:
         row = db_conn.execute("SELECT season_overrides_json FROM upload_jobs WHERE id=?", (job_id,)).fetchone()
         assert json.loads(row["season_overrides_json"]) == {
-            "source": "BluRay", "provider": None, "tag": "MYTAG",
+            "source": "BluRay", "provider": None, "tag": "MYTAG", "title": None,
         }
     finally:
         uq.cancel_queued_timer(job_id)
@@ -579,7 +579,8 @@ def test_run_queued_job_season_forwards_stored_overrides_to_apply(db_conn, tmp_p
     job_id = _queued_job_row(db_conn, season_id, path="")
     db_conn.execute(
         "UPDATE upload_jobs SET season_overrides_json = ? WHERE id = ?",
-        (json.dumps({"source": "BluRay", "provider": None, "tag": "MYTAG"}), job_id),
+        (json.dumps({"source": "BluRay", "provider": None, "tag": "MYTAG",
+                     "title": "The Tudors"}), job_id),
     )
     db_conn.commit()
 
@@ -590,17 +591,24 @@ def test_run_queued_job_season_forwards_stored_overrides_to_apply(db_conn, tmp_p
     import emuwarez_uploadrr.services.season_pack as season_pack_mod
 
     def fake_apply_season_pack(season_id_arg, conn, *, job_id=None,
-                                source_override=None, provider_override=None, tag_override=None):
+                                source_override=None, provider_override=None, tag_override=None,
+                                title_override=None):
         captured["source_override"] = source_override
         captured["provider_override"] = provider_override
         captured["tag_override"] = tag_override
+        captured["title_override"] = title_override
         return {"status": "blocked", "errors": ["stop here on purpose"], "episodes": []}
 
     monkeypatch.setattr(season_pack_mod, "apply_season_pack", fake_apply_season_pack)
 
     uq._run_queued_job(job_id)
 
-    assert captured == {"source_override": "BluRay", "provider_override": None, "tag_override": "MYTAG"}
+    assert captured == {
+        "source_override": "BluRay", "provider_override": None, "tag_override": "MYTAG",
+        # The Título dropdown's pick has to survive the round trip through
+        # season_overrides_json too — a season has no proposal row to hold it.
+        "title_override": "The Tudors",
+    }
 
 
 def _seed_season_with_episodes(conn, n=2):

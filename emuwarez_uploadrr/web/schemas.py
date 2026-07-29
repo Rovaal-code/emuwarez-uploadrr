@@ -573,6 +573,9 @@ class LibraryItemResponse(BaseModel):
     # Español column: 1 has Castilian audio, 0 does not, None unknown (no
     # MediaInfo yet, or a season/series with nothing held to roll up).
     has_spanish_audio: Optional[int] = None
+    # Same shape for subtitles. On a season row this is the season pack's
+    # subtitle rule: 1 means every held episode has Castilian subs.
+    has_spanish_subs: Optional[int] = None
     size_bytes: Optional[int] = None
     local_status: str
     request_status: str
@@ -919,6 +922,9 @@ class SeasonPackPlanResponse(BaseModel):
     # are editable here too, same as a movie/episode (source_override/
     # provider_override/tag_override applied uniformly across every episode).
     series_title: Optional[str] = None
+    # Choices for the Título dropdown: Spanish (the default) and original.
+    # A single entry when both are the same string.
+    title_options: list[dict] = []
     year: Optional[int] = None
     # Needed by the wizard's live title-preview call (previewSeasonPackFields)
     # — a season opened from its SERIES' own ficha (single or multi-season
@@ -1324,14 +1330,15 @@ class UploadQueueBody(BaseModel):
     # its detail page's "Verificación pre-subida" section can show exactly
     # what was checked, without re-running anything server-side.
     checks: Optional[UploadChecksSnapshot] = None
-    # Season-pack-only: Source/Proveedor/Tag edited by hand in the wizard's
-    # now-editable season fields (None for a single movie/episode, whose
-    # edits already flow through nomenclature_proposals instead). Applied
-    # uniformly across every episode — see season_pack.py's
+    # Season-pack-only: Título/Source/Proveedor/Tag edited by hand in the
+    # wizard's now-editable season fields (None for a single movie/episode,
+    # whose edits already flow through nomenclature_proposals instead).
+    # Applied uniformly across every episode — see season_pack.py's
     # build_season_pack_plan/apply_season_pack overrides.
     source: Optional[str] = None
     provider: Optional[str] = None
     tag: Optional[str] = None
+    title: Optional[str] = None
 
 
 class UploadQueueResponse(BaseModel):

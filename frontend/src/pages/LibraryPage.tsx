@@ -135,10 +135,10 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     if (kind === 'nomenclature') { setNomenclatureItem(item); return }
     if (kind === 'fields') { setFieldsItem(item); return }
     if (kind === 'request') { setRequestItem(item); return }
-    // 'upload' → unified Subir wizard. For a series/season the wizard itself
-    // asks which season/episode (or the whole season) to target. 'upload-multi'
-    // only ever comes from the series' own dedicated page (LibraryActionButtons'
-    // multiSeasonContext) — same wizard, multi-season checklist enabled.
+    // 'upload' → unified Subir wizard. For a season the wizard itself asks
+    // which episode (or the whole season) to target. 'upload-multi' comes from
+    // any series row (LibraryActionButtons' multiSeasonContext), on its own
+    // page or in the list — same wizard, multi-season checklist enabled.
     setWizardMultiSeason(kind === 'upload-multi')
     setWizardItem(item)
   }, [])

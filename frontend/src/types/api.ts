@@ -132,6 +132,9 @@ export interface LibraryItemResponse {
   // 1 = has Castilian audio, 0 = does not, null = unknown (no MediaInfo yet,
   // or a season/series with no held children to roll up).
   has_spanish_audio: number | null
+  // Same for subtitles. On a season row, 1 means every held episode has
+  // Castilian subs, which is what the season pack requires.
+  has_spanish_subs: number | null
   subtitle_languages: string | null
   size_bytes: number | null
   local_status: string
@@ -413,6 +416,8 @@ export interface SeasonPackPlanResponse {
   // grid shows. Source/Proveedor/Tag are editable here too, same as a
   // movie/episode (applied uniformly across every episode).
   series_title?: string | null
+  // Same two choices the single-file field box offers for Título.
+  title_options?: { value: string; kind: 'spanish' | 'original'; label: string }[]
   year?: number | null
   // Needed by the live title-preview call — a season opened from its
   // series' own ficha has no season_number of its own on the wizard's

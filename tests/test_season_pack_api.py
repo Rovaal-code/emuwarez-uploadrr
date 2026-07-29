@@ -26,8 +26,8 @@ def _seed_season_with_episode(isolated_db, tmp_path):
     conn.execute(
         """INSERT INTO library_items
            (item_type, title, year, local_status, request_status, nomenclature_status,
-            parent_id, season_number, episode_number, path, quality, updated_at)
-           VALUES ('episode', 'One Piece S01E01', 1999, 'Disponible', 'Sin petición', 'No adaptada', ?, 1, 1, ?, 'WEBDL-1080p', CURRENT_TIMESTAMP)""",
+            parent_id, season_number, episode_number, path, quality, subtitle_languages, updated_at)
+           VALUES ('episode', 'One Piece S01E01', 1999, 'Disponible', 'Sin petición', 'No adaptada', ?, 1, 1, ?, 'WEBDL-1080p', 'spa', CURRENT_TIMESTAMP)""",
         (season_id, str(src)),
     )
     conn.commit()
@@ -162,7 +162,8 @@ def test_upload_queue_endpoint_persists_season_overrides(client, auth_headers, i
         row = conn.execute("SELECT season_overrides_json FROM upload_jobs WHERE id=?", (job_id,)).fetchone()
         conn.close()
         import json as _json
-        assert _json.loads(row["season_overrides_json"]) == {"source": "BluRay", "provider": None, "tag": "MYTAG"}
+        assert _json.loads(row["season_overrides_json"]) == {
+            "source": "BluRay", "provider": None, "tag": "MYTAG", "title": None}
     finally:
         uq.cancel_queued_timer(job_id)
 

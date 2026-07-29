@@ -18,10 +18,10 @@ export function LibraryActionButtons({ item, onAction, title, multiSeasonContext
   item: LibraryItemResponse
   onAction: (kind: LibraryActionKind, item: LibraryItemResponse) => void
   title?: string
-  // Only true on a series' own dedicated Biblioteca page — the one place
-  // "Subir" opens the multi-season checklist instead of the single season/
-  // episode picker (never from the Biblioteca list/table, never from a
-  // season's own page).
+  // True for a series row anywhere in Biblioteca (its own page AND the
+  // list/table): "Subir" opens the multi-season checklist instead of the
+  // single season/episode picker. Never for a season's own page, which has
+  // exactly one season to offer.
   multiSeasonContext?: boolean
 }) {
   const missing = item.local_status === 'Faltante'

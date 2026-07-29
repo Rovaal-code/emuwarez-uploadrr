@@ -477,9 +477,10 @@ def _to_lib_response(row: dict, conn=None, rollups: Optional[dict] = None) -> Li
         audio_codec=audio_codec,
         audio_languages=audio_languages,
         subtitle_languages=subtitle_languages,
-        # Already rolled up and stored per row (recompute_spanish_audio), so
-        # unlike the audio_languages above it needs no per-row rollup here.
+        # Already rolled up and stored per row (recompute_spanish_flags), so
+        # unlike the audio_languages above they need no per-row rollup here.
         has_spanish_audio=row.get("has_spanish_audio"),
+        has_spanish_subs=row.get("has_spanish_subs"),
         size_bytes=size_bytes,
         local_status=local_status,
         request_status=row["request_status"],

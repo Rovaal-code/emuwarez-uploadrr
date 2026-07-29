@@ -169,9 +169,14 @@ def _split_languages(raw: Optional[str]) -> list[str]:
     return langs
 
 
-def has_castellano_audio(audio_languages: Optional[str]) -> Optional[int]:
-    """1 = the file has a Castilian Spanish audio track, 0 = it does not,
+def has_castellano(languages: Optional[str]) -> Optional[int]:
+    """1 = Castilian Spanish is present in this language list, 0 = it is not,
     None = unknown (no MediaInfo read yet, so the field is empty).
+
+    Takes either an audio_languages or a subtitle_languages string: both come
+    from the same *arr mediaInfo shape ("spa / eng"), and both are asked the
+    same question, so the Español column and the season pack's subtitle rule
+    can't drift apart.
 
     Deliberately strict about which Spanish counts: LANG_MAP resolves
     es/spa/spanish/castellano/es-es to ESP but es-419/latino/spa-lat to LAT, so
@@ -182,9 +187,9 @@ def has_castellano_audio(audio_languages: Optional[str]) -> Optional[int]:
     Shares _split_languages with build_audio_string on purpose: the column can
     never disagree with the ESP/DUAL/MULTI token the nomenclature builds.
     """
-    if not audio_languages or not str(audio_languages).strip():
+    if not languages or not str(languages).strip():
         return None
-    return 1 if "ESP" in _split_languages(audio_languages) else 0
+    return 1 if "ESP" in _split_languages(languages) else 0
 
 
 def build_audio_string(

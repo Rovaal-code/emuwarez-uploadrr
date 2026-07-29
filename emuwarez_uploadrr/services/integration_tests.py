@@ -87,8 +87,11 @@ def test_qbit_connection(
 
     result = qbit_test_connection(_url, _port, _user or "", _pass or "")
     if result.get("ok"):
-        ver = result.get("version")
-        return _ok("qbittorrent", message=f"Conexión correcta{f' (v{ver})' if ver else ''}",
+        ver = (result.get("version") or "").strip()
+        # qBittorrent already reports its version with a leading "v" ("v5.2.3"),
+        # so only add one when it is missing (never render "vv5.2.3").
+        label = ver if ver.lower().startswith("v") else f"v{ver}"
+        return _ok("qbittorrent", message=f"Conexión correcta ({label})" if ver else "Conexión correcta",
                    details={"version": ver} if ver else None)
     return _fail("qbittorrent", "connection_error", result.get("error") or "No se pudo conectar")
 

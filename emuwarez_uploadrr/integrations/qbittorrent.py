@@ -1,16 +1,24 @@
 """qBittorrent WebUI connector — connection test only.
 
 Uses the WebUI API v2 login endpoint to validate host + credentials. qBittorrent
-requires a Referer header matching the host (CSRF protection), and returns the
-body "Ok." on a successful login or "Fails." on bad credentials. We only probe
-connectivity/auth here — we never start/stop torrents.
+requires a Referer header matching the host (CSRF protection). The success reply
+changed between major versions: 4.x answers 200 with the body "Ok." ("Fails." on
+bad credentials), while 5.x answers 204 with an empty body and a 401 on bad
+credentials. Both shapes are accepted below. We only probe connectivity/auth
+here — we never start/stop torrents.
 """
 from __future__ import annotations
 
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
 from typing import Any
+
+BAD_LOGIN_ERROR = (
+    "Usuario o contraseña de qBittorrent incorrectos, o el puerto de la URL no "
+    "coincide con el puerto en el que escucha su WebUI"
+)
 
 
 def build_base_url(url: str, port: str | int | None) -> str:
@@ -45,19 +53,34 @@ def qbit_test_connection(url: str, port: str | int | None, username: str, passwo
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             body = resp.read().decode("utf-8", "replace").strip()
             cookie = resp.headers.get("Set-Cookie", "")
+            status_code = resp.status
     except urllib.error.HTTPError as exc:
+        if exc.code == 401:
+            # qBittorrent 5.x answers 401 both for wrong credentials and for a
+            # rejected Host header (which happens when the port in the URL is
+            # not the port the WebUI itself listens on, e.g. a Docker port map).
+            return {"ok": False, "error": BAD_LOGIN_ERROR}
         if exc.code == 403:
             return {"ok": False, "error": "qBittorrent rechazó la petición (403). ¿WebUI/host bien?"}
         return {"ok": False, "error": f"HTTP {exc.code} desde qBittorrent"}
     except Exception as exc:  # noqa: BLE001 — timeouts, DNS, connection refused…
         return {"ok": False, "error": f"No se pudo conectar con qBittorrent: {exc}"}
 
-    if body == "Ok." or "SID=" in cookie:
+    # Success shape differs by version: 4.x replies 200 with the body "Ok." and a
+    # "SID" cookie; 5.x replies 204 with an empty body and a port-scoped cookie
+    # named "QBT_SID_<puerto>". Accept a session cookie under any of those names.
+    if body == "Ok." or _has_session_cookie(cookie) or status_code == 204:
         version = _get_version(base, cookie, timeout=timeout)
         return {"ok": True, "version": version}
     if body == "Fails.":
-        return {"ok": False, "error": "Usuario o contraseña de qBittorrent incorrectos"}
+        return {"ok": False, "error": BAD_LOGIN_ERROR}
     return {"ok": False, "error": f"Respuesta inesperada de qBittorrent: {body[:60] or '(vacía)'}"}
+
+
+def _has_session_cookie(cookie: str) -> bool:
+    """True if the Set-Cookie header carries a qBittorrent session id.
+    Covers "SID=" (4.x) and "QBT_SID_<puerto>=" (5.x)."""
+    return bool(re.search(r"(?:^|[\s;,])(?:QBT_)?SID(?:_\d+)?=", cookie))
 
 
 def _get_version(base: str, cookie: str, *, timeout: int) -> str | None:

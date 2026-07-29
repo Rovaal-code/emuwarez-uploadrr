@@ -170,7 +170,7 @@ def test_series_original_title_comes_from_tmdb(isolated_db, monkeypatch):
     dropdown collapsed to a single, unusable option."""
     from emuwarez_uploadrr.database import connect, init_db
     from emuwarez_uploadrr.services import tmdb_titles
-    from emuwarez_uploadrr.services.tmdb_titles import resolve_original_title
+    from emuwarez_uploadrr.services.tmdb_titles import resolve_english_title
 
     conn = connect(isolated_db / "emuwarez_uploadrr.db")
     init_db(conn)
@@ -179,20 +179,20 @@ def test_series_original_title_comes_from_tmdb(isolated_db, monkeypatch):
     conn.commit()
 
     calls = []
-    monkeypatch.setattr(tmdb_titles.tmdb, "get_tv_original_name",
+    monkeypatch.setattr(tmdb_titles.tmdb, "get_tv_title",
                         lambda tid, **kw: calls.append(tid) or "The Tudors")
 
     # Stored original is NULL (the real Sonarr situation) → TMDb fills it.
-    assert resolve_original_title(conn, "tv", "1399", None) == "The Tudors"
+    assert resolve_english_title(conn, "tv", "1399", None) == "The Tudors"
     # And the answer is cached, so a whole multi-season batch hits TMDb once.
-    assert resolve_original_title(conn, "tv", "1399", None) == "The Tudors"
+    assert resolve_english_title(conn, "tv", "1399", None) == "The Tudors"
     assert calls == [1399]
 
 
 def test_original_title_falls_back_when_tmdb_cannot_answer(isolated_db, monkeypatch):
     from emuwarez_uploadrr.database import connect, init_db
     from emuwarez_uploadrr.services import tmdb_titles
-    from emuwarez_uploadrr.services.tmdb_titles import resolve_original_title
+    from emuwarez_uploadrr.services.tmdb_titles import resolve_english_title
 
     conn = connect(isolated_db / "emuwarez_uploadrr.db")
     init_db(conn)
@@ -202,9 +202,9 @@ def test_original_title_falls_back_when_tmdb_cannot_answer(isolated_db, monkeypa
 
     def boom(*a, **k):
         raise RuntimeError("TMDb caído")
-    monkeypatch.setattr(tmdb_titles.tmdb, "get_tv_original_name", boom)
+    monkeypatch.setattr(tmdb_titles.tmdb, "get_tv_title", boom)
     # Keeps whatever the library row had, and does NOT cache the miss.
-    assert resolve_original_title(conn, "tv", "1399", "Guardado") == "Guardado"
+    assert resolve_english_title(conn, "tv", "1399", "Guardado") == "Guardado"
     assert conn.execute(
         "SELECT COUNT(*) AS n FROM tmdb_title_cache WHERE language = 'original'"
     ).fetchone()["n"] == 0
@@ -212,10 +212,10 @@ def test_original_title_falls_back_when_tmdb_cannot_answer(isolated_db, monkeypa
 
 def test_no_tmdb_key_keeps_the_stored_original(isolated_db):
     from emuwarez_uploadrr.database import connect, init_db
-    from emuwarez_uploadrr.services.tmdb_titles import resolve_original_title
+    from emuwarez_uploadrr.services.tmdb_titles import resolve_english_title
     conn = connect(isolated_db / "emuwarez_uploadrr.db")
     init_db(conn)
-    assert resolve_original_title(conn, "movie", "550", "Fight Club") == "Fight Club"
+    assert resolve_english_title(conn, "movie", "550", "Fight Club") == "Fight Club"
 
 
 def test_season_pack_offers_the_tmdb_original_when_sonarr_has_none(season, monkeypatch):
@@ -229,7 +229,33 @@ def test_season_pack_offers_the_tmdb_original_when_sonarr_has_none(season, monke
     conn.execute("UPDATE library_items SET tmdb_id = '1399' WHERE item_type = 'series'")
     set_setting(conn, "tmdb.api_key", "fake-key")
     conn.commit()
-    monkeypatch.setattr(tmdb_titles.tmdb, "get_tv_original_name", lambda tid, **kw: "The Tudors")
+    monkeypatch.setattr(tmdb_titles.tmdb, "get_tv_title", lambda tid, **kw: "The Tudors")
 
     plan = build_season_pack_plan(season_id, conn=conn)
     assert [o["value"] for o in plan["title_options"]] == ["Los Tudor", "The Tudors"]
+
+
+def test_second_option_is_the_english_title_not_the_original_language_one(isolated_db, monkeypatch):
+    """The dropdown's second option must be the ENGLISH title. TMDb's
+    `original_name` would be the original-LANGUAGE one, which for an anime is
+    Japanese (ワンピース) and is never what an eMuwarez release name wants."""
+    from emuwarez_uploadrr.database import connect, init_db
+    from emuwarez_uploadrr.services import tmdb_titles
+    from emuwarez_uploadrr.services.tmdb_titles import resolve_english_title
+    from emuwarez_uploadrr.web.services.settings_service import set_setting
+
+    conn = connect(isolated_db / "emuwarez_uploadrr.db")
+    init_db(conn)
+    set_setting(conn, "tmdb.api_key", "fake-key")
+    conn.commit()
+
+    asked = {}
+
+    def fake_get_tv_title(tid, *, language="es-ES", **kw):
+        asked["language"] = language
+        # What TMDb would answer for One Piece at each language.
+        return {"en-US": "One Piece", "es-ES": "One Piece"}.get(language)
+
+    monkeypatch.setattr(tmdb_titles.tmdb, "get_tv_title", fake_get_tv_title)
+    assert resolve_english_title(conn, "tv", "37854", None) == "One Piece"
+    assert asked["language"] == "en-US"

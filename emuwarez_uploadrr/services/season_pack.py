@@ -228,16 +228,16 @@ def _season_title_options(series: dict | None, season: dict, conn) -> list[dict]
     """Título dropdown choices for a pack: the series' Spanish name and its
     original one.
 
-    The original comes from TMDb (cached), not just the stored column: Sonarr's
-    series payload has no originalTitle field, so library_items.original_title
-    is always empty for a series and the dropdown would show one dead option.
-    One cached lookup per plan, not per episode."""
+    The English one comes from TMDb (cached), not from the stored column:
+    Sonarr's series payload has no originalTitle field, and the sync overwrites
+    the Sonarr title with the Spanish one, so nothing English survives in
+    library_items for a series. One cached lookup per plan, not per episode."""
     from .source_assistant import build_title_options
-    from .tmdb_titles import resolve_original_title
+    from .tmdb_titles import resolve_english_title
     spanish = (series or {}).get("title") or season.get("title")
     original = (series or {}).get("original_title") or season.get("original_title")
     tmdb_id = (series or {}).get("tmdb_id") or season.get("tmdb_id")
-    original = resolve_original_title(conn, "tv", tmdb_id, original)
+    original = resolve_english_title(conn, "tv", tmdb_id, original)
     return build_title_options(spanish, original)
 
 

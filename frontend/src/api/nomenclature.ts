@@ -126,7 +126,7 @@ export async function getNomenclatureFields(itemId: number): Promise<{
   // Título dropdown: the Spanish title first (the default) then the original.
   // A single entry when both are the same string, which is what a series never
   // retitled in Spanish looks like.
-  title_options?: { value: string; kind: 'spanish' | 'original'; label: string }[]
+  title_options?: { value: string; kind: 'spanish' | 'english'; label: string }[]
   source_warning?: string | null
   source_comparison?: SourceComparison | null
   source_bitrate_table?: SourceBitrateRow[] | null

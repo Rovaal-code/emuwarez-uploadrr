@@ -419,7 +419,7 @@ export interface SeasonPackPlanResponse {
   // movie/episode (applied uniformly across every episode).
   series_title?: string | null
   // Same two choices the single-file field box offers for Título.
-  title_options?: { value: string; kind: 'spanish' | 'original'; label: string }[]
+  title_options?: { value: string; kind: 'spanish' | 'english'; label: string }[]
   year?: number | null
   // Needed by the live title-preview call — a season opened from its
   // series' own ficha has no season_number of its own on the wizard's

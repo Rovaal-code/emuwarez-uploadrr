@@ -671,9 +671,10 @@ def test_preview_season_pack_title_no_season_number_omits_sxx():
 # Subtitles: the one property a pack does NOT require to match across episodes
 # ---------------------------------------------------------------------------
 
-def _seed_pack(conn, tmp_path, subs_per_episode):
+def _seed_pack(conn, tmp_path, subs_per_episode, audio="spa / eng"):
     """A complete, otherwise-consistent 2-episode season in a shared folder,
-    with the given subtitle_languages per episode."""
+    with the given subtitle_languages per episode. `audio` is shared by every
+    episode, as a real pack requires (it is in _CONSISTENCY_FIELDS)."""
     _series_id, season_id = _seed_series_season(conn)
     folder = tmp_path / "One Piece" / "Season 1"
     folder.mkdir(parents=True)
@@ -682,7 +683,7 @@ def _seed_pack(conn, tmp_path, subs_per_episode):
         f.write_bytes(b"video")
         _seed_episode(conn, season_id, number=i, title=f"One Piece S01E0{i}", path=str(f),
                       quality="WEBDL-1080p", video_codec="x264", audio_codec="AC3",
-                      audio_languages="spa / eng", subtitle_languages=subs, source="WEB-DL")
+                      audio_languages=audio, subtitle_languages=subs, source="WEB-DL")
     return season_id
 
 
@@ -699,10 +700,10 @@ def test_pack_allowed_when_episodes_have_different_subtitles_but_all_castilian(i
 
 def test_pack_blocked_when_an_episode_has_no_castilian_subtitles(isolated_db, tmp_path):
     conn = _open(isolated_db)
-    season_id = _seed_pack(conn, tmp_path, ["spa", "eng"])
+    season_id = _seed_pack(conn, tmp_path, ["spa", "eng"], audio="eng")
     plan = build_season_pack_plan(season_id, conn=conn)
     assert plan["status"] == "blocked"
-    assert any("no tiene subtítulos en castellano" in e for e in plan["errors"])
+    assert any("no tiene castellano" in e for e in plan["errors"])
     # Names the offending episode, not just "something is wrong".
     assert any("capítulo 2" in e for e in plan["errors"])
     conn.close()
@@ -711,10 +712,29 @@ def test_pack_blocked_when_an_episode_has_no_castilian_subtitles(isolated_db, tm
 def test_pack_blocked_when_an_episode_has_no_subtitles_at_all(isolated_db, tmp_path):
     """"We never read its subtitles" is not evidence that the rule is met."""
     conn = _open(isolated_db)
-    season_id = _seed_pack(conn, tmp_path, ["spa", None])
+    season_id = _seed_pack(conn, tmp_path, ["spa", None], audio="eng")
     plan = build_season_pack_plan(season_id, conn=conn)
     assert plan["status"] == "blocked"
     assert any("sin subtítulos detectados" in e for e in plan["errors"])
+    conn.close()
+
+
+def test_castilian_audio_makes_subtitles_unnecessary(isolated_db, tmp_path):
+    """A dubbed pack with NO subtitle tracks at all is valid: the tracker only
+    wants Castilian present, and the audio already carries it."""
+    conn = _open(isolated_db)
+    season_id = _seed_pack(conn, tmp_path, [None, None], audio="spa / eng")
+    plan = build_season_pack_plan(season_id, conn=conn)
+    assert plan["status"] != "blocked", plan["errors"]
+    conn.close()
+
+
+def test_latin_only_audio_does_not_exempt_from_subtitles(isolated_db, tmp_path):
+    conn = _open(isolated_db)
+    season_id = _seed_pack(conn, tmp_path, [None, None], audio="es-419")
+    plan = build_season_pack_plan(season_id, conn=conn)
+    assert plan["status"] == "blocked"
+    assert any("no tiene castellano" in e for e in plan["errors"])
     conn.close()
 
 
@@ -738,10 +758,10 @@ def test_pack_still_blocked_on_a_non_subtitle_mismatch(isolated_db, tmp_path):
 
 def test_latin_only_subtitles_do_not_satisfy_the_rule(isolated_db, tmp_path):
     conn = _open(isolated_db)
-    season_id = _seed_pack(conn, tmp_path, ["spa", "es-419"])
+    season_id = _seed_pack(conn, tmp_path, ["spa", "es-419"], audio="eng")
     plan = build_season_pack_plan(season_id, conn=conn)
     assert plan["status"] == "blocked"
-    assert any("no tiene subtítulos en castellano" in e for e in plan["errors"])
+    assert any("no tiene castellano" in e for e in plan["errors"])
     conn.close()
 
 

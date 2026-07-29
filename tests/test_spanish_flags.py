@@ -314,3 +314,76 @@ def test_endpoint_exposes_the_subtitle_flag(client, auth_headers, isolated_db):
     item = client.get("/api/library", headers=auth_headers).json()["items"][0]
     assert item["has_spanish_audio"] == 0
     assert item["has_spanish_subs"] == 1
+
+
+# --- The combined flag the upload rules gate on ------------------------------
+
+def _ok_value(conn, item_id):
+    return conn.execute(
+        "SELECT has_spanish_ok FROM library_items WHERE id = ?", (item_id,)
+    ).fetchone()["has_spanish_ok"]
+
+
+@pytest.mark.parametrize("audio,subs,expected", [
+    ("spa", None, 1),          # dubbed, no subtitle info at all → fine
+    ("spa", "eng", 1),         # dubbed, English subs → still fine
+    ("eng", "spa", 1),         # VOSE → fine
+    ("eng", "eng", 0),         # neither → not fine
+    ("es-419", "eng", 0),      # Latin-only audio doesn't count as Castilian
+    # Audio confirmed non-Castilian but subtitles never read: genuinely
+    # unknown, since those subtitles could still carry it.
+    ("es-419", None, None),
+    ("eng", None, None),
+    (None, None, None),
+    (None, "spa", 1),          # subs alone settle it, audio unknown
+])
+def test_leaf_combined_flag(db_conn, audio, subs, expected):
+    from emuwarez_uploadrr.services.library import recompute_spanish_flags
+    item = _insert(db_conn, "Peli", audio_languages=audio, subtitle_languages=subs)
+    recompute_spanish_flags(db_conn)
+    assert _ok_value(db_conn, item) == expected
+
+
+def test_dubbed_season_without_subtitles_passes(db_conn):
+    """The regression this rule fixes: a season dubbed into Castilian with no
+    subtitle tracks was blocked, even though it's exactly what the tracker
+    wants."""
+    from emuwarez_uploadrr.services.library import recompute_spanish_flags
+    series = _insert(db_conn, "Serie", item_type="series", instance_type="sonarr")
+    season = _insert(db_conn, "T1", item_type="season", parent_id=series, instance_type="sonarr")
+    for _ in range(3):
+        _insert(db_conn, "E", item_type="episode", parent_id=season, instance_type="sonarr",
+                audio_languages="spa / eng", subtitle_languages=None)
+    recompute_spanish_flags(db_conn)
+    assert _subs_value(db_conn, season) is None   # no subtitle info at all…
+    assert _ok_value(db_conn, season) == 1        # …and that's fine, it's dubbed
+    assert _ok_value(db_conn, series) == 1
+
+
+def test_combined_flag_is_not_the_or_of_the_two_rollups(db_conn):
+    """Why this needs its own stored column: a season where each episode
+    satisfies the rule differently rolls up to 1, even though NEITHER the audio
+    rollup nor the subtitle rollup does."""
+    from emuwarez_uploadrr.services.library import recompute_spanish_flags
+    series = _insert(db_conn, "Serie", item_type="series", instance_type="sonarr")
+    season = _insert(db_conn, "T1", item_type="season", parent_id=series, instance_type="sonarr")
+    _insert(db_conn, "E1", item_type="episode", parent_id=season, instance_type="sonarr",
+            audio_languages="spa", subtitle_languages="eng")
+    _insert(db_conn, "E2", item_type="episode", parent_id=season, instance_type="sonarr",
+            audio_languages="eng", subtitle_languages="spa")
+    recompute_spanish_flags(db_conn)
+    assert _value(db_conn, season) == 0        # not all episodes have ESP audio
+    assert _subs_value(db_conn, season) == 0   # not all episodes have ESP subs
+    assert _ok_value(db_conn, season) == 1     # but every episode carries it somehow
+
+
+def test_endpoint_exposes_the_combined_flag(client, auth_headers, isolated_db):
+    from emuwarez_uploadrr.database import connect
+    from emuwarez_uploadrr.services.library import recompute_spanish_flags
+    conn = connect(isolated_db / "emuwarez_uploadrr.db")
+    _insert(conn, "Doblada", audio_languages="spa", subtitle_languages=None)
+    recompute_spanish_flags(conn)
+    item = client.get("/api/library", headers=auth_headers).json()["items"][0]
+    assert item["has_spanish_audio"] == 1
+    assert item["has_spanish_subs"] is None
+    assert item["has_spanish_ok"] == 1

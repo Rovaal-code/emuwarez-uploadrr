@@ -115,6 +115,34 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int) -> dict:
                    parent or (path or "El elemento no tiene ruta de archivo")):
             return done()
 
+        # 1b. Castilian — eMuwarez wants it present, dubbed or at least
+        # subtitled. The audio alone is enough: a film in Castilian needs no
+        # subtitles. Without Castilian audio, Castilian subtitles are what
+        # makes it acceptable. Same rule a season pack applies per episode
+        # (services/season_pack.py::_spanish_errors), which is why it reuses
+        # the same predicate.
+        #
+        # Unknown blocks: an item whose MediaInfo was never read can't be
+        # confirmed either way, and "we didn't look" is not evidence that the
+        # rule is met.
+        from .emu_format import has_castellano
+        audio_langs = item.get("audio_languages")
+        sub_langs = item.get("subtitle_languages")
+        has_audio_es = has_castellano(audio_langs) == 1
+        has_subs_es = has_castellano(sub_langs) == 1
+        if has_audio_es:
+            spanish_msg = f"Audio en castellano ({audio_langs}) — no necesita subtítulos."
+        elif has_subs_es:
+            spanish_msg = f"Sin audio en castellano ({audio_langs or 'desconocido'}), pero subtítulos sí ({sub_langs})."
+        else:
+            spanish_msg = (
+                f"Ni el audio ({audio_langs or 'sin detectar'}) ni los subtítulos "
+                f"({sub_langs or 'sin detectar'}) están en castellano."
+            )
+        if not add("spanish", "Tiene castellano", "No tiene castellano",
+                   has_audio_es or has_subs_es, spanish_msg):
+            return done()
+
     # 2. Output directory writable — where Uploadrr-EMU stages the .torrent +
     # images (torrents/screenshots/descriptions) is <uploadrr_path>/tmp, NOT
     # the top-level uploadrr_path itself: in the documented Docker deployment

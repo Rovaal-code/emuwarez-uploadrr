@@ -21,8 +21,9 @@ The whole season is required to be consistent (same video/audio codec,
 audio languages, resolution, source across every available episode) and
 complete (every episode of the season must be Disponible) — both are hard
 blocks, not warnings, since a mismatched or partial pack would be a broken
-release. Subtitles are the one exception: they may differ between episodes
-as long as every one of them carries Castilian (see _subtitle_errors).
+release. Subtitles are the one exception: they may differ between episodes,
+and aren't required at all when the audio is already in Castilian (see
+_spanish_errors).
 
 SAFETY CONTRACT: identical to filesystem_apply.py — this module never
 moves/deletes a source file, only renames it in place. It only calls the
@@ -192,7 +193,12 @@ def preview_season_pack_title(fields: dict) -> dict:
 # subtitle_languages is deliberately NOT in this list: eMuwarez accepts a
 # season pack whose episodes carry different subtitle tracks as long as every
 # one of them has Castilian, so requiring them to be identical blocked packs
-# the tracker would have taken. That looser rule is _subtitle_errors() below.
+# the tracker would have taken. That looser rule is _spanish_errors() below,
+# which also exempts subtitles entirely when the audio is already Castilian.
+#
+# audio_languages, by contrast, MUST stay here: the pack has a single release
+# name stating one audio for the whole thing, so episodes that disagree on it
+# would make that name lie about half the pack.
 _CONSISTENCY_FIELDS: list[tuple[str, str, Any]] = [
     ("video_codec", "códec de vídeo", lambda ep, prop: ep.get("video_codec")),
     ("audio_codec", "códec de audio", lambda ep, prop: ep.get("audio_codec")),
@@ -241,24 +247,37 @@ def _season_title_options(series: dict | None, season: dict, conn) -> list[dict]
     return build_title_options(spanish, original)
 
 
-def _subtitle_errors(episode_entries: list[dict]) -> list[str]:
-    """Subtitles don't have to match across episodes, they just have to include
-    Castilian in every one of them. Reports the episodes that don't, naming
-    what they actually carry so it's obvious what to fix.
+def _spanish_errors(episode_entries: list[dict]) -> list[str]:
+    """Every episode has to carry Castilian one way or the other: dubbed
+    (audio) or at least subtitled. Reports the episodes that carry neither,
+    naming what they actually have so it's obvious what to fix.
 
-    An episode with no subtitle info at all fails too: this is a rule the pack
-    has to satisfy, and "we never read its subtitles" is not evidence that it
-    meets it."""
+    Castilian AUDIO exempts an episode from needing subtitles at all — a dubbed
+    pack with no subtitle tracks whatsoever is perfectly valid. Subtitles are
+    only the fallback for when the audio isn't in Castilian, and then they don't
+    have to match across episodes, they just each have to include it.
+
+    The audio is the same across every episode of a pack anyway (audio_languages
+    is in _CONSISTENCY_FIELDS — it has to be, since the pack's single release
+    name states one audio for the whole thing), so in practice this either
+    exempts the entire season or none of it.
+
+    An episode with no info at all fails: "we never read it" is not evidence
+    that it meets the rule."""
     from .emu_format import has_castellano
 
     errors: list[str] = []
     for entry in episode_entries:
         ep = entry["episode"]
+        if has_castellano(ep.get("audio_languages")) == 1:
+            continue
         if has_castellano(ep.get("subtitle_languages")) == 1:
             continue
+        audio = ep.get("audio_languages")
         subs = ep.get("subtitle_languages")
         errors.append(
-            f"El capítulo {ep.get('episode_number')} no tiene subtítulos en castellano "
+            f"El capítulo {ep.get('episode_number')} no tiene castellano ni en el audio "
+            f"({audio or 'sin audio detectado'}) ni en los subtítulos "
             f"({subs or 'sin subtítulos detectados'})."
         )
     return errors
@@ -384,7 +403,7 @@ def build_season_pack_plan(
             _set_season_plan_progress(season_id, done=i + 1, total=total, current_title=ep.get("title"))
 
         errors.extend(_consistency_errors(episode_entries))
-        errors.extend(_subtitle_errors(episode_entries))
+        errors.extend(_spanish_errors(episode_entries))
 
         first_proposal = episode_entries[0]["proposal"]
         release_tag = tag_override or _get_release_tag(conn=conn)

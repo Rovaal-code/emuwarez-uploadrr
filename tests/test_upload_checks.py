@@ -14,11 +14,16 @@ def db_conn(isolated_db):
     return conn
 
 
-def _movie_with_path(conn, path: str) -> int:
+# Defaults to Castilian audio: the checks now require Castilian one way or the
+# other (upload_checks' "spanish" check), so a film without it isn't a normal
+# uploadable film any more. The Castilian tests pass their own values.
+def _movie_with_path(conn, path: str, *, audio_languages: str | None = "spa",
+                     subtitle_languages: str | None = None) -> int:
     conn.execute(
-        """INSERT INTO library_items (item_type, title, local_status, request_status, nomenclature_status, path, size_bytes, updated_at)
-           VALUES ('movie', 'X', 'Disponible', 'Sin petición', 'N/A', ?, 100, CURRENT_TIMESTAMP)""",
-        (path,),
+        """INSERT INTO library_items (item_type, title, local_status, request_status, nomenclature_status,
+            path, size_bytes, audio_languages, subtitle_languages, updated_at)
+           VALUES ('movie', 'X', 'Disponible', 'Sin petición', 'N/A', ?, 100, ?, ?, CURRENT_TIMESTAMP)""",
+        (path, audio_languages, subtitle_languages),
     )
     conn.commit()
     return conn.execute("SELECT id FROM library_items ORDER BY id DESC LIMIT 1").fetchone()["id"]
@@ -74,7 +79,7 @@ def test_all_green_when_everything_passes(db_conn, tmp_path, monkeypatch):
     iid = _movie_with_path(db_conn, str(f))
     r = uc.run_upload_checks(db_conn, iid)
     ids = [c["id"] for c in r["checks"]]
-    assert ids == ["renameable", "output", "qbittorrent", "imghosts", "emuwarez"]
+    assert ids == ["renameable", "spanish", "output", "qbittorrent", "imghosts", "emuwarez"]
     assert all(c["status"] == "ok" for c in r["checks"])
     assert r["ready"] is True
 
@@ -145,3 +150,61 @@ def test_stops_at_qbit_before_emuwarez(db_conn, tmp_path, monkeypatch):
     assert ids[-1] == "qbittorrent" and r["checks"][-1]["status"] == "fail"
     assert "emuwarez" not in ids
     assert r["ready"] is False
+
+
+# ---------------------------------------------------------------------------
+# Castilian: present in the audio OR in the subtitles
+# ---------------------------------------------------------------------------
+
+def _spanish_check(conn, item_id):
+    return next(c for c in uc.run_upload_checks(conn, item_id)["checks"] if c["id"] == "spanish")
+
+
+def test_castilian_audio_needs_no_subtitles(db_conn, tmp_path):
+    f = tmp_path / "peli.mkv"; f.write_bytes(b"x")
+    iid = _movie_with_path(db_conn, str(f), audio_languages="spa", subtitle_languages=None)
+    assert _spanish_check(db_conn, iid)["status"] == "ok"
+
+
+def test_castilian_subtitles_are_enough_without_castilian_audio(db_conn, tmp_path):
+    f = tmp_path / "peli.mkv"; f.write_bytes(b"x")
+    iid = _movie_with_path(db_conn, str(f), audio_languages="eng", subtitle_languages="spa / eng")
+    assert _spanish_check(db_conn, iid)["status"] == "ok"
+
+
+def test_blocked_when_neither_audio_nor_subtitles_are_castilian(db_conn, tmp_path):
+    f = tmp_path / "peli.mkv"; f.write_bytes(b"x")
+    iid = _movie_with_path(db_conn, str(f), audio_languages="eng", subtitle_languages="eng")
+    r = uc.run_upload_checks(db_conn, iid)
+    assert r["ready"] is False
+    check = next(c for c in r["checks"] if c["id"] == "spanish")
+    assert check["status"] == "fail"
+    # Says what it actually found, so it's obvious what to fix.
+    assert "eng" in check["message"]
+
+
+def test_latin_only_audio_without_castilian_subtitles_is_blocked(db_conn, tmp_path):
+    f = tmp_path / "peli.mkv"; f.write_bytes(b"x")
+    iid = _movie_with_path(db_conn, str(f), audio_languages="es-419", subtitle_languages="es-419")
+    assert _spanish_check(db_conn, iid)["status"] == "fail"
+
+
+def test_unknown_languages_block_instead_of_passing(db_conn, tmp_path):
+    """"We never read this file" is not evidence that it meets the rule."""
+    f = tmp_path / "peli.mkv"; f.write_bytes(b"x")
+    iid = _movie_with_path(db_conn, str(f), audio_languages=None, subtitle_languages=None)
+    assert _spanish_check(db_conn, iid)["status"] == "fail"
+
+
+def test_the_rule_is_the_same_for_a_single_episode(db_conn, tmp_path):
+    f = tmp_path / "cap.mkv"; f.write_bytes(b"x")
+    db_conn.execute(
+        """INSERT INTO library_items (item_type, title, local_status, request_status,
+            nomenclature_status, path, size_bytes, audio_languages, subtitle_languages, updated_at)
+           VALUES ('episode', 'Serie S01E01', 'Disponible', 'Sin petición', 'N/A', ?, 100,
+                   'spa', NULL, CURRENT_TIMESTAMP)""",
+        (str(f),),
+    )
+    db_conn.commit()
+    iid = db_conn.execute("SELECT id FROM library_items ORDER BY id DESC LIMIT 1").fetchone()["id"]
+    assert _spanish_check(db_conn, iid)["status"] == "ok"

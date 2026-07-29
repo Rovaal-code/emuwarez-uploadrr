@@ -854,9 +854,9 @@ def test_unique_content_excludes_season_with_inconsistent_episodes(mem_conn):
     mem_conn.execute(
         "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, parent_id, "
         "resolution, source, video_codec, audio_codec, audio_languages, subtitle_languages, "
-        "has_spanish_subs) "
+        "has_spanish_subs, has_spanish_ok) "
         "VALUES ('Ready Show - Temporada 1', 'season', 'Disponible', 0, ?, "
-        "'1080p', 'WEB-DL', 'x264', 'AAC', 'jpn', 'spa', 1)",
+        "'1080p', 'WEB-DL', 'x264', 'AAC', 'jpn', 'spa', 1, 1)",
         (series_id,),
     )
     # Inconsistent season: complete (Disponible) but episodes disagreed on the
@@ -865,9 +865,9 @@ def test_unique_content_excludes_season_with_inconsistent_episodes(mem_conn):
     mem_conn.execute(
         "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, parent_id, "
         "resolution, source, video_codec, audio_codec, audio_languages, subtitle_languages, "
-        "has_spanish_subs) "
+        "has_spanish_subs, has_spanish_ok) "
         "VALUES ('Ready Show - Temporada 2', 'season', 'Disponible', 0, ?, "
-        "'1080p', 'WEB-DL', NULL, 'AAC', 'jpn', 'spa', 1)",
+        "'1080p', 'WEB-DL', NULL, 'AAC', 'jpn', 'spa', 1, 1)",
         (series_id,),
     )
     # Subtitle tracks differ across episodes (rollup NULL) but every one has
@@ -875,18 +875,18 @@ def test_unique_content_excludes_season_with_inconsistent_episodes(mem_conn):
     mem_conn.execute(
         "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, parent_id, "
         "resolution, source, video_codec, audio_codec, audio_languages, subtitle_languages, "
-        "has_spanish_subs) "
+        "has_spanish_subs, has_spanish_ok) "
         "VALUES ('Ready Show - Temporada 3', 'season', 'Disponible', 0, ?, "
-        "'1080p', 'WEB-DL', 'x264', 'AAC', 'jpn', NULL, 1)",
+        "'1080p', 'WEB-DL', 'x264', 'AAC', 'jpn', NULL, 1, 1)",
         (series_id,),
     )
     # Same, but an episode has no Castilian subs at all — still blocked.
     mem_conn.execute(
         "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, parent_id, "
         "resolution, source, video_codec, audio_codec, audio_languages, subtitle_languages, "
-        "has_spanish_subs) "
+        "has_spanish_subs, has_spanish_ok) "
         "VALUES ('Ready Show - Temporada 4', 'season', 'Disponible', 0, ?, "
-        "'1080p', 'WEB-DL', 'x264', 'AAC', 'jpn', 'eng', 0)",
+        "'1080p', 'WEB-DL', 'x264', 'AAC', 'jpn', 'eng', 0, 0)",
         (series_id,),
     )
     mem_conn.commit()
@@ -917,9 +917,9 @@ def test_unique_content_lists_seasons_not_whole_series(mem_conn):
         mem_conn.execute(
             "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, parent_id, "
             "resolution, source, video_codec, audio_codec, audio_languages, subtitle_languages, "
-            "has_spanish_subs) "
+            "has_spanish_subs, has_spanish_ok) "
             f"VALUES ('Whole Show - Temporada {n}', 'season', 'Disponible', 0, ?, "
-            "'1080p', 'WEB-DL', 'x264', 'AAC', 'jpn', 'spa', 1)",
+            "'1080p', 'WEB-DL', 'x264', 'AAC', 'jpn', 'spa', 1, 1)",
             (series_id,),
         )
     mem_conn.commit()
@@ -955,9 +955,9 @@ def test_dashboard_summary_unique_seasons_excludes_inconsistent(mem_conn):
     mem_conn.execute(
         "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, parent_id, "
         "resolution, source, video_codec, audio_codec, audio_languages, subtitle_languages, "
-        "has_spanish_subs) "
+        "has_spanish_subs, has_spanish_ok) "
         "VALUES ('Show - Temporada 1', 'season', 'Disponible', 0, ?, "
-        "'1080p', 'WEB-DL', 'x264', 'AAC', 'jpn', NULL, 1)",
+        "'1080p', 'WEB-DL', 'x264', 'AAC', 'jpn', NULL, 1, 1)",
         (series_id,),
     )
     season1_id = mem_conn.execute("SELECT last_insert_rowid()").fetchone()[0]
@@ -972,9 +972,9 @@ def test_dashboard_summary_unique_seasons_excludes_inconsistent(mem_conn):
     mem_conn.execute(
         "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, parent_id, "
         "resolution, source, video_codec, audio_codec, audio_languages, subtitle_languages, "
-        "has_spanish_subs) "
+        "has_spanish_subs, has_spanish_ok) "
         "VALUES ('Show - Temporada 2', 'season', 'Disponible', 0, ?, "
-        "'1080p', 'WEB-DL', NULL, 'AAC', 'jpn', 'spa', 1)",
+        "'1080p', 'WEB-DL', NULL, 'AAC', 'jpn', 'spa', 1, 1)",
         (series_id,),
     )
     season2_id = mem_conn.execute("SELECT last_insert_rowid()").fetchone()[0]
@@ -989,9 +989,9 @@ def test_dashboard_summary_unique_seasons_excludes_inconsistent(mem_conn):
     mem_conn.execute(
         "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, parent_id, "
         "resolution, source, video_codec, audio_codec, audio_languages, subtitle_languages, "
-        "has_spanish_subs) "
+        "has_spanish_subs, has_spanish_ok) "
         "VALUES ('Show - Temporada 3', 'season', 'Disponible', 0, ?, "
-        "'1080p', 'WEB-DL', 'x264', 'AAC', 'jpn', 'eng', 0)",
+        "'1080p', 'WEB-DL', 'x264', 'AAC', 'jpn', 'eng', 0, 0)",
         (series_id,),
     )
     season3_id = mem_conn.execute("SELECT last_insert_rowid()").fetchone()[0]
@@ -1060,3 +1060,183 @@ def test_missing_since_backfill_runs_even_when_column_already_exists(mem_conn):
         "SELECT missing_since FROM library_items WHERE title = ?", ("Stuck Null Movie",)
     ).fetchone()
     assert row["missing_since"] == "2022-11-11T00:00:00"
+
+
+# ---------------------------------------------------------------------------
+# One notification per missing SEASON instead of one per missing episode
+# ---------------------------------------------------------------------------
+
+def _fake_episode_in(ep_id: int, series_id: int, season: int, number: int, has_file: bool) -> dict:
+    return {
+        "id": ep_id, "seriesId": series_id,
+        "seasonNumber": season, "episodeNumber": number,
+        "title": f"Episode {number}",
+        "hasFile": has_file,
+        "episodeFileId": ep_id * 10 if has_file else 0,
+    }
+
+
+def _sync_sonarr(conn, instance, series_data, episodes, ep_files):
+    from emuwarez_uploadrr.services.library import sync_instance
+    with (
+        patch("emuwarez_uploadrr.integrations.sonarr.get_series", return_value=series_data),
+        patch("emuwarez_uploadrr.integrations.sonarr.get_queue", return_value=[]),
+        patch("emuwarez_uploadrr.integrations.sonarr.get_episodes", return_value=episodes),
+        patch("emuwarez_uploadrr.integrations.sonarr.get_episode_files", return_value=ep_files),
+    ):
+        return sync_instance(conn, instance, include_episodes=True)
+
+
+def test_a_whole_missing_season_sends_one_notification_not_one_per_episode(sonarr_conn):
+    """Adding a season with nothing downloaded used to fire one notification
+    per episode, burying the bell. One per season says the same thing."""
+    from emuwarez_uploadrr.services.notification_center import list_notifications
+    from emuwarez_uploadrr.services.instances import list_instances
+    instance = list_instances(sonarr_conn)[0]
+
+    # First sync (a bulk backfill) never notifies — seed the instance with an
+    # unrelated, fully available season so the next pass is incremental.
+    seeded = [_fake_episode_in(1 + i, 20, 1, 1 + i, True) for i in range(3)]
+    _sync_sonarr(sonarr_conn, instance, [_fake_series(20, "Serie")], seeded,
+                 [_fake_ep_file(1 + i) for i in range(3)])
+    assert list_notifications(sonarr_conn) == []
+
+    # Now season 2 appears, entirely missing.
+    season2 = [_fake_episode_in(10 + i, 20, 2, 1 + i, False) for i in range(6)]
+    _sync_sonarr(sonarr_conn, instance, [_fake_series(20, "Serie")], seeded + season2,
+                 [_fake_ep_file(1 + i) for i in range(3)])
+
+    notes = list_notifications(sonarr_conn)
+    assert len(notes) == 1, [n["content_title"] for n in notes]
+    assert notes[0]["event_type"] == "content_missing_new"
+    assert "Temporada 2" in notes[0]["content_title"]
+    assert "6" in (notes[0]["body"] or "")     # names how many episodes
+
+
+def test_a_partially_missing_season_still_notifies_per_episode(sonarr_conn):
+    """The season notification only replaces the episode ones when the WHOLE
+    season is missing — otherwise it would claim more than it knows."""
+    from emuwarez_uploadrr.services.notification_center import list_notifications
+    from emuwarez_uploadrr.services.instances import list_instances
+    instance = list_instances(sonarr_conn)[0]
+
+    seeded = [_fake_episode_in(1, 20, 1, 1, True)]
+    _sync_sonarr(sonarr_conn, instance, [_fake_series(20, "Serie")], seeded, [_fake_ep_file(1)])
+    assert list_notifications(sonarr_conn) == []
+
+    # Season 2: one downloaded, two missing.
+    season2 = [
+        _fake_episode_in(10, 20, 2, 1, True),
+        _fake_episode_in(11, 20, 2, 2, False),
+        _fake_episode_in(12, 20, 2, 3, False),
+    ]
+    _sync_sonarr(sonarr_conn, instance, [_fake_series(20, "Serie")], seeded + season2,
+                 [_fake_ep_file(1), _fake_ep_file(10)])
+
+    notes = list_notifications(sonarr_conn)
+    assert len(notes) == 2
+    assert all("Temporada" not in (n["content_title"] or "") for n in notes)
+
+
+def test_an_already_missing_season_does_not_re_notify(sonarr_conn):
+    """Nothing NEW turned missing on the second pass, so the season must stay
+    quiet instead of re-announcing itself on every sync."""
+    from emuwarez_uploadrr.services.notification_center import list_notifications
+    from emuwarez_uploadrr.services.instances import list_instances
+    instance = list_instances(sonarr_conn)[0]
+
+    seeded = [_fake_episode_in(1, 20, 1, 1, True)]
+    _sync_sonarr(sonarr_conn, instance, [_fake_series(20, "Serie")], seeded, [_fake_ep_file(1)])
+
+    season2 = [_fake_episode_in(10 + i, 20, 2, 1 + i, False) for i in range(4)]
+    all_eps = seeded + season2
+    _sync_sonarr(sonarr_conn, instance, [_fake_series(20, "Serie")], all_eps, [_fake_ep_file(1)])
+    assert len(list_notifications(sonarr_conn)) == 1
+
+    _sync_sonarr(sonarr_conn, instance, [_fake_series(20, "Serie")], all_eps, [_fake_ep_file(1)])
+    assert len(list_notifications(sonarr_conn)) == 1
+
+
+def test_single_episode_season_keeps_the_episode_notification(sonarr_conn):
+    """"Temporada 3" and "S03E01" would say the same thing for a one-episode
+    season, and the episode one is the more precise of the two."""
+    from emuwarez_uploadrr.services.notification_center import list_notifications
+    from emuwarez_uploadrr.services.instances import list_instances
+    instance = list_instances(sonarr_conn)[0]
+
+    seeded = [_fake_episode_in(1, 20, 1, 1, True)]
+    _sync_sonarr(sonarr_conn, instance, [_fake_series(20, "Serie")], seeded, [_fake_ep_file(1)])
+
+    lone = [_fake_episode_in(10, 20, 3, 1, False)]
+    _sync_sonarr(sonarr_conn, instance, [_fake_series(20, "Serie")], seeded + lone, [_fake_ep_file(1)])
+
+    notes = list_notifications(sonarr_conn)
+    assert len(notes) == 1
+    assert "Temporada" not in (notes[0]["content_title"] or "")
+
+
+def test_unique_content_counts_a_dubbed_season_without_subtitles(mem_conn):
+    """Castilian audio makes subtitles unnecessary, so a dubbed season with no
+    subtitle tracks at all is uploadable and must be counted."""
+    from emuwarez_uploadrr.services.library import get_dashboard_summary, get_dashboard_recommendations
+
+    mem_conn.execute(
+        "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog) "
+        "VALUES ('Doblada', 'series', 'Disponible', 0)"
+    )
+    series_id = mem_conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    mem_conn.execute(
+        "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, parent_id, "
+        "resolution, source, video_codec, audio_codec, audio_languages, subtitle_languages, "
+        "has_spanish_subs, has_spanish_ok) "
+        "VALUES ('Doblada - Temporada 1', 'season', 'Disponible', 0, ?, "
+        "'1080p', 'WEB-DL', 'x264', 'AAC', 'spa', NULL, NULL, 1)",
+        (series_id,),
+    )
+    mem_conn.commit()
+
+    assert get_dashboard_summary(mem_conn)["unique_seasons"] == 1
+    recs = get_dashboard_recommendations(mem_conn)
+    assert "Doblada - Temporada 1" in [r["title"] for r in recs if r["rec_group"] == 2]
+
+
+def test_unique_content_excludes_a_film_without_castilian(mem_conn):
+    """A film without Castilian is blocked by the pre-upload checks the same as
+    a season, so counting it as ready to go would be a lie."""
+    from emuwarez_uploadrr.services.library import get_dashboard_summary, get_dashboard_recommendations
+
+    mem_conn.execute(
+        "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, has_spanish_ok) "
+        "VALUES ('Con castellano', 'movie', 'Disponible', 0, 1)"
+    )
+    mem_conn.execute(
+        "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, has_spanish_ok) "
+        "VALUES ('Sin castellano', 'movie', 'Disponible', 0, 0)"
+    )
+    mem_conn.execute(
+        "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, has_spanish_ok) "
+        "VALUES ('Sin leer', 'movie', 'Disponible', 0, NULL)"
+    )
+    mem_conn.commit()
+
+    assert get_dashboard_summary(mem_conn)["unique_movies"] == 1
+    titles = [r["title"] for r in get_dashboard_recommendations(mem_conn) if r["rec_group"] == 2]
+    assert titles == ["Con castellano"]
+
+
+def test_unique_content_counts_a_vose_film(mem_conn):
+    """A film that was never dubbed but carries Castilian subtitles IS
+    uploadable, so it must count — "sin castellano" means neither audio nor
+    subtitles, not "not dubbed"."""
+    from emuwarez_uploadrr.services.library import get_dashboard_summary, get_dashboard_recommendations
+
+    mem_conn.execute(
+        "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, "
+        "audio_languages, subtitle_languages, has_spanish_audio, has_spanish_subs, has_spanish_ok) "
+        "VALUES ('VOSE', 'movie', 'Disponible', 0, 'eng', 'spa', 0, 1, 1)"
+    )
+    mem_conn.commit()
+
+    assert get_dashboard_summary(mem_conn)["unique_movies"] == 1
+    titles = [r["title"] for r in get_dashboard_recommendations(mem_conn) if r["rec_group"] == 2]
+    assert titles == ["VOSE"]

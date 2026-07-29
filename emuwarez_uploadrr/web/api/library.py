@@ -481,6 +481,7 @@ def _to_lib_response(row: dict, conn=None, rollups: Optional[dict] = None) -> Li
         # unlike the audio_languages above they need no per-row rollup here.
         has_spanish_audio=row.get("has_spanish_audio"),
         has_spanish_subs=row.get("has_spanish_subs"),
+        has_spanish_ok=row.get("has_spanish_ok"),
         size_bytes=size_bytes,
         local_status=local_status,
         request_status=row["request_status"],

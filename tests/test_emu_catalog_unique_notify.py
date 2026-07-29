@@ -20,12 +20,19 @@ def db_conn(isolated_db):
     return conn
 
 
-def _movie(conn, title, emu_in_catalog):
+# has_spanish_ok=1 by default: "contenido único" only counts what could
+# actually be uploaded, and since the Castilian rule reaches films too
+# (services/upload_checks.py) a film with neither Castilian audio nor Castilian
+# subtitles isn't uploadable and doesn't belong in that count. These tests are
+# about the notification, not about the language rule, so their films are
+# ordinary uploadable ones. `spanish_ok=0` covers the opposite case.
+def _movie(conn, title, emu_in_catalog, *, spanish_ok: int | None = 1):
     conn.execute(
         """INSERT INTO library_items
-           (item_type, title, local_status, request_status, nomenclature_status, emu_in_catalog, updated_at)
-           VALUES ('movie', ?, 'Disponible', 'Sin petición', 'N/A', ?, CURRENT_TIMESTAMP)""",
-        (title, emu_in_catalog),
+           (item_type, title, local_status, request_status, nomenclature_status, emu_in_catalog,
+            has_spanish_ok, updated_at)
+           VALUES ('movie', ?, 'Disponible', 'Sin petición', 'N/A', ?, ?, CURRENT_TIMESTAMP)""",
+        (title, emu_in_catalog, spanish_ok),
     )
     conn.commit()
 

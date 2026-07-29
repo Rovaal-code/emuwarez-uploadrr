@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 32
+SCHEMA_VERSION = 33
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -1033,14 +1033,18 @@ def _migrate_emu_catalog(conn: sqlite3.Connection) -> None:
 
 
 def _migrate_library_items_spanish_audio(conn: sqlite3.Connection) -> None:
-    """Per-item "does this have Castilian audio / subtitles" flags. The audio
-    one is the Español column in Biblioteca; the subtitle one is what lets a
-    season pack through when its episodes disagree on subtitle tracks (see
-    services/season_pack.py). Both are rolled up for seasons/series (see
-    services/library.py::recompute_spanish_flags), so neither can be a plain
+    """Per-item Castilian flags. `has_spanish_audio` is the Español column in
+    Biblioteca; `has_spanish_subs` is the same question for subtitle tracks;
+    `has_spanish_ok` is the one the upload rules actually gate on: Castilian
+    present EITHER way, since dubbed content needs no subtitles at all (see
+    services/season_pack.py::_spanish_errors).
+
+    All three are rolled up for seasons/series (see
+    services/library.py::recompute_spanish_flags), so none can be a plain
     expression over the *_languages columns — only movie/episode leaves carry
-    those. Purely additive."""
-    for col in ("has_spanish_audio", "has_spanish_subs"):
+    those, and a season's verdict is "every episode I hold satisfies it", which
+    is not the same as OR-ing the two separate rollups. Purely additive."""
+    for col in ("has_spanish_audio", "has_spanish_subs", "has_spanish_ok"):
         try:
             conn.execute(f"ALTER TABLE library_items ADD COLUMN {col} INTEGER")
         except sqlite3.OperationalError:

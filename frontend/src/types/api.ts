@@ -132,9 +132,12 @@ export interface LibraryItemResponse {
   // 1 = has Castilian audio, 0 = does not, null = unknown (no MediaInfo yet,
   // or a season/series with no held children to roll up).
   has_spanish_audio: number | null
-  // Same for subtitles. On a season row, 1 means every held episode has
-  // Castilian subs, which is what the season pack requires.
+  // Same for subtitles.
   has_spanish_subs: number | null
+  // What the upload rules gate on: Castilian present either way (dubbed
+  // content needs no subtitles). On a season row, 1 means every held episode
+  // satisfies it.
+  has_spanish_ok: number | null
   subtitle_languages: string | null
   size_bytes: number | null
   local_status: string

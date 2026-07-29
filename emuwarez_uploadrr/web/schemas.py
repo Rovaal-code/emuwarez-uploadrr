@@ -573,9 +573,12 @@ class LibraryItemResponse(BaseModel):
     # Español column: 1 has Castilian audio, 0 does not, None unknown (no
     # MediaInfo yet, or a season/series with nothing held to roll up).
     has_spanish_audio: Optional[int] = None
-    # Same shape for subtitles. On a season row this is the season pack's
-    # subtitle rule: 1 means every held episode has Castilian subs.
+    # Same shape for subtitles.
     has_spanish_subs: Optional[int] = None
+    # The one the upload rules gate on: Castilian present either way (dubbed
+    # content needs no subtitles). On a season row, 1 means every held episode
+    # satisfies that.
+    has_spanish_ok: Optional[int] = None
     size_bytes: Optional[int] = None
     local_status: str
     request_status: str

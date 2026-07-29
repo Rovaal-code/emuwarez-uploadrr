@@ -30,7 +30,14 @@ logger = logging.getLogger("emuwarez.library")
 # Upsert
 # ---------------------------------------------------------------------------
 
-def upsert_library_item(conn: sqlite3.Connection, item: LibraryItem, *, notify_missing: bool = True) -> int:
+def upsert_library_item(
+    conn: sqlite3.Connection, item: LibraryItem, *, notify_missing: bool = True,
+    defer_to: Optional[list] = None,
+) -> int:
+    """`defer_to`: collect the "turned Faltante" notification into this list as
+    (item, item_id) instead of emitting it right away. Used by the Sonarr sync
+    so a season whose episodes ALL went missing at once can send one season
+    notification instead of one per episode (see _emit_missing_notifications)."""
     # Captured BEFORE the upsert overwrites it — this is what lets us fire a
     # notification on the exact sync pass where the item turns Faltante,
     # instead of guessing from a date (see services/notification_center.py's
@@ -151,7 +158,10 @@ def upsert_library_item(conn: sqlite3.Connection, item: LibraryItem, *, notify_m
         and item.local_status == LocalStatus.MISSING.value
         and prev_status != LocalStatus.MISSING.value
     ):
-        _notify_new_missing(conn, item, item_id)
+        if defer_to is None:
+            _notify_new_missing(conn, item, item_id)
+        else:
+            defer_to.append((item, item_id))
 
     return item_id
 
@@ -190,6 +200,81 @@ def _notify_new_missing(conn: sqlite3.Connection, item: LibraryItem, item_id: in
         )
     except Exception:
         logger.exception("No se pudo emitir la notificación de contenido faltante para el item %s", item_id)
+
+
+def _notify_new_missing_season(
+    conn: sqlite3.Connection, series_title: str, year, season_number: int,
+    season_row_id: Optional[int], poster_url: Optional[str], episode_count: int,
+) -> None:
+    """One notification for a whole season that went missing, instead of one per
+    episode. Best-effort — never raises, same as _notify_new_missing."""
+    try:
+        from .notification_center import emit
+        year_part = f" ({year})" if year else ""
+        emit(
+            conn, "content_missing_new",
+            "Temporada nueva faltante",
+            f"No tienes ninguno de sus {episode_count} capítulos. "
+            "Puede que quieras crear una petición en eMuwarez.",
+            link="/library",
+            level="warning",
+            entity_type="library_item",
+            entity_id=season_row_id,
+            poster_url=poster_url,
+            content_title=f"{series_title}{year_part} - Temporada {season_number}",
+        )
+    except Exception:
+        logger.exception(
+            "No se pudo emitir la notificación de temporada faltante (%s T%s)",
+            series_title, season_number,
+        )
+
+
+# A season notification replaces the per-episode ones only when there is more
+# than one episode to replace: for a single-episode season the two say exactly
+# the same thing, and the episode-level one is the more precise of the two.
+_MIN_EPISODES_FOR_SEASON_NOTIFICATION = 2
+
+
+def _emit_missing_notifications(
+    conn: sqlite3.Connection,
+    pending: list,
+    ep_items_by_season: dict,
+    season_row_id_by_number: dict,
+    series_item: LibraryItem,
+) -> None:
+    """Decide, per season, whether to send one season notification or the
+    individual episode ones collected during the sync pass.
+
+    Adding a series to Sonarr with nothing downloaded used to fire one
+    notification per episode — twenty for a normal season, hundreds for a long
+    running show — which buried everything else in the bell. A season whose
+    episodes are ALL missing says the same thing in one line."""
+    if not pending:
+        return
+
+    deferred_ids = {id(item) for item, _ in pending}
+    handled: set[int] = set()
+
+    for season_num, eps in ep_items_by_season.items():
+        if len(eps) < _MIN_EPISODES_FOR_SEASON_NOTIFICATION:
+            continue
+        # Every episode of the season missing, and at least one of them newly
+        # so — a season already fully missing on the previous pass has nothing
+        # new to report.
+        if not all(e.local_status == LocalStatus.MISSING.value for e in eps):
+            continue
+        if not any(id(e) in deferred_ids for e in eps):
+            continue
+        _notify_new_missing_season(
+            conn, series_item.title or "Serie", series_item.year, season_num,
+            season_row_id_by_number.get(season_num), series_item.poster_url, len(eps),
+        )
+        handled.update(id(e) for e in eps)
+
+    for item, item_id in pending:
+        if id(item) not in handled:
+            _notify_new_missing(conn, item, item_id)
 
 
 # ---------------------------------------------------------------------------
@@ -324,6 +409,8 @@ def _sync_one_series(
                 missing += 1
 
         ep_items_by_season: dict[int, list[LibraryItem]] = {}
+        # (item, item_id) for every episode that turned Faltante on this pass.
+        pending_missing: list[tuple[LibraryItem, int]] = []
         for episode in episodes:
             ep_file = (
                 files_by_id.get(episode.get("episodeFileId"))
@@ -342,7 +429,12 @@ def _sync_one_series(
                 ep_queue_map=ep_queue,
                 parent_id=parent_season_id,
             )
-            upsert_library_item(conn, ep_item, notify_missing=notify_missing)
+            # Collected, not emitted: the decision of "one season notification
+            # or twenty episode ones" can only be made once every episode of
+            # the season has been through here.
+            upsert_library_item(
+                conn, ep_item, notify_missing=notify_missing, defer_to=pending_missing,
+            )
             _bump()
             if ep_item.local_status != LocalStatus.AVAILABLE.value:
                 missing += 1
@@ -357,6 +449,10 @@ def _sync_one_series(
         # unconditionally, for every season, agreeing or not).
         for season_num, season_row_id in season_row_id_by_number.items():
             _update_season_rollup(conn, season_row_id, ep_items_by_season.get(season_num, []))
+
+        _emit_missing_notifications(
+            conn, pending_missing, ep_items_by_season, season_row_id_by_number, series_item,
+        )
 
     return missing
 
@@ -585,13 +681,34 @@ _MISSING_STATUSES = LocalStatus.not_available()
 # season/series rollup. Same trio the eMuwarez comparison uses.
 _HELD_STATUSES = (LocalStatus.AVAILABLE.value, LocalStatus.UPLOADED.value, LocalStatus.UPLOADING.value)
 
-# (stored column, source column on the leaf rows). The audio flag drives the
-# Español column in Biblioteca; the subtitle one is what lets a season pack
-# through even when its episodes carry different subtitle tracks, as long as
-# every one of them has Castilian (see services/season_pack.py).
+# (stored column, how to read it off a leaf row). The audio flag drives the
+# Español column in Biblioteca; `has_spanish_ok` is what the upload rules gate
+# on, and is an OR: Castilian in the audio makes subtitles unnecessary, since
+# a dubbed release doesn't need them (see services/season_pack.py).
+def _leaf_audio(row, has_castellano):
+    return has_castellano(row["audio_languages"])
+
+
+def _leaf_subs(row, has_castellano):
+    return has_castellano(row["subtitle_languages"])
+
+
+def _leaf_ok(row, has_castellano):
+    """1 = Castilian present one way or the other, 0 = confirmed absent from
+    both, None = can't tell yet (nothing read for at least one of them)."""
+    audio = has_castellano(row["audio_languages"])
+    subs = has_castellano(row["subtitle_languages"])
+    if audio == 1 or subs == 1:
+        return 1
+    if audio == 0 and subs == 0:
+        return 0
+    return None
+
+
 _SPANISH_FLAGS = (
-    ("has_spanish_audio", "audio_languages"),
-    ("has_spanish_subs", "subtitle_languages"),
+    ("has_spanish_audio", _leaf_audio),
+    ("has_spanish_subs", _leaf_subs),
+    ("has_spanish_ok", _leaf_ok),
 )
 
 
@@ -607,8 +724,8 @@ def _rollup_spanish(yes: int, no: int, unknown: int) -> Optional[int]:
 
 
 def recompute_spanish_flags(conn: sqlite3.Connection) -> int:
-    """Recompute has_spanish_audio/has_spanish_subs for every row, and return
-    how many rows ended up with a known (non-NULL) audio value.
+    """Recompute has_spanish_audio/has_spanish_subs/has_spanish_ok for every
+    row, and return how many rows ended up with a known (non-NULL) audio value.
 
     Three levels per flag: movie/episode leaves read their own *_languages
     column; a season folds its held episodes; a series folds the held episodes
@@ -620,14 +737,17 @@ def recompute_spanish_flags(conn: sqlite3.Connection) -> int:
 
     held = ",".join("?" * len(_HELD_STATUSES))
 
-    for flag, source in _SPANISH_FLAGS:
+    # Read once, reused by all three flags.
+    leaves = conn.execute(
+        "SELECT id, audio_languages, subtitle_languages FROM library_items "
+        "WHERE item_type IN ('movie','episode')"
+    ).fetchall()
+
+    for flag, read_leaf in _SPANISH_FLAGS:
         # 1) Leaves — the only rows carrying a language list of their own.
-        leaves = conn.execute(
-            f"SELECT id, {source} AS langs FROM library_items WHERE item_type IN ('movie','episode')"
-        ).fetchall()
         conn.executemany(
             f"UPDATE library_items SET {flag} = ? WHERE id = ?",
-            [(has_castellano(r["langs"]), r["id"]) for r in leaves],
+            [(read_leaf(r, has_castellano), r["id"]) for r in leaves],
         )
 
         # 2) Seasons — fold their own held episodes.
@@ -1039,11 +1159,13 @@ def get_dashboard_summary(conn: sqlite3.Connection) -> dict:
     # de rollup (services/library.py's _update_season_rollup, sync-time) NO son
     # NULL — null en cualquiera de ellos significa justo que sus capítulos no
     # coinciden entre sí (resolución/source/códecs/idiomas) — y todos sus
-    # capítulos tienen subtítulos en castellano (has_spanish_subs = 1).
+    # capítulos llevan castellano de alguna forma (has_spanish_ok = 1).
     #
-    # Los subtítulos NO se comprueban ya por igualdad: eMuwarez acepta el pack
-    # aunque las pistas difieran mientras todas lleven castellano, así que
-    # exigir subtitle_languages IS NOT NULL dejaba fuera temporadas que sí son
+    # Los subtítulos NO se comprueban por igualdad, ni siquiera por presencia:
+    # eMuwarez acepta el pack aunque las pistas difieran mientras todas lleven
+    # castellano, y no los exige en absoluto si el audio ya está en castellano
+    # (una temporada doblada no necesita subtítulos). Exigir
+    # subtitle_languages IS NOT NULL dejaba fuera temporadas que sí son
     # subibles. isSeasonReady/seasonNotReadyReason en el frontend usan la misma
     # señal. Sin este filtro, esta tarjeta contaba temporadas completas pero
     # técnicamente inconsistentes como si se pudieran subir.
@@ -1055,10 +1177,14 @@ def get_dashboard_summary(conn: sqlite3.Connection) -> dict:
             SUM(CASE WHEN item_type = 'season' THEN 1 ELSE 0 END) AS seasons
         FROM library_items
         WHERE emu_in_catalog = 0 AND local_status = ?
+          -- Castilian applies to EVERY kind, not just seasons: a film without
+          -- it is blocked by the pre-upload checks exactly the same way
+          -- (services/upload_checks.py), so counting it here as ready to go
+          -- would be a lie the moment you clicked Subir.
+          AND has_spanish_ok = 1
           AND (item_type != 'season' OR (
                 resolution IS NOT NULL AND source IS NOT NULL AND video_codec IS NOT NULL
                 AND audio_codec IS NOT NULL AND audio_languages IS NOT NULL
-                AND has_spanish_subs = 1
               ))
         """,
         [avail],
@@ -1072,7 +1198,7 @@ def get_dashboard_summary(conn: sqlite3.Connection) -> dict:
           AND s.item_type = 'season' AND s.emu_in_catalog = 0
           AND s.resolution IS NOT NULL AND s.source IS NOT NULL AND s.video_codec IS NOT NULL
           AND s.audio_codec IS NOT NULL AND s.audio_languages IS NOT NULL
-          AND s.has_spanish_subs = 1
+          AND s.has_spanish_ok = 1
         """,
         [avail],
     ).fetchone()
@@ -1392,12 +1518,12 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
     # single combined "series" row would hide.
     # A season also needs every episode to actually agree on resolution/
     # source/codecs/audio (services/library.py's _update_season_rollup only
-    # fills these in when they do) AND to have Castilian subtitles on every
-    # one of them — otherwise it's genuinely unique but not actually
-    # uploadable as a pack (build_season_pack_plan blocks it), so it
-    # shouldn't be recommended as if it were ready to go. Subtitles are
-    # checked by content, not by agreement: they may differ between episodes
-    # as long as all of them carry Castilian.
+    # fills these in when they do) AND to carry Castilian in every one of
+    # them — otherwise it's genuinely unique but not actually uploadable as a
+    # pack (build_season_pack_plan blocks it), so it shouldn't be recommended
+    # as if it were ready to go. Castilian counts from the audio OR the
+    # subtitles: a dubbed season needs no subtitles at all, and when it isn't
+    # dubbed the subtitle tracks may still differ between episodes.
     for row in conn.execute(
         f"""SELECT {cols},
               COALESCE(json_extract(li.raw_json, '$.added'),
@@ -1406,10 +1532,13 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
             FROM library_items li
             WHERE li.local_status = 'Disponible' AND li.emu_in_catalog = 0
               AND li.item_type IN ('movie', 'season')
+              -- Castilian applies to films too, not just seasons (see the
+              -- same condition in get_dashboard_summary).
+              AND li.has_spanish_ok = 1
               AND (li.item_type != 'season' OR (
                   li.resolution IS NOT NULL AND li.source IS NOT NULL
                   AND li.video_codec IS NOT NULL AND li.audio_codec IS NOT NULL
-                  AND li.audio_languages IS NOT NULL AND li.has_spanish_subs = 1
+                  AND li.audio_languages IS NOT NULL
               ))"""
     ).fetchall():
         _push(dict(row), 2)

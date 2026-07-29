@@ -57,9 +57,10 @@ export function listDisplayTitle(item: LibraryItemResponse): string {
 // out a button/card.
 //
 // Subtitles are NOT in this list: eMuwarez takes a pack whose episodes carry
-// different subtitle tracks as long as every one of them has Castilian, so
-// they get the looser has_spanish_subs check below instead of being required
-// to match. Mirrors season_pack.py's _CONSISTENCY_FIELDS/_subtitle_errors.
+// different subtitle tracks, and doesn't need them at all when the audio is
+// already Castilian, so they get the looser has_spanish_ok check below instead
+// of being required to match. Mirrors season_pack.py's
+// _CONSISTENCY_FIELDS/_spanish_errors.
 const SEASON_CONSISTENCY_FIELDS: { key: keyof LibraryItemResponse; label: string }[] = [
   { key: 'resolution', label: 'la resolución' },
   { key: 'source', label: 'el source' },
@@ -72,18 +73,18 @@ function seasonInconsistentField(item: LibraryItemResponse) {
   return SEASON_CONSISTENCY_FIELDS.find(f => !item[f.key])
 }
 
-// 1 = every held episode has Castilian subs. 0 or null both block the pack:
-// null means we never read some episode's subtitles, and "we didn't look" is
-// not evidence that the rule is met.
-function seasonMissingSpanishSubs(item: LibraryItemResponse): boolean {
-  return item.has_spanish_subs !== 1
+// 1 = every held episode carries Castilian, in its audio or its subtitles.
+// 0 or null both block the pack: null means we never read some episode's
+// tracks, and "we didn't look" is not evidence that the rule is met.
+function seasonMissingSpanish(item: LibraryItemResponse): boolean {
+  return item.has_spanish_ok !== 1
 }
 
 export function isSeasonReady(item: LibraryItemResponse): boolean {
   if (item.item_type !== 'season') return true
   return item.local_status === 'Disponible'
     && !seasonInconsistentField(item)
-    && !seasonMissingSpanishSubs(item)
+    && !seasonMissingSpanish(item)
 }
 
 // null when the season IS ready (or isn't a season) — a truthy reason string
@@ -95,8 +96,8 @@ export function seasonNotReadyReason(item: LibraryItemResponse): string | null {
   if (field) {
     return `Los capítulos de esta temporada no coinciden en ${field.label}. Revísalos antes de subir el pack.`
   }
-  if (seasonMissingSpanishSubs(item)) {
-    return 'Algún capítulo de esta temporada no tiene subtítulos en castellano. eMuwarez los exige en todos para aceptar el pack.'
+  if (seasonMissingSpanish(item)) {
+    return 'Algún capítulo de esta temporada no tiene castellano ni en el audio ni en los subtítulos. eMuwarez lo exige en todos para aceptar el pack.'
   }
   return null
 }

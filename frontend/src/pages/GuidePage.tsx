@@ -286,6 +286,235 @@ function RulesContent() {
   )
 }
 
+// --- Condiciones de subida ---------------------------------------------------
+
+// Kept as data (not hand-written JSX rows) so the verdict column can be
+// rendered consistently and a row can't accidentally ship without one.
+type Verdict = 'ok' | 'blocked' | 'warn'
+
+const VERDICT_LABEL: Record<Verdict, string> = {
+  ok: '✅ Válida',
+  blocked: '❌ Bloqueada',
+  warn: '⚠️ No bloquea',
+}
+
+const VERDICT_COLOR: Record<Verdict, string> = {
+  ok: '#22c55e',
+  blocked: '#ef4444',
+  warn: '#f59e0b',
+}
+
+interface SpanishRow {
+  kind: string
+  audio: string
+  subs: string
+  verdict: Verdict
+  verdictLabel?: string
+  why: React.ReactNode
+}
+
+const SPANISH_ROWS: SpanishRow[] = [
+  {
+    kind: 'Temporada', audio: 'spa en todos', subs: 'ninguno', verdict: 'ok',
+    why: 'Está doblada, así que el audio ya cumple la condición él solo. Una temporada doblada no necesita ninguna pista de subtítulos, ni siquiera una.',
+  },
+  {
+    kind: 'Temporada', audio: 'eng en todos', subs: 'cap. 1-4 spa / eng, cap. 5-8 spa', verdict: 'ok',
+    why: 'Como no está doblada, cada capítulo tiene que traer castellano en sus subtítulos, y los ocho lo traen. Que unos lleven además inglés y otros no da igual: los subtítulos no tienen que ser iguales entre capítulos.',
+  },
+  {
+    kind: 'Temporada', audio: 'eng en todos', subs: 'todos spa salvo el cap. 6, con eng', verdict: 'blocked',
+    why: (
+      <>
+        El capítulo 6 no está doblado y tampoco trae subtítulos en castellano, así que incumple él
+        solo y tumba el pack entero. El aviso lo señala por número:{' '}
+        <em>«El capítulo 6 no tiene castellano ni en el audio (eng) ni en los subtítulos (eng)»</em>.
+        Arreglando ese capítulo, la temporada pasa.
+      </>
+    ),
+  },
+  {
+    kind: 'Temporada', audio: 'cap. 1 spa, cap. 2 eng', subs: 'todos spa', verdict: 'blocked',
+    why: (
+      <>
+        Ojo, aquí el castellano lo tienen todos los capítulos. Lo que falla es otra cosa: el pack se
+        sube con <strong>un único nombre</strong> que declara un solo audio (<code>ESP DD 5.1</code>),
+        y con un capítulo doblado y otro en inglés ese nombre sería falso para media temporada. Por
+        eso el audio sí tiene que ser idéntico en todos.
+      </>
+    ),
+  },
+  {
+    kind: 'Capítulo suelto', audio: 'eng', subs: 'spa', verdict: 'ok', verdictLabel: '✅ Válido',
+    why: 'No está doblado, pero trae subtítulos en castellano, que es exactamente la alternativa que acepta el tracker.',
+  },
+  {
+    kind: 'Capítulo suelto', audio: 'es-419', subs: 'sin detectar', verdict: 'blocked',
+    verdictLabel: '❌ Bloqueado',
+    why: (
+      <>
+        El audio es latino, que no cuenta como castellano, así que todo depende de los subtítulos. Y
+        ahí no hay dato: puede ser que el archivo <strong>no tenga</strong> pistas de subtítulos, o
+        que <strong>las tenga dañadas</strong> y MediaInfo no consiga leerlas, en cuyo caso el
+        archivo necesitaría una reparación (remux). Sin ese dato no se puede afirmar que cumpla,
+        aunque podría estar cumpliendo.
+      </>
+    ),
+  },
+  {
+    kind: 'Película', audio: 'spa / eng', subs: 'ninguno', verdict: 'ok',
+    why: 'Trae pista de audio en castellano, aunque también traiga inglés. Con que exista una basta, y entonces los subtítulos no se piden.',
+  },
+  {
+    kind: 'Película', audio: 'eng', subs: 'eng', verdict: 'blocked',
+    why: 'Ni doblada ni subtitulada al castellano: no cumple por ninguna de las dos vías. Necesita que le añadas una pista de subtítulos en castellano, o una de audio.',
+  },
+  {
+    kind: 'Película o capítulo', audio: 'sin detectar', subs: 'cualquiera', verdict: 'blocked',
+    verdictLabel: '❌ Bloqueado',
+    why: (
+      <>
+        Que no se detecte el audio es raro y casi siempre apunta a un problema del archivo:
+        prácticamente todo vídeo trae al menos una pista de audio, así que si no aparece suele ser
+        porque <strong>las pistas están dañadas</strong> o el contenedor está mal formado y MediaInfo
+        no puede leerlo. Ese archivo necesita reparación (un remux) antes de subirse. También puede
+        ocurrir que simplemente nunca se haya leído su MediaInfo todavía: en ese caso se resuelve
+        leyéndolo desde la propia ficha.
+      </>
+    ),
+  },
+]
+
+interface OtherRow {
+  applies: string
+  condition: string
+  verdict: Verdict
+  verdictLabel?: string
+  why: string
+}
+
+const OTHER_CONDITION_ROWS: OtherRow[] = [
+  {
+    applies: 'Pack de temporada', condition: 'Falta algún capítulo por descargar',
+    verdict: 'blocked', verdictLabel: '❌ Bloquea',
+    why: 'Un pack de temporada es un único release que contiene la temporada completa. Con huecos, quien se lo descargue no recibe lo que el nombre promete.',
+  },
+  {
+    applies: 'Pack de temporada', condition: 'Los capítulos están en carpetas distintas',
+    verdict: 'blocked', verdictLabel: '❌ Bloquea',
+    why: 'El pack se arma sobre la carpeta que los capítulos ya comparten, renombrándolos ahí mismo. No se mueven archivos de sitio, así que si están repartidos no hay carpeta que usar. Muévelos a una común.',
+  },
+  {
+    applies: 'Pack de temporada',
+    condition: 'Los capítulos no coinciden en resolución, source, códec de vídeo, códec de audio o idiomas de audio',
+    verdict: 'blocked', verdictLabel: '❌ Bloquea',
+    why: 'Mismo motivo que la cuarta fila de la tabla de arriba: el pack lleva un solo nombre con un solo valor de cada campo, y ese nombre mentiría sobre los capítulos que no coincidan.',
+  },
+  {
+    applies: 'Pack de temporada', condition: 'Los capítulos tienen subtítulos distintos',
+    verdict: 'warn', verdictLabel: '✅ No bloquea',
+    why: 'Es la única excepción a lo anterior, porque los subtítulos no forman parte del nombre de la misma manera. Basta con que todos lleven castellano.',
+  },
+  {
+    applies: 'Cualquiera', condition: 'El contenido está Faltante',
+    verdict: 'blocked', verdictLabel: '❌ Ni se puede intentar',
+    why: 'El botón Subir aparece deshabilitado: no tienes el archivo en disco, así que no hay nada que subir.',
+  },
+  {
+    applies: 'Cualquiera', condition: 'La carpeta del archivo no permite escritura',
+    verdict: 'blocked', verdictLabel: '❌ Bloquea',
+    why: 'La subida renombra el archivo a la nomenclatura de eMuwarez en su sitio, sin copiarlo. Sin permiso de escritura en su carpeta, ese renombrado no se puede hacer.',
+  },
+  {
+    applies: 'Cualquiera', condition: 'El directorio de salida de Uploadrr no permite escritura',
+    verdict: 'blocked', verdictLabel: '❌ Bloquea',
+    why: 'Es donde se generan el .torrent, las capturas y la descripción antes de enviarlos. Sin poder escribir ahí no hay nada que subir.',
+  },
+  {
+    applies: 'Cualquiera', condition: 'eMuwarez no responde',
+    verdict: 'blocked', verdictLabel: '❌ Bloquea',
+    why: 'Es el destino de la subida. Suele ser la API key mal puesta o el tracker caído.',
+  },
+  {
+    applies: 'Cualquiera', condition: 'El repositorio de imágenes no responde',
+    verdict: 'blocked', verdictLabel: '❌ Bloquea',
+    why: 'Las capturas son obligatorias en la publicación, y se suben a ese repositorio antes de crear el torrent.',
+  },
+  {
+    applies: 'Cualquiera', condition: 'qBittorrent sin configurar',
+    verdict: 'warn', verdictLabel: '⚠️ No bloquea',
+    why: 'La subida se completa igual. Lo único que pierdes es que el .torrent se añada solo a la cola al terminar; tendrías que añadirlo a mano para sembrar.',
+  },
+]
+
+function VerdictCell({ verdict, label }: { verdict: Verdict; label?: string }) {
+  return (
+    <span style={{ color: VERDICT_COLOR[verdict], fontWeight: 600, whiteSpace: 'nowrap' }}>
+      {label ?? VERDICT_LABEL[verdict]}
+    </span>
+  )
+}
+
+function UploadConditionsContent() {
+  return (
+    <>
+      <h4 style={{ fontSize: 13, margin: '0 0 6px' }}>Castellano</h4>
+      <p style={{ fontSize: 12.5, marginTop: 0 }}>
+        eMuwarez exige castellano, pero no importa por dónde venga. Si el audio está en castellano,
+        la condición ya se cumple y los subtítulos no se piden. Si el audio no está en castellano,
+        entonces hacen falta subtítulos en castellano. El latino (<code>es-419</code>) es un idioma
+        distinto y no vale como castellano.
+      </p>
+      <div style={{ overflowX: 'auto' }}>
+        <table className="data-table" style={{ fontSize: 12.5 }}>
+          <thead>
+            <tr>
+              <th>Tipo</th><th>Audio</th><th>Subtítulos</th><th>Resultado</th><th>Por qué</th>
+            </tr>
+          </thead>
+          <tbody>
+            {SPANISH_ROWS.map((r, i) => (
+              <tr key={i}>
+                <td style={{ whiteSpace: 'nowrap' }}>{r.kind}</td>
+                <td style={{ fontFamily: 'monospace' }}>{r.audio}</td>
+                <td style={{ fontFamily: 'monospace' }}>{r.subs}</td>
+                <td><VerdictCell verdict={r.verdict} label={r.verdictLabel} /></td>
+                <td>{r.why}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p style={{ fontSize: 12.5 }}>
+        <strong>Cuando no hay datos, se bloquea.</strong> Un archivo cuyas pistas no se han podido
+        leer no se puede dar por bueno: «no lo hemos mirado» o «no se ha podido leer» no es prueba de
+        que cumpla. Si el dato falta de forma persistente después de leer el MediaInfo, sospecha del
+        archivo, no de la comprobación. Esto no afecta al contenido doblado, porque a ese le basta
+        con el audio.
+      </p>
+
+      <h4 style={{ fontSize: 13, margin: '18px 0 6px' }}>Otras condiciones que bloquean</h4>
+      <div style={{ overflowX: 'auto' }}>
+        <table className="data-table" style={{ fontSize: 12.5 }}>
+          <thead>
+            <tr><th>Aplica a</th><th>Condición</th><th>Resultado</th><th>Por qué</th></tr>
+          </thead>
+          <tbody>
+            {OTHER_CONDITION_ROWS.map((r, i) => (
+              <tr key={i}>
+                <td style={{ whiteSpace: 'nowrap' }}>{r.applies}</td>
+                <td>{r.condition}</td>
+                <td><VerdictCell verdict={r.verdict} label={r.verdictLabel} /></td>
+                <td>{r.why}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  )
+}
+
 interface GuideSection {
   id: string
   label: string
@@ -299,6 +528,7 @@ const SECTIONS: GuideSection[] = [
   { id: 'tech', label: 'Especificaciones técnicas (MediaInfo → Nombre)', title: 'Especificaciones técnicas (MediaInfo → Nombre)', render: TechSpecsContent },
   { id: 'examples', label: 'Ejemplos completos', title: 'Ejemplos completos', render: ExamplesContent },
   { id: 'rules', label: 'Reglas de nombrado de archivo', title: 'Reglas de nombrado de archivo', render: RulesContent },
+  { id: 'upload', label: 'Condiciones de subida', title: 'Condiciones de subida', render: UploadConditionsContent },
 ]
 
 export function GuidePage() {

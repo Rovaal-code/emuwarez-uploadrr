@@ -42,12 +42,16 @@ services:
     # Ajusta PUID/PGID al UID/GID del usuario propietario de los archivos de media
     user: "${PUID:-1000}:${PGID:-1000}"
 
-    # Límite de recursos del contenedor — ajusta a lo que tenga disponible tu
-    # equipo. Relevante sobre todo para "Subidas en Paralelo" (Configuración):
-    # cada subida activa puede llegar a saturar un núcleo entero (hasheo del
-    # torrent) y usar ~0.8 GB de RAM (capturas/remux/transferencia).
-    cpus: "4"
-    mem_limit: "8g"
+    # Límite de recursos del contenedor. Ajusta a lo que tenga disponible tu
+    # equipo: es lo que marca cuántas "Subidas en Paralelo" (Configuración)
+    # se sostienen de verdad, porque cada subida activa puede llegar a saturar
+    # un núcleo entero (hasheo del torrent) y usar ~0.8 GB de RAM
+    # (capturas/remux/transferencia). Con estos 2 núcleos y 2 GB caben
+    # teóricamente 2 subidas en paralelo reales. Si quieres más, sube los dos
+    # valores a la vez: subir "Subidas en Paralelo" sin darle más CPU y RAM al
+    # contenedor no acelera nada.
+    cpus: "2"
+    mem_limit: "2g"
 
     environment:
       TZ: ${TZ:-Europe/Madrid}

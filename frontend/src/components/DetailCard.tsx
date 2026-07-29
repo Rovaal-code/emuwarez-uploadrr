@@ -110,7 +110,10 @@ export function FieldRow({ label, children, help }: { label: string; children: R
         {label}
         {help && <InfoIcon text={help} />}
       </span>
-      <span style={{ textAlign: 'right', wordBreak: 'break-word', minWidth: 0 }}>{children}</span>
+      {/* overflow:hidden alongside minWidth:0 so a very long value (a 20
+          language audio list) truncates inside the row instead of widening
+          the whole card — the chip's own ellipsis needs a bounded parent. */}
+      <span style={{ textAlign: 'right', wordBreak: 'break-word', minWidth: 0, overflow: 'hidden' }}>{children}</span>
     </div>
   )
 }

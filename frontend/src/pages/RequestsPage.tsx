@@ -323,7 +323,7 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
         <DetailPoster url={item.poster_url ? posterUrl(item.poster_url, 'w500') : null} alt={item.title} fallbackEmoji={t.icon} />
 
         <div style={{ flex: 1, minWidth: 300 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, minHeight: DETAIL_CARD_HEIGHT }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16, minHeight: DETAIL_CARD_HEIGHT }}>
             <Card title="Estado de la petición" icon={<StatusCardIcon />}>
               <FieldRow label="Estado" help="Aunque salga «Compatible», revisa la petición: el audio y el códec no se pueden comparar del todo (suelen indicarse en la descripción del torrent), y si pide la serie completa puede que no quiera la temporada especial."><CompatibilityBadge status={effectiveStatus} /></FieldRow>
               <FieldRow label="Tipo">

@@ -114,7 +114,7 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
         />
 
         <div style={{ flex: 1, minWidth: 300 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, minHeight: DETAIL_CARD_HEIGHT }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16, minHeight: DETAIL_CARD_HEIGHT }}>
             <Card title="Estado de la biblioteca" icon={<StatusCardIcon />}>
               <FieldRow label="Tipo">
                 <ValueChip><ValueIcon><TypeValueIcon /></ValueIcon><span className="txt">{formatItemType(item.item_type)}</span></ValueChip>
@@ -165,11 +165,19 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
               <FieldRow label="Códec de audio" help={rollupHelp}>
                 <ValueChip><ValueIcon><AudioCodecValueIcon /></ValueIcon><span className="txt">{item.audio_codec || '–'}</span></ValueChip>
               </FieldRow>
+              {/* These two are the only fields that can carry a dozen values
+                  (a multi-language release), so they're the ones the card's
+                  width truncates — the tooltip is where the full list stays
+                  reachable. */}
               <FieldRow label="Idiomas de audio" help={rollupHelp}>
-                <ValueChip><ValueIcon><LanguageValueIcon /></ValueIcon><span className="txt">{item.audio_languages || '–'}</span></ValueChip>
+                <ValueChip title={item.audio_languages || undefined}>
+                  <ValueIcon><LanguageValueIcon /></ValueIcon><span className="txt">{item.audio_languages || '–'}</span>
+                </ValueChip>
               </FieldRow>
               <FieldRow label="Subtítulos" help={rollupHelp}>
-                <ValueChip><ValueIcon><SubtitleValueIcon /></ValueIcon><span className="txt">{item.subtitle_languages || '–'}</span></ValueChip>
+                <ValueChip title={item.subtitle_languages || undefined}>
+                  <ValueIcon><SubtitleValueIcon /></ValueIcon><span className="txt">{item.subtitle_languages || '–'}</span>
+                </ValueChip>
               </FieldRow>
               <FieldRow label="Tamaño">
                 <ValueChip><ValueIcon><SizeValueIcon /></ValueIcon><span className="txt">{formatBytes(item.size_bytes)}</span></ValueChip>

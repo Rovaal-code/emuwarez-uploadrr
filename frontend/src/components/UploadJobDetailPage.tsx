@@ -534,7 +534,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
             </div>
           )}
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16, minHeight: DETAIL_CARD_HEIGHT }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 16, minHeight: DETAIL_CARD_HEIGHT }}>
             <Card title="Estado de la subida" icon={<StatusCardIcon />}>
               <FieldRow label="Estado"><span className={STATUS_CLASS[job.status] || 'badge req-unknown'}>{statusLabel(job.status)}</span></FieldRow>
               <FieldRow label="Tipo">

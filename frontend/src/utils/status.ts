@@ -58,6 +58,18 @@ const EMU_STATUS_MAP: Record<string, StatusInfo> = {
   'Nuevo':   { label: 'Nuevo',   color: '#22c55e', cssClass: 'status-available' },
 }
 
+// Castilian audio ("Español" column). Opposite polarity to EMU_STATUS_MAP
+// above: eMuwarez all but requires Spanish audio, so "Sí" is the healthy state
+// (green) and "No" is what you need to act on (red).
+const SPANISH_STATUS_MAP: Record<string, StatusInfo> = {
+  'Sí': { label: 'Sí', color: '#22c55e', cssClass: 'status-available' },
+  'No': { label: 'No', color: '#ef4444', cssClass: 'status-missing' },
+}
+
+export function getSpanishStatusInfo(status: string): StatusInfo {
+  return SPANISH_STATUS_MAP[status] ?? { label: status, color: '#6b7280', cssClass: 'status-unknown' }
+}
+
 // task_runs.status values written by the backend (services/tasks.py):
 // 'running' | 'completed' | 'failed'. Keyed by the raw backend value so the
 // dashboard no longer collapses everything to "Desconocido".

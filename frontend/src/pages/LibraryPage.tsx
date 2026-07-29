@@ -189,6 +189,9 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const [searchSource, setSearchSource] = useState('')
   const [filterEmu, setFilterEmu] = useState('')
   const [filterAporte, setFilterAporte] = useState('')
+  // Backend-side filter (unlike the four above it), so it never forces the
+  // whole library to be fetched just to be thrown away in the browser.
+  const [filterSpanish, setFilterSpanish] = useState('')
   const [sortBy, setSortBy] = useState('title_asc')
   const [offset, setOffset] = useState(0)
 
@@ -207,6 +210,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
         status: filterStatus || undefined,
         instance_id: filterInstanceId ? Number(filterInstanceId) : undefined,
         request_status: filterRequest || undefined,
+        spanish: (filterSpanish || undefined) as 'yes' | 'no' | 'unknown' | undefined,
         sort: sortBy,
         parent_id: flatFilter ? undefined : TOP_LEVEL_PARENT_FILTER,
         limit: LOAD_LIMIT,
@@ -218,7 +222,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     } finally {
       setLoading(false)
     }
-  }, [debouncedSearch, filterType, filterStatus, filterInstanceId, filterRequest, searchProvider, searchQuality, searchSource, filterEmu, filterAporte, sortBy, offset])
+  }, [debouncedSearch, filterType, filterStatus, filterInstanceId, filterRequest, searchProvider, searchQuality, searchSource, filterEmu, filterAporte, filterSpanish, sortBy, offset])
 
   useEffect(() => { load() }, [load])
 
@@ -295,7 +299,13 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   }, [])
 
   // Refresh the list whenever any global sync finishes (library or eMuwarez).
-  useEffect(() => { if (lastCompletedAt) load() }, [lastCompletedAt, load])
+  // Deliberately NOT depending on `load`: it's a useCallback keyed on every
+  // filter, so including it made each filter change fire this reload on top of
+  // the one the [load] effect above already does — two full fetches back to
+  // back, which is what made the table flash "cargando" twice in a row. Same
+  // shape RequestsPage uses.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (lastCompletedAt) load() }, [lastCompletedAt])
 
   function applyFilters() {
     setOffset(0)
@@ -304,6 +314,13 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
 
   const items = data?.items ?? []
   const total = data?.total ?? 0
+
+  // A refetch over an already-rendered list no longer blanks the page (see the
+  // render below), so this dim is the only thing telling you the filter you
+  // just picked is still loading.
+  const refreshingStyle = (loading || isPending) && data
+    ? { opacity: 0.5, pointerEvents: 'none' as const, transition: 'opacity 120ms' }
+    : undefined
 
   // Same "aporte" definition the eMuwarez filter/notification hand-off use:
   // emu_in_catalog === 0 ("Nuevo" — you'd contribute the whole thing) or
@@ -427,6 +444,8 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
           <option value="updated_desc">Orden: RR (Reciente)</option>
           <option value="year_desc">Orden: Año (Nuevo)</option>
           <option value="year_asc">Orden: Año (Antiguo)</option>
+          <option value="size_desc">Orden: Tamaño (Más)</option>
+          <option value="size_asc">Orden: Tamaño (Menos)</option>
         </select>
         <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
           <Tooltip content="Vista de pósters">
@@ -462,7 +481,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
         </div>
       </div>
 
-      {loading || isPending ? (
+      {(loading || isPending) && !data ? (
         <LoadingState label="Cargando biblioteca…" />
       ) : error ? (
         <ErrorState message={error} onRetry={load} />
@@ -473,7 +492,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
           body="Añade instancias Radarr/Sonarr en la sección Instancias y sincroniza para ver el contenido aquí."
         />
       ) : viewMode === 'grid' ? (
-        <div className="activity-section" style={{ padding: 20, flex: 1, minHeight: 0, overflowY: 'auto', marginBottom: 0 }}>
+        <div className="activity-section" style={{ padding: 20, flex: 1, minHeight: 0, overflowY: 'auto', marginBottom: 0, ...refreshingStyle }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 16 }}>
             {filteredItems.map((item, i) => (
               <PosterCard key={item.id} item={item} onSelect={openDetail} priority={i < GRID_PRIORITY_COUNT} />
@@ -481,7 +500,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
           </div>
         </div>
       ) : viewMode === 'grid-lg' ? (
-        <div className="activity-section" style={{ padding: 20, flex: 1, minHeight: 0, overflowY: 'auto', marginBottom: 0 }}>
+        <div className="activity-section" style={{ padding: 20, flex: 1, minHeight: 0, overflowY: 'auto', marginBottom: 0, ...refreshingStyle }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 20 }}>
             {filteredItems.map((item, i) => (
               <LargePosterCard key={item.id} item={item} onSelect={openDetail} priority={i < GRID_PRIORITY_COUNT} />
@@ -489,7 +508,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
           </div>
         </div>
       ) : (
-        <div className="activity-section" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', marginBottom: 0 }}>
+        <div className="activity-section" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', marginBottom: 0, ...refreshingStyle }}>
           <div style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
             <table className="data-table">
               <thead>
@@ -519,6 +538,12 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
                   ]} /></th>
                   <th><HeaderFilter label="EMuwarez" value={filterEmu} onChange={v => { setFilterEmu(v); setOffset(0) }} options={[
                     { value: '', label: 'Todos' }, ...(filterOptions?.emu_states ?? []).map(s => ({ value: s, label: s === 'present' ? 'Sí' : 'No' })),
+                  ]} /></th>
+                  <th><HeaderFilter label="Español" value={filterSpanish} onChange={v => { setFilterSpanish(v); setOffset(0) }} options={[
+                    { value: '', label: 'Todos' },
+                    ...(filterOptions?.spanish_states ?? []).map(s => ({
+                      value: s, label: s === 'yes' ? 'Sí' : s === 'no' ? 'No' : 'Sin datos',
+                    })),
                   ]} /></th>
                   <th>Tamaño</th>
                   <th className="col-actions">Acciones</th>

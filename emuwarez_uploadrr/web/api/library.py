@@ -477,6 +477,9 @@ def _to_lib_response(row: dict, conn=None, rollups: Optional[dict] = None) -> Li
         audio_codec=audio_codec,
         audio_languages=audio_languages,
         subtitle_languages=subtitle_languages,
+        # Already rolled up and stored per row (recompute_spanish_audio), so
+        # unlike the audio_languages above it needs no per-row rollup here.
+        has_spanish_audio=row.get("has_spanish_audio"),
         size_bytes=size_bytes,
         local_status=local_status,
         request_status=row["request_status"],
@@ -603,6 +606,7 @@ def library_list(
     request_status: Optional[str] = Query(None, alias="request_status"),
     nomenclature: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    spanish: Optional[str] = Query(None, pattern="^(yes|no|unknown)$"),
     sort: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=20000),
     offset: int = Query(0, ge=0),
@@ -619,6 +623,7 @@ def library_list(
             instance_id=instance_id,
             parent_id=parent_id,
             search=search,
+            spanish=spanish,
             sort=sort,
             limit=limit,
             offset=offset,
@@ -633,6 +638,7 @@ def library_list(
             instance_id=instance_id,
             parent_id=parent_id,
             search=search,
+            spanish=spanish,
         )
         series_ids = [r["id"] for r in rows if r["item_type"] == "series"]
         season_ids = [r["id"] for r in rows if r["item_type"] == "season"]
@@ -736,6 +742,19 @@ def library_filter_options(current_user: dict = Depends(require_auth)) -> dict:
         emu_states = [v for v, present in [("candidate", has_candidate), ("present", has_present)] if present]
         aporte_states = [v for v, present in [("yes", has_aporte_yes), ("no", has_aporte_no)] if present]
 
+        # Same "only offer what actually occurs" rule for the Español column.
+        # "unknown" is offered too: on a library that has never been scanned
+        # it's the only value there is, and hiding it would leave the filter
+        # with nothing to pick.
+        seen_spanish = {r[0] for r in conn.execute(
+            "SELECT DISTINCT has_spanish_audio FROM library_items"
+        ).fetchall()}
+        spanish_states = [
+            v for v, present in [
+                ("yes", 1 in seen_spanish), ("no", 0 in seen_spanish), ("unknown", None in seen_spanish),
+            ] if present
+        ]
+
     return {
         "providers": providers,
         "qualities": qualities,
@@ -747,6 +766,7 @@ def library_filter_options(current_user: dict = Depends(require_auth)) -> dict:
         "instances": instances,
         "emu_states": emu_states,
         "aporte_states": aporte_states,
+        "spanish_states": spanish_states,
     }
 
 

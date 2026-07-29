@@ -169,6 +169,24 @@ def _split_languages(raw: Optional[str]) -> list[str]:
     return langs
 
 
+def has_castellano_audio(audio_languages: Optional[str]) -> Optional[int]:
+    """1 = the file has a Castilian Spanish audio track, 0 = it does not,
+    None = unknown (no MediaInfo read yet, so the field is empty).
+
+    Deliberately strict about which Spanish counts: LANG_MAP resolves
+    es/spa/spanish/castellano/es-es to ESP but es-419/latino/spa-lat to LAT, so
+    a Latin-American-only track answers 0, not 1. Note Radarr/Sonarr rarely tag
+    es-419 at all (a Latin-only rip usually arrives as plain "spa"), so this is
+    only as accurate as what the *arr reports.
+
+    Shares _split_languages with build_audio_string on purpose: the column can
+    never disagree with the ESP/DUAL/MULTI token the nomenclature builds.
+    """
+    if not audio_languages or not str(audio_languages).strip():
+        return None
+    return 1 if "ESP" in _split_languages(audio_languages) else 0
+
+
 def build_audio_string(
     audio_codec: Optional[str],
     audio_languages: Optional[str],

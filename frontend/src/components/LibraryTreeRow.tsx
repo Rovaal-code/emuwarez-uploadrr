@@ -53,6 +53,17 @@ export function EmuStatusCell({ item }: { item: LibraryItemResponse }) {
   return <StatusBadge status={status} type="emu" />
 }
 
+// Castilian audio. null is a real third state, not a styling fallback: an
+// episode whose MediaInfo hasn't been read yet, or a season/series with no
+// held children to roll up. Showing it as "No" would read as "confirmed
+// without Spanish", which is exactly the thing you'd act on.
+export function SpanishAudioCell({ item }: { item: LibraryItemResponse }) {
+  if (item.has_spanish_audio == null) {
+    return <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>
+  }
+  return <StatusBadge status={item.has_spanish_audio === 1 ? 'Sí' : 'No'} type="spanish" />
+}
+
 // Memoized: the list can hold hundreds of rows, and typing in the title
 // search box (LibraryPage's own `search` state) used to re-render every one
 // of them on every keystroke even though their own props hadn't changed —
@@ -109,7 +120,7 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
   }
 
   const indent = depth * 20
-  const colSpan = compact ? 10 : 11
+  const colSpan = compact ? 11 : 12
 
   return (
     <>
@@ -197,6 +208,7 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
             : <span style={{ color: 'var(--text-muted)' }}>—</span>}
         </td>
         <td style={{ whiteSpace: 'nowrap' }}><EmuStatusCell item={item} /></td>
+        <td style={{ whiteSpace: 'nowrap' }}><SpanishAudioCell item={item} /></td>
         <td style={{ whiteSpace: 'nowrap' }}>
           {item.size_bytes
             ? <ValueChip><ValueIcon><SizeValueIcon /></ValueIcon><span className="txt">{formatBytes(item.size_bytes)}</span></ValueChip>

@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 30
+SCHEMA_VERSION = 31
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -1032,6 +1032,18 @@ def _migrate_emu_catalog(conn: sqlite3.Connection) -> None:
             pass
 
 
+def _migrate_library_items_spanish_audio(conn: sqlite3.Connection) -> None:
+    """Per-item "does this have Castilian audio" flag, shown as the Español
+    column in Biblioteca. Rolled up for seasons/series (see
+    services/library.py::recompute_spanish_audio), so it can't be a plain
+    expression over audio_languages — only movie/episode leaves have that
+    field. Purely additive."""
+    try:
+        conn.execute("ALTER TABLE library_items ADD COLUMN has_spanish_audio INTEGER")
+    except sqlite3.OperationalError:
+        pass  # 1 yes, 0 no, NULL unknown/not computed
+
+
 def _migrate_notifications_table(conn: sqlite3.Connection) -> None:
     """In-app notification feed backing the topbar bell. Each row is one event
     (request published, upload completed, request match found, …). read_at is
@@ -1424,6 +1436,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_anime_id_map(conn)
         _migrate_library_items_backdrop_url(conn)
         _migrate_library_items_missing_since(conn)
+        _migrate_library_items_spanish_audio(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

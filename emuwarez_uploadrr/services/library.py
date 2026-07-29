@@ -552,6 +552,13 @@ def sync_all(conn: sqlite3.Connection, *, include_episodes: bool = False) -> dic
             recompute_emu_catalog_status(conn)
         except Exception:
             logger.warning("No se pudo recalcular el estado de eMuwarez tras la sincronización de biblioteca", exc_info=True)
+        # Same reasoning for the Español column: audio_languages just changed
+        # for whatever came in, and the season/series rollups above it can only
+        # be recomputed once every episode of the pass is stored.
+        try:
+            recompute_spanish_audio(conn)
+        except Exception:
+            logger.warning("No se pudo recalcular el audio en castellano tras la sincronización de biblioteca", exc_info=True)
         summary = f"{total} elementos sincronizados; {missing} no disponibles"
         finish_task(conn, task_id, "completed", summary, "\n".join(details))
         logger.info("Sincronización de biblioteca terminada: %d elementos, %d no disponibles%s",
@@ -568,6 +575,95 @@ def sync_all(conn: sqlite3.Connection, *, include_episodes: bool = False) -> dic
 # ---------------------------------------------------------------------------
 
 _MISSING_STATUSES = LocalStatus.not_available()
+
+# ---------------------------------------------------------------------------
+# Castilian audio ("Español" column)
+# ---------------------------------------------------------------------------
+
+# Statuses that mean "you actually hold this file", so it counts towards the
+# season/series rollup. Same trio the eMuwarez comparison uses.
+_HELD_STATUSES = (LocalStatus.AVAILABLE.value, LocalStatus.UPLOADED.value, LocalStatus.UPLOADING.value)
+
+
+def _rollup_spanish(yes: int, no: int, unknown: int) -> Optional[int]:
+    """Fold a set of children into the parent's value. "Sí" demands that EVERY
+    held child is Sí, so a single confirmed No settles it as No even when other
+    children are still unknown, and any remaining unknown blocks a Sí."""
+    if no:
+        return 0
+    if unknown:
+        return None
+    return 1 if yes else None  # nothing held → unknown, not a vacuous "Sí"
+
+
+def recompute_spanish_audio(conn: sqlite3.Connection) -> int:
+    """Recompute library_items.has_spanish_audio for every row, and return how
+    many rows ended up with a known (non-NULL) value.
+
+    Three levels: movie/episode leaves read their own audio_languages; a season
+    folds its held episodes; a series folds the held episodes of all its
+    seasons. Folding the series over episodes rather than over its seasons'
+    stored values is deliberate and equivalent: a season with no held episodes
+    is unknown, and letting it propagate would turn the whole series unknown
+    instead of just skipping it."""
+    from .emu_format import has_castellano_audio
+
+    held = ",".join("?" * len(_HELD_STATUSES))
+
+    # 1) Leaves — the only rows that carry audio_languages of their own.
+    leaves = conn.execute(
+        "SELECT id, audio_languages FROM library_items WHERE item_type IN ('movie','episode')"
+    ).fetchall()
+    conn.executemany(
+        "UPDATE library_items SET has_spanish_audio = ? WHERE id = ?",
+        [(has_castellano_audio(r["audio_languages"]), r["id"]) for r in leaves],
+    )
+
+    # 2) Seasons — fold their own held episodes.
+    conn.execute(
+        "UPDATE library_items SET has_spanish_audio = NULL WHERE item_type IN ('series','season')"
+    )
+    season_rows = conn.execute(
+        f"""
+        SELECT parent_id AS pid,
+               SUM(CASE WHEN has_spanish_audio = 1 THEN 1 ELSE 0 END) AS yes,
+               SUM(CASE WHEN has_spanish_audio = 0 THEN 1 ELSE 0 END) AS no,
+               SUM(CASE WHEN has_spanish_audio IS NULL THEN 1 ELSE 0 END) AS unk
+          FROM library_items
+         WHERE item_type = 'episode' AND parent_id IS NOT NULL AND local_status IN ({held})
+         GROUP BY parent_id
+        """,
+        _HELD_STATUSES,
+    ).fetchall()
+    conn.executemany(
+        "UPDATE library_items SET has_spanish_audio = ? WHERE id = ? AND item_type = 'season'",
+        [(_rollup_spanish(r["yes"], r["no"], r["unk"]), r["pid"]) for r in season_rows],
+    )
+
+    # 3) Series — fold every held episode hanging off any of its seasons.
+    series_rows = conn.execute(
+        f"""
+        SELECT s.parent_id AS pid,
+               SUM(CASE WHEN e.has_spanish_audio = 1 THEN 1 ELSE 0 END) AS yes,
+               SUM(CASE WHEN e.has_spanish_audio = 0 THEN 1 ELSE 0 END) AS no,
+               SUM(CASE WHEN e.has_spanish_audio IS NULL THEN 1 ELSE 0 END) AS unk
+          FROM library_items e
+          JOIN library_items s ON e.parent_id = s.id AND s.item_type = 'season'
+         WHERE e.item_type = 'episode' AND s.parent_id IS NOT NULL AND e.local_status IN ({held})
+         GROUP BY s.parent_id
+        """,
+        _HELD_STATUSES,
+    ).fetchall()
+    conn.executemany(
+        "UPDATE library_items SET has_spanish_audio = ? WHERE id = ? AND item_type = 'series'",
+        [(_rollup_spanish(r["yes"], r["no"], r["unk"]), r["pid"]) for r in series_rows],
+    )
+
+    conn.commit()
+    row = conn.execute(
+        "SELECT COUNT(*) AS n FROM library_items WHERE has_spanish_audio IS NOT NULL"
+    ).fetchone()
+    return int(row["n"]) if row else 0
 
 
 # Sentinel status value the Biblioteca filter uses for "todos los no
@@ -594,6 +690,7 @@ def _build_library_filter(
     instance_id: Optional[int] = None,
     parent_id: Optional[int] = None,
     search: Optional[str] = None,
+    spanish: Optional[str] = None,
 ) -> tuple[list[str], list]:
     """Shared WHERE-clause builder for list_library()/count_library() — used
     to be duplicated (and count_library() silently dropped request/
@@ -623,6 +720,15 @@ def _build_library_filter(
     if instance_id:
         where.append("instance_id = ?")
         params.append(instance_id)
+    # Filtered in SQL, not in the browser: the Español column is the whole
+    # library's worth of rows, and filtering it client-side would mean fetching
+    # every level up to LOAD_LIMIT just to throw most of it away.
+    if spanish == "yes":
+        where.append("has_spanish_audio = 1")
+    elif spanish == "no":
+        where.append("has_spanish_audio = 0")
+    elif spanish == "unknown":
+        where.append("has_spanish_audio IS NULL")
     if parent_id is not None:
         if parent_id == TOP_LEVEL_PARENT_FILTER:
             where.append("parent_id IS NULL")
@@ -647,6 +753,11 @@ _LIBRARY_SORT = {
     "updated_desc": "updated_at DESC, title COLLATE TITLE_SORT ASC",
     "year_desc": "year IS NULL, year DESC, title COLLATE TITLE_SORT ASC",
     "year_asc": "year IS NULL, year ASC, title COLLATE TITLE_SORT ASC",
+    # Rows without a size (series/season rollups, anything not downloaded) sort
+    # last in both directions rather than piling up at the top of the ascending
+    # one, which is never what you're looking for.
+    "size_desc": "size_bytes IS NULL, size_bytes DESC, title COLLATE TITLE_SORT ASC",
+    "size_asc": "size_bytes IS NULL, size_bytes ASC, title COLLATE TITLE_SORT ASC",
 }
 DEFAULT_LIBRARY_SORT = "title_asc"
 
@@ -662,6 +773,7 @@ def list_library(
     instance_id: Optional[int] = None,
     parent_id: Optional[int] = None,
     search: Optional[str] = None,
+    spanish: Optional[str] = None,
     sort: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
@@ -669,7 +781,7 @@ def list_library(
     where, params = _build_library_filter(
         status=status, request=request, nomenclature=nomenclature,
         item_type=item_type, origin=origin, instance_id=instance_id,
-        parent_id=parent_id, search=search,
+        parent_id=parent_id, search=search, spanish=spanish,
     )
     sql = "SELECT * FROM library_items"
     if where:
@@ -698,11 +810,12 @@ def count_library(
     instance_id: Optional[int] = None,
     parent_id: Optional[int] = None,
     search: Optional[str] = None,
+    spanish: Optional[str] = None,
 ) -> int:
     where, params = _build_library_filter(
         status=status, request=request, nomenclature=nomenclature,
         item_type=item_type, origin=origin, instance_id=instance_id,
-        parent_id=parent_id, search=search,
+        parent_id=parent_id, search=search, spanish=spanish,
     )
     sql = "SELECT COUNT(*) FROM library_items"
     if where:

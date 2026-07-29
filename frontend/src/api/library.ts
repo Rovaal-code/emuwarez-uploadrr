@@ -14,6 +14,9 @@ export interface LibraryQueryParams {
   request_status?: string
   nomenclature?: string
   search?: string
+  // Español column. Filtered in SQL by the backend (unlike the provider/
+  // quality/source ones, which are client-side over the loaded rows).
+  spanish?: 'yes' | 'no' | 'unknown'
   sort?: string
   limit?: number
   offset?: number
@@ -29,6 +32,7 @@ export async function getLibrary(params: LibraryQueryParams = {}): Promise<Libra
   if (params.request_status) qs.set('request_status', params.request_status)
   if (params.nomenclature) qs.set('nomenclature', params.nomenclature)
   if (params.search) qs.set('search', params.search)
+  if (params.spanish) qs.set('spanish', params.spanish)
   if (params.sort) qs.set('sort', params.sort)
   if (params.limit !== undefined) qs.set('limit', String(params.limit))
   if (params.offset !== undefined) qs.set('offset', String(params.offset))
@@ -116,6 +120,7 @@ export interface LibraryFilterOptions {
   instances: { id: number; type: 'radarr' | 'sonarr'; name: string }[]
   emu_states: ('candidate' | 'present')[]
   aporte_states: ('yes' | 'no')[]
+  spanish_states: ('yes' | 'no' | 'unknown')[]
 }
 
 export async function getLibraryFilterOptions(): Promise<LibraryFilterOptions> {

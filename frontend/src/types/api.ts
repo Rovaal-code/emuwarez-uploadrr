@@ -129,6 +129,9 @@ export interface LibraryItemResponse {
   video_codec: string | null
   audio_codec: string | null
   audio_languages: string | null
+  // 1 = has Castilian audio, 0 = does not, null = unknown (no MediaInfo yet,
+  // or a season/series with no held children to roll up).
+  has_spanish_audio: number | null
   subtitle_languages: string | null
   size_bytes: number | null
   local_status: string

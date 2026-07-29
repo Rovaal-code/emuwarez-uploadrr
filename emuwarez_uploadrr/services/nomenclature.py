@@ -605,6 +605,17 @@ def _refresh_media_info_from_real_file(item: dict, *, conn) -> None:
     )
     conn.commit()
 
+    # audio_languages just changed from a real file read, which is exactly the
+    # value the Español column is derived from — refresh it (and the season/
+    # series rollups above this item) instead of leaving them stale until the
+    # next library sync. Best-effort: a failure here must not break the
+    # nomenclature proposal that's actually being built.
+    try:
+        from .library import recompute_spanish_audio
+        recompute_spanish_audio(conn)
+    except Exception:
+        logger.warning("No se pudo recalcular el audio en castellano tras leer el MediaInfo real", exc_info=True)
+
     # A manually-edited proposal (fields_json is only ever written by the
     # field editor's save_nomenclature_fields()) must not be silently
     # discarded just because the corrected codec/audio metadata differs from

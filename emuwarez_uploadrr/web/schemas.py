@@ -570,6 +570,9 @@ class LibraryItemResponse(BaseModel):
     audio_codec: Optional[str] = None
     audio_languages: Optional[str] = None
     subtitle_languages: Optional[str] = None
+    # Español column: 1 has Castilian audio, 0 does not, None unknown (no
+    # MediaInfo yet, or a season/series with nothing held to roll up).
+    has_spanish_audio: Optional[int] = None
     size_bytes: Optional[int] = None
     local_status: str
     request_status: str

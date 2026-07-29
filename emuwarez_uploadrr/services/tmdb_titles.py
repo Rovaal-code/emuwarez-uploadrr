@@ -103,6 +103,50 @@ def resolve_movie_title(
     return title or fallback
 
 
+# Pseudo-language for the ORIGINAL title's row in tmdb_title_cache: it isn't a
+# translation, but it's the same (tmdb_id, media_type, key) -> title lookup and
+# deserves the same "hit TMDb once" caching.
+_ORIGINAL_LANG = "original"
+
+
+def resolve_original_title(
+    conn: sqlite3.Connection,
+    media_type: str,
+    tmdb_id: Optional[str | int],
+    fallback: Optional[str],
+) -> Optional[str]:
+    """The content's ORIGINAL title (usually English), for the Título
+    dropdown's second option. Falls back to `fallback` (library_items.
+    original_title, which Radarr fills and Sonarr does not) when TMDb can't
+    answer. Never raises."""
+    if not tmdb_id or not tmdb_configured(conn):
+        return fallback
+    tmdb_id = str(tmdb_id)
+    kind = "movie" if media_type in ("movie", "film") else "tv"
+
+    row = conn.execute(
+        "SELECT title FROM tmdb_title_cache WHERE tmdb_id = ? AND media_type = ? AND language = ?",
+        (tmdb_id, kind, _ORIGINAL_LANG),
+    ).fetchone()
+    if row is not None:
+        return row["title"] or fallback
+
+    try:
+        title = (tmdb.get_movie_original_title(int(tmdb_id), conn=conn) if kind == "movie"
+                 else tmdb.get_tv_original_name(int(tmdb_id), conn=conn))
+    except Exception:
+        # Transient (no key, network, rate limit): don't cache a miss, just use
+        # whatever the library row already had.
+        return fallback
+
+    conn.execute(
+        "INSERT OR REPLACE INTO tmdb_title_cache (tmdb_id, media_type, language, title, fetched_at) "
+        "VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)",
+        (tmdb_id, kind, _ORIGINAL_LANG, title),
+    )
+    return title or fallback
+
+
 def resolve_localized_title(
     conn: sqlite3.Connection,
     media_type: str,

@@ -555,8 +555,12 @@ def build_editable_nomenclature_fields(
                 title = srow.get("title") or title
                 original_title = srow.get("original_title") or original_title
                 title_tmdb_id = srow.get("tmdb_id") or title_tmdb_id
-        from .tmdb_titles import resolve_localized_title
+        from .tmdb_titles import resolve_localized_title, resolve_original_title
         title, title_warning = resolve_localized_title(conn, media_type, title_tmdb_id, title)
+        # TMDb, not just the stored column: Sonarr's series payload has no
+        # originalTitle field, so library_items.original_title is always empty
+        # for a series and the dropdown would collapse to a single, dead option.
+        original_title = resolve_original_title(conn, media_type, title_tmdb_id, original_title)
         title_options = build_title_options(title, original_title)
 
         def _se_token() -> str | None:

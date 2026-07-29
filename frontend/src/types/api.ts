@@ -405,7 +405,9 @@ export interface SeasonPackEpisodePlan {
 }
 
 export interface SeasonPackPlanResponse {
-  status: 'valid' | 'blocked'
+  // 'cancelled': the wizard was closed while the plan was still being built,
+  // so the server stopped at the next episode boundary. Not an error state.
+  status: 'valid' | 'blocked' | 'cancelled'
   errors: string[]
   warnings: string[]
   season_pack_title?: string | null

@@ -17,7 +17,7 @@ import type { MediaInfoReport } from '../api/library'
 import { CheckStatusIcon } from './DetailCard'
 import { SourceComparisonModal } from './SourceComparisonModal'
 import {
-  previewSeasonPack, getSeasonPlanProgress, getSeasonEpisodeNames,
+  previewSeasonPack, getSeasonPlanProgress, getSeasonEpisodeNames, cancelSeasonPackPreview,
   getSeasonEpisodeMediaInfo, getSeasonEpisodeRemuxPreview, previewSeasonPackFields,
   type SeasonPlanProgress, type SeasonEpisodeName, type SeasonEpisodeMediaInfo, type SeasonEpisodeRemux,
 } from '../api/seasonPack'
@@ -371,7 +371,7 @@ const INTERNAL_TITLE_LABEL = (
   </span>
 )
 
-export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect, multiSeason }: Props) {
+export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNavigate, preselect, multiSeason }: Props) {
   const isSeries = item.item_type === 'series'
   const isSeason = item.item_type === 'season'
   const needsSelection = isSeries || isSeason
@@ -462,6 +462,11 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
   // live "N de M capítulos" counter (real work per episode server-side).
   const [seasonPlan, setSeasonPlan] = useState<SeasonPackPlanResponse | null>(null)
   const [seasonPlanLoading, setSeasonPlanLoading] = useState(false)
+  // Which season (if any) has a plan being built right now, so closing the
+  // wizard can tell the server to stop. A ref, not state: the close handler
+  // must read the value at the moment of the click, not the one captured when
+  // it was last rendered.
+  const buildingPlanFor = useRef<number | null>(null)
   const [seasonPlanError, setSeasonPlanError] = useState<string | null>(null)
   const [seasonProgress, setSeasonProgress] = useState<SeasonPlanProgress>({ done: 0, total: 0, current_title: null })
   // Live-recomputed pack title while editing Source/Proveedor/Tag (null
@@ -665,6 +670,7 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
   const loadSeasonPlan = useCallback(async () => {
     if (targetId == null) return
     setSeasonPlanLoading(true); setSeasonPlanError(null)
+    buildingPlanFor.current = targetId
     setSeasonProgress({ done: 0, total: 0, current_title: null })
     setSeasonTitlePreview(null)
     const poll = window.setInterval(async () => {
@@ -700,15 +706,35 @@ export function UploadWizardModal({ item, onClose, onDone, onNavigate, preselect
       })
       setInitialTag(saved?.tag || plan.release_tag || 'EMUWAREZ')
       setSourceComparison(plan.source_comparison ?? null)
-      if (plan.status !== 'valid') setSeasonPlanError(plan.errors.join(' '))
+      // 'cancelled' isn't a failure: the user closed the wizard mid-build and
+      // the server stopped. Showing it as an error would flash a red message
+      // over a modal that's already going away.
+      if (plan.status !== 'valid' && plan.status !== 'cancelled') {
+        setSeasonPlanError(plan.errors.join(' '))
+      }
     } catch (e: unknown) {
       setSeasonPlan(null)
       setSeasonPlanError(e instanceof Error ? e.message : 'Error preparando la temporada')
     } finally {
       window.clearInterval(poll)
+      buildingPlanFor.current = null
       setSeasonPlanLoading(false)
     }
   }, [targetId, seasonOverridesById])
+
+  // Closing the wizard while a season plan is being built has to stop the
+  // server too: it runs one real nomenclature proposal per episode, so a 24
+  // episode season kept the CPU busy long after the modal was gone. Wraps
+  // EVERY exit (the ✕, the overlay click, Cancelar) — they all called onClose
+  // directly before.
+  const onClose = useCallback(() => {
+    const seasonId = buildingPlanFor.current
+    if (seasonId != null) {
+      buildingPlanFor.current = null
+      void cancelSeasonPackPreview(seasonId)
+    }
+    onCloseProp()
+  }, [onCloseProp])
 
   useEffect(() => { if (step === 1 && targetIsSeason) loadSeasonPlan() }, [step, targetIsSeason, loadSeasonPlan])
 

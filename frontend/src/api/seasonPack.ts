@@ -42,6 +42,15 @@ export function getSeasonPlanProgress(seasonId: number): Promise<SeasonPlanProgr
   return api.get<SeasonPlanProgress>(`/library/season/${seasonId}/pack-preview/progress`)
 }
 
+// Tells the server to stop building this season's plan (one real proposal per
+// episode). Called when the wizard closes mid-build; best-effort by design, a
+// failure here must never block closing the modal.
+export async function cancelSeasonPackPreview(seasonId: number): Promise<void> {
+  try {
+    await api.post(`/library/season/${seasonId}/pack-preview/cancel`, {})
+  } catch { /* closing anyway */ }
+}
+
 export interface SeasonEpisodeName {
   episode_id: number
   episode_number?: number | null

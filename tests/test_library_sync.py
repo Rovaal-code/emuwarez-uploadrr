@@ -838,7 +838,11 @@ def test_unique_content_excludes_season_with_inconsistent_episodes(mem_conn):
     rollup fields aren't all filled in — that only happens when every
     episode agrees (_update_season_rollup) — since build_season_pack_plan
     would block the actual upload anyway. Genuinely unique, but not
-    actually uploadable, so it shouldn't be recommended as if it were."""
+    actually uploadable, so it shouldn't be recommended as if it were.
+
+    Subtitles are NOT one of those fields any more: they may differ between
+    episodes as long as all of them carry Castilian, so the disqualifying
+    signal for them is has_spanish_subs, not subtitle_languages being NULL."""
     from emuwarez_uploadrr.services.library import get_dashboard_recommendations
 
     mem_conn.execute(
@@ -846,22 +850,43 @@ def test_unique_content_excludes_season_with_inconsistent_episodes(mem_conn):
         "VALUES ('Ready Show', 'series', 'Disponible', 1)"
     )
     series_id = mem_conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-    # Consistent season: every rollup field filled in — must appear.
+    # Consistent season: every rollup field filled in, Castilian subs — appears.
     mem_conn.execute(
         "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, parent_id, "
-        "resolution, source, video_codec, audio_codec, audio_languages, subtitle_languages) "
+        "resolution, source, video_codec, audio_codec, audio_languages, subtitle_languages, "
+        "has_spanish_subs) "
         "VALUES ('Ready Show - Temporada 1', 'season', 'Disponible', 0, ?, "
-        "'1080p', 'WEB-DL', 'x264', 'AAC', 'jpn', 'spa')",
+        "'1080p', 'WEB-DL', 'x264', 'AAC', 'jpn', 'spa', 1)",
         (series_id,),
     )
-    # Inconsistent season: complete (Disponible) but episodes disagreed on
-    # something, so its own rollup field (subtitle_languages) is None —
-    # must NOT appear even though it's technically "unique" content.
+    # Inconsistent season: complete (Disponible) but episodes disagreed on the
+    # video codec, so that rollup field is None — must NOT appear even though
+    # it's technically "unique" content.
     mem_conn.execute(
         "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, parent_id, "
-        "resolution, source, video_codec, audio_codec, audio_languages, subtitle_languages) "
+        "resolution, source, video_codec, audio_codec, audio_languages, subtitle_languages, "
+        "has_spanish_subs) "
         "VALUES ('Ready Show - Temporada 2', 'season', 'Disponible', 0, ?, "
-        "'1080p', 'WEB-DL', 'x264', 'AAC', 'jpn', NULL)",
+        "'1080p', 'WEB-DL', NULL, 'AAC', 'jpn', 'spa', 1)",
+        (series_id,),
+    )
+    # Subtitle tracks differ across episodes (rollup NULL) but every one has
+    # Castilian — the pack IS uploadable now, so this one must appear.
+    mem_conn.execute(
+        "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, parent_id, "
+        "resolution, source, video_codec, audio_codec, audio_languages, subtitle_languages, "
+        "has_spanish_subs) "
+        "VALUES ('Ready Show - Temporada 3', 'season', 'Disponible', 0, ?, "
+        "'1080p', 'WEB-DL', 'x264', 'AAC', 'jpn', NULL, 1)",
+        (series_id,),
+    )
+    # Same, but an episode has no Castilian subs at all — still blocked.
+    mem_conn.execute(
+        "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, parent_id, "
+        "resolution, source, video_codec, audio_codec, audio_languages, subtitle_languages, "
+        "has_spanish_subs) "
+        "VALUES ('Ready Show - Temporada 4', 'season', 'Disponible', 0, ?, "
+        "'1080p', 'WEB-DL', 'x264', 'AAC', 'jpn', 'eng', 0)",
         (series_id,),
     )
     mem_conn.commit()
@@ -870,6 +895,8 @@ def test_unique_content_excludes_season_with_inconsistent_episodes(mem_conn):
     unique_titles = [r["title"] for r in recs if r["rec_group"] == 2]
     assert "Ready Show - Temporada 1" in unique_titles
     assert "Ready Show - Temporada 2" not in unique_titles
+    assert "Ready Show - Temporada 3" in unique_titles
+    assert "Ready Show - Temporada 4" not in unique_titles
 
 
 def test_unique_content_lists_seasons_not_whole_series(mem_conn):
@@ -889,9 +916,10 @@ def test_unique_content_lists_seasons_not_whole_series(mem_conn):
     for n in (1, 2):
         mem_conn.execute(
             "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, parent_id, "
-            "resolution, source, video_codec, audio_codec, audio_languages, subtitle_languages) "
+            "resolution, source, video_codec, audio_codec, audio_languages, subtitle_languages, "
+            "has_spanish_subs) "
             f"VALUES ('Whole Show - Temporada {n}', 'season', 'Disponible', 0, ?, "
-            "'1080p', 'WEB-DL', 'x264', 'AAC', 'jpn', 'spa')",
+            "'1080p', 'WEB-DL', 'x264', 'AAC', 'jpn', 'spa', 1)",
             (series_id,),
         )
     mem_conn.commit()
@@ -907,10 +935,13 @@ def test_dashboard_summary_unique_seasons_excludes_inconsistent(mem_conn):
     """Regression: the Panel's "Contenido único" stat card counted a season
     as soon as it was local_status=Disponible and emu_in_catalog=0, with no
     check that its episodes actually agree on resolution/source/codecs/
-    audio/subs — the same requirement Recomendaciones' Group 2 and
-    build_season_pack_plan already enforce. A season whose episodes
-    disagree is genuinely unique but can't actually be uploaded as a pack,
-    so it shouldn't inflate this count."""
+    audio, and carry Castilian subtitles — the same requirement
+    Recomendaciones' Group 2 and build_season_pack_plan already enforce. A
+    season whose episodes disagree is genuinely unique but can't actually be
+    uploaded as a pack, so it shouldn't inflate this count.
+
+    Subtitles count by content, not by agreement: differing subtitle tracks
+    no longer disqualify a season, a missing Castilian one does."""
     from emuwarez_uploadrr.services.library import get_dashboard_summary
 
     mem_conn.execute(
@@ -919,11 +950,14 @@ def test_dashboard_summary_unique_seasons_excludes_inconsistent(mem_conn):
     )
     series_id = mem_conn.execute("SELECT last_insert_rowid()").fetchone()[0]
     # Consistent season with 2 episodes — must count (season + both episodes).
+    # Its subtitle tracks differ across episodes (rollup NULL) but all have
+    # Castilian, which is exactly the case that must NOT disqualify it.
     mem_conn.execute(
         "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, parent_id, "
-        "resolution, source, video_codec, audio_codec, audio_languages, subtitle_languages) "
+        "resolution, source, video_codec, audio_codec, audio_languages, subtitle_languages, "
+        "has_spanish_subs) "
         "VALUES ('Show - Temporada 1', 'season', 'Disponible', 0, ?, "
-        "'1080p', 'WEB-DL', 'x264', 'AAC', 'jpn', 'spa')",
+        "'1080p', 'WEB-DL', 'x264', 'AAC', 'jpn', NULL, 1)",
         (series_id,),
     )
     season1_id = mem_conn.execute("SELECT last_insert_rowid()").fetchone()[0]
@@ -933,13 +967,14 @@ def test_dashboard_summary_unique_seasons_excludes_inconsistent(mem_conn):
             f"VALUES ('Show S01E0{n}', 'episode', 'Disponible', 0, ?, {n})",
             (season1_id,),
         )
-    # Inconsistent season (episodes disagreed on something) — must not count,
-    # nor should its own episodes.
+    # Inconsistent season (episodes disagreed on the video codec) — must not
+    # count, nor should its own episodes.
     mem_conn.execute(
         "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, parent_id, "
-        "resolution, source, video_codec, audio_codec, audio_languages, subtitle_languages) "
+        "resolution, source, video_codec, audio_codec, audio_languages, subtitle_languages, "
+        "has_spanish_subs) "
         "VALUES ('Show - Temporada 2', 'season', 'Disponible', 0, ?, "
-        "'1080p', 'WEB-DL', 'x264', 'AAC', 'jpn', NULL)",
+        "'1080p', 'WEB-DL', NULL, 'AAC', 'jpn', 'spa', 1)",
         (series_id,),
     )
     season2_id = mem_conn.execute("SELECT last_insert_rowid()").fetchone()[0]
@@ -947,6 +982,23 @@ def test_dashboard_summary_unique_seasons_excludes_inconsistent(mem_conn):
         "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, parent_id, episode_number) "
         "VALUES ('Show S02E01', 'episode', 'Disponible', 0, ?, 1)",
         (season2_id,),
+    )
+    mem_conn.commit()
+
+    # And a third one where an episode simply has no Castilian subtitles.
+    mem_conn.execute(
+        "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, parent_id, "
+        "resolution, source, video_codec, audio_codec, audio_languages, subtitle_languages, "
+        "has_spanish_subs) "
+        "VALUES ('Show - Temporada 3', 'season', 'Disponible', 0, ?, "
+        "'1080p', 'WEB-DL', 'x264', 'AAC', 'jpn', 'eng', 0)",
+        (series_id,),
+    )
+    season3_id = mem_conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    mem_conn.execute(
+        "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, parent_id, episode_number) "
+        "VALUES ('Show S03E01', 'episode', 'Disponible', 0, ?, 1)",
+        (season3_id,),
     )
     mem_conn.commit()
 

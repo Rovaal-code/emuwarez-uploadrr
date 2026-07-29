@@ -743,3 +743,55 @@ def test_latin_only_subtitles_do_not_satisfy_the_rule(isolated_db, tmp_path):
     assert plan["status"] == "blocked"
     assert any("no tiene subtítulos en castellano" in e for e in plan["errors"])
     conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Cancelling an in-flight plan (the wizard was closed)
+# ---------------------------------------------------------------------------
+
+def test_plan_stops_early_when_cancelled(isolated_db, tmp_path, monkeypatch):
+    """Building a plan is one real nomenclature proposal per episode. Closing
+    the wizard has to stop that work, not just stop waiting for it."""
+    import emuwarez_uploadrr.services.season_pack as sp
+
+    conn = _open(isolated_db)
+    season_id = _seed_pack(conn, tmp_path, ["spa"] * 6)
+
+    real_build = sp.build_nomenclature_proposal
+    built = []
+
+    def counting_build(item_id, **kwargs):
+        built.append(item_id)
+        if len(built) == 2:            # user closes the wizard mid-build
+            sp.request_season_plan_cancel(season_id)
+        return real_build(item_id, **kwargs)
+
+    monkeypatch.setattr(sp, "build_nomenclature_proposal", counting_build)
+    plan = sp.build_season_pack_plan(season_id, conn=conn)
+
+    assert plan["status"] == "cancelled"
+    assert plan["errors"] == []          # not a failure, nothing to report
+    # Stopped at the next boundary instead of grinding through all 6.
+    assert len(built) == 2, built
+    conn.close()
+
+
+def test_cancel_flag_does_not_leak_into_the_next_plan(isolated_db, tmp_path):
+    """A stale flag would make the next season the user opens return
+    'cancelled' immediately, for no visible reason."""
+    from emuwarez_uploadrr.services.season_pack import (
+        build_season_pack_plan, request_season_plan_cancel,
+    )
+    conn = _open(isolated_db)
+    season_id = _seed_pack(conn, tmp_path, ["spa", "spa"])
+    request_season_plan_cancel(season_id)
+    build_season_pack_plan(season_id, conn=conn)          # consumes the flag
+    plan = build_season_pack_plan(season_id, conn=conn)   # must run normally
+    assert plan["status"] != "cancelled"
+    conn.close()
+
+
+def test_cancel_endpoint_is_safe_with_nothing_running(client, auth_headers):
+    r = client.post("/api/library/season/12345/pack-preview/cancel", headers=auth_headers)
+    assert r.status_code == 200
+    assert r.json()["status"] == "cancelling"

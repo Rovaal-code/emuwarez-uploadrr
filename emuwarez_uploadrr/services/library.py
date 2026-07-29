@@ -1035,14 +1035,18 @@ def get_dashboard_summary(conn: sqlite3.Connection) -> dict:
     # así que los capítulos se cuentan por su temporada única.
     #
     # Una temporada solo cuenta como "subible" si además de local_status =
-    # Disponible, sus 6 campos de rollup (services/library.py's
-    # _update_season_rollup, sync-time) NO son NULL — null en cualquiera de
-    # ellos significa justo que sus capítulos no coinciden entre sí (resolución/
-    # source/códecs/idiomas/subs), el mismo requisito de build_season_pack_plan
-    # para poder subirla como pack (isSeasonReady/seasonNotReadyReason en el
-    # frontend usan la misma señal). Sin este filtro, esta tarjeta contaba
-    # temporadas completas pero técnicamente inconsistentes como si se
-    # pudieran subir.
+    # Disponible cumple lo mismo que exige build_season_pack_plan: sus 5 campos
+    # de rollup (services/library.py's _update_season_rollup, sync-time) NO son
+    # NULL — null en cualquiera de ellos significa justo que sus capítulos no
+    # coinciden entre sí (resolución/source/códecs/idiomas) — y todos sus
+    # capítulos tienen subtítulos en castellano (has_spanish_subs = 1).
+    #
+    # Los subtítulos NO se comprueban ya por igualdad: eMuwarez acepta el pack
+    # aunque las pistas difieran mientras todas lleven castellano, así que
+    # exigir subtitle_languages IS NOT NULL dejaba fuera temporadas que sí son
+    # subibles. isSeasonReady/seasonNotReadyReason en el frontend usan la misma
+    # señal. Sin este filtro, esta tarjeta contaba temporadas completas pero
+    # técnicamente inconsistentes como si se pudieran subir.
     avail = LocalStatus.AVAILABLE.value
     uniq = conn.execute(
         """
@@ -1053,7 +1057,8 @@ def get_dashboard_summary(conn: sqlite3.Connection) -> dict:
         WHERE emu_in_catalog = 0 AND local_status = ?
           AND (item_type != 'season' OR (
                 resolution IS NOT NULL AND source IS NOT NULL AND video_codec IS NOT NULL
-                AND audio_codec IS NOT NULL AND audio_languages IS NOT NULL AND subtitle_languages IS NOT NULL
+                AND audio_codec IS NOT NULL AND audio_languages IS NOT NULL
+                AND has_spanish_subs = 1
               ))
         """,
         [avail],
@@ -1066,7 +1071,8 @@ def get_dashboard_summary(conn: sqlite3.Connection) -> dict:
         WHERE e.item_type = 'episode' AND e.local_status = ?
           AND s.item_type = 'season' AND s.emu_in_catalog = 0
           AND s.resolution IS NOT NULL AND s.source IS NOT NULL AND s.video_codec IS NOT NULL
-          AND s.audio_codec IS NOT NULL AND s.audio_languages IS NOT NULL AND s.subtitle_languages IS NOT NULL
+          AND s.audio_codec IS NOT NULL AND s.audio_languages IS NOT NULL
+          AND s.has_spanish_subs = 1
         """,
         [avail],
     ).fetchone()
@@ -1385,10 +1391,13 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
     # season can have its own readiness independent of its siblings, which a
     # single combined "series" row would hide.
     # A season also needs every episode to actually agree on resolution/
-    # source/codecs/audio/subs (services/library.py's _update_season_rollup
-    # only fills these in when they do) — otherwise it's genuinely unique
-    # but not actually uploadable as a pack (build_season_pack_plan blocks
-    # it), so it shouldn't be recommended as if it were ready to go.
+    # source/codecs/audio (services/library.py's _update_season_rollup only
+    # fills these in when they do) AND to have Castilian subtitles on every
+    # one of them — otherwise it's genuinely unique but not actually
+    # uploadable as a pack (build_season_pack_plan blocks it), so it
+    # shouldn't be recommended as if it were ready to go. Subtitles are
+    # checked by content, not by agreement: they may differ between episodes
+    # as long as all of them carry Castilian.
     for row in conn.execute(
         f"""SELECT {cols},
               COALESCE(json_extract(li.raw_json, '$.added'),
@@ -1400,7 +1409,7 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
               AND (li.item_type != 'season' OR (
                   li.resolution IS NOT NULL AND li.source IS NOT NULL
                   AND li.video_codec IS NOT NULL AND li.audio_codec IS NOT NULL
-                  AND li.audio_languages IS NOT NULL AND li.subtitle_languages IS NOT NULL
+                  AND li.audio_languages IS NOT NULL AND li.has_spanish_subs = 1
               ))"""
     ).fetchall():
         _push(dict(row), 2)

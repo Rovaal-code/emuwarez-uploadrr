@@ -55,6 +55,19 @@ def preview_season_pack_fields(
     return preview_season_pack_title(body.model_dump())
 
 
+@router.post("/library/season/{season_id}/pack-preview/cancel")
+def cancel_season_pack_preview(season_id: int, current_user: dict = Depends(require_auth)) -> dict:
+    """Abandon an in-flight pack-preview build. Called when the user closes the
+    wizard while "Comprobando N de M capítulos…" is still running: building a
+    plan is one build_nomenclature_proposal per episode, so without this the
+    server kept working through a whole season nobody was waiting for. The
+    build stops at its next episode boundary. Safe to call when nothing is
+    running (the flag is cleared whenever a plan starts)."""
+    from emuwarez_uploadrr.services.season_pack import request_season_plan_cancel
+    request_season_plan_cancel(season_id)
+    return {"status": "cancelling"}
+
+
 @router.get("/library/season/{season_id}/pack-preview/progress")
 def preview_season_pack_progress(season_id: int, current_user: dict = Depends(require_auth)) -> dict:
     """Live progress of a pack-preview build in flight for this season —

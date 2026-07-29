@@ -56,6 +56,33 @@ def get_tv_title(tmdb_id: int, *, language: str = "es-ES", api_key: str | None =
     return name or (data.get("original_name") or "").strip() or None
 
 
+def get_tv_original_name(tmdb_id: int, *, api_key: str | None = None, conn=None) -> str | None:
+    """A series' ORIGINAL name from TMDb (/tv/{id} `original_name`), for the
+    Título dropdown's second option. Needed because Sonarr's series payload has
+    no originalTitle field at all (unlike Radarr's movie one), so
+    library_items.original_title is always empty for a series."""
+    _key = api_key or _get_tmdb_api_key(conn)
+    if not _key:
+        raise IntegrationError("TMDb API key no configurada")
+    url = f"{_TMDB_BASE}/tv/{tmdb_id}?api_key={_key}"
+    data = request_json("GET", url)
+    if not isinstance(data, dict):
+        return None
+    return (data.get("original_name") or "").strip() or None
+
+
+def get_movie_original_title(tmdb_id: int, *, api_key: str | None = None, conn=None) -> str | None:
+    """A movie's ORIGINAL title from TMDb (/movie/{id} `original_title`)."""
+    _key = api_key or _get_tmdb_api_key(conn)
+    if not _key:
+        raise IntegrationError("TMDb API key no configurada")
+    url = f"{_TMDB_BASE}/movie/{tmdb_id}?api_key={_key}"
+    data = request_json("GET", url)
+    if not isinstance(data, dict):
+        return None
+    return (data.get("original_title") or "").strip() or None
+
+
 def get_movie_title(tmdb_id: int, *, language: str = "es-ES", api_key: str | None = None, conn=None) -> str | None:
     """Localized movie title from TMDb (/movie/{id}?language=xx). Returns the
     localized `title`, falling back to `original_title`; None if unavailable."""

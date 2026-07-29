@@ -53,11 +53,40 @@ from .nomenclature import (
 # single slow request is in flight.
 _PLAN_LOCK = threading.Lock()
 _PLAN_PROGRESS: dict[int, dict] = {}
+# Seasons whose in-flight plan the user asked to abandon (they closed the
+# wizard). Building a plan runs build_nomenclature_proposal once per episode,
+# which is real work — without this the server kept churning through a 24
+# episode season nobody was waiting for any more.
+_PLAN_CANCELLED: set[int] = set()
+
+
+class SeasonPlanCancelled(Exception):
+    """Raised out of the per-episode loop when the user closed the wizard."""
 
 
 def get_season_plan_progress(season_id: int) -> dict:
     with _PLAN_LOCK:
         return dict(_PLAN_PROGRESS.get(season_id, {"done": 0, "total": 0, "current_title": None}))
+
+
+def request_season_plan_cancel(season_id: int) -> None:
+    """Ask an in-flight build_season_pack_plan for this season to stop at its
+    next episode boundary. A no-op if none is running: the flag is cleared when
+    a plan starts, so it can't leak into the next one the user opens."""
+    with _PLAN_LOCK:
+        _PLAN_CANCELLED.add(season_id)
+
+
+def _raise_if_cancelled(season_id: int) -> None:
+    with _PLAN_LOCK:
+        cancelled = season_id in _PLAN_CANCELLED
+    if cancelled:
+        raise SeasonPlanCancelled()
+
+
+def _clear_season_plan_cancel(season_id: int) -> None:
+    with _PLAN_LOCK:
+        _PLAN_CANCELLED.discard(season_id)
 
 
 def _set_season_plan_progress(season_id: int, *, done: int, total: int, current_title: Optional[str] = None) -> None:
@@ -197,12 +226,18 @@ def _consistency_errors(episode_entries: list[dict]) -> list[str]:
 
 def _season_title_options(series: dict | None, season: dict, conn) -> list[dict]:
     """Título dropdown choices for a pack: the series' Spanish name and its
-    original one. Built from the STORED titles, deliberately not re-resolved
-    through TMDb here — build_season_pack_plan runs per episode over a whole
-    season and must stay cheap/offline."""
+    original one.
+
+    The original comes from TMDb (cached), not just the stored column: Sonarr's
+    series payload has no originalTitle field, so library_items.original_title
+    is always empty for a series and the dropdown would show one dead option.
+    One cached lookup per plan, not per episode."""
     from .source_assistant import build_title_options
+    from .tmdb_titles import resolve_original_title
     spanish = (series or {}).get("title") or season.get("title")
     original = (series or {}).get("original_title") or season.get("original_title")
+    tmdb_id = (series or {}).get("tmdb_id") or season.get("tmdb_id")
+    original = resolve_original_title(conn, "tv", tmdb_id, original)
     return build_title_options(spanish, original)
 
 
@@ -333,9 +368,13 @@ def build_season_pack_plan(
         # published as each one completes so the wizard can show "Comprobando
         # N de M capítulos…" while this (possibly slow) request is in flight.
         total = len(available_episodes)
+        _clear_season_plan_cancel(season_id)
         _set_season_plan_progress(season_id, done=0, total=total)
         episode_entries = []
         for i, ep in enumerate(available_episodes):
+            # Checked BEFORE each episode, so closing the wizard stops the work
+            # at the next boundary instead of at the end of the whole season.
+            _raise_if_cancelled(season_id)
             proposal = build_nomenclature_proposal(
                 ep["id"], conn=conn,
                 source_override=source_override, provider_override=provider_override,
@@ -451,7 +490,16 @@ def build_season_pack_plan(
             "year": year,
             "source_comparison": source_comparison,
         }
+    except SeasonPlanCancelled:
+        # Not an error: the user closed the wizard, so there is nothing to
+        # report and nothing was written (this function never touches disk).
+        # The endpoint turns this into a 499-style "cancelled" answer.
+        return {
+            "status": "cancelled", "errors": [], "warnings": [],
+            "season_pack_title": None, "pack_folder": None, "episodes": [],
+        }
     finally:
+        _clear_season_plan_cancel(season_id)
         if own:
             conn.close()
 

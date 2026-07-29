@@ -160,3 +160,76 @@ def test_single_item_fields_offer_both_titles(isolated_db, tmp_path, monkeypatch
     assert [o["value"] for o in result["title_options"]] == ["La Gran Evasión", "The Great Escape"]
     # The default stays the Spanish one.
     assert result["fields"]["title"] == "La Gran Evasión"
+
+
+# --- The original title for a SERIES has to come from TMDb -------------------
+
+def test_series_original_title_comes_from_tmdb(isolated_db, monkeypatch):
+    """The bug this guards: Sonarr's series payload has no originalTitle field,
+    so library_items.original_title is always NULL for a series and the Título
+    dropdown collapsed to a single, unusable option."""
+    from emuwarez_uploadrr.database import connect, init_db
+    from emuwarez_uploadrr.services import tmdb_titles
+    from emuwarez_uploadrr.services.tmdb_titles import resolve_original_title
+
+    conn = connect(isolated_db / "emuwarez_uploadrr.db")
+    init_db(conn)
+    from emuwarez_uploadrr.web.services.settings_service import set_setting
+    set_setting(conn, "tmdb.api_key", "fake-key")
+    conn.commit()
+
+    calls = []
+    monkeypatch.setattr(tmdb_titles.tmdb, "get_tv_original_name",
+                        lambda tid, **kw: calls.append(tid) or "The Tudors")
+
+    # Stored original is NULL (the real Sonarr situation) → TMDb fills it.
+    assert resolve_original_title(conn, "tv", "1399", None) == "The Tudors"
+    # And the answer is cached, so a whole multi-season batch hits TMDb once.
+    assert resolve_original_title(conn, "tv", "1399", None) == "The Tudors"
+    assert calls == [1399]
+
+
+def test_original_title_falls_back_when_tmdb_cannot_answer(isolated_db, monkeypatch):
+    from emuwarez_uploadrr.database import connect, init_db
+    from emuwarez_uploadrr.services import tmdb_titles
+    from emuwarez_uploadrr.services.tmdb_titles import resolve_original_title
+
+    conn = connect(isolated_db / "emuwarez_uploadrr.db")
+    init_db(conn)
+    from emuwarez_uploadrr.web.services.settings_service import set_setting
+    set_setting(conn, "tmdb.api_key", "fake-key")
+    conn.commit()
+
+    def boom(*a, **k):
+        raise RuntimeError("TMDb caído")
+    monkeypatch.setattr(tmdb_titles.tmdb, "get_tv_original_name", boom)
+    # Keeps whatever the library row had, and does NOT cache the miss.
+    assert resolve_original_title(conn, "tv", "1399", "Guardado") == "Guardado"
+    assert conn.execute(
+        "SELECT COUNT(*) AS n FROM tmdb_title_cache WHERE language = 'original'"
+    ).fetchone()["n"] == 0
+
+
+def test_no_tmdb_key_keeps_the_stored_original(isolated_db):
+    from emuwarez_uploadrr.database import connect, init_db
+    from emuwarez_uploadrr.services.tmdb_titles import resolve_original_title
+    conn = connect(isolated_db / "emuwarez_uploadrr.db")
+    init_db(conn)
+    assert resolve_original_title(conn, "movie", "550", "Fight Club") == "Fight Club"
+
+
+def test_season_pack_offers_the_tmdb_original_when_sonarr_has_none(season, monkeypatch):
+    """End to end: a series row with original_title NULL still gets two real
+    options in the pack's Título dropdown."""
+    from emuwarez_uploadrr.services import tmdb_titles
+    from emuwarez_uploadrr.services.season_pack import build_season_pack_plan
+    from emuwarez_uploadrr.web.services.settings_service import set_setting
+    conn, season_id = season
+    conn.execute("UPDATE library_items SET original_title = NULL WHERE item_type = 'series'")
+    conn.execute("UPDATE library_items SET tmdb_id = '1399' WHERE item_type = 'series'")
+    set_setting(conn, "tmdb.api_key", "fake-key")
+    conn.commit()
+    monkeypatch.setattr(tmdb_titles.tmdb, "get_tv_original_name", lambda tid, **kw: "The Tudors")
+
+    plan = build_season_pack_plan(season_id, conn=conn)
+    assert [o["value"] for o in plan["title_options"]] == ["Los Tudor", "The Tudors"]

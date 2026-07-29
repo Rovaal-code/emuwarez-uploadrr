@@ -202,6 +202,34 @@ def _notify_new_missing(conn: sqlite3.Connection, item: LibraryItem, item_id: in
         logger.exception("No se pudo emitir la notificación de contenido faltante para el item %s", item_id)
 
 
+def _notify_new_missing_series(
+    conn: sqlite3.Connection, series_item: LibraryItem, series_row_id: Optional[int],
+    season_count: int, episode_count: int,
+) -> None:
+    """One notification for a series that is missing in its entirety, instead of
+    one per season. Best-effort — never raises."""
+    try:
+        from .notification_center import emit
+        year_part = f" ({series_item.year})" if series_item.year else ""
+        emit(
+            conn, "content_missing_new",
+            "Serie nueva faltante",
+            f"No tienes ningún capítulo de sus {season_count} temporadas "
+            f"({episode_count} capítulos en total). "
+            "Puede que quieras crear una petición en eMuwarez.",
+            link="/library",
+            level="warning",
+            entity_type="library_item",
+            entity_id=series_row_id,
+            poster_url=series_item.poster_url,
+            content_title=f"{series_item.title or 'Serie'}{year_part}",
+        )
+    except Exception:
+        logger.exception(
+            "No se pudo emitir la notificación de serie faltante (%s)", series_item.title,
+        )
+
+
 def _notify_new_missing_season(
     conn: sqlite3.Connection, series_title: str, year, season_number: int,
     season_row_id: Optional[int], poster_url: Optional[str], episode_count: int,
@@ -236,12 +264,18 @@ def _notify_new_missing_season(
 _MIN_EPISODES_FOR_SEASON_NOTIFICATION = 2
 
 
+# Below this, one notification per season is already quiet enough, and naming
+# the seasons is more useful than collapsing them into the series.
+_MIN_SEASONS_FOR_SERIES_NOTIFICATION = 2
+
+
 def _emit_missing_notifications(
     conn: sqlite3.Connection,
     pending: list,
     ep_items_by_season: dict,
     season_row_id_by_number: dict,
     series_item: LibraryItem,
+    series_row_id: Optional[int] = None,
 ) -> None:
     """Decide, per season, whether to send one season notification or the
     individual episode ones collected during the sync pass.
@@ -249,12 +283,32 @@ def _emit_missing_notifications(
     Adding a series to Sonarr with nothing downloaded used to fire one
     notification per episode — twenty for a normal season, hundreds for a long
     running show — which buried everything else in the bell. A season whose
-    episodes are ALL missing says the same thing in one line."""
+    episodes are ALL missing says the same thing in one line, and a series
+    whose seasons are ALL missing says it in one line for the whole show."""
     if not pending:
         return
 
     deferred_ids = {id(item) for item, _ in pending}
     handled: set[int] = set()
+
+    # Seasons that actually hold episodes — an empty (unaired) season says
+    # nothing about whether the series is missing, so it must not be what
+    # stops the whole series from collapsing into one notification.
+    seasons_with_episodes = {n: eps for n, eps in ep_items_by_season.items() if eps}
+
+    # The whole series missing → one notification for it, not one per season.
+    # This is the "just added an 8 season show to Sonarr" case, which was ~150
+    # notifications before any of this and would still be 8 with only the
+    # per-season grouping below.
+    if len(seasons_with_episodes) >= _MIN_SEASONS_FOR_SERIES_NOTIFICATION and all(
+        all(e.local_status == LocalStatus.MISSING.value for e in eps)
+        for eps in seasons_with_episodes.values()
+    ) and any(id(e) in deferred_ids for eps in seasons_with_episodes.values() for e in eps):
+        _notify_new_missing_series(
+            conn, series_item, series_row_id, len(seasons_with_episodes),
+            sum(len(eps) for eps in seasons_with_episodes.values()),
+        )
+        return
 
     for season_num, eps in ep_items_by_season.items():
         if len(eps) < _MIN_EPISODES_FOR_SEASON_NOTIFICATION:
@@ -452,6 +506,7 @@ def _sync_one_series(
 
         _emit_missing_notifications(
             conn, pending_missing, ep_items_by_season, season_row_id_by_number, series_item,
+            series_row_id,
         )
 
     return missing

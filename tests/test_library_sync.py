@@ -1240,3 +1240,62 @@ def test_unique_content_counts_a_vose_film(mem_conn):
     assert get_dashboard_summary(mem_conn)["unique_movies"] == 1
     titles = [r["title"] for r in get_dashboard_recommendations(mem_conn) if r["rec_group"] == 2]
     assert titles == ["VOSE"]
+
+
+def test_a_whole_missing_series_sends_one_notification_not_one_per_season(sonarr_conn):
+    """The "just added an 8 season show" case: ~150 notifications before any
+    grouping, 8 with only the per-season one, 1 now."""
+    from emuwarez_uploadrr.services.notification_center import list_notifications
+    from emuwarez_uploadrr.services.instances import list_instances
+    instance = list_instances(sonarr_conn)[0]
+
+    # Seed an unrelated available series so the next pass isn't a first sync.
+    seeded = [_fake_episode_in(1, 20, 1, 1, True)]
+    _sync_sonarr(sonarr_conn, instance, [_fake_series(20, "Ya tengo")], seeded, [_fake_ep_file(1)])
+    assert list_notifications(sonarr_conn) == []
+
+    # A second series shows up with 3 seasons and nothing downloaded.
+    nueva = [
+        _fake_episode_in(100 + s * 10 + e, 21, s, e, False)
+        for s in (1, 2, 3) for e in (1, 2, 3, 4)
+    ]
+    with (
+        patch("emuwarez_uploadrr.integrations.sonarr.get_series",
+              return_value=[_fake_series(20, "Ya tengo"), _fake_series(21, "Serie Nueva")]),
+        patch("emuwarez_uploadrr.integrations.sonarr.get_queue", return_value=[]),
+        patch("emuwarez_uploadrr.integrations.sonarr.get_episodes",
+              side_effect=lambda url, key, sid: seeded if sid == 20 else nueva),
+        patch("emuwarez_uploadrr.integrations.sonarr.get_episode_files",
+              side_effect=lambda url, key, sid: [_fake_ep_file(1)] if sid == 20 else []),
+    ):
+        from emuwarez_uploadrr.services.library import sync_instance
+        sync_instance(sonarr_conn, instance, include_episodes=True)
+
+    notes = list_notifications(sonarr_conn)
+    assert len(notes) == 1, [n["content_title"] for n in notes]
+    assert "Serie Nueva" in notes[0]["content_title"]
+    # Says the whole show, not one of its seasons.
+    assert "Temporada" not in (notes[0]["content_title"] or "")
+    assert "3 temporadas" in (notes[0]["body"] or "")
+
+
+def test_a_series_with_one_season_downloaded_falls_back_to_the_season_notification(sonarr_conn):
+    """Not the whole series → the series notification would overstate it, so
+    the per-season grouping takes over."""
+    from emuwarez_uploadrr.services.notification_center import list_notifications
+    from emuwarez_uploadrr.services.instances import list_instances
+    instance = list_instances(sonarr_conn)[0]
+
+    have = [_fake_episode_in(1 + i, 20, 1, 1 + i, True) for i in range(2)]
+    _sync_sonarr(sonarr_conn, instance, [_fake_series(20, "Serie")], have,
+                 [_fake_ep_file(1 + i) for i in range(2)])
+    assert list_notifications(sonarr_conn) == []
+
+    # Season 2 arrives empty; season 1 is still fully downloaded.
+    s2 = [_fake_episode_in(10 + i, 20, 2, 1 + i, False) for i in range(3)]
+    _sync_sonarr(sonarr_conn, instance, [_fake_series(20, "Serie")], have + s2,
+                 [_fake_ep_file(1 + i) for i in range(2)])
+
+    notes = list_notifications(sonarr_conn)
+    assert len(notes) == 1
+    assert "Temporada 2" in notes[0]["content_title"]

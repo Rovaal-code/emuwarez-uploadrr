@@ -6,6 +6,7 @@
 // beyond which section's modal is currently open.
 
 import { useState } from 'react'
+import { CheckStatusIcon } from '../components/DetailCard'
 
 function Mono({ children }: { children: React.ReactNode }) {
   return (
@@ -293,15 +294,24 @@ function RulesContent() {
 type Verdict = 'ok' | 'blocked' | 'warn'
 
 const VERDICT_LABEL: Record<Verdict, string> = {
-  ok: '✅ Válida',
-  blocked: '❌ Bloqueada',
-  warn: '⚠️ No bloquea',
+  ok: 'Válida',
+  blocked: 'Bloqueada',
+  warn: 'No bloquea',
 }
 
+// Same three colours and the same icon the pre-upload checks use
+// (CheckStatusIcon), so a verdict here reads exactly like the check the user
+// will meet when they actually press Subir.
 const VERDICT_COLOR: Record<Verdict, string> = {
   ok: '#22c55e',
   blocked: '#ef4444',
   warn: '#f59e0b',
+}
+
+const VERDICT_ICON: Record<Verdict, 'ok' | 'fail' | 'skip'> = {
+  ok: 'ok',
+  blocked: 'fail',
+  warn: 'skip',
 }
 
 interface SpanishRow {
@@ -345,12 +355,12 @@ const SPANISH_ROWS: SpanishRow[] = [
     ),
   },
   {
-    kind: 'Capítulo suelto', audio: 'eng', subs: 'spa', verdict: 'ok', verdictLabel: '✅ Válido',
+    kind: 'Capítulo suelto', audio: 'eng', subs: 'spa', verdict: 'ok', verdictLabel: 'Válido',
     why: 'No está doblado, pero trae subtítulos en castellano, que es exactamente la alternativa que acepta el tracker.',
   },
   {
     kind: 'Capítulo suelto', audio: 'es-419', subs: 'sin detectar', verdict: 'blocked',
-    verdictLabel: '❌ Bloqueado',
+    verdictLabel: 'Bloqueado',
     why: (
       <>
         El audio es latino, que no cuenta como castellano, así que todo depende de los subtítulos. Y
@@ -371,7 +381,7 @@ const SPANISH_ROWS: SpanishRow[] = [
   },
   {
     kind: 'Película o capítulo', audio: 'sin detectar', subs: 'cualquiera', verdict: 'blocked',
-    verdictLabel: '❌ Bloqueado',
+    verdictLabel: 'Bloqueado',
     why: (
       <>
         Que no se detecte el audio es raro y casi siempre apunta a un problema del archivo:
@@ -396,60 +406,64 @@ interface OtherRow {
 const OTHER_CONDITION_ROWS: OtherRow[] = [
   {
     applies: 'Pack de temporada', condition: 'Falta algún capítulo por descargar',
-    verdict: 'blocked', verdictLabel: '❌ Bloquea',
+    verdict: 'blocked', verdictLabel: 'Bloquea',
     why: 'Un pack de temporada es un único release que contiene la temporada completa. Con huecos, quien se lo descargue no recibe lo que el nombre promete.',
   },
   {
     applies: 'Pack de temporada', condition: 'Los capítulos están en carpetas distintas',
-    verdict: 'blocked', verdictLabel: '❌ Bloquea',
+    verdict: 'blocked', verdictLabel: 'Bloquea',
     why: 'El pack se arma sobre la carpeta que los capítulos ya comparten, renombrándolos ahí mismo. No se mueven archivos de sitio, así que si están repartidos no hay carpeta que usar. Muévelos a una común.',
   },
   {
     applies: 'Pack de temporada',
     condition: 'Los capítulos no coinciden en resolución, source, códec de vídeo, códec de audio o idiomas de audio',
-    verdict: 'blocked', verdictLabel: '❌ Bloquea',
+    verdict: 'blocked', verdictLabel: 'Bloquea',
     why: 'Mismo motivo que la cuarta fila de la tabla de arriba: el pack lleva un solo nombre con un solo valor de cada campo, y ese nombre mentiría sobre los capítulos que no coincidan.',
   },
   {
     applies: 'Pack de temporada', condition: 'Los capítulos tienen subtítulos distintos',
-    verdict: 'warn', verdictLabel: '✅ No bloquea',
+    verdict: 'warn', verdictLabel: 'No bloquea',
     why: 'Es la única excepción a lo anterior, porque los subtítulos no forman parte del nombre de la misma manera. Basta con que todos lleven castellano.',
   },
   {
     applies: 'Cualquiera', condition: 'El contenido está Faltante',
-    verdict: 'blocked', verdictLabel: '❌ Ni se puede intentar',
+    verdict: 'blocked', verdictLabel: 'Ni se puede intentar',
     why: 'El botón Subir aparece deshabilitado: no tienes el archivo en disco, así que no hay nada que subir.',
   },
   {
     applies: 'Cualquiera', condition: 'La carpeta del archivo no permite escritura',
-    verdict: 'blocked', verdictLabel: '❌ Bloquea',
+    verdict: 'blocked', verdictLabel: 'Bloquea',
     why: 'La subida renombra el archivo a la nomenclatura de eMuwarez en su sitio, sin copiarlo. Sin permiso de escritura en su carpeta, ese renombrado no se puede hacer.',
   },
   {
     applies: 'Cualquiera', condition: 'El directorio de salida de Uploadrr no permite escritura',
-    verdict: 'blocked', verdictLabel: '❌ Bloquea',
+    verdict: 'blocked', verdictLabel: 'Bloquea',
     why: 'Es donde se generan el .torrent, las capturas y la descripción antes de enviarlos. Sin poder escribir ahí no hay nada que subir.',
   },
   {
     applies: 'Cualquiera', condition: 'eMuwarez no responde',
-    verdict: 'blocked', verdictLabel: '❌ Bloquea',
+    verdict: 'blocked', verdictLabel: 'Bloquea',
     why: 'Es el destino de la subida. Suele ser la API key mal puesta o el tracker caído.',
   },
   {
     applies: 'Cualquiera', condition: 'El repositorio de imágenes no responde',
-    verdict: 'blocked', verdictLabel: '❌ Bloquea',
+    verdict: 'blocked', verdictLabel: 'Bloquea',
     why: 'Las capturas son obligatorias en la publicación, y se suben a ese repositorio antes de crear el torrent.',
   },
   {
     applies: 'Cualquiera', condition: 'qBittorrent sin configurar',
-    verdict: 'warn', verdictLabel: '⚠️ No bloquea',
+    verdict: 'warn', verdictLabel: 'No bloquea',
     why: 'La subida se completa igual. Lo único que pierdes es que el .torrent se añada solo a la cola al terminar; tendrías que añadirlo a mano para sembrar.',
   },
 ]
 
 function VerdictCell({ verdict, label }: { verdict: Verdict; label?: string }) {
   return (
-    <span style={{ color: VERDICT_COLOR[verdict], fontWeight: 600, whiteSpace: 'nowrap' }}>
+    <span style={{
+      color: VERDICT_COLOR[verdict], fontWeight: 600, whiteSpace: 'nowrap',
+      display: 'inline-flex', alignItems: 'center', gap: 6,
+    }}>
+      <CheckStatusIcon status={VERDICT_ICON[verdict]} />
       {label ?? VERDICT_LABEL[verdict]}
     </span>
   )

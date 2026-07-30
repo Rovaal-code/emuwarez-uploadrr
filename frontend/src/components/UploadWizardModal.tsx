@@ -1212,21 +1212,27 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
         ]).map(m => {
           const enabled = !m.reason
           const selected = seasonUploadMode === m.key
+          // Same look as the Manual/Automático cards one screen back — these
+          // are the same kind of choice, so they shouldn't look like a
+          // different species of control. The only additions are the selected
+          // highlight (this one stays on screen after being picked) and the
+          // dimming when a mode isn't available.
           const card = (
             <button
+              className="btn btn-secondary"
               type="button"
               disabled={!enabled}
               onClick={() => setSeasonUploadMode(m.key)}
               style={{
-                width: '100%', padding: '14px', borderRadius: 8, textAlign: 'left', cursor: enabled ? 'pointer' : 'not-allowed',
-                background: selected ? 'rgba(37,99,235,0.18)' : 'var(--bg-card)',
-                border: `1px solid ${selected ? '#2563eb' : 'var(--border-input)'}`,
-                color: 'var(--text-primary)', opacity: enabled ? 1 : 0.45,
-                display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0, whiteSpace: 'normal',
+                padding: '14px 14px', textAlign: 'left', display: 'flex', flexDirection: 'column',
+                alignItems: 'flex-start', gap: 6, height: 'auto', width: '100%', minWidth: 0, whiteSpace: 'normal',
+                cursor: enabled ? 'pointer' : 'not-allowed',
+                opacity: enabled ? 1 : 0.45,
+                ...(selected ? { background: 'rgba(37,99,235,0.18)', borderColor: '#2563eb' } : {}),
               }}
             >
-              <span style={{ fontSize: 14, fontWeight: 700 }}>{m.title}</span>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 400 }}>{m.body}</span>
+              <span style={{ fontSize: 15, fontWeight: 700 }}>{m.title}</span>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 400, whiteSpace: 'normal' }}>{m.body}</span>
             </button>
           )
           return enabled
@@ -2214,23 +2220,22 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
             )}
             {batchPhase === 'done' && (
               <>
-                <div style={{ maxHeight: 260, overflowY: 'auto', marginBottom: 16 }}>
-                  {batchResults.map(r => (
-                    <div key={r.seasonId} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '6px 0', fontSize: 12.5 }}>
-                      <span style={{ marginTop: 2 }}>
-                        <CheckStatusIcon status={r.status === 'queued' ? 'ok' : 'fail'} />
-                      </span>
-                      <span>
-                        <strong>{r.title}</strong>
-                        {r.status === 'failed' && r.reason && (
-                          <span style={{ display: 'block', color: 'var(--text-muted)' }}>{r.reason}</span>
-                        )}
-                      </span>
-                    </div>
-                  ))}
+                <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 12, textAlign: 'center' }}>
+                  {batchResults.filter(r => r.status === 'queued').length} de {batchResults.length} capítulo(s) encolado(s)
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                  <button className="btn btn-primary" onClick={() => { onDone?.(); onClose() }} type="button">Cerrar</button>
+                {batchResults.some(r => r.status === 'failed') && (
+                  <div className="detail-card" style={{ padding: '12px 14px', borderRadius: 8, marginBottom: 14 }}>
+                    {batchResults.filter(r => r.status === 'failed').map(r => (
+                      <p key={r.seasonId} style={{ fontSize: 12.5, margin: '4px 0', color: '#fca5a5' }}>
+                        ✗ {r.title}: {r.reason}
+                      </p>
+                    ))}
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <button className="btn btn-primary" onClick={() => { onDone?.(); onNavigate?.('uploads'); onClose() }} type="button">
+                    Ir a Subidas
+                  </button>
                 </div>
               </>
             )}
@@ -2288,7 +2293,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
           </div>
         )}
 
-        {mode === 'manual' && step === 2 && seasonQueue.length <= 1 && (
+        {mode === 'manual' && step === 2 && seasonQueue.length <= 1 && episodeQueue.length <= 1 && (
           <div className="modal-body">
             <div className="detail-card" style={{ marginBottom: 14, padding: '12px 14px', borderRadius: 8 }}>
               {targetIsSeason ? (

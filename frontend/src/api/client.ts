@@ -90,11 +90,34 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     }
   }
 
-  const resp = await fetch(`${BASE_URL}${path}`, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  })
+  // fetch only REJECTS when the request never completed at all: DNS/TLS
+  // failure, connection reset, a cross-origin redirect (a Cloudflare Access
+  // interstitial in front of /api does exactly this), or an extension
+  // cancelling it. Every real HTTP answer — including a 403 from a WAF or a
+  // 502/524 from a proxy — resolves and is turned into an ApiClientError
+  // below.
+  //
+  // Wrapped here as status 0 so callers see ONE error type and can tell "never
+  // reached the server" apart from a real HTTP status, instead of having to
+  // sniff for the browser-specific "Failed to fetch" message. Before this,
+  // that TypeError escaped as-is and every caller's `instanceof
+  // ApiClientError` branch missed it — LoginPage's own "no se pudo conectar"
+  // case was unreachable for that reason, and a proxy problem surfaced as a
+  // bare "Error inesperado".
+  let resp: Response
+  try {
+    resp = await fetch(`${BASE_URL}${path}`, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    })
+  } catch (err) {
+    throw new ApiClientError(
+      'No se pudo conectar con el servidor: la petición no llegó a completarse.',
+      0,
+      err,
+    )
+  }
 
   if (resp.status === 401) {
     clearToken()
@@ -102,12 +125,20 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     throw new ApiClientError('No autorizado', 401, null)
   }
 
+  // Reading the body can fail too, and for the same kind of reason: a proxy
+  // that truncates the response, or one that answers with an HTML error page
+  // while still claiming application/json. Wrapped so it surfaces as a normal
+  // ApiClientError instead of a raw SyntaxError nobody upstream catches.
   let data: unknown
   const ct = resp.headers.get('content-type') ?? ''
-  if (ct.includes('application/json')) {
-    data = await resp.json()
-  } else {
-    data = await resp.text()
+  try {
+    data = ct.includes('application/json') ? await resp.json() : await resp.text()
+  } catch (err) {
+    throw new ApiClientError(
+      `El servidor respondió con algo que no se pudo leer (HTTP ${resp.status}).`,
+      resp.status,
+      err,
+    )
   }
 
   if (!resp.ok) {

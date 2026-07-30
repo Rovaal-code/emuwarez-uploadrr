@@ -23,16 +23,25 @@ export function LoginPage({ onSuccess }: LoginPageProps) {
       await login(username.trim(), password, remember)
       onSuccess()
     } catch (err) {
+      // The screen only ever shows a summary, so make sure the real cause
+      // reaches somewhere it can be read: behind a proxy, WHY the request
+      // failed is the whole diagnosis.
+      console.error('Fallo al iniciar sesión:', err)
       if (err instanceof ApiClientError) {
         if (err.status === 401) {
           setError('Credenciales incorrectas. Revisa usuario y contraseña.')
-        } else if (err.status === 0 || err.message === 'Failed to fetch') {
-          setError('No se pudo conectar con el servidor. Verifica que el backend está arrancado.')
+        } else if (err.status === 0) {
+          // status 0 = the request never reached the server (see client.ts).
+          setError(
+            'No se pudo conectar con el servidor. Comprueba que el backend está arrancado y, '
+            + 'si la aplicación va detrás de un proxy o de Cloudflare, que /api no se esté '
+            + 'redirigiendo a otro dominio. El motivo exacto está en la consola del navegador.',
+          )
         } else {
-          setError(err.message)
+          setError(`${err.message} (HTTP ${err.status})`)
         }
       } else {
-        setError('Error inesperado. Inténtalo de nuevo.')
+        setError('Error inesperado. Inténtalo de nuevo. El detalle está en la consola del navegador.')
       }
     } finally {
       setLoading(false)

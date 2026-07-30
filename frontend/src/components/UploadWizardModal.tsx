@@ -22,7 +22,7 @@ import {
   type SeasonPlanProgress, type SeasonEpisodeName, type SeasonEpisodeMediaInfo, type SeasonEpisodeRemux,
 } from '../api/seasonPack'
 import type { LibraryItemResponse, SeasonPackPlanResponse, UploadJob } from '../types/api'
-import { isSeasonReady, seasonNotReadyReason, episodeNotReadyReason } from '../utils/libraryItem'
+import { isSeasonReady, seasonNotReadyReason, episodeNotReadyReason, listDisplayTitle } from '../utils/libraryItem'
 import { InfoIcon } from './InfoIcon'
 import { AutoUploadSourceGate } from './AutoUploadSourceGate'
 import { FitText, FitTextPair } from './FitText'
@@ -406,6 +406,18 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   const [episodeSelected, setEpisodeSelected] = useState<Set<number>>(new Set())
   const [episodeQueue, setEpisodeQueue] = useState<number[]>([])
   const [episodeOverridesById, setEpisodeOverridesById] = useState<Map<number, { source?: string | null; provider?: string | null; tag?: string | null; title?: string | null }>>(new Map())
+  // Nomenclature is generated for EVERY selected episode up front, not lazily
+  // as the user switches between them: it's real work per episode, and doing
+  // it on switch made the dropdown feel broken (a spinner every time you moved)
+  // and hid failures until you happened to land on the broken one. Same shape
+  // as the season pack's own "Comprobando N de M capítulos…".
+  const [episodeFieldsById, setEpisodeFieldsById] = useState<Map<number, Awaited<ReturnType<typeof getNomenclatureFields>>>>(new Map())
+  const [episodePrepIndex, setEpisodePrepIndex] = useState(0)
+  const [episodePrepping, setEpisodePrepping] = useState(false)
+  // The one Título the whole batch shares (see setField). Null until the user
+  // actually picks one, so each item keeps its own auto-resolved title before
+  // that.
+  const [sharedTitle, setSharedTitle] = useState<string | null>(null)
   // "Subir todas" (multi-season) batch state.
   const [batchPhase, setBatchPhase] = useState<'idle' | 'processing' | 'done'>('idle')
   const [batchIndex, setBatchIndex] = useState(0)
@@ -693,6 +705,35 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   }, [mode, targetId])
   const existingJobBlocking = !!existingJob && ACTIVE_JOB_STATUSES.has(existingJob.status)
 
+  // Shared by the single-target load and the multi-episode cache, so both
+  // paths put exactly the same things on screen.
+  const applyFieldsResponse = useCallback((
+    resp: Awaited<ReturnType<typeof getNomenclatureFields>>,
+    saved?: { source?: string | null; provider?: string | null; tag?: string | null; title?: string | null },
+  ) => {
+    if (resp.blocked) {
+      setError(resp.error || 'No se puede generar la nomenclatura.')
+      setFields({})
+      setInitialTag('')
+      return
+    }
+    setError(null)
+    // Restore this item's own previously-edited values instead of falling back
+    // to what the backend auto-detected.
+    setFields({
+      ...(resp.fields || {}),
+      ...(saved?.source !== undefined && saved.source !== null ? { source: saved.source } : {}),
+      ...(saved?.provider !== undefined && saved.provider !== null ? { provider: saved.provider } : {}),
+      ...(saved?.tag ? { tag: saved.tag } : {}),
+      ...(sharedTitle ? { title: sharedTitle } : saved?.title ? { title: saved.title } : {}),
+    })
+    setInitialTag(saved?.tag || resp.fields?.tag || 'EMUWAREZ')
+    setTitleWarning(resp.title_warning ?? null)
+    setTitleOptions(resp.title_options ?? [])
+    setSourceWarning(resp.source_warning ?? null)
+    setSourceComparison(resp.source_comparison ?? null)
+  }, [sharedTitle])
+
   // --- Step 1: load nomenclature for the resolved target ---
   const loadFields = useCallback(async () => {
     if (targetId == null) return
@@ -703,30 +744,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
       ])
       setSources(srcResp.sources)
       setProviders(prvResp.providers)
-      // File not accessible / MediaInfo unavailable → block: show the error and
-      // don't render a (bogus, incomplete) name.
-      if (fieldsResp.blocked) {
-        setError(fieldsResp.error || 'No se puede generar la nomenclatura.')
-        setFields({})
-        setInitialTag('')
-        return
-      }
-      // Multi-episode: restore this episode's own previously-edited values (if
-      // the user already visited it via the dropdown) instead of always
-      // falling back to what the backend just auto-detected.
-      const savedEp = episodeOverridesById.get(targetId)
-      setFields({
-        ...(fieldsResp.fields || {}),
-        ...(savedEp?.source !== undefined && savedEp.source !== null ? { source: savedEp.source } : {}),
-        ...(savedEp?.provider !== undefined && savedEp.provider !== null ? { provider: savedEp.provider } : {}),
-        ...(savedEp?.tag ? { tag: savedEp.tag } : {}),
-        ...(savedEp?.title ? { title: savedEp.title } : {}),
-      })
-      setInitialTag(savedEp?.tag || fieldsResp.fields?.tag || 'EMUWAREZ')
-      setTitleWarning(fieldsResp.title_warning ?? null)
-      setTitleOptions(fieldsResp.title_options ?? [])
-      setSourceWarning(fieldsResp.source_warning ?? null)
-      setSourceComparison(fieldsResp.source_comparison ?? null)
+      applyFieldsResponse(fieldsResp, episodeOverridesById.get(targetId))
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error cargando la nomenclatura')
     } finally {
@@ -737,7 +755,63 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                    // depending on it would reload the fields on top of the
                    // edits it was just asked to restore.
 
-  useEffect(() => { if (step === 1 && !targetIsSeason) loadFields() }, [step, targetIsSeason, loadFields])
+  // Single target: load it. Multi-episode: the prefetch below owns it, so this
+  // must not also fire and race with it.
+  useEffect(() => {
+    if (step === 1 && !targetIsSeason && episodeQueue.length <= 1) loadFields()
+  }, [step, targetIsSeason, episodeQueue.length, loadFields])
+
+  // Multi-episode: generate the nomenclature for every selected episode in one
+  // pass, reporting which one it's on, and cache the results so switching
+  // between them afterwards is instant.
+  useEffect(() => {
+    if (step !== 1 || targetIsSeason || episodeQueue.length <= 1) return
+    if (episodeFieldsById.size >= episodeQueue.length) return
+    let alive = true
+    const run = async () => {
+      setEpisodePrepping(true); setEpisodePrepIndex(0); setError(null)
+      try {
+        const [srcResp, prvResp] = await Promise.all([getEmuSources(), getEmuProviders()])
+        if (!alive) return
+        setSources(srcResp.sources)
+        setProviders(prvResp.providers)
+        const cache = new Map<number, Awaited<ReturnType<typeof getNomenclatureFields>>>()
+        for (let i = 0; i < episodeQueue.length; i++) {
+          if (!alive) return
+          setEpisodePrepIndex(i)
+          try {
+            cache.set(episodeQueue[i], await getNomenclatureFields(episodeQueue[i]))
+          } catch (e: unknown) {
+            // One episode failing must not sink the rest — it surfaces as its
+            // own blocked entry when the user lands on it.
+            cache.set(episodeQueue[i], {
+              fields: {}, torrent_name: '', internal_mkv_title: '',
+              blocked: true,
+              error: e instanceof Error ? e.message : 'Error generando la nomenclatura',
+            })
+          }
+        }
+        if (!alive) return
+        setEpisodeFieldsById(cache)
+        const first = cache.get(episodeQueue[0])
+        if (first) applyFieldsResponse(first, episodeOverridesById.get(episodeQueue[0]))
+      } finally {
+        if (alive) setEpisodePrepping(false)
+      }
+    }
+    run()
+    return () => { alive = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, targetIsSeason, episodeQueue])
+
+  // Switching between already-generated episodes reads the cache — no refetch.
+  useEffect(() => {
+    if (step !== 1 || targetIsSeason || targetId == null) return
+    if (episodeQueue.length <= 1 || episodePrepping) return
+    const cached = episodeFieldsById.get(targetId)
+    if (cached) applyFieldsResponse(cached, episodeOverridesById.get(targetId))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetId, episodePrepping])
 
   // --- Step 1 (season target): build the pack plan, polling progress while
   // it's in flight (real work per episode — build_nomenclature_proposal()).
@@ -768,7 +842,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
       // auto-detected values.
       const saved = seasonOverridesById.get(targetId)
       setFields({
-        title: saved?.title ?? plan.series_title ?? undefined,
+        title: sharedTitle ?? saved?.title ?? plan.series_title ?? undefined,
         year: plan.year != null ? String(plan.year) : undefined,
         resolution: plan.resolution ?? undefined,
         source: saved?.source ?? plan.source ?? undefined,
@@ -969,6 +1043,11 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   }, [targetId, targetIsSeason, fields, seasonPlan?.season_number])
 
   const setField = (key: string, value: string | null) => {
+    // Título is a property of the SERIES, so it is shared by every item in a
+    // multi-episode or multi-season batch: picking it on episode 5 has to show
+    // up on episode 1 too, and go up with all of them. Everything else
+    // (Source, Proveedor, Tag) belongs to the individual file.
+    if (key === 'title') setSharedTitle(value)
     setFields(prev => {
       const updated = { ...prev, [key]: value }
       if (key === 'source' && !PROVIDER_SOURCES.has(value || '')) updated.provider = null
@@ -1072,9 +1151,10 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     // seasons the user never opened via the dropdown. Without this, choosing
     // the original title would silently upload season 1 as "The Tudors" and
     // the rest as "Los Tudor".
-    if (fields.title) {
+    const batchTitle = sharedTitle ?? fields.title
+    if (batchTitle) {
       for (const seasonId of seasonQueue) {
-        overridesMap.set(seasonId, { ...(overridesMap.get(seasonId) ?? {}), title: fields.title })
+        overridesMap.set(seasonId, { ...(overridesMap.get(seasonId) ?? {}), title: batchTitle })
       }
     }
 
@@ -1229,9 +1309,10 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     }
     // Título belongs to the SERIES, so the pick applies to every episode in the
     // batch, including ones the user never opened via the dropdown.
-    if (fields.title) {
+    const batchTitle = sharedTitle ?? fields.title
+    if (batchTitle) {
       for (const id of episodeQueue) {
-        overridesMap.set(id, { ...(overridesMap.get(id) ?? {}), title: fields.title })
+        overridesMap.set(id, { ...(overridesMap.get(id) ?? {}), title: batchTitle })
       }
     }
 
@@ -1241,11 +1322,15 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
       const episodeId = episodeQueue[i]
       setBatchIndex(i)
       const ep = episodes.find(x => x.id === episodeId)
-      const title = ep?.title || `Capítulo ${ep?.episode_number ?? episodeId}`
+      const title = ep ? listDisplayTitle(ep) : `Capítulo ${episodeId}`
       try {
         const ov = overridesMap.get(episodeId)
         if (ov) {
-          const current = await getNomenclatureFields(episodeId)
+          // Straight from the cache the step-1 pass already built — the save
+          // endpoint rebuilds the whole proposal from what it's given rather
+          // than merging, so it needs the episode's full field set, not just
+          // the overridden bits.
+          const current = episodeFieldsById.get(episodeId) ?? await getNomenclatureFields(episodeId)
           if (!current.blocked) {
             await saveNomenclatureFields(episodeId, {
               ...(current.fields || {}),
@@ -1419,7 +1504,14 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
         </label>
         {fields.season_episode != null && (
           <label><FieldLabel label="Temporada / Episodio" info={FIELD_INFO.season_episode} />
-            <input className="form-input" value={fields.season_episode || ''} onChange={e => setField('season_episode', e.target.value)} />
+            {/* Read-only like every other derived field here (Año, Resolución,
+                códecs): it comes straight from Sonarr's season/episode numbers
+                for THIS file. Editing it let you name a file S03E07 when it is
+                actually S01E02, and the upload renames the real file to
+                whatever this says — a typo here mislabels the release and the
+                file on disk. Only Source, Proveedor and Tag are meant to be
+                editable, and those are genuine judgement calls. */}
+            <input className="form-input" value={fields.season_episode || ''} disabled />
           </label>
         )}
         <label><FieldLabel label="Resolución" info={FIELD_INFO.resolution} />
@@ -1960,28 +2052,42 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                   className="form-input form-select" style={{ width: 'auto' }}
                   value={targetId ?? ''} onChange={e => switchActiveEpisode(Number(e.target.value))}
                 >
+                  {/* Canonical "Serie (Año) - SxxExx", same format the rest
+                      of the app uses for an episode. */}
                   {episodeQueue.map(id => {
                     const ep = episodes.find(x => x.id === id)
-                    const num = ep?.episode_number != null ? `E${String(ep.episode_number).padStart(2, '0')} — ` : ''
-                    return <option key={id} value={id}>{num}{ep?.title ?? id}</option>
+                    return <option key={id} value={id}>{ep ? listDisplayTitle(ep) : id}</option>
                   })}
                 </select>
               </div>
             )}
             {existingJobNotice}
-            {loading && (
+            {episodePrepping && (
+              <div style={{ padding: '36px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                <span className="spinner" style={{ width: 28, height: 28, borderWidth: 3 }} />
+                <div style={{ fontSize: 15, fontWeight: 600 }}>Generando Nomenclatura para eMuwarez…</div>
+                <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
+                  Capítulo {Math.min(episodePrepIndex + 1, episodeQueue.length)} de {episodeQueue.length}
+                  {(() => {
+                    const ep = episodes.find(x => x.id === episodeQueue[episodePrepIndex])
+                    return ep ? `: ${listDisplayTitle(ep)}` : ''
+                  })()}
+                </div>
+              </div>
+            )}
+            {loading && !episodePrepping && (
               <div style={{ padding: '36px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
                 <span className="spinner" style={{ width: 28, height: 28, borderWidth: 3 }} />
                 <div style={{ fontSize: 15, fontWeight: 600 }}>Generando Nomenclatura para eMuwarez…</div>
               </div>
             )}
-            {error && !loading && (
+            {error && !loading && !episodePrepping && (
               <div style={{ padding: '20px 0' }}>
                 <p className="text-error" style={{ marginTop: 0, marginBottom: 10 }}>⚠ {error}</p>
                 <button className="btn btn-secondary btn-sm" type="button" onClick={loadFields}>↻ Reintentar</button>
               </div>
             )}
-            {!loading && !error && (
+            {!loading && !error && !episodePrepping && (
               <>
                 <p className="text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
                   Los campos técnicos (audio por pista, códec, HDR/DV) se leen con MediaInfo del archivo
@@ -2101,7 +2207,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                   Subiendo capítulo {batchIndex + 1} de {episodeQueue.length}
                   {(() => {
                     const ep = episodes.find(x => x.id === episodeQueue[batchIndex])
-                    return ep ? `: ${ep.title}` : ''
+                    return ep ? `: ${listDisplayTitle(ep)}` : ''
                   })()}
                 </div>
               </div>

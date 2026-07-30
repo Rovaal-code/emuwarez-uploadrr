@@ -2,7 +2,6 @@ import type { LibraryItemResponse } from '../types/api'
 import type { LibraryActionKind } from './LibraryTreeRow'
 import { Tooltip } from './Tooltip'
 import { UploadButtonIcon, RequestButtonIcon } from './DetailCard'
-import { seasonNotReadyReason } from '../utils/libraryItem'
 
 // Single source of truth for the per-item action buttons, shared by the detail
 // page and the tree. Same visual format as the "Sincronizar biblioteca" button
@@ -25,21 +24,22 @@ export function LibraryActionButtons({ item, onAction, title, multiSeasonContext
   multiSeasonContext?: boolean
 }) {
   const missing = item.local_status === 'Faltante'
-  const seasonIncomplete = item.item_type === 'season' && item.local_status === 'Parcial'
-  const seasonInconsistentReason = seasonNotReadyReason(item)
+  // A season no longer gets disabled for being incomplete or for its episodes
+  // disagreeing: both of those only rule out the PACK, and the wizard now
+  // offers a per-episode mode where neither applies. The reason moves to the
+  // "Temporada entera" card inside, which is where it actually decides
+  // something. Only "nothing held at all" still blocks, since then there is
+  // no file to upload by any route.
   const multiSeason = !!multiSeasonContext && item.item_type === 'series'
   return (
     <>
       <Tooltip content={missing
         ? 'No se puede subir: contenido faltante (no lo tienes en disco).'
-        : seasonIncomplete
-        ? 'No se puede subir: temporada incompleta (faltan episodios por estar Disponibles).'
-        : seasonInconsistentReason
-        ?? (title ?? 'Prepara y sube este contenido a eMuwarez (nomenclatura, comprobaciones y subida).')}>
+        : (title ?? 'Prepara y sube este contenido a eMuwarez (nomenclatura, comprobaciones y subida).')}>
         <button
           className="btn btn-primary btn-sm"
           onClick={() => onAction(multiSeason ? 'upload-multi' : 'upload', item)}
-          disabled={missing || seasonIncomplete || !!seasonInconsistentReason}
+          disabled={missing}
         >
           <UploadButtonIcon /> Subir
         </button>

@@ -815,3 +815,40 @@ def test_cancel_endpoint_is_safe_with_nothing_running(client, auth_headers):
     r = client.post("/api/library/season/12345/pack-preview/cancel", headers=auth_headers)
     assert r.status_code == 200
     assert r.json()["status"] == "cancelling"
+
+
+def test_an_inconsistent_season_still_has_individually_uploadable_episodes(isolated_db, tmp_path):
+    """The premise the per-episode upload mode rests on: the pack's consistency
+    rules exist because a pack ships ONE release name for everything inside it.
+    Each episode ships its own, so episodes that can't go together as a pack are
+    still perfectly uploadable one by one."""
+    from emuwarez_uploadrr.services.upload_checks import run_upload_checks
+
+    conn = _open(isolated_db)
+    _series_id, season_id = _seed_series_season(conn)
+    folder = tmp_path / "One Piece" / "Season 1"
+    folder.mkdir(parents=True)
+    ids = []
+    # Two episodes that disagree on video codec AND audio languages — the pack
+    # is blocked twice over — but each one has Castilian on its own.
+    for i, (codec, audio) in enumerate([("x264", "spa"), ("x265", "spa / eng")], start=1):
+        f = folder / f"S01E0{i}.mkv"
+        f.write_bytes(b"video")
+        ids.append(_seed_episode(
+            conn, season_id, number=i, title=f"One Piece S01E0{i}", path=str(f),
+            quality="WEBDL-1080p", video_codec=codec, audio_codec="AC3",
+            audio_languages=audio, subtitle_languages="spa", source="WEB-DL",
+        ))
+
+    plan = build_season_pack_plan(season_id, conn=conn)
+    assert plan["status"] == "blocked"
+    assert any("códec de vídeo" in e for e in plan["errors"])
+
+    # …yet neither episode fails on its own account: no check about the season's
+    # consistency, and the Castilian one passes for both.
+    for episode_id in ids:
+        checks = run_upload_checks(conn, episode_id)
+        failed = [c for c in checks["checks"] if c["status"] == "fail"]
+        assert not any(c["id"] == "spanish" for c in failed), failed
+        assert not any("temporada" in (c.get("message") or "").lower() for c in failed), failed
+    conn.close()

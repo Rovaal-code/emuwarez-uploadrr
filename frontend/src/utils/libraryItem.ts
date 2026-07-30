@@ -87,6 +87,25 @@ export function isSeasonReady(item: LibraryItemResponse): boolean {
     && !seasonMissingSpanish(item)
 }
 
+// An episode uploaded ON ITS OWN answers only for itself: you have to hold the
+// file, and it has to carry Castilian somewhere. The season pack's rules —
+// every episode agreeing on codec/audio/resolution/source, the whole season
+// present — deliberately do NOT apply here, and that is the entire point of
+// the per-episode mode: those rules exist because a pack ships ONE release
+// name for everything inside it, while each episode ships its own, which can
+// state its own codec and audio truthfully.
+export function episodeNotReadyReason(item: LibraryItemResponse): string | null {
+  if (item.local_status !== 'Disponible' && item.local_status !== 'Subido') {
+    return `No se puede subir: el capítulo está "${item.local_status}", no lo tienes en disco.`
+  }
+  if (item.has_spanish_ok !== 1) {
+    return item.has_spanish_ok === 0
+      ? 'No se puede subir: no tiene castellano ni en el audio ni en los subtítulos.'
+      : 'No se puede subir: no se han podido leer sus pistas, así que no se puede confirmar que tenga castellano.'
+  }
+  return null
+}
+
 // null when the season IS ready (or isn't a season) — a truthy reason string
 // otherwise, for a disabled button/card's tooltip.
 export function seasonNotReadyReason(item: LibraryItemResponse): string | null {

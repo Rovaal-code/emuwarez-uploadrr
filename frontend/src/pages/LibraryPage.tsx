@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useTransition, memo } from 'react'
 import { getLibrary, TOP_LEVEL_PARENT_FILTER, getLibraryFilterOptions, getLibraryItem, type LibraryFilterOptions } from '../api/library'
 import { Tooltip } from '../components/Tooltip'
+import { getLocalStatusInfo } from '../utils/status'
 import { useSync } from '../context/SyncContext'
 import { EmuSyncButton } from '../components/EmuSyncButton'
 import { getInstances } from '../api/instances'
@@ -522,7 +523,11 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
                     ...(filterOptions?.instances ?? []).map(inst => ({ value: String(inst.id), label: `${inst.type === 'radarr' ? 'Radarr' : 'Sonarr'} — ${inst.name.length > 15 ? inst.name.slice(0, 15) + '…' : inst.name}` })),
                   ]} /></th>
                   <th><HeaderFilter label="Estado" value={filterStatus} onChange={v => { setFilterStatus(v); setOffset(0) }} options={[
-                    { value: '', label: 'Todos' }, ...(filterOptions?.statuses ?? []).map(s => ({ value: s, label: s })),
+                    { value: '', label: 'Todos' },
+                    // Through the same label map the badges use, or the filter
+                    // would offer "Error de importación" for a column showing
+                    // "Importación".
+                    ...(filterOptions?.statuses ?? []).map(s => ({ value: s, label: getLocalStatusInfo(s).label })),
                   ]} /></th>
                   <th><HeaderFilter label="Petición" value={filterRequest} onChange={v => { setFilterRequest(v); setOffset(0) }} options={[
                     { value: '', label: 'Todas' }, ...(filterOptions?.request_statuses ?? []).map(s => ({ value: s, label: s })),

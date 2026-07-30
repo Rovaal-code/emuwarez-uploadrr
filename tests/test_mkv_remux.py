@@ -497,3 +497,75 @@ def test_apply_failure_leaves_original_untouched(tmp_path):
     assert mkv_file.read_bytes() == b"fake mkv original"  # untouched
     row = conn.execute("SELECT track_remux_status FROM library_items WHERE id=?", (item_id,)).fetchone()
     assert row["track_remux_status"] == "error"
+
+
+# ---------------------------------------------------------------------------
+# Forced subtitles: container flag first, track name second
+# ---------------------------------------------------------------------------
+
+from emuwarez_uploadrr.services.mkv_remux import _is_forced
+
+
+@pytest.mark.parametrize("name", [
+    "Forced",
+    "forced",
+    "Spanish [ForcedNarrative]",       # the real-world case that was missed
+    "Español - Forzados",
+    "Subtítulos forzados",
+    "Castellano (Forzada)",
+    "[FORCED]",
+])
+def test_forced_detected_from_the_track_name(name):
+    """Plenty of releases never set the container's forced bit and only say it
+    in the name, which used to be ignored entirely."""
+    assert _is_forced({"track_name": name, "forced_track": 0}) is True
+
+
+@pytest.mark.parametrize("name", [
+    "Español (Castellano)",
+    "SDH",
+    "Full",
+    "Full, not forced",                # says the opposite, in so many words
+    "NonForced",
+    "Non-Forced",
+    "no forzado",
+    "unforced",
+    "reinforced dialogue",             # contains "forced" inside another word
+])
+def test_not_forced_from_the_track_name(name):
+    assert _is_forced({"track_name": name, "forced_track": 0}) is False
+
+
+def test_container_flag_wins_over_a_name_that_disagrees():
+    """The flag is what a player actually acts on, so a name saying otherwise
+    doesn't get to override it."""
+    assert _is_forced({"track_name": "Full, not forced", "forced_track": 1}) is True
+
+
+def test_missing_name_and_flag_is_not_forced():
+    assert _is_forced({}) is False
+    assert _is_forced({"track_name": None, "forced_track": None}) is False
+
+
+def test_forced_name_reaches_the_track_label_and_the_ordering():
+    """The flag isn't only cosmetic: it's the tiebreaker that keeps a regular
+    track ahead of a forced one, and the first track is the one marked default."""
+    from emuwarez_uploadrr.services.mkv_remux import build_track_plan
+    mkv_json = {"tracks": [
+        {"id": 0, "type": "video", "codec": "AVC", "properties": {}},
+        {"id": 1, "type": "audio", "codec": "AC-3",
+         "properties": {"language": "spa", "audio_channels": 6}},
+        # Forced only by NAME, and listed first on purpose.
+        {"id": 2, "type": "subtitles", "codec": "SubRip",
+         "properties": {"language": "spa", "track_name": "Spanish [ForcedNarrative]"}},
+        {"id": 3, "type": "subtitles", "codec": "SubRip",
+         "properties": {"language": "spa", "track_name": "Español (Castellano)"}},
+    ]}
+    plan = build_track_plan(mkv_json)
+    subs = [t for t in plan["ordered_tracks"] if t["type"] == "subtitles"]
+    by_id = {t["id"]: t for t in subs}
+    assert by_id[2]["forced"] is True
+    assert by_id[3]["forced"] is False
+    assert by_id[2]["new_name"].endswith("- Forzado")
+    # Regular Spanish sorts ahead of the forced one, so it's the default.
+    assert [t["id"] for t in subs][:2] == [3, 2]

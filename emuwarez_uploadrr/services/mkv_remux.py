@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -334,6 +335,33 @@ def read_tracks_json(path: str) -> dict:
 # Plan building (pure — testable without the mkvmerge binary)
 # ---------------------------------------------------------------------------
 
+# Forced subtitles: the MKV container's own forced_track bit is the reliable
+# signal and the one players obey, but plenty of releases never set it and only
+# say so in the track NAME ("Spanish [ForcedNarrative]"), which used to be
+# ignored entirely here — so a genuinely forced track showed up as a regular
+# one, both in the label and in the ordering below (`forced` is the tiebreaker
+# that keeps a regular track ahead of a forced one, and the first track is the
+# one marked default).
+#
+# The lookbehind stops "reinforced" from counting, and the negative pattern
+# keeps names that explicitly say the opposite ("Full, not forced",
+# "NonForced") from being flipped into forced by the word they contain.
+_FORCED_NAME_RE = re.compile(r"(?<![a-záéíóúñ])for[cz](?:ed|ad[oa]s?)", re.IGNORECASE)
+_NOT_FORCED_NAME_RE = re.compile(r"(?:non|not|no|un|sin)[\s._·-]*for[cz]", re.IGNORECASE)
+
+
+def _is_forced(props: dict) -> bool:
+    """Whether a track is forced, from the container flag first and the track
+    name second. The flag wins when set: it is what a player actually acts on,
+    so a name that disagrees with it doesn't get to override it."""
+    if props.get("forced_track"):
+        return True
+    name = props.get("track_name") or ""
+    if _NOT_FORCED_NAME_RE.search(name):
+        return False
+    return bool(_FORCED_NAME_RE.search(name))
+
+
 def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None) -> dict:
     """Turn a parsed `mkvmerge -J` structure into a reorder+rename plan: which
     track ids go where, and what name each gets. Pure function — no I/O.
@@ -358,7 +386,7 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None) -> 
             "language": props.get("language"),
             "current_name": props.get("track_name"),
             "default_before": bool(props.get("default_track")),
-            "forced": bool(props.get("forced_track")),
+            "forced": _is_forced(props),
             "audio_channels": props.get("audio_channels"),
             "pixel_dimensions": props.get("pixel_dimensions"),
         })

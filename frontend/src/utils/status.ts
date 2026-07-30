@@ -14,7 +14,12 @@ const LOCAL_STATUS_MAP: Record<string, StatusInfo> = {
   'En cola':                 { label: 'En cola',                 color: '#3b82f6', cssClass: 'status-queued' },
   'Descargando':             { label: 'Descargando',             color: '#818cf8', cssClass: 'status-downloading' },
   'Pendiente de importar':   { label: 'Pendiente de importar',   color: '#f59e0b', cssClass: 'status-pending' },
-  'Error de importación':    { label: 'Error de importación',    color: '#ef4444', cssClass: 'status-error' },
+  // Shown as plain "Importación" in amber, not as a red error: Radarr/Sonarr
+  // reports this while the file is sitting in the download folder waiting to
+  // be imported, which resolves itself most of the time. Painting it red made
+  // routine, self-healing states look like something to act on. The KEY stays
+  // the raw value Radarr/Sonarr stores — only its presentation changes.
+  'Error de importación':    { label: 'Importación',             color: '#f59e0b', cssClass: 'status-pending' },
   'Error de búsqueda':       { label: 'Error de búsqueda',       color: '#ef4444', cssClass: 'status-error' },
   'Subiendo':                { label: 'Subiendo',                color: '#a855f7', cssClass: 'status-uploading' },
   'Subido':                  { label: 'Subido',                  color: '#16a34a', cssClass: 'status-uploaded' },

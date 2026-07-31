@@ -1237,10 +1237,10 @@ def get_dashboard_summary(conn: sqlite3.Connection) -> dict:
           -- (services/upload_checks.py), so counting it here as ready to go
           -- would be a lie the moment you clicked Subir.
           AND has_spanish_ok = 1
-          AND (item_type != 'season' OR (
-                resolution IS NOT NULL AND source IS NOT NULL AND video_codec IS NOT NULL
-                AND audio_codec IS NOT NULL AND audio_languages IS NOT NULL
-              ))
+          -- Solo la resolución: es lo único que un pack exige que coincida
+          -- en todos sus capítulos (season_pack._CONSISTENCY_FIELDS). El
+          -- resto ya no bloquea, se resume en el nombre del pack.
+          AND (item_type != 'season' OR resolution IS NOT NULL)
         """,
         [avail],
     ).fetchone()
@@ -1251,8 +1251,7 @@ def get_dashboard_summary(conn: sqlite3.Connection) -> dict:
         JOIN library_items s ON e.parent_id = s.id
         WHERE e.item_type = 'episode' AND e.local_status = ?
           AND s.item_type = 'season' AND s.emu_in_catalog = 0
-          AND s.resolution IS NOT NULL AND s.source IS NOT NULL AND s.video_codec IS NOT NULL
-          AND s.audio_codec IS NOT NULL AND s.audio_languages IS NOT NULL
+          AND s.resolution IS NOT NULL          -- ver season_pack._CONSISTENCY_FIELDS
           AND s.has_spanish_ok = 1
         """,
         [avail],
@@ -1590,11 +1589,7 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
               -- Castilian applies to films too, not just seasons (see the
               -- same condition in get_dashboard_summary).
               AND li.has_spanish_ok = 1
-              AND (li.item_type != 'season' OR (
-                  li.resolution IS NOT NULL AND li.source IS NOT NULL
-                  AND li.video_codec IS NOT NULL AND li.audio_codec IS NOT NULL
-                  AND li.audio_languages IS NOT NULL
-              ))"""
+              AND (li.item_type != 'season' OR li.resolution IS NOT NULL)"""
     ).fetchall():
         _push(dict(row), 2)
 

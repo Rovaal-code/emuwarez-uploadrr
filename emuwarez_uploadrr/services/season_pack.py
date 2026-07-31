@@ -199,12 +199,17 @@ def preview_season_pack_title(fields: dict) -> dict:
 # audio_languages, by contrast, MUST stay here: the pack has a single release
 # name stating one audio for the whole thing, so episodes that disagree on it
 # would make that name lie about half the pack.
+# Lo ÚNICO que tiene que coincidir en todos los capítulos para que la
+# temporada pueda subirse como pack. Antes eran cinco campos: además de la
+# resolución, el códec de vídeo, el de audio, los idiomas y el source. Eso
+# rechazaba packs perfectamente válidos (una temporada donde un capítulo trae
+# una pista de audio extra, o viene de otra fuente, sigue siendo la misma
+# temporada).
+#
+# Los demás campos ya no bloquean: se resumen en el nombre del pack, ver
+# _aggregate_pack_fields.
 _CONSISTENCY_FIELDS: list[tuple[str, str, Any]] = [
-    ("video_codec", "códec de vídeo", lambda ep, prop: ep.get("video_codec")),
-    ("audio_codec", "códec de audio", lambda ep, prop: ep.get("audio_codec")),
-    ("audio_languages", "idiomas de audio", lambda ep, prop: ep.get("audio_languages")),
     ("resolution", "resolución", lambda ep, prop: prop.get("resolution")),
-    ("source", "source", lambda ep, prop: prop.get("source")),
 ]
 
 
@@ -228,6 +233,52 @@ def _consistency_errors(episode_entries: list[dict]) -> list[str]:
                     f"({baseline or 'desconocido'})."
                 )
     return errors
+
+
+def _aggregate_pack_fields(episode_entries: list[dict]) -> dict:
+    """Los valores que describen al PACK, sacados de sus capítulos.
+
+    Solo la resolución tiene que coincidir (lo garantiza _consistency_errors).
+    Con el resto:
+
+    - Los idiomas de audio se SUMAN. El pack CONTIENE todos, así que
+      anunciarlos todos es exacto: un capítulo con "ESP" y otro con "ESP-ING"
+      dan un pack "ESP-ING".
+    - Códec de vídeo, códec de audio y source se dejan VACÍOS si difieren. Un
+      nombre que dijera "x264 x265" anunciaría dos códecs para un solo release
+      y no describiría nada; mejor no decir nada que decir algo falso.
+    - El audio conserva su códec y canales solo si TODOS los capítulos traen
+      exactamente el mismo resumen; si no, se queda en los idiomas a secas.
+
+    Cada capítulo mantiene aparte su propia nomenclatura completa, con lo que
+    de verdad tiene dentro (get_season_episode_names).
+    """
+    from .emu_format import build_audio_string, _split_languages
+
+    def comun(getter):
+        """El valor si TODOS coinciden; None si difieren o falta alguno."""
+        valores = {getter(e) for e in episode_entries}
+        if len(valores) == 1:
+            unico = valores.pop()
+            return unico or None
+        return None
+
+    idiomas: list[str] = []
+    for entry in episode_entries:
+        for lang in _split_languages(entry["episode"].get("audio_languages")):
+            if lang not in idiomas:
+                idiomas.append(lang)
+
+    resumen_comun = comun(lambda e: e["proposal"].get("audio_summary"))
+    audio = resumen_comun or (build_audio_string(None, "/".join(idiomas), None) if idiomas else None)
+
+    return {
+        "resolution": comun(lambda e: e["proposal"].get("resolution")),
+        "source": comun(lambda e: e["proposal"].get("source")),
+        "video_codec": comun(lambda e: e["proposal"].get("video_codec")),
+        "audio_summary": audio,
+        "subtitle_summary": comun(lambda e: e["proposal"].get("subtitle_summary")),
+    }
 
 
 def _season_title_options(series: dict | None, season: dict, conn) -> list[dict]:
@@ -429,17 +480,16 @@ def build_season_pack_plan(
             suggestion = suggest_provider_for_item(available_episodes[0]["id"], conn=conn)
             provider = suggestion.get("suggested")
 
+        # Del conjunto de capítulos, no del primero: ya no tienen por qué
+        # coincidir en todo (ver _aggregate_pack_fields).
+        pack_fields = _aggregate_pack_fields(episode_entries)
         season_pack_title = _build_season_pack_title(
             title=series_title,
             year=year,
             season_number=season.get("season_number"),
-            resolution=first_proposal.get("resolution"),
-            source=first_proposal.get("source"),
-            video_codec=first_proposal.get("video_codec"),
-            audio_summary=first_proposal.get("audio_summary"),
-            subtitle_summary=first_proposal.get("subtitle_summary"),
             release_tag=release_tag,
             provider=provider,
+            **pack_fields,
         )
 
         # Rename-in-place: the episodes' own shared folder IS the pack folder,

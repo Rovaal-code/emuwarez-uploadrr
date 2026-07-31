@@ -145,7 +145,7 @@ def test_plan_full_season_all_episodes_present(isolated_db, tmp_path):
     conn.close()
 
 
-def test_plan_blocks_on_codec_mismatch(isolated_db, tmp_path):
+def test_a_codec_mismatch_no_longer_blocks_it_just_empties_the_field(isolated_db, tmp_path):
     conn = _open(isolated_db)
     _series_id, season_id = _seed_series_season(conn)
     src1 = tmp_path / "S01E01.mkv"
@@ -159,8 +159,9 @@ def test_plan_blocks_on_codec_mismatch(isolated_db, tmp_path):
 
     plan = build_season_pack_plan(season_id, conn=conn)
 
-    assert plan["status"] == "blocked"
-    assert any("capítulo 2" in e and "códec de audio" in e for e in plan["errors"])
+    # Antes esto bloqueaba. Sigue siendo la misma temporada: se sube, y el
+    # códec simplemente no se anuncia, porque no hay uno solo que sea cierto.
+    assert plan["status"] == "valid"
     conn.close()
 
 
@@ -758,8 +759,9 @@ def test_latin_only_audio_does_not_exempt_from_subtitles(isolated_db, tmp_path):
     conn.close()
 
 
-def test_pack_still_blocked_on_a_non_subtitle_mismatch(isolated_db, tmp_path):
-    """The exception is subtitles only — the other five properties stay strict."""
+def test_different_audio_languages_are_summed_not_blocked(isolated_db, tmp_path):
+    """Un capítulo con una pista de audio extra ya no tumba el pack: el pack
+    CONTIENE los dos idiomas, así que el nombre los anuncia los dos."""
     conn = _open(isolated_db)
     _series_id, season_id = _seed_series_season(conn)
     folder = tmp_path / "One Piece" / "Season 1"
@@ -771,8 +773,28 @@ def test_pack_still_blocked_on_a_non_subtitle_mismatch(isolated_db, tmp_path):
                       quality="WEBDL-1080p", video_codec="x264", audio_codec="AC3",
                       audio_languages=audio, subtitle_languages="spa", source="WEB-DL")
     plan = build_season_pack_plan(season_id, conn=conn)
+    assert plan["status"] == "valid"
+    # ESP + ING en el mismo pack: la regla DUAL de la guía.
+    assert "DUAL" in plan["season_pack_title"], plan["season_pack_title"]
+    conn.close()
+
+
+def test_a_resolution_mismatch_still_blocks(isolated_db, tmp_path):
+    """La resolución es lo único que sigue teniendo que coincidir: un pack con
+    capítulos a 1080p y a 720p no es una calidad, son dos."""
+    conn = _open(isolated_db)
+    _series_id, season_id = _seed_series_season(conn)
+    folder = tmp_path / "One Piece" / "Season 1"
+    folder.mkdir(parents=True)
+    for i, quality in enumerate(["WEBDL-1080p", "WEBDL-720p"], start=1):
+        f = folder / f"S01E0{i}.mkv"
+        f.write_bytes(b"video")
+        _seed_episode(conn, season_id, number=i, title=f"One Piece S01E0{i}", path=str(f),
+                      quality=quality, video_codec="x264", audio_codec="AC3",
+                      audio_languages="spa", subtitle_languages="spa", source="WEB-DL")
+    plan = build_season_pack_plan(season_id, conn=conn)
     assert plan["status"] == "blocked"
-    assert any("idiomas de audio" in e for e in plan["errors"])
+    assert any("resolución" in e for e in plan["errors"]), plan["errors"]
     conn.close()
 
 
@@ -849,20 +871,20 @@ def test_an_inconsistent_season_still_has_individually_uploadable_episodes(isola
     folder = tmp_path / "One Piece" / "Season 1"
     folder.mkdir(parents=True)
     ids = []
-    # Two episodes that disagree on video codec AND audio languages — the pack
-    # is blocked twice over — but each one has Castilian on its own.
-    for i, (codec, audio) in enumerate([("x264", "spa"), ("x265", "spa / eng")], start=1):
+    # Dos capítulos con resoluciones distintas: eso sí tumba el pack, que es
+    # lo único que sigue siendo obligatorio. Pero cada uno tiene castellano.
+    for i, quality in enumerate(["WEBDL-1080p", "WEBDL-720p"], start=1):
         f = folder / f"S01E0{i}.mkv"
         f.write_bytes(b"video")
         ids.append(_seed_episode(
             conn, season_id, number=i, title=f"One Piece S01E0{i}", path=str(f),
-            quality="WEBDL-1080p", video_codec=codec, audio_codec="AC3",
-            audio_languages=audio, subtitle_languages="spa", source="WEB-DL",
+            quality=quality, video_codec="x264", audio_codec="AC3",
+            audio_languages="spa", subtitle_languages="spa", source="WEB-DL",
         ))
 
     plan = build_season_pack_plan(season_id, conn=conn)
     assert plan["status"] == "blocked"
-    assert any("códec de vídeo" in e for e in plan["errors"])
+    assert any("resolución" in e for e in plan["errors"])
 
     # …yet neither episode fails on its own account: no check about the season's
     # consistency, and the Castilian one passes for both.
@@ -872,3 +894,53 @@ def test_an_inconsistent_season_still_has_individually_uploadable_episodes(isola
         assert not any(c["id"] == "spanish" for c in failed), failed
         assert not any("temporada" in (c.get("message") or "").lower() for c in failed), failed
     conn.close()
+
+
+def test_pack_fields_are_emptied_when_they_differ_and_audios_are_summed(isolated_db, tmp_path):
+    """El nombre del pack, con capítulos que ya no tienen por qué coincidir:
+
+    - los idiomas de audio se SUMAN, porque el pack contiene los dos;
+    - el códec de vídeo y el source se quedan FUERA cuando difieren, porque
+      anunciar uno solo sería mentir y anunciar los dos no describe nada.
+    """
+    conn = _open(isolated_db)
+    _series_id, season_id = _seed_series_season(conn, series_title="One Piece", year=1999)
+    folder = tmp_path / "One Piece" / "Season 1"
+    folder.mkdir(parents=True)
+    datos = [("x264", "WEB-DL", "spa"), ("x265", "BluRay", "spa / eng")]
+    for i, (codec, source, audio) in enumerate(datos, start=1):
+        f = folder / f"S01E0{i}.mkv"
+        f.write_bytes(b"video")
+        _seed_episode(conn, season_id, number=i, title=f"One Piece S01E0{i}", path=str(f),
+                      quality="WEBDL-1080p", video_codec=codec, audio_codec="AC3",
+                      audio_languages=audio, subtitle_languages="spa", source=source)
+
+    plan = build_season_pack_plan(season_id, conn=conn)
+    titulo = plan["season_pack_title"]
+    assert plan["status"] == "valid", plan["errors"]
+
+    # La resolución sí, que es lo único obligatorio.
+    assert "1080p" in titulo, titulo
+    # Los códecs y el source que difieren, no aparecen.
+    assert "x264" not in titulo and "x265" not in titulo, titulo
+    assert "BluRay" not in titulo, titulo
+    # Y los idiomas sumados: ESP + ING es DUAL en la guía.
+    assert "DUAL" in titulo, titulo
+    conn.close()
+
+
+def test_the_examples_generator_agrees_with_the_real_rule(isolated_db, tmp_path):
+    """_season_is_packable predice lo que hará build_season_pack_plan. Cuando
+    la regla cambió, esa copia se quedó atrás más de una vez."""
+    from emuwarez_uploadrr.services.request_examples import _season_is_packable
+    # Resolución y castellano: sube.
+    assert _season_is_packable({"resolution": "1080p", "has_spanish_ok": 1}) is True
+    # Sin resolución común entre capítulos: no.
+    assert _season_is_packable({"resolution": None, "has_spanish_ok": 1}) is False
+    # Sin castellano: no.
+    assert _season_is_packable({"resolution": "1080p", "has_spanish_ok": 0}) is False
+    # Y lo que ya no bloquea, no bloquea: sin códec ni source comunes, sube.
+    assert _season_is_packable({
+        "resolution": "1080p", "has_spanish_ok": 1,
+        "source": None, "video_codec": None, "audio_codec": None, "audio_languages": None,
+    }) is True

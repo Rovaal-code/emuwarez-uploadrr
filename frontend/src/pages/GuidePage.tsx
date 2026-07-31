@@ -393,13 +393,13 @@ const SPANISH_ROWS: SpanishRow[] = [
     ),
   },
   {
-    kind: 'Temporada', audio: 'cap. 1 spa, cap. 2 eng', subs: 'todos spa', verdict: 'blocked',
+    kind: 'Temporada', audio: 'cap. 1 spa, cap. 2 eng', subs: 'todos spa', verdict: 'ok',
     why: (
       <>
-        Ojo, aquí el castellano lo tienen todos los capítulos. Lo que falla es otra cosa: el pack se
-        sube con <strong>un único nombre</strong> que declara un solo audio (<code>ESP DD 5.1</code>),
-        y con un capítulo doblado y otro en inglés ese nombre sería falso para media temporada. Por
-        eso el audio sí tiene que ser idéntico en todos.
+        Todos los capítulos tienen castellano, uno doblado y otro subtitulado, y eso basta. Que los
+        audios no coincidan ya <strong>no bloquea</strong>: los idiomas se suman en el nombre del
+        pack (<code>DUAL</code> aquí), porque el pack contiene los dos y anunciarlos los dos es
+        exacto.
       </>
     ),
   },
@@ -465,14 +465,15 @@ const OTHER_CONDITION_ROWS: OtherRow[] = [
   },
   {
     applies: 'Pack de temporada',
-    condition: 'Los capítulos no coinciden en resolución, source, códec de vídeo, códec de audio o idiomas de audio',
+    condition: 'Los capítulos no coinciden en resolución',
     verdict: 'blocked', verdictLabel: 'Bloquea',
-    why: 'Mismo motivo que la cuarta fila de la tabla de arriba: el pack lleva un solo nombre con un solo valor de cada campo, y ese nombre mentiría sobre los capítulos que no coincidan.',
+    why: 'Es lo único que tiene que coincidir. Una temporada con capítulos a 1080p y a 720p no es una calidad, son dos, y el nombre solo puede declarar una.',
   },
   {
-    applies: 'Pack de temporada', condition: 'Los capítulos tienen subtítulos distintos',
+    applies: 'Pack de temporada',
+    condition: 'Los capítulos no coinciden en source, códecs, idiomas de audio o subtítulos',
     verdict: 'warn', verdictLabel: 'No bloquea',
-    why: 'Es la única excepción a lo anterior, porque los subtítulos no forman parte del nombre de la misma manera. Basta con que todos lleven castellano.',
+    why: 'Se resuelve en el nombre en vez de rechazar el pack: los idiomas de audio se suman (el pack los contiene todos) y el source y los códecs que no coincidan se dejan fuera del nombre, porque declarar uno solo sería mentir sobre el resto de capítulos.',
   },
   {
     applies: 'Cualquiera', condition: 'El contenido está Faltante',

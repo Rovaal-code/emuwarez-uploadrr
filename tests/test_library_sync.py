@@ -859,14 +859,23 @@ def test_unique_content_excludes_season_with_inconsistent_episodes(mem_conn):
         "'1080p', 'WEB-DL', 'x264', 'AAC', 'jpn', 'spa', 1, 1)",
         (series_id,),
     )
-    # Inconsistent season: complete (Disponible) but episodes disagreed on the
-    # video codec, so that rollup field is None — must NOT appear even though
-    # it's technically "unique" content.
+    # Episodios con RESOLUCIONES distintas (rollup NULL): eso sí sigue
+    # bloqueando el pack, así que no debe recomendarse.
     mem_conn.execute(
         "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, parent_id, "
         "resolution, source, video_codec, audio_codec, audio_languages, subtitle_languages, "
         "has_spanish_subs, has_spanish_ok) "
         "VALUES ('Ready Show - Temporada 2', 'season', 'Disponible', 0, ?, "
+        "NULL, 'WEB-DL', 'x264', 'AAC', 'jpn', 'spa', 1, 1)",
+        (series_id,),
+    )
+    # Códec de vídeo distinto entre capítulos: ya NO bloquea, se queda fuera
+    # del nombre del pack y la temporada se recomienda igual.
+    mem_conn.execute(
+        "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, parent_id, "
+        "resolution, source, video_codec, audio_codec, audio_languages, subtitle_languages, "
+        "has_spanish_subs, has_spanish_ok) "
+        "VALUES ('Ready Show - Temporada 5', 'season', 'Disponible', 0, ?, "
         "'1080p', 'WEB-DL', NULL, 'AAC', 'jpn', 'spa', 1, 1)",
         (series_id,),
     )
@@ -967,14 +976,15 @@ def test_dashboard_summary_unique_seasons_excludes_inconsistent(mem_conn):
             f"VALUES ('Show S01E0{n}', 'episode', 'Disponible', 0, ?, {n})",
             (season1_id,),
         )
-    # Inconsistent season (episodes disagreed on the video codec) — must not
-    # count, nor should its own episodes.
+    # Capítulos con RESOLUCIONES distintas (rollup NULL): sigue sin poder
+    # subirse como pack, así que ni ella ni sus capítulos cuentan. El códec de
+    # vídeo, en cambio, ya no descalifica a nadie.
     mem_conn.execute(
         "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, parent_id, "
         "resolution, source, video_codec, audio_codec, audio_languages, subtitle_languages, "
         "has_spanish_subs, has_spanish_ok) "
         "VALUES ('Show - Temporada 2', 'season', 'Disponible', 0, ?, "
-        "'1080p', 'WEB-DL', NULL, 'AAC', 'jpn', 'spa', 1, 1)",
+        "NULL, 'WEB-DL', 'x264', 'AAC', 'jpn', 'spa', 1, 1)",
         (series_id,),
     )
     season2_id = mem_conn.execute("SELECT last_insert_rowid()").fetchone()[0]

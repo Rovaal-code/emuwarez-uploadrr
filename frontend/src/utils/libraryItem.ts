@@ -61,12 +61,12 @@ export function listDisplayTitle(item: LibraryItemResponse): string {
 // already Castilian, so they get the looser has_spanish_ok check below instead
 // of being required to match. Mirrors season_pack.py's
 // _CONSISTENCY_FIELDS/_spanish_errors.
+// Lo único que un pack exige que coincida en todos sus capítulos. Copia de
+// season_pack._CONSISTENCY_FIELDS (el frontend no puede llamar a Python): si
+// allí cambia, aquí también. Antes eran cinco campos; el resto dejó de
+// bloquear y ahora se resume en el nombre del pack.
 const SEASON_CONSISTENCY_FIELDS: { key: keyof LibraryItemResponse; label: string }[] = [
   { key: 'resolution', label: 'la resolución' },
-  { key: 'source', label: 'el source' },
-  { key: 'video_codec', label: 'el códec de vídeo' },
-  { key: 'audio_codec', label: 'el códec de audio' },
-  { key: 'audio_languages', label: 'los idiomas de audio' },
 ]
 
 function seasonInconsistentField(item: LibraryItemResponse) {

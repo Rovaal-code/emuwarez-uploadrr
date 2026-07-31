@@ -131,7 +131,7 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int) -> dict:
         has_audio_es = has_castellano(audio_langs) == 1
         has_subs_es = has_castellano(sub_langs) == 1
         if has_audio_es:
-            spanish_msg = f"Audio en castellano ({audio_langs}) — no necesita subtítulos."
+            spanish_msg = "Audio en castellano. No son obligatorios subtítulos en castellano."
         elif has_subs_es:
             spanish_msg = f"Sin audio en castellano ({audio_langs or 'desconocido'}), pero subtítulos sí ({sub_langs})."
         else:

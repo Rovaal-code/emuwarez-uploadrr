@@ -1,15 +1,16 @@
-"""Shared data models for the legacy CLI, the new CLI, and the future web UI.
+"""Shared data models for the CLI and the web UI.
 
-The first four aliases keep the original uploader engine compatible.  The rest
-of the file defines the stable domain contract that the dashboard will use.
+Defines the stable domain contract. It used to also re-export AppConfig,
+MediaInfoData, FilePlan and RunPlan from legacy.py "to keep the original
+uploader engine compatible", but the engine defines those itself and nothing
+ever imported them from here, so the alias only widened this module's reach
+into legacy for no reader.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field, asdict
 from enum import Enum
 from typing import Any, Optional
-
-from .legacy import AppConfig, MediaInfoData, FilePlan, RunPlan
 
 
 class InstanceType(str, Enum):
@@ -232,7 +233,6 @@ class UploadJob:
 
 
 __all__ = [
-    "AppConfig", "MediaInfoData", "FilePlan", "RunPlan",
     "InstanceType", "MediaKind", "LocalStatus", "RequestStatus",
     "NomenclatureStatus", "DupeStatus", "TaskStatus",
     "InstanceConfig", "LibraryItem", "RequestItem", "RequestMatch",

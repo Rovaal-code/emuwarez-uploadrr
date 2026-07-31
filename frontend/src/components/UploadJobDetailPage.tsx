@@ -360,7 +360,7 @@ function ProgressCell({ pct, bold }: { pct: number; bold?: boolean }) {
   )
 }
 
-function PhasesSection({ phases, job }: { phases: UploadProgressPhase[]; job: UploadJob }) {
+function PhasesSection({ phases, globalPct, job }: { phases: UploadProgressPhase[]; globalPct: number; job: UploadJob }) {
   // If the job itself has stopped (failed/cancelled) but a phase snapshot was
   // never updated past "running" (e.g. mkvmerge's timeout kills the job
   // without touching progress_json), show that phase as failed/cancelled
@@ -406,6 +406,24 @@ function PhasesSection({ phases, job }: { phases: UploadProgressPhase[]; job: Up
             </tr>
             )
           })}
+          {/* Fila fija al pie (.sticky-footer-row en components.css): el
+              progreso del job entero, siempre visible al fondo del área de
+              scroll en vez de tener que bajar por todas las fases para verlo,
+              igual que la cabecera se queda pegada arriba.
+
+              Sí, el campo "Progreso" de la tarjeta Tiempos da el mismo
+              número, y por eso se quitó en su día (489b422). Vuelve porque
+              allí es un número suelto y aquí está en su contexto: alineado
+              con las columnas de inicio, fin y duración de las fases que lo
+              componen. */}
+          <tr className="sticky-footer-row" style={{ borderTop: '2px solid var(--border)' }}>
+            <td />
+            <td style={{ fontWeight: 700 }} colSpan={2}>Progreso global</td>
+            <td><ProgressCell pct={globalPct} bold /></td>
+            <td style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 700 }}>{formatDate(job.started_at ?? job.created_at ?? null)}</td>
+            <td style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 700 }}>{job.finished_at ? formatDate(job.finished_at) : '–'}</td>
+            <td style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{formatPhaseDuration(job.started_at ?? job.created_at, job.finished_at)}</td>
+          </tr>
         </tbody>
       </table>
     </div>
@@ -633,7 +651,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
         {isStaging ? (
           <GeneratingSpinner text="Esperando a que termine la verificación previa…" />
         ) : (
-          <PhasesSection phases={progress?.phases?.length ? progress.phases : DEFAULT_PHASES} job={job} />
+          <PhasesSection phases={progress?.phases?.length ? progress.phases : DEFAULT_PHASES} globalPct={progress?.global_pct ?? 0} job={job} />
         )}
       </Panel>
 

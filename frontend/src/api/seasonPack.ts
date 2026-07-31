@@ -52,6 +52,10 @@ export async function cancelSeasonPackPreview(seasonId: number): Promise<void> {
 }
 
 export interface SeasonEpisodeName {
+  // "Serie (Año) - SxxEyy" tal cual lo construye el backend
+  // (services/library.content_display_title), el mismo formato que Ver
+  // MediaInfo y que el resto de la aplicación.
+  display_title: string
   episode_id: number
   episode_number?: number | null
   title?: string | null

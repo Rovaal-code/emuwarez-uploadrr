@@ -13,7 +13,7 @@ import { UploadButtonIcon, RequestButtonIcon } from './DetailCard'
 // wizard just to hit that wall inside the pre-upload checks — disabled here,
 // same as Faltante, instead. For a series/season, "Subir" opens the wizard,
 // which asks which season/episode (or the whole season) to target.
-export function LibraryActionButtons({ item, onAction, title, multiSeasonContext }: {
+export function LibraryActionButtons({ item, onAction, title }: {
   item: LibraryItemResponse
   onAction: (kind: LibraryActionKind, item: LibraryItemResponse) => void
   title?: string
@@ -21,7 +21,6 @@ export function LibraryActionButtons({ item, onAction, title, multiSeasonContext
   // list/table): "Subir" opens the multi-season checklist instead of the
   // single season/episode picker. Never for a season's own page, which has
   // exactly one season to offer.
-  multiSeasonContext?: boolean
 }) {
   const missing = item.local_status === 'Faltante'
   // A season no longer gets disabled for being incomplete or for its episodes
@@ -30,7 +29,6 @@ export function LibraryActionButtons({ item, onAction, title, multiSeasonContext
   // "Temporada entera" card inside, which is where it actually decides
   // something. Only "nothing held at all" still blocks, since then there is
   // no file to upload by any route.
-  const multiSeason = !!multiSeasonContext && item.item_type === 'series'
   return (
     <>
       <Tooltip content={missing
@@ -38,7 +36,7 @@ export function LibraryActionButtons({ item, onAction, title, multiSeasonContext
         : (title ?? 'Prepara y sube este contenido a eMuwarez (nomenclatura, comprobaciones y subida).')}>
         <button
           className="btn btn-primary btn-sm"
-          onClick={() => onAction(multiSeason ? 'upload-multi' : 'upload', item)}
+          onClick={() => onAction('upload', item)}
           disabled={missing}
         >
           <UploadButtonIcon /> Subir

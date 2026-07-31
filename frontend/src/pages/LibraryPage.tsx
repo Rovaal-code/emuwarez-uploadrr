@@ -120,7 +120,6 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const [fieldsItem, setFieldsItem] = useState<LibraryItemResponse | null>(null)
   const [uploadItem, setUploadItem] = useState<LibraryItemResponse | null>(null)
   const [wizardItem, setWizardItem] = useState<LibraryItemResponse | null>(null)
-  const [wizardMultiSeason, setWizardMultiSeason] = useState(false)
   const [requestItem, setRequestItem] = useState<LibraryItemResponse | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode)
 
@@ -136,11 +135,9 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     if (kind === 'nomenclature') { setNomenclatureItem(item); return }
     if (kind === 'fields') { setFieldsItem(item); return }
     if (kind === 'request') { setRequestItem(item); return }
-    // 'upload' → unified Subir wizard. For a season the wizard itself asks
-    // which episode (or the whole season) to target. 'upload-multi' comes from
-    // any series row (LibraryActionButtons' multiSeasonContext), on its own
-    // page or in the list — same wizard, multi-season checklist enabled.
-    setWizardMultiSeason(kind === 'upload-multi')
+    // 'upload' abre el asistente. Él decide qué preguntar según el tipo: una
+    // serie elige temporadas, una temporada elige entre pack y capítulos
+    // sueltos, y una película o un capítulo entran directos.
     setWizardItem(item)
   }, [])
 
@@ -378,7 +375,6 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
           onClose={() => setWizardItem(null)}
           onDone={() => { load() }}
           onNavigate={onNavigate}
-          multiSeason={wizardMultiSeason}
         />
       )}
       {requestItem && (

@@ -97,7 +97,7 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
             item={item}
             onAction={onAction}
             title={isRollup ? 'Ver season pack' : undefined}
-            multiSeasonContext={item.item_type === 'series'}
+           
           />
         </div>
       </div>

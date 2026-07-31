@@ -639,6 +639,26 @@ def test_episode_display_title_matches_canonical_format(isolated_db, tmp_path):
     conn.close()
 
 
+def test_episode_names_selector_uses_the_short_canonical_title(isolated_db, tmp_path):
+    """El desplegable de "Ver nombre de todos los capítulos" usa el mismo
+    título que las cabeceras de Ver MediaInfo y Ver Remux, para que las tres
+    pantallas nombren igual al mismo capítulo."""
+    from emuwarez_uploadrr.services.season_pack import get_season_episode_names
+    conn = _open(isolated_db)
+    _series_id, season_id = _seed_series_season(conn, series_title="One Piece", year=1999)
+    src = tmp_path / "S01E05.mkv"
+    src.write_bytes(b"video")
+    _seed_episode(
+        conn, season_id, number=5,
+        title="One Piece S01E05 - El Placer De Su Majestad",
+        path=str(src), quality="WEBDL-1080p",
+    )
+
+    result = get_season_episode_names(season_id, conn=conn)
+    assert result["episodes"][0]["display_title"] == "One Piece (1999) - S01E05 - El Placer De Su Majestad"
+    conn.close()
+
+
 # ---------------------------------------------------------------------------
 # preview_season_pack_title — cheap live-preview while editing Source/
 # Proveedor/Tag in the wizard (no DB/disk I/O at all).

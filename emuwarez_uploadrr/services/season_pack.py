@@ -788,6 +788,9 @@ def get_season_episode_names(
                 "episode_id": ep["id"],
                 "episode_number": ep.get("episode_number"),
                 "title": ep.get("title"),
+                # Mismo título que las cabeceras de "Ver MediaInfo"/"Ver
+                # Remux": "Serie (Año) - SxxEyy - Título del capítulo".
+                "display_title": _episode_display_title(conn, ep),
                 "torrent_name": None if blocked else fields.get("torrent_name"),
                 "internal_mkv_title": None if blocked else fields.get("internal_mkv_title"),
                 "error": fields.get("error") if blocked else None,

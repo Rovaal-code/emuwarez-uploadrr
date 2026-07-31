@@ -15,7 +15,7 @@ const NESTED_PAGE_SIZE = 25
 // is never paginated, unlike episodes), but still bounded defensively.
 const MAX_SEASONS_PER_SERIES = 500
 
-export type LibraryActionKind = 'nomenclature' | 'fields' | 'upload' | 'upload-multi' | 'request'
+export type LibraryActionKind = 'nomenclature' | 'fields' | 'upload' | 'request'
 
 interface LibraryTreeRowProps {
   item: LibraryItemResponse
@@ -221,7 +221,7 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
                   two used to disagree, and "Subir" on a series meaning two
                   different things depending on where you clicked it was the
                   bug, not the feature. */}
-              <LibraryActionButtons item={item} onAction={onAction} multiSeasonContext={item.item_type === 'series'} />
+              <LibraryActionButtons item={item} onAction={onAction} />
             </div>
           </td>
         )}

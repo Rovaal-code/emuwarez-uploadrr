@@ -22,12 +22,16 @@ import {
 
 // Backend-real gates — mirror cancel_upload_job()/queue_retry_for_job() in
 // services/upload_execution.py / upload_queue.py exactly, so the button is
-// only enabled when the action would actually succeed. Cancelar excludes
-// raw 'preparing' on purpose: it displays as "Subiendo" same as 'running',
-// but the server is mid rename/remux at that point and can't safely abort.
+// only enabled when the action would actually succeed.
+//
+// 'preparing' SÍ entra: no se interrumpe a media faena (puede estar
+// renombrando o remuxeando), pero se marca y el trabajo se rinde en el
+// siguiente punto limpio. Excluirlo dejaba un agujero real: si la aplicación
+// se paraba durante esa fase, el job se quedaba en 'preparing' para siempre y
+// no había ningún botón capaz de tocarlo.
 // Reintentar excludes 'completed' on purpose: retrying an already-successful
 // upload isn't supported server-side.
-const CANCELLABLE_STATUSES = new Set(['staging', 'queued', 'running'])
+const CANCELLABLE_STATUSES = new Set(['staging', 'queued', 'running', 'preparing'])
 const RETRYABLE_STATUSES = new Set(['failed', 'cancelled'])
 
 const CONFIRMATION_TOKEN = 'INICIAR_UPLOADRR'
@@ -365,7 +369,16 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   }, [hasLiveJob, statusFilter])
   useTicker(jobs.some(j => j.status === 'queued'))
 
+  // Cancelar mientras se preparan ficheros no interrumpe nada a media faena,
+  // así que se avisa antes: lo que pasa de verdad no es obvio desde el botón.
+  const [confirmCancel, setConfirmCancel] = useState<UploadJob | null>(null)
   const handleCancel = async (jobId: number) => {
+    const job = jobs.find(j => j.id === jobId)
+    if (job?.status === 'preparing') { setConfirmCancel(job); return }
+    await doCancel(jobId)
+  }
+  const doCancel = async (jobId: number) => {
+    setConfirmCancel(null)
     try { await cancelUploadJob(jobId); await load() } catch { /* ignore */ }
   }
 
@@ -468,6 +481,39 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
 
   const modals = (
     <>
+      {confirmCancel && (
+        <div className="modal-overlay" onClick={() => setConfirmCancel(null)}>
+          <div className="modal-panel" onClick={e => e.stopPropagation()} style={{ maxWidth: 520 }}>
+            <div className="modal-header">
+              <h2 className="modal-title">Cancelar una subida que se está preparando</h2>
+              <button className="modal-close" onClick={() => setConfirmCancel(null)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: 13, marginTop: 0 }}>
+                <strong>«{confirmCancel.title}»</strong> está preparando ficheros: puede estar renombrando
+                o reordenando pistas. Eso no se puede interrumpir a mitad sin dejar un archivo a medias.
+              </p>
+              <p style={{ fontSize: 13 }}>
+                Se marcará como <strong>cancelada</strong> y se detendrá al terminar el paso en curso, no
+                al instante. Si el proceso ya no existe (por ejemplo, porque se paró la aplicación), queda
+                cancelada directamente.
+              </p>
+              <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                En ambos casos podrás <strong>reintentarla</strong> después. Revisa el archivo antes de
+                hacerlo, por si quedó algo a medio renombrar.
+              </p>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+                <button className="btn btn-secondary" type="button" onClick={() => setConfirmCancel(null)}>
+                  Dejarla seguir
+                </button>
+                <button className="btn btn-primary" type="button" onClick={() => doCancel(confirmCancel.id!)}>
+                  Cancelar la subida
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {startJob && <StartModal job={startJob} onClose={() => setStartJob(null)} onDone={() => { setStartJob(null); load() }} />}
       {deleteJob && (
         <DeleteUploadModal

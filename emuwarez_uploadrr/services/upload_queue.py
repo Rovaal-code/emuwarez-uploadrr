@@ -289,14 +289,42 @@ def cancel_queued_timer(job_id: int) -> bool:
     return False
 
 
-def _mark(job_id: int, *, stage: str, status: str = "preparing", **extra) -> None:
+def job_was_cancelled(job_id: int, conn=None) -> bool:
+    """Si alguien pulsó Cancelar mientras esto preparaba ficheros.
+
+    La preparación no se puede abortar a media faena (puede estar renombrando
+    o remuxeando), así que Cancelar solo deja la marca y el trabajo se rinde
+    en el siguiente punto limpio, entre fases."""
+    own = conn is None
+    conn = conn or connect()
+    try:
+        row = conn.execute("SELECT status FROM upload_jobs WHERE id = ?", (job_id,)).fetchone()
+        return bool(row) and row["status"] in ("cancelled", "failed")
+    finally:
+        if own:
+            conn.close()
+
+
+def _mark(job_id: int, *, stage: str, status: str = "preparing", **extra) -> bool:
+    """Avanza de fase. Devuelve False si el job ya estaba cancelado.
+
+    El WHERE excluye los estados terminales: sin él, un trabajo que siguiera
+    vivo tras un Cancelar resucitaría la fila en la siguiente fase y el job
+    volvería a parecer en marcha. Mismo guardia que ya usaba
+    _update_staging_stage.
+    """
     conn = connect()
     try:
         fields = {"status": status, "stage": stage, "updated_at": _now_iso(), **extra}
         set_clauses = ", ".join(f"{k} = ?" for k in fields)
         values = list(fields.values()) + [job_id]
-        conn.execute(f"UPDATE upload_jobs SET {set_clauses} WHERE id = ?", values)
+        cur = conn.execute(
+            f"UPDATE upload_jobs SET {set_clauses} "
+            "WHERE id = ? AND status NOT IN ('cancelled', 'failed')",
+            values,
+        )
         conn.commit()
+        return cur.rowcount > 0
     finally:
         conn.close()
 
@@ -675,7 +703,10 @@ def _run_queued_job(job_id: int) -> None:
         # after the progress_json fix above shipped). Set it to
         # "nomenclature" instead — nomenclature is genuinely the next real
         # named step once this brief pre-check window ends.
-        _mark(job_id, stage="nomenclature", started_at=_now_iso())
+        if not _mark(job_id, stage="nomenclature", started_at=_now_iso()):
+            append_upload_log(job_id, "info", "Subida cancelada; se detiene la preparación.",
+                              stream="system", conn=conn)
+            return
         append_upload_log(job_id, "info", "Comprobando integridad del archivo…", stream="system", conn=conn)
         if is_season:
             if not _check_season_integrity(job_id, item_id, conn=conn):
@@ -707,7 +738,10 @@ def _run_queued_job(job_id: int) -> None:
             return
 
         # --- 2. Nomenclature (rename to the final eMuwarez name).
-        _mark(job_id, stage="nomenclature")
+        if not _mark(job_id, stage="nomenclature"):
+            append_upload_log(job_id, "info", "Subida cancelada; se detiene la preparación.",
+                              stream="system", conn=conn)
+            return
         mark_phase_started(job_id, "nomenclature")
         append_upload_log(job_id, "info", "Aplicando nomenclatura…", stream="system", conn=conn)
         if is_season:
@@ -773,7 +807,10 @@ def _run_queued_job(job_id: int) -> None:
         )
 
         # --- 3. Track remux (reorder + rename audio/subs), on the final path.
-        _mark(job_id, stage="remux")
+        if not _mark(job_id, stage="remux"):
+            append_upload_log(job_id, "info", "Subida cancelada; se detiene la preparación.",
+                              stream="system", conn=conn)
+            return
         mark_phase_started(job_id, "remux")
         append_upload_log(job_id, "info", "Reordenando/renombrando pistas…", stream="system", conn=conn)
         if is_season:
@@ -844,7 +881,10 @@ def _run_queued_job(job_id: int) -> None:
         # advance_running_phase() marks it done retroactively when the NEXT
         # raw trigger (screenshots_generate) fires, same as every other
         # merged phase.
-        _mark(job_id, stage="verificacion_presubida")
+        if not _mark(job_id, stage="verificacion_presubida"):
+            append_upload_log(job_id, "info", "Subida cancelada; se detiene la preparación.",
+                              stream="system", conn=conn)
+            return
         mark_phase_started(job_id, "verificacion_presubida")
         append_upload_log(job_id, "info", "Preparando la subida…", stream="system", conn=conn)
         if not _populate_ready(job_id, item_id, conn=conn):

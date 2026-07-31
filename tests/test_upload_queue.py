@@ -729,3 +729,37 @@ def test_queue_upload_blocked_when_latest_job_is_active(db_conn, tmp_path):
 # its nomenclature/remux/checks previews computed in the background, then is
 # promoted into the normal 'queued' 60s countdown.
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Cancelar mientras se preparan ficheros
+# ---------------------------------------------------------------------------
+
+def test_cancelling_while_preparing_marks_the_job_and_stops_it(db_conn, tmp_path):
+    """Antes 'preparing' no se podía cancelar: ni el botón ni la API lo
+    aceptaban. Si la aplicación se paraba en esa fase, el job se quedaba ahí
+    para siempre y no había forma de tocarlo desde la interfaz."""
+    from emuwarez_uploadrr.services import upload_queue as uq
+    from emuwarez_uploadrr.services.upload_execution import cancel_upload_job
+
+    f = tmp_path / "peli.mkv"
+    f.write_bytes(b"x")
+    cur = db_conn.execute(
+        "INSERT INTO library_items(item_type,title,local_status,path) VALUES ('movie','Peli','Disponible',?)",
+        (str(f),))
+    item_id = cur.lastrowid
+    cur = db_conn.execute(
+        """INSERT INTO upload_jobs(library_item_id, title, path, status, stage)
+           VALUES (?, 'Peli', ?, 'preparing', 'remux')""", (item_id, str(f)))
+    job_id = cur.lastrowid
+    db_conn.commit()
+
+    result = cancel_upload_job(job_id, conn=db_conn)
+    assert result["ok"] is True
+    assert db_conn.execute("SELECT status FROM upload_jobs WHERE id = ?", (job_id,)).fetchone()["status"] == "cancelled"
+
+    # Y el trabajo que siguiera vivo NO puede resucitarlo al pasar de fase:
+    # sin este guardia el job volvía a parecer en marcha después de cancelarlo.
+    assert uq._mark(job_id, stage="verificacion_presubida") is False
+    assert db_conn.execute("SELECT status FROM upload_jobs WHERE id = ?", (job_id,)).fetchone()["status"] == "cancelled"
+    assert uq.job_was_cancelled(job_id, conn=db_conn) is True

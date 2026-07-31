@@ -1585,6 +1585,30 @@ def cancel_upload_job(job_id: int, conn=None) -> dict:
             append_upload_log(job_id, "info", "Subida automática cancelada mientras se preparaba.", stream="system")
             return {"ok": True, "message": "Subida cancelada.", "job_id": job_id}
 
+        if status == "preparing":
+            # Preparando: puede estar renombrando ficheros o remuxeando, y
+            # abortar a media faena dejaría un .tmp suelto o un fichero a
+            # medio renombrar. Así que no se interrumpe: se marca la fila y el
+            # trabajo se rinde en el siguiente punto limpio, entre fases
+            # (upload_queue._mark comprueba el estado antes de avanzar).
+            #
+            # Y si el proceso YA no existe —la aplicación se paró a mitad—
+            # esto es lo único que desatasca el job: antes se quedaba en
+            # 'preparing' para siempre, sin botón que lo tocara.
+            _update_job_status(job_id, "cancelled", stage="cancelled", finished_at=_now())
+            append_upload_log(
+                job_id, "info",
+                "Cancelación solicitada durante la preparación. Si el proceso sigue vivo, "
+                "terminará el paso en curso y se detendrá; si ya no existe, el job queda "
+                "cancelado y se puede reintentar.",
+                stream="system",
+            )
+            return {
+                "ok": True,
+                "message": "Subida cancelada. Se detendrá al terminar el paso en curso.",
+                "job_id": job_id,
+            }
+
         if status != "running":
             return {
                 "ok": False,

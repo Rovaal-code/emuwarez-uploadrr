@@ -34,6 +34,27 @@ _REPORT_CACHE: dict[str, tuple[tuple, dict]] = {}
 _REPORT_CACHE_MAX = 256
 
 
+def source_engine_enabled() -> bool:
+    """Whether the Internal Source Tool (services/source_engine) may run.
+
+    Off by default: the tool analyses the real file with FFprobe/MKVToolNix
+    and is still in development, so it stays opt-in from Ajustes -> Otros
+    rather than deciding sources for everyone out of the box.
+    """
+    from ..database import connect
+    try:
+        conn = connect()
+        try:
+            row = conn.execute(
+                "SELECT value FROM settings WHERE key = 'source_engine.enabled'"
+            ).fetchone()
+        finally:
+            conn.close()
+    except Exception:                      # nunca romper una lectura de MediaInfo por esto
+        return False
+    return (row["value"] if row else "") == "true"
+
+
 def mediainfo_available() -> bool:
     """Whether the `mediainfo` binary is on PATH. The dev/test sandbox for
     this project doesn't have it installed — only the Docker homelab image
@@ -129,13 +150,17 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
     if not p.is_file():
         return {"available": False, "message": f"Archivo no accesible desde la app: {path}", "rows": []}
 
+    _engine_on = source_engine_enabled()
+
     # MediaInfo over a remote (SSHFS/NFS) mount is slow, and the upload wizard
     # reads the same file twice (once to generate the nomenclature, once for
     # the "Ver MediaInfo" button). Cache the report per file (invalidated by
     # mtime+size, or by radarr_source changing) so the second read is instant.
     try:
         st = p.stat()
-        cache_key = (str(p), int(st.st_mtime), int(st.st_size), radarr_source)
+        # `_engine_on` entra en la clave: sin él, apagar la herramienta no se
+        # notaría hasta que el fichero cambiase de tamaño o de fecha.
+        cache_key = (str(p), int(st.st_mtime), int(st.st_size), radarr_source, _engine_on)
         cached = _REPORT_CACHE.get(str(p))
         if cached and cached[0] == cache_key:
             return cached[1]
@@ -180,9 +205,12 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
     # scores all 9 eMuwarez source candidates. Falls back to the old simple
     # bitrate/audio heuristic only if the engine couldn't run at all (missing
     # tools, unreadable file) so this row never goes empty.
-    from . import source_engine
-    _engine_result = source_engine.analyze_for_app(str(p), radarr_source=radarr_source)
-    _engine_source = source_engine.winning_app_source(_engine_result)
+    if _engine_on:
+        from . import source_engine
+        _engine_result = source_engine.analyze_for_app(str(p), radarr_source=radarr_source)
+        _engine_source = source_engine.winning_app_source(_engine_result)
+    else:
+        _engine_result = _engine_source = None
     if _engine_source is not None:
         _bitrate_source = _engine_source
     else:
@@ -231,7 +259,12 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
     # source, even a wrong one (e.g. "BluRay" for an actual MicroHD rip).
     source_signals = {
         "from_name": _name_source,
-        "from_mediainfo_bitrate": _bitrate_source,
+        # Con la herramienta apagada su columna sale vacía y queda fuera de la
+        # comparación (ver source_assistant), pero _bitrate_source se sigue
+        # calculando arriba: es el último recurso de _final_source cuando ni
+        # el nombre ni Radarr/Sonarr dicen nada, y sin él esos ficheros se
+        # quedarían sin source ninguno.
+        "from_mediainfo_bitrate": _bitrate_source if _engine_on else None,
         "mediainfo_reencoded": _reencoded,
         "bitrate_table": bitrate_table,
         # Full Internal Source Tool result (9-candidate ranking, evidence,

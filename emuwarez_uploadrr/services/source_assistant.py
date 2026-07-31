@@ -144,6 +144,23 @@ _TMDB_PROVIDER_MAP: dict[str, str] = {
 }
 
 
+def source_values_agree(*values: str | None) -> bool:
+    """Whether the known source values all say the same thing.
+
+    Decide el parpadeo del aviso de Source. Un valor ausente NO cuenta como
+    desacuerdo: avisar tiene que significar "estos valores dicen cosas
+    distintas", no "solo conozco uno". Antes esto era all(...), así que un
+    archivo cuyo nombre no lleva palabra de source avisaba siempre, aunque
+    Radarr/Sonarr lo tuviera clarísimo y no hubiera ninguna contradicción.
+
+    La Internal Source Tool llega en None cuando está apagada (ver
+    media_info_service.source_engine_enabled), así que se cae de la
+    comparación por el mismo filtro y quedan solo el nombre y Radarr/Sonarr.
+    """
+    known = [v for v in values if v]
+    return len(set(known)) <= 1
+
+
 def list_emu_sources() -> list[dict]:
     return list(EMU_SOURCES)
 
@@ -620,8 +637,11 @@ def build_editable_nomenclature_fields(
             # which case the UI falls back to the plain 3-column comparison.
             "engine": _sig_early.get("engine"),
         }
-        _vals = [source_comparison["from_name"], source_comparison["from_radarr"], source_comparison["from_mediainfo"]]
-        source_comparison["agree"] = all(_vals) and len(set(_vals)) == 1
+        source_comparison["agree"] = source_values_agree(
+            source_comparison["from_name"],
+            source_comparison["from_radarr"],
+            source_comparison["from_mediainfo"],
+        )
 
         fields: dict[str, Any] = {
             "title": title,

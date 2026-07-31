@@ -168,3 +168,32 @@ def test_put_empty_emu_api_key_is_rejected(client, auth_headers, monkeypatch):
 
     get_resp = client.get("/api/settings", headers=auth_headers)
     assert get_resp.json()["emu_api_key_configured"] is True, "Key should remain configured"
+
+
+# ---------------------------------------------------------------------------
+# Internal Source Tool (Ajustes -> Otros)
+# ---------------------------------------------------------------------------
+
+def test_source_engine_is_off_by_default(client, auth_headers):
+    """Sigue en desarrollo, así que no decide sources para todo el mundo de
+    salida: hay que encenderla a mano."""
+    s = client.get("/api/settings", headers=auth_headers).json()
+    assert s["source_engine_enabled"] is False
+
+
+def test_source_engine_toggle_roundtrip(client, auth_headers):
+    for value in (True, False):
+        client.put("/api/settings", json={"source_engine_enabled": value}, headers=auth_headers)
+        s = client.get("/api/settings", headers=auth_headers).json()
+        assert s["source_engine_enabled"] is value
+
+
+def test_source_engine_flag_is_what_media_info_reads(client, auth_headers, isolated_db):
+    """El ajuste que guarda la API y el que lee media_info_service tienen que
+    ser el mismo, o el interruptor no apagaría nada."""
+    import os
+    from emuwarez_uploadrr.services.media_info_service import source_engine_enabled
+    os.environ["CONFIG_DIR"] = str(isolated_db)
+    assert source_engine_enabled() is False
+    client.put("/api/settings", json={"source_engine_enabled": True}, headers=auth_headers)
+    assert source_engine_enabled() is True

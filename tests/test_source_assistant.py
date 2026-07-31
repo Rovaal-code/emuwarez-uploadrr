@@ -232,3 +232,32 @@ def _mi_report(from_name, from_mediainfo):
         "available": True,
         "source_signals": {"from_name": from_name, "from_mediainfo_bitrate": from_mediainfo},
     }
+
+
+
+# ---------------------------------------------------------------------------
+# Cuándo parpadea el aviso de Source
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("name,radarr,tool,agree,por_que", [
+    # Los tres conocidos y de acuerdo.
+    ("BluRay", "BluRay", "BluRay", True,  "todos coinciden"),
+    # Contradicción real entre dos conocidos: para eso existe el aviso.
+    ("BluRay", "WEB-DL", "BluRay", False, "nombre y Radarr se contradicen"),
+    ("BluRay", "BluRay", "WEB-DL", False, "la herramienta contradice a los otros dos"),
+    # Un valor ausente NO es un desacuerdo: antes esto parpadeaba, y hacía que
+    # cualquier archivo sin palabra de source en el nombre avisara siempre.
+    (None,     "BluRay", "BluRay", True,  "el nombre no dice nada, pero nadie se contradice"),
+    ("BluRay", None,     "BluRay", True,  "Radarr no dice nada"),
+    # Herramienta apagada: llega como None y se cae de la comparación.
+    ("BluRay", "BluRay", None,     True,  "apagada, y los dos que quedan coinciden"),
+    ("BluRay", "WEB-DL", None,     False, "apagada, pero nombre y Radarr se contradicen"),
+    # Sin nada que comparar.
+    (None,     None,     None,     True,  "no se conoce ningún valor"),
+    (None,     None,     "BluRay", True,  "solo se conoce uno"),
+])
+def test_source_agreement(name, radarr, tool, agree, por_que):
+    """El aviso significa "estos valores dicen cosas distintas", no "solo
+    conozco uno"."""
+    from emuwarez_uploadrr.services.source_assistant import source_values_agree
+    assert source_values_agree(name, radarr, tool) is agree, por_que

@@ -9,6 +9,7 @@ export interface SettingsData {
   tmdb_localize_series_titles: boolean
   qbit_url: string | null
   qbit_tag: string | null
+  source_engine_enabled: boolean
   qbit_username: string | null
   qbit_password_configured: boolean
   qbit_configured: boolean
@@ -50,6 +51,7 @@ export interface SettingsUpdatePayload {
   tmdb_localize_series_titles?: boolean
   qbit_url?: string
   qbit_tag?: string
+  source_engine_enabled?: boolean
   qbit_username?: string
   qbit_password?: string
   image_hosts_enabled?: string[]

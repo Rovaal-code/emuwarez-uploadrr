@@ -21,8 +21,10 @@ import { HoverTitle, Tooltip, useTooltip } from '../components/Tooltip'
 import { useSync } from '../context/SyncContext'
 import { UploadWizardModal } from '../components/UploadWizardModal'
 import { getLibraryItem } from '../api/library'
-import type { LibraryItemResponse } from '../types/api'
-import { posterUrl, idVerifyUrl } from '../utils/libraryItem'
+import { getInstances } from '../api/instances'
+import type { LibraryItemResponse, InstanceSafeResponse } from '../types/api'
+import { posterUrl, idVerifyUrl, buildDeepLink } from '../utils/libraryItem'
+import { ServiceLabel } from '../components/ServiceIcon'
 import { ExternalIdLink } from '../components/ExternalIdLink'
 import { InfoIcon } from '../components/InfoIcon'
 import {
@@ -193,6 +195,37 @@ function CompatibilityBadge({ status }: { status: string | null }) {
   return <StatusBadge status={status || 'Sin coincidencia'} type="request" />
 }
 
+// Origen: la instancia de Radarr/Sonarr donde tienes el contenido. Mismo
+// aspecto y mismo enlace que la columna Origen de Biblioteca y Subidas, para
+// que las cuatro pantallas digan lo mismo del mismo dato. Una petición que no
+// cruza con nada ("No importada") no tiene instancia: guion, como cualquier
+// otra celda sin valor. Es un componente y no JSX suelto porque useTooltip no
+// puede vivir dentro del .map() de la tabla.
+function OriginCell({ item, instances, size = 13 }: {
+  item: RequestItemResponse | RequestDetailResponse
+  instances: InstanceSafeResponse[]
+  size?: number
+}) {
+  const deepLink = buildDeepLink({
+    instance_id: item.instance_id,
+    instance_type: item.instance_type,
+    // El tmdb del item de biblioteca, que es el que existe en esa instancia;
+    // el de la petición solo como respaldo.
+    tmdb_id: item.library_tmdb_id ?? item.tmdb_id,
+    title_slug: item.title_slug,
+  }, instances)
+  const label = item.instance_name ?? item.instance_type ?? ''
+  const { triggerProps, tooltipNode } = useTooltip(deepLink ? `Abrir en ${label}` : null)
+  if (!item.instance_type) return <span style={{ color: 'var(--text-muted)' }}>—</span>
+  return (
+    <ValueChip linkable={!!deepLink}>
+      {deepLink
+        ? <a className="hover-link" href={deepLink} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} {...triggerProps}><ServiceLabel type={item.instance_type} label={label} size={size} />{tooltipNode}</a>
+        : <ServiceLabel type={item.instance_type} label={label} size={size} />}
+    </ValueChip>
+  )
+}
+
 function ReadinessBadge({ status }: { status: string | null | undefined }) {
   if (!status) return <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>—</span>
   const color =
@@ -273,9 +306,10 @@ function CreatedAtCell({ createdAt }: { createdAt: string | null | undefined }) 
 
 // Full dedicated request page — same visual format as the library item detail
 // page (back button, big poster left, title + fields grid right).
-function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload, onOpenLibraryItem }: {
+function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidates, onUpload, onOpenLibraryItem }: {
   item: RequestDetailResponse
   readiness: RequestReadinessResponse | null
+  instances: InstanceSafeResponse[]
   onBack: () => void
   onShowCandidates: () => void
   onUpload: (libraryItemId: number, preselect?: { season?: number | null; episode?: number | null }) => void
@@ -375,6 +409,9 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
               <FieldRow label="Estado" help="Aunque salga «Compatible», revisa la petición: el audio y el códec no se pueden comparar del todo (suelen indicarse en la descripción del torrent), y si pide la serie completa puede que no quiera la temporada especial."><CompatibilityBadge status={effectiveStatus} /></FieldRow>
               <FieldRow label="Tipo">
                 <ValueChip><ValueIcon><TypeValueIcon /></ValueIcon><span className="txt">{t.label}</span></ValueChip>
+              </FieldRow>
+              <FieldRow label="Origen">
+                <OriginCell item={item} instances={instances} size={15} />
               </FieldRow>
               <FieldRow label="Autor">
                 <ValueChip><ValueIcon><AuthorValueIcon /></ValueIcon><span className="txt"><AuthorCell author={item.author} isMine={item.is_mine} /></span></ValueChip>
@@ -620,6 +657,10 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
       setExamplesOpen(false)
     }
   }
+  // Solo para el enlace de la columna Origen, igual que en Subidas: el nombre
+  // de la instancia ya viene en cada petición, pero su URL no.
+  const [instances, setInstances] = useState<InstanceSafeResponse[]>([])
+  useEffect(() => { getInstances().then(setInstances).catch(() => {}) }, [])
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [detail, setDetail] = useState<RequestDetailResponse | null>(null)
   const [readiness, setReadiness] = useState<RequestReadinessResponse | null>(null)
@@ -806,6 +847,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
           <div style={{ padding: 24 }}><LoadingState label="Cargando petición…" /></div>
         ) : (
           <RequestDetailPage
+            instances={instances}
             item={detail}
             readiness={readiness}
             onBack={closeRequestDetail}
@@ -931,6 +973,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                       // offer "TV" for a column that says "Serie".
                       { value: '', label: 'Todos' }, ...facets.categories.map(c => ({ value: c, label: tipoOf(c).label })),
                     ]} /></th>
+                    <th>Origen</th>
                     <th><HeaderFilter label="Compatibilidad" value={statusFilter} onChange={setStatusFilter} options={[
                       // Labels, not raw values, or the filter would offer
                       // "No disponible" for a column that says "Faltante".
@@ -979,6 +1022,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                         <td style={{ whiteSpace: 'nowrap' }}>
                           <ValueChip><ValueIcon><TypeValueIcon /></ValueIcon><span className="txt">{tipoOf(item.category).label}</span></ValueChip>
                         </td>
+                        <td style={{ whiteSpace: 'nowrap' }}><OriginCell item={item} instances={instances} /></td>
                         <td><CompatibilityBadge status={item.compatibility_status} /></td>
                         <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}><AuthorCell author={item.author} isMine={item.is_mine} /></td>
                         <td style={{ whiteSpace: 'nowrap' }}><SpecValueChip value={item.requested_resolution} icon={ResolutionValueIcon} /></td>

@@ -706,6 +706,13 @@ class RequestItemResponse(BaseModel):
     library_item_id: Optional[int] = None
     library_title: Optional[str] = None
     library_year: Optional[int] = None
+    # Origen: instancia de Radarr/Sonarr del item cruzado. Todo en None
+    # cuando no hay cruce ("No importada").
+    instance_type: Optional[str] = None
+    instance_name: Optional[str] = None
+    instance_id: Optional[int] = None
+    title_slug: Optional[str] = None
+    library_tmdb_id: Optional[str] = None
     # Canonical "Serie (Año) - SxxEyy"-style title (services.library.
     # content_display_title), using the request's own season/episode scope —
     # only set when matched to a library item; only populated on the single

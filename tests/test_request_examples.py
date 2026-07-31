@@ -28,11 +28,16 @@ def _lib(conn, title, *, item_type="movie", status="Disponible",
         """INSERT INTO library_items
            (item_type, title, local_status, request_status, nomenclature_status,
             resolution, source, tmdb_id, year, video_codec, audio_codec,
-            audio_languages, has_spanish_ok, updated_at)
-           VALUES (?,?,?,'Sin petición','N/A',?,?,?,2020,?,?,?,?,CURRENT_TIMESTAMP)""",
+            audio_languages, has_spanish_ok, instance_type, instance_name,
+            updated_at)
+           VALUES (?,?,?,'Sin petición','N/A',?,?,?,2020,?,?,?,?,?,?,CURRENT_TIMESTAMP)""",
         (item_type, title, status, resolution, source, tmdb_id,
          "x264" if packable else None, "AC3" if packable else None,
-         "spa" if packable else None, 1 if packable else 0),
+         "spa" if packable else None, 1 if packable else 0,
+         # Origen: los ejemplos se construyen sobre TU biblioteca, así que
+         # heredan la instancia del item del que salen (ver el test de abajo).
+         "sonarr" if item_type in ("series", "season", "episode") else "radarr",
+         "Mi Sonarr" if item_type in ("series", "season", "episode") else "Mi Radarr"),
     )
     conn.commit()
 
@@ -418,3 +423,27 @@ def test_creation_dates_are_spread_over_the_last_days(db_conn):
     assert all(oldest <= d <= now + timedelta(minutes=1) for d in dates)
     # Spread, not all identical.
     assert len({d.date() for d in dates}) > 1
+
+
+def test_examples_carry_the_origin_of_the_library_item_they_came_from(db_conn):
+    """La columna Origen de Peticiones sale del item de biblioteca cruzado, así
+    que un ejemplo enseña la instancia real de la que se construyó. Las
+    inventadas no cruzan con nada y se quedan sin origen, que es lo que hace
+    que la tabla pinte un guion."""
+    from emuwarez_uploadrr.services.requests import list_request_items
+    _seed_library(db_conn)
+    ex.generate_examples(db_conn)
+
+    items = list_request_items(db_conn, limit=200)["items"]
+    examples = [i for i in items if str(i.get("emu_id", "")).startswith(ex.EXAMPLE_ID_PREFIX)]
+    assert examples, "no se generó ningún ejemplo"
+
+    matched = [i for i in examples if i.get("library_item_id")]
+    assert matched, "ningún ejemplo cruzó con la biblioteca"
+    assert all(i["instance_name"] in ("Mi Radarr", "Mi Sonarr") for i in matched), \
+        sorted({i["instance_name"] for i in matched})
+    assert all(i["instance_type"] in ("radarr", "sonarr") for i in matched)
+
+    unmatched = [i for i in examples if not i.get("library_item_id")]
+    assert unmatched, "se esperaban ejemplos inventados sin cruce"
+    assert all(i["instance_name"] is None and i["instance_type"] is None for i in unmatched)

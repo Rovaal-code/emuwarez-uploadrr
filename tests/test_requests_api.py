@@ -117,6 +117,53 @@ def test_requests_list_shows_reclamado_with_no_library_match(client, auth_header
     assert "Unmatched Reclamado Movie" in titles
 
 
+def test_requests_expose_the_origin_instance(client, auth_headers, isolated_db):
+    """Columna Origen de la tabla y campo Origen de la ficha: la instancia de
+    Radarr/Sonarr del item cruzado. Sin cruce viene en None y la UI pinta un
+    guion, que es el caso "No importada"."""
+    from emuwarez_uploadrr.database import connect, init_db
+    from emuwarez_uploadrr.services.requests import upsert_request
+    from emuwarez_uploadrr.models import RequestItem
+    import os
+    os.environ["CONFIG_DIR"] = str(isolated_db)
+    conn = connect()
+    init_db(conn)
+    cur = conn.execute(
+        """INSERT INTO library_items(item_type, title, year, local_status,
+                                     instance_type, instance_name, instance_id,
+                                     title_slug, tmdb_id)
+           VALUES ('movie', 'Con Origen', 2020, 'Disponible',
+                   'radarr', 'Radarr Pelis 4K', 7, NULL, '603')"""
+    )
+    lib_id = int(cur.lastrowid)
+    for title, matched in (("Con Origen", True), ("Sin Origen", False)):
+        upsert_request(conn, RequestItem(id=None, emu_id=f"origen-{title}", title=title,
+                                         category="Movies"))
+        if matched:
+            rid = conn.execute("SELECT id FROM request_items WHERE title = ?", (title,)).fetchone()["id"]
+            conn.execute(
+                """INSERT INTO request_matches(library_item_id, request_item_id, status, confidence)
+                   VALUES (?, ?, 'Compatible', 1.0)""", (lib_id, rid))
+    conn.commit()
+    conn.close()
+
+    rows = {i["title"]: i for i in client.get("/api/requests", headers=auth_headers).json()["items"]}
+
+    con = rows["Con Origen"]
+    assert con["instance_name"] == "Radarr Pelis 4K"
+    assert con["instance_type"] == "radarr"
+    assert con["instance_id"] == 7
+    assert con["library_tmdb_id"] == "603"      # el del item, para el enlace a la instancia
+
+    sin = rows["Sin Origen"]
+    assert sin["instance_name"] is None and sin["instance_type"] is None
+
+    # La ficha lee los mismos campos que la tabla, no unos suyos.
+    detail = client.get(f"/api/requests/{con['id']}", headers=auth_headers).json()
+    assert detail["instance_name"] == "Radarr Pelis 4K"
+    assert detail["instance_type"] == "radarr"
+
+
 def test_requests_list_no_library_match_is_filterable(client, auth_headers, isolated_db):
     """A request with nothing matching in your library reads as
     'Sin coincidencia' (shown as "No importada") — and the status filter must

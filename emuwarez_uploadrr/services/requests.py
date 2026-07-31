@@ -714,7 +714,17 @@ def list_request_items(
             li.year AS library_year,
             li.local_status,
             li.poster_url AS poster_url,
-            li.backdrop_url AS backdrop_url
+            li.backdrop_url AS backdrop_url,
+            -- Origen: la instancia de Radarr/Sonarr donde tienes el contenido.
+            -- Sale del item de biblioteca cruzado, así que una petición sin
+            -- cruce (No importada) los trae en NULL y la columna pinta un
+            -- guion. title_slug/tmdb_id son para el enlace directo a la
+            -- instancia, igual que en Biblioteca y Subidas.
+            li.instance_type,
+            li.instance_name,
+            li.instance_id,
+            li.title_slug,
+            li.tmdb_id AS library_tmdb_id
         FROM request_items ri
         LEFT JOIN request_matches rm ON rm.request_item_id = ri.id
           AND rm.id = (
@@ -804,7 +814,8 @@ def get_request_detail(conn: sqlite3.Connection, request_id: int) -> Optional[di
                li.poster_url AS poster_url, li.backdrop_url AS backdrop_url, li.video_codec AS local_video_codec,
                li.audio_languages AS local_audio_languages, li.size_bytes AS local_size,
                li.tmdb_id AS local_tmdb_id, li.imdb_id AS local_imdb_id, li.tvdb_id AS local_tvdb_id,
-               li.mal_id AS local_mal_id
+               li.mal_id AS local_mal_id,
+               li.instance_type, li.instance_name, li.instance_id, li.title_slug
         FROM request_matches rm
         JOIN library_items li ON li.id = rm.library_item_id
         WHERE rm.request_item_id = ?
@@ -819,6 +830,13 @@ def get_request_detail(conn: sqlite3.Connection, request_id: int) -> Optional[di
         result["poster_url"] = md.get("poster_url")
         result["backdrop_url"] = md.get("backdrop_url")
         result["library_year"] = md.get("library_year")
+        # Mismos nombres que en la lista, para que la columna Origen de la
+        # tabla y el campo Origen de la ficha lean lo mismo.
+        result["instance_type"] = md.get("instance_type")
+        result["instance_name"] = md.get("instance_name")
+        result["instance_id"] = md.get("instance_id")
+        result["title_slug"] = md.get("title_slug")
+        result["library_tmdb_id"] = md.get("local_tmdb_id")
         result["match"] = {
             "id": md["id"],
             "library_item_id": md["library_item_id"],

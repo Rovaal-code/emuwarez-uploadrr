@@ -282,6 +282,13 @@ export interface RequestItemResponse {
   library_item_id: number | null
   library_title: string | null
   library_year: number | null
+  // Origen: la instancia de Radarr/Sonarr donde tienes el contenido. Todo
+  // null cuando la petición no cruza con nada ("No importada").
+  instance_type: string | null
+  instance_name: string | null
+  instance_id: number | null
+  title_slug: string | null
+  library_tmdb_id: string | null
   display_title: string | null
   local_status: string | null
   poster_url: string | null

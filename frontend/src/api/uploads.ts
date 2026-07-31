@@ -72,35 +72,6 @@ export async function getUploads(params?: {
 // "Automático": no wizard involved. The job appears immediately in Subidas
 // as 'staging' ("Preparando") while the server computes nomenclature/remux/
 // checks previews in the background — see services/upload_queue.py.
-// `overrides` — set only when checkAutoUploadSource() found a disparity and
-// the user picked the source (and provider, if WEB-DL) by hand.
-export async function queueAutoUpload(
-  itemId: number,
-  overrides?: { source?: string; provider?: string },
-): Promise<UploadQueueResult> {
-  return api.post<UploadQueueResult>(`/library/${itemId}/upload/auto`, {
-    source: overrides?.source ?? null,
-    provider: overrides?.provider ?? null,
-  })
-}
-
-export interface AutoUploadSourceCheck {
-  disparity: boolean
-  from_name: string | null
-  from_radarr: string | null
-  from_mediainfo: string | null
-  accessible: boolean
-  message: string | null
-}
-
-// Quick pre-flight check run right before an "Automático" upload: do the
-// file's name, Radarr/Sonarr, and the Internal Source Tool all agree on the
-// source? Flags a disparity whenever any two of the (present) values
-// disagree — see services/source_assistant.py::check_auto_upload_source.
-export async function checkAutoUploadSource(itemId: number): Promise<AutoUploadSourceCheck> {
-  return api.get<AutoUploadSourceCheck>(`/library/${itemId}/upload/auto/source-check`)
-}
-
 // Precheck before opening/confirming the wizard: is there already a job for
 // this item (any status, including Completado)? Used to show "ya existe una
 // subida — al continuar se encadenará a su historial" instead of creating an

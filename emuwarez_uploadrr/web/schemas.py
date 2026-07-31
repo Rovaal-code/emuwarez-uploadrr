@@ -1367,23 +1367,6 @@ class UploadQueueResponse(BaseModel):
     errors: list[str] = []
 
 
-class AutoUploadRequest(BaseModel):
-    """Optional source/provider override for an "Automático" upload — set
-    once the user resolved a source-disparity by hand (see
-    services/source_assistant.py::check_auto_upload_source)."""
-    source: Optional[str] = None
-    provider: Optional[str] = None
-
-
-class AutoUploadSourceCheckResponse(BaseModel):
-    disparity: bool
-    from_name: Optional[str] = None
-    from_radarr: Optional[str] = None
-    from_mediainfo: Optional[str] = None
-    accessible: bool = True
-    message: Optional[str] = None
-
-
 # ---------------------------------------------------------------------------
 # Phase 10C — External API connection tests
 # ---------------------------------------------------------------------------

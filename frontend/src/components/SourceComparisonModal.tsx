@@ -3,19 +3,17 @@ import type { SourceComparison, SourceEngineResult } from '../api/nomenclature'
 import { InfoIcon } from './InfoIcon'
 import { Tooltip } from './Tooltip'
 
-// Shared by the manual wizard's Source field (both the icon button and the
-// blinking value inside "Ver MediaInfo") and the "Automático" upload's
-// disparity gate (AutoUploadSourceGate) — same modal, same detail toggle
-// semantics, so all three entry points behave identically instead of each
-// re-implementing their own version.
+// Shared by the manual wizard's Source field: both the icon button and the
+// blinking value inside "Ver MediaInfo". Same modal and same detail-toggle
+// semantics for both entry points, instead of each re-implementing its own.
 const thStyle: React.CSSProperties = {
   textAlign: 'left', padding: '8px 10px', fontWeight: 600, color: 'var(--text-muted)',
   position: 'sticky', top: 0, background: 'var(--bg-surface, #0f1420)',
 }
 
-// Shown next to every "Internal Source Tool" column header (this modal's own
-// table and AutoUploadSourceGate's disparity table) — same wording both
-// places so it doesn't read as two different explanations of the same thing.
+// Shown next to every "Internal Source Tool" column header, with the same
+// wording everywhere so it doesn't read as two different explanations of the
+// same thing.
 export const INTERNAL_SOURCE_TOOL_INFO =
   'Herramienta interna que calcula el source de un vídeo analizando el archivo real. Todavía está en desarrollo y puede ser inexacta.'
 

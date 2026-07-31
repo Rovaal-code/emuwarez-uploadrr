@@ -27,8 +27,6 @@ from ...services.upload_queue import get_queue_positions
 from ..dependencies import require_auth
 from ..runtime import _db_path
 from ..schemas import (
-    AutoUploadRequest,
-    AutoUploadSourceCheckResponse,
     CommandPreviewResponse,
     OkResponse,
     UploadArtifact,
@@ -288,48 +286,6 @@ def queue_upload(
         job=_job_to_detail(job) if job else None,
         errors=result.get("errors", []),
     )
-
-
-@router.post("/library/{item_id}/upload/auto", response_model=UploadQueueResponse)
-def queue_auto_upload(
-    item_id: int,
-    body: AutoUploadRequest = AutoUploadRequest(),
-    current_user: dict = Depends(require_auth),
-):
-    """"Automático": no wizard involved. The job appears immediately in
-    Subidas as 'staging' ("Preparando") while nomenclature/remux/checks
-    previews are computed server-side; see services/upload_queue.py.
-
-    `body.source`/`body.provider` come from the frontend's source-disparity
-    gate (GET .../upload/auto/source-check, called right before this) —
-    set only when the user had to resolve a disparity by hand."""
-    from ...services.upload_queue import queue_auto_upload_for_item
-    with _get_conn() as conn:
-        result = queue_auto_upload_for_item(
-            item_id, conn=conn,
-            source_override=body.source, provider_override=body.provider,
-        )
-
-    job = result.get("job")
-    return UploadQueueResponse(
-        status=result.get("status", "blocked"),
-        job=_job_to_detail(job) if job else None,
-        errors=result.get("errors", []),
-    )
-
-
-@router.get("/library/{item_id}/upload/auto/source-check", response_model=AutoUploadSourceCheckResponse)
-def check_auto_upload_source_route(
-    item_id: int,
-    current_user: dict = Depends(require_auth),
-):
-    """Quick pre-flight source check run right before an "Automático" upload
-    — see services/source_assistant.py::check_auto_upload_source for the
-    exact trigger condition."""
-    from ...services.source_assistant import check_auto_upload_source
-    with _get_conn() as conn:
-        result = check_auto_upload_source(item_id, conn=conn)
-    return AutoUploadSourceCheckResponse(**result)
 
 
 @router.get("/uploads", response_model=list[UploadJobDetail])

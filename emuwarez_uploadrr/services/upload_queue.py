@@ -63,7 +63,7 @@ def get_queue_positions(conn) -> dict[int, tuple[int, int]]:
 
 def _find_latest_job_for_item(conn, item_id: int) -> dict | None:
     """The tip of this item's retry chain: the job nobody else's
-    retry_of_job_id points at. Every "Subir"/Automático click chains onto
+    retry_of_job_id points at. Every "Subir" click chains onto
     this instead of creating an unrelated row, so the item's full upload
     activity (including past Completado attempts) stays in one place."""
     row = conn.execute(
@@ -157,9 +157,8 @@ def _insert_and_start_queued_job(
 
 def _arm_queue_timer(job_id: int) -> None:
     """Start the QUEUE_GRACE_SECONDS cancel-if-you-regret-it timer for a job
-    already sitting in status='queued' — shared by a fresh
-    _insert_and_start_queued_job() insert and by _run_staging_job() promoting
-    an Automático job from 'staging' once its previews are ready."""
+    already sitting in status='queued', inserted by
+    _insert_and_start_queued_job()."""
     timer = threading.Timer(QUEUE_GRACE_SECONDS, _run_queued_job, args=(job_id,))
     timer.daemon = True
     with _LOCK:
@@ -276,240 +275,6 @@ def queue_retry_for_job(original_job_id: int, conn=None) -> dict:
     finally:
         if own:
             conn.close()
-
-
-def _insert_staging_job(
-    conn, item: dict, *, retry_of_job_id: int | None = None, retry_count: int = 0,
-) -> int:
-    """Insert a job in status='staging' — appears in Subidas immediately for
-    an Automático upload, before anything is computed. No queued_until/timer
-    yet: those only get armed once _run_staging_job() finishes the previews
-    and promotes it to 'queued'.
-
-    stage starts at 'nomenclature' — the first of the three staging
-    sub-steps (nomenclature -> remux -> checks) _run_staging_job() works
-    through; the dedicated job page uses (status, stage) to show a spinner
-    next to whichever of its "Nomenclatura"/"Reordenación de pistas"/
-    "Verificación pre-subida" sections is currently being computed."""
-    now_iso = _now_iso()
-    cursor = conn.execute(
-        """
-        INSERT INTO upload_jobs (
-            library_item_id, status, stage, title, path, source_path,
-            retry_of_job_id, retry_count, created_at, updated_at
-        ) VALUES (?, 'staging', 'nomenclature', ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            item["id"], item.get("title") or "Sin título",
-            item.get("path") or "", item.get("path"),
-            retry_of_job_id, retry_count, now_iso, now_iso,
-        ),
-    )
-    conn.commit()
-    return cursor.lastrowid
-
-
-def queue_auto_upload_for_item(
-    item_id: int, conn=None,
-    source_override: str | None = None, provider_override: str | None = None,
-) -> dict:
-    """"Automático" upload: skips the wizard entirely. The job appears right
-    away in Subidas as 'staging' ("Preparando") while nomenclature/remux/
-    checks previews are computed server-side in a background thread; once
-    ready it's promoted into the normal 'queued' 60s countdown and proceeds
-    exactly like a manual upload from there. Same duplicate-chaining rule as
-    queue_upload_for_item().
-
-    `source_override`/`provider_override` come from the frontend's
-    source-disparity gate (checked right before this call, via
-    source_assistant.py::check_auto_upload_source) — when the user had to
-    pick a source by hand, that choice is forced into the nomenclature build
-    instead of the usual automatic inference."""
-    own = conn is None
-    conn = conn or connect()
-    try:
-        row = conn.execute("SELECT * FROM library_items WHERE id = ?", (item_id,)).fetchone()
-        item = row_to_dict(row)
-        if not item:
-            return {"status": "blocked", "errors": ["Item no encontrado."], "job": None}
-
-        latest = _find_latest_job_for_item(conn, item_id)
-        if latest and latest.get("status") in ACTIVE_JOB_STATUSES:
-            return {
-                "status": "blocked",
-                "errors": ["Ya hay una subida en curso para este contenido."],
-                "job": latest,
-            }
-        retry_of_job_id = latest["id"] if latest else None
-        retry_count = (latest.get("retry_count") or 0) + 1 if latest else 0
-
-        job_id = _insert_staging_job(conn, item, retry_of_job_id=retry_of_job_id, retry_count=retry_count)
-
-        thread = threading.Thread(
-            target=_run_staging_job, args=(job_id,),
-            kwargs={"source_override": source_override, "provider_override": provider_override},
-            daemon=True,
-        )
-        thread.start()
-
-        from .upload_execution import get_upload_job
-        return {"status": "staging", "job": get_upload_job(job_id, conn=conn)}
-    finally:
-        if own:
-            conn.close()
-
-
-def _run_staging_job(
-    job_id: int, *,
-    source_override: str | None = None, provider_override: str | None = None,
-) -> None:
-    """Background computation for an Automático job: generates the same
-    nomenclature/remux previews the manual wizard shows before the user
-    confirms, and the same pre-upload checks — writes them as read-only
-    snapshots and promotes the job to 'queued'. Never touches the
-    filesystem (all preview-only calls, same functions the wizard's own
-    preview endpoints use)."""
-    from .upload_execution import get_upload_job, append_upload_log
-    from .nomenclature import apply_nomenclature_proposal
-    from .mkv_remux import build_remux_plan
-    from .upload_checks import run_upload_checks
-
-    conn = connect()
-    try:
-        job = get_upload_job(job_id, conn=conn)
-        if not job or job.get("status") != "staging":
-            return  # cancelled before we even started
-        item_id = job.get("library_item_id")
-        if not item_id:
-            _fail(job_id, "El job no tiene un elemento de biblioteca asociado.")
-            return
-
-        row = conn.execute("SELECT * FROM library_items WHERE id = ?", (item_id,)).fetchone()
-        item = row_to_dict(row)
-        if not item:
-            _fail(job_id, "El elemento ya no existe en la biblioteca.")
-            return
-        is_season = item.get("item_type") == "season"
-
-        # Each of the three staging sub-steps below: compute -> bail out if
-        # cancelled meanwhile -> write its snapshot immediately -> advance
-        # `stage` for the NEXT one, rather than batching all three snapshots
-        # until the very end — the dedicated job page uses (status, stage)
-        # to show a spinner next to whichever section is currently active,
-        # which needs each snapshot to land as soon as it's actually ready.
-        append_upload_log(job_id, "info", "Generando nomenclatura para eMuwarez…", stream="system", conn=conn)
-        try:
-            if is_season:
-                from .season_pack import build_season_pack_plan
-
-                plan = build_season_pack_plan(
-                    item_id, conn=conn,
-                    source_override=source_override, provider_override=provider_override,
-                )
-                if plan.get("status") != "valid":
-                    _fail(job_id, "; ".join(plan.get("errors") or ["No se pudo preparar el pack de temporada."]))
-                    return
-                if source_override or provider_override:
-                    # Previously this choice only ever affected THIS preview
-                    # snapshot — the real apply step later (apply_season_pack,
-                    # in _run_queued_job) recomputed from scratch with no
-                    # override at all, silently discarding it. Persist it on
-                    # the job row so it actually reaches the renamed files.
-                    conn.execute(
-                        "UPDATE upload_jobs SET season_overrides_json = ? WHERE id = ?",
-                        (json.dumps({"source": source_override, "provider": provider_override}), job_id),
-                    )
-                    conn.commit()
-                nomenclature_snapshot = {
-                    "media_type": "season",
-                    "proposed_title": plan.get("season_pack_title"),
-                    "proposed_filename": plan.get("season_pack_title"),
-                    "series_title": plan.get("series_title"),
-                    "year": plan.get("year"),
-                    "season_number": plan.get("season_number"),
-                    "tmdb_id": plan.get("tmdb_id"),
-                    "resolution": plan.get("resolution"),
-                    "source": plan.get("source"),
-                    "provider_final": plan.get("provider"),
-                    "video_codec": plan.get("video_codec"),
-                    "audio_summary": plan.get("audio_summary"),
-                    "subtitle_summary": plan.get("subtitle_summary"),
-                    "release_tag": plan.get("release_tag"),
-                }
-            else:
-                nom_result = apply_nomenclature_proposal(
-                    item_id, conn=conn,  # dry_run default
-                    source_override=source_override, provider_override=provider_override,
-                )
-                if nom_result.get("status") == "blocked":
-                    _fail(job_id, "; ".join(nom_result.get("errors") or ["No se pudo generar la nomenclatura."]))
-                    return
-                nomenclature_snapshot = nom_result.get("proposal") or {}
-        except Exception as exc:
-            _fail(job_id, f"Error generando la nomenclatura: {exc}")
-            return
-
-        job = get_upload_job(job_id, conn=conn)
-        if not job or job.get("status") != "staging":
-            return  # cancelled while nomenclature was being computed
-        _write_snapshot(job_id, "nomenclature_snapshot_json", nomenclature_snapshot, conn=conn)
-        _update_staging_stage(job_id, "remux", conn)
-
-        try:
-            if is_season:
-                from .season_pack import get_season_episode_remux_previews
-                previews = get_season_episode_remux_previews(item_id, conn=conn)
-                remux_snapshot = {
-                    "episodes": [
-                        {
-                            "episode_id": ep.get("episode_id"),
-                            "title": ep.get("title"),
-                            "episode_number": ep.get("episode_number"),
-                            "ordered_tracks": (ep.get("plan") or {}).get("ordered_tracks", []),
-                        }
-                        for ep in previews.get("episodes", [])
-                    ]
-                }
-            else:
-                remux_plan = build_remux_plan(item_id, conn=conn)
-                remux_snapshot = {"ordered_tracks": remux_plan.get("ordered_tracks", [])}
-        except Exception as exc:
-            _fail(job_id, f"Error generando la reordenación de pistas: {exc}")
-            return
-
-        job = get_upload_job(job_id, conn=conn)
-        if not job or job.get("status") != "staging":
-            return  # cancelled while remux was being computed
-        _write_snapshot(job_id, "remux_snapshot_json", remux_snapshot, conn=conn)
-        _update_staging_stage(job_id, "checks", conn)
-
-        checks = run_upload_checks(conn, item_id)
-
-        # Re-check: the user may have cancelled while the checks above ran.
-        job = get_upload_job(job_id, conn=conn)
-        if not job or job.get("status") != "staging":
-            return
-
-        _write_snapshot(job_id, "checks_snapshot_json", checks, conn=conn)
-
-        if not checks.get("ready"):
-            failed = [c.get("message") or c.get("label") for c in checks.get("checks", []) if c.get("status") == "fail"]
-            _fail(job_id, "; ".join(failed) or "Las comprobaciones previas a la subida no se han superado.")
-            return
-
-        now = datetime.now(timezone.utc)
-        queued_until = (now + timedelta(seconds=QUEUE_GRACE_SECONDS)).isoformat()
-        conn.execute(
-            "UPDATE upload_jobs SET status = 'queued', stage = 'queued', queued_until = ?, updated_at = ? WHERE id = ?",
-            (queued_until, now.isoformat(), job_id),
-        )
-        conn.commit()
-        append_upload_log(job_id, "info", "Nomenclatura generada. En cola.", stream="system", conn=conn)
-        _arm_queue_timer(job_id)
-    except Exception as exc:
-        _fail(job_id, f"Error preparando la subida automática: {exc}")
-    finally:
-        conn.close()
 
 
 def cancel_queued_timer(job_id: int) -> bool:
@@ -1098,8 +863,8 @@ def _run_queued_job(job_id: int) -> None:
         # must still end with the job marked failed and the real traceback
         # in Activity — not a job silently stuck forever with nothing but a
         # stderr traceback nobody but the server console ever sees. Same
-        # safety net _run_staging_job() and _run_uploadrr_subprocess()
-        # already have; this was the one orchestrator missing it.
+        # safety net _run_uploadrr_subprocess() already has; this was the
+        # one orchestrator missing it.
         logger.exception("Job %s: excepción inesperada en _run_queued_job", job_id)
         _fail(job_id, f"Error inesperado: {exc}")
     finally:

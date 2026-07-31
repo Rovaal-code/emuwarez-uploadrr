@@ -24,7 +24,6 @@ import {
 import type { LibraryItemResponse, SeasonPackPlanResponse, UploadJob } from '../types/api'
 import { isSeasonReady, seasonNotReadyReason, episodeNotReadyReason, listDisplayTitle } from '../utils/libraryItem'
 import { InfoIcon } from './InfoIcon'
-import { AutoUploadSourceGate } from './AutoUploadSourceGate'
 import { FitText, FitTextPair } from './FitText'
 import { Tooltip, useTooltip } from './Tooltip'
 import { ACTIVE_JOB_STATUSES, statusLabel } from '../utils/uploadStatus'
@@ -377,9 +376,6 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   const needsSelection = isSeries || isSeason
   const allowMultiSeason = !!multiSeason && isSeries
 
-  // Manual/Automático choice, made up front — gates everything else. null
-  // shows the chooser screen; nothing below runs until one is picked.
-  const [mode, setMode] = useState<'manual' | 'auto' | null>(null)
 
   // Multi-season selection (series' own dedicated page only): a checklist
   // instead of the single season/episode dropdowns. `seasonQueue` holds every
@@ -387,9 +383,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   // review/edit each one's nomenclature (their Source/Proveedor/Tag edits
   // kept in seasonOverridesById below, restored when switching back), and
   // step 2 becomes a single "Subir todas" that checks + queues each one in
-  // turn (skipping — not blocking the rest — on a failed check); for
-  // Automático, all of them are queued in one go with no wizard involved
-  // from here on (AutoUploadSourceGate handles disparities one at a time).
+  // turn, skipping a failed check instead of blocking the rest.
   const [multiSelected, setMultiSelected] = useState<Set<number>>(new Set())
   const [seasonQueue, setSeasonQueue] = useState<number[]>([])
   // Source/Proveedor/Tag edits per season, keyed by season id — persists
@@ -614,9 +608,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
       setSelError('Selecciona un episodio o "Temporada entera"')
       return
     }
-    // For Automático the target resolving is enough — rendering switches to
-    // <AutoUploadSourceGate>, step 1's UI never renders.
-    if (mode === 'manual') setStep(1)
+    setStep(1)
   }
 
   const eligibleEpisodes = episodes.filter(ep => !episodeNotReadyReason(ep))
@@ -683,26 +675,20 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     if (multiSelected.size === 0) { setSelError('Selecciona al menos una temporada'); return }
     const ids = seasons.filter(s => multiSelected.has(s.id)).map(s => s.id)
     setSeasonQueue(ids)
-    if (mode === 'manual') {
-      setTargetId(ids[0])
-      setTargetIsSeason(true)
-      setStep(1)
-    }
-    // For Automático, setting seasonQueue above is enough — it switches the
-    // render to <AutoUploadSourceGate>, which checks + queues each season
-    // sequentially (source-disparity gate per season, see that component).
+    setTargetId(ids[0])
+    setTargetIsSeason(true)
+    setStep(1)
   }
 
-  // "Ya existe una subida" precheck — only relevant for the manual flow (the
-  // Automático path chains onto it silently server-side either way, see
-  // ACTIVE_JOB_STATUSES/_find_latest_job_for_item in upload_queue.py).
+  // "Ya existe una subida" precheck (ACTIVE_JOB_STATUSES /
+  // _find_latest_job_for_item en upload_queue.py).
   const [existingJob, setExistingJob] = useState<UploadJob | null>(null)
   useEffect(() => {
-    if (mode !== 'manual' || targetId == null) { setExistingJob(null); return }
+    if (targetId == null) { setExistingJob(null); return }
     let alive = true
     getExistingJobForItem(targetId).then(j => { if (alive) setExistingJob(j) }).catch(() => { if (alive) setExistingJob(null) })
     return () => { alive = false }
-  }, [mode, targetId])
+  }, [targetId])
   const existingJobBlocking = !!existingJob && ACTIVE_JOB_STATUSES.has(existingJob.status)
 
   // Shared by the single-target load and the multi-episode cache, so both
@@ -1212,11 +1198,10 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
         ]).map(m => {
           const enabled = !m.reason
           const selected = seasonUploadMode === m.key
-          // Same look as the Manual/Automático cards one screen back — these
-          // are the same kind of choice, so they shouldn't look like a
-          // different species of control. The only additions are the selected
-          // highlight (this one stays on screen after being picked) and the
-          // dimming when a mode isn't available.
+          // Tarjeta seleccionable: el mismo control que usa el resto del
+          // asistente para una elección de este tipo. Añade el resaltado del
+          // elegido (se queda en pantalla tras pulsarlo) y el atenuado cuando
+          // un modo no está disponible.
           const card = (
             <button
               className="btn btn-secondary"
@@ -1758,87 +1743,14 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
 
-        {mode === null && (
-          <div className="modal-body">
-            <p className="text-muted" style={{ fontSize: 12, marginBottom: 16 }}>
-              Elige cómo quieres subir <strong>{item.title}</strong> a eMuwarez.
-            </p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <button
-                className="btn btn-secondary"
-                style={{
-                  padding: '14px 14px', textAlign: 'left', display: 'flex', flexDirection: 'column',
-                  alignItems: 'flex-start', gap: 6, height: 'auto', width: '100%', minWidth: 0, whiteSpace: 'normal',
-                }}
-                onClick={() => setMode('manual')}
-                type="button"
-              >
-                <span style={{ fontSize: 15, fontWeight: 700 }}>Manual</span>
-                <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 400, whiteSpace: 'normal' }}>
-                  Revisa y ajusta la nomenclatura, el remux y las comprobaciones antes de confirmar.
-                </span>
-              </button>
-              <button
-                className="btn btn-secondary"
-                style={{
-                  padding: '14px 14px', textAlign: 'left', display: 'flex', flexDirection: 'column',
-                  alignItems: 'flex-start', gap: 6, height: 'auto', width: '100%', minWidth: 0, whiteSpace: 'normal',
-                }}
-                onClick={() => setMode('auto')}
-                type="button"
-              >
-                <span style={{ fontSize: 15, fontWeight: 700 }}>Automático</span>
-                <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 400, whiteSpace: 'normal' }}>
-                  Se envía directamente a Subidas; la nomenclatura y las comprobaciones se generan solas.
-                </span>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {mode === 'auto' && allowMultiSeason && seasonQueue.length === 0 && (
-          <div className="modal-body">
-            {multiSeasonChecklist}
-            {selError && <p className="text-error" style={{ marginTop: 10 }}>{selError}</p>}
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
-              <button className="btn btn-secondary" onClick={() => setMode(null)} type="button">← Volver</button>
-              <button className="btn btn-primary" onClick={confirmMultiSelection} type="button">Continuar →</button>
-            </div>
-          </div>
-        )}
-
-        {mode === 'auto' && allowMultiSeason && seasonQueue.length > 0 && (
-          <AutoUploadSourceGate targetIds={seasonQueue} onNavigate={onNavigate} onClose={onClose} onDone={onDone} />
-        )}
-
-        {mode === 'auto' && !allowMultiSeason && needsSelection && targetId == null && (
-          <div className="modal-body">
-            <p className="text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
-              Elige qué subir de <strong>{item.title}</strong>: un episodio concreto, o la temporada entera.
-            </p>
-            {singleSelectionFields}
-            {selError && <p className="text-error" style={{ marginTop: 10 }}>{selError}</p>}
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
-              <button className="btn btn-secondary" onClick={() => setMode(null)} type="button">← Volver</button>
-              <button className="btn btn-primary" onClick={confirmSelection} type="button">Continuar →</button>
-            </div>
-          </div>
-        )}
-
-        {mode === 'auto' && !allowMultiSeason && targetId != null && (
-          <AutoUploadSourceGate targetIds={[targetId]} onNavigate={onNavigate} onClose={onClose} onDone={onDone} />
-        )}
-
-        {mode === 'manual' && (
         <div style={{ display: 'flex', gap: 8, padding: '0 20px', marginTop: 8, fontSize: 12, flexWrap: 'wrap' }}>
           {needsSelection && <><span style={{ fontWeight: step === 0 ? 700 : 400, color: step === 0 ? 'var(--text)' : 'var(--text-muted)' }}>0. Selección</span><span style={{ color: 'var(--text-muted)' }}>→</span></>}
           <span style={{ fontWeight: step === 1 ? 700 : 400, color: step === 1 ? 'var(--text)' : 'var(--text-muted)' }}>1. Nomenclatura</span>
           <span style={{ color: 'var(--text-muted)' }}>→</span>
           <span style={{ fontWeight: step === 2 ? 700 : 400, color: step === 2 ? 'var(--text)' : 'var(--text-muted)' }}>2. Subida a eMuwarez</span>
         </div>
-        )}
 
-        {mode === 'manual' && step === 0 && (
+        {step === 0 && (
           <div className="modal-body">
             <p className="text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
               {allowMultiSeason
@@ -1849,8 +1761,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
             </p>
             {allowMultiSeason ? multiSeasonChecklist : isSeason ? seasonModeSelection : singleSelectionFields}
             {selError && <p className="text-error" style={{ marginTop: 10 }}>{selError}</p>}
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
-              <button className="btn btn-secondary" onClick={() => setMode(null)} type="button">← Volver</button>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
               <button
                 className="btn btn-primary"
                 disabled={isSeason && !allowMultiSeason && seasonUploadMode === null}
@@ -1865,7 +1776,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
           </div>
         )}
 
-        {mode === 'manual' && step === 1 && targetIsSeason && (
+        {step === 1 && targetIsSeason && (
           <div className="modal-body">
             {seasonQueue.length > 1 && (
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
@@ -2050,7 +1961,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
           </div>
         )}
 
-        {mode === 'manual' && step === 1 && !targetIsSeason && (
+        {step === 1 && !targetIsSeason && (
           <div className="modal-body">
             {episodeQueue.length > 1 && (
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
@@ -2190,7 +2101,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
           </div>
         )}
 
-        {mode === 'manual' && step === 2 && episodeQueue.length > 1 && (
+        {step === 2 && episodeQueue.length > 1 && (
           <div className="modal-body">
             {batchPhase === 'idle' && (
               <>
@@ -2242,7 +2153,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
           </div>
         )}
 
-        {mode === 'manual' && step === 2 && seasonQueue.length > 1 && (
+        {step === 2 && seasonQueue.length > 1 && (
           <div className="modal-body">
             {batchPhase === 'idle' && (
               <>
@@ -2293,7 +2204,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
           </div>
         )}
 
-        {mode === 'manual' && step === 2 && seasonQueue.length <= 1 && episodeQueue.length <= 1 && (
+        {step === 2 && seasonQueue.length <= 1 && episodeQueue.length <= 1 && (
           <div className="modal-body">
             <div className="detail-card" style={{ marginBottom: 14, padding: '12px 14px', borderRadius: 8 }}>
               {targetIsSeason ? (

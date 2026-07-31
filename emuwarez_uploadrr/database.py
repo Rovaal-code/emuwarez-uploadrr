@@ -506,10 +506,9 @@ def _migrate_upload_jobs_checks_snapshot(conn: sqlite3.Connection) -> None:
 
 def _migrate_upload_jobs_season_overrides(conn: sqlite3.Connection) -> None:
     """Add season_overrides_json — Source/Proveedor/Tag edited by hand for a
-    season pack (either in the manual wizard's now-editable season fields, or
-    by the Automático source-disparity gate), applied uniformly across every
-    episode. Previously this choice only ever reached the staging preview
-    snapshot — the real apply step (season_pack.apply_season_pack) recomputed
+    season pack in the wizard's editable season fields, applied uniformly
+    across every episode. Previously this choice only ever reached the preview
+    snapshot: the real apply step (season_pack.apply_season_pack) recomputed
     from scratch with no override at all, silently discarding it."""
     try:
         conn.execute("ALTER TABLE upload_jobs ADD COLUMN season_overrides_json TEXT")

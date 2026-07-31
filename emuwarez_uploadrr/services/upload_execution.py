@@ -1572,9 +1572,10 @@ def cancel_upload_job(job_id: int, conn=None) -> dict:
             return {"ok": True, "message": "Subida cancelada.", "job_id": job_id}
 
         if status == "staging":
-            # Nothing to signal (no subprocess, no timer yet) — just flip the
-            # row; _run_staging_job() re-reads status before persisting any
-            # snapshot or promoting to 'queued' and bails out when it sees this.
+            # Nada que señalar (ni subproceso ni temporizador), solo se marca
+            # la fila. Ya no se crean jobs en 'staging' (era del modo
+            # Automático, retirado), pero una base anterior puede tener alguno
+            # atascado ahí y tiene que poder cancelarse.
             _update_job_status(job_id, "cancelled", stage="cancelled", finished_at=_now())
             append_upload_log(job_id, "info", "Subida automática cancelada mientras se preparaba.", stream="system")
             return {"ok": True, "message": "Subida cancelada.", "job_id": job_id}

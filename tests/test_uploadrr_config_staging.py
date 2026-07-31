@@ -59,10 +59,10 @@ def test_stage_image_hosts_sets_ordered_img_hosts_list():
 
 def test_stage_image_hosts_sets_api_keys_inline_mapping():
     lines: list[str] = []
-    staged, _ = stage_image_hosts(lines, api_keys={"imgbb": "IMGBB_REAL_KEY", "ptpimg": "PTPIMG_REAL_KEY"})
+    staged, _ = stage_image_hosts(lines, api_keys={"imgbb": "IMGBB_REAL_KEY", "lensdump": "LENSDUMP_REAL_KEY"})
     text = "\n".join(staged)
     assert "IMGBB_REAL_KEY" in text
-    assert "PTPIMG_REAL_KEY" in text
+    assert "LENSDUMP_REAL_KEY" in text
     assert "API_KEYS" in text
 
 
@@ -73,13 +73,13 @@ def test_stage_image_hosts_skips_untouched_sections_when_nothing_given():
     assert message == "SCREENS sin cambios"
 
 
-def test_stage_image_hosts_only_stages_known_key_hosts():
-    # hamster/imghost.dev take a key in our own catalog but aren't part of
-    # SCREENS.API_KEYS in the real fork config — callers must filter to
-    # SCREENS_API_KEY_HOSTS before calling this (upload_execution.py does).
-    assert "hamster" not in SCREENS_API_KEY_HOSTS
-    assert "imghost" not in SCREENS_API_KEY_HOSTS
-    assert set(SCREENS_API_KEY_HOSTS) == {"imgbb", "ptpimg", "lensdump", "ptscreens", "onlyimage"}
+def test_stage_image_hosts_only_stages_hosts_that_take_a_key():
+    """imghost.dev estaba excluido suponiendo que su clave iba en otro bloque
+    del config del fork. Es un CheveretoTemplate como los demás y lee
+    SCREENS.API_KEYS, así que sin ella revienta."""
+    assert "imghost" in SCREENS_API_KEY_HOSTS
+    # Los que no llevan clave no se cuelan.
+    assert "imgbox" not in SCREENS_API_KEY_HOSTS
 
 
 def test_stage_qbittorrent_config_sets_credentials_and_default_client():
@@ -271,3 +271,19 @@ def test_stage_add_logo_creates_the_key_when_the_config_lacks_it():
     from emuwarez_uploadrr.legacy import get_block_key
     staged, _ = stage_add_logo(["DEFAULT:", "  tmdb: xxx"], False)
     assert get_block_key(staged, "DEFAULT", "add_logo") == "false"
+
+
+def test_every_host_that_needs_a_key_gets_it_staged():
+    """La lista de claves que se escriben en el config del fork estaba puesta a
+    mano y se quedó en cinco: hamster e imghost.dev también necesitan clave y
+    no estaban. Configurabas la suya en Ajustes, se guardaba, y la subida
+    fallaba igual porque nunca llegaba allí.
+
+    Derivarla de IMAGE_HOSTS lo arregla; este test es lo que impide que vuelva
+    a separarse cuando se añada el octavo proveedor."""
+    from emuwarez_uploadrr.services.uploadrr_config_staging import SCREENS_API_KEY_HOSTS
+    from emuwarez_uploadrr.services.image_hosts import IMAGE_HOSTS
+    esperados = {h["id"] for h in IMAGE_HOSTS if h["needs_key"]}
+    assert set(SCREENS_API_KEY_HOSTS) == esperados
+    # Y ninguno de los que NO necesitan clave se cuela.
+    assert not (set(SCREENS_API_KEY_HOSTS) & {h["id"] for h in IMAGE_HOSTS if not h["needs_key"]})

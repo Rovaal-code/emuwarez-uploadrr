@@ -35,20 +35,22 @@ from ..legacy import (
     yaml_scalar,
 )
 from ..integrations.qbittorrent import split_base_url
+from .image_hosts import IMAGE_HOSTS
 
 # The TORRENT_CLIENTS entry name we manage ourselves — matches the fork's own
 # example config.yaml convention. Fixed (not read from the user's config) so
 # DEFAULT.default_torrent_client always has a predictable target to point at.
 QBIT_CLIENT_KEY = "qbit"
 
-# The hosts Uploadrr-EMU's own SCREENS.API_KEYS block supports, confirmed
-# against a real config.yaml from the bundled fork. Notably `hamster` and
-# `imghost.dev` (which DO take a key in our own IMAGE_HOSTS catalog) are
-# absent from this section — their keys appear to live under a separate
-# ADULT.API_KEYS block for a different purpose in the fork, unconfirmed —
-# so those two are deliberately left unstaged (best-effort) rather than
-# guessed at.
-SCREENS_API_KEY_HOSTS = ("imgbb", "ptpimg", "lensdump", "ptscreens", "onlyimage")
+# Los hosts cuya API key hay que escribir en SCREENS.API_KEYS del config del
+# fork. Se DERIVA de IMAGE_HOSTS en vez de mantenerse a mano.
+#
+# La lista escrita a mano dejaba fuera a imghost.dev suponiendo que su clave
+# vivía en un bloque ADULT.API_KEYS aparte. Comprobado contra el fork: no. Es
+# un CheveretoTemplate como los demás y lee SCREENS.API_KEYS, lanzando
+# KeyError si no la encuentra. O sea que configurabas su clave en Ajustes, se
+# guardaba, y la subida fallaba igual porque nunca llegaba allí.
+SCREENS_API_KEY_HOSTS = tuple(h["id"] for h in IMAGE_HOSTS if h["needs_key"])
 
 _SECRET_LINE_PATTERNS = [
     re.compile(r"^(\s*api_key\s*:\s*).+$"),

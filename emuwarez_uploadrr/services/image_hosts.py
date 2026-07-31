@@ -27,21 +27,22 @@ IMAGE_HOSTS: list[dict[str, Any]] = [
     {"id": "pixhost",   "label": "Pixhost",    "url": "https://pixhost.cc",    "needs_key": False, "favicon": "https://pixhost.cc/favicon.ico"},
     {"id": "fastpic",   "label": "FastPic",    "url": "https://fastpic.org",   "needs_key": False, "favicon": "https://fastpic.org/favicon-32x32.png"},
     {"id": "imgbb",     "label": "ImgBB",      "url": "https://imgbb.com",     "needs_key": True,  "favicon": "https://simgbb.com/images/favicon.png"},
-    # ptpimg.me: currently returning a Cloudflare 523 (origin unreachable) —
-    # couldn't resolve its real favicon; falls back to Google's s2 service.
-    {"id": "ptpimg",    "label": "PTPIMG",     "url": "https://ptpimg.me",     "needs_key": True,  "favicon": None},
     # lensdump.com's own <link rel="icon"> points at a blank/broken CDN asset —
     # /favicon.ico at the root domain has the real camera-lens mark instead.
     {"id": "lensdump",  "label": "Lensdump",   "url": "https://lensdump.com",  "needs_key": True,  "favicon": "https://lensdump.com/favicon.ico"},
     {"id": "ptscreens", "label": "PTScreens",  "url": "https://ptscreens.com", "needs_key": True,  "favicon": "https://ptscreens.com/content/images/system/favicon_1725283834396_b75cb0.png"},
     {"id": "onlyimage", "label": "OnlyImage",  "url": "https://onlyimage.org", "needs_key": True,  "favicon": "https://onlyimage.org/content/images/system/favicon_1722402372098_802ccb.png"},
-    # hamster.is no longer resolves at all (NXDOMAIN, confirmed against
-    # Cloudflare's public resolver) — the domain looks dead. Left as-is
-    # pending the real current URL; flagged to the user.
-    {"id": "hamster",   "label": "Hamster",    "url": "https://hamster.is",    "needs_key": True,  "favicon": None},
     {"id": "imghost",   "label": "imghost.dev", "url": "https://imghost.dev",  "needs_key": True,  "favicon": "https://imghost.dev/content/images/system/default/favicon.png"},
 ]
 
+# Retirados: hamster.is dejó de resolver (NXDOMAIN) y ptpimg.me pasó a solo
+# lectura, sin aceptar subidas nuevas. Un proveedor que no puede recibir una
+# captura no pinta nada en la lista: solo sirve para que alguien lo ponga el
+# primero y se le rompan las subidas.
+#
+# Sus ajustes guardados (imghost.enabled, imghost.key.<id>) se quedan en la
+# base pero son inertes: get_enabled_hosts y set_config filtran por _BY_ID,
+# así que un id que ya no existe se cae solo.
 _BY_ID = {h["id"]: h for h in IMAGE_HOSTS}
 DEFAULT_HOST = "imgbox"
 

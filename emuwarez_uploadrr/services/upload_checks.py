@@ -157,7 +157,10 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int, *, scope: str = "a
         if has_audio_es:
             spanish_msg = "Audio en castellano. No son obligatorios subtítulos en castellano."
         elif has_subs_es:
-            spanish_msg = f"Sin audio en castellano ({audio_langs or 'desconocido'}), pero subtítulos sí ({sub_langs})."
+            # Sin la lista de subtítulos: un release puede traer 37 pistas y
+            # volcarlas aquí no dice nada que el mensaje no diga ya. El audio
+            # sí se nombra, porque ahí lo que importa es en qué idioma está.
+            spanish_msg = f"Sin audio en castellano ({audio_langs or 'desconocido'}), pero subtítulos en castellano."
         else:
             spanish_msg = (
                 f"Ni el audio ({audio_langs or 'sin detectar'}) ni los subtítulos "

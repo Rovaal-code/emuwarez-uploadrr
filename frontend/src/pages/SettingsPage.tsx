@@ -54,12 +54,11 @@ function configSignature(v: {
   recentLimit: number; uploadMaxConcurrent: number; qbitUrl: string; qbitTag: string; qbitUser: string
   imgEnabled: string[]; allowedRoots: string
   newKey?: string; newEmuKey?: string; qbitPass?: string
-  imgKeys?: Record<string, string>
 }): string {
   return JSON.stringify([
     v.tag, v.providerOrder, v.region, v.emuUsername,
     v.ignoreSpecials, v.sourceEngine, v.addLogo, v.recentLimit, v.uploadMaxConcurrent, v.qbitUrl, v.qbitTag, v.qbitUser, v.imgEnabled, v.allowedRoots,
-    v.newKey ?? '', v.newEmuKey ?? '', v.qbitPass ?? '', v.imgKeys ?? {},
+    v.newKey ?? '', v.newEmuKey ?? '', v.qbitPass ?? '',
   ])
 }
 
@@ -116,7 +115,12 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const qbitUserEyeTip = useTooltip(showQbitUser ? 'Ocultar usuario' : 'Mostrar usuario')
   // Image hosts
   const [imgEnabled, setImgEnabled] = useState<string[]>([])
-  const [imgKeys, setImgKeys] = useState<Record<string, string>>({})
+  // La API key de un proveedor se mete en su propia tarjeta, no en un campo
+  // colgando debajo de la fila: son cinco proveedores y el formulario se
+  // llenaba de campos de contraseña abiertos.
+  const [keyModalHost, setKeyModalHost] = useState<string | null>(null)
+  const [keyDraft, setKeyDraft] = useState('')
+  const [keySaving, setKeySaving] = useState(false)
   const [imgTest, setImgTest] = useState<Record<string, IntegrationTestResult>>({})
   const [imgTesting, setImgTesting] = useState<string | null>(null)
   const [showAddImg, setShowAddImg] = useState(false)
@@ -132,7 +136,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const currentSig = configSignature({
     tag, providerOrder, region, emuUsername,
     ignoreSpecials, sourceEngine, addLogo, recentLimit, uploadMaxConcurrent, qbitUrl, qbitTag, qbitUser, imgEnabled, allowedRoots,
-    newKey, newEmuKey, qbitPass, imgKeys,
+    newKey, newEmuKey, qbitPass,
   })
   const dirty = baseline !== '' && currentSig !== baseline
   const dirtyRef = useRef(false)
@@ -155,7 +159,12 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   async function handleTestImghost(hostId: string) {
     setImgTesting(hostId)
     try {
-      const r = await testImghostConnection(hostId, imgKeys[hostId]?.trim() || undefined)
+      // Con la tarjeta abierta se prueba lo que hay escrito AHORA; desde el
+      // botón Probar de la fila, lo que ya esté guardado (undefined deja que
+      // el backend lea el ajuste). Probar antes de guardar es justo para lo
+      // que existe la tarjeta.
+      const pending = keyModalHost === hostId ? keyDraft.trim() : ''
+      const r = await testImghostConnection(hostId, pending || undefined)
       setImgTest(p => ({ ...p, [hostId]: r }))
     } catch {
       setImgTest(p => ({ ...p, [hostId]: { ok: false, service: 'imghost', status: 'connection_error', message: 'Error al contactar con el servidor' } }))
@@ -298,8 +307,8 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
       if (newKey.trim()) payload.tmdb_api_key = newKey.trim()
       if (newEmuKey.trim()) payload.emu_api_key = newEmuKey.trim()
       if (qbitPass.trim()) payload.qbit_password = qbitPass.trim()
-      const keysToSend = Object.fromEntries(Object.entries(imgKeys).filter(([, v]) => v.trim()))
-      if (Object.keys(keysToSend).length) payload.image_host_keys = keysToSend
+      // Las API keys de imágenes ya NO viajan aquí: cada una se guarda desde
+      // su propia tarjeta, en el momento, sin depender del Guardar global.
       const updated = await updateSettings(payload)
       setSettings(updated)
       setTag(updated.default_release_tag)
@@ -314,7 +323,6 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
       setQbitUser(updated.qbit_username ?? '')
       setQbitPass('')
       setImgEnabled(updated.image_hosts_enabled ?? [])
-      setImgKeys({})
       setNewKey('')
       setNewEmuKey('')
       setAllowedRoots((updated.uploadrr_allowed_roots ?? []).join(', '))
@@ -587,7 +595,23 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                         </a>
                         <span style={{ fontSize: 13, fontWeight: 500 }}>{h.label}</span>
                         {isDefault && <span className="badge status-available" style={{ fontSize: 10 }}>por defecto</span>}
-                        {h.needs_key && <span className="badge nom-na" style={{ fontSize: 10 }}>API key</span>}
+                        {h.needs_key && (() => {
+                          // Verde cuando hay clave guardada; gris parpadeando
+                          // mientras no la haya, para que un proveedor recién
+                          // añadido pida lo que le falta en vez de quedarse
+                          // callado y fallar luego en plena subida.
+                          const guardada = !!settings?.image_host_keys_configured?.includes(id)
+                          return (
+                            <button
+                              type="button"
+                              title={guardada ? 'API key guardada. Pulsa para cambiarla' : 'Falta la API key. Pulsa para añadirla'}
+                              className={`badge ${guardada ? 'status-available' : 'nom-na badge-blink'}`}
+                              style={{ fontSize: 10, cursor: 'pointer', border: 'none' }}
+                              onClick={e => { e.stopPropagation(); setKeyModalHost(id); setKeyDraft('') }}
+                              onMouseDown={e => e.stopPropagation()}
+                            >API key</button>
+                          )
+                        })()}
                         <button className="btn btn-secondary btn-sm" style={{ marginLeft: 'auto', fontSize: 11, padding: '2px 8px' }}
                           onClick={() => handleTestImghost(id)} disabled={imgTesting === id} type="button">
                           {imgTesting === id ? 'Probando…' : 'Probar'}
@@ -596,11 +620,6 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                           <RemoveImgHostButton onClick={() => toggleImgHost(id)} />
                         )}
                       </div>
-                      {h.needs_key && (
-                        <input type="password" className="form-input" style={{ marginTop: 6 }} autoComplete="new-password"
-                          value={imgKeys[id] ?? ''} onChange={e => setImgKeys(p => ({ ...p, [id]: e.target.value }))}
-                          placeholder={settings?.image_host_keys_configured?.includes(id) ? '•••••••• (guardada, vacío para mantener)' : `API key de ${h.label}`} />
-                      )}
                       {t && <div style={{ fontSize: 11, marginTop: 4, color: testResultColor(t) }}>{testResultLabel(t)}</div>}
                     </div>
                   )
@@ -612,6 +631,61 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                 </button>
               )}
             </div>
+              {keyModalHost && (() => {
+                const host = (settings?.image_hosts_available ?? []).find((x: { id: string }) => x.id === keyModalHost)
+                const guardada = !!settings?.image_host_keys_configured?.includes(keyModalHost)
+                const t = imgTest[keyModalHost]
+                const guardar = async () => {
+                  if (!keyDraft.trim()) return
+                  setKeySaving(true)
+                  try {
+                    const updated = await updateSettings({ image_host_keys: { [keyModalHost]: keyDraft.trim() } })
+                    setSettings(updated)
+                    setKeyModalHost(null)
+                    setKeyDraft('')
+                  } catch { /* el mensaje de error global ya lo cubre */ }
+                  finally { setKeySaving(false) }
+                }
+                return (
+                  <div className="modal-overlay" onClick={() => setKeyModalHost(null)}>
+                    <div className="modal-panel" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
+                      <div className="modal-header">
+                        <h2 className="modal-title">API key de {host?.label ?? keyModalHost}</h2>
+                        <button className="modal-close" onClick={() => setKeyModalHost(null)}>✕</button>
+                      </div>
+                      <div className="modal-body">
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
+                          <input
+                            type="password" className="form-input" style={{ flex: 1 }} autoComplete="new-password"
+                            value={keyDraft} onChange={e => setKeyDraft(e.target.value)}
+                            placeholder={guardada ? '•••••••• (hay una guardada)' : `API key de ${host?.label ?? ''}`}
+                            autoFocus
+                          />
+                          <button
+                            className="btn btn-secondary" type="button"
+                            onClick={() => handleTestImghost(keyModalHost)}
+                            disabled={imgTesting === keyModalHost || !keyDraft.trim()}
+                          >
+                            {imgTesting === keyModalHost ? 'Probando…' : 'Probar'}
+                          </button>
+                        </div>
+                        {t && <div style={{ fontSize: 12, marginTop: 8, color: testResultColor(t) }}>{testResultLabel(t)}</div>}
+                        <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 10, marginBottom: 0 }}>
+                          Probar comprueba que el proveedor responde y que has escrito algo, no que la clave
+                          sea correcta: eso no se sabe sin subir una imagen de verdad.
+                        </p>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+                          <button className="btn btn-secondary" type="button" onClick={() => setKeyModalHost(null)}>Cancelar</button>
+                          <button className="btn btn-primary" type="button" onClick={guardar} disabled={!keyDraft.trim() || keySaving}>
+                            {keySaving ? 'Guardando…' : 'Guardar'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+
               {showAddImg && (
                 <div className="modal-overlay" onClick={() => setShowAddImg(false)}>
                   <div className="modal-panel" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>

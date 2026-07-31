@@ -66,12 +66,30 @@ function requestDisplayTitle(item: RequestItemResponse): string {
   return `${base}${year}`
 }
 
-function tipoOf(category: string | null): { icon: string; label: string } {
+// eMuwarez categories arrive in whatever wording the tracker uses ("TV",
+// "Movie", "Películas"…), so they're normalised once here and everything else
+// keys off the result. Reading the raw string in several places is what let
+// "TV" slip through every check: the Tipo column printed "TV" instead of
+// "Serie", and isTv/isSeriesLike below — which decide whether a request shows
+// its TVDB and MAL ids — came out false for every TV request.
+type ContentKind = 'movie' | 'series' | 'doc' | null
+
+export function contentKind(category: string | null): ContentKind {
   const c = (category || '').toLowerCase()
-  if (c.includes('serie')) return { icon: '📺', label: category || 'Serie' }
-  if (c.includes('docu')) return { icon: '🎥', label: category || 'Documental' }
-  if (c.includes('pel') || c.includes('movie') || c.includes('film')) return { icon: '🎬', label: category || 'Película' }
-  return { icon: '🎬', label: category || '—' }
+  if (c.includes('serie') || c.includes('tv') || c.includes('show')) return 'series'
+  if (c.includes('docu')) return 'doc'
+  if (c.includes('pel') || c.includes('movie') || c.includes('film')) return 'movie'
+  return null
+}
+
+function tipoOf(category: string | null): { icon: string; label: string } {
+  switch (contentKind(category)) {
+    case 'series': return { icon: '📺', label: 'Serie' }
+    case 'doc': return { icon: '🎥', label: 'Documental' }
+    case 'movie': return { icon: '🎬', label: 'Película' }
+    // Something we don't recognise: show it verbatim rather than guessing.
+    default: return { icon: '🎬', label: category || '—' }
+  }
 }
 
 function RequestPoster({ url, category, size = 'sm' }: { url: string | null; category: string | null; size?: 'sm' | 'lg' }) {
@@ -268,8 +286,9 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
   // item. TVDB only ever comes from the library item (Radarr/Sonarr); MAL
   // comes from eMuwarez on the request side, or from the library item's own
   // Fribb/anime-lists resolution (see services/anime_lists.py) otherwise.
-  const isTv = /serie/i.test(item.category || '')
-  const isSeriesLike = /serie|docu/i.test(item.category || '')
+  const kind = contentKind(item.category)
+  const isTv = kind === 'series'
+  const isSeriesLike = kind === 'series' || kind === 'doc'
   const tmdbId = item.tmdb_id || m?.local_tmdb_id || null
   const imdbId = item.imdb_id || m?.local_imdb_id || null
   const tvdbId = item.tvdb_id || m?.local_tvdb_id || null
@@ -553,11 +572,15 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
           .join(', ')
         setExamplesMsg(
           `${r.created} peticiones de ejemplo generadas: ${real}.`
-          + (r.shortfalls.length ? ` Tu biblioteca no daba para todo: ${r.shortfalls.join('; ')}.` : ''),
+          + (r.shortfalls.length ? ` Tu biblioteca no daba para todo: ${r.shortfalls.join('; ')}.` : '')
+          + ' La tabla de Recomendaciones del Panel se ha actualizado con ellas.',
         )
       } else {
         const r = await deleteExamples()
-        setExamplesMsg(`${r.deleted} peticiones de ejemplo borradas.`)
+        setExamplesMsg(
+          `${r.deleted} peticiones de ejemplo borradas.`
+          + ' La tabla de Recomendaciones del Panel se ha actualizado.',
+        )
       }
       refreshExampleCount()
       loadItems(0)
@@ -827,8 +850,14 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
         </div>
 
         {examplesMsg && (
-          <div className="detail-card" style={{ padding: '10px 14px', borderRadius: 8, marginBottom: 12, fontSize: 12.5 }}>
-            {examplesMsg}
+          <div className="detail-card" style={{ padding: '12px 14px', borderRadius: 8, marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+              <span style={{ marginTop: 1 }}><CheckStatusIcon status="ok" /></span>
+              <div style={{ fontSize: 12.5 }}>
+                <div style={{ fontWeight: 600, marginBottom: 2 }}>Peticiones de ejemplo</div>
+                {examplesMsg}
+              </div>
+            </div>
           </div>
         )}
 
@@ -871,7 +900,9 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                   <tr>
                     <th>Título</th>
                     <th><HeaderFilter label="Tipo" value={categoryFilter} onChange={setCategoryFilter} options={[
-                      { value: '', label: 'Todos' }, ...facets.categories.map(c => ({ value: c, label: c })),
+                      // Same label the Tipo column shows, or the filter would
+                      // offer "TV" for a column that says "Serie".
+                      { value: '', label: 'Todos' }, ...facets.categories.map(c => ({ value: c, label: tipoOf(c).label })),
                     ]} /></th>
                     <th><HeaderFilter label="Compatibilidad" value={statusFilter} onChange={setStatusFilter} options={[
                       { value: '', label: 'Todas' }, ...facets.statuses.map(s => ({ value: s, label: s })),

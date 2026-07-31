@@ -40,6 +40,13 @@ EXAMPLE_PLAN: list[tuple[int, str]] = [
     (3, "inventada"),
 ]
 
+# One of the "no disponible" ones is attributed to the user themselves, when
+# they've filled in their eMuwarez username: seeing your own name on a request
+# is the case that shows what the author column and the "es tuya" styling look
+# like, and it can't be demonstrated any other way without the real endpoint.
+_OWN_REQUEST_GROUP = "no_disponible"
+
+
 # Every example points at the requests page rather than at /requests/{id}: the
 # ids are made up, so a per-request link would 404 on the tracker. This keeps
 # "Ver Petición" going somewhere real until the endpoint exists.
@@ -98,15 +105,36 @@ def _library_pool(conn: sqlite3.Connection) -> dict[str, list[dict]]:
     demonstrate. Only movies and seasons: those are the levels a request is
     actually about, and the ones Recomendaciones works with."""
     rows = [dict(r) for r in conn.execute(
-        """SELECT id, item_type, title, year, tmdb_id, imdb_id, resolution, source, local_status
+        """SELECT id, item_type, title, year, tmdb_id, imdb_id, resolution, source, local_status,
+                  video_codec, audio_codec, audio_languages, has_spanish_ok
              FROM library_items
             WHERE item_type IN ('movie', 'season') AND (tmdb_id IS NOT NULL OR title IS NOT NULL)
             ORDER BY id"""
     ).fetchall()]
     held, missing = [], []
     for r in rows:
-        (held if r.get("local_status") in ("Disponible", "Subido", "Subiendo") else missing).append(r)
+        if r.get("local_status") in ("Disponible", "Subido", "Subiendo"):
+            # A season only qualifies if it could actually go up as a pack.
+            # Otherwise the demo produced requests for seasons the app itself
+            # refuses to upload, which is the opposite of what these examples
+            # are for. Same condition Recomendaciones and the Panel apply
+            # (services/library.py's get_dashboard_summary).
+            if r.get("item_type") == "season" and not _season_is_packable(r):
+                continue
+            held.append(r)
+        else:
+            missing.append(r)
     return {"held": _interleave(held), "missing": _interleave(missing), "all": rows}
+
+
+def _season_is_packable(row: dict) -> bool:
+    """Whether this season could be uploaded as a whole-season pack: every
+    episode agreeing on the technical fields (the rollup columns are only
+    filled in when they do) and Castilian present in all of them."""
+    return (
+        all(row.get(f) for f in ("resolution", "source", "video_codec", "audio_codec", "audio_languages"))
+        and row.get("has_spanish_ok") == 1
+    )
 
 
 def _interleave(rows: list[dict]) -> list[dict]:
@@ -216,6 +244,11 @@ def _row_for_kind(kind: str, item: dict) -> Optional[dict[str, Any]]:
     return _row_for(item, resolution=res, source=item.get("source"), emu_status=None)
 
 
+def _own_username(conn: sqlite3.Connection) -> Optional[str]:
+    from ..database import get_setting_canonical
+    return (get_setting_canonical(conn, "emu.username") or "").strip() or None
+
+
 def generate_examples(conn: sqlite3.Connection) -> dict[str, Any]:
     """Create the demo requests and re-run matching so their statuses appear.
 
@@ -231,6 +264,8 @@ def generate_examples(conn: sqlite3.Connection) -> dict[str, Any]:
                 "error": "Ya hay peticiones de ejemplo. Bórralas antes de generar otras."}
 
     pool = _library_pool(conn)
+    own_user = _own_username(conn)
+    own_assigned = False
     used: set[int] = set()
     by_group: dict[str, int] = {}
     shortfalls: list[str] = []
@@ -246,6 +281,11 @@ def generate_examples(conn: sqlite3.Connection) -> dict[str, Any]:
             )
         for row in rows:
             created += 1
+            # First row of its group gets the user's own name, so the list
+            # shows what one of your own requests looks like.
+            author = None
+            if own_user and kind == _OWN_REQUEST_GROUP and not own_assigned:
+                author, own_assigned = own_user, True
             conn.execute(
                 """INSERT INTO request_items(
                        emu_id, title, category, requested_source, requested_resolution,
@@ -257,7 +297,8 @@ def generate_examples(conn: sqlite3.Connection) -> dict[str, Any]:
                     row["requested_source"], row["requested_resolution"], row["emu_status"],
                     10 * created % 90, created % 7, None,
                     row["tmdb_id"], row["imdb_id"], _EXAMPLE_URL,
-                    None, 0, json.dumps({"example": True, "group": kind}, ensure_ascii=False),
+                    author, 1 if author else 0,
+                    json.dumps({"example": True, "group": kind}, ensure_ascii=False),
                 ),
             )
     conn.commit()

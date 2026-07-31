@@ -20,13 +20,19 @@ def db_conn(isolated_db):
 
 
 def _lib(conn, title, *, item_type="movie", status="Disponible",
-         resolution="1080p", source="WEB-DL", tmdb_id=None):
+         resolution="1080p", source="WEB-DL", tmdb_id=None, packable=True):
+    # Seasons only qualify as example material when they could actually go up
+    # as a pack, which means every rollup field filled in and Castilian
+    # present — `packable=False` builds one that can't.
     conn.execute(
         """INSERT INTO library_items
            (item_type, title, local_status, request_status, nomenclature_status,
-            resolution, source, tmdb_id, year, updated_at)
-           VALUES (?,?,?,'Sin petición','N/A',?,?,?,2020,CURRENT_TIMESTAMP)""",
-        (item_type, title, status, resolution, source, tmdb_id),
+            resolution, source, tmdb_id, year, video_codec, audio_codec,
+            audio_languages, has_spanish_ok, updated_at)
+           VALUES (?,?,?,'Sin petición','N/A',?,?,?,2020,?,?,?,?,CURRENT_TIMESTAMP)""",
+        (item_type, title, status, resolution, source, tmdb_id,
+         "x264" if packable else None, "AC3" if packable else None,
+         "spa" if packable else None, 1 if packable else 0),
     )
     conn.commit()
 
@@ -256,3 +262,40 @@ def test_reports_the_matcher_s_verdict_not_the_intent(db_conn):
         st = emu_override_status(row["emu_status"]) or row["match_status"] or "Sin coincidencia"
         live[st] = live.get(st, 0) + 1
     assert result["by_status"] == live
+
+
+def test_seasons_that_could_not_be_uploaded_are_not_used(db_conn):
+    """The demo existed to show what the app can work with, so generating
+    requests for seasons the app itself refuses to upload as a pack was the
+    opposite of useful."""
+    _lib(db_conn, "Serie buena - Temporada 1", item_type="season", tmdb_id="7001", packable=True)
+    _lib(db_conn, "Serie rota - Temporada 1", item_type="season", tmdb_id="7002", packable=False)
+    ex.generate_examples(db_conn)
+    titles = [r["title"] for r in db_conn.execute(
+        "SELECT title FROM request_items WHERE is_example = 1").fetchall()]
+    assert any("Serie buena" in t for t in titles)
+    assert not any("Serie rota" in t for t in titles)
+
+
+def test_one_request_carries_your_own_username(db_conn):
+    """Seeing your own name on a request is the one case the author column and
+    its styling can't be demonstrated without the real endpoint."""
+    from emuwarez_uploadrr.web.services.settings_service import set_setting
+    set_setting(db_conn, "emu.username", "Alvaro")
+    db_conn.commit()
+    _seed_library(db_conn)
+    ex.generate_examples(db_conn)
+    mine = db_conn.execute(
+        "SELECT title, author, author_visible FROM request_items WHERE author = 'Alvaro'"
+    ).fetchall()
+    assert len(mine) == 1
+    assert mine[0]["author_visible"] == 1
+
+
+def test_no_username_configured_means_no_authored_request(db_conn):
+    _seed_library(db_conn)
+    ex.generate_examples(db_conn)
+    authored = db_conn.execute(
+        "SELECT COUNT(*) AS n FROM request_items WHERE is_example = 1 AND author IS NOT NULL"
+    ).fetchone()["n"]
+    assert authored == 0

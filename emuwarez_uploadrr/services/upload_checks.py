@@ -43,6 +43,25 @@ CONTENT_CHECK_IDS = ("season_pack", "renameable", "spanish")
 ENVIRONMENT_CHECK_IDS = ("output", "qbittorrent", "imghosts", "emuwarez")
 
 
+def _short_langs(value: Optional[str], limit: int = 3) -> str:
+    """Los primeros idiomas de una lista "spa/eng/fre/…" y cuántos quedan.
+
+    Se repiten los duplicados que trae el fichero (dos pistas en inglés
+    llegan como "eng/eng"), así que se colapsan: nombrar "eng, eng, ara" no
+    dice nada que "eng, ara" no diga ya.
+    """
+    vistos: list[str] = []
+    for part in str(value or "").split("/"):
+        part = part.strip()
+        if part and part not in vistos:
+            vistos.append(part)
+    if not vistos:
+        return "sin detectar"
+    if len(vistos) <= limit:
+        return ", ".join(vistos)
+    return f"{', '.join(vistos[:limit])} y {len(vistos) - limit} más"
+
+
 def run_upload_checks(conn: sqlite3.Connection, item_id: int, *, scope: str = "all") -> dict:
     """`scope`:
 
@@ -162,9 +181,13 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int, *, scope: str = "a
             # sí se nombra, porque ahí lo que importa es en qué idioma está.
             spanish_msg = f"Sin audio en castellano ({audio_langs or 'desconocido'}), pero subtítulos en castellano."
         else:
+            # Aquí la comprobación FALLA y bloquea la subida, así que saber qué
+            # idiomas hay ayuda a decidir qué hacer. Pero un release puede
+            # traer 37 pistas de subtítulos y volcarlas enteras convierte el
+            # aviso en un muro: se nombran las primeras y se cuenta el resto.
             spanish_msg = (
-                f"Ni el audio ({audio_langs or 'sin detectar'}) ni los subtítulos "
-                f"({sub_langs or 'sin detectar'}) están en castellano."
+                f"Ni el audio ({_short_langs(audio_langs)}) ni los subtítulos "
+                f"({_short_langs(sub_langs)}) están en castellano."
             )
         if not add("spanish", "Tiene castellano", "No tiene castellano",
                    has_audio_es or has_subs_es, spanish_msg):

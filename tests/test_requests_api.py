@@ -484,3 +484,34 @@ def test_dashboard_summary_has_requests_fields(client, auth_headers):
     assert "requests_compatible" in data
     assert "requests_filled" in data
     assert isinstance(data["requests_total"], int)
+
+
+# ---------------------------------------------------------------------------
+# Una temporada con datos mezclados frente a una petición
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("pide_res,pide_src,tengo_res,tengo_src,esperado,por_que", [
+    # Campo mezclado = el rollup llega en None. "No lo sé" no satisface nada
+    # concreto, pero tampoco falla contra una petición que no lo restringe.
+    ("1080p", "WEB-DL", None, "WEB-DL", "Parcial",     "resolución mezclada"),
+    ("1080p", None,     None, "WEB-DL", "Parcial",     "resolución mezclada, source libre"),
+    ("720p",  None,     None, "WEB-DL", "Parcial",     "ni pidiendo la más baja"),
+    ("1080p", "WEB-DL", "1080p", None,  "Parcial",     "source mezclado"),
+    ("1080p", None,     "1080p", None,  "Compatible",  "source mezclado pero no se pide"),
+    ("1080p", "WEB-DL", "1080p", "WEB-DL", "Compatible", "coincidencia perfecta"),
+    ("720p",  None,     "1080p", "WEB-DL", "Compatible", "1080p supera lo pedido"),
+    ("2160p", None,     "1080p", "WEB-DL", "Parcial",     "falla la resolución"),
+    ("2160p", "BluRay", "1080p", "WEB-DL", "No compatible", "fallan las dos"),
+])
+def test_mixed_season_values_against_a_request(pide_res, pide_src, tengo_res, tengo_src, esperado, por_que):
+    """Una temporada puede tener varios sources (ya no bloquean) y, si está
+    descuadrada, varias resoluciones. Contra una petición, un campo mezclado
+    se comporta como "no lo sé": no puede prometerse.
+
+    Esto funcionaba ya, pero no lo fijaba ningún test y es fácil de romper sin
+    querer tocando los comparadores."""
+    from emuwarez_uploadrr.services.compatibility import classify_request_match
+    req = {"title": "X", "requested_resolution": pide_res, "requested_source": pide_src, "tmdb_id": "1"}
+    item = {"title": "X", "resolution": tengo_res, "source": tengo_src,
+            "tmdb_id": "1", "local_status": "Disponible"}
+    assert classify_request_match(req, item)["status"] == esperado, por_que

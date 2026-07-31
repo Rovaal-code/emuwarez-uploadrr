@@ -329,6 +329,35 @@ def _relevant_episodes(conn, matched_id, matched_type, scope, season, episode, i
     return []
 
 
+def _pack_blocked_reason(conn: sqlite3.Connection, matched_item: dict, req: dict) -> Optional[str]:
+    """Por qué la temporada que pide esta petición no puede subirse como pack.
+
+    None cuando sí puede, o cuando la petición no es de temporada/serie
+    completa (un capítulo suelto no necesita pack).
+    """
+    if req.get("req_scope") == "episode":
+        return None
+    from .season_pack import can_pack_from_rollup
+
+    season_id = _scoped_library_id(conn, matched_item, req)
+    row = conn.execute(
+        "SELECT * FROM library_items WHERE id = ? AND item_type = 'season'", (season_id,)
+    ).fetchone()
+    if not row:
+        return None
+    season = dict(row)
+    if can_pack_from_rollup(season):
+        return None
+    if not season.get("resolution"):
+        falta = "los capítulos no coinciden en resolución"
+    elif not season.get("video_codec"):
+        falta = "los capítulos no coinciden en códec de vídeo"
+    else:
+        falta = "algún capítulo no tiene castellano"
+    return (f"La temporada no puede subirse como pack: {falta}. "
+            "Sus capítulos sí se pueden subir uno a uno.")
+
+
 def _scoped_library_id(conn: sqlite3.Connection, matched_item: dict, req: dict) -> int:
     """The library row the request actually refers to: the season row for a
     season-scoped request, the episode row for an episode-scoped one, and the
@@ -893,6 +922,21 @@ def get_request_detail(conn: sqlite3.Connection, request_id: int) -> Optional[di
                 id_match=bool(md.get("type_match")),
                 base_confidence=float(md["confidence"]),
             )
+            # Una petición de temporada o serie completa se cubre con un
+            # PACK. Si ese pack no puede armarse (los capítulos no coinciden
+            # en resolución o en códec de vídeo), "Compatible" prometería algo
+            # que la subida va a rechazar: baja a Parcial y se dice por qué.
+            #
+            # Pasa cuando la petición no restringe la resolución: entonces la
+            # comparación no tiene nada que exigir y salía Compatible aunque
+            # la temporada estuviera descuadrada.
+            #
+            # Los capítulos sueltos SÍ se pueden subir, y el motivo lo dice.
+            if cls["status"] == "Compatible":
+                blocker = _pack_blocked_reason(conn, dict(lib_row), result)
+                if blocker:
+                    cls["status"] = "Parcial"
+                    cls["reasons"] = list(cls.get("reasons") or []) + [blocker]
             result["match"].update({
                 "status": cls["status"],
                 "resolution_match": cls["resolution_match"],

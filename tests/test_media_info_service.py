@@ -196,13 +196,24 @@ def _summary(tmp_path, tracks):
         return svc.build_mediainfo_report(str(f))["audio_summary"]
 
 
-def test_repeated_language_with_different_codecs_keeps_every_track(tmp_path):
-    """The regression: languages were de-duplicated (the DUAL/MULTI rules need
-    distinct ones) but codecs/channels were not, and the three lists were then
-    zipped together. Every entry after a repeated language landed on the wrong
-    codec and the last track vanished: this file came out as
-    "JAP TrueHD 5.1 CAT DD 5.1 ESP DD+ 2.0" — Catalan wearing the second
-    Japanese track's codec, and the fourth track gone."""
+def _report(tmp_path, tracks):
+    f = tmp_path / "movie.mkv"
+    f.write_text("fake")
+    with (
+        patch.object(svc, "mediainfo_available", return_value=True),
+        patch.object(svc.legacy, "run_mediainfo_json", return_value=_mediainfo_with_audio(tracks)),
+    ):
+        return svc.build_mediainfo_report(str(f))
+
+
+def test_repeated_language_keeps_only_its_best_codec(tmp_path):
+    """Un idioma en varias pistas se queda con UNA: la de mejor códec. El
+    nombre del release dice qué calidad ofrece, no cuántas pistas trae, así
+    que las dos japonesas (TrueHD y DD) se resumen en la TrueHD.
+
+    Antes salían las dos. Y antes de eso salían mal del todo: los idiomas se
+    de-duplicaban pero los códecs no, y al juntar las listas por posición cada
+    entrada tras un idioma repetido se llevaba el códec de otra pista."""
     summary = _summary(tmp_path, [
         # A real TrueHD track: MediaInfo reports the raw format as "MLP FBA"
         # and the commercial name separately, which is what audio_codec reads.
@@ -212,9 +223,9 @@ def test_repeated_language_with_different_codecs_keeps_every_track(tmp_path):
         {"Format": "E-AC-3", "Language": "ca", "Channels": "2"},
         {"Format": "E-AC-3", "Language": "es", "Channels": "2"},
     ])
-    # Two Japanese tracks on different codecs stay apart; Catalan and Spanish
-    # share a codec AND channel count, so they are ONE entry.
-    assert summary == "JAP TrueHD 5.1 JAP DD 5.1 ESP-CAT DD+ 2.0"
+    # La japonesa se queda en TrueHD (mejor que DD); catalán y castellano
+    # comparten códec Y canales, así que son UNA entrada.
+    assert summary == "JAP TrueHD 5.1 ESP-CAT DD+ 2.0"
 
 
 def test_languages_sharing_a_codec_join_with_a_hyphen(tmp_path):
@@ -231,14 +242,41 @@ def test_languages_sharing_a_codec_join_with_a_hyphen(tmp_path):
     assert summary == "ESP-CAT TrueHD 5.1"
 
 
-def test_same_language_different_channels_stays_apart(tmp_path):
-    """Same codec but a different channel layout is a different entry: the
-    grouping keys on both."""
+def test_same_language_different_channels_keeps_the_wider_one(tmp_path):
+    """Mismo códec y distintos canales también se resume en una: 5.1 es lo que
+    ofrece el release. Y el orden en que mkvmerge liste las pistas no decide
+    nada, que es lo que pasaba cuando el desempate era "la primera"."""
     summary = _summary(tmp_path, [
         {"Format": "AC-3", "Language": "es", "Channels": "6"},
         {"Format": "AC-3", "Language": "es", "Channels": "2"},
     ])
-    assert summary == "ESP DD 5.1 ESP DD 2.0"
+    assert summary == "ESP DD 5.1"
+
+
+def test_the_worse_track_is_dropped_whatever_order_it_comes_in(tmp_path):
+    """La peor primero o la mejor primero, da igual: gana la mejor."""
+    peor_primero = _summary(tmp_path, [
+        {"Format": "AC-3", "Language": "ja", "Channels": "6"},
+        {"Format": "MLP FBA", "Format_Commercial_IfAny": "Dolby TrueHD",
+         "Language": "ja", "Channels": "6"},
+    ])
+    assert peor_primero == "JAP TrueHD 5.1"
+
+
+def test_every_audio_track_still_shows_in_the_technical_card(tmp_path):
+    """Lo que se recorta es el segmento del NOMBRE. La ficha técnica sigue
+    enseñando las pistas reales del archivo, una por fila, porque ahí lo que
+    interesa es qué hay dentro."""
+    report = _report(tmp_path, [
+        {"Format": "MLP FBA", "Format_Commercial_IfAny": "Dolby TrueHD",
+         "Language": "ja", "Channels": "6"},
+        {"Format": "AC-3", "Language": "ja", "Channels": "6"},
+    ])
+    import re as _re
+    filas = [r for r in report["rows"] if _re.fullmatch(r"Audio \d+", str(r["field"]))]
+    assert [f["emu"] for f in filas] == ["JAP TrueHD 5.1", "JAP DD 5.1"], filas
+    # Y el segmento que va al nombre sí se queda con una sola.
+    assert report["audio_summary"] == "JAP TrueHD 5.1"
 
 
 def test_every_track_keeps_its_own_codec(tmp_path):

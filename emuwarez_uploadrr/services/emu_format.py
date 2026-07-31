@@ -192,6 +192,73 @@ def has_castellano(languages: Optional[str]) -> Optional[int]:
     return 1 if "ESP" in _split_languages(languages) else 0
 
 
+# Calidad de los códecs de audio, de mejor a peor. Está documentada para el
+# usuario en la Guía (frontend/src/pages/GuidePage.tsx, AUDIO_QUALITY_ROWS):
+# si tocas esta lista, actualiza aquella. El frontend no puede llamar a
+# Python, así que la copia es inevitable; que mienta, no.
+#
+# La guía los lista pero no
+# los ordena, así que el orden es este: primero los que no pierden nada
+# (PCM sin comprimir, luego los lossless), después los de alta resolución con
+# pérdida, y al final los comprimidos corrientes.
+#
+# Sirve para una sola cosa: cuando un idioma aparece en dos pistas con códecs
+# distintos, el nombre del release se queda solo con la mejor. "JAP TrueHD 5.1
+# JAP DD 5.1" pasa a "JAP TrueHD 5.1", porque el nombre describe la calidad
+# que ofrece el release, no un inventario de pistas.
+_AUDIO_CODEC_QUALITY = (
+    "PCM",          # sin comprimir
+    "MLP",          # sin pérdida (la base de TrueHD)
+    "TrueHD",       # sin pérdida
+    "DTS-HD MA",    # sin pérdida
+    "FLAC",         # sin pérdida
+    "ALAC",         # sin pérdida
+    "DTS:X",        # objetos, sobre núcleo DTS
+    "DTS-HD HRA",   # alta resolución, con pérdida
+    "DD+",          # E-AC3
+    "DTS",
+    "DD",           # AC3
+    "AAC LC",
+    "AAC HE",
+    "AAC LD",
+    "AAC",
+    "OPUS",
+    "MP3",
+)
+
+
+def audio_codec_quality(codec: Optional[str]) -> tuple[int, int]:
+    """Posición del códec en el ranking de calidad. Menor es mejor.
+
+    Devuelve (códec base, Atmos), para que entre dos pistas del MISMO códec
+    gane la que trae Atmos: es una capa por encima de TrueHD o DD+, no un
+    códec aparte, y audio_codec() lo pega al nombre ("TrueHD Atmos").
+
+    Un códec que no esté en la lista se va al final: preferir lo conocido es
+    más seguro que colar algo sin clasificar por delante.
+    """
+    text = (codec or "").strip()
+    atmos = 0 if "atmos" in text.lower() else 1
+    base = re.sub(r"\s*atmos\s*", " ", text, flags=re.I).strip()
+    try:
+        rank = _AUDIO_CODEC_QUALITY.index(base)
+    except ValueError:
+        rank = len(_AUDIO_CODEC_QUALITY)
+    return (rank, atmos)
+
+
+def audio_track_quality(codec: Optional[str], channels: Optional[str]) -> tuple:
+    """Calidad de una pista entera: códec primero, canales para desempatar.
+
+    Con el mismo códec, más canales es mejor: entre "ESP DD 5.1" y
+    "ESP DD 2.0" el release ofrece 5.1. Sin esto el desempate lo decidía el
+    orden en que mkvmerge listara las pistas, que no significa nada.
+    """
+    n = re.search(r"\d+", str(channels or ""))
+    count = int(n.group()) if n else 0
+    return audio_codec_quality(codec) + (-count,)
+
+
 def build_audio_string(
     audio_codec: Optional[str],
     audio_languages: Optional[str],

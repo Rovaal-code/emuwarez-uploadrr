@@ -152,6 +152,29 @@ const AUDIO_CODEC_ROWS: [string, string][] = [
   ['FLAC', 'FLAC'],
 ]
 
+// Prioridad de calidad de los códecs de audio, de mejor a peor.
+//
+// OJO: es una copia de _AUDIO_CODEC_QUALITY en
+// services/emu_format.py. El frontend no puede llamar a Python, así que la
+// copia es inevitable, pero si tocas una TIENES que tocar la otra: esta tabla
+// documenta lo que hace aquella, y una guía que miente es peor que ninguna.
+const AUDIO_QUALITY_ROWS: [string, string][] = [
+  ['PCM', 'Sin comprimir'],
+  ['MLP', 'Sin pérdida'],
+  ['TrueHD', 'Sin pérdida'],
+  ['DTS-HD MA', 'Sin pérdida'],
+  ['FLAC', 'Sin pérdida'],
+  ['ALAC', 'Sin pérdida'],
+  ['DTS:X', 'Objetos, con pérdida'],
+  ['DTS-HD HRA', 'Alta resolución, con pérdida'],
+  ['DD+', 'Con pérdida'],
+  ['DTS', 'Con pérdida'],
+  ['DD', 'Con pérdida'],
+  ['AAC LC / AAC HE / AAC LD / AAC', 'Con pérdida'],
+  ['OPUS', 'Con pérdida'],
+  ['MP3', 'Con pérdida'],
+]
+
 const CHANNEL_ROWS: [string, string][] = [
   ['Mudo', 'Mudo'],
   ['Un canal', 'Mono'],
@@ -256,6 +279,32 @@ function TechSpecsContent() {
 
       <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--text-muted)', marginTop: 18, marginBottom: 8 }}>Códec de audio</p>
       <TwoColTable head={['MediaInfo', 'Nombre']} rows={AUDIO_CODEC_ROWS} />
+
+      <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--text-muted)', marginTop: 18, marginBottom: 8 }}>Prioridad de audio</p>
+      <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 0, marginBottom: 8 }}>
+        Cuando un mismo idioma viene en varias pistas, el nombre se queda con una sola: la de mejor calidad.
+        El nombre dice qué vas a oír, no cuántas pistas trae el archivo. La ficha técnica sí las sigue
+        mostrando todas.
+      </p>
+      <TwoColTable head={['Códec', 'Tipo']} rows={AUDIO_QUALITY_ROWS} />
+      <div style={{ fontSize: 12, marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div>
+          Dos pistas japonesas, TrueHD y DD:
+          <br /><Mono>JAP TrueHD 5.1 JAP DD 5.1</Mono> → <Mono>JAP TrueHD 5.1</Mono>
+        </div>
+        <div>
+          Mismo códec y distintos canales, gana el que más tiene:
+          <br /><Mono>ESP DD 5.1 ESP DD 2.0</Mono> → <Mono>ESP DD 5.1</Mono>
+        </div>
+        <div>
+          Atmos desempata dentro del mismo códec, porque es una capa por encima y no un códec aparte:
+          <br /><Mono>ING DD+ 5.1 ING DD+ Atmos 5.1</Mono> → <Mono>ING DD+ Atmos 5.1</Mono>
+        </div>
+        <div>
+          Idiomas distintos no se tocan, y si comparten códec y canales se juntan:
+          <br /><Mono>ESP TrueHD 5.1 CAT TrueHD 5.1</Mono> → <Mono>ESP-CAT TrueHD 5.1</Mono>
+        </div>
+      </div>
 
       <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--text-muted)', marginTop: 18, marginBottom: 8 }}>Canales de audio</p>
       <TwoColTable head={['MediaInfo', 'Nombre']} rows={CHANNEL_ROWS} />

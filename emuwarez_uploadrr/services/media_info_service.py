@@ -302,7 +302,11 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
     # languages join with a hyphen, which is what the spec asks for — see the
     # guide's own "ESP-CAT TrueHD 5.1". Listing them separately would claim two
     # audio tracks where the release states one shared one.
-    groups: dict[tuple[str, str], list[str]] = {}
+    # Un idioma que viene en varias pistas se queda con UNA sola: la de mejor
+    # códec (emu_format.audio_codec_quality). El nombre del release dice qué
+    # calidad ofrece, no cuántas pistas trae, así que "JAP TrueHD 5.1 JAP DD
+    # 5.1" es "JAP TrueHD 5.1": quien lo lea busca lo mejor que va a oír.
+    best_by_lang: dict[str, tuple[tuple[int, int], str, str]] = {}
     for i, tr in enumerate(audio_tracks, 1):
         raw_lang = tr.get("Language") or tr.get("Language_String") or ""
         lang = emu_format.format_language(raw_lang) or "UND"
@@ -312,15 +316,22 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
         channels.append(ch)
         if lang not in langs:
             langs.append(lang)
-        key = (codec, ch)
-        # Same language twice on the SAME codec adds nothing; on a different
-        # codec it's a genuinely different track and gets its own entry.
-        if lang not in groups.setdefault(key, []):
-            groups[key].append(lang)
+        quality = emu_format.audio_track_quality(codec, ch)
+        previous = best_by_lang.get(lang)
+        if previous is None or quality < previous[0]:
+            best_by_lang[lang] = (quality, codec, ch)
         mi = " ".join(x for x in (tr.get("Format"), raw_lang or "?", tr.get("Channel_s_") or tr.get("Channels")) if x)
-        # The per-track row keeps saying what THIS track is, even when it ends
-        # up sharing an entry with another one in the combined segment below.
+        # La ficha técnica SÍ sigue enseñando todas las pistas, una por fila:
+        # ahí lo que interesa es qué hay dentro del archivo de verdad. Lo que
+        # se recorta es solo el segmento que va al nombre.
         add(f"Audio {i}", mi, f"{lang} {codec} {ch}")
+
+    groups: dict[tuple[str, str], list[str]] = {}
+    for lang in langs:
+        chosen = best_by_lang.get(lang)
+        if not chosen:
+            continue
+        groups.setdefault((chosen[1], chosen[2]), []).append(lang)
 
     audio_summary = None
     if audio_tracks:

@@ -365,8 +365,15 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
           </a>
           <button
             className="btn btn-primary btn-sm"
-            disabled={!libId}
-            onClick={() => libId && onUpload(libId, {
+            disabled={!libraryTargetId}
+            // libraryTargetId, no libId: el asistente tiene que abrirse sobre
+            // la fila a la que se refiere la petición (la temporada, o el
+            // capítulo), no sobre la que cruzó el emparejador, que para una
+            // serie es la serie entera. Si no, pedir la Temporada 2 abría el
+            // flujo de serie con una preselección, en vez de las tarjetas de
+            // "Temporada entera" / "Selección de capítulos" que salen al
+            // pulsar Subir en la ficha de esa temporada en Biblioteca.
+            onClick={() => libraryTargetId && onUpload(libraryTargetId, {
               season: item.req_season,
               episode: item.req_scope === 'episode' ? item.req_episode : null,
             })}

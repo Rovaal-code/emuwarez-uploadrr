@@ -208,3 +208,55 @@ def test_the_rule_is_the_same_for_a_single_episode(db_conn, tmp_path):
     db_conn.commit()
     iid = db_conn.execute("SELECT id FROM library_items ORDER BY id DESC LIMIT 1").fetchone()["id"]
     assert _spanish_check(db_conn, iid)["status"] == "ok"
+
+
+# ---------------------------------------------------------------------------
+# Reparto en dos grupos: lo del elemento va una vez por elemento, lo del
+# entorno una sola vez para toda la tanda
+# ---------------------------------------------------------------------------
+
+def test_content_scope_only_runs_the_per_item_checks(db_conn, tmp_path):
+    """Con 30 capítulos elegidos, estas sí van 30 veces: dependen del fichero."""
+    f = tmp_path / "movie.mkv"
+    f.write_bytes(b"x" * 2048)
+    iid = _movie_with_path(db_conn, str(f))
+    r = uc.run_upload_checks(db_conn, iid, scope="content")
+    ids = {c["id"] for c in r["checks"]}
+    assert ids <= set(uc.CONTENT_CHECK_IDS), ids
+    assert not (ids & set(uc.ENVIRONMENT_CHECK_IDS))
+
+
+def test_environment_scope_never_touches_the_item(db_conn, tmp_path):
+    """Y estas van una sola vez: preguntarle a eMuwarez 30 veces si está vivo
+    no aporta nada y multiplica por 30 la espera. Con un item_id que no existe
+    tienen que salir igual, porque no dependen de él."""
+    r = uc.run_upload_checks(db_conn, 999999, scope="environment")
+    ids = {c["id"] for c in r["checks"]}
+    assert ids <= set(uc.ENVIRONMENT_CHECK_IDS), ids
+    assert not (ids & set(uc.CONTENT_CHECK_IDS))
+    # Y no se cuela el "Elemento no encontrado" del camino normal.
+    assert not any(c.get("message") == "Elemento no encontrado" for c in r["checks"])
+
+
+def test_the_two_scopes_together_cover_exactly_the_full_run(db_conn, tmp_path, monkeypatch):
+    """Partir no puede perder ni duplicar comprobaciones: contenido + entorno
+    tiene que dar lo mismo que la pasada completa de siempre."""
+    from emuwarez_uploadrr.services import uploadrr_contract as ctr
+    monkeypatch.setattr(ctr, "DEFAULT_UPLOADRR_PATH", str(tmp_path))
+    (tmp_path / "tmp").mkdir()
+    f = tmp_path / "movie.mkv"
+    f.write_bytes(b"x" * 2048)
+    iid = _movie_with_path(db_conn, str(f))
+
+    full = [c["id"] for c in uc.run_upload_checks(db_conn, iid)["checks"]]
+    content = [c["id"] for c in uc.run_upload_checks(db_conn, iid, scope="content")["checks"]]
+    env = [c["id"] for c in uc.run_upload_checks(db_conn, iid, scope="environment")["checks"]]
+    assert content + env == full
+
+
+def test_a_failed_content_check_is_not_ready(db_conn, tmp_path):
+    """Lo que hace que al pulsar Subir se avise de qué elemento no puede ir."""
+    iid = _movie_with_path(db_conn, str(tmp_path / "no-existe" / "movie.mkv"))
+    r = uc.run_upload_checks(db_conn, iid, scope="content")
+    assert r["ready"] is False
+    assert any(c["status"] == "fail" for c in r["checks"])

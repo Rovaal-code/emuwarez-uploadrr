@@ -53,7 +53,6 @@ interface Props {
   // Only true when opened from a series' own dedicated Biblioteca page — the
   // one place multi-season selection is offered (never from the Biblioteca
   // list/table, never from a season's own page).
-  multiSeason?: boolean
 }
 
 const labelStyle: React.CSSProperties = {
@@ -370,11 +369,16 @@ const INTERNAL_TITLE_LABEL = (
   </span>
 )
 
-export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNavigate, preselect, multiSeason }: Props) {
+export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNavigate, preselect }: Props) {
   const isSeries = item.item_type === 'series'
   const isSeason = item.item_type === 'season'
   const needsSelection = isSeries || isSeason
-  const allowMultiSeason = !!multiSeason && isSeries
+  // Una serie SIEMPRE significa elegir temporadas. Esto dependía de una
+  // propiedad `multiSeason` que solo pasaba Biblioteca, así que la misma serie
+  // abierta desde Peticiones o desde el Panel caía en los desplegables
+  // antiguos de Temporada/Episodio. Y la propiedad ya era redundante: sus dos
+  // llamantes la calculaban como item_type === 'series'.
+  const allowMultiSeason = isSeries
 
 
   // Multi-season selection (series' own dedicated page only): a checklist
@@ -406,6 +410,17 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   // and hid failures until you happened to land on the broken one. Same shape
   // as the season pack's own "Comprobando N de M capítulos…".
   const [episodeFieldsById, setEpisodeFieldsById] = useState<Map<number, Awaited<ReturnType<typeof getNomenclatureFields>>>>(new Map())
+  // Paso 2 con varios elementos elegidos. Las comprobaciones del ENTORNO
+  // (directorio de salida, qBittorrent, hosts de imágenes, eMuwarez) se piden
+  // UNA vez para toda la tanda: con 30 capítulos, preguntarle 30 veces a
+  // eMuwarez si está vivo no aporta nada y multiplica por 30 la espera. Las
+  // del CONTENIDO sí van una por elemento, porque dependen del fichero.
+  const [batchEnvChecks, setBatchEnvChecks] = useState<UploadChecksResult | null>(null)
+  const [batchContentChecks, setBatchContentChecks] = useState<Map<number, UploadChecksResult>>(new Map())
+  const [batchChecksLoading, setBatchChecksLoading] = useState(false)
+  const [batchChecksIndex, setBatchChecksIndex] = useState(0)
+  // Cuál se está mirando en el desplegable de arriba a la derecha.
+  const [batchViewId, setBatchViewId] = useState<number | null>(null)
   const [episodePrepIndex, setEpisodePrepIndex] = useState(0)
   const [episodePrepping, setEpisodePrepping] = useState(false)
   // The one Título the whole batch shares (see setField). Null until the user
@@ -495,6 +510,10 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   const [seasonNames, setSeasonNames] = useState<SeasonEpisodeName[] | null>(null)
   const [seasonNamesLoading, setSeasonNamesLoading] = useState(false)
   const [showSeasonNamesCard, setShowSeasonNamesCard] = useState(false)
+  // Capítulo elegido dentro de "Ver nombre de todos los capítulos": se navega
+  // con un desplegable, igual que Ver MediaInfo, en vez de una lista de 25
+  // bloques uno debajo de otro.
+  const [seasonNamesEpisodeId, setSeasonNamesEpisodeId] = useState<number | null>(null)
 
   // Season target — per-episode MediaInfo/Remux (accordion, one entry per
   // episode), replacing the single-file "Ver MediaInfo"/"Ver Remux" cards.
@@ -610,6 +629,58 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     }
     setStep(1)
   }
+
+  // La tanda activa: capítulos sueltos o temporadas, nunca las dos.
+  const batchIsEpisodes = episodeQueue.length > 1
+  const batchQueue = batchIsEpisodes ? episodeQueue : seasonQueue
+  const batchItemTitle = (id: number) => {
+    const row = (batchIsEpisodes ? episodes : seasons).find(x => x.id === id)
+    return row ? listDisplayTitle(row) : `#${id}`
+  }
+  // Contenido + entorno reconstruye exactamente la pasada completa de siempre
+  // (fijado por tests/test_upload_checks.py), así que el snapshot que se
+  // guarda con el job es el mismo que antes.
+  const mergedChecksFor = (id: number): UploadChecksResult | null => {
+    const content = batchContentChecks.get(id)
+    if (!content || !batchEnvChecks) return null
+    return {
+      checks: [...content.checks, ...batchEnvChecks.checks],
+      ready: content.ready && batchEnvChecks.ready,
+    }
+  }
+
+  // Al entrar en el paso 2 con varios elegidos: el entorno una vez, el
+  // contenido uno a uno. Se guardan para que "Subir todos" no las repita y
+  // para que el desplegable pueda enseñar las de cualquiera sin volver a
+  // pedirlas.
+  useEffect(() => {
+    if (step !== 2 || batchQueue.length <= 1 || batchPhase !== 'idle') return
+    if (batchEnvChecks || batchChecksLoading) return
+    let alive = true
+    const run = async () => {
+      setBatchChecksLoading(true)
+      setBatchChecksIndex(0)
+      try {
+        // El item_id da igual para las de entorno, pero el endpoint lo pide.
+        const env = await runUploadChecks(batchQueue[0], 'environment')
+        if (!alive) return
+        setBatchEnvChecks(env)
+        const acc = new Map<number, UploadChecksResult>()
+        for (let i = 0; i < batchQueue.length; i++) {
+          if (!alive) return
+          setBatchChecksIndex(i)
+          acc.set(batchQueue[i], await runUploadChecks(batchQueue[i], 'content'))
+          setBatchContentChecks(new Map(acc))
+        }
+        if (alive) setBatchViewId(prev => prev ?? batchQueue[0])
+      } finally {
+        if (alive) setBatchChecksLoading(false)
+      }
+    }
+    run()
+    return () => { alive = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, batchQueue.length, batchPhase])
 
   const eligibleEpisodes = episodes.filter(ep => !episodeNotReadyReason(ep))
   const allEligibleSelected = eligibleEpisodes.length > 0
@@ -1152,7 +1223,10 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
       const s = seasons.find(x => x.id === seasonId)
       const title = s?.title || `Temporada ${s?.season_number ?? seasonId}`
       try {
-        const checksResult = await runUploadChecks(seasonId)
+        // Ya comprobado al entrar en el paso 2: el contenido de cada
+        // temporada una vez, y el entorno una sola vez para toda la tanda. Si
+        // por lo que sea no está cacheado, se hace la pasada completa.
+        const checksResult = mergedChecksFor(seasonId) ?? await runUploadChecks(seasonId)
         if (!checksResult.ready) {
           const reason = checksResult.checks.find(c => c.status === 'fail')?.message || 'Alguna comprobación falló'
           results.push({ seasonId, title, status: 'failed', reason })
@@ -1332,7 +1406,9 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
             })
           }
         }
-        const checksResult = await runUploadChecks(episodeId)
+        // Igual que las temporadas: se reutiliza lo comprobado al entrar en
+        // el paso 2 en vez de repetir las 4 de entorno por cada capítulo.
+        const checksResult = mergedChecksFor(episodeId) ?? await runUploadChecks(episodeId)
         if (!checksResult.ready) {
           const reason = checksResult.checks.find(c => c.status === 'fail')?.message || 'Alguna comprobación falló'
           results.push({ seasonId: episodeId, title, status: 'failed', reason })
@@ -1726,7 +1802,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
           <button
             className="btn btn-secondary btn-sm"
             type="button"
-            onClick={() => { setShowSeasonNamesCard(true); if (!seasonNames && !seasonNamesLoading) loadSeasonNames() }}
+            onClick={() => { setShowSeasonNamesCard(true); setSeasonNamesEpisodeId(null); if (!seasonNames && !seasonNamesLoading) loadSeasonNames() }}
           >
             Ver nombre de todos los capítulos
           </button>
@@ -1925,24 +2001,37 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                       </div>
                       <div className="modal-body">
                         {seasonNamesLoading && !seasonNames && <TableLoadingSpinner label="Generando el nombre de cada capítulo…" />}
-                        {seasonNames?.map(ep => (
-                          <div key={ep.episode_id} style={{ marginBottom: 14, paddingBottom: 14, borderBottom: '1px solid var(--border)' }}>
-                            <div style={{ ...labelStyle, marginBottom: 6 }}>
-                              {ep.episode_number != null ? `E${String(ep.episode_number).padStart(2, '0')} — ` : ''}{ep.title}
-                            </div>
-                            {ep.error ? (
-                              <p className="text-error" style={{ fontSize: 12, margin: 0 }}>✗ {ep.error}</p>
-                            ) : (
-                              <FitTextPair
-                                min={9}
-                                items={[
-                                  { label: 'Nombre del torrent', text: ep.torrent_name || '–', labelStyle: { ...labelStyle, fontSize: 10 } },
-                                  { label: INTERNAL_TITLE_LABEL, text: ep.internal_mkv_title || '–', labelStyle: { ...labelStyle, fontSize: 10 } },
-                                ]}
-                              />
-                            )}
-                          </div>
-                        ))}
+                        {seasonNames && seasonNames.length > 0 && (() => {
+                          const current = seasonNames.find(e => e.episode_id === seasonNamesEpisodeId) ?? seasonNames[0]
+                          return (
+                            <>
+                              {seasonNames.length > 1 && (
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+                                  <select
+                                    className="form-input form-select" style={{ width: 'auto' }}
+                                    value={current.episode_id}
+                                    onChange={e => setSeasonNamesEpisodeId(Number(e.target.value))}
+                                  >
+                                    {seasonNames.map(ep => (
+                                      <option key={ep.episode_id} value={ep.episode_id}>{ep.display_title}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              )}
+                              {current.error ? (
+                                <p className="text-error" style={{ fontSize: 12, margin: 0 }}>✗ {current.error}</p>
+                              ) : (
+                                <FitTextPair
+                                  min={9}
+                                  items={[
+                                    { label: 'Nombre del torrent', text: current.torrent_name || '–', labelStyle },
+                                    { label: INTERNAL_TITLE_LABEL, text: current.internal_mkv_title || '–', labelStyle },
+                                  ]}
+                                />
+                              )}
+                            </>
+                          )
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -2101,38 +2190,105 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
           </div>
         )}
 
-        {step === 2 && episodeQueue.length > 1 && (
+        {/* Paso 2 con varios elegidos. Mismo aspecto que el de uno solo:
+            tarjeta de comprobaciones y desplegable arriba a la derecha para
+            recorrer los elementos, en vez del párrafo suelto de antes. */}
+        {step === 2 && batchQueue.length > 1 && (
           <div className="modal-body">
-            {batchPhase === 'idle' && (
-              <>
-                <p className="text-muted" style={{ fontSize: 12.5, marginTop: 0, marginBottom: 16 }}>
-                  Se comprobará y encolará cada uno de los {episodeQueue.length} capítulos elegidos, uno a
-                  uno, con la nomenclatura que revisaste (o editaste) para cada uno. Cada capítulo es una
-                  subida independiente, así que pueden tener códecs o audios distintos entre sí. Si alguno
-                  falla la verificación, se saltará y se avisará al final — no bloqueará el resto.
-                </p>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <button className="btn btn-secondary" onClick={() => setStep(1)} type="button">← Volver</button>
-                  <button className="btn btn-primary" onClick={uploadAllEpisodes} type="button">Subir todos</button>
-                </div>
-              </>
-            )}
+            {batchPhase === 'idle' && (() => {
+              const viewId = batchViewId ?? batchQueue[0]
+              const contentChecks = batchContentChecks.get(viewId)
+              const blocked = batchQueue.filter(id => batchContentChecks.get(id)?.ready === false)
+              const envReady = batchEnvChecks?.ready !== false
+              return (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+                    <select
+                      className="form-input form-select" style={{ width: 'auto' }}
+                      value={viewId} onChange={e => setBatchViewId(Number(e.target.value))}
+                    >
+                      {batchQueue.map(id => {
+                        const failed = batchContentChecks.get(id)?.ready === false
+                        return <option key={id} value={id}>{failed ? '✗ ' : ''}{batchItemTitle(id)}</option>
+                      })}
+                    </select>
+                  </div>
+
+                  <div className="detail-card" style={{ padding: '12px 14px', borderRadius: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                      <div style={labelStyle}>Comprobaciones previas</div>
+                      {batchChecksLoading && <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />}
+                    </div>
+
+                    {/* Las del elemento que estés mirando. */}
+                    {contentChecks
+                      ? contentChecks.checks.map(c => <CheckRow key={c.id} c={c} />)
+                      : <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                          Comprobando {batchIsEpisodes ? 'capítulo' : 'temporada'} {Math.min(batchChecksIndex + 1, batchQueue.length)} de {batchQueue.length}…
+                        </div>}
+
+                    {/* Y las compartidas, hechas una sola vez para la tanda. */}
+                    {batchEnvChecks && (
+                      <>
+                        <div style={{ ...labelStyle, marginTop: 14, marginBottom: 8 }}>
+                          Comunes a {batchIsEpisodes ? 'todos los capítulos' : 'todas las temporadas'}
+                        </div>
+                        {batchEnvChecks.checks.map(c => <CheckRow key={c.id} c={c} />)}
+                      </>
+                    )}
+
+                    {!batchChecksLoading && (
+                      <div style={{ marginTop: 14, fontWeight: 600, color: blocked.length === 0 && envReady ? '#22c55e' : '#ef4444' }}>
+                        {!envReady
+                          ? '✗ La subida no se puede realizar'
+                          : blocked.length === 0
+                          ? `✓ Todo listo: ${batchQueue.length} ${batchIsEpisodes ? 'capítulos' : 'temporadas'}`
+                          : `✗ ${blocked.length} de ${batchQueue.length} no se ${blocked.length === 1 ? 'puede' : 'pueden'} subir`}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Qué se va a saltar y por qué, antes de pulsar nada. */}
+                  {!batchChecksLoading && blocked.length > 0 && (
+                    <div className="detail-card" style={{ padding: '12px 14px', borderRadius: 8, marginTop: 12 }}>
+                      {blocked.map(id => (
+                        <p key={id} style={{ fontSize: 12.5, margin: '4px 0', color: '#fca5a5' }}>
+                          ✗ {batchItemTitle(id)}: {batchContentChecks.get(id)?.checks.find(c => c.status === 'fail')?.message || 'Alguna comprobación falló'}
+                        </p>
+                      ))}
+                      <p style={{ fontSize: 12, margin: '10px 0 0', color: 'var(--text-muted)' }}>
+                        Se saltarán. El resto se subirá igualmente.
+                      </p>
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
+                    <button className="btn btn-secondary" onClick={() => setStep(1)} type="button">← Volver</button>
+                    <button
+                      className="btn btn-primary"
+                      onClick={batchIsEpisodes ? uploadAllEpisodes : uploadAllSeasons}
+                      disabled={batchChecksLoading || !envReady || blocked.length === batchQueue.length}
+                      type="button"
+                    >
+                      {batchIsEpisodes ? 'Subir todos' : 'Subir todas'}
+                    </button>
+                  </div>
+                </>
+              )
+            })()}
             {batchPhase === 'processing' && (
               <div style={{ padding: '20px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
                 <span className="spinner" style={{ width: 28, height: 28, borderWidth: 3 }} />
                 <div style={{ fontSize: 14, fontWeight: 600 }}>
-                  Subiendo capítulo {batchIndex + 1} de {episodeQueue.length}
-                  {(() => {
-                    const ep = episodes.find(x => x.id === episodeQueue[batchIndex])
-                    return ep ? `: ${listDisplayTitle(ep)}` : ''
-                  })()}
+                  Subiendo {batchIsEpisodes ? 'capítulo' : 'temporada'} {batchIndex + 1} de {batchQueue.length}
+                  {`: ${batchItemTitle(batchQueue[batchIndex])}`}
                 </div>
               </div>
             )}
             {batchPhase === 'done' && (
               <>
                 <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 12, textAlign: 'center' }}>
-                  {batchResults.filter(r => r.status === 'queued').length} de {batchResults.length} capítulo(s) encolado(s)
+                  {batchResults.filter(r => r.status === 'queued').length} de {batchResults.length} {batchIsEpisodes ? 'capítulo(s) encolado(s)' : 'temporada(s) encolada(s)'}
                 </div>
                 {batchResults.some(r => r.status === 'failed') && (
                   <div className="detail-card" style={{ padding: '12px 14px', borderRadius: 8, marginBottom: 14 }}>
@@ -2153,56 +2309,6 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
           </div>
         )}
 
-        {step === 2 && seasonQueue.length > 1 && (
-          <div className="modal-body">
-            {batchPhase === 'idle' && (
-              <>
-                <p className="text-muted" style={{ fontSize: 12.5, marginTop: 0, marginBottom: 16 }}>
-                  Se comprobará y encolará cada una de las {seasonQueue.length} temporadas elegidas, una a
-                  una, con la nomenclatura que revisaste (o editaste) para cada una. Si alguna falla la
-                  verificación, se saltará y se avisará al final — no bloqueará el resto.
-                </p>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <button className="btn btn-secondary" onClick={() => setStep(1)} type="button">← Volver</button>
-                  <button className="btn btn-primary" onClick={uploadAllSeasons} type="button">Subir todas</button>
-                </div>
-              </>
-            )}
-            {batchPhase === 'processing' && (
-              <div style={{ padding: '20px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-                <span className="spinner" style={{ width: 28, height: 28, borderWidth: 3 }} />
-                <div style={{ fontSize: 14, fontWeight: 600 }}>
-                  Subiendo temporada {batchIndex + 1} de {seasonQueue.length}
-                  {(() => {
-                    const s = seasons.find(x => x.id === seasonQueue[batchIndex])
-                    return s ? `: ${s.title || `Temporada ${s.season_number}`}` : ''
-                  })()}
-                </div>
-              </div>
-            )}
-            {batchPhase === 'done' && (
-              <>
-                <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 12, textAlign: 'center' }}>
-                  {batchResults.filter(r => r.status === 'queued').length} de {batchResults.length} temporada(s) encolada(s)
-                </div>
-                {batchResults.some(r => r.status === 'failed') && (
-                  <div className="detail-card" style={{ padding: '12px 14px', borderRadius: 8, marginBottom: 14 }}>
-                    {batchResults.filter(r => r.status === 'failed').map(r => (
-                      <p key={r.seasonId} style={{ fontSize: 12.5, margin: '4px 0', color: '#fca5a5' }}>
-                        ✗ {r.title}: {r.reason}
-                      </p>
-                    ))}
-                  </div>
-                )}
-                <div style={{ display: 'flex', justifyContent: 'center' }}>
-                  <button className="btn btn-primary" onClick={() => { onDone?.(); onNavigate?.('uploads'); onClose() }} type="button">
-                    Ir a Subidas
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        )}
 
         {step === 2 && seasonQueue.length <= 1 && episodeQueue.length <= 1 && (
           <div className="modal-body">

@@ -32,7 +32,26 @@ def _set_checks_progress(item_id: int, *, checks: list[dict], done: bool = False
         _CHECKS_PROGRESS[item_id] = {"checks": list(checks), "done": done, "ready": ready}
 
 
-def run_upload_checks(conn: sqlite3.Connection, item_id: int) -> dict:
+# Las comprobaciones se parten en dos grupos porque no todas dependen de lo
+# mismo. Las de CONTENIDO miran el elemento concreto (¿se puede armar el pack?
+# ¿se puede renombrar? ¿tiene castellano?) y hay que hacerlas una por
+# elemento. Las de ENTORNO miran la máquina y los servicios (directorio de
+# salida, qBittorrent, hosts de imágenes, eMuwarez) y dan lo mismo para todos:
+# con 30 capítulos elegidos, preguntarle 30 veces a eMuwarez si está vivo no
+# aporta nada y multiplica por 30 la espera.
+CONTENT_CHECK_IDS = ("season_pack", "renameable", "spanish")
+ENVIRONMENT_CHECK_IDS = ("output", "qbittorrent", "imghosts", "emuwarez")
+
+
+def run_upload_checks(conn: sqlite3.Connection, item_id: int, *, scope: str = "all") -> dict:
+    """`scope`:
+
+    - "all" (por defecto): contenido + entorno, el comportamiento de siempre,
+      que es lo que usa una subida de un solo elemento.
+    - "content": solo las del elemento. Para una selección de varias
+      temporadas o capítulos, donde estas sí van una por una.
+    - "environment": solo las compartidas, una vez para toda la tanda.
+    """
     from .library import get_library_item
     from .integration_tests import test_qbit_connection, test_emuwarez_connection
     from .image_hosts import fallback_order, get_host_key, test_image_host, host_meta
@@ -60,14 +79,17 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int) -> dict:
         checks.append({"id": cid, "label": label, "status": "skip", "message": message})
         _set_checks_progress(item_id, checks=checks)
 
-    def done() -> dict:
-        # Skips don't block: only a real failure (red) does.
-        ready = bool(checks) and all(c["status"] in ("ok", "skip") for c in checks) and checks[-1]["id"] == "emuwarez"
+    def done(complete: bool = False) -> dict:
+        # Skips don't block: only a real failure (red) does. `complete` dice si
+        # se llegó al final del grupo pedido — antes se deducía mirando que la
+        # última comprobación fuera "emuwarez", que deja de valer en cuanto un
+        # grupo puede acabar en otra.
+        ready = complete and bool(checks) and all(c["status"] in ("ok", "skip") for c in checks)
         _set_checks_progress(item_id, checks=checks, done=True, ready=ready)
         return {"checks": checks, "ready": ready}
 
-    item = get_library_item(conn, item_id)
-    if not item:
+    item = get_library_item(conn, item_id) if scope != "environment" else None
+    if scope != "environment" and not item:
         add("renameable", "Se puede renombrar", "No se puede renombrar", False, "Elemento no encontrado")
         return done()
 
@@ -80,7 +102,9 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int) -> dict:
     # reason ("no accesible" / "MediaInfo no pudo leer" / "mkvtoolnix no pudo
     # leer") instead of blocking the wizard's checklist pre-emptively.
 
-    if item.get("item_type") == "season":
+    if scope == "environment":
+        pass                                     # solo entorno: nada del elemento
+    elif item.get("item_type") == "season":
         # A season has no `path` of its own — only its episodes do — so the
         # generic single-file "renameable" check below doesn't
         # apply. build_season_pack_plan() already covers everything relevant
@@ -143,6 +167,9 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int) -> dict:
                    has_audio_es or has_subs_es, spanish_msg):
             return done()
 
+    if scope == "content":
+        return done(complete=True)
+
     # 2. Output directory writable — where Uploadrr-EMU stages the .torrent +
     # images (torrents/screenshots/descriptions) is <uploadrr_path>/tmp, NOT
     # the top-level uploadrr_path itself: in the documented Docker deployment
@@ -192,4 +219,4 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int) -> dict:
     # eMuwarez itself was never actually asked twice in a way it would mind.
     r = test_emuwarez_connection(conn=conn, enforce_rate_limit=False)
     add("emuwarez", "eMuwarez disponible", "eMuwarez no disponible", bool(r.get("ok")), r.get("message", ""))
-    return done()
+    return done(complete=True)

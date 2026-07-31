@@ -229,15 +229,23 @@ def upload_preflight(
 @router.post("/library/{item_id}/upload/checks")
 def upload_checks(
     item_id: int,
+    scope: str = Query(default="all", pattern="^(all|content|environment)$"),
     current_user: dict = Depends(require_auth),
 ) -> dict:
     """Run the pre-upload checks (fail-fast, eMuwarez last) for the 'Subida a
     eMuwarez' step. Returns each check's result + a `ready` flag. Can take
     ~30s (real network calls) — poll GET .../checks/progress concurrently to
-    show each check landing as it completes instead of a static wait."""
+    show each check landing as it completes instead of a static wait.
+
+    `scope` parte la pasada en dos para una selección de varias temporadas o
+    capítulos: "content" son las del elemento y van una por elemento;
+    "environment" son las compartidas (directorio de salida, qBittorrent,
+    hosts de imágenes, eMuwarez) y se piden UNA vez para toda la tanda, que
+    con 30 capítulos es la diferencia entre 4 comprobaciones de red y 120.
+    "all" (por defecto) las hace todas, que es lo que usa un solo elemento."""
     from emuwarez_uploadrr.services.upload_checks import run_upload_checks
     with _get_conn() as conn:
-        return run_upload_checks(conn, item_id)
+        return run_upload_checks(conn, item_id, scope=scope)
 
 
 @router.get("/library/{item_id}/upload/checks/progress")

@@ -143,8 +143,16 @@ export interface UploadChecksResult {
   ready: boolean
 }
 
-export async function runUploadChecks(itemId: number): Promise<UploadChecksResult> {
-  return api.post<UploadChecksResult>(`/library/${itemId}/upload/checks`, {})
+// `scope` parte la pasada para una selección de varias temporadas o
+// capítulos: 'content' son las del elemento (una por elemento) y
+// 'environment' las compartidas (una sola vez para toda la tanda). Sin
+// scope, las hace todas, que es lo que necesita un solo elemento.
+export async function runUploadChecks(
+  itemId: number,
+  scope?: 'content' | 'environment',
+): Promise<UploadChecksResult> {
+  const qs = scope ? `?scope=${scope}` : ''
+  return api.post<UploadChecksResult>(`/library/${itemId}/upload/checks${qs}`, {})
 }
 
 export interface UploadChecksProgress {

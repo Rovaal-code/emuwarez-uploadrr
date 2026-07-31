@@ -436,7 +436,7 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
         </div>
         <div className="detail-card" style={{ borderRadius: 10, padding: '21px 19px' }}>
           {!m ? (
-            <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Sin coincidencia en tu biblioteca local, no tienes este contenido.</span>
+            <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Sin coincidencia en tu biblioteca local, no tienes este contenido importado en tus instancias de Radarr o Sonarr.</span>
           ) : (
             <>
               <div style={{ overflowX: 'auto' }}>

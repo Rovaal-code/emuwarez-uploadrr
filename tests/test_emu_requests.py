@@ -274,3 +274,91 @@ def test_sync_requests_missing_endpoint_is_skipped_not_failed(db_conn, monkeypat
         "SELECT status FROM task_runs WHERE name='sync-emu-requests' ORDER BY id DESC LIMIT 1"
     ).fetchone()
     assert row["status"] == "skipped"
+
+
+# ---------------------------------------------------------------------------
+# "Contenido compatible" notifications name the season / episode
+# ---------------------------------------------------------------------------
+
+def _add_library_item(conn, *, item_type, title, year=None, parent_id=None,
+                      season_number=None, episode_number=None):
+    cur = conn.execute(
+        """INSERT INTO library_items(item_type, title, year, parent_id, season_number,
+                                     episode_number, local_status, poster_url)
+           VALUES (?, ?, ?, ?, ?, ?, 'Disponible', 'http://poster')""",
+        (item_type, title, year, parent_id, season_number, episode_number),
+    )
+    return int(cur.lastrowid)
+
+
+def _add_compatible_request(conn, *, title, library_item_id, scope=None,
+                            season=None, episode=None):
+    cur = conn.execute(
+        """INSERT INTO request_items(emu_id, title, req_scope, req_season, req_episode)
+           VALUES (?, ?, ?, ?, ?)""",
+        (f"emu-{title}", title, scope, season, episode),
+    )
+    rid = int(cur.lastrowid)
+    conn.execute(
+        """INSERT INTO request_matches(library_item_id, request_item_id, status, confidence)
+           VALUES (?, ?, 'Compatible', 1.0)""",
+        (library_item_id, rid),
+    )
+    conn.commit()
+    return rid
+
+
+def _notify_and_read(conn):
+    from emuwarez_uploadrr.services.requests import _notify_new_compatible_matches
+    from emuwarez_uploadrr.services.notification_center import list_notifications
+    _notify_new_compatible_matches(conn, set())
+    return list_notifications(conn)
+
+
+def test_compatible_notification_names_the_season(db_conn):
+    """A season request notified under the bare series name, so three seasons
+    of the same show all arrived as the same indistinguishable line."""
+    series = _add_library_item(db_conn, item_type="series", title="Serie", year=2019)
+    season = _add_library_item(db_conn, item_type="season", title="Serie Season 2",
+                               parent_id=series, season_number=2)
+    _add_compatible_request(db_conn, title="Serie S2", library_item_id=season,
+                            scope="season", season=2)
+
+    notes = _notify_and_read(db_conn)
+    assert len(notes) == 1
+    assert notes[0]["content_title"] == "Serie (2019) - Temporada 2"
+
+
+def test_compatible_notification_names_the_episode_as_sxxeyy(db_conn):
+    """An episode request says SxxEyy, and NOT "Temporada 2 - S02E05" — the
+    canonical format never carries both suffixes at once."""
+    series = _add_library_item(db_conn, item_type="series", title="Serie", year=2019)
+    season = _add_library_item(db_conn, item_type="season", title="Serie Season 2",
+                               parent_id=series, season_number=2)
+    ep = _add_library_item(db_conn, item_type="episode", title="Serie S02E05 - Piloto",
+                           parent_id=season, season_number=2, episode_number=5)
+    _add_compatible_request(db_conn, title="Serie S2E5", library_item_id=ep,
+                            scope="episode", season=2, episode=5)
+
+    notes = _notify_and_read(db_conn)
+    assert len(notes) == 1
+    assert notes[0]["content_title"] == "Serie (2019) - S02E05"
+
+
+def test_compatible_notification_for_a_movie_has_no_season_suffix(db_conn):
+    movie = _add_library_item(db_conn, item_type="movie", title="Pelicula", year=2020)
+    _add_compatible_request(db_conn, title="Pelicula", library_item_id=movie)
+
+    notes = _notify_and_read(db_conn)
+    assert len(notes) == 1
+    assert notes[0]["content_title"] == "Pelicula (2020)"
+
+
+def test_compatible_notification_keeps_the_matched_poster(db_conn):
+    """The poster and the title must come from the SAME matched row, or the
+    notification could show one season's art next to another's name."""
+    movie = _add_library_item(db_conn, item_type="movie", title="Pelicula", year=2020)
+    _add_compatible_request(db_conn, title="Pelicula", library_item_id=movie)
+
+    notes = _notify_and_read(db_conn)
+    assert notes[0]["poster_url"] == "http://poster"

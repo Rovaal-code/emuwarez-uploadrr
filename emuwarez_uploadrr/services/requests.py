@@ -488,19 +488,32 @@ def _notify_new_compatible_matches(conn: sqlite3.Connection, before_ids: set[int
         from .notification_center import emit
         for rid in new_ids:
             row = conn.execute(
-                "SELECT title, url FROM request_items WHERE id = ?", (rid,)
+                "SELECT title, url, req_scope, req_season, req_episode"
+                " FROM request_items WHERE id = ?", (rid,)
             ).fetchone()
             title = (row["title"] if row else None) or f"Petición #{rid}"
-            # request_items has no poster of its own — the matched
-            # library_item does, via the same 'Compatible' match this
-            # notification is about.
-            poster_row = conn.execute(
-                """SELECT li.poster_url AS poster_url
+            # request_items has neither a poster of its own nor a title that
+            # says WHICH season or episode was asked for — both come from the
+            # library item behind the very 'Compatible' match this
+            # notification is about, so they're read from one single row.
+            lib_row = conn.execute(
+                """SELECT li.*
                    FROM request_matches rm JOIN library_items li ON li.id = rm.library_item_id
                    WHERE rm.request_item_id = ? AND rm.status = 'Compatible'
                    LIMIT 1""",
                 (rid,),
             ).fetchone()
+            if row is not None and lib_row is not None:
+                # Same canonical title the rest of the app shows ("Serie (Año)
+                # - Temporada 2", "Serie (Año) - S02E05", "Título (Año)"), via
+                # the shared builder instead of a format of its own. Without
+                # the season/episode, every season of the same series notified
+                # under the bare series name and they were indistinguishable.
+                title = content_display_title(
+                    conn, dict(lib_row),
+                    season=row["req_season"], episode=row["req_episode"],
+                    scope=row["req_scope"],
+                ) or title
             emit(
                 conn, "request_match_found",
                 "Contenido compatible",
@@ -509,7 +522,7 @@ def _notify_new_compatible_matches(conn: sqlite3.Connection, before_ids: set[int
                 level="info",
                 entity_type="request_item",
                 entity_id=rid,
-                poster_url=poster_row["poster_url"] if poster_row else None,
+                poster_url=lib_row["poster_url"] if lib_row is not None else None,
                 content_title=title,
             )
     except Exception:

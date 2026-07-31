@@ -19,7 +19,9 @@ from __future__ import annotations
 
 import json
 import logging
+import random
 import sqlite3
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 logger = logging.getLogger("emuwarez.request_examples")
@@ -79,6 +81,29 @@ _SHORTFALL_REASON = {
     "parcial": "hace falta contenido con una resolución conocida por debajo del máximo",
     "no_compatible": "hace falta contenido con resolución y source por debajo del máximo",
 }
+
+# Filler that makes the table look like a real request list instead of a row
+# of empty cells. None of it means anything — it exists so the votes, points,
+# author and date columns can be seen doing their job.
+_AUTHORS = [
+    "Nocturno", "PixelHunter", "ElArchivista", "Marea", "Trece",
+    "LumenHD", "CafeConBits", "Sombra", "Aurora", "ElColeccionista",
+]
+
+# eMuwarez bounties are never small change, so anything under 100 would read as
+# broken. The range is wide on purpose: it's what makes sorting by points show
+# something.
+_POINTS_MIN, _POINTS_MAX = 1000, 30000
+_VOTES_MAX = 15
+# Requests all created at the same instant would make "Más recientes" useless.
+_MAX_AGE_DAYS = 10
+
+
+def _random_created_at(now: datetime) -> str:
+    """A moment between now and _MAX_AGE_DAYS ago, to the minute."""
+    delta = timedelta(minutes=random.randint(0, _MAX_AGE_DAYS * 24 * 60))
+    return (now - delta).isoformat()
+
 
 _INVENTED = [
     ("La sombra del viento", "movie", "1080p", "BluRay"),
@@ -287,6 +312,7 @@ def generate_examples(conn: sqlite3.Connection) -> dict[str, Any]:
                 "error": "Ya hay peticiones de ejemplo. Bórralas antes de generar otras."}
 
     pool = _library_pool(conn)
+    now = datetime.now(timezone.utc)
     own_user = _own_username(conn)
     own_assigned = False
     used: set[int] = set()
@@ -306,20 +332,24 @@ def generate_examples(conn: sqlite3.Connection) -> dict[str, Any]:
             created += 1
             # First row of its group gets the user's own name, so the list
             # shows what one of your own requests looks like.
-            author = None
+            # Yours on one of them (when configured), a made-up name on the
+            # rest: an empty author column shows nothing about how it behaves.
             if own_user and kind == _OWN_REQUEST_GROUP and not own_assigned:
                 author, own_assigned = own_user, True
+            else:
+                author = random.choice(_AUTHORS)
             conn.execute(
                 """INSERT INTO request_items(
                        emu_id, title, category, requested_source, requested_resolution,
-                       emu_status, points, comments, created_at, tmdb_id, imdb_id, url,
+                       emu_status, points, comments, votes, created_at, tmdb_id, imdb_id, url,
                        author, author_visible, raw_json, req_scope, req_season,
                        is_example, updated_at)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,CURRENT_TIMESTAMP)""",
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,CURRENT_TIMESTAMP)""",
                 (
                     f"{EXAMPLE_ID_PREFIX}{created}", row["title"], row["category"],
                     row["requested_source"], row["requested_resolution"], row["emu_status"],
-                    10 * created % 90, created % 7, None,
+                    random.randint(_POINTS_MIN, _POINTS_MAX), random.randint(0, 12),
+                    random.randint(0, _VOTES_MAX), _random_created_at(now),
                     row["tmdb_id"], row["imdb_id"], _EXAMPLE_URL,
                     author, 1 if author else 0,
                     json.dumps({"example": True, "group": kind}, ensure_ascii=False),

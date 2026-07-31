@@ -292,13 +292,16 @@ def test_one_request_carries_your_own_username(db_conn):
     assert mine[0]["author_visible"] == 1
 
 
-def test_no_username_configured_means_no_authored_request(db_conn):
+def test_without_a_username_none_of_them_is_yours(db_conn):
+    """Every example carries an author now (an empty column shows nothing), so
+    what matters is that none of them claims to be you when you haven't said
+    who you are."""
     _seed_library(db_conn)
     ex.generate_examples(db_conn)
-    authored = db_conn.execute(
-        "SELECT COUNT(*) AS n FROM request_items WHERE is_example = 1 AND author IS NOT NULL"
-    ).fetchone()["n"]
-    assert authored == 0
+    authors = {r["author"] for r in db_conn.execute(
+        "SELECT author FROM request_items WHERE is_example = 1").fetchall()}
+    assert authors and None not in authors
+    assert authors <= set(ex._AUTHORS)
 
 
 def test_season_examples_carry_the_request_scope(db_conn):
@@ -378,3 +381,40 @@ def test_a_movie_request_keeps_its_own_row(db_conn):
     _lib(db_conn, "Una peli", tmdb_id="550")
     movie = dict(db_conn.execute("SELECT * FROM library_items WHERE item_type='movie'").fetchone())
     assert _scoped_library_id(db_conn, movie, {"req_scope": "season", "req_season": 2}) == movie["id"]
+
+
+# --- Filler that makes the table look like a real list ----------------------
+
+def test_points_are_always_a_plausible_bounty(db_conn):
+    """Under 100 would read as broken — eMuwarez bounties are never small
+    change. The range is wide so sorting by points shows something."""
+    _seed_library(db_conn)
+    ex.generate_examples(db_conn)
+    points = [r["points"] for r in db_conn.execute(
+        "SELECT points FROM request_items WHERE is_example = 1").fetchall()]
+    assert points and all(ex._POINTS_MIN <= p <= ex._POINTS_MAX for p in points)
+    assert all(p > 100 for p in points)
+
+
+def test_votes_stay_within_range(db_conn):
+    _seed_library(db_conn)
+    ex.generate_examples(db_conn)
+    votes = [r["votes"] for r in db_conn.execute(
+        "SELECT votes FROM request_items WHERE is_example = 1").fetchall()]
+    assert votes and all(0 <= v <= ex._VOTES_MAX for v in votes)
+
+
+def test_creation_dates_are_spread_over_the_last_days(db_conn):
+    """All created at the same instant would make "Más recientes" useless."""
+    from datetime import datetime, timedelta, timezone
+    _seed_library(db_conn)
+    ex.generate_examples(db_conn)
+    raw = [r["created_at"] for r in db_conn.execute(
+        "SELECT created_at FROM request_items WHERE is_example = 1").fetchall()]
+    assert all(raw)
+    dates = [datetime.fromisoformat(d) for d in raw]
+    now = datetime.now(timezone.utc)
+    oldest = now - timedelta(days=ex._MAX_AGE_DAYS, minutes=1)
+    assert all(oldest <= d <= now + timedelta(minutes=1) for d in dates)
+    # Spread, not all identical.
+    assert len({d.date() for d in dates}) > 1

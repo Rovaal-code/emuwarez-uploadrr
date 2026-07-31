@@ -32,6 +32,7 @@ EXAMPLE_ID_PREFIX = "ejemplo-"
 EXAMPLE_PLAN: list[tuple[int, str]] = [
     (10, "compatible"),
     (5, "parcial"),
+    (5, "no_compatible"),
     (3, "reclamada"),
     (2, "llena"),
     (1, "pendiente"),
@@ -50,6 +51,26 @@ _EXAMPLE_URL = "https://emuwarez.com/requests"
 _HIGHER_RESOLUTION = {
     "480p": "720p", "576p": "720p", "720p": "1080p",
     "1080p": "2160p", "2160p": "4320p",
+}
+
+# For "no compatible" BOTH checks have to fail, so the source is asked above
+# the library's too. BDRemux tops _SOURCE_RANK; anything already at that top
+# can't demonstrate this bucket and is skipped.
+_TOP_SOURCE = "BDRemux"
+
+
+def _higher_source(local: Optional[str]) -> Optional[str]:
+    from .compatibility import compare_source
+    if not (local or "").strip():
+        return None
+    # Ask for the best source there is; if the library already holds it, this
+    # item can't make the source check fail.
+    return None if compare_source(_TOP_SOURCE, local) else _TOP_SOURCE
+
+_SHORTFALL_REASON = {
+    "no_disponible": "no tienes contenido en estado Faltante",
+    "parcial": "hace falta contenido con una resolución conocida por debajo del máximo",
+    "no_compatible": "hace falta contenido con resolución y source por debajo del máximo",
 }
 
 _INVENTED = [
@@ -85,7 +106,25 @@ def _library_pool(conn: sqlite3.Connection) -> dict[str, list[dict]]:
     held, missing = [], []
     for r in rows:
         (held if r.get("local_status") in ("Disponible", "Subido", "Subiendo") else missing).append(r)
-    return {"held": held, "missing": missing, "all": rows}
+    return {"held": _interleave(held), "missing": _interleave(missing), "all": rows}
+
+
+def _interleave(rows: list[dict]) -> list[dict]:
+    """Alternate films and seasons instead of taking them in id order.
+
+    Radarr is usually synced before Sonarr, so plain id order handed the first
+    groups nothing but films and the request list came out without a single
+    season in it — which hides exactly the season-vs-film differences these
+    examples exist to show."""
+    movies = [r for r in rows if r.get("item_type") == "movie"]
+    seasons = [r for r in rows if r.get("item_type") == "season"]
+    out: list[dict] = []
+    for i in range(max(len(movies), len(seasons))):
+        if i < len(movies):
+            out.append(movies[i])
+        if i < len(seasons):
+            out.append(seasons[i])
+    return out
 
 
 def _category_for(item: dict) -> str:
@@ -161,6 +200,13 @@ def _row_for_kind(kind: str, item: dict) -> Optional[dict[str, Any]]:
         if not asked:
             return None
         return _row_for(item, resolution=asked, source=item.get("source"), emu_status=None)
+    if kind == "no_compatible":
+        # BOTH checks have to fail for "No compatible" — one alone is "Parcial".
+        asked_res = _HIGHER_RESOLUTION.get((res or "").strip())
+        asked_src = _higher_source(item.get("source"))
+        if not asked_res or not asked_src:
+            return None
+        return _row_for(item, resolution=asked_res, source=asked_src, emu_status=None)
     if kind in ("reclamada", "llena", "pendiente"):
         # These three override the library verdict, so the spec can match
         # perfectly — the tracker state is what decides.
@@ -196,7 +242,7 @@ def generate_examples(conn: sqlite3.Connection) -> dict[str, Any]:
         if len(rows) < count:
             shortfalls.append(
                 f"{kind}: {len(rows)} de {count} "
-                f"({'no hay suficiente contenido faltante' if kind == 'no_disponible' else 'no hay suficiente contenido en tu biblioteca'})"
+                f"({_SHORTFALL_REASON.get(kind, 'no hay suficiente contenido en tu biblioteca')})"
             )
         for row in rows:
             created += 1
@@ -223,4 +269,33 @@ def generate_examples(conn: sqlite3.Connection) -> dict[str, Any]:
     except Exception:
         logger.exception("No se pudo emparejar las peticiones de ejemplo recién creadas")
 
-    return {"created": created, "by_group": by_group, "shortfalls": shortfalls}
+    return {
+        "created": created,
+        "by_group": by_group,
+        # What the matcher ACTUALLY decided, not what each group was aiming
+        # for. They can differ: a request is matched against the whole library,
+        # so it can land on a different item than the one it was built from —
+        # every season of a series shares the series' tmdb_id, for instance.
+        # Reporting the intent instead of the outcome would claim a
+        # distribution that isn't on screen.
+        "by_status": _actual_statuses(conn),
+        "shortfalls": shortfalls,
+    }
+
+
+def _actual_statuses(conn: sqlite3.Connection) -> dict[str, int]:
+    from .compatibility import emu_override_status
+
+    counts: dict[str, int] = {}
+    rows = conn.execute(
+        """SELECT ri.emu_status, rm.status AS match_status
+             FROM request_items ri
+             LEFT JOIN request_matches rm ON rm.request_item_id = ri.id
+            WHERE ri.is_example = 1"""
+    ).fetchall()
+    for r in rows:
+        # Same precedence the UI applies: the tracker state beats the library
+        # verdict.
+        status = emu_override_status(r["emu_status"]) or r["match_status"] or "Sin coincidencia"
+        counts[status] = counts.get(status, 0) + 1
+    return counts

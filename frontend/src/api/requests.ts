@@ -50,6 +50,9 @@ export async function syncRequests(force = false): Promise<RequestSyncResponse> 
 export interface ExamplesResult {
   created: number
   by_group: Record<string, number>
+  // What the matcher actually decided, which can differ from what each group
+  // aimed for — see request_examples.generate_examples.
+  by_status: Record<string, number>
   shortfalls: string[]
 }
 

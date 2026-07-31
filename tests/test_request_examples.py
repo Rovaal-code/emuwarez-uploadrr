@@ -32,10 +32,18 @@ def _lib(conn, title, *, item_type="movie", status="Disponible",
 
 
 def _seed_library(conn, held=25, missing=8):
+    # Films first and seasons after, on purpose: that's the real shape (Radarr
+    # is usually synced before Sonarr) and it's what used to leave the request
+    # list without a single season.
     for i in range(held):
         _lib(conn, f"Peli {i}", tmdb_id=str(1000 + i))
+    for i in range(held):
+        _lib(conn, f"Serie {i} - Temporada 1", item_type="season", tmdb_id=str(3000 + i))
     for i in range(missing):
         _lib(conn, f"Falta {i}", status="Faltante", tmdb_id=str(2000 + i))
+    for i in range(missing):
+        _lib(conn, f"Serie falta {i} - Temporada 1", item_type="season",
+             status="Faltante", tmdb_id=str(4000 + i))
 
 
 def _statuses(conn):
@@ -118,6 +126,7 @@ def test_groups_land_on_their_intended_status(db_conn):
 
     assert by_status.get("Compatible") == 10
     assert by_status.get("Parcial") == 5
+    assert by_status.get("No compatible") == 5
     assert by_status.get("Reclamado") == 3
     assert by_status.get("Llena") == 2
     assert by_status.get("Pendiente") == 1
@@ -199,3 +208,51 @@ def test_examples_route_is_not_swallowed_by_the_id_route(client, auth_headers):
     parsed as an id."""
     r = client.get("/api/requests/examples", headers=auth_headers)
     assert r.status_code == 200 and "count" in r.json()
+
+
+def test_requests_mix_films_and_seasons(db_conn):
+    """Plain id order handed the first groups nothing but films (Radarr syncs
+    before Sonarr), so the list came out without a single season — hiding
+    exactly the film-vs-season differences these examples exist to show."""
+    _seed_library(db_conn)
+    ex.generate_examples(db_conn)
+    cats = [r["category"] for r in db_conn.execute(
+        "SELECT category FROM request_items WHERE is_example = 1").fetchall()]
+    assert cats.count("Movie") >= 5
+    assert cats.count("TV") >= 5
+
+
+def test_no_compatible_fails_both_checks_not_just_one(db_conn):
+    """One check failing is "Parcial"; this bucket only exists when the
+    resolution AND the source both fall short."""
+    from emuwarez_uploadrr.services.compatibility import compare_resolution, compare_source
+    _seed_library(db_conn)
+    ex.generate_examples(db_conn)
+    rows = db_conn.execute(
+        """SELECT ri.requested_resolution, ri.requested_source, li.resolution, li.source
+             FROM request_items ri
+             JOIN request_matches rm ON rm.request_item_id = ri.id
+             JOIN library_items li ON li.id = rm.library_item_id
+            WHERE ri.is_example = 1 AND rm.status = 'No compatible'"""
+    ).fetchall()
+    assert len(rows) == 5
+    for r in rows:
+        assert compare_resolution(r["requested_resolution"], r["resolution"]) is False
+        assert compare_source(r["requested_source"], r["source"]) is False
+
+
+def test_reports_the_matcher_s_verdict_not_the_intent(db_conn):
+    """A request is matched against the WHOLE library, so it can land on a
+    different item than the one it was built from — every season of a series
+    shares the series' tmdb_id, for one. Reporting the intended distribution
+    would claim numbers that aren't on screen."""
+    _seed_library(db_conn)
+    result = ex.generate_examples(db_conn)
+    assert sum(result["by_status"].values()) == result["created"]
+    # And it agrees with what the table itself would show.
+    live = {}
+    from emuwarez_uploadrr.services.compatibility import emu_override_status
+    for row in _statuses(db_conn):
+        st = emu_override_status(row["emu_status"]) or row["match_status"] or "Sin coincidencia"
+        live[st] = live.get(st, 0) + 1
+    assert result["by_status"] == live

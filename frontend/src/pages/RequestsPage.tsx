@@ -447,6 +447,15 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
                     </tr>
                   </tbody>
                 </table>
+                {/* Every spec in the row above can match and the request STILL
+                    can't be filled, because the file isn't on disk. Without
+                    saying so, the table looks like a contradiction. */}
+                {m.local_status === 'Faltante' && (
+                  <p style={{ fontSize: 12.5, margin: '10px 0 0', color: '#f59e0b' }}>
+                    Este contenido está con el estado de Faltante en tu biblioteca local, así que
+                    no se puede cubrir la petición aunque las características coincidan.
+                  </p>
+                )}
               </div>
             </>
           )}
@@ -535,8 +544,15 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
     try {
       if (action === 'generate') {
         const r = await generateExamples()
+        // Reports what the matcher decided, not what was aimed for: a request
+        // is matched against the whole library, so it can land on a different
+        // item than the one it was built from.
+        const real = Object.entries(r.by_status)
+          .sort((a, b) => b[1] - a[1])
+          .map(([status, n]) => `${n} ${status}`)
+          .join(', ')
         setExamplesMsg(
-          `${r.created} peticiones de ejemplo generadas.`
+          `${r.created} peticiones de ejemplo generadas: ${real}.`
           + (r.shortfalls.length ? ` Tu biblioteca no daba para todo: ${r.shortfalls.join('; ')}.` : ''),
         )
       } else {
@@ -775,7 +791,8 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                   disabled={examplesBusy}
                   type="button"
                 >
-                  Ejemplos{exampleCount ? ` (${exampleCount})` : ''}
+                  {examplesBusy && <span className="spinner" style={{ width: 12, height: 12, borderWidth: 2, marginRight: 6 }} />}
+                  {examplesBusy ? 'Trabajando…' : `Ejemplos${exampleCount ? ` (${exampleCount})` : ''}`}
                 </button>
               </Tooltip>
               {examplesOpen && (
@@ -793,7 +810,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                     disabled={examplesBusy || !!exampleCount}
                     type="button"
                   >
-                    Generar
+                    {examplesBusy ? 'Generando…' : 'Generar'}
                   </button>
                   <button
                     className="btn btn-secondary btn-sm"

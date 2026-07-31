@@ -51,14 +51,14 @@ function formatBytes(n: number) {
 function configSignature(v: {
   tag: string; providerOrder: string[]; region: string
   emuUsername: string; ignoreSpecials: boolean
-  recentLimit: number; uploadMaxConcurrent: number; qbitUrl: string; qbitPort: string; qbitUser: string
+  recentLimit: number; uploadMaxConcurrent: number; qbitUrl: string; qbitTag: string; qbitUser: string
   imgEnabled: string[]; allowedRoots: string
   newKey?: string; newEmuKey?: string; qbitPass?: string
   imgKeys?: Record<string, string>
 }): string {
   return JSON.stringify([
     v.tag, v.providerOrder, v.region, v.emuUsername,
-    v.ignoreSpecials, v.recentLimit, v.uploadMaxConcurrent, v.qbitUrl, v.qbitPort, v.qbitUser, v.imgEnabled, v.allowedRoots,
+    v.ignoreSpecials, v.recentLimit, v.uploadMaxConcurrent, v.qbitUrl, v.qbitTag, v.qbitUser, v.imgEnabled, v.allowedRoots,
     v.newKey ?? '', v.newEmuKey ?? '', v.qbitPass ?? '', v.imgKeys ?? {},
   ])
 }
@@ -103,7 +103,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const [testingConcurrency, setTestingConcurrency] = useState(false)
   const [concurrencyEstimate, setConcurrencyEstimate] = useState<UploadConcurrencyEstimate | null>(null)
   const [qbitUrl, setQbitUrl] = useState('')
-  const [qbitPort, setQbitPort] = useState('8080')
+  const [qbitTag, setQbitTag] = useState('')
   const [qbitUser, setQbitUser] = useState('')
   const [qbitPass, setQbitPass] = useState('')
   const [testingQbit, setTestingQbit] = useState(false)
@@ -127,7 +127,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const [baseline, setBaseline] = useState('')
   const currentSig = configSignature({
     tag, providerOrder, region, emuUsername,
-    ignoreSpecials, recentLimit, uploadMaxConcurrent, qbitUrl, qbitPort, qbitUser, imgEnabled, allowedRoots,
+    ignoreSpecials, recentLimit, uploadMaxConcurrent, qbitUrl, qbitTag, qbitUser, imgEnabled, allowedRoots,
     newKey, newEmuKey, qbitPass, imgKeys,
   })
   const dirty = baseline !== '' && currentSig !== baseline
@@ -178,7 +178,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         setRecentLimit(s.recent_activity_limit ?? 100)
         setUploadMaxConcurrent(s.upload_max_concurrent ?? 1)
         setQbitUrl(s.qbit_url ?? '')
-        setQbitPort(s.qbit_port ?? '8080')
+        setQbitTag(s.qbit_tag ?? '')
         setQbitUser(s.qbit_username ?? '')
         setImgEnabled(s.image_hosts_enabled ?? [])
         setAllowedRoots((s.uploadrr_allowed_roots ?? []).join(', '))
@@ -188,7 +188,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           emuUsername: s.emu_username ?? '',
           ignoreSpecials: s.series_ignore_specials ?? true, recentLimit: s.recent_activity_limit ?? 100,
           uploadMaxConcurrent: s.upload_max_concurrent ?? 1,
-          qbitUrl: s.qbit_url ?? '', qbitPort: s.qbit_port ?? '8080', qbitUser: s.qbit_username ?? '',
+          qbitUrl: s.qbit_url ?? '', qbitTag: s.qbit_tag ?? '', qbitUser: s.qbit_username ?? '',
           imgEnabled: s.image_hosts_enabled ?? [],
           allowedRoots: (s.uploadrr_allowed_roots ?? []).join(', '),
         }))
@@ -251,7 +251,6 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
     try {
       const r = await testQbitConnection({
         url: qbitUrl.trim() || undefined,
-        port: qbitPort.trim() || undefined,
         username: qbitUser.trim() || undefined,
         password: qbitPass.trim() || undefined,
       })
@@ -282,7 +281,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         recent_activity_limit: recentLimit,
         upload_max_concurrent: uploadMaxConcurrent,
         qbit_url: qbitUrl.trim(),
-        qbit_port: qbitPort.trim(),
+        qbit_tag: qbitTag.trim(),
         qbit_username: qbitUser.trim(),
         image_hosts_enabled: imgEnabled,
         uploadrr_allowed_roots: allowedRoots,
@@ -302,7 +301,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
       setRecentLimit(updated.recent_activity_limit ?? 100)
       setUploadMaxConcurrent(updated.upload_max_concurrent ?? 1)
       setQbitUrl(updated.qbit_url ?? '')
-      setQbitPort(updated.qbit_port ?? '8080')
+      setQbitTag(updated.qbit_tag ?? '')
       setQbitUser(updated.qbit_username ?? '')
       setQbitPass('')
       setImgEnabled(updated.image_hosts_enabled ?? [])
@@ -316,7 +315,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         emuUsername: updated.emu_username ?? '',
         ignoreSpecials: updated.series_ignore_specials ?? true, recentLimit: updated.recent_activity_limit ?? 100,
         uploadMaxConcurrent: updated.upload_max_concurrent ?? 1,
-        qbitUrl: updated.qbit_url ?? '', qbitPort: updated.qbit_port ?? '8080', qbitUser: updated.qbit_username ?? '',
+        qbitUrl: updated.qbit_url ?? '', qbitTag: updated.qbit_tag ?? '', qbitUser: updated.qbit_username ?? '',
         imgEnabled: updated.image_hosts_enabled ?? [],
         allowedRoots: (updated.uploadrr_allowed_roots ?? []).join(', '),
       }))
@@ -464,8 +463,8 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           <input className="form-input" value={qbitUrl} onChange={e => setQbitUrl(e.target.value)} placeholder="http://127.0.0.1" />
         </div>
         <div className="form-group" style={{ marginBottom: 10 }}>
-          <label className="form-label">Puerto</label>
-          <input className="form-input" value={qbitPort} onChange={e => setQbitPort(e.target.value)} placeholder="8080" />
+          <label className="form-label">Tag</label>
+          <input className="form-input" value={qbitTag} onChange={e => setQbitTag(e.target.value)} placeholder="Subidas" />
         </div>
         <div className="form-group" style={{ marginBottom: 10 }}>
           <label className="form-label">Usuario</label>

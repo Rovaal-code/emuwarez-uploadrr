@@ -78,7 +78,10 @@ def test_qbit_connection(
     from ..integrations.qbittorrent import qbit_test_connection
 
     _url = url if url is not None else _setting(conn, "qbit.url")
-    _port = port if port is not None else _setting(conn, "qbit.port")
+    # El puerto ya no es un ajuste propio: va dentro de qbit.url, y
+    # qbit_test_connection acepta una url que ya lo trae. El parámetro sigue
+    # existiendo para quien quiera probar una combinación suelta sin guardarla.
+    _port = port
     _user = username if username is not None else _setting(conn, "qbit.username")
     _pass = password if password is not None else _setting(conn, "qbit.password")
 

@@ -34,6 +34,7 @@ from ..legacy import (
     set_emu_config,
     yaml_scalar,
 )
+from ..integrations.qbittorrent import split_base_url
 
 # The TORRENT_CLIENTS entry name we manage ourselves — matches the fork's own
 # example config.yaml convention. Fixed (not read from the user's config) so
@@ -135,7 +136,7 @@ def stage_image_hosts(
 
 
 def stage_qbittorrent_config(
-    lines: list[str], *, url: str, port: str, username: str, password: str,
+    lines: list[str], *, url: str, username: str, password: str, tag: str | None = None,
 ) -> tuple[list[str], str]:
     """Stage TORRENT_CLIENTS.qbit (host/port/user/pass, merged into whatever
     that entry already had — torrent_storage_dir/content_layout/enable_search
@@ -148,18 +149,29 @@ def stage_qbittorrent_config(
     NOT "qbit" — so a job could finish "successfully" while never touching
     qBittorrent's API at all, with no visible error (the skip is a debug-only
     log line in the fork, invisible in captured stdout). Settings' own
-    qbit.url/port/username/password were, until now, only used for the
+    qbit.url/username/password were, until now, only used for the
     pre-flight "¿conecta?" ping — never transmitted to the real subprocess."""
     staged = list(lines)
     existing = get_child_inline_mapping(staged, "TORRENT_CLIENTS", QBIT_CLIENT_KEY)
+    # La app guarda UNA url con el puerto dentro; Uploadrr-EMU quiere host y
+    # puerto en dos claves (src/clients.py: host=qbit_url, port=qbit_port), así
+    # que se separan aquí con la inversa de build_base_url.
+    host, port = split_base_url(url)
     merged = {
         **existing,
         "torrent_client": "qbit",
-        "qbit_url": url,
-        "qbit_port": str(port),
+        "qbit_url": host,
+        "qbit_port": port,
         "qbit_user": username,
         "qbit_pass": password,
     }
+    # La etiqueta que qBittorrent le pone al torrent, para reconocer tus
+    # subidas entre lo demás. Vacía significa "no etiquetes", así que se borra
+    # la que hubiera: si no, quitarla en Ajustes no la quitaría de verdad.
+    if (tag or "").strip():
+        merged["qbit_tag"] = tag.strip()
+    else:
+        merged.pop("qbit_tag", None)
     msg1 = set_child_inline_mapping(staged, "TORRENT_CLIENTS", QBIT_CLIENT_KEY, merged)
     msg2 = set_block_key(staged, "DEFAULT", "default_torrent_client", yaml_scalar(QBIT_CLIENT_KEY))
     return staged, f"{msg1}; {msg2}"

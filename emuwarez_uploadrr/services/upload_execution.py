@@ -701,7 +701,7 @@ def _stage_uploadrr_config(job_id: int, cwd: str) -> Path | None:
             if (key := get_host_key(conn, host_id))
         }
         qbit_url = get_setting_canonical(conn, "qbit.url")
-        qbit_port = get_setting_canonical(conn, "qbit.port")
+        qbit_tag = get_setting_canonical(conn, "qbit.tag")
         qbit_username = get_setting_canonical(conn, "qbit.username")
         qbit_password = get_setting_canonical(conn, "qbit.password")
     finally:
@@ -723,13 +723,13 @@ def _stage_uploadrr_config(job_id: int, cwd: str) -> Path | None:
             # instead of it silently defaulting to its own img_hosts order.
             lines, _msg = stage_image_hosts(lines, img_hosts=img_hosts, api_keys=img_api_keys)
             changed = True
-        if qbit_url and qbit_port and qbit_username and qbit_password:
+        if qbit_url and qbit_username and qbit_password:
             # Without this, Uploadrr-EMU falls back to whatever
             # DEFAULT.default_torrent_client its own config.yaml ships with
             # (confirmed: "watch", not "qbit") — the job finishes
             # "successfully" but silently never touches qBittorrent's API.
             lines, _msg = stage_qbittorrent_config(
-                lines, url=qbit_url, port=qbit_port, username=qbit_username, password=qbit_password,
+                lines, url=qbit_url, username=qbit_username, password=qbit_password, tag=qbit_tag,
             )
             changed = True
         if not changed:

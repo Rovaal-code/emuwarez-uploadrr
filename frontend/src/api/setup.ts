@@ -17,8 +17,10 @@ export async function setupEmu(api_key: string, endpoint_url: string | null = nu
   return api.post<OkResponse>('/setup/emu', { api_key, endpoint_url })
 }
 
-export async function setupQbit(url: string, port = '8080', username = '', password = ''): Promise<OkResponse> {
-  return api.post<OkResponse>('/setup/qbit', { url, port, username, password })
+// El puerto va dentro de la url; `tag` es la etiqueta que qBittorrent pone al
+// torrent para reconocer tus subidas (vacía = no etiquetar).
+export async function setupQbit(url: string, username = '', password = '', tag = ''): Promise<OkResponse> {
+  return api.post<OkResponse>('/setup/qbit', { url, username, password, tag })
 }
 
 export async function setupImghosts(enabled: string[], keys: Record<string, string>): Promise<OkResponse> {

@@ -96,17 +96,23 @@ def setup_tmdb(
 def setup_qbit(
     conn: sqlite3.Connection,
     url: str,
-    port: Optional[str] = "8080",
     username: Optional[str] = "",
     password: Optional[str] = "",
+    tag: Optional[str] = "",
 ) -> None:
     """Store the qBittorrent WebUI config. Skippable — an empty url means the
-    user didn't configure a torrent client in the wizard."""
+    user didn't configure a torrent client in the wizard.
+
+    The port goes INSIDE the url (http://host:8080); it stopped being a field
+    of its own because having it apart only meant typing it twice and made
+    "the port in the url doesn't match the WebUI's" a real, invisible failure.
+    `tag` is the label qBittorrent puts on the torrent so you can tell your
+    uploads apart; empty means don't tag."""
     if not url or not url.strip():
         return
     set_setting(conn, "qbit.url", url.strip())
-    set_setting(conn, "qbit.port", (port or "8080").strip())
     set_setting(conn, "qbit.username", (username or "").strip())
+    set_setting(conn, "qbit.tag", (tag or "").strip())
     if password:
         set_setting(conn, "qbit.password", password)
 

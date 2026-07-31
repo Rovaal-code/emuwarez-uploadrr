@@ -85,7 +85,7 @@ def test_stage_image_hosts_only_stages_known_key_hosts():
 def test_stage_qbittorrent_config_sets_credentials_and_default_client():
     lines: list[str] = []
     staged, message = stage_qbittorrent_config(
-        lines, url="http://192.168.1.10", port="8080", username="admin", password="secret",
+        lines, url="http://192.168.1.10:8080", username="admin", password="secret",
     )
     mapping = get_child_inline_mapping(staged, "TORRENT_CLIENTS", QBIT_CLIENT_KEY)
     assert mapping["qbit_url"] == "http://192.168.1.10"
@@ -103,7 +103,7 @@ def test_stage_qbittorrent_config_overrides_stale_default_torrent_client():
     # with "watch", not "qbit" — this is the actual bug that made a job
     # finish "successfully" while silently never touching qBittorrent's API.
     lines = ["DEFAULT:", "  default_torrent_client: watch"]
-    staged, _ = stage_qbittorrent_config(lines, url="http://x", port="8080", username="u", password="p")
+    staged, _ = stage_qbittorrent_config(lines, url="http://x:8080", username="u", password="p")
     text = "\n".join(staged)
     assert "default_torrent_client: watch" not in text
     assert "default_torrent_client: 'qbit'" in text
@@ -119,7 +119,7 @@ def test_stage_qbittorrent_config_preserves_unmanaged_existing_keys():
         "  qbit: {'torrent_client': 'qbit', 'enable_search': True, 'qbit_url': 'http://old', "
         "'torrent_storage_dir': '/downloads', 'content_layout': 'Original'}",
     ]
-    staged, _ = stage_qbittorrent_config(lines, url="http://new", port="9090", username="u2", password="p2")
+    staged, _ = stage_qbittorrent_config(lines, url="http://new:9090", username="u2", password="p2")
     mapping = get_child_inline_mapping(staged, "TORRENT_CLIENTS", QBIT_CLIENT_KEY)
     assert mapping["qbit_url"] == "http://new"
     assert mapping["enable_search"] is True
@@ -217,3 +217,39 @@ def test_never_touches_real_uploadrr_path(tmp_path):
     source = inspect.getsource(mod)
     assert "uploadrr_dir(" not in source
     assert "Uploadrr/data/config.yaml" not in source
+
+
+def test_stage_qbittorrent_splits_the_url_the_way_the_fork_expects():
+    """La app guarda una sola url con el puerto dentro; el cliente qBittorrent
+    del fork quiere host y puerto en dos claves (src/clients.py:
+    host=qbit_url, port=qbit_port)."""
+    from emuwarez_uploadrr.services.uploadrr_config_staging import stage_qbittorrent_config
+    from emuwarez_uploadrr.legacy import get_child_inline_mapping
+    lines = ["TORRENT_CLIENTS:", "  qbit: {'torrent_client': 'qbit'}"]
+    staged, _ = stage_qbittorrent_config(
+        lines, url="http://192.168.0.136:8082", username="u", password="p")
+    m = get_child_inline_mapping(staged, "TORRENT_CLIENTS", "qbit")
+    assert m["qbit_url"] == "http://192.168.0.136"
+    assert m["qbit_port"] == "8082"
+
+
+def test_stage_qbittorrent_writes_the_tag_the_fork_reads():
+    """qbit_tag es la clave que el fork aplica al torrent (clients.py:634)."""
+    from emuwarez_uploadrr.services.uploadrr_config_staging import stage_qbittorrent_config
+    from emuwarez_uploadrr.legacy import get_child_inline_mapping
+    lines = ["TORRENT_CLIENTS:", "  qbit: {'torrent_client': 'qbit'}"]
+    staged, _ = stage_qbittorrent_config(
+        lines, url="http://h:1", username="u", password="p", tag="Subidas")
+    assert get_child_inline_mapping(staged, "TORRENT_CLIENTS", "qbit")["qbit_tag"] == "Subidas"
+
+
+def test_clearing_the_tag_removes_it_from_the_fork_config():
+    """Vaciar el campo en Ajustes tiene que quitar la etiqueta de verdad, no
+    dejar la anterior puesta para siempre."""
+    from emuwarez_uploadrr.services.uploadrr_config_staging import stage_qbittorrent_config
+    from emuwarez_uploadrr.legacy import get_child_inline_mapping
+    lines = ["TORRENT_CLIENTS:", "  qbit: {'torrent_client': 'qbit', 'qbit_tag': 'Vieja'}"]
+    for tag in ("", None, "   "):
+        staged, _ = stage_qbittorrent_config(
+            lines, url="http://h:1", username="u", password="p", tag=tag)
+        assert "qbit_tag" not in get_child_inline_mapping(staged, "TORRENT_CLIENTS", "qbit")

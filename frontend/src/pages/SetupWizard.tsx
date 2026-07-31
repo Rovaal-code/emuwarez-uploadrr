@@ -203,7 +203,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
 
   // qBittorrent step state
   const [qbitUrl, setQbitUrl] = useState('')
-  const [qbitPort, setQbitPort] = useState('8080')
+  const [qbitTag, setQbitTag] = useState('')
   const [qbitUser, setQbitUser] = useState('')
   const [qbitPass, setQbitPass] = useState('')
   const [qbitTestResult, setQbitTestResult] = useState<IntegrationTestResult | null>(null)
@@ -213,7 +213,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
     setQbitTesting(true); setQbitTestResult(null)
     try {
       setQbitTestResult(await testQbitConnection({
-        url: qbitUrl.trim() || undefined, port: qbitPort.trim() || undefined,
+        url: qbitUrl.trim() || undefined,
         username: qbitUser.trim() || undefined, password: qbitPass.trim() || undefined,
       }))
     } catch {
@@ -439,7 +439,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
       if (!isValidHttpUrl(qbitUrl)) {
         throw new Error('La URL de qBittorrent debe empezar por http:// o https:// e incluir un host válido')
       }
-      await setupQbit(qbitUrl.trim(), qbitPort.trim() || '8080', qbitUser.trim(), qbitPass)
+      await setupQbit(qbitUrl.trim(), qbitUser.trim(), qbitPass, qbitTag.trim())
     }
     setStep('providers')
   })
@@ -821,11 +821,11 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               <div className="wizard-fields">
                 <div className="form-group">
                   <label className="form-label">URL del WebUI</label>
-                  <input className="form-input" value={qbitUrl} onChange={e => setQbitUrl(e.target.value)} placeholder="http://127.0.0.1" />
+                  <input className="form-input" value={qbitUrl} onChange={e => setQbitUrl(e.target.value)} placeholder="http://127.0.0.1:8080" />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Puerto</label>
-                  <input className="form-input" value={qbitPort} onChange={e => setQbitPort(e.target.value)} placeholder="8080" />
+                  <label className="form-label">Tag</label>
+                  <input className="form-input" value={qbitTag} onChange={e => setQbitTag(e.target.value)} placeholder="Subidas" />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Usuario</label>

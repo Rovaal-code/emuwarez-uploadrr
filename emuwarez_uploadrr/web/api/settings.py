@@ -54,7 +54,7 @@ class SettingsResponse(BaseModel):
     emu_api_key_masked: Optional[str] = None
     # qBittorrent (torrent client used by Uploadrr)
     qbit_url: Optional[str] = None
-    qbit_port: Optional[str] = None
+    qbit_tag: Optional[str] = None
     qbit_username: Optional[str] = None
     qbit_password_configured: bool = False
     qbit_configured: bool = False
@@ -103,7 +103,7 @@ class SettingsUpdateRequest(BaseModel):
     emu_api_key: Optional[str] = None
     # qBittorrent
     qbit_url: Optional[str] = None
-    qbit_port: Optional[str] = None
+    qbit_tag: Optional[str] = None
     qbit_username: Optional[str] = None
     qbit_password: Optional[str] = None
     # Image hosts
@@ -265,7 +265,7 @@ def _build_response(conn) -> SettingsResponse:
         emu_api_key_masked=emu_masked,
         emu_username=get_setting(conn, "emu.username"),
         qbit_url=qbit_url,
-        qbit_port=get_setting_canonical(conn, "qbit.port"),
+        qbit_tag=get_setting_canonical(conn, "qbit.tag"),
         qbit_username=get_setting_canonical(conn, "qbit.username"),
         qbit_password_configured=qbit_pass_configured,
         qbit_configured=qbit_configured,
@@ -390,8 +390,8 @@ def update_settings(
 
         if body.qbit_url is not None:
             set_setting(conn, "qbit.url", body.qbit_url.strip())
-        if body.qbit_port is not None:
-            set_setting(conn, "qbit.port", body.qbit_port.strip())
+        if body.qbit_tag is not None:
+            set_setting(conn, "qbit.tag", body.qbit_tag.strip())
         if body.qbit_username is not None:
             set_setting(conn, "qbit.username", body.qbit_username.strip())
         # Blank password left untouched (keeps the stored one), same as api keys.

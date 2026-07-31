@@ -622,7 +622,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
               {(() => {
                 const rows: React.ReactNode[] = []
                 const qbitUrl = connSettings?.qbit_url
-                  ? `${connSettings.qbit_url}${connSettings.qbit_port ? `:${connSettings.qbit_port}` : ''}`
+                  ? connSettings.qbit_url
                   : null
                 // Radarr/Sonarr instances (each configured one, with its icon).
                 for (const inst of connInstances) {

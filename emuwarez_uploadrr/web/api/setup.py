@@ -110,7 +110,7 @@ def setup_qbit(
 ) -> OkResponse:
     from ..services.setup_service import setup_qbit as _setup_qbit
     with _get_conn() as conn:
-        _setup_qbit(conn, body.url, body.port, body.username, body.password)
+        _setup_qbit(conn, body.url, body.username, body.password, body.tag)
         conn.commit()
     return OkResponse(message="Configuración de qBittorrent guardada correctamente")
 

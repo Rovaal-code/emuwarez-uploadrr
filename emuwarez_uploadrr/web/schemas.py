@@ -199,10 +199,12 @@ class SetupTmdbRequest(BaseModel):
 
 
 class SetupQbitRequest(BaseModel):
+    # El puerto va dentro de la url (http://host:8080), ya no es campo aparte.
     url: str
-    port: Optional[str] = "8080"
     username: Optional[str] = ""
     password: Optional[str] = ""
+    # Etiqueta que qBittorrent pone al torrent para distinguir tus subidas.
+    tag: Optional[str] = ""
 
     @field_validator("url")
     @classmethod

@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 34
+SCHEMA_VERSION = 35
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -1049,6 +1049,36 @@ def _migrate_request_items_is_example(conn: sqlite3.Connection) -> None:
         pass
 
 
+def _migrate_qbit_port_into_url(conn: sqlite3.Connection) -> None:
+    """El puerto de qBittorrent deja de tener campo propio y pasa a ir dentro
+    de la URL.
+
+    Tenerlo aparte solo servía para escribirlo dos veces y para que "el puerto
+    de la URL no coincide con el puerto en el que escucha su WebUI" fuera un
+    error de verdad, difícil de ver desde la interfaz.
+
+    Aquí se dobla el valor ya guardado dentro de la URL, para que a quien lo
+    tuviera configurado no se le caiga la conexión en silencio en cuanto el
+    campo desaparezca. Se usa el MISMO build_base_url que usa la conexión
+    real, así que la URL migrada es exactamente la que se estaba llamando
+    antes, no una reconstrucción parecida.
+    """
+    row = conn.execute("SELECT value FROM settings WHERE key = 'qbit.port'").fetchone()
+    port = ((row["value"] if row else None) or "").strip()
+    if port:
+        url_row = conn.execute("SELECT value FROM settings WHERE key = 'qbit.url'").fetchone()
+        url = ((url_row["value"] if url_row else None) or "").strip()
+        if url:
+            from .integrations.qbittorrent import build_base_url
+            conn.execute(
+                "UPDATE settings SET value = ? WHERE key = 'qbit.url'",
+                (build_base_url(url, port),),
+            )
+    # Fuera en cualquier caso: una sola fuente de verdad, o el día de mañana
+    # alguien lee el puerto viejo y no cuadra con el de la URL.
+    conn.execute("DELETE FROM settings WHERE key = 'qbit.port'")
+
+
 def _migrate_library_items_spanish_audio(conn: sqlite3.Connection) -> None:
     """Per-item Castilian flags. `has_spanish_audio` is the Español column in
     Biblioteca; `has_spanish_subs` is the same question for subtitle tracks;
@@ -1462,6 +1492,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_library_items_missing_since(conn)
         _migrate_library_items_spanish_audio(conn)
         _migrate_request_items_is_example(conn)
+        _migrate_qbit_port_into_url(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

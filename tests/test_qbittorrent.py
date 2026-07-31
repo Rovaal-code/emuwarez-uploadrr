@@ -132,13 +132,15 @@ def test_endpoint_qbit_bad_credentials(client, auth_headers, monkeypatch):
 
 
 def test_settings_roundtrip_qbit(client, auth_headers):
+    """El puerto ya no es un ajuste: va dentro de la url. En su hueco está el
+    tag que qBittorrent le pone al torrent."""
     client.put("/api/settings", json={
-        "qbit_url": "http://192.168.0.5", "qbit_port": "9090",
+        "qbit_url": "http://192.168.0.5:9090", "qbit_tag": "Subidas",
         "qbit_username": "me", "qbit_password": "secret",
     }, headers=auth_headers)
     s = client.get("/api/settings", headers=auth_headers).json()
-    assert s["qbit_url"] == "http://192.168.0.5"
-    assert s["qbit_port"] == "9090"
+    assert s["qbit_url"] == "http://192.168.0.5:9090"
+    assert s["qbit_tag"] == "Subidas"
     assert s["qbit_username"] == "me"
     assert s["qbit_configured"] is True
     assert s["qbit_password_configured"] is True
@@ -196,3 +198,67 @@ def test_service_version_label_adds_v_when_missing(isolated_db, monkeypatch):
     set_setting(conn, "qbit.url", "http://qbit")
     r = test_qbit_connection(conn=conn)
     assert r["message"] == "Conexión correcta (v4.6.0)"
+
+
+# ---------------------------------------------------------------------------
+# El puerto deja de ser un campo y pasa a ir dentro de la URL
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("url,host,port", [
+    ("http://192.168.0.136:8082", "http://192.168.0.136", "8082"),
+    ("http://192.168.0.136", "http://192.168.0.136", "80"),      # por defecto del esquema
+    ("https://qbit.midominio.com", "https://qbit.midominio.com", "443"),
+    ("https://qbit.midominio.com:9443", "https://qbit.midominio.com", "9443"),
+    ("192.168.0.5:8080", "http://192.168.0.5", "8080"),          # sin esquema
+    ("http://[::1]:8080", "http://[::1]", "8080"),               # IPv6
+    ("http://host:8080/", "http://host", "8080"),                # barra final
+    ("", "", ""),
+])
+def test_split_base_url(url, host, port):
+    from emuwarez_uploadrr.integrations.qbittorrent import split_base_url
+    assert split_base_url(url) == (host, port)
+
+
+def test_split_and_build_are_inverses():
+    """Uploadrr-EMU quiere host y puerto separados, la app guarda una sola url:
+    partir y volver a juntar no puede cambiar a dónde se llama."""
+    from emuwarez_uploadrr.integrations.qbittorrent import build_base_url, split_base_url
+    for url in ("http://192.168.0.136:8082", "https://qbit.midominio.com:9443", "http://[::1]:8080"):
+        host, port = split_base_url(url)
+        assert build_base_url(host, port) == url
+
+
+def test_migration_folds_the_stored_port_into_the_url(isolated_db):
+    """Al quitar el campo Puerto, a quien ya lo tuviera configurado se le
+    quedaría la url sin puerto y qBittorrent dejaría de conectar sin decir
+    nada. La migración lo mete dentro."""
+    import os
+    from emuwarez_uploadrr.database import connect, init_db, _migrate_qbit_port_into_url
+    os.environ["CONFIG_DIR"] = str(isolated_db)
+    conn = connect()
+    init_db(conn)
+    conn.execute("INSERT OR REPLACE INTO settings(key, value) VALUES ('qbit.url', 'http://192.168.0.136')")
+    conn.execute("INSERT OR REPLACE INTO settings(key, value) VALUES ('qbit.port', '8082')")
+    conn.commit()
+
+    _migrate_qbit_port_into_url(conn)
+    conn.commit()
+
+    url = conn.execute("SELECT value FROM settings WHERE key = 'qbit.url'").fetchone()["value"]
+    assert url == "http://192.168.0.136:8082"
+    # Y el ajuste viejo desaparece: una sola fuente de verdad.
+    assert conn.execute("SELECT value FROM settings WHERE key = 'qbit.port'").fetchone() is None
+
+
+def test_migration_leaves_a_url_that_already_had_its_port_alone(isolated_db):
+    import os
+    from emuwarez_uploadrr.database import connect, init_db, _migrate_qbit_port_into_url
+    os.environ["CONFIG_DIR"] = str(isolated_db)
+    conn = connect()
+    init_db(conn)
+    conn.execute("INSERT OR REPLACE INTO settings(key, value) VALUES ('qbit.url', 'http://host:9999')")
+    conn.execute("INSERT OR REPLACE INTO settings(key, value) VALUES ('qbit.port', '8080')")
+    conn.commit()
+    _migrate_qbit_port_into_url(conn)
+    conn.commit()
+    assert conn.execute("SELECT value FROM settings WHERE key = 'qbit.url'").fetchone()["value"] == "http://host:9999"

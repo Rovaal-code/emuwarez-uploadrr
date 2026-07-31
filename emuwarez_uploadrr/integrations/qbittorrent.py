@@ -36,6 +36,34 @@ def build_base_url(url: str, port: str | int | None) -> str:
     return url
 
 
+def split_base_url(url: str) -> tuple[str, str]:
+    """Inverse of build_base_url: (host_url_without_port, port).
+
+    Lives next to build_base_url on purpose. The app stores ONE URL with the
+    port inside it, but Uploadrr-EMU's qBittorrent client wants host and port
+    as two separate config keys, so the split has to happen somewhere — and
+    the only sane somewhere is beside the function that joins them, or the two
+    drift apart the day one of them learns about IPv6 or a trailing slash.
+
+    A URL with no explicit port falls back to the scheme's default (443 for
+    https, 80 otherwise), same as a browser would, rather than handing the
+    client an empty port.
+    """
+    url = (url or "").strip().rstrip("/")
+    if not url:
+        return "", ""
+    if "://" not in url:
+        url = "http://" + url
+    parsed = urllib.parse.urlparse(url)
+    host = parsed.hostname or ""
+    if ":" in host:                      # IPv6 literal, needs its brackets back
+        host = f"[{host}]"
+    port = parsed.port
+    if port is None:
+        port = 443 if parsed.scheme == "https" else 80
+    return f"{parsed.scheme}://{host}", str(port)
+
+
 def qbit_test_connection(url: str, port: str | int | None, username: str, password: str,
                          *, timeout: int = 10) -> dict[str, Any]:
     """Log into the qBittorrent WebUI to validate host + credentials.

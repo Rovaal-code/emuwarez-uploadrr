@@ -447,13 +447,13 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
                     </tr>
                   </tbody>
                 </table>
-                {/* Every spec in the row above can match and the request STILL
-                    can't be filled, because the file isn't on disk. Without
-                    saying so, the table looks like a contradiction. */}
+                {/* The library row's specs come from a file that isn't on
+                    disk, so there is nothing real to compare against. Without
+                    saying so, the table reads as a contradiction. */}
                 {m.local_status === 'Faltante' && (
                   <p style={{ fontSize: 12.5, margin: '10px 0 0', color: '#f59e0b' }}>
                     Este contenido está con el estado de Faltante en tu biblioteca local, así que
-                    no se puede cubrir la petición aunque las características coincidan.
+                    no es posible hacer la comparación.
                   </p>
                 )}
               </div>

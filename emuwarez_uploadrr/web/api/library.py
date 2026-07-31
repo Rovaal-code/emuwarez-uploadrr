@@ -821,7 +821,11 @@ def library_detail(
         row = get_library_item(conn, item_id)
         if not row:
             raise HTTPException(status_code=404, detail=f"Item {item_id} no encontrado")
-        return _to_lib_response(row, conn)
+        from emuwarez_uploadrr.services.library import rollup_all_values
+        response = _to_lib_response(row, conn)
+        # Solo en la ficha: la lista no lo necesita y son una consulta por fila.
+        response.rollup_all = rollup_all_values(conn, row)
+        return response
 
 
 @router.get("/library/{item_id}/mediainfo")

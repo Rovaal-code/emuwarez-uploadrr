@@ -147,9 +147,14 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
               </FieldRow>
             </Card>
 
+            {/* En una serie o temporada, el valor de la fila solo está
+                relleno cuando TODOS los capítulos coinciden: es la señal que
+                usa la regla del pack. Para enseñar es pobre (una temporada
+                con x264 y x265 salía con un guion), así que la ficha usa la
+                suma de lo que hay debajo: "x264, x265". */}
             <Card title="Información técnica" icon={<TechInfoCardIcon />}>
               <FieldRow label="Resolución" help={rollupHelp}>
-                <ValueChip><ValueIcon><ResolutionValueIcon /></ValueIcon><span className="txt">{item.resolution || '–'}</span></ValueChip>
+                <ValueChip><ValueIcon><ResolutionValueIcon /></ValueIcon><span className="txt">{item.rollup_all?.resolution || item.resolution || '–'}</span></ValueChip>
               </FieldRow>
               <FieldRow label="Proveedor" help={rollupHelp}>
                 {item.provider
@@ -157,26 +162,26 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
                   : <span className="muted">–</span>}
               </FieldRow>
               <FieldRow label="Source" help={rollupHelp}>
-                <ValueChip><ValueIcon><SourceValueIcon /></ValueIcon><span className="txt">{item.source || '–'}</span></ValueChip>
+                <ValueChip><ValueIcon><SourceValueIcon /></ValueIcon><span className="txt">{item.rollup_all?.source || item.source || '–'}</span></ValueChip>
               </FieldRow>
               <FieldRow label="Códec de vídeo" help={rollupHelp}>
-                <ValueChip><ValueIcon><VideoCodecValueIcon /></ValueIcon><span className="txt">{item.video_codec || '–'}</span></ValueChip>
+                <ValueChip><ValueIcon><VideoCodecValueIcon /></ValueIcon><span className="txt">{item.rollup_all?.video_codec || item.video_codec || '–'}</span></ValueChip>
               </FieldRow>
               <FieldRow label="Códec de audio" help={rollupHelp}>
-                <ValueChip><ValueIcon><AudioCodecValueIcon /></ValueIcon><span className="txt">{item.audio_codec || '–'}</span></ValueChip>
+                <ValueChip><ValueIcon><AudioCodecValueIcon /></ValueIcon><span className="txt">{item.rollup_all?.audio_codec || item.audio_codec || '–'}</span></ValueChip>
               </FieldRow>
               {/* These two are the only fields that can carry a dozen values
                   (a multi-language release), so they're the ones the card's
                   width truncates — the tooltip is where the full list stays
                   reachable. */}
               <FieldRow label="Idiomas de audio" help={rollupHelp}>
-                <ValueChip title={item.audio_languages || undefined}>
-                  <ValueIcon><LanguageValueIcon /></ValueIcon><span className="txt">{item.audio_languages || '–'}</span>
+                <ValueChip title={item.rollup_all?.audio_languages || item.audio_languages || undefined}>
+                  <ValueIcon><LanguageValueIcon /></ValueIcon><span className="txt">{item.rollup_all?.audio_languages || item.audio_languages || '–'}</span>
                 </ValueChip>
               </FieldRow>
               <FieldRow label="Subtítulos" help={rollupHelp}>
-                <ValueChip title={item.subtitle_languages || undefined}>
-                  <ValueIcon><SubtitleValueIcon /></ValueIcon><span className="txt">{item.subtitle_languages || '–'}</span>
+                <ValueChip title={item.rollup_all?.subtitle_languages || item.subtitle_languages || undefined}>
+                  <ValueIcon><SubtitleValueIcon /></ValueIcon><span className="txt">{item.rollup_all?.subtitle_languages || item.subtitle_languages || '–'}</span>
                 </ValueChip>
               </FieldRow>
               <FieldRow label="Tamaño">

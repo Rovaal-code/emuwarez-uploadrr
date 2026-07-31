@@ -531,6 +531,11 @@ class DashboardRecommendationsResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 class LibraryItemResponse(BaseModel):
+    # Todos los valores técnicos presentes bajo una serie o temporada
+    # ("x264, x265"), solo para enseñar en la ficha. Las columnas de siempre
+    # siguen siendo la señal de acuerdo que usa la regla del pack, así que no
+    # se tocan. None para películas y capítulos.
+    rollup_all: Optional[dict] = None
     id: int
     item_type: str
     title: str

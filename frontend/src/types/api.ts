@@ -93,6 +93,11 @@ export interface InstanceTestResponse {
 }
 
 export interface LibraryItemResponse {
+  // Todos los valores técnicos presentes bajo una serie o temporada
+  // ("x264, x265"), solo para enseñar. Los campos sueltos siguen guardando el
+  // valor único (o null cuando los capítulos no coinciden), que es lo que usa
+  // la regla del pack. Solo llega en la ficha, no en la lista.
+  rollup_all?: Record<string, string> | null
   id: number
   item_type: string
   title: string

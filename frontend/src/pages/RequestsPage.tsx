@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   getRequests,
   getRequestDetail,
+  getExamplesCount,
+  generateExamples,
+  deleteExamples,
 } from '../api/requests'
 import { getCandidates } from '../api/requestReadiness'
 import type {
@@ -13,7 +16,7 @@ import { ErrorState } from '../components/ErrorState'
 import { EmptyState } from '../components/EmptyState'
 import { SyncInfo } from '../components/SyncInfo'
 import { StatusBadge } from '../components/StatusBadge'
-import { HoverTitle, useTooltip } from '../components/Tooltip'
+import { HoverTitle, Tooltip, useTooltip } from '../components/Tooltip'
 import { useSync } from '../context/SyncContext'
 import { UploadWizardModal } from '../components/UploadWizardModal'
 import { getLibraryItem } from '../api/library'
@@ -511,6 +514,48 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   // Requests sync is global (shared with the Dashboard's "Peticiones" button
   // and the progress banner), so it can't be launched twice across tabs.
   const { requestsSyncing, requestsStatus, startRequestsSync, lastCompletedAt, isAnySyncing } = useSync()
+
+  // --- Demo requests (TEMPORARY) --------------------------------------------
+  // Only exists until eMuwarez hands over the real requests endpoint; the whole
+  // block goes away with it. `exampleCount` comes from the SERVER, not from
+  // local state: deriving "already generated" from the frontend would let a
+  // page reload re-enable Generar and stack another round of them.
+  const [examplesOpen, setExamplesOpen] = useState(false)
+  const [exampleCount, setExampleCount] = useState<number | null>(null)
+  const [examplesBusy, setExamplesBusy] = useState(false)
+  const [examplesMsg, setExamplesMsg] = useState<string | null>(null)
+
+  const refreshExampleCount = useCallback(() => {
+    getExamplesCount().then(r => setExampleCount(r.count)).catch(() => setExampleCount(null))
+  }, [])
+  useEffect(() => { refreshExampleCount() }, [refreshExampleCount])
+
+  const runExamples = async (action: 'generate' | 'delete') => {
+    setExamplesBusy(true); setExamplesMsg(null)
+    try {
+      if (action === 'generate') {
+        const r = await generateExamples()
+        setExamplesMsg(
+          `${r.created} peticiones de ejemplo generadas.`
+          + (r.shortfalls.length ? ` Tu biblioteca no daba para todo: ${r.shortfalls.join('; ')}.` : ''),
+        )
+      } else {
+        const r = await deleteExamples()
+        setExamplesMsg(`${r.deleted} peticiones de ejemplo borradas.`)
+      }
+      refreshExampleCount()
+      loadItems(0)
+      loadFacets()
+      // Recomendaciones se calcula en cada lectura, así que basta con avisar a
+      // quien la muestre de que los datos han cambiado.
+      window.dispatchEvent(new CustomEvent('emuwarez:data-changed'))
+    } catch (e: unknown) {
+      setExamplesMsg(e instanceof Error ? e.message : 'No se pudo completar la acción')
+    } finally {
+      setExamplesBusy(false)
+      setExamplesOpen(false)
+    }
+  }
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [detail, setDetail] = useState<RequestDetailResponse | null>(null)
   const [readiness, setReadiness] = useState<RequestReadinessResponse | null>(null)
@@ -721,8 +766,54 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
               label="Sincronizar peticiones"
               title="Descarga de eMuwarez las peticiones activas y las cruza con tu biblioteca local para ver cuáles puedes cubrir. Limitado a una vez por hora."
             />
+            {/* TEMPORARY: goes away with the real requests endpoint. */}
+            <div style={{ position: 'relative' }}>
+              <Tooltip content="Genera peticiones de prueba a partir de tu propia biblioteca, para ver Peticiones y Recomendaciones con contenido mientras eMuwarez no da el endpoint real.">
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setExamplesOpen(v => !v)}
+                  disabled={examplesBusy}
+                  type="button"
+                >
+                  Ejemplos{exampleCount ? ` (${exampleCount})` : ''}
+                </button>
+              </Tooltip>
+              {examplesOpen && (
+                <div
+                  className="detail-card"
+                  style={{
+                    position: 'absolute', right: 0, top: '100%', marginTop: 6, zIndex: 30,
+                    padding: 8, borderRadius: 8, display: 'flex', flexDirection: 'column',
+                    gap: 6, minWidth: 150,
+                  }}
+                >
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => runExamples('generate')}
+                    disabled={examplesBusy || !!exampleCount}
+                    type="button"
+                  >
+                    Generar
+                  </button>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => runExamples('delete')}
+                    disabled={examplesBusy || !exampleCount}
+                    type="button"
+                  >
+                    Borrar
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
+
+        {examplesMsg && (
+          <div className="detail-card" style={{ padding: '10px 14px', borderRadius: 8, marginBottom: 12, fontSize: 12.5 }}>
+            {examplesMsg}
+          </div>
+        )}
 
         <div className="filters-bar">
           <input

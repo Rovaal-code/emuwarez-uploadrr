@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 33
+SCHEMA_VERSION = 34
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -1032,6 +1032,23 @@ def _migrate_emu_catalog(conn: sqlite3.Connection) -> None:
             pass
 
 
+def _migrate_request_items_is_example(conn: sqlite3.Connection) -> None:
+    """Marks the demo requests generated from the user's own library while
+    eMuwarez hasn't handed over the real requests endpoint.
+
+    The flag exists FOR THE REMOVAL more than for the feature: sync_requests
+    only upserts and never deletes rows the tracker doesn't send, so the day
+    the real endpoint ships, any leftover examples would sit in the table
+    alongside real requests with no way to tell them apart. The version that
+    brings that endpoint deletes them from its own migration
+    (DELETE FROM request_items WHERE is_example = 1) instead of trusting that
+    somebody remembered to press Borrar first."""
+    try:
+        conn.execute("ALTER TABLE request_items ADD COLUMN is_example INTEGER NOT NULL DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+
+
 def _migrate_library_items_spanish_audio(conn: sqlite3.Connection) -> None:
     """Per-item Castilian flags. `has_spanish_audio` is the Español column in
     Biblioteca; `has_spanish_subs` is the same question for subtitle tracks;
@@ -1444,6 +1461,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_library_items_backdrop_url(conn)
         _migrate_library_items_missing_since(conn)
         _migrate_library_items_spanish_audio(conn)
+        _migrate_request_items_is_example(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

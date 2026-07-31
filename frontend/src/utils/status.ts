@@ -32,10 +32,16 @@ const REQUEST_STATUS_MAP: Record<string, StatusInfo> = {
   'Compatible':     { label: 'Compatible',     color: '#22c55e', cssClass: 'req-compatible' },
   'Parcial':        { label: 'Parcial',        color: '#f59e0b', cssClass: 'req-partial' },
   'No compatible':  { label: 'No compatible',  color: '#ef4444', cssClass: 'req-not-compatible' },
-  // 'No disponible' never renders as a badge (see StatusBadge's own
-  // dash-fallback for type 'request') — kept here only so any other code
-  // that looks up its label/color still gets a sane value.
-  'No disponible':  { label: 'No disponible',  color: '#6b7280', cssClass: 'req-unavailable' },
+  // Shown as "Faltante", in red: there IS an entry in your library for this
+  // request, but no file on disk — the very same state Biblioteca calls
+  // Faltante. It used to render as a plain dash, which buried an actionable
+  // verdict among the genuinely empty cells.
+  'No disponible':  { label: 'Faltante',       color: '#ef4444', cssClass: 'req-unavailable' },
+  // No library entry at all, not even one without a file. Neutral white
+  // rather than red: nothing is wrong with your copy, you simply don't have
+  // one. The backend already speaks this value in its status filter, so it's
+  // filterable like the rest instead of being an unfilterable dash.
+  'Sin coincidencia': { label: 'No importada', color: '#e5e7eb', cssClass: 'req-not-imported' },
   'Reclamado':      { label: 'Reclamado',      color: '#a855f7', cssClass: 'req-claimed' },
   'Pendiente':      { label: 'Pendiente',      color: '#eab308', cssClass: 'req-pending' },
   'Llena':          { label: 'Llena',          color: '#9ca3af', cssClass: 'req-filled' },

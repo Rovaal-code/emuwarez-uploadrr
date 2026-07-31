@@ -635,8 +635,15 @@ def list_request_items(
                 CASE
                     WHEN LOWER(COALESCE(ri.emu_status,'')) LIKE '%reclam%' OR LOWER(COALESCE(ri.emu_status,'')) LIKE '%claim%' THEN 'Reclamado'
                     WHEN LOWER(COALESCE(ri.emu_status,'')) LIKE '%pend%' THEN 'Pendiente'
+                    -- "Sin llenar" = petición abierta: no es un override, y
+                    -- como aquí ya no hay cruce con la biblioteca (rm.status
+                    -- es NULL), cae en el mismo 'Sin coincidencia' que
+                    -- devuelve _safe_request_dict. Antes daba NULL, así que
+                    -- estas filas se pintaban con un estado por el que luego
+                    -- no se las podía filtrar. Va antes que '%llena%' porque
+                    -- "llenar" contiene "llena".
                     WHEN LOWER(COALESCE(ri.emu_status,'')) LIKE '%sin llen%' OR LOWER(COALESCE(ri.emu_status,'')) LIKE '%unfilled%'
-                         OR LOWER(COALESCE(ri.emu_status,'')) LIKE '%open%' OR LOWER(COALESCE(ri.emu_status,'')) LIKE '%abiert%' THEN NULL
+                         OR LOWER(COALESCE(ri.emu_status,'')) LIKE '%open%' OR LOWER(COALESCE(ri.emu_status,'')) LIKE '%abiert%' THEN 'Sin coincidencia'
                     WHEN LOWER(COALESCE(ri.emu_status,'')) LIKE '%lleno%' OR LOWER(COALESCE(ri.emu_status,'')) LIKE '%llena%'
                          OR LOWER(COALESCE(ri.emu_status,'')) LIKE '%filled%' OR ri.emu_status = '1' THEN 'Llena'
                     ELSE 'Sin coincidencia'
@@ -952,11 +959,15 @@ def _safe_request_dict(d: dict) -> dict:
     Pendiente/Llena describe the request's own state on the tracker, true
     regardless of whether your library holds anything for it, so a request
     with zero candidates would otherwise silently read as "Sin coincidencia"
-    even when eMuwarez itself already says it's Reclamado."""
+    even when eMuwarez itself already says it's Reclamado.
+
+    Failing both, it settles on "Sin coincidencia" (shown as "No importada")
+    rather than staying null. The status filter above already resolves this
+    same case to that exact string, so leaving it null here made a row the
+    UI could paint but not filter: it showed a bare dash and had no entry in
+    the Compatibilidad dropdown."""
     if not d.get("author_visible"):
         d.pop("author", None)
     if not d.get("compatibility_status"):
-        override = emu_override_status(d.get("emu_status"))
-        if override:
-            d["compatibility_status"] = override
+        d["compatibility_status"] = emu_override_status(d.get("emu_status")) or "Sin coincidencia"
     return d

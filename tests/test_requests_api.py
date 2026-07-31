@@ -117,6 +117,47 @@ def test_requests_list_shows_reclamado_with_no_library_match(client, auth_header
     assert "Unmatched Reclamado Movie" in titles
 
 
+def test_requests_list_no_library_match_is_filterable(client, auth_headers, isolated_db):
+    """A request with nothing matching in your library reads as
+    'Sin coincidencia' (shown as "No importada") — and the status filter must
+    return exactly those same rows.
+
+    This used to disagree with itself: the list said 'Sin coincidencia' while
+    the filter's SQL resolved an open request ("Sin llenar", the most common
+    state) to NULL, so the row was visible under a status you couldn't filter
+    by. 'Sin llenar' is the regression case; the others guard the branches
+    around it.
+    """
+    from emuwarez_uploadrr.database import connect, init_db
+    from emuwarez_uploadrr.services.requests import upsert_request
+    from emuwarez_uploadrr.models import RequestItem
+    import os
+    os.environ["CONFIG_DIR"] = str(isolated_db)
+    conn = connect()
+    init_db(conn)
+    titles = {
+        "Open Sin Llenar": "Sin llenar",
+        "Open Unfilled": "unfilled",
+        "No Emu Status": None,
+        "Empty Emu Status": "",
+    }
+    for title, emu_status in titles.items():
+        upsert_request(conn, RequestItem(
+            id=None, emu_id=f"nomatch-{title.lower().replace(' ', '-')}",
+            title=title, category="Movies", emu_status=emu_status,
+        ))
+    conn.close()
+
+    listed = client.get("/api/requests", headers=auth_headers).json()["items"]
+    shown = {i["title"]: i["compatibility_status"] for i in listed if i["title"] in titles}
+    assert shown == {t: "Sin coincidencia" for t in titles}, shown
+
+    filtered = client.get("/api/requests?status=Sin coincidencia", headers=auth_headers)
+    assert filtered.status_code == 200
+    found = {i["title"] for i in filtered.json()["items"]}
+    assert set(titles) <= found, f"visibles pero no filtrables: {set(titles) - found}"
+
+
 def test_requests_list_search(client, auth_headers, isolated_db):
     from emuwarez_uploadrr.database import connect, init_db
     from emuwarez_uploadrr.services.requests import upsert_request

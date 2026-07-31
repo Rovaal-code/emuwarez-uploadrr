@@ -16,6 +16,7 @@ import { ErrorState } from '../components/ErrorState'
 import { EmptyState } from '../components/EmptyState'
 import { SyncInfo } from '../components/SyncInfo'
 import { StatusBadge } from '../components/StatusBadge'
+import { getRequestStatusInfo } from '../utils/status'
 import { HoverTitle, Tooltip, useTooltip } from '../components/Tooltip'
 import { useSync } from '../context/SyncContext'
 import { UploadWizardModal } from '../components/UploadWizardModal'
@@ -186,8 +187,10 @@ function cellMark(v: boolean | null) {
 const baseName = (path: string | null) => (path ? path.split('/').pop() || null : null)
 
 function CompatibilityBadge({ status }: { status: string | null }) {
-  if (!status) return <span style={{ color: 'var(--text-muted)' }}>—</span>
-  return <StatusBadge status={status} type="request" />
+  // No status at all means nothing in your library matches — the backend now
+  // says so explicitly ("Sin coincidencia" → "No importada"), and this only
+  // covers rows that predate that.
+  return <StatusBadge status={status || 'Sin coincidencia'} type="request" />
 }
 
 function ReadinessBadge({ status }: { status: string | null | undefined }) {
@@ -647,7 +650,9 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
       resolutions: uniq(list.map(i => i.requested_resolution)),
       sources: uniq(list.map(i => i.requested_source)),
       authors: uniq(list.map(i => i.author)),
-      statuses: uniq(list.map(i => i.compatibility_status)),
+      // Null reads as "no library match", which the filter knows by name —
+      // don't let uniq() drop it or that state stays unfilterable.
+      statuses: uniq(list.map(i => i.compatibility_status || 'Sin coincidencia')),
     }
   }
 
@@ -927,7 +932,9 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                       { value: '', label: 'Todos' }, ...facets.categories.map(c => ({ value: c, label: tipoOf(c).label })),
                     ]} /></th>
                     <th><HeaderFilter label="Compatibilidad" value={statusFilter} onChange={setStatusFilter} options={[
-                      { value: '', label: 'Todas' }, ...facets.statuses.map(s => ({ value: s, label: s })),
+                      // Labels, not raw values, or the filter would offer
+                      // "No disponible" for a column that says "Faltante".
+                      { value: '', label: 'Todas' }, ...facets.statuses.map(s => ({ value: s, label: getRequestStatusInfo(s).label })),
                     ]} /></th>
                     <th><HeaderFilter label="Autor" value={authorFilter} onChange={setAuthorFilter} options={[
                       { value: '', label: 'Todos' }, ...facets.authors.map(a => ({ value: a, label: a })),

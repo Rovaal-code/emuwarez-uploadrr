@@ -166,13 +166,21 @@
 .badge.req-compatible      { background: rgba(34,197,94,0.22);   color: #22c55e; }
 .badge.req-partial         { background: rgba(245,158,11,0.22);  color: #f59e0b; }
 .badge.req-not-compatible  { background: rgba(239,68,68,0.22);   color: #ef4444; }
-/* .req-unavailable is unused now — 'No disponible' shows as a plain dash
+/* 'No disponible' (there IS a library entry, but no file on disk) reads as
+   "Faltante" and in red: it's the same thing Biblioteca calls Faltante, and
+   it's actionable — you'd re-download it. It used to render as a plain dash,
+   which hid a real verdict among the empty cells. */
+/* (nota histórica) .req-unavailable estuvo sin usar mientras
    (see StatusBadge's dash-fallback for type 'request'), never a badge. */
 .badge.req-unavailable     { background: rgba(239,68,68,0.22);   color: #ef4444; }
 .badge.req-claimed         { background: rgba(168,85,247,0.22);  color: #a855f7; }
 .badge.req-pending         { background: rgba(234,179,8,0.22);   color: #eab308; }
 .badge.req-filled          { background: rgba(107,114,128,0.20); color: #9ca3af; }
 .badge.req-unknown         { background: rgba(107,114,128,0.20); color: #9ca3af; }
+/* Nothing in your library matches this request at all — not even an entry
+   without a file. Neutral white: it isn't a problem with your copy, you just
+   don't have one. */
+.badge.req-not-imported    { background: rgba(255,255,255,0.14); color: #e5e7eb; }
 
 /* Nomenclature badges */
 .badge.nom-correct         { background: rgba(34,197,94,0.22);   color: #22c55e; }

@@ -253,3 +253,21 @@ def test_clearing_the_tag_removes_it_from_the_fork_config():
         staged, _ = stage_qbittorrent_config(
             lines, url="http://h:1", username="u", password="p", tag=tag)
         assert "qbit_tag" not in get_child_inline_mapping(staged, "TORRENT_CLIENTS", "qbit")
+
+
+def test_stage_add_logo_writes_the_key_the_fork_reads():
+    """DEFAULT.add_logo es lo que mira src/utils/descgen.py del fork para
+    incrustar el logo en la descripción."""
+    from emuwarez_uploadrr.services.uploadrr_config_staging import stage_add_logo
+    from emuwarez_uploadrr.legacy import get_block_key
+    lines = ["DEFAULT:", "  tmdb: xxx", "  add_logo: true"]
+    for enabled, expected in ((False, "false"), (True, "true")):
+        staged, _ = stage_add_logo(lines, enabled)
+        assert get_block_key(staged, "DEFAULT", "add_logo") == expected
+
+
+def test_stage_add_logo_creates_the_key_when_the_config_lacks_it():
+    from emuwarez_uploadrr.services.uploadrr_config_staging import stage_add_logo
+    from emuwarez_uploadrr.legacy import get_block_key
+    staged, _ = stage_add_logo(["DEFAULT:", "  tmdb: xxx"], False)
+    assert get_block_key(staged, "DEFAULT", "add_logo") == "false"

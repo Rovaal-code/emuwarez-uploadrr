@@ -112,6 +112,17 @@ def stage_tmdb_key(lines: list[str], api_key: str) -> tuple[list[str], str]:
     return staged, message
 
 
+def stage_add_logo(lines: list[str], enabled: bool) -> tuple[list[str], str]:
+    """Stage DEFAULT.add_logo — si la descripción lleva el logo del contenido.
+
+    El fork lo lee en src/utils/descgen.py e incrusta el logo de TMDb en la
+    descripción. Se sube por defecto; esto solo existe para poder quitarlo sin
+    tocar su config a mano."""
+    staged = list(lines)
+    message = set_block_key(staged, "DEFAULT", "add_logo", "true" if enabled else "false")
+    return staged, message
+
+
 def stage_image_hosts(
     lines: list[str], *, img_hosts: Optional[list[str]] = None, api_keys: Optional[dict[str, str]] = None,
 ) -> tuple[list[str], str]:
@@ -236,6 +247,7 @@ __all__ = [
     "get_tmdb_key",
     "stage_tmdb_key",
     "stage_emu_config",
+    "stage_add_logo",
     "stage_image_hosts",
     "stage_qbittorrent_config",
     "QBIT_CLIENT_KEY",

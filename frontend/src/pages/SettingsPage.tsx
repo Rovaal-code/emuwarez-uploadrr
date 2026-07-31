@@ -50,7 +50,7 @@ function formatBytes(n: number) {
 // know whether there are unsaved changes. Array order is fixed on purpose.
 function configSignature(v: {
   tag: string; providerOrder: string[]; region: string
-  emuUsername: string; ignoreSpecials: boolean; sourceEngine: boolean
+  emuUsername: string; ignoreSpecials: boolean; sourceEngine: boolean; addLogo: boolean
   recentLimit: number; uploadMaxConcurrent: number; qbitUrl: string; qbitTag: string; qbitUser: string
   imgEnabled: string[]; allowedRoots: string
   newKey?: string; newEmuKey?: string; qbitPass?: string
@@ -58,7 +58,7 @@ function configSignature(v: {
 }): string {
   return JSON.stringify([
     v.tag, v.providerOrder, v.region, v.emuUsername,
-    v.ignoreSpecials, v.sourceEngine, v.recentLimit, v.uploadMaxConcurrent, v.qbitUrl, v.qbitTag, v.qbitUser, v.imgEnabled, v.allowedRoots,
+    v.ignoreSpecials, v.sourceEngine, v.addLogo, v.recentLimit, v.uploadMaxConcurrent, v.qbitUrl, v.qbitTag, v.qbitUser, v.imgEnabled, v.allowedRoots,
     v.newKey ?? '', v.newEmuKey ?? '', v.qbitPass ?? '', v.imgKeys ?? {},
   ])
 }
@@ -100,6 +100,8 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const [ignoreSpecials, setIgnoreSpecials] = useState(true)
   // Internal Source Tool: apagada por defecto, sigue en desarrollo.
   const [sourceEngine, setSourceEngine] = useState(false)
+  // El logo del contenido en la descripción: se sube por defecto.
+  const [addLogo, setAddLogo] = useState(true)
   const [recentLimit, setRecentLimit] = useState(100)
   const [uploadMaxConcurrent, setUploadMaxConcurrent] = useState(1)
   const [testingConcurrency, setTestingConcurrency] = useState(false)
@@ -129,7 +131,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const [baseline, setBaseline] = useState('')
   const currentSig = configSignature({
     tag, providerOrder, region, emuUsername,
-    ignoreSpecials, sourceEngine, recentLimit, uploadMaxConcurrent, qbitUrl, qbitTag, qbitUser, imgEnabled, allowedRoots,
+    ignoreSpecials, sourceEngine, addLogo, recentLimit, uploadMaxConcurrent, qbitUrl, qbitTag, qbitUser, imgEnabled, allowedRoots,
     newKey, newEmuKey, qbitPass, imgKeys,
   })
   const dirty = baseline !== '' && currentSig !== baseline
@@ -178,6 +180,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         setEmuUsername(s.emu_username ?? '')
         setIgnoreSpecials(s.series_ignore_specials ?? true)
         setSourceEngine(s.source_engine_enabled ?? false)
+        setAddLogo(s.emu_add_logo ?? true)
         setRecentLimit(s.recent_activity_limit ?? 100)
         setUploadMaxConcurrent(s.upload_max_concurrent ?? 1)
         setQbitUrl(s.qbit_url ?? '')
@@ -189,7 +192,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           tag: s.default_release_tag, providerOrder: s.provider_priority_order,
           region: s.tmdb_watch_region,
           emuUsername: s.emu_username ?? '',
-          ignoreSpecials: s.series_ignore_specials ?? true, sourceEngine: s.source_engine_enabled ?? false,
+          ignoreSpecials: s.series_ignore_specials ?? true, sourceEngine: s.source_engine_enabled ?? false, addLogo: s.emu_add_logo ?? true,
           recentLimit: s.recent_activity_limit ?? 100,
           uploadMaxConcurrent: s.upload_max_concurrent ?? 1,
           qbitUrl: s.qbit_url ?? '', qbitTag: s.qbit_tag ?? '', qbitUser: s.qbit_username ?? '',
@@ -283,6 +286,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         emu_username: emuUsername.trim(),
         series_ignore_specials: ignoreSpecials,
         source_engine_enabled: sourceEngine,
+        emu_add_logo: addLogo,
         recent_activity_limit: recentLimit,
         upload_max_concurrent: uploadMaxConcurrent,
         qbit_url: qbitUrl.trim(),
@@ -318,7 +322,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         tag: updated.default_release_tag, providerOrder: updated.provider_priority_order,
         region: updated.tmdb_watch_region,
         emuUsername: updated.emu_username ?? '',
-        ignoreSpecials: updated.series_ignore_specials ?? true, sourceEngine: updated.source_engine_enabled ?? false,
+        ignoreSpecials: updated.series_ignore_specials ?? true, sourceEngine: updated.source_engine_enabled ?? false, addLogo: updated.emu_add_logo ?? true,
         recentLimit: updated.recent_activity_limit ?? 100,
         uploadMaxConcurrent: updated.upload_max_concurrent ?? 1,
         qbitUrl: updated.qbit_url ?? '', qbitTag: updated.qbit_tag ?? '', qbitUser: updated.qbit_username ?? '',
@@ -769,6 +773,16 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           <select className="form-input form-select" value={sourceEngine ? 'true' : 'false'} onChange={e => setSourceEngine(e.target.value === 'true')}>
             <option value="false">Desactivada</option>
             <option value="true">Activada</option>
+          </select>
+        </div>
+        <div className="form-group">
+          <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            Subir el logo del contenido
+            <InfoIcon text="Incrusta el logo del contenido al principio de la descripción del torrent, en español cuando TMDb lo tiene en ese idioma. Desactivado, la descripción se sube sin logo; el resto (capturas, ficha técnica y tráiler) no cambia." />
+          </label>
+          <select className="form-input form-select" value={addLogo ? 'true' : 'false'} onChange={e => setAddLogo(e.target.value === 'true')}>
+            <option value="true">Sí</option>
+            <option value="false">No</option>
           </select>
         </div>
       </div>

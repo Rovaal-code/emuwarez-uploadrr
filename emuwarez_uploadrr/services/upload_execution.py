@@ -46,6 +46,7 @@ from .uploadrr_config_staging import (
     restore_config_from_backup,
     stage_emu_config,
     stage_image_hosts,
+    stage_add_logo,
     stage_qbittorrent_config,
     stage_tmdb_key,
     write_staged_config,
@@ -702,6 +703,8 @@ def _stage_uploadrr_config(job_id: int, cwd: str) -> Path | None:
         }
         qbit_url = get_setting_canonical(conn, "qbit.url")
         qbit_tag = get_setting_canonical(conn, "qbit.tag")
+        # El logo va en la descripción salvo que se haya apagado a mano.
+        add_logo = get_setting_canonical(conn, "emu.add_logo") != "false"
         qbit_username = get_setting_canonical(conn, "qbit.username")
         qbit_password = get_setting_canonical(conn, "qbit.password")
     finally:
@@ -716,6 +719,8 @@ def _stage_uploadrr_config(job_id: int, cwd: str) -> Path | None:
         if emu_key:
             lines, _msg = stage_emu_config(lines, api_key=emu_key)
             changed = True
+        lines, _msg = stage_add_logo(lines, add_logo)
+        changed = True
         if img_hosts:
             # Always staged (imgbox is always in fallback_order()'s result,
             # even with nothing else enabled) — this is what makes the

@@ -55,9 +55,25 @@ def _backfill_spanish_flags() -> None:
             "No se pudo recalcular el castellano (audio/subtítulos) al arrancar", exc_info=True)
 
 
+def _reconcile_interrupted_jobs() -> None:
+    """Los jobs que se quedaron a medias cuando se paró la aplicación.
+
+    Ninguno puede tener un hilo o un subproceso vivo: murieron con el proceso
+    anterior. Sin esto, parar el contenedor a media subida dejaba el job
+    congelado para siempre, sin ningún botón capaz de moverlo.
+    Best-effort: nunca bloquea el arranque."""
+    try:
+        from emuwarez_uploadrr.services.upload_queue import reconcile_interrupted_jobs
+        reconcile_interrupted_jobs()
+    except Exception:
+        logging.getLogger("emuwarez.web").warning(
+            "No se pudieron reconciliar las subidas interrumpidas al arrancar", exc_info=True)
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     _backfill_spanish_flags()
+    _reconcile_interrupted_jobs()
     scheduler_task = None
     # EMUWAREZ_DISABLE_SCHEDULER=1 — escape hatch for scripted Docker
     # smoke/E2E runs that don't want a background scheduler tick firing

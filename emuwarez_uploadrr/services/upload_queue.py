@@ -289,6 +289,61 @@ def cancel_queued_timer(job_id: int) -> bool:
     return False
 
 
+def reconcile_interrupted_jobs(conn=None) -> int:
+    """Marca como fallidos los jobs que se quedaron a medias al pararse la app.
+
+    Un job en estado activo ('queued', 'staging', 'preparing', 'running')
+    depende de un hilo o un subproceso de ESTE proceso. Si la aplicación
+    acaba de arrancar, ninguno de ellos existe: murieron con el proceso
+    anterior. La fila, en cambio, sobrevive en la base.
+
+    Sin esto, un `docker compose down` a media subida dejaba el job congelado
+    para siempre, con su barra a medias y sin nadie que lo moviera.
+
+    Se marcan como 'failed' y no como 'cancelled' porque nadie los canceló:
+    se interrumpieron. Y failed es reintentable, que es lo que hace falta.
+
+    Devuelve cuántos se reconciliaron. Nunca lanza.
+    """
+    own = conn is None
+    conn = conn or connect()
+    try:
+        rows = conn.execute(
+            "SELECT id, title FROM upload_jobs WHERE status IN ({})".format(
+                ",".join("?" * len(ACTIVE_JOB_STATUSES))),
+            tuple(ACTIVE_JOB_STATUSES),
+        ).fetchall()
+        for row in rows:
+            conn.execute(
+                "UPDATE upload_jobs SET status = 'failed', stage = 'failed', "
+                "finished_at = ?, updated_at = ?, error_message = ? WHERE id = ?",
+                (_now_iso(), _now_iso(),
+                 "Interrumpido al pararse la aplicación. Puedes reintentar la subida.",
+                 row["id"]),
+            )
+            conn.commit()
+            try:
+                from .upload_execution import append_upload_log
+                append_upload_log(
+                    row["id"], "error",
+                    "La aplicación se detuvo mientras esta subida estaba en marcha. "
+                    "Marcada como fallida para poder reintentarla. Revisa el archivo antes: "
+                    "pudo quedarse a medio renombrar.",
+                    stream="system",
+                )
+            except Exception:
+                logger.warning("No se pudo registrar el log del job %s", row["id"], exc_info=True)
+        if rows:
+            logger.info("Reconciliados %d job(s) interrumpidos al arrancar", len(rows))
+        return len(rows)
+    except Exception:
+        logger.warning("No se pudieron reconciliar los jobs interrumpidos", exc_info=True)
+        return 0
+    finally:
+        if own:
+            conn.close()
+
+
 def job_was_cancelled(job_id: int, conn=None) -> bool:
     """Si alguien pulsó Cancelar mientras esto preparaba ficheros.
 

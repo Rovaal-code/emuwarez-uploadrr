@@ -763,3 +763,72 @@ def test_cancelling_while_preparing_marks_the_job_and_stops_it(db_conn, tmp_path
     assert uq._mark(job_id, stage="verificacion_presubida") is False
     assert db_conn.execute("SELECT status FROM upload_jobs WHERE id = ?", (job_id,)).fetchone()["status"] == "cancelled"
     assert uq.job_was_cancelled(job_id, conn=db_conn) is True
+
+
+# ---------------------------------------------------------------------------
+# Jobs que se quedaron a medias al pararse la aplicación
+# ---------------------------------------------------------------------------
+
+def _seed_job(conn, status, stage="remux"):
+    cur = conn.execute(
+        "INSERT INTO library_items(item_type,title,local_status,path) "
+        "VALUES ('movie','Peli','Disponible','/data/peli.mkv')")
+    cur = conn.execute(
+        """INSERT INTO upload_jobs(library_item_id, title, path, status, stage)
+           VALUES (?, 'Peli', '/data/peli.mkv', ?, ?)""", (cur.lastrowid, status, stage))
+    conn.commit()
+    return cur.lastrowid
+
+
+def test_interrupted_jobs_are_marked_failed_on_boot(db_conn):
+    """Un job en estado activo depende de un hilo o un subproceso de ESTE
+    proceso. Si la aplicación acaba de arrancar, ninguno existe: murieron con
+    el proceso anterior, pero la fila sobrevivió. Sin esto, un
+    `docker compose down` a media subida lo dejaba congelado para siempre."""
+    from emuwarez_uploadrr.services.upload_queue import reconcile_interrupted_jobs, ACTIVE_JOB_STATUSES
+    ids = {estado: _seed_job(db_conn, estado) for estado in sorted(ACTIVE_JOB_STATUSES)}
+
+    assert reconcile_interrupted_jobs(conn=db_conn) == len(ids)
+
+    for estado, job_id in ids.items():
+        row = db_conn.execute("SELECT status, error_message FROM upload_jobs WHERE id = ?", (job_id,)).fetchone()
+        assert row["status"] == "failed", f"{estado} no se reconcilió"
+        # 'failed' y no 'cancelled' porque nadie los canceló: se interrumpieron.
+        # Y failed es lo que enciende el botón Reintentar.
+        assert "Interrumpido" in (row["error_message"] or "")
+
+
+def test_reconciling_leaves_finished_jobs_alone(db_conn):
+    """Lo que ya terminó no se toca: reconciliar no puede reescribir el
+    historial de subidas que salieron bien."""
+    from emuwarez_uploadrr.services.upload_queue import reconcile_interrupted_jobs
+    ids = {estado: _seed_job(db_conn, estado) for estado in ("completed", "failed", "cancelled")}
+
+    assert reconcile_interrupted_jobs(conn=db_conn) == 0
+
+    for estado, job_id in ids.items():
+        row = db_conn.execute("SELECT status FROM upload_jobs WHERE id = ?", (job_id,)).fetchone()
+        assert row["status"] == estado
+
+
+def test_reconciling_an_empty_queue_is_a_no_op(db_conn):
+    from emuwarez_uploadrr.services.upload_queue import reconcile_interrupted_jobs
+    assert reconcile_interrupted_jobs(conn=db_conn) == 0
+
+
+def test_the_reconciliation_actually_runs_when_the_app_boots(db_conn, isolated_db):
+    """Lo de arriba prueba la función; esto prueba que está enchufada. Un
+    arreglo que no se ejecuta no arregla nada."""
+    import os
+    from fastapi.testclient import TestClient
+    from emuwarez_uploadrr.web.app import app
+    os.environ["CONFIG_DIR"] = str(isolated_db)
+    job_id = _seed_job(db_conn, "preparing")
+
+    # El lifespan (y con él la reconciliación) solo corre al entrar en el
+    # contexto del cliente.
+    with TestClient(app):
+        pass
+
+    row = db_conn.execute("SELECT status FROM upload_jobs WHERE id = ?", (job_id,)).fetchone()
+    assert row["status"] == "failed"

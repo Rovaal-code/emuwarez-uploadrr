@@ -648,6 +648,11 @@ class MissingListResponse(BaseModel):
 class RequestMatchResponse(BaseModel):
     id: int
     library_item_id: Optional[int] = None
+    # The row this request is really about — the season's own row for a
+    # season-scoped request, where library_item_id above is the SERIES (every
+    # season shares the series' tmdb_id, so that is what the matcher finds).
+    # Links out of a request should follow this one.
+    library_target_id: Optional[int] = None
     library_title: Optional[str] = None
     local_status: Optional[str] = None
     local_resolution: Optional[str] = None

@@ -281,6 +281,10 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
   const m = item.match
   const effectiveStatus = m ? m.status : (item.compatibility_status ?? null)
   const libId = m?.library_item_id ?? item.library_item_id
+  // What a link out of this request should open: the season's own row for a
+  // season request, the matched row otherwise.
+  const libraryTargetId = m?.library_target_id ?? libId
+  const titleLinkTip = useTooltip('Ver en la biblioteca')
   const t = tipoOf(item.category)
   // External IDs: prefer the request's own, fall back to the matched library
   // item. TVDB only ever comes from the library item (Radarr/Sonarr); MAL
@@ -338,7 +342,25 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
       </div>
 
       <div style={{ marginBottom: 20 }}>
-        <DetailTitle><DetailTitleText title={item.display_title || requestDisplayTitle(item)} /></DetailTitle>
+        {/* Follows library_target_id, not the match's library_item_id: for a
+            season request the matcher lands on the SERIES row (every season
+            shares the series' tmdb_id), so linking that opened the whole
+            series instead of the season you clicked. */}
+        <DetailTitle>
+          {libraryTargetId ? (
+            <span
+              className="lib-title-link"
+              style={{ cursor: 'pointer' }}
+              onClick={() => onOpenLibraryItem?.(libraryTargetId)}
+              {...titleLinkTip.triggerProps}
+            >
+              <DetailTitleText title={item.display_title || requestDisplayTitle(item)} />
+              {titleLinkTip.tooltipNode}
+            </span>
+          ) : (
+            <DetailTitleText title={item.display_title || requestDisplayTitle(item)} />
+          )}
+        </DetailTitle>
       </div>
 
       <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
@@ -445,7 +467,7 @@ function RequestDetailPage({ item, readiness, onBack, onShowCandidates, onUpload
                       <td style={{ maxWidth: 320 }} {...libNameTip.triggerProps}>
                         {libId
                           ? (
-                            <ValueChip as="button" linkable onClick={() => onOpenLibraryItem?.(libId)} title="Ver ficha del contenido">
+                            <ValueChip as="button" linkable onClick={() => libraryTargetId && onOpenLibraryItem?.(libraryTargetId)} title="Ver ficha del contenido">
                               <ValueIcon><LibraryButtonIcon /></ValueIcon>
                               <span className="txt" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.content_name || baseName(m.local_path) || m.library_title || '—'}</span>
                             </ValueChip>

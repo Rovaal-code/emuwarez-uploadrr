@@ -329,6 +329,42 @@ def _relevant_episodes(conn, matched_id, matched_type, scope, season, episode, i
     return []
 
 
+def _scoped_library_id(conn: sqlite3.Connection, matched_item: dict, req: dict) -> int:
+    """The library row the request actually refers to: the season row for a
+    season-scoped request, the episode row for an episode-scoped one, and the
+    matched row itself otherwise. Used for the links out of a request, so
+    "Los Tudor (2007) - Temporada 2" opens that season and not the whole
+    series."""
+    matched_id = int(matched_item["id"])
+    if matched_item.get("item_type") not in ("series", "season"):
+        return matched_id
+    season = req.get("req_season")
+    episode = req.get("req_episode")
+    if season is None:
+        return matched_id
+
+    season_id = matched_id
+    if matched_item.get("item_type") == "series":
+        row = conn.execute(
+            "SELECT id FROM library_items WHERE parent_id = ? AND item_type = 'season' "
+            "AND season_number = ?",
+            (matched_id, season),
+        ).fetchone()
+        if not row:
+            return matched_id
+        season_id = int(row["id"])
+
+    if req.get("req_scope") == "episode" and episode is not None:
+        row = conn.execute(
+            "SELECT id FROM library_items WHERE parent_id = ? AND item_type = 'episode' "
+            "AND episode_number = ?",
+            (season_id, episode),
+        ).fetchone()
+        if row:
+            return int(row["id"])
+    return season_id
+
+
 def _effective_target(conn: sqlite3.Connection, matched_item: dict, req: dict) -> dict:
     """A copy of the matched library item with resolution/source/codecs/audio/
     subs/size/path/local_status reflecting the request's SCOPE, so a
@@ -797,6 +833,12 @@ def get_request_detail(conn: sqlite3.Connection, request_id: int) -> Optional[di
         ).fetchone()
         if lib_row:
             result["match"]["content_name"] = _comparison_content_name(conn, dict(lib_row), result)
+            # Which library row this request is really about. The MATCH points
+            # at whatever the matcher found — for a season request that is the
+            # series row, because every season of a series shares the series'
+            # tmdb_id — so following it landed you on the series instead of the
+            # season you clicked. This resolves the scope's own row.
+            result["match"]["library_target_id"] = _scoped_library_id(conn, dict(lib_row), result)
             # Same canonical "Serie (Año) - SxxEyy" title Biblioteca/Subidas'
             # own dedicated pages use — request's own scope (not the matched
             # row's) so a request matched against a series/season rollup still

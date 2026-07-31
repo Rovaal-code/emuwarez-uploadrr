@@ -79,6 +79,7 @@ def _match_dict_to_response(match_data: dict | None) -> RequestMatchResponse | N
     return RequestMatchResponse(
         id=match_data["id"],
         library_item_id=match_data.get("library_item_id"),
+        library_target_id=match_data.get("library_target_id"),
         library_title=match_data.get("library_title"),
         local_status=match_data.get("local_status"),
         local_resolution=match_data.get("local_resolution"),

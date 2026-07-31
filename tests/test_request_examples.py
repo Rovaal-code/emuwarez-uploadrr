@@ -342,3 +342,39 @@ def test_the_comparison_name_spells_out_the_season(db_conn):
     name = _comparison_content_name(db_conn, lib, req)
     assert "Temporada 2" in name
     assert "Season" not in name
+
+
+def test_a_season_request_links_to_the_season_not_the_series(db_conn):
+    """Following the match landed you on the whole series: every season shares
+    the series' tmdb_id, so that is the row the matcher finds. The link has to
+    follow the request's own scope instead."""
+    from emuwarez_uploadrr.services.requests import _scoped_library_id
+
+    _lib(db_conn, "Los Tudor", item_type="series", tmdb_id="1399")
+    series_id = db_conn.execute("SELECT id FROM library_items WHERE item_type='series'").fetchone()["id"]
+    for n in (1, 2):
+        db_conn.execute(
+            """INSERT INTO library_items
+               (item_type, title, local_status, request_status, nomenclature_status,
+                parent_id, season_number, tmdb_id, updated_at)
+               VALUES ('season',?,'Disponible','Sin petición','N/A',?,?,'1399',CURRENT_TIMESTAMP)""",
+            (f"Los Tudor - Temporada {n}", series_id, n),
+        )
+    db_conn.commit()
+    matched_series = dict(db_conn.execute(
+        "SELECT * FROM library_items WHERE id = ?", (series_id,)).fetchone())
+
+    season2 = db_conn.execute(
+        "SELECT id FROM library_items WHERE item_type='season' AND season_number=2").fetchone()["id"]
+    target = _scoped_library_id(db_conn, matched_series, {"req_scope": "season", "req_season": 2})
+    assert target == season2
+
+    # A request with no scope has nothing to narrow to and keeps the match.
+    assert _scoped_library_id(db_conn, matched_series, {}) == series_id
+
+
+def test_a_movie_request_keeps_its_own_row(db_conn):
+    from emuwarez_uploadrr.services.requests import _scoped_library_id
+    _lib(db_conn, "Una peli", tmdb_id="550")
+    movie = dict(db_conn.execute("SELECT * FROM library_items WHERE item_type='movie'").fetchone())
+    assert _scoped_library_id(db_conn, movie, {"req_scope": "season", "req_season": 2}) == movie["id"]

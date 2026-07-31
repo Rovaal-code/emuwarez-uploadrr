@@ -225,6 +225,9 @@ export interface ApiError {
 // Phase 5B — Requests
 
 export interface RequestMatchResponse {
+  // The row the request is really about (a season's own row, where
+  // library_item_id is the series). Links out of a request follow this one.
+  library_target_id?: number | null
   id: number
   library_item_id: number | null
   library_title: string | null

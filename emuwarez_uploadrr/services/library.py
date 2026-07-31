@@ -1015,6 +1015,52 @@ def get_library_item(conn: sqlite3.Connection, item_id: int) -> Optional[dict]:
     return dict(row) if row else None
 
 
+def rollup_all_values(conn: sqlite3.Connection, item: dict) -> Optional[dict]:
+    """TODOS los valores técnicos presentes bajo una serie o temporada.
+
+    Las columnas de rollup de la fila guardan el valor SOLO cuando todos los
+    capítulos coinciden, y NULL cuando no (_update_season_rollup). Eso es lo
+    que hace de señal de acuerdo para la regla del pack, así que no se puede
+    tocar. Pero como dato para enseñar es pobre: una temporada con capítulos
+    en x264 y x265 salía con un guion, y ese guion no dice qué tienes.
+
+    Esto lo calcula aparte, recorriendo los capítulos: "x264, x265". Es solo
+    para la ficha; nada decide nada con esto.
+
+    Devuelve None para películas y capítulos, que ya tienen sus propios
+    valores y no resumen nada.
+    """
+    if item.get("item_type") not in ("series", "season"):
+        return None
+    if item.get("item_type") == "season":
+        rows = conn.execute(
+            "SELECT * FROM library_items WHERE parent_id = ? AND item_type = 'episode'",
+            (item["id"],),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """SELECT e.* FROM library_items e
+               JOIN library_items s ON e.parent_id = s.id
+               WHERE s.parent_id = ? AND s.item_type = 'season' AND e.item_type = 'episode'""",
+            (item["id"],),
+        ).fetchall()
+    # Solo los capítulos que tienes: los que faltan no aportan datos técnicos.
+    disponibles = [dict(r) for r in rows if r["local_status"] == LocalStatus.AVAILABLE.value]
+    if not disponibles:
+        return None
+
+    out: dict[str, str] = {}
+    for field in _SEASON_ROLLUP_FIELDS:
+        vistos: list[str] = []
+        for ep in disponibles:
+            value = (ep.get(field) or "").strip()
+            if value and value not in vistos:
+                vistos.append(value)
+        if vistos:
+            out[field] = ", ".join(vistos)
+    return out or None
+
+
 def _resolve_arr_top(conn: sqlite3.Connection, item_id: int) -> dict:
     """Walk up to the movie/series row an item belongs to — Radarr/Sonarr's
     refresh/rescan commands target that level; a season/episode has none of
@@ -1225,8 +1271,9 @@ def get_dashboard_summary(conn: sqlite3.Connection) -> dict:
     # señal. Sin este filtro, esta tarjeta contaba temporadas completas pero
     # técnicamente inconsistentes como si se pudieran subir.
     avail = LocalStatus.AVAILABLE.value
+    from .season_pack import pack_rollup_sql
     uniq = conn.execute(
-        """
+        f"""
         SELECT
             SUM(CASE WHEN item_type = 'movie'  THEN 1 ELSE 0 END) AS movies,
             SUM(CASE WHEN item_type = 'season' THEN 1 ELSE 0 END) AS seasons
@@ -1237,21 +1284,22 @@ def get_dashboard_summary(conn: sqlite3.Connection) -> dict:
           -- (services/upload_checks.py), so counting it here as ready to go
           -- would be a lie the moment you clicked Subir.
           AND has_spanish_ok = 1
-          -- Solo la resolución: es lo único que un pack exige que coincida
-          -- en todos sus capítulos (season_pack._CONSISTENCY_FIELDS). El
-          -- resto ya no bloquea, se resume en el nombre del pack.
-          AND (item_type != 'season' OR resolution IS NOT NULL)
+          -- Lo que un pack exige que coincida en todos sus capítulos. El
+          -- fragmento lo genera season_pack.pack_rollup_sql() desde la misma
+          -- definición que usa la regla de verdad, para que no haya que
+          -- acertar en tres consultas cada vez que cambia.
+          AND (item_type != 'season' OR ({pack_rollup_sql()}))
         """,
         [avail],
     ).fetchone()
     uniq_ep = conn.execute(
-        """
+        f"""
         SELECT COUNT(*) AS n
         FROM library_items e
         JOIN library_items s ON e.parent_id = s.id
         WHERE e.item_type = 'episode' AND e.local_status = ?
           AND s.item_type = 'season' AND s.emu_in_catalog = 0
-          AND s.resolution IS NOT NULL          -- ver season_pack._CONSISTENCY_FIELDS
+          AND {pack_rollup_sql("s")}
           AND s.has_spanish_ok = 1
         """,
         [avail],
@@ -1483,6 +1531,7 @@ def _rec_rolled_size(conn: sqlite3.Connection, row: dict, *, season: int | None 
 
 
 def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100) -> list[dict]:
+    from .season_pack import pack_rollup_sql
     from datetime import datetime, timezone
     now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -1589,7 +1638,7 @@ def get_dashboard_recommendations(conn: sqlite3.Connection, *, limit: int = 100)
               -- Castilian applies to films too, not just seasons (see the
               -- same condition in get_dashboard_summary).
               AND li.has_spanish_ok = 1
-              AND (li.item_type != 'season' OR li.resolution IS NOT NULL)"""
+              AND (li.item_type != 'season' OR ({pack_rollup_sql("li")}))"""
     ).fetchall():
         _push(dict(row), 2)
 

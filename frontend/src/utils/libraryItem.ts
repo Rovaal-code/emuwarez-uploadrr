@@ -67,6 +67,7 @@ export function listDisplayTitle(item: LibraryItemResponse): string {
 // bloquear y ahora se resume en el nombre del pack.
 const SEASON_CONSISTENCY_FIELDS: { key: keyof LibraryItemResponse; label: string }[] = [
   { key: 'resolution', label: 'la resolución' },
+  { key: 'video_codec', label: 'el códec de vídeo' },
 ]
 
 function seasonInconsistentField(item: LibraryItemResponse) {

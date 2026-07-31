@@ -210,7 +210,50 @@ def preview_season_pack_title(fields: dict) -> dict:
 # _aggregate_pack_fields.
 _CONSISTENCY_FIELDS: list[tuple[str, str, Any]] = [
     ("resolution", "resolución", lambda ep, prop: prop.get("resolution")),
+    ("video_codec", "códec de vídeo", lambda ep, prop: prop.get("video_codec")),
 ]
+
+# Los mismos campos, para quien solo tiene la fila de rollup de la temporada y
+# no va a recorrer los capítulos.
+_PACK_ROLLUP_FIELDS = tuple(key for key, _label, _getter in _CONSISTENCY_FIELDS)
+
+
+def pack_rollup_sql(alias: str = "") -> str:
+    """El equivalente en SQL de la parte de can_pack_from_rollup que mira los
+    campos técnicos, para quien filtra en la base y no puede llamar a Python.
+
+    Se GENERA desde _PACK_ROLLUP_FIELDS en vez de escribirse a mano en cada
+    consulta: esa expresión estaba copiada en tres sitios de library.py (la
+    tarjeta Contenido único, la cuenta de episodios y Recomendaciones) con
+    alias distintos, y cuando la regla cambió hubo que acertar en las tres.
+    Ahora cambia sola con la definición.
+
+    No incluye el castellano (has_spanish_ok): las tres consultas lo aplican a
+    todos los tipos de contenido, no solo a las temporadas, así que cada una
+    lo pone en su sitio.
+    """
+    prefix = f"{alias}." if alias else ""
+    return " AND ".join(f"{prefix}{field} IS NOT NULL" for field in _PACK_ROLLUP_FIELDS)
+
+
+def can_pack_from_rollup(row: dict) -> bool:
+    """Si esta temporada podría subirse como pack, mirando solo su fila.
+
+    Es la MISMA regla que build_season_pack_plan aplica de verdad, en versión
+    barata: las columnas de rollup solo se rellenan cuando todos los capítulos
+    coinciden en ese campo (library._update_season_rollup), así que un NULL
+    significa "no coinciden".
+
+    Existe para que Biblioteca, el Panel, Recomendaciones y Peticiones no
+    tengan que reimplementar cada uno la condición: esa expresión copiada en
+    cinco sitios ya se quedó desincronizada tres veces (ver docs/auditoria.md,
+    hallazgo 2.1). Sirve para PINTAR, CONTAR y FILTRAR; quien decide de verdad
+    si la subida sale sigue siendo build_season_pack_plan.
+    """
+    return (
+        all(row.get(field) for field in _PACK_ROLLUP_FIELDS)
+        and row.get("has_spanish_ok") == 1
+    )
 
 
 def _consistency_errors(episode_entries: list[dict]) -> list[str]:

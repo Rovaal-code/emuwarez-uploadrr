@@ -907,7 +907,9 @@ def test_pack_fields_are_emptied_when_they_differ_and_audios_are_summed(isolated
     _series_id, season_id = _seed_series_season(conn, series_title="One Piece", year=1999)
     folder = tmp_path / "One Piece" / "Season 1"
     folder.mkdir(parents=True)
-    datos = [("x264", "WEB-DL", "spa"), ("x265", "BluRay", "spa / eng")]
+    # El códec de vídeo SÍ tiene que coincidir; lo que varía es el source y
+    # los idiomas.
+    datos = [("x264", "WEB-DL", "spa"), ("x264", "BluRay", "spa / eng")]
     for i, (codec, source, audio) in enumerate(datos, start=1):
         f = folder / f"S01E0{i}.mkv"
         f.write_bytes(b"video")
@@ -921,9 +923,9 @@ def test_pack_fields_are_emptied_when_they_differ_and_audios_are_summed(isolated
 
     # La resolución sí, que es lo único obligatorio.
     assert "1080p" in titulo, titulo
-    # Los códecs y el source que difieren, no aparecen.
-    assert "x264" not in titulo and "x265" not in titulo, titulo
-    assert "BluRay" not in titulo, titulo
+    # El códec, que coincide, sí aparece; el source, que difiere, no.
+    assert "x264" in titulo, titulo
+    assert "BluRay" not in titulo and "WEB-DL" not in titulo, titulo
     # Y los idiomas sumados: ESP + ING es DUAL en la guía.
     assert "DUAL" in titulo, titulo
     conn.close()
@@ -933,14 +935,96 @@ def test_the_examples_generator_agrees_with_the_real_rule(isolated_db, tmp_path)
     """_season_is_packable predice lo que hará build_season_pack_plan. Cuando
     la regla cambió, esa copia se quedó atrás más de una vez."""
     from emuwarez_uploadrr.services.request_examples import _season_is_packable
-    # Resolución y castellano: sube.
-    assert _season_is_packable({"resolution": "1080p", "has_spanish_ok": 1}) is True
-    # Sin resolución común entre capítulos: no.
-    assert _season_is_packable({"resolution": None, "has_spanish_ok": 1}) is False
-    # Sin castellano: no.
-    assert _season_is_packable({"resolution": "1080p", "has_spanish_ok": 0}) is False
-    # Y lo que ya no bloquea, no bloquea: sin códec ni source comunes, sube.
-    assert _season_is_packable({
-        "resolution": "1080p", "has_spanish_ok": 1,
-        "source": None, "video_codec": None, "audio_codec": None, "audio_languages": None,
-    }) is True
+    ok = {"resolution": "1080p", "video_codec": "x264", "has_spanish_ok": 1}
+    assert _season_is_packable(ok) is True
+    # Lo que bloquea: resolución, códec de vídeo y castellano.
+    assert _season_is_packable({**ok, "resolution": None}) is False
+    assert _season_is_packable({**ok, "video_codec": None}) is False
+    assert _season_is_packable({**ok, "has_spanish_ok": 0}) is False
+    # Y lo que no bloquea, no bloquea: sin source ni códec de audio comunes,
+    # sube igual y esos campos se quedan fuera del nombre.
+    assert _season_is_packable({**ok, "source": None, "audio_codec": None,
+                                "audio_languages": None}) is True
+
+
+def test_rollup_all_sums_what_the_episodes_have(isolated_db, tmp_path):
+    """La ficha de una temporada enseña TODO lo que hay debajo ("x264, x265"),
+    no un guion. Las columnas de la fila siguen guardando el valor único o
+    NULL, que es la señal de acuerdo que usa la regla del pack: si se sumaran
+    ahí, `resolution IS NOT NULL` dejaría de significar "coinciden" y la regla
+    entera se rompería."""
+    from emuwarez_uploadrr.services.library import rollup_all_values
+    conn = _open(isolated_db)
+    _series_id, season_id = _seed_series_season(conn)
+    for i, (codec, source) in enumerate([("x264", "WEB-DL"), ("x265", "BluRay"), ("x264", "WEB-DL")], start=1):
+        f = tmp_path / f"S01E0{i}.mkv"
+        f.write_bytes(b"video")
+        ep_id = _seed_episode(conn, season_id, number=i, title=f"One Piece S01E0{i}", path=str(f),
+                              quality="WEBDL-1080p", video_codec=codec, audio_codec="AC3",
+                              audio_languages="spa", subtitle_languages="spa", source=source)
+        # El sembrador guarda `quality`, no `resolution`: aquí interesa la
+        # columna que la ficha enseña.
+        conn.execute("UPDATE library_items SET resolution = '1080p' WHERE id = ?", (ep_id,))
+    conn.commit()
+
+    season = dict(conn.execute("SELECT * FROM library_items WHERE id = ?", (season_id,)).fetchone())
+    todos = rollup_all_values(conn, season)
+
+    assert todos["video_codec"] == "x264, x265"      # sin repetir el x264 del tercero
+    assert todos["source"] == "WEB-DL, BluRay"
+    assert todos["resolution"] == "1080p"            # coinciden: un solo valor
+    # Y la columna de la fila NO se toca: sigue siendo la señal de acuerdo.
+    assert season["video_codec"] is None
+    conn.close()
+
+
+def test_rollup_all_is_none_for_a_movie(isolated_db, tmp_path):
+    """Una película no resume nada: sus valores son los suyos."""
+    from emuwarez_uploadrr.services.library import rollup_all_values
+    conn = _open(isolated_db)
+    assert rollup_all_values(conn, {"id": 1, "item_type": "movie"}) is None
+    conn.close()
+
+
+def test_the_sql_fragment_matches_the_python_rule():
+    """Los tres filtros de library.py (tarjeta Contenido único, cuenta de
+    episodios y Recomendaciones) tienen que aplicar la MISMA condición que
+    can_pack_from_rollup. Se generan desde _PACK_ROLLUP_FIELDS justo para eso;
+    este test comprueba que el generador no se queda corto."""
+    from emuwarez_uploadrr.services.season_pack import pack_rollup_sql, _PACK_ROLLUP_FIELDS
+    fragmento = pack_rollup_sql("li")
+    for campo in _PACK_ROLLUP_FIELDS:
+        assert f"li.{campo} IS NOT NULL" in fragmento, campo
+    # Y ni un campo de más: los que ya no bloquean no pueden colarse.
+    assert fragmento.count("IS NOT NULL") == len(_PACK_ROLLUP_FIELDS)
+    assert "source" not in fragmento and "audio" not in fragmento
+
+
+def test_the_dashboard_only_counts_seasons_that_could_really_be_packed(isolated_db, tmp_path):
+    """La tarjeta Contenido único y Recomendaciones no pueden ofrecer una
+    temporada que la subida va a rechazar."""
+    from emuwarez_uploadrr.services.library import get_dashboard_summary
+    from emuwarez_uploadrr.services.season_pack import can_pack_from_rollup
+    conn = _open(isolated_db)
+    conn.execute("INSERT INTO library_items (title, item_type, local_status, emu_in_catalog) "
+                 "VALUES ('Serie', 'series', 'Disponible', 1)")
+    series_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    casos = [
+        ("Sube",              "1080p", "x264", 1),
+        ("Resol. mezclada",   None,    "x264", 1),
+        ("Códec mezclado",    "1080p", None,   1),
+        ("Sin castellano",    "1080p", "x264", 0),
+    ]
+    for titulo, res, codec, spanish in casos:
+        conn.execute(
+            "INSERT INTO library_items (title, item_type, local_status, emu_in_catalog, parent_id, "
+            "resolution, video_codec, has_spanish_ok) VALUES (?, 'season', 'Disponible', 0, ?, ?, ?, ?)",
+            (titulo, series_id, res, codec, spanish))
+    conn.commit()
+
+    # El SQL de la tarjeta y la regla de Python tienen que contar lo mismo.
+    esperado = sum(1 for _t, res, codec, sp in casos
+                   if can_pack_from_rollup({"resolution": res, "video_codec": codec, "has_spanish_ok": sp}))
+    assert esperado == 1
+    assert get_dashboard_summary(conn)["unique_seasons"] == esperado
+    conn.close()

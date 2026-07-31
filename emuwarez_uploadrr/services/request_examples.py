@@ -162,13 +162,10 @@ def _library_pool(conn: sqlite3.Connection) -> dict[str, list[dict]]:
 
 
 def _season_is_packable(row: dict) -> bool:
-    """Whether this season could be uploaded as a whole-season pack: todos sus
-    capítulos con la misma resolución (la columna de rollup solo se rellena
-    cuando coinciden) y castellano en todos.
-
-    Es la misma regla que aplica season_pack._CONSISTENCY_FIELDS más
-    _spanish_errors; el resto de campos dejó de bloquear."""
-    return row.get("resolution") is not None and row.get("has_spanish_ok") == 1
+    """Si esta temporada podría subirse como pack. Delega en la autoridad en
+    vez de repetir la condición: esa copia ya se quedó atrás varias veces."""
+    from .season_pack import can_pack_from_rollup
+    return can_pack_from_rollup(row)
 
 
 def _interleave(rows: list[dict]) -> list[dict]:

@@ -465,15 +465,15 @@ const OTHER_CONDITION_ROWS: OtherRow[] = [
   },
   {
     applies: 'Pack de temporada',
-    condition: 'Los capítulos no coinciden en resolución',
+    condition: 'Los capítulos no coinciden en resolución o en códec de vídeo',
     verdict: 'blocked', verdictLabel: 'Bloquea',
-    why: 'Es lo único que tiene que coincidir. Una temporada con capítulos a 1080p y a 720p no es una calidad, son dos, y el nombre solo puede declarar una.',
+    why: 'Son los dos únicos que tienen que coincidir. Una temporada con capítulos a 1080p y a 720p no es una calidad, son dos, y el nombre solo puede declarar una; con el códec de vídeo pasa lo mismo.',
   },
   {
     applies: 'Pack de temporada',
-    condition: 'Los capítulos no coinciden en source, códecs, idiomas de audio o subtítulos',
+    condition: 'Los capítulos no coinciden en source, códec de audio, idiomas de audio o subtítulos',
     verdict: 'warn', verdictLabel: 'No bloquea',
-    why: 'Se resuelve en el nombre en vez de rechazar el pack: los idiomas de audio se suman (el pack los contiene todos) y el source y los códecs que no coincidan se dejan fuera del nombre, porque declarar uno solo sería mentir sobre el resto de capítulos.',
+    why: 'Se resuelve en el nombre en vez de rechazar el pack: los idiomas de audio se suman (el pack los contiene todos) y el source y el códec de audio que no coincidan se dejan fuera del nombre, porque declarar uno solo sería mentir sobre el resto de capítulos.',
   },
   {
     applies: 'Cualquiera', condition: 'El contenido está Faltante',
@@ -575,6 +575,46 @@ function UploadConditionsContent() {
           </tbody>
         </table>
       </div>
+
+      <h4 style={{ fontSize: 13, margin: '18px 0 6px' }}>Una temporada con datos mezclados</h4>
+      <p style={{ fontSize: 12.5, marginTop: 0 }}>
+        Como el source, el códec de audio y los idiomas ya no tienen que coincidir, una temporada
+        puede tener <strong>varios valores</strong> en esos campos. La ficha te los enseña todos
+        (<code>WEB-DL, BluRay</code>) en vez de dejarlos en blanco. Pero al cruzarla con una
+        petición, un campo mezclado se comporta como <strong>«no lo sé»</strong>: no puede
+        prometerse. Solo deja de importar si la petición no restringe ese campo.
+      </p>
+      <div style={{ overflowX: 'auto' }}>
+        <table className="data-table" style={{ fontSize: 12.5 }}>
+          <thead>
+            <tr><th>La petición pide</th><th>Tu temporada tiene</th><th>Resultado</th><th>Por qué</th></tr>
+          </thead>
+          <tbody>
+            {([
+              ['1080p · WEB-DL', '1080p · WEB-DL en todos', 'ok', 'Coincidencia perfecta.'],
+              ['1080p · cualquier source', '1080p · WEB-DL, BluRay', 'ok', 'La petición no restringe el source, así que la mezcla da igual.'],
+              ['1080p · WEB-DL', '1080p · WEB-DL, BluRay', 'warn', 'No puedes prometer WEB-DL: la mitad de los capítulos no lo son.'],
+              ['720p · cualquier source', '1080p en todos', 'ok', 'La comparación es «iguala o mejora», y 1080p supera lo pedido.'],
+              ['1080p · WEB-DL', '1080p, 720p mezclado', 'warn', 'No puedes prometer una resolución que no tienen todos. Y además esa temporada no se puede subir como pack.'],
+              ['Sin resolución · cualquier source', '1080p, 720p mezclado', 'warn', 'La comparación no tiene nada que exigir, pero el pack sigue bloqueado por la resolución, así que no sale Compatible: sus capítulos sí se pueden subir uno a uno.'],
+              ['2160p · BluRay', '1080p · WEB-DL', 'blocked', 'Fallan los dos campos.'],
+            ] as [string, string, Verdict, string][]).map(([pide, tengo, verdict, why], i) => (
+              <tr key={i}>
+                <td style={{ fontFamily: 'monospace' }}>{pide}</td>
+                <td style={{ fontFamily: 'monospace' }}>{tengo}</td>
+                <td><VerdictCell verdict={verdict} label={verdict === 'ok' ? 'Compatible' : verdict === 'warn' ? 'Parcial' : 'No compatible'} /></td>
+                <td>{why}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p style={{ fontSize: 12.5 }}>
+        <strong>Ojo con la penúltima fila.</strong> Si la petición no pide resolución, la comparación
+        no tiene nada que exigir y saldría Compatible aunque la temporada esté descuadrada. Como ese
+        pack no se puede armar, se baja a Parcial y se explica el motivo: prometer algo que la subida
+        va a rechazar es peor que no prometerlo.
+      </p>
     </>
   )
 }

@@ -171,3 +171,117 @@ def test_build_mediainfo_report_codec_row_shows_encoder_fingerprint_alongside_fo
     by_field = {row["field"]: row for row in r["rows"]}
     assert by_field["Códec de vídeo"]["mediainfo"] == "AVC (x264)"
     assert by_field["Códec de vídeo"]["emu"] == "x264"
+
+
+# ---------------------------------------------------------------------------
+# One entry per real audio track, in track order
+# ---------------------------------------------------------------------------
+
+def _mediainfo_with_audio(tracks: list[dict]):
+    return {"media": {"track": [
+        {"@type": "General"},
+        {"@type": "Video", "Format": "HEVC", "Width": "1920", "Height": "1080"},
+        *[{"@type": "Audio", **t} for t in tracks],
+        {"@type": "Text", "Language": "spa"},
+    ]}}
+
+
+def _summary(tmp_path, tracks):
+    f = tmp_path / "movie.mkv"
+    f.write_text("fake")
+    with (
+        patch.object(svc, "mediainfo_available", return_value=True),
+        patch.object(svc.legacy, "run_mediainfo_json", return_value=_mediainfo_with_audio(tracks)),
+    ):
+        return svc.build_mediainfo_report(str(f))["audio_summary"]
+
+
+def test_repeated_language_with_different_codecs_keeps_every_track(tmp_path):
+    """The regression: languages were de-duplicated (the DUAL/MULTI rules need
+    distinct ones) but codecs/channels were not, and the three lists were then
+    zipped together. Every entry after a repeated language landed on the wrong
+    codec and the last track vanished: this file came out as
+    "JAP TrueHD 5.1 CAT DD 5.1 ESP DD+ 2.0" — Catalan wearing the second
+    Japanese track's codec, and the fourth track gone."""
+    summary = _summary(tmp_path, [
+        # A real TrueHD track: MediaInfo reports the raw format as "MLP FBA"
+        # and the commercial name separately, which is what audio_codec reads.
+        {"Format": "MLP FBA", "Format_Commercial_IfAny": "Dolby TrueHD",
+         "Language": "ja", "Channels": "6"},
+        {"Format": "AC-3", "Language": "ja", "Channels": "6"},
+        {"Format": "E-AC-3", "Language": "ca", "Channels": "2"},
+        {"Format": "E-AC-3", "Language": "es", "Channels": "2"},
+    ])
+    # Two Japanese tracks on different codecs stay apart; Catalan and Spanish
+    # share a codec AND channel count, so they are ONE entry.
+    assert summary == "JAP TrueHD 5.1 JAP DD 5.1 ESP-CAT DD+ 2.0"
+
+
+def test_languages_sharing_a_codec_join_with_a_hyphen(tmp_path):
+    """Straight out of the guide: "…BDRemux AVC ESP-CAT TrueHD 5.1…". Listing
+    them separately would claim two audio tracks where the release states one
+    shared one."""
+    summary = _summary(tmp_path, [
+        {"Format": "MLP FBA", "Format_Commercial_IfAny": "Dolby TrueHD",
+         "Language": "ca", "Channels": "6"},
+        {"Format": "MLP FBA", "Format_Commercial_IfAny": "Dolby TrueHD",
+         "Language": "es", "Channels": "6"},
+    ])
+    # Spanish leads regardless of track order, same as _split_languages sorts it.
+    assert summary == "ESP-CAT TrueHD 5.1"
+
+
+def test_same_language_different_channels_stays_apart(tmp_path):
+    """Same codec but a different channel layout is a different entry: the
+    grouping keys on both."""
+    summary = _summary(tmp_path, [
+        {"Format": "AC-3", "Language": "es", "Channels": "6"},
+        {"Format": "AC-3", "Language": "es", "Channels": "2"},
+    ])
+    assert summary == "ESP DD 5.1 ESP DD 2.0"
+
+
+def test_every_track_keeps_its_own_codec(tmp_path):
+    summary = _summary(tmp_path, [
+        {"Format": "DTS", "Language": "es", "Channels": "6"},
+        {"Format": "AC-3", "Language": "en", "Channels": "2"},
+    ])
+    assert summary == "ESP DTS 5.1 ING DD 2.0"
+
+
+def test_identical_tracks_are_not_listed_twice(tmp_path):
+    """Same language AND codec AND channels twice adds nothing to the name."""
+    summary = _summary(tmp_path, [
+        {"Format": "AC-3", "Language": "es", "Channels": "6"},
+        {"Format": "AC-3", "Language": "es", "Channels": "6"},
+    ])
+    assert summary == "ESP DD 5.1"
+
+
+def test_dual_applies_per_entry_not_to_the_whole_file(tmp_path):
+    """DUAL describes ONE audio entry, so a file whose tracks don't all share a
+    codec still gets it on the entry that does."""
+    summary = _summary(tmp_path, [
+        {"Format": "DTS", "Language": "ja", "Channels": "6"},
+        {"Format": "E-AC-3", "Language": "es", "Channels": "2"},
+        {"Format": "E-AC-3", "Language": "en", "Channels": "2"},
+    ])
+    assert summary == "JAP DTS 5.1 DUAL DD+ 2.0"
+
+
+def test_dual_shortcut_still_applies(tmp_path):
+    """Spanish + English on the same codec/channels stays "DUAL", it doesn't
+    become two spelled-out entries."""
+    summary = _summary(tmp_path, [
+        {"Format": "E-AC-3", "Language": "es", "Channels": "6"},
+        {"Format": "E-AC-3", "Language": "en", "Channels": "6"},
+    ])
+    assert summary == "DUAL DD+ 5.1"
+
+
+def test_multi_shortcut_still_applies(tmp_path):
+    summary = _summary(tmp_path, [
+        {"Format": "AC-3", "Language": lang, "Channels": "6"}
+        for lang in ("es", "en", "fr", "de")
+    ])
+    assert summary == "MULTI DD 5.1"

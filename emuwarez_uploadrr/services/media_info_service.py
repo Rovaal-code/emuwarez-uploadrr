@@ -255,6 +255,21 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
     # Audio tracks (one row each) + combined eMuwarez segment
     audio_tracks = [t for t in legacy.media_tracks(info) if t.get("@type") == "Audio"]
     codecs, langs, channels = [], [], []
+    # One "IDIOMA CÓDEC CANALES" per real track, in track order. Built here
+    # rather than zipped together afterwards from the three parallel lists,
+    # because `langs` is de-duplicated (it has to be: the DUAL/MULTI rules
+    # below count DISTINCT languages) while codecs/channels are not. Zipping
+    # them shifted every entry after the first repeated language onto the wrong
+    # codec and silently dropped the last track — a release with two Japanese
+    # tracks came out as "JAP TrueHD 5.1 CAT DD 5.1 ESP DD+ 2.0", giving
+    # Catalan the second Japanese track's codec and losing the fourth track
+    # entirely. And this string is not just for show: it goes into the release
+    # name (services/source_assistant.py's audio_summary).
+    # Grouped by (codec, channels): tracks that share both are ONE entry whose
+    # languages join with a hyphen, which is what the spec asks for — see the
+    # guide's own "ESP-CAT TrueHD 5.1". Listing them separately would claim two
+    # audio tracks where the release states one shared one.
+    groups: dict[tuple[str, str], list[str]] = {}
     for i, tr in enumerate(audio_tracks, 1):
         raw_lang = tr.get("Language") or tr.get("Language_String") or ""
         lang = emu_format.format_language(raw_lang) or "UND"
@@ -264,18 +279,33 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
         channels.append(ch)
         if lang not in langs:
             langs.append(lang)
+        key = (codec, ch)
+        # Same language twice on the SAME codec adds nothing; on a different
+        # codec it's a genuinely different track and gets its own entry.
+        if lang not in groups.setdefault(key, []):
+            groups[key].append(lang)
         mi = " ".join(x for x in (tr.get("Format"), raw_lang or "?", tr.get("Channel_s_") or tr.get("Channels")) if x)
+        # The per-track row keeps saying what THIS track is, even when it ends
+        # up sharing an entry with another one in the combined segment below.
         add(f"Audio {i}", mi, f"{lang} {codec} {ch}")
 
     audio_summary = None
     if audio_tracks:
-        same = len({(c, ch) for c, ch in zip(codecs, channels)}) == 1
-        if same and len(langs) == 2 and "ESP" in langs and "ING" in langs:
-            audio_summary = f"DUAL {codecs[0]} {channels[0]}"
-        elif same and len(langs) >= 4:
-            audio_summary = f"MULTI {codecs[0]} {channels[0]}"
-        else:
-            audio_summary = " ".join(f"{l} {c} {ch}" for l, c, ch in zip(langs, codecs, channels))
+        # Same DUAL/MULTI rules as emu_format.build_audio_string, but applied
+        # per group instead of once over every track: they describe ONE audio
+        # entry, so a file whose tracks don't all share a codec still gets them
+        # on the entries that do.
+        entries = []
+        for (codec, ch), group_langs in groups.items():
+            ordered = sorted(group_langs, key=lambda c: (0 if c == "ESP" else 1))
+            if len(ordered) == 2 and "ESP" in ordered and "ING" in ordered:
+                token = "DUAL"
+            elif len(ordered) >= 4:
+                token = "MULTI"
+            else:
+                token = "-".join(ordered)
+            entries.append(" ".join(x for x in (token, codec, ch) if x))
+        audio_summary = " ".join(entries)
         add("Audio (eMuwarez)", f"{len(audio_tracks)} pista(s)", audio_summary)
 
     # Subtitles

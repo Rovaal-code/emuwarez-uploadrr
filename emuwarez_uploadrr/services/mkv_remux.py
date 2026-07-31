@@ -303,6 +303,30 @@ def _channels_label(n) -> str:
 # mkvmerge availability + track reading
 # ---------------------------------------------------------------------------
 
+def reorder_tracks_enabled(conn=None) -> bool:
+    """Si el remux además REORDENA las pistas o solo las renombra y marca.
+
+    Apagado por defecto: reordenar obliga a reescribir el contenedor entero,
+    y eso sustituye el fichero por uno nuevo (os.replace), lo que rompe
+    cualquier hardlink que compartiera. Renombrar y marcar cambia lo mismo de
+    cara al reproductor sin obligar a ese cambio de orden.
+    """
+    own = conn is None
+    if own:
+        from ..database import connect as _connect
+        conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT value FROM settings WHERE key = 'remux.reorder_tracks'"
+        ).fetchone()
+        return (row["value"] if row else "") == "true"
+    except Exception:
+        return False
+    finally:
+        if own:
+            conn.close()
+
+
 def check_mkvmerge_available() -> dict:
     path = shutil.which("mkvmerge")
     if path:
@@ -395,7 +419,7 @@ def _default_subtitle_id(audio_sorted: list[dict], subs_sorted: list[dict]) -> i
         return full["id"]
     return subs_sorted[0]["id"] if subs_sorted else None
 
-def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None) -> dict:
+def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None, reorder: bool = True) -> dict:
     """Turn a parsed `mkvmerge -J` structure into a reorder+rename plan: which
     track ids go where, and what name each gets. Pure function — no I/O.
 
@@ -439,7 +463,15 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None) -> 
     # group, it never jumps ahead of a higher-priority language.
     subs_sorted = sorted(subs, key=lambda t: (t["_priority"], not t["forced"]))
 
-    new_order = [t["id"] for t in video] + [t["id"] for t in audio_sorted] + [t["id"] for t in subs_sorted]
+    # `reorder=False`: las pistas se quedan donde están y solo se renombran y
+    # se marcan las predeterminadas. Los nombres y el flag se siguen decidiendo
+    # con el orden de prioridad de arriba (es una regla de IDIOMA, no de
+    # posición), así que el castellano queda igual de marcado; simplemente no
+    # se mueve de sitio.
+    if reorder:
+        new_order = [t["id"] for t in video] + [t["id"] for t in audio_sorted] + [t["id"] for t in subs_sorted]
+    else:
+        new_order = [t["id"] for t in tracks]
 
     for t in video:
         res = known_resolution or _resolution_label(t["pixel_dimensions"])
@@ -466,7 +498,9 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None) -> 
         # depends on what the audio offers (see _default_subtitle_id).
         t["default_after"] = (t["id"] == default_sub_id)
 
-    ordered_tracks = video + audio_sorted + subs_sorted
+    # La tabla de "Ver Remux" sigue el orden que va a quedar en el fichero.
+    by_id = {t["id"]: t for t in (video + audio_sorted + subs_sorted)}
+    ordered_tracks = [by_id[i] for i in new_order if i in by_id]
     order_changed = [t["id"] for t in tracks] != new_order
     for t in ordered_tracks:
         t["changed"] = (
@@ -585,7 +619,8 @@ def build_remux_plan(library_item_id: int, conn=None) -> dict:
         if not read.get("ok"):
             return {**base, "status": "blocked", "errors": [f"mkvmerge -J falló: {read.get('error')}"]}
 
-        plan = build_track_plan(read["data"], known_resolution=_get_known_resolution(library_item_id, conn))
+        plan = build_track_plan(read["data"], known_resolution=_get_known_resolution(library_item_id, conn),
+                                reorder=reorder_tracks_enabled(conn))
         if not plan["tracks"]:
             return {**base, "status": "blocked", "errors": ["mkvmerge no encontró pistas en el archivo."]}
 
@@ -666,7 +701,8 @@ def apply_remux(
         if not read.get("ok"):
             return {**preview, "status": "blocked", "dry_run": False, "apply": False,
                      "errors": [f"mkvmerge -J falló: {read.get('error')}"]}
-        plan = build_track_plan(read["data"], known_resolution=_get_known_resolution(library_item_id, conn))
+        plan = build_track_plan(read["data"], known_resolution=_get_known_resolution(library_item_id, conn),
+                                reorder=reorder_tracks_enabled(conn))
         plan = apply_track_overrides(plan, overrides)
 
         if not plan["any_changed"]:

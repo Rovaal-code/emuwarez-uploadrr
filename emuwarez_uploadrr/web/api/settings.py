@@ -91,6 +91,8 @@ class SettingsResponse(BaseModel):
     source_engine_enabled: bool = False
     # El logo del contenido en la descripción. Se sube por defecto.
     emu_add_logo: bool = True
+    # Reordenar pistas al remuxear. Apagado por defecto.
+    remux_reorder_tracks: bool = False
     recent_activity_limit: int = 100
     upload_max_concurrent: int = 1
     # Remote path mappings: [{"from": "/data/media", "to": "/mnt/emu-media"}]
@@ -135,6 +137,7 @@ class SettingsUpdateRequest(BaseModel):
     series_ignore_specials: Optional[bool] = None
     source_engine_enabled: Optional[bool] = None
     emu_add_logo: Optional[bool] = None
+    remux_reorder_tracks: Optional[bool] = None
     recent_activity_limit: Optional[int] = None
     upload_max_concurrent: Optional[int] = None
     path_mappings: Optional[list[dict]] = None
@@ -293,6 +296,7 @@ def _build_response(conn) -> SettingsResponse:
         series_ignore_specials=(get_setting_canonical(conn, "series.ignore_specials") or "true") != "false",
         source_engine_enabled=get_setting_canonical(conn, "source_engine.enabled") == "true",
         emu_add_logo=get_setting_canonical(conn, "emu.add_logo") != "false",
+        remux_reorder_tracks=get_setting_canonical(conn, "remux.reorder_tracks") == "true",
         recent_activity_limit=_read_recent_activity_limit(conn),
         upload_max_concurrent=get_upload_max_concurrent(conn),
         path_mappings=_read_path_mappings(conn),
@@ -460,6 +464,8 @@ def update_settings(
             set_setting(conn, "source_engine.enabled", "true" if body.source_engine_enabled else "false")
         if body.emu_add_logo is not None:
             set_setting(conn, "emu.add_logo", "true" if body.emu_add_logo else "false")
+        if body.remux_reorder_tracks is not None:
+            set_setting(conn, "remux.reorder_tracks", "true" if body.remux_reorder_tracks else "false")
 
         if body.recent_activity_limit is not None:
             if body.recent_activity_limit not in _RECENT_ACTIVITY_CHOICES:

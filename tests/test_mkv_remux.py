@@ -362,9 +362,33 @@ def test_plan_ready_with_mocked_mkvmerge(tmp_path):
         result = build_remux_plan(item_id, conn=conn)
 
     assert result["status"] == "ready"
-    assert result["order_changed"] is True
+    # Reordenar viene apagado de fábrica, así que el orden no cambia: lo que
+    # se aplica son los nombres y las marcas de predeterminada.
+    assert result["order_changed"] is False
+    # status "ready" ya significa que hay algo que aplicar (los renombrados);
+    # sería "warning" si no hubiera nada.
     assert len(result["ordered_tracks"]) == 6
     assert "command_preview" in result
+
+
+def test_plan_reorders_when_the_setting_is_on(tmp_path):
+    """Y con el ajuste encendido vuelve a reordenar, que es el comportamiento
+    de siempre."""
+    mkv_file = tmp_path / "Film.2024.mkv"
+    mkv_file.write_bytes(b"fake mkv")
+    conn = _make_conn(tmp_path)
+    item_id = _insert_library_item(conn, prepared_path=str(mkv_file))
+    conn.execute("INSERT OR REPLACE INTO settings(key, value) VALUES ('remux.reorder_tracks', 'true')")
+    conn.commit()
+
+    with patch("emuwarez_uploadrr.services.mkv_remux.check_mkvmerge_available") as mock_chk, \
+         patch("emuwarez_uploadrr.services.mkv_remux.read_tracks_json") as mock_read:
+        mock_chk.return_value = {"available": True, "path": "/usr/bin/mkvmerge"}
+        mock_read.return_value = {"ok": True, "data": _SAMPLE_MKV_JSON}
+        from emuwarez_uploadrr.services.mkv_remux import build_remux_plan
+        result = build_remux_plan(item_id, conn=conn)
+
+    assert result["order_changed"] is True
 
 
 def test_apply_requires_confirmation(tmp_path):
@@ -654,3 +678,54 @@ def test_no_castilian_anywhere_falls_back_to_the_first_subtitle():
 def test_a_file_with_no_subtitles_at_all_has_no_default():
     _, default, _ = _plan_with(["spa"], [])
     assert default is None
+
+
+# ---------------------------------------------------------------------------
+# Reordenar es opcional: apagado, solo se renombra y se marca
+# ---------------------------------------------------------------------------
+
+_MIXED = {"tracks": [
+    {"id": 0, "type": "video", "codec": "AVC", "properties": {"pixel_dimensions": "1920x1080"}},
+    # Inglés antes que castellano a propósito: con reordenado, el castellano
+    # sube; sin él, se queda donde está pero igualmente marcado.
+    {"id": 1, "type": "audio", "codec": "AC-3", "properties": {"language": "eng", "audio_channels": 6}},
+    {"id": 2, "type": "audio", "codec": "AC-3", "properties": {"language": "spa", "audio_channels": 6}},
+    {"id": 3, "type": "subtitles", "codec": "SubRip", "properties": {"language": "eng"}},
+    {"id": 4, "type": "subtitles", "codec": "SubRip", "properties": {"language": "spa"}},
+]}
+
+
+def test_reorder_on_moves_castilian_first():
+    from emuwarez_uploadrr.services.mkv_remux import build_track_plan
+    plan = build_track_plan(_MIXED, reorder=True)
+    assert plan["new_order"] == [0, 2, 1, 4, 3]
+    assert plan["order_changed"] is True
+
+
+def test_reorder_off_keeps_the_file_order_but_still_renames_and_marks():
+    """Sin reordenar, las pistas se quedan donde están. Pero el nombre y la
+    marca de predeterminada se deciden igual, porque son reglas de IDIOMA y no
+    de posición: el castellano sigue siendo el marcado aunque vaya el segundo."""
+    from emuwarez_uploadrr.services.mkv_remux import build_track_plan
+    plan = build_track_plan(_MIXED, reorder=False)
+    assert plan["new_order"] == [0, 1, 2, 3, 4]
+    assert plan["order_changed"] is False
+
+    by_id = {t["id"]: t for t in plan["ordered_tracks"]}
+    # El castellano queda marcado, esté donde esté.
+    assert by_id[2]["default_after"] is True     # audio ESP
+    assert by_id[1]["default_after"] is False    # audio ING
+    # Con doblaje castellano no se activa ningún subtítulo (no hay forzado).
+    assert by_id[4]["default_after"] is False
+    assert by_id[3]["default_after"] is False
+    # Y los nombres se aplican igual que con reordenado.
+    assert by_id[2]["new_name"] == "Español (Castellano) - DD 5.1"
+    assert by_id[4]["new_name"] == "Español (Castellano)"
+
+
+def test_reorder_off_still_reports_the_renames_as_a_change():
+    """order_changed=False no puede significar "no hay nada que hacer": los
+    nombres y las marcas siguen cambiando y hay que aplicarlos."""
+    from emuwarez_uploadrr.services.mkv_remux import build_track_plan
+    plan = build_track_plan(_MIXED, reorder=False)
+    assert plan["any_changed"] is True

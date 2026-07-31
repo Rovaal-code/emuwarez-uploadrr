@@ -11,6 +11,7 @@ export interface SettingsData {
   qbit_tag: string | null
   source_engine_enabled: boolean
   emu_add_logo: boolean
+  remux_reorder_tracks: boolean
   qbit_username: string | null
   qbit_password_configured: boolean
   qbit_configured: boolean
@@ -54,6 +55,7 @@ export interface SettingsUpdatePayload {
   qbit_tag?: string
   source_engine_enabled?: boolean
   emu_add_logo?: boolean
+  remux_reorder_tracks?: boolean
   qbit_username?: string
   qbit_password?: string
   image_hosts_enabled?: string[]

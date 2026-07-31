@@ -50,14 +50,14 @@ function formatBytes(n: number) {
 // know whether there are unsaved changes. Array order is fixed on purpose.
 function configSignature(v: {
   tag: string; providerOrder: string[]; region: string
-  emuUsername: string; ignoreSpecials: boolean; sourceEngine: boolean; addLogo: boolean
+  emuUsername: string; ignoreSpecials: boolean; sourceEngine: boolean; addLogo: boolean; reorderTracks: boolean
   recentLimit: number; uploadMaxConcurrent: number; qbitUrl: string; qbitTag: string; qbitUser: string
   imgEnabled: string[]; allowedRoots: string
   newKey?: string; newEmuKey?: string; qbitPass?: string
 }): string {
   return JSON.stringify([
     v.tag, v.providerOrder, v.region, v.emuUsername,
-    v.ignoreSpecials, v.sourceEngine, v.addLogo, v.recentLimit, v.uploadMaxConcurrent, v.qbitUrl, v.qbitTag, v.qbitUser, v.imgEnabled, v.allowedRoots,
+    v.ignoreSpecials, v.sourceEngine, v.addLogo, v.reorderTracks, v.recentLimit, v.uploadMaxConcurrent, v.qbitUrl, v.qbitTag, v.qbitUser, v.imgEnabled, v.allowedRoots,
     v.newKey ?? '', v.newEmuKey ?? '', v.qbitPass ?? '',
   ])
 }
@@ -101,6 +101,8 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const [sourceEngine, setSourceEngine] = useState(false)
   // El logo del contenido en la descripción: se sube por defecto.
   const [addLogo, setAddLogo] = useState(true)
+  // Reordenar pistas: apagado por defecto, reescribe el contenedor entero.
+  const [reorderTracks, setReorderTracks] = useState(false)
   const [recentLimit, setRecentLimit] = useState(100)
   const [uploadMaxConcurrent, setUploadMaxConcurrent] = useState(1)
   const [testingConcurrency, setTestingConcurrency] = useState(false)
@@ -135,7 +137,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const [baseline, setBaseline] = useState('')
   const currentSig = configSignature({
     tag, providerOrder, region, emuUsername,
-    ignoreSpecials, sourceEngine, addLogo, recentLimit, uploadMaxConcurrent, qbitUrl, qbitTag, qbitUser, imgEnabled, allowedRoots,
+    ignoreSpecials, sourceEngine, addLogo, reorderTracks, recentLimit, uploadMaxConcurrent, qbitUrl, qbitTag, qbitUser, imgEnabled, allowedRoots,
     newKey, newEmuKey, qbitPass,
   })
   const dirty = baseline !== '' && currentSig !== baseline
@@ -190,6 +192,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         setIgnoreSpecials(s.series_ignore_specials ?? true)
         setSourceEngine(s.source_engine_enabled ?? false)
         setAddLogo(s.emu_add_logo ?? true)
+        setReorderTracks(s.remux_reorder_tracks ?? false)
         setRecentLimit(s.recent_activity_limit ?? 100)
         setUploadMaxConcurrent(s.upload_max_concurrent ?? 1)
         setQbitUrl(s.qbit_url ?? '')
@@ -201,7 +204,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           tag: s.default_release_tag, providerOrder: s.provider_priority_order,
           region: s.tmdb_watch_region,
           emuUsername: s.emu_username ?? '',
-          ignoreSpecials: s.series_ignore_specials ?? true, sourceEngine: s.source_engine_enabled ?? false, addLogo: s.emu_add_logo ?? true,
+          ignoreSpecials: s.series_ignore_specials ?? true, sourceEngine: s.source_engine_enabled ?? false, addLogo: s.emu_add_logo ?? true, reorderTracks: s.remux_reorder_tracks ?? false,
           recentLimit: s.recent_activity_limit ?? 100,
           uploadMaxConcurrent: s.upload_max_concurrent ?? 1,
           qbitUrl: s.qbit_url ?? '', qbitTag: s.qbit_tag ?? '', qbitUser: s.qbit_username ?? '',
@@ -296,6 +299,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         series_ignore_specials: ignoreSpecials,
         source_engine_enabled: sourceEngine,
         emu_add_logo: addLogo,
+        remux_reorder_tracks: reorderTracks,
         recent_activity_limit: recentLimit,
         upload_max_concurrent: uploadMaxConcurrent,
         qbit_url: qbitUrl.trim(),
@@ -330,7 +334,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         tag: updated.default_release_tag, providerOrder: updated.provider_priority_order,
         region: updated.tmdb_watch_region,
         emuUsername: updated.emu_username ?? '',
-        ignoreSpecials: updated.series_ignore_specials ?? true, sourceEngine: updated.source_engine_enabled ?? false, addLogo: updated.emu_add_logo ?? true,
+        ignoreSpecials: updated.series_ignore_specials ?? true, sourceEngine: updated.source_engine_enabled ?? false, addLogo: updated.emu_add_logo ?? true, reorderTracks: updated.remux_reorder_tracks ?? false,
         recentLimit: updated.recent_activity_limit ?? 100,
         uploadMaxConcurrent: updated.upload_max_concurrent ?? 1,
         qbitUrl: updated.qbit_url ?? '', qbitTag: updated.qbit_tag ?? '', qbitUser: updated.qbit_username ?? '',
@@ -606,21 +610,36 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                               type="button"
                               title={guardada ? 'API key guardada. Pulsa para cambiarla' : 'Falta la API key. Pulsa para añadirla'}
                               className={`badge ${guardada ? 'status-available' : 'nom-na badge-blink'}`}
-                              style={{ fontSize: 10, cursor: 'pointer', border: 'none' }}
+                              // Sin border:none — .badge lleva su propio borde
+                              // y quitarlo era lo que lo hacía distinto del
+                              // "por defecto" de al lado. El resto neutraliza
+                              // lo que el navegador le añade a un <button>:
+                              // su tipografía, su interlineado y su margen.
+                              style={{
+                                fontSize: 10, cursor: 'pointer', appearance: 'none',
+                                fontFamily: 'inherit', lineHeight: 'inherit', margin: 0,
+                              }}
                               onClick={e => { e.stopPropagation(); setKeyModalHost(id); setKeyDraft('') }}
                               onMouseDown={e => e.stopPropagation()}
                             >API key</button>
                           )
                         })()}
-                        <button className="btn btn-secondary btn-sm" style={{ marginLeft: 'auto', fontSize: 11, padding: '2px 8px' }}
-                          onClick={() => handleTestImghost(id)} disabled={imgTesting === id} type="button">
-                          {imgTesting === id ? 'Probando…' : 'Probar'}
-                        </button>
+                        {/* Los que llevan API key se prueban DENTRO de su
+                            tarjeta, que es donde está la clave. Aquí el botón
+                            dejaría su resultado donde ya no se enseña. */}
+                        {!h.needs_key && (
+                          <button className="btn btn-secondary btn-sm" style={{ marginLeft: 'auto', fontSize: 11, padding: '2px 8px' }}
+                            onClick={() => handleTestImghost(id)} disabled={imgTesting === id} type="button">
+                            {imgTesting === id ? 'Probando…' : 'Probar'}
+                          </button>
+                        )}
                         {!isDefault && (
                           <RemoveImgHostButton onClick={() => toggleImgHost(id)} />
                         )}
                       </div>
-                      {t && <div style={{ fontSize: 11, marginTop: 4, color: testResultColor(t) }}>{testResultLabel(t)}</div>}
+                      {/* Solo para los que no tienen tarjeta: los demás ya lo
+                          enseñan ahí y salía dos veces. */}
+                      {!h.needs_key && t && <div style={{ fontSize: 11, marginTop: 4, color: testResultColor(t) }}>{testResultLabel(t)}</div>}
                     </div>
                   )
                 }} />
@@ -857,6 +876,16 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           <select className="form-input form-select" value={addLogo ? 'true' : 'false'} onChange={e => setAddLogo(e.target.value === 'true')}>
             <option value="true">Sí</option>
             <option value="false">No</option>
+          </select>
+        </div>
+        <div className="form-group">
+          <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            Reordenar pistas al remuxear
+            <InfoIcon text="Activado, las pistas se colocan en orden (Español, Català, Inglés, resto) además de renombrarse. Desactivado, se quedan donde están y solo se renombran y se marca la predeterminada, con las mismas reglas. Reordenar obliga a reescribir el contenedor entero y eso sustituye el archivo por uno nuevo, así que rompe cualquier hardlink que compartiera con tu cliente de torrent: el torrent sigue sembrando bien, pero pasas a ocupar el doble en disco." />
+          </label>
+          <select className="form-input form-select" value={reorderTracks ? 'true' : 'false'} onChange={e => setReorderTracks(e.target.value === 'true')}>
+            <option value="false">No</option>
+            <option value="true">Sí</option>
           </select>
         </div>
       </div>

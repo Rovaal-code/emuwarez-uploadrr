@@ -69,8 +69,11 @@ def test_preview_track_remux_ready(client, auth_headers, tmp_path):
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "ready"
+    # Reordenar viene apagado de fábrica: las pistas salen en el orden del
+    # fichero. Lo que sí se aplica, igual que siempre, son los nombres.
     audio_names = [t["new_name"] for t in data["ordered_tracks"] if t["type"] == "audio"]
-    assert audio_names == ["Español (Castellano) - DD 5.1", "Inglés - DD 2.0"]
+    assert sorted(audio_names) == sorted(["Español (Castellano) - DD 5.1", "Inglés - DD 2.0"])
+    assert data["order_changed"] is False
 
 
 def test_apply_track_remux_requires_auth(client):

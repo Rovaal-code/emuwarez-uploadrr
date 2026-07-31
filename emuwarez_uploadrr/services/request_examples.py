@@ -104,12 +104,21 @@ def _library_pool(conn: sqlite3.Connection) -> dict[str, list[dict]]:
     """Library rows usable as the basis for an example, split by what they can
     demonstrate. Only movies and seasons: those are the levels a request is
     actually about, and the ones Recomendaciones works with."""
+    # The parent series' own title comes along for season rows: a REAL request
+    # names the series and carries the season in req_scope/req_season, it does
+    # not put "Serie - Temporada 2" in the title field. Getting that wrong is
+    # what made a season example show every season in its detail and drop the
+    # season from the comparison table.
     rows = [dict(r) for r in conn.execute(
-        """SELECT id, item_type, title, year, tmdb_id, imdb_id, resolution, source, local_status,
-                  video_codec, audio_codec, audio_languages, has_spanish_ok
-             FROM library_items
-            WHERE item_type IN ('movie', 'season') AND (tmdb_id IS NOT NULL OR title IS NOT NULL)
-            ORDER BY id"""
+        """SELECT li.id, li.item_type, li.title, li.year, li.tmdb_id, li.imdb_id,
+                  li.resolution, li.source, li.local_status, li.video_codec, li.audio_codec,
+                  li.audio_languages, li.has_spanish_ok, li.season_number,
+                  parent.title AS series_title, parent.year AS series_year
+             FROM library_items li
+             LEFT JOIN library_items parent ON parent.id = li.parent_id
+            WHERE li.item_type IN ('movie', 'season')
+              AND (li.tmdb_id IS NOT NULL OR li.title IS NOT NULL)
+            ORDER BY li.id"""
     ).fetchall()]
     held, missing = [], []
     for r in rows:
@@ -161,14 +170,25 @@ def _category_for(item: dict) -> str:
 
 def _row_for(item: dict, *, resolution: Optional[str], source: Optional[str],
              emu_status: Optional[str]) -> dict[str, Any]:
+    is_season = item.get("item_type") == "season"
+    # A real request names the SERIES and says which season it wants through
+    # req_scope/req_season. Everything downstream reads those two: the
+    # comparison table only appends "- Season N" when req_season is set
+    # (services/requests.py::_comparison_content_name), the detail narrows to
+    # that one season through them (_effective_target), and the canonical
+    # display title is built from them. Leaving them empty is what made a
+    # season example list every season of the series.
     return {
-        "title": item.get("title") or "Sin título",
+        "title": (item.get("series_title") or item.get("title") or "Sin título") if is_season
+                 else (item.get("title") or "Sin título"),
         "category": _category_for(item),
         "requested_resolution": resolution,
         "requested_source": source,
         "emu_status": emu_status,
         "tmdb_id": item.get("tmdb_id"),
         "imdb_id": item.get("imdb_id"),
+        "req_scope": "season" if is_season else None,
+        "req_season": item.get("season_number") if is_season else None,
     }
 
 
@@ -189,10 +209,13 @@ def _build_group(kind: str, count: int, pool: dict[str, list[dict]], used: set[i
         # No library counterpart at all → the matcher finds no candidate and the
         # request shows up with no compatibility verdict.
         for title, item_type, res, src in _INVENTED[:count]:
+            is_tv = item_type == "tv"
             out.append({
-                "title": title, "category": "TV" if item_type == "tv" else "Movie",
+                "title": title, "category": "TV" if is_tv else "Movie",
                 "requested_resolution": res, "requested_source": src,
                 "emu_status": None, "tmdb_id": None, "imdb_id": None,
+                "req_scope": "season" if is_tv else None,
+                "req_season": 1 if is_tv else None,
             })
         return out
 
@@ -290,8 +313,9 @@ def generate_examples(conn: sqlite3.Connection) -> dict[str, Any]:
                 """INSERT INTO request_items(
                        emu_id, title, category, requested_source, requested_resolution,
                        emu_status, points, comments, created_at, tmdb_id, imdb_id, url,
-                       author, author_visible, raw_json, is_example, updated_at)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,CURRENT_TIMESTAMP)""",
+                       author, author_visible, raw_json, req_scope, req_season,
+                       is_example, updated_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,CURRENT_TIMESTAMP)""",
                 (
                     f"{EXAMPLE_ID_PREFIX}{created}", row["title"], row["category"],
                     row["requested_source"], row["requested_resolution"], row["emu_status"],
@@ -299,6 +323,7 @@ def generate_examples(conn: sqlite3.Connection) -> dict[str, Any]:
                     row["tmdb_id"], row["imdb_id"], _EXAMPLE_URL,
                     author, 1 if author else 0,
                     json.dumps({"example": True, "group": kind}, ensure_ascii=False),
+                    row.get("req_scope"), row.get("req_season"),
                 ),
             )
     conn.commit()

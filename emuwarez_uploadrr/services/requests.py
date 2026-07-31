@@ -708,9 +708,13 @@ def _series_title_year(conn, lib: dict) -> tuple:
 
 
 def _comparison_content_name(conn, lib: dict, req: dict) -> str:
-    """Friendly name for the comparison table: "Serie (año) - Season N" and, for
-    an episode request, "Serie (año) - Season N - SxxEyy"; "Título (año)" for a
-    movie."""
+    """Friendly name for the comparison table: "Serie (año) - Temporada N" and,
+    for an episode request, "Serie (año) - Temporada N - SxxEyy"; "Título (año)"
+    for a movie.
+
+    "Temporada" and not "Season": this is the only place in the app that said it
+    in English, so the same content read "Temporada 2" everywhere else and
+    "Season 2" here."""
     scope, season, episode = req.get("req_scope"), req.get("req_season"), req.get("req_episode")
     if lib.get("item_type") in ("series", "season", "episode") or season is not None:
         title, year = _series_title_year(conn, lib)
@@ -718,7 +722,7 @@ def _comparison_content_name(conn, lib: dict, req: dict) -> str:
         if year:
             name += f" ({year})"
         if season is not None:
-            name += f" - Season {season}"
+            name += f" - Temporada {season}"
             if scope == "episode" and episode is not None:
                 try:
                     name += f" - S{int(season):02d}E{int(episode):02d}"

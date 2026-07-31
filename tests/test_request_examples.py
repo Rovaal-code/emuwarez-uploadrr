@@ -299,3 +299,46 @@ def test_no_username_configured_means_no_authored_request(db_conn):
         "SELECT COUNT(*) AS n FROM request_items WHERE is_example = 1 AND author IS NOT NULL"
     ).fetchone()["n"]
     assert authored == 0
+
+
+def test_season_examples_carry_the_request_scope(db_conn):
+    """The bug this fixes: a real request names the SERIES and says which season
+    it wants through req_scope/req_season. Putting "Serie - Temporada 2" in the
+    title and leaving those empty meant the detail listed every season of the
+    series (_effective_target couldn't narrow it), the comparison table dropped
+    the season entirely (_comparison_content_name only appends it when
+    req_season is set), and the canonical display title came out wrong."""
+    _lib(db_conn, "Los Tudor", item_type="series", tmdb_id="1399")
+    series_id = db_conn.execute("SELECT id FROM library_items WHERE item_type='series'").fetchone()["id"]
+    db_conn.execute(
+        """INSERT INTO library_items
+           (item_type, title, local_status, request_status, nomenclature_status, parent_id,
+            season_number, resolution, source, video_codec, audio_codec, audio_languages,
+            has_spanish_ok, tmdb_id, year, updated_at)
+           VALUES ('season','Los Tudor - Temporada 2','Disponible','Sin petición','N/A',?,
+                   2,'1080p','WEB-DL','x264','AC3','spa',1,'1399',2007,CURRENT_TIMESTAMP)""",
+        (series_id,),
+    )
+    db_conn.commit()
+
+    ex.generate_examples(db_conn)
+    row = db_conn.execute(
+        "SELECT title, req_scope, req_season FROM request_items "
+        "WHERE is_example = 1 AND category = 'TV' AND req_season IS NOT NULL LIMIT 1"
+    ).fetchone()
+    assert row is not None
+    # The title is the SERIES name, not "Serie - Temporada 2".
+    assert row["title"] == "Los Tudor"
+    assert row["req_scope"] == "season"
+    assert row["req_season"] == 2
+
+
+def test_the_comparison_name_spells_out_the_season(db_conn):
+    """End of the same chain: with the scope set, the comparison table says
+    which season — and says it in Spanish."""
+    from emuwarez_uploadrr.services.requests import _comparison_content_name
+    lib = {"item_type": "season", "title": "Los Tudor - Temporada 2", "year": 2007}
+    req = {"req_scope": "season", "req_season": 2, "title": "Los Tudor"}
+    name = _comparison_content_name(db_conn, lib, req)
+    assert "Temporada 2" in name
+    assert "Season" not in name

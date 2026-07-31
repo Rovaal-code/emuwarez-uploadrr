@@ -362,6 +362,39 @@ def _is_forced(props: dict) -> bool:
     return bool(_FORCED_NAME_RE.search(name))
 
 
+
+def _default_subtitle_id(audio_sorted: list[dict], subs_sorted: list[dict]) -> int | None:
+    """Which subtitle track (if any) should come out flagged as default.
+
+    Audio just takes the first track after sorting, but subtitles can't: which
+    one you want on depends on what the audio gives you.
+
+    | Audio                     | Subtítulo activado                          |
+    |---------------------------|---------------------------------------------|
+    | Castellano                | el castellano FORZADO — ves el doblaje y se |
+    |                           | traducen carteles y diálogos en otro idioma |
+    | Castellano, sin forzado   | ninguno — doblada y sin subtítulos          |
+    | Sin castellano            | el castellano COMPLETO — ves la versión     |
+    |                           | original y hacen falta todos los diálogos   |
+
+    Last resort, when there's no Castilian subtitle at all (say a Japanese film
+    subtitled only in English): the first of the sorted order, so the file
+    isn't shipped with every subtitle off.
+
+    Returns the track id, or None when nothing should be default.
+    """
+    castilian_audio = any(t["_priority"] == _PRIORITY_CASTILIAN for t in audio_sorted)
+    castilian_subs = [t for t in subs_sorted if t["_priority"] == _PRIORITY_CASTILIAN]
+
+    if castilian_audio:
+        forced = next((t for t in castilian_subs if t["forced"]), None)
+        return forced["id"] if forced else None
+
+    full = next((t for t in castilian_subs if not t["forced"]), None)
+    if full:
+        return full["id"]
+    return subs_sorted[0]["id"] if subs_sorted else None
+
 def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None) -> dict:
     """Turn a parsed `mkvmerge -J` structure into a reorder+rename plan: which
     track ids go where, and what name each gets. Pure function — no I/O.
@@ -399,14 +432,12 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None) -> 
         t["_priority"] = lang_priority(t["language"], ietf_by_id.get(t["id"]), t["current_name"])
 
     audio_sorted = sorted(audio, key=lambda t: t["_priority"])
-    # Secondary key `t["forced"]` (False < True): when two subtitle tracks of
-    # the SAME language tie on priority (e.g. a regular Spanish track and a
-    # forced-only Spanish track), the regular one must sort first — Python's
-    # sort is stable, so without this a forced track that merely happened to
-    # come first in the file's own original order would win the tie and end
-    # up marked default below, which is backwards (a forced track only
-    # covers foreign-language lines, it's not meant to be the general default).
-    subs_sorted = sorted(subs, key=lambda t: (t["_priority"], t["forced"]))
+    # Secondary key `not t["forced"]` (False < True, so forced wins the tie):
+    # within a language the forced track goes FIRST, giving
+    #   Español Forzado, Español, Català Forzado, Català, Inglés Forzado, Inglés, resto
+    # The language priority is untouched — forced only reorders inside its own
+    # group, it never jumps ahead of a higher-priority language.
+    subs_sorted = sorted(subs, key=lambda t: (t["_priority"], not t["forced"]))
 
     new_order = [t["id"] for t in video] + [t["id"] for t in audio_sorted] + [t["id"] for t in subs_sorted]
 
@@ -423,18 +454,17 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None) -> 
         t["new_name"] = f"{lang_name} - {codec} {ch}"
         t["default_after"] = (i == 0)  # first in the new order becomes default
 
-    for i, t in enumerate(subs_sorted):
+    default_sub_id = _default_subtitle_id(audio_sorted, subs_sorted)
+    for t in subs_sorted:
         lang_name = lang_display_name(t["language"], ietf_by_id.get(t["id"]), t["current_name"])
         # Same "{Idioma} - {Cualificador}" format as audio's "{Idioma} - {Códec}
         # {Canales}" — consistent separator across track types, whatever the
         # qualifier ends up being (Forzado today; Full/SDH etc. would follow
         # the same pattern if ever added).
         t["new_name"] = f"{lang_name} - Forzado" if t["forced"] else lang_name
-        # Same priority rule as audio: Español Castellano first, then
-        # Català, then Inglés, then whatever's left — plus the forced
-        # tiebreaker above (regular before forced) — the first (index 0)
-        # after that sort is the default, same as audio just above.
-        t["default_after"] = (i == 0)
+        # Unlike audio, the default subtitle is NOT simply the first one: it
+        # depends on what the audio offers (see _default_subtitle_id).
+        t["default_after"] = (t["id"] == default_sub_id)
 
     ordered_tracks = video + audio_sorted + subs_sorted
     order_changed = [t["id"] for t in tracks] != new_order

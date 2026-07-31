@@ -145,10 +145,10 @@ def test_build_track_plan_default_flags():
 
 
 def test_build_track_plan_subtitle_default_follows_language_priority_not_forced_flag():
-    """Subtitle default_after must follow the SAME Español Castellano ->
-    Català -> Inglés priority as audio — NOT the "forced" flag. A forced
-    track in a lower-priority language must NOT become default just because
-    it's forced; a non-forced Castellano track must."""
+    """El forzado solo adelanta DENTRO de su idioma: nunca salta por encima de
+    un idioma de mayor prioridad. Con audio castellano el activado sería el
+    castellano forzado, pero aquí no hay ninguno (el forzado es inglés), así
+    que no se activa ninguno: ves la peli doblada y sin subtítulos."""
     from emuwarez_uploadrr.services.mkv_remux import build_track_plan
     mkv_json = {
         "tracks": [
@@ -164,18 +164,17 @@ def test_build_track_plan_subtitle_default_follows_language_priority_not_forced_
     }
     plan = build_track_plan(mkv_json)
     by_id = {t["id"]: t for t in plan["ordered_tracks"]}
-    assert by_id[3]["default_after"] is True    # Español (Castellano), not forced
-    assert by_id[2]["default_after"] is False   # Inglés, forced — still not default
+    sub_ids = [t["id"] for t in plan["ordered_tracks"] if t["type"] == "subtitles"]
+    assert sub_ids == [3, 2]                    # Español antes que Inglés forzado
+    assert by_id[3]["default_after"] is False   # hay doblaje castellano: nada activado
+    assert by_id[2]["default_after"] is False   # y el forzado inglés tampoco
 
 
 def test_build_track_plan_forced_track_loses_default_tie_to_regular_same_language():
-    """Two subtitle tracks of the SAME language (both Español Castellano, top
-    priority): one regular, one forced-only. They tie on language priority, so
-    without a tiebreaker Python's stable sort keeps them in the file's own
-    original order — if mkvmerge happened to list the forced track first, it
-    would win the tie and become default by accident. The regular track must
-    always win: a forced track only covers foreign-language lines, it's not
-    meant to be the general default subtitle."""
+    """Dos subtítulos del mismo idioma (castellano), uno normal y otro forzado.
+    El forzado va primero en el orden, y como el fichero TIENE audio castellano
+    es además el activado: ves el doblaje y se te traducen los carteles y los
+    diálogos en otro idioma, que es justo para lo que existe un forzado."""
     from emuwarez_uploadrr.services.mkv_remux import build_track_plan
     mkv_json = {
         "tracks": [
@@ -193,9 +192,9 @@ def test_build_track_plan_forced_track_loses_default_tie_to_regular_same_languag
     plan = build_track_plan(mkv_json)
     by_id = {t["id"]: t for t in plan["ordered_tracks"]}
     sub_ids_in_order = [t["id"] for t in plan["ordered_tracks"] if t["type"] == "subtitles"]
-    assert sub_ids_in_order == [3, 2]           # regular before forced
-    assert by_id[3]["default_after"] is True    # regular Español (Castellano)
-    assert by_id[2]["default_after"] is False   # forced Español (Castellano) — not default
+    assert sub_ids_in_order == [2, 3]           # forzado antes que normal
+    assert by_id[2]["default_after"] is True    # el forzado, porque hay doblaje
+    assert by_id[3]["default_after"] is False   # el completo no
 
 
 def test_apply_track_overrides_name_and_default():
@@ -548,8 +547,8 @@ def test_missing_name_and_flag_is_not_forced():
 
 
 def test_forced_name_reaches_the_track_label_and_the_ordering():
-    """The flag isn't only cosmetic: it's the tiebreaker that keeps a regular
-    track ahead of a forced one, and the first track is the one marked default."""
+    """La bandera no es solo cosmética: es el desempate que pone el forzado
+    delante del normal dentro de su idioma."""
     from emuwarez_uploadrr.services.mkv_remux import build_track_plan
     mkv_json = {"tracks": [
         {"id": 0, "type": "video", "codec": "AVC", "properties": {}},
@@ -567,5 +566,91 @@ def test_forced_name_reaches_the_track_label_and_the_ordering():
     assert by_id[2]["forced"] is True
     assert by_id[3]["forced"] is False
     assert by_id[2]["new_name"].endswith("- Forzado")
-    # Regular Spanish sorts ahead of the forced one, so it's the default.
-    assert [t["id"] for t in subs][:2] == [3, 2]
+    # El forzado abre el grupo del castellano.
+    assert [t["id"] for t in subs][:2] == [2, 3]
+
+
+# ---------------------------------------------------------------------------
+# Qué subtítulo queda activado: depende del audio, no del orden
+# ---------------------------------------------------------------------------
+
+def _plan_with(audio_langs, subs):
+    """subs: lista de (lang, forced). Devuelve (orden de ids, id activado)."""
+    from emuwarez_uploadrr.services.mkv_remux import build_track_plan
+    tracks = [{"id": 0, "type": "video", "codec": "AVC", "properties": {"pixel_dimensions": "1920x1080"}}]
+    tid = 1
+    for lang in audio_langs:
+        tracks.append({"id": tid, "type": "audio", "codec": "AC-3",
+                       "properties": {"language": lang, "audio_channels": 6}})
+        tid += 1
+    ids = {}
+    for lang, forced in subs:
+        tracks.append({"id": tid, "type": "subtitles", "codec": "SubRip",
+                       "properties": {"language": lang, "forced_track": forced}})
+        ids[(lang, forced)] = tid
+        tid += 1
+    plan = build_track_plan({"tracks": tracks})
+    sub_tracks = [t for t in plan["ordered_tracks"] if t["type"] == "subtitles"]
+    default = next((t["id"] for t in sub_tracks if t["default_after"]), None)
+    return [t["id"] for t in sub_tracks], default, ids
+
+
+def test_forced_order_is_per_language_never_across_languages():
+    """Español Forzado, Español, Català Forzado, Català, Inglés Forzado, Inglés."""
+    order, _, ids = _plan_with(
+        ["jpn"],
+        [("eng", False), ("cat", True), ("spa", False), ("eng", True), ("spa", True), ("cat", False)],
+    )
+    assert order == [
+        ids[("spa", True)], ids[("spa", False)],
+        ids[("cat", True)], ids[("cat", False)],
+        ids[("eng", True)], ids[("eng", False)],
+    ]
+
+
+def test_with_castilian_audio_the_forced_castilian_sub_is_the_one_enabled():
+    """Ves el doblaje, así que se activan los carteles y los diálogos en otro
+    idioma que el doblaje no cubre — para eso existe un forzado."""
+    _, default, ids = _plan_with(["spa", "eng"], [("spa", False), ("spa", True), ("eng", False)])
+    assert default == ids[("spa", True)]
+
+
+def test_with_castilian_audio_but_no_forced_sub_nothing_is_enabled():
+    """Doblada y sin subtítulos: no hay nada que traducir por encima."""
+    _, default, _ = _plan_with(["spa"], [("spa", False), ("eng", False)])
+    assert default is None
+
+
+def test_without_castilian_audio_the_full_castilian_sub_is_enabled():
+    """Versión original: hacen falta TODOS los diálogos, no solo los carteles,
+    así que se activa el completo y no el forzado."""
+    _, default, ids = _plan_with(["jpn"], [("spa", True), ("spa", False)])
+    assert default == ids[("spa", False)]
+
+
+def test_latin_spanish_audio_does_not_count_as_castilian():
+    """El latino no es castellano (lang_priority ya lo separa), así que se
+    trata como si no hubiera doblaje: manda el subtítulo completo."""
+    from emuwarez_uploadrr.services.mkv_remux import build_track_plan
+    plan = build_track_plan({"tracks": [
+        {"id": 0, "type": "video", "codec": "AVC", "properties": {"pixel_dimensions": "1920x1080"}},
+        {"id": 1, "type": "audio", "codec": "AC-3",
+         "properties": {"language": "spa", "language_ietf": "es-419", "audio_channels": 6}},
+        {"id": 2, "type": "subtitles", "codec": "SubRip", "properties": {"language": "spa", "forced_track": True}},
+        {"id": 3, "type": "subtitles", "codec": "SubRip", "properties": {"language": "spa"}},
+    ]})
+    by_id = {t["id"]: t for t in plan["ordered_tracks"]}
+    assert by_id[3]["default_after"] is True
+    assert by_id[2]["default_after"] is False
+
+
+def test_no_castilian_anywhere_falls_back_to_the_first_subtitle():
+    """Japonesa subtitulada solo en inglés: mejor el primero activado que el
+    fichero entero con todos los subtítulos apagados."""
+    order, default, _ = _plan_with(["jpn"], [("eng", False), ("fre", False)])
+    assert default == order[0]
+
+
+def test_a_file_with_no_subtitles_at_all_has_no_default():
+    _, default, _ = _plan_with(["spa"], [])
+    assert default is None

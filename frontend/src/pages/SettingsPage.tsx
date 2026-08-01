@@ -627,15 +627,23 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                         {/* Los que llevan API key se prueban DENTRO de su
                             tarjeta, que es donde está la clave. Aquí el botón
                             dejaría su resultado donde ya no se enseña. */}
-                        {!h.needs_key && (
-                          <button className="btn btn-secondary btn-sm" style={{ marginLeft: 'auto', fontSize: 11, padding: '2px 8px' }}
-                            onClick={() => handleTestImghost(id)} disabled={imgTesting === id} type="button">
-                            {imgTesting === id ? 'Probando…' : 'Probar'}
-                          </button>
-                        )}
-                        {!isDefault && (
-                          <RemoveImgHostButton onClick={() => toggleImgHost(id)} />
-                        )}
+                        {/* Los controles van juntos a la derecha, con la X al
+                            final. El empuje vive en el contenedor y no en el
+                            botón Probar: ese botón solo existe para los
+                            proveedores sin API key (los demás se prueban en su
+                            tarjeta), así que colgar de él la alineación dejaba
+                            la X pegada a las insignias en el resto. */}
+                        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {!h.needs_key && (
+                            <button className="btn btn-secondary btn-sm" style={{ fontSize: 11, padding: '2px 8px' }}
+                              onClick={() => handleTestImghost(id)} disabled={imgTesting === id} type="button">
+                              {imgTesting === id ? 'Probando…' : 'Probar'}
+                            </button>
+                          )}
+                          {!isDefault && (
+                            <RemoveImgHostButton onClick={() => toggleImgHost(id)} />
+                          )}
+                        </div>
                       </div>
                       {/* Solo para los que no tienen tarjeta: los demás ya lo
                           enseñan ahí y salía dos veces. */}
@@ -771,6 +779,35 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         </h3>
         <div className="form-group">
           <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            Reordenar pistas al remuxear
+            <InfoIcon text="Activado, las pistas se colocan en orden (Español, Català, Inglés, resto) además de renombrarse, y eso obliga a reescribir el contenedor entero: sustituye el archivo por uno nuevo, así que rompe cualquier hardlink que compartiera con tu cliente de torrent (el torrent sigue sembrando bien, pero pasas a ocupar el doble en disco) y tarda en proporción al tamaño. Desactivado, las pistas se quedan donde están y solo se renombran y se marca la predeterminada, con las mismas reglas, editando la cabecera del archivo en el sitio: es casi instantáneo por grande que sea, no duplica nada y conserva los hardlinks." />
+          </label>
+          <select className="form-input form-select" value={reorderTracks ? 'true' : 'false'} onChange={e => setReorderTracks(e.target.value === 'true')}>
+            <option value="false">No</option>
+            <option value="true">Sí</option>
+          </select>
+        </div>        <div className="form-group">
+          <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            Internal Source Tool
+            <InfoIcon text="Herramienta interna que deduce el source analizando el archivo real con MediaInfo, FFprobe y MKVToolNix, sin mirar el nombre. Todavía está en desarrollo y puede ser inexacta, por eso viene desactivada. Activada, añade su columna a la comparación de Source y participa en el aviso de discrepancia. Desactivada, esa columna sale vacía y el aviso compara solo el nombre del archivo con Radarr/Sonarr; el source final no cambia salvo en archivos donde ni el nombre ni Radarr/Sonarr dicen nada, que siguen usando la estimación por bitrate de siempre." />
+          </label>
+          <select className="form-input form-select" value={sourceEngine ? 'true' : 'false'} onChange={e => setSourceEngine(e.target.value === 'true')}>
+            <option value="false">Desactivada</option>
+            <option value="true">Activada</option>
+          </select>
+        </div>
+        <div className="form-group">
+          <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            Subir el logo del contenido
+            <InfoIcon text="Incrusta el logo del contenido al principio de la descripción del torrent, en español cuando TMDb lo tiene en ese idioma. Desactivado, la descripción se sube sin logo; el resto (capturas, ficha técnica y tráiler) no cambia." />
+          </label>
+          <select className="form-input form-select" value={addLogo ? 'true' : 'false'} onChange={e => setAddLogo(e.target.value === 'true')}>
+            <option value="true">Sí</option>
+            <option value="false">No</option>
+          </select>
+        </div>
+        <div className="form-group">
+          <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             Máximo de Subidas en Paralelo
             <InfoIcon text="Cuántas subidas pueden estar en curso a la vez, de principio a fin (verificación previa, nomenclatura, remux, hasheo del torrent y transferencia a eMuwarez) — no es solo una cola visual: las demás no dan ni un paso hasta que se libera un hueco. Sin límite las deja correr todas a la vez. El botón «Ver Máximo» estima cuántas puede aguantar este equipo según su RAM y CPU disponibles." />
           </label>
@@ -802,6 +839,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                         <th>Recurso</th>
                         <th>Disponible</th>
                         <th>Uso estimado por 1 subida</th>
+                        <th>Qué lo consume</th>
                         <th>Subidas soportadas</th>
                       </tr>
                     </thead>
@@ -810,12 +848,18 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                         <td>RAM</td>
                         <td>{concurrencyEstimate.available_ram_gb} GB</td>
                         <td>{concurrencyEstimate.assumed_ram_gb_per_slot} GB</td>
+                        <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                          Sobre todo las capturas: FFmpeg extrayendo y escalando fotogramas.
+                        </td>
                         <td>{concurrencyEstimate.ram_limited_to}</td>
                       </tr>
                       <tr>
                         <td>CPU</td>
                         <td>{concurrencyEstimate.cpu_cores} núcleos</td>
                         <td>1 núcleo</td>
+                        <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                          El hasheo del torrent, que satura un núcleo entero, y las capturas.
+                        </td>
                         <td>{concurrencyEstimate.cpu_limited_to}</td>
                       </tr>
                     </tbody>
@@ -823,6 +867,8 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 14 }}>
                     <span className="form-hint">
                       Estimación orientativa, no tiene en cuenta la velocidad del disco o de la red.
+                      El remux de pistas casi no gasta RAM (copia flujos sin recodificar, va limitado
+                      por el disco), así que desactivar «Reordenar pistas» no cambia estos números.
                     </span>
                     <button
                       className="btn btn-secondary btn-sm"
@@ -840,16 +886,6 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         </div>
         <div className="form-group">
           <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            Máximo de Elementos en Recomendaciones
-            <InfoIcon text="Cuántos elementos como máximo se muestran en Recomendaciones. Sin límite los muestra todos." />
-          </label>
-          <select className="form-input form-select" value={recentLimit} onChange={e => setRecentLimit(Number(e.target.value))}>
-            <option value={0}>Sin límite</option>
-            {[50, 100, 150, 200, 250, 300].map(n => <option key={n} value={n}>{n}</option>)}
-          </select>
-        </div>
-        <div className="form-group">
-          <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             Ignorar Temporadas especiales
             <InfoIcon text="Excluye la temporada especial (temporada 0) del estado global de una serie. Si tienes todas las temporadas y capítulos salvo los especiales, la serie aparece como completa en las columnas Estado y eMuwarez de la Biblioteca. Sus atributos consolidados (resolución, source, códecs, audio y subtítulos) se calculan ignorando los especiales, y en el Panel sus capítulos faltantes no cuentan como faltantes." />
           </label>
@@ -860,34 +896,15 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         </div>
         <div className="form-group">
           <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            Internal Source Tool
-            <InfoIcon text="Herramienta interna que deduce el source analizando el archivo real con MediaInfo, FFprobe y MKVToolNix, sin mirar el nombre. Todavía está en desarrollo y puede ser inexacta, por eso viene desactivada. Activada, añade su columna a la comparación de Source y participa en el aviso de discrepancia. Desactivada, esa columna sale vacía y el aviso compara solo el nombre del archivo con Radarr/Sonarr; el source final no cambia salvo en archivos donde ni el nombre ni Radarr/Sonarr dicen nada, que siguen usando la estimación por bitrate de siempre." />
+            Máximo de Elementos en Recomendaciones
+            <InfoIcon text="Cuántos elementos como máximo se muestran en Recomendaciones. Sin límite los muestra todos." />
           </label>
-          <select className="form-input form-select" value={sourceEngine ? 'true' : 'false'} onChange={e => setSourceEngine(e.target.value === 'true')}>
-            <option value="false">Desactivada</option>
-            <option value="true">Activada</option>
+          <select className="form-input form-select" value={recentLimit} onChange={e => setRecentLimit(Number(e.target.value))}>
+            <option value={0}>Sin límite</option>
+            {[50, 100, 150, 200, 250, 300].map(n => <option key={n} value={n}>{n}</option>)}
           </select>
         </div>
-        <div className="form-group">
-          <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            Subir el logo del contenido
-            <InfoIcon text="Incrusta el logo del contenido al principio de la descripción del torrent, en español cuando TMDb lo tiene en ese idioma. Desactivado, la descripción se sube sin logo; el resto (capturas, ficha técnica y tráiler) no cambia." />
-          </label>
-          <select className="form-input form-select" value={addLogo ? 'true' : 'false'} onChange={e => setAddLogo(e.target.value === 'true')}>
-            <option value="true">Sí</option>
-            <option value="false">No</option>
-          </select>
-        </div>
-        <div className="form-group">
-          <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            Reordenar pistas al remuxear
-            <InfoIcon text="Activado, las pistas se colocan en orden (Español, Català, Inglés, resto) además de renombrarse. Desactivado, se quedan donde están y solo se renombran y se marca la predeterminada, con las mismas reglas. Reordenar obliga a reescribir el contenedor entero y eso sustituye el archivo por uno nuevo, así que rompe cualquier hardlink que compartiera con tu cliente de torrent: el torrent sigue sembrando bien, pero pasas a ocupar el doble en disco." />
-          </label>
-          <select className="form-input form-select" value={reorderTracks ? 'true' : 'false'} onChange={e => setReorderTracks(e.target.value === 'true')}>
-            <option value="false">No</option>
-            <option value="true">Sí</option>
-          </select>
-        </div>
+
       </div>
       </div>
     </div>

@@ -30,7 +30,17 @@ PRESUPUESTO: dict[str, tuple[int, int]] = {
     # legacy.py ya no define las constantes: las importa de constants.py, que
     # pasó a ser su dueño. Esta entrada es la de constants.py mirando al revés
     # y por eso no está aquí: la vigila test_constants_no_depende_de_legacy.
+    #
+    # Solo queda cli.py, y sus 13 usos son casi todos `legacy.main(argv)`: el
+    # CLI antiguo delegando en su propio motor, que es lo que legacy.py es hoy.
+    # Bajar de aquí ya no es refactorizar, es decidir si ese CLI sigue
+    # existiendo.
 }
+
+# La aplicación no puede tocar legacy.py: habla por la terminal (die() lanza
+# SystemExit, varias funciones preguntan por teclado) y eso dentro de una
+# petición HTTP tumba el hilo o se queda colgado. Ya pasó dos veces.
+CAPAS_PROHIBIDAS = ("web", "services", "integrations")
 
 
 def _codigo_sin_comentarios(src: str) -> str:
@@ -95,3 +105,23 @@ def test_constants_no_depende_de_legacy():
     importar de legacy, la inversión del 2026-08-01 se ha deshecho."""
     prefijo, directos = _medir(RAIZ / "constants.py")
     assert (prefijo, directos) == (0, 0), "constants.py ha vuelto a depender de legacy.py"
+
+
+def test_la_aplicacion_no_toca_legacy():
+    """web/, services/ e integrations/ no pueden llegar a legacy.py, ni con
+    prefijo ni importando nombres. Esta es la línea que no se cruza: lo de
+    PRESUPUESTO es deuda que se va pagando, esto es una regla."""
+    culpables = []
+    for f in _todos_los_modulos():
+        rel = str(f.relative_to(RAIZ))
+        if not rel.startswith(CAPAS_PROHIBIDAS):
+            continue
+        prefijo, directos = _medir(f)
+        if prefijo or directos:
+            culpables.append(f"{rel}: {prefijo} con prefijo, {directos} directos")
+    assert not culpables, (
+        "\nCódigo de la aplicación llamando a legacy.py:\n  " + "\n  ".join(culpables)
+        + "\n\nlegacy.py es el motor del CLI: habla por la terminal. Lo que necesites"
+          "\nestá en services/ (media_probe, uploadrr_yaml, emu_title, cli_config) o"
+          "\nen constants.py."
+    )

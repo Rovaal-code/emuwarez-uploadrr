@@ -4,7 +4,7 @@ Radarr/Sonarr only expose a *summary* mediaInfo (one audio codec/channels, not
 per-track), so the exact eMuwarez name — which needs the per-track audio —
 can only be built by reading MediaInfo from the actual file. This module:
 
-  1. reads MediaInfo (legacy.read_media_info),
+  1. reads MediaInfo (media_probe.read_media_info),
   2. builds the expected file name (build_emu_title → to_filesystem_name),
   3. compares it to the real file name, ignoring the group after the last '-',
   4. yields 'Correcta' / 'No adaptada' + a per-token diff for the UI.

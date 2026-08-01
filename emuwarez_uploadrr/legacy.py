@@ -1,9 +1,32 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-emuwarez_upload.py
+"""Motor del CLI interactivo antiguo. **La aplicación web ya no lo usa.**
 
-Automatiza el flujo eMuwarez + Uploadrr:
+Estado a 2026-08-01, tras el hallazgo 1.1 de la auditoría: este fichero era la
+implementación real de buena parte de la aplicación, escondida detrás de 19
+módulos que solo lo reexportaban. Ya no. Lo que era de todos vive en su sitio:
+
+    constants.py                 las constantes
+    services/media_probe.py      la lectura técnica de un fichero (MediaInfo)
+    services/uploadrr_yaml.py    el editor del config.yaml de Uploadrr
+    services/emu_title.py        el constructor original del nombre
+    services/cli_config.py       la lectura del fichero de configuración del CLI
+
+De todo eso ya no hay copia aquí: se importa de sus dueños, para que haya UNA
+implementación de cada cosa. Lo que queda es lo propio del CLI: los menús, las
+preguntas por teclado, el montaje del entorno virtual y `main()`.
+
+Quien lo alcanza hoy es solo `cli.py`, y siempre por la misma puerta:
+`legacy.main(argv)` cuando el comando no es uno de los modernos. Ninguna parte
+de `web/`, `services/` o `integrations/` lo importa (lo vigila
+tests/test_dependencia_legacy.py).
+
+CUIDADO al llamar a algo de aquí desde la aplicación: este código habla por la
+terminal. `die()` lanza SystemExit y varias funciones preguntan por teclado. En
+una petición HTTP lo primero tumba el hilo y lo segundo no vuelve nunca. Ya
+pasó las dos veces (ver services/cli_config.py y nomenclature_check).
+
+Lo que hace el CLI:
 
 - Primer arranque: crea/verifica ./.venv, instala dependencias de Uploadrr y configura claves/rutas.
 - Uploadrr se asume en ./Uploadrr, junto a este script.

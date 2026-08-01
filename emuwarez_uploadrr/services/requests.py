@@ -445,6 +445,17 @@ def match_all_requests(conn: sqlite3.Connection, *, emu_api_key: Optional[str] =
     # only notify about the ones that *newly* became satisfiable this run.
     before_compatible = _compatible_request_ids(conn)
 
+    # Se limpia antes de recalcular: sin esto, un estado se quedaba pegado en
+    # la fila donde se escribió una vez y ya nadie lo movía. Con el arreglo de
+    # arriba (escribir en la temporada y no en la serie), las series que ya
+    # llevaban el estado de una petición de temporada se habrían quedado con
+    # él para siempre.
+    conn.execute(
+        "UPDATE library_items SET request_status = 'Sin petición', request_id = NULL "
+        "WHERE request_status != 'Sin petición' OR request_id IS NOT NULL"
+    )
+    conn.commit()
+
     requests = [dict(r) for r in conn.execute("SELECT * FROM request_items").fetchall()]
     library = [dict(r) for r in conn.execute("SELECT * FROM library_items").fetchall()]
     updated = 0
@@ -490,7 +501,14 @@ def match_all_requests(conn: sqlite3.Connection, *, emu_api_key: Optional[str] =
                 reasons_str,
             ),
         )
-        update_request_status(conn, int(best["item"]["id"]), classification["status"], int(req["id"]))
+        # A la fila que la petición pide DE VERDAD, no a la que cruzó el
+        # emparejador. Para una petición de temporada eso es la serie entera
+        # (todas las temporadas comparten su tmdb_id), así que el estado
+        # aterrizaba en la serie y la temporada seguía diciendo "Sin petición".
+        update_request_status(
+            conn, _scoped_library_id(conn, best["item"], req),
+            classification["status"], int(req["id"]),
+        )
         if emu_api_key and _should_check_emu_catalog(req, status=classification["status"]):
             _check_emu_catalog_duplicate(conn, req, emu_api_key)
         updated += 1
@@ -618,7 +636,10 @@ def match_single_request(
             reasons_str,
         ),
     )
-    update_request_status(conn, int(best["item"]["id"]), classification["status"], int(req["id"]))
+    update_request_status(
+        conn, _scoped_library_id(conn, best["item"], req),
+        classification["status"], int(req["id"]),
+    )
     if emu_api_key and _should_check_emu_catalog(req, status=classification["status"]):
         _check_emu_catalog_duplicate(conn, req, emu_api_key)
     conn.commit()

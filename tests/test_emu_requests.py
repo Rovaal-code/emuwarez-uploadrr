@@ -362,3 +362,60 @@ def test_compatible_notification_keeps_the_matched_poster(db_conn):
 
     notes = _notify_and_read(db_conn)
     assert notes[0]["poster_url"] == "http://poster"
+
+
+# ---------------------------------------------------------------------------
+# El estado de la petición aterriza en la fila que la petición pide
+# ---------------------------------------------------------------------------
+
+def test_a_season_request_marks_the_season_not_the_series(db_conn):
+    """Una petición de la Temporada 2 tiene que marcar ESA temporada. El
+    emparejador cruza contra la SERIE (todas las temporadas comparten su
+    tmdb_id), así que el estado aterrizaba allí y la ficha de la temporada
+    seguía diciendo "Sin petición"."""
+    from emuwarez_uploadrr.services.requests import match_all_requests, upsert_request
+    from emuwarez_uploadrr.models import RequestItem
+
+    cur = db_conn.execute(
+        "INSERT INTO library_items(item_type,title,year,local_status,tmdb_id) "
+        "VALUES ('series','Serie',2019,'Disponible','555')")
+    series_id = cur.lastrowid
+    cur = db_conn.execute(
+        "INSERT INTO library_items(item_type,title,local_status,parent_id,season_number,"
+        "resolution,source,video_codec,has_spanish_ok) "
+        "VALUES ('season','Serie - Temporada 2','Disponible',?,2,'1080p','WEB-DL','x264',1)",
+        (series_id,))
+    season_id = cur.lastrowid
+    db_conn.commit()
+
+    upsert_request(db_conn, RequestItem(
+        id=None, emu_id="req-t2", title="Serie", category="TV", tmdb_id="555",
+        requested_resolution="1080p", requested_source="WEB-DL",
+    ))
+    db_conn.execute("UPDATE request_items SET req_scope='season', req_season=2")
+    db_conn.commit()
+
+    match_all_requests(db_conn)
+
+    estado = lambda i: db_conn.execute(
+        "SELECT request_status FROM library_items WHERE id = ?", (i,)).fetchone()["request_status"]
+    assert estado(season_id) != "Sin petición", "la temporada tiene que llevar el estado"
+    assert estado(series_id) == "Sin petición", "la serie no: la petición no es de la serie entera"
+
+
+def test_rematching_clears_a_status_left_on_the_wrong_row(db_conn):
+    """Recalcular limpia antes: si no, un estado escrito una vez se quedaba
+    pegado en esa fila para siempre, porque nadie lo volvía a tocar."""
+    from emuwarez_uploadrr.services.requests import match_all_requests
+    cur = db_conn.execute(
+        "INSERT INTO library_items(item_type,title,local_status,request_status,request_id) "
+        "VALUES ('movie','Peli','Disponible','Compatible',999)")
+    item_id = cur.lastrowid
+    db_conn.commit()
+
+    match_all_requests(db_conn)          # sin ninguna petición que lo respalde
+
+    row = db_conn.execute(
+        "SELECT request_status, request_id FROM library_items WHERE id = ?", (item_id,)).fetchone()
+    assert row["request_status"] == "Sin petición"
+    assert row["request_id"] is None

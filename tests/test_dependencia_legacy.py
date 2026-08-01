@@ -28,7 +28,6 @@ RAIZ = pathlib.Path(__file__).resolve().parents[1] / "emuwarez_uploadrr"
 PRESUPUESTO: dict[str, tuple[int, int]] = {
     "services/media_info_service.py": (26, 0),
     "cli.py": (13, 0),
-    "services/uploadrr_config_staging.py": (0, 8),
     "services/nomenclature.py": (1, 0),
     "services/nomenclature_check.py": (0, 2),
     # legacy.py ya no define las constantes: las importa de constants.py, que

@@ -9,12 +9,12 @@ SAFETY CONTRACT:
 - Any preview/diff output redacts DEFAULT.tmdb and TRACKERS.EMU.api_key
   values — never returns raw secrets.
 
-Reuses the pure, filesystem-agnostic YAML line helpers already implemented
-in emuwarez_uploadrr/legacy.py (ported from the original monolithic
-script): find_top_block, set_block_key, get_block_key,
+Reuses the pure, filesystem-agnostic YAML line helpers of
+services/uploadrr_yaml.py: find_top_block, set_block_key, get_block_key,
 set_child_inline_mapping, set_emu_config, yaml_scalar. Those functions only
 operate on `lines: list[str]` in memory — no filesystem or subprocess
-access — so reusing them here does not import any Uploadrr execution path.
+access. Vivían en legacy.py; se movieron a su propio módulo el 2026-08-01
+precisamente porque ser puras hacía el traslado seguro.
 """
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ import re
 from pathlib import Path
 from typing import Any, Optional
 
-from ..legacy import (
+from .uploadrr_yaml import (
     get_block_key,
     get_child_inline_mapping,
     get_emu_anon,

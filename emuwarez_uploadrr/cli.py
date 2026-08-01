@@ -11,18 +11,18 @@ import sys
 from pathlib import Path
 from typing import Any, Optional
 
-from . import legacy
 from .database import connect, init_db, db_path, get_state
 from .integrations.base import IntegrationError
 from .models import LocalStatus, NomenclatureStatus, RequestStatus
 from .services import instances as instance_service
 from .services import library as library_service
 from .services import requests as request_service
+from .constants import LOG_DIR
 from .services import tasks as task_service
 
 MODERN_COMMANDS = {
-    "configure", "doctor", "test-apis", "instances", "sync", "library",
-    "requests", "missing", "prepare", "upload", "tasks", "logs", "legacy",
+    "instances", "sync", "library",
+    "requests", "missing", "upload", "tasks", "logs",
     "db", "web", "nomenclature", "maintenance", "arr", "queue",
     "demo", "mkv-title",
 }
@@ -100,9 +100,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--db", default=str(db_path()), help="Ruta de SQLite. Por defecto: ~/.config/emuwarez-renamer/emuwarez_uploadrr.db")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("configure", help="Ejecutar configuración heredada del uploader")
-    sub.add_parser("doctor", help="Comprobar entorno/configuración heredada")
-    sub.add_parser("test-apis", help="Probar APIs configuradas")
+    # configure / doctor / test-apis se borraron con el CLI antiguo (2026-08-01):
+    # los tres eran envoltorios de sus asistentes interactivos y los tres tienen
+    # equivalente en la aplicación web (asistente de configuración, pestaña
+    # Diagnóstico y los botones "Probar conexión"). El diagnóstico del runtime
+    # sigue disponible aquí como `web doctor`.
 
     p_db = sub.add_parser("db", help="Operaciones de base de datos local")
     db_sub = p_db.add_subparsers(dest="db_command", required=True)
@@ -256,11 +258,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_mkv_apply.add_argument("--confirm", metavar="TOKEN", dest="mkv_confirm",
                              help="Token de confirmación: APLICAR_TITULO_MKV")
 
-    p_prepare = sub.add_parser("prepare", help="Adaptar nomenclatura / generar propuesta")
-    p_prepare.add_argument("target", help="ID de biblioteca o ruta")
-    p_prepare.add_argument("--apply", action="store_true", help="Aplicar preparación. Sin esto se usa dry-run")
-    p_prepare.add_argument("legacy_args", nargs=argparse.REMAINDER, help="Argumentos extra para el uploader heredado")
-
     p_upload = sub.add_parser("upload", help="Subir contenido / preflight Uploadrr")
     up_sub = p_upload.add_subparsers(dest="upload_command")
     p_up_preflight = up_sub.add_parser("preflight", help="Validar precondiciones de subida (no ejecuta Uploadrr)")
@@ -297,9 +294,6 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_logs = sub.add_parser("logs", help="Logs del uploader heredado")
     p_logs.add_argument("--tail", type=int, default=80)
-
-    p_legacy = sub.add_parser("legacy", help="Pasar argumentos directamente al uploader heredado")
-    p_legacy.add_argument("legacy_args", nargs=argparse.REMAINDER)
 
     p_web = sub.add_parser("web", help="Servidor web backend FastAPI")
     web_sub = p_web.add_subparsers(dest="web_command", required=True)
@@ -1353,16 +1347,6 @@ def cmd_upload_modern(args) -> int:
     return 1
 
 
-def cmd_prepare(args) -> int:
-    with _open_conn(args) as conn:
-        path = _target_to_path(conn, args.target)
-    legacy_args = [path]
-    if not args.apply:
-        legacy_args.append("--dry-run")
-    legacy_args.extend(args.legacy_args or [])
-    return legacy.main(legacy_args)
-
-
 def cmd_upload(args) -> int:
     if getattr(args, "upload_command", None):
         return cmd_upload_modern(args)
@@ -1382,7 +1366,7 @@ def cmd_tasks(args) -> int:
 
 
 def cmd_logs(args) -> int:
-    log_file = legacy.current_log_file()
+    log_file = LOG_DIR / "emuwarez-renamer.log"
     if not log_file.exists():
         print(f"No existe todavía: {log_file}")
         return 1
@@ -1747,12 +1731,6 @@ def modern_main(argv: Optional[list[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
-        if args.command == "configure":
-            return legacy.main(["--configure"])
-        if args.command == "doctor":
-            return legacy.main(["--doctor"])
-        if args.command == "test-apis":
-            return legacy.main(["--test-apis"])
         if args.command == "db":
             if args.db_command == "path":
                 print(args.db)
@@ -1772,16 +1750,12 @@ def modern_main(argv: Optional[list[str]] = None) -> int:
             return cmd_missing(args)
         if args.command == "nomenclature":
             return cmd_nomenclature(args)
-        if args.command == "prepare":
-            return cmd_prepare(args)
         if args.command == "upload":
             return cmd_upload(args)
         if args.command == "tasks":
             return cmd_tasks(args)
         if args.command == "logs":
             return cmd_logs(args)
-        if args.command == "legacy":
-            return legacy.main(args.legacy_args or [])
         if args.command == "web":
             if args.web_command == "info":
                 return cmd_web_info()
@@ -1816,21 +1790,12 @@ def modern_main(argv: Optional[list[str]] = None) -> int:
 
 
 def main(argv: Optional[list[str]] = None) -> int:
-    argv = list(sys.argv[1:] if argv is None else argv)
-    # Compatibility mode: old usage still works exactly as before.
-    if not argv:
-        return legacy.main(argv)
-    first = argv[0]
-    if first not in MODERN_COMMANDS:
-        return legacy.main(argv)
-    return modern_main(argv)
+    """Punto de entrada. Hasta el 2026-08-01, lo que no fuera un comando
+    conocido caía en el CLI interactivo antiguo; ese CLI se borró (asumía un
+    ./Uploadrr y un ./.venv junto al script que en el contenedor no existen, y
+    su asistente escribía una segunda configuración que la aplicación no usa).
+    Ahora un comando desconocido es un error, que es lo que siempre fue."""
+    return modern_main(list(sys.argv[1:] if argv is None else argv))
 
-
-# Backwards-compatible exports used by earlier refactor modules/tests.
-parse_args = legacy.parse_args
-process_path = legacy.process_path
-configure = legacy.configure
-doctor = legacy.doctor
-test_apis = legacy.test_apis
 
 __all__ = ["main", "modern_main", "build_parser", "parse_args", "process_path", "configure", "doctor", "test_apis"]

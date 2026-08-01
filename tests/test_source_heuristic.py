@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from emuwarez_uploadrr.legacy import (
+from emuwarez_uploadrr.services.media_probe import (
     _detect_source_by_name, detect_source, heuristic_source, detect_source_smart,
     estimate_source_from_bitrate, detect_video_codec,
 )

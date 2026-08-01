@@ -5,7 +5,7 @@ tests) never touch a real Uploadrr/ installation.
 """
 from __future__ import annotations
 
-from emuwarez_uploadrr.legacy import get_child_inline_mapping
+from emuwarez_uploadrr.services.uploadrr_yaml import get_child_inline_mapping
 from emuwarez_uploadrr.services.uploadrr_config_staging import (
     QBIT_CLIENT_KEY,
     SCREENS_API_KEY_HOSTS,
@@ -224,7 +224,7 @@ def test_stage_qbittorrent_splits_the_url_the_way_the_fork_expects():
     del fork quiere host y puerto en dos claves (src/clients.py:
     host=qbit_url, port=qbit_port)."""
     from emuwarez_uploadrr.services.uploadrr_config_staging import stage_qbittorrent_config
-    from emuwarez_uploadrr.legacy import get_child_inline_mapping
+    from emuwarez_uploadrr.services.uploadrr_yaml import get_child_inline_mapping
     lines = ["TORRENT_CLIENTS:", "  qbit: {'torrent_client': 'qbit'}"]
     staged, _ = stage_qbittorrent_config(
         lines, url="http://192.168.0.136:8082", username="u", password="p")
@@ -236,7 +236,7 @@ def test_stage_qbittorrent_splits_the_url_the_way_the_fork_expects():
 def test_stage_qbittorrent_writes_the_tag_the_fork_reads():
     """qbit_tag es la clave que el fork aplica al torrent (clients.py:634)."""
     from emuwarez_uploadrr.services.uploadrr_config_staging import stage_qbittorrent_config
-    from emuwarez_uploadrr.legacy import get_child_inline_mapping
+    from emuwarez_uploadrr.services.uploadrr_yaml import get_child_inline_mapping
     lines = ["TORRENT_CLIENTS:", "  qbit: {'torrent_client': 'qbit'}"]
     staged, _ = stage_qbittorrent_config(
         lines, url="http://h:1", username="u", password="p", tag="Subidas")
@@ -247,7 +247,7 @@ def test_clearing_the_tag_removes_it_from_the_fork_config():
     """Vaciar el campo en Ajustes tiene que quitar la etiqueta de verdad, no
     dejar la anterior puesta para siempre."""
     from emuwarez_uploadrr.services.uploadrr_config_staging import stage_qbittorrent_config
-    from emuwarez_uploadrr.legacy import get_child_inline_mapping
+    from emuwarez_uploadrr.services.uploadrr_yaml import get_child_inline_mapping
     lines = ["TORRENT_CLIENTS:", "  qbit: {'torrent_client': 'qbit', 'qbit_tag': 'Vieja'}"]
     for tag in ("", None, "   "):
         staged, _ = stage_qbittorrent_config(
@@ -259,7 +259,7 @@ def test_stage_add_logo_writes_the_key_the_fork_reads():
     """DEFAULT.add_logo es lo que mira src/utils/descgen.py del fork para
     incrustar el logo en la descripción."""
     from emuwarez_uploadrr.services.uploadrr_config_staging import stage_add_logo
-    from emuwarez_uploadrr.legacy import get_block_key
+    from emuwarez_uploadrr.services.uploadrr_yaml import get_block_key
     lines = ["DEFAULT:", "  tmdb: xxx", "  add_logo: true"]
     for enabled, expected in ((False, "false"), (True, "true")):
         staged, _ = stage_add_logo(lines, enabled)
@@ -268,7 +268,7 @@ def test_stage_add_logo_writes_the_key_the_fork_reads():
 
 def test_stage_add_logo_creates_the_key_when_the_config_lacks_it():
     from emuwarez_uploadrr.services.uploadrr_config_staging import stage_add_logo
-    from emuwarez_uploadrr.legacy import get_block_key
+    from emuwarez_uploadrr.services.uploadrr_yaml import get_block_key
     staged, _ = stage_add_logo(["DEFAULT:", "  tmdb: xxx"], False)
     assert get_block_key(staged, "DEFAULT", "add_logo") == "false"
 

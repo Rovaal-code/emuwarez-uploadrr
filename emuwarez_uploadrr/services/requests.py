@@ -10,8 +10,8 @@ import sqlite3
 import unicodedata
 from typing import Optional
 
-from ..config import load_app_config
 from ..database import get_setting_canonical, get_state, set_state
+from . import cli_config
 from ..integrations import emu
 from ..integrations.base import IntegrationError
 from ..models import RequestItem, RequestStatus, TaskStatus
@@ -130,22 +130,25 @@ def _is_requests_endpoint_missing(exc: Exception) -> bool:
     return "404" in m and ("api/requests" in m or "could not be found" in m or "route" in m)
 
 
-def _resolve_emu_api_key(conn: sqlite3.Connection, passphrase: Optional[str] = None) -> Optional[str]:
-    """The Settings UI stores the eMuwarez key in the DB (settings.emu.api_key);
-    the legacy YAML config is only a fallback. Reading only load_app_config()
-    made the requests task report "No hay API Key" even when it was configured."""
+def _resolve_emu_api_key(conn: sqlite3.Connection) -> Optional[str]:
+    """La API key de eMuwarez: la interfaz la guarda en la BD
+    (settings.emu.api_key) y esa es la fuente; la configuración del CLI antiguo
+    es solo un respaldo. Leer únicamente esta última hacía que la tarea de
+    peticiones dijera "No hay API Key" teniéndola configurada.
+
+    El respaldo se lee con services/cli_config, no con legacy.load_app_config:
+    aquella podía terminar en SystemExit o pidiendo una contraseña por teclado
+    desde el hilo del servidor. Ver la cabecera de cli_config.py."""
     key = get_setting_canonical(conn, "emu.api_key")
     if key:
         return key
-    cfg = load_app_config(passphrase=passphrase)
-    return getattr(cfg, "emu_api_key", None) if cfg else None
+    return cli_config.emu_api_key()
 
 
 def sync_emu_requests(
     conn: sqlite3.Connection,
     *,
     force: bool = False,
-    passphrase: Optional[str] = None,
 ) -> dict[str, int | str]:
     """Sync EMU requests using UNIT3D ?api_token= auth. Rate-limited to 1/hour."""
     allowed, wait = can_sync_requests(conn, force=force)
@@ -153,7 +156,7 @@ def sync_emu_requests(
         return {"status": "throttled", "wait_seconds": wait, "imported": 0, "matched": 0}
 
     task_id = start_task(conn, "sync-emu-requests", "Sincronizando peticiones EMU")
-    api_key = _resolve_emu_api_key(conn, passphrase)
+    api_key = _resolve_emu_api_key(conn)
     if not api_key:
         finish_task(conn, task_id, TaskStatus.FAILED.value, "No hay API Key de eMuwarez configurada")
         raise IntegrationError("No hay API Key de eMuwarez configurada")
@@ -212,20 +215,23 @@ def sync_requests(
     *,
     endpoint_url: Optional[str] = None,
     force: bool = False,
-    passphrase: Optional[str] = None,
 ) -> dict[str, int | str]:
     """Legacy sync using explicit endpoint_url + Bearer header."""
     allowed, wait = can_sync_requests(conn, force=force)
     if not allowed:
         return {"status": "throttled", "wait_seconds": wait, "imported": 0}
     task_id = start_task(conn, "sync-emu-requests", "Sincronizando peticiones EMU")
-    cfg = load_app_config(passphrase=passphrase)
-    if not cfg or not getattr(cfg, "emu_api_key", None):
+    # Mismo resolutor que sync_emu_requests: la BD primero. Esta función leía
+    # SOLO la configuración del CLI, así que decía "No hay API Key" a quien la
+    # tuviera puesta en la interfaz — justo el fallo que el docstring de
+    # _resolve_emu_api_key llevaba describiendo ochenta líneas más arriba.
+    api_key = _resolve_emu_api_key(conn)
+    if not api_key:
         finish_task(conn, task_id, TaskStatus.FAILED.value, "No hay API Key de eMuwarez configurada")
         raise IntegrationError("No hay API Key de eMuwarez configurada")
     try:
         raw = emu.get_requests(
-            cfg.emu_api_key,
+            api_key,
             endpoint_url=endpoint_url or get_state(conn, "emu_requests_endpoint"),
         )
         items = emu.normalize_requests(raw)
@@ -438,8 +444,11 @@ def match_all_requests(conn: sqlite3.Connection, *, emu_api_key: Optional[str] =
     still be called standalone (CLI, "recompute matches" endpoint, etc.).
     """
     if emu_api_key is None:
-        cfg = load_app_config()
-        emu_api_key = getattr(cfg, "emu_api_key", None) if cfg else None
+        # Mismo resolutor que el resto: la BD primero. Antes leía SOLO la
+        # configuración del CLI, así que a quien tuviera la clave puesta en la
+        # interfaz le salía None y la comprobación contra el catálogo de
+        # eMuwarez se saltaba en silencio.
+        emu_api_key = _resolve_emu_api_key(conn)
 
     # Snapshot which requests already had compatible content, so afterwards we
     # only notify about the ones that *newly* became satisfiable this run.
@@ -592,8 +601,11 @@ def match_single_request(
         return None
     req = dict(req_row)
     if emu_api_key is None:
-        cfg = load_app_config()
-        emu_api_key = getattr(cfg, "emu_api_key", None) if cfg else None
+        # Mismo resolutor que el resto: la BD primero. Antes leía SOLO la
+        # configuración del CLI, así que a quien tuviera la clave puesta en la
+        # interfaz le salía None y la comprobación contra el catálogo de
+        # eMuwarez se saltaba en silencio.
+        emu_api_key = _resolve_emu_api_key(conn)
     library = [dict(r) for r in conn.execute("SELECT * FROM library_items").fetchall()]
     candidates = match_request_to_library(req, library)
     if not candidates:

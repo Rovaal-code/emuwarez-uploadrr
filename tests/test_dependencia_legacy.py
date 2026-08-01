@@ -27,9 +27,6 @@ RAIZ = pathlib.Path(__file__).resolve().parents[1] / "emuwarez_uploadrr"
 # Bajar estos números al migrar. Nunca subirlos sin una razón escrita.
 PRESUPUESTO: dict[str, tuple[int, int]] = {
     "services/media_info_service.py": (26, 0),
-    # El último alias que queda. Sale de aquí cuando se resuelva
-    # load_app_config, su único consumidor real (services/requests.py).
-    "config.py": (0, 10),
     "cli.py": (13, 0),
     "services/uploadrr_config_staging.py": (0, 8),
     "services/nomenclature.py": (1, 0),

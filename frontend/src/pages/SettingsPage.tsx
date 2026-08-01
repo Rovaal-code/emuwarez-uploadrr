@@ -80,7 +80,17 @@ function RemoveMappingRuleButton({ onClick }: { onClick: () => void }) {
 }
 
 // ---------- Config tab ----------
-type SettingsMsg = { ok: boolean; text: string } | null
+type TonoMensaje = 'ok' | 'error' | 'aviso'
+
+type SettingsMsg = {
+  text: string
+  tono: TonoMensaje
+  // Un mensaje permanente describe un ESTADO que sigue siendo cierto (hay una
+  // versión nueva), no algo que acaba de pasar. No se borra solo; si mientras
+  // tanto ocurre algo (guardas, creas un backup), ese aviso pasa por delante
+  // unos segundos y luego vuelve el permanente.
+  permanente?: boolean
+} | null
 
 // Todos los avisos de esta página (guardado, backups, mantenimiento, errores)
 // salen en la misma fila que las pestañas, a la derecha. Antes cada pestaña
@@ -88,7 +98,14 @@ type SettingsMsg = { ok: boolean; text: string } | null
 // abajo al aparecer y las devolvía a su sitio al irse: el contenido daba un
 // salto justo cuando acabas de pulsar un botón. Desde la fila de pestañas no
 // mueve nada.
-const SettingsMessageContext = createContext<(ok: boolean, text: string) => void>(() => {})
+interface OpcionesMensaje {
+  tono?: TonoMensaje
+  permanente?: boolean
+}
+
+const SettingsMessageContext = createContext<
+  (ok: boolean, text: string, opciones?: OpcionesMensaje) => void
+>(() => {})
 
 export function useSettingsMessage() {
   return useContext(SettingsMessageContext)
@@ -99,7 +116,10 @@ export function useSettingsMessage() {
 // cambia es dónde sale el aviso.
 function useSettingsMessageAdapter() {
   const show = useSettingsMessage()
-  return useCallback((m: SettingsMsg) => { if (m) show(m.ok, m.text) }, [show])
+  return useCallback(
+    (m: { ok: boolean; text: string } | null) => { if (m) show(m.ok, m.text) },
+    [show],
+  )
 }
 
 // El aviso ocupa el hueco que sobra a la derecha de las pestañas y se recorta
@@ -116,13 +136,20 @@ function SettingsMessageSlot({ msg }: { msg: SettingsMsg }) {
   }, [msg?.text])
   const { triggerProps, tooltipNode } = useTooltip(recortado ? msg?.text ?? null : null)
   if (!msg) return null
+  const colores: Record<TonoMensaje, { texto: string; fondo: string; borde: string }> = {
+    ok: { texto: '#22c55e', fondo: 'rgba(34,197,94,0.10)', borde: 'rgba(34,197,94,0.30)' },
+    error: { texto: '#ef4444', fondo: 'rgba(239,68,68,0.10)', borde: 'rgba(239,68,68,0.30)' },
+    aviso: { texto: '#f59e0b', fondo: 'rgba(245,158,11,0.10)', borde: 'rgba(245,158,11,0.30)' },
+  }
+  const c = colores[msg.tono]
   return (
     <span
       ref={ref}
       style={{
-        marginLeft: 'auto', alignSelf: 'center', minWidth: 0, paddingLeft: 12,
+        marginLeft: 'auto', alignSelf: 'center', minWidth: 0,
+        padding: '4px 10px', marginBottom: 6, borderRadius: 6,
+        background: c.fondo, border: `1px solid ${c.borde}`, color: c.texto,
         fontSize: 12.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-        color: msg.ok ? '#22c55e' : '#ef4444',
       }}
       {...triggerProps}
     >
@@ -1126,20 +1153,32 @@ function PathMappingsCard() {
 // ---------- Diagnostics tab ----------
 function VersionCard() {
   const [info, setInfo] = useState<VersionInfo | null>(null)
-  const [error, setError] = useState<string | null>(null)
   const [comprobando, setComprobando] = useState(false)
+  const mensaje = useSettingsMessage()
 
   const cargar = useCallback(async (refrescar = false) => {
     setComprobando(refrescar)
     try {
-      setInfo(await getVersionInfo(refrescar))
-      setError(null)
+      const datos = await getVersionInfo(refrescar)
+      setInfo(datos)
+      // Al hueco de la fila de pestañas, como el resto de mensajes de esta
+      // pantalla. Permanente porque no es algo que acabe de pasar: es un
+      // estado que sigue siendo cierto hasta que actualices.
+      if (datos.estado === 'hay_novedad') {
+        mensaje(false, `Hay una versión más nueva${datos.ultima.notas ? `: ${datos.ultima.notas}` : ''}`,
+                { tono: 'aviso', permanente: true })
+      } else if (datos.estado === 'al_dia') {
+        mensaje(true, 'Estás en la última versión publicada', { permanente: true })
+      } else {
+        mensaje(false, datos.motivo || 'No se ha podido comprobar si hay una versión más nueva',
+                { tono: 'aviso', permanente: true })
+      }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e))
+      mensaje(false, e instanceof Error ? e.message : String(e), { permanente: true })
     } finally {
       setComprobando(false)
     }
-  }, [])
+  }, [mensaje])
 
   useEffect(() => { cargar() }, [cargar])
 
@@ -1158,39 +1197,6 @@ function VersionCard() {
     return <HoverTitle tip={valor}><code style={{ fontSize: 12 }}>{corto}</code></HoverTitle>
   }
 
-  const aviso = () => {
-    if (!info) return null
-    if (info.estado === 'hay_novedad') {
-      return (
-        <div style={{
-          padding: '10px 14px', borderRadius: 6, marginBottom: 12,
-          background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)',
-        }}>
-          <div style={{ fontWeight: 600, color: '#f59e0b', fontSize: 13 }}>
-            Hay una versión más nueva publicada
-          </div>
-          <div style={{ fontSize: 12.5, marginTop: 4, lineHeight: 1.5 }}>
-            Actualiza con <code>docker compose pull</code> y <code>docker compose up -d</code>.
-            {info.ultima.notas ? <> Último cambio: {info.ultima.notas}</> : null}
-          </div>
-        </div>
-      )
-    }
-    if (info.estado === 'al_dia') {
-      return (
-        <div style={{ fontSize: 12.5, color: '#22c55e', marginBottom: 12 }}>
-          ✓ Estás en la última versión publicada
-        </div>
-      )
-    }
-    return (
-      <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 12 }}>
-        No se ha podido comprobar si hay una versión más nueva
-        {info.motivo ? <>: {info.motivo}</> : '.'}
-      </div>
-    )
-  }
-
   return (
     <div className="placeholder-card">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
@@ -1200,11 +1206,14 @@ function VersionCard() {
           {comprobando ? 'Comprobando…' : 'Comprobar ahora'}
         </button>
       </div>
-      {error && <p className="text-error" style={{ fontSize: 12.5 }}>✗ {error}</p>}
-      {!info && !error && <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Cargando…</p>}
+      {!info && <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Cargando…</p>}
       {info && (
         <>
-          <div style={{ marginTop: 12 }}>{aviso()}</div>
+          {info.estado === 'hay_novedad' && (
+            <p style={{ fontSize: 12.5, marginTop: 10, marginBottom: 4, lineHeight: 1.5 }}>
+              Actualiza con <code>docker compose pull</code> y <code>docker compose up -d</code>.
+            </p>
+          )}
           <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
             <tbody>
               {fila('Versión', info.version)}
@@ -1582,13 +1591,11 @@ function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | nul
   const [discordEnabled, setDiscordEnabled] = useState(false)
   const [discordWebhook, setDiscordWebhook] = useState('')
   const [testingDiscord, setTestingDiscord] = useState(false)
-  const [discordResult, setDiscordResult] = useState<IntegrationTestResult | null>(null)
 
   const [telegramEnabled, setTelegramEnabled] = useState(false)
   const [telegramToken, setTelegramToken] = useState('')
   const [telegramChatId, setTelegramChatId] = useState('')
   const [testingTelegram, setTestingTelegram] = useState(false)
-  const [telegramResult, setTelegramResult] = useState<IntegrationTestResult | null>(null)
 
   // In-app bell ("UI" card): a configurable channel like Discord/Telegram, but
   // on by default and without credentials.
@@ -1685,13 +1692,12 @@ function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | nul
 
   async function handleTestDiscord() {
     setTestingDiscord(true)
-    setDiscordResult(null)
     try {
       const params: { webhook_url?: string } = {}
       if (discordWebhook.trim()) params.webhook_url = discordWebhook.trim()
-      setDiscordResult(await testDiscordNotification(params))
+      anunciarResultado(await testDiscordNotification(params))
     } catch {
-      setDiscordResult({ ok: false, service: 'discord', status: 'connection_error', message: 'Error al contactar con el servidor' })
+      anunciarResultado({ ok: false, service: 'discord', status: 'connection_error', message: 'Error al contactar con el servidor' })
     } finally {
       setTestingDiscord(false)
     }
@@ -1699,35 +1705,35 @@ function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | nul
 
   async function handleTestTelegram() {
     setTestingTelegram(true)
-    setTelegramResult(null)
     try {
       const params: { bot_token?: string; chat_id?: string } = {}
       if (telegramToken.trim()) params.bot_token = telegramToken.trim()
       if (telegramChatId.trim()) params.chat_id = telegramChatId.trim()
-      setTelegramResult(await testTelegramNotification(params))
+      anunciarResultado(await testTelegramNotification(params))
     } catch {
-      setTelegramResult({ ok: false, service: 'telegram', status: 'connection_error', message: 'Error al contactar con el servidor' })
+      anunciarResultado({ ok: false, service: 'telegram', status: 'connection_error', message: 'Error al contactar con el servidor' })
     } finally {
       setTestingTelegram(false)
     }
   }
 
-  function renderResult(result: IntegrationTestResult | null) {
-    if (!result) return null
-    return (
-      <span style={{
-        marginLeft: 10, fontSize: 12,
-        color: result.ok ? '#22c55e' : result.status === 'not_configured' ? '#f59e0b' : '#ef4444',
-      }}>
-        {result.ok ? '✓ Enviada'
-          : result.status === 'not_configured' ? '⚠ Sin configurar'
-          : result.status === 'invalid_key' ? '✗ Credenciales inválidas'
-          : result.status === 'invalid_chat_id' ? '✗ Chat ID inválido'
-          : result.status === 'timeout' ? '✗ Timeout'
-          : `✗ ${result.message}`}
-      </span>
-    )
-  }
+  // El resultado de la prueba va al hueco de la fila de pestañas, como el
+  // resto de mensajes de esta pantalla, en vez de aparecer junto al botón.
+  const textoResultado = (result: IntegrationTestResult): string =>
+    result.ok ? 'Notificación de prueba enviada'
+      : result.status === 'not_configured' ? 'Sin configurar'
+      : result.status === 'invalid_key' ? 'Credenciales inválidas'
+      : result.status === 'invalid_chat_id' ? 'Chat ID inválido'
+      : result.status === 'timeout' ? 'Se agotó el tiempo de espera'
+      : result.message
+
+  const anunciarResultado = useCallback((result: IntegrationTestResult | null) => {
+    if (!result) return
+    setMsg({
+      ok: result.ok,
+      text: `${result.service === 'telegram' ? 'Telegram' : 'Discord'}: ${textoResultado(result)}`,
+    })
+  }, [setMsg])
 
   if (loading) return <p style={{ padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>Cargando…</p>
 
@@ -1779,7 +1785,7 @@ function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | nul
         <button className="btn btn-secondary btn-sm" onClick={handleTestDiscord} disabled={testingDiscord} type="button">
           {testingDiscord ? 'Enviando…' : 'Probar notificación'}
         </button>
-        {renderResult(discordResult)}
+        
         <EventPicker
           title="Qué notificar por Discord"
           eventTypes={eventTypes}
@@ -1819,7 +1825,7 @@ function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | nul
         <button className="btn btn-secondary btn-sm" onClick={handleTestTelegram} disabled={testingTelegram} type="button">
           {testingTelegram ? 'Enviando…' : 'Probar notificación'}
         </button>
-        {renderResult(telegramResult)}
+        
         <EventPicker
           title="Qué notificar por Telegram"
           eventTypes={eventTypes}
@@ -1851,16 +1857,28 @@ export function SettingsPage() {
 
   useEffect(() => { loadStatus() }, [loadStatus])
 
-  const [msg, setMsg] = useState<SettingsMsg>(null)
+  // Dos mensajes a la vez, no uno: el permanente describe un estado que sigue
+  // siendo cierto (hay una versión nueva) y el pasajero, algo que acaba de
+  // ocurrir (has guardado). El pasajero se pone delante unos segundos y luego
+  // vuelve a verse el permanente, en vez de borrarlo para siempre.
+  const [msgPermanente, setMsgPermanente] = useState<SettingsMsg>(null)
+  const [msgPasajero, setMsgPasajero] = useState<SettingsMsg>(null)
   const msgTimer = useRef<number | null>(null)
-  // Se borra solo a los 5s, y el temporizador anterior se cancela: dos avisos
-  // seguidos no pueden dejar que el primero apague al segundo.
-  const showMessage = useCallback((ok: boolean, text: string) => {
+
+  const showMessage = useCallback((ok: boolean, text: string, opciones?: OpcionesMensaje) => {
+    const tono: TonoMensaje = opciones?.tono ?? (ok ? 'ok' : 'error')
+    if (opciones?.permanente) {
+      setMsgPermanente({ text, tono, permanente: true })
+      return
+    }
+    // El temporizador anterior se cancela: dos avisos seguidos no pueden dejar
+    // que el primero apague al segundo.
     if (msgTimer.current) window.clearTimeout(msgTimer.current)
-    setMsg({ ok, text })
-    msgTimer.current = window.setTimeout(() => setMsg(null), 5000)
+    setMsgPasajero({ text, tono })
+    msgTimer.current = window.setTimeout(() => setMsgPasajero(null), 5000)
   }, [])
   useEffect(() => () => { if (msgTimer.current) window.clearTimeout(msgTimer.current) }, [])
+  const msg = msgPasajero ?? msgPermanente
 
   const tabs: { key: Tab; label: string }[] = [
     { key: 'config', label: 'Configuración' },
@@ -1896,14 +1914,14 @@ export function SettingsPage() {
           <button
             key={t.key}
             className={`settings-tab${tab === t.key ? ' active' : ''}`}
-            onClick={() => { if (t.key !== tab) guardedLeave(() => { setTab(t.key); setMsg(null) }) }}
+            onClick={() => { if (t.key !== tab) guardedLeave(() => { setTab(t.key); setMsgPasajero(null) }) }}
           >
             {t.label}
           </button>
         ))}
         <SettingsMessageSlot
           msg={msg ?? (loadError
-            ? { ok: false, text: `✗ No se pudo cargar el estado de mantenimiento: ${loadError}` }
+            ? { text: `No se pudo cargar el estado de mantenimiento: ${loadError}`, tono: 'error' }
             : null)}
         />
       </div>

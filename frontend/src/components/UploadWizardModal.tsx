@@ -275,6 +275,29 @@ function episodeOnlyTitle(fullTitle?: string | null): string | undefined {
 
 // One collapsible episode row — used by the season target's MediaInfo/Remux
 // accordions (one entry per episode instead of a single-file table).
+// El desplegable con el que se elige capítulo dentro de una tarjeta de
+// temporada (MediaInfo, Remux, nombres). Se oculta si solo hay uno: un
+// desplegable de una sola opción no navega a ningún sitio.
+function EpisodePicker<T extends { episode_id: number; display_title?: string | null; title?: string | null }>(
+  { episodes, currentId, onChange }: { episodes: T[]; currentId: number; onChange: (id: number) => void },
+) {
+  if (episodes.length <= 1) return null
+  return (
+    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+      <select
+        className="form-input form-select" style={{ width: 'auto' }}
+        value={currentId} onChange={e => onChange(Number(e.target.value))}
+      >
+        {episodes.map(ep => (
+          <option key={ep.episode_id} value={ep.episode_id}>
+            {ep.display_title ?? episodeOnlyTitle(ep.title)}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
 export function EpisodeAccordionRow({ episodeNumber, title, expanded, onToggle, children }: {
   episodeNumber?: number | null
   title?: string | null
@@ -520,12 +543,15 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   const [seasonMi, setSeasonMi] = useState<SeasonEpisodeMediaInfo[] | null>(null)
   const [seasonMiLoading, setSeasonMiLoading] = useState(false)
   const [seasonMiError, setSeasonMiError] = useState<string | null>(null)
-  const [expandedMiEp, setExpandedMiEp] = useState<number | null>(null)
+  // Capítulo que se está viendo dentro de la tarjeta: se navega con un
+  // desplegable, igual que "Ver nombre de todos los capítulos", en vez de una
+  // lista de 25 acordeones que obliga a bajar buscando el que interesa.
+  const [miEpisodeId, setMiEpisodeId] = useState<number | null>(null)
 
   const [seasonRemux, setSeasonRemux] = useState<SeasonEpisodeRemux[] | null>(null)
   const [seasonRemuxLoading, setSeasonRemuxLoading] = useState(false)
   const [seasonRemuxError, setSeasonRemuxError] = useState<string | null>(null)
-  const [expandedRemuxEp, setExpandedRemuxEp] = useState<number | null>(null)
+  const [remuxEpisodeId, setRemuxEpisodeId] = useState<number | null>(null)
 
   // Step 1 — automatic TMDB provider detection for WEB-DL with no provider.
   const [detectingProvider, setDetectingProvider] = useState(false)
@@ -993,8 +1019,8 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     setRemuxPreview(null); setRemuxError(null); setRemuxEdits({}); setShowRemuxCard(false)
     setSeasonPlan(null); setSeasonPlanError(null)
     setSeasonNames(null); setShowSeasonNamesCard(false)
-    setSeasonMi(null); setSeasonMiError(null); setExpandedMiEp(null)
-    setSeasonRemux(null); setSeasonRemuxError(null); setExpandedRemuxEp(null)
+    setSeasonMi(null); setSeasonMiError(null); setMiEpisodeId(null)
+    setSeasonRemux(null); setSeasonRemuxError(null); setRemuxEpisodeId(null)
   }, [targetId])
 
   // Season target: invalidate the cached per-episode names list whenever
@@ -1907,8 +1933,8 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 600 }}>MediaInfo y Remux de los capítulos</div>
                       <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>
-                        Un capítulo por fila, expandible — cada uno con su propio detalle de MediaInfo y su
-                        propio plan de reordenación/renombrado de pistas (sin edición manual para temporadas).
+                        Se elige capítulo con un desplegable — cada uno con su propio detalle de MediaInfo y
+                        su propio plan de reordenación/renombrado de pistas (sin edición manual para temporadas).
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
@@ -1937,23 +1963,22 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                             <button className="btn btn-secondary btn-sm" type="button" onClick={loadSeasonMi}>↻ Reintentar</button>
                           </>
                         )}
-                        {seasonMi?.map(ep => (
-                          <EpisodeAccordionRow
-                            key={ep.episode_id}
-                            title={ep.display_title ?? episodeOnlyTitle(ep.title)}
-                            expanded={expandedMiEp === ep.episode_id}
-                            onToggle={() => setExpandedMiEp(expandedMiEp === ep.episode_id ? null : ep.episode_id)}
-                          >
-                            <MediaInfoTable
-                              report={ep.report}
-                              onSourceToolClick={ep.source_comparison ? () => {
-                                setSourceComparison(ep.source_comparison!)
-                                setShowEngineDetail(true)
-                                setShowSourceCompare(true)
-                              } : undefined}
-                            />
-                          </EpisodeAccordionRow>
-                        ))}
+                        {seasonMi && seasonMi.length > 0 && (() => {
+                          const current = seasonMi.find(e => e.episode_id === miEpisodeId) ?? seasonMi[0]
+                          return (
+                            <>
+                              <EpisodePicker episodes={seasonMi} currentId={current.episode_id} onChange={setMiEpisodeId} />
+                              <MediaInfoTable
+                                report={current.report}
+                                onSourceToolClick={current.source_comparison ? () => {
+                                  setSourceComparison(current.source_comparison!)
+                                  setShowEngineDetail(true)
+                                  setShowSourceCompare(true)
+                                } : undefined}
+                              />
+                            </>
+                          )
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -1981,16 +2006,15 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                             <button className="btn btn-secondary btn-sm" type="button" onClick={loadSeasonRemux}>↻ Reintentar</button>
                           </>
                         )}
-                        {seasonRemux?.map(ep => (
-                          <EpisodeAccordionRow
-                            key={ep.episode_id}
-                            title={ep.display_title ?? episodeOnlyTitle(ep.title)}
-                            expanded={expandedRemuxEp === ep.episode_id}
-                            onToggle={() => setExpandedRemuxEp(expandedRemuxEp === ep.episode_id ? null : ep.episode_id)}
-                          >
-                            <RemuxTable plan={ep.plan} editable={false} />
-                          </EpisodeAccordionRow>
-                        ))}
+                        {seasonRemux && seasonRemux.length > 0 && (() => {
+                          const current = seasonRemux.find(e => e.episode_id === remuxEpisodeId) ?? seasonRemux[0]
+                          return (
+                            <>
+                              <EpisodePicker episodes={seasonRemux} currentId={current.episode_id} onChange={setRemuxEpisodeId} />
+                              <RemuxTable plan={current.plan} editable={false} />
+                            </>
+                          )
+                        })()}
                       </div>
                     </div>
                   </div>

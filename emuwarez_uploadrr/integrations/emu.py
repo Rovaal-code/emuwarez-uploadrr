@@ -11,7 +11,7 @@ import re
 from typing import Any, Iterable
 
 from .base import IntegrationError, build_url, request_json
-from ..legacy import EMU_TEST_URL
+from ..constants import EMU_TEST_URL
 from ..models import RequestItem
 
 EMU_BASE_URL = "https://emuwarez.com"

@@ -10,7 +10,7 @@ from .arr_base import (
 )
 from .base import build_url, extract_backdrop_url, extract_media_info, extract_poster_url, request_json
 from ..models import LibraryItem, LocalStatus, MediaKind, NomenclatureStatus
-from ..legacy import DEFAULT_TAG
+from ..constants import DEFAULT_TAG
 
 
 # ---------------------------------------------------------------------------

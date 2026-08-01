@@ -7,7 +7,7 @@ import { EmuFieldChip } from './EmuComparisonSection'
 import { LibraryActionButtons } from './LibraryActionButtons'
 import type { LibraryActionKind } from './LibraryTreeRow'
 import { formatBytes, formatDate, formatItemType } from '../utils/format'
-import { buildDeepLink, posterUrl, idVerifyUrl, bluraySearchUrl } from '../utils/libraryItem'
+import { buildDeepLink, posterUrl, idVerifyUrl } from '../utils/libraryItem'
 import { ExternalIdLink } from './ExternalIdLink'
 import { ProviderTag } from './ProviderIcon'
 import { ServiceLabel } from './ServiceIcon'
@@ -157,15 +157,17 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
                 <ValueChip><ValueIcon><ResolutionValueIcon /></ValueIcon><span className="txt">{item.rollup_all?.resolution || item.resolution || '–'}</span></ValueChip>
               </FieldRow>
               <FieldRow label="Proveedor" help={rollupHelp}>
-                {/* Con varios proveedores bajo una temporada no hay una
-                    etiqueta con logo que valga para todos, así que se listan
-                    en texto igual que el resto de campos sumados. */}
-                {item.rollup_all?.provider && item.rollup_all.provider.includes(',')
-                  ? <ValueChip><span className="txt">{item.rollup_all.provider}</span></ValueChip>
+                {/* Con varios proveedores bajo una temporada se pinta uno por
+                    cada uno, cada cual con su icono y su nombre completo: es
+                    el mismo control que con uno solo, repetido. */}
+                {item.providers_all?.length
+                  ? <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 6 }}>
+                      {item.providers_all.map(p => (
+                        <ValueChip key={p.code} linkable><ProviderTag code={p.code} label={p.label} /></ValueChip>
+                      ))}
+                    </span>
                   : item.provider
                   ? <ValueChip linkable><ProviderTag code={item.provider} label={item.provider_label} /></ValueChip>
-                  : item.rollup_all?.provider
-                  ? <ValueChip><span className="txt">{item.rollup_all.provider}</span></ValueChip>
                   : <span className="muted">–</span>}
               </FieldRow>
               <FieldRow label="Source" help={rollupHelp}>
@@ -220,17 +222,6 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
                     {item.tvmaze_id ? <ValueChip linkable={Boolean(idVerifyUrl('tvmaze', item.tvmaze_id, isTv))}><ExternalIdLink id={item.tvmaze_id} href={idVerifyUrl('tvmaze', item.tvmaze_id, isTv)} label="TVmaze" /></ValueChip> : <span className="muted">–</span>}
                   </FieldRow>
                 </>
-              )}
-              {/* Blu-ray.com no da un id: se busca por el de IMDb, igual que
-                  hace Radarr en su fila de enlaces. Solo para películas, que es
-                  donde aplica section=theatrical. Como no hay identificador que
-                  enseñar, el valor es la acción. */}
-              {item.item_type === 'movie' && bluraySearchUrl(item.imdb_id) && (
-                <FieldRow label="Blu-ray.com">
-                  <ValueChip linkable>
-                    <ExternalIdLink id="Buscar edición" href={bluraySearchUrl(item.imdb_id)} label="Blu-ray.com" />
-                  </ValueChip>
-                </FieldRow>
               )}
               <FieldRow label="MAL">
                 {item.mal_id ? <ValueChip linkable={Boolean(idVerifyUrl('mal', item.mal_id, isTv))}><ExternalIdLink id={item.mal_id} href={idVerifyUrl('mal', item.mal_id, isTv)} label="MAL" /></ValueChip> : <span className="muted">–</span>}

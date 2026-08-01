@@ -1052,3 +1052,24 @@ def test_the_dashboard_only_counts_seasons_that_could_really_be_packed(isolated_
     assert esperado == 1
     assert get_dashboard_summary(conn)["unique_seasons"] == esperado
     conn.close()
+
+
+def test_rollup_all_returns_provider_codes_not_a_joined_string(isolated_db, tmp_path):
+    """La ficha pinta un ProviderTag por proveedor, con su icono y su nombre
+    completo, y para eso necesita los códigos sueltos. Pegarlos en "AMZN, NF"
+    obligaba a enseñarlos en texto pelado, sin icono."""
+    from emuwarez_uploadrr.services.library import rollup_all_values
+    conn = _open(isolated_db)
+    _series_id, season_id = _seed_series_season(conn)
+    for i, ruta in enumerate(["/data/S01E01.AMZN.WEB-DL.mkv", "/data/S01E02.NF.WEB-DL.mkv"], start=1):
+        _seed_episode(conn, season_id, number=i, title=f"One Piece S01E0{i}", path=ruta,
+                      quality="WEBDL-1080p", video_codec="x264", audio_codec="AC3",
+                      audio_languages="spa", subtitle_languages="spa", source="WEB-DL")
+
+    season = dict(conn.execute("SELECT * FROM library_items WHERE id = ?", (season_id,)).fetchone())
+    todos = rollup_all_values(conn, season)
+
+    codigos = todos.get("provider_codes")
+    assert isinstance(codigos, list), todos
+    assert set(codigos) == {"AMZN", "NF"}, codigos
+    conn.close()

@@ -825,7 +825,13 @@ def library_detail(
         from emuwarez_uploadrr.services.library import rollup_all_values
         response = _to_lib_response(row, conn)
         # Solo en la ficha: la lista no lo necesita y son una consulta por fila.
-        response.rollup_all = rollup_all_values(conn, row)
+        todos = rollup_all_values(conn, row) or {}
+        # Los proveedores salen como lista de códigos; la etiqueta legible
+        # ("Amazon (AMZN)") la construye este módulo, no el servicio.
+        codigos = todos.pop("provider_codes", None)
+        if codigos:
+            response.providers_all = [{"code": c, "label": _provider_label(c)} for c in codigos]
+        response.rollup_all = todos or None
         return response
 
 

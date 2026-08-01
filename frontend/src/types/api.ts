@@ -98,6 +98,7 @@ export interface LibraryItemResponse {
   // valor único (o null cuando los capítulos no coinciden), que es lo que usa
   // la regla del pack. Solo llega en la ficha, no en la lista.
   rollup_all?: Record<string, string> | null
+  providers_all?: { code: string; label: string | null }[] | null
   id: number
   item_type: string
   title: string

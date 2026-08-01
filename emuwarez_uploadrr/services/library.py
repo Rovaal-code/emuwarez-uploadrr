@@ -1080,7 +1080,10 @@ def rollup_all_values(conn: sqlite3.Connection, item: dict) -> Optional[dict]:
         if code and code not in proveedores:
             proveedores.append(code)
     if proveedores:
-        out["provider"] = ", ".join(proveedores)
+        # Lista, no cadena pegada: la ficha pinta un ProviderTag por cada uno,
+        # con su icono y su nombre completo, y para eso necesita los códigos
+        # sueltos. Pegarlos en "AMZN, NF" obligaba a enseñarlos en texto pelado.
+        out["provider_codes"] = proveedores
 
     return out or None
 

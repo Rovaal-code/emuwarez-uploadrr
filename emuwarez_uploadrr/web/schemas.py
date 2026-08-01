@@ -536,6 +536,9 @@ class LibraryItemResponse(BaseModel):
     # siguen siendo la señal de acuerdo que usa la regla del pack, así que no
     # se tocan. None para películas y capítulos.
     rollup_all: Optional[dict] = None
+    # Los proveedores presentes bajo una serie o temporada, con su etiqueta
+    # legible, para pintar uno por cada uno con su icono.
+    providers_all: Optional[list] = None
     id: int
     item_type: str
     title: str

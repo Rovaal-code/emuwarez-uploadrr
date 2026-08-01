@@ -162,18 +162,6 @@ export function posterUrl(url: string | null | undefined, size: PosterSize = 'w3
 }
 
 // Public page for an external ID so the user can open it in TMDb/IMDb/TheTVDB/MAL.
-// Blu-ray.com no tiene id propio: se BUSCA por el de IMDb, que es justo lo que
-// hace Radarr en su fila de enlaces. Por eso va aparte de idVerifyUrl, que
-// resuelve identificadores de verdad — aquí no hay ninguno que enseñar, solo
-// una búsqueda que responde si existe edición física.
-export function bluraySearchUrl(imdbId: string | null | undefined): string | null {
-  if (!imdbId) return null
-  const digits = imdbId.replace(/\D+/g, '')
-  if (!digits) return null
-  const tt = `tt${digits.padStart(7, '0')}`
-  return `https://www.blu-ray.com/search/?quicksearch=1&quicksearch_keyword=${tt}&section=theatrical`
-}
-
 export function idVerifyUrl(kind: 'tmdb' | 'imdb' | 'tvdb' | 'tvmaze' | 'mal', id: string | null | undefined, isTv: boolean): string | null {
   if (!id) return null
   const digits = id.replace(/\D+/g, '')

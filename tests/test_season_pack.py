@@ -528,7 +528,7 @@ def test_get_season_episode_mediainfo_prefers_prepared_path_over_stale_path(isol
     ]}}
     with (
         patch.object(media_info_service, "mediainfo_available", return_value=True),
-        patch.object(media_info_service.legacy, "run_mediainfo_json", return_value=info),
+        patch.object(media_info_service.media_probe, "run_mediainfo_json", return_value=info),
     ):
         result = get_season_episode_mediainfo(season_id, conn=conn)
 
@@ -559,7 +559,7 @@ def test_get_season_episode_mediainfo_uses_radarr_source_not_just_bitrate_guess(
     ]}}
     with (
         patch.object(media_info_service, "mediainfo_available", return_value=True),
-        patch.object(media_info_service.legacy, "run_mediainfo_json", return_value=info),
+        patch.object(media_info_service.media_probe, "run_mediainfo_json", return_value=info),
         patch("emuwarez_uploadrr.services.source_engine.analyze_for_app", return_value=None),
         patch("emuwarez_uploadrr.services.source_engine.winning_app_source", return_value="WEBRip"),
     ):
@@ -591,7 +591,7 @@ def test_get_season_episode_mediainfo_computes_source_comparison_once_and_shares
         patch("emuwarez_uploadrr.services.source_assistant.build_editable_nomenclature_fields",
               return_value={"source_comparison": fake_comparison}) as mocked_fields,
         patch.object(media_info_service, "mediainfo_available", return_value=True),
-        patch.object(media_info_service.legacy, "run_mediainfo_json", return_value=info),
+        patch.object(media_info_service.media_probe, "run_mediainfo_json", return_value=info),
     ):
         result = get_season_episode_mediainfo(season_id, conn=conn)
 

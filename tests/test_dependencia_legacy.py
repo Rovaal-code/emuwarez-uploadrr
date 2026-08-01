@@ -26,10 +26,7 @@ RAIZ = pathlib.Path(__file__).resolve().parents[1] / "emuwarez_uploadrr"
 # fichero -> (usos con prefijo, nombres importados directamente)
 # Bajar estos números al migrar. Nunca subirlos sin una razón escrita.
 PRESUPUESTO: dict[str, tuple[int, int]] = {
-    "services/media_info_service.py": (26, 0),
     "cli.py": (13, 0),
-    "services/nomenclature.py": (1, 0),
-    "services/nomenclature_check.py": (0, 2),
     # legacy.py ya no define las constantes: las importa de constants.py, que
     # pasó a ser su dueño. Esta entrada es la de constants.py mirando al revés
     # y por eso no está aquí: la vigila test_constants_no_depende_de_legacy.

@@ -185,8 +185,8 @@ def _infer_source_from_item(item: dict) -> str | None:
     path = item.get("path") or ""
     if path:
         from pathlib import Path
-        from .. import legacy
-        by_name = legacy._detect_source_by_name(Path(path))
+        from .media_probe import _detect_source_by_name
+        by_name = _detect_source_by_name(Path(path))
         if by_name:
             return by_name
     src = item.get("source")

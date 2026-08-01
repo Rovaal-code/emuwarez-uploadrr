@@ -56,7 +56,7 @@ def test_read_media_info_summary_parses_real_tracks(tmp_path):
     f.write_text("fake")
     with (
         patch.object(svc, "mediainfo_available", return_value=True),
-        patch.object(svc.legacy, "run_mediainfo_json", return_value=_fake_mediainfo_json()),
+        patch.object(svc.media_probe, "run_mediainfo_json", return_value=_fake_mediainfo_json()),
     ):
         result = svc.read_media_info_summary(str(f))
     assert result["video_codec"] == "HEVC"
@@ -79,7 +79,7 @@ def test_read_media_info_summary_never_prompts_on_unknown_language(tmp_path):
     ]}}
     with (
         patch.object(svc, "mediainfo_available", return_value=True),
-        patch.object(svc.legacy, "run_mediainfo_json", return_value=info),
+        patch.object(svc.media_probe, "run_mediainfo_json", return_value=info),
         patch("builtins.input", side_effect=AssertionError("must never prompt")),
     ):
         result = svc.read_media_info_summary(str(f))
@@ -91,7 +91,7 @@ def test_read_media_info_summary_handles_subprocess_failure(tmp_path):
     f.write_text("fake")
     with (
         patch.object(svc, "mediainfo_available", return_value=True),
-        patch.object(svc.legacy, "run_mediainfo_json", side_effect=RuntimeError("mediainfo falló")),
+        patch.object(svc.media_probe, "run_mediainfo_json", side_effect=RuntimeError("mediainfo falló")),
     ):
         assert svc.read_media_info_summary(str(f)) is None
 
@@ -125,7 +125,7 @@ def test_build_mediainfo_report_handles_subprocess_failure(tmp_path):
     f.write_text("fake")
     with (
         patch.object(svc, "mediainfo_available", return_value=True),
-        patch.object(svc.legacy, "run_mediainfo_json", side_effect=RuntimeError("boom")),
+        patch.object(svc.media_probe, "run_mediainfo_json", side_effect=RuntimeError("boom")),
     ):
         r = svc.build_mediainfo_report(str(f))
     assert r["available"] is False and "boom" in r["message"]
@@ -136,7 +136,7 @@ def test_build_mediainfo_report_rows_and_emu_mapping(tmp_path):
     f.write_text("fake")
     with (
         patch.object(svc, "mediainfo_available", return_value=True),
-        patch.object(svc.legacy, "run_mediainfo_json", return_value=_fake_mediainfo_json()),
+        patch.object(svc.media_probe, "run_mediainfo_json", return_value=_fake_mediainfo_json()),
     ):
         r = svc.build_mediainfo_report(str(f))
     assert r["available"] is True
@@ -165,7 +165,7 @@ def test_build_mediainfo_report_codec_row_shows_encoder_fingerprint_alongside_fo
     ]}}
     with (
         patch.object(svc, "mediainfo_available", return_value=True),
-        patch.object(svc.legacy, "run_mediainfo_json", return_value=info),
+        patch.object(svc.media_probe, "run_mediainfo_json", return_value=info),
     ):
         r = svc.build_mediainfo_report(str(f))
     by_field = {row["field"]: row for row in r["rows"]}
@@ -191,7 +191,7 @@ def _summary(tmp_path, tracks):
     f.write_text("fake")
     with (
         patch.object(svc, "mediainfo_available", return_value=True),
-        patch.object(svc.legacy, "run_mediainfo_json", return_value=_mediainfo_with_audio(tracks)),
+        patch.object(svc.media_probe, "run_mediainfo_json", return_value=_mediainfo_with_audio(tracks)),
     ):
         return svc.build_mediainfo_report(str(f))["audio_summary"]
 
@@ -201,7 +201,7 @@ def _report(tmp_path, tracks):
     f.write_text("fake")
     with (
         patch.object(svc, "mediainfo_available", return_value=True),
-        patch.object(svc.legacy, "run_mediainfo_json", return_value=_mediainfo_with_audio(tracks)),
+        patch.object(svc.media_probe, "run_mediainfo_json", return_value=_mediainfo_with_audio(tracks)),
     ):
         return svc.build_mediainfo_report(str(f))
 

@@ -1,0 +1,218 @@
+{
+ "S01E01.mkv": {
+  "audio_by_language": {
+   "ESP": {
+    "channels": "Mono",
+    "codec": "DD"
+   },
+   "ING": {
+    "channels": "Mono",
+    "codec": "DD"
+   }
+  },
+  "audio_summary": "DUAL DD Mono",
+  "available": true,
+  "message": null,
+  "rows": [
+   {
+    "emu": "480p SD",
+    "field": "Resolución",
+    "help": null,
+    "mediainfo": "320x180"
+   },
+   {
+    "emu": "HDTV",
+    "field": "Source",
+    "help": "MediaInfo: se calcula a través de una tool interna de la aplicación (analiza audio y bitrate del archivo), sin mirar el nombre del archivo. eMuwarez: nombre del archivo → Radarr/Sonarr → tool interna de la aplicación.",
+    "mediainfo": "HDTV"
+   },
+   {
+    "emu": "—",
+    "field": "HDR/DV",
+    "help": null,
+    "mediainfo": "—"
+   },
+   {
+    "emu": "x264",
+    "field": "Códec de vídeo",
+    "help": null,
+    "mediainfo": "AVC (x264)"
+   },
+   {
+    "emu": "ING DD Mono",
+    "field": "Audio 1",
+    "help": null,
+    "mediainfo": "AC-3 en 1"
+   },
+   {
+    "emu": "ESP DD Mono",
+    "field": "Audio 2",
+    "help": null,
+    "mediainfo": "AC-3 es 1"
+   },
+   {
+    "emu": "DUAL DD Mono",
+    "field": "Audio (eMuwarez)",
+    "help": null,
+    "mediainfo": "2 pista(s)"
+   },
+   {
+    "emu": "—",
+    "field": "Subtítulos",
+    "help": null,
+    "mediainfo": "—"
+   }
+  ],
+  "source_signals": {
+   "bitrate_table": [
+    {
+     "bitrate": "—",
+     "comment": "Solo se detecta por el nombre del archivo; no hay heurística de bitrate que lo distinga de un BDRemux/BluRay normal.",
+     "source": "Full BluRay"
+    },
+    {
+     "bitrate": "≥ 22 Mbps, con audio sin pérdida (DTS-HD MA, TrueHD, PCM…)",
+     "comment": "Bitrate cercano al disco original, prácticamente sin recomprimir.",
+     "source": "BDRemux"
+    },
+    {
+     "bitrate": "< 22 Mbps, con audio sin pérdida",
+     "comment": "Audio sin pérdida pero bitrate menor que un remux: recompresión del disco.",
+     "source": "BluRay"
+    },
+    {
+     "bitrate": "—",
+     "comment": "Solo se detecta por el nombre del archivo (MicroHD); con audio normal y re-encode es indistinguible de un WEBRip por bitrate.",
+     "source": "MHD"
+    },
+    {
+     "bitrate": "≥ 4 Mbps con audio con pérdida, o cualquier bitrate si el archivo NO está re-encodeado",
+     "comment": "Si el archivo no está re-encodeado y el bitrate cae aquí, es un WEB-DL confirmado (rip directo de la plataforma).",
+     "source": "WEB-DL"
+    },
+    {
+     "bitrate": "≥ 4 Mbps con audio con pérdida, con el archivo re-encodeado",
+     "comment": "Mismo rango que un WEB-DL re-encodeado, indistinguible por bitrate de un WEB-DL recomprimido o de un MicroHD.",
+     "source": "WEBRip"
+    },
+    {
+     "bitrate": "< 4 Mbps con audio con pérdida",
+     "comment": "Bitrate bajo, típico de una captura de TV o una recompresión agresiva.",
+     "source": "HDTV"
+    }
+   ],
+   "engine": null,
+   "from_mediainfo_bitrate": null,
+   "from_name": null,
+   "mediainfo_reencoded": true
+  }
+ },
+ "S01E02.mkv": {
+  "audio_by_language": {
+   "ESP": {
+    "channels": "Mono",
+    "codec": "DD"
+   },
+   "ING": {
+    "channels": "Mono",
+    "codec": "DD+"
+   }
+  },
+  "audio_summary": "ING DD+ Mono ESP DD Mono",
+  "available": true,
+  "message": null,
+  "rows": [
+   {
+    "emu": "480p SD",
+    "field": "Resolución",
+    "help": null,
+    "mediainfo": "320x180"
+   },
+   {
+    "emu": "HDTV",
+    "field": "Source",
+    "help": "MediaInfo: se calcula a través de una tool interna de la aplicación (analiza audio y bitrate del archivo), sin mirar el nombre del archivo. eMuwarez: nombre del archivo → Radarr/Sonarr → tool interna de la aplicación.",
+    "mediainfo": "HDTV"
+   },
+   {
+    "emu": "—",
+    "field": "HDR/DV",
+    "help": null,
+    "mediainfo": "—"
+   },
+   {
+    "emu": "x264",
+    "field": "Códec de vídeo",
+    "help": null,
+    "mediainfo": "AVC (x264)"
+   },
+   {
+    "emu": "ING DD+ Mono",
+    "field": "Audio 1",
+    "help": null,
+    "mediainfo": "E-AC-3 en 1"
+   },
+   {
+    "emu": "ESP DD Mono",
+    "field": "Audio 2",
+    "help": null,
+    "mediainfo": "AC-3 es 1"
+   },
+   {
+    "emu": "ING DD+ Mono ESP DD Mono",
+    "field": "Audio (eMuwarez)",
+    "help": null,
+    "mediainfo": "2 pista(s)"
+   },
+   {
+    "emu": "—",
+    "field": "Subtítulos",
+    "help": null,
+    "mediainfo": "—"
+   }
+  ],
+  "source_signals": {
+   "bitrate_table": [
+    {
+     "bitrate": "—",
+     "comment": "Solo se detecta por el nombre del archivo; no hay heurística de bitrate que lo distinga de un BDRemux/BluRay normal.",
+     "source": "Full BluRay"
+    },
+    {
+     "bitrate": "≥ 22 Mbps, con audio sin pérdida (DTS-HD MA, TrueHD, PCM…)",
+     "comment": "Bitrate cercano al disco original, prácticamente sin recomprimir.",
+     "source": "BDRemux"
+    },
+    {
+     "bitrate": "< 22 Mbps, con audio sin pérdida",
+     "comment": "Audio sin pérdida pero bitrate menor que un remux: recompresión del disco.",
+     "source": "BluRay"
+    },
+    {
+     "bitrate": "—",
+     "comment": "Solo se detecta por el nombre del archivo (MicroHD); con audio normal y re-encode es indistinguible de un WEBRip por bitrate.",
+     "source": "MHD"
+    },
+    {
+     "bitrate": "≥ 4 Mbps con audio con pérdida, o cualquier bitrate si el archivo NO está re-encodeado",
+     "comment": "Si el archivo no está re-encodeado y el bitrate cae aquí, es un WEB-DL confirmado (rip directo de la plataforma).",
+     "source": "WEB-DL"
+    },
+    {
+     "bitrate": "≥ 4 Mbps con audio con pérdida, con el archivo re-encodeado",
+     "comment": "Mismo rango que un WEB-DL re-encodeado, indistinguible por bitrate de un WEB-DL recomprimido o de un MicroHD.",
+     "source": "WEBRip"
+    },
+    {
+     "bitrate": "< 4 Mbps con audio con pérdida",
+     "comment": "Bitrate bajo, típico de una captura de TV o una recompresión agresiva.",
+     "source": "HDTV"
+    }
+   ],
+   "engine": null,
+   "from_mediainfo_bitrate": null,
+   "from_name": null,
+   "mediainfo_reencoded": true
+  }
+ }
+}

@@ -1,6 +1,6 @@
 """Real MediaInfo invocation for the web nomenclature-apply flow (Phase 6B).
 
-`legacy.py` already has working MediaInfo parsing code
+`media_probe.py` already has working MediaInfo parsing code
 (`run_mediainfo_json`/`read_media_info`, shell-out to `mediainfo
 --Output=JSON`) but it's part of the interactive legacy CLI: on an
 unrecognized audio language, `map_audio_language()` calls `prompt()`,
@@ -23,7 +23,9 @@ import shutil
 from pathlib import Path
 from typing import Optional
 
-from .. import legacy
+from ..constants import LANG_MAP
+from . import media_probe
+
 
 logger = logging.getLogger(__name__)
 
@@ -65,9 +67,9 @@ def mediainfo_available() -> bool:
 
 def _map_audio_language_noninteractive(value: str) -> str:
     key = (value or "").strip().lower()
-    if key in legacy.LANG_MAP:
-        return legacy.LANG_MAP[key]
-    # No prompt() here (unlike legacy.map_audio_language) — an unmapped
+    if key in LANG_MAP:
+        return LANG_MAP[key]
+    # No prompt() here (unlike media_probe.map_audio_language) — an unmapped
     # language just falls back to a 3-letter best-effort code so the web
     # request always completes.
     return (value or "UND").strip().upper()[:3] or "UND"
@@ -87,12 +89,12 @@ def read_media_info_summary(path: str) -> Optional[dict]:
         file_path = Path(path)
         if not file_path.is_file():
             return None
-        info = legacy.run_mediainfo_json(file_path)
-        video = legacy.first_track(info, "Video")
+        info = media_probe.run_mediainfo_json(file_path)
+        video = media_probe.first_track(info, "Video")
 
         audio_langs: list[str] = []
         audio_codecs: list[str] = []
-        for track in legacy.media_tracks(info):
+        for track in media_probe.media_tracks(info):
             if track.get("@type") != "Audio":
                 continue
             lang = _map_audio_language_noninteractive(
@@ -100,12 +102,12 @@ def read_media_info_summary(path: str) -> Optional[dict]:
             )
             if lang not in audio_langs:
                 audio_langs.append(lang)
-            codec = legacy.audio_codec(track)
+            codec = media_probe.audio_codec(track)
             if codec not in audio_codecs:
                 audio_codecs.append(codec)
 
         subtitle_langs: list[str] = []
-        for track in legacy.media_tracks(info):
+        for track in media_probe.media_tracks(info):
             if track.get("@type") != "Text":
                 continue
             lang = _map_audio_language_noninteractive(
@@ -115,7 +117,7 @@ def read_media_info_summary(path: str) -> Optional[dict]:
                 subtitle_langs.append(lang)
 
         return {
-            "video_codec": legacy.detect_video_codec(video, file_path) if video else None,
+            "video_codec": media_probe.detect_video_codec(video, file_path) if video else None,
             "audio_codec": " / ".join(audio_codecs) or None,
             "audio_languages": " / ".join(audio_langs) or None,
             "subtitle_languages": " / ".join(subtitle_langs) or None,
@@ -168,11 +170,11 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
         cache_key = None
 
     try:
-        info = legacy.run_mediainfo_json(p)
+        info = media_probe.run_mediainfo_json(p)
     except Exception as exc:  # noqa: BLE001
         return {"available": False, "message": f"MediaInfo falló: {exc}", "rows": []}
 
-    video = legacy.first_track(info, "Video")
+    video = media_probe.first_track(info, "Video")
     rows: list[dict] = []
 
     def add(field: str, mi, emu, help_text: str | None = None):
@@ -182,7 +184,7 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
     # Resolution
     w = video.get("Width") or video.get("Stored_Width")
     h = video.get("Height") or video.get("Stored_Height")
-    resolution = legacy.map_resolution(video) if video else None
+    resolution = media_probe.map_resolution(video) if video else None
     add("Resolución", f"{w}x{h}" if w and h else None, resolution)
     # Source: MediaInfo doesn't literally report a "source" field.
     # - "MediaInfo" column: always the bitrate/audio tool's own estimate,
@@ -191,10 +193,10 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
     #   the same priority as the real nomenclature (nombre del archivo →
     #   Radarr/Sonarr → MediaInfo bitrate tool — see
     #   nomenclature.py::_infer_source_from_item).
-    _audio_codecs = [legacy.audio_codec(t) for t in legacy.media_tracks(info) if t.get("@type") == "Audio"]
-    _general = legacy.first_track(info, "General")
-    _duration = legacy.duration_seconds(_general)
-    _name_source = legacy._detect_source_by_name(p)
+    _audio_codecs = [media_probe.audio_codec(t) for t in media_probe.media_tracks(info) if t.get("@type") == "Audio"]
+    _general = media_probe.first_track(info, "General")
+    _duration = media_probe.duration_seconds(_general)
+    _name_source = media_probe._detect_source_by_name(p)
     try:
         _size_bytes = p.stat().st_size
     except OSError:
@@ -214,14 +216,14 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
     if _engine_source is not None:
         _bitrate_source = _engine_source
     else:
-        _bitrate_source = legacy.estimate_source_from_bitrate(_size_bytes, _duration, _audio_codecs, resolution, video=video)
+        _bitrate_source = media_probe.estimate_source_from_bitrate(_size_bytes, _duration, _audio_codecs, resolution, video=video)
         if _bitrate_source is None:
-            _bitrate_source = legacy.heuristic_source(_audio_codecs, _size_bytes / (1024 ** 3), resolution)
+            _bitrate_source = media_probe.heuristic_source(_audio_codecs, _size_bytes / (1024 ** 3), resolution)
     _final_source = _name_source or radarr_source or _bitrate_source
     # Whether the video has a hand-encoder fingerprint — used by the bitrate
     # reference table (below) to explain why a given bitrate range does or
     # doesn't confirm WEB-DL, and by source_comparison's mediainfo_confirmed.
-    _reencoded = legacy.looks_reencoded(video)
+    _reencoded = media_probe.looks_reencoded(video)
     add("Source", _bitrate_source, _final_source,
         help_text="MediaInfo: se calcula a través de una tool interna de la aplicación (analiza audio y "
                    "bitrate del archivo), sin mirar el nombre del archivo. "
@@ -232,7 +234,7 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
     # THIS file's resolution, so the user can see where their file lands and
     # why. Full BluRay/MHD are name-only — the tool can't tell them apart
     # from BDRemux/BluRay or from a WEBRip by bitrate alone.
-    _remux_thr, _bluray_thr, _webdl_thr = legacy.bitrate_thresholds(resolution)
+    _remux_thr, _bluray_thr, _webdl_thr = media_probe.bitrate_thresholds(resolution)
     def _mbps(v: float) -> str:
         return f"{v:g}"
     bitrate_table = [
@@ -272,21 +274,21 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
         "engine": _engine_result,
     }
     # HDR / Dolby Vision
-    hdr = legacy.detect_hdr(video) if video else []
+    hdr = media_probe.detect_hdr(video) if video else []
     add("HDR/DV", video.get("HDR_Format") or video.get("HDR_Format_String"), " ".join(hdr) or None)
     # Video codec — when the real encoder fingerprint says x264/x265 (the
     # eMuwarez value below), the raw MediaInfo Format alone (AVC/HEVC, the
     # generic codec family) looks contradictory next to it. Showing "AVC
     # (x264)" here makes both true facts visible at once instead of one
     # column apparently disagreeing with the other.
-    _video_codec_label = legacy.detect_video_codec(video, p) if video else None
+    _video_codec_label = media_probe.detect_video_codec(video, p) if video else None
     _mi_video_codec = video.get("Format") or video.get("CodecID")
     if _mi_video_codec and _video_codec_label in ("x264", "x265") and _video_codec_label not in str(_mi_video_codec).lower():
         _mi_video_codec = f"{_mi_video_codec} ({_video_codec_label})"
     add("Códec de vídeo", _mi_video_codec, _video_codec_label)
 
     # Audio tracks (one row each) + combined eMuwarez segment
-    audio_tracks = [t for t in legacy.media_tracks(info) if t.get("@type") == "Audio"]
+    audio_tracks = [t for t in media_probe.media_tracks(info) if t.get("@type") == "Audio"]
     codecs, langs, channels = [], [], []
     # One "IDIOMA CÓDEC CANALES" per real track, in track order. Built here
     # rather than zipped together afterwards from the three parallel lists,
@@ -310,8 +312,8 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
     for i, tr in enumerate(audio_tracks, 1):
         raw_lang = tr.get("Language") or tr.get("Language_String") or ""
         lang = emu_format.format_language(raw_lang) or "UND"
-        codec = legacy.audio_codec(tr)
-        ch = legacy.audio_channels(tr)
+        codec = media_probe.audio_codec(tr)
+        ch = media_probe.audio_channels(tr)
         codecs.append(codec)
         channels.append(ch)
         if lang not in langs:
@@ -360,7 +362,7 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
         add("Audio (eMuwarez)", f"{len(audio_tracks)} pista(s)", audio_summary)
 
     # Subtitles
-    sub_tracks = [t for t in legacy.media_tracks(info) if t.get("@type") == "Text"]
+    sub_tracks = [t for t in media_probe.media_tracks(info) if t.get("@type") == "Text"]
     sub_langs = ", ".join(
         emu_format.format_language(t.get("Language") or t.get("Language_String") or "") or "UND"
         for t in sub_tracks

@@ -70,7 +70,7 @@ def _drop_optional_provider(tokens: list[str]) -> list[str]:
 
 def expected_core(title: str, year, media, season=None, episode=None) -> str:
     """Expected file-name core (dotted, accent-free, without the group tag)."""
-    from ..legacy import build_emu_title
+    from .emu_title import build_emu_title
     torrent = build_emu_title(title or "", str(year) if year else "", media,
                               tag="EMUWAREZ", season=season, episode=episode)
     return _strip_group(to_filesystem_name(torrent))
@@ -202,7 +202,9 @@ def evaluate_file(path: str, title: str, year, *, season=None, episode=None) -> 
     """Read MediaInfo of `path` and return the verdict.
     {status, expected, actual, diff}. Requires the file + `mediainfo` binary."""
     from pathlib import Path
-    from ..legacy import read_media_info
+    # media_probe y no legacy: la de legacy PREGUNTA por teclado cuando no
+    # reconoce el idioma de una pista, y esto corre dentro de una petición.
+    from .media_probe import read_media_info
     from .path_mapping import resolve_local_path
     path = resolve_local_path(path)
     if not path or not os.path.exists(path):

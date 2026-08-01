@@ -596,13 +596,21 @@ def build_season_pack_plan(
             # Checked BEFORE each episode, so closing the wizard stops the work
             # at the next boundary instead of at the end of the whole season.
             _raise_if_cancelled(season_id)
+            # El progreso se publica ANTES de trabajar, con el capítulo que se
+            # va a mirar. Publicándolo después, el asistente se quedaba en
+            # "0 de N" y sin ningún nombre durante todo el primer capítulo —
+            # que es justo el más lento, porque es el que paga la consulta del
+            # título a TMDb — y a partir de ahí enseñaba el nombre del capítulo
+            # YA TERMINADO mientras trabajaba en el siguiente.
+            _set_season_plan_progress(season_id, done=i, total=total,
+                                      current_title=ep.get("title"))
             proposal = build_nomenclature_proposal(
                 ep["id"], conn=conn,
                 source_override=source_override, provider_override=provider_override,
                 tag_override=tag_override, title_override=title_override,
             )
             episode_entries.append({"episode": ep, "proposal": proposal})
-            _set_season_plan_progress(season_id, done=i + 1, total=total, current_title=ep.get("title"))
+        _set_season_plan_progress(season_id, done=total, total=total, current_title=None)
 
         errors.extend(_consistency_errors(episode_entries))
         errors.extend(_spanish_errors(episode_entries))

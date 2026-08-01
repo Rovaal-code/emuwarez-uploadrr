@@ -1155,3 +1155,45 @@ def test_a_worse_track_of_a_language_every_episode_has_is_not_named(monkeypatch)
         {"ESP": "TrueHD 5.1"}, {"ESP": "TrueHD 5.1"},
     ])
     assert custom is False and texto == "ESP TrueHD 5.1"
+
+
+# --- El progreso mientras se genera la nomenclatura ------------------------
+
+def test_the_progress_names_the_episode_being_worked_on(isolated_db, tmp_path, monkeypatch):
+    """La barra publicaba el progreso DESPUÉS de cada capítulo, así que durante
+    todo el primero (el más lento: es el que paga la consulta del título a
+    TMDb) se quedaba en "0 de N" y sin ningún nombre, y a partir de ahí
+    enseñaba el capítulo YA TERMINADO mientras trabajaba en el siguiente."""
+    from emuwarez_uploadrr.services import season_pack as sp
+
+    conn = _open(isolated_db)
+    _series_id, season_id = _seed_series_season(conn)
+    folder = tmp_path / "One Piece" / "Season 1"
+    folder.mkdir(parents=True)
+    for i in (1, 2, 3):
+        f = folder / f"S01E0{i}.mkv"
+        f.write_bytes(b"video")
+        _seed_episode(conn, season_id, number=i, title=f"One Piece S01E0{i}", path=str(f),
+                      quality="WEBDL-1080p", video_codec="x264", audio_codec="AC3",
+                      audio_languages="spa", subtitle_languages="spa", source="WEB-DL")
+
+    visto = []
+    real = sp.build_nomenclature_proposal
+
+    def espia(item_id, **kw):
+        # Lo que vería el asistente justo mientras se trabaja este capítulo.
+        visto.append(dict(sp.get_season_plan_progress(season_id)))
+        return real(item_id, **kw)
+
+    monkeypatch.setattr(sp, "build_nomenclature_proposal", espia)
+    sp.build_season_pack_plan(season_id, conn=conn)
+
+    assert [p["done"] for p in visto] == [0, 1, 2], visto
+    # Y el nombre es el del capítulo EN CURSO, no el del anterior.
+    assert [p["current_title"] for p in visto] == [
+        "One Piece S01E01", "One Piece S01E02", "One Piece S01E03",
+    ], visto
+    # Al acabar, la cuenta cuadra con el total.
+    final = sp.get_season_plan_progress(season_id)
+    assert final["done"] == final["total"] == 3
+    conn.close()

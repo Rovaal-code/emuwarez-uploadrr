@@ -12,22 +12,17 @@ from emuwarez_uploadrr.services.nomenclature import infer_provider_from_item
 from emuwarez_uploadrr.services.library import content_display_title, episode_own_name
 from emuwarez_uploadrr.services.source_assistant import EMU_PROVIDERS
 
-_PROVIDER_NAME_BY_CODE = {p["code"]: p["name"] for p in EMU_PROVIDERS}
 
 
-def _provider_label(code: Optional[str]) -> Optional[str]:
-    """'Nombre (CÓDIGO)' for a provider code, e.g. 'Amazon (AMZN)'."""
-    if not code:
-        return None
-    name = _PROVIDER_NAME_BY_CODE.get(code)
-    return f"{name} ({code})" if name else code
 from ..schemas import (
     LibraryItemResponse, LibraryListResponse,
     MissingItemResponse, MissingListResponse,
     OkResponse, SyncRequest, SyncResponse,
 )
 from ...services.library import (  # agregación y filtros, movidos aquí
-    _specials_clause, _nomenclature_rollup, _local_status_rollup, _size_rollup, _rollup_path, _child_quality_rollup, _batch_rollups,
+    _specials_clause, _nomenclature_rollup, _local_status_rollup, _size_rollup,
+    _rollup_path, _child_quality_rollup, _batch_rollups,
+    _ROLLUP_EMPTY, _provider_label,
 )
 
 router = APIRouter(tags=["library"])
@@ -60,10 +55,6 @@ def _ignore_specials(conn) -> bool:
 
 
 
-_ROLLUP_EMPTY = {
-    "provider": None, "resolution": None, "source": None, "video_codec": None,
-    "audio_codec": None, "audio_languages": None, "subtitle_languages": None,
-}
 
 
 
@@ -78,83 +69,14 @@ _ROLLUP_EMPTY = {
 # queries total, then do the exact same aggregation in Python, keyed by id.
 # ---------------------------------------------------------------------------
 
-def _aggregate_nomenclature(statuses: list) -> Optional[str]:
-    counts: dict = {}
-    for s in statuses:
-        counts[s] = counts.get(s, 0) + 1
-    if sum(counts.values()) == 0:
-        return None
-    correct = counts.get("Correcta", 0)
-    not_adapted = counts.get("No adaptada", 0)
-    unchecked = counts.get("No comprobada", 0)
-    available = correct + not_adapted + unchecked
-    if available == 0:
-        return "N/A"
-    if unchecked > 0:
-        return "No comprobada"
-    if correct == available:
-        return "Correcta"
-    if not_adapted == available:
-        return "No adaptada"
-    return "Parcial"
 
 
-def _aggregate_local_status(statuses: list) -> Optional[str]:
-    counts: dict = {}
-    for s in statuses:
-        counts[s] = counts.get(s, 0) + 1
-    total = sum(counts.values())
-    if total == 0:
-        return None
-    available = counts.get("Disponible", 0)
-    if available == total:
-        return "Disponible"
-    if available == 0:
-        return "Faltante"
-    return "Parcial"
 
 
-def _aggregate_size(sizes: list) -> Optional[int]:
-    if not any(s is not None for s in sizes):
-        return None
-    return sum(s for s in sizes if s is not None)
 
 
-def _aggregate_quality(rows: list[dict]) -> dict:
-    if not rows:
-        return dict(_ROLLUP_EMPTY)
-
-    def uniq(key: str):
-        vals = {r[key] for r in rows}
-        return next(iter(vals)) if len(vals) == 1 else None
-
-    providers: set = set()
-    for r in rows:
-        providers.add(infer_provider_from_item({"path": r["path"], "source": r["source"]}))
-        if len(providers) > 1:
-            break
-    return {
-        "provider": next(iter(providers)) if len(providers) == 1 else None,
-        "resolution": uniq("resolution"),
-        "source": uniq("source"),
-        "video_codec": uniq("video_codec"),
-        "audio_codec": uniq("audio_codec"),
-        "audio_languages": uniq("audio_languages"),
-        "subtitle_languages": uniq("subtitle_languages"),
-    }
 
 
-def _aggregate_path(rows: list[dict]) -> Optional[str]:
-    paths = [r["path"] for r in rows if r["path"]]
-    if not paths:
-        return None
-    dirs = {os.path.dirname(p) for p in paths}
-    if len(dirs) == 1:
-        return next(iter(dirs))
-    try:
-        return os.path.commonpath(paths)
-    except ValueError:
-        return None
 
 
 

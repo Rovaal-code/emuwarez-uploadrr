@@ -18,7 +18,7 @@ from pydantic import BaseModel, field_validator
 
 from ..dependencies import require_auth
 from ..runtime import _db_path
-from ..services.settings_service import get_setting, mask_secret, set_setting
+from ...services.settings import get_setting_canonical, mask_secret, set_setting
 from ...services.uploadrr_contract import RUNTIME_EMU, RUNTIME_GENERIC, DEFAULT_TIMEOUT_SECONDS, DEFAULT_ALLOWED_ROOTS
 from ...services.source_assistant import EMU_PROVIDERS
 from ...services.notification_center import EVENT_TYPES, channel_events, ui_enabled
@@ -209,13 +209,13 @@ def _get_conn():
 
 
 def _build_response(conn) -> SettingsResponse:
-    raw_priority = get_setting(conn, "provider_priority_order")
+    raw_priority = get_setting_canonical(conn, "provider_priority_order")
     try:
         priority = json.loads(raw_priority) if raw_priority else _DEFAULT_PRIORITY
     except Exception:
         priority = _DEFAULT_PRIORITY
 
-    tmdb_key = get_setting(conn, "tmdb.api_key")
+    tmdb_key = get_setting_canonical(conn, "tmdb.api_key")
     configured = bool(tmdb_key and tmdb_key.strip())
     masked = mask_secret(tmdb_key) if configured else None
 
@@ -259,9 +259,9 @@ def _build_response(conn) -> SettingsResponse:
         timeout = DEFAULT_TIMEOUT_SECONDS
 
     return SettingsResponse(
-        default_release_tag=get_setting(conn, "default_release_tag") or _DEFAULT_TAG,
+        default_release_tag=get_setting_canonical(conn, "default_release_tag") or _DEFAULT_TAG,
         provider_priority_order=priority,
-        tmdb_watch_region=get_setting(conn, "tmdb_watch_region") or _DEFAULT_REGION,
+        tmdb_watch_region=get_setting_canonical(conn, "tmdb_watch_region") or _DEFAULT_REGION,
         tmdb_localize_series_titles=(get_setting_canonical(conn, "tmdb.localize_series_titles") or "true") != "false",
         tmdb_api_key_configured=configured,
         tmdb_api_key_masked=masked,
@@ -272,7 +272,7 @@ def _build_response(conn) -> SettingsResponse:
         uploadrr_allowed_roots=allowed_roots,
         emu_api_key_configured=emu_configured,
         emu_api_key_masked=emu_masked,
-        emu_username=get_setting(conn, "emu.username"),
+        emu_username=get_setting_canonical(conn, "emu.username"),
         qbit_url=qbit_url,
         qbit_tag=get_setting_canonical(conn, "qbit.tag"),
         qbit_username=get_setting_canonical(conn, "qbit.username"),

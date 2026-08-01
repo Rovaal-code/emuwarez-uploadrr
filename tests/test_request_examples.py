@@ -285,7 +285,7 @@ def test_seasons_that_could_not_be_uploaded_are_not_used(db_conn):
 def test_one_request_carries_your_own_username(db_conn):
     """Seeing your own name on a request is the one case the author column and
     its styling can't be demonstrated without the real endpoint."""
-    from emuwarez_uploadrr.web.services.settings_service import set_setting
+    from emuwarez_uploadrr.services.settings import set_setting
     set_setting(db_conn, "emu.username", "Alvaro")
     db_conn.commit()
     _seed_library(db_conn)

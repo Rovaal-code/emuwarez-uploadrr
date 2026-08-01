@@ -240,7 +240,7 @@ def db_conn(isolated_db):
 def test_sync_requests_reads_key_from_db_settings(db_conn, monkeypatch):
     """The key configured in the Settings UI (settings.emu.api_key) must be
     used — regression for the task reporting 'No hay API Key' when it was set."""
-    from emuwarez_uploadrr.web.services.settings_service import set_setting
+    from emuwarez_uploadrr.services.settings import set_setting
     from emuwarez_uploadrr.services import requests as reqs
     set_setting(db_conn, "emu.api_key", "configured-key-123")
 
@@ -257,7 +257,7 @@ def test_sync_requests_reads_key_from_db_settings(db_conn, monkeypatch):
 
 
 def test_sync_requests_missing_endpoint_is_skipped_not_failed(db_conn, monkeypatch):
-    from emuwarez_uploadrr.web.services.settings_service import set_setting
+    from emuwarez_uploadrr.services.settings import set_setting
     from emuwarez_uploadrr.integrations.base import IntegrationError
     from emuwarez_uploadrr.services import requests as reqs
     set_setting(db_conn, "emu.api_key", "configured-key-123")

@@ -233,10 +233,8 @@ def preview_nomenclature_fields(
             if item_row and item_row["tmdb_id"]:
                 try:
                     tmdb_id = int(str(item_row["tmdb_id"]).split("/")[-1].strip())
-                    region_row = conn.execute(
-                        "SELECT value FROM settings WHERE key='tmdb_watch_region'"
-                    ).fetchone()
-                    region = region_row["value"] if region_row else "ES"
+                    from ...services.settings import get_setting_canonical
+                    region = get_setting_canonical(conn, "tmdb_watch_region") or "ES"
                     tmdb_codes = get_tmdb_available_providers(
                         tmdb_id, item_row["item_type"] or "movie", region=region
                     )

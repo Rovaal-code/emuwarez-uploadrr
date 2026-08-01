@@ -266,9 +266,10 @@ def get_tmdb_available_providers(tmdb_id: int, media_type: str, region: str = "E
 
 def _get_provider_priority(conn) -> list[str]:
     try:
-        row = conn.execute("SELECT value FROM settings WHERE key = 'provider_priority_order'").fetchone()
-        if row:
-            return json.loads(row["value"])
+        from .settings import get_setting_canonical
+        raw = get_setting_canonical(conn, "provider_priority_order")
+        if raw:
+            return json.loads(raw)
     except Exception:
         pass
     return ["AMZN", "NF", "DSNP", "MAX", "ATVP"]
@@ -276,9 +277,10 @@ def _get_provider_priority(conn) -> list[str]:
 
 def _get_tmdb_watch_region(conn) -> str:
     try:
-        row = conn.execute("SELECT value FROM settings WHERE key = 'tmdb_watch_region'").fetchone()
-        if row and row["value"]:
-            return row["value"]
+        from .settings import get_setting_canonical
+        raw = get_setting_canonical(conn, "tmdb_watch_region")
+        if raw:
+            return raw
     except Exception:
         pass
     return "ES"
@@ -286,9 +288,10 @@ def _get_tmdb_watch_region(conn) -> str:
 
 def _get_default_tag(conn) -> str:
     try:
-        row = conn.execute("SELECT value FROM settings WHERE key = 'default_release_tag'").fetchone()
-        if row and row["value"]:
-            return row["value"]
+        from .settings import get_setting_canonical
+        raw = get_setting_canonical(conn, "default_release_tag")
+        if raw:
+            return raw
         row2 = conn.execute("SELECT value FROM app_state WHERE key = 'release_tag'").fetchone()
         if row2 and row2["value"]:
             return row2["value"]

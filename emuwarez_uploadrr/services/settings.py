@@ -1,15 +1,26 @@
-"""CRUD for the `settings` table.
+"""La ÚNICA puerta a la tabla `settings`.
 
-Keys use dotted namespaces: tmdb.api_key, emu.api_key, uploadrr.path, etc.
-Secrets are stored with is_secret=1 and masked in API responses:
-  masked_value = first_4 + "…" + last_4 for values longer than 8 chars.
+Las claves usan espacios de nombres con punto: tmdb.api_key, emu.api_key,
+uploadrr.path… Los secretos se guardan con is_secret=1 y salen enmascarados en
+las respuestas del API: primeros 4 + "…" + últimos 4, si pasan de 8 caracteres.
+
+Vivía en `web/services/` hasta el 2026-08-01, y eso obligaba a los servicios a
+importar hacia arriba, de la capa de dominio a la web (auditoría, hallazgo
+6.1). Leer un ajuste es cosa del dominio; enmascarar un secreto para una
+respuesta HTTP, de la web.
+
+**Nadie consulta la tabla por su cuenta.** Había 14 `SELECT ... FROM settings`
+repartidos que se saltaban el mapa de alias de claves antiguas, y de ahí salió
+un fallo real: Diagnóstico decía "Secretos sin configurar" a quien las tenía
+puestas, por preguntar por la grafía con guion bajo. Lo vigila
+tests/test_una_sola_puerta_a_settings.py.
 """
 from __future__ import annotations
 
 import sqlite3
 from typing import Optional
 
-from ...database import get_setting_canonical as _get_setting_canonical
+from ..database import get_setting_canonical as _get_setting_canonical
 
 _SECRET_KEYS: frozenset[str] = frozenset(
     [
@@ -29,7 +40,13 @@ def mask_secret(value: str) -> str:
     return value[:4] + "…" + value[-4:]
 
 
-def get_setting(conn: sqlite3.Connection, key: str, default: Optional[str] = None) -> Optional[str]:
+def get_setting_raw(conn: sqlite3.Connection, key: str, default: Optional[str] = None) -> Optional[str]:
+    """Lee la clave TAL CUAL, sin resolver el alias antiguo con guion bajo.
+
+    Se llama `_raw` a propósito: para casi todo lo que quieres es
+    `get_setting_canonical`. Esta solo sirve cuando de verdad te interesa esa
+    clave exacta y ninguna otra (por ejemplo al exportar la configuración). Se
+    llamaba `get_setting` y elegirla mal era un descuido silencioso."""
     row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
     return row["value"] if row else default
 
@@ -99,3 +116,19 @@ def get_settings_status(conn: sqlite3.Connection) -> dict:
         "uploadrr_timeout": _entry("uploadrr.timeout"),
         "uploadrr_allowed_roots": _entry("uploadrr.allowed_roots"),
     }
+
+
+def all_settings(conn: sqlite3.Connection) -> dict[str, Optional[str]]:
+    """Toda la tabla, clave -> valor. Para exportar la configuración, que es
+    el único caso donde interesa el contenido entero y literal: sin resolver
+    alias, sin enmascarar."""
+    try:
+        return {r["key"]: r["value"] for r in conn.execute("SELECT key, value FROM settings")}
+    except Exception:
+        return {}
+
+
+def setting_exists(conn: sqlite3.Connection, key: str) -> bool:
+    """Si la clave EXACTA está en la tabla. No mira el alias antiguo: quien
+    pregunta esto está decidiendo entre INSERT y UPDATE, no leyendo un valor."""
+    return conn.execute("SELECT 1 FROM settings WHERE key = ?", (key,)).fetchone() is not None

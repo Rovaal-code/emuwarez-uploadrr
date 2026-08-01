@@ -78,7 +78,7 @@ def fallback_order(conn: sqlite3.Connection) -> list[str]:
 
 
 def set_config(conn: sqlite3.Connection, enabled: list[str], keys: Optional[dict[str, str]] = None) -> None:
-    from ..web.services.settings_service import set_setting
+    from .settings import set_setting
     clean = [i for i in (enabled or []) if i in _BY_ID]
     set_setting(conn, "imghost.enabled", json.dumps(clean, ensure_ascii=False))
     for host_id, key in (keys or {}).items():

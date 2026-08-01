@@ -64,7 +64,7 @@ def test_a_retired_host_left_in_the_settings_is_ignored(db_conn):
     guardado en la base: tiene que caerse solo, no colarse en el orden de
     subida ni reventar nada."""
     import json
-    from emuwarez_uploadrr.web.services.settings_service import set_setting
+    from emuwarez_uploadrr.services.settings import set_setting
     set_setting(db_conn, "imghost.enabled", json.dumps(["ptpimg", "imgbb", "hamster"]))
     assert ih.get_enabled_hosts(db_conn) == ["imgbb"]
     assert ih.fallback_order(db_conn) == ["imgbb", "imgbox"]

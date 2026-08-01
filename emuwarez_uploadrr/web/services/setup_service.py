@@ -1,7 +1,7 @@
 """Setup wizard service.
 
 Orchestrates the multi-step first-run flow and delegates to auth_service /
-settings_service for persistence. All functions receive an open connection
+services/settings.py for persistence. All functions receive an open connection
 and do NOT commit — the caller commits.
 """
 from __future__ import annotations
@@ -13,7 +13,7 @@ from emuwarez_uploadrr.database import get_state, set_state
 from emuwarez_uploadrr.services.instances import list_instances
 
 from .auth_service import admin_exists, create_user
-from .settings_service import get_configured, set_setting
+from ...services.settings import get_configured, set_setting
 
 
 class SetupError(Exception):

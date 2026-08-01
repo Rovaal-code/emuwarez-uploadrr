@@ -106,8 +106,8 @@ def dashboard_summary(current_user: dict = Depends(require_auth)) -> DashboardSu
         # uses when exposing it in API responses) — an invisible-author row
         # never counts as "mine" even if it happens to match by coincidence.
         try:
-            from emuwarez_uploadrr.web.services.settings_service import get_setting
-            my_username = get_setting(conn, "emu.username")
+            from emuwarez_uploadrr.services.settings import get_setting_canonical
+            my_username = get_setting_canonical(conn, "emu.username")
             if my_username:
                 mine_row = conn.execute(
                     "SELECT COUNT(*) AS cnt FROM request_items WHERE author_visible = 1 AND author = ?",

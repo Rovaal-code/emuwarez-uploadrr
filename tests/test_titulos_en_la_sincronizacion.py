@@ -18,7 +18,7 @@ import pytest
 from emuwarez_uploadrr.database import connect, db_path, init_db
 from emuwarez_uploadrr.integrations import radarr, sonarr
 from emuwarez_uploadrr.services import tmdb_titles
-from emuwarez_uploadrr.web.services.settings_service import set_setting_canonical
+from emuwarez_uploadrr.services.settings import set_setting_canonical
 
 
 @pytest.fixture

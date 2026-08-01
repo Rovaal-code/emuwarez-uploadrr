@@ -4,7 +4,7 @@ Safety rules:
 - Only sends an explicit test message when the user clicks "Probar" — never
   triggered automatically by settings changes.
 - Never logs or returns the full webhook URL / bot token (same masking
-  convention as web/services/settings_service.py::mask_secret).
+  convention as services/settings.py::mask_secret).
 - Read-only with respect to the app's own data — this module only makes an
   outbound HTTP call to Discord/Telegram, it never reads library/upload data.
 """

@@ -47,14 +47,13 @@ def source_engine_enabled() -> bool:
     try:
         conn = connect()
         try:
-            row = conn.execute(
-                "SELECT value FROM settings WHERE key = 'source_engine.enabled'"
-            ).fetchone()
+            from .settings import get_setting_canonical
+            valor = get_setting_canonical(conn, "source_engine.enabled")
         finally:
             conn.close()
     except Exception:                      # nunca romper una lectura de MediaInfo por esto
         return False
-    return (row["value"] if row else "") == "true"
+    return (valor or "") == "true"
 
 
 def mediainfo_available() -> bool:

@@ -138,9 +138,10 @@ def _now() -> str:
 
 def _get_setting(conn, key: str, default=None):
     try:
-        row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
-        if row:
-            return row["value"]
+        from .settings import get_setting_canonical
+        valor = get_setting_canonical(conn, key)
+        if valor:
+            return valor
     except Exception:
         pass
     try:

@@ -42,12 +42,11 @@ def _read_settings_from_db() -> dict[str, str | None]:
         return {}
     conn = sqlite3.connect(str(db))
     try:
-        rows = conn.execute("SELECT key, value FROM settings").fetchall()
-    except Exception:
-        rows = []
+        from .settings import all_settings
+        conn.row_factory = sqlite3.Row
+        return all_settings(conn)
     finally:
         conn.close()
-    return {k: v for k, v in rows}
 
 
 def _write_settings_to_db(settings: dict[str, str | None]) -> int:
@@ -55,12 +54,14 @@ def _write_settings_to_db(settings: dict[str, str | None]) -> int:
     conn = sqlite3.connect(str(db))
     updated = 0
     try:
+        # Por la puerta (services/settings.set_setting), que además marca los
+        # secretos con is_secret=1. Escribiendo el INSERT a mano, una API key
+        # importada quedaba sin marcar y salía sin enmascarar en las
+        # respuestas del API.
+        from .settings import set_setting
+        conn.row_factory = sqlite3.Row
         for key, value in settings.items():
-            existing = conn.execute("SELECT key FROM settings WHERE key=?", (key,)).fetchone()
-            if existing:
-                conn.execute("UPDATE settings SET value=? WHERE key=?", (value, key))
-            else:
-                conn.execute("INSERT INTO settings (key, value) VALUES (?, ?)", (key, value))
+            set_setting(conn, key, "" if value is None else str(value))
             updated += 1
         conn.commit()
     finally:

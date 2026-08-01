@@ -15,7 +15,7 @@ def db_conn(isolated_db):
 
 
 def test_localized_default_on_and_toggle(db_conn):
-    from emuwarez_uploadrr.web.services.settings_service import set_setting
+    from emuwarez_uploadrr.services.settings import set_setting
     assert tmdb_titles.series_titles_localized(db_conn) is True  # default ON
     set_setting(db_conn, "tmdb.localize_series_titles", "false")
     assert tmdb_titles.series_titles_localized(db_conn) is False

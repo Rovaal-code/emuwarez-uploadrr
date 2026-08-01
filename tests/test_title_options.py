@@ -174,7 +174,7 @@ def test_series_original_title_comes_from_tmdb(isolated_db, monkeypatch):
 
     conn = connect(isolated_db / "emuwarez_uploadrr.db")
     init_db(conn)
-    from emuwarez_uploadrr.web.services.settings_service import set_setting
+    from emuwarez_uploadrr.services.settings import set_setting
     set_setting(conn, "tmdb.api_key", "fake-key")
     conn.commit()
 
@@ -196,7 +196,7 @@ def test_original_title_falls_back_when_tmdb_cannot_answer(isolated_db, monkeypa
 
     conn = connect(isolated_db / "emuwarez_uploadrr.db")
     init_db(conn)
-    from emuwarez_uploadrr.web.services.settings_service import set_setting
+    from emuwarez_uploadrr.services.settings import set_setting
     set_setting(conn, "tmdb.api_key", "fake-key")
     conn.commit()
 
@@ -223,7 +223,7 @@ def test_season_pack_offers_the_tmdb_original_when_sonarr_has_none(season, monke
     options in the pack's Título dropdown."""
     from emuwarez_uploadrr.services import tmdb_titles
     from emuwarez_uploadrr.services.season_pack import build_season_pack_plan
-    from emuwarez_uploadrr.web.services.settings_service import set_setting
+    from emuwarez_uploadrr.services.settings import set_setting
     conn, season_id = season
     conn.execute("UPDATE library_items SET original_title = NULL WHERE item_type = 'series'")
     conn.execute("UPDATE library_items SET tmdb_id = '1399' WHERE item_type = 'series'")
@@ -242,7 +242,7 @@ def test_second_option_is_the_english_title_not_the_original_language_one(isolat
     from emuwarez_uploadrr.database import connect, init_db
     from emuwarez_uploadrr.services import tmdb_titles
     from emuwarez_uploadrr.services.tmdb_titles import resolve_english_title
-    from emuwarez_uploadrr.web.services.settings_service import set_setting
+    from emuwarez_uploadrr.services.settings import set_setting
 
     conn = connect(isolated_db / "emuwarez_uploadrr.db")
     init_db(conn)

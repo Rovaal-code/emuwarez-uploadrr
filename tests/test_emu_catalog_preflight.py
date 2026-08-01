@@ -10,7 +10,7 @@ import pytest
 
 from emuwarez_uploadrr.integrations.base import IntegrationError
 from emuwarez_uploadrr.services import emu_catalog
-from emuwarez_uploadrr.web.services.settings_service import set_setting
+from emuwarez_uploadrr.services.settings import set_setting
 
 
 @pytest.fixture

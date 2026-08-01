@@ -204,7 +204,7 @@ def test_get_allowed_roots_defaults_to_data_when_never_set(isolated_db):
 
 def test_get_allowed_roots_respects_explicit_empty_list(isolated_db):
     from emuwarez_uploadrr.database import connect, init_db, db_path
-    from emuwarez_uploadrr.web.services.settings_service import set_setting
+    from emuwarez_uploadrr.services.settings import set_setting
     conn = connect(db_path())
     init_db(conn)
     set_setting(conn, "uploadrr.allowed_roots", "[]")
@@ -213,7 +213,7 @@ def test_get_allowed_roots_respects_explicit_empty_list(isolated_db):
 
 def test_get_allowed_roots_respects_explicit_value(isolated_db):
     from emuwarez_uploadrr.database import connect, init_db, db_path
-    from emuwarez_uploadrr.web.services.settings_service import set_setting
+    from emuwarez_uploadrr.services.settings import set_setting
     conn = connect(db_path())
     init_db(conn)
     set_setting(conn, "uploadrr.allowed_roots", '["/movies", "/tv"]')

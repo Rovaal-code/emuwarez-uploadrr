@@ -92,7 +92,7 @@ def test_series_mixed_seasons_is_partial(db_conn):
 
 
 def test_missing_specials_ignored_when_setting_on(db_conn):
-    from emuwarez_uploadrr.web.services.settings_service import set_setting
+    from emuwarez_uploadrr.services.settings import set_setting
     set_setting(db_conn, "series.ignore_specials", "true")
     sid = _series(db_conn, "Complete But Specials", tvdb_id=400)
     _season(db_conn, sid, 400, 0)  # specials, not on eMuwarez
@@ -115,7 +115,7 @@ def test_missing_specials_count_when_setting_off(db_conn):
     # With "Ignorar especiales" explicitly OFF, a missing special counts, so a
     # series complete except its specials is Partial (consistent with
     # Estado/Nomenclatura). Default is ON, so we set it off here.
-    from emuwarez_uploadrr.web.services.settings_service import set_setting
+    from emuwarez_uploadrr.services.settings import set_setting
     set_setting(db_conn, "series.ignore_specials", "false")
     sid = _series(db_conn, "Complete But Specials Off", tvdb_id=410)
     _season(db_conn, sid, 410, 0)  # specials, not on eMuwarez

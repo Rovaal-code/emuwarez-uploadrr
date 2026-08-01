@@ -316,10 +316,9 @@ def reorder_tracks_enabled(conn=None) -> bool:
         from ..database import connect as _connect
         conn = _connect()
     try:
-        row = conn.execute(
-            "SELECT value FROM settings WHERE key = 'remux.reorder_tracks'"
-        ).fetchone()
-        return (row["value"] if row else "") == "true"
+        from .settings import get_setting_canonical
+        valor = get_setting_canonical(conn, "remux.reorder_tracks")
+        return (valor or "") == "true"
     except Exception:
         return False
     finally:

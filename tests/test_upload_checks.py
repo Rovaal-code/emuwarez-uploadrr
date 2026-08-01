@@ -62,7 +62,7 @@ def test_output_check_falls_back_to_bundled_uploadrr_path(db_conn, tmp_path, mon
 
 
 def test_all_green_when_everything_passes(db_conn, tmp_path, monkeypatch):
-    from emuwarez_uploadrr.web.services.settings_service import set_setting
+    from emuwarez_uploadrr.services.settings import set_setting
     f = tmp_path / "movie.mkv"
     f.write_bytes(b"x" * 2048)
     (tmp_path / "tmp").mkdir()  # Uploadrr-EMU stages output under <path>/tmp, not the root
@@ -89,7 +89,7 @@ def test_emuwarez_check_does_not_enforce_rate_limit(db_conn, tmp_path, monkeypat
     minute must not make the second one's "eMuwarez disponible" check fail
     with the 1/minute "Probar conexión" throttle — that throttle exists for
     the user-facing Settings button, not for this automated precondition."""
-    from emuwarez_uploadrr.web.services.settings_service import set_setting
+    from emuwarez_uploadrr.services.settings import set_setting
     f = tmp_path / "movie.mkv"
     f.write_bytes(b"x" * 2048)
     (tmp_path / "tmp").mkdir()
@@ -116,7 +116,7 @@ def test_emuwarez_check_does_not_enforce_rate_limit(db_conn, tmp_path, monkeypat
 def test_skips_unconfigured_qbit(db_conn, tmp_path, monkeypatch):
     """qBittorrent not configured → yellow 'skip', non-blocking: the upload
     is still ready."""
-    from emuwarez_uploadrr.web.services.settings_service import set_setting
+    from emuwarez_uploadrr.services.settings import set_setting
     f = tmp_path / "movie.mkv"; f.write_bytes(b"x" * 2048)
     (tmp_path / "tmp").mkdir()  # Uploadrr-EMU stages output under <path>/tmp, not the root
     set_setting(db_conn, "uploadrr.path", str(tmp_path))
@@ -134,7 +134,7 @@ def test_skips_unconfigured_qbit(db_conn, tmp_path, monkeypatch):
 
 
 def test_stops_at_qbit_before_emuwarez(db_conn, tmp_path, monkeypatch):
-    from emuwarez_uploadrr.web.services.settings_service import set_setting
+    from emuwarez_uploadrr.services.settings import set_setting
     f = tmp_path / "m.mkv"; f.write_bytes(b"x" * 2048)
     (tmp_path / "tmp").mkdir()  # Uploadrr-EMU stages output under <path>/tmp, not the root
     set_setting(db_conn, "qbit.url", "http://localhost:8080")   # configured → qbit runs

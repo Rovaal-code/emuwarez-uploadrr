@@ -172,7 +172,7 @@ def test_service_version_label_not_duplicated(isolated_db, monkeypatch):
     """qBittorrent reports "v5.2.3" already — the message must not read "vv5.2.3"."""
     from emuwarez_uploadrr.database import connect, init_db
     from emuwarez_uploadrr.services.integration_tests import test_qbit_connection
-    from emuwarez_uploadrr.web.services.settings_service import set_setting
+    from emuwarez_uploadrr.services.settings import set_setting
     monkeypatch.setattr(
         "emuwarez_uploadrr.integrations.qbittorrent.qbit_test_connection",
         lambda *a, **k: {"ok": True, "version": "v5.2.3"},
@@ -188,7 +188,7 @@ def test_service_version_label_not_duplicated(isolated_db, monkeypatch):
 def test_service_version_label_adds_v_when_missing(isolated_db, monkeypatch):
     from emuwarez_uploadrr.database import connect, init_db
     from emuwarez_uploadrr.services.integration_tests import test_qbit_connection
-    from emuwarez_uploadrr.web.services.settings_service import set_setting
+    from emuwarez_uploadrr.services.settings import set_setting
     monkeypatch.setattr(
         "emuwarez_uploadrr.integrations.qbittorrent.qbit_test_connection",
         lambda *a, **k: {"ok": True, "version": "4.6.0"},

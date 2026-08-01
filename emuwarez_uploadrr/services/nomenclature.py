@@ -212,9 +212,10 @@ def _get_release_tag(conn=None) -> str:
     try:
         # Phase 10A: prefer settings table
         try:
-            row = _conn.execute("SELECT value FROM settings WHERE key = 'default_release_tag'").fetchone()
-            if row and row["value"]:
-                return row["value"]
+            from .settings import get_setting_canonical
+            raw = get_setting_canonical(_conn, "default_release_tag")
+            if raw:
+                return raw
         except Exception:
             pass
         tag = get_state(_conn, "release_tag") or get_state(_conn, "default_release_tag")

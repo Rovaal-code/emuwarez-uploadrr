@@ -15,7 +15,7 @@ import logging
 import sqlite3
 from typing import Optional
 
-from ..web.services.settings_service import get_setting_canonical
+from .settings import get_setting_canonical
 from .notifications import send_discord, send_telegram
 
 _log = logging.getLogger("emuwarez.notifications")

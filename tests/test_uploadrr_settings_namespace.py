@@ -13,7 +13,7 @@ from emuwarez_uploadrr.database import connect, get_setting_canonical, init_db
 from emuwarez_uploadrr.services.upload_execution import validate_upload_job_start
 from emuwarez_uploadrr.services.upload_preflight import validate_upload_preconditions
 from emuwarez_uploadrr.web.services.setup_service import setup_emu, setup_tmdb
-from emuwarez_uploadrr.web.services.settings_service import get_configured, set_setting
+from emuwarez_uploadrr.services.settings import get_configured, set_setting
 
 
 @pytest.fixture(autouse=True)

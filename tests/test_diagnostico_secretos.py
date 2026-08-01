@@ -15,7 +15,7 @@ import pytest
 
 from emuwarez_uploadrr.database import connect, db_path, init_db
 from emuwarez_uploadrr.services.runtime_diagnostics import check_required_secrets
-from emuwarez_uploadrr.web.services.settings_service import set_setting_canonical
+from emuwarez_uploadrr.services.settings import set_setting_canonical
 
 
 @pytest.fixture

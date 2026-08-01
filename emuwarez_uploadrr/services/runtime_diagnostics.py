@@ -87,13 +87,19 @@ def check_allowed_roots_setting() -> dict:
             roots = list(DEFAULT_ALLOWED_ROOTS)
             source = "por defecto"
         else:
-            conn = sqlite3.connect(str(db_path))
-            row = conn.execute("SELECT value FROM settings WHERE key='uploadrr.allowed_roots' LIMIT 1").fetchone()
-            conn.close()
-            if row and row[0]:
+            from ..database import connect as _connect, get_setting_canonical
+            conn = _connect(db_path)
+            try:
+                # Canónica: 'uploadrr.allowed_roots' tiene alias antiguo
+                # ('uploadrr_allowed_roots'), y preguntando a pelo por la de
+                # punto una instalación vieja parecía no tenerlo configurado.
+                valor = get_setting_canonical(conn, "uploadrr.allowed_roots")
+            finally:
+                conn.close()
+            if valor:
                 import json as _json
                 try:
-                    roots = [r for r in _json.loads(row[0]) if r]
+                    roots = [r for r in _json.loads(valor) if r]
                 except Exception:
                     roots = []
                 source = "configurado"

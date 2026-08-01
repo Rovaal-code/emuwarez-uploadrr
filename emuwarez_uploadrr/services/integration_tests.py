@@ -61,8 +61,8 @@ def _fail(service: str, status: str, message: str, details: Optional[dict] = Non
 def _setting(conn, key: str) -> Optional[str]:
     if conn is None:
         return None
-    row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
-    return row["value"] if row else None
+    from .settings import get_setting_canonical
+    return get_setting_canonical(conn, key)
 
 
 def test_qbit_connection(
@@ -135,8 +135,8 @@ def test_tmdb_connection(
     """
     _key = api_key
     if not _key and conn is not None:
-        row = conn.execute("SELECT value FROM settings WHERE key = 'tmdb.api_key'").fetchone()
-        _key = row["value"] if row else None
+        from .settings import get_setting_canonical
+        _key = get_setting_canonical(conn, "tmdb.api_key")
 
     if not _key or not _key.strip():
         return _fail("tmdb", "not_configured", "TMDb API key no configurada")
@@ -186,11 +186,10 @@ def test_emuwarez_connection(
 
     if conn is not None:
         if not _key:
-            row = conn.execute("SELECT value FROM settings WHERE key = 'emu.api_key'").fetchone()
-            _key = row["value"] if row else None
+            from .settings import get_setting_canonical
+            _key = get_setting_canonical(conn, "emu.api_key")
         if not _base:
-            row = conn.execute("SELECT value FROM settings WHERE key = 'emu.endpoint_url'").fetchone()
-            _base = row["value"] if row else None
+            _base = get_setting_canonical(conn, "emu.endpoint_url")
 
     if not _key or not _key.strip():
         return _fail("emuwarez", "not_configured", "API key de eMuwarez no configurada")

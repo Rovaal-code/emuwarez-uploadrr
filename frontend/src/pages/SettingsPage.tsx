@@ -608,7 +608,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                           return (
                             <button
                               type="button"
-                              title={guardada ? 'API key guardada. Pulsa para cambiarla' : 'Falta la API key. Pulsa para añadirla'}
+                              title={guardada ? 'API key comprobada. Pulsa para cambiarla' : 'Falta la API key. Pulsa para añadirla'}
                               className={`badge ${guardada ? 'status-available' : 'nom-na badge-blink'}`}
                               // Sin border:none — .badge lleva su propio borde
                               // y quitarlo era lo que lo hacía distinto del
@@ -662,10 +662,17 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                 const host = (settings?.image_hosts_available ?? []).find((x: { id: string }) => x.id === keyModalHost)
                 const guardada = !!settings?.image_host_keys_configured?.includes(keyModalHost)
                 const t = imgTest[keyModalHost]
+                // Guardar comprueba la clave ANTES: así una clave guardada es
+                // una clave que funciona, y la insignia verde no miente. Es lo
+                // que faltaba cuando imgbb daba "conectado" en Ajustes y
+                // fallaba en cada subida.
                 const guardar = async () => {
                   if (!keyDraft.trim()) return
                   setKeySaving(true)
                   try {
+                    const check = await testImghostConnection(keyModalHost, keyDraft.trim())
+                    setImgTest(p => ({ ...p, [keyModalHost]: check }))
+                    if (!check.ok) return          // el motivo ya se enseña debajo
                     const updated = await updateSettings({ image_host_keys: { [keyModalHost]: keyDraft.trim() } })
                     setSettings(updated)
                     setKeyModalHost(null)
@@ -698,13 +705,13 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                         </div>
                         {t && <div style={{ fontSize: 12, marginTop: 8, color: testResultColor(t) }}>{testResultLabel(t)}</div>}
                         <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 10, marginBottom: 0 }}>
-                          Probar comprueba que el proveedor responde y que has escrito algo, no que la clave
-                          sea correcta: eso no se sabe sin subir una imagen de verdad.
+                          La clave se comprueba contra el proveedor, sin subir ninguna imagen. Guardar la
+                          comprueba también: si no vale, no se guarda.
                         </p>
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
                           <button className="btn btn-secondary" type="button" onClick={() => setKeyModalHost(null)}>Cancelar</button>
                           <button className="btn btn-primary" type="button" onClick={guardar} disabled={!keyDraft.trim() || keySaving}>
-                            {keySaving ? 'Guardando…' : 'Guardar'}
+                            {keySaving ? 'Comprobando…' : 'Guardar'}
                           </button>
                         </div>
                       </div>

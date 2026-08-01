@@ -10,7 +10,7 @@ import { UploadJobDetailPage } from '../components/UploadJobDetailPage'
 import { DeleteUploadModal } from '../components/DeleteUploadModal'
 import { StatusBadge } from '../components/StatusBadge'
 import { ServiceLabel } from '../components/ServiceIcon'
-import { CancelButtonIcon, RetryButtonIcon, ValueChip, ValueIcon, TypeValueIcon } from '../components/DetailCard'
+import { CancelButtonIcon, RetryButtonIcon, DeleteButtonIcon, ValueChip, ValueIcon, TypeValueIcon } from '../components/DetailCard'
 import { useTooltip } from '../components/Tooltip'
 import { formatDateTimeSeconds } from '../utils/format'
 import { posterUrl, buildDeepLink } from '../utils/libraryItem'
@@ -33,6 +33,11 @@ import {
 // upload isn't supported server-side.
 const CANCELLABLE_STATUSES = new Set(['staging', 'queued', 'running', 'preparing'])
 const RETRYABLE_STATUSES = new Set(['failed', 'cancelled'])
+// Borrar solo lo terminado (mirror de delete_upload_job). 'completed' entra
+// porque borrar el registro de una subida que salió bien no deshace nada: el
+// torrent ya está en eMuwarez y el archivo sigue en su sitio; lo que se borra
+// es el historial de esta aplicación.
+const DELETABLE_STATUSES = new Set(['failed', 'cancelled', 'completed'])
 
 const CONFIRMATION_TOKEN = 'INICIAR_UPLOADRR'
 
@@ -108,16 +113,18 @@ function StartModal({ job, onClose, onDone }: { job: UploadJob; onClose: () => v
 // One table row — used both for the latest attempt in a retry chain (normal
 // row) and for its older attempts (indented/muted, revealed by expanding the
 // Reintentos toggle). `retryToggle` is only passed on the latest-attempt row.
-function JobRow({ job, instances, onOpen, indent, retryToggle, onCancel, onRetry }: {
+function JobRow({ job, instances, onOpen, indent, retryToggle, onCancel, onRetry, onDelete }: {
   job: UploadJob
   instances: InstanceSafeResponse[]
   onOpen: () => void
   indent?: boolean
   retryToggle?: { count: number; expanded: boolean; onClick: () => void }
   onCancel: (jobId: number) => void
+  onDelete: (job: UploadJob) => void
   onRetry: (job: UploadJob) => void
 }) {
   const canCancel = CANCELLABLE_STATUSES.has(job.status)
+  const canDelete = DELETABLE_STATUSES.has(job.status)
   const canRetry = RETRYABLE_STATUSES.has(job.status)
   const isPreparingOrRunning = job.status === 'preparing' || job.status === 'running'
   const phaseInfo = isPreparingOrRunning ? currentPhaseInfo(job) : null
@@ -128,6 +135,9 @@ function JobRow({ job, instances, onOpen, indent, retryToggle, onCancel, onRetry
   const { triggerProps: originTip, tooltipNode: originTooltip } = useTooltip(deepLink ? `Abrir en ${job.instance_name ?? job.instance_type}` : null)
   const retryToggleTip = useTooltip(retryToggle ? (retryToggle.expanded ? 'Ocultar intentos anteriores' : 'Ver intentos anteriores') : null)
   const retryBtnTip = useTooltip(canRetry ? 'Reintentar subida' : 'Solo se puede reintentar una subida cancelada o fallida')
+  const deleteBtnTip = useTooltip(canDelete
+    ? 'Borrar esta subida del historial'
+    : 'Solo se puede borrar una subida terminada: completada, cancelada o fallida')
   const cancelBtnTip = useTooltip(canCancel ? 'Cancelar subida' : 'Solo se puede cancelar mientras está preparando, en cola o subiendo')
   return (
     <tr style={indent ? { opacity: 0.65 } : undefined}>
@@ -252,6 +262,16 @@ function JobRow({ job, instances, onOpen, indent, retryToggle, onCancel, onRetry
           >
             <CancelButtonIcon /> Cancelar
             {cancelBtnTip.tooltipNode}
+          </button>
+          <button
+            type="button"
+            className="btn btn-danger btn-sm"
+            disabled={!canDelete}
+            onClick={() => onDelete(job)}
+            {...deleteBtnTip.triggerProps}
+          >
+            <DeleteButtonIcon /> Borrar
+            {deleteBtnTip.tooltipNode}
           </button>
         </div>
       </td>
@@ -613,10 +633,11 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
                         onOpen={() => openUpload(job.id!)}
                         retryToggle={ancestors.length > 0 ? { count: ancestors.length, expanded, onClick: () => toggleChain(job.id!) } : undefined}
                         onCancel={handleCancel}
+                        onDelete={setDeleteJob}
                         onRetry={handleRetryQueued}
                       />
                       {expanded && ancestors.map(a => (
-                        <JobRow key={a.id} job={a} instances={instances} indent onOpen={() => openUpload(a.id!)} onCancel={handleCancel} onRetry={handleRetryQueued} />
+                        <JobRow key={a.id} job={a} instances={instances} indent onOpen={() => openUpload(a.id!)} onCancel={handleCancel} onRetry={handleRetryQueued} onDelete={setDeleteJob} />
                       ))}
                     </Fragment>
                   )

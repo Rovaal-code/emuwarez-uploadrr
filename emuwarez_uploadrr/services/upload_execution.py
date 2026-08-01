@@ -1660,9 +1660,13 @@ def delete_upload_job(job_id: int, confirmation: str | None = None, conn=None) -
     artifacts) — never the real media file, which lives in Radarr/Sonarr's own
     library and this app never touches.
 
-    Only allowed for a terminal, non-retryable-source status: 'cancelled' or
-    'failed'. A job still queued/staging/preparing/running has to be cancelled
-    first (there's a live subprocess/timer to stop, which this never does).
+    Only allowed for a TERMINAL status: 'cancelled', 'failed' or 'completed'.
+    A job still queued/staging/preparing/running has to be cancelled first
+    (there's a live subprocess/timer to stop, which this never does).
+
+    'completed' entra porque borrar el registro de una subida que salió bien
+    no deshace nada: el torrent ya está en eMuwarez y el archivo sigue en su
+    sitio. Lo que se borra es el historial en esta aplicación.
     A job that has a later retry pointing at it (retry_of_job_id) is also
     refused — deleting it would orphan that retry's place in the chain shown
     in the UI.
@@ -1683,11 +1687,12 @@ def delete_upload_job(job_id: int, confirmation: str | None = None, conn=None) -
             }
 
         status = job.get("status", "")
-        if status not in ("cancelled", "failed"):
+        if status not in ("cancelled", "failed", "completed"):
             return {
                 "ok": False,
                 "error": "invalid_status",
-                "message": f"Solo se pueden borrar subidas canceladas o fallidas (status={status}).",
+                "message": f"Solo se pueden borrar subidas terminadas: completadas, "
+                           f"canceladas o fallidas (status={status}).",
                 "job_id": job_id,
             }
 

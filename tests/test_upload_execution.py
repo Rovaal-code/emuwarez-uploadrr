@@ -741,11 +741,23 @@ def test_delete_blocked_for_queued_job(db_conn):
     assert result["error"] == "invalid_status"
 
 
-def test_delete_blocked_for_completed_job(db_conn):
+def test_a_completed_job_can_be_deleted(db_conn):
+    """Borrar el registro de una subida que salió bien no deshace nada: el
+    torrent ya está en eMuwarez y el archivo sigue en su sitio. Lo que se
+    borra es el historial de esta aplicación."""
     jid = _insert_job(db_conn, status="completed")
     result = delete_upload_job(jid, confirmation=DELETE_CONFIRMATION_TOKEN, conn=db_conn)
-    assert not result["ok"]
-    assert result["error"] == "invalid_status"
+    assert result["ok"] is True
+
+
+def test_delete_blocked_while_the_job_is_still_running(db_conn):
+    """Lo que NO se puede borrar es algo en marcha: hay un subproceso o un
+    temporizador vivo que esto no para. Primero se cancela."""
+    for estado in ("queued", "staging", "preparing", "running"):
+        jid = _insert_job(db_conn, status=estado)
+        result = delete_upload_job(jid, confirmation=DELETE_CONFIRMATION_TOKEN, conn=db_conn)
+        assert not result["ok"], estado
+        assert result["error"] == "invalid_status"
 
 
 def test_delete_cancelled_job_removes_row_logs_and_artifacts(db_conn):

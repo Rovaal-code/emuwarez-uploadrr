@@ -446,6 +446,9 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None, reo
             "forced": _is_forced(props),
             "audio_channels": props.get("audio_channels"),
             "pixel_dimensions": props.get("pixel_dimensions"),
+            # UID de la pista dentro del MKV: es como mkvpropedit la
+            # selecciona sin depender de su posición.
+            "uid": props.get("uid"),
         })
 
     video = [t for t in tracks if t["type"] == "video"]
@@ -567,6 +570,34 @@ def build_mkvmerge_args(
             args += ["--default-track-flag", f"{t['id']}:{'1' if t['default_after'] else '0'}"]
     args += ["--track-order", ",".join(f"0:{tid}" for tid in plan["new_order"])]
     args += [source_path]
+    return args
+
+
+def build_mkvpropedit_args(path: str, plan: dict) -> list[str]:
+    """Aplicar SOLO nombres y banderas de predeterminada, editando la cabecera.
+
+    Cuando el plan no cambia el orden de las pistas, mkvmerge está de más:
+    reescribe el contenedor entero para tocar unas cadenas de la cabecera. Eso
+    significa leer y escribir el fichero completo (20 GB en una película), y
+    además sustituirlo por uno nuevo, lo que rompe cualquier hardlink que
+    compartiera con el cliente de torrent.
+
+    mkvpropedit edita en el sitio: no copia los datos, no cambia el inodo y no
+    escala con el tamaño del fichero. Medido sobre un MKV de 52 MB, 5 veces
+    más rápido; sobre uno de 20 GB la diferencia es de otro orden, porque
+    mkvmerge crece con el tamaño y esto se queda plano.
+
+    Las pistas se seleccionan por UID (`track:=<uid>`), no por posición: es
+    estable aunque el fichero se lea de otra manera. Sin UID se cae a la
+    posición 1-based, que es como las numera mkvpropedit.
+    """
+    args: list[str] = ["mkvpropedit", path]
+    for t in plan["ordered_tracks"]:
+        uid = t.get("uid")
+        selector = f"track:={uid}" if uid else f"track:{int(t['id']) + 1}"
+        args += ["--edit", selector, "--set", f"name={t['new_name']}"]
+        if t["type"] in ("audio", "subtitles"):
+            args += ["--set", f"flag-default={'1' if t['default_after'] else '0'}"]
     return args
 
 
@@ -713,6 +744,41 @@ def apply_remux(
             now = datetime.now(timezone.utc).isoformat()
             _update_status(conn, library_item_id, "aplicado", None, applied_at=now)
             logger.info("Reordenar/renombrar pistas: sin cambios que aplicar (item %s), mkvmerge omitido.", library_item_id)
+            if on_progress:
+                on_progress(100)
+            return {
+                **preview, "status": "applied", "dry_run": False, "apply": True,
+                "applied_at": now, "exit_code": 0,
+            }
+
+        if not plan["order_changed"]:
+            # Solo cambian nombres y banderas: eso se edita EN LA CABECERA con
+            # mkvpropedit, sin reescribir el contenedor. Evita leer y escribir
+            # el fichero entero (20 GB en una película) y, sobre todo, evita
+            # sustituirlo por uno nuevo: el inodo se conserva, así que un
+            # hardlink compartido con el cliente de torrent sobrevive y no se
+            # duplica el espacio en disco.
+            #
+            # mkvmerge se reserva para cuando de verdad hay que mover pistas,
+            # que es lo único que obliga a rehacer el contenedor.
+            args = build_mkvpropedit_args(prepared_path, plan)
+            logger.info("Renombrado de pistas del item %s con mkvpropedit (sin reordenar): "
+                        "edición en el sitio, sin reescribir el contenedor.", library_item_id)
+            try:
+                proc = subprocess.run(args, capture_output=True, text=True, timeout=300)
+            except FileNotFoundError:
+                return {**preview, "status": "error", "dry_run": False, "apply": True,
+                        "errors": ["mkvpropedit no encontrado al ejecutar (instala mkvtoolnix)."]}
+            except subprocess.TimeoutExpired:
+                return {**preview, "status": "error", "dry_run": False, "apply": True,
+                        "errors": ["mkvpropedit agotó el timeout de 300s."]}
+            if proc.returncode != 0:
+                salida = (proc.stdout or "") + (proc.stderr or "")
+                return {**preview, "status": "error", "dry_run": False, "apply": True,
+                        "exit_code": proc.returncode,
+                        "errors": [f"mkvpropedit falló: {salida.strip()[:500]}"]}
+            now = datetime.now(timezone.utc).isoformat()
+            _update_status(conn, library_item_id, "aplicado", None, applied_at=now)
             if on_progress:
                 on_progress(100)
             return {

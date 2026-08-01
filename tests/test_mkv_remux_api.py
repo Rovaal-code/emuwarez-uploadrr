@@ -16,6 +16,16 @@ _SAMPLE_MKV_JSON = {
 }
 
 
+def _enable_reorder():
+    """Los tests del camino de mkvmerge necesitan que haya algo que reordenar:
+    sin eso el aplicador usa mkvpropedit y edita la cabecera en el sitio."""
+    from emuwarez_uploadrr.database import connect
+    from emuwarez_uploadrr.web.runtime import _db_path
+    with connect(_db_path()) as conn:
+        conn.execute("INSERT OR REPLACE INTO settings(key, value) VALUES ('remux.reorder_tracks', 'true')")
+        conn.commit()
+
+
 def _seed_item(prepared_path=None):
     from emuwarez_uploadrr.database import connect, init_db
     from emuwarez_uploadrr.web.runtime import _db_path
@@ -127,6 +137,7 @@ def test_apply_track_remux_correct_token_calls_mkvmerge(client, auth_headers, tm
     mkv_file = tmp_path / "Film.2024.mkv"
     mkv_file.write_bytes(b"fake mkv original")
     item_id = _seed_item(prepared_path=str(mkv_file))
+    _enable_reorder()
 
     class _FakePopen:
         def __init__(self, args, **kwargs):
@@ -167,6 +178,7 @@ def test_apply_track_remux_with_manual_overrides(client, auth_headers, tmp_path)
     mkv_file = tmp_path / "Film.2024.mkv"
     mkv_file.write_bytes(b"fake mkv original")
     item_id = _seed_item(prepared_path=str(mkv_file))
+    _enable_reorder()
 
     captured_args = {}
 

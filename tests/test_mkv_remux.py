@@ -24,6 +24,14 @@ def _insert_library_item(conn, title="Movie", prepared_path=None, path=None):
     return conn.execute("SELECT last_insert_rowid() as id").fetchone()["id"]
 
 
+def _enable_reorder(conn):
+    """Enciende el reordenado. Viene apagado de fábrica, y sin reordenar el
+    aplicador usa mkvpropedit (edita la cabecera) en vez de mkvmerge: los
+    tests del camino de mkvmerge necesitan que haya algo que reordenar."""
+    conn.execute("INSERT OR REPLACE INTO settings(key, value) VALUES ('remux.reorder_tracks', 'true')")
+    conn.commit()
+
+
 _SAMPLE_MKV_JSON = {
     "tracks": [
         {"id": 0, "type": "video", "codec": "AVC/H.264/MPEG-4p10",
@@ -453,6 +461,7 @@ def test_apply_success_replaces_file(tmp_path):
     mkv_file.write_bytes(b"fake mkv original")
     conn = _make_conn(tmp_path)
     item_id = _insert_library_item(conn, prepared_path=str(mkv_file))
+    _enable_reorder(conn)
 
     class _FakePopen:
         def __init__(self, args, **kwargs):
@@ -494,6 +503,7 @@ def test_apply_failure_leaves_original_untouched(tmp_path):
     mkv_file.write_bytes(b"fake mkv original")
     conn = _make_conn(tmp_path)
     item_id = _insert_library_item(conn, prepared_path=str(mkv_file))
+    _enable_reorder(conn)
 
     class _FakePopen:
         def __init__(self, args, **kwargs):
@@ -729,3 +739,66 @@ def test_reorder_off_still_reports_the_renames_as_a_change():
     from emuwarez_uploadrr.services.mkv_remux import build_track_plan
     plan = build_track_plan(_MIXED, reorder=False)
     assert plan["any_changed"] is True
+
+
+# ---------------------------------------------------------------------------
+# Sin reordenar: se edita la cabecera, no se reescribe el contenedor
+# ---------------------------------------------------------------------------
+
+def test_mkvpropedit_args_select_tracks_by_uid():
+    """Por UID y no por posición: es estable aunque el fichero se lea de otra
+    manera. Sin UID se cae a la posición, que mkvpropedit numera desde 1."""
+    from emuwarez_uploadrr.services.mkv_remux import build_mkvpropedit_args
+    plan = {"ordered_tracks": [
+        {"id": 0, "type": "video", "uid": 111, "new_name": "1080p x264", "default_after": True},
+        {"id": 1, "type": "audio", "uid": 222, "new_name": "Español (Castellano) - DD 5.1", "default_after": True},
+        {"id": 2, "type": "subtitles", "uid": None, "new_name": "Español (Castellano)", "default_after": False},
+    ]}
+    args = build_mkvpropedit_args("/data/peli.mkv", plan)
+    assert args[:2] == ["mkvpropedit", "/data/peli.mkv"]
+    assert "track:=111" in args and "track:=222" in args
+    assert "track:3" in args                       # sin uid: posición 1-based
+    # El vídeo no lleva bandera de predeterminada; audio y subtítulos sí.
+    assert args.count("flag-default=1") == 1
+    assert args.count("flag-default=0") == 1
+
+
+def test_apply_without_reordering_edits_in_place(tmp_path):
+    """Lo que esto evita: reescribir 20 GB para cambiar unas cadenas de la
+    cabecera, y sustituir el fichero por uno nuevo, que rompe el hardlink
+    compartido con el cliente de torrent."""
+    from emuwarez_uploadrr.services.mkv_remux import apply_remux, REMUX_CONFIRMATION_TOKEN
+    mkv_file = tmp_path / "Film.2024.mkv"
+    mkv_file.write_bytes(b"contenido original")
+    conn = _make_conn(tmp_path)
+    item_id = _insert_library_item(conn, prepared_path=str(mkv_file))     # reordenado APAGADO
+
+    llamadas = []
+
+    def _fake_run(args, **kwargs):
+        llamadas.append(args)
+        class _R:
+            returncode = 0
+            stdout = "Realizado."
+            stderr = ""
+        return _R()
+
+    inodo_antes = mkv_file.stat().st_ino
+    with (
+        patch("emuwarez_uploadrr.services.mkv_remux.check_mkvmerge_available",
+              return_value={"available": True, "path": "/usr/bin/mkvmerge"}),
+        patch("emuwarez_uploadrr.services.mkv_remux.read_tracks_json",
+              return_value={"ok": True, "data": _SAMPLE_MKV_JSON}),
+        patch("emuwarez_uploadrr.services.mkv_remux.subprocess.run", _fake_run),
+    ):
+        result = apply_remux(item_id, conn=conn, dry_run=False, apply=True,
+                             confirmation=REMUX_CONFIRMATION_TOKEN)
+
+    assert result["status"] == "applied"
+    assert llamadas and llamadas[0][0] == "mkvpropedit", llamadas
+    # Ni "-o" ni fichero temporal: no se escribe una copia.
+    assert "-o" not in llamadas[0]
+    # Y lo que de verdad importa: el fichero es el MISMO.
+    assert mkv_file.stat().st_ino == inodo_antes
+    assert mkv_file.read_bytes() == b"contenido original"
+    conn.close()

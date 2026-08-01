@@ -90,6 +90,17 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 COPY --from=frontend-builder /build/frontend/dist ./frontend/dist
 
 # Runtime environment
+# Sello de versión: lo lee services/version_info.py para la tarjeta de
+# Diagnóstico y para saber si hay una imagen más nueva publicada. Se pasan con
+# --build-arg al construir; sin ellos vale "unknown" y la comprobación se
+# desactiva sola, diciéndolo, en vez de inventarse un estado.
+ARG APP_COMMIT=unknown
+ARG APP_BUILD_DATE=unknown
+ENV APP_COMMIT=${APP_COMMIT}
+ENV APP_BUILD_DATE=${APP_BUILD_DATE}
+LABEL org.opencontainers.image.revision=${APP_COMMIT}
+LABEL org.opencontainers.image.created=${APP_BUILD_DATE}
+
 ENV CONFIG_DIR=/config
 ENV TZ=Europe/Madrid
 ENV PYTHONUNBUFFERED=1

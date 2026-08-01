@@ -1487,3 +1487,24 @@ class TaskRunLogEntry(BaseModel):
 class TaskRunLogsResponse(BaseModel):
     task_key: str
     logs: list[TaskRunLogEntry] = []
+
+
+class UltimaVersionPublicada(BaseModel):
+    commit: Optional[str] = None
+    commit_corto: Optional[str] = None
+    digest: Optional[str] = None
+    publicada: Optional[str] = None
+    notas: Optional[str] = None
+
+
+class VersionResponse(BaseModel):
+    """Lo que enseña la tarjeta de Versión en Diagnóstico."""
+    version: str
+    commit: Optional[str] = None
+    commit_corto: Optional[str] = None
+    construida: Optional[str] = None
+    digest: Optional[str] = None
+    # al_dia | hay_novedad | desconocido
+    estado: str
+    motivo: Optional[str] = None
+    ultima: UltimaVersionPublicada

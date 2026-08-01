@@ -1,6 +1,9 @@
 [project]
 name = "emuwarez-uploadrr"
-version = "0.1.0"
+# La versión la declara el paquete (emuwarez_uploadrr/__init__.py) y aquí se
+# lee de ahí: estaba escrita en tres sitios con dos valores distintos, así que
+# /api/health decía 0.1.0 mientras el código decía 0.2.0.
+dynamic = ["version"]
 description = "CLI modular para eMuwarez Uploadrr, preparada para interfaz web"
 requires-python = ">=3.10"
 
@@ -20,3 +23,6 @@ dev = [
 [project.scripts]
 emuwarez-uploadrr = "emuwarez_uploadrr.cli:main"
 emuwarez-uploader = "emuwarez_uploadrr.cli:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "emuwarez_uploadrr.__version__"}

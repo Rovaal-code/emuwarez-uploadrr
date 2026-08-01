@@ -6,11 +6,11 @@ from pathlib import Path
 
 
 def _package_version() -> str:
-    try:
-        from importlib.metadata import version
-        return version("emuwarez-uploadrr")
-    except Exception:
-        return "0.2.0"
+    """La versión del paquete. La fuente es emuwarez_uploadrr.__version__, que
+    es de donde pyproject.toml la lee también: estaba escrita en tres sitios y
+    /api/health enseñaba una distinta de la del código."""
+    from .. import __version__
+    return __version__
 
 
 def _config_dir() -> Path:

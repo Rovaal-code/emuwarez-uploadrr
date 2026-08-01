@@ -179,3 +179,28 @@ export async function cleanupLogs(
     confirmation: opts.confirmation ?? null,
   })
 }
+
+// --- Versión en ejecución y si hay una más nueva publicada ---------------
+export interface UltimaVersionPublicada {
+  commit?: string | null
+  commit_corto?: string | null
+  digest?: string | null
+  publicada?: string | null
+  notas?: string | null
+}
+
+export interface VersionInfo {
+  version: string
+  commit?: string | null
+  commit_corto?: string | null
+  construida?: string | null
+  digest?: string | null
+  estado: 'al_dia' | 'hay_novedad' | 'desconocido'
+  motivo?: string | null
+  ultima: UltimaVersionPublicada
+}
+
+// `refrescar` salta la caché de una hora del backend: lo usa "Comprobar ahora".
+export function getVersionInfo(refrescar = false): Promise<VersionInfo> {
+  return api.get<VersionInfo>(`/runtime/version${refrescar ? '?refrescar=true' : ''}`)
+}

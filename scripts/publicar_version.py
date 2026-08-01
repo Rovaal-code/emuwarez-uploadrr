@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+"""Publica el manifiesto de versión que lee la tarjeta de Diagnóstico.
+
+El repositorio y el paquete de imágenes son privados, así que la aplicación no
+puede preguntarle al registro si hay algo nuevo. La salida es este manifiesto:
+un único JSON, público, con el commit, la fecha, el digest y una nota. El
+código y la imagen siguen privados; lo único que se publica es "cuál es la
+última versión".
+
+Se ejecuta DESPUÉS de `docker push`, porque el digest no existe hasta entonces:
+
+    python3 scripts/publicar_version.py \\
+        --digest sha256:abc... \\
+        --notas "Una serie SD recupera su resolución"
+
+Sin `--repo` escribe el JSON y dice qué hacer con él, sin tocar nada remoto:
+publicar es una acción hacia fuera y no se hace sola.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import pathlib
+import subprocess
+import sys
+import tempfile
+from datetime import datetime, timezone
+
+REPO_POR_DEFECTO = "Rovaal-code/uploadrr-version"
+FICHERO = "latest.json"
+
+
+def _git(*args: str) -> str:
+    return subprocess.run(["git", *args], capture_output=True, text=True,
+                          check=True).stdout.strip()
+
+
+def construir_manifiesto(digest: str | None, notas: str | None) -> dict:
+    return {
+        "commit": _git("rev-parse", "HEAD"),
+        "fecha": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        "digest": digest,
+        "notas": notas or _git("log", "-1", "--format=%s"),
+        # La versión del paquete, informativa: la comparación se hace por
+        # commit, que es lo único que cambia en cada despliegue.
+        "version": _leer_version(),
+    }
+
+
+def _leer_version() -> str:
+    raiz = pathlib.Path(__file__).resolve().parents[1]
+    for linea in (raiz / "emuwarez_uploadrr" / "__init__.py").read_text().splitlines():
+        if linea.startswith("__version__"):
+            return linea.split("=", 1)[1].strip().strip('"\'')
+    return "?"
+
+
+def publicar(manifiesto: dict, repo: str) -> None:
+    """Sube el manifiesto al repositorio público, con un commit por versión."""
+    with tempfile.TemporaryDirectory() as tmp:
+        subprocess.run(["gh", "repo", "clone", repo, tmp, "--", "--depth", "1"],
+                       check=True, capture_output=True)
+        destino = pathlib.Path(tmp) / FICHERO
+        destino.write_text(json.dumps(manifiesto, indent=2, ensure_ascii=False) + "\n")
+        subprocess.run(["git", "-C", tmp, "add", FICHERO], check=True)
+        subprocess.run(["git", "-C", tmp, "commit", "-m",
+                        f"{manifiesto['commit'][:7]}: {manifiesto['notas']}"], check=True)
+        subprocess.run(["git", "-C", tmp, "push"], check=True)
+    print(f"✓ publicado en {repo}/{FICHERO}")
+
+
+def main() -> int:
+    p = argparse.ArgumentParser(description=__doc__,
+                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--digest", help="digest de la imagen recién subida (sha256:...)")
+    p.add_argument("--notas", help="qué trae esta versión, en una línea")
+    p.add_argument("--repo", nargs="?", const=REPO_POR_DEFECTO,
+                   help=f"repositorio público donde publicar (por defecto {REPO_POR_DEFECTO})")
+    args = p.parse_args()
+
+    manifiesto = construir_manifiesto(args.digest, args.notas)
+    texto = json.dumps(manifiesto, indent=2, ensure_ascii=False)
+
+    if not args.repo:
+        salida = pathlib.Path("latest.json")
+        salida.write_text(texto + "\n")
+        print(texto)
+        print(f"\nEscrito en {salida.resolve()}. Para publicarlo de verdad:")
+        print(f"  python3 {sys.argv[0]} --digest ... --repo")
+        return 0
+
+    publicar(manifiesto, args.repo)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

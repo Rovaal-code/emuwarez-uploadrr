@@ -11,6 +11,8 @@ import {
   cleanupLogs,
   type MaintenanceStatus,
   type BackupInfo,
+  getVersionInfo,
+  type VersionInfo,
 } from '../api/maintenance'
 import { fetchSettings, updateSettings, type SettingsData } from '../api/settings'
 import { testTmdbConnection, testEmuwarezConnection, testQbitConnection, testImghostConnection, type IntegrationTestResult } from '../api/integrationTests'
@@ -1122,10 +1124,116 @@ function PathMappingsCard() {
 }
 
 // ---------- Diagnostics tab ----------
+function VersionCard() {
+  const [info, setInfo] = useState<VersionInfo | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [comprobando, setComprobando] = useState(false)
+
+  const cargar = useCallback(async (refrescar = false) => {
+    setComprobando(refrescar)
+    try {
+      setInfo(await getVersionInfo(refrescar))
+      setError(null)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setComprobando(false)
+    }
+  }, [])
+
+  useEffect(() => { cargar() }, [cargar])
+
+  const fila = (etiqueta: string, valor: React.ReactNode) => (
+    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+      <td style={{ padding: '6px 8px', color: 'var(--text-secondary)', width: 150 }}>{etiqueta}</td>
+      <td style={{ padding: '6px 8px', wordBreak: 'break-all' }}>{valor}</td>
+    </tr>
+  )
+
+  // El digest es largo y no aporta leído entero: se enseña recortado y entero
+  // al pasar el ratón, como el resto de identificadores de la aplicación.
+  const digest = (valor?: string | null) => {
+    if (!valor) return <span style={{ color: 'var(--text-muted)' }}>–</span>
+    const corto = valor.startsWith('sha256:') ? valor.slice(0, 19) + '…' : valor.slice(0, 12) + '…'
+    return <HoverTitle tip={valor}><code style={{ fontSize: 12 }}>{corto}</code></HoverTitle>
+  }
+
+  const aviso = () => {
+    if (!info) return null
+    if (info.estado === 'hay_novedad') {
+      return (
+        <div style={{
+          padding: '10px 14px', borderRadius: 6, marginBottom: 12,
+          background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)',
+        }}>
+          <div style={{ fontWeight: 600, color: '#f59e0b', fontSize: 13 }}>
+            Hay una versión más nueva publicada
+          </div>
+          <div style={{ fontSize: 12.5, marginTop: 4, lineHeight: 1.5 }}>
+            Actualiza con <code>docker compose pull</code> y <code>docker compose up -d</code>.
+            {info.ultima.notas ? <> Último cambio: {info.ultima.notas}</> : null}
+          </div>
+        </div>
+      )
+    }
+    if (info.estado === 'al_dia') {
+      return (
+        <div style={{ fontSize: 12.5, color: '#22c55e', marginBottom: 12 }}>
+          ✓ Estás en la última versión publicada
+        </div>
+      )
+    }
+    return (
+      <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 12 }}>
+        No se ha podido comprobar si hay una versión más nueva
+        {info.motivo ? <>: {info.motivo}</> : '.'}
+      </div>
+    )
+  }
+
+  return (
+    <div className="placeholder-card">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <h3 style={{ margin: 0 }}>Versión</h3>
+        <button className="btn btn-secondary btn-sm" type="button"
+                onClick={() => cargar(true)} disabled={comprobando}>
+          {comprobando ? 'Comprobando…' : 'Comprobar ahora'}
+        </button>
+      </div>
+      {error && <p className="text-error" style={{ fontSize: 12.5 }}>✗ {error}</p>}
+      {!info && !error && <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Cargando…</p>}
+      {info && (
+        <>
+          <div style={{ marginTop: 12 }}>{aviso()}</div>
+          <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+            <tbody>
+              {fila('Versión', info.version)}
+              {fila('Commit', info.commit_corto
+                ? <HoverTitle tip={info.commit!}><code style={{ fontSize: 12 }}>{info.commit_corto}</code></HoverTitle>
+                : <span style={{ color: 'var(--text-muted)' }}>sin sellar</span>)}
+              {fila('Construida', info.construida || <span style={{ color: 'var(--text-muted)' }}>–</span>)}
+              {fila('Digest', digest(info.digest))}
+              {info.estado === 'hay_novedad' && fila('Última publicada',
+                <>
+                  {info.ultima.commit_corto
+                    ? <HoverTitle tip={info.ultima.commit!}><code style={{ fontSize: 12 }}>{info.ultima.commit_corto}</code></HoverTitle>
+                    : '–'}
+                  {info.ultima.publicada ? <span style={{ color: 'var(--text-muted)' }}> · {info.ultima.publicada}</span> : null}
+                </>)}
+              {info.estado === 'hay_novedad' && fila('Digest publicado', digest(info.ultima.digest))}
+            </tbody>
+          </table>
+        </>
+      )}
+    </div>
+  )
+}
+
 function DiagnosticsTab({ status }: { status: MaintenanceStatus | null }) {
   const db = status?.database
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <VersionCard />
       <div className="placeholder-card">
         <h3>Base de datos</h3>
         {!db ? (

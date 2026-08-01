@@ -136,7 +136,9 @@ function JobRow({ job, instances, onOpen, indent, retryToggle, onCancel, onRetry
   const retryToggleTip = useTooltip(retryToggle ? (retryToggle.expanded ? 'Ocultar intentos anteriores' : 'Ver intentos anteriores') : null)
   const retryBtnTip = useTooltip(canRetry ? 'Reintentar subida' : 'Solo se puede reintentar una subida cancelada o fallida')
   const deleteBtnTip = useTooltip(canDelete
-    ? 'Borrar esta subida del historial'
+    ? ((job.retry_count ?? 0) > 0
+        ? 'Borrar esta subida del historial, con todos sus intentos'
+        : 'Borrar esta subida del historial')
     : 'Solo se puede borrar una subida terminada: completada, cancelada o fallida')
   const cancelBtnTip = useTooltip(canCancel ? 'Cancelar subida' : 'Solo se puede cancelar mientras está preparando, en cola o subiendo')
   return (

@@ -1655,6 +1655,36 @@ def cancel_upload_job(job_id: int, conn=None) -> dict:
             conn.close()
 
 
+def retry_chain_ids(job_id: int, conn) -> list[int]:
+    """Todos los intentos de la misma subida, entrando por cualquiera de ellos.
+
+    Se sube por retry_of_job_id hasta el intento original y luego se baja
+    recogiendo todo lo que cuelga de él. El control de visitados no es
+    decorativo: una fila que se apuntara a sí misma, o un ciclo por datos
+    corruptos, colgaría el bucle.
+    """
+    visto: set[int] = {job_id}
+    raiz = job_id
+    while True:
+        fila = conn.execute("SELECT retry_of_job_id FROM upload_jobs WHERE id = ?", (raiz,)).fetchone()
+        padre = fila["retry_of_job_id"] if fila else None
+        if padre is None or padre in visto:
+            break
+        visto.add(padre)
+        raiz = padre
+
+    ids: list[int] = []
+    pendientes = [raiz]
+    while pendientes:
+        actual = pendientes.pop()
+        if actual in ids:
+            continue
+        ids.append(actual)
+        for fila in conn.execute("SELECT id FROM upload_jobs WHERE retry_of_job_id = ?", (actual,)).fetchall():
+            pendientes.append(fila["id"])
+    return ids
+
+
 def delete_upload_job(job_id: int, confirmation: str | None = None, conn=None) -> dict:
     """Permanently remove a job and everything registered about it (logs,
     artifacts) — never the real media file, which lives in Radarr/Sonarr's own
@@ -1667,9 +1697,19 @@ def delete_upload_job(job_id: int, confirmation: str | None = None, conn=None) -
     'completed' entra porque borrar el registro de una subida que salió bien
     no deshace nada: el torrent ya está en eMuwarez y el archivo sigue en su
     sitio. Lo que se borra es el historial en esta aplicación.
-    A job that has a later retry pointing at it (retry_of_job_id) is also
-    refused — deleting it would orphan that retry's place in the chain shown
-    in the UI.
+    Borra la CADENA DE INTENTOS entera, no solo el job que se le pasa: cada
+    "Reintentar" crea una fila nueva que apunta a la anterior, así que una
+    subida con 5 reintentos son 6 filas. Antes se borraban de una en una,
+    empezando obligatoriamente por la última (borrar una con un reintento
+    posterior se rechazaba), así que quitar del historial una subida que
+    había costado varios intentos pedía pulsar Borrar seis veces. La tabla
+    ya las enseña como una sola fila con sus intentos anidados, y eso es lo
+    que se borra: la fila que se ve.
+
+    Da igual por qué intento de la cadena se entre, se resuelve entera. Si
+    alguno sigue vivo (en cola, preparando o subiendo) no se borra nada:
+    hay un proceso en marcha que esto no sabe parar, y hacerlo a medias
+    dejaría la cadena rota.
     """
     own = conn is None
     conn = conn or _get_db_conn()
@@ -1686,35 +1726,34 @@ def delete_upload_job(job_id: int, confirmation: str | None = None, conn=None) -
                 "job_id": job_id,
             }
 
-        status = job.get("status", "")
-        if status not in ("cancelled", "failed", "completed"):
+        chain = retry_chain_ids(job_id, conn=conn)
+
+        vivos = conn.execute(
+            f"SELECT id, status FROM upload_jobs WHERE id IN ({','.join('?' * len(chain))}) "
+            "AND status NOT IN ('cancelled', 'failed', 'completed')",
+            chain,
+        ).fetchall()
+        if vivos:
+            estados = ", ".join(sorted({str(r["status"]) for r in vivos}))
             return {
                 "ok": False,
                 "error": "invalid_status",
                 "message": f"Solo se pueden borrar subidas terminadas: completadas, "
-                           f"canceladas o fallidas (status={status}).",
+                           f"canceladas o fallidas (status={estados}).",
                 "job_id": job_id,
             }
 
-        newer_retry = conn.execute(
-            "SELECT id FROM upload_jobs WHERE retry_of_job_id = ? LIMIT 1", (job_id,)
-        ).fetchone()
-        if newer_retry:
-            return {
-                "ok": False,
-                "error": "has_retry",
-                "message": "No se puede borrar: existe un reintento posterior basado en esta subida. Bórralo primero.",
-                "job_id": job_id,
-            }
-
-        conn.execute("DELETE FROM upload_artifacts WHERE upload_job_id = ?", (job_id,))
-        conn.execute("DELETE FROM upload_job_logs WHERE upload_job_id = ?", (job_id,))
-        conn.execute("UPDATE filesystem_operations SET upload_job_id = NULL WHERE upload_job_id = ?", (job_id,))
-        conn.execute("UPDATE operational_queue_items SET upload_job_id = NULL WHERE upload_job_id = ?", (job_id,))
-        conn.execute("DELETE FROM upload_jobs WHERE id = ?", (job_id,))
+        marcas = ",".join("?" * len(chain))
+        conn.execute(f"DELETE FROM upload_artifacts WHERE upload_job_id IN ({marcas})", chain)
+        conn.execute(f"DELETE FROM upload_job_logs WHERE upload_job_id IN ({marcas})", chain)
+        conn.execute(f"UPDATE filesystem_operations SET upload_job_id = NULL WHERE upload_job_id IN ({marcas})", chain)
+        conn.execute(f"UPDATE operational_queue_items SET upload_job_id = NULL WHERE upload_job_id IN ({marcas})", chain)
+        conn.execute(f"DELETE FROM upload_jobs WHERE id IN ({marcas})", chain)
         conn.commit()
 
-        return {"ok": True, "message": "Subida eliminada.", "job_id": job_id}
+        mensaje = ("Subida eliminada." if len(chain) == 1
+                   else f"Subida eliminada, con sus {len(chain) - 1} reintento(s).")
+        return {"ok": True, "message": mensaje, "job_id": job_id, "deleted_job_ids": chain}
     finally:
         if own:
             conn.close()

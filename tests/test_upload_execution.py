@@ -779,16 +779,70 @@ def test_delete_failed_job_ok(db_conn):
     assert result["ok"] is True
 
 
-def test_delete_blocked_when_newer_retry_exists(db_conn):
-    jid = _insert_job(db_conn, status="failed")
-    db_conn.execute(
+def _insert_retry(conn, parent_id: int, status: str = "failed") -> int:
+    cur = conn.execute(
         """INSERT INTO upload_jobs (library_item_id, title, path, status, stage, retry_of_job_id, created_at, updated_at)
-           VALUES (NULL, 'Test Movie', '', 'queued', 'preflight', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""",
-        (jid,),
+           VALUES (NULL, 'Test Movie', '', ?, 'preflight', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""",
+        (status, parent_id),
     )
-    db_conn.commit()
+    conn.commit()
+    return cur.lastrowid
+
+
+def test_delete_blocked_while_any_attempt_is_still_running(db_conn):
+    """Un intento vivo en la cadena bloquea el borrado entero: hay un proceso
+    en marcha que esto no sabe parar."""
+    jid = _insert_job(db_conn, status="failed")
+    retry = _insert_retry(db_conn, jid, status="queued")
 
     result = delete_upload_job(jid, confirmation=DELETE_CONFIRMATION_TOKEN, conn=db_conn)
     assert not result["ok"]
-    assert result["error"] == "has_retry"
-    assert db_conn.execute("SELECT id FROM upload_jobs WHERE id=?", (jid,)).fetchone() is not None
+    assert result["error"] == "invalid_status"
+    # Y no borra nada a medias.
+    for x in (jid, retry):
+        assert db_conn.execute("SELECT id FROM upload_jobs WHERE id=?", (x,)).fetchone() is not None
+
+
+def test_delete_removes_every_attempt_of_the_chain(db_conn):
+    """Borrar es borrar la fila que se ve en la tabla, que son todos sus
+    intentos: con 5 reintentos había que pulsar Borrar 6 veces."""
+    original = _insert_job(db_conn, status="failed")
+    cadena = [original]
+    for _ in range(5):
+        cadena.append(_insert_retry(db_conn, cadena[-1]))
+    for jid in cadena:
+        append_upload_log(jid, "info", "algo", stream="system", conn=db_conn)
+        create_upload_artifact(jid, "trailer_url", name="Trailer", url="http://x", conn=db_conn)
+
+    # Se entra por el último intento, que es la fila que enseña la tabla.
+    result = delete_upload_job(cadena[-1], confirmation=DELETE_CONFIRMATION_TOKEN, conn=db_conn)
+    assert result["ok"] is True
+    assert sorted(result["deleted_job_ids"]) == sorted(cadena)
+
+    for jid in cadena:
+        assert db_conn.execute("SELECT id FROM upload_jobs WHERE id=?", (jid,)).fetchone() is None
+        assert db_conn.execute("SELECT id FROM upload_job_logs WHERE upload_job_id=?", (jid,)).fetchone() is None
+        assert db_conn.execute("SELECT id FROM upload_artifacts WHERE upload_job_id=?", (jid,)).fetchone() is None
+
+
+def test_delete_from_an_older_attempt_also_removes_the_whole_chain(db_conn):
+    """Los intentos antiguos también tienen su botón Borrar (desplegando
+    Reintentos), y hace lo mismo: da igual por dónde se entre."""
+    original = _insert_job(db_conn, status="failed")
+    medio = _insert_retry(db_conn, original)
+    ultimo = _insert_retry(db_conn, medio, status="completed")
+
+    result = delete_upload_job(original, confirmation=DELETE_CONFIRMATION_TOKEN, conn=db_conn)
+    assert result["ok"] is True
+    for jid in (original, medio, ultimo):
+        assert db_conn.execute("SELECT id FROM upload_jobs WHERE id=?", (jid,)).fetchone() is None
+
+
+def test_a_self_referencing_row_does_not_hang_the_chain_walk(db_conn):
+    """Datos corruptos (una fila apuntándose a sí misma) no pueden colgar el
+    bucle que resuelve la cadena."""
+    from emuwarez_uploadrr.services.upload_execution import retry_chain_ids
+    jid = _insert_job(db_conn, status="failed")
+    db_conn.execute("UPDATE upload_jobs SET retry_of_job_id = id WHERE id = ?", (jid,))
+    db_conn.commit()
+    assert retry_chain_ids(jid, conn=db_conn) == [jid]

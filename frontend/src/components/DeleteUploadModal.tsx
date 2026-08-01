@@ -37,11 +37,17 @@ export function DeleteUploadModal({ job, onClose, onDeleted }: {
           <p style={{ margin: 0, fontWeight: 600 }}>{job.title || `Job ${job.id}`}</p>
           <div style={{ padding: '10px 14px', background: 'rgba(255,80,80,0.08)', borderRadius: 6, border: '1px solid rgba(255,80,80,0.2)', margin: '12px 0' }}>
             <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5 }}>
-              Se va a borrar todo el material y todo lo que hay registrado de esta subida: registro de actividad, capturas y demás datos generados durante el intento. Esta acción no se puede deshacer.
+              Se va a borrar todo el material y todo lo que hay registrado de esta subida: registro de actividad,
+              capturas y demás datos generados. Esta acción no se puede deshacer.
             </p>
+            {(job.retry_count ?? 0) > 0 && (
+              <p style={{ margin: '8px 0 0', fontSize: 13.5, lineHeight: 1.5 }}>
+                Incluye sus <strong>{job.retry_count} reintento(s)</strong>: se borra la subida entera, no un intento suelto.
+              </p>
+            )}
           </div>
           <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>
-            El archivo de vídeo de tu biblioteca no se toca. Solo se borra todo el registro de este intento de subida.
+            El archivo de vídeo de tu biblioteca no se toca. Solo se borra el registro en esta aplicación.
           </p>
           {error && <p className="error-text" style={{ marginTop: 8 }}>{error}</p>}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>

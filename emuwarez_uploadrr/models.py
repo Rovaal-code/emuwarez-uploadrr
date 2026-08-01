@@ -109,6 +109,11 @@ class LibraryItem:
     title: str
     year: Optional[int] = None
     original_title: Optional[str] = None
+    # El título en inglés, resuelto durante la SINCRONIZACIÓN para que el
+    # asistente no tenga que salir a TMDb al generar la nomenclatura. No es lo
+    # mismo que original_title: el de un anime japonés es japonés, y la opción
+    # "Inglés" del desplegable de Título pide justo el inglés.
+    english_title: Optional[str] = None
     instance_id: Optional[int] = None
     instance_type: Optional[str] = None
     instance_name: Optional[str] = None

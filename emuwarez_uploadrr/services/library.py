@@ -76,7 +76,7 @@ def upsert_library_item(
         datetime.now(timezone.utc).isoformat() if item.local_status == LocalStatus.MISSING.value else None
     )
     columns = [
-        "item_type", "title", "year", "original_title", "instance_id", "instance_type",
+        "item_type", "title", "year", "original_title", "english_title", "instance_id", "instance_type",
         "instance_name", "external_id", "tmdb_id", "imdb_id", "tvdb_id", "tvmaze_id", "title_slug",
         "season_number", "episode_number", "parent_id", "path",
         "quality", "resolution", "source", "video_codec", "audio_codec", "audio_languages",
@@ -93,6 +93,7 @@ def upsert_library_item(
             title = excluded.title,
             year = excluded.year,
             original_title = excluded.original_title,
+            english_title = excluded.english_title,
             instance_type = excluded.instance_type,
             instance_name = excluded.instance_name,
             tmdb_id = excluded.tmdb_id,
@@ -393,7 +394,20 @@ def _sync_one_series(
 
     if localize_titles and series.get("title") and series.get("tmdbId"):
         from .tmdb_titles import resolve_series_title
-        series["title"] = resolve_series_title(conn, series.get("tmdbId"), series["title"])
+        # El título que manda Sonarr se guarda ANTES de pisarlo con el español.
+        # Sonarr no tiene un campo `originalTitle` como Radarr, así que el
+        # mapeador lo buscaba y no lo encontraba nunca: el inglés se perdía
+        # aquí mismo y después el asistente pagaba una llamada a TMDb para
+        # recuperar lo que ya habíamos tenido delante.
+        #
+        # Se guarda solo si de verdad cambia. Si TMDb devuelve lo mismo que
+        # Sonarr (una serie nunca retitulada, como One Piece), no hay dos
+        # títulos que ofrecer y anotarlo haría que el desplegable enseñara la
+        # misma cadena dos veces.
+        titulo_de_sonarr = series["title"]
+        series["title"] = resolve_series_title(conn, series.get("tmdbId"), titulo_de_sonarr)
+        if series["title"] != titulo_de_sonarr:
+            series["englishTitle"] = titulo_de_sonarr
     series_item = sonarr.series_to_library_item(
         series,
         instance_id=int(instance.id),
@@ -545,7 +559,23 @@ def sync_instance(
         movies = list(radarr.get_movies(instance.url, instance.api_key))
         if on_total:
             on_total(len(movies))  # total items to import from this instance
+        from .tmdb_titles import resolve_english_title, resolve_movie_title
         for movie in movies:
+            # Los títulos se dejan resueltos aquí, no en el asistente: así al
+            # terminar la sincronización la biblioteca ya tiene los dos y
+            # generar la nomenclatura no sale a la red. Las dos consultas se
+            # cachean por (tmdb_id, idioma) en tmdb_title_cache, así que solo
+            # se pagan la primera vez que aparece cada película.
+            #
+            # `title` de Radarr viene en el idioma configurado en Radarr, que
+            # no tiene por qué ser español; y `originalTitle` es el original de
+            # verdad (japonés en un anime), que no sirve para la opción
+            # "Inglés". Por eso se piden los dos por separado.
+            if movie.get("tmdbId") and movie.get("title"):
+                movie["title"] = resolve_movie_title(conn, movie.get("tmdbId"), movie["title"])
+                movie["englishTitle"] = resolve_english_title(
+                    conn, "movie", movie.get("tmdbId"), movie.get("originalTitle")
+                )
             item = radarr.movie_to_library_item(
                 movie,
                 instance_id=int(instance.id),

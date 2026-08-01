@@ -253,6 +253,10 @@ def movie_to_library_item(
         title=title,
         year=int(year) if str(year).isdigit() else None,
         original_title=movie.get("originalTitle"),
+        # OJO: no es original_title. El original de un anime japonés es
+        # japonés, y la opción "Inglés" pide el inglés. Lo resuelve la
+        # sincronización contra TMDb (ver services/library.py).
+        english_title=movie.get("englishTitle"),
         instance_id=instance_id,
         instance_type="radarr",
         instance_name=instance_name,

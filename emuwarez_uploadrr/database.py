@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 36
+SCHEMA_VERSION = 37
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -865,6 +865,10 @@ def _migrate_library_items_hierarchy(conn: sqlite3.Connection) -> None:
         ("parent_id", "INTEGER"),
         ("season_number", "INTEGER"),
         ("episode_number", "INTEGER"),
+        # Título en inglés resuelto en la sincronización (esquema 37). Las
+        # bibliotecas sincronizadas antes lo tienen vacío y el asistente sigue
+        # preguntando a TMDb hasta la siguiente sincronización.
+        ("english_title", "TEXT"),
     ]
     for col, col_type in new_cols:
         try:
@@ -1332,6 +1336,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
                 title TEXT NOT NULL,
                 year INTEGER,
                 original_title TEXT,
+                english_title TEXT,
                 instance_id INTEGER,
                 instance_type TEXT,
                 instance_name TEXT,

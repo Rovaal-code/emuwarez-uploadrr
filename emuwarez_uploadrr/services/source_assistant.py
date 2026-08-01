@@ -362,13 +362,17 @@ def suggest_provider_for_item(library_item_id: int, conn=None) -> dict:
 def _resolve_series_row(item: dict, conn) -> dict | None:
     """Walk parent_id up from an episode/season row to the series row and return
     it (title + tmdb_id), so episode nomenclature uses the series name and can
-    localize it via the series' own TMDb id."""
+    localize it via the series' own TMDb id.
+
+    OJO con la lista de columnas: es explícita, así que un campo nuevo que no
+    se añada aquí llega vacío al que la llama sin que falle nada. Pasó con
+    english_title, que hacía que se consultara a TMDb teniéndolo guardado."""
     seen: set[int] = set()
     pid = item.get("parent_id")
     while pid and pid not in seen:
         seen.add(pid)
         row = conn.execute(
-            "SELECT title, original_title, tmdb_id, item_type, parent_id "
+            "SELECT title, original_title, english_title, tmdb_id, item_type, parent_id "
             "FROM library_items WHERE id = ?", (pid,)
         ).fetchone()
         if not row:
@@ -490,20 +494,27 @@ def build_editable_nomenclature_fields(
         # the Título dropdown. Comes from the SERIES row for an episode/season,
         # same walk the localized title uses, never the per-episode name.
         original_title = item.get("original_title")
+        # El inglés lo deja resuelto la sincronización (esquema 37); solo se
+        # pregunta a TMDb si la fila es anterior a ese cambio.
+        english_title = item.get("english_title")
         if media_type in ("season", "episode"):
             srow = _resolve_series_row(item, conn)
             if srow:
                 title = srow.get("title") or title
                 original_title = srow.get("original_title") or original_title
+                english_title = srow.get("english_title") or english_title
                 title_tmdb_id = srow.get("tmdb_id") or title_tmdb_id
         from .tmdb_titles import resolve_localized_title, resolve_english_title
         title, title_warning = resolve_localized_title(conn, media_type, title_tmdb_id, title)
-        # From TMDb, not from the stored column: Sonarr's series payload has no
-        # originalTitle field, and the sync overwrites the Sonarr title with the
-        # Spanish one, so nothing English survives in library_items for a series
-        # and the dropdown would collapse to a single, dead option.
-        original_title = resolve_english_title(conn, media_type, title_tmdb_id, original_title)
-        title_options = build_title_options(title, original_title)
+        # Si la biblioteca ya guarda el título original, se usa tal cual y no
+        # se pregunta a TMDb: desde el 2026-08-01 la sincronización guarda el
+        # que manda Sonarr (normalmente el inglés) antes de pisarlo con el
+        # español. Solo se pregunta cuando no hay nada guardado, que es el caso
+        # de las bibliotecas sincronizadas antes de ese cambio.
+        if not (english_title or "").strip():
+            # Solo las bibliotecas sincronizadas antes del esquema 37.
+            english_title = resolve_english_title(conn, media_type, title_tmdb_id, original_title)
+        title_options = build_title_options(title, english_title)
 
         def _se_token() -> str | None:
             if season_num is None:

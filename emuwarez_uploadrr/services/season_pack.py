@@ -436,16 +436,26 @@ def _season_title_options(series: dict | None, season: dict, conn) -> list[dict]
     """Título dropdown choices for a pack: the series' Spanish name and its
     original one.
 
-    The English one comes from TMDb (cached), not from the stored column:
-    Sonarr's series payload has no originalTitle field, and the sync overwrites
-    the Sonarr title with the Spanish one, so nothing English survives in
-    library_items for a series. One cached lookup per plan, not per episode."""
+    El original sale de la biblioteca cuando está guardado: desde el
+    2026-08-01 la sincronización guarda el título que manda Sonarr (el que ves
+    en Sonarr, normalmente en inglés) antes de pisarlo con el español. Antes se
+    perdía ahí mismo, porque el mapeador buscaba un campo `originalTitle` que
+    Sonarr no tiene, y había que pedírselo a TMDb.
+
+    Se sigue preguntando a TMDb cuando no hay nada guardado, que es el caso de
+    las bibliotecas sincronizadas antes de ese cambio. Una consulta por plan,
+    cacheada, no una por capítulo."""
     from .source_assistant import build_title_options
     from .tmdb_titles import resolve_english_title
     spanish = (series or {}).get("title") or season.get("title")
-    original = (series or {}).get("original_title") or season.get("original_title")
+    original = (series or {}).get("english_title") or season.get("english_title")
     tmdb_id = (series or {}).get("tmdb_id") or season.get("tmdb_id")
-    original = resolve_english_title(conn, "tv", tmdb_id, original)
+    if not (original or "").strip():
+        # Solo las bibliotecas sincronizadas antes del esquema 37 llegan aquí.
+        original = resolve_english_title(
+            conn, "tv", tmdb_id,
+            (series or {}).get("original_title") or season.get("original_title"),
+        )
     return build_title_options(spanish, original)
 
 

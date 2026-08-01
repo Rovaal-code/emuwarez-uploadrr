@@ -275,6 +275,11 @@ def series_to_library_item(
         title=title,
         year=series.get("year"),
         original_title=series.get("originalTitle"),
+        # Lo deja puesto la sincronización antes de traducir el título (ver
+        # services/library.py::_sync_one_series): Sonarr no manda ningún campo
+        # de título original, pero el `title` que manda ya es el bueno para la
+        # opción "Inglés" del desplegable de Título.
+        english_title=series.get("englishTitle"),
         instance_id=instance_id,
         instance_type="sonarr",
         instance_name=instance_name,
@@ -346,6 +351,11 @@ def season_to_library_item(
         title=f"{series_title} - {season_label}",
         year=series.get("year"),
         original_title=series.get("originalTitle"),
+        # Lo deja puesto la sincronización antes de traducir el título (ver
+        # services/library.py::_sync_one_series): Sonarr no manda ningún campo
+        # de título original, pero el `title` que manda ya es el bueno para la
+        # opción "Inglés" del desplegable de Título.
+        english_title=series.get("englishTitle"),
         instance_id=instance_id,
         instance_type="sonarr",
         instance_name=instance_name,
@@ -413,6 +423,11 @@ def episode_to_library_item(
         title=title,
         year=series.get("year"),
         original_title=series.get("originalTitle"),
+        # Lo deja puesto la sincronización antes de traducir el título (ver
+        # services/library.py::_sync_one_series): Sonarr no manda ningún campo
+        # de título original, pero el `title` que manda ya es el bueno para la
+        # opción "Inglés" del desplegable de Título.
+        english_title=series.get("englishTitle"),
         instance_id=instance_id,
         instance_type="sonarr",
         instance_name=instance_name,

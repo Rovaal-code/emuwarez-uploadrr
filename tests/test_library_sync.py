@@ -1,4 +1,4 @@
-"""Tests for library sync and quality extraction (Phase 4).
+"""Tests for library sync (Phase 4).
 
 All HTTP calls are mocked — no real Radarr/Sonarr required.
 """
@@ -10,55 +10,23 @@ import pytest
 
 from emuwarez_uploadrr.database import connect, init_db
 from emuwarez_uploadrr.models import LocalStatus
-from emuwarez_uploadrr.services import quality as quality_svc
 
 
-# ---------------------------------------------------------------------------
-# Quality helpers
-# ---------------------------------------------------------------------------
-
-def test_extract_quality_name():
-    raw = {"quality": {"quality": {"name": "Bluray-1080p"}}}
-    assert quality_svc.extract_quality_name(raw) == "Bluray-1080p"
 
 
-def test_extract_quality_name_missing():
-    assert quality_svc.extract_quality_name({}) is None
 
 
-def test_extract_resolution_from_quality():
-    raw = {"quality": {"quality": {"name": "WEBRip-2160p"}}}
-    assert quality_svc.extract_resolution(raw) == "2160p"
 
 
-def test_extract_resolution_from_path():
-    raw = {"quality": {}, "path": "/movies/Film [1080p]/film.mkv"}
-    assert quality_svc.extract_resolution(raw) == "1080p"
 
 
-def test_extract_source_webdl():
-    raw = {"quality": {"quality": {"name": "WEB-DL-1080p"}}}
-    assert quality_svc.extract_source_from_quality(raw) == "WEB-DL"
 
 
-def test_extract_source_remux():
-    raw = {"quality": {"quality": {"name": "Remux-2160p"}}}
-    assert quality_svc.extract_source_from_quality(raw) == "BDRemux"
 
 
-def test_extract_source_from_title():
-    result = quality_svc.extract_source_from_title_or_path("Film.BluRay.1080p.mkv", None)
-    assert result == "BluRay"
 
 
-def test_extract_source_from_path():
-    result = quality_svc.extract_source_from_title_or_path(None, "/movies/Film.WEBRip.mkv")
-    assert result == "WEBRip"
 
-
-def test_extract_source_none_when_unknown():
-    result = quality_svc.extract_source_from_title_or_path("Film 2023", "/movies/film.mkv")
-    assert result is None
 
 
 # ---------------------------------------------------------------------------

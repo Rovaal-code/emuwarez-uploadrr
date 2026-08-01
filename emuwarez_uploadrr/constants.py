@@ -87,7 +87,12 @@ LANG_MAP = {
 
 SOURCE_PATTERNS = [
     (re.compile(r"\b(?:bd[ ._-]?remux|bluray[ ._-]?remux)\b", re.I), "BDRemux"),
-    (re.compile(r"\b(?:full[ ._-]?bd|bd50|bd25)\b", re.I), "FBD"),
+    # "Full BluRay" y no "FBD": es el código que usa la aplicación
+    # (source_assistant.EMU_SOURCES). El motor de Source sí habla en FBD, pero
+    # traduce al salir (source_engine/integration.ENGINE_TO_APP_SOURCE); esta
+    # detección por nombre no traducía nada, así que un fichero con "bd50" en
+    # el nombre acababa con un source que el tracker no acepta.
+    (re.compile(r"\b(?:full[ ._-]?bd|bd50|bd25)\b", re.I), "Full BluRay"),
     (re.compile(r"\b(?:full[ ._-]?dvd|dvd9|dvd5)\b", re.I), "FDVD"),
     (re.compile(r"\b(?:web[ ._-]?dl|webdl)\b", re.I), "WEB-DL"),
     (re.compile(r"\b(?:web[ ._-]?rip|webrip)\b", re.I), "WEBRip"),

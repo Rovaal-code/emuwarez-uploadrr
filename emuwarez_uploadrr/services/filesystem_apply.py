@@ -84,6 +84,27 @@ def build_safe_rename_plan(source_path: str, destination_path: str) -> dict[str,
     }
 
 
+def _destino_seguro(src: str | None, dst: str | None) -> str | None:
+    """Repite aquí las comprobaciones del plan, o devuelve el motivo del veto.
+
+    La función que construye el plan ya las hace, pero esta es la que escribe
+    en disco y no puede depender de que la llamen bien: recibe un diccionario
+    y hasta ahora se fiaba de que `status` dijera "ready". Que hoy los dos
+    únicos llamantes construyan el plan justo encima es una costumbre, no una
+    garantía."""
+    if not src or not dst:
+        return "Faltan las rutas de origen o destino."
+    origen, destino = Path(src), Path(dst)
+    if ".." in destino.parts:
+        return f"El destino no puede contener '..': {dst}"
+    try:
+        if destino.parent.resolve() != origen.parent.resolve():
+            return "El destino debe estar en la misma carpeta que el origen."
+    except OSError as exc:
+        return f"No se pudo resolver la ruta: {exc}"
+    return None
+
+
 def apply_rename_plan(plan: dict[str, Any], *, dry_run: bool = True) -> dict[str, Any]:
     """Execute or simulate the in-place rename. Only os.rename is allowed."""
     result = dict(plan)
@@ -108,6 +129,13 @@ def apply_rename_plan(plan: dict[str, Any], *, dry_run: bool = True) -> dict[str
     if dry_run:
         result["status"] = "ready"
         result["message"] = f"Dry-run: se renombraría '{src}' → '{dst}'. No se ha escrito nada."
+        return result
+
+    veto = _destino_seguro(src, dst)
+    if veto:
+        result["status"] = "blocked"
+        result["errors"] = list(plan.get("errors", [])) + [veto]
+        result["message"] = f"Renombrado bloqueado: {veto}"
         return result
 
     try:

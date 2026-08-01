@@ -230,7 +230,10 @@ def _source_from_quality(value: str | None) -> str | None:
     if "hdtv" in text:
         return "HDTV"
     if "dvd" in text:
-        return "DVD"
+        # "SD" y no "DVD": el vocabulario de sources de eMuwarez no tiene DVD
+        # (ver source_assistant.EMU_SOURCES). Devolverlo dejaba en la
+        # biblioteca un source que el tracker no acepta.
+        return "SD"
     return None
 
 

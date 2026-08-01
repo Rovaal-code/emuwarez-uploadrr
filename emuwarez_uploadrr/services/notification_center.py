@@ -22,7 +22,17 @@ _log = logging.getLogger("emuwarez.notifications")
 
 # --- Event catalog -----------------------------------------------------------
 # code -> human label (shown in the Settings checkbox matrix and used as the
-# default enabled set). Keep in sync with the frontend EVENT_TYPES list.
+# default enabled set).
+#
+# La matriz de Ajustes se pinta con lo que devuelve esta tabla
+# (`notify_event_types` en la respuesta de ajustes), así que añadir un evento
+# aquí ya lo hace aparecer sola. Lo que SÍ hay que tocar a mano es
+# NotificationBell.tsx, que elige icono y disposición comparando el código con
+# seis literales: un evento nuevo sale sin icono.
+#
+# (Aquí ponía "Keep in sync with the frontend EVENT_TYPES list". Esa lista
+# dejó de existir cuando los tipos pasaron a venir del backend, y el
+# comentario mandaba mantener algo que no se puede encontrar.)
 EVENT_TYPES: dict[str, str] = {
     "request_published": "Petición publicada",
     "upload_completed": "Subida completada",

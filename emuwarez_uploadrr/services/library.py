@@ -77,7 +77,7 @@ def upsert_library_item(
     )
     columns = [
         "item_type", "title", "year", "original_title", "instance_id", "instance_type",
-        "instance_name", "external_id", "tmdb_id", "imdb_id", "tvdb_id", "title_slug",
+        "instance_name", "external_id", "tmdb_id", "imdb_id", "tvdb_id", "tvmaze_id", "title_slug",
         "season_number", "episode_number", "parent_id", "path",
         "quality", "resolution", "source", "video_codec", "audio_codec", "audio_languages",
         "audio_channels", "dynamic_range", "subtitle_languages", "size_bytes", "local_status",
@@ -98,6 +98,7 @@ def upsert_library_item(
             tmdb_id = excluded.tmdb_id,
             imdb_id = excluded.imdb_id,
             tvdb_id = excluded.tvdb_id,
+            tvmaze_id = excluded.tvmaze_id,
             title_slug = excluded.title_slug,
             season_number = excluded.season_number,
             episode_number = excluded.episode_number,

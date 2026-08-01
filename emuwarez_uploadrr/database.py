@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 35
+SCHEMA_VERSION = 36
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -935,6 +935,19 @@ def _migrate_library_items_mal_id(conn: sqlite3.Connection) -> None:
         pass
 
 
+def _migrate_library_items_tvmaze_id(conn: sqlite3.Connection) -> None:
+    """TVmaze id, que Sonarr ya trae en su payload (`tvMazeId`) y no se estaba
+    guardando. 50 de 52 series lo traen con valor.
+
+    No se añade tvRageId, que Sonarr también manda: solo lo trae la mitad y
+    sus fichas devuelven 404 (comprobado con dos ids reales), así que el
+    enlace no llevaría a ninguna parte. Purely additive."""
+    try:
+        conn.execute("ALTER TABLE library_items ADD COLUMN tvmaze_id TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+
 def _migrate_library_items_backdrop_url(conn: sqlite3.Connection) -> None:
     """Add backdrop_url to library_items — the fanart/backdrop counterpart to
     poster_url (Phase 11E), same Radarr/Sonarr `images` array, just
@@ -1492,6 +1505,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_library_items_spanish_audio(conn)
         _migrate_request_items_is_example(conn)
         _migrate_qbit_port_into_url(conn)
+        _migrate_library_items_tvmaze_id(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

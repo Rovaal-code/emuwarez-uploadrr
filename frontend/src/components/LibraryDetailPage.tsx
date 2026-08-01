@@ -7,7 +7,7 @@ import { EmuFieldChip } from './EmuComparisonSection'
 import { LibraryActionButtons } from './LibraryActionButtons'
 import type { LibraryActionKind } from './LibraryTreeRow'
 import { formatBytes, formatDate, formatItemType } from '../utils/format'
-import { buildDeepLink, posterUrl, idVerifyUrl } from '../utils/libraryItem'
+import { buildDeepLink, posterUrl, idVerifyUrl, bluraySearchUrl } from '../utils/libraryItem'
 import { ExternalIdLink } from './ExternalIdLink'
 import { ProviderTag } from './ProviderIcon'
 import { ServiceLabel } from './ServiceIcon'
@@ -203,11 +203,33 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
               <FieldRow label="IMDb">
                 {item.imdb_id ? <ValueChip linkable={Boolean(idVerifyUrl('imdb', item.imdb_id, isTv))}><ExternalIdLink id={item.imdb_id} href={idVerifyUrl('imdb', item.imdb_id, isTv)} label="IMDb" /></ValueChip> : <span className="muted">–</span>}
               </FieldRow>
-              {/* Radarr no trae tvdbId para películas (TVDB es una base de series) —
-                  siempre sería un "–" fijo, así que directamente no se muestra. */}
+              {/* TVDB y TVmaze son bases de SERIES: Radarr no trae ninguno de
+                  los dos para una película, así que serían un "–" fijo y no se
+                  muestran. TVmaze lo da Sonarr en su payload (tvMazeId) y lo
+                  trae el 96% de las series.
+
+                  No se añade tvRageId, que Sonarr también manda: solo lo trae
+                  la mitad, y sus fichas devuelven 404 (comprobado con dos ids
+                  reales), así que el enlace no llevaría a ninguna parte. */}
               {item.item_type !== 'movie' && (
-                <FieldRow label="TVDB">
-                  {item.tvdb_id ? <ValueChip linkable={Boolean(idVerifyUrl('tvdb', item.tvdb_id, isTv))}><ExternalIdLink id={item.tvdb_id} href={idVerifyUrl('tvdb', item.tvdb_id, isTv)} label="TVDB" /></ValueChip> : <span className="muted">–</span>}
+                <>
+                  <FieldRow label="TVDB">
+                    {item.tvdb_id ? <ValueChip linkable={Boolean(idVerifyUrl('tvdb', item.tvdb_id, isTv))}><ExternalIdLink id={item.tvdb_id} href={idVerifyUrl('tvdb', item.tvdb_id, isTv)} label="TVDB" /></ValueChip> : <span className="muted">–</span>}
+                  </FieldRow>
+                  <FieldRow label="TVmaze">
+                    {item.tvmaze_id ? <ValueChip linkable={Boolean(idVerifyUrl('tvmaze', item.tvmaze_id, isTv))}><ExternalIdLink id={item.tvmaze_id} href={idVerifyUrl('tvmaze', item.tvmaze_id, isTv)} label="TVmaze" /></ValueChip> : <span className="muted">–</span>}
+                  </FieldRow>
+                </>
+              )}
+              {/* Blu-ray.com no da un id: se busca por el de IMDb, igual que
+                  hace Radarr en su fila de enlaces. Solo para películas, que es
+                  donde aplica section=theatrical. Como no hay identificador que
+                  enseñar, el valor es la acción. */}
+              {item.item_type === 'movie' && bluraySearchUrl(item.imdb_id) && (
+                <FieldRow label="Blu-ray.com">
+                  <ValueChip linkable>
+                    <ExternalIdLink id="Buscar edición" href={bluraySearchUrl(item.imdb_id)} label="Blu-ray.com" />
+                  </ValueChip>
                 </FieldRow>
               )}
               <FieldRow label="MAL">

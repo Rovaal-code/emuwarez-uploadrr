@@ -461,6 +461,7 @@ def _to_lib_response(row: dict, conn=None, rollups: Optional[dict] = None) -> Li
         tmdb_id=row.get("tmdb_id"),
         imdb_id=row.get("imdb_id"),
         tvdb_id=row.get("tvdb_id"),
+        tvmaze_id=row.get("tvmaze_id"),
         mal_id=row.get("mal_id"),
         title_slug=row.get("title_slug"),
         season_number=row.get("season_number"),

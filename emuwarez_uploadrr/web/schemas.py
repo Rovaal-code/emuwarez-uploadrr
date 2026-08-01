@@ -553,6 +553,7 @@ class LibraryItemResponse(BaseModel):
     tmdb_id: Optional[str] = None
     imdb_id: Optional[str] = None
     tvdb_id: Optional[str] = None
+    tvmaze_id: Optional[str] = None
     # Resolved from the Fribb/anime-lists table (see services/anime_lists.py)
     # — Radarr/Sonarr never provide this themselves, unlike the 3 IDs above.
     mal_id: Optional[str] = None
@@ -705,6 +706,7 @@ class RequestItemResponse(BaseModel):
     tmdb_id: Optional[str] = None
     imdb_id: Optional[str] = None
     tvdb_id: Optional[str] = None
+    tvmaze_id: Optional[str] = None
     mal_id: Optional[str] = None
     url: Optional[str] = None
     # author omitted — author_visible=0 by default

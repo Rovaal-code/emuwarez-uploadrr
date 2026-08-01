@@ -116,6 +116,8 @@ class LibraryItem:
     tmdb_id: Optional[str] = None
     imdb_id: Optional[str] = None
     tvdb_id: Optional[str] = None
+    # Sonarr lo trae en su payload (tvMazeId) y no se guardaba.
+    tvmaze_id: Optional[str] = None
     # Resolved from the Fribb/anime-lists table (see services/anime_lists.py)
     # against tvdb_id/tmdb_id at upsert time — Radarr/Sonarr never provide
     # this themselves, unlike the three IDs above.
@@ -168,6 +170,8 @@ class RequestItem:
     tmdb_id: Optional[str] = None
     imdb_id: Optional[str] = None
     tvdb_id: Optional[str] = None
+    # Sonarr lo trae en su payload (tvMazeId) y no se guardaba.
+    tvmaze_id: Optional[str] = None
     mal_id: Optional[str] = None
     url: Optional[str] = None
     author: Optional[str] = None

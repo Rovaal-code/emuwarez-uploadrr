@@ -318,3 +318,30 @@ def test_extract_media_info_missing_key():
 def test_extract_media_info_none_input():
     from emuwarez_uploadrr.integrations.base import extract_media_info
     assert extract_media_info(None)["video_codec"] is None
+
+
+def test_sonarr_series_keeps_its_tvmaze_id():
+    """Sonarr manda tvMazeId en su payload y no se estaba guardando: 50 de las
+    52 series de una biblioteca real lo traen con valor.
+
+    tvRageId también llega, pero no se guarda: solo lo trae la mitad y sus
+    fichas devuelven 404, así que el enlace no llevaría a ninguna parte."""
+    from emuwarez_uploadrr.integrations.sonarr import series_to_library_item
+    item = series_to_library_item(
+        {"id": 3, "title": "Serie", "tvdbId": 389597, "tvMazeId": 64632,
+         "tmdbId": 127532, "imdbId": "tt21209876", "path": "/data/serie"},
+        instance_id=1, instance_name="Mi Sonarr",
+    )
+    assert item.tvmaze_id == "64632"
+    assert item.tvdb_id == "389597"
+
+
+def test_a_series_without_tvmaze_id_leaves_it_empty():
+    """Sonarr manda 0 cuando no lo tiene, y un 0 enlazaría a una ficha que no
+    existe."""
+    from emuwarez_uploadrr.integrations.sonarr import series_to_library_item
+    item = series_to_library_item(
+        {"id": 3, "title": "Serie", "tvdbId": 1, "tvMazeId": 0, "path": "/data/serie"},
+        instance_id=1, instance_name="Mi Sonarr",
+    )
+    assert item.tvmaze_id is None

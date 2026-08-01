@@ -32,7 +32,7 @@ QUEUE_GRACE_SECONDS = 60
 # new "Subir"/automático click must not create an unrelated second job while
 # one of these is in flight, it has to wait or be told to view the existing
 # one instead.
-ACTIVE_JOB_STATUSES = {"queued", "staging", "preparing", "running"}
+from .upload_states import ACTIVE_JOB_STATUSES, escribir_estado  # noqa: E402
 
 # job_id -> pending threading.Timer, so a cancel during the grace period can
 # stop it before it fires. Single-process app, in-memory is enough (matches
@@ -368,31 +368,17 @@ def _mark(job_id: int, *, stage: str, status: str = "preparing", **extra) -> boo
     volvería a parecer en marcha. Mismo guardia que ya usaba
     _update_staging_stage.
     """
-    conn = connect()
-    try:
-        fields = {"status": status, "stage": stage, "updated_at": _now_iso(), **extra}
-        set_clauses = ", ".join(f"{k} = ?" for k in fields)
-        values = list(fields.values()) + [job_id]
-        cur = conn.execute(
-            f"UPDATE upload_jobs SET {set_clauses} "
-            "WHERE id = ? AND status NOT IN ('cancelled', 'failed')",
-            values,
-        )
-        conn.commit()
-        return cur.rowcount > 0
-    finally:
-        conn.close()
+    return escribir_estado(
+        job_id, salvo=("cancelled", "failed"),
+        status=status, stage=stage, **extra,
+    )
 
 
 def _update_staging_stage(job_id: int, stage: str, conn) -> None:
     """Advance the staging sub-step ('nomenclature' -> 'remux' -> 'checks')
     while status stays 'staging' — only while the job hasn't been cancelled
     in the meantime (the WHERE guards against a stray write after a cancel)."""
-    conn.execute(
-        "UPDATE upload_jobs SET stage = ?, updated_at = ? WHERE id = ? AND status = 'staging'",
-        (stage, _now_iso(), job_id),
-    )
-    conn.commit()
+    escribir_estado(job_id, desde={"staging"}, stage=stage, conn=conn)
 
 
 def _write_snapshot(job_id: int, column: str, data, conn) -> None:
@@ -420,16 +406,14 @@ def _fail(job_id: int, message: str) -> None:
     ya fallido no miente ni pierde nada, solo actualiza el mensaje al más
     reciente."""
     from .upload_execution import append_upload_log, _notify_upload_failed
+    escrito = escribir_estado(
+        job_id, salvo=("cancelled",),
+        status="failed", stage="failed",
+        error_message=message, finished_at=_now_iso(),
+    )
     conn = connect()
     try:
-        cur = conn.execute(
-            "UPDATE upload_jobs SET status = 'failed', stage = 'failed', "
-            "error_message = ?, finished_at = ?, updated_at = ? "
-            "WHERE id = ? AND status != 'cancelled'",
-            (message, _now_iso(), _now_iso(), job_id),
-        )
-        conn.commit()
-        if cur.rowcount == 0:
+        if not escrito:
             # Ya estaba cancelado: se deja constancia en su registro, porque el
             # error ocurrió de verdad y explica por qué se paró donde se paró.
             append_upload_log(job_id, "warning",

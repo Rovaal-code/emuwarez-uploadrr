@@ -49,16 +49,28 @@ def test_la_regla_del_pack_coincide():
     )
 
 
-def test_los_estados_activos_coinciden():
-    """Con uno de estos en marcha no se puede crear otro trabajo para el mismo
-    contenido. Si las dos listas se separan, el frontend ofrece un botón que el
-    backend va a rechazar, o esconde uno que sí valdría."""
-    from emuwarez_uploadrr.services.upload_queue import ACTIVE_JOB_STATUSES
+def test_el_vocabulario_de_estados_coincide():
+    """Los conjuntos del frontend son PREDICCIONES de lo que el backend
+    aceptará: qué botón se habilita. Si se separan, la interfaz ofrece algo que
+    el servidor va a rechazar, o esconde algo que sí valdría.
 
-    front = _cadenas_del_set(_texto("utils/uploadStatus.ts"), "ACTIVE_JOB_STATUSES")
-    assert front == set(ACTIVE_JOB_STATUSES), (
-        f"\nfrontend: {sorted(front)}\nbackend:  {sorted(ACTIVE_JOB_STATUSES)}"
-    )
+    Hasta la Fase 4 tres de ellos ni siquiera tenían nombre en el backend: eran
+    literales sueltos dentro de consultas, así que no había con qué comparar."""
+    from emuwarez_uploadrr.services import upload_states as st
+
+    casos = [
+        ("utils/uploadStatus.ts", "ACTIVE_JOB_STATUSES", st.ACTIVE_JOB_STATUSES),
+        ("pages/UploadsPage.tsx", "CANCELLABLE_STATUSES", st.CANCELLABLE_STATUSES),
+        ("pages/UploadsPage.tsx", "RETRYABLE_STATUSES", st.RETRYABLE_STATUSES),
+        ("pages/UploadsPage.tsx", "DELETABLE_STATUSES", st.DELETABLE_STATUSES),
+        ("pages/UploadsPage.tsx", "HIDDEN_STATES", st.PREPARATORY_STATUSES),
+    ]
+    diferencias = []
+    for rel, nombre, backend in casos:
+        front = _cadenas_del_set(_texto(rel), nombre)
+        if front != set(backend):
+            diferencias.append(f"{nombre}: frontend={sorted(front)} backend={sorted(backend)}")
+    assert not diferencias, "\n" + "\n".join(diferencias)
 
 
 def test_los_tokens_de_confirmacion_coinciden():

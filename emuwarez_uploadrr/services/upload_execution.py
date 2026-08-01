@@ -499,16 +499,13 @@ def get_upload_job_artifacts(job_id: int, conn=None) -> list[dict]:
 
 
 def _update_job_status(job_id: int, status: str, **kwargs) -> None:
-    conn = _get_db_conn()
-    try:
-        updates = {"status": status, "updated_at": _now()}
-        updates.update(kwargs)
-        set_clauses = ", ".join(f"{k} = ?" for k in updates)
-        values = list(updates.values()) + [job_id]
-        conn.execute(f"UPDATE upload_jobs SET {set_clauses} WHERE id = ?", values)
-        conn.commit()
-    finally:
-        conn.close()
+    """Escribe el estado sin condiciones. Es la única de las cinco que no
+    protege nada, y se conserva así a propósito: la usan los pasos que MUEVEN
+    el trabajo hacia adelante por decisión propia (encolar, arrancar), donde no
+    hay ninguna decisión del usuario que respetar. Para terminar un trabajo hay
+    que usar _finalize_job_status, que sí protege la cancelación."""
+    from .upload_states import escribir_estado
+    escribir_estado(job_id, status=status, **kwargs)
 
 
 def _finalize_job_status(job_id: int, desired_status: str, **kwargs) -> None:
@@ -528,28 +525,19 @@ def _finalize_job_status(job_id: int, desired_status: str, **kwargs) -> None:
     clause here blocks clobbering an already-cancelled job, and only the
     non-status bookkeeping fields (exit_code/finished_at/duration) are kept.
     """
+    from .upload_states import escribir_estado
+
+    escrito = escribir_estado(job_id, salvo=("cancelled",),
+                              status=desired_status, **kwargs)
     conn = _get_db_conn()
     try:
-        updates = {"status": desired_status, "updated_at": _now()}
-        updates.update(kwargs)
-        set_clauses = ", ".join(f"{k} = ?" for k in updates)
-        values = list(updates.values()) + [job_id]
-        cur = conn.execute(
-            f"UPDATE upload_jobs SET {set_clauses} WHERE id = ? AND status != 'cancelled'",
-            values,
-        )
-        conn.commit()
-        if cur.rowcount == 0:
+        if not escrito:
             # Already cancelled — keep status/stage, but still record the
             # bookkeeping fields (exit_code, finished_at, duration_seconds…)
             # for observability.
             extra = {k: v for k, v in kwargs.items() if k != "stage"}
             if extra:
-                extra["updated_at"] = _now()
-                set_clauses2 = ", ".join(f"{k} = ?" for k in extra)
-                values2 = list(extra.values()) + [job_id]
-                conn.execute(f"UPDATE upload_jobs SET {set_clauses2} WHERE id = ?", values2)
-                conn.commit()
+                escribir_estado(job_id, conn=conn, **extra)
     finally:
         conn.close()
 

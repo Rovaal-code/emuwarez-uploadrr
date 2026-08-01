@@ -28,7 +28,7 @@ const LOCAL_STATUS_MAP: Record<string, StatusInfo> = {
 }
 
 const REQUEST_STATUS_MAP: Record<string, StatusInfo> = {
-  'Sin petición':   { label: 'Sin petición',   color: '#6b7280', cssClass: 'req-none' },
+  'Sin petición':   { label: 'Sin petición',   color: '#9ca3af', cssClass: 'req-none' },
   'Compatible':     { label: 'Compatible',     color: '#22c55e', cssClass: 'req-compatible' },
   'Parcial':        { label: 'Parcial',        color: '#f59e0b', cssClass: 'req-partial' },
   'No compatible':  { label: 'No compatible',  color: '#ef4444', cssClass: 'req-not-compatible' },
@@ -44,7 +44,8 @@ const REQUEST_STATUS_MAP: Record<string, StatusInfo> = {
   'Sin coincidencia': { label: 'No importada', color: '#e5e7eb', cssClass: 'req-not-imported' },
   'Reclamado':      { label: 'Reclamado',      color: '#a855f7', cssClass: 'req-claimed' },
   'Pendiente':      { label: 'Pendiente',      color: '#eab308', cssClass: 'req-pending' },
-  'Llena':          { label: 'Llena',          color: '#9ca3af', cssClass: 'req-filled' },
+  // Más apagado que 'Sin petición': una petición llena ya está resuelta.
+  'Llena':          { label: 'Llena',          color: '#6b7280', cssClass: 'req-filled' },
   'Desconocida':    { label: 'Desconocida',    color: '#6b7280', cssClass: 'req-unknown' },
 }
 

@@ -175,7 +175,12 @@
 .badge.req-unavailable     { background: rgba(239,68,68,0.22);   color: #ef4444; }
 .badge.req-claimed         { background: rgba(168,85,247,0.22);  color: #a855f7; }
 .badge.req-pending         { background: rgba(234,179,8,0.22);   color: #eab308; }
-.badge.req-filled          { background: rgba(107,114,128,0.20); color: #9ca3af; }
+/* 'Llena' en un gris MÁS APAGADO que 'Sin petición': los dos eran idénticos
+   (#9ca3af sobre el mismo fondo) y no había forma de distinguirlos de un
+   vistazo. Además encaja con lo que significan: una petición llena ya está
+   resuelta y no pide nada de ti, mientras que "Sin petición" sí es un hueco
+   que podrías llenar. Se ve en Biblioteca, en Peticiones y en Subidas. */
+.badge.req-filled          { background: rgba(107,114,128,0.14); color: #6b7280; }
 .badge.req-unknown         { background: rgba(107,114,128,0.20); color: #9ca3af; }
 /* Nothing in your library matches this request at all — not even an entry
    without a file. Neutral white: it isn't a problem with your copy, you just
@@ -1216,4 +1221,33 @@ optgroup {
 }
 .detail-hero .btn-danger:hover:not(:disabled) {
   background: rgba(56, 14, 14, 0.9);
+}
+
+
+/* Desplegable del árbol de Biblioteca: sin caja, solo el triángulo. Se
+   ilumina al pasar el cursor en vez de dibujar un recuadro alrededor, que
+   competía con la carátula de al lado. */
+.tree-expander {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  flex-shrink: 0;
+  font-size: 10px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: color 0.12s ease;
+}
+.tree-expander:hover,
+.tree-expander:focus-visible {
+  color: var(--color-accent, #7c6af7);
+  outline: none;
+}
+
+/* Botón de acción sin texto: el icono ya lo dice y el tooltip lo explica.
+   Así la columna de título gana el ancho que ocupaban las etiquetas. */
+.btn-icon-only {
+  padding-left: 8px;
+  padding-right: 8px;
 }

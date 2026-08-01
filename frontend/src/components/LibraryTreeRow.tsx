@@ -128,10 +128,14 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
         <td style={{ maxWidth: 340 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: indent, minWidth: 0 }}>
             {canExpand ? (
+              // Sin recuadro: el triángulo se ilumina él solo al pasar por
+              // encima (.tree-expander). Un botón con caja aquí competía
+              // visualmente con la carátula que tiene al lado.
               <button
-                className="btn btn-ghost btn-sm"
+                type="button"
+                className="tree-expander"
                 onClick={e => { e.stopPropagation(); toggle() }}
-                style={{ width: 22, height: 22, padding: 0, fontSize: 10, flexShrink: 0 }}
+                aria-label={expanded ? 'Ocultar' : 'Desplegar'}
                 {...expandTip}
               >
                 {expanded ? '▼' : '▶'}
@@ -142,11 +146,11 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
               <span style={{ width: 22, flexShrink: 0, textAlign: 'left', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
                 {item.episode_number}
               </span>
-            ) : (
-              // Other leaf rows (movies) keep the chevron's width so their
-              // content stays aligned one indent level deeper than the parent.
+            ) : depth > 0 ? (
+              // Una fila hoja ANIDADA sí reserva el hueco del triángulo, para
+              // quedar un nivel más adentro que su padre.
               <span style={{ width: 22, flexShrink: 0 }} />
-            )}
+            ) : null}
             <div className="poster-thumb" style={{ flexShrink: 0, width: 28, height: 42, borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {item.poster_url ? (
                 <img
@@ -221,7 +225,7 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
                   two used to disagree, and "Subir" on a series meaning two
                   different things depending on where you clicked it was the
                   bug, not the feature. */}
-              <LibraryActionButtons item={item} onAction={onAction} />
+              <LibraryActionButtons item={item} onAction={onAction} soloIcono />
             </div>
           </td>
         )}

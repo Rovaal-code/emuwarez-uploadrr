@@ -13,10 +13,14 @@ import { UploadButtonIcon, RequestButtonIcon } from './DetailCard'
 // wizard just to hit that wall inside the pre-upload checks — disabled here,
 // same as Faltante, instead. For a series/season, "Subir" opens the wizard,
 // which asks which season/episode (or the whole season) to target.
-export function LibraryActionButtons({ item, onAction, title }: {
+export function LibraryActionButtons({ item, onAction, title, soloIcono = false }: {
   item: LibraryItemResponse
   onAction: (kind: LibraryActionKind, item: LibraryItemResponse) => void
   title?: string
+  // En la tabla de Biblioteca los botones van sin texto: el icono ya lo dice,
+  // el tooltip lo explica, y la columna de Título gana ese ancho. En la ficha
+  // del contenido sí se etiquetan, que ahí sobra sitio.
+  soloIcono?: boolean
   // True for a series row anywhere in Biblioteca (its own page AND the
   // list/table): "Subir" opens the multi-season checklist instead of the
   // single season/episode picker. Never for a season's own page, which has
@@ -35,16 +39,18 @@ export function LibraryActionButtons({ item, onAction, title }: {
         ? 'No se puede subir: contenido faltante (no lo tienes en disco).'
         : (title ?? 'Prepara y sube este contenido a eMuwarez (nomenclatura, comprobaciones y subida).')}>
         <button
-          className="btn btn-primary btn-sm"
+          className={`btn btn-primary btn-sm${soloIcono ? ' btn-icon-only' : ''}`}
           onClick={() => onAction('upload', item)}
           disabled={missing}
+          aria-label="Subir"
         >
-          <UploadButtonIcon /> Subir
+          <UploadButtonIcon />{soloIcono ? null : ' Subir'}
         </button>
       </Tooltip>
       <Tooltip content="Crea una petición de este contenido en eMuwarez.">
-        <button className="btn btn-primary btn-sm" onClick={() => onAction('request', item)}>
-          <RequestButtonIcon /> Petición
+        <button className={`btn btn-primary btn-sm${soloIcono ? ' btn-icon-only' : ''}`}
+                onClick={() => onAction('request', item)} aria-label="Petición">
+          <RequestButtonIcon />{soloIcono ? null : ' Petición'}
         </button>
       </Tooltip>
     </>

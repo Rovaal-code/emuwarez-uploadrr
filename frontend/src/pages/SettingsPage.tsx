@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, createContext, useContext } from 'react'
 import { setUnsavedGuard, guardedLeave } from '../utils/unsavedGuard'
 import {
   getMaintenanceStatus,
@@ -78,11 +78,63 @@ function RemoveMappingRuleButton({ onClick }: { onClick: () => void }) {
 }
 
 // ---------- Config tab ----------
+type SettingsMsg = { ok: boolean; text: string } | null
+
+// Todos los avisos de esta página (guardado, backups, mantenimiento, errores)
+// salen en la misma fila que las pestañas, a la derecha. Antes cada pestaña
+// pintaba su propio bloque arriba del todo, que empujaba las tarjetas hacia
+// abajo al aparecer y las devolvía a su sitio al irse: el contenido daba un
+// salto justo cuando acabas de pulsar un botón. Desde la fila de pestañas no
+// mueve nada.
+const SettingsMessageContext = createContext<(ok: boolean, text: string) => void>(() => {})
+
+export function useSettingsMessage() {
+  return useContext(SettingsMessageContext)
+}
+
+// Misma firma que el useState que sustituye (`setMsg({ ok, text })` y
+// `setMsg(null)`), para no tocar los sitios que ya avisaban: lo único que
+// cambia es dónde sale el aviso.
+function useSettingsMessageAdapter() {
+  const show = useSettingsMessage()
+  return useCallback((m: SettingsMsg) => { if (m) show(m.ok, m.text) }, [show])
+}
+
+// El aviso ocupa el hueco que sobra a la derecha de las pestañas y se recorta
+// con puntos suspensivos: un error de backup puede ser una frase larga y no
+// puede desmontar la fila. El texto completo sale al pasar el ratón.
+function SettingsMessageSlot({ msg }: { msg: SettingsMsg }) {
+  const ref = useRef<HTMLSpanElement>(null)
+  const [recortado, setRecortado] = useState(false)
+  // El tooltip solo tiene sentido si falta texto por ver: repetir un aviso que
+  // ya se lee entero solo estorba.
+  useEffect(() => {
+    const el = ref.current
+    setRecortado(!!el && el.scrollWidth > el.clientWidth)
+  }, [msg?.text])
+  const { triggerProps, tooltipNode } = useTooltip(recortado ? msg?.text ?? null : null)
+  if (!msg) return null
+  return (
+    <span
+      ref={ref}
+      style={{
+        marginLeft: 'auto', alignSelf: 'center', minWidth: 0, paddingLeft: 12,
+        fontSize: 12.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        color: msg.ok ? '#22c55e' : '#ef4444',
+      }}
+      {...triggerProps}
+    >
+      {msg.text}
+      {tooltipNode}
+    </span>
+  )
+}
+
 function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => void }) {
   const [settings, setSettings] = useState<SettingsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const setMsg = useSettingsMessageAdapter()
   const [testingTmdb, setTestingTmdb] = useState(false)
   const [tmdbTestResult, setTmdbTestResult] = useState<IntegrationTestResult | null>(null)
   const [testingEmu, setTestingEmu] = useState(false)
@@ -346,7 +398,6 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
       setMsg({ ok: false, text: `✗ ${e instanceof Error ? e.message : String(e)}` })
     } finally {
       setSaving(false)
-      setTimeout(() => setMsg(null), 5000)  // no dejar el mensaje empujando las tarjetas
     }
   }
 
@@ -354,17 +405,6 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
 
   return (
     <div data-tour="settings-content" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {msg && (
-        <div style={{
-          padding: '10px 14px', borderRadius: 6, fontSize: 13,
-          background: msg.ok ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)',
-          border: `1px solid ${msg.ok ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)'}`,
-          color: msg.ok ? '#86efac' : '#fca5a5',
-        }}>
-          {msg.text}
-        </div>
-      )}
-
       <div className="settings-config-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16, alignItems: 'stretch' }}>
       <AccountCard />
 
@@ -834,7 +874,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           </div>
           {concurrencyEstimate && (
             <div className="modal-overlay" onClick={() => setConcurrencyEstimate(null)}>
-              <div className="modal-panel" onClick={e => e.stopPropagation()} style={{ maxWidth: 560 }}>
+              <div className="modal-panel" onClick={e => e.stopPropagation()} style={{ maxWidth: 860 }}>
                 <div className="modal-header">
                   <h2 className="modal-title">Máximo de subidas en paralelo</h2>
                   <button className="modal-close" onClick={() => setConcurrencyEstimate(null)}>✕</button>
@@ -856,7 +896,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                         <td>{concurrencyEstimate.available_ram_gb} GB</td>
                         <td>{concurrencyEstimate.assumed_ram_gb_per_slot} GB</td>
                         <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                          Sobre todo las capturas: FFmpeg extrayendo y escalando fotogramas.
+                          Capturas con FFmpeg: extraer y escalar fotogramas. Es casi todo el gasto.
                         </td>
                         <td>{concurrencyEstimate.ram_limited_to}</td>
                       </tr>
@@ -865,7 +905,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                         <td>{concurrencyEstimate.cpu_cores} núcleos</td>
                         <td>1 núcleo</td>
                         <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                          El hasheo del torrent, que satura un núcleo entero, y las capturas.
+                          Hasheo del torrent con torf: satura un núcleo entero. Y las capturas con FFmpeg.
                         </td>
                         <td>{concurrencyEstimate.cpu_limited_to}</td>
                       </tr>
@@ -874,8 +914,10 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 14 }}>
                     <span className="form-hint">
                       Estimación orientativa, no tiene en cuenta la velocidad del disco o de la red.
-                      El remux de pistas casi no gasta RAM (copia flujos sin recodificar, va limitado
-                      por el disco), así que desactivar «Reordenar pistas» no cambia estos números.
+                      El trabajo sobre las pistas no entra en estos números, ni activando «Reordenar
+                      pistas»: reordenar con mkvmerge copia los flujos sin recodificar, así que tarda
+                      lo que tarde el disco pero apenas gasta RAM ni CPU. Y solo renombrar es aún más
+                      barato: mkvpropedit toca la cabecera en el sitio, sin releer el archivo.
                     </span>
                     <button
                       className="btn btn-secondary btn-sm"
@@ -928,7 +970,7 @@ function AccountCard() {
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [saving, setSaving] = useState(false)
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const setMsg = useSettingsMessageAdapter()
 
   useEffect(() => { getMe().then(u => setUsername(u.username)).catch(() => {}) }, [])
 
@@ -988,7 +1030,6 @@ function AccountCard() {
         <button className="btn btn-primary btn-sm" type="button" onClick={handleSave} disabled={saving || !dirty}>
           {saving ? 'Guardando…' : 'Guardar cambios'}
         </button>
-        {msg && <span style={{ fontSize: 12.5, color: msg.ok ? '#22c55e' : '#ef4444' }}>{msg.text}</span>}
       </div>
     </div>
   )
@@ -1002,7 +1043,7 @@ function PathMappingsCard() {
   const [mappings, setMappings] = useState<{ from: string; to: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const setMsg = useSettingsMessageAdapter()
   const [baseline, setBaseline] = useState('[]')
 
   useEffect(() => {
@@ -1073,7 +1114,6 @@ function PathMappingsCard() {
             <button className="btn btn-primary btn-sm" type="button" onClick={handleSave} disabled={saving || !dirty}>
               {saving ? 'Guardando…' : 'Guardar cambios'}
             </button>
-            {msg && <span style={{ fontSize: 12.5, color: msg.ok ? '#22c55e' : '#ef4444' }}>{msg.text}</span>}
           </div>
         </>
       )}
@@ -1135,16 +1175,10 @@ function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | null; on
   const [backups, setBackups] = useState<BackupInfo[]>([])
   const [backupDir, setBackupDir] = useState('')
   const [busy, setBusy] = useState(false)
-  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
   const [restorePath, setRestorePath] = useState('')
   const [restoreConfirm, setRestoreConfirm] = useState('')
 
-  // Show a transient message that clears itself after 5s (so it doesn't keep
-  // pushing the cards down).
-  const showMessage = useCallback((ok: boolean, text: string) => {
-    setMessage({ ok, text })
-    setTimeout(() => setMessage(null), 5000)
-  }, [])
+  const showMessage = useSettingsMessage()
 
   const loadBackups = useCallback(async () => {
     try {
@@ -1158,7 +1192,6 @@ function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | null; on
 
   async function handleBackup() {
     setBusy(true)
-    setMessage(null)
     try {
       const r = await createBackup()
       showMessage(r.ok, r.ok ? `✓ Backup creado: ${r.archive_name} (${formatBytes(r.size_bytes ?? 0)})` : `✗ ${r.error}`)
@@ -1176,7 +1209,6 @@ function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | null; on
       showMessage(false, 'Escribe RESTAURAR_CONFIG para confirmar'); return
     }
     setBusy(true)
-    setMessage(null)
     try {
       const r = await restoreBackup(restorePath, {
         dry_run: dry,
@@ -1193,11 +1225,6 @@ function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | null; on
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {message && (
-        <div style={{ padding: '10px 14px', borderRadius: 6, background: message.ok ? 'var(--color-success-bg, #1a2e1a)' : 'var(--color-error-bg, #2e1a1a)', fontSize: 13 }}>
-          {message.text}
-        </div>
-      )}
       <div className="placeholder-card">
         <h3>Crear backup</h3>
         <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: '0 0 12px' }}>
@@ -1274,16 +1301,16 @@ function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | null; on
 // ---------- Maintenance tab ----------
 function MaintenanceTab() {
   const [busy, setBusy] = useState(false)
-  const [results, setResults] = useState<{ key: string; ok: boolean; text: string }[]>([])
   const [vacuumConfirm, setVacuumConfirm] = useState('')
   const [cleanupConfirm, setCleanupConfirm] = useState('')
   const [cleanupDays, setCleanupDays] = useState(30)
 
-  function addResult(key: string, ok: boolean, text: string) {
-    const id = `${key}-${Date.now()}-${Math.random().toString(36).slice(2)}`
-    setResults(prev => [{ key: id, ok, text }, ...prev.slice(0, 9)])
-    // Auto-dismiss after 5s so the message doesn't keep pushing the cards.
-    setTimeout(() => setResults(prev => prev.filter(r => r.key !== id)), 5000)
+  const showMessage = useSettingsMessage()
+  // Se apilaban hasta 10 resultados; ahora se enseña el último, como el resto
+  // de la página. Estas operaciones se lanzan de una en una y cada una tapaba
+  // a la anterior de todas formas.
+  function addResult(_key: string, ok: boolean, text: string) {
+    showMessage(ok, text)
   }
 
   async function handleIntegrity() {
@@ -1345,16 +1372,6 @@ function MaintenanceTab() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {results.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {results.map(r => (
-            <div key={r.key} style={{ padding: '8px 12px', borderRadius: 6, fontSize: 13, background: r.ok ? 'var(--color-success-bg, #1a2e1a)' : 'var(--color-error-bg, #2e1a1a)' }}>
-              {r.text}
-            </div>
-          ))}
-        </div>
-      )}
-
       <div className="placeholder-card">
         <h3>Ajustes</h3>
         <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: '0 0 10px' }}>Exporta los ajustes actuales en JSON (secretos enmascarados).</p>
@@ -1452,7 +1469,7 @@ function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | nul
   const [settings, setSettings] = useState<SettingsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const setMsg = useSettingsMessageAdapter()
 
   const [discordEnabled, setDiscordEnabled] = useState(false)
   const [discordWebhook, setDiscordWebhook] = useState('')
@@ -1555,7 +1572,6 @@ function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | nul
       setMsg({ ok: false, text: `✗ ${e instanceof Error ? e.message : String(e)}` })
     } finally {
       setSaving(false)
-      setTimeout(() => setMsg(null), 5000)
     }
   }
 
@@ -1609,17 +1625,6 @@ function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | nul
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {msg && (
-        <div style={{
-          padding: '10px 14px', borderRadius: 6, fontSize: 13,
-          background: msg.ok ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)',
-          border: `1px solid ${msg.ok ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)'}`,
-          color: msg.ok ? '#86efac' : '#fca5a5',
-        }}>
-          {msg.text}
-        </div>
-      )}
-
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16, alignItems: 'stretch' }}>
       <div className="placeholder-card">
         <h3 style={{ marginTop: 0, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1738,6 +1743,17 @@ export function SettingsPage() {
 
   useEffect(() => { loadStatus() }, [loadStatus])
 
+  const [msg, setMsg] = useState<SettingsMsg>(null)
+  const msgTimer = useRef<number | null>(null)
+  // Se borra solo a los 5s, y el temporizador anterior se cancela: dos avisos
+  // seguidos no pueden dejar que el primero apague al segundo.
+  const showMessage = useCallback((ok: boolean, text: string) => {
+    if (msgTimer.current) window.clearTimeout(msgTimer.current)
+    setMsg({ ok, text })
+    msgTimer.current = window.setTimeout(() => setMsg(null), 5000)
+  }, [])
+  useEffect(() => () => { if (msgTimer.current) window.clearTimeout(msgTimer.current) }, [])
+
   const tabs: { key: Tab; label: string }[] = [
     { key: 'config', label: 'Configuración' },
     { key: 'notifications', label: 'Notificaciones' },
@@ -1767,29 +1783,30 @@ export function SettingsPage() {
         )}
       </div>
 
-      {loadError && (
-        <div style={{ padding: '8px 14px', marginBottom: 12, background: 'var(--color-error-bg, #2e1a1a)', borderRadius: 6, fontSize: 13 }}>
-          ✗ No se pudo cargar el estado de mantenimiento: {loadError}
-        </div>
-      )}
-
       <div style={{ display: 'flex', gap: 2, marginBottom: 20, borderBottom: '1px solid var(--border)' }}>
         {tabs.map(t => (
           <button
             key={t.key}
             className={`settings-tab${tab === t.key ? ' active' : ''}`}
-            onClick={() => { if (t.key !== tab) guardedLeave(() => setTab(t.key)) }}
+            onClick={() => { if (t.key !== tab) guardedLeave(() => { setTab(t.key); setMsg(null) }) }}
           >
             {t.label}
           </button>
         ))}
+        <SettingsMessageSlot
+          msg={msg ?? (loadError
+            ? { ok: false, text: `✗ No se pudo cargar el estado de mantenimiento: ${loadError}` }
+            : null)}
+        />
       </div>
 
-      {tab === 'config' && <ConfigTab onExposeSave={setSaveAction} />}
-      {tab === 'notifications' && <NotificationsTab onExposeSave={setSaveAction} />}
-      {tab === 'diagnostics' && <DiagnosticsTab status={status} />}
-      {tab === 'backup' && <BackupTab status={status} onRefresh={loadStatus} />}
-      {tab === 'maintenance' && <MaintenanceTab />}
+      <SettingsMessageContext.Provider value={showMessage}>
+        {tab === 'config' && <ConfigTab onExposeSave={setSaveAction} />}
+        {tab === 'notifications' && <NotificationsTab onExposeSave={setSaveAction} />}
+        {tab === 'diagnostics' && <DiagnosticsTab status={status} />}
+        {tab === 'backup' && <BackupTab status={status} onRefresh={loadStatus} />}
+        {tab === 'maintenance' && <MaintenanceTab />}
+      </SettingsMessageContext.Provider>
     </div>
   )
 }

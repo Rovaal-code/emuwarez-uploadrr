@@ -978,6 +978,30 @@ def test_rollup_all_sums_what_the_episodes_have(isolated_db, tmp_path):
     conn.close()
 
 
+def test_rollup_all_merges_languages_instead_of_listing_them(isolated_db, tmp_path):
+    """Un capítulo ya guarda varios idiomas en un mismo campo ("jpn/spa"), así
+    que tratarlos como un valor entero daba "jpn/spa, jpn/spa/eng": el mismo
+    idioma repetido y nada legible. Se funden en una sola lista."""
+    from emuwarez_uploadrr.services.library import rollup_all_values
+    conn = _open(isolated_db)
+    _series_id, season_id = _seed_series_season(conn)
+    for i, (audio, subs) in enumerate([("jpn/spa", "spa"), ("jpn/spa/eng", "spa/eng")], start=1):
+        f = tmp_path / f"S01E0{i}.mkv"
+        f.write_bytes(b"video")
+        _seed_episode(conn, season_id, number=i, title=f"One Piece S01E0{i}", path=str(f),
+                      quality="WEBDL-1080p", video_codec="x264", audio_codec="AC3",
+                      audio_languages=audio, subtitle_languages=subs, source="WEB-DL")
+
+    season = dict(conn.execute("SELECT * FROM library_items WHERE id = ?", (season_id,)).fetchone())
+    todos = rollup_all_values(conn, season)
+
+    assert todos["audio_languages"] == "jpn, spa, eng"
+    assert todos["subtitle_languages"] == "spa, eng"
+    # Los campos de un solo valor NO se parten: un códec no es una lista.
+    assert todos["video_codec"] == "x264"
+    conn.close()
+
+
 def test_rollup_all_is_none_for_a_movie(isolated_db, tmp_path):
     """Una película no resume nada: sus valores son los suyos."""
     from emuwarez_uploadrr.services.library import rollup_all_values

@@ -1049,15 +1049,38 @@ def rollup_all_values(conn: sqlite3.Connection, item: dict) -> Optional[dict]:
     if not disponibles:
         return None
 
+    # Los idiomas se FUNDEN, no se listan. Un capítulo ya guarda varios en un
+    # solo campo ("jpn/spa"), así que tratarlos como un valor entero daba
+    # "jpn/spa, jpn/spa/eng": el mismo idioma repetido y nada legible. Se
+    # parten y se unen en una sola lista: "jpn, spa, eng".
+    _MULTIVALOR = ("audio_languages", "subtitle_languages")
+
     out: dict[str, str] = {}
     for field in _SEASON_ROLLUP_FIELDS:
         vistos: list[str] = []
         for ep in disponibles:
-            value = (ep.get(field) or "").strip()
-            if value and value not in vistos:
-                vistos.append(value)
+            raw = (ep.get(field) or "").strip()
+            if not raw:
+                continue
+            partes = re.split(r"[/,]", raw) if field in _MULTIVALOR else [raw]
+            for parte in partes:
+                parte = parte.strip()
+                if parte and parte not in vistos:
+                    vistos.append(parte)
         if vistos:
             out[field] = ", ".join(vistos)
+
+    # El proveedor (AMZN, NF, DSNP...) no es una columna: se deduce de la ruta
+    # y el source de cada capítulo, así que se suma igual pero calculándolo.
+    from .nomenclature import infer_provider_from_item
+    proveedores: list[str] = []
+    for ep in disponibles:
+        code = infer_provider_from_item({"path": ep.get("path"), "source": ep.get("source")})
+        if code and code not in proveedores:
+            proveedores.append(code)
+    if proveedores:
+        out["provider"] = ", ".join(proveedores)
+
     return out or None
 
 

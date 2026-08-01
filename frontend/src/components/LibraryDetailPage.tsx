@@ -157,8 +157,15 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
                 <ValueChip><ValueIcon><ResolutionValueIcon /></ValueIcon><span className="txt">{item.rollup_all?.resolution || item.resolution || '–'}</span></ValueChip>
               </FieldRow>
               <FieldRow label="Proveedor" help={rollupHelp}>
-                {item.provider
+                {/* Con varios proveedores bajo una temporada no hay una
+                    etiqueta con logo que valga para todos, así que se listan
+                    en texto igual que el resto de campos sumados. */}
+                {item.rollup_all?.provider && item.rollup_all.provider.includes(',')
+                  ? <ValueChip><span className="txt">{item.rollup_all.provider}</span></ValueChip>
+                  : item.provider
                   ? <ValueChip linkable><ProviderTag code={item.provider} label={item.provider_label} /></ValueChip>
+                  : item.rollup_all?.provider
+                  ? <ValueChip><span className="txt">{item.rollup_all.provider}</span></ValueChip>
                   : <span className="muted">–</span>}
               </FieldRow>
               <FieldRow label="Source" help={rollupHelp}>

@@ -130,6 +130,7 @@ def _build_season_pack_title(
     subtitle_summary: Optional[str],
     release_tag: Optional[str],
     provider: Optional[str] = None,
+    custom: bool = False,
 ) -> str:
     """Modern equivalent of legacy.py::build_emu_title(..., pack=True) — one
     representative title for the whole pack (season only, no per-episode
@@ -141,6 +142,12 @@ def _build_season_pack_title(
         parts.append(str(year))
     if resolution:
         parts.append(resolution)
+    # CUSTOM va entre la resolución y el proveedor, que es donde lo pone el
+    # catálogo de eMuwarez ("… 2160p 4K UHD CUSTOM AMZN WEB-DL HEVC …").
+    # Aquí marca que los capítulos no traen el mismo audio, así que el nombre
+    # lista varias pistas del mismo idioma y ninguna está en todos.
+    if custom:
+        parts.append("CUSTOM")
     # Provider (AMZN/NF/DSNP...) attaches to Source, in front of it — same
     # combiner the single-file builder uses (nomenclature.py's
     # _build_proposed_filename) — without this a season pack's title never
@@ -179,6 +186,7 @@ def preview_season_pack_title(fields: dict) -> dict:
         audio_summary=fields.get("audio_summary"),
         subtitle_summary=fields.get("subtitle_summary"),
         release_tag=fields.get("tag"),
+        custom=bool(fields.get("custom")),
     )
     return {"torrent_name": title}
 
@@ -278,7 +286,7 @@ def _consistency_errors(episode_entries: list[dict]) -> list[str]:
     return errors
 
 
-def _aggregate_pack_fields(episode_entries: list[dict]) -> dict:
+def _aggregate_pack_fields(episode_entries: list[dict], conn=None) -> dict:
     """Los valores que describen al PACK, sacados de sus capítulos.
 
     Solo la resolución tiene que coincidir (lo garantiza _consistency_errors).
@@ -306,22 +314,122 @@ def _aggregate_pack_fields(episode_entries: list[dict]) -> dict:
             return unico or None
         return None
 
-    idiomas: list[str] = []
-    for entry in episode_entries:
-        for lang in _split_languages(entry["episode"].get("audio_languages")):
-            if lang not in idiomas:
-                idiomas.append(lang)
-
-    resumen_comun = comun(lambda e: e["proposal"].get("audio_summary"))
-    audio = resumen_comun or (build_audio_string(None, "/".join(idiomas), None) if idiomas else None)
+    audio, custom = _aggregate_pack_audio(episode_entries, conn)
 
     return {
         "resolution": comun(lambda e: e["proposal"].get("resolution")),
+        # El source y el proveedor se vacían si difieren: un release no puede
+        # ser BluRay y WEB-DL a la vez, y no hay nada que sumar.
         "source": comun(lambda e: e["proposal"].get("source")),
         "video_codec": comun(lambda e: e["proposal"].get("video_codec")),
         "audio_summary": audio,
         "subtitle_summary": comun(lambda e: e["proposal"].get("subtitle_summary")),
+        "custom": custom,
     }
+
+
+def _episode_audio_by_language(ep: dict, conn) -> dict:
+    """La mejor pista de cada idioma de UN capítulo: {"ESP": "DD+ 5.1", ...}.
+
+    Sale del informe de MediaInfo, que ya está cacheado por fichero desde que
+    lo leyó la nomenclatura de este mismo capítulo."""
+    from .media_info_service import build_mediainfo_report
+    from .path_mapping import resolve_local_path
+    from .emu_format import _split_languages
+    path = ep.get("path")
+    if path:
+        report = build_mediainfo_report(resolve_local_path(path, conn=conn) or path)
+        por_idioma = report.get("audio_by_language") or {}
+        if por_idioma:
+            return {lang: f"{v['codec']} {v['channels']}".strip()
+                    for lang, v in por_idioma.items()}
+
+    # Sin MediaInfo (fichero no accesible, o Radarr/Sonarr como única fuente)
+    # se cae a las columnas de la biblioteca. Ahí solo hay un códec para todo
+    # el capítulo, así que todos sus idiomas comparten pista: se pierde el
+    # detalle por idioma, pero seguir sabiendo QUÉ idiomas trae cada capítulo
+    # basta para no anunciar uno que falte en la mitad del pack.
+    codec = ep.get("audio_codec") or ""
+    return {lang: codec for lang in _split_languages(ep.get("audio_languages"))}
+
+
+def _aggregate_pack_audio(episode_entries: list[dict], conn=None) -> tuple[Optional[str], bool]:
+    """El audio del pack y si hay que marcarlo CUSTOM.
+
+    La regla es "no mentir": una pista solo puede nombrarse si TODOS los
+    capítulos la tienen.
+
+    - Un idioma que en todos los capítulos trae la misma pista se nombra tal
+      cual. Si dentro de cada capítulo ese idioma viene además en una pista
+      peor, nombrar la mejor no miente: todos la tienen (eso ya lo resuelve
+      media_info_service antes de llegar aquí).
+    - Un idioma cuya pista CAMBIA de un capítulo a otro no se puede resumir en
+      una: decir la mejor mentiría sobre los capítulos que solo tienen la peor.
+      Se nombran todas sus variantes y el pack se marca CUSTOM.
+    - Un idioma que solo está en algunos capítulos es el mismo caso: falta en
+      los demás, así que también marca CUSTOM.
+
+    Devuelve (cadena de audio, custom).
+    """
+    from .emu_format import (build_audio_string, audio_track_quality,
+                             format_audio_codec, format_channels)
+
+    por_capitulo = [_episode_audio_by_language(e["episode"], conn) for e in episode_entries]
+    por_capitulo = [d for d in por_capitulo if d]
+    if not por_capitulo:
+        return None, False
+
+    idiomas: list[str] = []
+    for d in por_capitulo:
+        for lang in d:
+            if lang not in idiomas:
+                idiomas.append(lang)
+
+    custom = False
+    # idioma -> pistas que hay que nombrar, en orden de calidad
+    a_nombrar: list[tuple[str, str]] = []
+    for lang in idiomas:
+        variantes = [d.get(lang) for d in por_capitulo]
+        distintas = {v for v in variantes if v}
+        if len(distintas) == 1 and all(variantes):
+            a_nombrar.append((lang, distintas.pop()))     # todos igual: no miente
+        else:
+            # Difieren, o falta en algún capítulo: se nombran todas y CUSTOM.
+            custom = True
+            # audio_track_quality ordena "menor es mejor".
+            for v in sorted(distintas, key=lambda x: audio_track_quality(*_partir(x))):
+                a_nombrar.append((lang, v))
+
+    # Se agrupa por pista, como dentro de un capítulo: los idiomas que
+    # comparten códec y canales van juntos ("ESP-CAT TrueHD 5.1").
+    grupos: dict[str, list[str]] = {}
+    for lang, pista in a_nombrar:
+        grupos.setdefault(pista, [])
+        if lang not in grupos[pista]:
+            grupos[pista].append(lang)
+
+    # De mejor a peor, igual que se ordenan las pistas dentro de un capítulo.
+    orden = sorted(grupos.items(), key=lambda kv: audio_track_quality(*_partir(kv[0])))
+
+    partes = []
+    for pista, langs in orden:
+        codec, canales = _partir(pista)
+        if custom and len(langs) > 1:
+            # En un pack CUSTOM un idioma puede salir en dos grupos, así que
+            # no se colapsa a DUAL/MULTI: esos tokens dicen "este release trae
+            # castellano e inglés" y aquí taparían de qué pista habla cada uno.
+            partes.append(" ".join(x for x in ("-".join(langs),
+                                               format_audio_codec(codec),
+                                               format_channels(canales)) if x))
+        else:
+            partes.append(build_audio_string(codec, "/".join(langs), canales))
+    return (" ".join(p for p in partes if p) or None), custom
+
+
+def _partir(pista: str) -> tuple[str, str]:
+    """"DD+ Atmos 5.1" -> ("DD+ Atmos", "5.1"). El último trozo son los canales."""
+    trozos = (pista or "").rsplit(" ", 1)
+    return (trozos[0], trozos[1]) if len(trozos) == 2 else (pista, "")
 
 
 def _season_title_options(series: dict | None, season: dict, conn) -> list[dict]:
@@ -525,7 +633,7 @@ def build_season_pack_plan(
 
         # Del conjunto de capítulos, no del primero: ya no tienen por qué
         # coincidir en todo (ver _aggregate_pack_fields).
-        pack_fields = _aggregate_pack_fields(episode_entries)
+        pack_fields = _aggregate_pack_fields(episode_entries, conn)
         season_pack_title = _build_season_pack_title(
             title=series_title,
             year=year,
@@ -585,17 +693,21 @@ def build_season_pack_plan(
             # call needs it (a season opened from its series' own ficha has
             # no season_number on the wizard's `item` prop, only the plan has it).
             "season_number": season.get("season_number"),
-            "resolution": first_proposal.get("resolution"),
-            "source": first_proposal.get("source"),
+            # Del conjunto, no del primer capítulo: es lo que se usó para
+            # construir el título y lo que la vista previa del asistente
+            # reutiliza al editar Source/Proveedor/Tag.
+            "resolution": pack_fields.get("resolution"),
+            "source": pack_fields.get("source"),
             "tmdb_id": (series or {}).get("tmdb_id"),
             "provider": provider,
             # Rest of the field breakdown used to build season_pack_title,
             # kept on the return dict so a caller (upload_queue.py) can
             # snapshot the full nomenclature breakdown for the job detail
             # page, not just the pieces build_season_pack_plan itself needs.
-            "video_codec": first_proposal.get("video_codec"),
-            "audio_summary": first_proposal.get("audio_summary"),
-            "subtitle_summary": first_proposal.get("subtitle_summary"),
+            "video_codec": pack_fields.get("video_codec"),
+            "audio_summary": pack_fields.get("audio_summary"),
+            "subtitle_summary": pack_fields.get("subtitle_summary"),
+            "custom": pack_fields.get("custom", False),
             "release_tag": release_tag,
             "series_title": series_title,
             "title_options": _season_title_options(series, season, conn),

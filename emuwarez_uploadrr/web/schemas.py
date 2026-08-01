@@ -966,6 +966,9 @@ class SeasonPackPlanResponse(BaseModel):
     video_codec: Optional[str] = None
     audio_summary: Optional[str] = None
     subtitle_summary: Optional[str] = None
+    # True cuando los capítulos no traen el mismo audio: el título lleva
+    # CUSTOM y lista todas las variantes en vez de una sola.
+    custom: bool = False
     release_tag: Optional[str] = None
     # Internal Source Tool comparison (name vs Radarr/Sonarr vs MediaInfo-
     # bitrate) for the representative (first) episode — backs the same
@@ -1307,6 +1310,7 @@ class SeasonPackFieldsPreviewBody(BaseModel):
     video_codec: Optional[str] = None
     audio_summary: Optional[str] = None
     subtitle_summary: Optional[str] = None
+    custom: bool = False
     tag: Optional[str] = None
 
 

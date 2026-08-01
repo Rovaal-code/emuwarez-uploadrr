@@ -333,6 +333,13 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
             continue
         groups.setdefault((chosen[1], chosen[2]), []).append(lang)
 
+    # La mejor pista de cada idioma, en estructura y no en cadena. El pack de
+    # temporada la necesita para comparar capítulo con capítulo: volver a
+    # parsear "ING DD+ Atmos 5.1 ESP-JAP DD+ 5.1" sería frágil, y esto ya está
+    # calculado aquí arriba.
+    audio_by_language = {lang: {"codec": best_by_lang[lang][1], "channels": best_by_lang[lang][2]}
+                         for lang in langs if lang in best_by_lang}
+
     audio_summary = None
     if audio_tracks:
         # Same DUAL/MULTI rules as emu_format.build_audio_string, but applied
@@ -361,6 +368,7 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
     add("Subtítulos", sub_langs or None, "SUBS" if sub_tracks else None)
 
     report = {"available": True, "message": None, "rows": rows, "audio_summary": audio_summary,
+               "audio_by_language": audio_by_language,
                "source_signals": source_signals}
     if cache_key is not None:
         if len(_REPORT_CACHE) >= _REPORT_CACHE_MAX:

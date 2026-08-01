@@ -454,6 +454,8 @@ export interface SeasonPackPlanResponse {
   video_codec?: string | null
   audio_summary?: string | null
   subtitle_summary?: string | null
+  // Los capítulos no traen el mismo audio: el título lleva CUSTOM.
+  custom?: boolean
   release_tag?: string | null
   source_comparison?: import('../api/nomenclature').SourceComparison | null
 }

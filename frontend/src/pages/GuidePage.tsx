@@ -473,7 +473,7 @@ const OTHER_CONDITION_ROWS: OtherRow[] = [
     applies: 'Pack de temporada',
     condition: 'Los capítulos no coinciden en source, códec de audio, idiomas de audio o subtítulos',
     verdict: 'warn', verdictLabel: 'No bloquea',
-    why: 'Se resuelve en el nombre en vez de rechazar el pack: los idiomas de audio se suman (el pack los contiene todos) y el source y el códec de audio que no coincidan se dejan fuera del nombre, porque declarar uno solo sería mentir sobre el resto de capítulos.',
+    why: 'Se resuelve en el nombre en vez de rechazar el pack: los audios se suman (ver «El audio de un pack: cuándo aparece CUSTOM») y el source que no coincida se deja fuera del nombre, porque declarar uno solo sería mentir sobre el resto de capítulos.',
   },
   {
     applies: 'Cualquiera', condition: 'El contenido está Faltante',
@@ -575,6 +575,72 @@ function UploadConditionsContent() {
           </tbody>
         </table>
       </div>
+
+      <h4 style={{ fontSize: 13, margin: '18px 0 6px' }}>El audio de un pack: cuándo aparece CUSTOM</h4>
+      <p style={{ fontSize: 12.5, marginTop: 0 }}>
+        El nombre de un pack solo puede anunciar una pista que <strong>tengan todos los
+        capítulos</strong>. Esa es toda la regla, y de ahí sale el resto:
+      </p>
+      <ul style={{ fontSize: 12.5, marginTop: 0, paddingLeft: 18 }}>
+        <li>
+          Un idioma que en todos los capítulos viene con la misma pista se anuncia tal cual.
+          Si dentro de cada capítulo ese idioma trae además una pista peor, se nombra la mejor:
+          no es mentira, todos la tienen.
+        </li>
+        <li>
+          Un idioma cuya pista <strong>cambia</strong> de un capítulo a otro no se puede resumir en
+          una sola. Anunciar la mejor mentiría sobre los capítulos que solo traen la peor, así que
+          se listan <strong>todas sus variantes</strong> y el nombre se marca <code>CUSTOM</code>.
+        </li>
+        <li>
+          Un idioma que solo está en <strong>algunos</strong> capítulos es el mismo caso: falta en
+          los demás, así que también marca <code>CUSTOM</code>.
+        </li>
+      </ul>
+      <p style={{ fontSize: 12.5 }}>
+        Los canales cuentan como parte de la pista: 5.1 en unos capítulos y 2.0 en otros ya es
+        CUSTOM, porque quien se baje el pack no recibe 5.1 en todos. Y <code>CUSTOM</code> es
+        <strong> solo por el audio</strong>: un source o un proveedor mezclados no lo activan, esos
+        simplemente se caen del nombre. Va justo antes del proveedor
+        (<code>… 1080p CUSTOM BluRay x264 …</code>), como en el resto del catálogo de eMuwarez.
+      </p>
+      <div style={{ overflowX: 'auto' }}>
+        <table className="data-table" style={{ fontSize: 12.5 }}>
+          <thead>
+            <tr><th>Los capítulos traen</th><th>El pack se llama</th><th>Por qué</th></tr>
+          </thead>
+          <tbody>
+            {([
+              ['Todos: ING TrueHD Atmos 7.1 + ESP DD+ 5.1',
+               'ING TrueHD Atmos 7.1 ESP DD+ 5.1',
+               'Nadie se queda fuera: las dos pistas están en los diez capítulos.'],
+              ['5 con ING DD+ Atmos 5.1 y 5 con ING DD+ 5.1 (ESP y JAP iguales)',
+               'CUSTOM … ING DD+ Atmos 5.1 ING-ESP-JAP DD+ 5.1',
+               'El Atmos solo está en la mitad. Se anuncian las dos versiones del inglés y CUSTOM avisa de que no todos los capítulos son iguales.'],
+              ['Todos con ESP, el JAP solo en 4 capítulos',
+               'CUSTOM … ESP DD+ 5.1 JAP FLAC 2.0',
+               'El japonés se anuncia porque está, y CUSTOM avisa de que no está en todos.'],
+              ['ESP DD+ 5.1 en unos, ESP DD+ 2.0 en otros',
+               'CUSTOM … ESP-ING DD+ 5.1 ESP DD+ 2.0',
+               'Mismo códec, distintos canales: sigue siendo otra pista.'],
+              ['Todos: ESP DD 5.1 + ING DD 5.1',
+               'DUAL DD 5.1',
+               'Sin CUSTOM, DUAL y MULTI siguen valiendo: ahí sí es verdad que todos los capítulos traen esos idiomas.'],
+            ] as [string, string, string][]).map(([tienen, nombre, why], i) => (
+              <tr key={i}>
+                <td>{tienen}</td>
+                <td style={{ fontFamily: 'monospace' }}>{nombre}</td>
+                <td>{why}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p style={{ fontSize: 12.5 }}>
+        Ojo con la última fila: <code>DUAL</code> y <code>MULTI</code> son atajos que prometen que
+        el release trae esos idiomas. En un pack CUSTOM un mismo idioma puede salir en dos sitios,
+        así que ahí no se usan — los idiomas se escriben uno a uno.
+      </p>
 
       <h4 style={{ fontSize: 13, margin: '18px 0 6px' }}>Una temporada con datos mezclados</h4>
       <p style={{ fontSize: 12.5, marginTop: 0 }}>

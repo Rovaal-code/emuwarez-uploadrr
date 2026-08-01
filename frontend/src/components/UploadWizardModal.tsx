@@ -1092,12 +1092,16 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
           resolution: fields.resolution, source: fields.source, provider: fields.provider,
           video_codec: fields.video_codec, audio_summary: fields.audio_summary,
           subtitle_summary: fields.subs, tag: fields.tag,
+          // El CUSTOM lo decide el plan comparando capítulos; editar
+          // Source/Proveedor/Tag no lo cambia, pero hay que reenviarlo o el
+          // título recalculado lo perdería.
+          custom: seasonPlan?.custom ?? false,
         })
         setSeasonTitlePreview(r.torrent_name)
       } catch { /* non-blocking */ }
     }, 400)
     return () => clearTimeout(t)
-  }, [targetId, targetIsSeason, fields, seasonPlan?.season_number])
+  }, [targetId, targetIsSeason, fields, seasonPlan?.season_number, seasonPlan?.custom])
 
   const setField = (key: string, value: string | null) => {
     // Título is a property of the SERIES, so it is shared by every item in a

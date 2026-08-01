@@ -208,3 +208,22 @@ def mark_instance_test_result(conn: sqlite3.Connection, instance_id: int, ok: bo
         (status, instance_id),
     )
     conn.commit()
+
+
+def list_instance_rows(conn) -> list[dict]:
+    """Todas las instancias, ordenadas como las enseña la interfaz."""
+    return [dict(r) for r in conn.execute("SELECT * FROM instances ORDER BY type, name")]
+
+
+def get_instance_row(instance_id: int, conn) -> dict | None:
+    row = conn.execute("SELECT * FROM instances WHERE id = ?", (instance_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def set_instance_flags(instance_id: int, *, is_4k: bool, is_anime: bool, conn) -> None:
+    """Las dos banderas que distinguen una instancia 4K o de anime."""
+    conn.execute(
+        "UPDATE instances SET is_4k=?, is_anime=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+        (int(is_4k), int(is_anime), instance_id),
+    )
+    conn.commit()

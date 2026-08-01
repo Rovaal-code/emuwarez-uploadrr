@@ -63,31 +63,50 @@ def first_track(info: dict[str, Any], track_type: str) -> dict[str, Any]:
     return next((x for x in media_tracks(info) if x.get("@type") == track_type), {})
 
 
+# Escalones de resolución: (anchura mínima, altura mínima, código, etiqueta).
+# El código es el vocabulario canónico de la aplicación ("1080p", "480p"), el
+# que se guarda en la biblioteca y el que entiende el contrato de subida; la
+# etiqueta es solo adorno para la ficha de MediaInfo.
+#
+# Se mira también la ANCHURA, no solo la altura: en cinemascope un 1080p real
+# puede venir como 1920x800 por recorte vertical.
+_ESCALONES_RESOLUCION: list[tuple[int, int, str, str]] = [
+    (7600, 4000, "4320p", "FUHD"),
+    (3800, 2000, "2160p", "UHD"),
+    (1900, 1000, "1080p", ""),
+    (1200, 700, "720p", ""),
+    (0, 560, "576p", "SD"),
+    (0, 520, "540p", "SD"),
+]
+
+
+def resolution_code(width: int, height: int) -> Optional[str]:
+    """El código canónico para unas dimensiones: "1080p", "480p"…
+
+    None si no hay dimensiones. Es lo que se guarda en la biblioteca y lo que
+    compara la regla del pack de temporada; `map_resolution` añade encima la
+    etiqueta de adorno."""
+    for min_w, min_h, codigo, _etiqueta in _ESCALONES_RESOLUCION:
+        if (min_w and width >= min_w) or (min_h and height >= min_h):
+            return codigo
+    if width or height:
+        return "480p"
+    return None
+
+
 def map_resolution(video: dict[str, Any]) -> str:
+    """La resolución para la ficha de MediaInfo, con su etiqueta ("480p SD")."""
     def number(value: Any) -> int:
         match = re.search(r"\d+", str(value or "0"))
         return int(match.group()) if match else 0
 
     width = number(video.get("Width") or video.get("Stored_Width"))
     height = number(video.get("Height") or video.get("Stored_Height"))
-
-    # En cine scope/cinemascope, un 1080p real puede venir como 1920x800
-    # por recorte vertical. Por eso se usa también la anchura, no solo la altura.
-    if width >= 7600 or height >= 4000:
-        return "4320p FUHD"
-    if width >= 3800 or height >= 2000:
-        return "2160p UHD"
-    if width >= 1900 or height >= 1000:
+    codigo = resolution_code(width, height)
+    if codigo is None:
         return "1080p"
-    if width >= 1200 or height >= 700:
-        return "720p"
-    if height >= 560:
-        return "576p SD"
-    if height >= 520:
-        return "540p SD"
-    if width or height:
-        return "480p SD"
-    return "1080p"
+    etiqueta = next((e for w, h, c, e in _ESCALONES_RESOLUCION if c == codigo), "SD")
+    return f"{codigo} {etiqueta}".strip()
 
 def _detect_source_by_name(path: Path) -> Optional[str]:
     """Source from the file/folder NAME only (most reliable). None if the name

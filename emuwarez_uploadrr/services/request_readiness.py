@@ -704,3 +704,10 @@ __all__ = [
     "get_candidates_for_request",
     "get_dashboard_readiness_counts",
 ]
+
+
+def request_exists(request_id: int, conn) -> bool:
+    """Si la petición existe. Lo comprobaba el endpoint con su propio SELECT."""
+    return conn.execute(
+        "SELECT 1 FROM request_items WHERE id = ?", (request_id,)
+    ).fetchone() is not None

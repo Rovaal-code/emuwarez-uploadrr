@@ -898,3 +898,90 @@ def apply_nomenclature_proposal(
     finally:
         if own:
             conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Consultas que vivían dentro de los endpoints (auditoría, hallazgo 6.2)
+# ---------------------------------------------------------------------------
+
+def list_filesystem_operations(item_id: int, *, limit: int = 20, conn=None) -> list[dict]:
+    """El historial de operaciones de fichero de un elemento, lo más reciente
+    primero. Solo las de nomenclatura: el resto del historial no es de esta
+    pantalla."""
+    own = conn is None
+    conn = conn or connect()
+    try:
+        rows = conn.execute(
+            """SELECT * FROM filesystem_operations
+               WHERE library_item_id = ?
+                 AND operation_type IN ('nomenclature_rename', 'nomenclature_hardlink')
+               ORDER BY created_at DESC LIMIT ?""",
+            (item_id, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        if own:
+            conn.close()
+
+
+def item_tmdb_reference(item_id: int, *, conn=None) -> tuple[str | None, str | None]:
+    """(tmdb_id, item_type) de un elemento, para consultar sus proveedores en
+    TMDb. Devuelve (None, None) si no existe."""
+    own = conn is None
+    conn = conn or connect()
+    try:
+        row = conn.execute(
+            "SELECT tmdb_id, item_type FROM library_items WHERE id = ?", (item_id,)
+        ).fetchone()
+        return (row["tmdb_id"], row["item_type"]) if row else (None, None)
+    finally:
+        if own:
+            conn.close()
+
+
+def save_manual_nomenclature_fields(item_id: int, fields: dict, preview: dict, *, conn) -> None:
+    """Guarda una propuesta editada a mano, expirando la anterior.
+
+    Vivía dentro del endpoint: un INSERT de dieciséis columnas escrito en el
+    controlador HTTP, con seis líneas de comentario explicando en qué columna
+    escribir y por qué la de al lado era huérfana. Eso es conocimiento de
+    dominio y este es su sitio."""
+    import json as _json
+    from datetime import datetime, timezone
+
+    ahora = datetime.now(timezone.utc).isoformat()
+    conn.execute(
+        "UPDATE nomenclature_proposals SET status='expired', updated_at=? "
+        "WHERE library_item_id=? AND status NOT IN ('applied','expired')",
+        (ahora, item_id),
+    )
+    conn.execute(
+        """INSERT INTO nomenclature_proposals
+           (library_item_id, status, proposed_filename, proposed_title,
+            fields_json, year, resolution, source, provider_final,
+            video_codec, audio_summary, subtitle_summary, release_tag,
+            internal_mkv_title, created_at, updated_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (
+            item_id, "valid",
+            preview.get("torrent_name") or "",
+            fields.get("title"),
+            _json.dumps(fields, ensure_ascii=False),
+            fields.get("year"),
+            fields.get("resolution"),
+            # La columna `source`, la misma que escriben build_nomenclature_proposal
+            # y save_nomenclature_proposal y la que lee la ficha de la subida —
+            # NO la columna source_final, huérfana que nadie más lee y en la que
+            # esto escribía por error, dejando `source` (y todos los demás campos
+            # técnicos) a NULL en una propuesta editada a mano.
+            fields.get("source"),
+            fields.get("provider"),
+            fields.get("video_codec"),
+            fields.get("audio_summary"),
+            fields.get("subs"),
+            fields.get("tag"),
+            preview.get("internal_mkv_title") or "",
+            ahora, ahora,
+        ),
+    )
+    conn.commit()

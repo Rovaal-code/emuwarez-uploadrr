@@ -163,40 +163,14 @@ def library_diagnostics(
 ):
     """Devuelve diagnósticos de items de biblioteca con filtros."""
     with _get_conn() as conn:
-        where_clauses = []
-        params: list = []
-
-        if status:
-            where_clauses.append("li.local_status = ?")
-            params.append(status)
-        if search:
-            where_clauses.append("li.title LIKE ?")
-            params.append(f"%{search}%")
-
-        where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
-        rows = conn.execute(
-            f"""
-            SELECT li.id, li.title, li.local_status, li.file_exists,
-                   li.file_verified_at, li.file_verification_error,
-                   li.arr_queue_status, li.arr_history_status, li.arr_history_error,
-                   li.diagnostic_status, li.diagnostic_summary,
-                   li.recommended_action, li.recommendation_reasons_json,
-                   li.recommendation_updated_at
-            FROM library_items li
-            {where_sql}
-            ORDER BY li.updated_at DESC
-            LIMIT ? OFFSET ?
-            """,
-            params + [limit, offset],
-        ).fetchall()
-        total_row = conn.execute(
-            f"SELECT COUNT(*) AS cnt FROM library_items li {where_sql}", params
-        ).fetchone()
+        from ...services.library import list_library_diagnostics
+        rows, total = list_library_diagnostics(
+            status=status, search=search, limit=limit, offset=offset, conn=conn,
+        )
 
     import json
     items = []
-    for r in rows:
-        d = dict(r)
+    for d in rows:
         try:
             d["recommendation_reasons"] = json.loads(d.pop("recommendation_reasons_json") or "[]")
         except Exception:
@@ -205,7 +179,7 @@ def library_diagnostics(
 
     return {
         "items": items,
-        "total": int(total_row["cnt"]) if total_row else len(items),
+        "total": total,
         "limit": limit,
         "offset": offset,
     }
@@ -222,35 +196,13 @@ def missing_diagnostics(
     current_user: dict = Depends(require_auth),
 ):
     """Devuelve faltantes enriquecidos con queue/history/recomendación."""
-    from emuwarez_uploadrr.models import LocalStatus
     with _get_conn() as conn:
-        missing_statuses = LocalStatus.not_available()
-        placeholders = ",".join("?" * len(missing_statuses))
-        rows = conn.execute(
-            f"""
-            SELECT id, title, item_type, year, instance_type, instance_name,
-                   tmdb_id, imdb_id, local_status, request_status,
-                   arr_queue_status, arr_queue_progress, arr_queue_timeleft, arr_queue_error,
-                   arr_history_status, arr_history_error,
-                   file_exists, diagnostic_status, diagnostic_summary,
-                   recommended_action, recommendation_reasons_json,
-                   updated_at
-            FROM library_items
-            WHERE local_status IN ({placeholders})
-            ORDER BY updated_at DESC
-            LIMIT ? OFFSET ?
-            """,
-            list(missing_statuses) + [limit, offset],
-        ).fetchall()
-        total_row = conn.execute(
-            f"SELECT COUNT(*) AS cnt FROM library_items WHERE local_status IN ({placeholders})",
-            list(missing_statuses),
-        ).fetchone()
+        from ...services.library import list_missing_diagnostics
+        rows, total = list_missing_diagnostics(limit=limit, offset=offset, conn=conn)
 
     import json
     items = []
-    for r in rows:
-        d = dict(r)
+    for d in rows:
         try:
             d["recommendation_reasons"] = json.loads(d.pop("recommendation_reasons_json") or "[]")
         except Exception:
@@ -259,7 +211,7 @@ def missing_diagnostics(
 
     return {
         "items": items,
-        "total": int(total_row["cnt"]) if total_row else len(items),
+        "total": total,
         "limit": limit,
         "offset": offset,
     }

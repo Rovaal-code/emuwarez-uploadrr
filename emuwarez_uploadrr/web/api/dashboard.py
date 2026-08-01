@@ -14,40 +14,6 @@ from ..schemas import (
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 
-def _get_upload_counts(conn) -> dict:
-    """Return upload job status counts for the dashboard summary."""
-    try:
-        rows = conn.execute(
-            """
-            SELECT status, COUNT(*) AS cnt FROM upload_jobs GROUP BY status
-            """
-        ).fetchall()
-        counts: dict[str, int] = {}
-        for row in rows:
-            counts[row["status"]] = int(row["cnt"] or 0)
-
-        last_row = conn.execute(
-            "SELECT MAX(updated_at) AS last_at FROM upload_jobs"
-        ).fetchone()
-        last_at = last_row["last_at"] if last_row else None
-
-        return {
-            "uploads_ready": counts.get("ready", 0),
-            "uploads_running": counts.get("running", 0),
-            "uploads_completed": counts.get("completed", 0),
-            "uploads_failed": counts.get("failed", 0),
-            "last_upload_at": last_at,
-        }
-    except Exception:
-        return {
-            "uploads_ready": 0,
-            "uploads_running": 0,
-            "uploads_completed": 0,
-            "uploads_failed": 0,
-            "last_upload_at": None,
-        }
-
-
 def _get_conn():
     from emuwarez_uploadrr.database import connect, init_db
     conn = connect(_db_path())
@@ -60,81 +26,14 @@ def dashboard_summary(current_user: dict = Depends(require_auth)) -> DashboardSu
     from emuwarez_uploadrr.services.library import get_dashboard_summary
     with _get_conn() as conn:
         summary = get_dashboard_summary(conn)
-        try:
-            row = conn.execute(
-                """
-                SELECT
-                    COUNT(*) AS total,
-                    SUM(CASE WHEN LOWER(COALESCE(emu_status,'')) IN ('filled','llena','lleno','1') THEN 1 ELSE 0 END) AS filled
-                FROM request_items
-                """
-            ).fetchone()
-            summary["requests_total"] = int(row["total"] or 0) if row else 0
-            summary["requests_filled"] = int(row["filled"] or 0) if row else 0
-            # Count requests whose BEST match is Compatible (same criterion as
-            # the Peticiones list), not every Compatible match row.
-            def _count_best_status(status: str) -> int:
-                r = conn.execute(
-                    """
-                    SELECT COUNT(*) AS cnt FROM request_items ri
-                    WHERE (
-                        SELECT rm.status FROM request_matches rm
-                        WHERE rm.request_item_id = ri.id
-                        ORDER BY rm.confidence DESC LIMIT 1
-                    ) = ?
-                    """,
-                    (status,),
-                ).fetchone()
-                return int(r["cnt"] or 0) if r else 0
-            summary["requests_compatible"] = _count_best_status("Compatible")
-            summary["requests_partial"] = _count_best_status("Parcial")
-            from emuwarez_uploadrr.database import get_state
-            summary["requests_last_sync_at"] = get_state(conn, "last_emu_requests_sync_utc")
+        # Los contadores de peticiones y de subidas los calculan sus propios
+        # servicios: el criterio de "Compatible", "Mías" y "Reclamadas" es de
+        # dominio, no de HTTP (auditoría, hallazgo 6.2).
+        from emuwarez_uploadrr.services.requests import dashboard_request_counters
+        summary.update(dashboard_request_counters(conn))
 
-        except Exception:
-            summary.setdefault("requests_total", 0)
-            summary.setdefault("requests_filled", 0)
-            summary.setdefault("requests_compatible", 0)
-            summary.setdefault("requests_partial", 0)
-            summary.setdefault("requests_last_sync_at", None)
-
-        # "Mis peticiones" (Phase 5 of the 12-part batch) — requests authored
-        # by the user's own eMuwarez account (new emu.username setting, no
-        # migration needed since `settings` is already a flexible key-value
-        # table). author_visible gates whether `author` is meaningfully
-        # populated at all (same convention services/requests.py already
-        # uses when exposing it in API responses) — an invisible-author row
-        # never counts as "mine" even if it happens to match by coincidence.
-        try:
-            from emuwarez_uploadrr.services.settings import get_setting_canonical
-            my_username = get_setting_canonical(conn, "emu.username")
-            if my_username:
-                mine_row = conn.execute(
-                    "SELECT COUNT(*) AS cnt FROM request_items WHERE author_visible = 1 AND author = ?",
-                    (my_username,),
-                ).fetchone()
-                summary["requests_mine"] = int(mine_row["cnt"] or 0) if mine_row else 0
-            else:
-                summary["requests_mine"] = 0
-        except Exception:
-            summary["requests_mine"] = 0
-
-        # Reclamadas — eMuwarez doesn't expose whether a claim belongs to
-        # you specifically, so this is every request currently Reclamado on
-        # the tracker (not filtered by author), same loose substring match
-        # compatibility.emu_override_status() uses for emu_status.
-        try:
-            reclaimed_row = conn.execute(
-                "SELECT COUNT(*) AS cnt FROM request_items "
-                "WHERE LOWER(COALESCE(emu_status,'')) LIKE '%reclam%' OR LOWER(COALESCE(emu_status,'')) LIKE '%claim%'"
-            ).fetchone()
-            summary["requests_reclaimed"] = int(reclaimed_row["cnt"] or 0) if reclaimed_row else 0
-        except Exception:
-            summary["requests_reclaimed"] = 0
-
-        # Phase 6D: upload counts
-        upload_counts = _get_upload_counts(conn)
-        summary.update(upload_counts)
+        from emuwarez_uploadrr.services.upload_queue import dashboard_upload_counters
+        summary.update(dashboard_upload_counters(conn))
 
         # Phase 8A: diagnostic counts
         try:

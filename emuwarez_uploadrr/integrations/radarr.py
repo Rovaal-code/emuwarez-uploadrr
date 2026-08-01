@@ -268,7 +268,9 @@ def movie_to_library_item(
         imdb_id=imdb_id,
         path=path,
         quality=quality_name,
-        resolution=_resolution_from_quality(quality_name),
+        # El nombre de calidad primero; si no lleva número ("SDTV", "DVD",
+        # "Raw-HD"), la resolución real que ya manda *Arr en su mediaInfo.
+        resolution=_resolution_from_quality(quality_name) or media_info.get("resolution"),
         source=_source_from_quality(quality_name),
         video_codec=media_info.get("video_codec"),
         audio_codec=media_info.get("audio_codec"),

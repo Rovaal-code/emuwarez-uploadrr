@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import ssl
 import threading
 import urllib.error
@@ -50,6 +51,16 @@ class MediaInfoSummary(dict):
     Optional[str] — a plain dict subclass just for a descriptive type name."""
 
 
+def _resolution_from_arr_media_info(media_info: dict) -> Optional[str]:
+    """El código canónico de resolución a partir del "640x480" de *Arr."""
+    crudo = str(media_info.get("resolution") or "").strip()
+    m = re.match(r"(\d+)\s*[xX*]\s*(\d+)", crudo)
+    if not m:
+        return None
+    from ..services.media_probe import resolution_code
+    return resolution_code(int(m.group(1)), int(m.group(2)))
+
+
 def extract_media_info(file_entry: Any) -> MediaInfoSummary:
     """Pull codec/audio/subtitle info out of Radarr's `movieFile` or Sonarr's
     `episodeFile` — both come from the same underlying *arr `mediaInfo`
@@ -66,12 +77,20 @@ def extract_media_info(file_entry: Any) -> MediaInfoSummary:
     result = MediaInfoSummary(
         video_codec=None, audio_codec=None, audio_languages=None,
         subtitle_languages=None, audio_channels=None, dynamic_range=None,
+        resolution=None,
     )
     if not isinstance(file_entry, dict):
         return result
     media_info = file_entry.get("mediaInfo")
     if not isinstance(media_info, dict):
         return result
+    # La resolución venía en el mismo `mediaInfo` y no se leía: Sonarr la manda
+    # como "640x480". Sin ella, una serie SD ("SDTV", "DVD", "Raw-HD": nombres
+    # de calidad sin ningún número) se quedaba con la resolución vacía en la
+    # biblioteca, y entonces su temporada no se podía subir como pack porque la
+    # regla exige que todos los capítulos coincidan en resolución. En Sonarr y
+    # en Ver MediaInfo se veía perfectamente; solo faltaba aquí.
+    result["resolution"] = _resolution_from_arr_media_info(media_info)
     result["video_codec"] = media_info.get("videoCodec") or None
     result["audio_codec"] = media_info.get("audioCodec") or None
     # audioLanguages/subtitles come back as a single string, e.g. "eng / spa"

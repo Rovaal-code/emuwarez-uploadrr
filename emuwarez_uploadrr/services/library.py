@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import sqlite3
 import threading
@@ -1784,3 +1785,451 @@ def mark_nomenclature(conn: sqlite3.Connection, library_item_id: int, status: st
         (status, library_item_id),
     )
     conn.commit()
+
+
+# ---------------------------------------------------------------------------
+# Agregación de una temporada/serie a partir de sus hijos, y valores de filtro
+#
+# Vivían dentro de web/api/library.py (auditoría, hallazgo 6.2). Son
+# conocimiento de dominio: cómo se suma el tamaño de una serie, de dónde sale
+# la ruta de una temporada, qué valores ofrece cada filtro.
+# ---------------------------------------------------------------------------
+
+def _specials_clause(alias: str, ignore_specials: bool) -> str:
+    """SQL fragment excluding season-0 episodes when ignore_specials is on."""
+    if not ignore_specials:
+        return ""
+    return f" AND ({alias}.season_number IS NULL OR {alias}.season_number != 0)"
+
+
+def _nomenclature_rollup(conn, item_id: int, item_type: str, ignore_specials: bool = False) -> Optional[str]:
+    """Aggregate the nomenclature status of a Season (from its episodes) or a
+    Series (from all its episodes). 'Correcta' only when EVERY episode is
+    'Correcta' — a missing/unadapted episode (N/A or No adaptada) prevents it.
+    Returns:
+      - 'Correcta'    when every episode is adapted,
+      - 'No adaptada' when none is adapted (and none is N/A),
+      - 'N/A'         when every episode is N/A (nothing to adapt yet),
+      - 'Parcial'     otherwise (a mix),
+      - None          when there's nothing to aggregate (keep the row's own).
+    """
+    if conn is None:
+        return None
+    if item_type == "season":
+        sql = (
+            "SELECT nomenclature_status AS s, COUNT(*) AS c FROM library_items "
+            "WHERE parent_id = ? AND item_type = 'episode' GROUP BY nomenclature_status"
+        )
+    elif item_type == "series":
+        sql = (
+            "SELECT e.nomenclature_status AS s, COUNT(*) AS c FROM library_items e "
+            "JOIN library_items se ON e.parent_id = se.id "
+            "WHERE se.parent_id = ? AND e.item_type = 'episode'"
+            + _specials_clause("se", ignore_specials)
+            + " GROUP BY e.nomenclature_status"
+        )
+    else:
+        return None
+    counts = {r["s"]: r["c"] for r in conn.execute(sql, (item_id,)).fetchall()}
+    if sum(counts.values()) == 0:
+        return None
+    correct = counts.get("Correcta", 0)
+    not_adapted = counts.get("No adaptada", 0)
+    unchecked = counts.get("No comprobada", 0)
+    available = correct + not_adapted + unchecked  # episodes with a file
+    if available == 0:
+        return "N/A"                 # nothing on disk to adapt yet
+    if unchecked > 0:
+        return "No comprobada"       # some available episode still not checked
+    if correct == available:
+        return "Correcta"            # all available checked and correct
+    if not_adapted == available:
+        return "No adaptada"
+    return "Parcial"
+
+
+def _local_status_rollup(conn, item_id: int, item_type: str, ignore_specials: bool = False) -> Optional[str]:
+    """Availability of a Season/Series computed from its real EPISODES, not from
+    Sonarr's own status (which reports 'Disponible' even when episodes are
+    missing). 'Disponible' only when every counted episode has a file,
+    'Faltante' when none does, 'Parcial' otherwise. With ignore_specials on,
+    season-0 episodes are excluded from a Series' count."""
+    if conn is None:
+        return None
+    if item_type == "season":
+        sql = (
+            "SELECT local_status AS s, COUNT(*) AS c FROM library_items "
+            "WHERE parent_id = ? AND item_type = 'episode' GROUP BY local_status"
+        )
+    elif item_type == "series":
+        sql = (
+            "SELECT e.local_status AS s, COUNT(*) AS c FROM library_items e "
+            "JOIN library_items se ON e.parent_id = se.id "
+            "WHERE se.parent_id = ? AND e.item_type = 'episode'"
+            + _specials_clause("se", ignore_specials)
+            + " GROUP BY e.local_status"
+        )
+    else:
+        return None
+    counts = {r["s"]: r["c"] for r in conn.execute(sql, (item_id,)).fetchall()}
+    total = sum(counts.values())
+    if total == 0:
+        return None
+    available = counts.get("Disponible", 0)
+    if available == total:
+        return "Disponible"
+    if available == 0:
+        return "Faltante"
+    return "Parcial"
+
+
+def _size_rollup(conn, item_id: int, item_type: str) -> Optional[int]:
+    """Total size of a Season/Series as the sum of its episodes' file sizes —
+    season/series rows have no file of their own, so their size only makes
+    sense as the aggregate of the episodes below them."""
+    if conn is None:
+        return None
+    if item_type == "season":
+        r = conn.execute(
+            "SELECT SUM(size_bytes) AS s FROM library_items "
+            "WHERE parent_id = ? AND item_type = 'episode'",
+            (item_id,),
+        ).fetchone()
+    elif item_type == "series":
+        r = conn.execute(
+            "SELECT SUM(e.size_bytes) AS s FROM library_items e "
+            "JOIN library_items se ON e.parent_id = se.id "
+            "WHERE se.parent_id = ? AND e.item_type = 'episode'",
+            (item_id,),
+        ).fetchone()
+    else:
+        return None
+    return int(r["s"]) if r and r["s"] is not None else None
+
+
+def _rollup_path(conn, item_id: int, item_type: str, ignore_specials: bool = False) -> Optional[str]:
+    """Folder path for a Season/Series rollup, derived from its episodes'
+    files: the common parent directory (a season's own folder, e.g.
+    '…/Attack on Titan/Season 2'; a series' root folder)."""
+    if conn is None:
+        return None
+    if item_type == "season":
+        rows = conn.execute(
+            "SELECT path FROM library_items "
+            "WHERE parent_id = ? AND item_type = 'episode' AND path IS NOT NULL",
+            (item_id,),
+        ).fetchall()
+    elif item_type == "series":
+        rows = conn.execute(
+            "SELECT e.path AS path FROM library_items e "
+            "JOIN library_items se ON e.parent_id = se.id "
+            "WHERE se.parent_id = ? AND e.item_type = 'episode' AND e.path IS NOT NULL"
+            + _specials_clause("se", ignore_specials),
+            (item_id,),
+        ).fetchall()
+    else:
+        return None
+    paths = [r["path"] for r in rows if r["path"]]
+    if not paths:
+        return None
+    dirs = {os.path.dirname(p) for p in paths}
+    if len(dirs) == 1:
+        return next(iter(dirs))
+    try:
+        return os.path.commonpath(paths)
+    except ValueError:
+        return None
+
+
+def _child_quality_rollup(conn, item_id: int, item_type: str, ignore_specials: bool = False) -> dict:
+    """Per-attribute value shared by ALL episodes of a Season/Series (or None
+    when they differ or are absent): provider, resolution, source, video/audio
+    codec, audio and subtitle languages. Lets a uniform season/series show the
+    same attributes as its episodes. Specials (season 0) are excluded from a
+    Series rollup when ignore_specials is on."""
+    if conn is None:
+        return dict(_ROLLUP_EMPTY)
+    if item_type == "season":
+        rows = conn.execute(
+            "SELECT path, resolution, source, video_codec, audio_codec, "
+            "audio_languages, subtitle_languages FROM library_items "
+            "WHERE parent_id = ? AND item_type = 'episode'",
+            (item_id,),
+        ).fetchall()
+    elif item_type == "series":
+        rows = conn.execute(
+            "SELECT e.path AS path, e.resolution AS resolution, e.source AS source, "
+            "e.video_codec AS video_codec, e.audio_codec AS audio_codec, "
+            "e.audio_languages AS audio_languages, e.subtitle_languages AS subtitle_languages "
+            "FROM library_items e JOIN library_items se ON e.parent_id = se.id "
+            "WHERE se.parent_id = ? AND e.item_type = 'episode'"
+            + _specials_clause("se", ignore_specials),
+            (item_id,),
+        ).fetchall()
+    else:
+        return dict(_ROLLUP_EMPTY)
+    if not rows:
+        return dict(_ROLLUP_EMPTY)
+
+    def uniq(key: str):
+        vals = {r[key] for r in rows}
+        return next(iter(vals)) if len(vals) == 1 else None
+
+    providers: set = set()
+    for r in rows:
+        from .nomenclature import infer_provider_from_item as _infer_prov
+        providers.add(_infer_prov({"path": r["path"], "source": r["source"]}))
+        if len(providers) > 1:
+            break
+    return {
+        "provider": next(iter(providers)) if len(providers) == 1 else None,
+        "resolution": uniq("resolution"),
+        "source": uniq("source"),
+        "video_codec": uniq("video_codec"),
+        "audio_codec": uniq("audio_codec"),
+        "audio_languages": uniq("audio_languages"),
+        "subtitle_languages": uniq("subtitle_languages"),
+    }
+
+
+def _batch_rollups(conn, series_ids: list[int], season_ids: list[int], ignore_specials: bool) -> dict[int, dict]:
+    """{item_id: {"nomenclature", "size", "local_status", "quality", "path"}}
+    for every id in series_ids/season_ids, computed from at most 2 queries
+    total (one per grouping depth) instead of ~5 queries per id."""
+    groups: dict[int, list[dict]] = {}
+
+    if season_ids:
+        placeholders = ",".join("?" * len(season_ids))
+        rows = conn.execute(
+            "SELECT parent_id AS gid, path, resolution, source, video_codec, audio_codec, "
+            "audio_languages, subtitle_languages, nomenclature_status, local_status, size_bytes "
+            f"FROM library_items WHERE parent_id IN ({placeholders}) AND item_type = 'episode'",
+            season_ids,
+        ).fetchall()
+        for r in rows:
+            groups.setdefault(r["gid"], []).append(dict(r))
+
+    if series_ids:
+        placeholders = ",".join("?" * len(series_ids))
+        rows = conn.execute(
+            "SELECT se.parent_id AS gid, e.path AS path, e.resolution AS resolution, e.source AS source, "
+            "e.video_codec AS video_codec, e.audio_codec AS audio_codec, "
+            "e.audio_languages AS audio_languages, e.subtitle_languages AS subtitle_languages, "
+            "e.nomenclature_status AS nomenclature_status, e.local_status AS local_status, e.size_bytes AS size_bytes "
+            "FROM library_items e JOIN library_items se ON e.parent_id = se.id "
+            f"WHERE se.parent_id IN ({placeholders}) AND e.item_type = 'episode'"
+            + _specials_clause("se", ignore_specials),
+            series_ids,
+        ).fetchall()
+        for r in rows:
+            groups.setdefault(r["gid"], []).append(dict(r))
+
+    result: dict[int, dict] = {}
+    for gid, episode_rows in groups.items():
+        result[gid] = {
+            "nomenclature": _aggregate_nomenclature([r["nomenclature_status"] for r in episode_rows]),
+            "size": _aggregate_size([r["size_bytes"] for r in episode_rows]),
+            "local_status": _aggregate_local_status([r["local_status"] for r in episode_rows]),
+            "quality": _aggregate_quality(episode_rows),
+            "path": _aggregate_path(episode_rows),
+        }
+    return result
+
+
+def library_filter_values(conn) -> dict:
+    """Los valores que de verdad existen en la biblioteca, para el desplegable
+    de filtro de cada columna de Biblioteca.
+
+    Estilo Excel: un filtro solo ofrece lo que ocurre en los datos, nunca una
+    lista fija inventada (LocalStatus tiene una decena de valores posibles y
+    solo deben salir los que algún elemento tiene de verdad). Vivía dentro del
+    endpoint con sus nueve consultas y su criterio de ordenación por calidad
+    real (auditoría, hallazgo 6.2).
+    """
+    import json as _json
+
+    qrows = conn.execute(
+        "SELECT DISTINCT resolution, source FROM library_items "
+        "WHERE resolution IS NOT NULL OR source IS NOT NULL"
+    ).fetchall()
+    # Order by real quality: resolution first (higher → better), then source.
+    _RES_RANK = {"4320p": 8, "2160p": 7, "1080p": 6, "1080i": 5, "720p": 4, "576p": 3, "540p": 2, "480p": 1}
+    _SRC_RANK = {"BDRemux": 6, "Remux": 6, "BluRay": 5, "WEB-DL": 4, "WEBRip": 3, "HDTV": 2, "DVD": 1}
+    # Calidad and Source are now their own table columns/filters (see
+    # Biblioteca's list view) — each needs its own distinct-values list
+    # instead of the old single "resolution · source" combined string.
+    resolutions = {r["resolution"] for r in qrows if r["resolution"]}
+    sources_seen = {r["source"] for r in qrows if r["source"]}
+    qualities = sorted(resolutions, key=lambda r: _RES_RANK.get(r, 0), reverse=True)
+    sources = sorted(sources_seen, key=lambda s: _SRC_RANK.get(s, 0), reverse=True)
+    prows = conn.execute(
+        "SELECT path, source FROM library_items "
+        "WHERE item_type IN ('movie', 'episode') AND path IS NOT NULL"
+    ).fetchall()
+    codes = set()
+    for r in prows:
+        c = infer_provider_from_item({"path": r["path"], "source": r["source"]})
+        if c:
+            codes.add(c)
+    providers = sorted({lbl for c in codes if (lbl := _provider_label(c))})
+
+    types = [r[0] for r in conn.execute(
+        "SELECT DISTINCT item_type FROM library_items WHERE item_type IS NOT NULL ORDER BY item_type"
+    ).fetchall()]
+    statuses = [r[0] for r in conn.execute(
+        "SELECT DISTINCT local_status FROM library_items WHERE local_status IS NOT NULL ORDER BY local_status"
+    ).fetchall()]
+    request_statuses = [r[0] for r in conn.execute(
+        "SELECT DISTINCT request_status FROM library_items WHERE request_status IS NOT NULL ORDER BY request_status"
+    ).fetchall()]
+    nomenclature_statuses = [r[0] for r in conn.execute(
+        "SELECT DISTINCT nomenclature_status FROM library_items WHERE nomenclature_status IS NOT NULL ORDER BY nomenclature_status"
+    ).fetchall()]
+    instances = [
+        {"id": r["id"], "type": r["type"], "name": r["name"]}
+        for r in conn.execute(
+            "SELECT DISTINCT i.id, i.type, i.name FROM instances i "
+            "WHERE EXISTS (SELECT 1 FROM library_items li WHERE li.instance_id = i.id) "
+            "ORDER BY i.name"
+        ).fetchall()
+    ]
+
+    # emu_in_catalog/emu_aportes only get computed by the (throttled)
+    # eMuwarez catalog sync — read once and derive both which "¿En
+    # eMuwarez?" values and which "Aportes" values actually occur, rather
+    # than always offering both fixed options regardless of whether any
+    # item currently has them.
+    emu_rows = conn.execute("SELECT emu_in_catalog, emu_aportes FROM library_items").fetchall()
+    has_candidate = has_present = has_aporte_yes = has_aporte_no = False
+    for r in emu_rows:
+        ic = r["emu_in_catalog"]
+        if ic == 0:
+            has_candidate = True
+            has_aporte_yes = True
+        elif ic == 1:
+            has_present = True
+            try:
+                aportes = _json.loads(r["emu_aportes"]) if r["emu_aportes"] else []
+            except (TypeError, ValueError):
+                aportes = []
+            if aportes:
+                has_aporte_yes = True
+            else:
+                has_aporte_no = True
+    emu_states = [v for v, present in [("candidate", has_candidate), ("present", has_present)] if present]
+    aporte_states = [v for v, present in [("yes", has_aporte_yes), ("no", has_aporte_no)] if present]
+
+    # Same "only offer what actually occurs" rule for the Español column.
+    # "unknown" is offered too: on a library that has never been scanned
+    # it's the only value there is, and hiding it would leave the filter
+    # with nothing to pick.
+    seen_spanish = {r[0] for r in conn.execute(
+        "SELECT DISTINCT has_spanish_audio FROM library_items"
+    ).fetchall()}
+    spanish_states = [
+        v for v, present in [
+            ("yes", 1 in seen_spanish), ("no", 0 in seen_spanish), ("unknown", None in seen_spanish),
+        ] if present
+    ]
+
+    return {
+    "providers": providers,
+    "qualities": qualities,
+    "sources": sources,
+    "types": types,
+    "statuses": statuses,
+    "request_statuses": request_statuses,
+    "nomenclature_statuses": nomenclature_statuses,
+    "instances": instances,
+    "emu_states": emu_states,
+    "aporte_states": aporte_states,
+    "spanish_states": spanish_states,
+    }
+
+
+# Los campos con los que la lista de Subidas adorna cada trabajo: carátula,
+# origen, estado de petición… SELECT explícito y no `*` para no arrastrar la
+# fila entera por cada trabajo de la lista.
+_CAMPOS_ADORNO = (
+    "id, item_type, poster_url, backdrop_url, instance_type, instance_name, "
+    "request_status, year, instance_id, tmdb_id, title_slug"
+)
+
+
+def library_display_fields(item_ids, conn) -> dict[int, dict]:
+    """Los campos de adorno de varios elementos, indexados por id. El endpoint
+    de Subidas construía el IN a mano."""
+    ids = [int(i) for i in item_ids if i]
+    if not ids:
+        return {}
+    marcas = ",".join("?" * len(ids))
+    filas = conn.execute(
+        f"SELECT {_CAMPOS_ADORNO} FROM library_items WHERE id IN ({marcas})", tuple(ids)
+    ).fetchall()
+    return {r["id"]: dict(r) for r in filas}
+
+
+def library_display_fields_one(item_id: int, conn) -> dict | None:
+    """Lo mismo para uno solo, con los campos extra que pide la ficha de una
+    subida (título, temporada, capítulo, padre)."""
+    row = conn.execute(
+        f"SELECT {_CAMPOS_ADORNO}, title, season_number, episode_number, parent_id "
+        "FROM library_items WHERE id = ?",
+        (item_id,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def list_library_diagnostics(
+    *, status: str | None = None, search: str | None = None,
+    limit: int = 50, offset: int = 0, conn,
+) -> tuple[list[dict], int]:
+    """La lista de diagnósticos con sus filtros, y el total sin paginar.
+    Construía el WHERE a mano dentro del endpoint."""
+    condiciones, params = [], []
+    if status:
+        condiciones.append("li.local_status = ?")
+        params.append(status)
+    if search:
+        condiciones.append("li.title LIKE ?")
+        params.append(f"%{search}%")
+    where = ("WHERE " + " AND ".join(condiciones)) if condiciones else ""
+
+    filas = conn.execute(
+        f"""SELECT li.id, li.title, li.local_status, li.file_exists,
+                   li.file_verified_at, li.file_verification_error,
+                   li.arr_queue_status, li.arr_history_status, li.arr_history_error,
+                   li.diagnostic_status, li.diagnostic_summary,
+                   li.recommended_action, li.recommendation_reasons_json,
+                   li.recommendation_updated_at
+            FROM library_items li {where}
+            ORDER BY li.updated_at DESC LIMIT ? OFFSET ?""",
+        params + [limit, offset],
+    ).fetchall()
+    total_row = conn.execute(
+        f"SELECT COUNT(*) AS cnt FROM library_items li {where}", params
+    ).fetchone()
+    return [dict(r) for r in filas], (int(total_row["cnt"] or 0) if total_row else 0)
+
+
+def list_missing_diagnostics(*, limit: int = 50, offset: int = 0, conn) -> tuple[list[dict], int]:
+    """Los faltantes con su diagnóstico, y el total. Qué cuenta como faltante
+    lo decide LocalStatus.not_available(), no una lista escrita en el
+    endpoint."""
+    estados = list(LocalStatus.not_available())
+    marcas = ",".join("?" * len(estados))
+    filas = conn.execute(
+        f"""SELECT id, title, item_type, year, instance_type, instance_name,
+                   tmdb_id, imdb_id, local_status, request_status,
+                   arr_queue_status, arr_queue_progress, arr_queue_timeleft, arr_queue_error,
+                   arr_history_status, arr_history_error,
+                   file_exists, diagnostic_status, diagnostic_summary,
+                   recommended_action, recommendation_reasons_json, updated_at
+            FROM library_items WHERE local_status IN ({marcas})
+            ORDER BY updated_at DESC LIMIT ? OFFSET ?""",
+        estados + [limit, offset],
+    ).fetchall()
+    total_row = conn.execute(
+        f"SELECT COUNT(*) AS cnt FROM library_items WHERE local_status IN ({marcas})", estados
+    ).fetchone()
+    return [dict(r) for r in filas], (int(total_row["cnt"] or 0) if total_row else 0)

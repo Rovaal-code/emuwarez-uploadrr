@@ -970,3 +970,21 @@ def _run_queued_job(job_id: int) -> None:
         conn.close()
         if owns_gate:
             _upload_concurrency_gate.release()
+
+
+def dashboard_upload_counters(conn) -> dict:
+    """Los contadores de subidas del Panel. Vivían dentro del endpoint."""
+    try:
+        cuentas = {r["status"]: int(r["cnt"] or 0) for r in conn.execute(
+            "SELECT status, COUNT(*) AS cnt FROM upload_jobs GROUP BY status")}
+        ultima = conn.execute("SELECT MAX(updated_at) AS last_at FROM upload_jobs").fetchone()
+        return {
+            "uploads_ready": cuentas.get("ready", 0),
+            "uploads_running": cuentas.get("running", 0),
+            "uploads_completed": cuentas.get("completed", 0),
+            "uploads_failed": cuentas.get("failed", 0),
+            "last_upload_at": ultima["last_at"] if ultima else None,
+        }
+    except Exception:
+        return {"uploads_ready": 0, "uploads_running": 0, "uploads_completed": 0,
+                "uploads_failed": 0, "last_upload_at": None}

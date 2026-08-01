@@ -139,15 +139,10 @@ def adapt_nomenclature(
 def get_nomenclature_operations(item_id: int, current_user: dict = Depends(require_auth)):
     """Return filesystem operation history for a library item."""
     with _get_conn() as conn:
-        rows = conn.execute(
-            """SELECT * FROM filesystem_operations
-               WHERE library_item_id = ? AND operation_type IN ('nomenclature_rename', 'nomenclature_hardlink')
-               ORDER BY created_at DESC LIMIT 20""",
-            (item_id,),
-        ).fetchall()
+        from ...services.nomenclature import list_filesystem_operations
+        rows = list_filesystem_operations(item_id, conn=conn)
     ops = []
-    for r in rows:
-        d = dict(r)
+    for d in rows:
         warnings: list[str] = []
         errors: list[str] = []
         try:
@@ -226,17 +221,16 @@ def preview_nomenclature_fields(
         provider_options = []
         source = body.fields.get("source")
         if source in PROVIDER_SOURCES:
-            item_row = conn.execute(
-                "SELECT tmdb_id, item_type FROM library_items WHERE id = ?", (item_id,)
-            ).fetchone()
+            from ...services.nomenclature import item_tmdb_reference
+            item_tmdb_id, item_tipo = item_tmdb_reference(item_id, conn=conn)
             tmdb_codes: list[str] = []
-            if item_row and item_row["tmdb_id"]:
+            if item_tmdb_id:
                 try:
-                    tmdb_id = int(str(item_row["tmdb_id"]).split("/")[-1].strip())
+                    tmdb_id = int(str(item_tmdb_id).split("/")[-1].strip())
                     from ...services.settings import get_setting_canonical
                     region = get_setting_canonical(conn, "tmdb_watch_region") or "ES"
                     tmdb_codes = get_tmdb_available_providers(
-                        tmdb_id, item_row["item_type"] or "movie", region=region
+                        tmdb_id, item_tipo or "movie", region=region
                     )
                 except Exception:
                     pass
@@ -263,48 +257,12 @@ def save_nomenclature_fields(
     current_user: dict = Depends(require_auth),
 ):
     """Save editable fields and recalculate proposed_filename."""
-    import json as _json
-    from datetime import datetime, timezone
+    from ...services.nomenclature import save_manual_nomenclature_fields
     with _get_conn() as conn:
         preview = update_nomenclature_fields_preview(item_id, body.fields, conn=conn)
-        torrent_name = preview.get("torrent_name") or ""
-        internal_mkv_title = preview.get("internal_mkv_title") or ""
-        now = datetime.now(timezone.utc).isoformat()
-        conn.execute(
-            "UPDATE nomenclature_proposals SET status='expired', updated_at=? "
-            "WHERE library_item_id=? AND status NOT IN ('applied','expired')",
-            (now, item_id),
-        )
-        conn.execute(
-            """INSERT INTO nomenclature_proposals
-               (library_item_id, status, proposed_filename, proposed_title,
-                fields_json, year, resolution, source, provider_final,
-                video_codec, audio_summary, subtitle_summary, release_tag,
-                internal_mkv_title, created_at, updated_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (
-                item_id, "valid", torrent_name,
-                body.fields.get("title"),
-                _json.dumps(body.fields, ensure_ascii=False),
-                body.fields.get("year"),
-                body.fields.get("resolution"),
-                # Same `source` column build_nomenclature_proposal()/
-                # save_nomenclature_proposal() write and the job detail page's
-                # "Nomenclatura" card reads — NOT the separate source_final
-                # column (an orphan nobody else reads), which this used to
-                # write into by mistake, leaving `source` (and every other
-                # technical field below) NULL for a manually-edited proposal.
-                body.fields.get("source"),
-                body.fields.get("provider"),
-                body.fields.get("video_codec"),
-                body.fields.get("audio_summary"),
-                body.fields.get("subs"),
-                body.fields.get("tag"),
-                internal_mkv_title,
-                now, now,
-            ),
-        )
-        conn.commit()
+        save_manual_nomenclature_fields(item_id, body.fields, preview, conn=conn)
+    torrent_name = preview.get("torrent_name") or ""
+    internal_mkv_title = preview.get("internal_mkv_title") or ""
     return {
         "ok": True,
         "torrent_name": torrent_name,

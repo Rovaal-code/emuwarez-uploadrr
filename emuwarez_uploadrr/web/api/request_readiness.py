@@ -167,8 +167,8 @@ def list_candidates(
     from emuwarez_uploadrr.services.request_readiness import get_candidates_for_request
     with _get_conn() as conn:
         # Verify request exists
-        row = conn.execute("SELECT id FROM request_items WHERE id = ?", (request_id,)).fetchone()
-        if not row:
+        from ...services.request_readiness import request_exists
+        if not request_exists(request_id, conn):
             raise HTTPException(status_code=404, detail="Petición no encontrada")
         items = get_candidates_for_request(request_id, conn)
     return [_candidate_to_response(c) for c in items]

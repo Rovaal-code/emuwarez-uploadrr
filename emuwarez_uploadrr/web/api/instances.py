@@ -41,8 +41,9 @@ def _row_to_safe(row: dict) -> InstanceSafeResponse:
 @router.get("", response_model=list[InstanceSafeResponse])
 def list_instances(current_user: dict = Depends(require_auth)) -> list[InstanceSafeResponse]:
     with _get_conn() as conn:
-        rows = conn.execute("SELECT * FROM instances ORDER BY type, name").fetchall()
-    return [_row_to_safe(dict(r)) for r in rows]
+        from ...services.instances import list_instance_rows
+        rows = list_instance_rows(conn)
+    return [_row_to_safe(r) for r in rows]
 
 
 @router.post("", response_model=OkResponse, status_code=201)
@@ -57,11 +58,8 @@ def create_instance(
             # unreachable/unauthorized instance must not be created.
             iid = add_instance(conn, body.type, body.name, body.url, body.api_key, test_connection=True)
             if body.is_4k or body.is_anime:
-                conn.execute(
-                    "UPDATE instances SET is_4k=?, is_anime=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
-                    (int(body.is_4k), int(body.is_anime), iid),
-                )
-                conn.commit()
+                from ...services.instances import set_instance_flags
+                set_instance_flags(iid, is_4k=body.is_4k, is_anime=body.is_anime, conn=conn)
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     return OkResponse(message=f"Instancia '{body.name}' ({body.type}) creada con ID {iid}")
@@ -94,8 +92,9 @@ def update_instance_endpoint(
             )
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-        row = conn.execute("SELECT * FROM instances WHERE id = ?", (instance_id,)).fetchone()
-    return _row_to_safe(dict(row))
+        from ...services.instances import get_instance_row
+        row = get_instance_row(instance_id, conn)
+    return _row_to_safe(row)
 
 
 @router.delete("/{instance_id}", response_model=OkResponse)

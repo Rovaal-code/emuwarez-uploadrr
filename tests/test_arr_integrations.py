@@ -302,6 +302,9 @@ def test_extract_media_info_full():
         "video_codec": "HEVC", "audio_codec": "DTS",
         "audio_languages": "eng / spa", "subtitle_languages": "eng",
         "audio_channels": "5.1", "dynamic_range": "DV HDR10",
+        # Este payload no trae `resolution`; cuando la trae se lee, y de ahí
+        # depende que una serie SD tenga resolución (ver test_resolucion_sd).
+        "resolution": None,
     }
 
 
@@ -311,7 +314,7 @@ def test_extract_media_info_missing_key():
     assert result == {
         "video_codec": None, "audio_codec": None,
         "audio_languages": None, "subtitle_languages": None,
-        "audio_channels": None, "dynamic_range": None,
+        "audio_channels": None, "dynamic_range": None, "resolution": None,
     }
 
 

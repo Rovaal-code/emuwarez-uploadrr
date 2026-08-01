@@ -1079,3 +1079,64 @@ def _safe_request_dict(d: dict) -> dict:
     if not d.get("compatibility_status"):
         d["compatibility_status"] = emu_override_status(d.get("emu_status")) or "Sin coincidencia"
     return d
+
+
+def dashboard_request_counters(conn: sqlite3.Connection) -> dict[str, int | str | None]:
+    """Los contadores de peticiones del Panel.
+
+    Vivían dentro del endpoint (auditoría, hallazgo 6.2), y no eran consultas
+    tontas: "Compatible" cuenta peticiones cuya MEJOR coincidencia lo es, no
+    filas de coincidencia; "Mías" exige author_visible porque una fila sin
+    autor visible no es tuya aunque el texto coincida por casualidad; y
+    "Reclamadas" busca por subcadena porque eMuwarez no dice si la reclamación
+    es tuya. Ese criterio es de dominio, no de HTTP."""
+    from .settings import get_setting_canonical
+
+    def _cuenta(sql: str, params: tuple = ()) -> int:
+        try:
+            row = conn.execute(sql, params).fetchone()
+            return int(row["cnt"] or 0) if row else 0
+        except Exception:
+            return 0
+
+    try:
+        row = conn.execute(
+            """SELECT COUNT(*) AS total,
+                      SUM(CASE WHEN LOWER(COALESCE(emu_status,'')) IN ('filled','llena','lleno','1')
+                               THEN 1 ELSE 0 END) AS filled
+               FROM request_items"""
+        ).fetchone()
+        total, filled = (int(row["total"] or 0), int(row["filled"] or 0)) if row else (0, 0)
+    except Exception:
+        total = filled = 0
+
+    def _mejor(status: str) -> int:
+        return _cuenta(
+            """SELECT COUNT(*) AS cnt FROM request_items ri
+               WHERE (SELECT rm.status FROM request_matches rm
+                      WHERE rm.request_item_id = ri.id
+                      ORDER BY rm.confidence DESC LIMIT 1) = ?""",
+            (status,),
+        )
+
+    mias = 0
+    usuario = get_setting_canonical(conn, "emu.username")
+    if usuario:
+        mias = _cuenta(
+            "SELECT COUNT(*) AS cnt FROM request_items WHERE author_visible = 1 AND author = ?",
+            (usuario,),
+        )
+
+    return {
+        "requests_total": total,
+        "requests_filled": filled,
+        "requests_compatible": _mejor("Compatible"),
+        "requests_partial": _mejor("Parcial"),
+        "requests_mine": mias,
+        "requests_reclaimed": _cuenta(
+            "SELECT COUNT(*) AS cnt FROM request_items "
+            "WHERE LOWER(COALESCE(emu_status,'')) LIKE '%reclam%' "
+            "   OR LOWER(COALESCE(emu_status,'')) LIKE '%claim%'"
+        ),
+        "requests_last_sync_at": get_state(conn, "last_emu_requests_sync_utc"),
+    }

@@ -332,13 +332,8 @@ def get_uploads(
         tmdb_id_by_item: dict[int, str] = {}
         title_slug_by_item: dict[int, str] = {}
         if item_ids:
-            placeholders = ",".join("?" * len(item_ids))
-            for row in conn.execute(
-                f"SELECT id, item_type, poster_url, backdrop_url, instance_type, instance_name, request_status, year, "
-                f"instance_id, tmdb_id, title_slug "
-                f"FROM library_items WHERE id IN ({placeholders})",
-                tuple(item_ids),
-            ):
+            from ...services.library import library_display_fields
+            for row in library_display_fields(item_ids, conn).values():
                 media_by_item[row["id"]] = row["item_type"]
                 if row["poster_url"]:
                     poster_by_item[row["id"]] = row["poster_url"]
@@ -391,12 +386,8 @@ def get_upload(job_id: int, current_user: dict = Depends(require_auth)):
         display_title = None
         item_id = job.get("library_item_id")
         if item_id:
-            row = conn.execute(
-                "SELECT item_type, poster_url, backdrop_url, instance_type, instance_name, request_status, year, "
-                "instance_id, tmdb_id, title_slug, title, season_number, episode_number, parent_id "
-                "FROM library_items WHERE id = ?",
-                (item_id,),
-            ).fetchone()
+            from ...services.library import library_display_fields_one
+            row = library_display_fields_one(item_id, conn)
             if row:
                 media_type = row["item_type"]
                 poster_url = row["poster_url"]

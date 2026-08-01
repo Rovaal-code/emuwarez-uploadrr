@@ -407,15 +407,35 @@ def _write_snapshot(job_id: int, column: str, data, conn) -> None:
 
 
 def _fail(job_id: int, message: str) -> None:
+    """Marca el trabajo como fallido, salvo que el usuario ya lo hubiera
+    cancelado.
+
+    La guardia es la misma que documenta upload_execution._finalize_job_status,
+    y por el mismo motivo: cancelar es una decisión del usuario y el sistema no
+    puede pisarla. Sin ella, cancelar mientras preparaba y que fallara algo
+    justo después (un fichero que ya no está, mkvmerge que devuelve error)
+    dejaba la fila en Fallido, así que el usuario no veía lo que había hecho.
+
+    Solo se excluye 'cancelled', no 'failed': volver a marcar como fallido algo
+    ya fallido no miente ni pierde nada, solo actualiza el mensaje al más
+    reciente."""
     from .upload_execution import append_upload_log, _notify_upload_failed
     conn = connect()
     try:
-        conn.execute(
+        cur = conn.execute(
             "UPDATE upload_jobs SET status = 'failed', stage = 'failed', "
-            "error_message = ?, finished_at = ?, updated_at = ? WHERE id = ?",
+            "error_message = ?, finished_at = ?, updated_at = ? "
+            "WHERE id = ? AND status != 'cancelled'",
             (message, _now_iso(), _now_iso(), job_id),
         )
         conn.commit()
+        if cur.rowcount == 0:
+            # Ya estaba cancelado: se deja constancia en su registro, porque el
+            # error ocurrió de verdad y explica por qué se paró donde se paró.
+            append_upload_log(job_id, "warning",
+                              f"Error posterior a la cancelación: {message}",
+                              stream="system", conn=conn)
+            return
         append_upload_log(job_id, "error", message, stream="system", conn=conn)
     finally:
         conn.close()

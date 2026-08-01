@@ -138,12 +138,18 @@ def check_required_secrets() -> dict:
         db_path = Path(config_dir) / "emuwarez_uploadrr.db"
         if not db_path.exists():
             return _check("required_secrets", "warning", "BD no existe aún, secretos sin verificar", {})
-        conn = sqlite3.connect(str(db_path))
-        rows = conn.execute("SELECT key, value FROM settings WHERE key IN ('tmdb_api_key','emu_api_key')").fetchall()
-        conn.close()
-        found = {k: bool(v) for k, v in rows}
-        tmdb_ok = found.get("tmdb_api_key", False)
-        emu_ok = found.get("emu_api_key", False)
+        # get_setting_canonical y no un SELECT a pelo: la clave canónica es la
+        # de punto ('tmdb.api_key'), que es la única que escriben el asistente
+        # y la interfaz, y el guion bajo es el alias antiguo que solo tienen
+        # las instalaciones que vienen del CLI. Preguntando solo por el alias,
+        # esto decía "Secretos sin configurar" a todo el mundo.
+        from ..database import connect as _connect, get_setting_canonical
+        conn = _connect(db_path)
+        try:
+            tmdb_ok = bool((get_setting_canonical(conn, "tmdb.api_key") or "").strip())
+            emu_ok = bool((get_setting_canonical(conn, "emu.api_key") or "").strip())
+        finally:
+            conn.close()
         if tmdb_ok and emu_ok:
             return _check("required_secrets", "ok", "Secretos de TMDb y eMuwarez configurados", {
                 "tmdb": "configurado",

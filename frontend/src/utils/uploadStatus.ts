@@ -74,9 +74,18 @@ export function latestInChain(jobs: UploadJob[]): UploadJob | null {
 const PHASE_LABEL: Record<string, string> = {
   staging: 'Generando nomenclatura',
   queued: 'En cola',
+  // Las siete fases que publica el backend (services/uploadrr_progress.py,
+  // PHASES). Sin una de ellas aquí, phaseLabel() devolvería su clave interna
+  // cruda ("hash_torrent") — y eso pasa justo cuando no hay progreso legible,
+  // o sea con un trabajo atascado, que es el peor momento para enseñar jerga.
+  // Lo vigila tests/test_copias_frontend.py.
   verificacion_presubida: 'Inicio de Uploadrr',
   nomenclature: 'Aplicando nomenclatura',
   remux: 'Reordenando/renombrando pistas',
+  screenshots: 'Generando y subiendo capturas',
+  hash_torrent: 'Calculando el hash del torrent',
+  uploading_emu: 'Subiendo a eMuwarez',
+  qbittorrent_add: 'Subiendo a qBittorrent',
   config_staging: 'Preparando configuración',
   // Repliegue genérico cuando no hay ninguna fase "running" detectable (p.ej.
   // Uploadrr-EMU atascado reintentando en silencio) — deliberadamente NO usa

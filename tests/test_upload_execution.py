@@ -846,3 +846,53 @@ def test_a_self_referencing_row_does_not_hang_the_chain_walk(db_conn):
     db_conn.execute("UPDATE upload_jobs SET retry_of_job_id = id WHERE id = ?", (jid,))
     db_conn.commit()
     assert retry_chain_ids(jid, conn=db_conn) == [jid]
+
+
+# --- La guardia de _fail (hallazgo 4.1 de la auditoría) --------------------
+
+def test_a_failure_after_a_cancel_does_not_overwrite_the_cancel(db_conn):
+    """Cancelar es una decisión del usuario y el sistema no puede pisarla.
+
+    _finalize_job_status dedica catorce líneas de docstring a explicar por qué
+    su guardia es imprescindible; _fail, llamada desde 24 sitios de la fase de
+    preparación, no tenía ninguna. Cancelas mientras prepara, falla algo justo
+    después (un fichero que ya no está, mkvmerge que devuelve error) y la fila
+    acababa en Fallido: el usuario no veía lo que hizo, veía otra cosa."""
+    from emuwarez_uploadrr.services.upload_queue import _fail
+
+    jid = _insert_job(db_conn, status="cancelled")
+
+    _fail(jid, "El archivo no es accesible")
+
+    fila = db_conn.execute("SELECT status, error_message FROM upload_jobs WHERE id=?", (jid,)).fetchone()
+    assert fila["status"] == "cancelled", "un fallo posterior ha pisado la cancelación"
+
+
+def test_a_failure_still_lands_on_a_job_that_was_running(db_conn):
+    """Y lo normal sigue funcionando: un trabajo vivo que falla se marca."""
+    from emuwarez_uploadrr.services.upload_queue import _fail
+
+    jid = _insert_job(db_conn, status="running")
+    _fail(jid, "mkvmerge devolvió error")
+
+    fila = db_conn.execute("SELECT status, error_message FROM upload_jobs WHERE id=?", (jid,)).fetchone()
+    assert fila["status"] == "failed"
+    assert fila["error_message"] == "mkvmerge devolvió error"
+
+
+def test_a_cancelled_job_does_not_notify_that_the_upload_failed(db_conn, monkeypatch):
+    """Y tampoco se avisa por Discord/Telegram de una subida "fallida" que en
+    realidad canceló el usuario: el aviso llegaba igual."""
+    from emuwarez_uploadrr.services import upload_queue
+
+    avisos = []
+    import emuwarez_uploadrr.services.upload_execution as ue
+    monkeypatch.setattr(ue, "_notify_upload_failed", lambda *a, **kw: avisos.append(a))
+
+    jid = _insert_job(db_conn, status="cancelled")
+    upload_queue._fail(jid, "El archivo no es accesible")
+    assert not avisos, "ha avisado de una subida fallida que estaba cancelada"
+
+    jid2 = _insert_job(db_conn, status="running")
+    upload_queue._fail(jid2, "mkvmerge devolvió error")
+    assert len(avisos) == 1

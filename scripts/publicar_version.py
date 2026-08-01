@@ -29,6 +29,24 @@ from datetime import datetime, timezone
 REPO_POR_DEFECTO = "Rovaal-code/uploadrr-version"
 FICHERO = "latest.json"
 
+# Este fichero es PÚBLICO. La nota de cada versión la lee cualquiera, incluido
+# quien quiera atacar a los que todavía no han actualizado: decir "se arregla
+# que la API key salía sin enmascarar" es contarle dónde mirar en la versión
+# anterior. Estas palabras no significan que el cambio sea malo, significan
+# que la nota hay que redactarla en neutro ("mejoras de seguridad").
+_PALABRAS_DELICADAS = (
+    "api key", "apikey", "clave", "contraseña", "password", "token", "secreto",
+    "secret", "credencial", "enmascar", "vulnerab", "exploit", "inyec",
+    "systemexit", "expone", "expuesto", "fuga", "leak", "auth", "sesión",
+    "permiso", "traversal", "rce", "xss", "csrf",
+)
+
+
+def revisar_nota(nota: str) -> list[str]:
+    """Las palabras delicadas que aparecen en la nota, si las hay."""
+    bajo = nota.lower()
+    return [p for p in _PALABRAS_DELICADAS if p in bajo]
+
 
 def _git(*args: str) -> str:
     return subprocess.run(["git", *args], capture_output=True, text=True,
@@ -40,7 +58,9 @@ def construir_manifiesto(digest: str | None, notas: str | None) -> dict:
         "commit": _git("rev-parse", "HEAD"),
         "fecha": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "digest": digest,
-        "notas": notas or _git("log", "-1", "--format=%s"),
+        # NUNCA el título del commit por defecto: es donde se describe el fallo
+        # que se acaba de arreglar, y esto es público.
+        "notas": notas or "Actualización disponible",
         # La versión del paquete, informativa: la comparación se hace por
         # commit, que es lo único que cambia en cada despliegue.
         "version": _leer_version(),
@@ -73,12 +93,25 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--digest", help="digest de la imagen recién subida (sha256:...)")
-    p.add_argument("--notas", help="qué trae esta versión, en una línea")
+    p.add_argument("--notas", help="qué trae esta versión, en una línea y en neutro")
+    p.add_argument("--acepto-la-nota", action="store_true",
+                   help="publicar aunque la nota mencione algo delicado")
     p.add_argument("--repo", nargs="?", const=REPO_POR_DEFECTO,
                    help=f"repositorio público donde publicar (por defecto {REPO_POR_DEFECTO})")
     args = p.parse_args()
 
     manifiesto = construir_manifiesto(args.digest, args.notas)
+    delicadas = revisar_nota(manifiesto["notas"])
+    if delicadas and not args.acepto_la_nota:
+        print("✗ La nota menciona algo delicado y este fichero es PÚBLICO:",
+              ", ".join(delicadas), file=sys.stderr)
+        print("\n  " + manifiesto["notas"], file=sys.stderr)
+        print("\nQuien lea esto sabe qué buscar en la versión ANTERIOR, que es la que"
+              "\nsigue ejecutando quien no haya actualizado. Redáctala en neutro"
+              '\n(por ejemplo: "Correcciones y mejoras de seguridad") o repite con'
+              "\n--acepto-la-nota si de verdad no compromete nada.", file=sys.stderr)
+        return 1
+
     texto = json.dumps(manifiesto, indent=2, ensure_ascii=False)
 
     if not args.repo:

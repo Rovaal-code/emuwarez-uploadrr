@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useTransition, memo } from 'react'
 import { getLibrary, TOP_LEVEL_PARENT_FILTER, getLibraryFilterOptions, getLibraryItem, type LibraryFilterOptions } from '../api/library'
 import { Tooltip } from '../components/Tooltip'
 import { getLocalStatusInfo } from '../utils/status'
+import { useRecargarAlVerse } from '../hooks/useRefrescoPorAvisos'
 import { useSync } from '../context/SyncContext'
 import { EmuSyncButton } from '../components/EmuSyncButton'
 import { getInstances } from '../api/instances'
@@ -21,7 +22,6 @@ import { LibraryDetailPage } from '../components/LibraryDetailPage'
 import { HeaderFilter } from '../components/HeaderFilter'
 import { posterUrl, isAporteEligible } from '../utils/libraryItem'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
-import { guardarPagina, tomarCopia, copiaNoConfirmada, generacionCache } from '../utils/cachePaginas'
 
 const LOAD_LIMIT = 20000  // show everything in one container (no pagination); backend caps here
 
@@ -91,10 +91,8 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // que se cargó SIN FILTROS y se refresca por detrás. Los filtros sí se
   // reinician, y por eso solo se guarda la vista sin filtrar: reutilizar un
   // resultado filtrado bajo unos filtros vacíos parecería que faltan cosas.
-  // Una sola vez al montar, no en cada render (ver tomarCopia).
-  const [guardado] = useState(() => tomarCopia<LibraryListResponse>('biblioteca'))
-  const [data, setData] = useState<LibraryListResponse | null>(guardado)
-  const [loading, setLoading] = useState(!guardado)
+  const [data, setData] = useState<LibraryListResponse | null>(null)
+  const [loading, setLoading] = useState(true)
   // Applying a Provider/Resolución filter fetches every level (up to LOAD_LIMIT)
   // and re-renders a large list — a synchronous commit that briefly froze the
   // UI after `loading` had already flipped back to false. Committing the data
@@ -209,13 +207,6 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
       // mixed-provider series would hide a season whose episodes are all e.g.
       // Netflix. Without them we keep the top-level tree.
       const flatFilter = !!(searchProvider || searchQuality || searchSource || filterEmu || filterAporte)
-      // La vista de partida: sin nada puesto, primera página y orden por
-      // defecto. Es la única que se guarda, porque es la única que se verá al
-      // volver (los filtros se reinician).
-      const sinFiltros = !debouncedSearch && !filterType && !filterStatus && !filterInstanceId
-        && !filterRequest && !filterSpanish && !flatFilter
-        && offset === 0 && sortBy === 'title_asc'
-      const generacion = generacionCache()
       const result = await getLibrary({
         search: debouncedSearch || undefined,
         type: filterType || undefined,
@@ -229,13 +220,8 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
         offset,
       })
       startTransition(() => setData(result))
-      if (sinFiltros) guardarPagina('biblioteca', result, { generacion })
     } catch {
       setError('Error al cargar la biblioteca')
-      // Si lo de la pantalla era una copia sin confirmar, se vacía: es un dato
-      // de antigüedad desconocida y ya no va a llegar nada que lo corrija.
-      // Biblioteca es la que más lo necesita, porque no repide sola.
-      if (copiaNoConfirmada('biblioteca')) setData(null)
     } finally {
       setLoading(false)
     }
@@ -322,7 +308,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // back, which is what made the table flash "cargando" twice in a row. Same
   // shape RequestsPage uses.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (lastInvalidatedAt) load() }, [lastInvalidatedAt])
+  useRecargarAlVerse(load, lastInvalidatedAt)
 
   function applyFilters() {
     setOffset(0)

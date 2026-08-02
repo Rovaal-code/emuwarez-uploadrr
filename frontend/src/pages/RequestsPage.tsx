@@ -39,7 +39,6 @@ import {
 import { HeaderFilter } from '../components/HeaderFilter'
 import { formatBytes, timeAgo, formatDate } from '../utils/format'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
-import { guardarPagina, tomarCopia, copiaNoConfirmada, generacionCache } from '../utils/cachePaginas'
 
 // Fallback for "Consultar en eMuwarez" while we don't have the exact
 // per-request URL yet — points at the general requests listing instead of
@@ -586,12 +585,11 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
     try { sessionStorage.setItem('emuwarez_open_library_item', String(id)) } catch { /* ignore */ }
     onNavigate?.('library')
   }
-  // Volver a Peticiones no vuelve a enseñar "Cargando…": se parte de lo último
-  // sin filtrar y se refresca por detrás. Los filtros se reinician, así que
-  // solo se guarda esa vista (ver utils/cachePaginas).
-  const [guardado] = useState(() => tomarCopia<{ items: RequestItemResponse[]; total: number }>('peticiones'))
-  const [items, setItems] = useState<RequestItemResponse[]>(guardado?.items ?? [])
-  const [total, setTotal] = useState(guardado?.total ?? 0)
+  // Volver aquí no vuelve a enseñar "Cargando…" ni reinicia los filtros: la
+  // sección no se desmonta al cambiar de pestaña, se queda montada y oculta
+  // (ver AppShell). Esto solo corre la PRIMERA vez que se entra.
+  const [items, setItems] = useState<RequestItemResponse[]>([])
+  const [total, setTotal] = useState(0)
   const [offset, setOffset] = useState(0)
   const [search, setSearch] = useState('')
   // The input stays bound to `search` for instant typing feedback; loadItems
@@ -611,7 +609,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   const [facets, setFacets] = useState<{ categories: string[]; resolutions: string[]; sources: string[]; authors: string[]; statuses: string[] }>({
     categories: [], resolutions: [], sources: [], authors: [], statuses: [],
   })
-  const [loading, setLoading] = useState(!guardado)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   // Requests sync is global (shared with the Dashboard's "Peticiones" button
   // and the progress banner), so it can't be launched twice across tabs.
@@ -718,7 +716,6 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
     setLoading(true)
     setError(null)
     try {
-      const generacion = generacionCache()
       const res = await getRequests({
         search: debouncedSearch || undefined,
         status: statusFilter || undefined,
@@ -736,13 +733,10 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
       if (isUnfiltered && off === 0) {
         setFacets(computeFacets(res.items))
         if (sortBy === 'created_desc') {
-          guardarPagina('peticiones', { items: res.items, total: res.total }, { generacion })
         }
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error cargando peticiones')
-      // Ver LibraryPage: solo se vacía si la copia nunca llegó a confirmarse.
-      if (copiaNoConfirmada('peticiones')) { setItems([]); setTotal(0) }
     } finally {
       setLoading(false)
     }

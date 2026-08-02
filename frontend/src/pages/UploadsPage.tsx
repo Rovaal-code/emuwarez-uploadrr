@@ -19,7 +19,6 @@ import {
   UPLOAD_TYPE_LABEL, STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo,
   progressCounter, queuedWaitText, useTicker,
 } from '../utils/uploadStatus'
-import { guardarPagina, tomarCopia, copiaNoConfirmada, generacionCache } from '../utils/cachePaginas'
 import { useRefrescoPorAvisos, AVISOS_SUBIDA } from '../hooks/useRefrescoPorAvisos'
 
 // Backend-real gates — mirror cancel_upload_job()/queue_retry_for_job() in
@@ -284,16 +283,14 @@ function JobRow({ job, instances, onOpen, indent, retryToggle, onCancel, onRetry
 }
 
 export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => void } = {}) {
-  const [guardadoSubidas] = useState(() => tomarCopia<UploadJob[]>('subidas'))
-  const [jobs, setJobs] = useState<UploadJob[]>(guardadoSubidas ?? [])
+  const [jobs, setJobs] = useState<UploadJob[]>([])
   // Only needed to build the Origen deep link (same as Biblioteca's own column).
   const [instances, setInstances] = useState<InstanceSafeResponse[]>([])
   useEffect(() => { getInstances().then(setInstances).catch(() => {}) }, [])
-  // Volver a Subidas no vuelve a enseñar "Cargando…": se parte de lo último
-  // sin filtrar y se refresca por detrás (además del refresco propio cada 2,5s
-  // mientras hay algo en marcha). Los filtros se reinician, así que solo se
-  // guarda esa vista (ver utils/cachePaginas).
-  const [loading, setLoading] = useState(!guardadoSubidas)
+  // Volver aquí no vuelve a enseñar "Cargando…" ni reinicia los filtros: la
+  // sección no se desmonta al cambiar de pestaña, se queda montada y oculta
+  // (ver AppShell). Esto solo corre la PRIMERA vez que se entra.
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState('')
   const [search, setSearch] = useState('')
@@ -327,7 +324,6 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const load = async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) { setLoading(true); setError(null) }
     const seq = ++loadSeqRef.current
-    const generacion = generacionCache()
     try {
       // The "Subiendo" filter option (value 'running') must also catch
       // 'preparing' jobs — they display identically as "Subiendo" now (see
@@ -336,12 +332,9 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
       const data = await getUploads(statusFilter && statusFilter !== 'running' ? { status: statusFilter } : undefined)
       if (seq === loadSeqRef.current) {
         setJobs(data)
-        if (!statusFilter) guardarPagina('subidas', data, { generacion })
       }
     } catch {
       if (!opts?.silent) setError('Error al cargar los trabajos de subida.')
-      // Ver LibraryPage: solo se vacía si la copia nunca llegó a confirmarse.
-      if (copiaNoConfirmada('subidas')) setJobs([])
     }
     finally { if (!opts?.silent) setLoading(false) }
   }

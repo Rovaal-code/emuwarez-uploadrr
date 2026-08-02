@@ -11,7 +11,6 @@ import {
   type EmuSyncMode,
 } from '../api/library'
 import { syncRequests, getSyncStatus } from '../api/requests'
-import { olvidarPagina } from '../utils/cachePaginas'
 import { suscribirse, canalVivo } from '../api/eventos'
 import type { RequestSyncStatusResponse } from '../types/api'
 
@@ -55,10 +54,10 @@ interface SyncContextValue {
   messageIsError: boolean
   messageFadingOut: boolean
   // Marca creciente: "lo que tengas cargado ya no vale, vuelve a pedirlo".
-  // La página MONTADA se recarga con esto; las demás están desmontadas y lo
-  // que se les tira es su copia (utils/cachePaginas), en el mismo sitio.
+  // La sección que se esté viendo recarga al momento; las demás están
+  // montadas pero ocultas y lo hacen al volver a ellas (useRecargarAlVerse).
   // Sube por dos hechos, no por el paso del tiempo: termina una
-  // sincronización, o vuelves a la pestaña.
+  // sincronización, o vuelves a la pestaña del navegador.
   lastInvalidatedAt: number
 }
 
@@ -147,19 +146,22 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   const catalogBusy = useRef(false)
   const requestsBusy = useRef(false)
 
-  // "Nada de lo cargado vale ya": tira la copia de las secciones desmontadas y
-  // avisa a la montada para que se recargue. Las dos mitades van juntas a
-  // propósito, porque una sin la otra deja la mitad de la aplicación mintiendo.
+  // "Nada de lo cargado vale ya, volved a pedirlo".
   //
-  // Se olvidan TODAS las secciones y no solo la que parece afectada: una
-  // sincronización toca varias a la vez (el catálogo cambia el "Llena / Sin
-  // petición" de Biblioteca, y los tres contadores del Panel).
+  // Ojo con lo que NO hace: no borra nada de la pantalla. Hubo una versión que
+  // sí, y fue un error — volver de otra pestaña del navegador dispara esto, y
+  // dejaba a todas las secciones sin nada que enseñar, así que entrar en
+  // cualquiera de ellas volvía a sacar "Cargando…". Revalidar es refrescar por
+  // detrás, no vaciar y empezar de cero.
+  //
+  // Se avisa a TODAS y no solo a la que parece afectada: una sincronización
+  // toca varias a la vez (el catálogo cambia el "Llena / Sin petición" de
+  // Biblioteca, y los tres contadores del Panel).
   const ultimaInvalidacion = useRef(0)
   const invalidarTodo = useCallback(() => {
     const ahora = Date.now()
     if (ahora - ultimaInvalidacion.current < AGLUTINAR_MS) return
     ultimaInvalidacion.current = ahora
-    olvidarPagina()
     setLastInvalidatedAt(ahora)
   }, [])
 

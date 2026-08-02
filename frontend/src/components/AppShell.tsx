@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react'
 import { Sidebar } from './Sidebar'
+import { SeccionVisible } from '../context/SeccionVisible'
 import { Topbar } from './Topbar'
 import type { CurrentUserResponse } from '../types/api'
 import { guardedLeave, hasUnsavedChanges } from '../utils/unsavedGuard'
@@ -43,7 +44,7 @@ const PAGE_TITLE: Record<string, string> = {
   settings:   'Configuración',
 }
 
-function PageContent({ page, onNavigate }: { page: string; onNavigate: (p: string) => void }) {
+function unaPagina(page: string, onNavigate: (p: string) => void) {
   switch (page) {
     case 'dashboard':  return <DashboardPage onNavigate={onNavigate} />
     case 'library':    return <LibraryPage onNavigate={onNavigate} />
@@ -56,6 +57,48 @@ function PageContent({ page, onNavigate }: { page: string; onNavigate: (p: strin
     case 'settings':   return <SettingsPage />
     default:           return <DashboardPage />
   }
+}
+
+/**
+ * Las secciones NO se desmontan al cambiar de pestaña: se quedan montadas y
+ * ocultas, y volver a una es instantáneo.
+ *
+ * Antes esto era un `switch`, o sea que cambiar de pestaña destruía la sección
+ * entera y volver a ella la levantaba de cero: pedir los datos otra vez,
+ * volver a pintar la lista, y mientras tanto "Cargando…". Con Biblioteca eso
+ * se notaba especialmente, porque pinta hasta 20.000 filas de una vez y
+ * rehacerlas cuesta, hubiera cambiado algo o no.
+ *
+ * Hubo un intento intermedio de guardar la última carga de cada sección para
+ * volver a pintarla al entrar. Tapaba el síntoma a medias —seguía habiendo que
+ * rehacer todo el árbol— y traía sus propios problemas: cuándo caduca la
+ * copia, qué hacer si al confirmarla falla la recarga, cómo no reutilizar una
+ * lista filtrada bajo unos filtros ya reiniciados. Nada de eso existe si la
+ * sección simplemente sigue ahí, así que se quitó entero.
+ *
+ * Se montan según se visitan, no todas de golpe: entrar en la aplicación no
+ * puede costar levantar nueve pantallas de las que vas a mirar una.
+ *
+ * `display: contents` hace que este envoltorio no genere caja, así que la
+ * sección sigue colocándose exactamente igual que cuando colgaba directa de
+ * `.page-container`. La oculta va con `display: none`, que la saca del
+ * renderizado y del árbol de accesibilidad: no ocupa, no se puede tabular a
+ * ella, y el tour no la confunde con la buena (mide rectángulos, y los de una
+ * sección oculta son de tamaño cero).
+ */
+function PageContent({ page, onNavigate }: { page: string; onNavigate: (p: string) => void }) {
+  const visitadas = useRef<string[]>([])
+  if (!visitadas.current.includes(page)) visitadas.current = [...visitadas.current, page]
+
+  return (
+    <>
+      {visitadas.current.map(p => (
+        <div key={p} style={{ display: p === page ? 'contents' : 'none' }}>
+          <SeccionVisible visible={p === page}>{unaPagina(p, onNavigate)}</SeccionVisible>
+        </div>
+      ))}
+    </>
+  )
 }
 
 // Tabs that map to a URL path, so the address bar reflects the current tab
@@ -112,6 +155,34 @@ export function AppShell({ user, onLogout }: AppShellProps) {
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [])
 
+  // El desplazamiento lo lleva `.page-container`, que ahora es uno solo para
+  // todas las secciones: sin esto, dejar Biblioteca a media altura y entrar en
+  // Peticiones te dejaba en mitad de Peticiones. Se guarda el de la que sale y
+  // se restaura el de la que entra, así que cada sección recuerda por dónde
+  // ibas, que es parte de que volver se sienta instantáneo.
+  const contenedor = useRef<HTMLElement | null>(null)
+  const alturas = useRef<Record<string, number>>({})
+  const paginaActual = useRef(activePage)
+
+  // Se apunta MIENTRAS te desplazas, no al cambiar de sección. Intenté lo
+  // segundo y no funciona: para cuando el efecto puede leer `scrollTop`, el
+  // navegador ya ha recortado el desplazamiento a la altura de la sección
+  // nueva, así que lo que se guardaba de la que salía era casi siempre 0.
+  useEffect(() => {
+    const caja = contenedor.current
+    if (!caja) return
+    const apuntar = () => { alturas.current[paginaActual.current] = caja.scrollTop }
+    caja.addEventListener('scroll', apuntar, { passive: true })
+    return () => caja.removeEventListener('scroll', apuntar)
+  }, [])
+
+  // Antes de pintar, para que no se vea el salto.
+  useLayoutEffect(() => {
+    paginaActual.current = activePage
+    const caja = contenedor.current
+    if (caja) caja.scrollTop = alturas.current[activePage] ?? 0
+  }, [activePage])
+
   return (
     <div className="app-shell hud-app">
       <UnsavedChangesModal />
@@ -122,7 +193,7 @@ export function AppShell({ user, onLogout }: AppShellProps) {
           pageTitle={PAGE_TITLE[activePage] ?? ''}
           onLogout={onLogout}
         />
-        <main className="page-container">
+        <main className="page-container" ref={contenedor}>
           <PageContent page={activePage} onNavigate={navigate} />
         </main>
       </div>

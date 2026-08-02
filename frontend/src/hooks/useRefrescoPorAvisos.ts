@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { canalVivo, observarCanal, suscribirse, type Aviso } from '../api/eventos'
+import { useSeccionVisible } from '../context/SeccionVisible'
 
 /**
  * Mantiene una pantalla al día: recarga cuando el servidor avisa, y repide por
@@ -45,6 +46,11 @@ export function useRefrescoPorAvisos(
   { cadaSinCanal, cadaConCanal = CADA_CON_CANAL_MS, activo = true, filtro }: Opciones,
 ): { canalVivo: boolean } {
   const [vivo, setVivo] = useState(canalVivo)
+  // Las secciones se quedan montadas al cambiar de pestaña, así que "montada"
+  // ya no quiere decir "a la vista". Ocho repidiendo a la vez sería peor que
+  // lo que había antes de todo esto.
+  const seVe = useSeccionVisible()
+  activo = activo && seVe
   // En refs para que rehacer el callback o el array en cada render de la
   // página no reinicie el temporizador ni rehaga las suscripciones.
   const recargarRef = useRef(recargar)
@@ -77,4 +83,35 @@ export function useRefrescoPorAvisos(
   }, [vivo, cadaSinCanal, cadaConCanal, activo])
 
   return { canalVivo: vivo }
+}
+
+
+/**
+ * Recarga la sección cuando vuelve a verse, si algo la dejó desfasada mientras
+ * estaba oculta.
+ *
+ * Con las secciones montadas siempre, `lastInvalidatedAt` ya no puede provocar
+ * una recarga inmediata en todas: si estás en Subidas y termina una
+ * sincronización, Biblioteca no tiene que ponerse a rehacer 20.000 filas que
+ * nadie mira. Se apunta que hay que hacerlo y se hace al volver a ella.
+ *
+ * Y NO se recarga por el simple hecho de volver: si nada avisó de que algo
+ * cambió, lo que hay en pantalla sigue siendo bueno. Eso es lo que hace que
+ * cambiar de pestaña sea instantáneo de verdad y no "instantáneo y luego un
+ * parpadeo". Se puede confiar en ello porque ahora el servidor avisa de todo
+ * lo que se mueve (ver services/eventos.py).
+ */
+export function useRecargarAlVerse(recargar: () => void, marca: number): void {
+  const seVe = useSeccionVisible()
+  const recargarRef = useRef(recargar)
+  recargarRef.current = recargar
+  // La marca con la que ya está al día. Arranca en la actual: recién montada,
+  // la sección acaba de pedir sus datos y no debe a nadie.
+  const alDiaCon = useRef(marca)
+
+  useEffect(() => {
+    if (!seVe || marca === alDiaCon.current) return
+    alDiaCon.current = marca
+    recargarRef.current()
+  }, [seVe, marca])
 }

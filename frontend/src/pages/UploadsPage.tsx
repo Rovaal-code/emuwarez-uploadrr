@@ -50,6 +50,17 @@ const STATUS_OPTIONS = ['', 'staging', 'queued', 'running', 'completed', 'failed
 // Preparatory states never represent a real upload — hide any stale leftovers.
 const HIDDEN_STATES = new Set(['draft', 'preflight', 'blocked', 'ready', 'config_staging'])
 
+// "Orden: Estado" ordenaba por el CÓDIGO interno, no por lo que se ve, y salía
+// una secuencia sin sentido para nadie: Cancelado, Completado, Fallido, En
+// cola, Subiendo, Preparando. Se ordena por el ciclo de vida de una subida, que
+// además dice más que el alfabético: lo que está en marcha arriba y lo
+// terminado abajo (auditoría de tablas).
+const ORDEN_DE_ESTADO = ['staging', 'queued', 'preparing', 'running', 'completed', 'failed', 'cancelled']
+const ordenDeEstado = (estado?: string | null): number => {
+  const i = ORDEN_DE_ESTADO.indexOf(estado ?? '')
+  return i === -1 ? ORDEN_DE_ESTADO.length : i    // lo desconocido, al final
+}
+
 function StartModal({ job, onClose, onDone }: { job: UploadJob; onClose: () => void; onDone: () => void }) {
   const [confirm, setConfirm] = useState('')
   const [loading, setLoading] = useState(false)
@@ -479,7 +490,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
       switch (sortBy) {
         case 'created_asc': return dt(a.created_at) - dt(b.created_at)
         case 'title': return (a.title || '').localeCompare(b.title || '')
-        case 'status': return (a.status || '').localeCompare(b.status || '')
+        case 'status': return ordenDeEstado(a.status) - ordenDeEstado(b.status)
         case 'duration_desc': return (b.duration_seconds ?? -1) - (a.duration_seconds ?? -1)
         default: return dt(b.created_at) - dt(a.created_at) // created_desc
       }

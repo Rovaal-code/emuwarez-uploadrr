@@ -976,17 +976,35 @@ def _build_library_filter(
 # "title_asc" (COLLATE NOCASE) gives símbolos < números < A-Z, the default.
 # TITLE_SORT (registered in database.connect) folds accents and orders
 # símbolos < números < letras; NOCASE would drop accented titles at the end.
+# El tamaño que hay que usar para ordenar, que es el MISMO que enseña la
+# columna Tamaño. Una serie o una temporada no guardan tamaño propio (es NULL):
+# el que se ve es la suma de lo que cuelga de ellas, y se calculaba solo al
+# pintar. Ordenando por la columna cruda, una serie que enseña 11 GB caía por
+# detrás de una película de 4 GB en "Tamaño (Más)" — el orden contradecía a la
+# vista (auditoría de tablas).
+#
+# El COALESCE corta en cuanto encuentra un valor, así que la subconsulta solo
+# corre para las filas sin tamaño propio (series y temporadas, una minoría), y
+# va por el índice idx_library_parent. Dos niveles porque eso es lo que hay:
+# serie → temporada → capítulo.
+_TAMANO_EFECTIVO = """COALESCE(size_bytes, (
+    SELECT SUM(d.size_bytes) FROM library_items d
+     WHERE d.parent_id = library_items.id
+        OR d.parent_id IN (SELECT s.id FROM library_items s WHERE s.parent_id = library_items.id)
+))"""
+
 _LIBRARY_SORT = {
     "title_asc": "title COLLATE TITLE_SORT ASC, updated_at DESC",
     "title_desc": "title COLLATE TITLE_SORT DESC, updated_at DESC",
     "updated_desc": "updated_at DESC, title COLLATE TITLE_SORT ASC",
     "year_desc": "year IS NULL, year DESC, title COLLATE TITLE_SORT ASC",
     "year_asc": "year IS NULL, year ASC, title COLLATE TITLE_SORT ASC",
-    # Rows without a size (series/season rollups, anything not downloaded) sort
-    # last in both directions rather than piling up at the top of the ascending
-    # one, which is never what you're looking for.
-    "size_desc": "size_bytes IS NULL, size_bytes DESC, title COLLATE TITLE_SORT ASC",
-    "size_asc": "size_bytes IS NULL, size_bytes ASC, title COLLATE TITLE_SORT ASC",
+    # Ver _TAMANO_EFECTIVO: hay que ordenar por lo MISMO que enseña la columna.
+    # Lo que sigue sin tener tamaño (nada descargado) va al final en los dos
+    # sentidos, en vez de amontonarse arriba en el ascendente, que nunca es lo
+    # que estás buscando.
+    "size_desc": f"{_TAMANO_EFECTIVO} IS NULL, {_TAMANO_EFECTIVO} DESC, title COLLATE TITLE_SORT ASC",
+    "size_asc": f"{_TAMANO_EFECTIVO} IS NULL, {_TAMANO_EFECTIVO} ASC, title COLLATE TITLE_SORT ASC",
 }
 DEFAULT_LIBRARY_SORT = "title_asc"
 

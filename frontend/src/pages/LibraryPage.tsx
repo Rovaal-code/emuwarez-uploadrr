@@ -203,8 +203,14 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     setLoading(true)
     setError(null)
     try {
+      // Con cualquier filtro puesto se pide la biblioteca en plano. Ver
+      // utils/filtrosBiblioteca: recortar a la raíz mientras filtras dejaba la
+      // tabla vacía para valores que el propio desplegable ofrecía.
       const flatFilter = necesitaTodosLosNiveles({
-        searchProvider, searchQuality, searchSource, filterEmu, filterAporte, filterType })
+        search: debouncedSearch, filterType, filterStatus, filterInstanceId,
+        filterRequest, filterSpanish, searchProvider, searchQuality, searchSource,
+        filterEmu, filterAporte,
+      })
       const result = await getLibrary({
         search: debouncedSearch || undefined,
         type: filterType || undefined,

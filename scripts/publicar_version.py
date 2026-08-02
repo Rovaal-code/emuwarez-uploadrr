@@ -75,6 +75,17 @@ def _leer_version() -> str:
     return "?"
 
 
+def version_publicada(repo: str) -> str | None:
+    """La versión del manifiesto que hay publicado ahora mismo, si se puede leer."""
+    import urllib.request
+    url = f"https://raw.githubusercontent.com/{repo}/main/{FICHERO}"
+    try:
+        with urllib.request.urlopen(url, timeout=10) as r:
+            return json.loads(r.read().decode("utf-8")).get("version")
+    except Exception:
+        return None
+
+
 def publicar(manifiesto: dict, repo: str) -> None:
     """Sube el manifiesto al repositorio público, con un commit por versión."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -96,6 +107,8 @@ def main() -> int:
     p.add_argument("--notas", help="qué trae esta versión, en una línea y en neutro")
     p.add_argument("--acepto-la-nota", action="store_true",
                    help="publicar aunque la nota mencione algo delicado")
+    p.add_argument("--misma-version", action="store_true",
+                   help="publicar aunque el número de versión no haya cambiado")
     p.add_argument("--repo", nargs="?", const=REPO_POR_DEFECTO,
                    help=f"repositorio público donde publicar (por defecto {REPO_POR_DEFECTO})")
     args = p.parse_args()
@@ -111,6 +124,22 @@ def main() -> int:
               '\n(por ejemplo: "Correcciones y mejoras de seguridad") o repite con'
               "\n--acepto-la-nota si de verdad no compromete nada.", file=sys.stderr)
         return 1
+
+    # La tarjeta y la notificación anuncian la versión por su NÚMERO. Si dos
+    # despliegues llevan el mismo, quien lo lea no puede distinguirlos: la
+    # notificación dirá lo mismo las dos veces. La comparación interna se hace
+    # por commit y sigue funcionando, pero el aviso al usuario queda inútil.
+    if args.repo:
+        anterior = version_publicada(args.repo)
+        if anterior and anterior == manifiesto["version"] and not args.misma_version:
+            print(f"✗ La versión publicada ya es {anterior} y vas a publicar la misma.",
+                  file=sys.stderr)
+            print("\n  Súbela ANTES de construir la imagen, que es donde se sella:",
+                  file=sys.stderr)
+            print("    python3 scripts/subir_version.py patch", file=sys.stderr)
+            print("\n  O repite con --misma-version si de verdad es una republicación.",
+                  file=sys.stderr)
+            return 1
 
     texto = json.dumps(manifiesto, indent=2, ensure_ascii=False)
 

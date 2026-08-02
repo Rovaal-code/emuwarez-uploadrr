@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { getDashboardSummary, getDashboardActivity, getDashboardRecommendations, type DashboardRecommendationItem } from '../api/dashboard'
 import { getUploads } from '../api/uploads'
 import { fetchSettings, type SettingsData } from '../api/settings'
@@ -45,11 +45,12 @@ function RecOriginCell({ item, instances }: { item: DashboardRecommendationItem;
   )
 }
 import {
-  ACTIVE_JOB_STATUSES, STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo,
+  STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo,
   progressCounter, queuedWaitText, useTicker,
 } from '../utils/uploadStatus'
 import { guardarPagina, tomarCopia, copiaNoConfirmada, generacionCache } from '../utils/cachePaginas'
 import { useRefrescoPorAvisos, AVISOS_SUBIDA } from '../hooks/useRefrescoPorAvisos'
+import { queSalieron, soloVivas, idsDe, ESPERA_MS, DESVANECER_MS } from '../utils/despedidaSubidas'
 
 // Phase 11G — "Recomendaciones" groups, in the order they appear. The content
 // name always links to its Biblioteca detail; the "Acción" button is
@@ -212,6 +213,48 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
 
   useTicker(activeUploads.some(j => j.status === 'queued'))
 
+  // Las que acaban de terminar se quedan con su estado final y luego se
+  // desvanecen (ver utils/despedidaSubidas). Aparte de `activeUploads` porque
+  // ya no están vivas: no cuentan para el sondeo ni para el tic del reloj.
+  const [despidiendose, setDespidiendose] = useState<{ job: UploadJob; yendose: boolean }[]>([])
+  const vivasAntes = useRef<Set<number>>(new Set())
+  const relojes = useRef<ReturnType<typeof setTimeout>[]>([])
+  useEffect(() => () => { relojes.current.forEach(clearTimeout) }, [])
+
+  // La ÚNICA puerta por la que entran las subidas al Panel, la traiga la carga
+  // completa o el refresco propio de "Actividad de subida". Si cada una lo
+  // hiciera por su cuenta, según por dónde llegara la noticia la fila se
+  // despediría o no.
+  const registrarSubidas = useCallback((todas: UploadJob[]): UploadJob[] => {
+    const vivas = soloVivas(todas)
+    const idsVivas = idsDe(vivas)
+    const salieron = queSalieron(todas, vivasAntes.current)
+    vivasAntes.current = idsVivas
+    setActiveUploads(vivas)
+
+    setDespidiendose(prev => {
+      // Una que vuelve a estar viva (la reintentaste) deja de despedirse.
+      const siguen = prev.filter(
+        d => !idsVivas.has(d.job.id!) && !salieron.some(s => s.id === d.job.id))
+      if (!salieron.length && siguen.length === prev.length) return prev   // nada que cambiar
+      return [...siguen, ...salieron.map(job => ({ job, yendose: false }))]
+    })
+    for (const job of salieron) {
+      relojes.current.push(setTimeout(() => setDespidiendose(
+        prev => prev.map(d => (d.job.id === job.id ? { ...d, yendose: true } : d))), ESPERA_MS))
+      relojes.current.push(setTimeout(() => setDespidiendose(
+        prev => prev.filter(d => d.job.id !== job.id)), ESPERA_MS + DESVANECER_MS))
+    }
+    return vivas
+  }, [])
+
+  // Lo que se pinta: primero las vivas y detrás las que se van. En ese orden
+  // porque al quitarse una no mueve de sitio a las de arriba.
+  const filasDeSubida = [
+    ...activeUploads.map(job => ({ job, yendose: false })),
+    ...despidiendose,
+  ]
+
   const loadData = useCallback(async () => {
     setLoadingData(true)
     setDataError(null)
@@ -252,10 +295,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
     }
     if (a.status === 'fulfilled') setTaskActivity(a.value)
     if (la.status === 'fulfilled') setRecommendations(la.value.items)
-    const subidasVivas = up.status === 'fulfilled'
-      ? up.value.filter(j => ACTIVE_JOB_STATUSES.has(j.status))
-      : []
-    if (up.status === 'fulfilled') setActiveUploads(subidasVivas)
+    const subidasVivas = up.status === 'fulfilled' ? registrarSubidas(up.value) : []
     // Se guarda para la próxima vez que se entre en el Panel.
     guardarPagina<PanelGuardado>('panel', {
       summary: s.status === 'fulfilled' ? s.value : null,
@@ -286,8 +326,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   // y solo esta petición y no el Panel entero.
   const loadActiveUploads = useCallback(async () => {
     try {
-      const up = await getUploads({ limit: 50 })
-      setActiveUploads(up.filter(j => ACTIVE_JOB_STATUSES.has(j.status)))
+      registrarSubidas(await getUploads({ limit: 50 }))
     } catch { /* ignore — next tick retries */ }
   }, [])
   const hasLiveUpload = activeUploads.length > 0
@@ -557,11 +596,11 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
             </div>
             <div className="upload-panel-body" style={{
               padding: '12px 16px', display: 'flex', flexDirection: 'column',
-              justifyContent: activeUploads.length === 0 ? 'flex-end' : 'flex-start',
+              justifyContent: filasDeSubida.length === 0 ? 'flex-end' : 'flex-start',
               alignItems: 'stretch',
               minHeight: 'auto', flex: 1, overflowY: 'auto',
             }}>
-              {activeUploads.length === 0 ? (
+              {filasDeSubida.length === 0 ? (
                 <div className="hud-projection" {...uploadEmptyTip} style={{ cursor: 'help' }}>
                   {uploadEmptyTooltip}
                   <svg viewBox="0 0 260 196" className="hud-projection-svg">
@@ -592,7 +631,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {activeUploads.map(job => {
+                  {filasDeSubida.map(({ job, yendose }) => {
                     const isPreparingOrRunning = job.status === 'preparing' || job.status === 'running'
                     const phaseInfo = isPreparingOrRunning ? currentPhaseInfo(job) : null
                     const phaseLabelText = phaseInfo?.label ?? (isPreparingOrRunning ? phaseLabel(job.progress_phase) : null)
@@ -603,7 +642,16 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                     // pondera cada fase); se acota por si llega algo raro.
                     const globalPct = Math.min(100, Math.max(0, Math.round(job.progress?.global_pct ?? 0)))
                     return (
-                    <div key={job.id} style={{ display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid var(--border)', paddingBottom: 12 }}>
+                    <div key={job.id} style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      borderBottom: '1px solid var(--border)', paddingBottom: 12,
+                      // Terminada, se queda quieta ESPERA_MS y luego se va poco a
+                      // poco. Las que se despiden van al final de la lista, así
+                      // que al desaparecer no mueven de sitio a las de arriba.
+                      opacity: yendose ? 0 : 1,
+                      transition: `opacity ${DESVANECER_MS}ms ease-out`,
+                      pointerEvents: yendose ? 'none' : undefined,
+                    }}>
                       {/* 36x54: el texto de la derecha ocupa unos 45 px (título 16,
                           estado 17, barra 4 y los huecos), así que el póster tiene
                           que ser al menos eso para que la fila no crezca por debajo

@@ -50,6 +50,7 @@ import {
 } from '../utils/uploadStatus'
 import { useRefrescoPorAvisos, AVISOS_SUBIDA, AVISOS_SUBIDA_PROGRESO } from '../hooks/useRefrescoPorAvisos'
 import { queSalieron, soloVivas, idsDe, ESPERA_MS, DESVANECER_MS } from '../utils/despedidaSubidas'
+import { useSeccionVisible } from '../context/SeccionVisible'
 
 // Phase 11G — "Recomendaciones" groups, in the order they appear. The content
 // name always links to its Biblioteca detail; the "Acción" button is
@@ -283,11 +284,15 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   // lo actual y no lo actual tras un parpadeo.
   useEffect(() => { if (lastInvalidatedAt) loadData() }, [lastInvalidatedAt, loadData])
 
-  // Light polling for the whole dashboard (summary/recommendations/tasks).
+  // Red de seguridad del Panel entero (resumen/recomendaciones/tareas). Solo
+  // mientras se ve: la sección se queda montada al cambiar de pestaña, así que
+  // sin esta condición seguiría preguntando cada 15 s para nadie.
+  const panelALaVista = useSeccionVisible()
   useEffect(() => {
+    if (!panelALaVista) return
     const t = setInterval(loadData, 15000)
     return () => clearInterval(t)
-  }, [loadData])
+  }, [loadData, panelALaVista])
 
   // "Actividad de subida" needs a much faster refresh than the rest of the
   // dashboard — at 15s, a job's progress visibly jumps in big steps instead

@@ -86,9 +86,47 @@ function unaPagina(page: string, onNavigate: (p: string) => void) {
  * ella, y el tour no la confunde con la buena (mide rectángulos, y los de una
  * sección oculta son de tamaño cero).
  */
+// El orden en que se montan solas las que no has abierto. Primero las que
+// cuestan (piden datos y pintan listas); las de después son casi instantáneas
+// y van al final porque da igual cuándo lleguen.
+const ORDEN_DE_PREPARADO = ['library', 'requests', 'uploads', 'dashboard',
+                            'tasks', 'instances', 'settings', 'logs', 'guide']
+
+// Lo que se espera antes de empezar. El navegador tiene bastante que hacer
+// justo después de arrancar (pintar la primera sección, pedir sus datos), y
+// meterle ocho pantallas más en ese momento se notaría en lo único que el
+// usuario está mirando.
+const ESPERA_ANTES_DE_PREPARAR_MS = 2000
+
 function PageContent({ page, onNavigate }: { page: string; onNavigate: (p: string) => void }) {
+  const [, repintar] = useState(0)
   const visitadas = useRef<string[]>([])
   if (!visitadas.current.includes(page)) visitadas.current = [...visitadas.current, page]
+
+  // Las secciones que no has abierto se van montando solas, en silencio, una
+  // por una. Así pulsar cualquiera es instantáneo también la PRIMERA vez, que
+  // era lo único que seguía costando una carga.
+  //
+  // Una por una y en huecos libres (`requestIdleCallback`), no las ocho de
+  // golpe: montar Biblioteca puede significar pintar miles de filas, y hacerlo
+  // todo junto congelaría la pantalla que sí estás mirando. Repartido, no se
+  // nota.
+  useEffect(() => {
+    let cancelado = false
+    const pedirHueco = window.requestIdleCallback ?? ((f: () => void) => setTimeout(f, 200))
+
+    const siguiente = () => {
+      if (cancelado) return
+      const falta = ORDEN_DE_PREPARADO.find(p => !visitadas.current.includes(p))
+      if (!falta) return
+      visitadas.current = [...visitadas.current, falta]
+      repintar(n => n + 1)
+      pedirHueco(siguiente)
+    }
+
+    const arranque = setTimeout(() => pedirHueco(siguiente), ESPERA_ANTES_DE_PREPARAR_MS)
+    return () => { cancelado = true; clearTimeout(arranque) }
+  }, [])
 
   return (
     <>

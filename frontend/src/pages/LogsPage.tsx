@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { getLogs, type LogEntry } from '../api/logs'
 import { EmptyState } from '../components/EmptyState'
+import { useSeccionVisible } from '../context/SeccionVisible'
 
 const LEVELS = ['', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
 const LEVEL_COLOR: Record<string, string> = {
@@ -32,11 +33,15 @@ export function LogsPage() {
   useEffect(() => { load() }, [load])
 
   // Auto-refresh every 3s while enabled.
+  // El auto-refresco viene encendido, y la sección se queda montada al cambiar
+  // de pestaña: sin la condición de que se vea, montarla una vez dejaba una
+  // petición cada 3 segundos para siempre, mirara nadie o no.
+  const logsALaVista = useSeccionVisible()
   useEffect(() => {
-    if (!auto) return
+    if (!auto || !logsALaVista) return
     const t = setInterval(load, 3000)
     return () => clearInterval(t)
-  }, [auto, load])
+  }, [auto, load, logsALaVista])
 
   return (
     <div data-tour="logs-content" style={{ height: '100%' }}>

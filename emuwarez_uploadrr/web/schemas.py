@@ -1495,6 +1495,7 @@ class UltimaVersionPublicada(BaseModel):
     digest: Optional[str] = None
     publicada: Optional[str] = None
     notas: Optional[str] = None
+    version: Optional[str] = None
 
 
 class VersionResponse(BaseModel):

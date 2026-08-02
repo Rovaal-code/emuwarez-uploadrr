@@ -183,12 +183,10 @@ def _comprobar_version(conn: sqlite3.Connection) -> tuple[str, str]:
         return "completed", "Hay una versión más nueva (ya avisado)"
 
     from .notification_center import emit
-    notas = (r.get("ultima") or {}).get("notas")
+    version = (r.get("ultima") or {}).get("version") or r.get("version")
     emit(
         conn, "version_available",
-        "Hay una versión más nueva de Uploadrr",
-        (f"{notas}. " if notas else "")
-        + "Actualiza con docker compose pull y docker compose up -d.",
+        f"Hay una versión más nueva: v{version}",
         level="warning",
     )
     set_state(conn, _ESTADO_ULTIMO_AVISO, ultimo or "")

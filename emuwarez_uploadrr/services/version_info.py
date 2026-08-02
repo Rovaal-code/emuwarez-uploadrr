@@ -101,6 +101,7 @@ def estado_de_version(*, forzar: bool = False) -> dict[str, Any]:
         "digest": (datos or {}).get("digest"),
         "publicada": (datos or {}).get("fecha"),
         "notas": (datos or {}).get("notas"),
+        "version": (datos or {}).get("version"),
     }
 
     if error:

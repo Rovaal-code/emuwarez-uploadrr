@@ -187,6 +187,7 @@ export interface UltimaVersionPublicada {
   digest?: string | null
   publicada?: string | null
   notas?: string | null
+  version?: string | null
 }
 
 export interface VersionInfo {

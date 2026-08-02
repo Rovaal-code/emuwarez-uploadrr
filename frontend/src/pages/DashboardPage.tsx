@@ -72,9 +72,12 @@ const REC_GROUP_META: Record<number, {
 // task_runs.name is the internal task key (services/scheduler.py's
 // TASK_LIBRARY_SYNC/TASK_EMU_SYNC) — same human names Ajustes → Tareas
 // programadas already shows for these same keys (services/scheduler.py's
-// DEFAULT_TASKS). Unknown/future keys just fall back to the raw key.
+// DEFAULT_TASKS). Unknown/future keys just fall back to the raw key, que es
+// lo que pasó al añadir "check-version": salía en crudo. Lo vigila ahora
+// tests/test_copias_frontend.py.
 const TASK_NAME_LABEL: Record<string, string> = {
   'sync-library': 'Sincronizar bibliotecas',
+  'check-version': 'Comprobar versión',
   'sync-emu-requests': 'Sincronizar peticiones eMuwarez',
   'sync-emu-catalog': 'Sincronizar catálogo eMuwarez',
 }

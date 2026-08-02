@@ -32,8 +32,8 @@ def _version(monkeypatch, estado, commit="nuevo111", notas="algo nuevo"):
             "version": "0.2.0", "commit": "viejo000", "commit_corto": "viejo00",
             "construida": "2026-08-01", "digest": None, "estado": estado, "motivo":
             "sin manifiesto" if estado == "desconocido" else None,
-            "ultima": {"commit": commit, "commit_corto": commit[:7],
-                       "digest": "sha256:x", "publicada": "2026-08-02", "notas": notas},
+            "ultima": {"commit": commit, "commit_corto": commit[:7], "digest": "sha256:x",
+                       "publicada": "2026-08-02", "notas": notas, "version": "0.3.0"},
         })
 
 
@@ -63,6 +63,10 @@ def test_avisa_una_sola_vez_por_version(db_conn, monkeypatch):
 
     r1 = scheduler.run_scheduled_task(db_conn, scheduler.TASK_CHECK_VERSION, manual=True)
     assert "avisado" in r1["summary"]
+    aviso = [n for n in list_notifications(db_conn) if n["event_type"] == "version_available"][0]
+    # Una sola línea, con el número de versión y sin instrucciones.
+    assert aviso["title"] == "Hay una versión más nueva: v0.3.0"
+    assert not aviso["body"]
     assert len([n for n in list_notifications(db_conn) if n["event_type"] == "version_available"]) == 1
 
     # Segunda hora, misma versión: sigue diciendo que hay novedad, sin avisar.

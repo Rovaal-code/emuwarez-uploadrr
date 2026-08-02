@@ -101,6 +101,11 @@ type SettingsMsg = {
 interface OpcionesMensaje {
   tono?: TonoMensaje
   permanente?: boolean
+  // Borra el permanente que hubiera. Lo usa la comprobación de versión cuando
+  // pasa a "al día": sin esto, el aviso de versión nueva de la comprobación
+  // anterior seguía debajo y reaparecía al caducar el pasajero, diciendo que
+  // hay novedad cuando ya no la hay.
+  borrarPermanente?: boolean
 }
 
 const SettingsMessageContext = createContext<
@@ -1161,14 +1166,17 @@ function VersionCard() {
     try {
       const datos = await getVersionInfo(refrescar)
       setInfo(datos)
-      // Al hueco de la fila de pestañas, como el resto de mensajes de esta
-      // pantalla. Permanente porque no es algo que acabe de pasar: es un
-      // estado que sigue siendo cierto hasta que actualices.
+      // Al hueco de la fila de pestañas, como el resto de mensajes.
+      //
+      // Permanente solo cuando queda algo por hacer: hay versión nueva, o no
+      // se ha podido comprobar. "Estás al día" es una confirmación de que la
+      // comprobación se hizo, así que se comporta como los demás y desaparece
+      // a los cinco segundos; dejarlo fijo era ruido en todas las pestañas.
       if (datos.estado === 'hay_novedad') {
-        mensaje(false, `Hay una versión más nueva${datos.ultima.notas ? `: ${datos.ultima.notas}` : ''}`,
+        mensaje(false, `Hay una versión más nueva${datos.ultima.version ? `: v${datos.ultima.version}` : ''}`,
                 { tono: 'aviso', permanente: true })
       } else if (datos.estado === 'al_dia') {
-        mensaje(true, 'Estás en la última versión publicada', { permanente: true })
+        mensaje(true, 'Estás en la última versión publicada', { borrarPermanente: true })
       } else {
         mensaje(false, datos.motivo || 'No se ha podido comprobar si hay una versión más nueva',
                 { tono: 'aviso', permanente: true })
@@ -1209,11 +1217,6 @@ function VersionCard() {
       {!info && <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Cargando…</p>}
       {info && (
         <>
-          {info.estado === 'hay_novedad' && (
-            <p style={{ fontSize: 12.5, marginTop: 10, marginBottom: 4, lineHeight: 1.5 }}>
-              Actualiza con <code>docker compose pull</code> y <code>docker compose up -d</code>.
-            </p>
-          )}
           <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
             <tbody>
               {fila('Versión', info.version)}
@@ -1871,6 +1874,7 @@ export function SettingsPage() {
       setMsgPermanente({ text, tono, permanente: true })
       return
     }
+    if (opciones?.borrarPermanente) setMsgPermanente(null)
     // El temporizador anterior se cancela: dos avisos seguidos no pueden dejar
     // que el primero apague al segundo.
     if (msgTimer.current) window.clearTimeout(msgTimer.current)

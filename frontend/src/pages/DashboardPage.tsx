@@ -555,9 +555,16 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                     // Total time since the job started (not just this sub-phase) — the
                     // number that actually answers "how long has this been going".
                     const totalElapsedText = isPreparingOrRunning ? progressCounter(job) : null
+                    // El global que ya calcula el backend (uploadrr_progress.PHASES
+                    // pondera cada fase); se acota por si llega algo raro.
+                    const globalPct = Math.min(100, Math.max(0, Math.round(job.progress?.global_pct ?? 0)))
                     return (
                     <div key={job.id} style={{ display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid var(--border)', paddingBottom: 12 }}>
-                      <div className="poster-thumb" style={{ width: 28, height: 42, borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      {/* 36x54: el texto de la derecha ocupa unos 45 px (título 16,
+                          estado 17, barra 4 y los huecos), así que el póster tiene
+                          que ser al menos eso para que la fila no crezca por debajo
+                          de él. Antes era 28x42 y se quedaba corto al añadir la barra. */}
+                      <div className="poster-thumb" style={{ width: 36, height: 54, borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                         {job.poster_url ? (
                           <img
                             src={posterUrl(job.poster_url, 'w154')}
@@ -567,7 +574,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                             onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
                           />
                         ) : (
-                          <span style={{ fontSize: 14, opacity: 0.35 }}>
+                          <span style={{ fontSize: 18, opacity: 0.35 }}>
                             {job.media_type === 'series' || job.media_type === 'episode' ? '📺' : '🎬'}
                           </span>
                         )}
@@ -606,6 +613,15 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                               </span>
                             )}
                           </div>
+                          {/* Progreso global, en la misma barra fina que usa el resto
+                              del Panel. Solo mientras trabaja: en cola no hay nada que
+                              medir todavía, y terminada la barra no dice nada que el
+                              estado no diga ya. */}
+                          {isPreparingOrRunning && (
+                            <div className="progress-bar" title={`${globalPct}%`}>
+                              <div className="progress-fill" style={{ width: `${globalPct}%` }} />
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>

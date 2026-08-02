@@ -357,6 +357,13 @@
 .hud-app .upload-panel-body .hover-link {
   color: var(--text-primary);
 }
+/* ...pero al pasar el cursor manda el azul, igual que el título de una serie
+   o una película en Biblioteca (.lib-title-link:hover). La regla de arriba
+   tiene más especificidad que `.hover-link:hover`, así que sin esta el color
+   de reposo ganaba siempre y el título no reaccionaba. */
+.hud-app .upload-panel-body .hover-link:hover {
+  color: var(--text-accent, var(--hud-cyan));
+}
 
 /* ---- projected empty-state hologram (Actividad de subida) ---- */
 .hud-app .hud-projection {
@@ -532,4 +539,16 @@
 .hud-app .tree-expander:focus-visible {
   color: var(--hud-cyan);
   filter: drop-shadow(0 0 4px var(--hud-cyan));
+}
+
+/* Barra de progreso global de "Actividad de subida". El estilo base
+   (.progress-bar/.progress-fill en dashboard.css) llevaba tiempo definido sin
+   usarse en ningún sitio; aquí se estrena. Dentro de un panel del tema, donde
+   todo indicador va en cian, un azul distinto desentonaba. */
+.hud-app .upload-panel-body .progress-bar {
+  background: rgba(47, 216, 255, .12);
+}
+.hud-app .upload-panel-body .progress-fill {
+  background: var(--hud-cyan);
+  box-shadow: 0 0 6px rgba(47, 216, 255, .55);
 }

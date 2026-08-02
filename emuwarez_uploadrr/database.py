@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 37
+SCHEMA_VERSION = 38
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -879,6 +879,30 @@ def _migrate_library_items_hierarchy(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_library_tvdb ON library_items(tvdb_id)")
 
 
+def _migrate_ui_recibe_aviso_de_version(conn: sqlite3.Connection) -> None:
+    """Esquema 38: el aviso de versión nueva, activado en la campana.
+
+    Un canal sin configurar recibe todo, así que para una instalación nueva no
+    hace falta nada. Pero quien ya guardó su selección de eventos tiene una
+    lista cerrada, y el evento nuevo se quedaría fuera: se le añade, porque en
+    la campana va activado por defecto.
+
+    A los bots NO se les toca: ahí este aviso es opt-in a propósito."""
+    try:
+        fila = conn.execute(
+            "SELECT value FROM settings WHERE key = 'notify.ui.events'").fetchone()
+    except sqlite3.OperationalError:
+        return
+    if not fila or not fila["value"]:
+        return                      # sin configurar: ya lo recibe todo
+    codigos = [c.strip() for c in fila["value"].split(",") if c.strip()]
+    if "version_available" in codigos:
+        return
+    codigos.append("version_available")
+    conn.execute("UPDATE settings SET value = ? WHERE key = 'notify.ui.events'",
+                 (",".join(codigos),))
+
+
 def _migrate_tmdb_title_cache(conn: sqlite3.Connection) -> None:
     """Cache of TMDb-resolved titles by (tmdb_id, media_type, language), so the
     Sonarr title localization only hits TMDb once per series instead of on every
@@ -1495,6 +1519,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_notifications_table(conn)
         _migrate_emu_catalog(conn)
         _migrate_tmdb_title_cache(conn)
+        _migrate_ui_recibe_aviso_de_version(conn)
         _migrate_library_items_track_remux(conn)
         _migrate_upload_jobs_queue(conn)
         _migrate_upload_jobs_snapshots(conn)

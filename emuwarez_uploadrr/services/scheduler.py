@@ -26,6 +26,7 @@ from typing import Optional
 
 TASK_LIBRARY_SYNC = "sync-library"
 TASK_EMU_SYNC = "sync-emu-requests"
+TASK_CHECK_VERSION = "check-version"
 
 # task_key, name, description, default_interval_minutes, min_interval_minutes, manual_allowed
 DEFAULT_TASKS: list[tuple[str, str, str, int, int, int]] = [
@@ -34,6 +35,12 @@ DEFAULT_TASKS: list[tuple[str, str, str, int, int, int]] = [
         "Sincronizar bibliotecas",
         "Sincroniza las bibliotecas desde las instancias Radarr/Sonarr configuradas.",
         30, 15, 1,
+    ),
+    (
+        TASK_CHECK_VERSION,
+        "Comprobar versión",
+        "Consulta si hay una imagen más nueva publicada y avisa una sola vez por versión.",
+        60, 60, 1,
     ),
     # NOTE: the eMuwarez request sync (TASK_EMU_SYNC) is intentionally NOT a
     # scheduled task — it runs only from the "Sincronizar peticiones" button.
@@ -125,9 +132,74 @@ def _run_emu_sync(conn: sqlite3.Connection) -> tuple[str, str]:
     return "completed", f"{result.get('imported', 0)} peticiones importadas, {result.get('matched', 0)} cruces"
 
 
+# Clave donde se recuerda de qué versión ya se avisó, para no repetir el aviso
+# cada hora mientras no actualices.
+_ESTADO_ULTIMO_AVISO = "version_avisada_commit"
+
+
+def _run_check_version(conn: sqlite3.Connection) -> tuple[str, str]:
+    """Comprueba si hay una imagen más nueva publicada.
+
+    Deja constancia en `task_runs`, que es lo que alimenta "Últimas tareas
+    ejecutadas" del Panel: `run_scheduled_task` solo actualiza la fila de la
+    tarea programada, así que cada tarea registra su propia ejecución (igual
+    que hace la sincronización de biblioteca).
+
+    Avisa UNA sola vez por versión: mientras no actualices, la tarea sigue
+    corriendo cada hora y diciendo que hay novedad en su resumen, pero la
+    notificación no se repite. Se vuelve a avisar cuando el manifiesto publica
+    un commit distinto del ya avisado."""
+    from ..database import get_state, set_state
+    from .tasks import finish_task, start_task
+    from .version_info import estado_de_version
+
+    run_id = start_task(conn, TASK_CHECK_VERSION, "Comprobando versión…")
+    try:
+        estado, resumen = _comprobar_version(conn)
+    except Exception as exc:
+        finish_task(conn, run_id, "failed", str(exc))
+        raise
+    finish_task(conn, run_id, estado, resumen)
+    return estado, resumen
+
+
+def _comprobar_version(conn: sqlite3.Connection) -> tuple[str, str]:
+    from ..database import get_state, set_state
+    from .version_info import estado_de_version
+
+    r = estado_de_version(forzar=True)
+
+    if r["estado"] == "desconocido":
+        # No es un fallo de la tarea: es que no se pudo comparar (sin
+        # manifiesto, sin sellar, o la red). Se registra tal cual.
+        return "skipped", r.get("motivo") or "No se pudo comprobar la versión."
+
+    if r["estado"] == "al_dia":
+        return "completed", f"Al día ({r.get('commit_corto') or r['version']})"
+
+    ultimo = (r.get("ultima") or {}).get("commit")
+    ya_avisado = get_state(conn, _ESTADO_ULTIMO_AVISO)
+    if ya_avisado == ultimo:
+        return "completed", "Hay una versión más nueva (ya avisado)"
+
+    from .notification_center import emit
+    notas = (r.get("ultima") or {}).get("notas")
+    emit(
+        conn, "version_available",
+        "Hay una versión más nueva de Uploadrr",
+        (f"{notas}. " if notas else "")
+        + "Actualiza con docker compose pull y docker compose up -d.",
+        level="warning",
+    )
+    set_state(conn, _ESTADO_ULTIMO_AVISO, ultimo or "")
+    conn.commit()
+    return "completed", "Hay una versión más nueva: avisado"
+
+
 _EXECUTORS = {
     TASK_LIBRARY_SYNC: _run_library_sync,
     TASK_EMU_SYNC: _run_emu_sync,
+    TASK_CHECK_VERSION: _run_check_version,
 }
 
 
@@ -211,7 +283,7 @@ def tick_due_tasks() -> list[dict]:
 
 
 __all__ = [
-    "TASK_LIBRARY_SYNC", "TASK_EMU_SYNC", "DEFAULT_TASKS",
+    "TASK_LIBRARY_SYNC", "TASK_EMU_SYNC", "TASK_CHECK_VERSION", "DEFAULT_TASKS",
     "ensure_default_tasks", "list_scheduled_tasks", "get_scheduled_task",
     "set_task_interval", "run_scheduled_task", "claim_due_tasks", "tick_due_tasks",
 ]

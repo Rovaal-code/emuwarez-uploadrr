@@ -1241,7 +1241,7 @@ optgroup {
 }
 .tree-expander:hover,
 .tree-expander:focus-visible {
-  color: var(--color-accent, #7c6af7);
+  color: #2fd8ff;
   outline: none;
 }
 

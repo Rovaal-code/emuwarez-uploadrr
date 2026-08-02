@@ -54,9 +54,11 @@ def test_emu_request_sync_is_not_scheduled(db_conn):
 
 
 def test_list_scheduled_tasks_idempotent(db_conn):
+    from emuwarez_uploadrr.services.scheduler import DEFAULT_TASKS
+
     first = list_scheduled_tasks(db_conn)
     second = list_scheduled_tasks(db_conn)
-    assert len(first) == len(second) == 1
+    assert len(first) == len(second) == len(DEFAULT_TASKS)
 
 
 # ---------------------------------------------------------------------------
@@ -120,13 +122,17 @@ def test_run_unknown_task_raises(db_conn):
 # ---------------------------------------------------------------------------
 
 def test_claim_due_tasks_all_due_initially(db_conn):
+    from emuwarez_uploadrr.services.scheduler import DEFAULT_TASKS
+
     claimed = claim_due_tasks(db_conn)
-    assert set(claimed) == {TASK_LIBRARY_SYNC}
+    assert set(claimed) == {t[0] for t in DEFAULT_TASKS}
 
 
 def test_claim_due_tasks_does_not_reclaim_immediately(db_conn):
+    from emuwarez_uploadrr.services.scheduler import DEFAULT_TASKS
+
     first = claim_due_tasks(db_conn)
-    assert len(first) == 1
+    assert len(first) == len(DEFAULT_TASKS)
     second = claim_due_tasks(db_conn)
     assert second == []  # grace window pushed next_run_at forward
 
@@ -144,12 +150,19 @@ def test_claim_due_tasks_respects_disabled_flag(db_conn):
 # ---------------------------------------------------------------------------
 
 def test_tick_due_tasks_runs_all_on_first_tick(isolated_db):
-    with patch("emuwarez_uploadrr.services.library.sync_all") as mock_lib:
+    from emuwarez_uploadrr.services.scheduler import DEFAULT_TASKS
+
+    with patch("emuwarez_uploadrr.services.library.sync_all") as mock_lib, \
+         patch("emuwarez_uploadrr.services.version_info.estado_de_version") as mock_ver:
         mock_lib.return_value = {"imported": 0, "missing": 0, "instances": 0, "errors": []}
+        # Sin manifiesto publicado: la comprobación de versión no puede
+        # comparar y se salta, que es un resultado válido de la tarea.
+        mock_ver.return_value = {"estado": "desconocido", "motivo": "sin manifiesto",
+                                 "version": "0.2.0", "commit_corto": None, "ultima": {}}
         results = tick_due_tasks()
 
     task_keys = {r["task_key"] for r in results}
-    assert task_keys == {TASK_LIBRARY_SYNC}
+    assert task_keys == {t[0] for t in DEFAULT_TASKS}
     assert all(r["status"] in ("completed", "skipped") for r in results)
 
 

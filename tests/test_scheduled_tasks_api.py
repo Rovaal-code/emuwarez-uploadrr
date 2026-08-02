@@ -25,18 +25,25 @@ def test_logs_requires_auth(client):
 
 
 def test_list_returns_default_tasks(client, auth_headers):
+    """Se compara contra DEFAULT_TASKS, no contra una lista escrita a mano:
+    esta prueba llevaba tiempo en rojo por exigir una tarea que se retiró."""
+    from emuwarez_uploadrr.services.scheduler import DEFAULT_TASKS
+
     resp = client.get("/api/tasks/scheduled", headers=auth_headers)
     assert resp.status_code == 200
-    data = resp.json()
-    keys = {t["task_key"] for t in data}
-    assert keys == {"sync-library", "sync-emu-requests"}
+    keys = {t["task_key"] for t in resp.json()}
+    assert keys == {t[0] for t in DEFAULT_TASKS}
 
 
-def test_emu_task_has_manual_allowed_false(client, auth_headers):
-    resp = client.get("/api/tasks/scheduled", headers=auth_headers)
-    emu = next(t for t in resp.json() if t["task_key"] == "sync-emu-requests")
-    assert emu["manual_allowed"] is False
-    assert emu["min_interval_minutes"] == 60
+def test_la_sincronizacion_de_peticiones_ya_no_es_una_tarea_programada(client, auth_headers):
+    """Se quitó a propósito: las peticiones se sincronizan desde su botón, con
+    su propio límite de una por hora (services/requests.py). Queda listada en
+    OBSOLETE_TASKS para que se borre de instalaciones antiguas."""
+    from emuwarez_uploadrr.services.scheduler import OBSOLETE_TASKS
+
+    keys = {t["task_key"] for t in client.get("/api/tasks/scheduled", headers=auth_headers).json()}
+    assert "sync-emu-requests" not in keys
+    assert "sync-emu-requests" in OBSOLETE_TASKS
 
 
 def test_update_interval_success(client, auth_headers):
@@ -65,10 +72,12 @@ def test_run_library_sync_now(client, auth_headers):
     assert data["task_key"] == "sync-library"
 
 
-def test_run_emu_sync_manually_blocked(client, auth_headers):
+def test_run_emu_sync_manually_returns_404(client, auth_headers):
+    """Ya no existe como tarea programada, así que ejecutarla es pedir algo que
+    no está: 404. Antes daba 400 ("no admite ejecución manual"), y esta prueba
+    llevaba en rojo desde que la tarea se retiró."""
     resp = client.post("/api/tasks/scheduled/sync-emu-requests/run", headers=auth_headers)
-    assert resp.status_code == 400
-    assert "manual" in resp.json()["detail"].lower()
+    assert resp.status_code == 404
 
 
 def test_run_unknown_task_returns_404(client, auth_headers):

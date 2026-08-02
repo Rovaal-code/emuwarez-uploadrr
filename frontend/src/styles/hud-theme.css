@@ -524,3 +524,12 @@
   height: 14px;
   color: var(--hud-cyan);
 }
+
+/* Desplegable del árbol de Biblioteca: se ilumina en el cian de la interfaz,
+   con el mismo brillo que los iconos activos de la navegación. Sin caja: lo
+   que responde al cursor es el triángulo, no un recuadro a su alrededor. */
+.hud-app .tree-expander:hover,
+.hud-app .tree-expander:focus-visible {
+  color: var(--hud-cyan);
+  filter: drop-shadow(0 0 4px var(--hud-cyan));
+}

@@ -40,7 +40,16 @@ EVENT_TYPES: dict[str, str] = {
     "request_match_found": "Contenido compatible",
     "content_missing_new": "Contenido nuevo faltante",
     "content_unique_changed": "Nuevo contenido único",
+    "version_available": "Versión nueva disponible",
 }
+
+# Eventos que NO se mandan a Discord/Telegram salvo que se pidan a mano.
+#
+# Que haya una versión nueva es cosa de quien administra esto, no algo que
+# valga la pena empujar a un chat: no hay nada que hacer al respecto desde el
+# móvil y se repetiría en cada actualización. En la campana sí aparece por
+# defecto, que es donde se mira el estado de la aplicación.
+SOLO_UI_POR_DEFECTO: frozenset[str] = frozenset({"version_available"})
 
 # When a channel has never been configured, default to forwarding every event
 # (so enabling Discord/Telegram "just works" without extra clicks).
@@ -70,10 +79,14 @@ def _ui_stores(conn: sqlite3.Connection, event_type: str) -> bool:
 
 
 def channel_events(conn: sqlite3.Connection, channel: str) -> set[str]:
-    """Event types enabled for a channel. Unset (never saved) → all events."""
+    """Tipos de evento activos en un canal.
+
+    Sin configurar, la campana recibe todo y los canales externos todo menos
+    los de SOLO_UI_POR_DEFECTO. Configurado, se respeta exactamente lo que el
+    usuario guardó: si desmarcó algo, desmarcado se queda."""
     raw = get_setting_canonical(conn, f"notify.{channel}.events")
     if raw is None:
-        return set(_ALL_EVENTS)
+        return set(_ALL_EVENTS) if channel == "ui" else set(_ALL_EVENTS - SOLO_UI_POR_DEFECTO)
     return {c.strip() for c in raw.split(",") if c.strip() and c.strip() in EVENT_TYPES}
 
 
@@ -222,7 +235,7 @@ def emit(
 
 
 __all__ = [
-    "EVENT_TYPES",
+    "EVENT_TYPES", "SOLO_UI_POR_DEFECTO",
     "channel_events",
     "ui_enabled",
     "list_notifications",

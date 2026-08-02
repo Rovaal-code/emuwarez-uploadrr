@@ -147,12 +147,33 @@ def test_feed_mark_all_read(client, auth_headers):
 
 
 def test_settings_expose_event_types_and_default_all_enabled(client, auth_headers):
+    from emuwarez_uploadrr.services.notification_center import SOLO_UI_POR_DEFECTO
+
     s = client.get("/api/settings", headers=auth_headers).json()
     codes = {e["code"] for e in s["notify_event_types"]}
     assert {"upload_completed", "request_match_found"} <= codes
-    # Unset → every event enabled by default for each channel.
-    assert set(s["notify_discord_events"]) == codes
-    assert set(s["notify_telegram_events"]) == codes
+
+    # Sin configurar, los canales externos reciben todo MENOS los eventos que
+    # son opt-in a propósito: que haya una versión nueva es cosa de quien
+    # administra esto, no algo que empujar a un chat.
+    esperado_bots = codes - set(SOLO_UI_POR_DEFECTO)
+    assert set(s["notify_discord_events"]) == esperado_bots
+    assert set(s["notify_telegram_events"]) == esperado_bots
+    assert SOLO_UI_POR_DEFECTO, "si no hay eventos solo-UI, esta prueba no comprueba nada"
+
+
+def test_el_aviso_de_version_llega_a_la_campana_pero_no_a_los_bots(client, auth_headers):
+    """Lo pedido: activado por defecto en la interfaz, no en los bots."""
+    from emuwarez_uploadrr.services.notification_center import channel_events
+    from emuwarez_uploadrr.database import connect, db_path
+
+    conn = connect(db_path())
+    try:
+        assert "version_available" in channel_events(conn, "ui")
+        assert "version_available" not in channel_events(conn, "discord")
+        assert "version_available" not in channel_events(conn, "telegram")
+    finally:
+        conn.close()
 
 
 def test_settings_save_event_selection(client, auth_headers):

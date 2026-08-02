@@ -1,11 +1,15 @@
 /**
  * El canal por el que el servidor avisa de que algo ha cambiado.
  *
- * La interfaz pregunta cada pocos segundos en once sitios distintos. Esto es
+ * La interfaz preguntaba cada pocos segundos en once sitios distintos. Esto es
  * el camino contrario: una conexión abierta por la que el servidor escribe
- * cuando pasa algo de verdad. De momento solo llega `sync-terminada`; el resto
- * de sondeos siguen intactos, así que si este canal no funciona no se rompe
- * nada — solo se vuelve a depender de lo que ya había.
+ * cuando pasa algo de verdad.
+ *
+ * Las pantallas que ya lo usan NO dejan de repedir: bajan a un sondeo lento de
+ * red de seguridad mientras el canal está vivo, y vuelven al rápido si se cae
+ * (ver `canalVivo`). Un canal caído tiene que costar latencia, no dejar la
+ * pantalla congelada enseñando una subida al 45% que terminó hace diez
+ * minutos.
  *
  * NO se usa `EventSource`, que sería lo natural, porque no sabe mandar
  * cabeceras y aquí se autentica con `Authorization: Bearer`. La otra salida
@@ -66,8 +70,11 @@ export function extraerAvisos(acumulado: string): { avisos: Aviso[]; resto: stri
  * Se reconecta sola salvo en dos casos: que la corten a propósito, o que el
  * servidor conteste 401 — ahí el token ya no vale y reintentar sería aporrear
  * la puerta.
+ *
+ * Uso directo solo desde `suscribirse`, que es quien se encarga de que haya UNA
+ * conexión para toda la aplicación y no una por pantalla.
  */
-export function escucharEventos(alRecibir: (aviso: Aviso) => void): () => void {
+function escucharEventos(alRecibir: (aviso: Aviso) => void): () => void {
   let cortado = false
   let intento = 0
   let control: AbortController | null = null
@@ -90,6 +97,7 @@ export function escucharEventos(alRecibir: (aviso: Aviso) => void): () => void {
       // Conectados. Se reinicia la cuenta para que la siguiente caída vuelva a
       // reintentar rápido, en vez de arrastrar la espera larga de la anterior.
       intento = 0
+      marcarVivo(true)
       const lector = respuesta.body.getReader()
       const decodificador = new TextDecoder()
       let acumulado = ''
@@ -112,6 +120,7 @@ export function escucharEventos(alRecibir: (aviso: Aviso) => void): () => void {
   }
 
   const programarReintento = (): void => {
+    marcarVivo(false)         // las pantallas vuelven al sondeo rápido
     if (cortado) return
     const espera = esperaDelIntento(intento++)
     reintento = setTimeout(() => { void conectar() }, espera)
@@ -123,5 +132,75 @@ export function escucharEventos(alRecibir: (aviso: Aviso) => void): () => void {
     cortado = true
     if (reintento) clearTimeout(reintento)
     control?.abort()
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Una sola conexión para toda la aplicación
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Varias pantallas quieren enterarse a la vez (la tabla de Subidas, el Panel,
+// el detalle de un trabajo). Si cada una abriera la suya, un navegador tendría
+// cuatro conexiones abiertas contra el mismo servidor para recibir lo mismo —
+// y Chrome corta a seis por dominio, así que el resto de la aplicación se
+// quedaría sin poder pedir nada.
+//
+// Así que la conexión es una, se abre con el primer suscriptor y se cierra con
+// el último.
+
+type Oyente = (aviso: Aviso) => void
+
+const oyentes = new Map<string, Set<Oyente>>()
+let cortarConexion: (() => void) | null = null
+
+// Si el canal está dando servicio ahora mismo. Las pantallas lo miran para
+// decidir cada cuánto repiden por su cuenta: con el canal vivo basta una red de
+// seguridad lenta; sin él hay que volver al sondeo rápido de siempre, porque es
+// lo único que queda.
+let vivo = false
+const oyentesDeEstado = new Set<(vivo: boolean) => void>()
+
+function marcarVivo(nuevo: boolean): void {
+  if (vivo === nuevo) return
+  vivo = nuevo
+  for (const cb of oyentesDeEstado) {
+    try { cb(vivo) } catch { /* un oyente roto no tumba a los demás */ }
+  }
+}
+
+export function canalVivo(): boolean {
+  return vivo
+}
+
+/** Avisa cuando el canal se cae o vuelve. Devuelve cómo dejar de escuchar. */
+export function observarCanal(cb: (vivo: boolean) => void): () => void {
+  oyentesDeEstado.add(cb)
+  return () => { oyentesDeEstado.delete(cb) }
+}
+
+function repartir(aviso: Aviso): void {
+  for (const cb of oyentes.get(aviso.tipo) ?? []) {
+    try { cb(aviso) } catch { /* un oyente roto no corta el canal */ }
+  }
+}
+
+/**
+ * Escucha un tipo de aviso. Devuelve cómo dejar de escuchar, que hay que
+ * llamar al desmontar.
+ */
+export function suscribirse(tipo: string, cb: Oyente): () => void {
+  let conjunto = oyentes.get(tipo)
+  if (!conjunto) { conjunto = new Set(); oyentes.set(tipo, conjunto) }
+  conjunto.add(cb)
+  if (!cortarConexion) cortarConexion = escucharEventos(repartir)
+
+  return () => {
+    conjunto!.delete(cb)
+    if (conjunto!.size === 0) oyentes.delete(tipo)
+    if (oyentes.size === 0 && cortarConexion) {
+      cortarConexion()
+      cortarConexion = null
+      marcarVivo(false)
+    }
   }
 }

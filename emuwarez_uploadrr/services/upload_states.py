@@ -13,8 +13,9 @@ vez**: `escribir_estado()` recibe la guardia declarada por quien llama, y esa
 guardia viaja DENTRO del UPDATE. Quien llama declara qué respeta; no
 reimplementa cómo se comprueba.
 
-Este módulo no importa nada de `services/` a propósito: lo usan los dos lados
-del pipeline y tiene que poder estar debajo de ambos.
+Este módulo casi no importa nada de `services/` a propósito: lo usan los dos
+lados del pipeline y tiene que poder estar debajo de ambos. La excepción es
+`eventos`, que no importa nada del paquete y por tanto está debajo de todo.
 """
 from __future__ import annotations
 
@@ -22,6 +23,7 @@ from datetime import datetime, timezone
 from typing import Iterable, Optional
 
 from ..database import connect
+from .eventos import EVENTO_SUBIDA_ESTADO, publicar
 
 # Los estados que la interfaz enseña como una subida de verdad.
 VISIBLE_STATUSES: frozenset[str] = frozenset({
@@ -118,10 +120,18 @@ def escribir_estado(
             [*campos.values(), job_id, *estados],
         )
         conn.commit()
-        return cur.rowcount > 0
+        escribio = cur.rowcount > 0
     finally:
         if propia:
             conn.close()
+
+    # Solo si SE ESCRIBIÓ: cuando la guardia rechaza el cambio no ha pasado
+    # nada que contar, y avisar haría recargar a la interfaz para enseñar
+    # exactamente lo mismo. Este es el único sitio desde el que se escribe el
+    # estado de una subida, así que basta con ponerlo aquí.
+    if escribio:
+        publicar(EVENTO_SUBIDA_ESTADO, {"job_id": job_id, "status": status, "stage": stage})
+    return escribio
 
 
 __all__ = [

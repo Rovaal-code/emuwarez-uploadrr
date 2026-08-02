@@ -52,6 +52,7 @@ from .uploadrr_config_staging import (
     write_staged_config,
 )
 from .image_hosts import fallback_order, get_host_key
+from .eventos import EVENTO_SUBIDA_LOG, EVENTO_SUBIDA_PROGRESO, publicar_agrupado
 
 logger = logging.getLogger("emuwarez.upload")
 
@@ -367,6 +368,20 @@ def build_uploadrr_execution_command(job: dict, conn=None) -> dict:
             conn.close()
 
 
+def _avisar_de_log(job_id: int) -> None:
+    """Avisa de que hay líneas nuevas, como mucho una vez por segundo.
+
+    El aviso NO lleva las líneas. El proceso escupe cientos por segundo y
+    mandarlas por el canal lo convertiría en una tubería de logs; además solo
+    le importan a quien tenga abierta esa pantalla concreta. Así que solo se
+    dice que las hay, y quien mire las pide.
+
+    Agrupar aquí es seguro porque el aviso no lleva estado: el que sí sale trae
+    consigo todo lo que se perdieron los que no salieron.
+    """
+    publicar_agrupado(f"log-{job_id}", EVENTO_SUBIDA_LOG, {"job_id": job_id}, cada=1.0)
+
+
 def append_upload_log(
     job_id: int,
     level: str,
@@ -375,6 +390,7 @@ def append_upload_log(
     raw: dict | None = None,
     conn=None,
 ) -> None:
+    _avisar_de_log(job_id)
     own = conn is None
     conn = conn or _get_db_conn()
     try:
@@ -969,6 +985,14 @@ def advance_running_phase(job_id: int, phase_key: str, pct: int) -> None:
         display_pct = max(display_pct, current_row.get("pct", 0))
     new_state = build_phase_state(list(completed), current=display_key, current_pct=display_pct)
     _write_progress_json(job_id, with_phase_timestamps(new_state, state.get("phases")))
+
+    # El progreso ya está escrito: ahora se puede avisar. Se agrupa por trabajo
+    # porque el proceso reporta a mucha más resolución de la que un ojo
+    # distingue, y recargar la tabla de subidas veinte veces por segundo sería
+    # más caro que el sondeo de 2,5 s que esto viene a sustituir.
+    publicar_agrupado(f"progreso-{job_id}", EVENTO_SUBIDA_PROGRESO,
+                      {"job_id": job_id, "phase": display_key, "pct": display_pct},
+                      cada=0.5)
 
 
 def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str], *, pre_gated: bool = False) -> None:

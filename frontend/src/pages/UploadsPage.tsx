@@ -20,6 +20,7 @@ import {
   progressCounter, queuedWaitText, useTicker,
 } from '../utils/uploadStatus'
 import { guardarPagina, tomarCopia, copiaNoConfirmada, generacionCache } from '../utils/cachePaginas'
+import { useRefrescoDeSubidas } from '../hooks/useRefrescoDeSubidas'
 
 // Backend-real gates — mirror cancel_upload_job()/queue_retry_for_job() in
 // services/upload_execution.py / upload_queue.py exactly, so the button is
@@ -393,16 +394,11 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
     return () => window.removeEventListener('emuwarez:open-upload', onOpenUpload)
   }, [])
 
-  // Poll every 2.5s while at least one job is live (staging/queued/preparing/
-  // running), so status/progress/logs — and the staging→queued→preparing→
-  // running transition — update on their own.
+  // Mientras haya algún trabajo vivo (staging/queued/preparing/running), la
+  // tabla se mantiene al día. Ahora lo hace el aviso del servidor, y el sondeo
+  // de 2,5 s queda de red de seguridad para cuando el canal está caído.
   const hasLiveJob = jobs.some(j => j.status === 'running' || j.status === 'preparing' || j.status === 'queued' || j.status === 'staging')
-  useEffect(() => {
-    if (!hasLiveJob) return
-    const timer = setInterval(() => load({ silent: true }), 2500)
-    return () => clearInterval(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasLiveJob, statusFilter])
+  useRefrescoDeSubidas(() => load({ silent: true }), { cadaSinCanal: 2500, activo: hasLiveJob })
   useTicker(jobs.some(j => j.status === 'queued'))
 
   // Cancelar mientras se preparan ficheros no interrumpe nada a media faena,

@@ -25,6 +25,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -34,6 +35,15 @@ logger = logging.getLogger(__name__)
 # El cliente recarga por la API de siempre, así que un aviso perdido o repetido
 # no descuadra nada.
 EVENTO_SYNC_TERMINADA = "sync-terminada"
+# Una subida cambió de estado (encolada, subiendo, terminada, fallida...).
+EVENTO_SUBIDA_ESTADO = "subida-estado"
+# Una subida avanzó dentro de su fase.
+EVENTO_SUBIDA_PROGRESO = "subida-progreso"
+# Hay líneas nuevas en el registro de una subida. No lleva las líneas: el
+# proceso escupe cientos por segundo y mandarlas por aquí sería convertir el
+# canal en una tubería de logs. Solo dice que las hay, y quien mire esa pantalla
+# las pide.
+EVENTO_SUBIDA_LOG = "subida-log"
 
 # Cuántos avisos se le guardan a un cliente que no lee. Al llenarse se tira el
 # más viejo: son órdenes de recargar, y la última vale por todas las anteriores.
@@ -129,8 +139,38 @@ def publicar(tipo: str, datos: Optional[dict[str, Any]] = None) -> int:
         return 0
 
 
+_ultimo_agrupado: dict[str, float] = {}
+_candado_agrupar = threading.Lock()
+
+
+def publicar_agrupado(clave: str, tipo: str, datos: Optional[dict[str, Any]] = None,
+                      cada: float = 1.0, *, reloj=None) -> bool:
+    """Publica como mucho una vez cada `cada` segundos para la misma `clave`.
+
+    Para lo que ocurre a chorro. El registro de una subida escupe cientos de
+    líneas por segundo, y un aviso por línea convertiría el canal en una
+    tubería de logs: la interfaz recargaría sin parar y sería más caro que el
+    sondeo que viene a sustituir.
+
+    Se puede tirar sin miedo porque un aviso solo dice "esto ha cambiado, vuelve
+    a pedirlo": el que sí sale trae consigo todo lo que se perdieron los que no.
+
+    Devuelve True si lo publicó.
+    """
+    ahora = (reloj or time.monotonic)()
+    with _candado_agrupar:
+        anterior = _ultimo_agrupado.get(clave)
+        if anterior is not None and (ahora - anterior) < cada:
+            return False
+        _ultimo_agrupado[clave] = ahora
+    publicar(tipo, datos)
+    return True
+
+
 def olvidar_todos() -> None:
     """Vacía la lista de suscriptores. Para los tests."""
     global _suscriptores
     with _candado:
         _suscriptores = []
+    with _candado_agrupar:
+        _ultimo_agrupado.clear()

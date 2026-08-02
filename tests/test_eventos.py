@@ -170,3 +170,71 @@ def test_se_sigue_sirviendo_con_un_solo_proceso():
         "es un bus EN MEMORIA: los avisos publicados en un proceso no llegan a "
         "los clientes conectados a otro. Saca el bus fuera antes de esto."
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Agrupar: para lo que ocurre a chorro (fase 2)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class _Reloj:
+    """Un reloj de mentira, para no dormir en los tests."""
+
+    def __init__(self):
+        self.t = 0.0
+
+    def __call__(self) -> float:
+        return self.t
+
+    def avanzar(self, s: float) -> None:
+        self.t += s
+
+
+def test_el_primero_sale_siempre():
+    reloj = _Reloj()
+    assert eventos.publicar_agrupado("log-1", "subida-log", cada=1.0, reloj=reloj) is True
+
+
+def test_lo_que_viene_pegado_detras_no_sale():
+    """El registro de una subida escupe cientos de líneas por segundo. Un aviso
+    por línea convertiría el canal en una tubería de logs y saldría más caro
+    que el sondeo que viene a sustituir."""
+    reloj = _Reloj()
+    eventos.publicar_agrupado("log-1", "subida-log", cada=1.0, reloj=reloj)
+    for _ in range(500):
+        reloj.avanzar(0.001)
+        assert eventos.publicar_agrupado("log-1", "subida-log", cada=1.0, reloj=reloj) is False
+
+
+def test_pasado_el_rato_vuelve_a_salir():
+    reloj = _Reloj()
+    eventos.publicar_agrupado("log-1", "subida-log", cada=1.0, reloj=reloj)
+    reloj.avanzar(1.0)
+    assert eventos.publicar_agrupado("log-1", "subida-log", cada=1.0, reloj=reloj) is True
+
+
+def test_cada_subida_lleva_su_propia_cuenta():
+    """Dos subidas a la vez no pueden taparse la una a la otra."""
+    reloj = _Reloj()
+    assert eventos.publicar_agrupado("log-1", "subida-log", cada=1.0, reloj=reloj) is True
+    assert eventos.publicar_agrupado("log-2", "subida-log", cada=1.0, reloj=reloj) is True
+
+
+def test_el_que_sale_trae_lo_que_se_perdieron_los_que_no():
+    """Por qué se puede tirar sin miedo: el aviso no lleva estado, solo dice
+    'vuelve a pedirlo'. El que sale vale por todos los que no salieron."""
+    async def escenario():
+        reloj = _Reloj()
+        sus = eventos.suscribir()
+        try:
+            for i in range(50):
+                reloj.avanzar(0.01)
+                eventos.publicar_agrupado("progreso-7", eventos.EVENTO_SUBIDA_PROGRESO,
+                                          {"job_id": 7, "pct": i}, cada=1.0, reloj=reloj)
+            await asyncio.sleep(0)
+            # Uno solo, el primero; los 49 siguientes se agruparon en él. Y la
+            # interfaz, al recargar, verá el 49 igualmente.
+            assert sus.cola.qsize() == 1
+        finally:
+            eventos.desuscribir(sus)
+
+    asyncio.run(escenario())

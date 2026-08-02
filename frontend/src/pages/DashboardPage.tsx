@@ -49,6 +49,7 @@ import {
   progressCounter, queuedWaitText, useTicker,
 } from '../utils/uploadStatus'
 import { guardarPagina, tomarCopia, copiaNoConfirmada, generacionCache } from '../utils/cachePaginas'
+import { useRefrescoDeSubidas } from '../hooks/useRefrescoDeSubidas'
 
 // Phase 11G — "Recomendaciones" groups, in the order they appear. The content
 // name always links to its Biblioteca detail; the "Acción" button is
@@ -280,8 +281,9 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
 
   // "Actividad de subida" needs a much faster refresh than the rest of the
   // dashboard — at 15s, a job's progress visibly jumps in big steps instead
-  // of reading as live. Same 2.5s cadence Subidas' own table uses, but
-  // scoped to just this fetch so it doesn't reload the whole dashboard.
+  // of reading as live. Ahora lo lleva el aviso del servidor (la barra se mueve
+  // cuando se mueve, no a saltos), con el sondeo de 2,5 s de red de seguridad,
+  // y solo esta petición y no el Panel entero.
   const loadActiveUploads = useCallback(async () => {
     try {
       const up = await getUploads({ limit: 50 })
@@ -289,11 +291,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
     } catch { /* ignore — next tick retries */ }
   }, [])
   const hasLiveUpload = activeUploads.length > 0
-  useEffect(() => {
-    if (!hasLiveUpload) return
-    const t = setInterval(loadActiveUploads, 2500)
-    return () => clearInterval(t)
-  }, [hasLiveUpload, loadActiveUploads])
+  useRefrescoDeSubidas(loadActiveUploads, { cadaSinCanal: 2500, activo: hasLiveUpload })
 
   if (loadingData && !summary) return <LoadingState label="Cargando Panel…" />
   if (!summary) return <ErrorState message={dataError ?? 'No se pudieron cargar los datos del dashboard'} onRetry={loadData} />

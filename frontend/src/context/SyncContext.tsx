@@ -12,7 +12,7 @@ import {
 } from '../api/library'
 import { syncRequests, getSyncStatus } from '../api/requests'
 import { olvidarPagina } from '../utils/cachePaginas'
-import { escucharEventos } from '../api/eventos'
+import { suscribirse } from '../api/eventos'
 import type { RequestSyncStatusResponse } from '../types/api'
 
 // Global sync state, shared by every page (Dashboard / Biblioteca / Peticiones).
@@ -342,17 +342,11 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     return () => document.removeEventListener('visibilitychange', alVolver)
   }, [invalidarTodo])
 
-  // El aviso del servidor. Mientras solo llega "sync-terminada", así que esto
-  // no sustituye a nada todavía: los once sondeos siguen donde estaban. Lo que
-  // añade es enterarse de una sincronización que terminó SIN que este
-  // navegador la hubiera lanzado — la programada, o la de otra pestaña — que
-  // hasta ahora se descubría por casualidad, cuando el sondeo de turno pasaba
-  // por ahí. Si el canal no levanta, se reintenta solo y no se rompe nada.
-  useEffect(() => {
-    return escucharEventos(aviso => {
-      if (aviso.tipo === 'sync-terminada') invalidarTodo()
-    })
-  }, [invalidarTodo])
+  // El aviso del servidor cuando termina una sincronización, la haya lanzado
+  // este navegador o no — la programada, o la de otra pestaña, que hasta ahora
+  // se descubrían por casualidad cuando al sondeo de turno le tocaba pasar por
+  // ahí. Si el canal no levanta, se reintenta solo y no se rompe nada.
+  useEffect(() => suscribirse('sync-terminada', () => invalidarTodo()), [invalidarTodo])
 
   const value: SyncContextValue = {
     libSyncing, libProgress, startLibrarySync,

@@ -17,6 +17,7 @@ from typing import Optional
 
 from .settings import get_setting_canonical
 from .notifications import send_discord, send_telegram
+from .eventos import EVENTO_NOTIFICACION, publicar
 
 _log = logging.getLogger("emuwarez.notifications")
 
@@ -227,6 +228,10 @@ def emit(
         notif_id = int(cur.lastrowid)
         if commit:
             conn.commit()
+        # La campana sondeaba cada 30 segundos, así que una notificación podía
+        # tardar medio minuto en aparecer. Solo se avisa si de verdad se
+        # guardó: si el canal UI está desactivado no hay nada que enseñar.
+        publicar(EVENTO_NOTIFICACION, {"event_type": event_type, "level": level})
     # Discord/Telegram fan-out is independent of the bell (each has its own
     # enabled flag + event selection).
     if dispatch:

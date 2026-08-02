@@ -27,6 +27,7 @@ import { InfoIcon } from './InfoIcon'
 import { FitText, FitTextPair } from './FitText'
 import { Tooltip, useTooltip } from './Tooltip'
 import { ACTIVE_JOB_STATUSES, statusLabel } from '../utils/uploadStatus'
+import { seguirProgreso } from '../api/eventos'
 
 // Unified "Subir" wizard (replaces the separate Nomenclatura + Campos + Subir
 // buttons). For a Series/Season it first asks which season (and episode, or the
@@ -574,16 +575,18 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     if (targetId == null) return
     setChecksLoading(true)
     setLiveChecks([])
-    const poll = window.setInterval(async () => {
+    const pedir = async () => {
       try {
         const p = await getUploadChecksProgress(targetId)
         setLiveChecks(p.checks)
-      } catch { /* transient poll failure — next tick retries */ }
-    }, 400)
+      } catch { /* fallo pasajero — el siguiente aviso o tic reintenta */ }
+    }
+    const dejarDeSeguir = seguirProgreso(
+      'comprobaciones-progreso', a => a.item_id === targetId, pedir, 400)
     try { setChecks(await runUploadChecks(targetId)) }
     catch { setChecks(null) }
     finally {
-      window.clearInterval(poll)
+      dejarDeSeguir()
       setChecksLoading(false)
       setLiveChecks([])
     }
@@ -904,9 +907,11 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     buildingPlanFor.current = targetId
     setSeasonProgress({ done: 0, total: 0, current_title: null })
     setSeasonTitlePreview(null)
-    const poll = window.setInterval(async () => {
-      try { setSeasonProgress(await getSeasonPlanProgress(targetId)) } catch { /* transient poll failure — next tick retries */ }
-    }, 400)
+    const pedirPlan = async () => {
+      try { setSeasonProgress(await getSeasonPlanProgress(targetId)) } catch { /* fallo pasajero */ }
+    }
+    const dejarDeSeguirPlan = seguirProgreso(
+      'plan-temporada-progreso', a => a.season_id === targetId, pedirPlan, 400)
     try {
       const [plan, srcResp, prvResp] = await Promise.all([
         previewSeasonPack(targetId), getEmuSources(), getEmuProviders(),
@@ -947,7 +952,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
       setSeasonPlan(null)
       setSeasonPlanError(e instanceof Error ? e.message : 'Error preparando la temporada')
     } finally {
-      window.clearInterval(poll)
+      dejarDeSeguirPlan()
       buildingPlanFor.current = null
       setSeasonPlanLoading(false)
     }

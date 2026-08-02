@@ -54,6 +54,8 @@ from .nomenclature import (
 # single slow request is in flight.
 _PLAN_LOCK = threading.Lock()
 _PLAN_PROGRESS: dict[int, dict] = {}
+
+from .eventos import EVENTO_PLAN_TEMPORADA, publicar
 # Seasons whose in-flight plan the user asked to abandon (they closed the
 # wizard). Building a plan runs build_nomenclature_proposal once per episode,
 # which is real work — without this the server kept churning through a 24
@@ -93,6 +95,12 @@ def _clear_season_plan_cancel(season_id: int) -> None:
 def _set_season_plan_progress(season_id: int, *, done: int, total: int, current_title: Optional[str] = None) -> None:
     with _PLAN_LOCK:
         _PLAN_PROGRESS[season_id] = {"done": done, "total": total, "current_title": current_title}
+    # Un aviso por capítulo. No se agrupa a propósito: el asistente enseña
+    # "3/12 capítulos" con el título del que va, y agrupar se saltaría nombres.
+    # Cada capítulo cuesta bastante (se le lee la pista de audio), así que la
+    # frecuencia la marca el trabajo real, no un bucle.
+    publicar(EVENTO_PLAN_TEMPORADA,
+             {"season_id": season_id, "done": done, "total": total})
 
 
 def _get_season_row(season_id: int, conn) -> Optional[dict]:

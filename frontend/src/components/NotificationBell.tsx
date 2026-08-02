@@ -10,6 +10,7 @@ import {
 import { posterUrl } from '../utils/libraryItem'
 import { UploadButtonIcon, CancelButtonIcon, RequestCardIcon } from './DetailCard'
 import { useTooltip } from './Tooltip'
+import { useRefrescoPorAvisos } from '../hooks/useRefrescoPorAvisos'
 
 const POLL_MS = 30000
 
@@ -218,12 +219,14 @@ export function NotificationBell() {
     }
   }, [])
 
-  // Initial load + polling for the unread badge.
-  useEffect(() => {
-    refresh()
-    const t = setInterval(refresh, POLL_MS)
-    return () => clearInterval(t)
-  }, [refresh])
+  useEffect(() => { refresh() }, [refresh])
+  // La campana sondeaba cada 30 segundos, así que una notificación podía tardar
+  // medio minuto en aparecer. Ahora sale al momento, y el sondeo se espacia a
+  // dos minutos de red de seguridad mientras el canal esté vivo.
+  useRefrescoPorAvisos(['notificacion'], refresh, {
+    cadaSinCanal: POLL_MS,
+    cadaConCanal: 120_000,
+  })
 
   // Close on outside click / Escape.
   useEffect(() => {

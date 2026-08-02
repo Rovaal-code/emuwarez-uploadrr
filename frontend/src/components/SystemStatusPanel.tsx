@@ -75,6 +75,11 @@ function NetRow({ down, up, collapsed }: { down: number; up: number; collapsed: 
 export function SystemStatusPanel({ collapsed = false }: { collapsed?: boolean }) {
   const [stats, setStats] = useState<SystemStats | null>(null)
 
+  // Este sondeo se queda, y es a propósito: es el único que no se pasó a
+  // avisos del servidor (services/eventos.py). CPU, RAM y disco no "cambian"
+  // en ningún instante concreto — se miden cuando alguien mira. No hay nada
+  // que el servidor pueda anunciar salvo "ha pasado un rato", que es
+  // exactamente lo que ya hace un temporizador y más barato.
   useEffect(() => {
     let alive = true
     let timer: ReturnType<typeof setTimeout> | undefined

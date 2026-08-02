@@ -154,7 +154,10 @@ def test_al_terminar_una_sync_de_biblioteca_se_avisa(monkeypatch):
     with library._lib_sync_guard():
         pass
 
-    assert avisos == [("sync-terminada", {"que": "biblioteca"})]
+    # Desde la fase 4 el guard avisa también al EMPEZAR, para que la barra de
+    # arriba aparezca sin esperar al sondeo (ver test_eventos_fases_3_y_4.py).
+    assert avisos == [("sync-empezada", {"que": "biblioteca"}),
+                      ("sync-terminada", {"que": "biblioteca"})]
 
 
 def test_se_avisa_tambien_cuando_la_sync_falla(monkeypatch):
@@ -170,7 +173,8 @@ def test_se_avisa_tambien_cuando_la_sync_falla(monkeypatch):
         with library._lib_sync_guard():
             raise RuntimeError("se cayó Sonarr")
 
-    assert avisos == [("sync-terminada", {"que": "biblioteca"})]
+    assert avisos == [("sync-empezada", {"que": "biblioteca"}),
+                      ("sync-terminada", {"que": "biblioteca"})]
 
 
 def test_avisar_no_puede_tumbar_una_sincronizacion():

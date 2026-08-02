@@ -45,6 +45,25 @@ EVENTO_SUBIDA_PROGRESO = "subida-progreso"
 # las pide.
 EVENTO_SUBIDA_LOG = "subida-log"
 
+# --- Fase 3: el asistente de subida -----------------------------------------
+# Avanzó la verificación previa de un elemento, o el plan de un pack de
+# temporada. Son los dos sondeos más agresivos que había (cada 0,4 y 0,5
+# segundos), y encima corren justo mientras el asistente está haciendo trabajo
+# pesado por detrás.
+EVENTO_COMPROBACIONES = "comprobaciones-progreso"
+EVENTO_PLAN_TEMPORADA = "plan-temporada-progreso"
+
+# --- Fase 4: el resto --------------------------------------------------------
+# Entró una notificación nueva en la campana.
+EVENTO_NOTIFICACION = "notificacion"
+# Terminó una tarea programada.
+EVENTO_TAREA = "tarea-terminada"
+# Empezó una sincronización. Hace falta aparte de `sync-terminada` porque la
+# barra de progreso de arriba tiene que aparecer al EMPEZAR, y hasta ahora eso
+# se descubría con un sondeo cada 8 segundos por si alguien había lanzado una
+# desde otra pestaña o desde una tarea programada.
+EVENTO_SYNC_EMPEZADA = "sync-empezada"
+
 # Cuántos avisos se le guardan a un cliente que no lee. Al llenarse se tira el
 # más viejo: son órdenes de recargar, y la última vale por todas las anteriores.
 # Un cliente atascado no puede hacer crecer la memoria del servidor.

@@ -204,3 +204,43 @@ export function suscribirse(tipo: string, cb: Oyente): () => void {
     }
   }
 }
+
+/**
+ * Sigue el progreso de una operación mientras dura, y devuelve cómo dejar de
+ * seguirla.
+ *
+ * Es para los sondeos del asistente, que tienen otra forma que los de las
+ * pantallas: no corren siempre, corren mientras una petición larga está en
+ * vuelo (verificar un elemento, planear un pack de temporada). Eran los dos
+ * más agresivos que había —cada 0,4 y 0,5 segundos— y encima disparaban justo
+ * cuando el servidor estaba ocupado con el trabajo pesado.
+ *
+ * Igual que en las pantallas, el sondeo no desaparece: con el canal vivo baja a
+ * una red de seguridad lenta, y sin él vuelve a su cadencia de siempre. Aquí
+ * importa más que en ningún otro sitio, porque el usuario está mirando la
+ * barra y esperando.
+ */
+export function seguirProgreso(
+  tipo: string,
+  coincide: (aviso: Aviso) => boolean,
+  pedir: () => void,
+  cadaSinCanal: number,
+): () => void {
+  const LENTO_MS = 5000
+  let temporizador: ReturnType<typeof setInterval> | null = null
+
+  const reprogramar = (vivo: boolean) => {
+    if (temporizador) clearInterval(temporizador)
+    temporizador = setInterval(pedir, vivo ? LENTO_MS : cadaSinCanal)
+  }
+  reprogramar(canalVivo())
+
+  const dejarDeObservar = observarCanal(reprogramar)
+  const dejarDeEscuchar = suscribirse(tipo, aviso => { if (coincide(aviso)) pedir() })
+
+  return () => {
+    if (temporizador) clearInterval(temporizador)
+    dejarDeObservar()
+    dejarDeEscuchar()
+  }
+}

@@ -21,6 +21,8 @@ from typing import Optional
 _CHECKS_LOCK = threading.Lock()
 _CHECKS_PROGRESS: dict[int, dict] = {}
 
+from .eventos import EVENTO_COMPROBACIONES, publicar
+
 
 def get_checks_progress(item_id: int) -> dict:
     with _CHECKS_LOCK:
@@ -30,6 +32,10 @@ def get_checks_progress(item_id: int) -> dict:
 def _set_checks_progress(item_id: int, *, checks: list[dict], done: bool = False, ready: bool = False) -> None:
     with _CHECKS_LOCK:
         _CHECKS_PROGRESS[item_id] = {"checks": list(checks), "done": done, "ready": ready}
+    # Único escritor del progreso, así que basta con avisar aquí. Sin agrupar:
+    # cada comprobación tarda lo suyo (hay llamadas a eMuwarez, a qBittorrent,
+    # al disco), así que esto no sale a chorro — son unas pocas por elemento.
+    publicar(EVENTO_COMPROBACIONES, {"item_id": item_id, "done": done})
 
 
 # Las comprobaciones se parten en dos grupos porque no todas dependen de lo

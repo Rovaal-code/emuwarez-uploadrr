@@ -16,7 +16,7 @@ import { RemuxTable, EpisodeAccordionRow } from './UploadWizardModal'
 import {
   UPLOAD_TYPE_LABEL, STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo, progressCounter, formatElapsed, queuedWaitText, useTicker, formatSecondsHM,
 } from '../utils/uploadStatus'
-import { useRefrescoDeSubidas } from '../hooks/useRefrescoDeSubidas'
+import { useRefrescoPorAvisos, AVISOS_SUBIDA } from '../hooks/useRefrescoPorAvisos'
 
 // Dedicated page for one upload job (replaces the old JobProgressPanel modal)
 // — same Radarr/Sonarr-style layout LibraryDetailPage/RequestDetailPage use:
@@ -497,11 +497,12 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
   // El aviso NO trae las líneas —el proceso escupe cientos por segundo— y va
   // agrupado a una vez por segundo en el servidor: solo dice que las hay. El
   // sondeo de 2 s queda de red de seguridad para cuando el canal está caído.
-  useRefrescoDeSubidas(loadLogs, {
+  useRefrescoPorAvisos([...AVISOS_SUBIDA, 'subida-log'], loadLogs, {
     cadaSinCanal: 2000,
     activo: isRunning || isPreparing || isStaging,
-    jobId,
-    conRegistro: true,
+    // Con varias subidas a la vez, el detalle de una no se recarga porque otra
+    // distinta esté avanzando.
+    filtro: aviso => aviso.job_id === jobId,
   })
   // No artificial cap here: `logs` is already the last 300 lines (tail=true
   // above). Slicing further to a small window (e.g. -40) used to discard

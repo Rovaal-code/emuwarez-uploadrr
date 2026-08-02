@@ -49,7 +49,7 @@ import {
   progressCounter, queuedWaitText, useTicker,
 } from '../utils/uploadStatus'
 import { guardarPagina, tomarCopia, copiaNoConfirmada, generacionCache } from '../utils/cachePaginas'
-import { useRefrescoDeSubidas } from '../hooks/useRefrescoDeSubidas'
+import { useRefrescoPorAvisos, AVISOS_SUBIDA } from '../hooks/useRefrescoPorAvisos'
 
 // Phase 11G — "Recomendaciones" groups, in the order they appear. The content
 // name always links to its Biblioteca detail; the "Acción" button is
@@ -291,7 +291,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
     } catch { /* ignore — next tick retries */ }
   }, [])
   const hasLiveUpload = activeUploads.length > 0
-  useRefrescoDeSubidas(loadActiveUploads, { cadaSinCanal: 2500, activo: hasLiveUpload })
+  useRefrescoPorAvisos(AVISOS_SUBIDA, loadActiveUploads, { cadaSinCanal: 2500, activo: hasLiveUpload })
 
   if (loadingData && !summary) return <LoadingState label="Cargando Panel…" />
   if (!summary) return <ErrorState message={dataError ?? 'No se pudieron cargar los datos del dashboard'} onRetry={loadData} />

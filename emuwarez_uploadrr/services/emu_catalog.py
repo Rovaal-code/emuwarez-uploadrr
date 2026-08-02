@@ -23,7 +23,7 @@ from ..database import get_setting_canonical, get_state, set_state, get_json_sta
 from ..integrations import emu
 from ..integrations.base import IntegrationError
 from .tasks import start_task, finish_task
-from .eventos import EVENTO_SYNC_TERMINADA, publicar
+from .eventos import EVENTO_SYNC_EMPEZADA, EVENTO_SYNC_TERMINADA, publicar
 
 logger = logging.getLogger("emuwarez.emu")
 
@@ -632,6 +632,7 @@ def start_emu_sync_background(force: bool = False, mode: str = "incremental") ->
         conn.close()
     _set_progress(active=True, done=False, error=None, phase="Iniciando…", torrents=0, items=0,
                   page=0, total_pages=None, eta_seconds=None)
+    publicar(EVENTO_SYNC_EMPEZADA, {"que": "catalogo"})
 
     def _run() -> None:
         c = connect(db_path())

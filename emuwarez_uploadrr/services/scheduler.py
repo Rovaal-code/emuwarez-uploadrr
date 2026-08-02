@@ -23,6 +23,7 @@ from __future__ import annotations
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+from .eventos import EVENTO_TAREA, publicar
 
 TASK_LIBRARY_SYNC = "sync-library"
 TASK_EMU_SYNC = "sync-emu-requests"
@@ -230,6 +231,9 @@ def run_scheduled_task(conn: sqlite3.Connection, task_key: str, *, manual: bool 
         (_now_iso(), status, summary, next_run_at, task_key),
     )
     conn.commit()
+    # "Últimas tareas ejecutadas" sondeaba cada 30 segundos. Aquí termina toda
+    # tarea, la lance el reloj o el botón de Ejecutar ahora.
+    publicar(EVENTO_TAREA, {"task_key": task_key, "status": status})
     return {"task_key": task_key, "status": status, "summary": summary, "next_run_at": next_run_at}
 
 

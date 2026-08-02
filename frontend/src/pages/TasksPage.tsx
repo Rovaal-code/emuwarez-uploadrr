@@ -6,6 +6,7 @@ import {
 import { LoadingState } from '../components/LoadingState'
 import { ErrorState } from '../components/ErrorState'
 import { formatDate } from '../utils/format'
+import { useRefrescoPorAvisos } from '../hooks/useRefrescoPorAvisos'
 
 const INTERVAL_OPTIONS_MINUTES = [15, 30, 45, 60, 90, 120, 180, 360, 720]
 
@@ -235,12 +236,13 @@ export function TasksPage() {
 
   useEffect(() => { load() }, [load])
 
-  // Light polling so last/next run + status stay fresh if a scheduled run
-  // happens in the background while this page is open.
-  useEffect(() => {
-    const t = setInterval(load, 30000)
-    return () => clearInterval(t)
-  }, [load])
+  // "Últimas tareas ejecutadas" se actualiza en cuanto termina una, en vez de
+  // hasta 30 segundos después. El sondeo se espacia a dos minutos de red de
+  // seguridad mientras el canal esté vivo.
+  useRefrescoPorAvisos(['tarea-terminada'], load, {
+    cadaSinCanal: 30_000,
+    cadaConCanal: 120_000,
+  })
 
   return (
     <div>

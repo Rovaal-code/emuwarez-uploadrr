@@ -17,7 +17,7 @@ from ..models import InstanceConfig, LibraryItem, LocalStatus, MediaKind, Nomenc
 from .source_assistant import EMU_PROVIDERS
 from .instances import list_instances
 from .tasks import start_task, finish_task
-from .eventos import EVENTO_SYNC_TERMINADA, publicar
+from .eventos import EVENTO_SYNC_EMPEZADA, EVENTO_SYNC_TERMINADA, publicar
 
 # Only these two are real, downloadable leaf rows — series/season local_status
 # is a rollup over their children (see LocalStatus.PARTIAL), so a rollup
@@ -661,6 +661,11 @@ def _lib_sync_guard() -> Iterator[None]:
             raise SyncAlreadyRunning()
         _LIB_SYNC_PROGRESS.update(active=True, done=False, error=None, phase="Iniciando…",
                                   imported=0, missing=0, total=0, instance="", instance_type="")
+    # Fuera del candado, que publicar no tiene por qué sujetarlo. La barra de
+    # arriba tiene que aparecer al EMPEZAR, y hasta ahora eso se descubría con
+    # un sondeo cada 8 segundos por si la había lanzado otra pestaña o una
+    # tarea programada.
+    publicar(EVENTO_SYNC_EMPEZADA, {"que": "biblioteca"})
     try:
         yield
     except Exception as exc:  # noqa: BLE001 — surfaced to the progress card

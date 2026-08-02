@@ -12,7 +12,7 @@ import {
 } from '../api/library'
 import { syncRequests, getSyncStatus } from '../api/requests'
 import { olvidarPagina } from '../utils/cachePaginas'
-import { suscribirse } from '../api/eventos'
+import { suscribirse, canalVivo } from '../api/eventos'
 import type { RequestSyncStatusResponse } from '../types/api'
 
 // Global sync state, shared by every page (Dashboard / Biblioteca / Peticiones).
@@ -312,14 +312,31 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     }).catch(() => { /* ignore */ })
   }, [refreshCatalogStatus, refreshRequestsStatus, checkAndResumeLibrarySync, followCatalog])
 
-  // Ambient poll: a scheduled task (the automatic tick, or "Ejecutar ahora" in
-  // Tareas) can start a library sync without the user ever clicking anything
-  // in this tab — the mount-time check above only catches one already running
-  // at that moment. Poll slowly for one that started later; once detected,
-  // the normal 800ms follow loop takes over from there.
+  // Una tarea programada (el tic automático, o "Ejecutar ahora" en Tareas)
+  // puede arrancar una sincronización sin que nadie toque nada en esta
+  // pestaña. La comprobación al montar solo pilla las que YA estaban
+  // corriendo, así que hacía falta enterarse de las que empiezan después: eso
+  // era un sondeo cada 8 segundos, y ahora lo dice el servidor al empezar. En
+  // cuanto se detecta, el bucle de seguimiento de siempre toma el relevo.
+  //
+  // El sondeo se queda de red de seguridad, muy espaciado: sin él, con el
+  // canal caído la barra de arriba no aparecería nunca para una
+  // sincronización que no hayas lanzado tú.
+  useEffect(() => suscribirse('sync-empezada', () => {
+    if (!libBusy.current) checkAndResumeLibrarySync()
+  }), [checkAndResumeLibrarySync])
+
   useEffect(() => {
-    const timer = setInterval(() => { if (!libBusy.current) checkAndResumeLibrarySync() }, 8000)
-    return () => clearInterval(timer)
+    let vivo = true
+    let timer: ReturnType<typeof setTimeout> | undefined
+    // Encadenado en vez de setInterval: así cada vuelta vuelve a mirar si el
+    // canal está en pie, sin tener que suscribirse también a eso aquí.
+    const tic = () => {
+      if (!libBusy.current) checkAndResumeLibrarySync()
+      if (vivo) timer = setTimeout(tic, canalVivo() ? 60_000 : 8000)
+    }
+    timer = setTimeout(tic, canalVivo() ? 60_000 : 8000)
+    return () => { vivo = false; if (timer) clearTimeout(timer) }
   }, [checkAndResumeLibrarySync])
 
   // Volver a la pestaña revalida. Es `refetchOnWindowFocus`, que SWR y TanStack

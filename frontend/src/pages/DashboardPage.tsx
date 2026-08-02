@@ -48,7 +48,7 @@ import {
   STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo,
   progressCounter, queuedWaitText, useTicker,
 } from '../utils/uploadStatus'
-import { useRefrescoPorAvisos, useRecargarAlVerse, AVISOS_SUBIDA } from '../hooks/useRefrescoPorAvisos'
+import { useRefrescoPorAvisos, AVISOS_SUBIDA, AVISOS_SUBIDA_PROGRESO } from '../hooks/useRefrescoPorAvisos'
 import { queSalieron, soloVivas, idsDe, ESPERA_MS, DESVANECER_MS } from '../utils/despedidaSubidas'
 
 // Phase 11G — "Recomendaciones" groups, in the order they appear. The content
@@ -277,7 +277,11 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   useEffect(() => { loadData() }, [loadData])
 
   // Reload the dashboard data whenever any global sync finishes.
-  useRecargarAlVerse(loadData, lastInvalidatedAt)
+  // Recarga en cuanto algo cambia, se esté viendo esta sección o no: los avisos
+  // que suben esta marca son raros (una sincronización, una tarea), así que
+  // mantenerlas todas al día cuesta poco y a cambio cambiar de pestaña enseña
+  // lo actual y no lo actual tras un parpadeo.
+  useEffect(() => { if (lastInvalidatedAt) loadData() }, [lastInvalidatedAt, loadData])
 
   // Light polling for the whole dashboard (summary/recommendations/tasks).
   useEffect(() => {
@@ -296,7 +300,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
     } catch { /* ignore — next tick retries */ }
   }, [])
   const hasLiveUpload = activeUploads.length > 0
-  useRefrescoPorAvisos(AVISOS_SUBIDA, loadActiveUploads, { cadaSinCanal: 2500, activo: hasLiveUpload })
+  useRefrescoPorAvisos(AVISOS_SUBIDA, loadActiveUploads,
+    { cadaSinCanal: 2500, activo: hasLiveUpload, soloVisible: AVISOS_SUBIDA_PROGRESO })
 
   if (loadingData && !summary) return <LoadingState label="Cargando Panel…" />
   if (!summary) return <ErrorState message={dataError ?? 'No se pudieron cargar los datos del dashboard'} onRetry={loadData} />

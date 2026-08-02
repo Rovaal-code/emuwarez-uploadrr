@@ -19,7 +19,7 @@ import {
   UPLOAD_TYPE_LABEL, STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo,
   progressCounter, queuedWaitText, useTicker,
 } from '../utils/uploadStatus'
-import { useRefrescoPorAvisos, AVISOS_SUBIDA } from '../hooks/useRefrescoPorAvisos'
+import { useRefrescoPorAvisos, AVISOS_SUBIDA, AVISOS_SUBIDA_PROGRESO } from '../hooks/useRefrescoPorAvisos'
 
 // Backend-real gates — mirror cancel_upload_job()/queue_retry_for_job() in
 // services/upload_execution.py / upload_queue.py exactly, so the button is
@@ -391,7 +391,8 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // tabla se mantiene al día. Ahora lo hace el aviso del servidor, y el sondeo
   // de 2,5 s queda de red de seguridad para cuando el canal está caído.
   const hasLiveJob = jobs.some(j => j.status === 'running' || j.status === 'preparing' || j.status === 'queued' || j.status === 'staging')
-  useRefrescoPorAvisos(AVISOS_SUBIDA, () => load({ silent: true }), { cadaSinCanal: 2500, activo: hasLiveJob })
+  useRefrescoPorAvisos(AVISOS_SUBIDA, () => load({ silent: true }),
+    { cadaSinCanal: 2500, activo: hasLiveJob, soloVisible: AVISOS_SUBIDA_PROGRESO })
   useTicker(jobs.some(j => j.status === 'queued'))
 
   // Cancelar mientras se preparan ficheros no interrumpe nada a media faena,

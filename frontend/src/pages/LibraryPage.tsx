@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useTransition, memo } from 'react'
 import { getLibrary, TOP_LEVEL_PARENT_FILTER, getLibraryFilterOptions, getLibraryItem, type LibraryFilterOptions } from '../api/library'
 import { Tooltip } from '../components/Tooltip'
 import { getLocalStatusInfo } from '../utils/status'
-import { useRecargarAlVerse } from '../hooks/useRefrescoPorAvisos'
 import { useSync } from '../context/SyncContext'
 import { EmuSyncButton } from '../components/EmuSyncButton'
 import { getInstances } from '../api/instances'
@@ -308,7 +307,11 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // back, which is what made the table flash "cargando" twice in a row. Same
   // shape RequestsPage uses.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useRecargarAlVerse(load, lastInvalidatedAt)
+  // Recarga en cuanto algo cambia, se esté viendo esta sección o no: los avisos
+  // que suben esta marca son raros (una sincronización, una tarea), así que
+  // mantenerlas todas al día cuesta poco y a cambio cambiar de pestaña enseña
+  // lo actual y no lo actual tras un parpadeo.
+  useEffect(() => { if (lastInvalidatedAt) load() }, [lastInvalidatedAt])
 
   function applyFilters() {
     setOffset(0)

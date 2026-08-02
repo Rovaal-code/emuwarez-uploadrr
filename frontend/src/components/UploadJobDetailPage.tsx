@@ -16,7 +16,7 @@ import { RemuxTable, EpisodeAccordionRow } from './UploadWizardModal'
 import {
   UPLOAD_TYPE_LABEL, STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo, progressCounter, formatElapsed, queuedWaitText, useTicker, formatSecondsHM,
 } from '../utils/uploadStatus'
-import { useRefrescoPorAvisos, AVISOS_SUBIDA } from '../hooks/useRefrescoPorAvisos'
+import { useRefrescoPorAvisos, AVISOS_SUBIDA, AVISOS_SUBIDA_PROGRESO } from '../hooks/useRefrescoPorAvisos'
 
 // Dedicated page for one upload job (replaces the old JobProgressPanel modal)
 // — same Radarr/Sonarr-style layout LibraryDetailPage/RequestDetailPage use:
@@ -498,6 +498,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
   // agrupado a una vez por segundo en el servidor: solo dice que las hay. El
   // sondeo de 2 s queda de red de seguridad para cuando el canal está caído.
   useRefrescoPorAvisos([...AVISOS_SUBIDA, 'subida-log'], loadLogs, {
+    soloVisible: AVISOS_SUBIDA_PROGRESO,
     cadaSinCanal: 2000,
     activo: isRunning || isPreparing || isStaging,
     // Con varias subidas a la vez, el detalle de una no se recarga porque otra

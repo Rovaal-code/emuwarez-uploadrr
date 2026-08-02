@@ -615,7 +615,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   const [error, setError] = useState<string | null>(null)
   // Requests sync is global (shared with the Dashboard's "Peticiones" button
   // and the progress banner), so it can't be launched twice across tabs.
-  const { requestsSyncing, requestsStatus, startRequestsSync, lastCompletedAt, isAnySyncing } = useSync()
+  const { requestsSyncing, requestsStatus, startRequestsSync, lastInvalidatedAt, isAnySyncing } = useSync()
 
   // --- Demo requests (TEMPORARY) --------------------------------------------
   // Only exists until eMuwarez hands over the real requests endpoint; the whole
@@ -766,14 +766,15 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch, statusFilter, categoryFilter, resolutionFilter, sourceFilter, authorFilter, sortBy])
 
-  // Reload table + facets whenever a global sync (peticiones or otra) finishes.
+  // Reload table + facets whenever what's loaded stops being valid: a global
+  // sync finishing (peticiones u otra), or coming back to the tab.
   useEffect(() => {
-    if (lastCompletedAt) {
+    if (lastInvalidatedAt) {
       loadItems(0)
       if (!isUnfiltered) loadFacets()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lastCompletedAt])
+  }, [lastInvalidatedAt])
 
   // Keeps /requests/:id in sync with whichever request's detail is open.
   const closeRequestDetail = () => {

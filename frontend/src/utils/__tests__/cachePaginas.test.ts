@@ -1,14 +1,14 @@
 /**
  * La caché que evita volver a ver "Cargando…" al cambiar de sección.
  *
- * Lo que se prueba es la regla de vigencia, que cada sección tenga la suya, y
- * que una petición que salió antes de invalidar no vuelva a meter lo viejo.
- * Que solo se guarde la vista sin filtrar lo decide quien llama (no se guarda
- * si hay filtros), porque la caché no puede saber qué es un filtro en cada
- * pantalla.
+ * Lo que se prueba son sus tres decisiones: que cada sección tenga la suya,
+ * que NO caduque por tiempo (la invalidan hechos, ver la cabecera del módulo),
+ * y que una petición que salió antes de invalidar no vuelva a meter lo viejo.
+ * Que solo se guarde la vista sin filtrar lo decide quien llama, no la caché:
+ * no puede saber qué es un filtro en cada pantalla.
  */
 import { describe, it, expect, beforeEach } from 'vitest'
-import { guardarPagina, ultimaPagina, olvidarPagina, generacionCache, VIGENCIA_MS } from '../cachePaginas'
+import { guardarPagina, ultimaPagina, olvidarPagina, generacionCache } from '../cachePaginas'
 
 interface Datos { contador: number }
 
@@ -19,75 +19,68 @@ describe('la caché de secciones', () => {
     expect(ultimaPagina<Datos>('panel')).toBeNull()
   })
 
-  it('lo recién guardado se reutiliza', () => {
-    guardarPagina<Datos>('panel', { contador: 7 }, { ahora: 1_000 })
-    expect(ultimaPagina<Datos>('panel', 1_000)?.contador).toBe(7)
-  })
-
-  it('sigue valiendo dentro de la vigencia (ir a otra sección y volver)', () => {
-    guardarPagina<Datos>('panel', { contador: 7 }, { ahora: 1_000 })
-    expect(ultimaPagina<Datos>('panel', 1_000 + VIGENCIA_MS - 1)).not.toBeNull()
-  })
-
-  it('justo en el límite todavía vale', () => {
-    guardarPagina<Datos>('panel', { contador: 7 }, { ahora: 1_000 })
-    expect(ultimaPagina<Datos>('panel', 1_000 + VIGENCIA_MS)).not.toBeNull()
-  })
-
-  it('deja de valer al pasarse: mejor "Cargando" que un dato falso', () => {
-    guardarPagina<Datos>('panel', { contador: 7 }, { ahora: 1_000 })
-    expect(ultimaPagina<Datos>('panel', 1_000 + VIGENCIA_MS + 1)).toBeNull()
+  it('lo guardado se reutiliza', () => {
+    guardarPagina<Datos>('panel', { contador: 7 })
+    expect(ultimaPagina<Datos>('panel')?.contador).toBe(7)
   })
 
   it('cada sección guarda la suya, sin mezclarse', () => {
-    guardarPagina<Datos>('panel', { contador: 1 }, { ahora: 1_000 })
-    guardarPagina<Datos>('biblioteca', { contador: 2 }, { ahora: 1_000 })
-    expect(ultimaPagina<Datos>('panel', 1_000)?.contador).toBe(1)
-    expect(ultimaPagina<Datos>('biblioteca', 1_000)?.contador).toBe(2)
-    expect(ultimaPagina<Datos>('peticiones', 1_000)).toBeNull()
+    guardarPagina<Datos>('panel', { contador: 1 })
+    guardarPagina<Datos>('biblioteca', { contador: 2 })
+    expect(ultimaPagina<Datos>('panel')?.contador).toBe(1)
+    expect(ultimaPagina<Datos>('biblioteca')?.contador).toBe(2)
+    expect(ultimaPagina<Datos>('peticiones')).toBeNull()
   })
 
-  it('guardar otra vez renueva la cuenta', () => {
-    guardarPagina<Datos>('panel', { contador: 1 }, { ahora: 1_000 })
-    guardarPagina<Datos>('panel', { contador: 2 }, { ahora: 100_000 })
-    expect(ultimaPagina<Datos>('panel', 100_000)?.contador).toBe(2)
+  it('guardar otra vez sustituye lo anterior', () => {
+    guardarPagina<Datos>('panel', { contador: 1 })
+    guardarPagina<Datos>('panel', { contador: 2 })
+    expect(ultimaPagina<Datos>('panel')?.contador).toBe(2)
+  })
+
+  // Subidas guarda un array, y una lista vacía es una respuesta legítima (no
+  // hay ninguna subida). Distinguirla de "no hay copia" es la diferencia entre
+  // enseñar la tabla vacía o el "Cargando…" que esto viene a quitar.
+  it('un valor legítimamente vacío no se confunde con no tener nada', () => {
+    guardarPagina<Datos[]>('subidas', [])
+    expect(ultimaPagina<Datos[]>('subidas')).toEqual([])
   })
 
   it('se puede olvidar una sola sección', () => {
-    guardarPagina<Datos>('panel', { contador: 1 }, { ahora: 1_000 })
-    guardarPagina<Datos>('biblioteca', { contador: 2 }, { ahora: 1_000 })
+    guardarPagina<Datos>('panel', { contador: 1 })
+    guardarPagina<Datos>('biblioteca', { contador: 2 })
     olvidarPagina('panel')
-    expect(ultimaPagina<Datos>('panel', 1_000)).toBeNull()
-    expect(ultimaPagina<Datos>('biblioteca', 1_000)).not.toBeNull()
+    expect(ultimaPagina<Datos>('panel')).toBeNull()
+    expect(ultimaPagina<Datos>('biblioteca')).not.toBeNull()
   })
 
   // La carrera de verdad: Subidas repide cada 2,5 segundos, así que una
   // sincronización puede terminar con una petición ya en vuelo. Al resolver
-  // traería datos de ANTES de la sincronización, y guardarlos volvería a
-  // meter en la caché justo lo que se acababa de tirar, para dos minutos.
+  // traería datos de ANTES, y guardarlos volvería a meter en la caché justo
+  // lo que se acababa de tirar.
   it('lo pedido antes de invalidar ya no se guarda', () => {
     const generacion = generacionCache()      // la página empieza a pedir
     olvidarPagina()                           // termina una sincronización
-    guardarPagina<Datos>('subidas', { contador: 1 }, { generacion, ahora: 1_000 })
-    expect(ultimaPagina<Datos>('subidas', 1_000)).toBeNull()
+    guardarPagina<Datos>('subidas', { contador: 1 }, { generacion })
+    expect(ultimaPagina<Datos>('subidas')).toBeNull()
   })
 
   it('olvidar una sola sección también invalida lo que estuviera en vuelo', () => {
     const generacion = generacionCache()
     olvidarPagina('biblioteca')
-    guardarPagina<Datos>('panel', { contador: 1 }, { generacion, ahora: 1_000 })
-    expect(ultimaPagina<Datos>('panel', 1_000)).toBeNull()
+    guardarPagina<Datos>('panel', { contador: 1 }, { generacion })
+    expect(ultimaPagina<Datos>('panel')).toBeNull()
   })
 
   it('lo pedido después sí se guarda (la recarga que sigue a la sincronización)', () => {
     olvidarPagina()
     const generacion = generacionCache()
-    guardarPagina<Datos>('subidas', { contador: 2 }, { generacion, ahora: 1_000 })
-    expect(ultimaPagina<Datos>('subidas', 1_000)?.contador).toBe(2)
+    guardarPagina<Datos>('subidas', { contador: 2 }, { generacion })
+    expect(ultimaPagina<Datos>('subidas')?.contador).toBe(2)
   })
 
   it('sin declarar generación se guarda igual: es opcional', () => {
-    guardarPagina<Datos>('panel', { contador: 3 }, { ahora: 1_000 })
-    expect(ultimaPagina<Datos>('panel', 1_000)?.contador).toBe(3)
+    guardarPagina<Datos>('panel', { contador: 3 })
+    expect(ultimaPagina<Datos>('panel')?.contador).toBe(3)
   })
 })

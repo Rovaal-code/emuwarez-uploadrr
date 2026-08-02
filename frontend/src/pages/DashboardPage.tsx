@@ -199,10 +199,11 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   const [wizardPreselect, setWizardPreselect] = useState<{ season?: number | null; episode?: number | null } | undefined>(undefined)
   const [requestItem, setRequestItem] = useState<LibraryItemResponse | null>(null)
   // Global sync state (shared with Biblioteca/Peticiones and the progress
-  // banner). `lastCompletedAt` triggers a data reload when any sync finishes
+  // banner). `lastInvalidatedAt` triggers a data reload when what's loaded
+  // stops being valid — una sincronización que termina, o volver a la pestaña
   // — the completion message itself is shown centrally in the topbar (see
   // SyncProgressBanner), not duplicated here.
-  const { lastCompletedAt } = useSync()
+  const { lastInvalidatedAt } = useSync()
   // The empty-state hologram has no room for a caption of its own — the
   // explanation lives in a hover tooltip instead, styled like the rest of
   // the app's tooltips (not a native title box).
@@ -259,7 +260,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   useEffect(() => { loadData() }, [loadData])
 
   // Reload the dashboard data whenever any global sync finishes.
-  useEffect(() => { if (lastCompletedAt) loadData() }, [lastCompletedAt, loadData])
+  useEffect(() => { if (lastInvalidatedAt) loadData() }, [lastInvalidatedAt, loadData])
 
   // Light polling for the whole dashboard (summary/recommendations/tasks).
   useEffect(() => {

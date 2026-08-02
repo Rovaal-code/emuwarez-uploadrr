@@ -169,7 +169,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // Library + eMuwarez syncs are global (shared with the Dashboard/Peticiones
   // and the progress banner), so a running sync stays visible and its button
   // stays disabled on every tab.
-  const { libSyncing, startLibrarySync, lastCompletedAt, isAnySyncing } = useSync()
+  const { libSyncing, startLibrarySync, lastInvalidatedAt, isAnySyncing } = useSync()
 
   // Filters
   const [search, setSearch] = useState('')
@@ -317,7 +317,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // back, which is what made the table flash "cargando" twice in a row. Same
   // shape RequestsPage uses.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (lastCompletedAt) load() }, [lastCompletedAt])
+  useEffect(() => { if (lastInvalidatedAt) load() }, [lastInvalidatedAt])
 
   function applyFilters() {
     setOffset(0)

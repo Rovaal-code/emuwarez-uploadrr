@@ -53,10 +53,16 @@ interface SyncContextValue {
   message: string | null
   messageIsError: boolean
   messageFadingOut: boolean
-  // Monotonically increasing marker so pages can reload their own data when
-  // any sync finishes.
-  lastCompletedAt: number
+  // Marca creciente: "lo que tengas cargado ya no vale, vuelve a pedirlo".
+  // La página MONTADA se recarga con esto; las demás están desmontadas y lo
+  // que se les tira es su copia (utils/cachePaginas), en el mismo sitio.
+  // Sube por dos hechos, no por el paso del tiempo: termina una
+  // sincronización, o vuelves a la pestaña.
+  lastInvalidatedAt: number
 }
+
+// Lo que se espera entre dos vueltas a la pestaña antes de volver a revalidar.
+const ESPERA_ENTRE_VUELTAS_MS = 5000
 
 const SyncContext = createContext<SyncContextValue | null>(null)
 
@@ -79,7 +85,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   const [message, setMessageText] = useState<string | null>(null)
   const [messageIsError, setMessageIsError] = useState(false)
   const [messageFadingOut, setMessageFadingOut] = useState(false)
-  const [lastCompletedAt, setLastCompletedAt] = useState(0)
+  const [lastInvalidatedAt, setLastInvalidatedAt] = useState(0)
 
   const requestsUnavailableTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const requestsFadeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -135,17 +141,16 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   const catalogBusy = useRef(false)
   const requestsBusy = useRef(false)
 
-  // Se llama al terminar CUALQUIERA de las tres sincronizaciones, incluida la
-  // programada que arranca sola. Además de avisar a la página montada para que
-  // se recargue, tira lo guardado de todas las secciones: las demás están
-  // desmontadas y solo tienen su copia, así que entrar en Biblioteca justo
-  // después de importar 40 películas enseñaría la lista de antes. Se olvidan
-  // todas y no solo la que parece afectada, porque una sincronización toca
-  // varias a la vez (el catálogo cambia el "Llena / Sin petición" de
-  // Biblioteca, y los tres contadores del Panel).
-  const bumpCompleted = useCallback(() => {
+  // "Nada de lo cargado vale ya": tira la copia de las secciones desmontadas y
+  // avisa a la montada para que se recargue. Las dos mitades van juntas a
+  // propósito, porque una sin la otra deja la mitad de la aplicación mintiendo.
+  //
+  // Se olvidan TODAS las secciones y no solo la que parece afectada: una
+  // sincronización toca varias a la vez (el catálogo cambia el "Llena / Sin
+  // petición" de Biblioteca, y los tres contadores del Panel).
+  const invalidarTodo = useCallback(() => {
     olvidarPagina()
-    setLastCompletedAt(Date.now())
+    setLastInvalidatedAt(Date.now())
   }, [])
 
   const refreshCatalogStatus = useCallback(() => {
@@ -165,7 +170,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
           showMessage(p.error
             ? `Error durante la sincronización: ${p.error}`
             : `Sincronizado: ${p.imported} elementos · ${p.missing} no disponibles`, !!p.error)
-          bumpCompleted()
+          invalidarTodo()
           break
         }
         await new Promise(r => setTimeout(r, 800))
@@ -175,7 +180,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       setLibSyncing(false)
       libBusy.current = false
     }
-  }, [bumpCompleted, showMessage])
+  }, [invalidarTodo, showMessage])
 
   const startLibrarySync = useCallback(() => {
     if (libBusy.current) return
@@ -203,7 +208,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
           showMessage(p.error
             ? `Error al sincronizar eMuwarez: ${p.error}`
             : `Catálogo eMuwarez: ${p.torrents} torrents, ${p.items} elementos comparados`, !!p.error)
-          bumpCompleted()
+          invalidarTodo()
           break
         }
         await new Promise(r => setTimeout(r, 800))
@@ -214,7 +219,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       catalogBusy.current = false
       refreshCatalogStatus()
     }
-  }, [bumpCompleted, refreshCatalogStatus, showMessage])
+  }, [invalidarTodo, refreshCatalogStatus, showMessage])
 
   const startCatalogSync = useCallback((mode: EmuSyncMode = 'incremental') => {
     if (catalogBusy.current) return
@@ -251,7 +256,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         // success gets the generic message banner.
         if (res.ok) {
           showMessage(res.message, false)
-          bumpCompleted()
+          invalidarTodo()
         } else {
           flashRequestsUnavailable()
         }
@@ -262,7 +267,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         requestsBusy.current = false
         refreshRequestsStatus()
       })
-  }, [bumpCompleted, refreshRequestsStatus, flashRequestsUnavailable, hideMessage, showMessage])
+  }, [invalidarTodo, refreshRequestsStatus, flashRequestsUnavailable, hideMessage, showMessage])
 
   // Checks for a library (Radarr/Sonarr) sync already running server-side and
   // hands off to the normal follow loop if one is found — reused both on
@@ -307,12 +312,36 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(timer)
   }, [checkAndResumeLibrarySync])
 
+  // Volver a la pestaña revalida. Es `refetchOnWindowFocus`, que SWR y TanStack
+  // Query traen activado por defecto, y es lo que sustituye al plazo de
+  // caducidad que tenía la caché: el caso que aquel intentaba cubrir a ciegas
+  // era la pestaña abierta toda la noche, y esto lo cubre sabiendo cuándo pasa
+  // en vez de suponerlo. Importa sobre todo para Biblioteca, que es la única
+  // que no repide por su cuenta: sin esto se queda con lo de anoche hasta que
+  // la toques.
+  //
+  // Se estrangula a 5 segundos (el valor por defecto de SWR): alternar entre
+  // ventanas es algo que se hace muchas veces seguidas, y cada vuelta dispara
+  // una recarga completa de la página montada.
+  const ultimaVuelta = useRef(0)
+  useEffect(() => {
+    const alVolver = () => {
+      if (document.visibilityState !== 'visible') return
+      const ahora = Date.now()
+      if (ahora - ultimaVuelta.current < ESPERA_ENTRE_VUELTAS_MS) return
+      ultimaVuelta.current = ahora
+      invalidarTodo()
+    }
+    document.addEventListener('visibilitychange', alVolver)
+    return () => document.removeEventListener('visibilitychange', alVolver)
+  }, [invalidarTodo])
+
   const value: SyncContextValue = {
     libSyncing, libProgress, startLibrarySync,
     catalogSyncing, catalogProgress, catalogStatus, startCatalogSync, refreshCatalogStatus,
     requestsSyncing, requestsStatus, startRequestsSync, refreshRequestsStatus, requestsUnavailable, requestsFadingOut,
     isAnySyncing: libSyncing || catalogSyncing || requestsSyncing,
-    message, messageIsError, messageFadingOut, lastCompletedAt,
+    message, messageIsError, messageFadingOut, lastInvalidatedAt,
   }
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>
 }

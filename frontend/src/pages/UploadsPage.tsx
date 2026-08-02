@@ -19,6 +19,7 @@ import {
   UPLOAD_TYPE_LABEL, STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo,
   progressCounter, queuedWaitText, useTicker,
 } from '../utils/uploadStatus'
+import { guardarPagina, ultimaPagina } from '../utils/cachePaginas'
 
 // Backend-real gates — mirror cancel_upload_job()/queue_retry_for_job() in
 // services/upload_execution.py / upload_queue.py exactly, so the button is
@@ -282,11 +283,16 @@ function JobRow({ job, instances, onOpen, indent, retryToggle, onCancel, onRetry
 }
 
 export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => void } = {}) {
-  const [jobs, setJobs] = useState<UploadJob[]>([])
+  const guardadoSubidas = ultimaPagina<UploadJob[]>('subidas')
+  const [jobs, setJobs] = useState<UploadJob[]>(guardadoSubidas ?? [])
   // Only needed to build the Origen deep link (same as Biblioteca's own column).
   const [instances, setInstances] = useState<InstanceSafeResponse[]>([])
   useEffect(() => { getInstances().then(setInstances).catch(() => {}) }, [])
-  const [loading, setLoading] = useState(true)
+  // Volver a Subidas no vuelve a enseñar "Cargando…": se parte de lo último
+  // sin filtrar y se refresca por detrás (además del refresco propio cada 2,5s
+  // mientras hay algo en marcha). Los filtros se reinician, así que solo se
+  // guarda esa vista (ver utils/cachePaginas).
+  const [loading, setLoading] = useState(!guardadoSubidas)
   const [error, setError] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState('')
   const [search, setSearch] = useState('')
@@ -326,7 +332,10 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
       // STATUS_LABEL) — so it can't be a single exact server-side match;
       // fetch unfiltered and narrow client-side in visibleJobs instead.
       const data = await getUploads(statusFilter && statusFilter !== 'running' ? { status: statusFilter } : undefined)
-      if (seq === loadSeqRef.current) setJobs(data)
+      if (seq === loadSeqRef.current) {
+        setJobs(data)
+        if (!statusFilter) guardarPagina('subidas', data)
+      }
     } catch { if (!opts?.silent) setError('Error al cargar los trabajos de subida.') }
     finally { if (!opts?.silent) setLoading(false) }
   }

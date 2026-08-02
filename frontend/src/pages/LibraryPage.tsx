@@ -21,6 +21,7 @@ import { LibraryDetailPage } from '../components/LibraryDetailPage'
 import { HeaderFilter } from '../components/HeaderFilter'
 import { posterUrl, isAporteEligible } from '../utils/libraryItem'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
+import { guardarPagina, ultimaPagina } from '../utils/cachePaginas'
 
 const LOAD_LIMIT = 20000  // show everything in one container (no pagination); backend caps here
 
@@ -86,8 +87,13 @@ const PosterCard = memo(function PosterCard({ item, onSelect, priority }: { item
 })
 
 export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => void } = {}) {
-  const [data, setData] = useState<LibraryListResponse | null>(null)
-  const [loading, setLoading] = useState(true)
+  // Volver a Biblioteca no vuelve a enseñar "Cargando…": se parte de lo último
+  // que se cargó SIN FILTROS y se refresca por detrás. Los filtros sí se
+  // reinician, y por eso solo se guarda la vista sin filtrar: reutilizar un
+  // resultado filtrado bajo unos filtros vacíos parecería que faltan cosas.
+  const guardado = ultimaPagina<LibraryListResponse>('biblioteca')
+  const [data, setData] = useState<LibraryListResponse | null>(guardado)
+  const [loading, setLoading] = useState(!guardado)
   // Applying a Provider/Resolución filter fetches every level (up to LOAD_LIMIT)
   // and re-renders a large list — a synchronous commit that briefly froze the
   // UI after `loading` had already flipped back to false. Committing the data
@@ -202,6 +208,12 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
       // mixed-provider series would hide a season whose episodes are all e.g.
       // Netflix. Without them we keep the top-level tree.
       const flatFilter = !!(searchProvider || searchQuality || searchSource || filterEmu || filterAporte)
+      // La vista de partida: sin nada puesto, primera página y orden por
+      // defecto. Es la única que se guarda, porque es la única que se verá al
+      // volver (los filtros se reinician).
+      const sinFiltros = !debouncedSearch && !filterType && !filterStatus && !filterInstanceId
+        && !filterRequest && !filterSpanish && !flatFilter
+        && offset === 0 && sortBy === 'title_asc'
       const result = await getLibrary({
         search: debouncedSearch || undefined,
         type: filterType || undefined,
@@ -215,6 +227,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
         offset,
       })
       startTransition(() => setData(result))
+      if (sinFiltros) guardarPagina('biblioteca', result)
     } catch {
       setError('Error al cargar la biblioteca')
     } finally {

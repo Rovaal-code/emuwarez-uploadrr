@@ -39,6 +39,7 @@ import {
 import { HeaderFilter } from '../components/HeaderFilter'
 import { formatBytes, timeAgo, formatDate } from '../utils/format'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
+import { guardarPagina, ultimaPagina } from '../utils/cachePaginas'
 
 // Fallback for "Consultar en eMuwarez" while we don't have the exact
 // per-request URL yet — points at the general requests listing instead of
@@ -585,8 +586,12 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
     try { sessionStorage.setItem('emuwarez_open_library_item', String(id)) } catch { /* ignore */ }
     onNavigate?.('library')
   }
-  const [items, setItems] = useState<RequestItemResponse[]>([])
-  const [total, setTotal] = useState(0)
+  // Volver a Peticiones no vuelve a enseñar "Cargando…": se parte de lo último
+  // sin filtrar y se refresca por detrás. Los filtros se reinician, así que
+  // solo se guarda esa vista (ver utils/cachePaginas).
+  const guardado = ultimaPagina<{ items: RequestItemResponse[]; total: number }>('peticiones')
+  const [items, setItems] = useState<RequestItemResponse[]>(guardado?.items ?? [])
+  const [total, setTotal] = useState(guardado?.total ?? 0)
   const [offset, setOffset] = useState(0)
   const [search, setSearch] = useState('')
   // The input stays bound to `search` for instant typing feedback; loadItems
@@ -606,7 +611,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   const [facets, setFacets] = useState<{ categories: string[]; resolutions: string[]; sources: string[]; authors: string[]; statuses: string[] }>({
     categories: [], resolutions: [], sources: [], authors: [], statuses: [],
   })
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!guardado)
   const [error, setError] = useState<string | null>(null)
   // Requests sync is global (shared with the Dashboard's "Peticiones" button
   // and the progress banner), so it can't be launched twice across tabs.
@@ -727,7 +732,12 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
       setItems(res.items)
       setTotal(res.total)
       setOffset(off)
-      if (isUnfiltered && off === 0) setFacets(computeFacets(res.items))
+      if (isUnfiltered && off === 0) {
+        setFacets(computeFacets(res.items))
+        if (sortBy === 'created_desc') {
+          guardarPagina('peticiones', { items: res.items, total: res.total })
+        }
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error cargando peticiones')
     } finally {

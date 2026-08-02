@@ -48,6 +48,7 @@ import {
   ACTIVE_JOB_STATUSES, STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo,
   progressCounter, queuedWaitText, useTicker,
 } from '../utils/uploadStatus'
+import { guardarPagina, ultimaPagina } from '../utils/cachePaginas'
 
 // Phase 11G — "Recomendaciones" groups, in the order they appear. The content
 // name always links to its Biblioteca detail; the "Acción" button is
@@ -135,6 +136,15 @@ interface DashboardPageProps {
   onNavigate?: (page: string) => void
 }
 
+interface PanelGuardado {
+  summary: DashboardSummaryResponse | null
+  taskActivity: DashboardActivityResponse | null
+  recommendations: DashboardRecommendationItem[]
+  activeUploads: UploadJob[]
+  connSettings: SettingsData | null
+  connInstances: InstanceSafeResponse[]
+}
+
 export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   // Open a recommendation's target: group 1 → its eMuwarez request (Peticiones
   // tab), groups 2 & 3 → the content's own detail page (Biblioteca tab). Both
@@ -171,13 +181,19 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
     } catch { /* ignore — the content may have vanished since the last sync */ }
   }
 
-  const [summary, setSummary] = useState<DashboardSummaryResponse | null>(null)
-  const [taskActivity, setTaskActivity] = useState<DashboardActivityResponse | null>(null)
-  const [recommendations, setRecommendations] = useState<DashboardRecommendationItem[]>([])
-  const [activeUploads, setActiveUploads] = useState<UploadJob[]>([])
-  const [connSettings, setConnSettings] = useState<SettingsData | null>(null)
-  const [connInstances, setConnInstances] = useState<InstanceSafeResponse[]>([])
-  const [loadingData, setLoadingData] = useState(true)
+  // Al cambiar de sección, AppShell DESMONTA la página (PageContent es un
+  // switch), así que todo su estado se pierde y volver a entrar arrancaba de
+  // cero con "Cargando Panel…". Recargar está bien —el Panel enseña datos
+  // vivos— pero bloquear la pantalla para ello no: si hace un momento estabas
+  // aquí, se enseña lo último y se refresca por detrás.
+  const guardado = ultimaPagina<PanelGuardado>('panel')
+  const [summary, setSummary] = useState<DashboardSummaryResponse | null>(guardado?.summary ?? null)
+  const [taskActivity, setTaskActivity] = useState<DashboardActivityResponse | null>(guardado?.taskActivity ?? null)
+  const [recommendations, setRecommendations] = useState<DashboardRecommendationItem[]>(guardado?.recommendations ?? [])
+  const [activeUploads, setActiveUploads] = useState<UploadJob[]>(guardado?.activeUploads ?? [])
+  const [connSettings, setConnSettings] = useState<SettingsData | null>(guardado?.connSettings ?? null)
+  const [connInstances, setConnInstances] = useState<InstanceSafeResponse[]>(guardado?.connInstances ?? [])
+  const [loadingData, setLoadingData] = useState(!guardado)
   const [dataError, setDataError] = useState<string | null>(null)
   const [wizardItem, setWizardItem] = useState<LibraryItemResponse | null>(null)
   const [wizardPreselect, setWizardPreselect] = useState<{ season?: number | null; episode?: number | null } | undefined>(undefined)
@@ -200,7 +216,10 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
     // Settings first, so "Recomendaciones" honours the configured limit.
     const cfg = await fetchSettings().catch(() => null)
     if (cfg) setConnSettings(cfg)
-    getInstances().then(setConnInstances).catch(() => { /* ignore */ })
+    // Se espera con el resto, no por su cuenta: su valor entra en la caché, y
+    // guardarlo vacío haría parpadear "Conexiones" al volver al Panel.
+    const instancias = await getInstances().catch(() => [] as InstanceSafeResponse[])
+    setConnInstances(instancias)
     const recentLimit = cfg?.recent_activity_limit ?? 100
     // Promise.allSettled never rejects — each branch's own status carries
     // its outcome, so failures are handled per-item below, not via catch.
@@ -217,7 +236,19 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
     else setDataError('No se pudieron cargar los datos del dashboard')
     if (a.status === 'fulfilled') setTaskActivity(a.value)
     if (la.status === 'fulfilled') setRecommendations(la.value.items)
-    if (up.status === 'fulfilled') setActiveUploads(up.value.filter(j => ACTIVE_JOB_STATUSES.has(j.status)))
+    const subidasVivas = up.status === 'fulfilled'
+      ? up.value.filter(j => ACTIVE_JOB_STATUSES.has(j.status))
+      : []
+    if (up.status === 'fulfilled') setActiveUploads(subidasVivas)
+    // Se guarda para la próxima vez que se entre en el Panel.
+    guardarPagina<PanelGuardado>('panel', {
+      summary: s.status === 'fulfilled' ? s.value : null,
+      taskActivity: a.status === 'fulfilled' ? a.value : null,
+      recommendations: la.status === 'fulfilled' ? la.value.items : [],
+      activeUploads: subidasVivas,
+      connSettings: cfg ?? null,
+      connInstances: instancias,
+    })
     setLoadingData(false)
   }, [])
 

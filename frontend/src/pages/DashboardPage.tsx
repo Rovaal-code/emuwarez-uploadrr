@@ -48,7 +48,7 @@ import {
   ACTIVE_JOB_STATUSES, STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo,
   progressCounter, queuedWaitText, useTicker,
 } from '../utils/uploadStatus'
-import { guardarPagina, ultimaPagina } from '../utils/cachePaginas'
+import { guardarPagina, ultimaPagina, generacionCache } from '../utils/cachePaginas'
 
 // Phase 11G — "Recomendaciones" groups, in the order they appear. The content
 // name always links to its Biblioteca detail; the "Acción" button is
@@ -213,6 +213,10 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   const loadData = useCallback(async () => {
     setLoadingData(true)
     setDataError(null)
+    // La generación de AHORA, antes de pedir nada: si algo invalida la caché
+    // mientras estas peticiones vuelan (una sincronización que termina), lo
+    // que traigan ya es de antes y no se guarda.
+    const generacion = generacionCache()
     // Settings first, so "Recomendaciones" honours the configured limit.
     const cfg = await fetchSettings().catch(() => null)
     if (cfg) setConnSettings(cfg)
@@ -248,7 +252,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
       activeUploads: subidasVivas,
       connSettings: cfg ?? null,
       connInstances: instancias,
-    })
+    }, { generacion })
     setLoadingData(false)
   }, [])
 

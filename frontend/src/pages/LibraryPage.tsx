@@ -21,7 +21,7 @@ import { LibraryDetailPage } from '../components/LibraryDetailPage'
 import { HeaderFilter } from '../components/HeaderFilter'
 import { posterUrl, isAporteEligible } from '../utils/libraryItem'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
-import { guardarPagina, ultimaPagina } from '../utils/cachePaginas'
+import { guardarPagina, ultimaPagina, generacionCache } from '../utils/cachePaginas'
 
 const LOAD_LIMIT = 20000  // show everything in one container (no pagination); backend caps here
 
@@ -214,6 +214,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
       const sinFiltros = !debouncedSearch && !filterType && !filterStatus && !filterInstanceId
         && !filterRequest && !filterSpanish && !flatFilter
         && offset === 0 && sortBy === 'title_asc'
+      const generacion = generacionCache()
       const result = await getLibrary({
         search: debouncedSearch || undefined,
         type: filterType || undefined,
@@ -227,7 +228,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
         offset,
       })
       startTransition(() => setData(result))
-      if (sinFiltros) guardarPagina('biblioteca', result)
+      if (sinFiltros) guardarPagina('biblioteca', result, { generacion })
     } catch {
       setError('Error al cargar la biblioteca')
     } finally {

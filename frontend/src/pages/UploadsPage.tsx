@@ -19,7 +19,7 @@ import {
   UPLOAD_TYPE_LABEL, STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo,
   progressCounter, queuedWaitText, useTicker,
 } from '../utils/uploadStatus'
-import { guardarPagina, ultimaPagina } from '../utils/cachePaginas'
+import { guardarPagina, ultimaPagina, generacionCache } from '../utils/cachePaginas'
 
 // Backend-real gates — mirror cancel_upload_job()/queue_retry_for_job() in
 // services/upload_execution.py / upload_queue.py exactly, so the button is
@@ -326,6 +326,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const load = async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) { setLoading(true); setError(null) }
     const seq = ++loadSeqRef.current
+    const generacion = generacionCache()
     try {
       // The "Subiendo" filter option (value 'running') must also catch
       // 'preparing' jobs — they display identically as "Subiendo" now (see
@@ -334,7 +335,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
       const data = await getUploads(statusFilter && statusFilter !== 'running' ? { status: statusFilter } : undefined)
       if (seq === loadSeqRef.current) {
         setJobs(data)
-        if (!statusFilter) guardarPagina('subidas', data)
+        if (!statusFilter) guardarPagina('subidas', data, { generacion })
       }
     } catch { if (!opts?.silent) setError('Error al cargar los trabajos de subida.') }
     finally { if (!opts?.silent) setLoading(false) }

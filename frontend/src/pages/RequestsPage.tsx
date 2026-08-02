@@ -39,7 +39,7 @@ import {
 import { HeaderFilter } from '../components/HeaderFilter'
 import { formatBytes, timeAgo, formatDate } from '../utils/format'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
-import { guardarPagina, ultimaPagina } from '../utils/cachePaginas'
+import { guardarPagina, ultimaPagina, generacionCache } from '../utils/cachePaginas'
 
 // Fallback for "Consultar en eMuwarez" while we don't have the exact
 // per-request URL yet — points at the general requests listing instead of
@@ -718,6 +718,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
     setLoading(true)
     setError(null)
     try {
+      const generacion = generacionCache()
       const res = await getRequests({
         search: debouncedSearch || undefined,
         status: statusFilter || undefined,
@@ -735,7 +736,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
       if (isUnfiltered && off === 0) {
         setFacets(computeFacets(res.items))
         if (sortBy === 'created_desc') {
-          guardarPagina('peticiones', { items: res.items, total: res.total })
+          guardarPagina('peticiones', { items: res.items, total: res.total }, { generacion })
         }
       }
     } catch (e: unknown) {

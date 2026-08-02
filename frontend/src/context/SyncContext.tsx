@@ -11,6 +11,7 @@ import {
   type EmuSyncMode,
 } from '../api/library'
 import { syncRequests, getSyncStatus } from '../api/requests'
+import { olvidarPagina } from '../utils/cachePaginas'
 import type { RequestSyncStatusResponse } from '../types/api'
 
 // Global sync state, shared by every page (Dashboard / Biblioteca / Peticiones).
@@ -134,7 +135,18 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   const catalogBusy = useRef(false)
   const requestsBusy = useRef(false)
 
-  const bumpCompleted = useCallback(() => setLastCompletedAt(Date.now()), [])
+  // Se llama al terminar CUALQUIERA de las tres sincronizaciones, incluida la
+  // programada que arranca sola. Además de avisar a la página montada para que
+  // se recargue, tira lo guardado de todas las secciones: las demás están
+  // desmontadas y solo tienen su copia, así que entrar en Biblioteca justo
+  // después de importar 40 películas enseñaría la lista de antes. Se olvidan
+  // todas y no solo la que parece afectada, porque una sincronización toca
+  // varias a la vez (el catálogo cambia el "Llena / Sin petición" de
+  // Biblioteca, y los tres contadores del Panel).
+  const bumpCompleted = useCallback(() => {
+    olvidarPagina()
+    setLastCompletedAt(Date.now())
+  }, [])
 
   const refreshCatalogStatus = useCallback(() => {
     getEmuSyncStatus().then(setCatalogStatus).catch(() => { /* optional */ })

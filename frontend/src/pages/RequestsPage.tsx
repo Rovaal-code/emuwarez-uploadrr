@@ -960,7 +960,11 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
           </select>
         </div>
 
-        {loading ? (
+        {/* Solo bloquea la PRIMERA vez, cuando todavía no hay nada que enseñar.
+            Al ordenar o filtrar la tabla se queda puesta: cambiarla por un
+            "Cargando…" para volver medio segundo después es un parpadeo, y
+            encima te deja sin la referencia de lo que estabas mirando. */}
+        {loading && items.length === 0 ? (
           <LoadingState label="Cargando peticiones…" />
         ) : error ? (
           <ErrorState message={error} onRetry={() => loadItems()} />

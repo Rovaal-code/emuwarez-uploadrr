@@ -21,6 +21,8 @@ import { LibraryDetailPage } from '../components/LibraryDetailPage'
 import { HeaderFilter } from '../components/HeaderFilter'
 import { posterUrl, isAporteEligible } from '../utils/libraryItem'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
+import { necesitaTodosLosNiveles } from '../utils/filtrosBiblioteca'
+import { useTardanza } from '../hooks/useTardanza'
 
 const LOAD_LIMIT = 20000  // show everything in one container (no pagination); backend caps here
 
@@ -201,11 +203,8 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     setLoading(true)
     setError(null)
     try {
-      // Provider/quality are rollups computed across the hierarchy, so when
-      // one is active we fetch ALL levels (not just top level) — otherwise a
-      // mixed-provider series would hide a season whose episodes are all e.g.
-      // Netflix. Without them we keep the top-level tree.
-      const flatFilter = !!(searchProvider || searchQuality || searchSource || filterEmu || filterAporte)
+      const flatFilter = necesitaTodosLosNiveles({
+        searchProvider, searchQuality, searchSource, filterEmu, filterAporte, filterType })
       const result = await getLibrary({
         search: debouncedSearch || undefined,
         type: filterType || undefined,
@@ -321,10 +320,13 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const items = data?.items ?? []
   const total = data?.total ?? 0
 
-  // A refetch over an already-rendered list no longer blanks the page (see the
-  // render below), so this dim is the only thing telling you the filter you
-  // just picked is still loading.
-  const refreshingStyle = (loading || isPending) && data
+  // La tabla solo se apaga si la espera se nota. Filtrar u ordenar tarda unos
+  // milisegundos, y apagarla en cuanto sale la petición se veía como un
+  // parpadeo: molestaba más que la propia espera y daba sensación de lentitud
+  // justo cuando va rápido. Con una biblioteca enorme sí tarda, y entonces el
+  // apagado aparece y dice que el clic ha hecho algo.
+  const tarda = useTardanza((loading || isPending) && !!data)
+  const refreshingStyle = tarda
     ? { opacity: 0.5, pointerEvents: 'none' as const, transition: 'opacity 120ms' }
     : undefined
 

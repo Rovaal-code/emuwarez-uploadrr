@@ -76,12 +76,18 @@ def _leer_version() -> str:
 
 
 def version_publicada(repo: str) -> str | None:
-    """La versión del manifiesto que hay publicado ahora mismo, si se puede leer."""
-    import urllib.request
-    url = f"https://raw.githubusercontent.com/{repo}/main/{FICHERO}"
+    """La versión del manifiesto publicado ahora mismo.
+
+    Se pregunta a la API de GitHub y NO a raw.githubusercontent.com: esa URL
+    sirve una copia cacheada varios minutos, así que justo después de publicar
+    devuelve todavía la anterior. Con la caché de por medio este guardián no
+    saltaba (comprobado: dejó republicar la misma versión)."""
     try:
-        with urllib.request.urlopen(url, timeout=10) as r:
-            return json.loads(r.read().decode("utf-8")).get("version")
+        salida = subprocess.run(
+            ["gh", "api", f"repos/{repo}/contents/{FICHERO}", "--jq", ".content"],
+            capture_output=True, text=True, check=True, timeout=20).stdout
+        import base64
+        return json.loads(base64.b64decode(salida)).get("version")
     except Exception:
         return None
 

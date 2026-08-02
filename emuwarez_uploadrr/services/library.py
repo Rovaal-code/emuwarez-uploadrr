@@ -17,6 +17,7 @@ from ..models import InstanceConfig, LibraryItem, LocalStatus, MediaKind, Nomenc
 from .source_assistant import EMU_PROVIDERS
 from .instances import list_instances
 from .tasks import start_task, finish_task
+from .eventos import EVENTO_SYNC_TERMINADA, publicar
 
 # Only these two are real, downloadable leaf rows — series/season local_status
 # is a rollup over their children (see LocalStatus.PARTIAL), so a rollup
@@ -667,6 +668,10 @@ def _lib_sync_guard() -> Iterator[None]:
         raise
     finally:
         _set_lib_progress(active=False, done=True)
+        # Aquí termina TODA sincronización de biblioteca, la arranque quien la
+        # arranque (el botón, la tarea programada o el asistente de setup), así
+        # que es el único sitio donde hace falta avisar.
+        publicar(EVENTO_SYNC_TERMINADA, {"que": "biblioteca"})
 
 
 def start_library_sync_background(include_episodes: bool = True) -> dict:

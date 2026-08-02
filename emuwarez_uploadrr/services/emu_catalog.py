@@ -23,6 +23,7 @@ from ..database import get_setting_canonical, get_state, set_state, get_json_sta
 from ..integrations import emu
 from ..integrations.base import IntegrationError
 from .tasks import start_task, finish_task
+from .eventos import EVENTO_SYNC_TERMINADA, publicar
 
 logger = logging.getLogger("emuwarez.emu")
 
@@ -652,6 +653,8 @@ def start_emu_sync_background(force: bool = False, mode: str = "incremental") ->
         finally:
             c.close()
             _set_progress(active=False, done=True)
+            # Aquí termina la sincronización del catálogo, salga bien o mal.
+            publicar(EVENTO_SYNC_TERMINADA, {"que": "catalogo"})
 
     threading.Thread(target=_run, daemon=True).start()
     return {"status": "started"}

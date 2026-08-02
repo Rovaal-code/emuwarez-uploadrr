@@ -12,6 +12,7 @@ import {
 } from '../api/library'
 import { syncRequests, getSyncStatus } from '../api/requests'
 import { olvidarPagina } from '../utils/cachePaginas'
+import { escucharEventos } from '../api/eventos'
 import type { RequestSyncStatusResponse } from '../types/api'
 
 // Global sync state, shared by every page (Dashboard / Biblioteca / Peticiones).
@@ -61,8 +62,13 @@ interface SyncContextValue {
   lastInvalidatedAt: number
 }
 
-// Lo que se espera entre dos vueltas a la pestaña antes de volver a revalidar.
-const ESPERA_ENTRE_VUELTAS_MS = 5000
+// Dos invalidaciones más juntas que esto se cuentan como una. No es un plazo
+// de caducidad —eso se quitó a propósito— sino un aglutinador: ahora hay tres
+// cosas que pueden pedir lo mismo casi a la vez (el aviso del servidor, el
+// bucle que sigue la sincronización, y volver a la pestaña), y recargarlo todo
+// tres veces seguidas no aporta nada. También cubre el alternar rápido entre
+// ventanas, que es para lo que SWR tiene su propio estrangulamiento.
+const AGLUTINAR_MS = 2000
 
 const SyncContext = createContext<SyncContextValue | null>(null)
 
@@ -148,9 +154,13 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   // Se olvidan TODAS las secciones y no solo la que parece afectada: una
   // sincronización toca varias a la vez (el catálogo cambia el "Llena / Sin
   // petición" de Biblioteca, y los tres contadores del Panel).
+  const ultimaInvalidacion = useRef(0)
   const invalidarTodo = useCallback(() => {
+    const ahora = Date.now()
+    if (ahora - ultimaInvalidacion.current < AGLUTINAR_MS) return
+    ultimaInvalidacion.current = ahora
     olvidarPagina()
-    setLastInvalidatedAt(Date.now())
+    setLastInvalidatedAt(ahora)
   }, [])
 
   const refreshCatalogStatus = useCallback(() => {
@@ -323,17 +333,25 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   // Se estrangula a 5 segundos (el valor por defecto de SWR): alternar entre
   // ventanas es algo que se hace muchas veces seguidas, y cada vuelta dispara
   // una recarga completa de la página montada.
-  const ultimaVuelta = useRef(0)
   useEffect(() => {
     const alVolver = () => {
       if (document.visibilityState !== 'visible') return
-      const ahora = Date.now()
-      if (ahora - ultimaVuelta.current < ESPERA_ENTRE_VUELTAS_MS) return
-      ultimaVuelta.current = ahora
       invalidarTodo()
     }
     document.addEventListener('visibilitychange', alVolver)
     return () => document.removeEventListener('visibilitychange', alVolver)
+  }, [invalidarTodo])
+
+  // El aviso del servidor. Mientras solo llega "sync-terminada", así que esto
+  // no sustituye a nada todavía: los once sondeos siguen donde estaban. Lo que
+  // añade es enterarse de una sincronización que terminó SIN que este
+  // navegador la hubiera lanzado — la programada, o la de otra pestaña — que
+  // hasta ahora se descubría por casualidad, cuando el sondeo de turno pasaba
+  // por ahí. Si el canal no levanta, se reintenta solo y no se rompe nada.
+  useEffect(() => {
+    return escucharEventos(aviso => {
+      if (aviso.tipo === 'sync-terminada') invalidarTodo()
+    })
   }, [invalidarTodo])
 
   const value: SyncContextValue = {

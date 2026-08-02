@@ -39,7 +39,7 @@ import {
 import { HeaderFilter } from '../components/HeaderFilter'
 import { formatBytes, timeAgo, formatDate } from '../utils/format'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
-import { guardarPagina, ultimaPagina, generacionCache } from '../utils/cachePaginas'
+import { guardarPagina, tomarCopia, copiaNoConfirmada, generacionCache } from '../utils/cachePaginas'
 
 // Fallback for "Consultar en eMuwarez" while we don't have the exact
 // per-request URL yet — points at the general requests listing instead of
@@ -589,7 +589,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   // Volver a Peticiones no vuelve a enseñar "Cargando…": se parte de lo último
   // sin filtrar y se refresca por detrás. Los filtros se reinician, así que
   // solo se guarda esa vista (ver utils/cachePaginas).
-  const guardado = ultimaPagina<{ items: RequestItemResponse[]; total: number }>('peticiones')
+  const [guardado] = useState(() => tomarCopia<{ items: RequestItemResponse[]; total: number }>('peticiones'))
   const [items, setItems] = useState<RequestItemResponse[]>(guardado?.items ?? [])
   const [total, setTotal] = useState(guardado?.total ?? 0)
   const [offset, setOffset] = useState(0)
@@ -741,6 +741,8 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error cargando peticiones')
+      // Ver LibraryPage: solo se vacía si la copia nunca llegó a confirmarse.
+      if (copiaNoConfirmada('peticiones')) { setItems([]); setTotal(0) }
     } finally {
       setLoading(false)
     }

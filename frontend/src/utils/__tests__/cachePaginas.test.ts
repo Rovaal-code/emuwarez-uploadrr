@@ -8,7 +8,10 @@
  * no puede saber qué es un filtro en cada pantalla.
  */
 import { describe, it, expect, beforeEach } from 'vitest'
-import { guardarPagina, ultimaPagina, olvidarPagina, generacionCache } from '../cachePaginas'
+import {
+  guardarPagina, ultimaPagina, olvidarPagina, generacionCache,
+  tomarCopia, copiaNoConfirmada,
+} from '../cachePaginas'
 
 interface Datos { contador: number }
 
@@ -82,5 +85,68 @@ describe('la caché de secciones', () => {
   it('sin declarar generación se guarda igual: es opcional', () => {
     guardarPagina<Datos>('panel', { contador: 3 })
     expect(ultimaPagina<Datos>('panel')?.contador).toBe(3)
+  })
+})
+
+// El único caso en que una copia se queda mintiendo, y no un instante sino
+// hasta que toques algo: montas desde la copia y la recarga que debía
+// confirmarla FALLA. Sin plazo de caducidad no hay nada más que la acote.
+describe('la copia que nunca se llegó a confirmar', () => {
+  beforeEach(() => olvidarPagina())
+
+  it('montar desde la copia la deja pendiente de confirmar', () => {
+    guardarPagina<Datos>('biblioteca', { contador: 1 })
+    tomarCopia<Datos>('biblioteca')
+    expect(copiaNoConfirmada('biblioteca')).toBe(true)
+  })
+
+  it('al fallar se tira, para no repetir la escena al volver a entrar', () => {
+    guardarPagina<Datos>('biblioteca', { contador: 1 })
+    tomarCopia<Datos>('biblioteca')
+    copiaNoConfirmada('biblioteca')
+    expect(ultimaPagina<Datos>('biblioteca')).toBeNull()
+  })
+
+  it('una recarga que llega bien la confirma', () => {
+    guardarPagina<Datos>('biblioteca', { contador: 1 })
+    tomarCopia<Datos>('biblioteca')
+    guardarPagina<Datos>('biblioteca', { contador: 2 })   // la recarga vuelve
+    expect(copiaNoConfirmada('biblioteca')).toBe(false)
+  })
+
+  // Un refresco de fondo que parpadea no puede vaciar una tabla buena.
+  it('con los datos ya confirmados, un fallo posterior no vacía nada', () => {
+    guardarPagina<Datos>('subidas', { contador: 1 })
+    tomarCopia<Datos>('subidas')
+    guardarPagina<Datos>('subidas', { contador: 2 })
+    expect(copiaNoConfirmada('subidas')).toBe(false)
+    expect(ultimaPagina<Datos>('subidas')?.contador).toBe(2)
+  })
+
+  it('sin copia con la que montar no hay nada que vaciar (primera visita)', () => {
+    expect(tomarCopia<Datos>('panel')).toBeNull()
+    expect(copiaNoConfirmada('panel')).toBe(false)
+  })
+
+  it('dos fallos seguidos no vacían dos veces', () => {
+    guardarPagina<Datos>('panel', { contador: 1 })
+    tomarCopia<Datos>('panel')
+    expect(copiaNoConfirmada('panel')).toBe(true)
+    expect(copiaNoConfirmada('panel')).toBe(false)
+  })
+
+  it('cada sección lleva su propia cuenta', () => {
+    guardarPagina<Datos>('biblioteca', { contador: 1 })
+    guardarPagina<Datos>('panel', { contador: 2 })
+    tomarCopia<Datos>('biblioteca')
+    expect(copiaNoConfirmada('panel')).toBe(false)
+    expect(ultimaPagina<Datos>('panel')).not.toBeNull()
+  })
+
+  it('invalidar por sincronización deja la marca limpia', () => {
+    guardarPagina<Datos>('biblioteca', { contador: 1 })
+    tomarCopia<Datos>('biblioteca')
+    olvidarPagina()
+    expect(copiaNoConfirmada('biblioteca')).toBe(false)
   })
 })

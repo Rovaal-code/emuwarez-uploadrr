@@ -19,7 +19,7 @@ import {
   UPLOAD_TYPE_LABEL, STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo,
   progressCounter, queuedWaitText, useTicker,
 } from '../utils/uploadStatus'
-import { guardarPagina, ultimaPagina, generacionCache } from '../utils/cachePaginas'
+import { guardarPagina, tomarCopia, copiaNoConfirmada, generacionCache } from '../utils/cachePaginas'
 
 // Backend-real gates — mirror cancel_upload_job()/queue_retry_for_job() in
 // services/upload_execution.py / upload_queue.py exactly, so the button is
@@ -283,7 +283,7 @@ function JobRow({ job, instances, onOpen, indent, retryToggle, onCancel, onRetry
 }
 
 export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => void } = {}) {
-  const guardadoSubidas = ultimaPagina<UploadJob[]>('subidas')
+  const [guardadoSubidas] = useState(() => tomarCopia<UploadJob[]>('subidas'))
   const [jobs, setJobs] = useState<UploadJob[]>(guardadoSubidas ?? [])
   // Only needed to build the Origen deep link (same as Biblioteca's own column).
   const [instances, setInstances] = useState<InstanceSafeResponse[]>([])
@@ -337,7 +337,11 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
         setJobs(data)
         if (!statusFilter) guardarPagina('subidas', data, { generacion })
       }
-    } catch { if (!opts?.silent) setError('Error al cargar los trabajos de subida.') }
+    } catch {
+      if (!opts?.silent) setError('Error al cargar los trabajos de subida.')
+      // Ver LibraryPage: solo se vacía si la copia nunca llegó a confirmarse.
+      if (copiaNoConfirmada('subidas')) setJobs([])
+    }
     finally { if (!opts?.silent) setLoading(false) }
   }
 

@@ -48,7 +48,7 @@ import {
   ACTIVE_JOB_STATUSES, STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo,
   progressCounter, queuedWaitText, useTicker,
 } from '../utils/uploadStatus'
-import { guardarPagina, ultimaPagina, generacionCache } from '../utils/cachePaginas'
+import { guardarPagina, tomarCopia, copiaNoConfirmada, generacionCache } from '../utils/cachePaginas'
 
 // Phase 11G — "Recomendaciones" groups, in the order they appear. The content
 // name always links to its Biblioteca detail; the "Acción" button is
@@ -186,7 +186,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   // cero con "Cargando Panel…". Recargar está bien —el Panel enseña datos
   // vivos— pero bloquear la pantalla para ello no: si hace un momento estabas
   // aquí, se enseña lo último y se refresca por detrás.
-  const guardado = ultimaPagina<PanelGuardado>('panel')
+  const [guardado] = useState(() => tomarCopia<PanelGuardado>('panel'))
   const [summary, setSummary] = useState<DashboardSummaryResponse | null>(guardado?.summary ?? null)
   const [taskActivity, setTaskActivity] = useState<DashboardActivityResponse | null>(guardado?.taskActivity ?? null)
   const [recommendations, setRecommendations] = useState<DashboardRecommendationItem[]>(guardado?.recommendations ?? [])
@@ -238,7 +238,17 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
       getUploads({ limit: 50 }),
     ])
     if (s.status === 'fulfilled') setSummary(s.value)
-    else setDataError('No se pudieron cargar los datos del dashboard')
+    else {
+      setDataError('No se pudieron cargar los datos del dashboard')
+      // Ver LibraryPage: solo se vacía si la copia nunca llegó a confirmarse.
+      // Aquí el resumen es el que manda — si él no llegó, lo demás que se
+      // pintara vendría de la copia y sería igual de viejo.
+      if (copiaNoConfirmada('panel')) {
+        setTaskActivity(null)
+        setRecommendations([])
+        setActiveUploads([])
+      }
+    }
     if (a.status === 'fulfilled') setTaskActivity(a.value)
     if (la.status === 'fulfilled') setRecommendations(la.value.items)
     const subidasVivas = up.status === 'fulfilled'

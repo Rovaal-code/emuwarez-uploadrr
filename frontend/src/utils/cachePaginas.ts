@@ -30,6 +30,18 @@
 
 const guardado = new Map<string, unknown>()
 
+// Secciones que están enseñando una copia que NADIE ha confirmado todavía:
+// se entregó al montar y la recarga que debía confirmarla aún no ha vuelto.
+// Importa porque si esa recarga FALLA, lo de la pantalla es un dato de una
+// antigüedad que nadie conoce y sin nada que lo corrija — el único caso en
+// que una copia se queda mintiendo, y no un instante sino hasta que toques
+// algo. Afecta sobre todo a Biblioteca, que es la que no repide sola.
+//
+// Una recarga que falla NO es lo mismo que esto: si la copia ya se había
+// confirmado, lo que hay en pantalla es bueno y se queda. Vaciar la tabla
+// porque un refresco de fondo parpadeó sería peor que no hacer nada.
+const sinConfirmar = new Set<string>()
+
 // Sube cada vez que algo invalida lo guardado. Existe por una carrera real:
 // Subidas repide cada 2,5 segundos y el Panel cada 15, así que una
 // sincronización puede terminar con una petición YA EN VUELO. Esa petición
@@ -49,21 +61,55 @@ interface OpcionesGuardar {
   generacion?: number
 }
 
-/** Guarda la carga de una sección. Llamar SOLO cuando no hay filtros puestos. */
+/** Guarda la carga de una sección. Llamar SOLO cuando no hay filtros puestos.
+ *  Guardar es lo que confirma la copia: los datos acaban de llegar bien. */
 export function guardarPagina<T>(pagina: string, datos: T, opciones: OpcionesGuardar = {}): void {
   if (opciones.generacion !== undefined && opciones.generacion !== generacion) return
   guardado.set(pagina, datos)
+  sinConfirmar.delete(pagina)
 }
 
-/** Lo último guardado de una sección, mientras no se haya invalidado. */
+/** Lo último guardado de una sección, mientras no se haya invalidado. No marca
+ *  nada: es la lectura a secas. Para montar una página, `tomarCopia`. */
 export function ultimaPagina<T>(pagina: string): T | null {
   return guardado.has(pagina) ? (guardado.get(pagina) as T) : null
+}
+
+/** La copia con la que arranca una página, marcada como pendiente de
+ *  confirmar. Se llama UNA vez al montar (desde un inicializador perezoso de
+ *  useState), no en cada render: si se llamara en cada render volvería a
+ *  marcar como sin confirmar algo que ya se confirmó. */
+export function tomarCopia<T>(pagina: string): T | null {
+  if (!guardado.has(pagina)) return null
+  sinConfirmar.add(pagina)
+  return guardado.get(pagina) as T
+}
+
+/** La recarga que debía confirmar la copia ha fallado.
+ *
+ *  Devuelve true si lo que hay en pantalla era una copia sin confirmar, y
+ *  entonces quien llama tiene que vaciarlo: es un dato de antigüedad
+ *  desconocida y ya no va a llegar nada que lo corrija, así que enseñar el
+ *  error con la tabla vacía dice la verdad y enseñarlo con datos viejos no.
+ *  La copia se tira también, para no repetir la escena al volver a entrar.
+ *
+ *  Devuelve false si los datos ya estaban confirmados: ahí el fallo es un
+ *  refresco que parpadeó, y lo de la pantalla sigue siendo bueno. */
+export function copiaNoConfirmada(pagina: string): boolean {
+  if (!sinConfirmar.has(pagina)) return false
+  olvidarPagina(pagina)
+  return true
 }
 
 /** Tira lo guardado de una sección (o de todas) e invalida lo que esté en
  *  vuelo. Lo llaman las dos invalidaciones de la cabecera. */
 export function olvidarPagina(pagina?: string): void {
-  if (pagina) guardado.delete(pagina)
-  else guardado.clear()
+  if (pagina) {
+    guardado.delete(pagina)
+    sinConfirmar.delete(pagina)
+  } else {
+    guardado.clear()
+    sinConfirmar.clear()
+  }
   generacion++
 }

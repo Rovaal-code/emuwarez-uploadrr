@@ -21,7 +21,7 @@ import { LibraryDetailPage } from '../components/LibraryDetailPage'
 import { HeaderFilter } from '../components/HeaderFilter'
 import { posterUrl, isAporteEligible } from '../utils/libraryItem'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
-import { guardarPagina, ultimaPagina, generacionCache } from '../utils/cachePaginas'
+import { guardarPagina, tomarCopia, copiaNoConfirmada, generacionCache } from '../utils/cachePaginas'
 
 const LOAD_LIMIT = 20000  // show everything in one container (no pagination); backend caps here
 
@@ -91,7 +91,8 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // que se cargó SIN FILTROS y se refresca por detrás. Los filtros sí se
   // reinician, y por eso solo se guarda la vista sin filtrar: reutilizar un
   // resultado filtrado bajo unos filtros vacíos parecería que faltan cosas.
-  const guardado = ultimaPagina<LibraryListResponse>('biblioteca')
+  // Una sola vez al montar, no en cada render (ver tomarCopia).
+  const [guardado] = useState(() => tomarCopia<LibraryListResponse>('biblioteca'))
   const [data, setData] = useState<LibraryListResponse | null>(guardado)
   const [loading, setLoading] = useState(!guardado)
   // Applying a Provider/Resolución filter fetches every level (up to LOAD_LIMIT)
@@ -231,6 +232,10 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
       if (sinFiltros) guardarPagina('biblioteca', result, { generacion })
     } catch {
       setError('Error al cargar la biblioteca')
+      // Si lo de la pantalla era una copia sin confirmar, se vacía: es un dato
+      // de antigüedad desconocida y ya no va a llegar nada que lo corrija.
+      // Biblioteca es la que más lo necesita, porque no repide sola.
+      if (copiaNoConfirmada('biblioteca')) setData(null)
     } finally {
       setLoading(false)
     }

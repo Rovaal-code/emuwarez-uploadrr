@@ -934,6 +934,42 @@ def _run_queued_job(job_id: int) -> None:
 
         mark_phase_done(job_id, "remux")
 
+        # --- 3b. La carpeta que se le entrega a Uploadrr, solo para un pack.
+        #
+        # AQUÍ y no antes: el remux de arriba reescribe cada fichero y lo
+        # sustituye con os.replace, así que un enlace creado antes seguiría
+        # apuntando a los datos viejos. Este es el primer punto en que los
+        # ficheros ya son los definitivos.
+        #
+        # torf toma el nombre del torrent del nombre de la carpeta, y esa es la
+        # carpeta que recibe quien se descargue el release: entregando la de
+        # Sonarr, el torrent se llamaría "Season 1". Antes se resolvía
+        # renombrando la carpeta del usuario; ahora se le entrega una carpeta
+        # de enlaces creada aparte, y la biblioteca no se toca.
+        if is_season:
+            from .carpeta_subida import preparar_carpeta_de_pack
+            from .season_pack import _sanitize_pack_folder_name, build_season_pack_plan
+            plan_final = build_season_pack_plan(item_id, conn=conn)
+            ficheros = [resolve_local_path(ep.get("destination_path") or ep.get("source_path"), conn=conn)
+                        or ep.get("source_path")
+                        for ep in plan_final.get("episodes", [])]
+            preparada = preparar_carpeta_de_pack(
+                _sanitize_pack_folder_name(plan_final.get("season_pack_title") or ""), ficheros)
+            if preparada["status"] != "ready":
+                _fail(job_id, "No se pudo preparar la carpeta de subida: "
+                              + "; ".join(preparada["errors"]))
+                return
+            conn.execute("UPDATE upload_jobs SET prepared_path = ?, updated_at = ? WHERE id = ?",
+                         (preparada["carpeta"], _now_iso(), job_id))
+            conn.commit()
+            append_upload_log(
+                job_id, "info",
+                f"Carpeta de subida preparada con {preparada['cuantos']} enlace(s) "
+                f"{'/'.join(preparada['enlaces'])}: «{os.path.basename(preparada['carpeta'])}». "
+                f"La carpeta original de la temporada no se ha tocado.",
+                stream="system", conn=conn,
+            )
+
         # --- 4. Final preflight (fresh preconditions + command preview,
         # against the now-final renamed/remuxed file) then start. This is
         # where "Inicio de Uploadrr" actually becomes the current step (see

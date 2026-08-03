@@ -762,59 +762,6 @@ def _sanitize_pack_folder_name(name: str) -> str:
     return name.replace("/", " ").replace("\\", " ").strip(" .")
 
 
-def _build_safe_folder_rename_plan(source_dir: str, destination_dir: str) -> dict[str, Any]:
-    """Validate an in-place rename of the season's shared folder itself (same
-    parent directory, no move) — same safety posture as
-    filesystem_apply.build_safe_rename_plan, but for the enclosing directory
-    instead of a file inside it. Never touches the filesystem."""
-    errors: list[str] = []
-    src_exists = os.path.exists(source_dir) if source_dir else False
-    if not source_dir:
-        errors.append("Carpeta de origen no proporcionada.")
-    elif not src_exists:
-        errors.append(f"La carpeta de la temporada no existe: {source_dir}")
-    elif os.path.islink(source_dir):
-        errors.append("La carpeta de la temporada es un symlink. No se permite renombrarla.")
-    elif not os.path.isdir(source_dir):
-        errors.append(f"El origen no es una carpeta: {source_dir}")
-
-    if not destination_dir:
-        errors.append("Carpeta de destino no proporcionada.")
-    elif src_exists:
-        if os.path.dirname(os.path.abspath(destination_dir)) != os.path.dirname(os.path.abspath(source_dir)):
-            errors.append("El destino debe estar en la misma carpeta padre que el origen.")
-        elif os.path.abspath(destination_dir) != os.path.abspath(source_dir) and os.path.exists(destination_dir):
-            errors.append(f"El destino ya existe: {destination_dir}.")
-        if not os.access(os.path.dirname(source_dir) or ".", os.W_OK):
-            errors.append(f"La carpeta padre no es escribible: {os.path.dirname(source_dir)}")
-
-    status = "blocked" if errors else "ready"
-    return {"status": status, "source_dir": source_dir, "destination_dir": destination_dir, "errors": errors}
-
-
-def _apply_folder_rename(plan: dict[str, Any]) -> dict[str, Any]:
-    """Execute the in-place folder rename planned by
-    _build_safe_folder_rename_plan(). Only os.rename is allowed."""
-    result = dict(plan)
-    src, dst = plan.get("source_dir"), plan.get("destination_dir")
-    if os.path.abspath(src) == os.path.abspath(dst):
-        result["status"] = "applied"
-        result["message"] = "La carpeta ya tenía el nombre correcto."
-        return result
-    if plan["status"] == "blocked":
-        result["message"] = "Plan bloqueado. Ver errors para más detalles."
-        return result
-    try:
-        os.rename(src, dst)
-        result["status"] = "applied"
-        result["message"] = f"Carpeta renombrada correctamente: '{dst}'."
-    except OSError as exc:
-        result["status"] = "failed"
-        result["errors"] = list(plan.get("errors", [])) + [f"Error de sistema: {exc}"]
-        result["message"] = f"Falló el renombrado de la carpeta: {exc}"
-    return result
-
-
 def apply_season_pack(
     season_id: int, conn, *, job_id: int | None = None,
     source_override: str | None = None, provider_override: str | None = None,
@@ -887,64 +834,21 @@ def apply_season_pack(
             any_failed = True
     conn.commit()
 
-    # Only once every file inside is safely renamed: rename the shared
-    # folder itself (Sonarr's own "Season N" folder) to match the pack's own
-    # release title. Deliberately the LAST step, not the first — if any file
-    # above failed, the folder is left exactly as it was (no orphaned
-    # episodes pointing at a folder name that no longer exists on a retry),
-    # and if the folder rename itself fails, every file is still exactly
-    # where library_items already says it is. Without this, the folder
-    # handed to Uploadrr-EMU as prepared_path stays named "Season N", and
-    # since torf.Torrent() defaults its torrent name to
-    # os.path.basename(path), that's literally what qBittorrent shows
-    # instead of the real release name (2026-07-28: Los Tudor S02 torrent
-    # named "Season 2" while eMuwarez itself got the correct name via -mt,
-    # which only overrides the tracker's displayed title, never the
-    # torrent's own name). A single movie/episode never hits this: its
-    # prepared_path is already the renamed FILE, whose basename is the
-    # release name by construction — only a season pack hands Uploadrr-EMU
-    # a directory.
-    old_pack_folder = plan["pack_folder"]
-    pack_folder = old_pack_folder
+    # La carpeta de Sonarr NO se toca. Antes se renombraba al título del
+    # release, porque torf toma el nombre del torrent del nombre de la carpeta
+    # y esa es la carpeta que recibe quien se descargue el release. Funcionaba,
+    # pero tocaba la biblioteca del usuario —Sonarr es quien gestiona esa
+    # carpeta— y dejaba rutas guardadas apuntando a un sitio que ya no existía,
+    # de donde salían nombres calculados con datos de Radarr/Sonarr en vez de
+    # con el fichero (2026-08-03: "…AAC.cat.spa.jpn.cat.cat.spa.spa").
+    #
+    # Lo que se le entrega a Uploadrr es una carpeta de enlaces creada APARTE
+    # (services/carpeta_subida.py). No se crea aquí sino después del remux
+    # (upload_queue.py): el remux reescribe cada fichero y lo sustituye con
+    # os.replace, así que un enlace creado antes seguiría apuntando a los datos
+    # viejos.
+    pack_folder = plan["pack_folder"]
     folder_rename_errors: list[str] = []
-    if not any_failed:
-        target_folder_name = _sanitize_pack_folder_name(plan["season_pack_title"])
-        new_pack_folder = os.path.join(os.path.dirname(old_pack_folder), target_folder_name)
-        if os.path.abspath(new_pack_folder) != os.path.abspath(old_pack_folder):
-            folder_plan = _build_safe_folder_rename_plan(old_pack_folder, new_pack_folder)
-            folder_result = _apply_folder_rename(folder_plan)
-            if folder_result["status"] != "applied":
-                any_failed = True
-                folder_rename_errors = folder_result.get("errors") or [
-                    folder_result.get("message") or "No se pudo renombrar la carpeta de la temporada."
-                ]
-            else:
-                pack_folder = new_pack_folder
-                if job_id is not None:
-                    from .upload_execution import append_upload_log
-                    append_upload_log(
-                        job_id, "info",
-                        f"Carpeta de la temporada renombrada a «{target_folder_name}»…",
-                        stream="system", conn=conn,
-                    )
-                # Every episode's file already lives under the new folder
-                # (the directory move carried them along with their already-
-                # final basenames) — just repoint library_items to match,
-                # same raw/local path-mapping convention as the per-file
-                # rename above (path_mapping.resolve_local_path only ever
-                # rewrites a leading prefix, so the raw path shares the same
-                # leaf folder name as the local one).
-                for ep in plan["episodes"]:
-                    new_prepared = os.path.join(pack_folder, os.path.relpath(ep["destination_path"], old_pack_folder))
-                    raw_dst = ep.get("raw_destination_path") or ep["destination_path"]
-                    raw_old_dir = os.path.dirname(raw_dst)
-                    raw_new_dir = os.path.join(os.path.dirname(raw_old_dir), target_folder_name)
-                    new_raw = os.path.join(raw_new_dir, os.path.basename(raw_dst))
-                    conn.execute(
-                        "UPDATE library_items SET path = ?, prepared_path = ? WHERE id = ?",
-                        (new_raw, new_prepared, ep["episode_id"]),
-                    )
-                conn.commit()
 
     generic_errors = folder_rename_errors or (
         ["Algunos episodios fallaron al renombrar. Ver episodes."] if any_failed else []

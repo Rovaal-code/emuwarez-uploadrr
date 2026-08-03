@@ -72,6 +72,15 @@ def _reconcile_interrupted_jobs() -> None:
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
+    # La carpeta donde se preparan los packs para subir, creada de entrada:
+    # así existe antes de la primera subida en vez de aparecer a mitad, y la
+    # comprobación del asistente puede probar el enlace sin crearla ella.
+    try:
+        from emuwarez_uploadrr.services.carpeta_subida import asegurar_raiz
+        asegurar_raiz()
+    except Exception:
+        logging.getLogger("emuwarez.web").warning(
+            "No se pudo preparar la carpeta de subidas", exc_info=True)
     _backfill_spanish_flags()
     _reconcile_interrupted_jobs()
     scheduler_task = None

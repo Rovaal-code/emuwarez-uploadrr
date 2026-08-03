@@ -15,8 +15,12 @@ set -eu
 
 DATA_TARGET="/config/Uploadrr/data"
 TMP_TARGET="/config/Uploadrr/tmp"
+# Donde se preparan los packs de temporada para subir: una carpeta con el
+# nombre del release y enlaces a los capítulos, para que el torrent se llame
+# como debe sin tocar la carpeta de Sonarr (services/carpeta_subida.py).
+UPLOADS_TARGET="/config/Uploadrr/uploads"
 
-mkdir -p "$TMP_TARGET"
+mkdir -p "$TMP_TARGET" "$UPLOADS_TARGET"
 
 if [ ! -e "$DATA_TARGET" ]; then
     # First boot with this /config volume — seed it from whatever the image's

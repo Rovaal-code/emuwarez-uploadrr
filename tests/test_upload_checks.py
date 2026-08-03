@@ -32,13 +32,16 @@ def _movie_with_path(conn, path: str, *, audio_languages: str | None = "spa",
 def test_stops_at_unrenameable_when_path_missing(db_conn):
     # Accessibility/integrity are no longer checked here — they're checked for
     # real once the upload is queued (upload_queue.py's "integrity" stage).
-    # A nonexistent path still fails fast, but now at "renameable": its parent
+    # Una ruta que no existe falla ya en "accesible", que va la primera: el
+    # asistente calcula la nomenclatura leyendo el fichero, así que sin poder
+    # abrirlo el nombre propuesto sale de las columnas de Radarr/Sonarr.
+    # Antes esto llegaba a "renameable", que solo mira la carpeta padre.
     # directory doesn't exist either, so it's not writable.
     iid = _movie_with_path(db_conn, "/nope/does/not/exist.mkv")
     r = uc.run_upload_checks(db_conn, iid)
     assert r["ready"] is False
     assert len(r["checks"]) == 1
-    assert r["checks"][0]["id"] == "renameable" and r["checks"][0]["status"] == "fail"
+    assert r["checks"][0]["id"] == "accesible" and r["checks"][0]["status"] == "fail"
 
 
 def test_output_check_falls_back_to_bundled_uploadrr_path(db_conn, tmp_path, monkeypatch):
@@ -79,7 +82,8 @@ def test_all_green_when_everything_passes(db_conn, tmp_path, monkeypatch):
     iid = _movie_with_path(db_conn, str(f))
     r = uc.run_upload_checks(db_conn, iid)
     ids = [c["id"] for c in r["checks"]]
-    assert ids == ["renameable", "spanish", "output", "qbittorrent", "imghosts", "emuwarez"]
+    assert ids == ["accesible", "renameable", "spanish", "output", "qbittorrent",
+                   "imghosts", "emuwarez"]
     assert all(c["status"] == "ok" for c in r["checks"])
     assert r["ready"] is True
 

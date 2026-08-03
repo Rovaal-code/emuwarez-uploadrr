@@ -45,7 +45,8 @@ def _set_checks_progress(item_id: int, *, checks: list[dict], done: bool = False
 # salida, qBittorrent, hosts de imágenes, eMuwarez) y dan lo mismo para todos:
 # con 30 capítulos elegidos, preguntarle 30 veces a eMuwarez si está vivo no
 # aporta nada y multiplica por 30 la espera.
-CONTENT_CHECK_IDS = ("season_pack", "renameable", "spanish")
+CONTENT_CHECK_IDS = ("accesible", "season_pack", "capitulos_accesibles",
+                     "carpeta_subida", "renameable", "spanish")
 ENVIRONMENT_CHECK_IDS = ("output", "qbittorrent", "imghosts", "emuwarez")
 
 
@@ -66,6 +67,24 @@ def _short_langs(value: Optional[str], limit: int = 3) -> str:
     if len(vistos) <= limit:
         return ", ".join(vistos)
     return f"{', '.join(vistos[:limit])} y {len(vistos) - limit} más"
+
+
+def _se_puede_leer(ruta: str | None) -> bool:
+    """Si el fichero existe y se puede abrir para lectura.
+
+    `os.access(R_OK)` no basta: con un montaje remoto caído puede decir que sí
+    y fallar al abrirlo de verdad, que es justo el caso que se quiere pillar.
+    """
+    if not ruta:
+        return False
+    try:
+        if not os.path.isfile(ruta):
+            return False
+        with open(ruta, "rb") as f:
+            f.read(1)
+        return True
+    except OSError:
+        return False
 
 
 def run_upload_checks(conn: sqlite3.Connection, item_id: int, *, scope: str = "all") -> dict:
@@ -118,14 +137,18 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int, *, scope: str = "a
         add("renameable", "Se puede renombrar", "No se puede renombrar", False, "Elemento no encontrado")
         return done()
 
-    # Accessibility and integrity (MediaInfo/mkvtoolnix can read the file) are
-    # NOT checked here anymore — they're checked for real once the upload is
-    # actually queued, as the first stage of the server-side preparation
-    # (services/upload_queue.py), which already runs MediaInfo/mkvmerge on
-    # each real file for the nomenclature/remux steps. Checking twice would
-    # just duplicate that work; a failure there fails the job with a specific
-    # reason ("no accesible" / "MediaInfo no pudo leer" / "mkvtoolnix no pudo
-    # leer") instead of blocking the wizard's checklist pre-emptively.
+    # La INTEGRIDAD (que MediaInfo y mkvmerge puedan leer el fichero entero) se
+    # comprueba al encolar, no aquí: es cara y ya se hace allí de todos modos.
+    #
+    # Pero que el fichero EXISTA y se pueda abrir sí se comprueba aquí, y esto
+    # es una corrección: antes se dejaba también para el encolado, y para
+    # entonces ya es tarde. La nomenclatura se calcula en el asistente leyendo
+    # el fichero; si no puede, cae a las columnas de Radarr/Sonarr y propone un
+    # nombre con los códigos crudos ("…AAC.cat.spa.jpn.cat.cat.spa.spa" en un
+    # caso real). El asistente solo lo enseñaba como un aviso que se podía
+    # ignorar, así que se llegaba a renombrar los ficheros con ese nombre.
+    #
+    # Es barata: existe y se puede abrir, sin leer el contenido.
 
     if scope == "environment":
         pass                                     # solo entorno: nada del elemento
@@ -146,6 +169,45 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int, *, scope: str = "a
         if not add("season_pack", "Se puede preparar el pack de temporada",
                    "No se puede preparar el pack de temporada", ok, msg):
             return done()
+
+        # Y TODOS sus capítulos, uno a uno. Un pack se nombra leyendo cada
+        # fichero: basta que uno no se pueda abrir para que su nombre se
+        # calcule con las columnas de Radarr/Sonarr en vez de con el fichero,
+        # y ese capítulo acabe renombrado con códigos crudos. Comprobar solo
+        # "el pack se puede preparar" no lo pilla: eso mira que estén todos y
+        # que compartan carpeta, no que se puedan leer.
+        from .path_mapping import resolve_local_path
+        ilegibles = []
+        for ep in plan.get("episodes", []):
+            ruta = ep.get("source_path") or resolve_local_path(ep.get("raw_source_path"), conn=conn)
+            if not _se_puede_leer(ruta):
+                ilegibles.append(f"capítulo {ep.get('episode_number') or ep.get('episode_id')}")
+        cuantos = len(plan.get("episodes", []))
+        if not add("capitulos_accesibles",
+                   f"Los {cuantos} capítulos son accesibles",
+                   "Hay capítulos que no se pueden leer",
+                   not ilegibles,
+                   ", ".join(ilegibles) if ilegibles else f"{cuantos} capítulo(s) legibles"):
+            return done()
+
+        # Y que se pueda enlazar en la carpeta de subidas. Es lo que se le
+        # entrega a Uploadrr para que el torrent se llame como el release sin
+        # tocar la carpeta de Sonarr (ver services/carpeta_subida.py). Se
+        # prueba haciendo un enlace de verdad y deshaciéndolo, no mirando
+        # números de dispositivo: hay montajes donde coinciden y el enlace
+        # falla igual.
+        from .carpeta_subida import RAIZ_SUBIDAS, comprobar_enlace
+        muestra = next((ep.get("source_path") for ep in plan.get("episodes", [])
+                        if ep.get("source_path")), None)
+        prueba = comprobar_enlace(muestra) if muestra else {
+            "ok": False, "tipo": None, "error": "El pack no tiene ningún capítulo con ruta."}
+        if not add("carpeta_subida",
+                   "Se puede preparar la carpeta de subida",
+                   "No se puede preparar la carpeta de subida",
+                   prueba["ok"],
+                   (f"{RAIZ_SUBIDAS} (enlace {prueba['tipo']})" if prueba["ok"]
+                    else prueba["error"] or "")):
+            return done()
         # Falls through to the shared checks below (output dir/qBittorrent/
         # image hosts/eMuwarez) — those don't depend on item_type.
     else:
@@ -156,6 +218,14 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int, *, scope: str = "a
         # the raw /data path.
         from .path_mapping import resolve_local_path
         local_path = resolve_local_path(path) or path
+
+        # 0. Accesible — el fichero existe y se puede abrir. Va ANTES de
+        # "se puede renombrar", que solo mira la carpeta padre: con la carpeta
+        # accesible y el fichero no, aquella pasaba y esto se colaba.
+        if not add("accesible", "El archivo es accesible", "El archivo no es accesible",
+                   _se_puede_leer(local_path),
+                   local_path or (path or "El elemento no tiene ruta de archivo")):
+            return done()
 
         # 1. Renameable — write permission on the file's directory.
         parent = os.path.dirname(local_path) if local_path else ""

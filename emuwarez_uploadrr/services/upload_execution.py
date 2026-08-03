@@ -1756,7 +1756,16 @@ def delete_upload_job(job_id: int, confirmation: str | None = None, conn=None) -
                 "job_id": job_id,
             }
 
+        # Las carpetas de enlaces de los packs, antes de perder sus rutas. Solo
+        # borra enlaces: los ficheros de verdad siguen en la carpeta de Sonarr,
+        # que es la gracia de todo esto (ver services/carpeta_subida.py). Y
+        # solo si la ruta está dentro de la carpeta de subidas, así que un
+        # prepared_path que apunte a la biblioteca no se toca.
+        from .carpeta_subida import borrar_carpeta_de_pack
         marcas = ",".join("?" * len(chain))
+        for fila in conn.execute(
+                f"SELECT prepared_path FROM upload_jobs WHERE id IN ({marcas})", chain).fetchall():
+            borrar_carpeta_de_pack(fila["prepared_path"])
         conn.execute(f"DELETE FROM upload_artifacts WHERE upload_job_id IN ({marcas})", chain)
         conn.execute(f"DELETE FROM upload_job_logs WHERE upload_job_id IN ({marcas})", chain)
         conn.execute(f"UPDATE filesystem_operations SET upload_job_id = NULL WHERE upload_job_id IN ({marcas})", chain)

@@ -860,7 +860,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         </h3>
         <div className="form-group">
           <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            Reordenar pistas al remuxear
+            Reordenar pistas
             <InfoIcon text="Activado, las pistas se colocan en orden (Español, Català, Inglés, resto) además de renombrarse, y eso obliga a reescribir el contenedor entero: sustituye el archivo por uno nuevo, así que rompe cualquier hardlink que compartiera con tu cliente de torrent (el torrent sigue sembrando bien, pero pasas a ocupar el doble en disco) y tarda en proporción al tamaño. Desactivado, las pistas se quedan donde están y solo se renombran y se marca la predeterminada, con las mismas reglas, editando la cabecera del archivo en el sitio: es casi instantáneo por grande que sea, no duplica nada y conserva los hardlinks." />
           </label>
           <select className="form-input form-select" value={reorderTracks ? 'true' : 'false'} onChange={e => setReorderTracks(e.target.value === 'true')}>

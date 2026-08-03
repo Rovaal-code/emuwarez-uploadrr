@@ -91,7 +91,7 @@ class SettingsResponse(BaseModel):
     source_engine_enabled: bool = False
     # El logo del contenido en la descripción. Se sube por defecto.
     emu_add_logo: bool = True
-    # Reordenar pistas al remuxear. Apagado por defecto.
+    # Reordenar pistas. Apagado por defecto.
     remux_reorder_tracks: bool = False
     recent_activity_limit: int = 100
     upload_max_concurrent: int = 1

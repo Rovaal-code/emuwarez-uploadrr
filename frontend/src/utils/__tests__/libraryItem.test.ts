@@ -32,6 +32,33 @@ describe('una temporada lista para subir como pack', () => {
     expect(isSeasonReady(item({ local_status: 'Faltante' }))).toBe(false)
   })
 
+  // Este caso devolvía null "porque el que llama ya tiene su propio mensaje",
+  // y solo lo tenía uno de los dos sitios que la usan: desde la ficha de una
+  // SERIE la temporada incompleta salía deshabilitada, y desde la ficha de la
+  // TEMPORADA la tarjeta "Temporada entera" salía habilitada y te dejaba
+  // avanzar dos pasos para que el servidor lo rechazara al final.
+  it.each(['Faltante', 'Parcial', 'Subido'])('y lo DICE cuando está %s', estado => {
+    const t = item({ local_status: estado })
+    expect(isSeasonReady(t)).toBe(false)
+    expect(seasonNotReadyReason(t)).toContain('incompleta')
+  })
+
+  it('nunca dice que no está lista sin explicar por qué', () => {
+    // La pareja tiene que ir siempre junta: un motivo vacío deja una tarjeta
+    // deshabilitada sin nada que enseñar al pasar por encima.
+    const rotas = [
+      item({ local_status: 'Faltante' }),
+      item({ resolution: null }),
+      item({ video_codec: null }),
+      item({ has_spanish_ok: 0 }),
+      item({ has_spanish_ok: null }),
+    ]
+    for (const t of rotas) {
+      expect(isSeasonReady(t)).toBe(false)
+      expect(seasonNotReadyReason(t)).toBeTruthy()
+    }
+  })
+
   it('no lo está si sus capítulos no coinciden en resolución', () => {
     const t = item({ resolution: null })
     expect(isSeasonReady(t)).toBe(false)

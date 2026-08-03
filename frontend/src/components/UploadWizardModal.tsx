@@ -1318,13 +1318,13 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
           {
             key: 'whole' as const,
             title: 'Temporada entera',
-            body: 'Un único release con todos los capítulos. Exige que estén todos y que coincidan entre sí.',
+            body: 'Un único release con todos los capítulos. Exige tenerlos todos, que coincidan en resolución y códec de vídeo, y que todos tengan audio en castellano o, si está en otro idioma, al menos subtítulos en castellano.',
             reason: seasonPackReason,
           },
           {
             key: 'episodes' as const,
             title: 'Selección de capítulos',
-            body: 'Cada capítulo se sube por separado, con su propio nombre. Pueden tener códecs o audios distintos entre sí.',
+            body: 'Cada capítulo se sube por separado, con su propia nomenclatura, así que pueden diferir en resolución, códec o audio. Cada uno sigue necesitando audio en castellano o, si está en otro idioma, al menos subtítulos en castellano.',
             reason: eligibleEpisodes.length === 0
               ? 'Ningún capítulo de esta temporada cumple las condiciones de subida.'
               : null,
@@ -1525,10 +1525,6 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   // pick one and fail later. isSeasonReady/seasonNotReadyReason (shared with
   // LibraryActionButtons' own "Subir" button) only know about the
   // consistency check; the "incomplete" message is layered on here.
-  const seasonCardReason = (s: LibraryItemResponse) =>
-    s.local_status !== 'Disponible'
-      ? 'Temporada incompleta: no todos los capítulos están Disponibles.'
-      : seasonNotReadyReason(s)
   const selectableSeasons = seasons.filter(isSeasonReady)
   // The series' own name is redundant here (already the wizard's title) —
   // just the season part, e.g. "Temporada 1"/"Especiales".
@@ -1550,7 +1546,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10, maxHeight: 320, overflowY: 'auto' }}>
         {seasons.map(s => {
           const ready = isSeasonReady(s)
-          const reason = seasonCardReason(s)
+          const reason = seasonNotReadyReason(s)
           const selected = multiSelected.has(s.id)
           const card = (
             <button

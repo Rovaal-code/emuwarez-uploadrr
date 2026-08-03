@@ -109,9 +109,19 @@ export function episodeNotReadyReason(item: LibraryItemResponse): string | null 
 
 // null when the season IS ready (or isn't a season) — a truthy reason string
 // otherwise, for a disabled button/card's tooltip.
+//
+// Contesta ENTERA, incluida la temporada incompleta. Antes ese caso devolvía
+// null y se dejaba "al que llama, que ya tiene su propio mensaje", y solo lo
+// tenía uno de los dos: desde la ficha de una SERIE la temporada incompleta
+// salía deshabilitada, y desde la ficha de la TEMPORADA la tarjeta "Temporada
+// entera" salía habilitada y te dejaba avanzar dos pasos para que el servidor
+// lo rechazara al final. Una regla repartida entre la función y quien la llama
+// se cumple solo donde alguien se acordó de completarla.
 export function seasonNotReadyReason(item: LibraryItemResponse): string | null {
   if (item.item_type !== 'season') return null
-  if (item.local_status !== 'Disponible') return null // caller already has its own "incomplete" message
+  if (item.local_status !== 'Disponible') {
+    return 'Temporada incompleta: no todos los capítulos están Disponibles.'
+  }
   const field = seasonInconsistentField(item)
   if (field) {
     return `Los capítulos de esta temporada no coinciden en ${field.label}. Revísalos antes de subir el pack.`

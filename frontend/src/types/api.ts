@@ -175,6 +175,9 @@ export interface EmuAporte {
 export interface LibraryListResponse {
   items: LibraryItemResponse[]
   total: number
+  /** Archivos de vídeo que tienes de verdad: películas + capítulos en disco.
+   *  No depende de los filtros, al revés que `total`. */
+  archivos: number
   limit: number
   offset: number
 }

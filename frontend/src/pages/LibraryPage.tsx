@@ -348,7 +348,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   }
 
   const items = data?.items ?? []
-  const total = data?.total ?? 0
+  const archivos = data?.archivos ?? 0
 
   // La tabla solo se apaga si la espera se nota. Filtrar u ordenar tarda unos
   // milisegundos, y apagarla en cuanto sale la petición se veía como un
@@ -446,7 +446,10 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
         <div>
           <div className="page-title">Biblioteca</div>
           <div className="page-subtitle">
-            {total > 0 ? `${total} elementos sincronizados` : 'Sin elementos'}
+            {/* Cuenta ARCHIVOS (películas + capítulos que tienes), no filas de la
+                tabla: enseñando las filas, una serie con 90 capítulos contaba 1.
+                Por eso no cambia al filtrar — la pregunta es "cuánto tengo". */}
+            {archivos > 0 ? `${archivos} archivos sincronizados` : 'Sin elementos'}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>

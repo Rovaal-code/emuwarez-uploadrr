@@ -1071,6 +1071,36 @@ def count_library(
     return int(row[0]) if row else 0
 
 
+# Los estados en que el archivo está EN TU DISCO. Mismo criterio que usan
+# nomenclature_check y emu_catalog: "Subiendo" y "Subido" siguen siendo tuyos,
+# subirlo no lo borra.
+TIENES_EL_ARCHIVO = ("Disponible", "Subiendo", "Subido")
+
+
+def contar_archivos(conn: sqlite3.Connection) -> int:
+    """Cuántos archivos de vídeo tienes de verdad.
+
+    Solo películas y capítulos, que es lo único que es un fichero: una serie y
+    una temporada son agrupaciones, no algo que ocupe disco. Y solo los que
+    tienes — un "Faltante" es algo que Radarr o Sonarr conocen pero que no has
+    descargado.
+
+    Es a propósito distinto de `count_library`, que cuenta FILAS de la tabla
+    con los filtros puestos. Ese número sirve para la tabla; este contesta
+    "cuánto tengo", que es otra pregunta y la que hace el subtítulo de
+    Biblioteca. Antes ese subtítulo enseñaba el de las filas, así que una serie
+    con 90 capítulos contaba 1.
+    """
+    marcas = ",".join("?" * len(TIENES_EL_ARCHIVO))
+    row = conn.execute(
+        f"""SELECT COUNT(*) FROM library_items
+             WHERE item_type IN ('movie', 'episode')
+               AND local_status IN ({marcas})""",
+        TIENES_EL_ARCHIVO,
+    ).fetchone()
+    return int(row[0]) if row else 0
+
+
 def get_library_item(conn: sqlite3.Connection, item_id: int) -> Optional[dict]:
     row = conn.execute("SELECT * FROM library_items WHERE id = ?", (item_id,)).fetchone()
     return dict(row) if row else None

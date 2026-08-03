@@ -342,6 +342,8 @@ def library_list(
             search=search,
             spanish=spanish,
         )
+        from ...services.library import contar_archivos
+        archivos = contar_archivos(conn)
         series_ids = [r["id"] for r in rows if r["item_type"] == "series"]
         season_ids = [r["id"] for r in rows if r["item_type"] == "season"]
         rollups = (
@@ -352,6 +354,7 @@ def library_list(
     return LibraryListResponse(
         items=items,
         total=total,
+        archivos=archivos,
         limit=limit,
         offset=offset,
     )

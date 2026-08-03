@@ -617,6 +617,10 @@ class LibraryItemResponse(BaseModel):
 class LibraryListResponse(BaseModel):
     items: list[LibraryItemResponse] = []
     total: int = 0
+    # Cuántos archivos de vídeo hay de verdad (películas + capítulos que tienes
+    # en disco). NO depende de los filtros ni del nivel que se esté pidiendo,
+    # al revés que `total`: contesta "cuánto tengo", no "cuántas filas hay".
+    archivos: int = 0
     limit: int = 50
     offset: int = 0
 

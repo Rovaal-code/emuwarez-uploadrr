@@ -1871,7 +1871,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 900 }}>
         <div className="modal-header">
-          <h2 className="modal-title">Subir a eMuwarez — {item.title}</h2>
+          <h2 className="modal-title">{item.title}</h2>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
 

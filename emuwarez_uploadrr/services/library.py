@@ -982,8 +982,27 @@ def _build_library_filter(
             where.append("parent_id = ?")
             params.append(parent_id)
     if search:
-        where.append("title LIKE ?")
-        params.append(f"%{search}%")
+        if parent_id == TOP_LEVEL_PARENT_FILTER:
+            # Buscando en la vista de árbol, un acierto SUBE hasta su serie.
+            #
+            # Los títulos de temporadas y capítulos llevan dentro el de la
+            # serie, así que buscar "One Piece" acertaba en los tres niveles y
+            # la tabla escupía la serie, sus 20 temporadas y sus 1000 capítulos
+            # como filas hermanas. Lo que se busca es el contenido, y el
+            # contenido es la serie: lo de dentro se ve expandiéndola.
+            #
+            # De paso, buscar algo que solo existe por debajo ("T2E1") ya no
+            # devuelve la fila suelta y descolgada, sino la serie que lo tiene.
+            where.append(f"""(title LIKE ? OR EXISTS (
+                SELECT 1 FROM library_items d
+                 WHERE (d.parent_id = library_items.id
+                     OR d.parent_id IN (SELECT s.id FROM library_items s
+                                         WHERE s.parent_id = library_items.id))
+                   AND d.title LIKE ?))""")
+            params.extend([f"%{search}%", f"%{search}%"])
+        else:
+            where.append("title LIKE ?")
+            params.append(f"%{search}%")
     return where, params
 
 

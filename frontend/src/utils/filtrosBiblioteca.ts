@@ -25,6 +25,16 @@
  * que conservar mientras buscas algo concreto. Escrito como "algún filtro
  * activo" y no enumerando los que aplanan, porque enumerarlos es justo lo que
  * hizo que se olvidaran cinco.
+ *
+ * LA BÚSQUEDA ES LA EXCEPCIÓN, y por una razón distinta a todas las de arriba.
+ * Los desplegables ofrecen valores que solo ocurren por debajo de la raíz; el
+ * cajón de buscar no: los títulos de temporadas y capítulos llevan dentro el de
+ * su serie, así que buscar "One Piece" acierta en los tres niveles a la vez.
+ * En plano eso son la serie, sus temporadas y todos sus capítulos como filas
+ * hermanas — cientos de filas para un único contenido. Buscar sigue mirando la
+ * biblioteca entera, pero el acierto sube hasta su serie
+ * (services/library.py::_build_library_filter), que es donde se busca el
+ * contenido; lo de dentro se ve expandiéndola, como en cualquier otro momento.
  */
 
 export interface FiltrosActivos {
@@ -45,7 +55,10 @@ export function hayAlgunFiltro(f: FiltrosActivos): boolean {
   return Object.values(f).some(v => !!v && v !== '')
 }
 
-/** Con algo filtrado hay que mirar la biblioteca entera, no solo la raíz. */
+/** Con algo filtrado hay que mirar la biblioteca entera, no solo la raíz.
+ *  Buscar no cuenta: el backend ya sube el acierto hasta su serie, así que la
+ *  vista sigue siendo el árbol. */
 export function necesitaTodosLosNiveles(f: FiltrosActivos): boolean {
-  return hayAlgunFiltro(f)
+  const { search: _buscar, ...resto } = f
+  return hayAlgunFiltro(resto)
 }

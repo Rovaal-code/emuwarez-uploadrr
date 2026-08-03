@@ -7,15 +7,17 @@
  * auditoría, con 11 elementos: filtrar por Episodio devolvía 0 de 4, por
  * "Sin petición" 0 de 4, y buscar el título de un capítulo 0 de 1.
  *
- * Así que la regla es una: si hay algo filtrado, se pide en plano.
+ * Así que la regla es una: si hay algo filtrado, se pide en plano. Con UNA
+ * excepción, buscar, que se trata en el segundo bloque.
  */
 import { describe, it, expect } from 'vitest'
 import { necesitaTodosLosNiveles, hayAlgunFiltro } from '../filtrosBiblioteca'
 
-// Todos los filtros de la pantalla. Si mañana se añade uno, va aquí y el test
-// de abajo lo obliga a comportarse como los demás.
+// Los filtros de los desplegables. Si mañana se añade uno, va aquí y el test
+// de abajo lo obliga a comportarse como los demás. Buscar NO está: tiene su
+// propio bloque porque hace otra cosa.
 const TODOS_LOS_FILTROS = [
-  'search', 'filterType', 'filterStatus', 'filterInstanceId', 'filterRequest',
+  'filterType', 'filterStatus', 'filterInstanceId', 'filterRequest',
   'filterSpanish', 'searchProvider', 'searchQuality', 'searchSource',
   'filterEmu', 'filterAporte',
 ] as const
@@ -46,13 +48,39 @@ describe('cuándo hay que pedir la biblioteca en plano', () => {
     ['Petición = Sin petición', { filterRequest: 'Sin petición' }],
     ['Petición = No compatible', { filterRequest: 'No compatible' }],
     ['Español = Sí', { filterSpanish: 'yes' }],
-    ['buscar el título de un capítulo', { search: 'T2E1' }],
   ])('%s (salía vacío)', (_nombre, filtros) => {
     expect(necesitaTodosLosNiveles(filtros)).toBe(true)
   })
 
-  it('hayAlgunFiltro es la misma pregunta, por si hace falta en otro sitio', () => {
+  it('hayAlgunFiltro es otra pregunta: ahí buscar SÍ cuenta como filtro', () => {
     expect(hayAlgunFiltro({ filterStatus: 'Disponible' })).toBe(true)
+    expect(hayAlgunFiltro({ search: 'One Piece' })).toBe(true)
     expect(hayAlgunFiltro({})).toBe(false)
+  })
+})
+
+/**
+ * Buscar aplanaba como los demás, y con una serie larga era inservible: los
+ * títulos de temporadas y capítulos llevan dentro el de la serie, así que
+ * buscar "One Piece" acertaba en los tres niveles y devolvía la serie, sus
+ * temporadas y todos sus capítulos como filas hermanas.
+ *
+ * Ahora la vista sigue siendo el árbol y es el BACKEND el que sube cada
+ * acierto hasta su serie (services/library.py::_build_library_filter, con la
+ * misma pareja de casos comprobada en tests/test_busqueda_biblioteca.py).
+ */
+describe('buscar es la excepción: mantiene el árbol', () => {
+  it('buscar el nombre de una serie no aplana', () => {
+    expect(necesitaTodosLosNiveles({ search: 'One Piece' })).toBe(false)
+  })
+
+  it('buscar el título de un capítulo tampoco: sale su serie', () => {
+    expect(necesitaTodosLosNiveles({ search: 'T2E1' })).toBe(false)
+  })
+
+  // Buscar no aplana, pero tampoco impide que otro filtro lo haga: quien pone
+  // Tipo = Episodio está pidiendo capítulos sueltos a propósito.
+  it('con otro filtro puesto, ese otro manda y se aplana igual', () => {
+    expect(necesitaTodosLosNiveles({ search: 'One Piece', filterType: 'episode' })).toBe(true)
   })
 })

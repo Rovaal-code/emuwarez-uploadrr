@@ -23,6 +23,7 @@ import { posterUrl, isAporteEligible } from '../utils/libraryItem'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
 import { necesitaTodosLosNiveles } from '../utils/filtrosBiblioteca'
 import { useTardanza } from '../hooks/useTardanza'
+import { useAlEntrar, useAlSalir } from '../context/SeccionVisible'
 
 const LOAD_LIMIT = 20000  // show everything in one container (no pagination); backend caps here
 
@@ -233,15 +234,38 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
 
   useEffect(() => { load() }, [load])
 
-  // Opened from the dashboard "Actividad reciente" (clicking a title): pick up
-  // the stashed item id and show its detail page.
-  useEffect(() => {
+  // "Ver en Biblioteca" desde una petición, desde una subida, desde el Panel o
+  // desde la campana: el id viene apuntado en sessionStorage y se recoge aquí.
+  //
+  // Al ENTRAR y no al montar. Antes era un efecto de montaje y bastaba, porque
+  // la sección se levantaba de cero cada vez que entrabas; ahora se monta una
+  // sola vez —y encima al arrancar la aplicación, cuando todavía no hay nada
+  // apuntado—, así que no volvía a mirar nunca: la aplicación cambiaba a
+  // Biblioteca y te dejaba donde lo hubieras dejado, sin abrir nada.
+  useAlEntrar(() => {
     let pending: string | null = null
     try { pending = sessionStorage.getItem('emuwarez_open_library_item') } catch { /* ignore */ }
     if (!pending) return
     try { sessionStorage.removeItem('emuwarez_open_library_item') } catch { /* ignore */ }
     getLibraryItem(Number(pending)).then(openDetail).catch(() => { /* ignore */ })
-  }, [])
+  })
+
+  // Al SALIR, la sección vuelve a su estado de partida: la tabla, sin filtros
+  // y con el orden por defecto. Si no, volver te dejaba en la ficha que
+  // abriste hace media hora o con un filtro que ya no recuerdas haber puesto.
+  //
+  // Al salir y NO al entrar: reiniciando al entrar se borraría justo el
+  // contenido al que te acaban de mandar (el useAlEntrar de arriba).
+  useAlSalir(() => {
+    setSelected(null)
+    closeDetailPath('library')
+    setSearch(''); setDebouncedSearch('')
+    setFilterType(''); setFilterStatus(''); setFilterInstanceId(''); setFilterRequest('')
+    setSearchProvider(''); setSearchQuality(''); setSearchSource('')
+    setFilterEmu(''); setFilterAporte(''); setFilterSpanish('')
+    setSortBy('title_asc')
+    setOffset(0)
+  })
 
   // Deep link: /library/:id (bookmark, reload, or a link shared elsewhere) —
   // resolve the id straight from the URL, same as the sessionStorage hand-off

@@ -5,11 +5,22 @@
 // app. `base` is always one of AppShell's own VALID_PAGES tab names
 // (e.g. 'library', 'uploads', 'requests').
 
-export function getDetailIdFromPath(base: string): number | null {
-  const parts = window.location.pathname.replace(/^\/+/, '').split('/')
+/** El id de la ficha en una ruta, o null. Puro, para poder probarlo: es la
+ *  regla que decide qué se abre al pegar un enlace. */
+export function idEnLaRuta(pathname: string, base: string): number | null {
+  const parts = pathname.replace(/^\/+/, '').split('/')
   if (parts[0] !== base || !parts[1]) return null
   const id = Number(parts[1])
   return Number.isFinite(id) ? id : null
+}
+
+/** Si la ruta pertenece a esa sección, con ficha abierta o sin ella. */
+export function esDeLaSeccion(pathname: string, base: string): boolean {
+  return pathname.replace(/^\/+/, '').split('/')[0] === base
+}
+
+export function getDetailIdFromPath(base: string): number | null {
+  return idEnLaRuta(window.location.pathname, base)
 }
 
 export function pushDetailPath(base: string, id: number) {
@@ -20,6 +31,12 @@ export function pushDetailPath(base: string, id: number) {
 }
 
 export function closeDetailPath(base: string) {
+  // Solo si de verdad estás en esa sección. Al salir de una, la sección se
+  // reinicia y cierra su ficha (ver context/SeccionVisible::useAlSalir), pero
+  // eso ocurre DESPUÉS de que la navegación haya puesto la URL de la sección
+  // nueva: sin esta comprobación, salir de Biblioteca con una ficha abierta
+  // dejaba la barra de direcciones diciendo /library estando ya en Subidas.
+  if (!esDeLaSeccion(window.location.pathname, base)) return
   const path = `/${base}`
   if (window.location.pathname !== path) {
     window.history.replaceState({}, '', path)

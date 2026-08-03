@@ -39,6 +39,7 @@ import {
 import { HeaderFilter } from '../components/HeaderFilter'
 import { formatBytes, timeAgo, formatDate } from '../utils/format'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
+import { useAlEntrar, useAlSalir } from '../context/SeccionVisible'
 
 // Fallback for "Consultar en eMuwarez" while we don't have the exact
 // per-request URL yet — points at the general requests listing instead of
@@ -803,8 +804,10 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   }
 
   // Deep link from the Dashboard "Recomendaciones" panel: open a specific
-  // request's detail on mount when its id was stashed before navigating here.
-  useEffect(() => {
+  // request's detail when its id se apuntó antes de venir aquí. Al ENTRAR y
+  // no al montar: la sección ya no se levanta de cero en cada visita (ver
+  // context/SeccionVisible).
+  useAlEntrar(() => {
     let stashed: string | null = null
     try {
       stashed = sessionStorage.getItem('emuwarez_open_request')
@@ -812,8 +815,17 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
     } catch { /* ignore */ }
     const id = stashed ? parseInt(stashed, 10) : NaN
     if (!Number.isNaN(id)) handleRowClick(id)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  })
+
+  // Al salir, de vuelta a la tabla sin filtros y con el orden por defecto.
+  useAlSalir(() => {
+    closeRequestDetail()
+    setSearch(''); setDebouncedSearch('')
+    setStatusFilter(''); setCategoryFilter(''); setResolutionFilter('')
+    setSourceFilter(''); setAuthorFilter('')
+    setSortBy('created_desc')
+    setOffset(0)
+  })
 
   // Same hand-off, but live — the sessionStorage read above only fires on
   // mount, so clicking a notification while Peticiones is ALREADY the open

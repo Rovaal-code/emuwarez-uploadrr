@@ -20,6 +20,7 @@ import {
   progressCounter, queuedWaitText, useTicker,
 } from '../utils/uploadStatus'
 import { useRefrescoPorAvisos, AVISOS_SUBIDA, AVISOS_SUBIDA_PROGRESO } from '../hooks/useRefrescoPorAvisos'
+import { useAlSalir, useSeccionVisible } from '../context/SeccionVisible'
 
 // Backend-real gates — mirror cancel_upload_job()/queue_retry_for_job() in
 // services/upload_execution.py / upload_queue.py exactly, so the button is
@@ -354,15 +355,29 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
 
   // Opened from the dashboard "Actividad de subida" (clicking a title): pick
   // up the stashed job id once the list has loaded and show its detail page.
+  //
+  // Depende de `jobs` porque hay que comprobar que el trabajo exista antes de
+  // abrirlo, y además de `seVe`: la sección ya no se levanta de cero en cada
+  // visita, así que sin eso solo se recogía el salto si los datos llegaban
+  // justo después (ver context/SeccionVisible).
+  const subidasALaVista = useSeccionVisible()
   useEffect(() => {
-    if (jobs.length === 0) return
+    if (!subidasALaVista || jobs.length === 0) return
     let pending: string | null = null
     try { pending = sessionStorage.getItem('emuwarez_open_upload') } catch { /* ignore */ }
     if (!pending) return
     if (!jobs.some(j => j.id === Number(pending))) return
     try { sessionStorage.removeItem('emuwarez_open_upload') } catch { /* ignore */ }
     openUpload(Number(pending))
-  }, [jobs])
+  }, [jobs, subidasALaVista])
+
+  // Al salir, de vuelta a la tabla sin filtros y con el orden por defecto.
+  useAlSalir(() => {
+    closeUpload()
+    setSearch('')
+    setStatusFilter(''); setTypeFilter('')
+    setSortBy('created_desc')
+  })
 
   // Deep link: /uploads/:id — resolve straight from the URL. selectedJob's
   // own `jobs.find(...)` gracefully returns undefined until `jobs` finishes

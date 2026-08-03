@@ -216,8 +216,8 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
             ? <ValueChip><ValueIcon><SourceValueIcon /></ValueIcon><span className="txt">{item.source}</span></ValueChip>
             : <span style={{ color: 'var(--text-muted)' }}>—</span>}
         </td>
-        <td style={{ whiteSpace: 'nowrap' }}><EmuStatusCell item={item} /></td>
         <td style={{ whiteSpace: 'nowrap' }}><SpanishAudioCell item={item} /></td>
+        <td style={{ whiteSpace: 'nowrap' }}><EmuStatusCell item={item} /></td>
         <td style={{ whiteSpace: 'nowrap' }}>
           {item.size_bytes
             ? <ValueChip><ValueIcon><SizeValueIcon /></ValueIcon><span className="txt">{formatBytes(item.size_bytes)}</span></ValueChip>

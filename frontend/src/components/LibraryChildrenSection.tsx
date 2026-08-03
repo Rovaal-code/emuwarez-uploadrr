@@ -55,8 +55,8 @@ export function LibraryChildrenSection({ parentId, childType, title, instances, 
                   <th>Resolución</th>
                   <th>Proveedor</th>
                   <th>Source</th>
-                  <th>EMuwarez</th>
                   <th>Español</th>
+                  <th>EMuwarez</th>
                   <th>Tamaño</th>
                   <th>Acciones</th>
                 </tr>

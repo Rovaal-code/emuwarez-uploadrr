@@ -305,8 +305,10 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
     } catch { /* ignore — next tick retries */ }
   }, [])
   const hasLiveUpload = activeUploads.length > 0
+  // Ver UploadsPage: la cadencia depende de si hay algo vivo, pero el sondeo
+  // no se apaga — es la red de seguridad por si se pierde un aviso.
   useRefrescoPorAvisos(AVISOS_SUBIDA, loadActiveUploads,
-    { cadaSinCanal: 2500, activo: hasLiveUpload, soloVisible: AVISOS_SUBIDA_PROGRESO })
+    { cadaSinCanal: hasLiveUpload ? 2500 : 30_000, soloVisible: AVISOS_SUBIDA_PROGRESO })
 
   if (loadingData && !summary) return <LoadingState label="Cargando Panel…" />
   if (!summary) return <ErrorState message={dataError ?? 'No se pudieron cargar los datos del dashboard'} onRetry={loadData} />

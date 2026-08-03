@@ -97,20 +97,35 @@ export function useRefrescoPorAvisos(
 
   useEffect(() => observarCanal(setVivo), [])
 
+  // La recarga pendiente vive FUERA del efecto, y esto es el arreglo de un
+  // fallo real, no una preferencia de estilo. Estaba dentro, y su limpieza la
+  // cancelaba al rehacerse el efecto — que es justo lo que pasa al entrar en
+  // la sección, porque `clave` cambia al hacerse visible. Secuencia:
+  //
+  //   1. Nace la subida y llega el aviso.
+  //   2. Subidas programa su recarga para dentro de AGLUTINAR_MS.
+  //   3. La aplicación te lleva a Subidas → pasa a visible → cambia `clave`.
+  //   4. El efecto se rehace y la limpieza cancela la recarga. Nunca ocurre.
+  //
+  // El Panel se salvaba por casualidad (al ir de Biblioteca a Subidas su
+  // visibilidad no cambia), y de ahí el síntoma que lo delató: el Panel veía
+  // la subida nueva y Subidas no.
+  const pendiente = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (pendiente.current) clearTimeout(pendiente.current) }, [])
+
   // Siempre escuchando: ver `activo`.
   useEffect(() => {
     if (!clave) return
-    let pendiente: ReturnType<typeof setTimeout> | null = null
     const pedirRecarga = (aviso: Aviso) => {
       if (filtroRef.current && !filtroRef.current(aviso)) return
-      if (pendiente) return
-      pendiente = setTimeout(() => { pendiente = null; recargarRef.current() }, AGLUTINAR_MS)
+      if (pendiente.current) return
+      pendiente.current = setTimeout(() => {
+        pendiente.current = null
+        recargarRef.current()
+      }, AGLUTINAR_MS)
     }
     const cortes = clave.split(',').map(tipo => suscribirse(tipo, pedirRecarga))
-    return () => {
-      if (pendiente) clearTimeout(pendiente)
-      cortes.forEach(cortar => cortar())
-    }
+    return () => cortes.forEach(cortar => cortar())
   }, [clave])
 
   useEffect(() => {

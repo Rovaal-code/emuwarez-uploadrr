@@ -417,8 +417,13 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // tabla se mantiene al día. Ahora lo hace el aviso del servidor, y el sondeo
   // de 2,5 s queda de red de seguridad para cuando el canal está caído.
   const hasLiveJob = jobs.some(j => j.status === 'running' || j.status === 'preparing' || j.status === 'queued' || j.status === 'staging')
+  // La cadencia depende de si hay algo en marcha, pero el sondeo NO se apaga
+  // del todo: es la red de seguridad de la que dependía enterarse de una
+  // subida nueva cuando el aviso se perdía, y apagarla dejaba la tabla clavada
+  // hasta recargar la página. Mirando y sin nada vivo, preguntar una vez cada
+  // 30 s no se nota.
   useRefrescoPorAvisos(AVISOS_SUBIDA, () => load({ silent: true }),
-    { cadaSinCanal: 2500, activo: hasLiveJob, soloVisible: AVISOS_SUBIDA_PROGRESO })
+    { cadaSinCanal: hasLiveJob ? 2500 : 30_000, soloVisible: AVISOS_SUBIDA_PROGRESO })
   useTicker(jobs.some(j => j.status === 'queued'))
 
   // Cancelar mientras se preparan ficheros no interrumpe nada a media faena,

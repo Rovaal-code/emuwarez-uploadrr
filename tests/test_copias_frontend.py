@@ -172,3 +172,27 @@ def test_las_fases_de_la_ficha_dicen_lo_mismo_que_el_backend():
         + str({k: (delBack[k], delFront[k]) for k in set(delFront) & set(delBack)
                if delFront[k] != delBack[k]})
     )
+
+
+def test_los_estados_de_castellano_coinciden():
+    """La columna Español tiene sus cinco estados escritos DOS veces: el SQL
+    que filtra (services/library.py) y la regla que pinta la celda
+    (utils/castellano.ts). Si se separan, filtras por "Audio" y te salen filas
+    que dicen otra cosa — y nada falla, solo miente.
+
+    Aquí solo se comprueba que ambos lados manejen los MISMOS cinco nombres;
+    que además signifiquen lo mismo lo cubre tests/test_filtro_castellano.py,
+    comparando los 9 casos posibles uno a uno.
+    """
+    fuente = _texto("utils/castellano.ts")
+    m = re.search(r"export type EstadoCastellano =([^\n]+)", fuente)
+    assert m, "no se encontró EstadoCastellano"
+    delFront = set(re.findall(r"'(\w+)'", m.group(1)))
+
+    backend = (RAIZ / "emuwarez_uploadrr" / "services" / "library.py").read_text()
+    delBack = set(re.findall(r'spanish == "(\w+)"', backend))
+
+    assert delFront == delBack, (
+        "\nLos estados de la columna Español no coinciden."
+        f"\n  solo en el frontend: {sorted(delFront - delBack)}"
+        f"\n  solo en el backend : {sorted(delBack - delFront)}")

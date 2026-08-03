@@ -952,12 +952,29 @@ def _build_library_filter(
     # Filtered in SQL, not in the browser: the Español column is the whole
     # library's worth of rows, and filtering it client-side would mean fetching
     # every level up to LOAD_LIMIT just to throw most of it away.
-    if spanish == "yes":
-        where.append("has_spanish_audio = 1")
+    # Los cuatro casos de la columna Español, más el que no se sabe. Tienen que
+    # cuadrar EXACTAMENTE con lo que enseña la celda (frontend
+    # utils/castellano.ts::estadoCastellano) o filtrarías por "Audio" y te
+    # saldrían filas que dicen otra cosa. Lo vigila tests/test_copias_frontend.
+    if spanish == "ambos":
+        where.append("has_spanish_audio = 1 AND has_spanish_subs = 1")
+    elif spanish == "audio":
+        where.append("has_spanish_audio = 1 AND COALESCE(has_spanish_subs, 0) != 1")
+    elif spanish == "subs":
+        where.append("COALESCE(has_spanish_audio, 0) != 1 AND has_spanish_subs = 1")
     elif spanish == "no":
-        where.append("has_spanish_audio = 0")
-    elif spanish == "unknown":
-        where.append("has_spanish_audio IS NULL")
+        where.append("has_spanish_audio = 0 AND has_spanish_subs = 0")
+    elif spanish == "desconocido":
+        # Ni uno ni otro confirmados: no es "no tiene", es que falta leerlo.
+        #
+        # Todo en positivo con COALESCE, y no con NOT: en SQL `NOT (NULL = 1)`
+        # es NULL, no TRUE, así que la versión con NOT no devolvía NINGUNA de
+        # las tres filas que tenían que salir. Lo pilló el cruce de los 9 casos
+        # contra la regla del frontend.
+        where.append(
+            "COALESCE(has_spanish_audio, 0) != 1 AND COALESCE(has_spanish_subs, 0) != 1"
+            " AND NOT (COALESCE(has_spanish_audio, -1) = 0"
+            " AND COALESCE(has_spanish_subs, -1) = 0)")
     if parent_id is not None:
         if parent_id == TOP_LEVEL_PARENT_FILTER:
             where.append("parent_id IS NULL")
@@ -2278,18 +2295,33 @@ def library_filter_values(conn) -> dict:
     emu_states = [v for v, present in [("candidate", has_candidate), ("present", has_present)] if present]
     aporte_states = [v for v, present in [("yes", has_aporte_yes), ("no", has_aporte_no)] if present]
 
-    # Same "only offer what actually occurs" rule for the Español column.
-    # "unknown" is offered too: on a library that has never been scanned
-    # it's the only value there is, and hiding it would leave the filter
-    # with nothing to pick.
-    seen_spanish = {r[0] for r in conn.execute(
-        "SELECT DISTINCT has_spanish_audio FROM library_items"
+    # Same "only offer what actually occurs" rule for the Español column, ahora
+    # con los cuatro casos que enseña la celda. Se calcula con las MISMAS
+    # combinaciones que la regla del frontend (utils/castellano.ts) y no
+    # mirando has_spanish_audio a secas, que era lo de antes: ofrecería "No"
+    # para una fila que la tabla enseña como "Subs".
+    #
+    # "desconocido" se ofrece aunque parezca raro: en una biblioteca recién
+    # sincronizada y sin leer es el único valor que hay, y esconderlo dejaría
+    # el filtro sin nada que elegir.
+    combinaciones = {(r[0], r[1]) for r in conn.execute(
+        "SELECT DISTINCT has_spanish_audio, has_spanish_subs FROM library_items"
     ).fetchall()}
-    spanish_states = [
-        v for v, present in [
-            ("yes", 1 in seen_spanish), ("no", 0 in seen_spanish), ("unknown", None in seen_spanish),
-        ] if present
-    ]
+
+    def _estado(audio, subs) -> str:
+        if audio == 1 and subs == 1:
+            return "ambos"
+        if audio == 1:
+            return "audio"
+        if subs == 1:
+            return "subs"
+        if audio == 0 and subs == 0:
+            return "no"
+        return "desconocido"
+
+    presentes = {_estado(a, s) for a, s in combinaciones}
+    spanish_states = [v for v in ("ambos", "audio", "subs", "no", "desconocido")
+                      if v in presentes]
 
     return {
     "providers": providers,

@@ -1,5 +1,6 @@
 import { api } from './client'
 import type { LibraryListResponse, LibraryItemResponse, SyncResponse } from '../types/api'
+import type { EstadoCastellano } from '../utils/castellano'
 
 export interface LibraryQueryParams {
   type?: string
@@ -16,7 +17,7 @@ export interface LibraryQueryParams {
   search?: string
   // Español column. Filtered in SQL by the backend (unlike the provider/
   // quality/source ones, which are client-side over the loaded rows).
-  spanish?: 'yes' | 'no' | 'unknown'
+  spanish?: EstadoCastellano
   sort?: string
   limit?: number
   offset?: number
@@ -120,7 +121,7 @@ export interface LibraryFilterOptions {
   instances: { id: number; type: 'radarr' | 'sonarr'; name: string }[]
   emu_states: ('candidate' | 'present')[]
   aporte_states: ('yes' | 'no')[]
-  spanish_states: ('yes' | 'no' | 'unknown')[]
+  spanish_states: EstadoCastellano[]
 }
 
 export async function getLibraryFilterOptions(): Promise<LibraryFilterOptions> {

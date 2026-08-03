@@ -22,6 +22,7 @@ import { HeaderFilter } from '../components/HeaderFilter'
 import { posterUrl, isAporteEligible } from '../utils/libraryItem'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
 import { necesitaTodosLosNiveles } from '../utils/filtrosBiblioteca'
+import { CASTELLANO_OPCIONES, type EstadoCastellano } from '../utils/castellano'
 import { useTardanza } from '../hooks/useTardanza'
 import { useAlEntrar, useAlSalir } from '../context/SeccionVisible'
 
@@ -218,7 +219,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
         status: filterStatus || undefined,
         instance_id: filterInstanceId ? Number(filterInstanceId) : undefined,
         request_status: filterRequest || undefined,
-        spanish: (filterSpanish || undefined) as 'yes' | 'no' | 'unknown' | undefined,
+        spanish: (filterSpanish || undefined) as EstadoCastellano | undefined,
         sort: sortBy,
         parent_id: flatFilter ? undefined : TOP_LEVEL_PARENT_FILTER,
         limit: LOAD_LIMIT,
@@ -585,8 +586,12 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
                   ]} /></th>
                   <th><HeaderFilter label="Español" value={filterSpanish} onChange={v => { setFilterSpanish(v); setOffset(0) }} options={[
                     { value: '', label: 'Todos' },
+                    // Las etiquetas salen de la misma tabla que pinta la celda
+                    // (utils/castellano), para que el desplegable no pueda
+                    // ofrecer un nombre que la columna no usa.
                     ...(filterOptions?.spanish_states ?? []).map(s => ({
-                      value: s, label: s === 'yes' ? 'Sí' : s === 'no' ? 'No' : 'Sin datos',
+                      value: s,
+                      label: CASTELLANO_OPCIONES.find(o => o.value === s)?.label ?? s,
                     })),
                   ]} /></th>
                   <th>Tamaño</th>

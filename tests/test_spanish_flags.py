@@ -200,12 +200,19 @@ def test_recompute_clears_a_stale_value(db_conn):
 
 def test_filter_by_spanish_state(db_conn):
     from emuwarez_uploadrr.services.library import list_library, count_library, recompute_spanish_flags
-    _insert(db_conn, "Con", audio_languages="spa")
-    _insert(db_conn, "Sin", audio_languages="eng")
+    # Los subtítulos hay que declararlos: con el audio confirmado que NO y los
+    # subtítulos SIN LEER la respuesta es "desconocido", no "no" — todavía
+    # puede aparecer castellano por ese lado.
+    _insert(db_conn, "Solo audio", audio_languages="spa", subtitle_languages="eng")
+    _insert(db_conn, "Solo subs", audio_languages="eng", subtitle_languages="spa")
+    _insert(db_conn, "Ambos", audio_languages="spa", subtitle_languages="spa")
+    _insert(db_conn, "Sin", audio_languages="eng", subtitle_languages="eng")
     _insert(db_conn, "Ni idea")
     recompute_spanish_flags(db_conn)
 
-    for state, expected in [("yes", ["Con"]), ("no", ["Sin"]), ("unknown", ["Ni idea"])]:
+    for state, expected in [("audio", ["Solo audio"]), ("subs", ["Solo subs"]),
+                            ("ambos", ["Ambos"]), ("no", ["Sin"]),
+                            ("desconocido", ["Ni idea"])]:
         items = list_library(db_conn, spanish=state)
         assert [i["title"] for i in items] == expected, state
         # count_library must apply the very same WHERE, or `total` lies.
@@ -242,8 +249,8 @@ def test_endpoint_exposes_and_filters_the_column(client, auth_headers, isolated_
     from emuwarez_uploadrr.database import connect
     from emuwarez_uploadrr.services.library import recompute_spanish_flags
     conn = connect(isolated_db / "emuwarez_uploadrr.db")
-    _insert(conn, "Con castellano", audio_languages="spa")
-    _insert(conn, "Sin castellano", audio_languages="eng")
+    _insert(conn, "Con castellano", audio_languages="spa", subtitle_languages="spa")
+    _insert(conn, "Sin castellano", audio_languages="eng", subtitle_languages="eng")
     recompute_spanish_flags(conn)
 
     body = client.get("/api/library", headers=auth_headers).json()
@@ -251,6 +258,7 @@ def test_endpoint_exposes_and_filters_the_column(client, auth_headers, isolated_
     assert by_title["Con castellano"]["has_spanish_audio"] == 1
     assert by_title["Sin castellano"]["has_spanish_audio"] == 0
 
+    # Los dos confirmados que no (audio eng, subtítulos leídos y sin castellano).
     filtered = client.get("/api/library?spanish=no", headers=auth_headers).json()
     assert [i["title"] for i in filtered["items"]] == ["Sin castellano"]
     assert filtered["total"] == 1
@@ -267,7 +275,8 @@ def test_filter_options_only_offer_states_that_occur(client, auth_headers, isola
     _insert(conn, "Con castellano", audio_languages="spa")
     recompute_spanish_flags(conn)
     options = client.get("/api/library/filter-options", headers=auth_headers).json()
-    assert options["spanish_states"] == ["yes"]
+    # Audio en castellano y subtítulos sin leer: "audio", no "ambos".
+    assert options["spanish_states"] == ["audio"]
 
 
 # --- Subtitle flag (drives the season pack's subtitle rule) -------------------

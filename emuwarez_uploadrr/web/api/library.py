@@ -308,7 +308,10 @@ def library_list(
     request_status: Optional[str] = Query(None, alias="request_status"),
     nomenclature: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
-    spanish: Optional[str] = Query(None, pattern="^(yes|no|unknown)$"),
+    # Los cinco estados de la columna Español. El patrón tiene que ir con
+    # ellos: se quedó con los tres viejos al ampliarla y descartaba en
+    # silencio "ambos"/"audio"/"subs", así que el filtro no devolvía nada.
+    spanish: Optional[str] = Query(None, pattern="^(ambos|audio|subs|no|desconocido)$"),
     sort: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=20000),
     offset: int = Query(0, ge=0),

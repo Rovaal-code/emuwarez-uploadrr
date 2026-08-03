@@ -9,6 +9,7 @@ import { ProviderTag } from './ProviderIcon'
 import { LibraryActionButtons } from './LibraryActionButtons'
 import { useTooltip } from './Tooltip'
 import { ValueChip, ValueIcon, TypeValueIcon, ResolutionValueIcon, SourceValueIcon, SizeValueIcon, DetailTitleText } from './DetailCard'
+import { estadoCastellano, CASTELLANO_INFO } from '../utils/castellano'
 
 const NESTED_PAGE_SIZE = 25
 // Seasons per series — well under the API's max limit=500 (a season list
@@ -53,15 +54,19 @@ export function EmuStatusCell({ item }: { item: LibraryItemResponse }) {
   return <StatusBadge status={status} type="emu" />
 }
 
-// Castilian audio. null is a real third state, not a styling fallback: an
-// episode whose MediaInfo hasn't been read yet, or a season/series with no
-// held children to roll up. Showing it as "No" would read as "confirmed
-// without Spanish", which is exactly the thing you'd act on.
+// Castellano en el audio, en los subtítulos, en los dos o en ninguno (ver
+// utils/castellano). El guion es un estado de verdad, no un hueco de estilo:
+// un capítulo cuyo MediaInfo no se ha leído, un Faltante que no está en disco,
+// o un archivo del que no se puede sacar nada. Enseñarlo como "No" sería
+// afirmar algo que nadie ha comprobado, y es justo lo que uno miraría para
+// decidir si lo vuelve a descargar.
 export function SpanishAudioCell({ item }: { item: LibraryItemResponse }) {
-  if (item.has_spanish_audio == null) {
+  const estado = estadoCastellano(item)
+  if (estado === 'desconocido') {
     return <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>
   }
-  return <StatusBadge status={item.has_spanish_audio === 1 ? 'Sí' : 'No'} type="spanish" />
+  const { label, cssClass } = CASTELLANO_INFO[estado]
+  return <span className={`badge ${cssClass}`}>{label}</span>
 }
 
 // Memoized: the list can hold hundreds of rows, and typing in the title

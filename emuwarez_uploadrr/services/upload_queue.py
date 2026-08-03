@@ -33,6 +33,7 @@ QUEUE_GRACE_SECONDS = 60
 # one of these is in flight, it has to wait or be told to view the existing
 # one instead.
 from .upload_states import ACTIVE_JOB_STATUSES, escribir_estado  # noqa: E402
+from .eventos import EVENTO_SUBIDA_ESTADO, publicar
 
 # job_id -> pending threading.Timer, so a cancel during the grace period can
 # stop it before it fires. Single-process app, in-memory is enough (matches
@@ -148,6 +149,12 @@ def _insert_and_start_queued_job(
     )
     conn.commit()
     job_id = cursor.lastrowid
+
+    # Nace un trabajo. Hay que avisar AQUÍ y no confiar en escribir_estado(),
+    # que solo cubre los UPDATE: crear es un INSERT y no pasa por ella. Sin
+    # esto, pulsar Subir te llevaba a la tabla de Subidas y no aparecía nada
+    # hasta recargar la página, porque nadie decía que la subida existía.
+    publicar(EVENTO_SUBIDA_ESTADO, {"job_id": job_id, "status": "queued", "stage": "queued"})
 
     _arm_queue_timer(job_id)
 

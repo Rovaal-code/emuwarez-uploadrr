@@ -58,7 +58,18 @@ interface Opciones {
   cadaSinCanal: number
   /** Cada cuánto repedir con el canal vivo. Solo es una red de seguridad. */
   cadaConCanal?: number
-  /** Si está apagado no se escucha ni se repide. */
+  /**
+   * Si hay algo en marcha que justifique REPEDIR por nuestra cuenta.
+   *
+   * Apaga solo el temporizador, nunca la escucha de avisos. Apagaba las dos, y
+   * eso rompía justo el momento que importa: sin trabajos vivos, Subidas
+   * dejaba de escuchar, así que no se enteraba de que acababa de nacer el
+   * primero. Pulsabas Subir, te llevaba a la tabla y no aparecía nada hasta
+   * recargar la página.
+   *
+   * Escuchar es gratis —una conexión para toda la aplicación— y es lo único
+   * que puede avisar de que empieza algo. Lo caro es preguntar en vano.
+   */
   activo?: boolean
   /** Avisos que solo se escuchan mientras la sección está a la vista. Para lo
    *  que llega a chorro y no cambia qué hay, sino cuánto lleva. */
@@ -86,8 +97,9 @@ export function useRefrescoPorAvisos(
 
   useEffect(() => observarCanal(setVivo), [])
 
+  // Siempre escuchando: ver `activo`.
   useEffect(() => {
-    if (!activo || !clave) return
+    if (!clave) return
     let pendiente: ReturnType<typeof setTimeout> | null = null
     const pedirRecarga = (aviso: Aviso) => {
       if (filtroRef.current && !filtroRef.current(aviso)) return
@@ -99,13 +111,32 @@ export function useRefrescoPorAvisos(
       if (pendiente) clearTimeout(pendiente)
       cortes.forEach(cortar => cortar())
     }
-  }, [activo, clave])
+  }, [clave])
 
   useEffect(() => {
     if (!activo || !seVe) return
     const t = setInterval(() => recargarRef.current(), vivo ? cadaConCanal : cadaSinCanal)
     return () => clearInterval(t)
   }, [vivo, cadaSinCanal, cadaConCanal, activo, seVe])
+
+  // Recarga cuando no se puede confiar en estar al día. Dos casos, el mismo
+  // motivo: los avisos son lo único que mantiene una sección al día, y cuando
+  // faltan hay que volver a preguntar.
+  //
+  //   El canal VUELVE       lo ocurrido mientras estaba caído no se reenvía.
+  //   Entras con él CAÍDO   nada te va a despertar, ni siquiera el sondeo si
+  //                         `activo` está apagado (que es el caso justo antes
+  //                         de que empiece la primera subida).
+  //
+  // No se recarga al entrar con el canal vivo, y eso es a propósito: es lo que
+  // hace que cambiar de sección sea instantáneo de verdad y no "instantáneo y
+  // luego un parpadeo".
+  const teniaCanal = useRef(vivo)
+  useEffect(() => {
+    const volvio = vivo && !teniaCanal.current
+    teniaCanal.current = vivo
+    if (seVe && (volvio || !vivo)) recargarRef.current()
+  }, [vivo, seVe])
 
   return { canalVivo: vivo }
 }

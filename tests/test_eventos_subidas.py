@@ -125,3 +125,36 @@ def test_el_registro_de_verdad_se_agrupa(trabajo):
             eventos.desuscribir(sus)
 
     asyncio.run(escenario())
+
+
+def test_crear_un_trabajo_avisa(client, monkeypatch):
+    """Nace una subida: la tabla tiene que enterarse SIN recargar la página.
+
+    Crear es un INSERT, así que no pasa por `escribir_estado` — el aviso hay
+    que darlo aquí. Sin él, pulsar Subir te llevaba a la tabla de Subidas y no
+    aparecía nada hasta que recargabas (reportado el 2026-08-03).
+    """
+    from emuwarez_uploadrr.database import connect, db_path, init_db
+    from emuwarez_uploadrr.services import upload_queue
+
+    avisos: list = []
+    monkeypatch.setattr(upload_queue, "publicar",
+                        lambda tipo, datos=None: avisos.append((tipo, datos)) or 0)
+    # El temporizador de gracia arrancaría la subida de verdad.
+    monkeypatch.setattr(upload_queue, "_arm_queue_timer", lambda job_id: None)
+
+    conn = connect(db_path()); init_db(conn)
+    try:
+        cur = conn.execute(
+            """INSERT INTO library_items (item_type, title, path, local_status)
+               VALUES ('movie', 'Peli', '/x.mkv', 'Disponible')""")
+        conn.commit()
+        item = dict(conn.execute("SELECT * FROM library_items WHERE id = ?",
+                                 (cur.lastrowid,)).fetchone())
+        upload_queue._insert_and_start_queued_job(conn, item)
+    finally:
+        conn.close()
+
+    assert [a[0] for a in avisos] == ["subida-estado"]
+    assert avisos[0][1]["status"] == "queued"
+    assert avisos[0][1]["job_id"] > 0

@@ -247,7 +247,13 @@ export function RemuxTable({ plan, editable, edits, onEdit }: {
                 return (
                   <tr key={t.id} style={{ borderTop: '1px solid var(--border)' }}>
                     <td style={{ padding: '6px 10px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{TRACK_TYPE_LABEL[t.type] ?? t.type}</td>
-                    <td style={{ padding: '6px 10px', fontFamily: 'monospace', color: 'var(--text-secondary)' }}>{t.language || '—'}</td>
+                    {/* El BCP-47 cuando lo hay: es lo único que distingue el
+                        valenciano del catalán ("cat" vs "ca-valencia") y el
+                        latino del castellano. Enseñando solo `language`, esta
+                        columna decía "cat" para una pista en valenciano. */}
+                    <td style={{ padding: '6px 10px', fontFamily: 'monospace', color: 'var(--text-secondary)' }}>
+                      {t.language_ietf || t.language || '—'}
+                    </td>
                     <td style={{ padding: '6px 10px', color: 'var(--text-muted)', wordBreak: 'break-word' }}>{t.current_name || '—'}</td>
                     <td style={{ padding: '5px 8px' }}>
                       {editable ? (
@@ -535,6 +541,18 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   const [remuxLoading, setRemuxLoading] = useState(false)
   const [remuxError, setRemuxError] = useState<string | null>(null)
   const [remuxEdits, setRemuxEdits] = useState<Record<number, TrackRemuxOverride>>({})
+  // Si se aplican los nombres propuestos o se conservan los que ya tiene el
+  // archivo. Activado por defecto, que es lo que la aplicación hacía siempre.
+  //
+  // Desmarcarlo NO cambia el orden ni la pista predeterminada: solo los
+  // nombres, que es lo que dice la casilla. Se resuelve rellenando el nombre
+  // actual como si lo hubieras escrito tú a mano en la tabla, así que no hace
+  // falta nada nuevo en el servidor ni en el contrato de subida.
+  const [aplicarNombres, setAplicarNombres] = useState(true)
+  // El botón late hasta que lo abres una vez. Los nombres se aplican por
+  // defecto, así que conviene que les eches un ojo antes de subir; seguir
+  // parpadeando después de haberlos visto sería ruido.
+  const [pistasVistas, setPistasVistas] = useState(false)
   const [showRemuxCard, setShowRemuxCard] = useState(false)
 
   // Step 1 (season target only) — the pack plan: consistency across
@@ -1047,6 +1065,10 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   useEffect(() => {
     setMiReport(null); setMiError(null); setShowMiCard(false)
     setRemuxPreview(null); setRemuxError(null); setRemuxEdits({}); setShowRemuxCard(false)
+    // Otro contenido, otras pistas: la casilla vuelve a su valor de partida y
+    // el botón vuelve a latir. Arrastrarlo haría que un capítulo heredara la
+    // decisión que tomaste para el anterior sin decírtelo.
+    setAplicarNombres(true); setPistasVistas(false)
     setSeasonPlan(null); setSeasonPlanError(null)
     setSeasonNames(null); setShowSeasonNamesCard(false)
     setSeasonMi(null); setSeasonMiError(null); setMiEpisodeId(null)
@@ -1113,6 +1135,20 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   // mount) so it's usually already loaded (or well underway) by the time the
   // user opens "Ver Pistas", instead of only starting the read on click.
   useEffect(() => { if (step === 1 && !targetIsSeason) runTrackRemux() }, [step, targetIsSeason, runTrackRemux])
+
+  // Lo que de verdad se manda. Con la casilla quitada, cada pista conserva su
+  // nombre actual; las que no tienen ninguno sí reciben el propuesto, porque
+  // "conservar un nombre vacío" no le sirve a nadie.
+  const edicionesFinales = (): Record<number, TrackRemuxOverride> => {
+    if (aplicarNombres) return remuxEdits
+    const conservar: Record<number, TrackRemuxOverride> = {}
+    for (const t of remuxPreview?.ordered_tracks ?? []) {
+      if (t.current_name && t.current_name.trim()) {
+        conservar[t.id] = { ...remuxEdits[t.id], new_name: t.current_name }
+      }
+    }
+    return conservar
+  }
 
   const setRemuxEdit = (trackId: number, patch: TrackRemuxOverride) => {
     setRemuxEdits(prev => ({ ...prev, [trackId]: { ...prev[trackId], ...patch } }))
@@ -1228,10 +1264,10 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     try {
       await saveNomenclatureFields(targetId, fields)
       const remuxSnapshot = remuxPreview
-        ? { ordered_tracks: mergeRemuxTracks(remuxPreview, remuxEdits) }
+        ? { ordered_tracks: mergeRemuxTracks(remuxPreview, edicionesFinales()) }
         : null
       const r = await queueUpload(
-        targetId, remuxEdits, checks, remuxSnapshot,
+        targetId, edicionesFinales(), checks, remuxSnapshot,
         targetIsSeason
           ? { source: fields.source, provider: fields.provider, tag: fields.tag, title: fields.title }
           : undefined,
@@ -2174,8 +2210,12 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                         Ver MediaInfo
                       </button>
                       <button
-                        className="btn btn-primary"
-                        onClick={() => { setShowRemuxCard(true); if (!remuxPreview && !remuxLoading) runTrackRemux() }}
+                        className={`btn btn-primary${pistasVistas ? '' : ' btn-atencion'}`}
+                        onClick={() => {
+                          setPistasVistas(true)
+                          setShowRemuxCard(true)
+                          if (!remuxPreview && !remuxLoading) runTrackRemux()
+                        }}
                         disabled={targetId == null}
                       >
                         Ver Pistas
@@ -2232,6 +2272,24 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                           </>
                         )}
                         {remuxPreview && <RemuxTable plan={remuxPreview} editable edits={remuxEdits} onEdit={setRemuxEdit} />}
+                        {remuxPreview && (
+                          <label className="checkbox-label" style={{
+                            display: 'flex', alignItems: 'center', gap: 8,
+                            marginTop: 14, fontSize: 12,
+                          }}>
+                            <input
+                              type="checkbox"
+                              checked={aplicarNombres}
+                              onChange={e => setAplicarNombres(e.target.checked)}
+                            />
+                            Renombrar las pistas
+                            <span className="text-muted" style={{ fontSize: 11 }}>
+                              {aplicarNombres
+                                ? '(se aplican los nombres de la columna Nuevo nombre)'
+                                : '(cada pista conserva el nombre que ya tiene)'}
+                            </span>
+                          </label>
+                        )}
                       </div>
                     </div>
                   </div>

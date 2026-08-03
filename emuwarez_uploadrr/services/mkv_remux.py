@@ -157,6 +157,10 @@ _LANG_DISPLAY: dict[str, str] = {
     "zu": "Zulú", "zul": "Zulú",
 }
 _LATIN_SPANISH_NAME = "Español (Latinoamérica)"
+# El valenciano comparte código ISO con el catalán ("cat"), así que la única
+# forma de distinguirlo es el BCP-47 de la pista ("ca-valencia"). Mismo caso
+# que el castellano y el latino, que también comparten "spa".
+_VALENCIAN_NAME = "Valencià"
 _UNKNOWN_LANG_NAME = "Desconocido"
 
 # Sort priority for the top 3 (0 = highest); everything else is bucket 3 and
@@ -199,11 +203,28 @@ def _normalize_lang_code(lang: str | None) -> str:
     return (lang or "und").strip().lower()
 
 
+def _is_valencian(lang: str | None, lang_ietf: str | None, existing_name: str | None) -> bool:
+    """Valenciano, que no se puede distinguir del catalán por el código ISO.
+
+    mkvmerge da DOS campos: `language` ("cat", sin variante) y `language_ietf`
+    ("ca-valencia", con ella). La columna Idioma leía el primero y por eso un
+    valenciano salía como catalán, aunque Ver MediaInfo enseñara la variante.
+    """
+    for texto in (lang_ietf, lang):
+        if texto and "valencia" in str(texto).strip().lower():
+            return True
+    if existing_name and "valenci" in existing_name.strip().lower():
+        return True
+    return False
+
+
 def lang_display_name(lang: str | None, lang_ietf: str | None = None, existing_name: str | None = None) -> str:
     """Human-readable, Spanish-audience display name for a track's language."""
     code = _normalize_lang_code(lang)
     if code in ("es", "spa") and _is_latin_spanish(lang_ietf, existing_name):
         return _LATIN_SPANISH_NAME
+    if _is_valencian(lang, lang_ietf, existing_name):
+        return _VALENCIAN_NAME
     if code in ("", "und", "mis"):
         return _UNKNOWN_LANG_NAME
     return _LANG_DISPLAY.get(code, code.upper())
@@ -440,6 +461,12 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None, reo
             "type": t.get("type"),
             "codec": t.get("codec"),
             "language": props.get("language"),
+            # El BCP-47, cuando el archivo lo trae. Es lo ÚNICO que distingue
+            # el valenciano del catalán y el latino del castellano: el código
+            # ISO de `language` es el mismo para los dos ("cat", "spa"). La
+            # columna Idioma de "Ver Pistas" enseñaba solo `language`, así que
+            # un valenciano salía como "cat" aunque Ver MediaInfo lo dijera.
+            "language_ietf": props.get("language_ietf"),
             "current_name": props.get("track_name"),
             "default_before": bool(props.get("default_track")),
             "forced": _is_forced(props),

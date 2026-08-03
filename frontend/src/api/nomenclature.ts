@@ -171,6 +171,10 @@ export interface TrackRemuxTrack {
   type: 'video' | 'audio' | 'subtitles'
   codec: string | null
   language: string | null
+  /** El BCP-47 de la pista si el archivo lo trae ("ca-valencia", "es-419").
+   *  Es lo único que distingue el valenciano del catalán y el latino del
+   *  castellano: `language` es el mismo código para los dos. */
+  language_ietf?: string | null
   current_name: string | null
   new_name: string
   default_before: boolean

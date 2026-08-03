@@ -34,7 +34,7 @@ const FIELD_SOURCES: { field: string; example: string; source: string }[] = [
   },
   {
     field: 'Resolución',
-    example: '2160p UHD',
+    example: '2160p 4K UHD',
     source: 'Perfil de calidad de Radarr/Sonarr ("quality.name"), normalizado a la nomenclatura eMuwarez (ver tabla técnica abajo). No se recalcula con MediaInfo.',
   },
   {
@@ -75,13 +75,13 @@ const FIELD_SOURCES: { field: string; example: string; source: string }[] = [
 ]
 
 const RESOLUTION_ROWS: [string, string][] = [
-  ['Full Ultra HD 8k', '4320p FUHD'],
-  ['Ultra HD 4k', '2160p UHD'],
+  ['Full Ultra HD 8k', '4320p 8K FUHD'],
+  ['Ultra HD 4k', '2160p 4K UHD'],
   ['Full HD', '1080p'],
   ['HD', '720p'],
-  ['SD', '576p SD'],
-  ['SD', '540p SD'],
-  ['SD', '480p SD'],
+  ['SD', '576p'],
+  ['SD', '540p'],
+  ['SD', '480p'],
 ]
 
 const SOURCE_ROWS: [string, string][] = [
@@ -190,8 +190,8 @@ const CHANNEL_ROWS: [string, string][] = [
 const EXAMPLES = [
   'Hora punta 1998 1080p BluRay x264 ESP DD 5.1 ING DTS ES 5.1 ING-COM DD 2.0 SUBS-EMUWAREZ',
   'La trama fenicia 2025 1080p MA WEB-DL x264 ESP DD+ 5.1 ING DD+ Atmos 5.1 SUBS-EMUWAREZ',
-  'Brave - Indomable 2012 2160p UHD AV1 MULTI DD 5.1 SUBS - EMUWAREZ',
-  'La trama fenicia 2025 2160p UHD MA WEB-DL DV HDR HEVC ESP DD+ 5.1 ING DD+ Atmos 5.1 SUBS-EMUWAREZ',
+  'Brave - Indomable 2012 2160p 4K UHD AV1 MULTI DD 5.1 SUBS - EMUWAREZ',
+  'La trama fenicia 2025 2160p 4K UHD MA WEB-DL DV HDR HEVC ESP DD+ 5.1 ING DD+ Atmos 5.1 SUBS-EMUWAREZ',
   'Raíces profundas 1953 1080p BDRemux AVC ESP MLP TrueHD 2.0 ING DD 2.0 SUBS-MATTS',
   'Anacleto: Agente secreto 2015 1080p BDRemux AVC ESP-CAT TrueHD 5.1 SUBS-MATTS',
   'Upload S01 2020 1080p AMZN WEB-DL AVC DUAL DD+ 5.1 SUBS-EMUWAREZ',

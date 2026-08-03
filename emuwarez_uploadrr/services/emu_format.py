@@ -25,29 +25,41 @@ LANG_MAP: dict[str, str] = {
     "it": "ITA", "ita": "ITA", "italian": "ITA",
     "pt": "POR", "por": "POR", "portuguese": "POR",
     "ca": "CAT", "cat": "CAT", "catalan": "CAT",
+    # El valenciano va aparte del catalán. MediaInfo lo da como
+    # "cat-valencia" o "ca-valencia" (BCP-47), que es la única forma de
+    # distinguirlo: el código ISO a secas ("cat") es el mismo para los dos.
+    "val": "VAL", "valencian": "VAL", "valenciano": "VAL", "valencia": "VAL",
+    "ca-valencia": "VAL", "cat-valencia": "VAL", "ca-valencia-es": "VAL",
 }
 
 _CHANNELS_MAP = {1: "Mono", 2: "2.0", 3: "3.0", 4: "3.1", 5: "5.0", 6: "5.1", 7: "6.1", 8: "7.1"}
+
+
+# La resolución tal como la escribe eMuwarez. Está en la Guía
+# (frontend/src/pages/GuidePage.tsx, RESOLUTION_ROWS) y un test vigila que las
+# dos listas digan lo mismo.
+#
+# Las dos de arriba llevan el "4K"/"8K" además de la sigla, que es como se
+# nombran en la práctica. Las de abajo NO llevan "SD": la resolución ya lo dice
+# todo, y el token sobraba.
+_RESOLUCIONES = (
+    (("4320", "8k", "fuhd"), "4320p 8K FUHD"),
+    (("2160", "4k", "uhd"), "2160p 4K UHD"),
+    (("1080",), "1080p"),
+    (("720",), "720p"),
+    (("576",), "576p"),
+    (("540",), "540p"),
+    (("480",), "480p"),
+)
 
 
 def format_resolution(res: Optional[str]) -> Optional[str]:
     if not res:
         return None
     r = str(res).lower()
-    if "4320" in r or "8k" in r or "fuhd" in r:
-        return "4320p FUHD"
-    if "2160" in r or "4k" in r or "uhd" in r:
-        return "2160p UHD"
-    if "1080" in r:
-        return "1080p"
-    if "720" in r:
-        return "720p"
-    if "576" in r:
-        return "576p SD"
-    if "540" in r:
-        return "540p SD"
-    if "480" in r:
-        return "480p SD"
+    for marcas, token in _RESOLUCIONES:
+        if any(m in r for m in marcas):
+            return token
     return str(res).strip() or None
 
 
@@ -146,12 +158,25 @@ def format_channels(channels) -> Optional[str]:
 
 
 def format_language(lang: Optional[str]) -> Optional[str]:
+    """El código de eMuwarez para un idioma. None si no viene nada.
+
+    Lo que no está en LANG_MAP sale en mayúsculas y recortado a tres letras,
+    que es la longitud de todos los códigos del tracker. Ese recorte se hace
+    sobre la PARTE PRINCIPAL y no sobre la cadena entera: con un BCP-47 como
+    "ca-valencia" cortar a ciegas daba "CA-", un token con un guion suelto que
+    llegaba tal cual al nombre del torrent (visto en un pack real).
+    """
     if not lang:
         return None
     key = str(lang).strip().lower()
     if key in LANG_MAP:
         return LANG_MAP[key]
-    return str(lang).strip().upper()[:3] or None
+    # Un BCP-47 desconocido ("pt-br", "zh-hans"): vale su idioma base, que es
+    # más cierto que inventarse un código con media región dentro.
+    base = key.split("-")[0]
+    if base in LANG_MAP:
+        return LANG_MAP[base]
+    return base.upper()[:3] or None
 
 
 def _split_languages(raw: Optional[str]) -> list[str]:

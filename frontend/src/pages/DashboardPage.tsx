@@ -414,7 +414,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
           />
           <StatCard
             icon={ICON_RECLAIMED}
-            label="Reclamadas"
+            label="Peticiones Reclamadas"
             value={s.requests_reclaimed ?? 0}
             accentColor="#a855f7"
             info="Peticiones ya Reclamadas en eMuwarez. eMuwarez no permite saber si el reclamo es tuyo, así que es el total de reclamadas, no solo las tuyas."

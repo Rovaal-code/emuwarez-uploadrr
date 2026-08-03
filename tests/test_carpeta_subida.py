@@ -15,8 +15,9 @@ import os
 import pytest
 
 from emuwarez_uploadrr.services.carpeta_subida import (asegurar_raiz, borrar_carpeta_de_pack,
-                                                       comprobar_enlace,
-                                                       preparar_carpeta_de_pack)
+                                                       borrar_de_subidas, comprobar_enlace,
+                                                       preparar_carpeta_de_pack,
+                                                       preparar_fichero_suelto)
 
 
 @pytest.fixture
@@ -140,3 +141,66 @@ def test_la_comprobacion_falla_sin_fichero(biblioteca):
 def test_asegurar_raiz_es_idempotente(biblioteca):
     assert asegurar_raiz(biblioteca["uploads"]) is True
     assert asegurar_raiz(biblioteca["uploads"]) is True
+
+
+# --- Un fichero suelto (película o capítulo) ---------------------------------
+
+def test_un_fichero_suelto_va_en_la_raiz(biblioteca):
+    """Y NO dentro de una carpeta propia: metido en una, torf haría un torrent
+    de varios ficheros con esa carpeta dentro, y el release dejaría de ser un
+    fichero suelto (comprobado: singlefile vs multifile)."""
+    r = preparar_fichero_suelto(biblioteca["ficheros"][0], raiz=biblioteca["uploads"])
+    assert r["status"] == "ready"
+    assert os.path.dirname(r["ruta"]) == biblioteca["uploads"]
+
+
+def test_conserva_el_nombre_del_fichero(biblioteca):
+    """Es lo que torf usa para nombrar el torrent, y la nomenclatura ya lo dejó
+    como debe: tocarlo aquí cambiaría el nombre del release."""
+    origen = biblioteca["ficheros"][0]
+    r = preparar_fichero_suelto(origen, raiz=biblioteca["uploads"])
+    assert os.path.basename(r["ruta"]) == os.path.basename(origen)
+
+
+def test_el_fichero_suelto_tampoco_se_duplica(biblioteca):
+    r = preparar_fichero_suelto(biblioteca["ficheros"][0], raiz=biblioteca["uploads"])
+    assert os.stat(r["ruta"]).st_ino == os.stat(biblioteca["ficheros"][0]).st_ino
+
+
+def test_reenlazar_el_mismo_fichero_no_falla(biblioteca):
+    """Un reintento, o volver a subir lo mismo."""
+    for _ in range(2):
+        r = preparar_fichero_suelto(biblioteca["ficheros"][0], raiz=biblioteca["uploads"])
+        assert r["status"] == "ready"
+    assert len(os.listdir(biblioteca["uploads"])) == 1
+
+
+def test_un_fichero_que_no_existe_lo_bloquea(biblioteca):
+    r = preparar_fichero_suelto("/no/existe.mkv", raiz=biblioteca["uploads"])
+    assert r["status"] == "blocked"
+
+
+def test_borrar_de_subidas_sirve_para_las_dos_formas(biblioteca):
+    """El borrado es uno solo: un pack es una carpeta y una película un
+    fichero, y al borrar la subida no se sabe cuál era."""
+    pack = preparar_carpeta_de_pack("Serie S01", biblioteca["ficheros"], raiz=biblioteca["uploads"])
+    suelto = preparar_fichero_suelto(biblioteca["ficheros"][0], raiz=biblioteca["uploads"])
+    assert borrar_de_subidas(pack["carpeta"], raiz=biblioteca["uploads"]) is True
+    assert borrar_de_subidas(suelto["ruta"], raiz=biblioteca["uploads"]) is True
+    assert os.listdir(biblioteca["uploads"]) == []
+    for f in biblioteca["ficheros"]:
+        assert os.path.isfile(f)
+
+
+def test_borrar_un_enlace_simbolico_no_sigue_hasta_el_original(biblioteca, tmp_path):
+    """La salvaguarda mira el PADRE y no la ruta resuelta: un enlace simbólico
+    apunta a la biblioteca, y resolverlo lo dejaría "fuera" de la raíz — o
+    peor, borraría el fichero de verdad."""
+    import os as _os
+    up = str(tmp_path / "otro-fs")
+    _os.makedirs(up)
+    enlace = _os.path.join(up, "peli.mkv")
+    _os.symlink(biblioteca["ficheros"][0], enlace)
+    assert borrar_de_subidas(enlace, raiz=up) is True
+    assert not _os.path.lexists(enlace)
+    assert _os.path.isfile(biblioteca["ficheros"][0]), "el original NO se toca"

@@ -6,6 +6,16 @@ import pytest
 from emuwarez_uploadrr.services import upload_checks as uc
 
 
+@pytest.fixture(autouse=True)
+def _carpeta_de_subidas_aislada(tmp_path, monkeypatch):
+    """La comprobación "carpeta_subida" enlaza de verdad en /config/Uploadrr/
+    uploads, que solo existe dentro del contenedor. Se apunta a un temporal
+    para que los tests no dependan de eso — y sigan probando lo que importa,
+    que es que el enlace se pueda hacer."""
+    from emuwarez_uploadrr.services import carpeta_subida
+    monkeypatch.setattr(carpeta_subida, "RAIZ_SUBIDAS", str(tmp_path / "uploads"))
+
+
 @pytest.fixture
 def db_conn(isolated_db):
     from emuwarez_uploadrr.database import connect, init_db
@@ -82,8 +92,8 @@ def test_all_green_when_everything_passes(db_conn, tmp_path, monkeypatch):
     iid = _movie_with_path(db_conn, str(f))
     r = uc.run_upload_checks(db_conn, iid)
     ids = [c["id"] for c in r["checks"]]
-    assert ids == ["accesible", "renameable", "spanish", "output", "qbittorrent",
-                   "imghosts", "emuwarez"]
+    assert ids == ["accesible", "carpeta_subida", "renameable", "spanish",
+                   "output", "qbittorrent", "imghosts", "emuwarez"]
     assert all(c["status"] == "ok" for c in r["checks"])
     assert r["ready"] is True
 

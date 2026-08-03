@@ -934,20 +934,24 @@ def _run_queued_job(job_id: int) -> None:
 
         mark_phase_done(job_id, "remux")
 
-        # --- 3b. La carpeta que se le entrega a Uploadrr, solo para un pack.
+        # --- 3b. Lo que se le entrega a Uploadrr: enlaces en la carpeta de
+        # subidas. TODO pasa por aquí, pack o fichero suelto, para que lo que
+        # subes esté siempre en el mismo sitio y la biblioteca no aparezca en
+        # ninguna ruta de subida.
         #
         # AQUÍ y no antes: el remux de arriba reescribe cada fichero y lo
         # sustituye con os.replace, así que un enlace creado antes seguiría
         # apuntando a los datos viejos. Este es el primer punto en que los
         # ficheros ya son los definitivos.
         #
-        # torf toma el nombre del torrent del nombre de la carpeta, y esa es la
-        # carpeta que recibe quien se descargue el release: entregando la de
-        # Sonarr, el torrent se llamaría "Season 1". Antes se resolvía
-        # renombrando la carpeta del usuario; ahora se le entrega una carpeta
-        # de enlaces creada aparte, y la biblioteca no se toca.
+        # Para un PACK hace falta además por el nombre: torf toma el nombre del
+        # torrent del nombre de la carpeta, y esa es la carpeta que recibe quien
+        # se descargue el release — entregando la de Sonarr se llamaría
+        # "Season 1". Un fichero suelto ya salía bien (torf usa su nombre, que
+        # la nomenclatura dejó correcto), así que ahí esto es solo por tenerlo
+        # todo junto.
+        from .carpeta_subida import preparar_carpeta_de_pack, preparar_fichero_suelto
         if is_season:
-            from .carpeta_subida import preparar_carpeta_de_pack
             from .season_pack import _sanitize_pack_folder_name, build_season_pack_plan
             plan_final = build_season_pack_plan(item_id, conn=conn)
             ficheros = [resolve_local_path(ep.get("destination_path") or ep.get("source_path"), conn=conn)
@@ -955,20 +959,33 @@ def _run_queued_job(job_id: int) -> None:
                         for ep in plan_final.get("episodes", [])]
             preparada = preparar_carpeta_de_pack(
                 _sanitize_pack_folder_name(plan_final.get("season_pack_title") or ""), ficheros)
-            if preparada["status"] != "ready":
-                _fail(job_id, "No se pudo preparar la carpeta de subida: "
-                              + "; ".join(preparada["errors"]))
-                return
-            conn.execute("UPDATE upload_jobs SET prepared_path = ?, updated_at = ? WHERE id = ?",
-                         (preparada["carpeta"], _now_iso(), job_id))
-            conn.commit()
-            append_upload_log(
-                job_id, "info",
-                f"Carpeta de subida preparada con {preparada['cuantos']} enlace(s) "
-                f"{'/'.join(preparada['enlaces'])}: «{os.path.basename(preparada['carpeta'])}». "
-                f"La carpeta original de la temporada no se ha tocado.",
-                stream="system", conn=conn,
-            )
+            destino_uploadrr = preparada.get("carpeta")
+            que = f"{preparada.get('cuantos', 0)} capítulo(s)"
+        else:
+            # Se relee: la nomenclatura y el remux de arriba han cambiado
+            # prepared_path, y el `item` de antes es de antes de eso.
+            item_final = row_to_dict(
+                conn.execute("SELECT * FROM library_items WHERE id = ?", (item_id,)).fetchone()) or {}
+            fichero = resolve_local_path(
+                item_final.get("prepared_path") or item_final.get("path"), conn=conn
+            ) or item_final.get("prepared_path") or item_final.get("path")
+            preparada = preparar_fichero_suelto(fichero)
+            destino_uploadrr = preparada.get("ruta")
+            que = "el archivo"
+
+        if preparada["status"] != "ready":
+            _fail(job_id, "No se pudo preparar la subida en la carpeta de subidas: "
+                          + "; ".join(preparada["errors"]))
+            return
+        conn.execute("UPDATE upload_jobs SET prepared_path = ?, updated_at = ? WHERE id = ?",
+                     (destino_uploadrr, _now_iso(), job_id))
+        conn.commit()
+        append_upload_log(
+            job_id, "info",
+            f"Preparado para subir: {que} enlazado(s) en «{os.path.basename(destino_uploadrr)}» "
+            f"(enlace {'/'.join(preparada['enlaces'])}). El original no se ha tocado.",
+            stream="system", conn=conn,
+        )
 
         # --- 4. Final preflight (fresh preconditions + command preview,
         # against the now-final renamed/remuxed file) then start. This is

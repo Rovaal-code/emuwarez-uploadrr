@@ -1,4 +1,4 @@
-"""La carpeta que se le entrega a Uploadrr para subir un pack de temporada.
+"""Lo que se le entrega a Uploadrr para subir: enlaces dentro de /config/Uploadrr/uploads.
 
 EL PROBLEMA. `torf` toma el nombre del torrent del nombre de la carpeta, y ese
 nombre es la carpeta que recibe QUIEN SE DESCARGUE el release. Entregando la
@@ -28,7 +28,17 @@ en otro disco, y ahí `os.link` falla con EXDEV. En ese caso se cae a un enlace
 simbólico, que cruza sistemas de ficheros sin copiar: mkvmerge y qBittorrent
 leen a través de él sin enterarse.
 
-LO QUE NO HACE: borrarla sola. Mientras siembres, esos enlaces son de donde
+TODO PASA POR AQUÍ, no solo los packs. Una película o un capítulo suelto no
+necesitaban esto —a Uploadrr se le entrega el FICHERO, y torf nombra el torrent
+con el nombre del fichero, que la nomenclatura ya dejó bien— pero se enlazan
+igual para que todo lo que subas esté en el mismo sitio: qBittorrent siembra
+siempre desde uploads y la biblioteca no aparece en ninguna ruta de subida.
+
+Un fichero suelto se enlaza DIRECTAMENTE en uploads, nunca dentro de una
+carpeta propia: metido en una, torf haría un torrent de varios ficheros con esa
+carpeta dentro, y eso cambia el release (comprobado: singlefile vs multifile).
+
+LO QUE NO HACE: borrarlo solo. Mientras siembres, esos enlaces son de donde
 qBittorrent lee. Se borra al borrar la subida, no antes.
 """
 from __future__ import annotations
@@ -111,6 +121,67 @@ def preparar_carpeta_de_pack(
 
     return {"status": "ready", "carpeta": destino, "errors": [],
             "enlaces": sorted(tipos), "cuantos": len(ficheros)}
+
+
+def preparar_fichero_suelto(fichero: str, *, raiz: Optional[str] = None) -> dict:
+    """Enlaza UN fichero (película o capítulo) en la carpeta de subidas.
+
+    Directamente en la raíz, sin carpeta propia: dentro de una, torf haría un
+    torrent de varios ficheros con esa carpeta dentro y el release dejaría de
+    ser un fichero suelto.
+
+    El nombre se conserva tal cual, que ya es el de la nomenclatura: es lo que
+    torf usa para nombrar el torrent.
+    """
+    raiz = raiz or RAIZ_SUBIDAS
+    if not fichero or not os.path.isfile(fichero):
+        return {"status": "blocked", "ruta": None,
+                "errors": [f"No existe: {fichero or '(sin ruta)'}"]}
+    if not asegurar_raiz(raiz):
+        return {"status": "blocked", "ruta": None,
+                "errors": [f"No se pudo crear la carpeta de subidas: {raiz}"]}
+
+    destino = os.path.join(raiz, os.path.basename(fichero))
+    try:
+        if os.path.lexists(destino):
+            # Un reintento, o un enlace de una subida anterior del mismo
+            # contenido: se rehace, que es más barato que averiguar si sirve.
+            os.unlink(destino)
+        tipo = _enlazar(fichero, destino)
+    except OSError as e:
+        return {"status": "blocked", "ruta": None,
+                "errors": [f"No se pudo enlazar en {raiz}: {e}"]}
+
+    return {"status": "ready", "ruta": destino, "errors": [],
+            "enlaces": [tipo], "cuantos": 1}
+
+
+def borrar_de_subidas(ruta: Optional[str], *, raiz: Optional[str] = None) -> bool:
+    """Borra de la carpeta de subidas, sea una carpeta de pack o un fichero
+    suelto. Solo borra ENLACES: lo de verdad sigue en la biblioteca.
+
+    Nunca toca nada fuera de la carpeta de subidas — `prepared_path` puede
+    apuntar a la biblioteca en subidas viejas, anteriores a que todo pasara por
+    aquí, y borrar una subida no puede llevarse el fichero del usuario.
+    """
+    raiz = raiz or RAIZ_SUBIDAS
+    if not ruta or not os.path.lexists(ruta):
+        return False
+    # realpath del PADRE, no de la ruta: la ruta puede ser un enlace simbólico
+    # que apunta a la biblioteca, y resolverlo la dejaría fuera de la raíz.
+    dentro = os.path.realpath(os.path.dirname(ruta)).startswith(os.path.realpath(raiz))
+    if not dentro:
+        logger.warning("No se borra %s: está fuera de %s", ruta, raiz)
+        return False
+    try:
+        if os.path.isdir(ruta) and not os.path.islink(ruta):
+            shutil.rmtree(ruta)
+        else:
+            os.unlink(ruta)
+        return True
+    except OSError:
+        logger.warning("No se pudo borrar de la carpeta de subidas: %s", ruta, exc_info=True)
+        return False
 
 
 def borrar_carpeta_de_pack(carpeta: Optional[str], *, raiz: Optional[str] = None) -> bool:

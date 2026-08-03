@@ -227,6 +227,19 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int, *, scope: str = "a
                    local_path or (path or "El elemento no tiene ruta de archivo")):
             return done()
 
+        # 0b. Y que se pueda enlazar en la carpeta de subidas, igual que un
+        # pack: desde 2026-08-04 TODO lo que se sube se enlaza ahí, no solo los
+        # packs, para que la biblioteca no aparezca en ninguna ruta de subida.
+        from .carpeta_subida import RAIZ_SUBIDAS, comprobar_enlace
+        prueba = comprobar_enlace(local_path)
+        if not add("carpeta_subida",
+                   "Se puede preparar la carpeta de subida",
+                   "No se puede preparar la carpeta de subida",
+                   prueba["ok"],
+                   (f"{RAIZ_SUBIDAS} (enlace {prueba['tipo']})" if prueba["ok"]
+                    else prueba["error"] or "")):
+            return done()
+
         # 1. Renameable — write permission on the file's directory.
         parent = os.path.dirname(local_path) if local_path else ""
         if not add("renameable", "Se puede renombrar", "No se puede renombrar",

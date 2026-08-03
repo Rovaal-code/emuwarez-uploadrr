@@ -500,7 +500,7 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None, reo
         # depends on what the audio offers (see _default_subtitle_id).
         t["default_after"] = (t["id"] == default_sub_id)
 
-    # La tabla de "Ver Remux" sigue el orden que va a quedar en el fichero.
+    # La tabla de "Ver Pistas" sigue el orden que va a quedar en el fichero.
     by_id = {t["id"]: t for t in (video + audio_sorted + subs_sorted)}
     ordered_tracks = [by_id[i] for i in new_order if i in by_id]
     order_changed = [t["id"] for t in tracks] != new_order

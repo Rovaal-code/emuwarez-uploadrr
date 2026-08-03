@@ -1350,7 +1350,7 @@ class UploadChecksSnapshot(BaseModel):
 
 
 class UploadQueueBody(BaseModel):
-    # Manual edits the user made in the wizard's "Ver Remux" card, carried
+    # Manual edits the user made in the wizard's "Ver Pistas" card, carried
     # through to the server-side remux step that runs after the grace period.
     remux_overrides: Optional[Dict[str, TrackRemuxOverride]] = None
     # The wizard's already-merged (base plan + remux_overrides) track table —

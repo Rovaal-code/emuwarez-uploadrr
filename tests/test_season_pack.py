@@ -420,7 +420,7 @@ def test_apply_folder_rename(tmp_path):
 
 # ---------------------------------------------------------------------------
 # Per-episode read views (backing the wizard's "Ver nombre de todos los
-# capítulos" / "Ver MediaInfo" / "Ver Remux" for a season target)
+# capítulos" / "Ver MediaInfo" / "Ver Pistas" for a season target)
 # ---------------------------------------------------------------------------
 
 def test_apply_pack_forwards_overrides_to_real_files(isolated_db, tmp_path):
@@ -617,7 +617,7 @@ def test_get_season_episode_remux_previews_one_per_episode(isolated_db, tmp_path
 
 
 def test_episode_display_title_matches_canonical_format(isolated_db, tmp_path):
-    """"Ver MediaInfo"/"Ver Remux" accordion headers must use the exact same
+    """"Ver MediaInfo"/"Ver Pistas" accordion headers must use the exact same
     "Serie (Año) - SxxEyy - Título" format Biblioteca/Subidas/Peticiones
     already use (library.py's content_display_title + episode_own_name) —
     previously they showed the raw stored title verbatim instead."""
@@ -642,7 +642,7 @@ def test_episode_display_title_matches_canonical_format(isolated_db, tmp_path):
 
 def test_episode_names_selector_uses_the_short_canonical_title(isolated_db, tmp_path):
     """El desplegable de "Ver nombre de todos los capítulos" usa el mismo
-    título que las cabeceras de Ver MediaInfo y Ver Remux, para que las tres
+    título que las cabeceras de Ver MediaInfo y Ver Pistas, para que las tres
     pantallas nombren igual al mismo capítulo."""
     from emuwarez_uploadrr.services.season_pack import get_season_episode_names
     conn = _open(isolated_db)

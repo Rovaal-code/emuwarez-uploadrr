@@ -37,7 +37,7 @@ from .upload_states import ACTIVE_JOB_STATUSES, escribir_estado  # noqa: E402
 # job_id -> pending threading.Timer, so a cancel during the grace period can
 # stop it before it fires. Single-process app, in-memory is enough (matches
 # upload_checks.py's pattern). Remux overrides the user edited in the
-# wizard's "Ver Remux" card are persisted on the job row itself
+# wizard's "Ver Pistas" card are persisted on the job row itself
 # (remux_overrides_json) instead of kept here — they need to survive a
 # process restart during the grace window and be readable by a later retry.
 _LOCK = threading.Lock()

@@ -108,7 +108,7 @@ def season_episode_mediainfo(season_id: int, current_user: dict = Depends(requir
 
 @router.get("/library/season/{season_id}/episode-remux-preview")
 def season_episode_remux_preview(season_id: int, current_user: dict = Depends(require_auth)) -> dict:
-    """Per-episode track remux plan — backs "Ver Remux" for a season target
+    """Per-episode track remux plan — backs "Ver Pistas" for a season target
     (read-only preview; no manual per-track overrides for season packs)."""
     with _get_conn() as conn:
         return get_season_episode_remux_previews(season_id, conn=conn)

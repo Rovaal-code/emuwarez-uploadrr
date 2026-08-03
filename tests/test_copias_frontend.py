@@ -144,3 +144,31 @@ def test_toda_tarea_programada_tiene_nombre_en_espanol():
                  for clave, nombre, *_ in DEFAULT_TASKS
                  if clave in traducidas and traducidas[clave] != nombre]
     assert not distintas, "\n" + "\n".join(distintas)
+
+
+def test_las_fases_de_la_ficha_dicen_lo_mismo_que_el_backend():
+    """DEFAULT_PHASES es el esqueleto que la ficha de una subida enseña ANTES
+    de que haya progreso real, y es una copia literal de PHASES.
+
+    Si las dos se desincronizan, la fase cambia de nombre a mitad de la subida:
+    empiezas viendo "Reordenación o renombrado de pistas" y en cuanto llega el
+    primer progreso pasa a decir otra cosa. Nada falla, solo parece que la
+    aplicación no sabe lo que hace. Pasó al renombrar esa fase: son dos
+    literales en dos lenguajes distintos y solo se cambió uno.
+    """
+    from emuwarez_uploadrr.services.uploadrr_progress import PHASES
+
+    fuente = _texto("components/UploadJobDetailPage.tsx")
+    m = re.search(r"const DEFAULT_PHASES: UploadProgressPhase\[\] = \[(.*?)\n\]", fuente, re.S)
+    assert m, "no se encontró DEFAULT_PHASES"
+    delFront = dict(re.findall(r"key: '([a-z_]+)', label: '([^']+)'", m.group(1)))
+    delBack = {clave: etiqueta for clave, etiqueta, _peso in PHASES}
+
+    assert delFront == delBack, (
+        "\nLas fases de la ficha no coinciden con las del backend."
+        f"\n  solo en el frontend: {sorted(set(delFront) - set(delBack))}"
+        f"\n  solo en el backend : {sorted(set(delBack) - set(delFront))}"
+        f"\n  con distinto texto : "
+        + str({k: (delBack[k], delFront[k]) for k in set(delFront) & set(delBack)
+               if delFront[k] != delBack[k]})
+    )

@@ -321,7 +321,7 @@ const PHASE_STATUS_TEXT: Record<string, string> = {
 // eMuwarez) are each their own row, not collapsed into one "Subiendo" bucket.
 const DEFAULT_PHASES: UploadProgressPhase[] = [
   { key: 'nomenclature', label: 'Aplicación de nomenclatura', status: 'pending', pct: 0 },
-  { key: 'remux', label: 'Reordenación y renombrado de pistas', status: 'pending', pct: 0 },
+  { key: 'remux', label: 'Reordenación o renombrado de pistas', status: 'pending', pct: 0 },
   { key: 'verificacion_presubida', label: 'Inicio de Uploadrr', status: 'pending', pct: 0 },
   { key: 'screenshots', label: 'Generación y subida de capturas', status: 'pending', pct: 0 },
   { key: 'hash_torrent', label: 'Cálculo de hash del torrent', status: 'pending', pct: 0 },

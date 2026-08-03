@@ -179,7 +179,7 @@ export function mergeRemuxTracks(
   })
 }
 
-// Track reorder/rename table — the single-file "Ver Remux" card renders it
+// Track reorder/rename table — the single-file "Ver Pistas" card renders it
 // editable (inputs); the season target's per-episode accordion renders it
 // read-only (editable=false — no manual per-track overrides for seasons).
 export function RemuxTable({ plan, editable, edits, onEdit }: {
@@ -540,7 +540,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   const [seasonNamesEpisodeId, setSeasonNamesEpisodeId] = useState<number | null>(null)
 
   // Season target — per-episode MediaInfo/Remux (accordion, one entry per
-  // episode), replacing the single-file "Ver MediaInfo"/"Ver Remux" cards.
+  // episode), replacing the single-file "Ver MediaInfo"/"Ver Pistas" cards.
   const [seasonMi, setSeasonMi] = useState<SeasonEpisodeMediaInfo[] | null>(null)
   const [seasonMiLoading, setSeasonMiLoading] = useState(false)
   const [seasonMiError, setSeasonMiError] = useState<string | null>(null)
@@ -1086,7 +1086,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   // Prefetch the track remux plan IN PARALLEL with the nomenclature fields
   // (reading a real .mkv's tracks — mkvmerge -J — can be slow over a remote
   // mount) so it's usually already loaded (or well underway) by the time the
-  // user opens "Ver Remux", instead of only starting the read on click.
+  // user opens "Ver Pistas", instead of only starting the read on click.
   useEffect(() => { if (step === 1 && !targetIsSeason) runTrackRemux() }, [step, targetIsSeason, runTrackRemux])
 
   const setRemuxEdit = (trackId: number, patch: TrackRemuxOverride) => {
@@ -1936,7 +1936,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                 <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>MediaInfo y Remux de los capítulos</div>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>MediaInfo y pistas de los capítulos</div>
                       <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>
                         Se elige capítulo con un desplegable — cada uno con su propio detalle de MediaInfo y
                         su propio plan de reordenación/renombrado de pistas (sin edición manual para temporadas).
@@ -1947,7 +1947,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                         Ver MediaInfo
                       </button>
                       <button className="btn btn-primary" onClick={() => { setShowRemuxCard(true); if (!seasonRemux && !seasonRemuxLoading) loadSeasonRemux() }} disabled={targetId == null}>
-                        Ver Remux
+                        Ver Pistas
                       </button>
                     </div>
                   </div>
@@ -2004,7 +2004,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                         <button className="modal-close" onClick={() => setShowRemuxCard(false)}>✕</button>
                       </div>
                       <div className="modal-body">
-                        {seasonRemuxLoading && !seasonRemux && <TableLoadingSpinner label="Calculando el remux de cada capítulo…" />}
+                        {seasonRemuxLoading && !seasonRemux && <TableLoadingSpinner label="Calculando las pistas de cada capítulo…" />}
                         {seasonRemuxError && !seasonRemuxLoading && (
                           <>
                             <p className="text-error" style={{ fontSize: 12, marginTop: 0, marginBottom: 10 }}>✗ {seasonRemuxError}</p>
@@ -2138,9 +2138,9 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                 <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>MediaInfo y Remux del archivo</div>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>MediaInfo y pistas del archivo</div>
                       <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>
-                        Ver Remux: muestra la reordenación y el nombre de las pistas de vídeo/audio/subtítulos del contenido (editable).
+                        Ver Pistas: muestra la reordenación y el nombre de las pistas de vídeo/audio/subtítulos del contenido (editable).
                         <br />
                         Ver MediaInfo: muestra el detalle técnico real del archivo.
                       </div>
@@ -2154,7 +2154,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                         onClick={() => { setShowRemuxCard(true); if (!remuxPreview && !remuxLoading) runTrackRemux() }}
                         disabled={targetId == null}
                       >
-                        Ver Remux
+                        Ver Pistas
                       </button>
                     </div>
                   </div>

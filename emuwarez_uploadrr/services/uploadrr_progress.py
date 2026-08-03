@@ -36,7 +36,7 @@ from typing import Optional
 # group it chronologically sits inside.
 PHASES: list[tuple[str, str, int]] = [
     ("nomenclature", "Aplicación de nomenclatura", 5),
-    ("remux", "Reordenación y renombrado de pistas", 15),
+    ("remux", "Reordenación o renombrado de pistas", 15),
     # integrity(5) + preflight(5) + queue_processing(2) + video_processing(2)
     # + mediainfo_export(3) + video_metadata(2) + duplicates(3) = 22. Stays
     # "running" from before Uploadrr-EMU is even invoked (starts before

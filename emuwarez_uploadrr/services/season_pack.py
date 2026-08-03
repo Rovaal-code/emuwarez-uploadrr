@@ -977,7 +977,7 @@ def _episode_display_title(conn, ep: dict) -> str:
     canonical format Biblioteca/Subidas/Peticiones already use
     (library.py's content_display_title), plus the episode's own title
     (episode_own_name). Backs the wizard's per-episode "Ver MediaInfo"/
-    "Ver Remux" accordion headers, which previously showed the raw stored
+    "Ver Pistas" accordion headers, which previously showed the raw stored
     title verbatim ("Serie SxxEyy - Título"), inconsistent with this format
     used everywhere else."""
     from .library import content_display_title, episode_own_name
@@ -1092,7 +1092,7 @@ def get_season_episode_mediainfo(season_id: int, conn=None) -> dict:
 
 
 def get_season_episode_remux_previews(season_id: int, conn=None) -> dict:
-    """Per-episode track remux plan — backs the wizard's "Ver Remux"
+    """Per-episode track remux plan — backs the wizard's "Ver Pistas"
     dropdown for a season target. Read-only preview only: manual per-track
     overrides aren't offered for season packs (each episode gets its own
     auto-computed plan applied as-is during the queued upload)."""

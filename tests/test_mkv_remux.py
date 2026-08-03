@@ -802,3 +802,49 @@ def test_apply_without_reordering_edits_in_place(tmp_path):
     assert mkv_file.stat().st_ino == inodo_antes
     assert mkv_file.read_bytes() == b"contenido original"
     conn.close()
+
+
+# ---------------------------------------------------------------------------
+# El plan dice si la ordenación está activada, para que la tabla pueda avisar
+# ---------------------------------------------------------------------------
+
+def _plan_con_reorden(tmp_path, activado: bool) -> dict:
+    mkv_file = tmp_path / "Peli.2024.mkv"
+    mkv_file.write_bytes(b"fake mkv")
+    conn = _make_conn(tmp_path)
+    item_id = _insert_library_item(conn, prepared_path=None, path=str(mkv_file))
+    with patch("emuwarez_uploadrr.services.mkv_remux.check_mkvmerge_available") as mock_chk, \
+         patch("emuwarez_uploadrr.services.mkv_remux.read_tracks_json") as mock_read, \
+         patch("emuwarez_uploadrr.services.mkv_remux.reorder_tracks_enabled") as mock_reorder:
+        mock_chk.return_value = {"available": True, "path": "/usr/bin/mkvmerge"}
+        mock_read.return_value = {"ok": True, "data": _SAMPLE_MKV_JSON}
+        mock_reorder.return_value = activado
+        from emuwarez_uploadrr.services.mkv_remux import build_remux_plan
+        return build_remux_plan(item_id, conn=conn)
+
+
+@pytest.mark.parametrize("activado", [True, False])
+def test_el_plan_dice_si_la_ordenacion_esta_activada(tmp_path, activado):
+    """La tabla de "Ver Pistas" enseña el orden que va a quedar, así que con la
+    ordenación apagada enseña el ACTUAL — y sin este dato nada distingue "ya
+    estaban bien" de "no se van a mover". La interfaz lo usa para avisar."""
+    assert _plan_con_reorden(tmp_path, activado)["reorder_enabled"] is activado
+
+
+def test_apagada_el_plan_conserva_el_orden_del_archivo(tmp_path):
+    """Que el aviso diga la verdad: apagada, las pistas se quedan donde están.
+
+    Es lo que hace que el aviso valga la pena — el castellano NO sube al primer
+    puesto, aunque la tabla siga llamándose "Ordenación y Nombre de las Pistas".
+    """
+    plan = _plan_con_reorden(tmp_path, False)
+    assert plan["order_changed"] is False
+    assert [t["id"] for t in plan["ordered_tracks"]] == [t["id"] for t in plan["tracks"]]
+
+
+def test_activada_el_plan_si_reordena(tmp_path):
+    """Y el contraste: con ella puesta el orden sí cambia, así que no hay nada
+    que avisar. Si este test y el de arriba dieran lo mismo, el aviso sobraría
+    o mentiría."""
+    plan = _plan_con_reorden(tmp_path, True)
+    assert plan["order_changed"] is True

@@ -649,8 +649,9 @@ def build_remux_plan(library_item_id: int, conn=None) -> dict:
         if not read.get("ok"):
             return {**base, "status": "blocked", "errors": [f"mkvmerge -J falló: {read.get('error')}"]}
 
+        reordena = reorder_tracks_enabled(conn)
         plan = build_track_plan(read["data"], known_resolution=_get_known_resolution(library_item_id, conn),
-                                reorder=reorder_tracks_enabled(conn))
+                                reorder=reordena)
         if not plan["tracks"]:
             return {**base, "status": "blocked", "errors": ["mkvmerge no encontró pistas en el archivo."]}
 
@@ -670,6 +671,11 @@ def build_remux_plan(library_item_id: int, conn=None) -> dict:
             "tracks": plan["tracks"],
             "ordered_tracks": plan["ordered_tracks"],
             "order_changed": plan["order_changed"],
+            # Para que la tabla pueda avisar de que solo va a renombrar. Sin
+            # esto la vista previa es correcta pero se lee mal: enseña las
+            # pistas en su orden actual y no hay nada que distinga "ya están
+            # bien" de "no se van a tocar porque está desactivado".
+            "reorder_enabled": reordena,
             "command_preview": _preview_command(args),
         }
     finally:

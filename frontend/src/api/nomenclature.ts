@@ -186,6 +186,9 @@ export interface TrackRemuxPreview {
   using_prepared_copy?: boolean
   mkvmerge_available?: boolean
   order_changed?: boolean
+  /** Si el ajuste "Reordenar pistas" está activo. Con él apagado la tabla
+   *  enseña las pistas en su orden actual, porque es el que van a conservar. */
+  reorder_enabled?: boolean
   tracks?: TrackRemuxTrack[]
   ordered_tracks?: TrackRemuxTrack[]
   command_preview?: string | null

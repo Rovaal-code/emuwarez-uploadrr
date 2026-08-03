@@ -179,6 +179,31 @@ export function mergeRemuxTracks(
   })
 }
 
+/**
+ * Avisa, junto al título de "Ver Pistas", de que la ordenación está apagada.
+ *
+ * Sin esto la tabla es correcta pero se lee mal: con "Reordenar pistas"
+ * desactivado enseña las pistas en su orden ACTUAL, porque es el que van a
+ * conservar, y nada distingue "ya estaban bien" de "no se van a mover". Quien
+ * abre esta ventana justo para comprobar el orden se lleva la impresión
+ * contraria a la real.
+ *
+ * Solo con `false` explícito: `undefined` significa que el plan no llegó a
+ * calcularse (falta mkvmerge, archivo inaccesible), y ahí no se sabe.
+ */
+function AvisoOrdenApagada({ plan }: { plan?: { reorder_enabled?: boolean } | null }) {
+  if (plan?.reorder_enabled !== false) return null
+  return (
+    <span style={{
+      fontSize: 11, fontWeight: 500, color: '#f59e0b',
+      background: 'rgba(245,158,11,0.14)', border: '1px solid rgba(245,158,11,0.35)',
+      borderRadius: 4, padding: '2px 8px', whiteSpace: 'nowrap',
+    }}>
+      Ordenación de pistas desactivada en Configuración
+    </span>
+  )
+}
+
 // Track reorder/rename table — the single-file "Ver Pistas" card renders it
 // editable (inputs); the season target's per-episode accordion renders it
 // read-only (editable=false — no manual per-track overrides for seasons).
@@ -2000,7 +2025,10 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                   <div className="modal-overlay" onClick={() => setShowRemuxCard(false)}>
                     <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 780 }}>
                       <div className="modal-header">
-                        <h2 className="modal-title">Ordenación y Nombre de las Pistas por Capítulo</h2>
+                        <h2 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                          Ordenación y Nombre de las Pistas por Capítulo
+                          <AvisoOrdenApagada plan={seasonRemux?.[0]?.plan} />
+                        </h2>
                         <button className="modal-close" onClick={() => setShowRemuxCard(false)}>✕</button>
                       </div>
                       <div className="modal-body">
@@ -2193,7 +2221,10 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                   <div className="modal-overlay" onClick={() => setShowRemuxCard(false)}>
                     <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 780 }}>
                       <div className="modal-header">
-                        <h2 className="modal-title">Ordenación y Nombre de las Pistas</h2>
+                        <h2 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                          Ordenación y Nombre de las Pistas
+                          <AvisoOrdenApagada plan={remuxPreview} />
+                        </h2>
                         <button className="modal-close" onClick={() => setShowRemuxCard(false)}>✕</button>
                       </div>
                       <div className="modal-body">

@@ -887,7 +887,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
       <>
         <div className="page-header">
           <div>
-            <div className="page-title">Peticiones eMuwarez</div>
+            <div className="page-title">Peticiones</div>
             <div className="page-subtitle">
               {total > 0 ? `${total} peticiones` : 'Peticiones activas cruzadas con tu biblioteca local'}
             </div>

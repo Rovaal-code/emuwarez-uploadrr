@@ -12,6 +12,7 @@ Stored as JSON in the setting `library.path_mappings`:
 from __future__ import annotations
 
 import json
+import os
 
 from ..database import connect, db_path, get_setting_canonical
 
@@ -52,3 +53,39 @@ def resolve_local_path(path: str | None, conn=None) -> str | None:
         if path.startswith(frm + "/"):
             return to + path[len(frm):]
     return path
+
+
+def ruta_de_lectura(item: dict, conn=None) -> str | None:
+    """De qué fichero se lee este elemento: `prepared_path` si SIGUE EXISTIENDO,
+    y si no `path`. Devuelve la ruta tal como está guardada, sin mapear.
+
+    Las dos columnas quieren decir cosas distintas. `path` es lo que dice
+    Radarr/Sonarr y la sincronización lo refresca en cada pasada. `prepared_path`
+    es dónde dejó el fichero la última subida, y NADIE lo refresca: no lo toca la
+    sincronización ni se borra al terminar.
+
+    Mientras las dos apuntan al mismo sitio da igual cuál se lea, y por eso el
+    `prepared_path or path` de siempre parecía inofensivo. Deja de serlo en
+    cuanto el fichero se mueve por fuera:
+
+        el usuario deshace a mano el renombrado de la carpeta que hacía la
+        versión vieja, Sonarr vuelve a escanear, `path` queda bien y
+        `prepared_path` se queda apuntando a una carpeta que ya no existe.
+        Como iba primero, ganaba, y subir contestaba "Archivo no accesible"
+        con una ruta que la ficha del contenido enseñaba correcta
+        (The Tudors S03, 2026-08-04).
+
+    Igual de roto queda si borras a mano los enlaces de la carpeta de subidas,
+    o si el fichero se vuelve a descargar y Sonarr lo deja en otro sitio.
+
+    Preferir el que existe, y no el que se escribió antes, se arregla solo en
+    todos esos casos: con la subida a medias `prepared_path` está vivo y manda,
+    y en cuanto muere se vuelve solo a la biblioteca, que es lo que la
+    sincronización mantiene al día.
+    """
+    preparada = item.get("prepared_path")
+    if preparada:
+        local = resolve_local_path(preparada, conn=conn) or preparada
+        if os.path.exists(local):
+            return preparada
+    return item.get("path") or preparada

@@ -308,7 +308,7 @@ def _library_disk_path(conn) -> str:
 
 
 def _resolve_library_disk_path(conn) -> str:
-    from .path_mapping import resolve_local_path
+    from .path_mapping import resolve_local_path, ruta_de_lectura
     try:
         rows = conn.execute(
             "SELECT prepared_path, path FROM library_items "
@@ -318,7 +318,7 @@ def _resolve_library_disk_path(conn) -> str:
         rows = []
     path = str(CONFIG_DIR)
     for row in rows:
-        raw = row["prepared_path"] or row["path"]
+        raw = ruta_de_lectura(dict(row), conn)
         local = resolve_local_path(raw, conn)
         if not local:
             continue

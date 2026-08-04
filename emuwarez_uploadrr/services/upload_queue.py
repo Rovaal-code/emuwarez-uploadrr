@@ -704,10 +704,11 @@ def _run_queued_job(job_id: int) -> None:
     from .nomenclature import apply_nomenclature_proposal, CONFIRMATION_TOKEN as NOM_TOKEN
     from .mkv_remux import (
         build_remux_plan, apply_remux, check_mkvmerge_available, read_tracks_json,
+        modo_pistas, toca_el_fichero,
         REMUX_CONFIRMATION_TOKEN as REMUX_TOKEN,
     )
     from .media_info_service import mediainfo_available, read_media_info_summary
-    from .path_mapping import resolve_local_path
+    from .path_mapping import resolve_local_path, ruta_de_lectura
 
     # Full serialization of "Subidas en paralelo": a queued job takes its
     # concurrency slot HERE, before any preprocessing (verificación
@@ -778,12 +779,8 @@ def _run_queued_job(job_id: int) -> None:
             if not _check_season_integrity(job_id, item_id, conn=conn):
                 return
         else:
-            # Prefer prepared_path over the raw path — same convention
-            # mkv_remux.py/mkv_title.py already use: once nomenclature has
-            # been applied before, `path` may be stale (the original file
-            # was renamed/hardlinked away) while prepared_path is the real
-            # current file.
-            candidate_path = item.get("prepared_path") or item.get("path")
+            # Cuál de las dos rutas se lee: path_mapping.py::ruta_de_lectura.
+            candidate_path = ruta_de_lectura(item)
             local_path = resolve_local_path(candidate_path) or candidate_path
             if not local_path or not os.path.isfile(local_path):
                 _fail(job_id, f"El archivo no es accesible: {local_path or candidate_path or '(sin ruta)'}")
@@ -878,8 +875,19 @@ def _run_queued_job(job_id: int) -> None:
                               stream="system", conn=conn)
             return
         mark_phase_started(job_id, "remux")
-        append_upload_log(job_id, "info", "Reordenando/renombrando pistas…", stream="system", conn=conn)
-        if is_season:
+        modo_de_pistas = modo_pistas(conn)
+        if not toca_el_fichero(modo_de_pistas):
+            # "Ninguno": el archivo se sube tal cual. Se marca la fase como
+            # hecha en vez de saltársela sin más, para que el detalle del
+            # trabajo diga POR QUÉ no se tocó nada — una fase que desaparece se
+            # lee como si hubiera fallado algo.
+            append_upload_log(
+                job_id, "info",
+                "Renombrar/Ordenar pistas está en Ninguno: el archivo se sube sin tocar.",
+                stream="system", conn=conn,
+            )
+            update_phase_progress(job_id, "remux", 100)
+        elif is_season:
             ok, episodes_snapshot = _run_season_remux(job_id, item_id, conn=conn)
             if not ok:
                 return
@@ -966,9 +974,8 @@ def _run_queued_job(job_id: int) -> None:
             # prepared_path, y el `item` de antes es de antes de eso.
             item_final = row_to_dict(
                 conn.execute("SELECT * FROM library_items WHERE id = ?", (item_id,)).fetchone()) or {}
-            fichero = resolve_local_path(
-                item_final.get("prepared_path") or item_final.get("path"), conn=conn
-            ) or item_final.get("prepared_path") or item_final.get("path")
+            elegida = ruta_de_lectura(item_final, conn=conn)
+            fichero = resolve_local_path(elegida, conn=conn) or elegida
             preparada = preparar_fichero_suelto(fichero)
             destino_uploadrr = preparada.get("ruta")
             que = "el archivo"

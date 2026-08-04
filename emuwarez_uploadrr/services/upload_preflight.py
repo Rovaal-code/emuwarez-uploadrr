@@ -134,10 +134,14 @@ def build_uploadrr_command_preview(
         media_type = library_item.get("item_type") or "movie"
         tmdb_id = library_item.get("tmdb_id")
         resolution = (proposal or {}).get("resolution") or library_item.get("resolution") or ""
-        # Prefer prepared_path (nomenclature applied) over original path
-        has_prepared = bool(library_item.get("prepared_path"))
-        prepared_path = library_item.get("prepared_path") or ""
-        active_path = prepared_path or library_item.get("path") or ""
+        # Cuál de las dos rutas se lee: path_mapping.py::ruta_de_lectura.
+        from .path_mapping import ruta_de_lectura
+        active_path = ruta_de_lectura(library_item) or ""
+        # Cuál de las dos ha salido, y no "hay prepared_path guardado": lo que
+        # se informa es de dónde se está leyendo de verdad, que ya no es lo
+        # mismo desde que una ruta preparada muerta cede el paso a la de la
+        # biblioteca.
+        has_prepared = bool(active_path) and active_path == library_item.get("prepared_path")
         season = (proposal or {}).get("season") or library_item.get("season")
         episode = (proposal or {}).get("episode") or library_item.get("episode")
 

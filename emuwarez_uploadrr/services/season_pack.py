@@ -943,7 +943,7 @@ def get_season_episode_mediainfo(season_id: int, conn=None) -> dict:
     conn = conn or connect()
     try:
         from .media_info_service import build_mediainfo_report
-        from .path_mapping import resolve_local_path
+        from .path_mapping import resolve_local_path, ruta_de_lectura
         from .source_assistant import build_editable_nomenclature_fields
 
         all_episodes = _get_season_episodes(season_id, conn=conn)
@@ -963,15 +963,12 @@ def get_season_episode_mediainfo(season_id: int, conn=None) -> dict:
                 available[0]["id"], conn=conn,
             ).get("source_comparison")
         for ep in available:
-            # Prefer prepared_path over the raw path — same convention
-            # nomenclature.py/mkv_remux.py/mkv_title.py already follow: once
-            # nomenclature has been applied before (e.g. a prior retry),
-            # `path` may be stale (still the pre-rename name) while
-            # prepared_path is the real current file. Reading raw `path`
-            # here showed a stale Source (e.g. "WEBRIP" from the original
-            # name) that disagreed with the actually-applied name (e.g.
-            # "BluRay", from prepared_path) shown everywhere else.
-            candidate_path = ep.get("prepared_path") or ep.get("path")
+            # Cuál de las dos rutas se lee: path_mapping.py::ruta_de_lectura.
+            # Aquí importa que salga la del reintento y no la de antes de
+            # renombrar: leyendo la vieja, la columna Source enseñaba un valor
+            # ("WEBRIP", del nombre original) que no cuadraba con el nombre ya
+            # aplicado ("BluRay") que se veía en todos los demás sitios.
+            candidate_path = ruta_de_lectura(ep, conn=conn)
             local_path = resolve_local_path(candidate_path, conn=conn) or candidate_path
             # radarr_source: without it, the Source row's "eMuwarez" column
             # skips straight from "nombre del archivo" to the bitrate tool's

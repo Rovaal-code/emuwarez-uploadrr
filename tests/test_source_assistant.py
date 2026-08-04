@@ -261,3 +261,71 @@ def test_source_agreement(name, radarr, tool, agree, por_que):
     conozco uno"."""
     from emuwarez_uploadrr.services.source_assistant import source_values_agree
     assert source_values_agree(name, radarr, tool) is agree, por_que
+
+
+def test_una_ruta_preparada_muerta_no_bloquea_la_nomenclatura(tmp_path):
+    """El caso de The Tudors S03 (2026-08-04).
+
+    La versión vieja renombraba la carpeta real de Sonarr al título del
+    release. El usuario deshizo ese renombrado a mano, actualizó en Sonarr y
+    sincronizó: `path` quedó apuntando al fichero de verdad y `prepared_path`
+    a la carpeta renombrada, que ya no existe. Como `prepared_path` iba
+    primero, subir contestaba "Archivo no accesible" con una ruta que la ficha
+    del contenido enseñaba correcta.
+
+    La regla de cuál se lee vive ahora en path_mapping.py::ruta_de_lectura
+    (con su propio test), pero hace falta comprobarlo TAMBIÉN aquí: el fallo
+    no estaba en la regla sino en que este sitio tenía su propia copia.
+    """
+    conn = _make_conn(tmp_path)
+    item_id = _accessible_item(conn, tmp_path, title="The Tudors", tmdb_id="1399")
+    muerta = tmp_path / "Los Tudor S03 2007 1080p BluRay x264-CCX94" / "cap.mkv"
+    conn.execute("UPDATE library_items SET prepared_path = ? WHERE id = ?",
+                 (str(muerta), item_id))
+    conn.commit()
+    assert not muerta.exists()
+
+    with patch(
+        "emuwarez_uploadrr.services.source_assistant._get_tmdb_available_providers_raw",
+        return_value=[],
+    ), patch(
+        "emuwarez_uploadrr.services.media_info_service.build_mediainfo_report",
+        return_value=_MI_OK,
+    ):
+        from emuwarez_uploadrr.services.source_assistant import build_editable_nomenclature_fields
+        result = build_editable_nomenclature_fields(item_id, conn=conn)
+
+    assert not result.get("blocked"), result.get("error")
+    assert "fields" in result
+
+
+def test_con_la_ruta_preparada_viva_se_sigue_leyendo_de_ella(tmp_path):
+    """La otra mitad: durante una subida, los enlaces de la carpeta de subidas
+    son el fichero bueno y tienen que seguir mandando."""
+    conn = _make_conn(tmp_path)
+    item_id = _accessible_item(conn, tmp_path, title="Dune", tmdb_id="438631")
+    viva = tmp_path / "uploads" / "Dune.2021.1080p.mkv"
+    viva.parent.mkdir()
+    viva.write_bytes(b"x" * 2048)
+    conn.execute("UPDATE library_items SET prepared_path = ? WHERE id = ?",
+                 (str(viva), item_id))
+    conn.commit()
+
+    leidos = []
+
+    def espia(path, *a, **k):
+        leidos.append(path)
+        return _MI_OK
+
+    with patch(
+        "emuwarez_uploadrr.services.source_assistant._get_tmdb_available_providers_raw",
+        return_value=[],
+    ), patch(
+        "emuwarez_uploadrr.services.media_info_service.build_mediainfo_report",
+        side_effect=espia,
+    ):
+        from emuwarez_uploadrr.services.source_assistant import build_editable_nomenclature_fields
+        result = build_editable_nomenclature_fields(item_id, conn=conn)
+
+    assert not result.get("blocked"), result.get("error")
+    assert leidos and str(viva) in leidos[0], leidos

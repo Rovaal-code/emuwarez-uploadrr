@@ -238,8 +238,9 @@ def validate_nomenclature_preconditions(library_item: dict, conn=None) -> dict:
     if local_status in ("Faltante", "Missing", "missing", "faltante"):
         errors.append("El ítem no está disponible localmente (faltante).")
 
-    # Prefer prepared_path over the raw path — see build_nomenclature_proposal.
-    path = library_item.get("prepared_path") or library_item.get("path")
+    # Cuál de las dos rutas se lee: path_mapping.py::ruta_de_lectura.
+    from .path_mapping import ruta_de_lectura
+    path = ruta_de_lectura(library_item)
     if not path:
         errors.append("El ítem no tiene ruta de archivo registrada.")
     else:
@@ -320,12 +321,9 @@ def build_nomenclature_proposal(
         media_type = item.get("item_type") or "movie"
         tmdb_id = item.get("tmdb_id")
         imdb_id = item.get("imdb_id")
-        # Prefer prepared_path over the raw path — same convention
-        # source_assistant.py/mkv_remux.py already use: once nomenclature has
-        # been applied before, `path` may be stale (e.g. overwritten by a
-        # later Radarr/Sonarr sync) while prepared_path is the real current
-        # file on disk.
-        path = item.get("prepared_path") or item.get("path")
+        # Cuál de las dos rutas se lee: path_mapping.py::ruta_de_lectura.
+        from .path_mapping import ruta_de_lectura
+        path = ruta_de_lectura(item, conn=conn)
 
         # For episodes/seasons the eMuwarez title must be the SERIES name
         # (not the per-episode title Sonarr stores, e.g. "Serie S01E01 -
@@ -592,11 +590,11 @@ def _refresh_media_info_from_real_file(item: dict, *, conn) -> None:
     Phase 6A values (or lack thereof) are always a safe fallback."""
     from .media_info_service import read_media_info_summary
 
-    # Same prepared_path-first rule as build_nomenclature_proposal — this
-    # function's whole job is correcting stale Radarr/Sonarr-reported values
-    # with a real file read, so it must never read from a `path` that itself
-    # went stale after a prior successful rename.
-    path = item.get("prepared_path") or item.get("path")
+    # Cuál de las dos rutas se lee: path_mapping.py::ruta_de_lectura. Esta
+    # función existe para corregir con el fichero real lo que dice
+    # Radarr/Sonarr, así que leer de una ruta muerta la deja sin sentido.
+    from .path_mapping import ruta_de_lectura
+    path = ruta_de_lectura(item)
     if not path:
         return
     real = read_media_info_summary(path)
@@ -652,6 +650,7 @@ def build_nomenclature_apply_plan(
     """Build a dry-run plan for applying nomenclature — renames the original
     file in place. Never modifies the filesystem."""
     from .filesystem_apply import build_safe_rename_plan
+    from .path_mapping import ruta_de_lectura
     import os as _os
 
     own = conn is None
@@ -705,7 +704,7 @@ def build_nomenclature_apply_plan(
                 "errors": ["La propuesta de nomenclatura está bloqueada."] + prop_errors,
                 "warnings": [],
                 "proposal": proposal,
-                "source_path": item.get("prepared_path") or item.get("path"),
+                "source_path": ruta_de_lectura(item, conn=conn),
                 "destination_path": None,
             }
 
@@ -720,10 +719,14 @@ def build_nomenclature_apply_plan(
         # rename read from — and compute a fresh proposal against — a file
         # that no longer exists under that name.
         from .path_mapping import resolve_local_path
+        elegida = ruta_de_lectura(item, conn=conn)
+        source_path = (resolve_local_path(elegida, conn=conn) or elegida) if elegida else elegida
+        # `path` se guarda SIEMPRE en el convenio de Radarr/Sonarr, así que la
+        # ruta que se anotará después del renombrado sale de ahí y no de la
+        # que se acabe leyendo: leyendo de la carpeta de subidas, apuntar
+        # `path` a esa carpeta dejaría la fila mirando a un enlace en vez de a
+        # la biblioteca.
         raw_source = item.get("path")
-        source_path = item.get("prepared_path") or (
-            (resolve_local_path(raw_source, conn=conn) or raw_source) if raw_source else raw_source
-        )
         proposed_filename = (
             proposal.get("proposed_filename")
             or proposal.get("proposed_title")

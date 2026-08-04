@@ -453,14 +453,9 @@ def build_editable_nomenclature_fields(
         # accessibility up front (applying the remote path mapping) and block
         # instead of producing a misleading name with empty technical fields.
         #
-        # Prefer prepared_path over the raw path — same convention
-        # mkv_remux.py/mkv_title.py already use: once nomenclature has been
-        # applied, `path` may be stale (the original file was renamed/
-        # hardlinked away) while prepared_path is the real current file.
-        from .path_mapping import resolve_local_path
-        raw_path = item.get("path")
-        prepared_path = item.get("prepared_path")
-        candidate_path = prepared_path or raw_path
+        # Cuál de las dos rutas se lee: path_mapping.py::ruta_de_lectura.
+        from .path_mapping import resolve_local_path, ruta_de_lectura
+        candidate_path = ruta_de_lectura(item, conn=conn)
         local_path = resolve_local_path(candidate_path, conn=conn) or candidate_path
         if not (local_path and os.path.isfile(local_path)):
             return {

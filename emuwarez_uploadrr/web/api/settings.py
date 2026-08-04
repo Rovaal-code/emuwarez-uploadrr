@@ -22,6 +22,7 @@ from ...services.settings import get_setting_canonical, mask_secret, set_setting
 from ...services.uploadrr_contract import RUNTIME_EMU, RUNTIME_GENERIC, DEFAULT_TIMEOUT_SECONDS, DEFAULT_ALLOWED_ROOTS
 from ...services.source_assistant import EMU_PROVIDERS
 from ...services.notification_center import EVENT_TYPES, channel_events, ui_enabled
+from ...services.mkv_remux import MODOS_PISTAS, modo_pistas, reordena
 from ...services.upload_execution import (
     UPLOAD_MAX_CONCURRENT_SETTING_KEY, UPLOAD_MAX_CONCURRENT_CHOICES, get_upload_max_concurrent,
 )
@@ -91,8 +92,9 @@ class SettingsResponse(BaseModel):
     source_engine_enabled: bool = False
     # El logo del contenido en la descripción. Se sube por defecto.
     emu_add_logo: bool = True
-    # Reordenar pistas. Apagado por defecto.
-    remux_reorder_tracks: bool = False
+    # Qué se le hace a las pistas: uno de mkv_remux.MODOS_PISTAS. De fábrica
+    # solo se renombran, que es lo barato (ver mkv_remux.MODO_PISTAS_POR_DEFECTO).
+    remux_track_mode: str = "solo_renombrar"
     recent_activity_limit: int = 100
     upload_max_concurrent: int = 1
     # Remote path mappings: [{"from": "/data/media", "to": "/mnt/emu-media"}]
@@ -137,7 +139,7 @@ class SettingsUpdateRequest(BaseModel):
     series_ignore_specials: Optional[bool] = None
     source_engine_enabled: Optional[bool] = None
     emu_add_logo: Optional[bool] = None
-    remux_reorder_tracks: Optional[bool] = None
+    remux_track_mode: Optional[str] = None
     recent_activity_limit: Optional[int] = None
     upload_max_concurrent: Optional[int] = None
     path_mappings: Optional[list[dict]] = None
@@ -296,7 +298,7 @@ def _build_response(conn) -> SettingsResponse:
         series_ignore_specials=(get_setting_canonical(conn, "series.ignore_specials") or "true") != "false",
         source_engine_enabled=get_setting_canonical(conn, "source_engine.enabled") == "true",
         emu_add_logo=get_setting_canonical(conn, "emu.add_logo") != "false",
-        remux_reorder_tracks=get_setting_canonical(conn, "remux.reorder_tracks") == "true",
+        remux_track_mode=modo_pistas(conn),
         recent_activity_limit=_read_recent_activity_limit(conn),
         upload_max_concurrent=get_upload_max_concurrent(conn),
         path_mappings=_read_path_mappings(conn),
@@ -464,8 +466,19 @@ def update_settings(
             set_setting(conn, "source_engine.enabled", "true" if body.source_engine_enabled else "false")
         if body.emu_add_logo is not None:
             set_setting(conn, "emu.add_logo", "true" if body.emu_add_logo else "false")
-        if body.remux_reorder_tracks is not None:
-            set_setting(conn, "remux.reorder_tracks", "true" if body.remux_reorder_tracks else "false")
+        if body.remux_track_mode is not None:
+            if body.remux_track_mode not in MODOS_PISTAS:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"remux_track_mode debe ser uno de {list(MODOS_PISTAS)}")
+            set_setting(conn, "remux.track_mode", body.remux_track_mode)
+            # El ajuste viejo de sí/no se deja escrito y a la par. modo_pistas()
+            # ya no lo mira cuando existe el nuevo, pero sigue siendo lo que lee
+            # cualquier instalación que se vuelva atrás a una versión anterior,
+            # y encontrárselo congelado en el valor de antes sería peor que
+            # traducirlo.
+            set_setting(conn, "remux.reorder_tracks",
+                        "true" if reordena(body.remux_track_mode) else "false")
 
         if body.recent_activity_limit is not None:
             if body.recent_activity_limit not in _RECENT_ACTIVITY_CHOICES:

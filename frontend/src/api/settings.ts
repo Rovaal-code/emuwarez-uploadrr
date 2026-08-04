@@ -1,4 +1,5 @@
 import { api } from './client'
+import type { ModoPistas } from '../utils/modoPistas'
 
 export type UploadrrRuntimeType = 'uploadrr_emu' | 'uploadrr_generic'
 
@@ -11,7 +12,7 @@ export interface SettingsData {
   qbit_tag: string | null
   source_engine_enabled: boolean
   emu_add_logo: boolean
-  remux_reorder_tracks: boolean
+  remux_track_mode: ModoPistas
   qbit_username: string | null
   qbit_password_configured: boolean
   qbit_configured: boolean
@@ -55,7 +56,7 @@ export interface SettingsUpdatePayload {
   qbit_tag?: string
   source_engine_enabled?: boolean
   emu_add_logo?: boolean
-  remux_reorder_tracks?: boolean
+  remux_track_mode?: ModoPistas
   qbit_username?: string
   qbit_password?: string
   image_hosts_enabled?: string[]

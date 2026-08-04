@@ -30,6 +30,7 @@ import { getMe, changeCredentials } from '../api/auth'
 import { useTooltip, HoverTitle } from '../components/Tooltip'
 import { isValidHttpUrl } from '../utils/validation'
 import { getUploadConcurrencyEstimate, type UploadConcurrencyEstimate } from '../api/system'
+import { MODOS_PISTAS, MODO_PISTAS_POR_DEFECTO, normalizarModo, type ModoPistas } from '../utils/modoPistas'
 
 type Tab = 'config' | 'notifications' | 'diagnostics' | 'backup' | 'maintenance'
 
@@ -52,14 +53,14 @@ function formatBytes(n: number) {
 // know whether there are unsaved changes. Array order is fixed on purpose.
 function configSignature(v: {
   tag: string; providerOrder: string[]; region: string
-  emuUsername: string; ignoreSpecials: boolean; sourceEngine: boolean; addLogo: boolean; reorderTracks: boolean
+  emuUsername: string; ignoreSpecials: boolean; sourceEngine: boolean; addLogo: boolean; modoDePistas: ModoPistas
   recentLimit: number; uploadMaxConcurrent: number; qbitUrl: string; qbitTag: string; qbitUser: string
   imgEnabled: string[]; allowedRoots: string
   newKey?: string; newEmuKey?: string; qbitPass?: string
 }): string {
   return JSON.stringify([
     v.tag, v.providerOrder, v.region, v.emuUsername,
-    v.ignoreSpecials, v.sourceEngine, v.addLogo, v.reorderTracks, v.recentLimit, v.uploadMaxConcurrent, v.qbitUrl, v.qbitTag, v.qbitUser, v.imgEnabled, v.allowedRoots,
+    v.ignoreSpecials, v.sourceEngine, v.addLogo, v.modoDePistas, v.recentLimit, v.uploadMaxConcurrent, v.qbitUrl, v.qbitTag, v.qbitUser, v.imgEnabled, v.allowedRoots,
     v.newKey ?? '', v.newEmuKey ?? '', v.qbitPass ?? '',
   ])
 }
@@ -188,7 +189,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   // El logo del contenido en la descripción: se sube por defecto.
   const [addLogo, setAddLogo] = useState(true)
   // Reordenar pistas: apagado por defecto, reescribe el contenedor entero.
-  const [reorderTracks, setReorderTracks] = useState(false)
+  const [modoDePistas, setModoDePistas] = useState<ModoPistas>(MODO_PISTAS_POR_DEFECTO)
   const [recentLimit, setRecentLimit] = useState(100)
   const [uploadMaxConcurrent, setUploadMaxConcurrent] = useState(1)
   const [testingConcurrency, setTestingConcurrency] = useState(false)
@@ -223,7 +224,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const [baseline, setBaseline] = useState('')
   const currentSig = configSignature({
     tag, providerOrder, region, emuUsername,
-    ignoreSpecials, sourceEngine, addLogo, reorderTracks, recentLimit, uploadMaxConcurrent, qbitUrl, qbitTag, qbitUser, imgEnabled, allowedRoots,
+    ignoreSpecials, sourceEngine, addLogo, modoDePistas, recentLimit, uploadMaxConcurrent, qbitUrl, qbitTag, qbitUser, imgEnabled, allowedRoots,
     newKey, newEmuKey, qbitPass,
   })
   const dirty = baseline !== '' && currentSig !== baseline
@@ -278,7 +279,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         setIgnoreSpecials(s.series_ignore_specials ?? true)
         setSourceEngine(s.source_engine_enabled ?? false)
         setAddLogo(s.emu_add_logo ?? true)
-        setReorderTracks(s.remux_reorder_tracks ?? false)
+        setModoDePistas(normalizarModo(s.remux_track_mode))
         setRecentLimit(s.recent_activity_limit ?? 100)
         setUploadMaxConcurrent(s.upload_max_concurrent ?? 1)
         setQbitUrl(s.qbit_url ?? '')
@@ -290,7 +291,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           tag: s.default_release_tag, providerOrder: s.provider_priority_order,
           region: s.tmdb_watch_region,
           emuUsername: s.emu_username ?? '',
-          ignoreSpecials: s.series_ignore_specials ?? true, sourceEngine: s.source_engine_enabled ?? false, addLogo: s.emu_add_logo ?? true, reorderTracks: s.remux_reorder_tracks ?? false,
+          ignoreSpecials: s.series_ignore_specials ?? true, sourceEngine: s.source_engine_enabled ?? false, addLogo: s.emu_add_logo ?? true, modoDePistas: normalizarModo(s.remux_track_mode),
           recentLimit: s.recent_activity_limit ?? 100,
           uploadMaxConcurrent: s.upload_max_concurrent ?? 1,
           qbitUrl: s.qbit_url ?? '', qbitTag: s.qbit_tag ?? '', qbitUser: s.qbit_username ?? '',
@@ -385,7 +386,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         series_ignore_specials: ignoreSpecials,
         source_engine_enabled: sourceEngine,
         emu_add_logo: addLogo,
-        remux_reorder_tracks: reorderTracks,
+        remux_track_mode: modoDePistas,
         recent_activity_limit: recentLimit,
         upload_max_concurrent: uploadMaxConcurrent,
         qbit_url: qbitUrl.trim(),
@@ -420,7 +421,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         tag: updated.default_release_tag, providerOrder: updated.provider_priority_order,
         region: updated.tmdb_watch_region,
         emuUsername: updated.emu_username ?? '',
-        ignoreSpecials: updated.series_ignore_specials ?? true, sourceEngine: updated.source_engine_enabled ?? false, addLogo: updated.emu_add_logo ?? true, reorderTracks: updated.remux_reorder_tracks ?? false,
+        ignoreSpecials: updated.series_ignore_specials ?? true, sourceEngine: updated.source_engine_enabled ?? false, addLogo: updated.emu_add_logo ?? true, modoDePistas: normalizarModo(updated.remux_track_mode),
         recentLimit: updated.recent_activity_limit ?? 100,
         uploadMaxConcurrent: updated.upload_max_concurrent ?? 1,
         qbitUrl: updated.qbit_url ?? '', qbitTag: updated.qbit_tag ?? '', qbitUser: updated.qbit_username ?? '',
@@ -860,12 +861,12 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         </h3>
         <div className="form-group">
           <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            Reordenar pistas
-            <InfoIcon text="Activado, las pistas se colocan en orden (Español, Català, Inglés, resto) además de renombrarse, y eso obliga a reescribir el contenedor entero: sustituye el archivo por uno nuevo, así que rompe cualquier hardlink que compartiera con tu cliente de torrent (el torrent sigue sembrando bien, pero pasas a ocupar el doble en disco) y tarda en proporción al tamaño. Desactivado, las pistas se quedan donde están y solo se renombran y se marca la predeterminada, con las mismas reglas, editando la cabecera del archivo en el sitio: es casi instantáneo por grande que sea, no duplica nada y conserva los hardlinks." />
+            Renombrar/Ordenar pistas
+            <InfoIcon text="Qué se le hace a las pistas de audio y subtítulos antes de subir. Renombrar les pone nombre siguiendo las reglas de eMuwarez y cambia solo la cabecera del archivo: es casi instantáneo por grande que sea, no duplica nada y conserva los hardlinks con tu cliente de torrent. Reordenar las coloca en orden (Español, Català, Inglés, resto) y obliga a reescribir el contenedor entero, sustituyendo el archivo por uno nuevo: rompe esos hardlinks (el torrent sigue sembrando bien, pero pasas a ocupar el doble en disco) y tarda en proporción al tamaño. Con Ninguno el archivo se sube tal cual. En los tres primeros se marca la pista predeterminada, que es lo que decide qué audio suena al abrirlo." />
           </label>
-          <select className="form-input form-select" value={reorderTracks ? 'true' : 'false'} onChange={e => setReorderTracks(e.target.value === 'true')}>
-            <option value="false">No</option>
-            <option value="true">Sí</option>
+          <select className="form-input form-select" value={modoDePistas}
+                  onChange={e => setModoDePistas(normalizarModo(e.target.value))}>
+            {MODOS_PISTAS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
           </select>
         </div>        <div className="form-group">
           <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

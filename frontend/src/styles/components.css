@@ -949,19 +949,6 @@ optgroup {
   animation: btn-unsaved-pulse 1.1s ease-in-out infinite;
 }
 
-/* Un botón que reclama que lo abras la primera vez, sin ser una alarma: el
- * asistente va a renombrar las pistas por su cuenta y conviene que le eches un
- * ojo antes de subir. Late más despacio que .btn-unsaved (ahí hay cambios sin
- * guardar, aquí solo algo que mirar) y se apaga en cuanto lo abres — seguir
- * parpateando después sería ruido. */
-@keyframes btn-atencion-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0.5); }
-  50%      { box-shadow: 0 0 0 6px rgba(59,130,246,0); }
-}
-.btn-atencion {
-  animation: btn-atencion-pulse 1.8s ease-in-out infinite;
-}
-
 /* "En cola" badge (Subidas) — a smooth breathing pulse (opacity ramps up and
  * down progressively, not a hard flash) so a queued job visibly stands out
  * from a job actively "Subiendo" even though both use the same blue. */

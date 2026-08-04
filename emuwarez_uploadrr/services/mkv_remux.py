@@ -324,13 +324,52 @@ def _channels_label(n) -> str:
 # mkvmerge availability + track reading
 # ---------------------------------------------------------------------------
 
-def reorder_tracks_enabled(conn=None) -> bool:
-    """Si el remux además REORDENA las pistas o solo las renombra y marca.
+# Qué se le hace a las pistas antes de subir. Son DOS cosas independientes
+# —colocarlas en orden y ponerles nombre— y hasta ahora el ajuste solo decidía
+# la primera, dando por hecho que renombrar se hacía siempre.
+#
+# Los dos costes son muy distintos, y por eso interesa poder elegirlos por
+# separado:
+#
+#   renombrar   mkvpropedit edita la cabecera EN EL SITIO. No copia los datos,
+#               conserva el inodo y por tanto los hardlinks con el cliente de
+#               torrent. Es casi instantáneo por grande que sea el fichero.
+#   reordenar   obliga a rehacer el contenedor con mkvmerge y a sustituir el
+#               fichero (os.replace): rompe los hardlinks y tarda en
+#               proporción al tamaño.
+MODO_REORDENAR_Y_RENOMBRAR = "reordenar_y_renombrar"
+MODO_SOLO_RENOMBRAR = "solo_renombrar"
+MODO_SOLO_REORDENAR = "solo_reordenar"
+MODO_NINGUNO = "ninguno"
 
-    Apagado por defecto: reordenar obliga a reescribir el contenedor entero,
-    y eso sustituye el fichero por uno nuevo (os.replace), lo que rompe
-    cualquier hardlink que compartiera. Renombrar y marcar cambia lo mismo de
-    cara al reproductor sin obligar a ese cambio de orden.
+MODOS_PISTAS = (
+    MODO_REORDENAR_Y_RENOMBRAR,
+    MODO_SOLO_RENOMBRAR,
+    MODO_SOLO_REORDENAR,
+    MODO_NINGUNO,
+)
+
+# Lo que enseña la interfaz. Aquí y no en el frontend para que no haya dos
+# listas que se puedan desincronizar (lo vigila tests/test_copias_frontend).
+ETIQUETAS_MODO_PISTAS = {
+    MODO_REORDENAR_Y_RENOMBRAR: "Reordenar y renombrar",
+    MODO_SOLO_RENOMBRAR: "Solo renombrar",
+    MODO_SOLO_REORDENAR: "Solo reordenar",
+    MODO_NINGUNO: "Ninguno",
+}
+
+# Sigue siendo el de antes: reordenar rompe hardlinks y cuesta tiempo, así que
+# de fábrica solo se renombra.
+MODO_PISTAS_POR_DEFECTO = MODO_SOLO_RENOMBRAR
+
+
+def modo_pistas(conn=None) -> str:
+    """Qué se le hace a las pistas: uno de MODOS_PISTAS.
+
+    Lee el ajuste nuevo (`remux.track_mode`) y, si no está escrito todavía,
+    traduce el viejo de sí/no (`remux.reorder_tracks`) en vez de caer al valor
+    de fábrica: quien tuviera reordenar activado se lo encontraría apagado
+    después de actualizar, sin haber tocado nada.
     """
     own = conn is None
     if own:
@@ -338,13 +377,38 @@ def reorder_tracks_enabled(conn=None) -> bool:
         conn = _connect()
     try:
         from .settings import get_setting_canonical
-        valor = get_setting_canonical(conn, "remux.reorder_tracks")
-        return (valor or "") == "true"
+        valor = (get_setting_canonical(conn, "remux.track_mode") or "").strip()
+        if valor in MODOS_PISTAS:
+            return valor
+        viejo = get_setting_canonical(conn, "remux.reorder_tracks")
+        if viejo is not None:
+            return (MODO_REORDENAR_Y_RENOMBRAR if (viejo or "") == "true"
+                    else MODO_SOLO_RENOMBRAR)
+        return MODO_PISTAS_POR_DEFECTO
     except Exception:
-        return False
+        return MODO_PISTAS_POR_DEFECTO
     finally:
         if own:
             conn.close()
+
+
+def reordena(modo: str) -> bool:
+    return modo in (MODO_REORDENAR_Y_RENOMBRAR, MODO_SOLO_REORDENAR)
+
+
+def renombra(modo: str) -> bool:
+    return modo in (MODO_REORDENAR_Y_RENOMBRAR, MODO_SOLO_RENOMBRAR)
+
+
+def toca_el_fichero(modo: str) -> bool:
+    """Con "Ninguno" no hay nada que ejecutar y la fase se salta entera."""
+    return modo != MODO_NINGUNO
+
+
+def reorder_tracks_enabled(conn=None) -> bool:
+    """Si además de lo demás se REORDENAN las pistas. Se mantiene porque hay
+    llamadas que solo preguntan eso; el estado completo es modo_pistas()."""
+    return reordena(modo_pistas(conn))
 
 
 def check_mkvmerge_available() -> dict:
@@ -439,9 +503,17 @@ def _default_subtitle_id(audio_sorted: list[dict], subs_sorted: list[dict]) -> i
         return full["id"]
     return subs_sorted[0]["id"] if subs_sorted else None
 
-def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None, reorder: bool = True) -> dict:
+def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None,
+                     reorder: bool = True, rename: bool = True,
+                     mark_default: bool = True) -> dict:
     """Turn a parsed `mkvmerge -J` structure into a reorder+rename plan: which
     track ids go where, and what name each gets. Pure function — no I/O.
+
+    `rename=False`: cada pista conserva el nombre que ya tiene. No es lo mismo
+    que "no calcular nombres": el plan sigue teniendo su columna `new_name`
+    para que la tabla de Ver Pistas se lea igual, solo que repitiendo el actual.
+    Así lo que se enseña es exactamente lo que va a quedar en el fichero, sin
+    que la tabla tenga que saber en qué modo está.
 
     `known_resolution` (e.g. "1080p", already resolved elsewhere in the app
     from Radarr/Sonarr's quality profile) is preferred over deriving it from
@@ -527,6 +599,22 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None, reo
         # depends on what the audio offers (see _default_subtitle_id).
         t["default_after"] = (t["id"] == default_sub_id)
 
+    # Sin renombrar, cada pista se queda con el nombre que ya tiene. Se hace
+    # AQUÍ y no antes para no repetir la regla del nombre predeterminado: los
+    # `default_after` de arriba se calculan igual, porque marcar la pista no es
+    # renombrarla y se sigue haciendo en los tres modos que tocan el fichero.
+    if not rename:
+        for t in video + audio_sorted + subs_sorted:
+            t["new_name"] = t.get("current_name")
+
+    # Igual con la pista predeterminada cuando no se va a tocar el fichero
+    # ("Ninguno"): la columna tiene que enseñar la que ya trae, no la que se
+    # elegiría. Marcada la que se elegiría, la tabla prometía un cambio que
+    # nadie iba a hacer (visto en el navegador con un MKV real).
+    if not mark_default:
+        for t in video + audio_sorted + subs_sorted:
+            t["default_after"] = t["default_before"]
+
     # La tabla de "Ver Pistas" sigue el orden que va a quedar en el fichero.
     by_id = {t["id"]: t for t in (video + audio_sorted + subs_sorted)}
     ordered_tracks = [by_id[i] for i in new_order if i in by_id]
@@ -546,6 +634,16 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None, reo
         "order_changed": order_changed,
         "any_changed": any(t["changed"] for t in ordered_tracks),
     }
+
+
+def _sin_nombres(overrides: dict[int, dict] | None) -> dict[int, dict] | None:
+    """Los mismos overrides pero sin la parte del nombre, para los modos que no
+    renombran. Se quedan los `default_after`, que sí se aplican."""
+    if not overrides:
+        return overrides
+    limpios = {tid: {k: v for k, v in ov.items() if k != "new_name"}
+               for tid, ov in overrides.items()}
+    return {tid: ov for tid, ov in limpios.items() if ov}
 
 
 def apply_track_overrides(plan: dict, overrides: dict[int, dict] | None) -> dict:
@@ -676,9 +774,10 @@ def build_remux_plan(library_item_id: int, conn=None) -> dict:
         if not read.get("ok"):
             return {**base, "status": "blocked", "errors": [f"mkvmerge -J falló: {read.get('error')}"]}
 
-        reordena = reorder_tracks_enabled(conn)
+        modo = modo_pistas(conn)
         plan = build_track_plan(read["data"], known_resolution=_get_known_resolution(library_item_id, conn),
-                                reorder=reordena)
+                                reorder=reordena(modo), rename=renombra(modo),
+                                mark_default=toca_el_fichero(modo))
         if not plan["tracks"]:
             return {**base, "status": "blocked", "errors": ["mkvmerge no encontró pistas en el archivo."]}
 
@@ -698,11 +797,14 @@ def build_remux_plan(library_item_id: int, conn=None) -> dict:
             "tracks": plan["tracks"],
             "ordered_tracks": plan["ordered_tracks"],
             "order_changed": plan["order_changed"],
-            # Para que la tabla pueda avisar de que solo va a renombrar. Sin
-            # esto la vista previa es correcta pero se lee mal: enseña las
+            # Sin esto la vista previa es correcta pero se lee mal: enseña las
             # pistas en su orden actual y no hay nada que distinga "ya están
-            # bien" de "no se van a tocar porque está desactivado".
-            "reorder_enabled": reordena,
+            # bien" de "no se van a tocar porque está desactivado". La tarjeta
+            # de Ver Pistas usa `track_mode` para decir en qué modo está y para
+            # saber si la columna de nombre se puede editar.
+            "track_mode": modo,
+            "reorder_enabled": reordena(modo),
+            "rename_enabled": renombra(modo),
             "command_preview": _preview_command(args),
         }
     finally:
@@ -754,6 +856,17 @@ def apply_remux(
                 ],
             }
 
+        # "Ninguno": el fichero se sube tal cual. La cola ya se salta la fase
+        # entera, así que aquí no debería llegar nadie; se comprueba igual
+        # porque este es el único punto por el que se toca el fichero, y una
+        # llamada suelta (un reintento, el endpoint a mano) no puede saltarse
+        # el ajuste.
+        if not toca_el_fichero(modo_pistas(conn)):
+            return {**preview, "status": "skipped", "dry_run": False, "apply": False,
+                    "errors": [],
+                    "warnings": preview.get("warnings", []) + [
+                        "Renombrar/Ordenar pistas está en Ninguno: el archivo se sube sin tocar."]}
+
         prepared_path = preview["prepared_path"]
         p = Path(prepared_path)
         if not p.is_file():
@@ -764,9 +877,18 @@ def apply_remux(
         if not read.get("ok"):
             return {**preview, "status": "blocked", "dry_run": False, "apply": False,
                      "errors": [f"mkvmerge -J falló: {read.get('error')}"]}
+        modo = modo_pistas(conn)
         plan = build_track_plan(read["data"], known_resolution=_get_known_resolution(library_item_id, conn),
-                                reorder=reorder_tracks_enabled(conn))
-        plan = apply_track_overrides(plan, overrides)
+                                reorder=reordena(modo), rename=renombra(modo),
+                                mark_default=toca_el_fichero(modo))
+        # Sin renombrar, la columna del nombre sale bloqueada en la tarjeta y
+        # aquí se descarta lo que traiga: un nombre escrito ANTES de cambiar el
+        # ajuste sigue guardado en el trabajo y se colaría por detrás.
+        #
+        # Solo el nombre. La pista predeterminada se marca en los tres modos
+        # que tocan el fichero y se puede seguir eligiendo cuál, así que esa
+        # mitad del override se respeta.
+        plan = apply_track_overrides(plan, overrides if renombra(modo) else _sin_nombres(overrides))
 
         if not plan["any_changed"]:
             # Tracks already in the right order with the right names (even

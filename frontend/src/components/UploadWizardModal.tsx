@@ -28,6 +28,7 @@ import { FitText, FitTextPair } from './FitText'
 import { Tooltip, useTooltip } from './Tooltip'
 import { ACTIVE_JOB_STATUSES, statusLabel } from '../utils/uploadStatus'
 import { seguirProgreso } from '../api/eventos'
+import { AVISO_MODO_PISTAS, normalizarModo, renombra, tocaElFichero } from '../utils/modoPistas'
 
 // Unified "Subir" wizard (replaces the separate Nomenclatura + Campos + Subir
 // buttons). For a Series/Season it first asks which season (and episode, or the
@@ -180,26 +181,29 @@ export function mergeRemuxTracks(
 }
 
 /**
- * Avisa, junto al título de "Ver Pistas", de que la ordenación está apagada.
+ * Dice, junto al título de "Ver Pistas", qué se va a hacer con las pistas.
  *
- * Sin esto la tabla es correcta pero se lee mal: con "Reordenar pistas"
- * desactivado enseña las pistas en su orden ACTUAL, porque es el que van a
- * conservar, y nada distingue "ya estaban bien" de "no se van a mover". Quien
- * abre esta ventana justo para comprobar el orden se lleva la impresión
- * contraria a la real.
+ * Sale SIEMPRE, no solo cuando algo está apagado. Antes solo avisaba de que la
+ * ordenación estaba desactivada, y con cuatro estados posibles callarse en los
+ * demás deja adivinando: la tabla puede enseñar las pistas en su orden actual
+ * porque es el que van a conservar, o los nombres actuales porque no se van a
+ * cambiar, y nada distinguía eso de "ya estaban bien".
  *
- * Solo con `false` explícito: `undefined` significa que el plan no llegó a
- * calcularse (falta mkvmerge, archivo inaccesible), y ahí no se sabe.
+ * Sin `track_mode` no se pinta nada: significa que el plan no llegó a
+ * calcularse (falta mkvmerge, archivo inaccesible) y ahí no se sabe en qué
+ * modo se habría trabajado.
  */
-function AvisoOrdenApagada({ plan }: { plan?: { reorder_enabled?: boolean } | null }) {
-  if (plan?.reorder_enabled !== false) return null
+function AvisoModoPistas({ plan }: { plan?: { track_mode?: string } | null }) {
+  if (!plan?.track_mode) return null
+  const aviso = AVISO_MODO_PISTAS[normalizarModo(plan.track_mode)]
+  const color = aviso.tono === 'info' ? '59,130,246' : aviso.tono === 'aviso' ? '245,158,11' : '239,68,68'
   return (
     <span style={{
-      fontSize: 11, fontWeight: 500, color: '#f59e0b',
-      background: 'rgba(245,158,11,0.14)', border: '1px solid rgba(245,158,11,0.35)',
-      borderRadius: 4, padding: '2px 8px', whiteSpace: 'nowrap',
+      fontSize: 11, fontWeight: 500, color: `rgb(${color})`,
+      background: `rgba(${color},0.14)`, border: `1px solid rgba(${color},0.35)`,
+      borderRadius: 4, padding: '2px 8px',
     }}>
-      Ordenación de pistas desactivada en Configuración
+      {aviso.texto}
     </span>
   )
 }
@@ -207,9 +211,16 @@ function AvisoOrdenApagada({ plan }: { plan?: { reorder_enabled?: boolean } | nu
 // Track reorder/rename table — the single-file "Ver Pistas" card renders it
 // editable (inputs); the season target's per-episode accordion renders it
 // read-only (editable=false — no manual per-track overrides for seasons).
-export function RemuxTable({ plan, editable, edits, onEdit }: {
+export function RemuxTable({ plan, editable, nameEditable, edits, onEdit }: {
   plan: TrackRemuxPreview
+  /** Si se puede tocar la casilla "Predet.". */
   editable: boolean
+  /** Si se puede escribir en "Nombre nuevo". Va aparte de `editable` porque
+   *  son ajustes distintos: con "Solo reordenar" la aplicación sigue marcando
+   *  la pista predeterminada (y tú puedes cambiar cuál), pero los nombres se
+   *  quedan como están y ofrecer escribirlos sería mentir. Sin pasarlo,
+   *  acompaña a `editable`, que es lo que hace el acordeón de temporada. */
+  nameEditable?: boolean
   edits?: Record<number, TrackRemuxOverride>
   onEdit?: (trackId: number, patch: TrackRemuxOverride) => void
 }) {
@@ -256,7 +267,7 @@ export function RemuxTable({ plan, editable, edits, onEdit }: {
                     </td>
                     <td style={{ padding: '6px 10px', color: 'var(--text-muted)', wordBreak: 'break-word' }}>{t.current_name || '—'}</td>
                     <td style={{ padding: '5px 8px' }}>
-                      {editable ? (
+                      {(nameEditable ?? editable) ? (
                         <input
                           className="form-input"
                           style={{ fontSize: 12, padding: '4px 6px' }}
@@ -541,18 +552,6 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   const [remuxLoading, setRemuxLoading] = useState(false)
   const [remuxError, setRemuxError] = useState<string | null>(null)
   const [remuxEdits, setRemuxEdits] = useState<Record<number, TrackRemuxOverride>>({})
-  // Si se aplican los nombres propuestos o se conservan los que ya tiene el
-  // archivo. Activado por defecto, que es lo que la aplicación hacía siempre.
-  //
-  // Desmarcarlo NO cambia el orden ni la pista predeterminada: solo los
-  // nombres, que es lo que dice la casilla. Se resuelve rellenando el nombre
-  // actual como si lo hubieras escrito tú a mano en la tabla, así que no hace
-  // falta nada nuevo en el servidor ni en el contrato de subida.
-  const [aplicarNombres, setAplicarNombres] = useState(true)
-  // El botón late hasta que lo abres una vez. Los nombres se aplican por
-  // defecto, así que conviene que les eches un ojo antes de subir; seguir
-  // parpadeando después de haberlos visto sería ruido.
-  const [pistasVistas, setPistasVistas] = useState(false)
   const [showRemuxCard, setShowRemuxCard] = useState(false)
 
   // Step 1 (season target only) — the pack plan: consistency across
@@ -1064,11 +1063,10 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   // resolved target changes — a different item means unrelated data.
   useEffect(() => {
     setMiReport(null); setMiError(null); setShowMiCard(false)
+    // Otro contenido, otras pistas: las ediciones a mano no se arrastran, que
+    // haría que un capítulo heredara los nombres que escribiste para el
+    // anterior sin decírtelo.
     setRemuxPreview(null); setRemuxError(null); setRemuxEdits({}); setShowRemuxCard(false)
-    // Otro contenido, otras pistas: la casilla vuelve a su valor de partida y
-    // el botón vuelve a latir. Arrastrarlo haría que un capítulo heredara la
-    // decisión que tomaste para el anterior sin decírtelo.
-    setAplicarNombres(true); setPistasVistas(false)
     setSeasonPlan(null); setSeasonPlanError(null)
     setSeasonNames(null); setShowSeasonNamesCard(false)
     setSeasonMi(null); setSeasonMiError(null); setMiEpisodeId(null)
@@ -1136,19 +1134,12 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   // user opens "Ver Pistas", instead of only starting the read on click.
   useEffect(() => { if (step === 1 && !targetIsSeason) runTrackRemux() }, [step, targetIsSeason, runTrackRemux])
 
-  // Lo que de verdad se manda. Con la casilla quitada, cada pista conserva su
-  // nombre actual; las que no tienen ninguno sí reciben el propuesto, porque
-  // "conservar un nombre vacío" no le sirve a nadie.
-  const edicionesFinales = (): Record<number, TrackRemuxOverride> => {
-    if (aplicarNombres) return remuxEdits
-    const conservar: Record<number, TrackRemuxOverride> = {}
-    for (const t of remuxPreview?.ordered_tracks ?? []) {
-      if (t.current_name && t.current_name.trim()) {
-        conservar[t.id] = { ...remuxEdits[t.id], new_name: t.current_name }
-      }
-    }
-    return conservar
-  }
+  // Lo que el usuario haya escrito a mano en la tabla. No hace falta filtrarlo
+  // por el modo: la columna solo es editable si el modo renombra, y el
+  // servidor descarta las ediciones igualmente cuando no
+  // (mkv_remux.py::apply_remux), que es lo que cubre el caso de cambiar el
+  // ajuste con un trabajo ya encolado.
+  const edicionesFinales = (): Record<number, TrackRemuxOverride> => remuxEdits
 
   const setRemuxEdit = (trackId: number, patch: TrackRemuxOverride) => {
     setRemuxEdits(prev => ({ ...prev, [trackId]: { ...prev[trackId], ...patch } }))
@@ -2059,7 +2050,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                       <div className="modal-header">
                         <h2 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                           Ordenación y Nombre de las Pistas por Capítulo
-                          <AvisoOrdenApagada plan={seasonRemux?.[0]?.plan} />
+                          <AvisoModoPistas plan={seasonRemux?.[0]?.plan} />
                         </h2>
                         <button className="modal-close" onClick={() => setShowRemuxCard(false)}>✕</button>
                       </div>
@@ -2210,9 +2201,8 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                         Ver MediaInfo
                       </button>
                       <button
-                        className={`btn btn-primary${pistasVistas ? '' : ' btn-atencion'}`}
+                        className="btn btn-primary"
                         onClick={() => {
-                          setPistasVistas(true)
                           setShowRemuxCard(true)
                           if (!remuxPreview && !remuxLoading) runTrackRemux()
                         }}
@@ -2259,7 +2249,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                       <div className="modal-header">
                         <h2 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                           Ordenación y Nombre de las Pistas
-                          <AvisoOrdenApagada plan={remuxPreview} />
+                          <AvisoModoPistas plan={remuxPreview} />
                         </h2>
                         <button className="modal-close" onClick={() => setShowRemuxCard(false)}>✕</button>
                       </div>
@@ -2271,24 +2261,20 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                             <button className="btn btn-secondary btn-sm" type="button" onClick={runTrackRemux}>↻ Reintentar</button>
                           </>
                         )}
-                        {remuxPreview && <RemuxTable plan={remuxPreview} editable edits={remuxEdits} onEdit={setRemuxEdit} />}
+                        {/* Editable solo si el modo renombra: sin eso la
+                            columna ofrece escribir un nombre que no se va a
+                            aplicar. Lo decide Configuración → Otros, no una
+                            casilla aquí: la casilla solo salía subiendo una
+                            película o un capítulo suelto, nunca en una
+                            temporada entera. */}
                         {remuxPreview && (
-                          <label className="checkbox-label" style={{
-                            display: 'flex', alignItems: 'center', gap: 8,
-                            marginTop: 14, fontSize: 12,
-                          }}>
-                            <input
-                              type="checkbox"
-                              checked={aplicarNombres}
-                              onChange={e => setAplicarNombres(e.target.checked)}
-                            />
-                            Renombrar las pistas
-                            <span className="text-muted" style={{ fontSize: 11 }}>
-                              {aplicarNombres
-                                ? '(se aplican los nombres de la columna Nuevo nombre)'
-                                : '(cada pista conserva el nombre que ya tiene)'}
-                            </span>
-                          </label>
+                          <RemuxTable
+                            plan={remuxPreview}
+                            editable={tocaElFichero(normalizarModo(remuxPreview.track_mode))}
+                            nameEditable={renombra(normalizarModo(remuxPreview.track_mode))}
+                            edits={remuxEdits}
+                            onEdit={setRemuxEdit}
+                          />
                         )}
                       </div>
                     </div>

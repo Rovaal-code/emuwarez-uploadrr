@@ -805,46 +805,56 @@ def test_apply_without_reordering_edits_in_place(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# El plan dice si la ordenación está activada, para que la tabla pueda avisar
+# El plan lleva el modo, para que la tarjeta de Ver Pistas diga qué va a pasar
 # ---------------------------------------------------------------------------
 
-def _plan_con_reorden(tmp_path, activado: bool) -> dict:
+def _plan_en_modo(tmp_path, modo: str) -> dict:
     mkv_file = tmp_path / "Peli.2024.mkv"
     mkv_file.write_bytes(b"fake mkv")
     conn = _make_conn(tmp_path)
     item_id = _insert_library_item(conn, prepared_path=None, path=str(mkv_file))
     with patch("emuwarez_uploadrr.services.mkv_remux.check_mkvmerge_available") as mock_chk, \
          patch("emuwarez_uploadrr.services.mkv_remux.read_tracks_json") as mock_read, \
-         patch("emuwarez_uploadrr.services.mkv_remux.reorder_tracks_enabled") as mock_reorder:
+         patch("emuwarez_uploadrr.services.mkv_remux.modo_pistas") as mock_modo:
         mock_chk.return_value = {"available": True, "path": "/usr/bin/mkvmerge"}
         mock_read.return_value = {"ok": True, "data": _SAMPLE_MKV_JSON}
-        mock_reorder.return_value = activado
+        mock_modo.return_value = modo
         from emuwarez_uploadrr.services.mkv_remux import build_remux_plan
         return build_remux_plan(item_id, conn=conn)
 
 
-@pytest.mark.parametrize("activado", [True, False])
-def test_el_plan_dice_si_la_ordenacion_esta_activada(tmp_path, activado):
-    """La tabla de "Ver Pistas" enseña el orden que va a quedar, así que con la
-    ordenación apagada enseña el ACTUAL — y sin este dato nada distingue "ya
-    estaban bien" de "no se van a mover". La interfaz lo usa para avisar."""
-    assert _plan_con_reorden(tmp_path, activado)["reorder_enabled"] is activado
+@pytest.mark.parametrize("modo", [
+    "reordenar_y_renombrar", "solo_renombrar", "solo_reordenar", "ninguno",
+])
+def test_el_plan_lleva_el_modo_configurado(tmp_path, modo):
+    """La tarjeta de "Ver Pistas" enseña lo que va a quedar en el archivo, y sin
+    este dato no puede decir POR QUÉ: nada distingue "las pistas ya estaban
+    bien" de "no se van a mover porque está configurado así"."""
+    plan = _plan_en_modo(tmp_path, modo)
+    assert plan["track_mode"] == modo
+    from emuwarez_uploadrr.services.mkv_remux import renombra, reordena
+    assert plan["reorder_enabled"] is reordena(modo)
+    assert plan["rename_enabled"] is renombra(modo)
 
 
-def test_apagada_el_plan_conserva_el_orden_del_archivo(tmp_path):
-    """Que el aviso diga la verdad: apagada, las pistas se quedan donde están.
-
-    Es lo que hace que el aviso valga la pena — el castellano NO sube al primer
-    puesto, aunque la tabla siga llamándose "Ordenación y Nombre de las Pistas".
-    """
-    plan = _plan_con_reorden(tmp_path, False)
+@pytest.mark.parametrize("modo", ["solo_renombrar", "ninguno"])
+def test_sin_reordenar_el_plan_conserva_el_orden_del_archivo(tmp_path, modo):
+    """Que el mensaje diga la verdad: el castellano NO sube al primer puesto."""
+    plan = _plan_en_modo(tmp_path, modo)
     assert plan["order_changed"] is False
     assert [t["id"] for t in plan["ordered_tracks"]] == [t["id"] for t in plan["tracks"]]
 
 
-def test_activada_el_plan_si_reordena(tmp_path):
-    """Y el contraste: con ella puesta el orden sí cambia, así que no hay nada
-    que avisar. Si este test y el de arriba dieran lo mismo, el aviso sobraría
-    o mentiría."""
-    plan = _plan_con_reorden(tmp_path, True)
-    assert plan["order_changed"] is True
+@pytest.mark.parametrize("modo", ["reordenar_y_renombrar", "solo_reordenar"])
+def test_reordenando_el_plan_si_cambia_el_orden(tmp_path, modo):
+    """El contraste: si esto y el de arriba dieran lo mismo, el mensaje de la
+    tarjeta sobraría o mentiría."""
+    assert _plan_en_modo(tmp_path, modo)["order_changed"] is True
+
+
+@pytest.mark.parametrize("modo", ["solo_reordenar", "ninguno"])
+def test_sin_renombrar_el_plan_repite_los_nombres_actuales(tmp_path, modo):
+    """Lo que hace que la columna "Nombre nuevo" se pueda leer igual en los
+    cuatro modos: enseña lo que va a quedar, no lo que se propondría."""
+    for t in _plan_en_modo(tmp_path, modo)["ordered_tracks"]:
+        assert t["new_name"] == t["current_name"]

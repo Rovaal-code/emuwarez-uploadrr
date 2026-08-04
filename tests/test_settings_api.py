@@ -197,3 +197,44 @@ def test_source_engine_flag_is_what_media_info_reads(client, auth_headers, isola
     assert source_engine_enabled() is False
     client.put("/api/settings", json={"source_engine_enabled": True}, headers=auth_headers)
     assert source_engine_enabled() is True
+
+
+# ---------------------------------------------------------------------------
+# Renombrar/Ordenar pistas
+# ---------------------------------------------------------------------------
+# El desplegable de Configuración y la validación del servidor son dos listas
+# distintas del mismo conjunto. Que coincidan lo vigila
+# tests/test_copias_frontend.py; lo que se comprueba aquí es la otra mitad: que
+# el endpoint acepta los cuatro y rechaza lo que no lo es.
+
+def test_los_cuatro_modos_de_pistas_se_guardan(client, auth_headers):
+    from emuwarez_uploadrr.services.mkv_remux import MODOS_PISTAS
+    for modo in MODOS_PISTAS:
+        resp = client.put("/api/settings", json={"remux_track_mode": modo}, headers=auth_headers)
+        assert resp.status_code == 200, (modo, resp.text)
+        assert resp.json()["remux_track_mode"] == modo
+        assert client.get("/api/settings", headers=auth_headers).json()["remux_track_mode"] == modo
+
+
+def test_un_modo_de_pistas_inventado_se_rechaza(client, auth_headers):
+    resp = client.put("/api/settings", json={"remux_track_mode": "pepe"}, headers=auth_headers)
+    assert resp.status_code == 422
+
+
+def test_el_ajuste_viejo_de_reordenar_se_deja_a_la_par(client, auth_headers):
+    """Volver a una versión anterior lee `remux.reorder_tracks`, y
+    encontrárselo congelado en el valor de antes sería peor que traducirlo."""
+    from emuwarez_uploadrr.database import connect, db_path
+    from emuwarez_uploadrr.services.settings import get_setting_canonical
+
+    def viejo():
+        conn = connect(db_path())
+        try:
+            return get_setting_canonical(conn, "remux.reorder_tracks")
+        finally:
+            conn.close()
+
+    client.put("/api/settings", json={"remux_track_mode": "solo_reordenar"}, headers=auth_headers)
+    assert viejo() == "true"
+    client.put("/api/settings", json={"remux_track_mode": "solo_renombrar"}, headers=auth_headers)
+    assert viejo() == "false"

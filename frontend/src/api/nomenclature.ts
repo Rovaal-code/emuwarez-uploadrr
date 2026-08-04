@@ -190,9 +190,13 @@ export interface TrackRemuxPreview {
   using_prepared_copy?: boolean
   mkvmerge_available?: boolean
   order_changed?: boolean
-  /** Si el ajuste "Reordenar pistas" está activo. Con él apagado la tabla
-   *  enseña las pistas en su orden actual, porque es el que van a conservar. */
+  /** El ajuste "Renombrar/Ordenar pistas" de Configuración → Otros, que es lo
+   *  que decide qué enseña la tabla y si la columna de nombre se puede editar.
+   *  Uno de utils/modoPistas.ts::MODOS_PISTAS. */
+  track_mode?: string
+  /** Las dos mitades de `track_mode`, ya resueltas por el servidor. */
   reorder_enabled?: boolean
+  rename_enabled?: boolean
   tracks?: TrackRemuxTrack[]
   ordered_tracks?: TrackRemuxTrack[]
   command_preview?: string | null

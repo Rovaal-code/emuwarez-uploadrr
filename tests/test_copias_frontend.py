@@ -196,3 +196,36 @@ def test_los_estados_de_castellano_coinciden():
         "\nLos estados de la columna Español no coinciden."
         f"\n  solo en el frontend: {sorted(delFront - delBack)}"
         f"\n  solo en el backend : {sorted(delBack - delFront)}")
+
+
+def test_los_modos_de_pistas_coinciden():
+    """Configuración ofrece los cuatro valores de "Renombrar/Ordenar pistas" y
+    el servidor los valida con un 422. Si una lista se adelanta a la otra, el
+    desplegable ofrece un valor que no se puede guardar, y el error que ve el
+    usuario es un 422 sin explicación."""
+    from emuwarez_uploadrr.services.mkv_remux import ETIQUETAS_MODO_PISTAS
+
+    fuente = _texto("utils/modoPistas.ts")
+    m = re.search(r"MODOS_PISTAS[^=]*=\s*\[(.*?)\n\]", fuente, re.S)
+    assert m, "no se encontró MODOS_PISTAS en el frontend"
+    delante = dict(re.findall(r"value:\s*'([^']+)',\s*label:\s*'([^']+)'", m.group(1)))
+
+    assert delante == ETIQUETAS_MODO_PISTAS, (
+        "los valores o las etiquetas de los modos de pistas no coinciden "
+        "entre services/mkv_remux.py y utils/modoPistas.ts")
+
+
+def test_las_dos_mitades_de_cada_modo_coinciden():
+    """`reordena`/`renombra` deciden en Python lo que se aplica y en TypeScript
+    si la columna del nombre se puede editar. Descuadradas, la tabla ofrece
+    escribir un nombre que el servidor va a descartar."""
+    from emuwarez_uploadrr.services import mkv_remux
+
+    fuente = _texto("utils/modoPistas.ts")
+    for funcion in ("reordena", "renombra"):
+        m = re.search(rf"export function {funcion}\(modo: ModoPistas\): boolean \{{\n\s*return ([^\n]+)\n",
+                      fuente)
+        assert m, f"no se encontró {funcion} en el frontend"
+        delante = set(re.findall(r"'([^']+)'", m.group(1)))
+        detras = {m_ for m_ in mkv_remux.MODOS_PISTAS if getattr(mkv_remux, funcion)(m_)}
+        assert delante == detras, f"{funcion} no coincide entre Python y TypeScript"

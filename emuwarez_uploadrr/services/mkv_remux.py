@@ -35,7 +35,6 @@ from pathlib import Path
 from typing import Callable
 
 from ..database import connect
-from .mkv_title import _get_prepared_path
 from .uploadrr_progress import parse_mkvmerge_gui_progress
 
 logger = logging.getLogger("emuwarez.mkv_remux")
@@ -47,18 +46,23 @@ def _get_target_path(library_item_id: int, conn) -> tuple[str | None, bool]:
     """Track reorder/rename is independent of nomenclature — it only needs a
     real .mkv on disk, so it can be tried before nomenclature has ever run.
     Prefers `prepared_path` (the copy about to be uploaded, from a hardlink or
-    a rename) when nomenclature already ran; otherwise falls back to the
-    item's own file, resolved to the local mount (same convention nomenclature
-    itself uses before it has a prepared copy). Returns (path, is_prepared)."""
-    prepared = _get_prepared_path(library_item_id, conn)
-    if prepared:
-        return prepared, True
-    row = conn.execute("SELECT path FROM library_items WHERE id = ?", (library_item_id,)).fetchone()
-    raw_path = row["path"] if row else None
-    if not raw_path:
+    a rename) when nomenclature already ran AND that copy still exists on
+    disk; otherwise falls back to the item's own file, resolved to the local
+    mount — same rule as everywhere else that reads from a library item, see
+    path_mapping.py::ruta_de_lectura. Returns (path, is_prepared)."""
+    from .path_mapping import resolve_local_path, ruta_de_lectura
+    row = conn.execute(
+        "SELECT path, prepared_path FROM library_items WHERE id = ?", (library_item_id,)
+    ).fetchone()
+    if not row:
         return None, False
-    from .path_mapping import resolve_local_path
-    return (resolve_local_path(raw_path, conn=conn) or raw_path), False
+    item = {"path": row["path"], "prepared_path": row["prepared_path"]}
+    elegida = ruta_de_lectura(item, conn=conn)
+    if not elegida:
+        return None, False
+    local = resolve_local_path(elegida, conn=conn) or elegida
+    is_prepared = bool(item["prepared_path"]) and elegida == item["prepared_path"]
+    return local, is_prepared
 
 # ---------------------------------------------------------------------------
 # Language: display name + sort priority + Latin-Spanish detection

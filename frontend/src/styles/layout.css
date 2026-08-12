@@ -2,7 +2,7 @@
 
 .app-shell {
   display: flex;
-  height: 100vh;
+  height: var(--vh100);
   overflow: hidden;
 }
 
@@ -297,7 +297,7 @@
   top: calc(100% + 8px);
   right: 0;
   width: 360px;
-  max-width: 90vw;
+  max-width: calc(var(--vw100) * 0.9);
   max-height: 460px;
   display: flex;
   flex-direction: column;

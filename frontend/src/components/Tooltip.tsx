@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useLayoutEffect, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { sinEscalar, anchoVentana } from '../utils/uiScale'
 
 // Custom hover tooltip styled like the app's cards (opaque surface, not the
 // native browser title box). Rendered in a fixed-position portal just below
@@ -9,15 +10,23 @@ import { createPortal } from 'react-dom'
 // cursor has rested on the target for this long.
 const HOVER_DELAY_MS = 1000
 
+// clientX/clientY vienen en el espacio escalado por el zoom del body, y de aquí
+// salen para un style.top/left, que se vuelve a escalar. Se guardan ya
+// convertidos, para que todo lo demás trabaje en un solo espacio. Ver
+// utils/uiScale.
+function punto(e: React.MouseEvent) {
+  return { x: sinEscalar(e.clientX), y: sinEscalar(e.clientY) }
+}
+
 export function useTooltip(content: React.ReactNode, maxWidth = 460) {
   const [show, setShow] = useState(false)
   const [pt, setPt] = useState({ x: 0, y: 0 })
   const ref = useRef<HTMLDivElement>(null)
   const timer = useRef<number | null>(null)
 
-  const track = useCallback((e: React.MouseEvent) => setPt({ x: e.clientX, y: e.clientY }), [])
+  const track = useCallback((e: React.MouseEvent) => setPt(punto(e)), [])
   const open = useCallback((e: React.MouseEvent) => {
-    setPt({ x: e.clientX, y: e.clientY })
+    setPt(punto(e))
     if (timer.current) window.clearTimeout(timer.current)
     timer.current = window.setTimeout(() => setShow(true), HOVER_DELAY_MS)
   }, [])
@@ -39,13 +48,13 @@ export function useTooltip(content: React.ReactNode, maxWidth = 460) {
     const range = document.createRange()
     range.selectNodeContents(el)
     let longest = 0
-    for (const r of range.getClientRects()) longest = Math.max(longest, r.width)
+    for (const r of range.getClientRects()) longest = Math.max(longest, sinEscalar(r.width))
     if (longest > 0) {
       // + horizontal padding (24px) + border (2px)
       el.style.width = `${Math.ceil(longest) + 26}px`
     }
     const half = el.offsetWidth / 2
-    const clamped = Math.min(Math.max(pt.x, half + 6), window.innerWidth - half - 6)
+    const clamped = Math.min(Math.max(pt.x, half + 6), anchoVentana() - half - 6)
     el.style.left = `${clamped}px`
   }, [show, pt.x, pt.y])
 

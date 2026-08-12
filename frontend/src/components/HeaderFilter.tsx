@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useTooltip } from './Tooltip'
+import { medir, anchoVentana, altoVentana } from '../utils/uiScale'
 
 export interface FilterOption { value: string; label: string }
 
@@ -58,7 +59,9 @@ export function HeaderFilter({ label, value, options, onChange }: {
   }, [open])
 
   const toggle = () => {
-    const r = btnRef.current?.getBoundingClientRect()
+    // medir() y no getBoundingClientRect(): lo que sale de aquí acaba en un
+    // style.top/left, que el zoom del body vuelve a escalar. Ver utils/uiScale.
+    const r = btnRef.current ? medir(btnRef.current) : null
     if (r) setPos({ top: r.bottom + 4, left: r.left })
     setOpen(o => !o)
   }
@@ -73,10 +76,10 @@ export function HeaderFilter({ label, value, options, onChange }: {
     const menu = menuRef.current
     const btn = btnRef.current
     if (!menu || !btn) return
-    const menuRect = menu.getBoundingClientRect()
-    const btnRect = btn.getBoundingClientRect()
-    const maxLeft = window.innerWidth - menuRect.width - 8
-    const maxTop = window.innerHeight - menuRect.height - 8
+    const menuRect = medir(menu)
+    const btnRect = medir(btn)
+    const maxLeft = anchoVentana() - menuRect.width - 8
+    const maxTop = altoVentana() - menuRect.height - 8
     setPos({
       left: Math.max(8, Math.min(btnRect.left, maxLeft)),
       top: Math.max(8, Math.min(btnRect.bottom + 4, maxTop)),
@@ -110,7 +113,7 @@ export function HeaderFilter({ label, value, options, onChange }: {
           onClick={e => e.stopPropagation()}
           style={{
             position: 'fixed', top: pos.top, left: pos.left, zIndex: 2000,
-            minWidth: 170, maxWidth: 'min(340px, calc(100vw - 16px))',
+            minWidth: 170, maxWidth: 'min(340px, calc(var(--vw100) - 16px))',
             maxHeight: 300, overflowY: 'auto', padding: 4,
             background: 'var(--bg-surface, #0f1420)', border: '1px solid var(--border)',
             borderRadius: 8, boxShadow: 'var(--shadow-modal, 0 10px 30px rgba(0,0,0,0.45))',

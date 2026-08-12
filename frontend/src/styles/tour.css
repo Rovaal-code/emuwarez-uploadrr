@@ -24,7 +24,7 @@
   position: fixed;
   z-index: 2001;
   width: 340px;
-  max-width: calc(100vw - 32px);
+  max-width: calc(var(--vw100) - 32px);
   box-sizing: border-box;
   background: var(--bg-card);
   background-color: #0f1420;

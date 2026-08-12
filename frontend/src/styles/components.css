@@ -443,7 +443,12 @@ optgroup {
   margin-bottom: 20px;
 }
 
-@media (max-width: 1400px) {
+/* Antes: 1400px. Las media queries se evalúan contra la ventana REAL, no
+   contra el espacio que el zoom deja al contenido. Con la escala en su mínimo
+   (0,75) el contenido dispone de ancho / 0,75, así que los mismos 1400px de
+   contenido de siempre se alcanzan ahora con una ventana de 1050px. Ver
+   ESCALA_MINIMA y CORTE_ESTRECHO en utils/uiScale.ts. */
+@media (max-width: 1050px) {
   .stat-cards-row {
     grid-template-columns: repeat(3, 1fr);
   }
@@ -572,7 +577,7 @@ optgroup {
   padding: 16px;
   position: sticky;
   top: 72px;
-  max-height: calc(100vh - 100px);
+  max-height: calc(var(--vh100) - 100px);
   overflow-y: auto;
 }
 .detail-panel__header {
@@ -707,7 +712,7 @@ optgroup {
   border-radius: 12px;
   width: 90%;
   max-width: 600px;
-  max-height: 85vh;
+  max-height: calc(var(--vh100) * 0.85);
   overflow-y: auto;
   box-shadow: 0 8px 32px rgba(0,0,0,0.4);
 }
@@ -742,7 +747,7 @@ optgroup {
   border-radius: 12px;
   width: 90%;
   max-width: 600px;
-  max-height: 90vh;
+  max-height: calc(var(--vh100) * 0.9);
   overflow-y: auto;
   box-shadow: 0 8px 32px rgba(0,0,0,0.4);
 }

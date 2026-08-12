@@ -69,7 +69,7 @@ export function EmuFieldChip({ itemId }: { itemId: number }) {
       </ValueChip>
       {showModal && createPortal(
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: '95vw', width: 'max-content' }}>
+          <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 'calc(var(--vw100) * 0.95)', width: 'max-content' }}>
             <div className="modal-header">
               <h2 className="modal-title">Comparación con eMuwarez</h2>
               <button className="modal-close" onClick={() => setShowModal(false)}>✕</button>

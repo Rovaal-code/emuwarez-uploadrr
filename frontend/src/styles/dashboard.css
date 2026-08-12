@@ -11,7 +11,12 @@
 
 /* Below 1400px the stat rows collapse to 3 columns (see components.css),
    so a single card becomes (100% - 2*16px) / 3 — keep the panel in step. */
-@media (max-width: 1400px) {
+/* Antes: 1400px. Las media queries se evalúan contra la ventana REAL, no
+   contra el espacio que el zoom deja al contenido. Con la escala en su mínimo
+   (0,75) el contenido dispone de ancho / 0,75, así que los mismos 1400px de
+   contenido de siempre se alcanzan ahora con una ventana de 1050px. Ver
+   ESCALA_MINIMA y CORTE_ESTRECHO en utils/uiScale.ts. */
+@media (max-width: 1050px) {
   .dashboard-grid {
     grid-template-columns: 1fr calc((100% - 32px) / 3);
   }
@@ -42,7 +47,12 @@
   padding-left: 8px;
   padding-right: 8px;
 }
-@media (max-width: 1400px) {
+/* Antes: 1400px. Las media queries se evalúan contra la ventana REAL, no
+   contra el espacio que el zoom deja al contenido. Con la escala en su mínimo
+   (0,75) el contenido dispone de ancho / 0,75, así que los mismos 1400px de
+   contenido de siempre se alcanzan ahora con una ventana de 1050px. Ver
+   ESCALA_MINIMA y CORTE_ESTRECHO en utils/uiScale.ts. */
+@media (max-width: 1050px) {
   .sync-card {
     width: calc((100% - 32px) / 3);
   }
@@ -188,7 +198,7 @@
 
 /* Setup wizard */
 .setup-wizard-wrap {
-  min-height: 100vh;
+  min-height: var(--vh100);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -329,7 +339,7 @@
 
 /* Login page */
 .login-wrap {
-  min-height: 100vh;
+  min-height: var(--vh100);
   display: flex;
   align-items: center;
   justify-content: center;

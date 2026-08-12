@@ -1,12 +1,17 @@
 import { useRef, useLayoutEffect, useState } from 'react'
 import { useTooltip } from './Tooltip'
+import { medir } from '../utils/uiScale'
 
 // Binary-searches the LARGEST font size in [min,max] that makes `el`'s own
 // text content fit on one line within `el`'s current width — mutates
 // el.style.fontSize as it measures (that's how it's measured) and returns the
 // chosen size. Pure w.r.t. everything except that one element's style.
 function measureFitSize(el: HTMLElement, min: number, max: number): number {
-  const avail = el.getBoundingClientRect().width
+  // Por medir() y no getBoundingClientRect(): el ancho disponible se compara
+  // contra scrollWidth y contra tamaños de fuente en px, que NO llevan el zoom
+  // del body encima. Mezclarlos daría una letra más pequeña cuanto más se
+  // aleje la escala del 100%. Ver utils/uiScale.
+  const avail = medir(el).width
   if (avail <= 0) return max
   // 1px safety margin: `scrollWidth` is an integer (rounded) layout
   // measurement, but the browser's actual sub-pixel glyph paint can come out
@@ -78,7 +83,7 @@ export function FitText({
     // (<0.5px) between two reads of the same settled layout is "unchanged".
     let lastAvail = -1
     const fit = () => {
-      const avail = el.getBoundingClientRect().width
+      const avail = medir(el).width
       if (avail <= 0 || Math.abs(avail - lastAvail) < 0.5) return
       lastAvail = avail
       autoSizeRef.current = measureFitSize(el, min, max)
@@ -156,8 +161,8 @@ export function FitTextPair({
     let lastAvailA = -1
     let lastAvailB = -1
     const fit = () => {
-      const availA = elA.getBoundingClientRect().width
-      const availB = elB.getBoundingClientRect().width
+      const availA = medir(elA).width
+      const availB = medir(elB).width
       if (availA <= 0 || availB <= 0) return
       if (Math.abs(availA - lastAvailA) < 0.5 && Math.abs(availB - lastAvailB) < 0.5) return
       lastAvailA = availA

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTour } from '../context/TourContext'
+import { medir, anchoVentana, altoVentana, type RectoSinEscalar } from '../utils/uiScale'
 
 interface TourOverlayProps {
   activePage: string
@@ -16,14 +17,16 @@ const WAIT_TIMEOUT_MS = 4000
 // while its own data loads). Gives up after WAIT_TIMEOUT_MS and resolves
 // null, so a step whose target genuinely never appears still lets the tour
 // continue (centered, no spotlight) instead of getting stuck forever.
-function waitForRect(selector: string, onFound: (rect: DOMRect) => void): () => void {
+function waitForRect(selector: string, onFound: (rect: RectoSinEscalar) => void): () => void {
   let cancelled = false
   const start = performance.now()
   function poll() {
     if (cancelled) return
     const el = document.querySelector<HTMLElement>(selector)
     if (el) {
-      const rect = el.getBoundingClientRect()
+      // medir() y no getBoundingClientRect(): el recorte y la burbuja se
+      // posicionan con estos números dentro del body escalado. Ver uiScale.
+      const rect = medir(el)
       if (rect.width > 0 && rect.height > 0) {
         onFound(rect)
         return
@@ -37,14 +40,14 @@ function waitForRect(selector: string, onFound: (rect: DOMRect) => void): () => 
   return () => { cancelled = true }
 }
 
-function placeBubble(rect: DOMRect | null, placement?: 'top-center'): { top: number; left: number } {
+function placeBubble(rect: RectoSinEscalar | null, placement?: 'top-center'): { top: number; left: number } {
   if (placement === 'top-center') {
-    return { top: BUBBLE_MARGIN + 56, left: window.innerWidth / 2 - BUBBLE_WIDTH / 2 }
+    return { top: BUBBLE_MARGIN + 56, left: anchoVentana() / 2 - BUBBLE_WIDTH / 2 }
   }
   if (!rect) {
-    return { top: window.innerHeight / 2 - 90, left: window.innerWidth / 2 - BUBBLE_WIDTH / 2 }
+    return { top: altoVentana() / 2 - 90, left: anchoVentana() / 2 - BUBBLE_WIDTH / 2 }
   }
-  const spaceBelow = window.innerHeight - rect.bottom
+  const spaceBelow = altoVentana() - rect.bottom
   const spaceAbove = rect.top
   let top: number
   if (spaceBelow >= 200 || spaceBelow >= spaceAbove) {
@@ -53,8 +56,8 @@ function placeBubble(rect: DOMRect | null, placement?: 'top-center'): { top: num
     top = Math.max(BUBBLE_MARGIN, rect.top - BUBBLE_MARGIN - 180)
   }
   let left = rect.left
-  if (left + BUBBLE_WIDTH > window.innerWidth - BUBBLE_MARGIN) {
-    left = window.innerWidth - BUBBLE_WIDTH - BUBBLE_MARGIN
+  if (left + BUBBLE_WIDTH > anchoVentana() - BUBBLE_MARGIN) {
+    left = anchoVentana() - BUBBLE_WIDTH - BUBBLE_MARGIN
   }
   left = Math.max(BUBBLE_MARGIN, left)
   return { top, left }
@@ -62,7 +65,7 @@ function placeBubble(rect: DOMRect | null, placement?: 'top-center'): { top: num
 
 export function TourOverlay({ activePage, navigate }: TourOverlayProps) {
   const { active, stepIndex, steps, next, prev, close } = useTour()
-  const [rect, setRect] = useState<DOMRect | null>(null)
+  const [rect, setRect] = useState<RectoSinEscalar | null>(null)
   const step = steps[stepIndex]
 
   useEffect(() => {
@@ -80,7 +83,7 @@ export function TourOverlay({ activePage, navigate }: TourOverlayProps) {
     if (!active || !step) return
     const onResize = () => {
       const el = document.querySelector<HTMLElement>(step.selector)
-      if (el) setRect(el.getBoundingClientRect())
+      if (el) setRect(medir(el))
     }
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)

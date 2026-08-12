@@ -234,7 +234,7 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
 
       {showRuta && (
         <div className="modal-overlay" onClick={() => setShowRuta(false)}>
-          <div className="modal-panel" onClick={e => e.stopPropagation()} style={{ width: 'max-content', maxWidth: '90vw', minWidth: 320 }}>
+          <div className="modal-panel" onClick={e => e.stopPropagation()} style={{ width: 'max-content', maxWidth: 'calc(var(--vw100) * 0.9)', minWidth: 320 }}>
             <div className="modal-header">
               <h2 className="modal-title">Ruta</h2>
               <button className="modal-close" onClick={() => setShowRuta(false)}>✕</button>

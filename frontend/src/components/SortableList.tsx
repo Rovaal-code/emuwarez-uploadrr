@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react'
+import { medir, type RectoSinEscalar } from '../utils/uiScale'
 
 // 1×1 transparent GIF used to hide the browser's default (shrunk/translucent)
 // drag ghost — the feedback is the in-list illumination + slide instead.
@@ -43,7 +44,7 @@ export function SortableList({ ids, onChange, renderRow, gap = 6 }: {
   const [grabbedId, setGrabbedId] = useState<string | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const nodeRefs = useRef<Map<string, HTMLElement>>(new Map())
-  const prevRects = useRef<Map<string, DOMRect>>(new Map())
+  const prevRects = useRef<Map<string, RectoSinEscalar>>(new Map())
   const prevIds = useRef<string[]>(ids)
   // While a FLIP slide is running, rows carry a transform, so their
   // getBoundingClientRect() reports the ANIMATED position — measuring midpoints
@@ -63,7 +64,10 @@ export function SortableList({ ids, onChange, renderRow, gap = 6 }: {
       nodeRefs.current.forEach((node, id) => {
         const prev = prevRects.current.get(id)
         if (prev) {
-          const dy = prev.top - node.getBoundingClientRect().top
+          // En espacio sin escalar: dy sale de aquí para meterse en un
+          // translateY(px), y el zoom del body lo volvería a escalar, así que
+          // las filas se pasarían de largo. Ver utils/uiScale.
+          const dy = prev.top - medir(node).top
           if (dy) {
             node.style.transition = 'none'
             node.style.transform = `translateY(${dy}px)`
@@ -77,8 +81,8 @@ export function SortableList({ ids, onChange, renderRow, gap = 6 }: {
     }
     // Always refresh the baseline so the next reorder measures from where the
     // rows currently are (even after a plain layout shift).
-    const map = new Map<string, DOMRect>()
-    nodeRefs.current.forEach((node, id) => map.set(id, node.getBoundingClientRect()))
+    const map = new Map<string, RectoSinEscalar>()
+    nodeRefs.current.forEach((node, id) => map.set(id, medir(node)))
     prevRects.current = map
     prevIds.current = ids
   }, [ids])
@@ -95,6 +99,9 @@ export function SortableList({ ids, onChange, renderRow, gap = 6 }: {
     const from = ids.indexOf(draggingId)
     const to = ids.indexOf(targetId)
     if (from < 0 || to < 0) return
+    // Aquí sí vale getBoundingClientRect() a secas: e.clientY viene en el
+    // mismo espacio escalado, y de los dos solo sale una proporción, que es
+    // igual con zoom y sin él.
     const rect = e.currentTarget.getBoundingClientRect()
     const past = (e.clientY - rect.top) / rect.height  // 0 = top … 1 = bottom
     if (to > from && past < 0.5) return  // going down, not past the midpoint yet

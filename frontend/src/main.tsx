@@ -7,6 +7,11 @@ import './styles/dashboard.css'
 import './styles/hud-theme.css'
 import './styles/tour.css'
 import { App } from './App'
+import { iniciarEscaladoUi } from './utils/uiScale'
+
+// Antes del primer render: así el primer pintado ya sale al tamaño bueno, sin
+// el salto de ver la interfaz a escala 1 y encogerse un instante después.
+iniciarEscaladoUi()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

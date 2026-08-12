@@ -149,7 +149,7 @@ export function ProviderPriorityPicker({ order, onChange, linkIcons = true }: Pr
               {available.length === 0 ? (
                 <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Ya están todos añadidos.</p>
               ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 6, maxHeight: '55vh', overflowY: 'auto' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 6, maxHeight: 'calc(var(--vh100) * 0.55)', overflowY: 'auto' }}>
                   {available.map(opt => (
                     <button
                       key={opt.code}

@@ -53,6 +53,20 @@
   /* Typography */
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* Escalado global. Todo el CSS está en píxeles fijos calibrados para 2560px
+     de ancho; utils/uiScale.ts pone aquí el factor que corresponde a la
+     pantalla real, y el `zoom` del body de abajo lo aplica a todo de golpe.
+     Vale 1 mientras no haya arrancado el JavaScript. */
+  --ui-scale: 1;
+
+  /* Dentro de un elemento con zoom, 100vh sigue midiendo la ventana entera y
+     LUEGO se escala, así que una caja "de alto de pantalla" se saldría (o se
+     quedaría corta) justo en el factor de la escala. Estas dos son el alto y
+     el ancho de ventana ya corregidos: en la aplicación se usan estas, nunca
+     vh/vw a pelo. */
+  --vh100: calc(100vh / var(--ui-scale));
+  --vw100: calc(100vw / var(--ui-scale));
 }
 
 *, *::before, *::after {
@@ -70,13 +84,18 @@ body {
   font-family: var(--font-sans);
   background-color: var(--bg-base);
   color: var(--text-primary);
-  min-height: 100vh;
+  min-height: var(--vh100);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  /* Aquí es donde se escala la interfaz entera. Va en el body y no en el html
+     para que el fondo y la barra de desplazamiento de la ventana se queden
+     fuera del escalado. Los portales de React cuelgan del body, así que los
+     menús y modales entran también, que es justo lo que queremos. */
+  zoom: var(--ui-scale);
 }
 
 #root {
-  min-height: 100vh;
+  min-height: var(--vh100);
   display: flex;
   flex-direction: column;
 }

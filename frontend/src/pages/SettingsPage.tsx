@@ -444,8 +444,13 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   if (loading) return <p style={{ padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>Cargando…</p>
 
   return (
-    <div data-tour="settings-content" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div className="settings-config-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16, alignItems: 'stretch' }}>
+    <div data-tour="settings-content" style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%', minHeight: 0 }}>
+      {/* Ocho tarjetas en cuatro columnas, o sea dos filas exactas. Las filas
+          se reparten el alto disponible (1fr cada una) en vez de medir 460px
+          fijos: así las dos juntas nunca pasan del alto de la ventana, que es
+          el mismo techo que respeta la barra lateral. Cada tarjeta ya se
+          desplaza por dentro (.settings-config-grid > .placeholder-card). */}
+      <div className="settings-config-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gridTemplateRows: 'repeat(2, minmax(0, 1fr))', gap: 16, alignItems: 'stretch', flex: 1, minHeight: 0 }}>
       <AccountCard />
 
       <div className="placeholder-card">
@@ -651,7 +656,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           return (
             <>
             <div className="provider-card__body">
-              <div className="provider-card__list" style={{ maxHeight: 234 }}>
+              <div className="provider-card__list">
                 <SortableList ids={configuredIds} onChange={setImgEnabled} gap={8} renderRow={(id, idx, { dragging, handleProps }) => {
                   const h = metaOf(id); if (!h) return null
                   const isDefault = id === 'imgbox'
@@ -1914,8 +1919,13 @@ export function SettingsPage() {
   ]
 
   return (
-    <div>
-      <div className="page-header">
+    // Llena el alto de la página y no más: mismo patrón que Biblioteca, para
+    // que las tarjetas de Configuración quepan entre la cabecera y el borde
+    // inferior en vez de desbordar y poner la página entera a hacer scroll.
+    // Lo que sobra se lo queda el contenido de la pestaña, y cada pestaña
+    // decide si lo rellena (Configuración) o lo desplaza (las demás).
+    <div style={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      <div className="page-header" style={{ flexShrink: 0 }}>
         <div>
           <div className="page-title">Configuración</div>
           <div className="page-subtitle">Ajustes, diagnóstico, backup y mantenimiento</div>
@@ -1934,7 +1944,7 @@ export function SettingsPage() {
         )}
       </div>
 
-      <div style={{ display: 'flex', gap: 2, marginBottom: 20, borderBottom: '1px solid var(--border)' }}>
+      <div style={{ display: 'flex', gap: 2, marginBottom: 20, borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
         {tabs.map(t => (
           <button
             key={t.key}
@@ -1951,13 +1961,18 @@ export function SettingsPage() {
         />
       </div>
 
-      <SettingsMessageContext.Provider value={showMessage}>
-        {tab === 'config' && <ConfigTab onExposeSave={setSaveAction} />}
-        {tab === 'notifications' && <NotificationsTab onExposeSave={setSaveAction} />}
-        {tab === 'diagnostics' && <DiagnosticsTab status={status} />}
-        {tab === 'backup' && <BackupTab status={status} onRefresh={loadStatus} />}
-        {tab === 'maintenance' && <MaintenanceTab />}
-      </SettingsMessageContext.Provider>
+      {/* overflowY auto y no hidden: Configuración se ajusta sola y nunca lo
+          usa, pero las otras pestañas sí crecen más que la pantalla y tienen
+          que poder desplazarse. */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+        <SettingsMessageContext.Provider value={showMessage}>
+          {tab === 'config' && <ConfigTab onExposeSave={setSaveAction} />}
+          {tab === 'notifications' && <NotificationsTab onExposeSave={setSaveAction} />}
+          {tab === 'diagnostics' && <DiagnosticsTab status={status} />}
+          {tab === 'backup' && <BackupTab status={status} onRefresh={loadStatus} />}
+          {tab === 'maintenance' && <MaintenanceTab />}
+        </SettingsMessageContext.Provider>
+      </div>
     </div>
   )
 }

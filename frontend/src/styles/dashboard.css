@@ -427,7 +427,13 @@
    organically outgrows that height (e.g. a long provider list), so it
    scrolls internally instead of being silently clipped. */
 .settings-config-grid > .placeholder-card {
-  height: 460px;
+  /* Antes: 460px fijos. Dos filas de 460 más el hueco eran 936px de tarjetas,
+     que en 1080p no caben y ponían la página entera a hacer scroll. Ahora cada
+     fila se lleva la mitad del alto que quede (grid-template-rows en
+     SettingsPage), la tarjeta lo ocupa entero y es ella la que se desplaza por
+     dentro. Así las dos filas juntas nunca pasan del alto de la ventana. */
+  height: 100%;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -439,7 +445,14 @@
 .settings-config-grid > .placeholder-card.provider-card {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  /* Sin `overflow: hidden`. Lo llevaba, y anulaba el `overflow-y: auto` que
+     tienen las otras seis tarjetas: mientras todas medían 460px fijos daba
+     igual, porque el hueco estaba calculado para que cupiera todo. Con la
+     tarjeta ya ajustándose a la ventana, lo que no cabía se recortaba sin
+     forma de llegar a ello: con muchos proveedores añadidos no se veían los
+     últimos ni se alcanzaba el botón de añadir. Ahora hereda el auto del
+     selector general, que es la red de seguridad para cuando ni la cabecera
+     cabe. */
 }
 
 .provider-card__body {
@@ -449,8 +462,18 @@
   flex-direction: column;
 }
 
+/* Se queda con el alto que sobre y se desplaza por dentro, en vez de medir un
+   alto fijo que no encogía (flex-shrink: 0 y un max-height en el JSX). Así el
+   botón de añadir sigue anclado abajo y siempre visible, que era la gracia de
+   esta tarjeta, pero la lista deja de empujarlo fuera de la vista. */
 .provider-card__list {
-  flex-shrink: 0;
+  flex: 1;
+  /* Tres filas. No es `min-height: 0` porque entonces la lista es lo primero
+     que cede: con la interfaz al 150% se quedaba en 26px, desplazable pero
+     inservible, mientras el título y el botón seguían enteros. Con este suelo,
+     cuando ya no cabe la que cede es la tarjeta, que se desplaza como las otras
+     seis. */
+  min-height: 132px;
   overflow-y: auto;
 }
 

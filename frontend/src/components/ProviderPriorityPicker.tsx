@@ -103,7 +103,7 @@ export function ProviderPriorityPicker({ order, onChange, linkIcons = true }: Pr
         </p>
       )}
       {order.length > 0 && (
-        <div className="provider-card__list" style={{ maxHeight: 226 }}>
+        <div className="provider-card__list">
           <SortableList ids={order} onChange={onChange} renderRow={(code, idx, { dragging, handleProps }) => {
             const opt = options.find(p => p.code === code)
             return (

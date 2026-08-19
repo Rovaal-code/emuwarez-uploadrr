@@ -443,15 +443,13 @@ optgroup {
   margin-bottom: 20px;
 }
 
-/* Antes: 1400px. Las media queries se evalúan contra la ventana REAL, no
-   contra el espacio que el zoom deja al contenido. Con la escala en su mínimo
-   (0,75) el contenido dispone de ancho / 0,75, así que los mismos 1400px de
-   contenido de siempre se alcanzan ahora con una ventana de 1050px. Ver
-   ESCALA_MINIMA y CORTE_ESTRECHO en utils/uiScale.ts. */
-@media (max-width: 1050px) {
-  .stat-cards-row {
-    grid-template-columns: repeat(3, 1fr);
-  }
+/* Antes esto era un @media (max-width: 1400px). Las media queries miran la
+   ventana REAL y el zoom del tamaño de interfaz no existe para ellas: al 150%
+   en una pantalla de 1920 el contenido solo dispone de 1280 y necesita la
+   disposición estrecha, pero la media query sigue viendo 1920 y no salta. El
+   corte lo decide ahora utils/uiScale.ts y lo publica como esta clase. */
+.ui-estrecha .stat-cards-row {
+  grid-template-columns: repeat(3, 1fr);
 }
 
 /* Filters bar */

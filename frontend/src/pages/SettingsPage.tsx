@@ -28,6 +28,7 @@ import { CheckStatusIcon } from '../components/DetailCard'
 import { testResultLabel, testResultColor, emuTestCooldownSeconds } from '../utils/integrationResult'
 import { getMe, changeCredentials } from '../api/auth'
 import { useTooltip, HoverTitle } from '../components/Tooltip'
+import { TAMANOS, TAMANO_POR_DEFECTO, tamanoUi, guardarTamano } from '../utils/uiScale'
 import { isValidHttpUrl } from '../utils/validation'
 import { getUploadConcurrencyEstimate, type UploadConcurrencyEstimate } from '../api/system'
 import { MODOS_PISTAS, MODO_PISTAS_POR_DEFECTO, normalizarModo, type ModoPistas } from '../utils/modoPistas'
@@ -184,6 +185,10 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const [newEmuKey, setNewEmuKey] = useState('')
   const [emuUsername, setEmuUsername] = useState('')
   const [ignoreSpecials, setIgnoreSpecials] = useState(true)
+  // Tamaño de interfaz. Arranca de lo que ya está aplicado (utils/uiScale lo
+  // puso al cargar la página desde localStorage), no de un valor por defecto:
+  // si no, el desplegable diría 100% mientras la interfaz está al 130%.
+  const [tamanoInterfaz, setTamanoInterfaz] = useState(tamanoUi)
   // Internal Source Tool: apagada por defecto, sigue en desarrollo.
   const [sourceEngine, setSourceEngine] = useState(false)
   // El logo del contenido en la descripción: se sube por defecto.
@@ -868,7 +873,22 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                   onChange={e => setModoDePistas(normalizarModo(e.target.value))}>
             {MODOS_PISTAS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
           </select>
-        </div>        <div className="form-group">
+        </div>        {/* El único ajuste de esta pestaña que NO se guarda con el botón: es
+            de este navegador, no de la instalación, y se aplica y se recuerda
+            al elegirlo. Ver utils/uiScale.ts. */}
+        <div className="form-group">
+          <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            Tamaño de interfaz
+            <InfoIcon text="Agranda o encoge la interfaz entera, para ajustarla a tu pantalla. La misma resolución se ve muy distinta según el tamaño del monitor y a la distancia que lo tengas, así que aquí no se adivina nada: lo eliges tú y se aplica al momento. Se guarda solo en este navegador, así que puedes tener un tamaño en el sobremesa y otro en el portátil, y no entra en el backup de configuración." />
+          </label>
+          <select className="form-input form-select" value={tamanoInterfaz}
+                  onChange={e => setTamanoInterfaz(guardarTamano(Number(e.target.value)))}>
+            {TAMANOS.map(t => (
+              <option key={t} value={t}>{t}%{t === TAMANO_POR_DEFECTO ? ' (por defecto)' : ''}</option>
+            ))}
+          </select>
+        </div>
+        <div className="form-group">
           <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             Internal Source Tool
             <InfoIcon text="Herramienta interna que deduce el source analizando el archivo real con MediaInfo, FFprobe y MKVToolNix, sin mirar el nombre. Todavía está en desarrollo y puede ser inexacta, por eso viene desactivada. Activada, añade su columna a la comparación de Source y participa en el aviso de discrepancia. Desactivada, esa columna sale vacía y el aviso compara solo el nombre del archivo con Radarr/Sonarr; el source final no cambia salvo en archivos donde ni el nombre ni Radarr/Sonarr dicen nada, que siguen usando la estimación por bitrate de siempre." />

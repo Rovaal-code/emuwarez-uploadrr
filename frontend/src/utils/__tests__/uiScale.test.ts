@@ -1,54 +1,77 @@
 import { describe, it, expect } from 'vitest'
 import {
-  escalaPara,
-  ANCHO_REFERENCIA,
-  ESCALA_MINIMA,
-  ESCALA_MAXIMA,
-  CORTE_ESTRECHO,
+  normalizarTamano,
+  esEstrecha,
+  TAMANOS,
+  TAMANO_POR_DEFECTO,
+  ANCHO_ESTRECHO,
 } from '../uiScale'
 
-describe('escalaPara', () => {
-  it('deja la interfaz tal cual en la resolución para la que está calibrada', () => {
-    expect(escalaPara(ANCHO_REFERENCIA)).toBe(1)
+describe('TAMANOS', () => {
+  it('ofrece del 50% al 150% de diez en diez, con el 100% dentro', () => {
+    expect(TAMANOS).toEqual([50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150])
+    expect(TAMANOS).toContain(TAMANO_POR_DEFECTO)
+  })
+})
+
+describe('normalizarTamano', () => {
+  it('deja pasar los valores del desplegable', () => {
+    for (const t of TAMANOS) expect(normalizarTamano(t)).toBe(t)
   })
 
-  it('encoge en 1080p, para que ocupe la misma proporción que en 2K', () => {
-    expect(escalaPara(1920)).toBe(0.75)
+  it('entiende el número guardado como texto, que es como sale de localStorage', () => {
+    expect(normalizarTamano('120')).toBe(120)
+    expect(normalizarTamano('90')).toBe(90)
   })
 
-  it('crece en 4K, que es donde se quedaba en miniatura', () => {
-    expect(escalaPara(3840)).toBe(1.5)
+  it('cae en el 100% ante cualquier cosa que no sea un número', () => {
+    expect(normalizarTamano(null)).toBe(TAMANO_POR_DEFECTO)
+    expect(normalizarTamano(undefined)).toBe(TAMANO_POR_DEFECTO)
+    expect(normalizarTamano('grande')).toBe(TAMANO_POR_DEFECTO)
+    expect(normalizarTamano(NaN)).toBe(TAMANO_POR_DEFECTO)
+    expect(normalizarTamano(Infinity)).toBe(TAMANO_POR_DEFECTO)
   })
 
-  it('no sigue encogiendo por debajo de 1080p: ahí el texto se volvería ilegible', () => {
-    expect(escalaPara(1280)).toBe(ESCALA_MINIMA)
-    expect(escalaPara(800)).toBe(ESCALA_MINIMA)
-    expect(escalaPara(0)).toBe(ESCALA_MINIMA)
+  it('acota lo que se salga del rango, en vez de aplicarlo', () => {
+    // Un valor manipulado a mano en localStorage no debe poder dejar la
+    // interfaz en un tamaño del que no se pueda salir.
+    expect(normalizarTamano(0)).toBe(50)
+    expect(normalizarTamano(-300)).toBe(50)
+    expect(normalizarTamano(5000)).toBe(150)
   })
 
-  it('tiene tope por arriba, para que una pantalla enorme no la infle sin fin', () => {
-    expect(escalaPara(8000)).toBe(ESCALA_MAXIMA)
+  it('redondea al escalón más cercano', () => {
+    expect(normalizarTamano(94)).toBe(90)
+    expect(normalizarTamano(96)).toBe(100)
+    expect(normalizarTamano(125)).toBe(120)   // empate: se queda con el primero
+  })
+})
+
+describe('esEstrecha', () => {
+  // El corte ya no puede ser una media query: esas miran la ventana real y el
+  // zoom no existe para ellas. Lo que decide es el ancho de CONTENIDO, que es
+  // ancho de ventana dividido por la escala.
+  it('mira el ancho de contenido, no el de la ventana', () => {
+    // 1920 de ventana al 150% deja 1280 de contenido: estrecha, aunque la
+    // ventana sea de sobra ancha. Este es justo el caso que la media query
+    // no veía.
+    expect(esEstrecha(1920, 150)).toBe(true)
+    expect(esEstrecha(1920, 100)).toBe(false)
   })
 
-  it('redondea, para no repintar por diferencias invisibles', () => {
-    // 2000 / 2560 = 0.78125 exacto
-    expect(escalaPara(2000)).toBe(0.781)
+  it('al revés también: una ventana estrecha deja de serlo si encoges la interfaz', () => {
+    expect(esEstrecha(1280, 100)).toBe(true)
+    expect(esEstrecha(1280, 50)).toBe(false)   // 2560 de contenido
   })
 
-  it('crece de forma monótona con el ancho', () => {
-    const anchos = [800, 1280, 1600, 1920, 2200, 2560, 3000, 3840, 5120]
-    const escalas = anchos.map(escalaPara)
-    for (let i = 1; i < escalas.length; i++) {
-      expect(escalas[i]).toBeGreaterThanOrEqual(escalas[i - 1])
+  it('el corte cae exactamente en ANCHO_ESTRECHO', () => {
+    expect(esEstrecha(ANCHO_ESTRECHO, 100)).toBe(false)
+    expect(esEstrecha(ANCHO_ESTRECHO - 1, 100)).toBe(true)
+  })
+
+  it('al 100% se comporta igual que la media query de siempre', () => {
+    for (const ancho of [800, 1024, 1280, 1399, 1400, 1401, 1920, 2560, 3840]) {
+      expect(esEstrecha(ancho, 100)).toBe(ancho < 1400)
     }
-  })
-
-  it('el corte estrecho del CSS es el ancho de ventana que deja 1400px de contenido', () => {
-    // Las media queries miran la ventana real, no el espacio que el zoom deja
-    // al contenido: con la escala en su mínimo, 1400px de contenido salen de
-    // una ventana de CORTE_ESTRECHO. Si esto cambia, hay que tocar el
-    // "max-width" de components.css y dashboard.css.
-    expect(CORTE_ESTRECHO).toBe(1050)
-    expect(CORTE_ESTRECHO / escalaPara(CORTE_ESTRECHO)).toBeCloseTo(1400, 0)
   })
 })

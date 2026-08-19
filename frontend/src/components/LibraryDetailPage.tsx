@@ -53,6 +53,16 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
   const [parentSeason, setParentSeason] = useState<LibraryItemResponse | null>(null)
   const [parentSeries, setParentSeries] = useState<LibraryItemResponse | null>(null)
   const [showRuta, setShowRuta] = useState(false)
+  // Pliega el póster y las tres tarjetas para que la tabla de temporadas o
+  // capítulos se quede con ese alto: la tabla ya llena el hueco que le sobra
+  // (LibraryChildrenSection), así que encoger esto la agranda sola.
+  //
+  // No se guarda en ninguna parte: se abre desplegada al entrar en Biblioteca y
+  // se olvida al recargar. Sí se mantiene mientras navegas de una serie a su
+  // temporada, que es justo cuando lo has plegado para ver capítulos y no
+  // querrías tener que volver a plegarlo en cada salto.
+  const [fichaPlegada, setFichaPlegada] = useState(false)
+  const tieneTabla = item.item_type === 'series' || item.item_type === 'season'
   const originTip = useTooltip(deepLink ? `Abrir en ${item.instance_name ?? item.instance_type}` : null)
 
   useEffect(() => {
@@ -106,7 +116,10 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
         <DetailTitle><DetailTitleText title={item.display_title || item.title} /></DetailTitle>
       </div>
 
-      <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+      {/* Lo que se pliega con la flecha del título de Temporadas/Capítulos: el
+          póster y las tres tarjetas. Fuera se quedan el título del elemento y
+          sus botones, que son lo que sigue haciendo falta con la tabla grande. */}
+      <div style={{ display: fichaPlegada && tieneTabla ? 'none' : 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
         <DetailPoster
           url={item.poster_url ? posterUrl(item.poster_url, 'w500') : null}
           alt={item.title}
@@ -248,11 +261,13 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
       </div>
 
       {item.item_type === 'series' && (
-        <LibraryChildrenSection parentId={item.id} childType="season" title="Temporadas" instances={instances} onSelect={onSelect} onAction={onAction} />
+        <LibraryChildrenSection parentId={item.id} childType="season" title="Temporadas" instances={instances} onSelect={onSelect} onAction={onAction}
+          fichaPlegada={fichaPlegada} onAlternarFicha={() => setFichaPlegada(v => !v)} />
       )}
 
       {item.item_type === 'season' && (
-        <LibraryChildrenSection parentId={item.id} childType="episode" title="Capítulos" instances={instances} onSelect={onSelect} onAction={onAction} />
+        <LibraryChildrenSection parentId={item.id} childType="episode" title="Capítulos" instances={instances} onSelect={onSelect} onAction={onAction}
+          fichaPlegada={fichaPlegada} onAlternarFicha={() => setFichaPlegada(v => !v)} />
       )}
     </div>
   )

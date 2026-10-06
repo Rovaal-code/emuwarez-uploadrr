@@ -1761,11 +1761,18 @@ def delete_upload_job(job_id: int, confirmation: str | None = None, conn=None) -
         # que es la gracia de todo esto (ver services/carpeta_subida.py). Y
         # solo si la ruta está dentro de la carpeta de subidas, así que un
         # prepared_path que apunte a la biblioteca no se toca.
+        #
+        # Los de una subida completada se quedan: es de ahí de donde siembra
+        # qBittorrent, y quitarlos lo deja sin ficheros. Los intentos fallidos
+        # de la misma cadena suelen apuntar al mismo enlace, así que tampoco.
         from .carpeta_subida import borrar_de_subidas
         marcas = ",".join("?" * len(chain))
-        for fila in conn.execute(
-                f"SELECT prepared_path FROM upload_jobs WHERE id IN ({marcas})", chain).fetchall():
-            borrar_de_subidas(fila["prepared_path"])
+        filas = conn.execute(
+            f"SELECT prepared_path, status FROM upload_jobs WHERE id IN ({marcas})", chain).fetchall()
+        sembrando = {f["prepared_path"] for f in filas if f["status"] == "completed"}
+        for fila in filas:
+            if fila["prepared_path"] not in sembrando:
+                borrar_de_subidas(fila["prepared_path"])
         conn.execute(f"DELETE FROM upload_artifacts WHERE upload_job_id IN ({marcas})", chain)
         conn.execute(f"DELETE FROM upload_job_logs WHERE upload_job_id IN ({marcas})", chain)
         conn.execute(f"UPDATE filesystem_operations SET upload_job_id = NULL WHERE upload_job_id IN ({marcas})", chain)

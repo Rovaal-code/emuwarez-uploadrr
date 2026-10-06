@@ -204,3 +204,47 @@ def test_borrar_un_enlace_simbolico_no_sigue_hasta_el_original(biblioteca, tmp_p
     assert borrar_de_subidas(enlace, raiz=up) is True
     assert not _os.path.lexists(enlace)
     assert _os.path.isfile(biblioteca["ficheros"][0]), "el original NO se toca"
+
+
+def _subida(conn, status, prepared_path, retry_of=None):
+    return conn.execute(
+        "INSERT INTO upload_jobs (title, path, status, stage, prepared_path, retry_of_job_id, created_at, updated_at)"
+        " VALUES ('X', '', ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+        (status, status, prepared_path, retry_of),
+    ).lastrowid
+
+
+def test_borrar_una_subida_completada_deja_lo_que_siembra_qbittorrent(biblioteca, monkeypatch, isolated_db):
+    """El enlace de una subida completada es de donde siembra qBittorrent. El
+    intento fallido de antes apunta al mismo enlace y tampoco puede llevárselo."""
+    from emuwarez_uploadrr.database import connect, init_db
+    from emuwarez_uploadrr.services import carpeta_subida
+    from emuwarez_uploadrr.services.upload_execution import DELETE_CONFIRMATION_TOKEN, delete_upload_job
+
+    monkeypatch.setattr(carpeta_subida, "RAIZ_SUBIDAS", biblioteca["uploads"])
+    enlace = preparar_fichero_suelto(biblioteca["ficheros"][0], raiz=biblioteca["uploads"])["ruta"]
+    conn = connect()
+    init_db(conn)
+    fallido = _subida(conn, "failed", enlace)
+    _subida(conn, "completed", enlace, retry_of=fallido)
+    conn.commit()
+
+    assert delete_upload_job(fallido, confirmation=DELETE_CONFIRMATION_TOKEN, conn=conn)["ok"]
+    assert os.path.lexists(enlace)
+
+
+def test_borrar_una_subida_fallida_quita_su_enlace(biblioteca, monkeypatch, isolated_db):
+    from emuwarez_uploadrr.database import connect, init_db
+    from emuwarez_uploadrr.services import carpeta_subida
+    from emuwarez_uploadrr.services.upload_execution import DELETE_CONFIRMATION_TOKEN, delete_upload_job
+
+    monkeypatch.setattr(carpeta_subida, "RAIZ_SUBIDAS", biblioteca["uploads"])
+    enlace = preparar_fichero_suelto(biblioteca["ficheros"][0], raiz=biblioteca["uploads"])["ruta"]
+    conn = connect()
+    init_db(conn)
+    fallido = _subida(conn, "failed", enlace)
+    conn.commit()
+
+    assert delete_upload_job(fallido, confirmation=DELETE_CONFIRMATION_TOKEN, conn=conn)["ok"]
+    assert not os.path.lexists(enlace)
+    assert os.path.exists(biblioteca["ficheros"][0])

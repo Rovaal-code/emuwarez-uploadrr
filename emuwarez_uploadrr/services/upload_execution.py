@@ -19,6 +19,7 @@ import signal
 import subprocess
 import sys
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -1077,6 +1078,7 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
             stderr=subprocess.PIPE,
             stdin=subprocess.DEVNULL,
             text=True,
+            errors="replace",
             cwd=cwd if os.path.isdir(cwd) else None,
             env=env,
         )
@@ -1141,8 +1143,14 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
                 line = line.rstrip("\n")
                 safe_line = redact_secrets(line, secrets)
                 buf.append(safe_line)
-                append_upload_log(job_id, level, safe_line, stream=stream_name)
-                _track_uploadrr_progress(safe_line)
+                # Si guardar la línea falla (base bloqueada, disco lleno) se
+                # sigue leyendo: sin nadie vaciando la tubería, Uploadrr se
+                # queda bloqueado escribiendo hasta el timeout.
+                try:
+                    append_upload_log(job_id, level, safe_line, stream=stream_name)
+                    _track_uploadrr_progress(safe_line)
+                except Exception:
+                    logger.exception("Subida %s: no se pudo registrar una línea de %s", job_id, stream_name)
 
         t_out = threading.Thread(
             target=_read_stream,
@@ -1156,8 +1164,10 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
         )
         t_out.start()
         t_err.start()
+        # Un solo plazo para los dos: esperar `timeout` a cada uno lo doblaba.
+        inicio = time.monotonic()
         t_out.join(timeout=timeout)
-        t_err.join(timeout=timeout)
+        t_err.join(timeout=None if timeout is None else max(0, inicio + timeout - time.monotonic()))
 
         timed_out = t_out.is_alive() or t_err.is_alive()
         if timed_out:

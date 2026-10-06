@@ -96,3 +96,51 @@ def test_restore_config_backup_not_found(config_dir):
     result = restore_config_backup("/nonexistent/path.tar.gz")
     assert result["ok"] is False
     assert "no encontrado" in result["error"].lower()
+
+
+def test_la_copia_de_una_base_en_uso_se_puede_abrir(tmp_path, monkeypatch):
+    """Con la app escribiendo, copiar el .db, el -wal y el -shm por separado
+    daba copias rotas. La copia lleva una instantánea, sin -wal ni -shm."""
+    import sqlite3
+    import threading
+
+    from emuwarez_uploadrr.database import connect
+
+    config = tmp_path / "config"
+    config.mkdir()
+    monkeypatch.setenv("CONFIG_DIR", str(config))
+    db = config / "emuwarez_uploadrr.db"
+    conn = connect(db)
+    conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, pad TEXT)")
+    conn.commit()
+    conn.close()
+
+    parar = threading.Event()
+    escritas = threading.Event()
+
+    def escribir():
+        conn = connect(db)
+        while not parar.is_set():
+            conn.executemany("INSERT INTO t(pad) VALUES (?)", [("x" * 300,)] * 50)
+            conn.commit()
+            escritas.set()
+        conn.close()
+
+    hilo = threading.Thread(target=escribir)
+    hilo.start()
+    try:
+        assert escritas.wait(10)
+        for i in range(5):
+            result = create_config_backup()
+            destino = tmp_path / f"restaurada{i}"
+            with tarfile.open(result["archive_path"]) as tar:
+                assert tar.getnames() == ["emuwarez_uploadrr.db"]
+                tar.extractall(destino, filter="data")
+            copia = sqlite3.connect(destino / "emuwarez_uploadrr.db")
+            assert copia.execute("PRAGMA integrity_check").fetchone() == ("ok",)
+            filas, maximo = copia.execute("SELECT count(*), max(id) FROM t").fetchone()
+            assert filas == maximo > 0
+            copia.close()
+    finally:
+        parar.set()
+        hilo.join()

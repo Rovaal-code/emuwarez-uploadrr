@@ -4,10 +4,35 @@ from __future__ import annotations
 import datetime
 import os
 import shutil
+import sqlite3
 import tarfile
+import tempfile
 from pathlib import Path
 
 RESTORE_CONFIRMATION = "RESTAURAR_CONFIG"
+_DB_NAME = "emuwarez_uploadrr.db"
+
+
+def _add_db_snapshot(tar: tarfile.TarFile, db_file: Path, arcname: str) -> None:
+    """Mete en la copia una instantánea coherente de la base de datos.
+
+    Con la app en marcha la base está en modo WAL: copiar el .db, el -wal y el
+    -shm uno detrás de otro mientras alguien escribe da una copia rota. La API
+    de backup de SQLite lee todo dentro de una misma transacción.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        snapshot = Path(tmp) / db_file.name
+        src = sqlite3.connect(str(db_file), timeout=30)
+        dst = sqlite3.connect(str(snapshot))
+        try:
+            src.backup(dst)
+        except sqlite3.DatabaseError:
+            # Si no se puede leer como SQLite, se copia tal cual, como siempre.
+            snapshot = db_file
+        finally:
+            dst.close()
+            src.close()
+        tar.add(snapshot, arcname=arcname)
 
 
 def _get_config_dir() -> Path:
@@ -95,7 +120,6 @@ def create_config_backup(
     # copia de configuración no puede engordar con el catálogo.
     excluded_dirs = {"backups"}
     excluded_paths = {("Uploadrr", "uploads")}
-    secret_keys = {"tmdb_api_key", "emu_api_key"}
 
     with tarfile.open(archive_path, "w:gz") as tar:
         for item in sorted(config_dir.rglob("*")):
@@ -104,12 +128,16 @@ def create_config_backup(
                 continue
             if any(rel.parts[:len(p)] == p for p in excluded_paths):
                 continue
-            if item.is_file():
-                if not include_secrets and item.name == "emuwarez_uploadrr.db":
-                    # still include db — secrets are in db rows but tar includes it
-                    # we only skip if caller explicitly opted out (db is always included)
-                    pass
-                tar.add(item, arcname=str(rel))
+            if not item.is_file() or item.name in (f"{_DB_NAME}-wal", f"{_DB_NAME}-shm"):
+                continue
+            try:
+                if item.name == _DB_NAME:
+                    _add_db_snapshot(tar, item, str(rel))
+                else:
+                    tar.add(item, arcname=str(rel))
+            except FileNotFoundError:
+                # Un temporal que desaparece entre listarlo y copiarlo.
+                continue
 
     size = archive_path.stat().st_size
     return {

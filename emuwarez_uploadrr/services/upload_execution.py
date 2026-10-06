@@ -1317,12 +1317,16 @@ def start_upload_job(
     confirmation: str | None = None,
     conn=None,
     pre_gated: bool = False,
+    wait: bool = False,
 ) -> dict:
     """Start or preview a job.
 
     pre_gated=True: the caller already holds this job's concurrency slot
     (see _run_uploadrr_subprocess) — passed through unchanged to the spawned
     thread, not acted on here.
+
+    wait=True: no volver hasta que la subida termine. Lo necesita el CLI, que
+    sale al volver de aquí y se llevaría por delante el hilo (es daemon).
 
     - dry_run=True (default): validate and return command preview, do not execute.
     - dry_run=False, start=True, confirmation=INICIAR_UPLOADRR: execute real Uploadrr.
@@ -1424,17 +1428,22 @@ def start_upload_job(
         logger.info("Subida iniciada (job %s): «%s»", job_id,
                     (job or {}).get("title") or (job or {}).get("torrent_name") or "?")
 
+        final = {"status": "running", "stage": "running"}
+        if wait:
+            t.join()
+            final = get_upload_job(job_id, conn=conn) or final
+
         return {
             "job_id": job_id,
             "action": "started",
-            "status": "running",
-            "stage": "running",
+            "status": final.get("status"),
+            "stage": final.get("stage"),
             "dry_run": False,
             "errors": [],
             "warnings": validation.get("warnings", []),
             "command_preview": redact_secrets(cmd.get("command_preview", ""), secrets),
             "using_prepared_path": cmd.get("using_prepared_path"),
-            "message": "Uploadrr iniciado en background. Consulta los logs para el progreso.",
+            "message": "Uploadrr ha terminado." if wait else "Uploadrr iniciado en background. Consulta los logs para el progreso.",
             "error": None,
         }
     finally:
@@ -1448,6 +1457,7 @@ def retry_upload_job(
     dry_run: bool = True,
     start: bool = False,
     confirmation: str | None = None,
+    wait: bool = False,
 ) -> dict:
     """Create a new upload_job as a retry of job_id.
 
@@ -1520,6 +1530,18 @@ def retry_upload_job(
                 "message": f'Se requiere confirmación exacta: "{CONFIRMATION_TOKEN}".',
             }
 
+        from .upload_queue import trabajo_activo
+        activa = trabajo_activo(conn, original.get("library_item_id"))
+        if activa:
+            return {
+                "ok": False,
+                "action": "blocked",
+                "dry_run": False,
+                "error": "blocked",
+                "job_id": job_id,
+                "message": f"Ya hay una subida en curso para este contenido (job {activa['id']}).",
+            }
+
         # Create new job
         now = _now()
         retry_count = (original.get("retry_count") or 0) + 1
@@ -1560,6 +1582,7 @@ def retry_upload_job(
             start=True,
             confirmation=CONFIRMATION_TOKEN,
             conn=conn,
+            wait=wait,
         )
         result["retry_of_job_id"] = job_id
         result["retry_count"] = retry_count

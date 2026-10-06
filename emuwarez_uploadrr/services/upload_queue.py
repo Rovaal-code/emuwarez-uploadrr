@@ -76,6 +76,15 @@ def _find_latest_job_for_item(conn, item_id: int) -> dict | None:
     return row_to_dict(row)
 
 
+def trabajo_activo(conn, item_id: int) -> dict | None:
+    """El trabajo en marcha de este elemento, si hay alguno."""
+    return row_to_dict(conn.execute(
+        f"SELECT * FROM upload_jobs WHERE library_item_id = ? AND status IN "
+        f"({','.join('?' * len(ACTIVE_JOB_STATUSES))}) ORDER BY id DESC LIMIT 1",
+        (item_id, *ACTIVE_JOB_STATUSES),
+    ).fetchone())
+
+
 def _insert_and_start_queued_job(
     conn, item: dict, *,
     request_item_id: int | None = None,
@@ -128,11 +137,7 @@ def _insert_and_start_queued_job(
     conn.isolation_level = None
     try:
         conn.execute("BEGIN IMMEDIATE")
-        activa = row_to_dict(conn.execute(
-            f"SELECT * FROM upload_jobs WHERE library_item_id = ? AND status IN "
-            f"({','.join('?' * len(ACTIVE_JOB_STATUSES))}) ORDER BY id DESC LIMIT 1",
-            (item["id"], *ACTIVE_JOB_STATUSES),
-        ).fetchone())
+        activa = trabajo_activo(conn, item["id"])
         if activa:
             conn.execute("ROLLBACK")
             return {

@@ -121,33 +121,57 @@ def _insert_and_start_queued_job(
     queued_until = (now + timedelta(seconds=QUEUE_GRACE_SECONDS)).isoformat()
     now_iso = now.isoformat()
 
-    cursor = conn.execute(
-        """
-        INSERT INTO upload_jobs (
-            library_item_id, request_item_id, status, stage, title, path, source_path,
-            queued_until, retry_of_job_id, retry_count, checks_snapshot_json,
-            nomenclature_proposal_id, nomenclature_snapshot_json,
-            remux_overrides_json, remux_snapshot_json, season_overrides_json,
-            created_at, updated_at
-        ) VALUES (?, ?, 'queued', 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            item["id"], request_item_id,
-            item.get("title") or "Sin título",
-            item.get("path") or "",
-            item.get("path"),
-            queued_until,
-            retry_of_job_id, retry_count,
-            json.dumps(checks, ensure_ascii=False) if checks else None,
-            nomenclature_proposal_id,
-            json.dumps(nomenclature_snapshot, ensure_ascii=False, default=str) if nomenclature_snapshot else None,
-            json.dumps(remux_overrides, ensure_ascii=False) if remux_overrides else None,
-            json.dumps(remux_snapshot, ensure_ascii=False) if remux_snapshot else None,
-            json.dumps(season_overrides, ensure_ascii=False) if season_overrides else None,
-            now_iso, now_iso,
-        ),
-    )
-    conn.commit()
+    # Comprobar y crear en la misma transacción: con dos clics en "Reintentar"
+    # o dos pestañas, las dos peticiones pasaban la comprobación antes de que
+    # ninguna insertara, y el mismo contenido se subía dos veces.
+    prior_isolation = conn.isolation_level
+    conn.isolation_level = None
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        activa = row_to_dict(conn.execute(
+            f"SELECT * FROM upload_jobs WHERE library_item_id = ? AND status IN "
+            f"({','.join('?' * len(ACTIVE_JOB_STATUSES))}) ORDER BY id DESC LIMIT 1",
+            (item["id"], *ACTIVE_JOB_STATUSES),
+        ).fetchone())
+        if activa:
+            conn.execute("ROLLBACK")
+            return {
+                "status": "blocked",
+                "errors": ["Ya hay una subida en curso para este contenido."],
+                "job": activa,
+            }
+        cursor = conn.execute(
+            """
+            INSERT INTO upload_jobs (
+                library_item_id, request_item_id, status, stage, title, path, source_path,
+                queued_until, retry_of_job_id, retry_count, checks_snapshot_json,
+                nomenclature_proposal_id, nomenclature_snapshot_json,
+                remux_overrides_json, remux_snapshot_json, season_overrides_json,
+                created_at, updated_at
+            ) VALUES (?, ?, 'queued', 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                item["id"], request_item_id,
+                item.get("title") or "Sin título",
+                item.get("path") or "",
+                item.get("path"),
+                queued_until,
+                retry_of_job_id, retry_count,
+                json.dumps(checks, ensure_ascii=False) if checks else None,
+                nomenclature_proposal_id,
+                json.dumps(nomenclature_snapshot, ensure_ascii=False, default=str) if nomenclature_snapshot else None,
+                json.dumps(remux_overrides, ensure_ascii=False) if remux_overrides else None,
+                json.dumps(remux_snapshot, ensure_ascii=False) if remux_snapshot else None,
+                json.dumps(season_overrides, ensure_ascii=False) if season_overrides else None,
+                now_iso, now_iso,
+            ),
+        )
+        conn.execute("COMMIT")
+    except BaseException:
+        conn.execute("ROLLBACK")
+        raise
+    finally:
+        conn.isolation_level = prior_isolation
     job_id = cursor.lastrowid
 
     # Nace un trabajo. Hay que avisar AQUÍ y no confiar en escribir_estado(),
@@ -193,12 +217,6 @@ def queue_upload_for_item(
             return {"status": "blocked", "errors": ["Item no encontrado."], "job": None}
 
         latest = _find_latest_job_for_item(conn, item_id)
-        if latest and latest.get("status") in ACTIVE_JOB_STATUSES:
-            return {
-                "status": "blocked",
-                "errors": ["Ya hay una subida en curso para este contenido."],
-                "job": latest,
-            }
         retry_of_job_id = latest["id"] if latest else None
         retry_count = (latest.get("retry_count") or 0) + 1 if latest else 0
 

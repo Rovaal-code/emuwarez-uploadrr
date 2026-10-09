@@ -156,6 +156,17 @@ def preparar_fichero_suelto(fichero: str, *, raiz: Optional[str] = None) -> dict
             "enlaces": [tipo], "cuantos": 1}
 
 
+def en_carpeta_de_subidas(ruta: str, *, raiz: Optional[str] = None) -> bool:
+    """Si la ruta está en la carpeta de subidas, aunque sea un enlace simbólico
+    que apunta a la biblioteca.
+
+    Mira el realpath del PADRE, no el de la ruta: resolver el enlace la dejaría
+    fuera de la raíz.
+    """
+    raiz = raiz or RAIZ_SUBIDAS
+    return os.path.realpath(os.path.dirname(ruta)).startswith(os.path.realpath(raiz))
+
+
 def borrar_de_subidas(ruta: Optional[str], *, raiz: Optional[str] = None) -> bool:
     """Borra de la carpeta de subidas, sea una carpeta de pack o un fichero
     suelto. Solo borra ENLACES: lo de verdad sigue en la biblioteca.
@@ -167,10 +178,7 @@ def borrar_de_subidas(ruta: Optional[str], *, raiz: Optional[str] = None) -> boo
     raiz = raiz or RAIZ_SUBIDAS
     if not ruta or not os.path.lexists(ruta):
         return False
-    # realpath del PADRE, no de la ruta: la ruta puede ser un enlace simbólico
-    # que apunta a la biblioteca, y resolverlo la dejaría fuera de la raíz.
-    dentro = os.path.realpath(os.path.dirname(ruta)).startswith(os.path.realpath(raiz))
-    if not dentro:
+    if not en_carpeta_de_subidas(ruta, raiz=raiz):
         logger.warning("No se borra %s: está fuera de %s", ruta, raiz)
         return False
     try:

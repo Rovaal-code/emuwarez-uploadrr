@@ -245,10 +245,13 @@ def validate_upload_job_start(job_id: int, conn=None) -> dict:
         if not active_path:
             errors.append("No hay ruta de archivo registrada en el job.")
         else:
+            from .carpeta_subida import en_carpeta_de_subidas
             p = Path(active_path)
             if not p.exists():
                 errors.append(f"El archivo no existe en disco: {active_path}")
-            elif p.is_symlink():
+            elif p.is_symlink() and not en_carpeta_de_subidas(active_path):
+                # Los de la carpeta de subidas sí valen: con /config y /data en
+                # montajes distintos no cabe un enlace duro y se hace simbólico.
                 errors.append(f"El archivo es un symlink y no puede usarse: {active_path}")
             elif p.is_dir():
                 # A season pack's prepared_path is the shared hardlink folder,

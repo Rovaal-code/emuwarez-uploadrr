@@ -248,3 +248,20 @@ def test_borrar_una_subida_fallida_quita_su_enlace(biblioteca, monkeypatch, isol
     assert delete_upload_job(fallido, confirmation=DELETE_CONFIRMATION_TOKEN, conn=conn)["ok"]
     assert not os.path.lexists(enlace)
     assert os.path.exists(biblioteca["ficheros"][0])
+
+
+def test_un_symlink_fuera_de_la_carpeta_de_subidas_no_vale_para_subir(biblioteca, monkeypatch, isolated_db, tmp_path):
+    from emuwarez_uploadrr.database import connect, init_db
+    from emuwarez_uploadrr.services import carpeta_subida
+    from emuwarez_uploadrr.services.upload_execution import validate_upload_job_start
+
+    monkeypatch.setattr(carpeta_subida, "RAIZ_SUBIDAS", biblioteca["uploads"])
+    fuera = tmp_path / "otro.mkv"
+    os.symlink(biblioteca["ficheros"][0], fuera)
+    conn = connect()
+    init_db(conn)
+    job = _subida(conn, "ready", str(fuera))
+    conn.commit()
+
+    errores = validate_upload_job_start(job, conn=conn)["errors"]
+    assert any("symlink" in e for e in errores)

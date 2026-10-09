@@ -562,14 +562,7 @@ def _populate_ready(job_id: int, item_id: int, conn) -> bool:
             "episode": None,
         }
         command_preview = build_uploadrr_command_preview(synthetic_item, None, None, conn=conn)
-        conn.execute(
-            "UPDATE upload_jobs SET status = 'ready', stage = 'preflight', "
-            "prepared_path = ?, uploadrr_command_json = ?, error_message = NULL, updated_at = ? "
-            "WHERE id = ?",
-            (plan.get("pack_folder"), json.dumps(command_preview, ensure_ascii=False), _now_iso(), job_id),
-        )
-        conn.commit()
-        return True
+        return _marcar_lista(job_id, command_preview, conn)
 
     proposal_row = conn.execute(
         "SELECT * FROM nomenclature_proposals WHERE library_item_id = ? AND status != 'expired' "
@@ -584,14 +577,24 @@ def _populate_ready(job_id: int, item_id: int, conn) -> bool:
         return False
 
     command_preview = build_uploadrr_command_preview(item, proposal, None, conn=conn)
-    conn.execute(
-        "UPDATE upload_jobs SET status = 'ready', stage = 'preflight', "
-        "prepared_path = ?, uploadrr_command_json = ?, error_message = NULL, updated_at = ? "
-        "WHERE id = ?",
-        (item.get("prepared_path"), json.dumps(command_preview, ensure_ascii=False), _now_iso(), job_id),
+    return _marcar_lista(job_id, command_preview, conn)
+
+
+def _marcar_lista(job_id: int, command_preview: dict, conn) -> bool:
+    """Deja el trabajo en 'ready' para arrancar Uploadrr.
+
+    No toca prepared_path: el paso anterior ya dejó ahí el enlace de la
+    carpeta de subidas, que es lo que Uploadrr tiene que recibir. Escribir
+    aquí la ruta de la biblioteca hacía que un pack se subiera con la carpeta
+    de Sonarr ("Season 1") en vez de la del release.
+
+    Devuelve False si el usuario canceló mientras tanto: no se resucita.
+    """
+    return escribir_estado(
+        job_id, salvo=("cancelled", "failed"), status="ready", stage="preflight",
+        uploadrr_command_json=json.dumps(command_preview, ensure_ascii=False),
+        error_message=None, conn=conn,
     )
-    conn.commit()
-    return True
 
 
 def _check_season_integrity(job_id: int, season_id: int, conn) -> bool:

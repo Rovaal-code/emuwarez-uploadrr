@@ -517,7 +517,14 @@ def _check_generic_upload_preconditions(job_id: int, item_id: int, is_season: bo
     return True
 
 
-def _populate_ready(job_id: int, item_id: int, conn) -> bool:
+def _ajustes_de_pack(season_overrides: dict | None) -> dict:
+    """Lo editado a mano para un pack en el asistente, como argumentos de
+    build_season_pack_plan() y apply_season_pack()."""
+    ajustes = season_overrides or {}
+    return {f"{k}_override": ajustes.get(k) for k in ("source", "provider", "tag", "title")}
+
+
+def _populate_ready(job_id: int, item_id: int, conn, season_overrides: dict | None = None) -> bool:
     """Recompute preconditions + command preview NOW (after rename/remux, so
     prepared_path reflects the final file) and, if ok, flip the SAME job row
     to 'ready' — mirrors upload_preflight.build_upload_preflight() but UPDATEs
@@ -536,7 +543,7 @@ def _populate_ready(job_id: int, item_id: int, conn) -> bool:
         # season-specific precondition check replaces it.
         from .season_pack import build_season_pack_plan
 
-        plan = build_season_pack_plan(item_id, conn=conn)
+        plan = build_season_pack_plan(item_id, conn=conn, **_ajustes_de_pack(season_overrides))
         if plan["status"] != "valid":
             _fail(job_id, "; ".join(plan.get("errors") or ["No se pudo preparar el pack de temporada."]))
             return False
@@ -814,12 +821,7 @@ def _run_queued_job(job_id: int) -> None:
             from .season_pack import apply_season_pack
             try:
                 applied = apply_season_pack(
-                    item_id, conn=conn, job_id=job_id,
-                    source_override=season_overrides.get("source"),
-                    provider_override=season_overrides.get("provider"),
-                    tag_override=season_overrides.get("tag"),
-                    title_override=season_overrides.get("title"),
-                )
+                    item_id, conn=conn, job_id=job_id, **_ajustes_de_pack(season_overrides))
             except Exception as exc:
                 _fail(job_id, f"Error aplicando la nomenclatura del pack de temporada: {exc}")
                 return
@@ -964,7 +966,7 @@ def _run_queued_job(job_id: int) -> None:
         from .carpeta_subida import preparar_carpeta_de_pack, preparar_fichero_suelto
         if is_season:
             from .season_pack import _sanitize_pack_folder_name, build_season_pack_plan
-            plan_final = build_season_pack_plan(item_id, conn=conn)
+            plan_final = build_season_pack_plan(item_id, conn=conn, **_ajustes_de_pack(season_overrides))
             ficheros = [resolve_local_path(ep.get("destination_path") or ep.get("source_path"), conn=conn)
                         or ep.get("source_path")
                         for ep in plan_final.get("episodes", [])]
@@ -1016,7 +1018,7 @@ def _run_queued_job(job_id: int) -> None:
             return
         mark_phase_started(job_id, "verificacion_presubida")
         append_upload_log(job_id, "info", "Preparando la subida…", stream="system", conn=conn)
-        if not _populate_ready(job_id, item_id, conn=conn):
+        if not _populate_ready(job_id, item_id, conn=conn, season_overrides=season_overrides):
             return  # _populate_ready already recorded the failure reason
 
         result = start_upload_job(job_id, dry_run=False, start=True, confirmation=START_TOKEN, conn=conn, pre_gated=True)

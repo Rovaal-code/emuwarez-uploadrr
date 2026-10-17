@@ -28,6 +28,7 @@ import { FitText, FitTextPair } from './FitText'
 import { Tooltip, useTooltip } from './Tooltip'
 import { ACTIVE_JOB_STATUSES, statusLabel } from '../utils/uploadStatus'
 import { seguirProgreso } from '../api/eventos'
+import { fetchSettings } from '../api/settings'
 import { AVISO_MODO_PISTAS, normalizarModo, renombra, tocaElFichero } from '../utils/modoPistas'
 
 // Unified "Subir" wizard (replaces the separate Nomenclatura + Campos + Subir
@@ -525,6 +526,12 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   // dropdown always offers it as an option alongside the "EMUWAREZ" fallback,
   // even after the user picks the other one.
   const [initialTag, setInitialTag] = useState('')
+  // Los grupos de subida guardados en Configuración, para el desplegable de Tag.
+  const [gruposDeSubida, setGruposDeSubida] = useState<string[]>([])
+  useEffect(() => {
+    fetchSettings().then(s => setGruposDeSubida(s.upload_tags ?? [])).catch(() => { /* quedan los de siempre */ })
+  }, [])
+  const opcionesTag = Array.from(new Set([fields.tag, initialTag, ...gruposDeSubida, 'EMUWAREZ'].filter(Boolean))) as string[]
   const [titleWarning, setTitleWarning] = useState<string | null>(null)
   const [titleOptions, setTitleOptions] = useState<{ value: string; kind: string; label: string }[]>([])
   const [sourceWarning, setSourceWarning] = useState<string | null>(null)
@@ -1745,7 +1752,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
         </label>
         <label><FieldLabel label="Tag" info={FIELD_INFO.tag} />
           <select className="form-input form-select" value={fields.tag || ''} onChange={e => setField('tag', e.target.value)}>
-            {Array.from(new Set([initialTag, 'EMUWAREZ'].filter(Boolean))).map(t => (
+            {opcionesTag.map(t => (
               <option key={t} value={t}>{t}</option>
             ))}
           </select>
@@ -1865,7 +1872,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
       </label>
       <label><FieldLabel label="Tag" info={FIELD_INFO.tag} />
         <select className="form-input form-select" value={fields.tag || ''} onChange={e => setField('tag', e.target.value)}>
-          {Array.from(new Set([initialTag, 'EMUWAREZ'].filter(Boolean))).map(t => (
+          {opcionesTag.map(t => (
             <option key={t} value={t}>{t}</option>
           ))}
         </select>

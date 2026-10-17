@@ -53,14 +53,14 @@ function formatBytes(n: number) {
 // Serialize the Config form's values so we can compare current vs. loaded and
 // know whether there are unsaved changes. Array order is fixed on purpose.
 function configSignature(v: {
-  tag: string; providerOrder: string[]; region: string
+  tags: string[]; providerOrder: string[]; region: string
   emuUsername: string; ignoreSpecials: boolean; sourceEngine: boolean; addLogo: boolean; modoDePistas: ModoPistas
   recentLimit: number; uploadMaxConcurrent: number; qbitUrl: string; qbitTag: string; qbitUser: string
   imgEnabled: string[]; allowedRoots: string
   newKey?: string; newEmuKey?: string; qbitPass?: string
 }): string {
   return JSON.stringify([
-    v.tag, v.providerOrder, v.region, v.emuUsername,
+    v.tags, v.providerOrder, v.region, v.emuUsername,
     v.ignoreSpecials, v.sourceEngine, v.addLogo, v.modoDePistas, v.recentLimit, v.uploadMaxConcurrent, v.qbitUrl, v.qbitTag, v.qbitUser, v.imgEnabled, v.allowedRoots,
     v.newKey ?? '', v.newEmuKey ?? '', v.qbitPass ?? '',
   ])
@@ -178,7 +178,9 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const emuCooldown = useCooldown()
 
   // Form state
-  const [tag, setTag] = useState('')
+  // Grupos de subida: el primero es el que sale por defecto al subir.
+  const [tags, setTags] = useState<string[]>([])
+  const [nuevoTag, setNuevoTag] = useState('')
   const [providerOrder, setProviderOrder] = useState<string[]>([])
   const [region, setRegion] = useState('')
   const [newKey, setNewKey] = useState('')
@@ -228,7 +230,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   // Unsaved-changes tracking: compare current form values to the loaded ones.
   const [baseline, setBaseline] = useState('')
   const currentSig = configSignature({
-    tag, providerOrder, region, emuUsername,
+    tags, providerOrder, region, emuUsername,
     ignoreSpecials, sourceEngine, addLogo, modoDePistas, recentLimit, uploadMaxConcurrent, qbitUrl, qbitTag, qbitUser, imgEnabled, allowedRoots,
     newKey, newEmuKey, qbitPass,
   })
@@ -277,7 +279,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
     fetchSettings()
       .then(s => {
         setSettings(s)
-        setTag(s.default_release_tag)
+        setTags(s.upload_tags?.length ? s.upload_tags : [s.default_release_tag])
         setProviderOrder(s.provider_priority_order)
         setRegion(s.tmdb_watch_region)
         setEmuUsername(s.emu_username ?? '')
@@ -293,7 +295,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         setImgEnabled(s.image_hosts_enabled ?? [])
         setAllowedRoots((s.uploadrr_allowed_roots ?? []).join(', '))
         setBaseline(configSignature({
-          tag: s.default_release_tag, providerOrder: s.provider_priority_order,
+          tags: s.upload_tags?.length ? s.upload_tags : [s.default_release_tag], providerOrder: s.provider_priority_order,
           region: s.tmdb_watch_region,
           emuUsername: s.emu_username ?? '',
           ignoreSpecials: s.series_ignore_specials ?? true, sourceEngine: s.source_engine_enabled ?? false, addLogo: s.emu_add_logo ?? true, modoDePistas: normalizarModo(s.remux_track_mode),
@@ -373,6 +375,12 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
     }
   }
 
+  function anadirTag() {
+    const t = nuevoTag.trim()
+    if (t && !tags.includes(t)) setTags([...tags, t])
+    setNuevoTag('')
+  }
+
   async function handleSave() {
     if (qbitUrl.trim() && !isValidHttpUrl(qbitUrl)) {
       setMsg({ ok: false, text: 'La URL de qBittorrent debe empezar por http:// o https:// e incluir un host válido' })
@@ -382,7 +390,8 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
     setMsg(null)
     try {
       const payload: Parameters<typeof updateSettings>[0] = {
-        default_release_tag: tag.trim(),
+        default_release_tag: tags[0],
+        upload_tags: tags,
         provider_priority_order: providerOrder,
         tmdb_watch_region: region.trim(),
         // No longer a user-facing toggle — always on.
@@ -407,7 +416,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
       // su propia tarjeta, en el momento, sin depender del Guardar global.
       const updated = await updateSettings(payload)
       setSettings(updated)
-      setTag(updated.default_release_tag)
+      setTags(updated.upload_tags?.length ? updated.upload_tags : [updated.default_release_tag])
       setProviderOrder(updated.provider_priority_order)
       setRegion(updated.tmdb_watch_region)
       setEmuUsername(updated.emu_username ?? '')
@@ -423,7 +432,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
       setNewEmuKey('')
       setAllowedRoots((updated.uploadrr_allowed_roots ?? []).join(', '))
       setBaseline(configSignature({
-        tag: updated.default_release_tag, providerOrder: updated.provider_priority_order,
+        tags: updated.upload_tags?.length ? updated.upload_tags : [updated.default_release_tag], providerOrder: updated.provider_priority_order,
         region: updated.tmdb_watch_region,
         emuUsername: updated.emu_username ?? '',
         ignoreSpecials: updated.series_ignore_specials ?? true, sourceEngine: updated.source_engine_enabled ?? false, addLogo: updated.emu_add_logo ?? true, modoDePistas: normalizarModo(updated.remux_track_mode),
@@ -506,10 +515,30 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         </div>
         <div className="form-group" style={{ marginTop: 14 }}>
           <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            Tag del grupo de subida
-            <InfoIcon text="El tag que va tras el último «-» en el nombre del torrent (tu grupo/usuario)." />
+            Grupos de subida
+            <InfoIcon text="El tag que va tras el último «-» en el nombre del torrent (tu grupo/usuario). El primero es el que sale por defecto al subir; los demás se eligen en el asistente." />
           </label>
-          <input className="form-input" value={tag} onChange={e => setTag(e.target.value)} placeholder="EMUWAREZ" />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+            {tags.map((t, i) => (
+              <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', fontSize: 13, fontWeight: 500 }}>{t}</span>
+                {i === 0
+                  ? <span className="badge status-available" style={{ fontSize: 10 }}>por defecto</span>
+                  : <button type="button" className="btn-icon" title="Usar por defecto" aria-label={`Usar ${t} por defecto`}
+                      onClick={() => setTags([t, ...tags.filter(x => x !== t)])}>☆</button>}
+                {tags.length > 1 && (
+                  <button type="button" className="btn-icon" aria-label={`Quitar ${t}`}
+                    onClick={() => setTags(tags.filter(x => x !== t))}>✕</button>
+                )}
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input className="form-input" value={nuevoTag} onChange={e => setNuevoTag(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); anadirTag() } }}
+              placeholder="Añadir otro grupo" />
+            <button type="button" className="btn btn-secondary" onClick={anadirTag} disabled={!nuevoTag.trim()}>Añadir</button>
+          </div>
         </div>
       </div>
 

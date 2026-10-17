@@ -5,6 +5,7 @@ export type UploadrrRuntimeType = 'uploadrr_emu' | 'uploadrr_generic'
 
 export interface SettingsData {
   default_release_tag: string
+  upload_tags?: string[]
   provider_priority_order: string[]
   tmdb_watch_region: string
   tmdb_localize_series_titles: boolean
@@ -49,6 +50,7 @@ export interface SettingsData {
 
 export interface SettingsUpdatePayload {
   default_release_tag?: string
+  upload_tags?: string[]
   provider_priority_order?: string[]
   tmdb_watch_region?: string
   tmdb_localize_series_titles?: boolean

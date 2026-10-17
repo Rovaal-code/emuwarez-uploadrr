@@ -564,6 +564,9 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   // must read the value at the moment of the click, not the one captured when
   // it was last rendered.
   const buildingPlanFor = useRef<number | null>(null)
+  // Paso de antes del último cambio. Al volver del 2 al 1 no se recarga nada:
+  // recargar pisaba lo elegido (título, fuente, etiqueta, nombres de pistas).
+  const pasoPrevio = useRef(0)
   const [seasonPlanError, setSeasonPlanError] = useState<string | null>(null)
   const [seasonProgress, setSeasonProgress] = useState<SeasonPlanProgress>({ done: 0, total: 0, current_title: null })
   // Live-recomputed pack title while editing Source/Proveedor/Tag (null
@@ -886,7 +889,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   // Single target: load it. Multi-episode: the prefetch below owns it, so this
   // must not also fire and race with it.
   useEffect(() => {
-    if (step === 1 && !targetIsSeason && episodeQueue.length <= 1) loadFields()
+    if (step === 1 && pasoPrevio.current !== 2 && !targetIsSeason && episodeQueue.length <= 1) loadFields()
   }, [step, targetIsSeason, episodeQueue.length, loadFields])
 
   // Multi-episode: generate the nomenclature for every selected episode in one
@@ -1014,7 +1017,9 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     onCloseProp()
   }, [onCloseProp])
 
-  useEffect(() => { if (step === 1 && targetIsSeason) loadSeasonPlan() }, [step, targetIsSeason, loadSeasonPlan])
+  useEffect(() => {
+    if (step === 1 && pasoPrevio.current !== 2 && targetIsSeason) loadSeasonPlan()
+  }, [step, targetIsSeason, loadSeasonPlan])
 
   // Multi-season dropdown: save the outgoing season's current edits before
   // switching (loadSeasonPlan, re-triggered by targetId changing, restores
@@ -1132,7 +1137,12 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   // (reading a real .mkv's tracks — mkvmerge -J — can be slow over a remote
   // mount) so it's usually already loaded (or well underway) by the time the
   // user opens "Ver Pistas", instead of only starting the read on click.
-  useEffect(() => { if (step === 1 && !targetIsSeason) runTrackRemux() }, [step, targetIsSeason, runTrackRemux])
+  useEffect(() => {
+    if (step === 1 && pasoPrevio.current !== 2 && !targetIsSeason) runTrackRemux()
+  }, [step, targetIsSeason, runTrackRemux])
+
+  // Después de los efectos de carga, para que al pasar del 2 al 1 aún vean el 2.
+  useEffect(() => { pasoPrevio.current = step }, [step])
 
   // Lo que el usuario haya escrito a mano en la tabla. No hace falta filtrarlo
   // por el modo: la columna solo es editable si el modo renombra, y el
@@ -2420,7 +2430,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
               {targetIsSeason ? (
                 <>
                   <div style={labelStyle}>Nombre final del torrent (pack de temporada)</div>
-                  <FitText min={9} text={seasonPlan?.season_pack_title || '–'} />
+                  <FitText min={9} text={seasonDisplayTitle || '–'} />
                 </>
               ) : (
                 <FitTextPair

@@ -164,7 +164,9 @@ def en_carpeta_de_subidas(ruta: str, *, raiz: Optional[str] = None) -> bool:
     fuera de la raíz.
     """
     raiz = raiz or RAIZ_SUBIDAS
-    return os.path.realpath(os.path.dirname(ruta)).startswith(os.path.realpath(raiz))
+    padre, raiz = os.path.realpath(os.path.dirname(ruta)), os.path.realpath(raiz)
+    # Por componentes: con startswith, /data/uploads-old pasaba por /data/uploads.
+    return os.path.commonpath((padre, raiz)) == raiz
 
 
 def borrar_de_subidas(ruta: Optional[str], *, raiz: Optional[str] = None) -> bool:

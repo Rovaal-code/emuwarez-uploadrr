@@ -265,3 +265,29 @@ def test_un_symlink_fuera_de_la_carpeta_de_subidas_no_vale_para_subir(biblioteca
 
     errores = validate_upload_job_start(job, conn=conn)["errors"]
     assert any("symlink" in e for e in errores)
+
+
+def test_una_carpeta_hermana_no_cuenta_como_la_de_subidas(tmp_path):
+    from emuwarez_uploadrr.services.carpeta_subida import en_carpeta_de_subidas
+    (tmp_path / "uploads").mkdir()
+    (tmp_path / "uploads-old").mkdir()
+    assert en_carpeta_de_subidas(str(tmp_path / "uploads" / "x.mkv"), raiz=str(tmp_path / "uploads"))
+    assert not en_carpeta_de_subidas(str(tmp_path / "uploads-old" / "x.mkv"), raiz=str(tmp_path / "uploads"))
+
+
+def test_borrar_no_quita_el_enlace_que_siembra_otra_subida(biblioteca, monkeypatch, isolated_db):
+    """Otra cadena completada que apunta al mismo enlace tampoco puede perderlo."""
+    from emuwarez_uploadrr.database import connect, init_db
+    from emuwarez_uploadrr.services import carpeta_subida
+    from emuwarez_uploadrr.services.upload_execution import DELETE_CONFIRMATION_TOKEN, delete_upload_job
+
+    monkeypatch.setattr(carpeta_subida, "RAIZ_SUBIDAS", biblioteca["uploads"])
+    enlace = preparar_fichero_suelto(biblioteca["ficheros"][0], raiz=biblioteca["uploads"])["ruta"]
+    conn = connect()
+    init_db(conn)
+    _subida(conn, "completed", enlace)
+    fallida = _subida(conn, "failed", enlace)
+    conn.commit()
+
+    assert delete_upload_job(fallida, confirmation=DELETE_CONFIRMATION_TOKEN, conn=conn)["ok"]
+    assert os.path.lexists(enlace)

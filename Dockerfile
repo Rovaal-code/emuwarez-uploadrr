@@ -58,6 +58,7 @@ WORKDIR /app
 # at build time. If omitted it stays "unknown", which can reuse a cached
 # clone: pass a current UPLOADRR_COMMIT or build with `--no-cache`.
 # Uploadrr-EMU no versiona data/config.yaml: sale de su ejemplo, y el entrypoint lo copia a /config la primera vez.
+# Solo instalaciones nuevas: un /config/Uploadrr/data que ya existe se queda como está.
 ARG UPLOADRR_COMMIT=unknown
 RUN echo "Uploadrr-EMU @ ${UPLOADRR_COMMIT}" \
     && git clone --depth 1 https://github.com/Kisnov/Uploadrr-EMU.git /opt/Uploadrr \

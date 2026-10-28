@@ -336,9 +336,15 @@ def update_settings(
         tag = body.default_release_tag.strip()
         if not tag:
             errors.append("default_release_tag no puede estar vacío")
+        elif any(c in tag for c in "/\\"):
+            errors.append("default_release_tag no puede tener / ni \\")
 
-    if body.upload_tags is not None and not all(t.strip() for t in body.upload_tags):
-        errors.append("upload_tags no puede tener tags vacíos")
+    if body.upload_tags is not None:
+        if not all(t.strip() for t in body.upload_tags):
+            errors.append("upload_tags no puede tener tags vacíos")
+        # El tag acaba en el nombre del fichero: con una barra sería otra carpeta.
+        if any(c in t for t in body.upload_tags for c in "/\\"):
+            errors.append("upload_tags no puede tener / ni \\")
 
     if body.provider_priority_order is not None:
         codes = [c.strip() for c in body.provider_priority_order]

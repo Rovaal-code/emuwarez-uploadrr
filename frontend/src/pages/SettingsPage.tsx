@@ -229,8 +229,11 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
 
   // Unsaved-changes tracking: compare current form values to the loaded ones.
   const [baseline, setBaseline] = useState('')
+  // Un grupo escrito sin pulsar «Añadir» también se guarda.
+  const borrador = nuevoTag.trim()
+  const tagsAGuardar = borrador && !tags.includes(borrador) ? [...tags, borrador] : tags
   const currentSig = configSignature({
-    tags, providerOrder, region, emuUsername,
+    tags: tagsAGuardar, providerOrder, region, emuUsername,
     ignoreSpecials, sourceEngine, addLogo, modoDePistas, recentLimit, uploadMaxConcurrent, qbitUrl, qbitTag, qbitUser, imgEnabled, allowedRoots,
     newKey, newEmuKey, qbitPass,
   })
@@ -391,7 +394,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
     try {
       const payload: Parameters<typeof updateSettings>[0] = {
         default_release_tag: tags[0],
-        upload_tags: tags,
+        upload_tags: tagsAGuardar,
         provider_priority_order: providerOrder,
         tmdb_watch_region: region.trim(),
         // No longer a user-facing toggle — always on.
@@ -417,6 +420,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
       const updated = await updateSettings(payload)
       setSettings(updated)
       setTags(updated.upload_tags?.length ? updated.upload_tags : [updated.default_release_tag])
+      setNuevoTag('')
       setProviderOrder(updated.provider_priority_order)
       setRegion(updated.tmdb_watch_region)
       setEmuUsername(updated.emu_username ?? '')
@@ -514,7 +518,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           />
         </div>
         <div className="form-group" style={{ marginTop: 14 }}>
-          <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <label className="form-label" htmlFor="nuevo-grupo-de-subida" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             Grupos de subida
             <InfoIcon text="El tag que va tras el último «-» en el nombre del torrent (tu grupo/usuario). El primero es el que sale por defecto al subir; los demás se eligen en el asistente." />
           </label>
@@ -534,7 +538,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
             ))}
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <input className="form-input" value={nuevoTag} onChange={e => setNuevoTag(e.target.value)}
+            <input id="nuevo-grupo-de-subida" className="form-input" value={nuevoTag} onChange={e => setNuevoTag(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); anadirTag() } }}
               placeholder="Añadir otro grupo" />
             <button type="button" className="btn btn-secondary" onClick={anadirTag} disabled={!nuevoTag.trim()}>Añadir</button>

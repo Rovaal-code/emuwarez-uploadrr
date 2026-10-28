@@ -531,7 +531,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   useEffect(() => {
     fetchSettings().then(s => setGruposDeSubida(s.upload_tags ?? [])).catch(() => { /* quedan los de siempre */ })
   }, [])
-  const opcionesTag = Array.from(new Set([fields.tag, initialTag, ...gruposDeSubida, 'EMUWAREZ'].filter(Boolean))) as string[]
+  const opcionesTag = Array.from(new Set([fields.tag, initialTag, ...(gruposDeSubida.length ? gruposDeSubida : ['EMUWAREZ'])].filter(Boolean))) as string[]
   const [titleWarning, setTitleWarning] = useState<string | null>(null)
   const [titleOptions, setTitleOptions] = useState<{ value: string; kind: string; label: string }[]>([])
   const [sourceWarning, setSourceWarning] = useState<string | null>(null)
@@ -571,9 +571,10 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   // must read the value at the moment of the click, not the one captured when
   // it was last rendered.
   const buildingPlanFor = useRef<number | null>(null)
-  // Paso de antes del último cambio. Al volver del 2 al 1 no se recarga nada:
-  // recargar pisaba lo elegido (título, fuente, etiqueta, nombres de pistas).
-  const pasoPrevio = useRef(0)
+  // Lo que ya se cargó en el paso 1. Volver al 1 (desde el 2, o desde el 0 con
+  // lo mismo elegido) no recarga: pisaba lo elegido (título, fuente, etiqueta, pistas).
+  const cargadoPara = useRef<string | null>(null)
+  const objetivo = `${targetIsSeason ? 's' : 'e'}${targetId}`
   const [seasonPlanError, setSeasonPlanError] = useState<string | null>(null)
   const [seasonProgress, setSeasonProgress] = useState<SeasonPlanProgress>({ done: 0, total: 0, current_title: null })
   // Live-recomputed pack title while editing Source/Proveedor/Tag (null
@@ -896,8 +897,8 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   // Single target: load it. Multi-episode: the prefetch below owns it, so this
   // must not also fire and race with it.
   useEffect(() => {
-    if (step === 1 && pasoPrevio.current !== 2 && !targetIsSeason && episodeQueue.length <= 1) loadFields()
-  }, [step, targetIsSeason, episodeQueue.length, loadFields])
+    if (step === 1 && cargadoPara.current !== objetivo && !targetIsSeason && episodeQueue.length <= 1) loadFields()
+  }, [step, objetivo, targetIsSeason, episodeQueue.length, loadFields])
 
   // Multi-episode: generate the nomenclature for every selected episode in one
   // pass, reporting which one it's on, and cache the results so switching
@@ -1025,8 +1026,8 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   }, [onCloseProp])
 
   useEffect(() => {
-    if (step === 1 && pasoPrevio.current !== 2 && targetIsSeason) loadSeasonPlan()
-  }, [step, targetIsSeason, loadSeasonPlan])
+    if (step === 1 && cargadoPara.current !== objetivo && targetIsSeason) loadSeasonPlan()
+  }, [step, objetivo, targetIsSeason, loadSeasonPlan])
 
   // Multi-season dropdown: save the outgoing season's current edits before
   // switching (loadSeasonPlan, re-triggered by targetId changing, restores
@@ -1145,11 +1146,11 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   // mount) so it's usually already loaded (or well underway) by the time the
   // user opens "Ver Pistas", instead of only starting the read on click.
   useEffect(() => {
-    if (step === 1 && pasoPrevio.current !== 2 && !targetIsSeason) runTrackRemux()
-  }, [step, targetIsSeason, runTrackRemux])
+    if (step === 1 && cargadoPara.current !== objetivo && !targetIsSeason) runTrackRemux()
+  }, [step, objetivo, targetIsSeason, runTrackRemux])
 
-  // Después de los efectos de carga, para que al pasar del 2 al 1 aún vean el 2.
-  useEffect(() => { pasoPrevio.current = step }, [step])
+  // Después de los efectos de carga, para que aún vean lo cargado antes.
+  useEffect(() => { if (step === 1) cargadoPara.current = objetivo }, [step, objetivo])
 
   // Lo que el usuario haya escrito a mano en la tabla. No hace falta filtrarlo
   // por el modo: la columna solo es editable si el modo renombra, y el
@@ -1178,6 +1179,9 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   useEffect(() => {
     if (!targetIsSeason) return
     if (targetId == null || !Object.keys(fields).length) return
+    // '' = recalculando o sin título: nunca se enseña el de antes de editar.
+    let vigente = true
+    setSeasonTitlePreview('')
     const t = setTimeout(async () => {
       try {
         const r = await previewSeasonPackFields(targetId, {
@@ -1197,10 +1201,10 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
           // título recalculado lo perdería.
           custom: seasonPlan?.custom ?? false,
         })
-        setSeasonTitlePreview(r.torrent_name)
+        if (vigente) setSeasonTitlePreview(r.torrent_name)
       } catch { /* non-blocking */ }
     }, 400)
-    return () => clearTimeout(t)
+    return () => { vigente = false; clearTimeout(t) }
   }, [targetId, targetIsSeason, fields, seasonPlan?.season_number, seasonPlan?.custom])
 
   const setField = (key: string, value: string | null) => {

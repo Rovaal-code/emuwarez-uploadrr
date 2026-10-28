@@ -265,3 +265,8 @@ def test_el_grupo_por_defecto_va_siempre_el_primero(client, auth_headers):
 def test_no_se_guarda_un_grupo_de_subida_vacio(client, auth_headers):
     resp = client.put("/api/settings", json={"upload_tags": ["Ryodan", "  "]}, headers=auth_headers)
     assert resp.status_code == 422
+
+
+@pytest.mark.parametrize("cuerpo", [{"upload_tags": ["../fuera"]}, {"default_release_tag": r"a\b"}])
+def test_un_grupo_de_subida_no_lleva_barras(client, auth_headers, cuerpo):
+    assert client.put("/api/settings", json=cuerpo, headers=auth_headers).status_code == 422

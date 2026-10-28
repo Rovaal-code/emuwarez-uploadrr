@@ -8,15 +8,17 @@ export interface FilterOption { value: string; label: string }
 // Its own component (not inlined in the .map() below) so useTooltip's hook
 // call is legal — the option list is a plain callback invoked once per row,
 // not a separate component instance.
-function FilterOptionButton({ option, selected, onClick }: { option: FilterOption; selected: boolean; onClick: () => void }) {
+function FilterOptionButton({ option, selected, multiple, onClick }: { option: FilterOption; selected: boolean; multiple: boolean; onClick: () => void }) {
   const { triggerProps, tooltipNode } = useTooltip(option.label)
   return (
     <button
       type="button"
       className={`hf-option${selected ? ' selected' : ''}`}
       onClick={onClick}
+      aria-pressed={multiple ? selected : undefined}
       {...triggerProps}
     >
+      {multiple && <span aria-hidden style={{ display: 'inline-block', width: 14 }}>{selected ? '✓' : ''}</span>}
       {option.label}
       {tooltipNode}
     </button>
@@ -26,21 +28,35 @@ function FilterOptionButton({ option, selected, onClick }: { option: FilterOptio
 // Excel-style column-header filter: the column title with a small dropdown
 // caret; clicking opens a menu of options. When a filter is active the title
 // (and caret) turn blue so it's obvious a filter is applied.
-export function HeaderFilter({ label, value, options, onChange }: {
+//
+// Con `value` como lista es de selección múltiple: cada opción se marca o
+// desmarca sin cerrar el menú, y la de valor '' («Todos») las quita todas.
+export function HeaderFilter<T extends string | string[]>({ label, value, options, onChange }: {
   label: string
-  value: string
+  value: T
   options: FilterOption[]
-  onChange: (v: string) => void
+  onChange: (v: T) => void
 }) {
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState({ top: 0, left: 0 })
   const btnRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
-  const active = value !== ''
+  const multiple = Array.isArray(value)
+  const elegidos: string[] = Array.isArray(value) ? value : value ? [value] : []
+  const active = elegidos.length > 0
   const accent = '#3b82f6'
   const { triggerProps: caretTip, tooltipNode: caretTooltip } = useTooltip(
-    active ? `Filtrado: ${options.find(o => o.value === value)?.label ?? value}` : 'Filtrar',
+    active ? `Filtrado: ${elegidos.map(v => options.find(o => o.value === v)?.label ?? v).join(', ')}` : 'Filtrar',
   )
+  const elegir = (v: string) => {
+    if (!multiple) {
+      onChange(v as T)
+      setOpen(false)
+      return
+    }
+    if (v === '' && !active) return
+    onChange((v === '' ? [] : elegidos.includes(v) ? elegidos.filter(x => x !== v) : [...elegidos, v]) as T)
+  }
 
   useEffect(() => {
     if (!open) return
@@ -123,8 +139,9 @@ export function HeaderFilter({ label, value, options, onChange }: {
             <FilterOptionButton
               key={o.value || '__all__'}
               option={o}
-              selected={o.value === value}
-              onClick={() => { onChange(o.value); setOpen(false) }}
+              selected={o.value === '' ? !active : elegidos.includes(o.value)}
+              multiple={multiple && o.value !== ''}
+              onClick={() => elegir(o.value)}
             />
           ))}
         </div>,

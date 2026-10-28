@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import os
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -300,18 +300,18 @@ def sync_all(
 @router.get("/library", response_model=LibraryListResponse)
 def library_list(
     current_user: dict = Depends(require_auth),
-    item_type: Optional[str] = Query(None, alias="type"),
-    origin: Optional[str] = Query(None),
-    instance_id: Optional[int] = Query(None),
+    # Los filtros de columna se repiten para elegir varios valores (?type=movie&type=series).
+    item_type: Optional[list[str]] = Query(None, alias="type"),
+    origin: Optional[list[str]] = Query(None),
+    instance_id: Optional[list[int]] = Query(None),
     parent_id: Optional[int] = Query(None),
-    status: Optional[str] = Query(None),
-    request_status: Optional[str] = Query(None, alias="request_status"),
-    nomenclature: Optional[str] = Query(None),
+    status: Optional[list[str]] = Query(None),
+    request_status: Optional[list[str]] = Query(None, alias="request_status"),
+    nomenclature: Optional[list[str]] = Query(None),
     search: Optional[str] = Query(None),
-    # Los cinco estados de la columna Español. El patrón tiene que ir con
-    # ellos: se quedó con los tres viejos al ampliarla y descartaba en
-    # silencio "ambos"/"audio"/"subs", así que el filtro no devolvía nada.
-    spanish: Optional[str] = Query(None, pattern="^(ambos|audio|subs|no|desconocido)$"),
+    # Los cinco estados de la columna Español: uno desconocido es un 422, no
+    # un filtro que en silencio no devuelve nada.
+    spanish: Optional[list[Literal["ambos", "audio", "subs", "no", "desconocido"]]] = Query(None),
     sort: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=20000),
     offset: int = Query(0, ge=0),

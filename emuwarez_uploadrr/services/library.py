@@ -10,7 +10,7 @@ import threading
 import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from typing import Callable, Iterator, Optional
+from typing import Callable, Iterator, Optional, Sequence, Union
 
 from ..integrations import radarr, sonarr
 from ..models import InstanceConfig, LibraryItem, LocalStatus, MediaKind, NomenclatureStatus
@@ -909,17 +909,55 @@ NOT_AVAILABLE_STATUS_FILTER = "__not_available__"
 TOP_LEVEL_PARENT_FILTER = 0
 
 
+# Una columna filtrada admite varios valores (se suman con OR); las columnas entre sí, con AND.
+Filtro = Union[str, int, Sequence[Union[str, int]], None]
+
+
+def _valores(v: Filtro) -> list:
+    if v is None or v == "":
+        return []
+    return [x for x in ([v] if isinstance(v, (str, int)) else v) if x not in (None, "")]
+
+
+def _en(columna: str, valores: list, where: list[str], params: list) -> None:
+    if valores:
+        where.append(f"{columna} IN ({','.join('?' * len(valores))})")
+        params.extend(valores)
+
+
+# Los casos de la columna Español. Tienen que cuadrar EXACTAMENTE con lo que
+# enseña la celda (frontend utils/castellano.ts::estadoCastellano) o filtrarías
+# por "Audio" y te saldrían filas que dicen otra cosa. Lo vigila
+# tests/test_copias_frontend.
+_CASTELLANO_SQL = {
+    "ambos": "has_spanish_audio = 1 AND has_spanish_subs = 1",
+    "audio": "has_spanish_audio = 1 AND COALESCE(has_spanish_subs, 0) != 1",
+    "subs": "COALESCE(has_spanish_audio, 0) != 1 AND has_spanish_subs = 1",
+    "no": "has_spanish_audio = 0 AND has_spanish_subs = 0",
+    # Ni uno ni otro confirmados: no es "no tiene", es que falta leerlo.
+    #
+    # Todo en positivo con COALESCE, y no con NOT: en SQL `NOT (NULL = 1)`
+    # es NULL, no TRUE, así que la versión con NOT no devolvía NINGUNA de
+    # las tres filas que tenían que salir. Lo pilló el cruce de los 9 casos
+    # contra la regla del frontend.
+    "desconocido": (
+        "COALESCE(has_spanish_audio, 0) != 1 AND COALESCE(has_spanish_subs, 0) != 1"
+        " AND NOT (COALESCE(has_spanish_audio, -1) = 0"
+        " AND COALESCE(has_spanish_subs, -1) = 0)"),
+}
+
+
 def _build_library_filter(
     *,
-    status: Optional[str] = None,
-    request: Optional[str] = None,
-    nomenclature: Optional[str] = None,
-    item_type: Optional[str] = None,
-    origin: Optional[str] = None,
-    instance_id: Optional[int] = None,
+    status: Filtro = None,
+    request: Filtro = None,
+    nomenclature: Filtro = None,
+    item_type: Filtro = None,
+    origin: Filtro = None,
+    instance_id: Filtro = None,
     parent_id: Optional[int] = None,
     search: Optional[str] = None,
-    spanish: Optional[str] = None,
+    spanish: Filtro = None,
 ) -> tuple[list[str], list]:
     """Shared WHERE-clause builder for list_library()/count_library() — used
     to be duplicated (and count_library() silently dropped request/
@@ -927,54 +965,21 @@ def _build_library_filter(
     used), now both always apply the exact same filters."""
     where = []
     params: list = []
-    if status == NOT_AVAILABLE_STATUS_FILTER:
-        placeholders = ",".join("?" * len(_MISSING_STATUSES))
-        where.append(f"local_status IN ({placeholders})")
-        params.extend(_MISSING_STATUSES)
-    elif status:
-        where.append("local_status = ?")
-        params.append(status)
-    if request:
-        where.append("request_status = ?")
-        params.append(request)
-    if nomenclature:
-        where.append("nomenclature_status = ?")
-        params.append(nomenclature)
-    if item_type:
-        where.append("item_type = ?")
-        params.append(item_type)
-    if origin:
-        where.append("instance_type = ?")
-        params.append(origin)
-    if instance_id:
-        where.append("instance_id = ?")
-        params.append(instance_id)
+    estados: list = []
+    for v in _valores(status):
+        estados.extend(_MISSING_STATUSES if v == NOT_AVAILABLE_STATUS_FILTER else [v])
+    _en("local_status", list(dict.fromkeys(estados)), where, params)
+    _en("request_status", _valores(request), where, params)
+    _en("nomenclature_status", _valores(nomenclature), where, params)
+    _en("item_type", _valores(item_type), where, params)
+    _en("instance_type", _valores(origin), where, params)
+    _en("instance_id", _valores(instance_id), where, params)
     # Filtered in SQL, not in the browser: the Español column is the whole
     # library's worth of rows, and filtering it client-side would mean fetching
     # every level up to LOAD_LIMIT just to throw most of it away.
-    # Los cuatro casos de la columna Español, más el que no se sabe. Tienen que
-    # cuadrar EXACTAMENTE con lo que enseña la celda (frontend
-    # utils/castellano.ts::estadoCastellano) o filtrarías por "Audio" y te
-    # saldrían filas que dicen otra cosa. Lo vigila tests/test_copias_frontend.
-    if spanish == "ambos":
-        where.append("has_spanish_audio = 1 AND has_spanish_subs = 1")
-    elif spanish == "audio":
-        where.append("has_spanish_audio = 1 AND COALESCE(has_spanish_subs, 0) != 1")
-    elif spanish == "subs":
-        where.append("COALESCE(has_spanish_audio, 0) != 1 AND has_spanish_subs = 1")
-    elif spanish == "no":
-        where.append("has_spanish_audio = 0 AND has_spanish_subs = 0")
-    elif spanish == "desconocido":
-        # Ni uno ni otro confirmados: no es "no tiene", es que falta leerlo.
-        #
-        # Todo en positivo con COALESCE, y no con NOT: en SQL `NOT (NULL = 1)`
-        # es NULL, no TRUE, así que la versión con NOT no devolvía NINGUNA de
-        # las tres filas que tenían que salir. Lo pilló el cruce de los 9 casos
-        # contra la regla del frontend.
-        where.append(
-            "COALESCE(has_spanish_audio, 0) != 1 AND COALESCE(has_spanish_subs, 0) != 1"
-            " AND NOT (COALESCE(has_spanish_audio, -1) = 0"
-            " AND COALESCE(has_spanish_subs, -1) = 0)")
+    casos = [_CASTELLANO_SQL[v] for v in _valores(spanish) if v in _CASTELLANO_SQL]
+    if casos:
+        where.append("(" + " OR ".join(f"({c})" for c in casos) + ")")
     if parent_id is not None:
         if parent_id == TOP_LEVEL_PARENT_FILTER:
             where.append("parent_id IS NULL")
@@ -1048,15 +1053,15 @@ DEFAULT_LIBRARY_SORT = "title_asc"
 def list_library(
     conn: sqlite3.Connection,
     *,
-    status: Optional[str] = None,
-    request: Optional[str] = None,
-    nomenclature: Optional[str] = None,
-    item_type: Optional[str] = None,
-    origin: Optional[str] = None,
-    instance_id: Optional[int] = None,
+    status: Filtro = None,
+    request: Filtro = None,
+    nomenclature: Filtro = None,
+    item_type: Filtro = None,
+    origin: Filtro = None,
+    instance_id: Filtro = None,
     parent_id: Optional[int] = None,
     search: Optional[str] = None,
-    spanish: Optional[str] = None,
+    spanish: Filtro = None,
     sort: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
@@ -1085,15 +1090,15 @@ def list_library(
 def count_library(
     conn: sqlite3.Connection,
     *,
-    status: Optional[str] = None,
-    request: Optional[str] = None,
-    nomenclature: Optional[str] = None,
-    item_type: Optional[str] = None,
-    origin: Optional[str] = None,
-    instance_id: Optional[int] = None,
+    status: Filtro = None,
+    request: Filtro = None,
+    nomenclature: Filtro = None,
+    item_type: Filtro = None,
+    origin: Filtro = None,
+    instance_id: Filtro = None,
     parent_id: Optional[int] = None,
     search: Optional[str] = None,
-    spanish: Optional[str] = None,
+    spanish: Filtro = None,
 ) -> int:
     where, params = _build_library_filter(
         status=status, request=request, nomenclature=nomenclature,

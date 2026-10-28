@@ -37,22 +37,25 @@
  * contenido; lo de dentro se ve expandiéndola, como en cualquier otro momento.
  */
 
+// Las columnas con selección múltiple llegan como lista; vacía = sin filtro.
+type Valor = string | string[]
+
 export interface FiltrosActivos {
   search?: string
-  filterType?: string
-  filterStatus?: string
-  filterInstanceId?: string
-  filterRequest?: string
-  filterSpanish?: string
-  searchProvider?: string
-  searchQuality?: string
-  searchSource?: string
-  filterEmu?: string
-  filterAporte?: string
+  filterType?: Valor
+  filterStatus?: Valor
+  filterInstanceId?: Valor
+  filterRequest?: Valor
+  filterSpanish?: Valor
+  searchProvider?: Valor
+  searchQuality?: Valor
+  searchSource?: Valor
+  filterEmu?: Valor
+  filterAporte?: Valor
 }
 
 export function hayAlgunFiltro(f: FiltrosActivos): boolean {
-  return Object.values(f).some(v => !!v && v !== '')
+  return Object.values(f).some(v => (Array.isArray(v) ? v.length > 0 : !!v))
 }
 
 /** Con algo filtrado hay que mirar la biblioteca entera, no solo la raíz.

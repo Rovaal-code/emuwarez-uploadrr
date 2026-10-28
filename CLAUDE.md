@@ -41,13 +41,15 @@ the upload with Uploadrr-EMU (`Kisnov/Uploadrr-EMU`, cloned into the image at `/
   `init_db`. `init_db` runs on every authenticated request and returns early when the version matches.
 - Upload pipeline: `upload_queue._run_queued_job` → `carpeta_subida` links the files into
   `UPLOADRR_UPLOADS_DIR` (default `/config/Uploadrr/uploads`) → `upload_execution.start_upload_job` →
-  Uploadrr-EMU subprocess. Uploadrr hands that same folder to qBittorrent as the save path, so the uploads
-  folder must live under `/data` at a path qBittorrent sees identically (hardlinks, not symlinks).
+  Uploadrr-EMU subprocess. Uploadrr hands that same folder to qBittorrent as the save path, so qBittorrent
+  must see it at the same path. `_enlazar` hardlinks and falls back to a symlink across filesystems; keep the
+  folder on the media's filesystem (e.g. under `/data`): a symlink only seeds if qBittorrent resolves its target.
 - Contract with Uploadrr-EMU, change both repos together: argv in `services/uploadrr_contract.py`;
   `config.yaml` keys staged by `uploadrr_config_staging.py` / `uploadrr_yaml.py` and restored from
   `data/config.yaml.bak` after every job (hand edits to `config.yaml` don't survive, edit the `.bak`);
   progress and result parsing in `uploadrr_progress.py` / `upload_result_parser.py` match its output lines
-  verbatim. Uploadrr-EMU exits 1 when nothing was uploaded and prints `Torrent URL: …`.
+  verbatim. Uploadrr-EMU exits 0 only if something was uploaded (any other code is a failed job), and after
+  a successful upload prints `Torrent URL: …`.
 - eMuwarez and TMDb keys travel in the URL query. Never log or return a raw URL: use
   `integrations.base.url_sin_claves`.
 - Image: `ghcr.io/kisnov/emuwarez-uploadrr`, built and published with `scripts/desplegar.sh`. Pass

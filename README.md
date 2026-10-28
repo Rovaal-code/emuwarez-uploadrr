@@ -1,33 +1,36 @@
 # eMuwarez Uploadrr
 
-Aplicación web (+ CLI) para gestionar subidas a **eMuwarez** (tracker UNIT3D)
-a partir de tu biblioteca de **Radarr**/**Sonarr**: sincroniza tu biblioteca,
-cruza peticiones abiertas en eMuwarez con lo que ya tienes, adapta la
-nomenclatura, prepara el hardlink y ejecuta la subida real con
-[Uploadrr-EMU](https://github.com/Kisnov/Uploadrr-EMU) — todo desde una
-interfaz web, sin tocar la terminal.
+[![CI](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/ci.yml/badge.svg)](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/ci.yml)
+[![Imagen](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/imagen.yml/badge.svg)](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/imagen.yml)
 
-## Características principales
+Aplicación web autoalojada (+ CLI) para subir a **[eMuwarez](https://emu-warez.com)** (tracker UNIT3D) desde tu
+biblioteca de **Radarr**/**Sonarr**. Sincroniza la biblioteca, la cruza con las peticiones abiertas de eMuwarez,
+genera el nombre con la nomenclatura del tracker, enlaza los ficheros en una carpeta de subidas y lanza la subida
+con [Uploadrr-EMU](https://github.com/Kisnov/Uploadrr-EMU), que va dentro de la imagen. Todo desde la interfaz web.
 
-- **Biblioteca**: sincroniza películas y series desde Radarr/Sonarr, con
-  estado (Disponible/Faltante/Subiendo/Subido/Error) y nomenclatura por ítem.
-- **Peticiones**: importa las peticiones abiertas de eMuwarez y calcula
-  automáticamente qué tienes ya listo para cubrirlas (compatible, parcial,
-  no compatible), con prioridad y candidato sugerido.
-- **Subidas**: preflight, nomenclatura, hardlink y ejecución controlada de
-  Uploadrr-EMU (`shell=False`, argv como lista, secretos siempre redactados
-  en logs), con límite configurable de subidas simultáneas.
-- **Mantenimiento**: backups de configuración, VACUUM de la base de datos,
-  logs centralizados, diagnóstico (`web doctor`).
-- **Tareas automáticas**: sincronización periódica de biblioteca y
-  peticiones, sin intervención manual.
+## Qué hace
+
+- **Panel**: recomendaciones de qué subir y las últimas tareas ejecutadas.
+- **Biblioteca**: películas y series de Radarr/Sonarr con su estado (Disponible, Faltante, Subiendo, Subido,
+  Error) y si llevan castellano (Ambos, Audio, Subs, No). Filtros por columna con varias opciones a la vez.
+  En la ficha de cada ítem: MediaInfo, pistas, temporadas y capítulos.
+- **Peticiones**: las peticiones abiertas de eMuwarez cruzadas con lo que ya tienes (compatible, parcial, no
+  compatible), con prioridad y candidato sugerido.
+- **Subidas**: un asistente comprueba el contenido, genera el nombre (también para packs de temporada) y lanza
+  Uploadrr-EMU. Opcionalmente renombra y reordena las pistas (cuatro modos, apagado por defecto). Progreso en
+  directo, límite de subidas en paralelo y varios grupos de subida guardados para el tag.
+- **Guía**: cada campo de la nomenclatura de eMuwarez, con ejemplos y de dónde lo saca la aplicación.
+- **Tareas**: sincronización periódica de biblioteca y peticiones, y aviso de versión nueva en la campana.
+- **Instancias**: tus Radarr y Sonarr.
+- **Logs**: registros de la aplicación y de cada subida, con los secretos redactados.
+- **Configuración**: claves de TMDb, eMuwarez y hosts de imágenes (se comprueban contra el proveedor),
+  mapeo de rutas, notificaciones (Discord, Telegram, webhook), diagnóstico, backup y mantenimiento.
 
 ## Arranque rápido (Docker Compose)
 
-Requiere Docker 24+ con Compose v2. No hace falta clonar el repo: copia esto
-en un `docker-compose.yml`, ajusta las rutas de los volúmenes a tu entorno y
-levántalo. Usa la imagen ya publicada en
-`ghcr.io/kisnov/emuwarez-uploadrr`, así que no compila nada.
+Requiere Docker 24+ con Compose v2. No hace falta clonar el repo: copia esto en un `docker-compose.yml`, ajusta
+las rutas de los volúmenes y levántalo. Usa la imagen publicada en `ghcr.io/kisnov/emuwarez-uploadrr`, así que no
+compila nada.
 
 ```yaml
 services:
@@ -56,21 +59,22 @@ services:
     environment:
       TZ: ${TZ:-Europe/Madrid}
       CONFIG_DIR: /config
+      # Carpeta donde se enlaza lo que se sube. Uploadrr-EMU se la da a
+      # qBittorrent como ruta de guardado, así que tiene que estar en el mismo
+      # sistema de ficheros que la media (para que sea un enlace duro) y
+      # qBittorrent tiene que verla en esta misma ruta.
+      UPLOADRR_UPLOADS_DIR: /data/uploads/emu
 
     volumes:
       # Configuración persistente: base de datos SQLite, settings, y el
-      # config.yaml/temporales de Uploadrr-EMU (bajo /config/Uploadrr —
-      # Uploadrr-EMU va empaquetado en la imagen, no es un mount aparte).
+      # config.yaml/temporales de Uploadrr-EMU (bajo /config/Uploadrr).
       - /srv/emuwarez-uploadrr/config:/config
 
-      # Raíz de datos compartida para media + uploads — una sola raíz evita
-      # el error EXDEV al crear hardlinks entre origen y destino.
-      # Configura en el setup web: Raíz media → /data/media,
-      # hardlink_base → /data/uploads/emu
+      # Raíz de datos compartida: media de Radarr/Sonarr y carpeta de subidas.
       - /srv/data:/data
 ```
 
-Opcionalmente, junto a él crea un `.env` para no editar el compose directamente:
+Opcionalmente, crea al lado un `.env` para no editar el compose:
 
 ```env
 PUID=1000
@@ -85,14 +89,22 @@ Y levanta el contenedor:
 docker compose up -d
 ```
 
-Abre `http://localhost:9494` — el asistente de configuración inicial se abre
-solo.
+Abre `http://localhost:9494`: el asistente de configuración inicial se abre solo.
 
-> API keys (TMDb, eMuwarez, Radarr/Sonarr...) se configuran desde el propio
-> asistente web o desde Configuración — nunca en el compose ni en el `.env`.
+> Las API keys (TMDb, eMuwarez, Radarr/Sonarr…) se configuran desde el asistente web o desde Configuración, nunca
+> en el compose ni en el `.env`.
 
-Si prefieres clonar el repo (por ejemplo para construir la imagen tú mismo
-en vez de usar la publicada), usa `docker-compose.example.yml`:
+### Rutas: lo único delicado
+
+- **La carpeta de subidas** (`UPLOADRR_UPLOADS_DIR`) tiene que estar en el mismo sistema de ficheros que la media.
+  Si no lo está, la aplicación crea un enlace simbólico en lugar de uno duro, y solo se siembra si qBittorrent
+  puede resolver a dónde apunta. Sin la variable, la carpeta es `/config/Uploadrr/uploads`, normalmente en otro
+  disco.
+- **qBittorrent** tiene que ver la carpeta de subidas en la misma ruta que este contenedor.
+- **Si Radarr/Sonarr ven la media en otra ruta** que este contenedor, añade una regla en Configuración →
+  *Mapeo de rutas (biblioteca remota)*.
+
+### Construir la imagen tú mismo
 
 ```bash
 git clone https://github.com/Kisnov/emuwarez-uploadrr.git
@@ -101,37 +113,49 @@ cp .env.example .env
 docker compose -f docker-compose.example.yml up -d --build
 ```
 
-**Guía de despliegue completa** (hardlinks/EXDEV, primer usuario admin,
-troubleshooting): [`docs/DEPLOYMENT_DOCKER.md`](docs/DEPLOYMENT_DOCKER.md).
+> Uploadrr-EMU va empaquetado dentro de la imagen: no hay que montar ni configurar nada aparte para él. Su
+> `config.yaml` y sus temporales persisten bajo el volumen `/config`.
 
-> `Uploadrr-EMU` va empaquetado dentro de la imagen — no hay que montar ni
-> configurar nada aparte para él. Su `config.yaml` y sus temporales de subida
-> persisten automáticamente bajo el propio volumen `/config`.
+## Uso sin Docker
 
-## Uso sin Docker (CLI local)
+Necesita Python 3.10+, Node 20, `mediainfo`, `ffmpeg`, `mkvtoolnix` y una copia de Uploadrr-EMU (ruta en el ajuste
+`uploadrr.path`, por defecto `/opt/Uploadrr`).
 
 ```bash
 pip install -e ".[web]"
+(cd frontend && npm ci && npm run build)
 python3 emuwarez_uploader.py web serve --host 0.0.0.0 --port 9494
 ```
 
-La CLI también expone comandos equivalentes a cada acción de la web
-(sincronizar, listar biblioteca/peticiones, preparar nomenclatura, subir…) —
-ver [`README_CLI_READY.md`](README_CLI_READY.md) para el listado completo y
-el modelo de datos en SQLite.
+La CLI también tiene un comando para cada acción de la web (sincronizar, listar biblioteca y peticiones, generar
+la nomenclatura, subir…): ver [`README_CLI_READY.md`](README_CLI_READY.md).
+
+## Desarrollo
+
+```bash
+# Backend, en Linux (hardlinks, mediainfo, mkvtoolnix): ~2180 tests, ~7 min
+pip install -e ".[web,dev]"
+python -m pytest tests -q -p no:cacheprovider
+
+# Frontend
+cd frontend && npm ci && npx tsc --noEmit && npx vitest run && npx vite build
+```
+
+El CI pasa lo mismo y las reglas graves de `ruff` en cada PR. `CLAUDE.md` recoge las reglas de arquitectura y el
+contrato con Uploadrr-EMU (argumentos, claves de `config.yaml` y líneas de salida que se leen): si cambias uno de
+los dos lados, cambia el otro a la vez.
 
 ## Documentación
 
-- [`docs/DEPLOYMENT_DOCKER.md`](docs/DEPLOYMENT_DOCKER.md) — despliegue Docker paso a paso y troubleshooting.
-- [`docs/source_engine.md`](docs/source_engine.md) — motor de detección de source/nomenclatura.
-- [`references/`](references) — nomenclatura y guía de subida de eMuwarez.
-- [`README_CLI_READY.md`](README_CLI_READY.md) — referencia extendida de la CLI y el modelo SQLite.
+- [`docs/DEPLOYMENT_DOCKER.md`](docs/DEPLOYMENT_DOCKER.md): despliegue Docker paso a paso y troubleshooting.
+- [`docs/source_engine.md`](docs/source_engine.md): motor de detección de source y nomenclatura.
+- [`README_CLI_READY.md`](README_CLI_READY.md): referencia de la CLI y del modelo SQLite.
 
 ## Stack
 
 - Backend: Python (FastAPI) + SQLite.
 - Frontend: React + Vite + TypeScript, servido como estáticos por el backend.
-- Integraciones: Radarr, Sonarr, TMDb, eMuwarez (UNIT3D), Uploadrr-EMU.
+- Integraciones: Radarr, Sonarr, TMDb, eMuwarez (UNIT3D), Uploadrr-EMU, qBittorrent.
 
 ## Licencia
 

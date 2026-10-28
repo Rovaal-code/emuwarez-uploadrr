@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 38
+SCHEMA_VERSION = 39
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -879,6 +879,22 @@ def _migrate_library_items_hierarchy(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_library_tvdb ON library_items(tvdb_id)")
 
 
+def _migrate_dominio_emu_warez(conn: sqlite3.Connection) -> None:
+    """Esquema 39: eMuwarez pasó de emuwarez.com a emu-warez.com, y el viejo ya
+    no responde. Los enlaces guardados (torrents subidos, peticiones, avisos,
+    ajustes) se reescriben para que sigan abriéndose."""
+    for tabla, columna in (
+        ("upload_jobs", "result_url"), ("upload_artifacts", "url"), ("upload_artifacts", "value"),
+        ("request_items", "url"), ("notifications", "link"), ("settings", "value"), ("app_state", "value"),
+    ):
+        try:
+            conn.execute(
+                f"UPDATE {tabla} SET {columna} = REPLACE({columna}, '//emuwarez.com', '//emu-warez.com') "
+                f"WHERE {columna} LIKE '%//emuwarez.com%'")
+        except sqlite3.OperationalError:
+            pass                        # tabla o columna que esta base aún no tiene
+
+
 def _migrate_ui_recibe_aviso_de_version(conn: sqlite3.Connection) -> None:
     """Esquema 38: el aviso de versión nueva, activado en la campana.
 
@@ -1536,6 +1552,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_request_items_is_example(conn)
         _migrate_qbit_port_into_url(conn)
         _migrate_library_items_tvmaze_id(conn)
+        _migrate_dominio_emu_warez(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

@@ -26,6 +26,8 @@ import { CASTELLANO_OPCIONES, type EstadoCastellano } from '../utils/castellano'
 import { useTardanza } from '../hooks/useTardanza'
 import { useAlEntrar, useAlSalir } from '../context/SeccionVisible'
 
+// Una sola lista vacía: volver a ponerla no cuenta como cambio y no recarga la biblioteca.
+const NINGUNO: string[] = []
 const LOAD_LIMIT = 20000  // show everything in one container (no pagination); backend caps here
 
 // Spanish display label for each real item_type value the Tipo filter offers
@@ -185,20 +187,20 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     const t = setTimeout(() => setDebouncedSearch(search), 350)
     return () => clearTimeout(t)
   }, [search])
-  const [filterType, setFilterType] = useState<string[]>([])
-  const [filterStatus, setFilterStatus] = useState<string[]>([])
-  const [filterInstanceId, setFilterInstanceId] = useState<string[]>([])
-  const [filterRequest, setFilterRequest] = useState<string[]>([])
+  const [filterType, setFilterType] = useState<string[]>(NINGUNO)
+  const [filterStatus, setFilterStatus] = useState<string[]>(NINGUNO)
+  const [filterInstanceId, setFilterInstanceId] = useState<string[]>(NINGUNO)
+  const [filterRequest, setFilterRequest] = useState<string[]>(NINGUNO)
   // Client-side text filters (no backend param) over the loaded items.
   // Las columnas admiten varios valores: lista vacía = sin filtro.
-  const [searchProvider, setSearchProvider] = useState<string[]>([])
-  const [searchQuality, setSearchQuality] = useState<string[]>([])
-  const [searchSource, setSearchSource] = useState<string[]>([])
-  const [filterEmu, setFilterEmu] = useState<string[]>([])
+  const [searchProvider, setSearchProvider] = useState<string[]>(NINGUNO)
+  const [searchQuality, setSearchQuality] = useState<string[]>(NINGUNO)
+  const [searchSource, setSearchSource] = useState<string[]>(NINGUNO)
+  const [filterEmu, setFilterEmu] = useState<string[]>(NINGUNO)
   const [filterAporte, setFilterAporte] = useState('')
   // Backend-side filter (unlike the four above it), so it never forces the
   // whole library to be fetched just to be thrown away in the browser.
-  const [filterSpanish, setFilterSpanish] = useState<string[]>([])
+  const [filterSpanish, setFilterSpanish] = useState<string[]>(NINGUNO)
   const [sortBy, setSortBy] = useState('title_asc')
   const [offset, setOffset] = useState(0)
 
@@ -262,9 +264,9 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     setSelected(null)
     closeDetailPath('library')
     setSearch(''); setDebouncedSearch('')
-    setFilterType([]); setFilterStatus([]); setFilterInstanceId([]); setFilterRequest([])
-    setSearchProvider([]); setSearchQuality([]); setSearchSource([])
-    setFilterEmu([]); setFilterAporte(''); setFilterSpanish([])
+    setFilterType(NINGUNO); setFilterStatus(NINGUNO); setFilterInstanceId(NINGUNO); setFilterRequest(NINGUNO)
+    setSearchProvider(NINGUNO); setSearchQuality(NINGUNO); setSearchSource(NINGUNO)
+    setFilterEmu(NINGUNO); setFilterAporte(''); setFilterSpanish(NINGUNO)
     setSortBy('title_asc')
     setOffset(0)
   })

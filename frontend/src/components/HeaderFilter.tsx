@@ -15,7 +15,7 @@ function FilterOptionButton({ option, selected, multiple, onClick }: { option: F
       type="button"
       className={`hf-option${selected ? ' selected' : ''}`}
       onClick={onClick}
-      {...(multiple ? { role: 'menuitemcheckbox', 'aria-checked': selected } : {})}
+      aria-pressed={multiple ? selected : undefined}
       {...triggerProps}
     >
       {multiple && <span aria-hidden style={{ display: 'inline-block', width: 14 }}>{selected ? '✓' : ''}</span>}
@@ -54,6 +54,7 @@ export function HeaderFilter<T extends string | string[]>({ label, value, option
       setOpen(false)
       return
     }
+    if (v === '' && !active) return
     onChange((v === '' ? [] : elegidos.includes(v) ? elegidos.filter(x => x !== v) : [...elegidos, v]) as T)
   }
 

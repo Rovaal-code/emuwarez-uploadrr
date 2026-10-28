@@ -51,6 +51,7 @@ import {
 import { useRefrescoPorAvisos, AVISOS_SUBIDA, AVISOS_SUBIDA_PROGRESO } from '../hooks/useRefrescoPorAvisos'
 import { queSalieron, soloVivas, idsDe, ESPERA_MS, DESVANECER_MS } from '../utils/despedidaSubidas'
 import { useSeccionVisible } from '../context/SeccionVisible'
+import { EMU_URL } from '../constants/emu'
 
 // Phase 11G — "Recomendaciones" groups, in the order they appear. The content
 // name always links to its Biblioteca detail; the "Acción" button is
@@ -721,7 +722,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                   )
                 }
                 if (connSettings?.emu_api_key_configured)
-                  rows.push(<ConnRow key="emu" icon={<ServiceIcon type="emu" size={16} />} label="API eMuwarez" href="https://emuwarez.com" />)
+                  rows.push(<ConnRow key="emu" icon={<ServiceIcon type="emu" size={16} />} label="API eMuwarez" href={EMU_URL} />)
                 if (connSettings?.tmdb_api_key_configured)
                   rows.push(<ConnRow key="tmdb" icon={<ServiceIcon type="tmdb" size={16} />} label="API TMDb" href="https://www.themoviedb.org" />)
                 if (connSettings?.qbit_configured)

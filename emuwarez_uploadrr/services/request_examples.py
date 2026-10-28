@@ -24,6 +24,8 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
+from ..constants import EMU_BASE_URL
+
 logger = logging.getLogger("emuwarez.request_examples")
 
 EXAMPLE_ID_PREFIX = "ejemplo-"
@@ -52,7 +54,7 @@ _OWN_REQUEST_GROUP = "no_disponible"
 # Every example points at the requests page rather than at /requests/{id}: the
 # ids are made up, so a per-request link would 404 on the tracker. This keeps
 # "Ver Petición" going somewhere real until the endpoint exists.
-_EXAMPLE_URL = "https://emuwarez.com/requests"
+_EXAMPLE_URL = f"{EMU_BASE_URL}/requests"
 
 # Resolution ladder, used to ask for something HIGHER than what the library
 # holds — that is what makes the resolution check fail and the verdict land on

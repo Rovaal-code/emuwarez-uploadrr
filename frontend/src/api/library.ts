@@ -2,22 +2,23 @@ import { api } from './client'
 import type { LibraryListResponse, LibraryItemResponse, SyncResponse } from '../types/api'
 import type { EstadoCastellano } from '../utils/castellano'
 
+// Los filtros de columna admiten varios valores: viajan como parámetro repetido.
 export interface LibraryQueryParams {
-  type?: string
+  type?: string | string[]
   origin?: string
-  instance_id?: number
+  instance_id?: number | number[]
   // Series/Season/Episode hierarchy — omit for "no filter" (CLI-style
   // callers), pass 0 (TOP_LEVEL_PARENT_FILTER, matches the backend
   // sentinel) for "top level only", or a real id to fetch that row's
   // direct children.
   parent_id?: number
-  status?: string
-  request_status?: string
+  status?: string | string[]
+  request_status?: string | string[]
   nomenclature?: string
   search?: string
   // Español column. Filtered in SQL by the backend (unlike the provider/
   // quality/source ones, which are client-side over the loaded rows).
-  spanish?: EstadoCastellano
+  spanish?: EstadoCastellano | EstadoCastellano[]
   sort?: string
   limit?: number
   offset?: number
@@ -25,15 +26,18 @@ export interface LibraryQueryParams {
 
 export async function getLibrary(params: LibraryQueryParams = {}): Promise<LibraryListResponse> {
   const qs = new URLSearchParams()
-  if (params.type) qs.set('type', params.type)
-  if (params.origin) qs.set('origin', params.origin)
-  if (params.instance_id !== undefined) qs.set('instance_id', String(params.instance_id))
+  const poner = (clave: string, v: string | number | (string | number)[] | undefined) => {
+    for (const x of [v ?? []].flat()) if (x !== '') qs.append(clave, String(x))
+  }
+  poner('type', params.type)
+  poner('origin', params.origin)
+  poner('instance_id', params.instance_id)
   if (params.parent_id !== undefined) qs.set('parent_id', String(params.parent_id))
-  if (params.status) qs.set('status', params.status)
-  if (params.request_status) qs.set('request_status', params.request_status)
-  if (params.nomenclature) qs.set('nomenclature', params.nomenclature)
+  poner('status', params.status)
+  poner('request_status', params.request_status)
+  poner('nomenclature', params.nomenclature)
   if (params.search) qs.set('search', params.search)
-  if (params.spanish) qs.set('spanish', params.spanish)
+  poner('spanish', params.spanish)
   if (params.sort) qs.set('sort', params.sort)
   if (params.limit !== undefined) qs.set('limit', String(params.limit))
   if (params.offset !== undefined) qs.set('offset', String(params.offset))

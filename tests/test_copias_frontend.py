@@ -189,8 +189,8 @@ def test_los_estados_de_castellano_coinciden():
     assert m, "no se encontró EstadoCastellano"
     delFront = set(re.findall(r"'(\w+)'", m.group(1)))
 
-    backend = (RAIZ / "emuwarez_uploadrr" / "services" / "library.py").read_text()
-    delBack = set(re.findall(r'spanish == "(\w+)"', backend))
+    from emuwarez_uploadrr.services.library import _CASTELLANO_SQL
+    delBack = set(_CASTELLANO_SQL)
 
     assert delFront == delBack, (
         "\nLos estados de la columna Español no coinciden."

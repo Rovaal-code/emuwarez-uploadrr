@@ -84,3 +84,10 @@ describe('buscar es la excepción: mantiene el árbol', () => {
     expect(necesitaTodosLosNiveles({ search: 'One Piece', filterType: 'episode' })).toBe(true)
   })
 })
+
+describe('columnas con varios valores', () => {
+  it('una lista vacía no cuenta como filtro y una con algo sí', () => {
+    expect(necesitaTodosLosNiveles({ filterType: [], searchSource: [] })).toBe(false)
+    expect(necesitaTodosLosNiveles({ filterInstanceId: ['1', '2'] })).toBe(true)
+  })
+})

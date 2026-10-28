@@ -185,19 +185,20 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     const t = setTimeout(() => setDebouncedSearch(search), 350)
     return () => clearTimeout(t)
   }, [search])
-  const [filterType, setFilterType] = useState('')
-  const [filterStatus, setFilterStatus] = useState('')
-  const [filterInstanceId, setFilterInstanceId] = useState('')
-  const [filterRequest, setFilterRequest] = useState('')
+  const [filterType, setFilterType] = useState<string[]>([])
+  const [filterStatus, setFilterStatus] = useState<string[]>([])
+  const [filterInstanceId, setFilterInstanceId] = useState<string[]>([])
+  const [filterRequest, setFilterRequest] = useState<string[]>([])
   // Client-side text filters (no backend param) over the loaded items.
-  const [searchProvider, setSearchProvider] = useState('')
-  const [searchQuality, setSearchQuality] = useState('')
-  const [searchSource, setSearchSource] = useState('')
-  const [filterEmu, setFilterEmu] = useState('')
+  // Las columnas admiten varios valores: lista vacía = sin filtro.
+  const [searchProvider, setSearchProvider] = useState<string[]>([])
+  const [searchQuality, setSearchQuality] = useState<string[]>([])
+  const [searchSource, setSearchSource] = useState<string[]>([])
+  const [filterEmu, setFilterEmu] = useState<string[]>([])
   const [filterAporte, setFilterAporte] = useState('')
   // Backend-side filter (unlike the four above it), so it never forces the
   // whole library to be fetched just to be thrown away in the browser.
-  const [filterSpanish, setFilterSpanish] = useState('')
+  const [filterSpanish, setFilterSpanish] = useState<string[]>([])
   const [sortBy, setSortBy] = useState('title_asc')
   const [offset, setOffset] = useState(0)
 
@@ -215,11 +216,11 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
       })
       const result = await getLibrary({
         search: debouncedSearch || undefined,
-        type: filterType || undefined,
-        status: filterStatus || undefined,
-        instance_id: filterInstanceId ? Number(filterInstanceId) : undefined,
-        request_status: filterRequest || undefined,
-        spanish: (filterSpanish || undefined) as EstadoCastellano | undefined,
+        type: filterType,
+        status: filterStatus,
+        instance_id: filterInstanceId.map(Number),
+        request_status: filterRequest,
+        spanish: filterSpanish as EstadoCastellano[],
         sort: sortBy,
         parent_id: flatFilter ? undefined : TOP_LEVEL_PARENT_FILTER,
         limit: LOAD_LIMIT,
@@ -261,9 +262,9 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     setSelected(null)
     closeDetailPath('library')
     setSearch(''); setDebouncedSearch('')
-    setFilterType(''); setFilterStatus(''); setFilterInstanceId(''); setFilterRequest('')
-    setSearchProvider(''); setSearchQuality(''); setSearchSource('')
-    setFilterEmu(''); setFilterAporte(''); setFilterSpanish('')
+    setFilterType([]); setFilterStatus([]); setFilterInstanceId([]); setFilterRequest([])
+    setSearchProvider([]); setSearchQuality([]); setSearchSource([])
+    setFilterEmu([]); setFilterAporte(''); setFilterSpanish([])
     setSortBy('title_asc')
     setOffset(0)
   })
@@ -371,13 +372,16 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     isAporteEligible(it) && (it.emu_in_catalog === 0 || (it.emu_in_catalog === 1 && (it.emu_aportes?.length ?? 0) > 0))
 
   const matchesFilter = (it: LibraryItemResponse) => {
-    const provOk = !searchProvider || it.provider_label === searchProvider
-    const qualOk = !searchQuality || it.resolution === searchQuality
-    const sourceOk = !searchSource || it.source === searchSource
+    const cumple = (elegidos: string[], v: string | null | undefined) => !elegidos.length || elegidos.includes(v ?? '')
+    const provOk = cumple(searchProvider, it.provider_label)
+    const qualOk = cumple(searchQuality, it.resolution)
+    const sourceOk = cumple(searchSource, it.source)
     // "candidate" = No (not on eMuwarez), "present" = Sí. A partial series
     // (emu_in_catalog === 2) matches neither on its own — its Sí/No seasons do,
     // so filtering surfaces those seasons instead of the misleading series row.
-    const emuOk = !filterEmu || (filterEmu === 'candidate' ? it.emu_in_catalog === 0 : it.emu_in_catalog === 1)
+    const emuOk = !filterEmu.length
+      || (filterEmu.includes('candidate') && it.emu_in_catalog === 0)
+      || (filterEmu.includes('present') && it.emu_in_catalog === 1)
     // Same rollup caveat as emuOk: an ambiguous/partial item (emu_in_catalog
     // null or 2) matches neither "yes" nor "no" on its own.
     const aporteOk = !filterAporte || (filterAporte === 'yes' ? isAporte(it) : (it.emu_in_catalog === 1 && !isAporte(it)))
@@ -387,7 +391,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // Show the matching items at the highest matching level: if a whole series
   // matches, show the series (not each of its seasons); if only some seasons
   // match (mixed series), show those seasons.
-  const flatFilter = !!(searchProvider || searchQuality || searchSource || filterEmu || filterAporte)
+  const flatFilter = !!(searchProvider.length || searchQuality.length || searchSource.length || filterEmu.length || filterAporte)
   let filteredItems: LibraryItemResponse[]
   if (flatFilter) {
     const matchIds = new Set(items.filter(matchesFilter).map(i => i.id))

@@ -541,7 +541,14 @@ def _check_generic_upload_preconditions(job_id: int, item_id: int, is_season: bo
     return True
 
 
-def _populate_ready(job_id: int, item_id: int, conn) -> bool:
+def _ajustes_de_pack(season_overrides: dict | None) -> dict:
+    """Lo editado a mano para un pack en el asistente, como argumentos de
+    build_season_pack_plan() y apply_season_pack()."""
+    ajustes = season_overrides or {}
+    return {f"{k}_override": ajustes.get(k) for k in ("source", "provider", "tag", "title")}
+
+
+def _populate_ready(job_id: int, item_id: int, conn, season_overrides: dict | None = None) -> bool:
     """Recompute preconditions + command preview NOW (after rename/remux, so
     prepared_path reflects the final file) and, if ok, flip the SAME job row
     to 'ready' — mirrors upload_preflight.build_upload_preflight() but UPDATEs
@@ -560,7 +567,7 @@ def _populate_ready(job_id: int, item_id: int, conn) -> bool:
         # season-specific precondition check replaces it.
         from .season_pack import build_season_pack_plan
 
-        plan = build_season_pack_plan(item_id, conn=conn)
+        plan = build_season_pack_plan(item_id, conn=conn, **_ajustes_de_pack(season_overrides))
         if plan["status"] != "valid":
             _fail(job_id, "; ".join(plan.get("errors") or ["No se pudo preparar el pack de temporada."]))
             return False
@@ -586,14 +593,7 @@ def _populate_ready(job_id: int, item_id: int, conn) -> bool:
             "episode": None,
         }
         command_preview = build_uploadrr_command_preview(synthetic_item, None, None, conn=conn)
-        conn.execute(
-            "UPDATE upload_jobs SET status = 'ready', stage = 'preflight', "
-            "prepared_path = ?, uploadrr_command_json = ?, error_message = NULL, updated_at = ? "
-            "WHERE id = ?",
-            (plan.get("pack_folder"), json.dumps(command_preview, ensure_ascii=False), _now_iso(), job_id),
-        )
-        conn.commit()
-        return True
+        return _marcar_lista(job_id, command_preview, conn)
 
     proposal_row = conn.execute(
         "SELECT * FROM nomenclature_proposals WHERE library_item_id = ? AND status != 'expired' "
@@ -608,14 +608,24 @@ def _populate_ready(job_id: int, item_id: int, conn) -> bool:
         return False
 
     command_preview = build_uploadrr_command_preview(item, proposal, None, conn=conn)
-    conn.execute(
-        "UPDATE upload_jobs SET status = 'ready', stage = 'preflight', "
-        "prepared_path = ?, uploadrr_command_json = ?, error_message = NULL, updated_at = ? "
-        "WHERE id = ?",
-        (item.get("prepared_path"), json.dumps(command_preview, ensure_ascii=False), _now_iso(), job_id),
+    return _marcar_lista(job_id, command_preview, conn)
+
+
+def _marcar_lista(job_id: int, command_preview: dict, conn) -> bool:
+    """Deja el trabajo en 'ready' para arrancar Uploadrr.
+
+    No toca prepared_path: el paso anterior ya dejó ahí el enlace de la
+    carpeta de subidas, que es lo que Uploadrr tiene que recibir. Escribir
+    aquí la ruta de la biblioteca hacía que un pack se subiera con la carpeta
+    de Sonarr ("Season 1") en vez de la del release.
+
+    Devuelve False si el usuario canceló mientras tanto: no se resucita.
+    """
+    return escribir_estado(
+        job_id, salvo=("cancelled", "failed"), status="ready", stage="preflight",
+        uploadrr_command_json=json.dumps(command_preview, ensure_ascii=False),
+        error_message=None, conn=conn,
     )
-    conn.commit()
-    return True
 
 
 def _check_season_integrity(job_id: int, season_id: int, conn) -> bool:
@@ -835,12 +845,7 @@ def _run_queued_job(job_id: int) -> None:
             from .season_pack import apply_season_pack
             try:
                 applied = apply_season_pack(
-                    item_id, conn=conn, job_id=job_id,
-                    source_override=season_overrides.get("source"),
-                    provider_override=season_overrides.get("provider"),
-                    tag_override=season_overrides.get("tag"),
-                    title_override=season_overrides.get("title"),
-                )
+                    item_id, conn=conn, job_id=job_id, **_ajustes_de_pack(season_overrides))
             except Exception as exc:
                 _fail(job_id, f"Error aplicando la nomenclatura del pack de temporada: {exc}")
                 return
@@ -982,35 +987,36 @@ def _run_queued_job(job_id: int) -> None:
         # "Season 1". Un fichero suelto ya salía bien (torf usa su nombre, que
         # la nomenclatura dejó correcto), así que ahí esto es solo por tenerlo
         # todo junto.
-        from .carpeta_subida import preparar_carpeta_de_pack, preparar_fichero_suelto
-        if is_season:
-            from .season_pack import _sanitize_pack_folder_name, build_season_pack_plan
-            plan_final = build_season_pack_plan(item_id, conn=conn)
-            ficheros = [resolve_local_path(ep.get("destination_path") or ep.get("source_path"), conn=conn)
-                        or ep.get("source_path")
-                        for ep in plan_final.get("episodes", [])]
-            preparada = preparar_carpeta_de_pack(
-                _sanitize_pack_folder_name(plan_final.get("season_pack_title") or ""), ficheros)
-            destino_uploadrr = preparada.get("carpeta")
-            que = f"{preparada.get('cuantos', 0)} capítulo(s)"
-        else:
-            # Se relee: la nomenclatura y el remux de arriba han cambiado
-            # prepared_path, y el `item` de antes es de antes de eso.
-            item_final = row_to_dict(
-                conn.execute("SELECT * FROM library_items WHERE id = ?", (item_id,)).fetchone()) or {}
-            elegida = ruta_de_lectura(item_final, conn=conn)
-            fichero = resolve_local_path(elegida, conn=conn) or elegida
-            preparada = preparar_fichero_suelto(fichero)
-            destino_uploadrr = preparada.get("ruta")
-            que = "el archivo"
+        from .carpeta_subida import ENLACES, preparar_carpeta_de_pack, preparar_fichero_suelto
+        with ENLACES:
+            if is_season:
+                from .season_pack import _sanitize_pack_folder_name, build_season_pack_plan
+                plan_final = build_season_pack_plan(item_id, conn=conn, **_ajustes_de_pack(season_overrides))
+                ficheros = [resolve_local_path(ep.get("destination_path") or ep.get("source_path"), conn=conn)
+                            or ep.get("source_path")
+                            for ep in plan_final.get("episodes", [])]
+                preparada = preparar_carpeta_de_pack(
+                    _sanitize_pack_folder_name(plan_final.get("season_pack_title") or ""), ficheros)
+                destino_uploadrr = preparada.get("carpeta")
+                que = f"{preparada.get('cuantos', 0)} capítulo(s)"
+            else:
+                # Se relee: la nomenclatura y el remux de arriba han cambiado
+                # prepared_path, y el `item` de antes es de antes de eso.
+                item_final = row_to_dict(
+                    conn.execute("SELECT * FROM library_items WHERE id = ?", (item_id,)).fetchone()) or {}
+                elegida = ruta_de_lectura(item_final, conn=conn)
+                fichero = resolve_local_path(elegida, conn=conn) or elegida
+                preparada = preparar_fichero_suelto(fichero)
+                destino_uploadrr = preparada.get("ruta")
+                que = "el archivo"
 
-        if preparada["status"] != "ready":
-            _fail(job_id, "No se pudo preparar la subida en la carpeta de subidas: "
-                          + "; ".join(preparada["errors"]))
-            return
-        conn.execute("UPDATE upload_jobs SET prepared_path = ?, updated_at = ? WHERE id = ?",
-                     (destino_uploadrr, _now_iso(), job_id))
-        conn.commit()
+            if preparada["status"] != "ready":
+                _fail(job_id, "No se pudo preparar la subida en la carpeta de subidas: "
+                              + "; ".join(preparada["errors"]))
+                return
+            conn.execute("UPDATE upload_jobs SET prepared_path = ?, updated_at = ? WHERE id = ?",
+                         (destino_uploadrr, _now_iso(), job_id))
+            conn.commit()
         append_upload_log(
             job_id, "info",
             f"Preparado para subir: {que} enlazado(s) en «{os.path.basename(destino_uploadrr)}» "
@@ -1037,7 +1043,7 @@ def _run_queued_job(job_id: int) -> None:
             return
         mark_phase_started(job_id, "verificacion_presubida")
         append_upload_log(job_id, "info", "Preparando la subida…", stream="system", conn=conn)
-        if not _populate_ready(job_id, item_id, conn=conn):
+        if not _populate_ready(job_id, item_id, conn=conn, season_overrides=season_overrides):
             return  # _populate_ready already recorded the failure reason
 
         result = start_upload_job(job_id, dry_run=False, start=True, confirmation=START_TOKEN, conn=conn, pre_gated=True)

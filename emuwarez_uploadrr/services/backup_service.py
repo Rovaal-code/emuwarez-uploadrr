@@ -13,11 +13,12 @@ RESTORE_CONFIRMATION = "RESTAURAR_CONFIG"
 _DB_NAME = "emuwarez_uploadrr.db"
 # Lo que no va en la copia: las copias anteriores, los enlaces de subida y los
 # temporales de Uploadrr (capturas, torrents; en una instalación real, 1,7 GB).
-_FUERA_DE_LA_COPIA = (("backups",), ("Uploadrr", "uploads"), ("Uploadrr", "tmp"))
+# Una carpeta "backups" a cualquier profundidad tampoco: la copia no se mete a sí misma.
+_FUERA_DE_LA_COPIA = (("Uploadrr", "uploads"), ("Uploadrr", "tmp"))
 
 
 def _fuera_de_la_copia(rel_parts: tuple[str, ...]) -> bool:
-    return any(rel_parts[:len(p)] == p for p in _FUERA_DE_LA_COPIA)
+    return "backups" in rel_parts or any(rel_parts[:len(p)] == p for p in _FUERA_DE_LA_COPIA)
 
 
 def _add_db_snapshot(tar: tarfile.TarFile, db_file: Path, arcname: str) -> None:

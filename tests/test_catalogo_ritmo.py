@@ -39,3 +39,31 @@ def test_otros_errores_no_se_reintentan(monkeypatch):
     with pytest.raises(IntegrationError):
         emu.emu_fetch_all_torrents("k")
     assert len(llamadas) == 1
+
+
+def test_un_429_real_de_urlopen_llega_como_status_y_se_reintenta(monkeypatch):
+    import io
+    import json
+    import urllib.error
+
+    from emuwarez_uploadrr.integrations import base
+
+    class Respuesta(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    llamadas = []
+
+    def urlopen(req, timeout=None, context=None):
+        llamadas.append(req.full_url)
+        if len(llamadas) == 1:
+            raise urllib.error.HTTPError(req.full_url, 429, "Too Many Requests", {}, io.BytesIO(b"slow down"))
+        return Respuesta(json.dumps({"data": [{"id": 5}], "meta": {"last_page": 1}}).encode())
+
+    monkeypatch.setattr(base.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(emu.time, "sleep", lambda s: None)
+    assert [t["id"] for t in emu.emu_fetch_all_torrents("k")] == [5]
+    assert len(llamadas) == 2

@@ -89,3 +89,12 @@ def test_la_copia_no_lleva_los_temporales_de_uploadrr(config):
     assert not any("Uploadrr/tmp" in n for n in miembros)
     assert "Uploadrr/data/config.yaml" in miembros
     assert not any("Uploadrr/tmp" in f["name"] for f in get_config_inventory()["files"])
+
+
+def test_una_carpeta_backups_anidada_tampoco_entra(config):
+    anidada = config["cfg"] / "otra" / "backups"
+    anidada.mkdir(parents=True)
+    (anidada / "vieja.tar.gz").write_bytes(b"B" * 1000)
+    r = create_config_backup()
+    assert not any("backups" in n for n in _miembros(r["archive_path"]))
+    assert not any("backups" in f["name"] for f in get_config_inventory()["files"])

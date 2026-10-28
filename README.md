@@ -97,9 +97,16 @@ Abre `http://localhost:9494`: el asistente de configuración inicial se abre sol
 ### Rutas: lo único delicado
 
 - **La carpeta de subidas** (`UPLOADRR_UPLOADS_DIR`) tiene que estar en el mismo sistema de ficheros que la media.
-  Si no lo está, la aplicación crea un enlace simbólico en lugar de uno duro, y solo se siembra si qBittorrent
-  puede resolver a dónde apunta. Sin la variable, la carpeta es `/config/Uploadrr/uploads`, normalmente en otro
-  disco.
+  Cuando no se puede crear un enlace duro (otro sistema de ficheros, un montaje CIFS o NFS que no los admite, o el
+  límite de enlaces del fichero), la aplicación crea uno simbólico, y solo se siembra si qBittorrent puede resolver
+  a dónde apunta. Sin la variable, la carpeta es `/config/Uploadrr/uploads`, normalmente en otro disco.
+- **Créala antes de arrancar**, con el mismo dueño que `PUID:PGID`: si `/srv/data` es de root, el contenedor no
+  puede crearla y las subidas se quedan sin preparar.
+
+  ```bash
+  mkdir -p /srv/data/uploads/emu
+  chown 1000:1000 /srv/data/uploads/emu
+  ```
 - **qBittorrent** tiene que ver la carpeta de subidas en la misma ruta que este contenedor.
 - **Si Radarr/Sonarr ven la media en otra ruta** que este contenedor, añade una regla en Configuración →
   *Mapeo de rutas (biblioteca remota)*.
@@ -148,6 +155,7 @@ los dos lados, cambia el otro a la vez.
 ## Documentación
 
 - [`docs/DEPLOYMENT_DOCKER.md`](docs/DEPLOYMENT_DOCKER.md): despliegue Docker paso a paso y troubleshooting.
+  **Desactualizada:** aún describe `hardlink_base` y pasos que ya no existen; para las rutas vale lo de arriba.
 - [`docs/source_engine.md`](docs/source_engine.md): motor de detección de source y nomenclatura.
 - [`README_CLI_READY.md`](README_CLI_READY.md): referencia de la CLI y del modelo SQLite.
 

@@ -12,13 +12,18 @@
 # 2. Carpeta de subidas (UPLOADRR_UPLOADS_DIR, abajo):
 #    Lo que se sube se enlaza ahí, y Uploadrr-EMU se la da a qBittorrent
 #    como ruta de guardado. Tiene que estar en el MISMO sistema de ficheros
-#    que la media de Radarr/Sonarr, o el enlace es simbólico en vez de duro,
-#    y qBittorrent tiene que verla en la misma ruta que este contenedor.
+#    que la media de Radarr/Sonarr, y qBittorrent tiene que verla en la misma
+#    ruta que este contenedor. Si no se puede crear un enlace duro (otro
+#    sistema de ficheros, un montaje CIFS/NFS que no los admite), el enlace es
+#    simbólico y solo siembra si qBittorrent resuelve a dónde apunta.
 #    Sin la variable es /config/Uploadrr/uploads, normalmente en otro disco.
 #
 #    Ejemplo con raíz común /data:
 #      /data/media        → media (Radarr/Sonarr)
 #      /data/uploads/emu  → carpeta de subidas
+#
+#    Créala en el host antes de arrancar, con el dueño de PUID:PGID:
+#      mkdir -p /srv/data/uploads/emu && chown 1000:1000 /srv/data/uploads/emu
 #
 # 3. API keys: configúralas desde el setup web (http://localhost:9494) o
 #    desde Configuración. No las pongas en este fichero ni en .env.

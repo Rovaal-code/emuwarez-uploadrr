@@ -72,6 +72,15 @@ def _sin_listas_de_anime(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _sin_manifiesto_de_version(monkeypatch):
+    """El planificador y el arranque comprueban la versión contra GitHub: en
+    los tests, a un puerto cerrado de loopback (falla al instante)."""
+    from emuwarez_uploadrr.services import version_info
+
+    monkeypatch.setattr(version_info, "URL_MANIFIESTO", "http://127.0.0.1:9/latest.json")
+
+
+@pytest.fixture(autouse=True)
 def isolated_db(tmp_path, monkeypatch):
     """Point CONFIG_DIR to a per-test temp dir so each test starts with a fresh DB."""
     monkeypatch.setenv("CONFIG_DIR", str(tmp_path))

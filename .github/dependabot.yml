@@ -22,6 +22,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    groups:
+      docker:
+        update-types: [minor, patch]
 
   - package-ecosystem: github-actions
     directory: /
@@ -29,4 +32,4 @@ updates:
       interval: weekly
     groups:
       actions:
-        patterns: ["*"]
+        update-types: [minor, patch]

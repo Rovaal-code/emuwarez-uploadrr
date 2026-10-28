@@ -22,10 +22,20 @@ the upload with Uploadrr-EMU (`Kisnov/Uploadrr-EMU`, cloned into the image at `/
   On Windows, copy the tree into the container (`cp -r /src/. /w/`) rather than running on the bind mount.
 - Frontend: `cd frontend && npm ci && npx tsc --noEmit && npx vitest run && npx vite build`.
 - Architecture guards: `test_una_sola_puerta_a_settings.py` (settings only through `services/settings.py`
-  or `database.py`), `test_web_no_habla_sql.py`, `test_copias_frontend.py` (frontend copies of backend
-  constants must match).
+  or `database.py`; `services/` never imports from `web/`), `test_web_no_habla_sql.py`,
+  `test_copias_frontend.py` (frontend copies of backend constants must match), `test_dependencia_legacy.py`
+  (`legacy.py` stays deleted).
+- `test_media_info_congelado.py` compares the mediainfo report against
+  `tests/fixtures/mediainfo_informe_esperado.json`. For an intended change, regenerate it with
+  `python -m tests.test_media_info_congelado --regenerar` and review the JSON diff.
+- CI (`.github/workflows/ci.yml`) runs pytest, critical ruff rules and the frontend checks on every PR.
 
 ## Not obvious
+
+- Push events: call `eventos.publicar` from the one place that writes the data, not from its callers; it
+  must never raise. The server stays a single process (no extra uvicorn workers): the event bus is in memory.
+  A new `setInterval` in the frontend fails `test_no_han_aparecido_sondeos_nuevos` unless it is listed in
+  `SONDEOS_ESPERADOS` or `RELOJES`: push from the server instead of polling.
 
 - Migrations: bump `SCHEMA_VERSION` in `database.py` and add a `_migrate_*` call at the end of the cascade in
   `init_db`. `init_db` runs on every authenticated request and returns early when the version matches.

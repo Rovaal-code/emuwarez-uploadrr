@@ -45,8 +45,6 @@ WORKDIR /app
 # upstream checkout that silently drops all of that on a fresh deploy. The
 # fork is public, so the build needs no token.
 #
-# setuptools is pinned <80 because pyrobase's setup.py still imports the
-# pkg_resources module that newer setuptools dropped.
 # Cache-busting: Docker's layer cache keys a RUN step on its literal command
 # text, not on what the command actually fetches from the network — a plain
 # `git clone` here would silently keep reusing a stale checkout on every
@@ -62,9 +60,7 @@ WORKDIR /app
 ARG UPLOADRR_COMMIT=unknown
 RUN echo "Uploadrr-EMU @ ${UPLOADRR_COMMIT}" \
     && git clone --depth 1 https://github.com/Kisnov/Uploadrr-EMU.git /opt/Uploadrr \
-    && pip install --no-cache-dir "setuptools<80" wheel \
-    && pip install --no-cache-dir --no-build-isolation -r /opt/Uploadrr/requirements.txt \
-    && pip install --no-cache-dir tmdbsimple \
+    && pip install --no-cache-dir -r /opt/Uploadrr/requirements.txt \
     && rm -rf /opt/Uploadrr/.git \
     && chmod -R a+rwX /opt/Uploadrr
 # world-writable: the container's runtime UID (PUID/PGID, docker-compose's

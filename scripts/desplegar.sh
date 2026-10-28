@@ -23,7 +23,7 @@
 # Necesita `gh auth login` hecho, para publicar la versión.
 set -euo pipefail
 
-IMAGEN="ghcr.io/rovaal-code/emuwarez-uploadrr:latest"
+IMAGEN="ghcr.io/kisnov/emuwarez-uploadrr:latest"
 FORK="https://github.com/Kisnov/Uploadrr-EMU.git"
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 

@@ -48,7 +48,7 @@ id $(whoami)  # muestra tu UID y GID
 
 ## 4. Levantar con Compose
 
-Con la imagen ya publicada en `ghcr.io/rovaal-code/emuwarez-uploadrr` (no compila nada):
+Con la imagen ya publicada en `ghcr.io/kisnov/emuwarez-uploadrr` (no compila nada):
 
 ```bash
 docker compose up -d

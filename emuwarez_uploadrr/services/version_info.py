@@ -30,7 +30,7 @@ from .. import __version__
 # entorno, para probar sin tocar el publicado.
 URL_MANIFIESTO = os.environ.get(
     "UPLOADRR_VERSION_MANIFEST_URL",
-    "https://raw.githubusercontent.com/Rovaal-code/uploadrr-version/main/latest.json",
+    "https://raw.githubusercontent.com/Kisnov/uploadrr-version/main/latest.json",
 )
 
 # Una consulta por hora basta: publicar una versión no es algo que pase cada

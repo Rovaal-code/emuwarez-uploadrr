@@ -29,6 +29,12 @@ jobs:
           uploadrr="$(git ls-remote --exit-code https://github.com/Kisnov/Uploadrr-EMU.git refs/heads/main | cut -f1)"
           test -n "$uploadrr"
           echo "uploadrr=$uploadrr" >> "$GITHUB_OUTPUT"
+          # latest solo si este commit sigue siendo la punta de master: re-ejecutar uno viejo no lo retrasa.
+          tags="ghcr.io/kisnov/emuwarez-uploadrr:${GITHUB_SHA}"
+          if [ "$(git ls-remote --exit-code origin refs/heads/master | cut -f1)" = "$GITHUB_SHA" ]; then
+            tags="$tags,ghcr.io/kisnov/emuwarez-uploadrr:latest"
+          fi
+          echo "tags=$tags" >> "$GITHUB_OUTPUT"
           echo "fecha=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
@@ -43,9 +49,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: |
-            ghcr.io/kisnov/emuwarez-uploadrr:latest
-            ghcr.io/kisnov/emuwarez-uploadrr:${{ github.sha }}
+          tags: ${{ steps.sello.outputs.tags }}
           build-args: |
             UPLOADRR_COMMIT=${{ steps.sello.outputs.uploadrr }}
             APP_COMMIT=${{ github.sha }}

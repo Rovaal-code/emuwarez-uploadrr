@@ -88,3 +88,16 @@ def test_una_respuesta_no_json_no_lleva_la_clave():
 def test_url_sin_claves_deja_el_resto_igual():
     assert url_sin_claves(_URL_CON_CLAVE) == "https://emuwarez.invalid/api/requests?api_token=***&page=1"
     assert url_sin_claves("http://radarr:7878/api/v3/movie") == "http://radarr:7878/api/v3/movie"
+
+
+def test_url_sin_claves_quita_usuario_y_contrasena():
+    assert url_sin_claves("http://usu:pass@radarr:7878/api?apikey=K") == "http://radarr:7878/api?apikey=***"
+
+
+def test_el_cuerpo_del_error_no_repite_la_clave():
+    cuerpo = io.BytesIO(b"Bad request for /api?api_token=CLAVESECRETA123")
+    fallo = urllib.error.HTTPError(_URL_CON_CLAVE, 400, "Bad", None, cuerpo)
+    with patch("urllib.request.urlopen", side_effect=fallo):
+        with pytest.raises(IntegrationError) as info:
+            request_json("GET", _URL_CON_CLAVE)
+    assert "CLAVESECRETA123" not in str(info.value)

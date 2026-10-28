@@ -11,6 +11,13 @@ from pathlib import Path
 
 RESTORE_CONFIRMATION = "RESTAURAR_CONFIG"
 _DB_NAME = "emuwarez_uploadrr.db"
+# Lo que no va en la copia: las copias anteriores, los enlaces de subida y los
+# temporales de Uploadrr (capturas, torrents; en una instalación real, 1,7 GB).
+_FUERA_DE_LA_COPIA = (("backups",), ("Uploadrr", "uploads"), ("Uploadrr", "tmp"))
+
+
+def _fuera_de_la_copia(rel_parts: tuple[str, ...]) -> bool:
+    return any(rel_parts[:len(p)] == p for p in _FUERA_DE_LA_COPIA)
 
 
 def _add_db_snapshot(tar: tarfile.TarFile, db_file: Path, arcname: str) -> None:
@@ -70,9 +77,9 @@ def get_config_inventory() -> dict:
         # Lo mismo que excluye create_config_backup: este inventario es lo que
         # se le enseña al usuario como "esto es lo que se va a copiar", así que
         # contar aquí algo que la copia no lleva sería mentir.
-        if rel_parts[:2] == ("Uploadrr", "uploads"):
+        if _fuera_de_la_copia(rel_parts):
             continue
-        if f.is_file() and "backups" not in f.parts:
+        if f.is_file():
             size = f.stat().st_size
             total += size
             files.append({"name": str(f.relative_to(config_dir)), "size_bytes": size})
@@ -122,15 +129,10 @@ def create_config_backup(
     # distingue de un fichero normal y metería CADA PELÍCULA ENTERA en la copia
     # (comprobado: 5 MB de película en una copia que debía pesar 1 KB). Una
     # copia de configuración no puede engordar con el catálogo.
-    excluded_dirs = {"backups"}
-    excluded_paths = {("Uploadrr", "uploads")}
-
     with tarfile.open(archive_path, "w:gz") as tar:
         for item in sorted(config_dir.rglob("*")):
             rel = item.relative_to(config_dir)
-            if rel.parts and rel.parts[0] in excluded_dirs:
-                continue
-            if any(rel.parts[:len(p)] == p for p in excluded_paths):
+            if _fuera_de_la_copia(rel.parts):
                 continue
             # La base antes que is_file(): si desaparece por el camino, la copia falla.
             if item.name == _DB_NAME:

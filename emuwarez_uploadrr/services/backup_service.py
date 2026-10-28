@@ -27,7 +27,10 @@ def _add_db_snapshot(tar: tarfile.TarFile, db_file: Path, arcname: str) -> None:
         try:
             src.backup(dst)
         except sqlite3.DatabaseError:
-            # Si no se puede leer como SQLite, se copia tal cual, como siempre.
+            # Una base SQLite que falla no se copia en crudo: saldría rota.
+            with open(db_file, "rb") as f:
+                if f.read(16) == b"SQLite format 3\x00":
+                    raise
             snapshot = db_file
         finally:
             dst.close()

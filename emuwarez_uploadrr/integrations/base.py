@@ -12,7 +12,9 @@ from typing import Any, Optional
 
 
 class IntegrationError(RuntimeError):
-    pass
+    def __init__(self, mensaje: str = "", *, status: Optional[int] = None):
+        super().__init__(mensaje)
+        self.status = status  # código HTTP, si la respuesta llegó
 
 
 def _extract_cover_url(images: Any, cover_type: str) -> Optional[str]:
@@ -177,7 +179,7 @@ def request_json(
             # El cuerpo de error puede repetir la URL pedida, clave incluida.
             for clave in _claves_de(url):
                 raw = raw.replace(clave, "***")
-            raise IntegrationError(f"HTTP {exc.code} en {safe_url}: {raw[:500]}") from None
+            raise IntegrationError(f"HTTP {exc.code} en {safe_url}: {raw[:500]}", status=exc.code) from None
         if isinstance(exc, urllib.error.URLError):
             raise IntegrationError(f"No se pudo conectar con {safe_url}: {exc.reason}") from None
         if isinstance(exc, json.JSONDecodeError):

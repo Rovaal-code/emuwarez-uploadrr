@@ -1,6 +1,7 @@
 """Tests for backup_service."""
 from __future__ import annotations
 
+import sqlite3
 import tarfile
 from pathlib import Path
 
@@ -144,3 +145,11 @@ def test_la_copia_de_una_base_en_uso_se_puede_abrir(tmp_path, monkeypatch):
     finally:
         parar.set()
         hilo.join()
+
+
+def test_una_base_que_desaparece_no_se_copia_vacia(tmp_path):
+    from emuwarez_uploadrr.services.backup_service import _add_db_snapshot
+    db = tmp_path / "emuwarez_uploadrr.db"
+    with tarfile.open(tmp_path / "c.tar.gz", "w:gz") as tar, pytest.raises(sqlite3.OperationalError):
+        _add_db_snapshot(tar, db, db.name)
+    assert not db.exists()

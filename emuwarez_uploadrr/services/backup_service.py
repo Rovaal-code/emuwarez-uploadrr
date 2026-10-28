@@ -22,7 +22,8 @@ def _add_db_snapshot(tar: tarfile.TarFile, db_file: Path, arcname: str) -> None:
     """
     with tempfile.TemporaryDirectory() as tmp:
         snapshot = Path(tmp) / db_file.name
-        src = sqlite3.connect(str(db_file), timeout=30)
+        # mode=rw: si la base ha desaparecido, falla en vez de crear una vacía.
+        src = sqlite3.connect(db_file.resolve().as_uri() + "?mode=rw", uri=True, timeout=30)
         dst = sqlite3.connect(str(snapshot))
         try:
             src.backup(dst)
@@ -133,11 +134,11 @@ def create_config_backup(
                 continue
             if not item.is_file() or item.name in (f"{_DB_NAME}-wal", f"{_DB_NAME}-shm"):
                 continue
+            if item.name == _DB_NAME:
+                _add_db_snapshot(tar, item, str(rel))
+                continue
             try:
-                if item.name == _DB_NAME:
-                    _add_db_snapshot(tar, item, str(rel))
-                else:
-                    tar.add(item, arcname=str(rel))
+                tar.add(item, arcname=str(rel))
             except FileNotFoundError:
                 # Un temporal que desaparece entre listarlo y copiarlo.
                 continue

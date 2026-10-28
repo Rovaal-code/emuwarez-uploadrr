@@ -7,6 +7,8 @@ guarantees (can_execute is always False in this phase).
 """
 from __future__ import annotations
 
+import sys
+
 import pytest
 
 from emuwarez_uploadrr.database import connect, init_db
@@ -83,7 +85,7 @@ def test_mt_uses_full_proposed_filename_not_bare_title(tmp_path, db_conn):
     uploadrr_dir.mkdir()
     (uploadrr_dir / "upload.py").write_text("# fake")
     _set(db_conn, "uploadrr.path", str(uploadrr_dir))
-    _set(db_conn, "uploadrr.python_path", "/usr/bin/python3")
+    _set(db_conn, "uploadrr.python_path", sys.executable)
 
     root = tmp_path / "library"
     root.mkdir()

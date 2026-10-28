@@ -1,6 +1,6 @@
 # docker-compose.yml — despliegue con la imagen publicada
 #
-# Usa la imagen ya construida en ghcr.io/rovaal-code/emuwarez-uploadrr, así
+# Usa la imagen ya construida en ghcr.io/kisnov/emuwarez-uploadrr, así
 # que "docker compose up -d" no necesita compilar nada (ni el frontend ni
 # clonar Uploadrr-EMU en build time). Para construir la imagen tú mismo a
 # partir del código local, usa docker-compose.example.yml en su lugar.
@@ -31,7 +31,7 @@
 
 services:
   emuwarez-uploadrr:
-    image: ghcr.io/rovaal-code/emuwarez-uploadrr:${EMUWAREZ_UPLOADRR_TAG:-latest}
+    image: ghcr.io/kisnov/emuwarez-uploadrr:${EMUWAREZ_UPLOADRR_TAG:-latest}
     container_name: emuwarez-uploadrr
     restart: unless-stopped
 

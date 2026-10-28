@@ -20,6 +20,7 @@ import { testResultLabel, testResultColor, emuTestCooldownSeconds } from '../uti
 import { isValidHttpUrl } from '../utils/validation'
 import { useCooldown } from '../hooks/useCooldown'
 import { HoverTitle } from '../components/Tooltip'
+import { EMU_URL } from '../constants/emu'
 
 // Mirrors validate_password_strength() in web/security.py exactly (same
 // regexes) so the checklist never drifts from what the backend enforces.
@@ -569,7 +570,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     API key eMuwarez
                     <a
-                      href="https://emuwarez.com"
+                      href={EMU_URL}
                       target="_blank" rel="noreferrer" className="hover-link"
                       title="Abrir eMuwarez"
                       style={{ display: 'inline-flex' }}

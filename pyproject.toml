@@ -26,3 +26,8 @@ emuwarez-uploader = "emuwarez_uploadrr.cli:main"
 
 [tool.setuptools.dynamic]
 version = {attr = "emuwarez_uploadrr.__version__"}
+
+# Sin esto, en un clon setuptools ve también frontend/ como paquete y se niega
+# a instalar ("Multiple top-level packages discovered in a flat-layout").
+[tool.setuptools.packages.find]
+include = ["emuwarez_uploadrr*"]

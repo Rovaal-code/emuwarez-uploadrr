@@ -116,19 +116,17 @@ def test_tras_sincronizar_la_nomenclatura_no_sale_a_la_red(db_conn, tmdb_falso, 
     assert [o["value"] for o in opciones] == ["Arcane", "Arcane: League of Legends"]
 
 
-def test_generar_la_nomenclatura_no_consulta_a_tmdb(db_conn, tmdb_falso, monkeypatch):
+def test_generar_la_nomenclatura_no_consulta_a_tmdb(db_conn, tmdb_falso, tmp_path):
     """El objetivo entero, de punta a punta: se sincroniza una serie (una
     consulta, la del español) y a partir de ahí el plan de temporada no sale a
     la red ni una vez."""
-    import os
-    import pathlib
-
     from emuwarez_uploadrr.services.library import _sync_one_series
     from emuwarez_uploadrr.services.season_pack import build_season_pack_plan
 
-    base = pathlib.Path(os.environ["CLAUDE_JOB_DIR"]) / "tmp/pack/Season1"
-    if not base.exists():
-        pytest.skip("hacen falta los MKV de prueba")
+    base = tmp_path / "Season1"
+    base.mkdir()
+    for n in (1, 2):
+        (base / f"S01E0{n}.mkv").write_bytes(b"\x00")
 
     class _Inst:
         id, name, type, url, api_key = 1, "Sonarr", "sonarr", "http://x", "k"

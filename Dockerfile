@@ -38,14 +38,12 @@ WORKDIR /app
 # so what Uploadrr-EMU writes there survives a rebuild/recreate without the
 # user mounting anything beyond the /config volume they already have.
 #
-# Cloned from our own private fork (Rovaal-code/Uploadrr-EMU on GitHub, not
-# the public codeberg.org/ccx94/Uploadrr-EMU upstream) so the image ships
-# our local patches — Spanish trailer preference, trailer on TV/anime too,
-# and our own signature instead of Uploadrr's default branding — instead of
-# a clean upstream checkout that silently drops all of that on a fresh
-# deploy. Private repo needs a token, passed as a BuildKit secret so it
-# never ends up baked into an image layer: `docker build --secret
-# id=github_token,env=GITHUB_TOKEN ...` (or `,src=<file>`).
+# Cloned from our own fork (Kisnov/Uploadrr-EMU on GitHub, not the public
+# codeberg.org/ccx94/Uploadrr-EMU upstream) so the image ships our local
+# patches — Spanish trailer preference, trailer on TV/anime too, and our own
+# signature instead of Uploadrr's default branding — instead of a clean
+# upstream checkout that silently drops all of that on a fresh deploy. The
+# fork is public, so the build needs no token.
 #
 # setuptools is pinned <80 because pyrobase's setup.py still imports the
 # pkg_resources module that newer setuptools dropped.
@@ -58,12 +56,11 @@ WORKDIR /app
 # fixes already pushed to the fork). Passing the fork's current commit SHA as
 # a build arg makes THIS layer's cache key include it, so it only re-clones
 # when the fork actually has new commits — pass
-# `--build-arg UPLOADRR_COMMIT=$(git ls-remote https://github.com/Rovaal-code/Uploadrr-EMU.git main | cut -f1)`
+# `--build-arg UPLOADRR_COMMIT=$(git ls-remote https://github.com/Kisnov/Uploadrr-EMU.git main | cut -f1)`
 # at build time (falls back to "unknown", i.e. always re-clone, if omitted).
 ARG UPLOADRR_COMMIT=unknown
-RUN --mount=type=secret,id=github_token \
-    echo "Uploadrr-EMU @ ${UPLOADRR_COMMIT}" \
-    && git clone --depth 1 "https://x-access-token:$(cat /run/secrets/github_token)@github.com/Rovaal-code/Uploadrr-EMU.git" /opt/Uploadrr \
+RUN echo "Uploadrr-EMU @ ${UPLOADRR_COMMIT}" \
+    && git clone --depth 1 https://github.com/Kisnov/Uploadrr-EMU.git /opt/Uploadrr \
     && pip install --no-cache-dir "setuptools<80" wheel \
     && pip install --no-cache-dir --no-build-isolation -r /opt/Uploadrr/requirements.txt \
     && pip install --no-cache-dir tmdbsimple \

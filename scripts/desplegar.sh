@@ -20,11 +20,11 @@
 #   scripts/desplegar.sh --notas "..." --version patch   # sube la versión antes
 #   scripts/desplegar.sh --notas "..." --sin-publicar    # construye y sube, sin anunciar
 #
-# Necesita `gh auth login` hecho (de ahí sale el token del fork privado).
+# Necesita `gh auth login` hecho, para publicar la versión.
 set -euo pipefail
 
 IMAGEN="ghcr.io/rovaal-code/emuwarez-uploadrr:latest"
-FORK="https://github.com/Rovaal-code/Uploadrr-EMU.git"
+FORK="https://github.com/Kisnov/Uploadrr-EMU.git"
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 NOTAS=""
@@ -81,15 +81,12 @@ if [[ -z "$COMMIT_FORK" ]]; then
 fi
 echo "Fork ........ $COMMIT_FORK"
 
-export GITHUB_TOKEN="${GITHUB_TOKEN:-$(gh auth token)}"
-
 REGISTRO="$(mktemp -t desplegar-XXXXXX.log)"
 echo "Construyendo (registro en $REGISTRO)…"
 if ! docker build \
     --build-arg "UPLOADRR_COMMIT=$COMMIT_FORK" \
     --build-arg "APP_COMMIT=$COMMIT" \
     --build-arg "APP_BUILD_DATE=$FECHA" \
-    --secret id=github_token,env=GITHUB_TOKEN \
     -t "$IMAGEN" . > "$REGISTRO" 2>&1; then
   echo "La construcción ha fallado. Últimas líneas:" >&2
   tail -30 "$REGISTRO" >&2

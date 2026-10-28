@@ -13,7 +13,8 @@ def test_los_enlaces_guardados_pasan_al_dominio_nuevo(isolated_db):
         " VALUES ('X', '', 'completed', 'completed', 'https://emuwarez.com/torrents/1',"
         " CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)")
     conn.execute("INSERT INTO request_items (emu_id, title, url) VALUES ('7', 'X', 'https://emuwarez.com/requests/7')")
-    conn.execute("INSERT INTO request_items (emu_id, title, url) VALUES ('8', 'Y', 'https://otra.web/emuwarez.com')")
+    conn.execute("INSERT INTO request_items (emu_id, title, url) VALUES ('8', 'Y', 'https://emuwarez.com.example.org/x')")
+    conn.execute("INSERT INTO request_items (emu_id, title, url) VALUES ('9', 'Z', 'HTTPS://EMUWAREZ.COM')")
     set_state(conn, "schema_version", "38")
     conn.commit()
 
@@ -21,5 +22,5 @@ def test_los_enlaces_guardados_pasan_al_dominio_nuevo(isolated_db):
 
     assert conn.execute("SELECT result_url FROM upload_jobs").fetchone()[0] == "https://emu-warez.com/torrents/1"
     urls = [r[0] for r in conn.execute("SELECT url FROM request_items ORDER BY emu_id")]
-    assert urls == ["https://emu-warez.com/requests/7", "https://otra.web/emuwarez.com"]
+    assert urls == ["https://emu-warez.com/requests/7", "https://emuwarez.com.example.org/x", "HTTPS://emu-warez.com"]
     conn.close()

@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import sqlite3
 from pathlib import Path
 from typing import Any, Iterable, Optional
@@ -888,11 +889,15 @@ def _migrate_dominio_emu_warez(conn: sqlite3.Connection) -> None:
         ("request_items", "url"), ("notifications", "link"), ("settings", "value"), ("app_state", "value"),
     ):
         try:
-            conn.execute(
-                f"UPDATE {tabla} SET {columna} = REPLACE({columna}, '//emuwarez.com', '//emu-warez.com') "
-                f"WHERE {columna} LIKE '%//emuwarez.com%'")
+            filas = conn.execute(
+                f"SELECT rowid, {columna} FROM {tabla} WHERE {columna} LIKE '%//emuwarez.com%'").fetchall()
         except sqlite3.OperationalError:
-            pass                        # tabla o columna que esta base aún no tiene
+            continue                    # tabla o columna que esta base aún no tiene
+        for rowid, valor in filas:
+            # Solo el host entero: emuwarez.com.example.org no es eMuwarez.
+            nuevo = re.sub(r"//emuwarez\.com(?=[/:?#]|$)", "//emu-warez.com", valor, flags=re.IGNORECASE)
+            if nuevo != valor:
+                conn.execute(f"UPDATE {tabla} SET {columna} = ? WHERE rowid = ?", (nuevo, rowid))
 
 
 def _migrate_ui_recibe_aviso_de_version(conn: sqlite3.Connection) -> None:

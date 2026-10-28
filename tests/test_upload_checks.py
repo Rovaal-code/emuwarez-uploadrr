@@ -64,6 +64,8 @@ def test_output_check_falls_back_to_bundled_uploadrr_path(db_conn, tmp_path, mon
     though the runtime it validates for doesn't require configuring it."""
     from emuwarez_uploadrr.services import uploadrr_contract as ctr
     monkeypatch.setattr(ctr, "DEFAULT_UPLOADRR_PATH", str(tmp_path))
+    import emuwarez_uploadrr.services.image_hosts as ih
+    monkeypatch.setattr(ih, "test_image_host", lambda hid, key=None, **k: {"ok": True})
     (tmp_path / "tmp").mkdir()  # Uploadrr-EMU stages output under <path>/tmp, not the root
 
     f = tmp_path / "movie.mkv"
@@ -257,6 +259,8 @@ def test_the_two_scopes_together_cover_exactly_the_full_run(db_conn, tmp_path, m
     tiene que dar lo mismo que la pasada completa de siempre."""
     from emuwarez_uploadrr.services import uploadrr_contract as ctr
     monkeypatch.setattr(ctr, "DEFAULT_UPLOADRR_PATH", str(tmp_path))
+    import emuwarez_uploadrr.services.image_hosts as ih
+    monkeypatch.setattr(ih, "test_image_host", lambda hid, key=None, **k: {"ok": True})
     (tmp_path / "tmp").mkdir()
     f = tmp_path / "movie.mkv"
     f.write_bytes(b"x" * 2048)

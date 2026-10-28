@@ -392,6 +392,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
     setSaving(true)
     setMsg(null)
     try {
+      const enviado = borrador
       const payload: Parameters<typeof updateSettings>[0] = {
         default_release_tag: tags[0],
         upload_tags: tagsAGuardar,
@@ -420,7 +421,8 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
       const updated = await updateSettings(payload)
       setSettings(updated)
       setTags(updated.upload_tags?.length ? updated.upload_tags : [updated.default_release_tag])
-      setNuevoTag('')
+      // Solo el borrador que se envió: lo escrito mientras guardaba se queda.
+      setNuevoTag(n => (n.trim() === enviado ? '' : n))
       setProviderOrder(updated.provider_priority_order)
       setRegion(updated.tmdb_watch_region)
       setEmuUsername(updated.emu_username ?? '')
@@ -532,7 +534,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                       onClick={() => setTags([t, ...tags.filter(x => x !== t)])}>☆</button>}
                 {tags.length > 1 && (
                   <button type="button" className="btn-icon" aria-label={`Quitar ${t}`}
-                    onClick={() => setTags(tags.filter(x => x !== t))}>✕</button>
+                    onClick={() => { setTags(tags.filter(x => x !== t)); if (borrador === t) setNuevoTag('') }}>✕</button>
                 )}
               </div>
             ))}

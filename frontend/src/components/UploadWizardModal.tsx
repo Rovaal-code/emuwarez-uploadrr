@@ -571,6 +571,8 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   // must read the value at the moment of the click, not the one captured when
   // it was last rendered.
   const buildingPlanFor = useRef<number | null>(null)
+  // Cuenta las cargas de plan: la respuesta de una temporada ya abandonada no pisa la actual.
+  const planPedido = useRef(0)
   // Lo que ya se cargó en el paso 1. Volver al 1 (desde el 2, o desde el 0 con
   // lo mismo elegido) no recarga: pisaba lo elegido (título, fuente, etiqueta, pistas).
   const cargadoPara = useRef<string | null>(null)
@@ -956,6 +958,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   // it's in flight (real work per episode — build_nomenclature_proposal()).
   const loadSeasonPlan = useCallback(async () => {
     if (targetId == null) return
+    const pedido = ++planPedido.current
     setSeasonPlanLoading(true); setSeasonPlanError(null)
     buildingPlanFor.current = targetId
     setSeasonProgress({ done: 0, total: 0, current_title: null })
@@ -969,6 +972,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
       const [plan, srcResp, prvResp] = await Promise.all([
         previewSeasonPack(targetId), getEmuSources(), getEmuProviders(),
       ])
+      if (pedido !== planPedido.current) return
       setSeasonPlan(plan)
       setSources(srcResp.sources)
       setProviders(prvResp.providers)
@@ -1002,12 +1006,15 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
         setSeasonPlanError(plan.errors.join(' '))
       }
     } catch (e: unknown) {
+      if (pedido !== planPedido.current) return
       setSeasonPlan(null)
       setSeasonPlanError(e instanceof Error ? e.message : 'Error preparando la temporada')
     } finally {
       dejarDeSeguirPlan()
-      buildingPlanFor.current = null
-      setSeasonPlanLoading(false)
+      if (pedido === planPedido.current) {
+        buildingPlanFor.current = null
+        setSeasonPlanLoading(false)
+      }
     }
   }, [targetId, seasonOverridesById])
 

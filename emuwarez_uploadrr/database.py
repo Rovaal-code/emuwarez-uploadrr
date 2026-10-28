@@ -895,7 +895,7 @@ def _migrate_dominio_emu_warez(conn: sqlite3.Connection) -> None:
             continue                    # tabla o columna que esta base aún no tiene
         for rowid, valor in filas:
             # Solo el host entero: emuwarez.com.example.org no es eMuwarez.
-            nuevo = re.sub(r"//emuwarez\.com(?=[/:?#]|$)", "//emu-warez.com", valor, flags=re.IGNORECASE)
+            nuevo = re.sub(r"//emuwarez\.com(?![\w.-])", "//emu-warez.com", valor, flags=re.IGNORECASE)
             if nuevo != valor:
                 conn.execute(f"UPDATE {tabla} SET {columna} = ? WHERE rowid = ?", (nuevo, rowid))
 

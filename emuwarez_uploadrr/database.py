@@ -886,7 +886,7 @@ def _migrate_dominio_emu_warez(conn: sqlite3.Connection) -> None:
     ajustes) se reescriben para que sigan abriéndose."""
     for tabla, columna in (
         ("upload_jobs", "result_url"), ("upload_artifacts", "url"), ("upload_artifacts", "value"),
-        ("request_items", "url"), ("notifications", "link"), ("settings", "value"), ("app_state", "value"),
+        ("request_items", "url"), ("request_items", "emu_id"), ("notifications", "link"), ("settings", "value"), ("app_state", "value"),
     ):
         try:
             filas = conn.execute(

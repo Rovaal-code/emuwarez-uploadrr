@@ -158,8 +158,13 @@ def test_upload_cancel_cli_marks_job_cancelled(
     _insert_settings(db_conn, fake_uploadrr_emu_dir, fake_uploadrr_python_path)
     jid = _insert_job(db_conn, prepared_path=str(prepared))
 
-    _run(["upload", "start", str(jid), "--apply", "--confirm", CONFIRMATION_TOKEN])
-    capsys.readouterr()
+    # `upload start --apply` espera a que termine la subida, así que el cancel
+    # llega desde otra invocación mientras tanto, como lo haría el usuario.
+    import threading
+    arranque = threading.Thread(
+        target=_run, args=(["upload", "start", str(jid), "--apply", "--confirm", CONFIRMATION_TOKEN],),
+    )
+    arranque.start()
 
     deadline = time.monotonic() + 5
     while time.monotonic() < deadline:
@@ -178,9 +183,56 @@ def test_upload_cancel_cli_marks_job_cancelled(
         if job["status"] in ("completed", "failed", "cancelled"):
             break
         time.sleep(0.1)
+    arranque.join(timeout=10)
     assert job["status"] == "cancelled"
 
     # Let the background thread (killed subprocess + reader threads + config
     # restore) fully finish before this test's isolated_db tmp_path is torn
     # down, so it can't leak a stray write into the next test's fresh DB.
     time.sleep(1.0)
+
+
+def test_upload_start_apply_espera_a_que_la_subida_termine(db_conn, tmp_path, fake_uploadrr_emu_dir, fake_uploadrr_python_path):
+    """En un proceso aparte, como lo lanza el usuario: el hilo de la subida es
+    daemon y moría con el CLI, que decía "iniciado" sin haber subido nada."""
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    prepared = tmp_path / "prepared.mkv"
+    prepared.write_bytes(b"\x00")
+    _insert_settings(db_conn, fake_uploadrr_emu_dir, fake_uploadrr_python_path)
+    jid = _insert_job(db_conn, prepared_path=str(prepared))
+
+    raiz = Path(__file__).resolve().parent.parent
+    proc = subprocess.run(
+        [sys.executable, str(raiz / "emuwarez_uploader.py"), "--db", str(db_path()),
+         "upload", "start", str(jid), "--apply", "--confirm", CONFIRMATION_TOKEN],
+        cwd=raiz, capture_output=True, text=True, timeout=60,
+    )
+
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert get_upload_job(jid, conn=db_conn)["status"] == "completed"
+
+
+def test_upload_retry_no_crea_otra_subida_si_ya_hay_una_en_curso(db_conn, tmp_path, capsys):
+    prepared = tmp_path / "prepared.mkv"
+    prepared.write_bytes(b"\x00")
+    db_conn.execute(
+        "INSERT INTO library_items (item_type, title, local_status) VALUES ('movie', 'X', 'Disponible')"
+    )
+    item_id = db_conn.execute("SELECT max(id) FROM library_items").fetchone()[0]
+    for status in ("failed", "queued"):
+        db_conn.execute(
+            "INSERT INTO upload_jobs (library_item_id, title, path, status, stage, created_at, updated_at)"
+            " VALUES (?, 'X', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            (item_id, str(prepared), status, status),
+        )
+    db_conn.commit()
+    fallido = db_conn.execute("SELECT id FROM upload_jobs WHERE status = 'failed'").fetchone()[0]
+
+    rc = _run(["upload", "retry", str(fallido), "--apply", "--confirm", CONFIRMATION_TOKEN])
+
+    assert rc == 1
+    assert "en curso" in capsys.readouterr().out
+    assert db_conn.execute("SELECT COUNT(*) FROM upload_jobs").fetchone()[0] == 2

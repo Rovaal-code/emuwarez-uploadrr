@@ -724,6 +724,62 @@ def test_queue_upload_blocked_when_latest_job_is_active(db_conn, tmp_path):
     assert "en curso" in result["errors"][0]
 
 
+def test_reintentar_dos_veces_no_crea_dos_subidas(db_conn, tmp_path):
+    """Doble clic en "Reintentar": el original sigue fallido, así que el
+    segundo reintento también lo aceptaba y el contenido se subía dos veces."""
+    f = tmp_path / "movie.mkv"
+    f.write_bytes(b"x" * 100)
+    iid = _movie_with_path(db_conn, str(f))
+    original_id = _failed_job_row(db_conn, iid, status="failed")
+
+    primero = uq.queue_retry_for_job(original_id, conn=db_conn)
+    try:
+        segundo = uq.queue_retry_for_job(original_id, conn=db_conn)
+        assert primero["status"] == "queued"
+        assert segundo["status"] == "blocked"
+        assert segundo["job"]["id"] == primero["job"]["id"]
+        activos = db_conn.execute(
+            "SELECT COUNT(*) FROM upload_jobs WHERE library_item_id = ? AND status = 'queued'", (iid,)
+        ).fetchone()[0]
+        assert activos == 1
+    finally:
+        uq.cancel_queued_timer(primero["job"]["id"])
+
+
+def test_dos_peticiones_a_la_vez_dejan_una_sola_subida(db_conn, tmp_path, monkeypatch):
+    """Dos peticiones simultáneas (dos pestañas) leían las dos "no hay nada en
+    curso" antes de que ninguna insertara."""
+    import threading
+
+    f = tmp_path / "movie.mkv"
+    f.write_bytes(b"x" * 100)
+    iid = _movie_with_path(db_conn, str(f))
+    monkeypatch.setattr(uq, "_arm_queue_timer", lambda job_id: None)
+
+    barrera = threading.Barrier(2)
+    original = uq._find_latest_job_for_item
+
+    def leer_y_esperar(conn, item_id):
+        fila = original(conn, item_id)
+        barrera.wait(timeout=5)
+        return fila
+
+    monkeypatch.setattr(uq, "_find_latest_job_for_item", leer_y_esperar)
+    resultados = []
+    hilos = [threading.Thread(target=lambda: resultados.append(uq.queue_upload_for_item(iid)["status"]))
+             for _ in range(2)]
+    for h in hilos:
+        h.start()
+    for h in hilos:
+        h.join()
+
+    assert sorted(resultados) == ["blocked", "queued"]
+    activos = db_conn.execute(
+        "SELECT COUNT(*) FROM upload_jobs WHERE library_item_id = ? AND status = 'queued'", (iid,)
+    ).fetchone()[0]
+    assert activos == 1
+
+
 # ---------------------------------------------------------------------------
 # staging ("Automático") — the job appears immediately as 'staging', gets
 # its nomenclature/remux/checks previews computed in the background, then is

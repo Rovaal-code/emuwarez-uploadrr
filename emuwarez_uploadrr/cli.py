@@ -1270,6 +1270,7 @@ def cmd_upload_modern(args) -> int:
                 start=do_apply,
                 confirmation=confirmation,
                 conn=conn,
+                wait=do_apply,
             )
             action = result.get("action", "unknown")
             if dry_run or action == "dry_run":
@@ -1302,8 +1303,8 @@ def cmd_upload_modern(args) -> int:
                 print(f"  ✓ No se ejecuta mkvpropedit.")
                 print(f"  ✓ Secretos ocultos en logs.")
                 print(f"\nMensaje:\n  {result.get('message', '–')}")
-                print(f"\nUsa 'upload logs {args.id}' para seguir el progreso.")
-                return 0
+                print(f"\nUsa 'upload logs {args.id}' para ver el detalle.")
+                return 0 if result.get("status") == "completed" else 1
             return 1
 
         if args.upload_command == "retry":
@@ -1315,6 +1316,7 @@ def cmd_upload_modern(args) -> int:
                 dry_run=dry_run,
                 start=do_apply,
                 confirmation=confirmation,
+                wait=do_apply,
             )
             if dry_run or result.get("action") == "dry_run":
                 print(f"\n── Retry dry-run ────────────────────")
@@ -1327,8 +1329,9 @@ def cmd_upload_modern(args) -> int:
                     print(f"Comando previsto: {result['command_preview']}")
                 print(f"No se ha ejecutado Uploadrr.")
                 return 0
-            if result.get("error") in ("blocked", "confirmation_required", "invalid_status", "not_found"):
-                print(f"✗ {result.get('message', 'Bloqueado.')}")
+            if result.get("action") == "blocked":
+                for e in result.get("errors") or [result.get("message") or "Bloqueado."]:
+                    print(f"✗ {e}")
                 return 1
             print(f"\n── Retry iniciado ────────────────────")
             new_job_id = result.get("new_job_id", "–")
@@ -1336,8 +1339,8 @@ def cmd_upload_modern(args) -> int:
             print(f"Reintento: {result.get('retry_count', '–')}")
             print(f"Estado: {result.get('status', '–')}")
             print(f"Mensaje: {result.get('message', '–')}")
-            print(f"\nUsa 'upload logs {new_job_id}' para seguir el progreso.")
-            return 0
+            print(f"\nUsa 'upload logs {new_job_id}' para ver el detalle.")
+            return 0 if result.get("status") == "completed" else 1
 
         if args.upload_command == "cancel":
             result = cancel_upload_job(args.id, conn=conn)

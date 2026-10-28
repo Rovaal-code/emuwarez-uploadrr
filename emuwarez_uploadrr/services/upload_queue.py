@@ -963,35 +963,36 @@ def _run_queued_job(job_id: int) -> None:
         # "Season 1". Un fichero suelto ya salía bien (torf usa su nombre, que
         # la nomenclatura dejó correcto), así que ahí esto es solo por tenerlo
         # todo junto.
-        from .carpeta_subida import preparar_carpeta_de_pack, preparar_fichero_suelto
-        if is_season:
-            from .season_pack import _sanitize_pack_folder_name, build_season_pack_plan
-            plan_final = build_season_pack_plan(item_id, conn=conn, **_ajustes_de_pack(season_overrides))
-            ficheros = [resolve_local_path(ep.get("destination_path") or ep.get("source_path"), conn=conn)
-                        or ep.get("source_path")
-                        for ep in plan_final.get("episodes", [])]
-            preparada = preparar_carpeta_de_pack(
-                _sanitize_pack_folder_name(plan_final.get("season_pack_title") or ""), ficheros)
-            destino_uploadrr = preparada.get("carpeta")
-            que = f"{preparada.get('cuantos', 0)} capítulo(s)"
-        else:
-            # Se relee: la nomenclatura y el remux de arriba han cambiado
-            # prepared_path, y el `item` de antes es de antes de eso.
-            item_final = row_to_dict(
-                conn.execute("SELECT * FROM library_items WHERE id = ?", (item_id,)).fetchone()) or {}
-            elegida = ruta_de_lectura(item_final, conn=conn)
-            fichero = resolve_local_path(elegida, conn=conn) or elegida
-            preparada = preparar_fichero_suelto(fichero)
-            destino_uploadrr = preparada.get("ruta")
-            que = "el archivo"
+        from .carpeta_subida import ENLACES, preparar_carpeta_de_pack, preparar_fichero_suelto
+        with ENLACES:
+            if is_season:
+                from .season_pack import _sanitize_pack_folder_name, build_season_pack_plan
+                plan_final = build_season_pack_plan(item_id, conn=conn, **_ajustes_de_pack(season_overrides))
+                ficheros = [resolve_local_path(ep.get("destination_path") or ep.get("source_path"), conn=conn)
+                            or ep.get("source_path")
+                            for ep in plan_final.get("episodes", [])]
+                preparada = preparar_carpeta_de_pack(
+                    _sanitize_pack_folder_name(plan_final.get("season_pack_title") or ""), ficheros)
+                destino_uploadrr = preparada.get("carpeta")
+                que = f"{preparada.get('cuantos', 0)} capítulo(s)"
+            else:
+                # Se relee: la nomenclatura y el remux de arriba han cambiado
+                # prepared_path, y el `item` de antes es de antes de eso.
+                item_final = row_to_dict(
+                    conn.execute("SELECT * FROM library_items WHERE id = ?", (item_id,)).fetchone()) or {}
+                elegida = ruta_de_lectura(item_final, conn=conn)
+                fichero = resolve_local_path(elegida, conn=conn) or elegida
+                preparada = preparar_fichero_suelto(fichero)
+                destino_uploadrr = preparada.get("ruta")
+                que = "el archivo"
 
-        if preparada["status"] != "ready":
-            _fail(job_id, "No se pudo preparar la subida en la carpeta de subidas: "
-                          + "; ".join(preparada["errors"]))
-            return
-        conn.execute("UPDATE upload_jobs SET prepared_path = ?, updated_at = ? WHERE id = ?",
-                     (destino_uploadrr, _now_iso(), job_id))
-        conn.commit()
+            if preparada["status"] != "ready":
+                _fail(job_id, "No se pudo preparar la subida en la carpeta de subidas: "
+                              + "; ".join(preparada["errors"]))
+                return
+            conn.execute("UPDATE upload_jobs SET prepared_path = ?, updated_at = ? WHERE id = ?",
+                         (destino_uploadrr, _now_iso(), job_id))
+            conn.commit()
         append_upload_log(
             job_id, "info",
             f"Preparado para subir: {que} enlazado(s) en «{os.path.basename(destino_uploadrr)}» "

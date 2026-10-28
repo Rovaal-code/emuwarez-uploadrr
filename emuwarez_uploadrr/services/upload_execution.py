@@ -58,6 +58,8 @@ logger = logging.getLogger("emuwarez.upload")
 
 CONFIRMATION_TOKEN = "INICIAR_UPLOADRR"
 DELETE_CONFIRMATION_TOKEN = "BORRAR_SUBIDA"
+# Queda en los logs del job: delete_upload_job la busca para no borrar lo que siembra qBittorrent.
+QBIT_AÑADIDO = "qBittorrent: torrent añadido correctamente."
 
 # Phase 10F: approximate progress phases surfaced to the UI (string label
 # only). Numeric per-phase percentages are tracked separately in
@@ -1117,7 +1119,7 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
             # already captured above — otherwise this only shows up as one
             # more anonymous line among hundreds in Ver Logs.
             if phase_key == "qbittorrent_add" and ok_state is True:
-                append_upload_log(job_id, "info", "qBittorrent: torrent añadido correctamente.", stream="system")
+                append_upload_log(job_id, "info", QBIT_AÑADIDO, stream="system")
             elif phase_key == "qbittorrent_add" and ok_state is False:
                 if "Torrent upload succeeded, but failed to" in line:
                     # UNIT3D.py's re-download-after-upload step 403'd (or
@@ -1766,18 +1768,21 @@ def delete_upload_job(job_id: int, confirmation: str | None = None, conn=None) -
         # prepared_path que apunte a la biblioteca no se toca.
         #
         # Se quedan los que usa cualquier subida completada (qBittorrent siembra
-        # de ahí) o todavía viva (se está preparando o subiendo), sea de esta
-        # cadena o de otra: los intentos fallidos suelen apuntar al mismo enlace.
-        from .carpeta_subida import borrar_de_subidas
+        # de ahí, también si se canceló o falló después de añadir el torrent) o
+        # todavía viva (se está preparando o subiendo), sea de esta cadena o de
+        # otra: los intentos fallidos suelen apuntar al mismo enlace.
+        from .carpeta_subida import ENLACES, borrar_de_subidas
         marcas = ",".join("?" * len(chain))
         filas = conn.execute(
             f"SELECT prepared_path, status FROM upload_jobs WHERE id IN ({marcas})", chain).fetchall()
-        en_uso = {f["prepared_path"] for f in conn.execute(
-            "SELECT prepared_path FROM upload_jobs WHERE status NOT IN ('cancelled', 'failed') "
-            "AND prepared_path IS NOT NULL")}
-        for fila in filas:
-            if fila["prepared_path"] not in en_uso:
-                borrar_de_subidas(fila["prepared_path"])
+        with ENLACES:
+            en_uso = {f["prepared_path"] for f in conn.execute(
+                "SELECT prepared_path FROM upload_jobs WHERE prepared_path IS NOT NULL "
+                "AND (status NOT IN ('cancelled', 'failed') "
+                "OR id IN (SELECT upload_job_id FROM upload_job_logs WHERE message = ?))", (QBIT_AÑADIDO,))}
+            for fila in filas:
+                if fila["prepared_path"] not in en_uso:
+                    borrar_de_subidas(fila["prepared_path"])
         conn.execute(f"DELETE FROM upload_artifacts WHERE upload_job_id IN ({marcas})", chain)
         conn.execute(f"DELETE FROM upload_job_logs WHERE upload_job_id IN ({marcas})", chain)
         conn.execute(f"UPDATE filesystem_operations SET upload_job_id = NULL WHERE upload_job_id IN ({marcas})", chain)

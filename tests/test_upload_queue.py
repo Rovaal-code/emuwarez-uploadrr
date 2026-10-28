@@ -4,6 +4,7 @@ integrity/nomenclature/remux/start)."""
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -896,7 +897,7 @@ def test_uploadrr_recibe_el_enlace_de_la_carpeta_de_subidas(db_conn, tmp_path, m
     después de que el paso anterior dejara ahí el enlace."""
     visto = _correr_cola_hasta_el_inicio(db_conn, tmp_path, monkeypatch)
     assert visto["status"] == "ready"
-    assert visto["prepared_path"].startswith(visto["uploads"])
+    assert Path(visto["prepared_path"]).is_relative_to(visto["uploads"])
     assert visto["errores"] == []
 
 
@@ -906,5 +907,5 @@ def test_un_enlace_simbolico_en_la_carpeta_de_subidas_vale_para_subir(db_conn, t
 
     visto = _correr_cola_hasta_el_inicio(db_conn, tmp_path, monkeypatch, enlace_duro=False)
     assert os.path.islink(visto["prepared_path"])
-    assert visto["prepared_path"].startswith(visto["uploads"])
+    assert Path(visto["prepared_path"]).is_relative_to(visto["uploads"])
     assert visto["errores"] == []

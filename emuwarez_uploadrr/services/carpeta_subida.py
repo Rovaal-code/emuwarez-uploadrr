@@ -47,6 +47,7 @@ import errno
 import logging
 import os
 import shutil
+import threading
 from typing import Iterable, Optional
 
 logger = logging.getLogger(__name__)
@@ -54,6 +55,10 @@ logger = logging.getLogger(__name__)
 # Dentro de /config, que es el volumen que el usuario ya monta: no hay nada
 # nuevo que configurar, y sobrevive a reconstruir la imagen.
 RAIZ_SUBIDAS = os.environ.get("UPLOADRR_UPLOADS_DIR", "/config/Uploadrr/uploads")
+
+# Crear un enlace y guardarlo en prepared_path, o comprobar que nadie lo usa y
+# borrarlo, va de uno en uno: un borrado no se lleva el enlace de otra subida.
+ENLACES = threading.Lock()
 
 
 def _enlazar(origen: str, destino: str) -> str:

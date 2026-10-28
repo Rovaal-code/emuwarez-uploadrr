@@ -250,6 +250,26 @@ def test_borrar_una_subida_fallida_quita_su_enlace(biblioteca, monkeypatch, isol
     assert os.path.exists(biblioteca["ficheros"][0])
 
 
+def test_borrar_una_subida_cancelada_con_el_torrent_ya_en_qbittorrent_deja_el_enlace(biblioteca, monkeypatch, isolated_db):
+    from emuwarez_uploadrr.database import connect, init_db
+    from emuwarez_uploadrr.services import carpeta_subida
+    from emuwarez_uploadrr.services.upload_execution import (
+        DELETE_CONFIRMATION_TOKEN, QBIT_AÑADIDO, append_upload_log, delete_upload_job)
+
+    monkeypatch.setattr(carpeta_subida, "RAIZ_SUBIDAS", biblioteca["uploads"])
+    enlace = preparar_fichero_suelto(biblioteca["ficheros"][0], raiz=biblioteca["uploads"])["ruta"]
+    conn = connect()
+    init_db(conn)
+    cancelado = _subida(conn, "cancelled", enlace)
+    otro = _subida(conn, "failed", enlace)
+    conn.commit()
+    append_upload_log(cancelado, "info", QBIT_AÑADIDO, stream="system", conn=conn)
+    conn.commit()
+
+    assert delete_upload_job(otro, confirmation=DELETE_CONFIRMATION_TOKEN, conn=conn)["ok"]
+    assert os.path.lexists(enlace)
+
+
 def test_un_symlink_fuera_de_la_carpeta_de_subidas_no_vale_para_subir(biblioteca, monkeypatch, isolated_db, tmp_path):
     from emuwarez_uploadrr.database import connect, init_db
     from emuwarez_uploadrr.services import carpeta_subida

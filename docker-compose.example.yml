@@ -9,22 +9,19 @@
 #    ser persistente (config.yaml y los temporales de cada subida) vive
 #    automáticamente bajo el propio volumen /config (ver docker-entrypoint.sh).
 #
-# 2. Hardlinks y EXDEV:
-#    Para que la creación de hardlinks funcione, el directorio fuente
-#    (media de Radarr/Sonarr) y el hardlink_base deben estar en el
-#    MISMO filesystem/dispositivo físico.
+# 2. Carpeta de subidas (UPLOADRR_UPLOADS_DIR, abajo):
+#    Lo que se sube se enlaza ahí, y Uploadrr-EMU se la da a qBittorrent
+#    como ruta de guardado. Tiene que estar en el MISMO sistema de ficheros
+#    que la media de Radarr/Sonarr, o el enlace es simbólico en vez de duro,
+#    y qBittorrent tiene que verla en la misma ruta que este contenedor.
+#    Sin la variable es /config/Uploadrr/uploads, normalmente en otro disco.
 #
-#    Ejemplo con raíz común /data para evitar EXDEV:
-#      /data/media        → fuente (Radarr/Sonarr)
-#      /data/uploads/emu  → hardlink_base (preparado para subida eMuwarez)
+#    Ejemplo con raíz común /data:
+#      /data/media        → media (Radarr/Sonarr)
+#      /data/uploads/emu  → carpeta de subidas
 #
-#    Si montas /media y /uploads en dispositivos o discos distintos,
-#    la creación de hardlinks fallará con error EXDEV (cross-device link).
-#    Usa siempre una raíz de datos compartida.
-#
-# 3. API keys: Configúralas desde el setup web (http://localhost:9494)
-#    o con: python3 emuwarez_uploader.py web create-admin
-#    No las pongas en este fichero ni en .env.
+# 3. API keys: configúralas desde el setup web (http://localhost:9494) o
+#    desde Configuración. No las pongas en este fichero ni en .env.
 
 services:
   emuwarez-uploadrr:
@@ -55,17 +52,15 @@ services:
     environment:
       TZ: ${TZ:-Europe/Madrid}
       CONFIG_DIR: /config
+      # Carpeta de subidas: mismo sistema de ficheros que la media (nota 2).
+      UPLOADRR_UPLOADS_DIR: /data/uploads/emu
 
     volumes:
       # Configuración persistente: base de datos SQLite, settings, y el
       # config.yaml/temporales de Uploadrr-EMU (bajo /config/Uploadrr).
       - /srv/emuwarez-uploadrr/config:/config
 
-      # Raíz de datos compartida para media + uploads
-      # Usar una sola raíz garantiza que hardlinks funcionan sin EXDEV.
-      # Configura en el setup web:
-      #   Raíz media (Radarr/Sonarr): /data/media
-      #   hardlink_base:               /data/uploads/emu
+      # Raíz de datos compartida: media de Radarr/Sonarr y carpeta de subidas.
       - /srv/data:/data
 
     # Red compartida con Radarr/Sonarr si corren en Docker.

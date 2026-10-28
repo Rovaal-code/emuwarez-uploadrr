@@ -238,3 +238,35 @@ def test_el_ajuste_viejo_de_reordenar_se_deja_a_la_par(client, auth_headers):
     assert viejo() == "true"
     client.put("/api/settings", json={"remux_track_mode": "solo_renombrar"}, headers=auth_headers)
     assert viejo() == "false"
+
+
+def test_por_defecto_solo_hay_un_grupo_de_subida(client, auth_headers):
+    assert client.get("/api/settings", headers=auth_headers).json()["upload_tags"] == ["EMUWAREZ"]
+
+
+def test_se_guardan_varios_grupos_de_subida(client, auth_headers):
+    resp = client.put(
+        "/api/settings",
+        json={"default_release_tag": "Ryodan", "upload_tags": ["Ryodan", " Otro ", "Ryodan", "Tercero"]},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    data = client.get("/api/settings", headers=auth_headers).json()
+    assert data["default_release_tag"] == "Ryodan"
+    assert data["upload_tags"] == ["Ryodan", "Otro", "Tercero"]
+
+
+def test_el_grupo_por_defecto_va_siempre_el_primero(client, auth_headers):
+    client.put("/api/settings", json={"upload_tags": ["Otro", "Tercero"]}, headers=auth_headers)
+    client.put("/api/settings", json={"default_release_tag": "Tercero"}, headers=auth_headers)
+    assert client.get("/api/settings", headers=auth_headers).json()["upload_tags"] == ["Tercero", "Otro"]
+
+
+def test_no_se_guarda_un_grupo_de_subida_vacio(client, auth_headers):
+    resp = client.put("/api/settings", json={"upload_tags": ["Ryodan", "  "]}, headers=auth_headers)
+    assert resp.status_code == 422
+
+
+@pytest.mark.parametrize("cuerpo", [{"upload_tags": ["../fuera"]}, {"default_release_tag": r"a\b"}])
+def test_un_grupo_de_subida_no_lleva_barras(client, auth_headers, cuerpo):
+    assert client.put("/api/settings", json=cuerpo, headers=auth_headers).status_code == 422

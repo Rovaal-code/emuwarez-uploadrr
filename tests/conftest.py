@@ -34,6 +34,7 @@ def sin_red(monkeypatch):
     intentos: list[str] = []
 
     conectar = socket.socket.connect
+    conectar_envio = socket.socket.sendto
     resolver = socket.getaddrinfo
 
     def _host(direccion):
@@ -53,6 +54,8 @@ def sin_red(monkeypatch):
         return resolver(host, *args, **kwargs)
 
     monkeypatch.setattr(socket.socket, "connect", connect)
+    monkeypatch.setattr(socket.socket, "connect_ex", connect)
+    monkeypatch.setattr(socket.socket, "sendto", lambda sock, data, *args: connect(sock, args[-1]) or conectar_envio(sock, data, *args))
     monkeypatch.setattr(socket, "getaddrinfo", getaddrinfo)
     yield
     if intentos:

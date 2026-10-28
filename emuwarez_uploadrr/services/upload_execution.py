@@ -1148,9 +1148,12 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
                 # queda bloqueado escribiendo hasta el timeout.
                 try:
                     append_upload_log(job_id, level, safe_line, stream=stream_name)
-                    _track_uploadrr_progress(safe_line)
                 except Exception:
                     logger.exception("Subida %s: no se pudo registrar una línea de %s", job_id, stream_name)
+                try:
+                    _track_uploadrr_progress(safe_line)
+                except Exception:
+                    logger.exception("Subida %s: no se pudo actualizar el progreso", job_id)
 
         t_out = threading.Thread(
             target=_read_stream,

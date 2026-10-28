@@ -1772,7 +1772,8 @@ def delete_upload_job(job_id: int, confirmation: str | None = None, conn=None) -
         marcas = ",".join("?" * len(chain))
         filas = conn.execute(
             f"SELECT prepared_path, status FROM upload_jobs WHERE id IN ({marcas})", chain).fetchall()
-        sembrando = {f["prepared_path"] for f in filas if f["status"] == "completed"}
+        sembrando = {f["prepared_path"] for f in conn.execute(
+            "SELECT prepared_path FROM upload_jobs WHERE status = 'completed' AND prepared_path IS NOT NULL")}
         for fila in filas:
             if fila["prepared_path"] not in sembrando:
                 borrar_de_subidas(fila["prepared_path"])

@@ -60,6 +60,8 @@ WORKDIR /app
 ARG UPLOADRR_COMMIT=unknown
 RUN echo "Uploadrr-EMU @ ${UPLOADRR_COMMIT}" \
     && git clone --depth 1 https://github.com/Kisnov/Uploadrr-EMU.git /opt/Uploadrr \
+    && if [ "${UPLOADRR_COMMIT}" != unknown ]; then \
+         git -C /opt/Uploadrr fetch -q --depth 1 origin "${UPLOADRR_COMMIT}" && git -C /opt/Uploadrr checkout -q FETCH_HEAD; fi \
     && pip install --no-cache-dir -r /opt/Uploadrr/requirements.txt \
     && rm -rf /opt/Uploadrr/.git \
     && chmod -R a+rwX /opt/Uploadrr

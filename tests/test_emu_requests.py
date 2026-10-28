@@ -19,7 +19,7 @@ from emuwarez_uploadrr.models import RequestItem
 # ---------------------------------------------------------------------------
 
 def test_emu_base_url():
-    assert EMU_BASE_URL == "https://emuwarez.com"
+    assert EMU_BASE_URL == "https://emu-warez.com"
 
 
 # ---------------------------------------------------------------------------
@@ -41,24 +41,24 @@ def test_flatten_unit3d_nested():
             "tmdb": "12345",
             "anon": True,
         },
-        "links": {"self": "https://emuwarez.com/requests/5"},
+        "links": {"self": "https://emu-warez.com/requests/5"},
     }
     flat = _flatten_unit3d(raw)
     assert flat["name"] == "A Movie"
     assert flat["resolution"] == "1080p"
     assert flat["tmdb"] == "12345"
-    assert flat["url"] == "https://emuwarez.com/requests/5"
+    assert flat["url"] == "https://emu-warez.com/requests/5"
 
 
 def test_flatten_unit3d_existing_url_preserved():
     raw = {
         "id": 1,
-        "url": "https://emuwarez.com/requests/1",
+        "url": "https://emu-warez.com/requests/1",
         "attributes": {"name": "Foo"},
-        "links": {"self": "https://emuwarez.com/api/requests/1"},
+        "links": {"self": "https://emu-warez.com/api/requests/1"},
     }
     flat = _flatten_unit3d(raw)
-    assert flat["url"] == "https://emuwarez.com/requests/1"
+    assert flat["url"] == "https://emu-warez.com/requests/1"
 
 
 # ---------------------------------------------------------------------------
@@ -78,7 +78,7 @@ def test_normalize_request_flat():
         "comments": "3",
         "filled": False,
         "created_at": "2024-01-01T00:00:00Z",
-        "url": "https://emuwarez.com/requests/42",
+        "url": "https://emu-warez.com/requests/42",
         "anon": True,
     }
     item = normalize_request(raw)
@@ -92,7 +92,7 @@ def test_normalize_request_flat():
     assert item.imdb_id == "tt0000001"
     assert item.points == 500
     assert item.comments == 3
-    assert item.url == "https://emuwarez.com/requests/42"
+    assert item.url == "https://emu-warez.com/requests/42"
     assert item.author is None  # anon=True
     assert item.author_visible is False
 
@@ -114,7 +114,7 @@ def test_normalize_request_unit3d_nested():
             "username": "usuario_emu",
             "created_at": "2025-06-01T12:00:00Z",
         },
-        "links": {"self": "https://emuwarez.com/requests/7"},
+        "links": {"self": "https://emu-warez.com/requests/7"},
     }
     item = normalize_request(raw)
     assert item.emu_id == "7"
@@ -123,7 +123,7 @@ def test_normalize_request_unit3d_nested():
     assert item.requested_source == "WEB-DL"
     assert item.tmdb_id == "99999"
     assert item.imdb_id == "tt1234567"
-    assert item.url == "https://emuwarez.com/requests/7"
+    assert item.url == "https://emu-warez.com/requests/7"
     # anon=False, so author should be set
     assert item.author == "usuario_emu"
     assert item.author_visible is False  # always hidden by default
@@ -264,7 +264,7 @@ def test_sync_requests_missing_endpoint_is_skipped_not_failed(db_conn, monkeypat
 
     def fake_fetch(*a, **kw):
         raise IntegrationError(
-            "HTTP 404 en https://emuwarez.com/api/requests: The route api/requests could not be found."
+            "HTTP 404 en https://emu-warez.com/api/requests: The route api/requests could not be found."
         )
     monkeypatch.setattr(reqs.emu, "emu_fetch_all_pages", fake_fetch)
 

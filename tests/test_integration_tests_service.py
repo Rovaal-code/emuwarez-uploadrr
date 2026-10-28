@@ -140,39 +140,39 @@ class TestEmuwarezConnection:
     @patch("urllib.request.urlopen")
     def test_success(self, mock_open):
         mock_open.return_value = _mock_response(200)
-        result = svc_test_emu(api_key="key123", base_url="https://emuwarez.com")
+        result = svc_test_emu(api_key="key123", base_url="https://emu-warez.com")
         assert result["ok"] is True
         assert result["status"] == "connected"
 
     @patch("urllib.request.urlopen")
     def test_invalid_key_401(self, mock_open):
         mock_open.side_effect = _http_error(401)
-        result = svc_test_emu(api_key="badkey", base_url="https://emuwarez.com")
+        result = svc_test_emu(api_key="badkey", base_url="https://emu-warez.com")
         assert result["ok"] is False
         assert result["status"] == "invalid_key"
 
     @patch("urllib.request.urlopen")
     def test_timeout(self, mock_open):
         mock_open.side_effect = _timeout_url_error()
-        result = svc_test_emu(api_key="key", base_url="https://emuwarez.com")
+        result = svc_test_emu(api_key="key", base_url="https://emu-warez.com")
         assert result["ok"] is False
         assert result["status"] == "timeout"
 
     @patch("urllib.request.urlopen")
     def test_connection_error(self, mock_open):
         mock_open.side_effect = _url_error("Connection refused")
-        result = svc_test_emu(api_key="key", base_url="https://emuwarez.com")
+        result = svc_test_emu(api_key="key", base_url="https://emu-warez.com")
         assert result["ok"] is False
         assert result["status"] == "connection_error"
 
     def test_defaults_to_emuwarez_base_url(self):
-        """base_url defaults to https://emuwarez.com when not provided."""
+        """base_url defaults to https://emu-warez.com when not provided."""
         with patch("urllib.request.urlopen") as mock_open:
             mock_open.return_value = _mock_response(200)
             result = svc_test_emu(api_key="key123")
             assert result["ok"] is True
             called_url = mock_open.call_args[0][0].full_url
-            assert "emuwarez.com" in called_url
+            assert "emu-warez.com" in called_url
 
     def test_full_key_never_in_response(self):
         import json
@@ -189,11 +189,11 @@ class TestEmuwarezConnection:
         init_db(conn)
         mock_open.return_value = _mock_response(200)
 
-        first = svc_test_emu(api_key="key123", base_url="https://emuwarez.com", conn=conn)
+        first = svc_test_emu(api_key="key123", base_url="https://emu-warez.com", conn=conn)
         assert first["ok"] is True
         assert mock_open.call_count == 1
 
-        second = svc_test_emu(api_key="key123", base_url="https://emuwarez.com", conn=conn)
+        second = svc_test_emu(api_key="key123", base_url="https://emu-warez.com", conn=conn)
         assert second["ok"] is False
         assert second["status"] == "rate_limited"
         assert second["details"]["wait_seconds"] > 0
@@ -216,7 +216,7 @@ class TestEmuwarezConnection:
         stale = dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=MIN_EMU_TEST_SECONDS + 1)
         set_state(conn, EMU_TEST_STATE_KEY, stale.isoformat())
 
-        result = svc_test_emu(api_key="key123", base_url="https://emuwarez.com", conn=conn)
+        result = svc_test_emu(api_key="key123", base_url="https://emu-warez.com", conn=conn)
         assert result["ok"] is True
         assert mock_open.call_count == 1
 
@@ -228,7 +228,7 @@ class TestEmuwarezConnection:
         conn = connect(tmp_path / "test.db")
         init_db(conn)
 
-        result = svc_test_emu(api_key=None, base_url="https://emuwarez.com", conn=conn)
+        result = svc_test_emu(api_key=None, base_url="https://emu-warez.com", conn=conn)
         assert result["status"] == "not_configured"
         # no timestamp recorded, no network call
         assert get_state(conn, EMU_TEST_STATE_KEY) is None

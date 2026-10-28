@@ -16,6 +16,7 @@ Failure/slowness simulation (for exercising cancel/timeout/failed paths):
   --fake-sleep SECONDS        sleep between each log line
   FAKE_UPLOADRR_FAIL=1        same as --fake-fail (env fallback)
   FAKE_UPLOADRR_SLEEP=N       same as --fake-sleep (env fallback)
+  FAKE_UPLOADRR_LINES=N       print N more stdout lines (enough to fill the pipe)
 """
 from __future__ import annotations
 
@@ -60,6 +61,8 @@ def main(argv: list[str] | None = None) -> int:
     emit("[EMU] Generando torrent")
     emit("[EMU] Generando descripcion")
     emit("[EMU] Subiendo a tracker")
+    for i in range(int(os.environ.get("FAKE_UPLOADRR_LINES", "0") or 0)):
+        print(f"[EMU] hashing {i:06d} " + "." * 80)
 
     if fail:
         print("[EMU] ERROR: fallo simulado durante la subida (--fake-fail)", file=sys.stderr, flush=True)

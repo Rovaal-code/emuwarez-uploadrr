@@ -204,3 +204,127 @@ def test_borrar_un_enlace_simbolico_no_sigue_hasta_el_original(biblioteca, tmp_p
     assert borrar_de_subidas(enlace, raiz=up) is True
     assert not _os.path.lexists(enlace)
     assert _os.path.isfile(biblioteca["ficheros"][0]), "el original NO se toca"
+
+
+def _subida(conn, status, prepared_path, retry_of=None):
+    return conn.execute(
+        "INSERT INTO upload_jobs (title, path, status, stage, prepared_path, retry_of_job_id, created_at, updated_at)"
+        " VALUES ('X', '', ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+        (status, status, prepared_path, retry_of),
+    ).lastrowid
+
+
+def test_borrar_una_subida_completada_deja_lo_que_siembra_qbittorrent(biblioteca, monkeypatch, isolated_db):
+    """El enlace de una subida completada es de donde siembra qBittorrent. El
+    intento fallido de antes apunta al mismo enlace y tampoco puede llevárselo."""
+    from emuwarez_uploadrr.database import connect, init_db
+    from emuwarez_uploadrr.services import carpeta_subida
+    from emuwarez_uploadrr.services.upload_execution import DELETE_CONFIRMATION_TOKEN, delete_upload_job
+
+    monkeypatch.setattr(carpeta_subida, "RAIZ_SUBIDAS", biblioteca["uploads"])
+    enlace = preparar_fichero_suelto(biblioteca["ficheros"][0], raiz=biblioteca["uploads"])["ruta"]
+    conn = connect()
+    init_db(conn)
+    fallido = _subida(conn, "failed", enlace)
+    _subida(conn, "completed", enlace, retry_of=fallido)
+    conn.commit()
+
+    assert delete_upload_job(fallido, confirmation=DELETE_CONFIRMATION_TOKEN, conn=conn)["ok"]
+    assert os.path.lexists(enlace)
+
+
+def test_borrar_una_subida_fallida_quita_su_enlace(biblioteca, monkeypatch, isolated_db):
+    from emuwarez_uploadrr.database import connect, init_db
+    from emuwarez_uploadrr.services import carpeta_subida
+    from emuwarez_uploadrr.services.upload_execution import DELETE_CONFIRMATION_TOKEN, delete_upload_job
+
+    monkeypatch.setattr(carpeta_subida, "RAIZ_SUBIDAS", biblioteca["uploads"])
+    enlace = preparar_fichero_suelto(biblioteca["ficheros"][0], raiz=biblioteca["uploads"])["ruta"]
+    conn = connect()
+    init_db(conn)
+    fallido = _subida(conn, "failed", enlace)
+    conn.commit()
+
+    assert delete_upload_job(fallido, confirmation=DELETE_CONFIRMATION_TOKEN, conn=conn)["ok"]
+    assert not os.path.lexists(enlace)
+    assert os.path.exists(biblioteca["ficheros"][0])
+
+
+def test_borrar_una_subida_cancelada_con_el_torrent_ya_en_qbittorrent_deja_el_enlace(biblioteca, monkeypatch, isolated_db):
+    from emuwarez_uploadrr.database import connect, init_db
+    from emuwarez_uploadrr.services import carpeta_subida
+    from emuwarez_uploadrr.services.upload_execution import (
+        DELETE_CONFIRMATION_TOKEN, QBIT_AÑADIDO, append_upload_log, delete_upload_job)
+
+    monkeypatch.setattr(carpeta_subida, "RAIZ_SUBIDAS", biblioteca["uploads"])
+    enlace = preparar_fichero_suelto(biblioteca["ficheros"][0], raiz=biblioteca["uploads"])["ruta"]
+    conn = connect()
+    init_db(conn)
+    cancelado = _subida(conn, "cancelled", enlace)
+    otro = _subida(conn, "failed", enlace)
+    conn.commit()
+    append_upload_log(cancelado, "info", QBIT_AÑADIDO, stream="system", conn=conn)
+    conn.commit()
+
+    assert delete_upload_job(otro, confirmation=DELETE_CONFIRMATION_TOKEN, conn=conn)["ok"]
+    assert os.path.lexists(enlace)
+
+
+def test_un_symlink_fuera_de_la_carpeta_de_subidas_no_vale_para_subir(biblioteca, monkeypatch, isolated_db, tmp_path):
+    from emuwarez_uploadrr.database import connect, init_db
+    from emuwarez_uploadrr.services import carpeta_subida
+    from emuwarez_uploadrr.services.upload_execution import validate_upload_job_start
+
+    monkeypatch.setattr(carpeta_subida, "RAIZ_SUBIDAS", biblioteca["uploads"])
+    fuera = tmp_path / "otro.mkv"
+    os.symlink(biblioteca["ficheros"][0], fuera)
+    conn = connect()
+    init_db(conn)
+    job = _subida(conn, "ready", str(fuera))
+    conn.commit()
+
+    errores = validate_upload_job_start(job, conn=conn)["errors"]
+    assert any("symlink" in e for e in errores)
+
+
+def test_una_carpeta_hermana_no_cuenta_como_la_de_subidas(tmp_path):
+    from emuwarez_uploadrr.services.carpeta_subida import en_carpeta_de_subidas
+    (tmp_path / "uploads").mkdir()
+    (tmp_path / "uploads-old").mkdir()
+    assert en_carpeta_de_subidas(str(tmp_path / "uploads" / "x.mkv"), raiz=str(tmp_path / "uploads"))
+    assert not en_carpeta_de_subidas(str(tmp_path / "uploads-old" / "x.mkv"), raiz=str(tmp_path / "uploads"))
+
+
+def test_borrar_no_quita_el_enlace_que_siembra_otra_subida(biblioteca, monkeypatch, isolated_db):
+    """Otra cadena completada que apunta al mismo enlace tampoco puede perderlo."""
+    from emuwarez_uploadrr.database import connect, init_db
+    from emuwarez_uploadrr.services import carpeta_subida
+    from emuwarez_uploadrr.services.upload_execution import DELETE_CONFIRMATION_TOKEN, delete_upload_job
+
+    monkeypatch.setattr(carpeta_subida, "RAIZ_SUBIDAS", biblioteca["uploads"])
+    enlace = preparar_fichero_suelto(biblioteca["ficheros"][0], raiz=biblioteca["uploads"])["ruta"]
+    conn = connect()
+    init_db(conn)
+    _subida(conn, "completed", enlace)
+    fallida = _subida(conn, "failed", enlace)
+    conn.commit()
+
+    assert delete_upload_job(fallida, confirmation=DELETE_CONFIRMATION_TOKEN, conn=conn)["ok"]
+    assert os.path.lexists(enlace)
+
+
+def test_borrar_no_quita_el_enlace_de_una_subida_en_marcha(biblioteca, monkeypatch, isolated_db):
+    from emuwarez_uploadrr.database import connect, init_db
+    from emuwarez_uploadrr.services import carpeta_subida
+    from emuwarez_uploadrr.services.upload_execution import DELETE_CONFIRMATION_TOKEN, delete_upload_job
+
+    monkeypatch.setattr(carpeta_subida, "RAIZ_SUBIDAS", biblioteca["uploads"])
+    enlace = preparar_fichero_suelto(biblioteca["ficheros"][0], raiz=biblioteca["uploads"])["ruta"]
+    conn = connect()
+    init_db(conn)
+    _subida(conn, "running", enlace)
+    fallida = _subida(conn, "failed", enlace)
+    conn.commit()
+
+    assert delete_upload_job(fallida, confirmation=DELETE_CONFIRMATION_TOKEN, conn=conn)["ok"]
+    assert os.path.lexists(enlace)

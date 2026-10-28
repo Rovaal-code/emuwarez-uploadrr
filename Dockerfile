@@ -38,17 +38,13 @@ WORKDIR /app
 # so what Uploadrr-EMU writes there survives a rebuild/recreate without the
 # user mounting anything beyond the /config volume they already have.
 #
-# Cloned from our own private fork (Rovaal-code/Uploadrr-EMU on GitHub, not
-# the public codeberg.org/ccx94/Uploadrr-EMU upstream) so the image ships
-# our local patches — Spanish trailer preference, trailer on TV/anime too,
-# and our own signature instead of Uploadrr's default branding — instead of
-# a clean upstream checkout that silently drops all of that on a fresh
-# deploy. Private repo needs a token, passed as a BuildKit secret so it
-# never ends up baked into an image layer: `docker build --secret
-# id=github_token,env=GITHUB_TOKEN ...` (or `,src=<file>`).
+# Cloned from our own fork (Kisnov/Uploadrr-EMU on GitHub, not the public
+# codeberg.org/ccx94/Uploadrr-EMU upstream) so the image ships our local
+# patches — Spanish trailer preference, trailer on TV/anime too, and our own
+# signature instead of Uploadrr's default branding — instead of a clean
+# upstream checkout that silently drops all of that on a fresh deploy. The
+# fork is public, so the build needs no token.
 #
-# setuptools is pinned <80 because pyrobase's setup.py still imports the
-# pkg_resources module that newer setuptools dropped.
 # Cache-busting: Docker's layer cache keys a RUN step on its literal command
 # text, not on what the command actually fetches from the network — a plain
 # `git clone` here would silently keep reusing a stale checkout on every
@@ -58,15 +54,15 @@ WORKDIR /app
 # fixes already pushed to the fork). Passing the fork's current commit SHA as
 # a build arg makes THIS layer's cache key include it, so it only re-clones
 # when the fork actually has new commits — pass
-# `--build-arg UPLOADRR_COMMIT=$(git ls-remote https://github.com/Rovaal-code/Uploadrr-EMU.git main | cut -f1)`
-# at build time (falls back to "unknown", i.e. always re-clone, if omitted).
+# `--build-arg UPLOADRR_COMMIT=$(git ls-remote https://github.com/Kisnov/Uploadrr-EMU.git main | cut -f1)`
+# at build time. If omitted it stays "unknown", which can reuse a cached
+# clone: pass a current UPLOADRR_COMMIT or build with `--no-cache`.
 ARG UPLOADRR_COMMIT=unknown
-RUN --mount=type=secret,id=github_token \
-    echo "Uploadrr-EMU @ ${UPLOADRR_COMMIT}" \
-    && git clone --depth 1 "https://x-access-token:$(cat /run/secrets/github_token)@github.com/Rovaal-code/Uploadrr-EMU.git" /opt/Uploadrr \
-    && pip install --no-cache-dir "setuptools<80" wheel \
-    && pip install --no-cache-dir --no-build-isolation -r /opt/Uploadrr/requirements.txt \
-    && pip install --no-cache-dir tmdbsimple \
+RUN echo "Uploadrr-EMU @ ${UPLOADRR_COMMIT}" \
+    && git clone --depth 1 https://github.com/Kisnov/Uploadrr-EMU.git /opt/Uploadrr \
+    && if [ "${UPLOADRR_COMMIT}" != unknown ]; then \
+         git -C /opt/Uploadrr fetch -q --depth 1 origin "${UPLOADRR_COMMIT}" && git -C /opt/Uploadrr checkout -q FETCH_HEAD; fi \
+    && pip install --no-cache-dir -r /opt/Uploadrr/requirements.txt \
     && rm -rf /opt/Uploadrr/.git \
     && chmod -R a+rwX /opt/Uploadrr
 # world-writable: the container's runtime UID (PUID/PGID, docker-compose's

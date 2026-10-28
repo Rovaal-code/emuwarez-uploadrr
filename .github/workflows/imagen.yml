@@ -1,0 +1,58 @@
+# Construye y publica la imagen en ghcr.io/kisnov/emuwarez-uploadrr con cada
+# push a master. A mano (Actions → Imagen → Run workflow) sirve para recoger
+# cambios de Uploadrr-EMU sin tocar este repo.
+name: Imagen
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: imagen
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    # A mano también se puede elegir otra rama: solo master publica latest.
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - id: sello
+        run: |
+          uploadrr="$(git ls-remote --exit-code https://github.com/Kisnov/Uploadrr-EMU.git refs/heads/main | cut -f1)"
+          test -n "$uploadrr"
+          echo "uploadrr=$uploadrr" >> "$GITHUB_OUTPUT"
+          # latest solo si este commit sigue siendo la punta de master: re-ejecutar uno viejo no lo retrasa.
+          tags="ghcr.io/kisnov/emuwarez-uploadrr:${GITHUB_SHA}"
+          if [ "$(git ls-remote --exit-code origin refs/heads/master | cut -f1)" = "$GITHUB_SHA" ]; then
+            tags="$tags,ghcr.io/kisnov/emuwarez-uploadrr:latest"
+          fi
+          echo "tags=$tags" >> "$GITHUB_OUTPUT"
+          echo "fecha=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.sello.outputs.tags }}
+          build-args: |
+            UPLOADRR_COMMIT=${{ steps.sello.outputs.uploadrr }}
+            APP_COMMIT=${{ github.sha }}
+            APP_BUILD_DATE=${{ steps.sello.outputs.fecha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

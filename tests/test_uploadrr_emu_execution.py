@@ -115,6 +115,33 @@ def test_apply_with_fake_runner_succeeds(db_conn, tmp_path, fake_uploadrr_emu_di
     assert any(a["artifact_type"] == "uploaded_url" for a in artifacts)
 
 
+def test_un_fallo_al_guardar_el_log_no_cuelga_la_subida(db_conn, tmp_path, fake_uploadrr_emu_dir, fake_uploadrr_python_path, monkeypatch):
+    """Si guardar una línea fallaba (base bloqueada), el hilo lector moría,
+    nadie vaciaba la tubería y Uploadrr se quedaba bloqueado hasta el timeout."""
+    import sqlite3
+
+    from emuwarez_uploadrr.services import upload_execution
+
+    monkeypatch.setenv("FAKE_UPLOADRR_LINES", "1000")
+    original = upload_execution.append_upload_log
+
+    def falla_en_stdout(job_id, level, message, *args, stream="system", **kwargs):
+        if stream == "stdout":
+            raise sqlite3.OperationalError("database is locked")
+        return original(job_id, level, message, *args, stream=stream, **kwargs)
+
+    monkeypatch.setattr(upload_execution, "append_upload_log", falla_en_stdout)
+    prepared = tmp_path / "prepared.mkv"
+    prepared.write_bytes(b"\x00" * 16)
+    _insert_settings(db_conn, fake_uploadrr_emu_dir, fake_uploadrr_python_path, timeout=30)
+    jid = _insert_job(db_conn, prepared_path=str(prepared))
+
+    start_upload_job(jid, dry_run=False, start=True, confirmation=CONFIRMATION_TOKEN, conn=db_conn)
+
+    job = _wait_for_terminal(jid, db_conn, timeout=15)
+    assert job["status"] == "completed"
+
+
 def test_apply_with_fake_runner_fail_marks_failed(db_conn, tmp_path, fake_uploadrr_emu_dir, fake_uploadrr_python_path, monkeypatch):
     monkeypatch.setenv("FAKE_UPLOADRR_FAIL", "1")
     prepared = tmp_path / "prepared.mkv"

@@ -45,6 +45,8 @@ _DEFAULT_TAG = "EMUWAREZ"
 
 class SettingsResponse(BaseModel):
     default_release_tag: str
+    # Todos los grupos de subida, el de por defecto el primero.
+    upload_tags: list[str] = []
     provider_priority_order: list[str]
     tmdb_watch_region: str
     tmdb_localize_series_titles: bool = True
@@ -103,6 +105,7 @@ class SettingsResponse(BaseModel):
 
 class SettingsUpdateRequest(BaseModel):
     default_release_tag: Optional[str] = None
+    upload_tags: Optional[list[str]] = None
     provider_priority_order: Optional[list[str]] = None
     tmdb_watch_region: Optional[str] = None
     tmdb_localize_series_titles: Optional[bool] = None
@@ -203,6 +206,16 @@ def _clean_event_csv(codes: list[str]) -> str:
     return ",".join(seen)
 
 
+def _read_upload_tags(conn) -> list[str]:
+    """Los grupos de subida guardados, con el de por defecto el primero."""
+    default = get_setting_canonical(conn, "default_release_tag") or _DEFAULT_TAG
+    try:
+        saved = json.loads(get_setting_canonical(conn, "upload_tags") or "[]")
+    except ValueError:
+        saved = []
+    return list(dict.fromkeys([default, *saved]))
+
+
 def _get_conn():
     from emuwarez_uploadrr.database import connect, init_db
     conn = connect(_db_path())
@@ -262,6 +275,7 @@ def _build_response(conn) -> SettingsResponse:
 
     return SettingsResponse(
         default_release_tag=get_setting_canonical(conn, "default_release_tag") or _DEFAULT_TAG,
+        upload_tags=_read_upload_tags(conn),
         provider_priority_order=priority,
         tmdb_watch_region=get_setting_canonical(conn, "tmdb_watch_region") or _DEFAULT_REGION,
         tmdb_localize_series_titles=(get_setting_canonical(conn, "tmdb.localize_series_titles") or "true") != "false",
@@ -322,6 +336,15 @@ def update_settings(
         tag = body.default_release_tag.strip()
         if not tag:
             errors.append("default_release_tag no puede estar vacío")
+        elif any(c in tag for c in "/\\"):
+            errors.append("default_release_tag no puede tener / ni \\")
+
+    if body.upload_tags is not None:
+        if not all(t.strip() for t in body.upload_tags):
+            errors.append("upload_tags no puede tener tags vacíos")
+        # El tag acaba en el nombre del fichero: con una barra sería otra carpeta.
+        if any(c in t for t in body.upload_tags for c in "/\\"):
+            errors.append("upload_tags no puede tener / ni \\")
 
     if body.provider_priority_order is not None:
         codes = [c.strip() for c in body.provider_priority_order]
@@ -381,6 +404,10 @@ def update_settings(
 
         if body.default_release_tag is not None:
             set_setting(conn, "default_release_tag", body.default_release_tag.strip())
+
+        if body.upload_tags is not None:
+            tags = list(dict.fromkeys(t.strip() for t in body.upload_tags))
+            set_setting(conn, "upload_tags", json.dumps(tags, ensure_ascii=False))
 
         if body.provider_priority_order is not None:
             codes = [c.strip() for c in body.provider_priority_order]

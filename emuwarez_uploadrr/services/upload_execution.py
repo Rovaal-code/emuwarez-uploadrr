@@ -19,6 +19,7 @@ import signal
 import subprocess
 import sys
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -58,6 +59,8 @@ logger = logging.getLogger("emuwarez.upload")
 
 CONFIRMATION_TOKEN = "INICIAR_UPLOADRR"
 DELETE_CONFIRMATION_TOKEN = "BORRAR_SUBIDA"
+# Queda en los logs del job: delete_upload_job la busca para no borrar lo que siembra qBittorrent.
+QBIT_AÑADIDO = "qBittorrent: torrent añadido correctamente."
 
 # Phase 10F: approximate progress phases surfaced to the UI (string label
 # only). Numeric per-phase percentages are tracked separately in
@@ -245,10 +248,13 @@ def validate_upload_job_start(job_id: int, conn=None) -> dict:
         if not active_path:
             errors.append("No hay ruta de archivo registrada en el job.")
         else:
+            from .carpeta_subida import en_carpeta_de_subidas
             p = Path(active_path)
             if not p.exists():
                 errors.append(f"El archivo no existe en disco: {active_path}")
-            elif p.is_symlink():
+            elif p.is_symlink() and not en_carpeta_de_subidas(active_path):
+                # Los de la carpeta de subidas sí valen: con /config y /data en
+                # montajes distintos no cabe un enlace duro y se hace simbólico.
                 errors.append(f"El archivo es un symlink y no puede usarse: {active_path}")
             elif p.is_dir():
                 # A season pack's prepared_path is the shared hardlink folder,
@@ -1077,6 +1083,7 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
             stderr=subprocess.PIPE,
             stdin=subprocess.DEVNULL,
             text=True,
+            errors="replace",
             cwd=cwd if os.path.isdir(cwd) else None,
             env=env,
         )
@@ -1114,7 +1121,7 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
             # already captured above — otherwise this only shows up as one
             # more anonymous line among hundreds in Ver Logs.
             if phase_key == "qbittorrent_add" and ok_state is True:
-                append_upload_log(job_id, "info", "qBittorrent: torrent añadido correctamente.", stream="system")
+                append_upload_log(job_id, "info", QBIT_AÑADIDO, stream="system")
             elif phase_key == "qbittorrent_add" and ok_state is False:
                 if "Torrent upload succeeded, but failed to" in line:
                     # UNIT3D.py's re-download-after-upload step 403'd (or
@@ -1141,8 +1148,17 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
                 line = line.rstrip("\n")
                 safe_line = redact_secrets(line, secrets)
                 buf.append(safe_line)
-                append_upload_log(job_id, level, safe_line, stream=stream_name)
-                _track_uploadrr_progress(safe_line)
+                # Si guardar la línea falla (base bloqueada, disco lleno) se
+                # sigue leyendo: sin nadie vaciando la tubería, Uploadrr se
+                # queda bloqueado escribiendo hasta el timeout.
+                try:
+                    append_upload_log(job_id, level, safe_line, stream=stream_name)
+                except Exception:
+                    logger.exception("Subida %s: no se pudo registrar una línea de %s", job_id, stream_name)
+                try:
+                    _track_uploadrr_progress(safe_line)
+                except Exception:
+                    logger.exception("Subida %s: no se pudo actualizar el progreso", job_id)
 
         t_out = threading.Thread(
             target=_read_stream,
@@ -1156,8 +1172,10 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
         )
         t_out.start()
         t_err.start()
+        # Un solo plazo para los dos: esperar `timeout` a cada uno lo doblaba.
+        inicio = time.monotonic()
         t_out.join(timeout=timeout)
-        t_err.join(timeout=timeout)
+        t_err.join(timeout=None if timeout is None else max(0, inicio + timeout - time.monotonic()))
 
         timed_out = t_out.is_alive() or t_err.is_alive()
         if timed_out:
@@ -1317,12 +1335,16 @@ def start_upload_job(
     confirmation: str | None = None,
     conn=None,
     pre_gated: bool = False,
+    wait: bool = False,
 ) -> dict:
     """Start or preview a job.
 
     pre_gated=True: the caller already holds this job's concurrency slot
     (see _run_uploadrr_subprocess) — passed through unchanged to the spawned
     thread, not acted on here.
+
+    wait=True: no volver hasta que la subida termine. Lo necesita el CLI, que
+    sale al volver de aquí y se llevaría por delante el hilo (es daemon).
 
     - dry_run=True (default): validate and return command preview, do not execute.
     - dry_run=False, start=True, confirmation=INICIAR_UPLOADRR: execute real Uploadrr.
@@ -1424,17 +1446,22 @@ def start_upload_job(
         logger.info("Subida iniciada (job %s): «%s»", job_id,
                     (job or {}).get("title") or (job or {}).get("torrent_name") or "?")
 
+        final = {"status": "running", "stage": "running"}
+        if wait:
+            t.join()
+            final = get_upload_job(job_id, conn=conn) or final
+
         return {
             "job_id": job_id,
             "action": "started",
-            "status": "running",
-            "stage": "running",
+            "status": final.get("status"),
+            "stage": final.get("stage"),
             "dry_run": False,
             "errors": [],
             "warnings": validation.get("warnings", []),
             "command_preview": redact_secrets(cmd.get("command_preview", ""), secrets),
             "using_prepared_path": cmd.get("using_prepared_path"),
-            "message": "Uploadrr iniciado en background. Consulta los logs para el progreso.",
+            "message": "Uploadrr ha terminado." if wait else "Uploadrr iniciado en background. Consulta los logs para el progreso.",
             "error": None,
         }
     finally:
@@ -1448,6 +1475,7 @@ def retry_upload_job(
     dry_run: bool = True,
     start: bool = False,
     confirmation: str | None = None,
+    wait: bool = False,
 ) -> dict:
     """Create a new upload_job as a retry of job_id.
 
@@ -1520,6 +1548,18 @@ def retry_upload_job(
                 "message": f'Se requiere confirmación exacta: "{CONFIRMATION_TOKEN}".',
             }
 
+        from .upload_queue import trabajo_activo
+        activa = trabajo_activo(conn, original.get("library_item_id"))
+        if activa:
+            return {
+                "ok": False,
+                "action": "blocked",
+                "dry_run": False,
+                "error": "blocked",
+                "job_id": job_id,
+                "message": f"Ya hay una subida en curso para este contenido (job {activa['id']}).",
+            }
+
         # Create new job
         now = _now()
         retry_count = (original.get("retry_count") or 0) + 1
@@ -1560,6 +1600,7 @@ def retry_upload_job(
             start=True,
             confirmation=CONFIRMATION_TOKEN,
             conn=conn,
+            wait=wait,
         )
         result["retry_of_job_id"] = job_id
         result["retry_count"] = retry_count
@@ -1761,11 +1802,23 @@ def delete_upload_job(job_id: int, confirmation: str | None = None, conn=None) -
         # que es la gracia de todo esto (ver services/carpeta_subida.py). Y
         # solo si la ruta está dentro de la carpeta de subidas, así que un
         # prepared_path que apunte a la biblioteca no se toca.
-        from .carpeta_subida import borrar_de_subidas
+        #
+        # Se quedan los que usa cualquier subida completada (qBittorrent siembra
+        # de ahí, también si se canceló o falló después de añadir el torrent) o
+        # todavía viva (se está preparando o subiendo), sea de esta cadena o de
+        # otra: los intentos fallidos suelen apuntar al mismo enlace.
+        from .carpeta_subida import ENLACES, borrar_de_subidas
         marcas = ",".join("?" * len(chain))
-        for fila in conn.execute(
-                f"SELECT prepared_path FROM upload_jobs WHERE id IN ({marcas})", chain).fetchall():
-            borrar_de_subidas(fila["prepared_path"])
+        filas = conn.execute(
+            f"SELECT prepared_path, status FROM upload_jobs WHERE id IN ({marcas})", chain).fetchall()
+        with ENLACES:
+            en_uso = {f["prepared_path"] for f in conn.execute(
+                "SELECT prepared_path FROM upload_jobs WHERE prepared_path IS NOT NULL "
+                "AND (status NOT IN ('cancelled', 'failed') "
+                "OR id IN (SELECT upload_job_id FROM upload_job_logs WHERE message = ?))", (QBIT_AÑADIDO,))}
+            for fila in filas:
+                if fila["prepared_path"] not in en_uso:
+                    borrar_de_subidas(fila["prepared_path"])
         conn.execute(f"DELETE FROM upload_artifacts WHERE upload_job_id IN ({marcas})", chain)
         conn.execute(f"DELETE FROM upload_job_logs WHERE upload_job_id IN ({marcas})", chain)
         conn.execute(f"UPDATE filesystem_operations SET upload_job_id = NULL WHERE upload_job_id IN ({marcas})", chain)

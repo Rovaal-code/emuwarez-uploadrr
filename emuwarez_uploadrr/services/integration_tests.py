@@ -21,6 +21,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Optional
 
+from ..constants import EMU_BASE_URL
+
 _TIMEOUT = 10  # seconds — short timeout for connection probes
 
 # Rate-limit the live eMuwarez connection probe so the "Probar conexión" button
@@ -195,7 +197,7 @@ def test_emuwarez_connection(
         return _fail("emuwarez", "not_configured", "API key de eMuwarez no configurada")
 
     _key = _key.strip()
-    _base = (_base or "https://emuwarez.com").rstrip("/")
+    _base = (_base or EMU_BASE_URL).rstrip("/")
 
     # Validate URL shape before hitting network
     if not _base.startswith(("http://", "https://")):

@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from typing import Any, Iterable
 
 from .base import IntegrationError, build_url, request_json
@@ -110,10 +111,23 @@ def emu_fetch_all_pages(api_key: str, base_url: str | None = None) -> list[dict[
 
 
 # eMuwarez rate-limits the API to 30 requests/minute (x-ratelimit-limit: 30)
-# and caps perPage at 100 server-side, so a full ~11k-torrent catalog is ~112
-# sequential requests. We deliberately pace to ~10/min (one every 6s) to stay
-# well under the limit and never trip a 429.
-EMU_MIN_REQUEST_INTERVAL = 6.0  # seconds between torrent-catalog requests
+# and caps perPage at 100 server-side, so a full ~13k-torrent catalog is ~130
+# sequential requests. 2,2 s entre peticiones queda por debajo del límite (cada
+# petición tarda además ~3 s); antes eran 6 s y la completa tardaba 17 min.
+EMU_MIN_REQUEST_INTERVAL = 2.2  # seconds between torrent-catalog requests
+# Si aun así llega un 429, se espera a que se vacíe la ventana del minuto y se repite la página.
+EMU_ESPERA_429 = 60.0
+EMU_REINTENTOS_429 = 3
+
+
+def _pedir_pagina(url: str) -> Any:
+    for intento in range(EMU_REINTENTOS_429 + 1):
+        try:
+            return request_json("GET", url)
+        except IntegrationError as e:
+            if e.status != 429 or intento == EMU_REINTENTOS_429:
+                raise
+            time.sleep(EMU_ESPERA_429)
 
 
 def emu_fetch_all_torrents(
@@ -138,7 +152,6 @@ def emu_fetch_all_torrents(
 
     `progress(page, total_pages, items_so_far, total_items)` is called after each
     page (total_pages/total_items from the API `meta`, or None if absent)."""
-    import time
     base = (base_url or EMU_BASE_URL).rstrip("/")
     all_items: list[dict[str, Any]] = []
     total_pages: int | None = None
@@ -147,9 +160,9 @@ def emu_fetch_all_torrents(
     reached_known = False
     while page <= max_pages and not reached_known:
         if page > 1:
-            time.sleep(min_interval)  # rate limit (~10/min, well under 30/min)
+            time.sleep(min_interval)  # rate limit (see EMU_MIN_REQUEST_INTERVAL)
         url = build_url(base, "/api/torrents/filter", {"api_token": api_key, "perPage": str(per_page), "page": str(page)})
-        data = request_json("GET", url)
+        data = _pedir_pagina(url)
         items = data.get("data") if isinstance(data, dict) else None
         meta = data.get("meta") if isinstance(data, dict) else None
         if isinstance(meta, dict):

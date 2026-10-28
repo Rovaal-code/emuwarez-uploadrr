@@ -76,3 +76,25 @@ def test_el_inventario_dice_lo_mismo_que_la_copia(config):
     nombres = [f["name"] for f in inv["files"]]
     assert not any("uploads" in n for n in nombres)
     assert inv["total_size_bytes"] < 50_000
+
+
+def test_la_copia_no_lleva_los_temporales_de_uploadrr(config):
+    """Capturas y torrents de cada subida: en una instalación real eran 1,7 GB y
+    la copia tardaba 50 s. El config.yaml de Uploadrr sí entra."""
+    tmp = config["cfg"] / "Uploadrr" / "tmp" / "Peli 2020"
+    tmp.mkdir(parents=True)
+    (tmp / "captura.png").write_bytes(b"P" * 200_000)
+    r = create_config_backup()
+    miembros = _miembros(r["archive_path"])
+    assert not any("Uploadrr/tmp" in n for n in miembros)
+    assert "Uploadrr/data/config.yaml" in miembros
+    assert not any("Uploadrr/tmp" in f["name"] for f in get_config_inventory()["files"])
+
+
+def test_una_carpeta_backups_anidada_tampoco_entra(config):
+    anidada = config["cfg"] / "otra" / "backups"
+    anidada.mkdir(parents=True)
+    (anidada / "vieja.tar.gz").write_bytes(b"B" * 1000)
+    r = create_config_backup()
+    assert not any("backups" in n for n in _miembros(r["archive_path"]))
+    assert not any("backups" in f["name"] for f in get_config_inventory()["files"])

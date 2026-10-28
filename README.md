@@ -4,7 +4,7 @@ Aplicación web (+ CLI) para gestionar subidas a **eMuwarez** (tracker UNIT3D)
 a partir de tu biblioteca de **Radarr**/**Sonarr**: sincroniza tu biblioteca,
 cruza peticiones abiertas en eMuwarez con lo que ya tienes, adapta la
 nomenclatura, prepara el hardlink y ejecuta la subida real con
-[Uploadrr-EMU](https://github.com/Rovaal-code/Uploadrr-EMU) — todo desde una
+[Uploadrr-EMU](https://github.com/Kisnov/Uploadrr-EMU) — todo desde una
 interfaz web, sin tocar la terminal.
 
 ## Características principales
@@ -27,12 +27,12 @@ interfaz web, sin tocar la terminal.
 Requiere Docker 24+ con Compose v2. No hace falta clonar el repo: copia esto
 en un `docker-compose.yml`, ajusta las rutas de los volúmenes a tu entorno y
 levántalo. Usa la imagen ya publicada en
-`ghcr.io/rovaal-code/emuwarez-uploadrr`, así que no compila nada.
+`ghcr.io/kisnov/emuwarez-uploadrr`, así que no compila nada.
 
 ```yaml
 services:
   emuwarez-uploadrr:
-    image: ghcr.io/rovaal-code/emuwarez-uploadrr:${EMUWAREZ_UPLOADRR_TAG:-latest}
+    image: ghcr.io/kisnov/emuwarez-uploadrr:${EMUWAREZ_UPLOADRR_TAG:-latest}
     container_name: emuwarez-uploadrr
     restart: unless-stopped
 
@@ -95,7 +95,7 @@ Si prefieres clonar el repo (por ejemplo para construir la imagen tú mismo
 en vez de usar la publicada), usa `docker-compose.example.yml`:
 
 ```bash
-git clone https://github.com/Rovaal-code/emuwarez-uploadrr.git
+git clone https://github.com/Kisnov/emuwarez-uploadrr.git
 cd emuwarez-uploadrr
 cp .env.example .env
 docker compose -f docker-compose.example.yml up -d --build

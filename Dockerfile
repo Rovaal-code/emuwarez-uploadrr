@@ -57,7 +57,8 @@ WORKDIR /app
 # a build arg makes THIS layer's cache key include it, so it only re-clones
 # when the fork actually has new commits — pass
 # `--build-arg UPLOADRR_COMMIT=$(git ls-remote https://github.com/Kisnov/Uploadrr-EMU.git main | cut -f1)`
-# at build time (falls back to "unknown", i.e. always re-clone, if omitted).
+# at build time. If omitted it stays "unknown", which can reuse a cached
+# clone: pass a current UPLOADRR_COMMIT or build with `--no-cache`.
 ARG UPLOADRR_COMMIT=unknown
 RUN echo "Uploadrr-EMU @ ${UPLOADRR_COMMIT}" \
     && git clone --depth 1 https://github.com/Kisnov/Uploadrr-EMU.git /opt/Uploadrr \

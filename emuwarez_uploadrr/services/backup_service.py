@@ -132,10 +132,11 @@ def create_config_backup(
                 continue
             if any(rel.parts[:len(p)] == p for p in excluded_paths):
                 continue
-            if not item.is_file() or item.name in (f"{_DB_NAME}-wal", f"{_DB_NAME}-shm"):
-                continue
+            # La base antes que is_file(): si desaparece por el camino, la copia falla.
             if item.name == _DB_NAME:
                 _add_db_snapshot(tar, item, str(rel))
+                continue
+            if not item.is_file() or item.name in (f"{_DB_NAME}-wal", f"{_DB_NAME}-shm"):
                 continue
             try:
                 tar.add(item, arcname=str(rel))

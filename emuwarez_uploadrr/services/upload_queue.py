@@ -173,7 +173,8 @@ def _insert_and_start_queued_job(
         )
         conn.execute("COMMIT")
     except BaseException:
-        conn.execute("ROLLBACK")
+        if conn.in_transaction:
+            conn.execute("ROLLBACK")
         raise
     finally:
         conn.isolation_level = prior_isolation

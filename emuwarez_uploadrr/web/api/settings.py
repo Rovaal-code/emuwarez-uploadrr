@@ -9,7 +9,7 @@ import json
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 import re
 
 logger = logging.getLogger("emuwarez.settings")
@@ -350,7 +350,7 @@ def update_settings(
 
     if errors:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=422,
             detail="; ".join(errors),
         )
 
@@ -375,7 +375,7 @@ def update_settings(
 
         if key_errors:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=422,
                 detail="; ".join(key_errors),
             )
 

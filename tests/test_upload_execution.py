@@ -323,7 +323,7 @@ def test_run_subprocess_torrent_redownload_403_logs_and_skips_done(db_conn, tmp_
 
     mock_proc = _make_mock_proc(returncode=0, stdout_lines=[
         "Torrent upload succeeded, but failed to download the torrent file: "
-        "Client error '403 Forbidden' for url 'https://emuwarez.com/torrent/download/16209.abc'",
+        "Client error '403 Forbidden' for url 'https://emu-warez.com/torrent/download/16209.abc'",
     ])
 
     with patch("subprocess.Popen", return_value=mock_proc):
@@ -457,7 +457,7 @@ def test_notify_upload_completed_flags_requiere_trailer_when_not_found(db_conn):
     from emuwarez_uploadrr.services.upload_execution import _notify_upload_completed
     jid = _insert_job(db_conn, status="completed")
 
-    _notify_upload_completed(jid, "https://emuwarez.com/torrents/1")
+    _notify_upload_completed(jid, "https://emu-warez.com/torrents/1")
 
     bodies = _notification_bodies(db_conn, jid)
     assert len(bodies) == 1
@@ -469,7 +469,7 @@ def test_notify_upload_completed_no_flag_when_trailer_artifact_present(db_conn):
     jid = _insert_job(db_conn, status="completed")
     create_upload_artifact(jid, "trailer_url", name="Trailer", url="https://youtube.com/watch?v=abc123", conn=db_conn)
 
-    _notify_upload_completed(jid, "https://emuwarez.com/torrents/1")
+    _notify_upload_completed(jid, "https://emu-warez.com/torrents/1")
 
     bodies = _notification_bodies(db_conn, jid)
     assert len(bodies) == 1

@@ -40,11 +40,12 @@ import { HeaderFilter } from '../components/HeaderFilter'
 import { formatBytes, timeAgo, formatDate } from '../utils/format'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
 import { useAlEntrar, useAlSalir } from '../context/SeccionVisible'
+import { EMU_URL } from '../constants/emu'
 
 // Fallback for "Consultar en eMuwarez" while we don't have the exact
 // per-request URL yet — points at the general requests listing instead of
 // leaving the button disabled.
-const EMU_REQUESTS_FALLBACK_URL = 'https://emuwarez.com/requests'
+const EMU_REQUESTS_FALLBACK_URL = `${EMU_URL}/requests`
 
 // A request's category maps to a friendly "Tipo" with an icon.
 // The raw eMuwarez title is whatever the requester typed there — for a

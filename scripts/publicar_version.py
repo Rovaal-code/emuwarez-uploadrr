@@ -26,7 +26,7 @@ import sys
 import tempfile
 from datetime import datetime, timezone
 
-REPO_POR_DEFECTO = "Rovaal-code/uploadrr-version"
+REPO_POR_DEFECTO = "Kisnov/uploadrr-version"
 FICHERO = "latest.json"
 
 # Este fichero es PÚBLICO. La nota de cada versión la lee cualquiera, incluido

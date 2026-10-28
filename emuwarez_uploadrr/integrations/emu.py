@@ -1,6 +1,6 @@
 """eMuwarez API connector.
 
-eMuwarez runs on the UNIT3D platform (https://emuwarez.com).
+eMuwarez runs on the UNIT3D platform (https://emu-warez.com).
 UNIT3D API authentication uses ?api_token=<key> as a query parameter.
 """
 from __future__ import annotations
@@ -11,10 +11,8 @@ import re
 from typing import Any, Iterable
 
 from .base import IntegrationError, build_url, request_json
-from ..constants import EMU_TEST_URL
+from ..constants import EMU_BASE_URL, EMU_TEST_URL
 from ..models import RequestItem
-
-EMU_BASE_URL = "https://emuwarez.com"
 
 
 # ---------------------------------------------------------------------------

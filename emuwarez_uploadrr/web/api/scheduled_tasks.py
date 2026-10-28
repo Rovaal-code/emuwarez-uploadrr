@@ -68,7 +68,7 @@ def update_scheduled_task(
         try:
             task = set_task_interval(conn, task_key, body.interval_minutes)
         except ValueError as exc:
-            code = status.HTTP_404_NOT_FOUND if "desconocida" in str(exc).lower() else status.HTTP_422_UNPROCESSABLE_ENTITY
+            code = 404 if "desconocida" in str(exc).lower() else 422
             raise HTTPException(status_code=code, detail=str(exc))
     return _to_response(task)
 

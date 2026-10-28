@@ -116,7 +116,7 @@ def test_tras_sincronizar_la_nomenclatura_no_sale_a_la_red(db_conn, tmdb_falso, 
     assert [o["value"] for o in opciones] == ["Arcane", "Arcane: League of Legends"]
 
 
-def test_generar_la_nomenclatura_no_consulta_a_tmdb(db_conn, tmdb_falso, monkeypatch, tmp_path):
+def test_generar_la_nomenclatura_no_consulta_a_tmdb(db_conn, tmdb_falso, tmp_path):
     """El objetivo entero, de punta a punta: se sincroniza una serie (una
     consulta, la del español) y a partir de ahí el plan de temporada no sale a
     la red ni una vez."""

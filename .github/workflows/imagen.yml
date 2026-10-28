@@ -1,0 +1,50 @@
+# Construye y publica la imagen en ghcr.io/kisnov/emuwarez-uploadrr con cada
+# push a master. A mano (Actions → Imagen → Run workflow) sirve para recoger
+# cambios de Uploadrr-EMU sin tocar este repo.
+name: Imagen
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: imagen
+  cancel-in-progress: true
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: sello
+        run: |
+          echo "uploadrr=$(git ls-remote https://github.com/Kisnov/Uploadrr-EMU.git main | cut -f1)" >> "$GITHUB_OUTPUT"
+          echo "fecha=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/kisnov/emuwarez-uploadrr:latest
+            ghcr.io/kisnov/emuwarez-uploadrr:${{ github.sha }}
+          build-args: |
+            UPLOADRR_COMMIT=${{ steps.sello.outputs.uploadrr }}
+            APP_COMMIT=${{ github.sha }}
+            APP_BUILD_DATE=${{ steps.sello.outputs.fecha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

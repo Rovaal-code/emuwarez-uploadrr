@@ -259,3 +259,30 @@ def test_second_option_is_the_english_title_not_the_original_language_one(isolat
     monkeypatch.setattr(tmdb_titles.tmdb, "get_tv_title", fake_get_tv_title)
     assert resolve_english_title(conn, "tv", "37854", None) == "One Piece"
     assert asked["language"] == "en-US"
+
+
+def test_el_titulo_elegido_llega_al_comando_de_uploadrr(season, tmp_path):
+    """La cola rehacía el plan del pack sin lo editado en el asistente, así que
+    el nombre del torrent (-mt) salía siempre con el título por defecto."""
+    import json
+
+    from emuwarez_uploadrr.services import upload_queue as uq
+    from emuwarez_uploadrr.services.settings import set_setting
+
+    conn, season_id = season
+    (tmp_path / "U").mkdir()
+    (tmp_path / "U" / "upload.py").write_text("")
+    for k, v in (("emu.api_key", "a"), ("tmdb.api_key", "b"), ("uploadrr.path", str(tmp_path / "U"))):
+        set_setting(conn, k, v)
+    job_id = conn.execute(
+        "INSERT INTO upload_jobs (library_item_id, status, stage, title, path, created_at, updated_at)"
+        " VALUES (?, 'preparing', 'verificacion_presubida', 'X', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+        (season_id,),
+    ).lastrowid
+    conn.commit()
+
+    assert uq._populate_ready(job_id, season_id, conn, season_overrides={"title": "The Tudors"})
+
+    comando = json.loads(conn.execute(
+        "SELECT uploadrr_command_json FROM upload_jobs WHERE id = ?", (job_id,)).fetchone()[0])
+    assert comando["title"].startswith("The Tudors S02")

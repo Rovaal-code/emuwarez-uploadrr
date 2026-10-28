@@ -164,20 +164,48 @@ def request_json(
     thread = threading.Thread(target=_worker, daemon=True)
     thread.start()
     thread.join(timeout=timeout + 5)
+    # Estos mensajes acaban en app.log, en task_runs y en la respuesta HTTP:
+    # eMuwarez y TMDb llevan la clave en la URL, así que nunca va entera.
+    safe_url = url_sin_claves(url)
     if thread.is_alive():
-        raise IntegrationError(f"Tiempo de espera agotado conectando con {url}")
+        raise IntegrationError(f"Tiempo de espera agotado conectando con {safe_url}")
 
     exc = result.get("error")
     if exc is not None:
         if isinstance(exc, urllib.error.HTTPError):
             raw = exc.read().decode("utf-8", errors="replace")
-            raise IntegrationError(f"HTTP {exc.code} en {url}: {raw[:500]}") from exc
+            # El cuerpo de error puede repetir la URL pedida, clave incluida.
+            for clave in _claves_de(url):
+                raw = raw.replace(clave, "***")
+            raise IntegrationError(f"HTTP {exc.code} en {safe_url}: {raw[:500]}") from None
         if isinstance(exc, urllib.error.URLError):
-            raise IntegrationError(f"No se pudo conectar con {url}: {exc.reason}") from exc
+            raise IntegrationError(f"No se pudo conectar con {safe_url}: {exc.reason}") from None
         if isinstance(exc, json.JSONDecodeError):
-            raise IntegrationError(f"Respuesta no JSON desde {url}") from exc
+            raise IntegrationError(f"Respuesta no JSON desde {safe_url}") from None
+        if isinstance(exc, Exception):
+            # Su mensaje puede llevar la URL con la clave: solo el tipo.
+            raise IntegrationError(f"Error con {safe_url}: {type(exc).__name__}") from None
         raise exc
     return result["value"]
+
+
+_PARAMETROS_CLAVE = {"api_token", "api_key", "apikey"}
+
+
+def _claves_de(url: str) -> list[str]:
+    query = urllib.parse.urlsplit(url).query
+    return [v for k, v in urllib.parse.parse_qsl(query) if k.lower() in _PARAMETROS_CLAVE and v]
+
+
+def url_sin_claves(url: str) -> str:
+    """La URL sin usuario:contraseña y con el valor de los parámetros de clave cambiado por ***."""
+    parts = urllib.parse.urlsplit(url)
+    parts = parts._replace(netloc=parts.netloc.rpartition("@")[2])
+    query = [
+        (k, "***" if k.lower() in _PARAMETROS_CLAVE else v)
+        for k, v in urllib.parse.parse_qsl(parts.query, keep_blank_values=True)
+    ]
+    return urllib.parse.urlunsplit(parts._replace(query=urllib.parse.urlencode(query, safe="*")))
 
 
 def build_url(base_url: str, path: str, params: Optional[dict[str, Any]] = None) -> str:

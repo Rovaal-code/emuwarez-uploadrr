@@ -4,6 +4,7 @@ integrity/nomenclature/remux/start)."""
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -724,6 +725,62 @@ def test_queue_upload_blocked_when_latest_job_is_active(db_conn, tmp_path):
     assert "en curso" in result["errors"][0]
 
 
+def test_reintentar_dos_veces_no_crea_dos_subidas(db_conn, tmp_path):
+    """Doble clic en "Reintentar": el original sigue fallido, así que el
+    segundo reintento también lo aceptaba y el contenido se subía dos veces."""
+    f = tmp_path / "movie.mkv"
+    f.write_bytes(b"x" * 100)
+    iid = _movie_with_path(db_conn, str(f))
+    original_id = _failed_job_row(db_conn, iid, status="failed")
+
+    primero = uq.queue_retry_for_job(original_id, conn=db_conn)
+    try:
+        segundo = uq.queue_retry_for_job(original_id, conn=db_conn)
+        assert primero["status"] == "queued"
+        assert segundo["status"] == "blocked"
+        assert segundo["job"]["id"] == primero["job"]["id"]
+        activos = db_conn.execute(
+            "SELECT COUNT(*) FROM upload_jobs WHERE library_item_id = ? AND status = 'queued'", (iid,)
+        ).fetchone()[0]
+        assert activos == 1
+    finally:
+        uq.cancel_queued_timer(primero["job"]["id"])
+
+
+def test_dos_peticiones_a_la_vez_dejan_una_sola_subida(db_conn, tmp_path, monkeypatch):
+    """Dos peticiones simultáneas (dos pestañas) leían las dos "no hay nada en
+    curso" antes de que ninguna insertara."""
+    import threading
+
+    f = tmp_path / "movie.mkv"
+    f.write_bytes(b"x" * 100)
+    iid = _movie_with_path(db_conn, str(f))
+    monkeypatch.setattr(uq, "_arm_queue_timer", lambda job_id: None)
+
+    barrera = threading.Barrier(2)
+    original = uq._find_latest_job_for_item
+
+    def leer_y_esperar(conn, item_id):
+        fila = original(conn, item_id)
+        barrera.wait(timeout=5)
+        return fila
+
+    monkeypatch.setattr(uq, "_find_latest_job_for_item", leer_y_esperar)
+    resultados = []
+    hilos = [threading.Thread(target=lambda: resultados.append(uq.queue_upload_for_item(iid)["status"]))
+             for _ in range(2)]
+    for h in hilos:
+        h.start()
+    for h in hilos:
+        h.join()
+
+    assert sorted(resultados) == ["blocked", "queued"]
+    activos = db_conn.execute(
+        "SELECT COUNT(*) FROM upload_jobs WHERE library_item_id = ? AND status = 'queued'", (iid,)
+    ).fetchone()[0]
+    assert activos == 1
+
+
 # ---------------------------------------------------------------------------
 # staging ("Automático") — the job appears immediately as 'staging', gets
 # its nomenclature/remux/checks previews computed in the background, then is
@@ -832,3 +889,79 @@ def test_the_reconciliation_actually_runs_when_the_app_boots(db_conn, isolated_d
 
     row = db_conn.execute("SELECT status FROM upload_jobs WHERE id = ?", (job_id,)).fetchone()
     assert row["status"] == "failed"
+
+
+# ---------------------------------------------------------------------------
+# Lo que recibe Uploadrr: el enlace de la carpeta de subidas
+# ---------------------------------------------------------------------------
+
+def _correr_cola_hasta_el_inicio(db_conn, tmp_path, monkeypatch, *, enlace_duro=True):
+    """Pasa un trabajo por toda la cola (con los pasos pesados simulados) y
+    devuelve lo que hay en la fila justo cuando se arranca Uploadrr."""
+    import errno
+    import os
+
+    from emuwarez_uploadrr.services import carpeta_subida as cs
+    from emuwarez_uploadrr.services.settings import set_setting
+
+    lib = tmp_path / "lib"
+    lib.mkdir()
+    f = lib / "Movie.2024.mkv"
+    f.write_bytes(b"x" * 100)
+    monkeypatch.setattr(cs, "RAIZ_SUBIDAS", str(tmp_path / "uploads"))
+    if not enlace_duro:
+        def sin_enlace_duro(*a, **k):
+            raise OSError(errno.EXDEV, "Invalid cross-device link")
+        monkeypatch.setattr(cs.os, "link", sin_enlace_duro)
+
+    iid = _movie_with_path(db_conn, str(f))
+    db_conn.execute("UPDATE library_items SET prepared_path = ?, tmdb_id = '1' WHERE id = ?", (str(f), iid))
+    jid = _queued_job_row(db_conn, iid, str(f))
+    (tmp_path / "U").mkdir()
+    (tmp_path / "U" / "upload.py").write_text("")
+    for k, v in (("emu.api_key", "a"), ("tmdb.api_key", "b"), ("uploadrr.path", str(tmp_path / "U"))):
+        set_setting(db_conn, k, v)
+    db_conn.commit()
+
+    visto = {}
+
+    def arrancar(job_id, **kw):
+        from emuwarez_uploadrr.services.upload_execution import validate_upload_job_start
+        fila = db_conn.execute("SELECT prepared_path, status FROM upload_jobs WHERE id = ?", (job_id,)).fetchone()
+        visto.update(dict(fila))
+        visto["errores"] = validate_upload_job_start(job_id, conn=db_conn)["errors"]
+        return {"error": None}
+
+    with patch("emuwarez_uploadrr.services.upload_execution.start_upload_job", arrancar), \
+         patch("emuwarez_uploadrr.services.nomenclature.apply_nomenclature_proposal", lambda *a, **k: {"status": "applied"}), \
+         patch("emuwarez_uploadrr.services.library.refresh_arr_and_resync", lambda *a, **k: None), \
+         patch("emuwarez_uploadrr.services.mkv_remux.modo_pistas", lambda c: "ninguno"), \
+         patch("emuwarez_uploadrr.services.mkv_remux.toca_el_fichero", lambda m: False), \
+         patch("emuwarez_uploadrr.services.upload_queue._apply_mkv_title_best_effort", lambda *a, **k: None):
+        uq._run_queued_job(jid)
+    # La cola cede su plaza al hilo de Uploadrr, que aquí no existe.
+    from emuwarez_uploadrr.services.upload_execution import _upload_concurrency_gate
+    _upload_concurrency_gate.release()
+    visto["uploads"] = str(tmp_path / "uploads")
+    visto["biblioteca"] = str(f)
+    assert os.path.exists(str(f))
+    return visto
+
+
+def test_uploadrr_recibe_el_enlace_de_la_carpeta_de_subidas(db_conn, tmp_path, monkeypatch):
+    """_populate_ready escribía en prepared_path la ruta de la biblioteca justo
+    después de que el paso anterior dejara ahí el enlace."""
+    visto = _correr_cola_hasta_el_inicio(db_conn, tmp_path, monkeypatch)
+    assert visto["status"] == "ready"
+    assert Path(visto["prepared_path"]).is_relative_to(visto["uploads"])
+    assert visto["errores"] == []
+
+
+def test_un_enlace_simbolico_en_la_carpeta_de_subidas_vale_para_subir(db_conn, tmp_path, monkeypatch):
+    """Con /config y /data en montajes distintos no cabe un enlace duro."""
+    import os
+
+    visto = _correr_cola_hasta_el_inicio(db_conn, tmp_path, monkeypatch, enlace_duro=False)
+    assert os.path.islink(visto["prepared_path"])
+    assert Path(visto["prepared_path"]).is_relative_to(visto["uploads"])
+    assert visto["errores"] == []

@@ -47,6 +47,7 @@ import errno
 import logging
 import os
 import shutil
+import threading
 from typing import Iterable, Optional
 
 logger = logging.getLogger(__name__)
@@ -54,6 +55,10 @@ logger = logging.getLogger(__name__)
 # Dentro de /config, que es el volumen que el usuario ya monta: no hay nada
 # nuevo que configurar, y sobrevive a reconstruir la imagen.
 RAIZ_SUBIDAS = os.environ.get("UPLOADRR_UPLOADS_DIR", "/config/Uploadrr/uploads")
+
+# Crear un enlace y guardarlo en prepared_path, o comprobar que nadie lo usa y
+# borrarlo, va de uno en uno: un borrado no se lleva el enlace de otra subida.
+ENLACES = threading.Lock()
 
 
 def _enlazar(origen: str, destino: str) -> str:
@@ -156,6 +161,19 @@ def preparar_fichero_suelto(fichero: str, *, raiz: Optional[str] = None) -> dict
             "enlaces": [tipo], "cuantos": 1}
 
 
+def en_carpeta_de_subidas(ruta: str, *, raiz: Optional[str] = None) -> bool:
+    """Si la ruta está en la carpeta de subidas, aunque sea un enlace simbólico
+    que apunta a la biblioteca.
+
+    Mira el realpath del PADRE, no el de la ruta: resolver el enlace la dejaría
+    fuera de la raíz.
+    """
+    raiz = raiz or RAIZ_SUBIDAS
+    padre, raiz = os.path.realpath(os.path.dirname(ruta)), os.path.realpath(raiz)
+    # Por componentes: con startswith, /data/uploads-old pasaba por /data/uploads.
+    return os.path.commonpath((padre, raiz)) == raiz
+
+
 def borrar_de_subidas(ruta: Optional[str], *, raiz: Optional[str] = None) -> bool:
     """Borra de la carpeta de subidas, sea una carpeta de pack o un fichero
     suelto. Solo borra ENLACES: lo de verdad sigue en la biblioteca.
@@ -167,10 +185,7 @@ def borrar_de_subidas(ruta: Optional[str], *, raiz: Optional[str] = None) -> boo
     raiz = raiz or RAIZ_SUBIDAS
     if not ruta or not os.path.lexists(ruta):
         return False
-    # realpath del PADRE, no de la ruta: la ruta puede ser un enlace simbólico
-    # que apunta a la biblioteca, y resolverlo la dejaría fuera de la raíz.
-    dentro = os.path.realpath(os.path.dirname(ruta)).startswith(os.path.realpath(raiz))
-    if not dentro:
+    if not en_carpeta_de_subidas(ruta, raiz=raiz):
         logger.warning("No se borra %s: está fuera de %s", ruta, raiz)
         return False
     try:

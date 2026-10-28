@@ -57,12 +57,15 @@ WORKDIR /app
 # `--build-arg UPLOADRR_COMMIT=$(git ls-remote https://github.com/Kisnov/Uploadrr-EMU.git main | cut -f1)`
 # at build time. If omitted it stays "unknown", which can reuse a cached
 # clone: pass a current UPLOADRR_COMMIT or build with `--no-cache`.
+# Uploadrr-EMU no versiona data/config.yaml: sale de su ejemplo, y el entrypoint lo copia a /config la primera vez.
+# Solo instalaciones nuevas: un /config/Uploadrr/data que ya existe se queda como está.
 ARG UPLOADRR_COMMIT=unknown
 RUN echo "Uploadrr-EMU @ ${UPLOADRR_COMMIT}" \
     && git clone --depth 1 https://github.com/Kisnov/Uploadrr-EMU.git /opt/Uploadrr \
     && if [ "${UPLOADRR_COMMIT}" != unknown ]; then \
          git -C /opt/Uploadrr fetch -q --depth 1 origin "${UPLOADRR_COMMIT}" && git -C /opt/Uploadrr checkout -q FETCH_HEAD; fi \
     && pip install --no-cache-dir -r /opt/Uploadrr/requirements.txt \
+    && { [ -e /opt/Uploadrr/data/config.yaml ] || cp /opt/Uploadrr/data/backup/example_config.yaml /opt/Uploadrr/data/config.yaml; } \
     && rm -rf /opt/Uploadrr/.git \
     && chmod -R a+rwX /opt/Uploadrr
 # world-writable: the container's runtime UID (PUID/PGID, docker-compose's

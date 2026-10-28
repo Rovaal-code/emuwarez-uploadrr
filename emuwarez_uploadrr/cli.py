@@ -1801,4 +1801,4 @@ def main(argv: Optional[list[str]] = None) -> int:
     return modern_main(list(sys.argv[1:] if argv is None else argv))
 
 
-__all__ = ["main", "modern_main", "build_parser", "parse_args", "process_path", "configure", "doctor", "test_apis"]
+__all__ = ["main", "modern_main", "build_parser"]

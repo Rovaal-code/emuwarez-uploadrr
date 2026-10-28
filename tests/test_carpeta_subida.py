@@ -291,3 +291,20 @@ def test_borrar_no_quita_el_enlace_que_siembra_otra_subida(biblioteca, monkeypat
 
     assert delete_upload_job(fallida, confirmation=DELETE_CONFIRMATION_TOKEN, conn=conn)["ok"]
     assert os.path.lexists(enlace)
+
+
+def test_borrar_no_quita_el_enlace_de_una_subida_en_marcha(biblioteca, monkeypatch, isolated_db):
+    from emuwarez_uploadrr.database import connect, init_db
+    from emuwarez_uploadrr.services import carpeta_subida
+    from emuwarez_uploadrr.services.upload_execution import DELETE_CONFIRMATION_TOKEN, delete_upload_job
+
+    monkeypatch.setattr(carpeta_subida, "RAIZ_SUBIDAS", biblioteca["uploads"])
+    enlace = preparar_fichero_suelto(biblioteca["ficheros"][0], raiz=biblioteca["uploads"])["ruta"]
+    conn = connect()
+    init_db(conn)
+    _subida(conn, "running", enlace)
+    fallida = _subida(conn, "failed", enlace)
+    conn.commit()
+
+    assert delete_upload_job(fallida, confirmation=DELETE_CONFIRMATION_TOKEN, conn=conn)["ok"]
+    assert os.path.lexists(enlace)

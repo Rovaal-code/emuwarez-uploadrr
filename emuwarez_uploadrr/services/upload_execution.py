@@ -1765,17 +1765,18 @@ def delete_upload_job(job_id: int, confirmation: str | None = None, conn=None) -
         # solo si la ruta está dentro de la carpeta de subidas, así que un
         # prepared_path que apunte a la biblioteca no se toca.
         #
-        # Los de una subida completada se quedan: es de ahí de donde siembra
-        # qBittorrent, y quitarlos lo deja sin ficheros. Los intentos fallidos
-        # de la misma cadena suelen apuntar al mismo enlace, así que tampoco.
+        # Se quedan los que usa cualquier subida completada (qBittorrent siembra
+        # de ahí) o todavía viva (se está preparando o subiendo), sea de esta
+        # cadena o de otra: los intentos fallidos suelen apuntar al mismo enlace.
         from .carpeta_subida import borrar_de_subidas
         marcas = ",".join("?" * len(chain))
         filas = conn.execute(
             f"SELECT prepared_path, status FROM upload_jobs WHERE id IN ({marcas})", chain).fetchall()
-        sembrando = {f["prepared_path"] for f in conn.execute(
-            "SELECT prepared_path FROM upload_jobs WHERE status = 'completed' AND prepared_path IS NOT NULL")}
+        en_uso = {f["prepared_path"] for f in conn.execute(
+            "SELECT prepared_path FROM upload_jobs WHERE status NOT IN ('cancelled', 'failed') "
+            "AND prepared_path IS NOT NULL")}
         for fila in filas:
-            if fila["prepared_path"] not in sembrando:
+            if fila["prepared_path"] not in en_uso:
                 borrar_de_subidas(fila["prepared_path"])
         conn.execute(f"DELETE FROM upload_artifacts WHERE upload_job_id IN ({marcas})", chain)
         conn.execute(f"DELETE FROM upload_job_logs WHERE upload_job_id IN ({marcas})", chain)

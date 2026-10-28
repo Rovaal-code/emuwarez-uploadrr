@@ -135,7 +135,7 @@ def test_la_copia_de_una_base_en_uso_se_puede_abrir(tmp_path, monkeypatch):
             destino = tmp_path / f"restaurada{i}"
             with tarfile.open(result["archive_path"]) as tar:
                 assert tar.getnames() == ["emuwarez_uploadrr.db"]
-                tar.extractall(destino, filter="data")
+                tar.extractall(destino, **({"filter": "data"} if hasattr(tarfile, "data_filter") else {}))
             copia = sqlite3.connect(destino / "emuwarez_uploadrr.db")
             assert copia.execute("PRAGMA integrity_check").fetchone() == ("ok",)
             filas, maximo = copia.execute("SELECT count(*), max(id) FROM t").fetchone()

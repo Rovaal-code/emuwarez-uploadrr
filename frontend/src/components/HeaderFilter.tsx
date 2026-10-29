@@ -14,6 +14,7 @@ export interface FilterOption { value: string; label: string }
 // botón con una ✓ que solo salía al marcarlo, y nada decía que se pudiera
 // elegir más de uno. Un <input type="checkbox"> se ve como tal, se marca con
 // la barra espaciadora y el lector de pantalla lo anuncia como casilla.
+// «Todos» se queda como botón: quita el filtro, no es un valor más.
 function FilterOptionButton({ option, selected, multiple, onClick }: { option: FilterOption; selected: boolean; multiple: boolean; onClick: () => void }) {
   const { triggerProps, tooltipNode } = useTooltip(option.label)
   if (multiple) {
@@ -175,7 +176,9 @@ export function HeaderFilter<T extends string | string[]>({ label, value, option
               key={o.value || '__all__'}
               option={o}
               selected={o.value === '' ? !active : elegidos.includes(o.value)}
-              multiple={multiple}
+              // «Todos» no es una casilla sino el botón que lo quita todo: con
+              // nada elegido saldría marcada y desmarcarla no haría nada.
+              multiple={multiple && o.value !== ''}
               onClick={() => elegir(o.value)}
             />
           ))}

@@ -17,12 +17,14 @@ permissions:
   contents: read
   packages: write
 
-concurrency:
-  group: imagen
-  cancel-in-progress: false
-
 jobs:
   publicar:
+    # Las construcciones van de una en una. GitHub solo guarda una pendiente
+    # por grupo: por eso el job de las etiquetas va en otro, para no poder
+    # sustituir (y cancelar) la construcción pendiente de su propio commit.
+    concurrency:
+      group: imagen
+      cancel-in-progress: false
     # A mano también se puede elegir otra rama: solo master publica latest.
     if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
@@ -65,6 +67,11 @@ jobs:
   version:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    concurrency:
+      group: imagen-version-${{ github.ref_name }}
+      cancel-in-progress: false
+    # Lo que más puede tardar es esperar a que termine la construcción del commit.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
@@ -88,16 +95,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Va en el mismo grupo de concurrencia que la construcción de master, así
-      # que si la etiqueta llega mientras se construye ese commit, espera.
+      # Si la etiqueta llega mientras se construye su commit (o con su
+      # construcción aún en cola), espera a que la imagen exista.
       - name: Poner la etiqueta de versión a la imagen del commit
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           imagen=ghcr.io/kisnov/emuwarez-uploadrr
-          if ! docker buildx imagetools inspect "$imagen:$GITHUB_SHA" > /dev/null 2>&1; then
-            echo "::error::No hay imagen de $GITHUB_SHA: solo se construyen los commits de master. Pon la etiqueta en un commit de master."
-            exit 1
-          fi
+          for intento in $(seq 1 80); do
+            docker buildx imagetools inspect "$imagen:$GITHUB_SHA" > /dev/null 2>&1 && break
+            if [ "$intento" -eq 80 ]; then
+              echo "::error::No hay imagen de $GITHUB_SHA tras 40 minutos: solo se construyen los commits de master. Pon la etiqueta en un commit de master."
+              exit 1
+            fi
+            echo "Aún no hay imagen de $GITHUB_SHA; espero 30 s ($intento/80)…"
+            sleep 30
+          done
           docker buildx imagetools create --tag "$imagen:$VERSION" "$imagen:$GITHUB_SHA"
           echo "Publicada $imagen:$VERSION (= $imagen:$GITHUB_SHA)"

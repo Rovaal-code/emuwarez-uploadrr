@@ -20,6 +20,11 @@
 #   scripts/desplegar.sh --notas "..." --version patch   # sube la versión antes
 #   scripts/desplegar.sh --notas "..." --sin-publicar    # construye y sube, sin anunciar
 #
+# Al publicar crea también la etiqueta vX.Y.Z en el commit y la sube. Con ella
+# el workflow Imagen le pone a la imagen de ese commit la etiqueta X.Y.Z, que es
+# la que se fija en el compose (EMUWAREZ_UPLOADRR_TAG=X.Y.Z) para quedarse en
+# una versión o volver a ella.
+#
 # Necesita `gh auth login` hecho, para publicar la versión.
 set -euo pipefail
 
@@ -72,6 +77,84 @@ echo "Versión ..... $VERSION"
 echo "Commit ...... $COMMIT"
 echo "Construida .. $FECHA"
 
+# La etiqueta vX.Y.Z de esta versión. Nunca se pisa: si ya existe en otro
+# commit, aquí o en GitHub, se para antes de construir nada y hay que
+# resolverlo a mano. Lo que manda es GitHub, porque es su etiqueta la que
+# dispara el workflow Imagen. De una etiqueta anotada, ls-remote da también la
+# línea "^{}" con el commit al que apunta; de una ligera (las de una release
+# hecha en la web), solo esa.
+ETIQUETA="v$VERSION"
+
+# Si no se puede preguntar a GitHub (sin red, sin permiso), es un error, no
+# "no hay etiqueta": se para en vez de seguir a ciegas.
+etiqueta_remota() {
+  local salida
+  salida="$(git ls-remote --tags origin "refs/tags/$ETIQUETA" "refs/tags/$ETIQUETA^{}")" || {
+    echo "No se pudo consultar en GitHub la etiqueta $ETIQUETA." >&2
+    return 1
+  }
+  printf '%s\n' "$salida" | sort -k2 | tail -1 | cut -f1
+}
+
+etiqueta_local() {
+  git rev-parse -q --verify "refs/tags/$ETIQUETA^{commit}" || true
+}
+
+comprobar_etiqueta() {
+  local remota local_
+  # Con `|| return 1` explícito: se llama dentro de un `||`, donde set -e no
+  # actúa, y un fallo de la consulta pasaría por "no hay etiqueta".
+  remota="$(etiqueta_remota)" || return 1
+  local_="$(etiqueta_local)"
+  if [[ -n "$remota" && "$remota" != "$COMMIT" ]]; then
+    echo "La etiqueta $ETIQUETA ya está en GitHub en $remota, no en este commit." >&2
+    echo "No se pisa: sube la versión (--version patch) o quita la etiqueta que sobra." >&2
+    return 1
+  fi
+  if [[ -n "$local_" && "$local_" != "$COMMIT" ]]; then
+    echo "La etiqueta $ETIQUETA existe aquí en $local_, no en este commit." >&2
+    echo "Si sobra:  git tag -d $ETIQUETA  y vuelve a lanzar esto." >&2
+    return 1
+  fi
+}
+
+# Al final, con el manifiesto ya publicado: crea la etiqueta, o sube la que
+# una ejecución anterior dejó solo aquí. Solo si el commit es la punta de
+# master en GitHub: la imagen de cada commit la construye el workflow Imagen
+# con el push a master, y la etiqueta solo le añade el nombre de la versión.
+etiquetar() {
+  # Otra vez, por si algo ha cambiado mientras se construía.
+  comprobar_etiqueta || return 1
+  local remota
+  remota="$(etiqueta_remota)" || return 1
+  # Entre una consulta y otra alguien podría haberla creado en otro commit.
+  if [[ -n "$remota" && "$remota" != "$COMMIT" ]]; then
+    echo "La etiqueta $ETIQUETA ya está en GitHub en $remota, no en este commit." >&2
+    return 1
+  fi
+  if [[ -n "$remota" ]]; then
+    echo "La etiqueta $ETIQUETA ya está en GitHub."
+    return 0
+  fi
+  git fetch -q origin master
+  if [[ "$(git rev-parse origin/master)" != "$COMMIT" ]]; then
+    echo "Este commit no es la punta de master en GitHub, así que no creo $ETIQUETA." >&2
+    echo "Cuando lo sea:  git tag -a $ETIQUETA -m \"…\" $COMMIT && git push origin $ETIQUETA" >&2
+    return 0
+  fi
+  if [[ -n "$(etiqueta_local)" ]]; then
+    echo "La etiqueta $ETIQUETA estaba creada aquí pero sin subir: la subo."
+  else
+    git tag -a "$ETIQUETA" -m "${NOTAS:-Versión $VERSION}" "$COMMIT"
+  fi
+  git push -q origin "$ETIQUETA"
+  echo "Etiqueta .... $ETIQUETA (la imagen :$VERSION la añade el workflow Imagen)"
+}
+
+if [[ "$PUBLICAR" -eq 1 ]]; then
+  comprobar_etiqueta || exit 1
+fi
+
 echo "Resolviendo el HEAD del fork…"
 COMMIT_FORK="$(git ls-remote "$FORK" main | cut -f1)"
 if [[ -z "$COMMIT_FORK" ]]; then
@@ -110,10 +193,12 @@ echo "Digest ...... $DIGEST"
 
 if [[ "$PUBLICAR" -eq 0 ]]; then
   echo
-  echo "Sin publicar el manifiesto, como pediste. Para anunciarla:"
+  echo "Sin publicar el manifiesto ni crear la etiqueta, como pediste. Para anunciarla:"
   echo "  python3 scripts/publicar_version.py --digest $DIGEST --notas \"…\" --repo"
+  echo "  git tag -a v$VERSION -m \"…\" $COMMIT && git push origin v$VERSION"
   exit 0
 fi
 
 echo "Publicando el manifiesto…"
 python3 scripts/publicar_version.py --digest "$DIGEST" --notas "$NOTAS" --repo
+etiquetar

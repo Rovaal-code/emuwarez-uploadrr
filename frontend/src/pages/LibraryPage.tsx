@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useTransition, memo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, useTransition, memo } from 'react'
 import { getLibrary, TOP_LEVEL_PARENT_FILTER, getLibraryFilterOptions, getLibraryItem, type LibraryFilterOptions } from '../api/library'
 import { Tooltip } from '../components/Tooltip'
 import { getLocalStatusInfo } from '../utils/status'
@@ -19,6 +19,7 @@ import { LibraryTreeRow, type LibraryActionKind } from '../components/LibraryTre
 import { LargePosterCard } from '../components/LargePosterCard'
 import { LibraryDetailPage } from '../components/LibraryDetailPage'
 import { HeaderFilter } from '../components/HeaderFilter'
+import { FilasVirtuales } from '../components/FilasVirtuales'
 import { posterUrl, isAporteEligible } from '../utils/libraryItem'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
 import { necesitaTodosLosNiveles } from '../utils/filtrosBiblioteca'
@@ -55,6 +56,11 @@ const GRID_PRIORITY_COUNT = 30
 // List rows are much shorter than poster tiles, so more of them fit above
 // the fold — same rationale, higher count.
 const LIST_PRIORITY_COUNT = 40
+// Lo que mide una fila de la lista antes de pintarla (FilasVirtuales la
+// corrige con la primera que mide de verdad).
+const LIST_ROW_HEIGHT = 50
+const LIST_COLUMNS = 12
+const claveDeItem = (it: LibraryItemResponse) => it.id
 
 // Memoized: a plain inline onClick={() => onSelect(item)} arrow would be a
 // new function identity every render, defeating memo — so this takes a
@@ -205,18 +211,24 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const [sortBy, setSortBy] = useState('title_asc')
   const [offset, setOffset] = useState(0)
 
+  // Con cualquier filtro puesto se pide la biblioteca en plano. Ver
+  // utils/filtrosBiblioteca: recortar a la raíz mientras filtras dejaba la
+  // tabla vacía para valores que el propio desplegable ofrecía.
+  const flatFilter = necesitaTodosLosNiveles({
+    search: debouncedSearch, filterType, filterStatus, filterInstanceId,
+    filterRequest, filterSpanish, searchProvider, searchQuality, searchSource,
+    filterEmu, filterAporte,
+  })
+
+  // Proveedor, Resolución, Source, eMuwarez y Aportes se filtran en el
+  // navegador, sobre lo ya cargado: no van al servidor, así que cambiarlos no
+  // tiene por qué volver a pedir nada. De ellos solo cuenta si obligan a pedir
+  // en plano, que es lo que dice `flatFilter`. Antes cada clic en uno de esos
+  // desplegables volvía a bajar la biblioteca entera (21 MB con 15.900 archivos).
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      // Con cualquier filtro puesto se pide la biblioteca en plano. Ver
-      // utils/filtrosBiblioteca: recortar a la raíz mientras filtras dejaba la
-      // tabla vacía para valores que el propio desplegable ofrecía.
-      const flatFilter = necesitaTodosLosNiveles({
-        search: debouncedSearch, filterType, filterStatus, filterInstanceId,
-        filterRequest, filterSpanish, searchProvider, searchQuality, searchSource,
-        filterEmu, filterAporte,
-      })
       const result = await getLibrary({
         search: debouncedSearch || undefined,
         type: filterType,
@@ -235,7 +247,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     } finally {
       setLoading(false)
     }
-  }, [debouncedSearch, filterType, filterStatus, filterInstanceId, filterRequest, searchProvider, searchQuality, searchSource, filterEmu, filterAporte, filterSpanish, sortBy, offset])
+  }, [debouncedSearch, filterType, filterStatus, filterInstanceId, filterRequest, flatFilter, filterSpanish, sortBy, offset])
 
   useEffect(() => { load() }, [load])
 
@@ -365,43 +377,69 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     ? { opacity: 0.5, pointerEvents: 'none' as const, transition: 'opacity 120ms' }
     : undefined
 
-  // Same "aporte" definition the eMuwarez filter/notification hand-off use:
-  // emu_in_catalog === 0 ("Nuevo" — you'd contribute the whole thing) or
-  // === 1 with at least one emu_aportes entry (you'd contribute a specific
-  // improvement). Only counts for content you actually have — a Faltante
-  // item has nothing to give. The "Aportes" column itself was removed from
-  // the list view, but this still backs the notification-driven filter.
-  const isAporte = (it: LibraryItemResponse) =>
-    isAporteEligible(it) && (it.emu_in_catalog === 0 || (it.emu_in_catalog === 1 && (it.emu_aportes?.length ?? 0) > 0))
+  // Memorizado: con todo cargado en plano son unas 20.000 filas, y sin esto se
+  // volvían a recorrer en cada render de la página (cada tecla del buscador).
+  const filteredItems = useMemo(() => {
+    // Same "aporte" definition the eMuwarez filter/notification hand-off use:
+    // emu_in_catalog === 0 ("Nuevo" — you'd contribute the whole thing) or
+    // === 1 with at least one emu_aportes entry (you'd contribute a specific
+    // improvement). Only counts for content you actually have — a Faltante
+    // item has nothing to give. The "Aportes" column itself was removed from
+    // the list view, but this still backs the notification-driven filter.
+    const isAporte = (it: LibraryItemResponse) =>
+      isAporteEligible(it) && (it.emu_in_catalog === 0 || (it.emu_in_catalog === 1 && (it.emu_aportes?.length ?? 0) > 0))
 
-  const matchesFilter = (it: LibraryItemResponse) => {
-    const cumple = (elegidos: string[], v: string | null | undefined) => !elegidos.length || elegidos.includes(v ?? '')
-    const provOk = cumple(searchProvider, it.provider_label)
-    const qualOk = cumple(searchQuality, it.resolution)
-    const sourceOk = cumple(searchSource, it.source)
-    // "candidate" = No (not on eMuwarez), "present" = Sí. A partial series
-    // (emu_in_catalog === 2) matches neither on its own — its Sí/No seasons do,
-    // so filtering surfaces those seasons instead of the misleading series row.
-    const emuOk = !filterEmu.length
-      || (filterEmu.includes('candidate') && it.emu_in_catalog === 0)
-      || (filterEmu.includes('present') && it.emu_in_catalog === 1)
-    // Same rollup caveat as emuOk: an ambiguous/partial item (emu_in_catalog
-    // null or 2) matches neither "yes" nor "no" on its own.
-    const aporteOk = !filterAporte || (filterAporte === 'yes' ? isAporte(it) : (it.emu_in_catalog === 1 && !isAporte(it)))
-    return provOk && qualOk && sourceOk && emuOk && aporteOk
-  }
-  // With a Provider/Resolución/Source/eMuwarez/Aporte filter active, `items` holds every level.
-  // Show the matching items at the highest matching level: if a whole series
-  // matches, show the series (not each of its seasons); if only some seasons
-  // match (mixed series), show those seasons.
-  const flatFilter = !!(searchProvider.length || searchQuality.length || searchSource.length || filterEmu.length || filterAporte)
-  let filteredItems: LibraryItemResponse[]
-  if (flatFilter) {
+    const matchesFilter = (it: LibraryItemResponse) => {
+      const cumple = (elegidos: string[], v: string | null | undefined) => !elegidos.length || elegidos.includes(v ?? '')
+      const provOk = cumple(searchProvider, it.provider_label)
+      const qualOk = cumple(searchQuality, it.resolution)
+      const sourceOk = cumple(searchSource, it.source)
+      // "candidate" = No (not on eMuwarez), "present" = Sí. A partial series
+      // (emu_in_catalog === 2) matches neither on its own — its Sí/No seasons do,
+      // so filtering surfaces those seasons instead of the misleading series row.
+      const emuOk = !filterEmu.length
+        || (filterEmu.includes('candidate') && it.emu_in_catalog === 0)
+        || (filterEmu.includes('present') && it.emu_in_catalog === 1)
+      // Same rollup caveat as emuOk: an ambiguous/partial item (emu_in_catalog
+      // null or 2) matches neither "yes" nor "no" on its own.
+      const aporteOk = !filterAporte || (filterAporte === 'yes' ? isAporte(it) : (it.emu_in_catalog === 1 && !isAporte(it)))
+      return provOk && qualOk && sourceOk && emuOk && aporteOk
+    }
+    // With a Provider/Resolución/Source/eMuwarez/Aporte filter active, `items` holds every level.
+    // Show the matching items at the highest matching level: if a whole series
+    // matches, show the series (not each of its seasons); if only some seasons
+    // match (mixed series), show those seasons.
+    const clientFilter = !!(searchProvider.length || searchQuality.length || searchSource.length || filterEmu.length || filterAporte)
+    if (!clientFilter) return items
     const matchIds = new Set(items.filter(matchesFilter).map(i => i.id))
-    filteredItems = items.filter(it => matchIds.has(it.id) && !(it.parent_id != null && matchIds.has(it.parent_id)))
-  } else {
-    filteredItems = items
-  }
+    return items.filter(it => matchIds.has(it.id) && !(it.parent_id != null && matchIds.has(it.parent_id)))
+  }, [items, searchProvider, searchQuality, searchSource, filterEmu, filterAporte])
+
+  // La lista solo pinta lo que se ve (FilasVirtuales). Las series desplegadas
+  // se pintan siempre, para no perder lo que tienen abierto al salir de vista.
+  const listaRef = useRef<HTMLDivElement>(null)
+  const cabeceraRef = useRef<HTMLTableSectionElement>(null)
+  const [desplegadas, setDesplegadas] = useState<ReadonlySet<number>>(() => new Set())
+  const alDesplegar = useCallback((id: number, abierta: boolean) => {
+    setDesplegadas(prev => {
+      if (prev.has(id) === abierta) return prev
+      const sig = new Set(prev)
+      if (abierta) sig.add(id); else sig.delete(id)
+      return sig
+    })
+  }, [])
+  const pintarFila = useCallback((item: LibraryItemResponse, i: number) => (
+    <LibraryTreeRow
+      item={item}
+      depth={0}
+      instances={instances}
+      onSelect={openDetail}
+      onAction={handleTreeAction}
+      onReload={load}
+      priority={i < LIST_PRIORITY_COUNT}
+      onExpandedChange={alDesplegar}
+    />
+  ), [instances, openDetail, handleTreeAction, load, alDesplegar])
 
   // Modals/overlays, shared by the list view and the detail page so an action
   // triggered from the detail page (Subir/Petición) shows its window without
@@ -560,9 +598,9 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
         </div>
       ) : (
         <div className="activity-section" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', marginBottom: 0, ...refreshingStyle }}>
-          <div style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
+          <div ref={listaRef} style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
             <table className="data-table">
-              <thead>
+              <thead ref={cabeceraRef}>
                 <tr>
                   <th style={{ width: '100%' }}>Título</th>
                   <th><HeaderFilter label="Tipo" value={filterType} onChange={v => { setFilterType(v); setOffset(0) }} options={[
@@ -608,20 +646,16 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
                   <th className="col-actions">Acciones</th>
                 </tr>
               </thead>
-              <tbody>
-                {filteredItems.map((item, i) => (
-                  <LibraryTreeRow
-                    key={item.id}
-                    item={item}
-                    depth={0}
-                    instances={instances}
-                    onSelect={openDetail}
-                    onAction={handleTreeAction}
-                    onReload={load}
-                    priority={i < LIST_PRIORITY_COUNT}
-                  />
-                ))}
-              </tbody>
+              <FilasVirtuales
+                items={filteredItems}
+                clave={claveDeItem}
+                alturaEstimada={LIST_ROW_HEIGHT}
+                columnas={LIST_COLUMNS}
+                contenedor={listaRef}
+                cabecera={cabeceraRef}
+                fijas={desplegadas}
+                pintar={pintarFila}
+              />
             </table>
           </div>
         </div>

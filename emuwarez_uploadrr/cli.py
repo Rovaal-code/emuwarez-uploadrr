@@ -1696,6 +1696,11 @@ def cmd_web_serve(args) -> int:
         host=args.host,
         port=args.port,
         reload=args.reload,
+        # Al parar, uvicorn espera a que se cierren todas las conexiones, y
+        # /api/eventos no se cierra mientras haya una pestaña abierta: sin
+        # este tope, `docker stop` acaba siempre en SIGKILL (código 137) tras
+        # el stop_grace_period entero. Pasado el tope corta lo que quede.
+        timeout_graceful_shutdown=5,
     )
     return 0
 

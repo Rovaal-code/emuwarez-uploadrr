@@ -408,6 +408,16 @@ optgroup {
   cursor: pointer;
 }
 
+/* El hueco que ocupa el sitio de las filas que no se pintan (FilasVirtuales):
+   no es una fila de verdad, así que ni borde ni resaltado al pasar por encima.
+   tbody en el selector para ganar a `.hud-app .data-table tr:hover td`. */
+.data-table tbody tr.fila-hueco td,
+.data-table tbody tr.fila-hueco:hover td {
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
 /* Library list: only the title navigates to the dedicated detail card, so it
    gets its own affordance (pointer + highlight on hover) to make that clear. */
 .lib-title-link {
@@ -1041,6 +1051,71 @@ optgroup {
   .value-chip.chip-blink-new { animation: none; border-color: color-mix(in srgb, var(--color-available) 85%, transparent); }
   .value-chip.chip-blink-alert { animation: none; border-color: color-mix(in srgb, var(--color-missing) 85%, transparent); }
   .value-chip.chip-blink-live { animation: none; border-color: color-mix(in srgb, var(--text-accent) 95%, transparent); }
+}
+
+/* Column-header (Excel-style) filter: the whole header cell is the button.
+   The <th> drops its own padding and the button takes it, so a click anywhere
+   in the cell opens the menu, not just on the caret. */
+.data-table th:has(> .hf-trigger) {
+  padding: 0;
+}
+.hf-trigger {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.hf-trigger:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+.hf-trigger:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+.hf-caret {
+  font-size: 9px;
+  color: var(--text-muted);
+}
+.hf-count {
+  min-width: 15px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--text-accent) 20%, transparent);
+  color: var(--text-accent);
+  font-size: 11px;
+  line-height: 15px;
+  text-align: center;
+}
+.hf-hint {
+  padding: 4px 10px 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+.hf-option.hf-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.hf-option.hf-check input {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--text-accent);
+  cursor: pointer;
 }
 
 /* Column-header (Excel-style) filter menu options. */

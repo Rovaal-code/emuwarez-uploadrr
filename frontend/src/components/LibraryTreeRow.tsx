@@ -1,4 +1,4 @@
-import { useState, useCallback, memo } from 'react'
+import { useState, useCallback, useEffect, useRef, memo } from 'react'
 import { getLibrary } from '../api/library'
 import type { LibraryItemResponse, InstanceSafeResponse } from '../types/api'
 import { StatusBadge } from './StatusBadge'
@@ -34,6 +34,10 @@ interface LibraryTreeRowProps {
   // fetch priority so their poster is already there instead of popping in
   // as the browser's own lazy-load catches up.
   priority?: boolean
+  // Avisa al desplegar y plegar. La lista de Biblioteca solo pinta las filas
+  // que se ven (FilasVirtuales), y así mantiene montada una serie desplegada
+  // aunque salga de la pantalla: dentro guarda sus temporadas y su página.
+  onExpandedChange?: (id: number, expanded: boolean) => void
 }
 
 // Series -> Season -> Episode collapsible tree, one row per level, reused
@@ -75,7 +79,7 @@ export function SpanishAudioCell({ item }: { item: LibraryItemResponse }) {
 // of them on every keystroke even though their own props hadn't changed —
 // this (plus onSelect/onAction/onReload staying referentially stable at the
 // call site) is what makes that skip actually happen.
-export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instances, onSelect, onAction, onReload, compact = false, priority = false }: LibraryTreeRowProps) {
+export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instances, onSelect, onAction, onReload, compact = false, priority = false, onExpandedChange }: LibraryTreeRowProps) {
   const [expanded, setExpanded] = useState(false)
   const [children, setChildren] = useState<LibraryItemResponse[]>([])
   const [childTotal, setChildTotal] = useState(0)
@@ -85,6 +89,15 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
   const { triggerProps: titleTip, tooltipNode: titleTooltip } = useTooltip('Abrir ficha')
   const { triggerProps: expandTip, tooltipNode: expandTooltip } = useTooltip(expanded ? 'Ocultar' : 'Desplegar')
   const { triggerProps: originTip, tooltipNode: originTooltip } = useTooltip(deepLink ? `Abrir en ${item.instance_name ?? item.instance_type}` : null)
+
+  // Desmontada desplegada (un filtro la ha quitado de la lista): que la lista
+  // deje de tenerla por abierta, o la seguiría pintando fuera de la vista.
+  const expandedRef = useRef(expanded)
+  expandedRef.current = expanded
+  useEffect(() => () => {
+    if (expandedRef.current) onExpandedChange?.(item.id, false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const isSeries = item.item_type === 'series'
   const isSeason = item.item_type === 'season'
@@ -117,9 +130,11 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
   function toggle() {
     if (expanded) {
       setExpanded(false)
+      onExpandedChange?.(item.id, false)
       return
     }
     setExpanded(true)
+    onExpandedChange?.(item.id, true)
     // Only series/season load child rows; an episode just reveals its own
     // inline detail panel (no children to fetch).
     if (expandable && children.length === 0) loadChildren(0)

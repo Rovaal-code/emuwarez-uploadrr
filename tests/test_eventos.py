@@ -172,6 +172,26 @@ def test_se_sigue_sirviendo_con_un_solo_proceso():
     )
 
 
+def test_parar_el_servidor_no_espera_a_los_clientes_de_eventos(monkeypatch):
+    """/api/eventos deja la conexión abierta mientras la pestaña lo esté, y
+    uvicorn, al parar, espera a que se cierren todas. Sin un tope, `docker
+    stop` agota el stop_grace_period y acaba en SIGKILL (código 137). El tope
+    tiene que caber en los 10 s que Docker da por defecto."""
+    import argparse
+
+    import uvicorn
+
+    from emuwarez_uploadrr import cli
+
+    recibido = {}
+    monkeypatch.setattr(uvicorn, "run", lambda app, **kw: recibido.update(kw))
+    cli.cmd_web_serve(argparse.Namespace(host="127.0.0.1", port=9494, reload=False))
+
+    tope = recibido.get("timeout_graceful_shutdown")
+    assert tope is not None, "uvicorn.run sin timeout_graceful_shutdown"
+    assert 0 < tope < 10
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Agrupar: para lo que ocurre a chorro (fase 2)
 # ─────────────────────────────────────────────────────────────────────────────

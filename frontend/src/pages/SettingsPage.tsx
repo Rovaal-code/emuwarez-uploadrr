@@ -668,7 +668,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           Proveedores de vídeo
         </h3>
         <span className="form-hint" style={{ display: 'block', marginBottom: 6 }}>
-          Se usa para elegir automáticamente el proveedor cuando TMDb devuelve varios. Arrastra para reordenar. El icono de cada uno enlaza a su web oficial.
+          Se usa para elegir automáticamente el proveedor cuando TMDb devuelve varios. Arrastra para reordenar, o usa las flechas desde el asa de cada fila. El icono de cada uno enlaza a su web oficial.
         </span>
         <div className="form-group provider-card__body">
           <label className="form-label">Prioridad de proveedores</label>
@@ -681,7 +681,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           <ServiceIcon type="imghost" size={18} /> Proveedores de imágenes
         </h3>
         <span className="form-hint" style={{ display: 'block', marginBottom: 12 }}>
-          Para las capturas que Uploadrr sube junto al torrent. Se prueban por orden de prioridad; arrastra para reordenar. <strong>imgbox</strong> es el fallback sin API key.
+          Para las capturas que Uploadrr sube junto al torrent. Se prueban por orden de prioridad; arrastra para reordenar, o usa las flechas desde el asa de cada fila. <strong>imgbox</strong> es el fallback sin API key.
         </span>
         <label className="form-label" style={{ display: 'block', marginBottom: 8 }}>Prioridad de proveedores</label>
         {(() => {
@@ -693,7 +693,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
             <>
             <div className="provider-card__body">
               <div className="provider-card__list">
-                <SortableList ids={configuredIds} onChange={setImgEnabled} gap={8} renderRow={(id, idx, { dragging, handleProps }) => {
+                <SortableList etiqueta={id => metaOf(id)?.label ?? id} ids={configuredIds} onChange={setImgEnabled} gap={8} renderRow={(id, idx, { dragging, handleProps }) => {
                   const h = metaOf(id); if (!h) return null
                   const isDefault = id === 'imgbox'
                   const t = imgTest[id]
@@ -707,9 +707,8 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                         <span style={{ color: 'var(--text-muted)', fontSize: 11, width: 16, textAlign: 'center' }}>{idx + 1}</span>
                         <HoverTitle
                           as="span"
-                          tip="Arrastrar para reordenar"
-                          onMouseDown={handleProps.onMouseDown}
-                          onMouseUp={handleProps.onMouseUp}
+                          tip="Arrastra para reordenar, o usa las flechas del teclado"
+                          {...handleProps}
                           className="drag-handle"
                           style={{ ...handleProps.style, color: 'var(--text-accent)', width: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginLeft: 8, marginRight: 8 }}
                         ><DragHandleIcon /></HoverTitle>

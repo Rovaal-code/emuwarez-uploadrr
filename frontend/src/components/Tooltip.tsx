@@ -232,7 +232,12 @@ export function Tooltip({ content, children, style, maxWidth }: {
 // inside a `.map()` (where a hook can't be called directly) still gets one:
 // this is a real component instance per row, so its own useTooltip() call
 // is perfectly legal.
-export function HoverTitle({ as = 'div', className, style, onClick, onMouseDown, onMouseUp, tip, children }: {
+// Atributos sueltos que también se pueden pasar (role, tabIndex, aria-*,
+// onKeyDown, data-*): los usa, por ejemplo, la asa de una lista reordenable.
+type AtributosExtra = Omit<React.HTMLAttributes<HTMLElement>, 'onClick' | 'onMouseDown' | 'onMouseUp' | 'children' | 'style' | 'className'>
+  & { [dato: `data-${string}`]: string | undefined }
+
+export function HoverTitle({ as = 'div', className, style, onClick, onMouseDown, onMouseUp, tip, children, onKeyDown, ...resto }: {
   as?: 'div' | 'span'
   className?: string
   style?: React.CSSProperties
@@ -241,23 +246,21 @@ export function HoverTitle({ as = 'div', className, style, onClick, onMouseDown,
   onMouseUp?: (e: React.MouseEvent) => void
   tip: string
   children: React.ReactNode
-}) {
+} & AtributosExtra) {
   const { triggerProps, tooltipNode } = useTooltip(tip)
   const Tag = as as 'div'
   // Con onClick es un enlace (abre una ficha o una subida): se alcanza con
   // Tab y se abre con Intro, igual que con el ratón.
-  const comoEnlace = onClick
-    ? {
-        role: 'link',
-        tabIndex: 0,
-        onKeyDown: (e: React.KeyboardEvent) => {
-          triggerProps.onKeyDown(e)
-          if (e.key === 'Enter') onClick(e)
-        },
-      }
-    : {}
+  const comoEnlace = onClick ? { role: 'link', tabIndex: 0 } : {}
+  // Las teclas pasan por todos: Escape cierra el tooltip, Intro abre el
+  // enlace y el onKeyDown de quien llama hace lo suyo.
+  const teclas = (e: React.KeyboardEvent<HTMLElement>) => {
+    triggerProps.onKeyDown(e)
+    onKeyDown?.(e)
+    if (onClick && e.key === 'Enter') onClick(e)
+  }
   return (
-    <Tag className={className} style={style} onClick={onClick} onMouseDown={onMouseDown} onMouseUp={onMouseUp} {...triggerProps} {...comoEnlace}>
+    <Tag className={className} style={style} onClick={onClick} onMouseDown={onMouseDown} onMouseUp={onMouseUp} {...resto} {...triggerProps} {...comoEnlace} onKeyDown={teclas}>
       {children}
       {tooltipNode}
     </Tag>

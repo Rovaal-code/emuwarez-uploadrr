@@ -26,6 +26,7 @@ import { necesitaTodosLosNiveles } from '../utils/filtrosBiblioteca'
 import { CASTELLANO_OPCIONES, type EstadoCastellano } from '../utils/castellano'
 import { useTardanza } from '../hooks/useTardanza'
 import { useAlEntrar, useAlSalir } from '../context/SeccionVisible'
+import { IconoLibros, IconoTipo } from '../components/Iconos'
 
 // Una sola lista vacía: volver a ponerla no cuenta como cambio y no recarga la biblioteca.
 const NINGUNO: string[] = []
@@ -74,7 +75,7 @@ const PosterCard = memo(function PosterCard({ item, onSelect, priority }: { item
         background: 'var(--bg-surface)', border: '1px solid var(--border)', cursor: 'pointer',
       }}
     >
-      <div style={{ position: 'relative', width: '100%', aspectRatio: '2 / 3', background: 'rgba(255,255,255,0.04)' }}>
+      <div style={{ position: 'relative', width: '100%', aspectRatio: '2 / 3', background: 'color-mix(in srgb, var(--overlay-light) 4%, transparent)' }}>
         {item.poster_url ? (
           <img
             src={posterUrl(item.poster_url, 'w342')}
@@ -86,7 +87,7 @@ const PosterCard = memo(function PosterCard({ item, onSelect, priority }: { item
           />
         ) : (
           <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36, opacity: 0.35 }}>
-            {item.item_type === 'series' || item.item_type === 'episode' ? '📺' : '🎬'}
+            <IconoTipo serie={item.item_type === 'series' || item.item_type === 'episode'} />
           </div>
         )}
         <div style={{ position: 'absolute', top: 6, right: 6 }}>
@@ -494,7 +495,10 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
             {/* Cuenta ARCHIVOS (películas + capítulos que tienes), no filas de la
                 tabla: enseñando las filas, una serie con 90 capítulos contaba 1.
                 Por eso no cambia al filtrar — la pregunta es "cuánto tengo". */}
-            {archivos > 0 ? `${archivos} archivos sincronizados` : 'Sin elementos'}
+            {/* Mientras carga no se sabe cuántos hay: "Sin elementos" mentía. */}
+            {archivos > 0
+              ? `${archivos} archivos sincronizados`
+              : loading && !data ? 'Contando archivos…' : 'Sin elementos'}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -572,7 +576,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
         <ErrorState message={error} onRetry={load} />
       ) : items.length === 0 ? (
         <EmptyState
-          icon="📚"
+          icon={<IconoLibros />}
           title="Biblioteca vacía"
           body="Añade instancias Radarr/Sonarr en la sección Instancias y sincroniza para ver el contenido aquí."
         />
@@ -604,7 +608,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
                   ]} /></th>
                   <th><HeaderFilter label="Origen" value={filterInstanceId} onChange={v => { setFilterInstanceId(v); setOffset(0) }} options={[
                     { value: '', label: 'Todos' },
-                    ...(filterOptions?.instances ?? []).map(inst => ({ value: String(inst.id), label: `${inst.type === 'radarr' ? 'Radarr' : 'Sonarr'} — ${inst.name.length > 15 ? inst.name.slice(0, 15) + '…' : inst.name}` })),
+                    ...(filterOptions?.instances ?? []).map(inst => ({ value: String(inst.id), label: `${inst.type === 'radarr' ? 'Radarr' : 'Sonarr'}: ${inst.name.length > 15 ? inst.name.slice(0, 15) + '…' : inst.name}` })),
                   ]} /></th>
                   <th><HeaderFilter label="Estado" value={filterStatus} onChange={v => { setFilterStatus(v); setOffset(0) }} options={[
                     { value: '', label: 'Todos' },

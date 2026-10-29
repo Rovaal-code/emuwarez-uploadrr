@@ -64,7 +64,7 @@ export function HeaderFilter<T extends string | string[]>({ label, value, option
   const multiple = Array.isArray(value)
   const elegidos: string[] = Array.isArray(value) ? value : value ? [value] : []
   const active = elegidos.length > 0
-  const accent = '#3b82f6'
+  const accent = 'var(--text-accent)'
   const resumen = resumenFiltro(elegidos, options)
   const { triggerProps: caretTip, tooltipNode: caretTooltip } = useTooltip(
     active ? `Filtrado: ${resumen}` : multiple ? 'Filtrar (puedes marcar varios)' : 'Filtrar',
@@ -166,8 +166,8 @@ export function HeaderFilter<T extends string | string[]>({ label, value, option
             position: 'fixed', top: pos.top, left: pos.left, zIndex: 2000,
             minWidth: 170, maxWidth: 'min(340px, calc(var(--vw100) - 16px))',
             maxHeight: 300, overflowY: 'auto', padding: 4,
-            background: 'var(--bg-surface, #0f1420)', border: '1px solid var(--border)',
-            borderRadius: 8, boxShadow: 'var(--shadow-modal, 0 10px 30px rgba(0,0,0,0.45))',
+            background: 'var(--bg-surface)', border: '1px solid var(--border)',
+            borderRadius: 8, boxShadow: 'var(--shadow-modal)',
           }}
         >
           {multiple && <div className="hf-hint">Marca uno o varios</div>}

@@ -10,6 +10,7 @@ import { LibraryActionButtons } from './LibraryActionButtons'
 import { useTooltip } from './Tooltip'
 import { ValueChip, ValueIcon, TypeValueIcon, ResolutionValueIcon, SourceValueIcon, SizeValueIcon, DetailTitleText } from './DetailCard'
 import { estadoCastellano, CASTELLANO_INFO } from '../utils/castellano'
+import { IconoDesplegar, IconoTipo } from './Iconos'
 
 const NESTED_PAGE_SIZE = 25
 // Seasons per series — well under the API's max limit=500 (a season list
@@ -158,7 +159,7 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
                 aria-label={expanded ? 'Ocultar' : 'Desplegar'}
                 {...expandTip}
               >
-                {expanded ? '▼' : '▶'}
+                <IconoDesplegar abierto={expanded} size={12} />
                 {expandTooltip}
               </button>
             ) : item.item_type === 'episode' && item.episode_number != null ? (
@@ -183,7 +184,7 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
                 />
               ) : (
                 <span style={{ fontSize: 14, opacity: 0.35 }}>
-                  {item.item_type === 'series' || item.item_type === 'episode' ? '📺' : '🎬'}
+                  <IconoTipo serie={item.item_type === 'series' || item.item_type === 'episode'} />
                 </span>
               )}
             </div>
@@ -285,7 +286,7 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
                 disabled={childOffset === 0}
                 onClick={() => loadChildren(Math.max(0, childOffset - NESTED_PAGE_SIZE))}
               >
-                ← Anterior
+                Anterior
               </button>
               <span style={{ fontSize: 11, color: 'var(--text-muted)', alignSelf: 'center' }}>
                 {Math.floor(childOffset / NESTED_PAGE_SIZE) + 1} / {Math.ceil(childTotal / NESTED_PAGE_SIZE)}
@@ -295,7 +296,7 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
                 disabled={childOffset + NESTED_PAGE_SIZE >= childTotal}
                 onClick={() => loadChildren(childOffset + NESTED_PAGE_SIZE)}
               >
-                Siguiente →
+                Siguiente
               </button>
             </div>
           </td>

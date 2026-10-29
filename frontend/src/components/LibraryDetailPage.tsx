@@ -19,6 +19,7 @@ import {
   AudioCodecValueIcon, LanguageValueIcon, SubtitleValueIcon, SizeValueIcon,
   FolderIcon, CalendarValueIcon,
 } from './DetailCard'
+import { IconoTipo } from './Iconos'
 
 // Full dedicated detail page (Radarr/Sonarr-style) — replaces the old small
 // modal and the large card. Rendered in place of the library list, with a
@@ -94,12 +95,12 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
       <DetailHero backdropUrl={item.backdrop_url}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 16 }}>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button className="btn btn-ghost btn-sm" onClick={onBack}>← Volver a la biblioteca</button>
+          <button className="btn btn-ghost btn-sm" onClick={onBack}>Volver a la biblioteca</button>
           {parentSeason && (
-            <button className="btn btn-ghost btn-sm" onClick={() => onSelect(parentSeason)}>← Volver a la temporada</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => onSelect(parentSeason)}>Volver a la temporada</button>
           )}
           {parentSeries && (
-            <button className="btn btn-ghost btn-sm" onClick={() => onSelect(parentSeries)}>← Volver a la serie</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => onSelect(parentSeries)}>Volver a la serie</button>
           )}
         </div>
         <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
@@ -123,7 +124,7 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
         <DetailPoster
           url={item.poster_url ? posterUrl(item.poster_url, 'w500') : null}
           alt={item.title}
-          fallbackEmoji={item.item_type === 'series' || item.item_type === 'episode' ? '📺' : '🎬'}
+          fallbackIcon={<IconoTipo serie={item.item_type === 'series' || item.item_type === 'episode'} />}
         />
 
         <div style={{ flex: 1, minWidth: 300 }}>

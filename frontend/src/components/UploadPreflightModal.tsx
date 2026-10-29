@@ -155,7 +155,7 @@ export function UploadPreflightModal({ itemId, itemTitle, requestId, onClose }: 
                       <div className="detail-panel__section-title">Errores de contrato Uploadrr-EMU</div>
                       <ul className="detail-panel__reasons">
                         {result.command_preview.contract_errors!.map((err, i) => (
-                          <li key={i} style={{ color: 'var(--color-error, #f87171)' }}>{err}</li>
+                          <li key={i} style={{ color: 'var(--color-error)' }}>{err}</li>
                         ))}
                       </ul>
                     </div>
@@ -183,7 +183,7 @@ export function UploadPreflightModal({ itemId, itemTitle, requestId, onClose }: 
                   <div className="detail-panel__section-title">Errores</div>
                   <ul className="detail-panel__reasons">
                     {result.errors.map((err, i) => (
-                      <li key={i} style={{ color: 'var(--color-error, #f87171)' }}>{err}</li>
+                      <li key={i} style={{ color: 'var(--color-error)' }}>{err}</li>
                     ))}
                   </ul>
                 </div>
@@ -192,8 +192,8 @@ export function UploadPreflightModal({ itemId, itemTitle, requestId, onClose }: 
           )}
 
           {canStart && (
-            <div className="detail-panel__section" style={{ marginTop: 16, padding: '12px 14px', background: 'rgba(255,80,80,0.08)', borderRadius: 6, border: '1px solid rgba(255,80,80,0.2)' }}>
-              <div className="detail-panel__section-title" style={{ color: 'var(--color-error, #f87171)', marginBottom: 8 }}>
+            <div className="detail-panel__section" style={{ marginTop: 16, padding: '12px 14px', background: 'color-mix(in srgb, var(--color-error) 8%, transparent)', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--color-error) 20%, transparent)' }}>
+              <div className="detail-panel__section-title" style={{ color: 'var(--color-error)', marginBottom: 8 }}>
                 Advertencia de seguridad
               </div>
               <ul style={{ margin: 0, paddingLeft: 18, fontSize: '0.83rem', lineHeight: 1.6 }}>
@@ -214,8 +214,8 @@ export function UploadPreflightModal({ itemId, itemTitle, requestId, onClose }: 
                   style={{
                     width: '100%',
                     padding: '6px 10px',
-                    background: 'rgba(255,255,255,0.08)',
-                    border: `1px solid ${confirmInput === CONFIRMATION_TOKEN ? 'var(--color-success, #4ade80)' : 'rgba(255,255,255,0.15)'}`,
+                    background: 'color-mix(in srgb, var(--overlay-light) 8%, transparent)',
+                    border: `1px solid ${confirmInput === CONFIRMATION_TOKEN ? 'var(--color-available-soft)' : 'color-mix(in srgb, var(--overlay-light) 15%, transparent)'}`,
                     borderRadius: 4,
                     color: 'inherit',
                     fontFamily: 'monospace',
@@ -228,7 +228,7 @@ export function UploadPreflightModal({ itemId, itemTitle, requestId, onClose }: 
           )}
 
           {startResult && (
-            <div className="detail-panel__section" style={{ marginTop: 12, padding: '10px 14px', background: 'rgba(0,200,100,0.06)', borderRadius: 6 }}>
+            <div className="detail-panel__section" style={{ marginTop: 12, padding: '10px 14px', background: 'color-mix(in srgb, var(--color-available) 6%, transparent)', borderRadius: 6 }}>
               <div className="detail-panel__section-title">Resultado</div>
               <p style={{ margin: '4px 0', fontSize: '0.85rem' }}>
                 <strong>Acción:</strong> {startResult.action} &nbsp;
@@ -239,7 +239,7 @@ export function UploadPreflightModal({ itemId, itemTitle, requestId, onClose }: 
           )}
           {startError && <p className="error-text" style={{ marginTop: 8 }}>{startError}</p>}
 
-          <div className="detail-panel__section" style={{ marginTop: 16, padding: '8px 12px', background: 'rgba(255,200,0,0.08)', borderRadius: 6, fontSize: '0.85rem' }}>
+          <div className="detail-panel__section" style={{ marginTop: 16, padding: '8px 12px', background: 'color-mix(in srgb, var(--color-warning-soft) 8%, transparent)', borderRadius: 6, fontSize: '0.85rem' }}>
             Preflight seguro. {canStart ? 'Usa dry-run para previsualizar o confirma para iniciar la subida real.' : 'No se ha ejecutado Uploadrr.'}
           </div>
         </div>

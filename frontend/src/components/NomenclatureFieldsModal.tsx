@@ -15,6 +15,7 @@ import {
   previewMkvTitle,
   applyMkvTitle,
 } from '../api/nomenclature'
+import { IconoAviso } from './Iconos'
 
 const MKV_TOKEN = 'APLICAR_TITULO_MKV'
 const PROVIDER_SOURCES = new Set(['WEB-DL'])
@@ -137,11 +138,11 @@ export function NomenclatureFieldsModal({ itemId, itemTitle, onClose, onSaved }:
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h2 className="modal-title">Campos de nomenclatura — {itemTitle}</h2>
+          <h2 className="modal-title">Campos de nomenclatura: {itemTitle}</h2>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
 
-        {loading && <div className="modal-body"><p className="text-muted">Cargando...</p></div>}
+        {loading && <div className="modal-body"><p className="text-muted">Cargando…</p></div>}
         {error && <div className="modal-body"><p className="text-error">{error}</p></div>}
 
         {!loading && (
@@ -158,7 +159,7 @@ export function NomenclatureFieldsModal({ itemId, itemTitle, onClose, onSaved }:
               </label>
               <label>Source
                 <select value={fields.source || ''} onChange={e => handleField('source', e.target.value)}>
-                  <option value="">— Seleccionar —</option>
+                  <option value="">Seleccionar…</option>
                   {sources.map(s => (
                     <option key={s.code} value={s.code}>{s.label}</option>
                   ))}
@@ -230,7 +231,7 @@ export function NomenclatureFieldsModal({ itemId, itemTitle, onClose, onSaved }:
                     <p key={i} className="text-error">✗ {e}</p>
                   ))}
                   {mkvPreview.warnings?.map((w, i) => (
-                    <p key={i} className="text-warning">⚠ {w}</p>
+                    <p key={i} className="text-warning"><IconoAviso /> {w}</p>
                   ))}
                   {mkvPreview.status === 'ready' && (
                     <div className="apply-section">

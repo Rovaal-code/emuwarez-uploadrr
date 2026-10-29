@@ -10,7 +10,7 @@ import { CheckStatusIcon } from '../components/DetailCard'
 
 function Mono({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ fontFamily: 'monospace', fontSize: 12.5, background: 'rgba(0,0,0,0.2)', padding: '10px 12px', borderRadius: 6, overflowX: 'auto', whiteSpace: 'pre' }}>
+    <div style={{ fontFamily: 'monospace', fontSize: 12.5, background: 'color-mix(in srgb, var(--overlay-dark) 20%, transparent)', padding: '10px 12px', borderRadius: 6, overflowX: 'auto', whiteSpace: 'pre' }}>
       {children}
     </div>
   )
@@ -60,7 +60,7 @@ const FIELD_SOURCES: { field: string; example: string; source: string }[] = [
   {
     field: 'Audio (idioma + códec + canales)',
     example: 'ESP DD+ Atmos 5.1',
-    source: 'MediaInfo del archivo real, pista a pista (idioma, códec y canales de cada pista de audio) — aplica las reglas DUAL/MULTI/ESP-ING según cuántos idiomas haya. Si el archivo no es accesible, se usa el resumen agregado que ya trae Radarr/Sonarr (sin distinguir pistas).',
+    source: 'MediaInfo del archivo real, pista a pista (idioma, códec y canales de cada pista de audio); aplica las reglas DUAL/MULTI/ESP-ING según cuántos idiomas haya. Si el archivo no es accesible, se usa el resumen agregado que ya trae Radarr/Sonarr (sin distinguir pistas).',
   },
   {
     field: 'Subtítulos (SUBS)',
@@ -258,29 +258,29 @@ function TechSpecsContent() {
         (o el dato de Radarr/Sonarr cuando el archivo no es accesible).
       </p>
 
-      <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--text-muted)', marginTop: 18, marginBottom: 8 }}>Resolución</p>
+      <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginTop: 18, marginBottom: 8 }}>Resolución</p>
       <TwoColTable head={['MediaInfo', 'Nombre']} rows={RESOLUTION_ROWS} />
 
-      <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--text-muted)', marginTop: 18, marginBottom: 8 }}>Formato (Source)</p>
+      <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginTop: 18, marginBottom: 8 }}>Formato (Source)</p>
       <TwoColTable head={['MediaInfo', 'Nombre']} rows={SOURCE_ROWS} />
 
-      <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--text-muted)', marginTop: 18, marginBottom: 8 }}>Códec de vídeo</p>
+      <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginTop: 18, marginBottom: 8 }}>Códec de vídeo</p>
       <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 0, marginBottom: 8 }}>
         Ojo: H264→AVC y x264→x264 son distintos (códec genérico vs. encoder concreto). Igual con H265→HEVC vs. x265→x265.
       </p>
       <TwoColTable head={['MediaInfo', 'Nombre']} rows={VIDEO_CODEC_ROWS} />
 
-      <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--text-muted)', marginTop: 18, marginBottom: 8 }}>Dolby Vision / HDR</p>
+      <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginTop: 18, marginBottom: 8 }}>Dolby Vision / HDR</p>
       <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 0, marginBottom: 8 }}>Se coloca delante del códec de vídeo.</p>
       <TwoColTable head={['MediaInfo', 'Nombre']} rows={HDR_ROWS} />
 
-      <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--text-muted)', marginTop: 18, marginBottom: 8 }}>Idioma de audio</p>
+      <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginTop: 18, marginBottom: 8 }}>Idioma de audio</p>
       <TwoColTable head={['MediaInfo', 'Nombre']} rows={LANGUAGE_ROWS} />
 
-      <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--text-muted)', marginTop: 18, marginBottom: 8 }}>Códec de audio</p>
+      <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginTop: 18, marginBottom: 8 }}>Códec de audio</p>
       <TwoColTable head={['MediaInfo', 'Nombre']} rows={AUDIO_CODEC_ROWS} />
 
-      <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--text-muted)', marginTop: 18, marginBottom: 8 }}>Prioridad de audio</p>
+      <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginTop: 18, marginBottom: 8 }}>Prioridad de audio</p>
       <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 0, marginBottom: 8 }}>
         Cuando un mismo idioma viene en varias pistas, el nombre se queda con una sola: la de mejor calidad.
         El nombre dice qué vas a oír, no cuántas pistas trae el archivo. La ficha técnica sí las sigue
@@ -306,7 +306,7 @@ function TechSpecsContent() {
         </div>
       </div>
 
-      <p style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--text-muted)', marginTop: 18, marginBottom: 8 }}>Canales de audio</p>
+      <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginTop: 18, marginBottom: 8 }}>Canales de audio</p>
       <TwoColTable head={['MediaInfo', 'Nombre']} rows={CHANNEL_ROWS} />
 
       <p style={{ fontSize: 12.5, marginTop: 18, marginBottom: 0 }}>
@@ -328,9 +328,9 @@ function RulesContent() {
   return (
     <ul style={{ fontSize: 12.5, margin: 0, paddingLeft: 18, lineHeight: 1.8 }}>
       <li>El título siempre va en Castellano (o como se haya publicado oficialmente en España).</li>
-      <li>El proveedor nunca es obligatorio en WEB-DL — si no se sabe, se omite en vez de arriesgarse a poner uno incorrecto.</li>
+      <li>El proveedor nunca es obligatorio en WEB-DL: si no se sabe, se omite en vez de arriesgarse a poner uno incorrecto.</li>
       <li>Los paréntesis y corchetes <code>( ) [ ] {'{'} {'}'}</code> se eliminan del nombre del archivo y del título interno del .mkv (el título del aporte/torrent sí los conserva).</li>
-      <li>No se usan caracteres que den problemas en el sistema de archivos: <code>: / ? *</code>, etc. — se sustituyen espacios por puntos en el nombre del fichero.</li>
+      <li>No se usan caracteres que den problemas en el sistema de archivos: <code>: / ? *</code>, etc., y se sustituyen espacios por puntos en el nombre del fichero.</li>
       <li>El grupo/uploader (lo que va tras el último guion) no afecta a si el resto del nombre es correcto o no.</li>
     </ul>
   )
@@ -352,9 +352,9 @@ const VERDICT_LABEL: Record<Verdict, string> = {
 // (CheckStatusIcon), so a verdict here reads exactly like the check the user
 // will meet when they actually press Subir.
 const VERDICT_COLOR: Record<Verdict, string> = {
-  ok: '#22c55e',
-  blocked: '#ef4444',
-  warn: '#f59e0b',
+  ok: 'var(--color-available)',
+  blocked: 'var(--color-error)',
+  warn: 'var(--color-warning)',
 }
 
 const VERDICT_ICON: Record<Verdict, 'ok' | 'fail' | 'skip'> = {
@@ -639,7 +639,7 @@ function UploadConditionsContent() {
       <p style={{ fontSize: 12.5 }}>
         Ojo con la última fila: <code>DUAL</code> y <code>MULTI</code> son atajos que prometen que
         el release trae esos idiomas. En un pack CUSTOM un mismo idioma puede salir en dos sitios,
-        así que ahí no se usan — los idiomas se escriben uno a uno.
+        así que ahí no se usan: los idiomas se escriben uno a uno.
       </p>
 
       <h4 style={{ fontSize: 13, margin: '18px 0 6px' }}>Una temporada con datos mezclados</h4>

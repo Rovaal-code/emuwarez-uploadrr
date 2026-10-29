@@ -128,12 +128,12 @@ export function EmuComparisonContent({ data }: { data: EmuComparison | null }) {
           notInCatalog ? (
             <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>No lo tienes descargado y no está en eMuwarez todavía</span>
           ) : (
-            <span style={{ fontWeight: 600, color: '#60a5fa' }}>Está en eMuwarez, pero aún no lo tienes descargado</span>
+            <span style={{ fontWeight: 600, color: 'var(--color-accent-soft)' }}>Está en eMuwarez, pero aún no lo tienes descargado</span>
           )
         ) : notInCatalog ? (
-          <span style={{ fontWeight: 600, color: '#22c55e' }}>No está en eMuwarez · Contenido único</span>
+          <span style={{ fontWeight: 600, color: 'var(--color-available)' }}>No está en eMuwarez · Contenido único</span>
         ) : data.only_episodes ? (
-          <span style={{ fontWeight: 600, color: '#eab308' }}>
+          <span style={{ fontWeight: 600, color: 'var(--color-req-pending)' }}>
             Los capítulos ya están en eMuwarez (sueltos), no hay season pack{' '}
             {data.have_all_episodes
               ? '· tienes todos, podrías aportar el pack de temporada.'
@@ -167,7 +167,7 @@ export function EmuComparisonContent({ data }: { data: EmuComparison | null }) {
             </thead>
             <tbody>
               {mine && hasLocal && (
-                <tr style={{ background: 'rgba(34,197,94,0.06)' }}>
+                <tr style={{ background: 'color-mix(in srgb, var(--color-available) 6%, transparent)' }}>
                   <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>Tu copia</td>
                   <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={ResolutionValueIcon} value={mine.resolution} /></td>
                   <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={SourceValueIcon} value={mine.source} /></td>
@@ -188,7 +188,7 @@ export function EmuComparisonContent({ data }: { data: EmuComparison | null }) {
                 </tr>
               )}
               {data.matches.map((m, i) => (
-                <tr key={i} style={m === matchedCandidate ? { background: 'rgba(59,130,246,0.08)' } : undefined}>
+                <tr key={i} style={m === matchedCandidate ? { background: 'color-mix(in srgb, var(--text-accent) 8%, transparent)' } : undefined}>
                   <td style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>eMuwarez</td>
                   <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={ResolutionValueIcon} value={m.resolution} /></td>
                   <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={SourceValueIcon} value={m.source} /></td>
@@ -221,5 +221,5 @@ function TorrentNameCell({ name }: { name: string | null | undefined }) {
 
 const chipStyle: React.CSSProperties = {
   fontSize: 11.5, padding: '2px 8px', borderRadius: 4, whiteSpace: 'nowrap',
-  background: 'rgba(34,197,94,0.14)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)',
+  background: 'color-mix(in srgb, var(--color-available) 14%, transparent)', color: 'var(--color-available)', border: '1px solid color-mix(in srgb, var(--color-available) 30%, transparent)',
 }

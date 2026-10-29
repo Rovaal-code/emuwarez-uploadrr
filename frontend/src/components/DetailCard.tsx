@@ -83,7 +83,7 @@ export function Card({ title, icon, children, padding = '21px 19px', gap = 10, t
   return (
     <div className="detail-card" style={{ borderRadius: 10, padding }}>
       <div className="detail-card-title" style={{
-        fontSize: 13.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em',
+        fontSize: 13.5, fontWeight: 600,
         marginBottom: titleGap, paddingBottom: titleGap / 2,
         display: 'flex', alignItems: 'center', gap: 8,
       }}>
@@ -106,7 +106,7 @@ export function Card({ title, icon, children, padding = '21px 19px', gap = 10, t
 export function FieldRow({ label, children, help }: { label: string; children: React.ReactNode; help?: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-      <span style={{ fontSize: 13.5, color: 'var(--text-muted)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
+      <span style={{ fontSize: 13.5, color: 'var(--text-muted)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4, overflowWrap: 'break-word', minWidth: 0 }}>
         {label}
         {help && <InfoIcon text={help} />}
       </span>
@@ -165,9 +165,10 @@ export function TechChip({ icon: Icon, value }: { icon: React.ComponentType; val
 // (UploadWizardModal) and any other pass/fail/skip indicator that should
 // read as the same affordance (e.g. a comparison table's ✓/✗ marks).
 export function CheckStatusIcon({ status }: { status: 'ok' | 'fail' | 'skip' }) {
-  const color = status === 'ok' ? '#22c55e' : status === 'skip' ? '#f59e0b' : '#ef4444'
+  const color = status === 'ok' ? 'var(--color-available)' : status === 'skip' ? 'var(--color-warning)' : 'var(--color-error)'
   return (
     <svg viewBox="0 0 24 24" width={16} height={16}
+      role="img" aria-label={status === 'ok' ? 'Correcto' : status === 'skip' ? 'Omitido' : 'Falla'}
       style={{ color, filter: `drop-shadow(0 0 4px ${color})`, flexShrink: 0 }}>
       <circle cx="12" cy="12" r="9.5" fill="none" stroke="rgba(56,189,255,.18)" strokeWidth="2" />
       <circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" strokeWidth="2" />
@@ -189,7 +190,7 @@ export function CheckStatusIcon({ status }: { status: 'ok' | 'fail' | 'skip' }) 
 
 // Fixed-size poster (300px, 2:3) used at the top of every dedicated detail
 // page, next to the title/action-buttons header.
-export function DetailPoster({ url, alt, fallbackEmoji }: { url?: string | null; alt: string; fallbackEmoji: string }) {
+export function DetailPoster({ url, alt, fallbackIcon }: { url?: string | null; alt: string; fallbackIcon: React.ReactNode }) {
   return (
     <div className="detail-poster" style={{ flexShrink: 0, height: DETAIL_CARD_HEIGHT, maxWidth: '100%', aspectRatio: '2 / 3', borderRadius: 10, overflow: 'hidden' }}>
       {url ? (
@@ -201,7 +202,7 @@ export function DetailPoster({ url, alt, fallbackEmoji }: { url?: string | null;
         />
       ) : (
         <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 88, opacity: 0.35 }}>
-          {fallbackEmoji}
+          {fallbackIcon}
         </div>
       )}
     </div>
@@ -212,7 +213,7 @@ export function DetailPoster({ url, alt, fallbackEmoji }: { url?: string | null;
 
 function Icon({ children, size = 15 }: { children: React.ReactNode; size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
       {children}
     </svg>
   )
@@ -372,7 +373,7 @@ export function EpisodeValueIcon() {
 // reads as "star" specifically because of that color.
 export function RecommendationValueIcon() {
   return (
-    <span style={{ color: '#facc15' }}>
+    <span style={{ color: 'var(--color-warning-soft)' }}>
       <Icon size={14}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" fill="currentColor" /></Icon>
     </span>
   )
@@ -420,7 +421,7 @@ export function LogsValueIcon() {
 // on hover and only grows a touch (via .brand-icon in components.css).
 export function FolderIcon({ size = 15 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="#2cbde5">
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="#2cbde5">
       <path d="M4 4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2H4z" />
     </svg>
   )

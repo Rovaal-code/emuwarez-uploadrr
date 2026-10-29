@@ -4,7 +4,9 @@
    See the approved boceto (artifacts/visual-review/panel/) for the visual
    source of truth. */
 
-.hud-app {
+/* Los tokens del HUD. Van en :root para que sean tokens de verdad (un solo
+   sitio donde vive cada color); solo los usan reglas bajo .hud-app. */
+:root {
   --hud-fill: rgba(3, 17, 39, .82);
   --hud-fill-2: rgba(2, 10, 24, .9);
   --hud-line: rgba(30, 110, 190, .65);
@@ -15,35 +17,50 @@
   --hud-warn: #ffb930;
   --hud-danger: #ff5470;
   --hud-font: "Share Tech Mono", "Consolas", ui-monospace, monospace;
+  /* La voz de rótulo del HUD (títulos de página): la misma monoespaciada. */
+  --font-display: var(--hud-font);
+
+  /* Bases de los marcos, brillos y fondos; se mezclan con transparencia. */
+  --hud-blue: #1e6ebe;
+  --hud-glint: #8cdcff;
+  --hud-sky: #38bdff;
+  --hud-azure: #1c7dff;
+  --hud-deep: #06142a;
+  --hud-well: #030c1a;
+  --hud-bar: #030a16;
+  --hud-panel-solid: #060e1c;
+}
+
+.hud-app {
   position: relative;
   background:
-    radial-gradient(900px 500px at 10% -10%, rgba(47, 216, 255, .08), transparent 60%),
-    radial-gradient(800px 460px at 95% 0%, rgba(28, 125, 255, .07), transparent 60%),
+    radial-gradient(900px 500px at 10% -10%, color-mix(in srgb, var(--hud-cyan) 8%, transparent), transparent 60%),
+    radial-gradient(800px 460px at 95% 0%, color-mix(in srgb, var(--hud-azure) 7%, transparent), transparent 60%),
     var(--bg-base);
 }
 
 /* ---- shell: sidebar + topbar ---- */
 .hud-app .sidebar {
   background:
-    radial-gradient(160px 220px at 0% 0%, rgba(47, 216, 255, .12), transparent 60%),
-    radial-gradient(160px 260px at 100% 100%, rgba(47, 216, 255, .08), transparent 60%),
+    radial-gradient(160px 220px at 0% 0%, color-mix(in srgb, var(--hud-cyan) 12%, transparent), transparent 60%),
+    radial-gradient(160px 260px at 100% 100%, color-mix(in srgb, var(--hud-cyan) 8%, transparent), transparent 60%),
     linear-gradient(175deg, var(--hud-fill) 0%, var(--hud-fill-2) 100%);
   /* Same edge/frame recipe as .stat-card/.card/.activity-section: full
      border + inset hairline + outer glow + chamfered corners. */
   border: 1.5px solid var(--hud-line);
   box-shadow:
     inset 0 0 0 1px var(--hud-line-inner),
-    inset -1px 0 0 rgba(140, 220, 255, .15),
-    6px 0 34px -18px rgba(47, 216, 255, .55);
+    inset -1px 0 0 color-mix(in srgb, var(--hud-glint) 15%, transparent),
+    6px 0 34px -18px color-mix(in srgb, var(--hud-cyan) 55%, transparent);
   clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 18px 100%, 0 calc(100% - 18px));
 }
 .hud-app .sidebar-logo {
-  border-bottom: 1px solid rgba(30, 110, 190, .4);
+  border-bottom: 1px solid color-mix(in srgb, var(--hud-blue) 40%, transparent);
 }
 .hud-app .sidebar-logo-text {
   font-family: var(--hud-font);
   letter-spacing: .04em;
-  text-shadow: 0 0 10px rgba(47, 216, 255, .5);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--hud-cyan) 50%, transparent);
 }
 .hud-app .nav-item {
   font-family: var(--hud-font);
@@ -61,39 +78,42 @@
   clip-path: none;
 }
 .hud-app .nav-item:hover {
-  background: rgba(47, 216, 255, .06);
+  background: color-mix(in srgb, var(--hud-cyan) 6%, transparent);
   color: var(--hud-ice);
 }
 .hud-app .nav-item.active {
   color: var(--hud-ice);
-  background: linear-gradient(90deg, rgba(47, 216, 255, .18), rgba(47, 216, 255, .02));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--hud-cyan) 18%, transparent), color-mix(in srgb, var(--hud-cyan) 2%, transparent));
   border-left-color: var(--hud-cyan);
-  box-shadow: inset 0 0 0 1px rgba(47, 216, 255, .22), 0 0 16px -6px rgba(47, 216, 255, .7);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hud-cyan) 22%, transparent), 0 0 16px -6px color-mix(in srgb, var(--hud-cyan) 70%, transparent);
 }
 .hud-app .nav-item.active .nav-item-icon {
   filter: drop-shadow(0 0 4px var(--hud-cyan));
   opacity: 1;
 }
 .hud-app .topbar {
-  background: rgba(3, 10, 22, .88);
+  background: color-mix(in srgb, var(--hud-bar) 88%, transparent);
   border-bottom: 1px solid var(--hud-line);
 }
+/* El rótulo en mayúsculas ya lo lleva el título de la página, justo debajo;
+   la barra repite el nombre en voz baja, como una miga de pan. */
 .hud-app .topbar-title {
   font-family: var(--hud-font);
-  letter-spacing: .08em;
-  text-transform: uppercase;
+  letter-spacing: .03em;
+  font-weight: 400;
+  color: var(--text-secondary);
 }
 .hud-app .topbar-btn,
 .hud-app .topbar-user,
 .hud-app .topbar-eye {
-  border-color: rgba(30, 110, 190, .5);
-  background: rgba(6, 20, 42, .6);
-  box-shadow: 0 0 8px -4px rgba(47, 216, 255, .5);
+  border-color: color-mix(in srgb, var(--hud-blue) 50%, transparent);
+  background: color-mix(in srgb, var(--hud-deep) 60%, transparent);
+  box-shadow: 0 0 8px -4px color-mix(in srgb, var(--hud-cyan) 50%, transparent);
 }
 .hud-app .topbar-btn:hover,
 .hud-app .topbar-eye:hover {
   border-color: var(--hud-cyan);
-  box-shadow: 0 0 12px -4px rgba(47, 216, 255, .7);
+  box-shadow: 0 0 12px -4px color-mix(in srgb, var(--hud-cyan) 70%, transparent);
 }
 .hud-app .topbar-username {
   font-family: var(--hud-font);
@@ -101,23 +121,21 @@
 }
 .hud-app .sync-chip-label {
   font-family: var(--hud-font);
-  letter-spacing: .05em;
-  text-transform: uppercase;
   color: var(--hud-ice);
 }
 .hud-app .sync-chip-bar {
-  background: rgba(56, 189, 255, .12);
+  background: color-mix(in srgb, var(--hud-sky) 12%, transparent);
 }
 .hud-app .sync-chip-bar-fill {
   background: var(--hud-cyan);
-  box-shadow: 0 0 6px rgba(47, 216, 255, .6);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--hud-cyan) 60%, transparent);
 }
 
 .hud-app .page-title {
-  font-family: var(--hud-font);
+  font-family: var(--font-display);
   letter-spacing: .1em;
   text-transform: uppercase;
-  text-shadow: 0 0 22px rgba(47, 216, 255, .45);
+  text-shadow: 0 0 22px color-mix(in srgb, var(--hud-cyan) 45%, transparent);
 }
 
 /* ---- shared HUD panel material: chamfer + layered frame + corner glow ---- */
@@ -125,17 +143,17 @@
 .hud-app .activity-section,
 .hud-app .upload-panel {
   background:
-    radial-gradient(120px 90px at 0% 0%, rgba(47, 216, 255, .16), transparent 60%),
-    radial-gradient(140px 100px at 100% 100%, rgba(47, 216, 255, .1), transparent 60%),
+    radial-gradient(120px 90px at 0% 0%, color-mix(in srgb, var(--hud-cyan) 16%, transparent), transparent 60%),
+    radial-gradient(140px 100px at 100% 100%, color-mix(in srgb, var(--hud-cyan) 10%, transparent), transparent 60%),
     linear-gradient(175deg, var(--hud-fill) 0%, var(--hud-fill-2) 100%);
   border: 1.5px solid var(--hud-line);
   border-radius: 3px;
   clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 18px 100%, 0 calc(100% - 18px));
   box-shadow:
     inset 0 0 0 1px var(--hud-line-inner),
-    inset 0 22px 40px -32px rgba(140, 220, 255, .45),
-    0 14px 30px -16px rgba(0, 0, 0, .7),
-    0 0 26px -12px rgba(47, 216, 255, .35);
+    inset 0 22px 40px -32px color-mix(in srgb, var(--hud-glint) 45%, transparent),
+    0 14px 30px -16px color-mix(in srgb, var(--overlay-dark) 70%, transparent),
+    0 0 26px -12px color-mix(in srgb, var(--hud-cyan) 35%, transparent);
 }
 
 /* ---- global primitives: cards, buttons, modals, inputs ---- */
@@ -147,20 +165,20 @@
 .hud-app .login-card,
 .hud-app .wizard-card {
   background:
-    radial-gradient(120px 90px at 0% 0%, rgba(47, 216, 255, .1), transparent 60%),
+    radial-gradient(120px 90px at 0% 0%, color-mix(in srgb, var(--hud-cyan) 10%, transparent), transparent 60%),
     linear-gradient(175deg, var(--hud-fill) 0%, var(--hud-fill-2) 100%);
   border: 1px solid var(--hud-line);
-  box-shadow: inset 0 0 0 1px var(--hud-line-inner), 0 14px 30px -16px rgba(0, 0, 0, .7);
+  box-shadow: inset 0 0 0 1px var(--hud-line-inner), 0 14px 30px -16px color-mix(in srgb, var(--overlay-dark) 70%, transparent);
 }
 .hud-app .modal-header,
 .hud-app .modal-title {
-  border-color: rgba(30, 110, 190, .4);
+  border-color: color-mix(in srgb, var(--hud-blue) 40%, transparent);
 }
 .hud-app .login-title,
 .hud-app .wizard-logo-title {
   font-family: var(--hud-font);
   letter-spacing: .04em;
-  text-shadow: 0 0 10px rgba(47, 216, 255, .5);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--hud-cyan) 50%, transparent);
 }
 .hud-app .wizard-step-dot.active {
   background: var(--hud-cyan);
@@ -170,45 +188,44 @@
   background: var(--hud-ok);
 }
 .hud-app .btn-primary {
-  background: linear-gradient(180deg, rgba(47, 216, 255, .22), rgba(28, 125, 255, .35));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--hud-cyan) 22%, transparent), color-mix(in srgb, var(--hud-azure) 35%, transparent));
   border-color: var(--hud-cyan);
-  box-shadow: 0 0 12px -4px rgba(47, 216, 255, .7), inset 0 1px 0 rgba(255, 255, 255, .12);
+  box-shadow: 0 0 12px -4px color-mix(in srgb, var(--hud-cyan) 70%, transparent), inset 0 1px 0 color-mix(in srgb, var(--overlay-light) 12%, transparent);
 }
 .hud-app .btn-primary:hover:not(:disabled) {
-  background: linear-gradient(180deg, rgba(47, 216, 255, .32), rgba(28, 125, 255, .45));
-  box-shadow: 0 0 18px -4px rgba(47, 216, 255, .9);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--hud-cyan) 32%, transparent), color-mix(in srgb, var(--hud-azure) 45%, transparent));
+  box-shadow: 0 0 18px -4px color-mix(in srgb, var(--hud-cyan) 90%, transparent);
 }
 .hud-app .btn-secondary {
-  background: rgba(6, 20, 42, .6);
-  border-color: rgba(30, 110, 190, .5);
+  background: color-mix(in srgb, var(--hud-deep) 60%, transparent);
+  border-color: color-mix(in srgb, var(--hud-blue) 50%, transparent);
 }
 .hud-app .btn-secondary:hover:not(:disabled) {
   border-color: var(--hud-cyan);
-  box-shadow: 0 0 10px -4px rgba(47, 216, 255, .6);
+  box-shadow: 0 0 10px -4px color-mix(in srgb, var(--hud-cyan) 60%, transparent);
 }
 .hud-app .notif-dropdown {
   background:
-    radial-gradient(120px 90px at 100% 0%, rgba(47, 216, 255, .1), transparent 60%),
+    radial-gradient(120px 90px at 100% 0%, color-mix(in srgb, var(--hud-cyan) 10%, transparent), transparent 60%),
     linear-gradient(175deg, var(--hud-fill) 0%, var(--hud-fill-2) 100%);
   border: 1px solid var(--hud-line);
-  box-shadow: inset 0 0 0 1px var(--hud-line-inner), 0 14px 30px -16px rgba(0, 0, 0, .8);
+  box-shadow: inset 0 0 0 1px var(--hud-line-inner), 0 14px 30px -16px color-mix(in srgb, var(--overlay-dark) 80%, transparent);
 }
 .hud-app .notif-dropdown-header {
-  border-bottom-color: rgba(30, 110, 190, .4);
+  border-bottom-color: color-mix(in srgb, var(--hud-blue) 40%, transparent);
 }
 .hud-app .notif-dropdown-title {
   font-family: var(--hud-font);
-  letter-spacing: .04em;
   color: var(--hud-ice);
 }
 .hud-app .notif-item {
-  border-bottom-color: rgba(56, 189, 255, .09);
+  border-bottom-color: color-mix(in srgb, var(--hud-sky) 9%, transparent);
 }
 .hud-app .notif-item.clickable:hover {
-  background: rgba(47, 216, 255, .06);
+  background: color-mix(in srgb, var(--hud-cyan) 6%, transparent);
 }
 .hud-app .notif-item.unread {
-  background: rgba(47, 216, 255, .08);
+  background: color-mix(in srgb, var(--hud-cyan) 8%, transparent);
 }
 .hud-app .notif-item-dot {
   background: var(--hud-cyan);
@@ -219,52 +236,52 @@
 }
 .hud-app .settings-tab:hover:not(.active) {
   color: var(--hud-ice);
-  background: rgba(47, 216, 255, .05);
+  background: color-mix(in srgb, var(--hud-cyan) 5%, transparent);
 }
 .hud-app .settings-tab.active {
   color: var(--hud-ice);
-  background: rgba(47, 216, 255, .1);
+  background: color-mix(in srgb, var(--hud-cyan) 10%, transparent);
   border-color: var(--hud-cyan);
-  box-shadow: 0 0 10px -4px rgba(47, 216, 255, .6);
+  box-shadow: 0 0 10px -4px color-mix(in srgb, var(--hud-cyan) 60%, transparent);
 }
 .hud-app .btn-ghost {
   color: var(--hud-ice);
   border-color: transparent;
 }
 .hud-app .btn-ghost:hover:not(:disabled) {
-  background: rgba(6, 20, 42, .6);
-  border-color: rgba(30, 110, 190, .5);
-  box-shadow: 0 0 10px -4px rgba(47, 216, 255, .5);
+  background: color-mix(in srgb, var(--hud-deep) 60%, transparent);
+  border-color: color-mix(in srgb, var(--hud-blue) 50%, transparent);
+  box-shadow: 0 0 10px -4px color-mix(in srgb, var(--hud-cyan) 50%, transparent);
 }
 .hud-app input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
 .hud-app textarea,
 .hud-app select,
 .hud-app .form-input {
-  background: rgba(3, 12, 26, .7);
-  border-color: rgba(30, 110, 190, .45);
+  background: color-mix(in srgb, var(--hud-well) 70%, transparent);
+  border-color: color-mix(in srgb, var(--hud-blue) 45%, transparent);
 }
 .hud-app input:focus,
 .hud-app textarea:focus,
 .hud-app select:focus {
   border-color: var(--hud-cyan);
-  box-shadow: 0 0 0 3px rgba(47, 216, 255, .15);
+  outline-color: var(--color-focus);
 }
 
 .hud-app .detail-card {
   background:
-    radial-gradient(120px 90px at 0% 0%, rgba(47, 216, 255, .1), transparent 60%),
+    radial-gradient(120px 90px at 0% 0%, color-mix(in srgb, var(--hud-cyan) 10%, transparent), transparent 60%),
     linear-gradient(175deg, var(--hud-fill) 0%, var(--hud-fill-2) 100%);
   border: 1px solid var(--hud-line);
-  box-shadow: inset 0 0 0 1px var(--hud-line-inner), 0 14px 30px -16px rgba(0, 0, 0, .7);
+  box-shadow: inset 0 0 0 1px var(--hud-line-inner), 0 14px 30px -16px color-mix(in srgb, var(--overlay-dark) 70%, transparent);
 }
 .hud-app .detail-card-title {
   font-family: var(--hud-font);
   color: var(--hud-ice);
-  border-bottom-color: rgba(30, 110, 190, .4);
+  border-bottom-color: color-mix(in srgb, var(--hud-blue) 40%, transparent);
 }
 .hud-app .detail-poster {
   border: 1.5px solid var(--hud-line);
-  box-shadow: inset 0 0 0 1px var(--hud-line-inner), 0 0 18px -8px rgba(47, 216, 255, .5);
+  box-shadow: inset 0 0 0 1px var(--hud-line-inner), 0 0 18px -8px color-mix(in srgb, var(--hud-cyan) 50%, transparent);
 }
 .hud-app .poster-thumb {
   border: 1px solid var(--hud-line);
@@ -274,7 +291,7 @@
 .hud-app .instance-card-name {
   font-family: var(--hud-font);
   letter-spacing: .03em;
-  text-shadow: 0 0 8px rgba(47, 216, 255, .3);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--hud-cyan) 30%, transparent);
 }
 
 /* ---- stat cards: big icon badge + text stack ---- */
@@ -293,15 +310,14 @@
   flex-shrink: 0;
   border-radius: 3px;
   color: var(--hud-cyan);
-  background: radial-gradient(circle at 35% 30%, rgba(47, 216, 255, .28), rgba(47, 216, 255, .04) 70%);
-  border: 1px solid rgba(47, 216, 255, .45);
-  box-shadow: 0 0 14px -4px rgba(47, 216, 255, .6), inset 0 0 10px rgba(47, 216, 255, .2);
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--hud-cyan) 28%, transparent), color-mix(in srgb, var(--hud-cyan) 4%, transparent) 70%);
+  border: 1px solid color-mix(in srgb, var(--hud-cyan) 45%, transparent);
+  box-shadow: 0 0 14px -4px color-mix(in srgb, var(--hud-cyan) 60%, transparent), inset 0 0 10px color-mix(in srgb, var(--hud-cyan) 20%, transparent);
   clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%);
 }
 .hud-app .stat-card-icon svg { width: 24px; height: 24px; }
 .hud-app .stat-card-label {
   font-family: var(--hud-font);
-  letter-spacing: .08em;
 }
 .hud-app .stat-card-value {
   font-family: var(--hud-font);
@@ -315,11 +331,9 @@
 }
 .hud-app .section-title {
   font-family: var(--hud-font);
-  font-size: 12px;
-  letter-spacing: .14em;
-  text-transform: uppercase;
+  font-size: 14px;
   color: var(--hud-ice);
-  text-shadow: 0 0 8px rgba(47, 216, 255, .4);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--hud-cyan) 40%, transparent);
   position: relative;
   padding-bottom: 10px;
   width: 100%;
@@ -329,27 +343,23 @@
   position: absolute;
   left: 0; right: 0; bottom: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(56, 189, 255, .7) 15%, rgba(140, 220, 255, .9) 50%, rgba(56, 189, 255, .7) 85%, transparent);
-  box-shadow: 0 0 8px rgba(56, 189, 255, .5);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--hud-sky) 70%, transparent) 15%, color-mix(in srgb, var(--hud-glint) 90%, transparent) 50%, color-mix(in srgb, var(--hud-sky) 70%, transparent) 85%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--hud-sky) 50%, transparent);
 }
 
 /* ---- tables ---- */
 .hud-app .data-table th {
   font-family: var(--hud-font);
-  font-size: 10px;
-  letter-spacing: .08em;
-  text-transform: uppercase;
   color: var(--text-muted);
 }
 .hud-app .data-table td {
-  border-bottom: 1px solid rgba(56, 189, 255, .09);
+  border-bottom: 1px solid color-mix(in srgb, var(--hud-sky) 9%, transparent);
 }
 .hud-app .data-table tr:hover td {
-  background: rgba(47, 216, 255, .06);
+  background: color-mix(in srgb, var(--hud-cyan) 6%, transparent);
 }
 .hud-app .badge {
   font-family: var(--hud-font);
-  letter-spacing: .04em;
   border-radius: 2px;
 }
 
@@ -362,7 +372,7 @@
    tiene más especificidad que `.hover-link:hover`, así que sin esta el color
    de reposo ganaba siempre y el título no reaccionaba. */
 .hud-app .upload-panel-body .hover-link:hover {
-  color: var(--text-accent, var(--hud-cyan));
+  color: var(--text-accent);
 }
 
 /* ---- projected empty-state hologram (Actividad de subida) ---- */
@@ -415,7 +425,7 @@
   display: flex;
   flex-direction: column;
   padding: 8px 14px 8px;
-  border-top: 1px solid rgba(30, 110, 190, .35);
+  border-top: 1px solid color-mix(in srgb, var(--hud-blue) 35%, transparent);
 }
 .hud-app .sys-gauge-list {
   flex: 1;
@@ -449,7 +459,7 @@
 }
 .hud-app .sys-gauge-track {
   fill: none;
-  stroke: rgba(56, 189, 255, .15);
+  stroke: color-mix(in srgb, var(--hud-sky) 15%, transparent);
   stroke-width: 8;
 }
 .hud-app .sys-gauge-fill {
@@ -477,10 +487,8 @@
 }
 .hud-app .sys-gauge-label {
   font-family: var(--hud-font);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: .06em;
-  text-transform: uppercase;
   color: var(--text-secondary);
   line-height: 1;
 }
@@ -490,15 +498,16 @@
   justify-content: space-between;
   margin-top: 3px;
   padding-top: 4px;
-  border-top: 1px solid rgba(30, 110, 190, .2);
+  border-top: 1px solid color-mix(in srgb, var(--hud-blue) 20%, transparent);
 }
 .hud-app .sys-net-item {
   display: flex;
   align-items: center;
   gap: 4px;
   font-family: var(--hud-font);
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 .hud-app .sys-net-item svg {
   width: 11px;
@@ -519,7 +528,6 @@
 }
 .hud-app .sidebar.collapsed .sys-gauge-label {
   font-size: 6px;
-  letter-spacing: .03em;
 }
 .hud-app .sys-net-row.collapsed {
   justify-content: center;
@@ -546,9 +554,9 @@
    usarse en ningún sitio; aquí se estrena. Dentro de un panel del tema, donde
    todo indicador va en cian, un azul distinto desentonaba. */
 .hud-app .upload-panel-body .progress-bar {
-  background: rgba(47, 216, 255, .12);
+  background: color-mix(in srgb, var(--hud-cyan) 12%, transparent);
 }
 .hud-app .upload-panel-body .progress-fill {
   background: var(--hud-cyan);
-  box-shadow: 0 0 6px rgba(47, 216, 255, .55);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--hud-cyan) 55%, transparent);
 }

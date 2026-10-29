@@ -21,7 +21,7 @@ function Gauge({ percent, label, color, title }: { percent: number; label: strin
   return (
     <div className="sys-gauge-row" {...triggerProps}>
       <div className="sys-gauge">
-        <svg viewBox="0 0 100 100">
+        <svg aria-hidden="true" viewBox="0 0 100 100">
           <circle cx="50" cy="50" r={RADIUS} className="sys-gauge-track" />
           <circle
             cx="50" cy="50" r={RADIUS} className="sys-gauge-fill"
@@ -52,7 +52,7 @@ function NetRow({ down, up, collapsed }: { down: number; up: number; collapsed: 
   if (collapsed) {
     return (
       <div className="sys-net-row collapsed" {...triggerProps}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M12 3v8M8 7l4-4 4 4" />
           <path d="M12 21v-8M8 17l4 4 4-4" />
         </svg>
@@ -63,10 +63,10 @@ function NetRow({ down, up, collapsed }: { down: number; up: number; collapsed: 
   return (
     <div className="sys-net-row">
       <Tooltip content="Velocidad de bajada">
-        <span className="sys-net-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M6 13l6 6 6-6" /></svg>{formatBytes(down)}/s</span>
+        <span className="sys-net-item"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M6 13l6 6 6-6" /></svg>{formatBytes(down)}/s</span>
       </Tooltip>
       <Tooltip content="Velocidad de subida">
-        <span className="sys-net-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 19V5M6 11l6-6 6 6" /></svg>{formatBytes(up)}/s</span>
+        <span className="sys-net-item"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 19V5M6 11l6-6 6 6" /></svg>{formatBytes(up)}/s</span>
       </Tooltip>
     </div>
   )

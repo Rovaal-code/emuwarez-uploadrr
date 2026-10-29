@@ -174,7 +174,7 @@ export function NomenclatureModal({ itemId, itemTitle, onClose }: Props) {
                   <div className="detail-panel__section-title">Errores</div>
                   <ul className="detail-panel__reasons">
                     {proposal.errors.map((err, i) => (
-                      <li key={i} style={{ color: 'var(--color-error, #f87171)' }}>{err}</li>
+                      <li key={i} style={{ color: 'var(--color-error)' }}>{err}</li>
                     ))}
                   </ul>
                 </div>
@@ -184,7 +184,7 @@ export function NomenclatureModal({ itemId, itemTitle, onClose }: Props) {
               {canApply && (
                 <div
                   className="detail-panel__section"
-                  style={{ marginTop: 16, padding: '12px', background: 'rgba(99,102,241,0.08)', borderRadius: 6 }}
+                  style={{ marginTop: 16, padding: '12px', background: 'color-mix(in srgb, var(--color-indigo) 8%, transparent)', borderRadius: 6 }}
                 >
                   <div className="detail-panel__section-title" style={{ marginBottom: 8 }}>
                     Aplicar nomenclatura
@@ -195,7 +195,7 @@ export function NomenclatureModal({ itemId, itemTitle, onClose }: Props) {
                     </button>
                   ) : (
                     <>
-                      <p style={{ fontSize: '0.85rem', marginBottom: 8, color: 'var(--color-text-muted, #9ca3af)' }}>
+                      <p style={{ fontSize: '0.85rem', marginBottom: 8, color: 'var(--text-secondary)' }}>
                         Se renombrará el archivo original con el nombre propuesto (mismo directorio).
                         Uploadrr no se ejecuta.
                       </p>
@@ -224,8 +224,8 @@ export function NomenclatureModal({ itemId, itemTitle, onClose }: Props) {
                                 padding: '4px 8px',
                                 fontFamily: 'monospace',
                                 fontSize: '0.85rem',
-                                background: 'rgba(0,0,0,0.3)',
-                                border: '1px solid rgba(255,255,255,0.15)',
+                                background: 'color-mix(in srgb, var(--overlay-dark) 30%, transparent)',
+                                border: '1px solid color-mix(in srgb, var(--overlay-light) 15%, transparent)',
                                 borderRadius: 4,
                                 color: 'inherit',
                               }}
@@ -245,7 +245,7 @@ export function NomenclatureModal({ itemId, itemTitle, onClose }: Props) {
 
                   {applyLoading && <p style={{ marginTop: 8, fontSize: '0.85rem' }}>Procesando…</p>}
                   {applyError && (
-                    <p style={{ marginTop: 8, fontSize: '0.85rem', color: 'var(--color-error, #f87171)' }}>
+                    <p style={{ marginTop: 8, fontSize: '0.85rem', color: 'var(--color-error)' }}>
                       {applyError}
                     </p>
                   )}
@@ -271,7 +271,7 @@ export function NomenclatureModal({ itemId, itemTitle, onClose }: Props) {
                         </div>
                       )}
                       {applyResult.message && (
-                        <p style={{ fontSize: '0.8rem', marginTop: 4, color: 'var(--color-text-muted, #9ca3af)' }}>
+                        <p style={{ fontSize: '0.8rem', marginTop: 4, color: 'var(--text-secondary)' }}>
                           {applyResult.message}
                         </p>
                       )}
@@ -283,7 +283,7 @@ export function NomenclatureModal({ itemId, itemTitle, onClose }: Props) {
                       {applyResult.errors.length > 0 && (
                         <ul className="detail-panel__reasons" style={{ marginTop: 4 }}>
                           {applyResult.errors.map((e, i) => (
-                            <li key={i} style={{ fontSize: '0.8rem', color: 'var(--color-error, #f87171)' }}>{e}</li>
+                            <li key={i} style={{ fontSize: '0.8rem', color: 'var(--color-error)' }}>{e}</li>
                           ))}
                         </ul>
                       )}
@@ -294,7 +294,7 @@ export function NomenclatureModal({ itemId, itemTitle, onClose }: Props) {
             </>
           )}
 
-          <div className="detail-panel__section" style={{ marginTop: 16, padding: '8px 12px', background: 'rgba(255,200,0,0.08)', borderRadius: 6, fontSize: '0.85rem' }}>
+          <div className="detail-panel__section" style={{ marginTop: 16, padding: '8px 12px', background: 'color-mix(in srgb, var(--color-warning-soft) 8%, transparent)', borderRadius: 6, fontSize: '0.85rem' }}>
             Seguridad: el archivo original nunca se renombra. Uploadrr y mkvpropedit no se ejecutan.
           </div>
         </div>

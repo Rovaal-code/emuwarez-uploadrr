@@ -1,3 +1,13 @@
+/* Hallmark · checked: 2026-10-29 · genre: modern-minimal (inferred) · shape: app screen
+ * floor: 14 FAIL reported (11 × 19: el guion de celda vacía, decisión del dueño · 2 × 67: navegación y título en mayúsculas del HUD, caso permitido por 67 · 1 × 50: falso positivo, el ajuste está dentro de FieldRow) · fixed: 4, 7a, 10a, 11, 15, 17, 19, 26a, 26b, 27, 30a, 33, 34, 39a, 40, 41, 48, 63, 67, 75 · structural: 5 printed (Subidas, Configuración, Panel, móvil, fichas)
+ * finish-review: subagent · fix · 5 findings · 4 resolved, 1 partial (formato de cifras: queda para el dueño)
+ * built: the project · redesign: polish · v2.0.0 */
+/* Hallmark · dismissed 28a · carátulas pequeñas en tablas tras el inicio de sesión, ninguna es la imagen principal de la pantalla */
+/* Hallmark · dismissed 49 · los dos botones son .btn, que ya lleva white-space: nowrap */
+/* Hallmark · dismissed 74 · el azul #3b82f6 es el acento propio del proyecto, anterior a este pulido; el índigo marca un nivel de aviso */
+/* Hallmark · answered F6 · .empty-state-icon ya no muestra cifras: ahora es un icono de línea */
+/* Hallmark · answered F24 · el borde del modal lo recorta sobre el velo oscuro; la sombra lo separa del panel de debajo */
+
 /* eMuwarez Uploadrr — Global Styles */
 
 :root {
@@ -16,8 +26,14 @@
 
   --text-primary:  #e5e7eb;
   --text-secondary: #9ca3af;
-  --text-muted:    #6b7280;
+  /* Antes #6b7280: con 11px se quedaba en 3,8:1 sobre los paneles. Este da
+     4,9:1 incluso sobre una fila resaltada. */
+  --text-muted:    #848c9b;
   --text-accent:   #3b82f6;
+  /* Texto sobre un relleno de color (botón primario, globo de avisos). */
+  --text-on-color: #f5f9ff;
+  /* El anillo de foco: el cian del HUD, más de 3:1 sobre cualquier fondo. */
+  --color-focus:   #2fd8ff;
 
   /* Semantic colors */
   --color-available:    #22c55e;
@@ -35,6 +51,35 @@
   --color-filled:       #9ca3af;
   --color-info:         #3b82f6;
   --color-warning:      #f59e0b;
+  --color-alert-strong: #dc2626;
+  --color-req-pending:  #eab308;
+  --color-indigo:       #6366f1;
+  --color-tab-active:   #7c6af7;
+
+  /* Tonos claros de los colores de estado, para texto sobre fondos teñidos. */
+  --color-error-soft:     #f87171;
+  --color-error-pale:     #fca5a5;
+  --color-available-soft: #4ade80;
+  --color-available-pale: #86efac;
+  --color-warning-soft:   #fbbf24;
+  --color-warning-pale:   #fde68a;
+  --color-accent-soft:    #7cb0ff;
+  --color-accent-pale:    #93c5fd;
+
+  /* Botón primario. */
+  --color-primary:       #2563eb;
+  --color-primary-hover: #1d4ed8;
+
+  /* Bases para velos y sombras: se usan mezcladas con transparencia
+     (color-mix). El blanco tal cual solo va de placa tras los logos de los
+     proveedores, que están pensados sobre blanco. */
+  --overlay-light: #ffffff;
+  --overlay-dark:  #000000;
+
+  /* Fondos oscuros sueltos: velo del tour, modal elevado, aviso grave. */
+  --scrim:          #04101f;
+  --bg-raised:      #1e1e32;
+  --bg-danger-deep: #380e0e;
 
   /* Shadows */
   --shadow-card:  0 2px 8px rgba(0, 0, 0, 0.4);
@@ -78,6 +123,7 @@
 html {
   font-size: 14px;
   color-scheme: dark;
+  overflow-x: clip;
 }
 
 body {
@@ -87,6 +133,8 @@ body {
   min-height: var(--vh100);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
+  caret-color: var(--color-focus);
   /* Aquí es donde se escala la interfaz entera. Va en el body y no en el html
      para que el fondo y la barra de desplazamiento de la ventana se queden
      fuera del escalado. Los portales de React cuelgan del body, así que los
@@ -114,6 +162,29 @@ button {
   cursor: pointer;
 }
 
+/* Un solo anillo de foco para todo lo que se maneja con el teclado, sin
+   transición. Va dentro de :where() para no ganar en especificidad: el
+   componente que lo necesite por dentro (campos, esquinas recortadas del HUD)
+   solo cambia el desplazamiento. */
+:where(a, button, input, select, textarea, summary, [tabindex], [role="link"], [role="button"]):focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* "Reducir movimiento": las transiciones pasan a ser instantáneas en toda la
+   aplicación. Las animaciones con bucle tienen su propio caso junto a ellas. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0s !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-focus) 35%, transparent);
+  color: var(--text-primary);
+}
+
 input, select, textarea {
   font-family: inherit;
   font-size: inherit;
@@ -129,10 +200,14 @@ input, select, textarea {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: color-mix(in srgb, var(--overlay-light) 12%, transparent);
   border-radius: 3px;
 }
 
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: color-mix(in srgb, var(--overlay-light) 20%, transparent);
 }

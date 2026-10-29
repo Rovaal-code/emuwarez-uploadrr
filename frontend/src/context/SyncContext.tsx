@@ -181,7 +181,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         if (p.done || !p.active) {
           showMessage(p.error
             ? `Error durante la sincronización: ${p.error}`
-            : `Sincronizado: ${p.imported} elementos · ${p.missing} no disponibles`, !!p.error)
+            : `Sincronizado: ${p.imported} elementos; ${p.missing} no disponibles`, !!p.error)
           invalidarTodo()
           break
         }

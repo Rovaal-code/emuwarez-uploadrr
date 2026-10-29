@@ -85,9 +85,15 @@ echo "Construida .. $FECHA"
 # hecha en la web), solo esa.
 ETIQUETA="v$VERSION"
 
+# Si no se puede preguntar a GitHub (sin red, sin permiso), es un error, no
+# "no hay etiqueta": se para en vez de seguir a ciegas.
 etiqueta_remota() {
-  git ls-remote --tags origin "refs/tags/$ETIQUETA" "refs/tags/$ETIQUETA^{}" |
-    sort -k2 | tail -1 | cut -f1
+  local salida
+  salida="$(git ls-remote --tags origin "refs/tags/$ETIQUETA" "refs/tags/$ETIQUETA^{}")" || {
+    echo "No se pudo consultar en GitHub la etiqueta $ETIQUETA." >&2
+    return 1
+  }
+  printf '%s\n' "$salida" | sort -k2 | tail -1 | cut -f1
 }
 
 etiqueta_local() {
@@ -96,7 +102,9 @@ etiqueta_local() {
 
 comprobar_etiqueta() {
   local remota local_
-  remota="$(etiqueta_remota)"
+  # Con `|| return 1` explícito: se llama dentro de un `||`, donde set -e no
+  # actúa, y un fallo de la consulta pasaría por "no hay etiqueta".
+  remota="$(etiqueta_remota)" || return 1
   local_="$(etiqueta_local)"
   if [[ -n "$remota" && "$remota" != "$COMMIT" ]]; then
     echo "La etiqueta $ETIQUETA ya está en GitHub en $remota, no en este commit." >&2
@@ -117,7 +125,14 @@ comprobar_etiqueta() {
 etiquetar() {
   # Otra vez, por si algo ha cambiado mientras se construía.
   comprobar_etiqueta || return 1
-  if [[ -n "$(etiqueta_remota)" ]]; then
+  local remota
+  remota="$(etiqueta_remota)" || return 1
+  # Entre una consulta y otra alguien podría haberla creado en otro commit.
+  if [[ -n "$remota" && "$remota" != "$COMMIT" ]]; then
+    echo "La etiqueta $ETIQUETA ya está en GitHub en $remota, no en este commit." >&2
+    return 1
+  fi
+  if [[ -n "$remota" ]]; then
     echo "La etiqueta $ETIQUETA ya está en GitHub."
     return 0
   fi

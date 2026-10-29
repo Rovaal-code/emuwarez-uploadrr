@@ -80,7 +80,7 @@ export function LogsPage() {
         ) : items.length === 0 ? (
           <EmptyState icon={<IconoDocumento />} title="Sin logs" body="No hay entradas que coincidan con el filtro." />
         ) : (
-          <div style={{ maxHeight: 'calc(var(--vh100) * 0.7)', overflow: 'auto', fontFamily: 'monospace', fontSize: 12 }}>
+          <div style={{ maxHeight: 'calc(var(--vh100) * 0.7)', overflow: 'auto', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
             {items.map((e, i) => (
               <div key={i} style={{ display: 'flex', gap: 10, padding: '3px 12px', borderBottom: '1px solid var(--border)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                 <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>{e.time}</span>

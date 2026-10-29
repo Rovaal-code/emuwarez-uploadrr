@@ -222,7 +222,7 @@ export function NomenclatureModal({ itemId, itemTitle, onClose }: Props) {
                               style={{
                                 flex: 1,
                                 padding: '4px 8px',
-                                fontFamily: 'monospace',
+                                fontFamily: 'var(--font-mono)',
                                 fontSize: '0.85rem',
                                 background: 'color-mix(in srgb, var(--overlay-dark) 30%, transparent)',
                                 border: '1px solid color-mix(in srgb, var(--overlay-light) 15%, transparent)',

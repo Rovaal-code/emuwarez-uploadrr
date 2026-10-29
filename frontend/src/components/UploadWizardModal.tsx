@@ -144,7 +144,7 @@ function MediaInfoTable({ report, onSourceToolClick }: {
                     {r.help && <InfoIcon text={r.help} />}
                   </span>
                 </td>
-                <td style={{ padding: '7px 12px', fontFamily: 'monospace', color: 'var(--text-muted)', wordBreak: 'break-word' }}>
+                <td style={{ padding: '7px 12px', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', wordBreak: 'break-word' }}>
                   {isSourceRow && onSourceToolClick ? (
                     <Tooltip content="Ver comparación del source">
                       <button type="button" className="source-bitrate-link" onClick={onSourceToolClick}>
@@ -153,7 +153,7 @@ function MediaInfoTable({ report, onSourceToolClick }: {
                     </Tooltip>
                   ) : r.mediainfo}
                 </td>
-                <td style={{ padding: '7px 12px', fontFamily: 'monospace', wordBreak: 'break-word' }}>{r.emu}</td>
+                <td style={{ padding: '7px 12px', fontFamily: 'var(--font-mono)', wordBreak: 'break-word' }}>{r.emu}</td>
               </tr>
             )
           })}
@@ -264,7 +264,7 @@ export function RemuxTable({ plan, editable, nameEditable, edits, onEdit }: {
                         valenciano del catalán ("cat" vs "ca-valencia") y el
                         latino del castellano. Enseñando solo `language`, esta
                         columna decía "cat" para una pista en valenciano. */}
-                    <td style={{ padding: '6px 10px', fontFamily: 'monospace', color: 'var(--text-secondary)' }}>
+                    <td style={{ padding: '6px 10px', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>
                       {t.language_ietf || t.language || '—'}
                     </td>
                     <td style={{ padding: '6px 10px', color: 'var(--text-muted)', wordBreak: 'break-word' }}>{t.current_name || '—'}</td>
@@ -277,7 +277,7 @@ export function RemuxTable({ plan, editable, nameEditable, edits, onEdit }: {
                           onChange={e => onEdit?.(t.id, { new_name: e.target.value })}
                         />
                       ) : (
-                        <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{effectiveName}</span>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{effectiveName}</span>
                       )}
                     </td>
                     <td style={{ padding: '6px 10px', textAlign: 'center' }}>

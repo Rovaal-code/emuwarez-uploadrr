@@ -174,8 +174,10 @@ repite los dos comandos de [Construir la imagen tú mismo](#construir-la-imagen-
 ## 8. Backup
 
 En Configuración → Backup, «Crear backup ahora» genera un `.tar.gz` de `/config` en `/config/backups`, sin la
-carpeta de subidas por defecto (`/config/Uploadrr/uploads`) ni los temporales de Uploadrr-EMU. En la misma pestaña
-se restaura. Como queda dentro de `/config`, cópialo a otro disco.
+carpeta de subidas por defecto (`/config/Uploadrr/uploads`) ni los temporales de Uploadrr-EMU. La de
+`UPLOADRR_UPLOADS_DIR` (`/data/uploads/emu`) está fuera de `/config`, así que tampoco entra: son enlaces, y para
+seguir sembrando tras restaurar en otro disco hay que respaldarla aparte. En la misma pestaña se restaura. Como el
+backup queda dentro de `/config`, cópialo a otro disco.
 
 Desde la línea de comandos:
 

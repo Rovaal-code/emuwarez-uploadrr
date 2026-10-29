@@ -111,6 +111,19 @@ Abre `http://localhost:9494`: el asistente de configuración inicial se abre sol
 - **Si Radarr/Sonarr ven la media en otra ruta** que este contenedor, añade una regla en Configuración →
   *Mapeo de rutas (biblioteca remota)*.
 
+### Versiones y volver atrás
+
+La imagen se publica con varias etiquetas, y `EMUWAREZ_UPLOADRR_TAG` (en el `.env`) elige cuál usa el compose:
+
+- `latest` (sin la variable): la última de `master`. Se actualiza con `docker compose pull && docker compose up -d`.
+- `0.11.0`: una versión concreta, de las que tienen etiqueta `v0.11.0` en el repo. Sirve para quedarte en ella o
+  para volver atrás si la nueva falla.
+- El sha de un commit de `master`: cada commit de `master` tiene su imagen.
+
+```bash
+EMUWAREZ_UPLOADRR_TAG=0.11.0 docker compose up -d
+```
+
 ### Construir la imagen tú mismo
 
 ```bash

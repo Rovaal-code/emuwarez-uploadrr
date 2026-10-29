@@ -20,6 +20,11 @@
 #   scripts/desplegar.sh --notas "..." --version patch   # sube la versión antes
 #   scripts/desplegar.sh --notas "..." --sin-publicar    # construye y sube, sin anunciar
 #
+# Al publicar crea también la etiqueta vX.Y.Z en el commit y la sube. Con ella
+# el workflow Imagen le pone a la imagen de ese commit la etiqueta X.Y.Z, que es
+# la que se fija en el compose (EMUWAREZ_UPLOADRR_TAG=X.Y.Z) para quedarse en
+# una versión o volver a ella.
+#
 # Necesita `gh auth login` hecho, para publicar la versión.
 set -euo pipefail
 
@@ -108,12 +113,35 @@ docker push "$IMAGEN"
 DIGEST="$(docker image inspect "$IMAGEN" --format '{{index .RepoDigests 0}}' | cut -d@ -f2)"
 echo "Digest ...... $DIGEST"
 
+# La etiqueta vX.Y.Z en este commit. Solo si es la punta de master ya subida a
+# GitHub: la imagen de cada commit la construye el workflow Imagen con el push a
+# master, y la etiqueta solo le añade el nombre de la versión a esa imagen.
+etiquetar() {
+  local etiqueta="v$VERSION"
+  if git rev-parse -q --verify "refs/tags/$etiqueta" >/dev/null ||
+      git ls-remote --exit-code --tags origin "refs/tags/$etiqueta" >/dev/null 2>&1; then
+    echo "La etiqueta $etiqueta ya existe: no la toco."
+    return 0
+  fi
+  git fetch -q origin master
+  if [[ "$(git rev-parse origin/master)" != "$COMMIT" ]]; then
+    echo "Este commit no es la punta de master en GitHub, así que no creo $etiqueta." >&2
+    echo "Cuando lo sea:  git tag -a $etiqueta -m \"…\" $COMMIT && git push origin $etiqueta" >&2
+    return 0
+  fi
+  git tag -a "$etiqueta" -m "${NOTAS:-Versión $VERSION}" "$COMMIT"
+  git push -q origin "$etiqueta"
+  echo "Etiqueta .... $etiqueta (la imagen :$VERSION la añade el workflow Imagen)"
+}
+
 if [[ "$PUBLICAR" -eq 0 ]]; then
   echo
-  echo "Sin publicar el manifiesto, como pediste. Para anunciarla:"
+  echo "Sin publicar el manifiesto ni crear la etiqueta, como pediste. Para anunciarla:"
   echo "  python3 scripts/publicar_version.py --digest $DIGEST --notas \"…\" --repo"
+  echo "  git tag -a v$VERSION -m \"…\" $COMMIT && git push origin v$VERSION"
   exit 0
 fi
 
 echo "Publicando el manifiesto…"
 python3 scripts/publicar_version.py --digest "$DIGEST" --notas "$NOTAS" --repo
+etiquetar

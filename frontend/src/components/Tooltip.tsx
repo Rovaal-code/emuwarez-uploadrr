@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useLayoutEffect, useEffect, useId } from 'react'
+import { useState, useCallback, useRef, useLayoutEffect, useEffect, useId, isValidElement, cloneElement } from 'react'
 import { createPortal } from 'react-dom'
 import { sinEscalar, anchoVentana, medir } from '../utils/uiScale'
 
@@ -165,9 +165,20 @@ export function Tooltip({ content, children, style, maxWidth }: {
   maxWidth?: number
 }) {
   const { triggerProps, tooltipNode } = useTooltip(content, maxWidth)
+  const { 'aria-describedby': descripcion, ...eventos } = triggerProps
+  // Lo normal es envolver un solo botón: la descripción va en él desde el
+  // primer render, que es quien recibe el foco, y no en el <span> de fuera.
+  // Con otros hijos se queda en el <span>, y openOnFocus la enlaza al control
+  // que reciba el foco.
+  const unHijo = isValidElement<{ 'aria-describedby'?: string }>(children)
+  const hijo = unHijo && descripcion
+    ? cloneElement(children, {
+        'aria-describedby': [children.props['aria-describedby'], descripcion].filter(Boolean).join(' '),
+      })
+    : children
   return (
-    <span {...triggerProps} style={{ display: 'inline-flex', alignItems: 'center', ...style }}>
-      {children}
+    <span {...eventos} aria-describedby={unHijo ? undefined : descripcion} style={{ display: 'inline-flex', alignItems: 'center', ...style }}>
+      {hijo}
       {tooltipNode}
     </span>
   )

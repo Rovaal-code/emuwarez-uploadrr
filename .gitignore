@@ -42,6 +42,12 @@ frontend/dist/
 frontend/.vite/
 
 # Local API key files (never commit — secrets)
+# El /config que monta el contenedor (base de datos, claves, config.yaml de Uploadrr) y sus copias.
+/config/
+emuwarez_config_*.tar.gz
+.env
+.env.*
+!.env.example
 radarr_apikey
 sonarr_apikey
 TMDB_api

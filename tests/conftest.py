@@ -16,6 +16,73 @@ from fastapi.testclient import TestClient
 FAKE_UPLOADRR_EMU_SCRIPT = Path(__file__).parent / "fixtures" / "fake_uploadrr_emu.py"
 
 
+_LOCALES = {"localhost", "127.0.0.1", "::1", "testserver"}
+
+
+class RedBloqueada(RuntimeError):
+    pass
+
+
+@pytest.fixture(autouse=True)
+def sin_red(monkeypatch):
+    """Ningún test sale a la red: una petición real a eMuwarez puede costar el
+    ban de la cuenta. Solo se permite loopback (servidores falsos locales).
+    El intento se corta y además suspende el test, aunque el código se trague
+    el error y siga por otro camino."""
+    import socket
+
+    intentos: list[str] = []
+
+    conectar = socket.socket.connect
+    conectar_envio = socket.socket.sendto
+    resolver = socket.getaddrinfo
+
+    def _host(direccion):
+        return direccion[0] if isinstance(direccion, tuple) else None
+
+    def connect(sock, direccion):
+        host = _host(direccion)
+        if sock.family in (socket.AF_INET, socket.AF_INET6) and host not in _LOCALES:
+            intentos.append(f"conexión a {host}")
+            raise RedBloqueada(f"conexión real a {host} desde un test: haz mock")
+        return conectar(sock, direccion)
+
+    def getaddrinfo(host, *args, **kwargs):
+        if host not in _LOCALES:
+            intentos.append(f"DNS de {host}")
+            raise RedBloqueada(f"resolución DNS de {host} desde un test: haz mock")
+        return resolver(host, *args, **kwargs)
+
+    monkeypatch.setattr(socket.socket, "connect", connect)
+    monkeypatch.setattr(socket.socket, "connect_ex", connect)
+    monkeypatch.setattr(socket.socket, "sendto", lambda sock, data, *args: connect(sock, args[-1]) or conectar_envio(sock, data, *args))
+    monkeypatch.setattr(socket, "getaddrinfo", getaddrinfo)
+    yield
+    if intentos:
+        pytest.fail(f"el test intentó salir a la red: {sorted(set(intentos))}")
+
+
+@pytest.fixture(autouse=True)
+def _sin_listas_de_anime(monkeypatch):
+    """Cada sincronización de biblioteca intenta bajar anime-list-full.json de
+    GitHub; en los tests falla igual que sin red (ensure_anime_id_map lo tolera)."""
+    from emuwarez_uploadrr.services import anime_lists
+
+    def _sin_red(*_a, **_k):
+        raise RuntimeError("sin red en los tests")
+
+    monkeypatch.setattr(anime_lists, "request_json", _sin_red)
+
+
+@pytest.fixture(autouse=True)
+def _sin_manifiesto_de_version(monkeypatch):
+    """El planificador y el arranque comprueban la versión contra GitHub: en
+    los tests, a un puerto cerrado de loopback (falla al instante)."""
+    from emuwarez_uploadrr.services import version_info
+
+    monkeypatch.setattr(version_info, "URL_MANIFIESTO", "http://127.0.0.1:9/latest.json")
+
+
 @pytest.fixture(autouse=True)
 def isolated_db(tmp_path, monkeypatch):
     """Point CONFIG_DIR to a per-test temp dir so each test starts with a fresh DB."""

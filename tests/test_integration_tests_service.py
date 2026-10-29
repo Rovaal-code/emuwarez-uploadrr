@@ -112,10 +112,12 @@ class TestTmdbConnection:
         result = svc_test_tmdb(api_key=None, conn=conn)
         assert result["status"] == "not_configured"
 
-    def test_full_key_never_in_response(self):
+    @patch("urllib.request.urlopen")
+    def test_full_key_never_in_response(self, mock_open):
         """Full API key must not appear in the result dict."""
         import json
         secret = "supersecret_tmdb_key_99999"
+        mock_open.side_effect = _url_error("Name or service not known")
         result = svc_test_tmdb(api_key=secret)
         serialised = json.dumps(result)
         assert secret not in serialised
@@ -302,7 +304,8 @@ class TestArrConnection:
 
     def test_prepends_http_if_missing_scheme(self):
         """URLs without scheme get http:// prepended before making the call."""
-        with patch("emuwarez_uploadrr.integrations.arr_base.arr_request") as mock_req:
+        with patch("emuwarez_uploadrr.integrations.arr_base.arr_request") as mock_req,                 patch("emuwarez_uploadrr.services.integration_tests._arr_content_visibility",
+                      return_value={"visible": True, "roots": []}):
             mock_req.return_value = {"version": "5.0"}
             result = svc_test_arr(kind="radarr", base_url="192.168.1.10:7878", api_key="k")
             assert result["ok"] is True

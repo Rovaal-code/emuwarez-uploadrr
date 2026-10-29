@@ -53,8 +53,12 @@ the upload with Uploadrr-EMU (`Kisnov/Uploadrr-EMU`, cloned into the image at `/
 - eMuwarez and TMDb keys travel in the URL query. Never log or return a raw URL: use
   `integrations.base.url_sin_claves`.
 - Image: `ghcr.io/kisnov/emuwarez-uploadrr`, built and published with `scripts/desplegar.sh`. Pass
-  `--build-arg UPLOADRR_COMMIT=…` or the Uploadrr-EMU clone layer comes from cache. Version manifest repo:
-  `Kisnov/uploadrr-version`.
+  `--build-arg UPLOADRR_COMMIT=…` or the Uploadrr-EMU clone layer comes from cache.
+- Version manifest: the Diagnóstico card compares the image's `APP_COMMIT` with `latest.json` in the public
+  repo `Kisnov/uploadrr-version` (a fork of `Rovaal-code/uploadrr-version`). It is separate because this
+  repo and the image are private, so the app can't ask GHCR or read a private raw URL without a token.
+  `desplegar.sh` publishes it after `docker push` via `scripts/publicar_version.py --repo`; don't edit it by
+  hand, run that script (needed after `--sin-publicar`). The file is public: keep `--notas` neutral.
 - Building on Windows: the checkout is CRLF (autocrlf), and a CRLF `docker-entrypoint.sh` fails with
   "no such file or directory". Build from `git -c core.autocrlf=false archive HEAD`.
 

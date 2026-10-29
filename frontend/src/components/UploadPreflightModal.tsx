@@ -105,7 +105,7 @@ export function UploadPreflightModal({ itemId, itemTitle, requestId, onClose }: 
                   <div className="detail-row">
                     <span className="text-muted">Runtime:</span>
                     <span>
-                      {result.command_preview.runtime_type || '–'}
+                      {result.command_preview.runtime_type || '—'}
                       {result.command_preview.contract_valid === false && (
                         <span className="badge req-not-compatible" style={{ marginLeft: 6, fontSize: '0.7rem' }}>
                           contrato inválido
@@ -120,24 +120,24 @@ export function UploadPreflightModal({ itemId, itemTitle, requestId, onClose }: 
                   </div>
                   <div className="detail-row">
                     <span className="text-muted">Tracker:</span>
-                    <span>{result.command_preview.tracker || '–'}</span>
+                    <span>{result.command_preview.tracker || '—'}</span>
                   </div>
                   <div className="detail-row">
                     <span className="text-muted">Categoría:</span>
-                    <span>{result.command_preview.category || '–'}</span>
+                    <span>{result.command_preview.category || '—'}</span>
                   </div>
                   <div className="detail-row">
                     <span className="text-muted">TMDb:</span>
-                    <span>{result.command_preview.tmdb_id || '–'}</span>
+                    <span>{result.command_preview.tmdb_id || '—'}</span>
                   </div>
                   <div className="detail-row">
                     <span className="text-muted">Resolución:</span>
-                    <span>{result.command_preview.resolution || '–'}</span>
+                    <span>{result.command_preview.resolution || '—'}</span>
                   </div>
                   <div className="detail-row">
                     <span className="text-muted">Archivo origen:</span>
                     <span style={{ wordBreak: 'break-all', fontSize: '0.8rem' }}>
-                      {result.command_preview.source_path || '–'}
+                      {result.command_preview.source_path || '—'}
                       {result.command_preview.using_prepared_path && (
                         <span className="badge req-filled" style={{ marginLeft: 6, fontSize: '0.7rem' }}>
                           preparado

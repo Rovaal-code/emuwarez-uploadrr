@@ -971,13 +971,18 @@ optgroup {
 }
 
 
+/* Los avisos que parpadean lo hacen unas pocas veces (menos de 5 s, como pide
+   WCAG 2.2.2) y se quedan fijos en su estado de aviso, que es su estilo en
+   reposo: el parpadeo llama la atención y el color la mantiene. */
+
 /* Blinking "save" button when a form has unsaved changes. */
 @keyframes btn-unsaved-pulse {
   0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--text-accent) 55%, transparent); opacity: 1; }
   50%      { box-shadow: 0 0 0 5px transparent; opacity: 0.72; }
 }
 .btn-unsaved {
-  animation: btn-unsaved-pulse 1.1s ease-in-out infinite;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--text-accent) 55%, transparent);
+  animation: btn-unsaved-pulse 1.1s ease-in-out 4;
 }
 
 /* "En cola" badge (Subidas) — a smooth breathing pulse (opacity ramps up and
@@ -988,7 +993,10 @@ optgroup {
   50%      { opacity: 0.25; }
 }
 .badge-blink {
-  animation: badge-blink 1.6s ease-in-out infinite;
+  /* En reposo, el contorno discontinuo lo sigue distinguiendo de "Subiendo". */
+  outline: 1px dashed currentColor;
+  outline-offset: -1px;
+  animation: badge-blink 1.6s ease-in-out 3;
 }
 
 /* Source (bitrate tool) value acting as a link to its reference table — same
@@ -1005,7 +1013,8 @@ optgroup {
   padding: 0;
   font: inherit;
   cursor: pointer;
-  animation: source-link-blink 1.6s ease-in-out infinite;
+  color: var(--text-accent);
+  animation: source-link-blink 1.6s ease-in-out 3;
 }
 .source-bitrate-link:hover {
   color: var(--text-accent);
@@ -1023,13 +1032,21 @@ optgroup {
   0%, 100% { border-color: color-mix(in srgb, var(--color-available) 85%, transparent); box-shadow: 0 0 6px -1px color-mix(in srgb, var(--color-available) 55%, transparent); }
   50%      { border-color: color-mix(in srgb, var(--text-accent) 30%, transparent); box-shadow: none; }
 }
-.value-chip.chip-blink-new { animation: chip-blink-new 1.6s ease-in-out infinite; }
+.value-chip.chip-blink-new {
+  border-color: color-mix(in srgb, var(--color-available) 85%, transparent);
+  box-shadow: 0 0 6px -1px color-mix(in srgb, var(--color-available) 55%, transparent);
+  animation: chip-blink-new 1.6s ease-in-out 3;
+}
 
 @keyframes chip-blink-alert {
   0%, 100% { border-color: color-mix(in srgb, var(--color-error) 85%, transparent); box-shadow: 0 0 6px -1px color-mix(in srgb, var(--color-error) 55%, transparent); }
   50%      { border-color: color-mix(in srgb, var(--text-accent) 30%, transparent); box-shadow: none; }
 }
-.value-chip.chip-blink-alert { animation: chip-blink-alert 1.6s ease-in-out infinite; }
+.value-chip.chip-blink-alert {
+  border-color: color-mix(in srgb, var(--color-error) 85%, transparent);
+  box-shadow: 0 0 6px -1px color-mix(in srgb, var(--color-error) 55%, transparent);
+  animation: chip-blink-alert 1.6s ease-in-out 3;
+}
 
 /* Blue = live/in-progress (e.g. "Ver Logs" while a job is actively writing
  * to Actividad) — same breathing cadence, just intensifying the chip's own
@@ -1039,18 +1056,22 @@ optgroup {
   0%, 100% { border-color: color-mix(in srgb, var(--text-accent) 95%, transparent); box-shadow: 0 0 6px -1px color-mix(in srgb, var(--text-accent) 70%, transparent); }
   50%      { border-color: color-mix(in srgb, var(--text-accent) 30%, transparent); box-shadow: none; }
 }
-.value-chip.chip-blink-live { animation: chip-blink-live 1.6s ease-in-out infinite; }
+.value-chip.chip-blink-live {
+  border-color: color-mix(in srgb, var(--text-accent) 95%, transparent);
+  box-shadow: 0 0 6px -1px color-mix(in srgb, var(--text-accent) 70%, transparent);
+  animation: chip-blink-live 1.6s ease-in-out 3;
+}
 
-/* Con "reducir movimiento" nada parpadea: cada estado se queda fijo en su
-   color de aviso, que ya lo distingue. El indicador de carga gira despacio. */
+/* Con "reducir movimiento" nada parpadea: cada aviso se queda directamente
+   en su estilo de reposo. El indicador de carga gira despacio. */
 @media (prefers-reduced-motion: reduce) {
   .spinner { animation-duration: 2.4s; }
-  .btn-unsaved { animation: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--text-accent) 55%, transparent); }
-  .badge-blink { animation: none; }
-  .source-bitrate-link { animation: none; color: var(--text-accent); }
-  .value-chip.chip-blink-new { animation: none; border-color: color-mix(in srgb, var(--color-available) 85%, transparent); }
-  .value-chip.chip-blink-alert { animation: none; border-color: color-mix(in srgb, var(--color-missing) 85%, transparent); }
-  .value-chip.chip-blink-live { animation: none; border-color: color-mix(in srgb, var(--text-accent) 95%, transparent); }
+  .btn-unsaved,
+  .badge-blink,
+  .source-bitrate-link,
+  .value-chip.chip-blink-new,
+  .value-chip.chip-blink-alert,
+  .value-chip.chip-blink-live { animation: none; }
 }
 
 /* Column-header (Excel-style) filter: the whole header cell is the button.
@@ -1225,7 +1246,7 @@ optgroup {
   color: var(--text-accent);
 }
 
-/* Plain muted placeholder ("–") for a field with no value — not a chip,
+/* Plain muted placeholder ("—") for a field with no value — not a chip,
    just dimmed text, same as an empty table cell elsewhere. */
 .muted {
   color: var(--text-muted);

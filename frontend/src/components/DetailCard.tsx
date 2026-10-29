@@ -156,7 +156,7 @@ export function ValueIcon({ children }: { children: React.ReactNode }) {
 // an empty-looking chip.
 export function TechChip({ icon: Icon, value }: { icon: React.ComponentType; value: string | null | undefined }) {
   if (!value || value === '—' || value === '?') {
-    return <span style={{ color: 'var(--text-muted)' }}>{value || '–'}</span>
+    return <span style={{ color: 'var(--text-muted)' }}>{value || '—'}</span>
   }
   return <ValueChip><ValueIcon><Icon /></ValueIcon><span className="txt">{value}</span></ValueChip>
 }

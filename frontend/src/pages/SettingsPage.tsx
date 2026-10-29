@@ -32,6 +32,7 @@ import { TAMANOS, TAMANO_POR_DEFECTO, tamanoUi, guardarTamano } from '../utils/u
 import { isValidHttpUrl } from '../utils/validation'
 import { getUploadConcurrencyEstimate, type UploadConcurrencyEstimate } from '../api/system'
 import { MODOS_PISTAS, MODO_PISTAS_POR_DEFECTO, normalizarModo, type ModoPistas } from '../utils/modoPistas'
+import { formatNumero } from '../utils/format'
 
 type Tab = 'config' | 'notifications' | 'diagnostics' | 'backup' | 'maintenance'
 
@@ -46,8 +47,8 @@ export interface SaveExpose {
 
 function formatBytes(n: number) {
   if (n < 1024) return `${n} B`
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
-  return `${(n / 1024 / 1024).toFixed(2)} MB`
+  if (n < 1024 * 1024) return `${formatNumero(n / 1024, 1)} KB`
+  return `${formatNumero(n / 1024 / 1024, 2)} MB`
 }
 
 // Serialize the Config form's values so we can compare current vs. loaded and
@@ -1261,7 +1262,7 @@ function VersionCard() {
   // El digest es largo y no aporta leído entero: se enseña recortado y entero
   // al pasar el ratón, como el resto de identificadores de la aplicación.
   const digest = (valor?: string | null) => {
-    if (!valor) return <span style={{ color: 'var(--text-muted)' }}>–</span>
+    if (!valor) return <span style={{ color: 'var(--text-muted)' }}>—</span>
     const corto = valor.startsWith('sha256:') ? valor.slice(0, 19) + '…' : valor.slice(0, 12) + '…'
     return <HoverTitle tip={valor}><code style={{ fontSize: 12 }}>{corto}</code></HoverTitle>
   }
@@ -1284,13 +1285,13 @@ function VersionCard() {
               {fila('Commit', info.commit_corto
                 ? <HoverTitle tip={info.commit!}><code style={{ fontSize: 12 }}>{info.commit_corto}</code></HoverTitle>
                 : <span style={{ color: 'var(--text-muted)' }}>sin sellar</span>)}
-              {fila('Construida', info.construida || <span style={{ color: 'var(--text-muted)' }}>–</span>)}
+              {fila('Construida', info.construida || <span style={{ color: 'var(--text-muted)' }}>—</span>)}
               {fila('Digest', digest(info.digest))}
               {info.estado === 'hay_novedad' && fila('Última publicada',
                 <>
                   {info.ultima.commit_corto
                     ? <HoverTitle tip={info.ultima.commit!}><code style={{ fontSize: 12 }}>{info.ultima.commit_corto}</code></HoverTitle>
-                    : '–'}
+                    : '—'}
                   {info.ultima.publicada ? <span style={{ color: 'var(--text-muted)' }}> · {info.ultima.publicada}</span> : null}
                 </>)}
               {info.estado === 'hay_novedad' && fila('Digest publicado', digest(info.ultima.digest))}
@@ -1325,7 +1326,7 @@ function DiagnosticsTab({ status }: { status: MaintenanceStatus | null }) {
               ].map(([k, v]) => (
                 <tr key={String(k)} style={{ borderBottom: '1px solid var(--border)' }}>
                   <td style={{ padding: '6px 8px', color: 'var(--text-secondary)', width: 130 }}>{k}</td>
-                  <td style={{ padding: '6px 8px' }}>{String(v ?? '–')}</td>
+                  <td style={{ padding: '6px 8px' }}>{String(v ?? '—')}</td>
                 </tr>
               ))}
             </tbody>

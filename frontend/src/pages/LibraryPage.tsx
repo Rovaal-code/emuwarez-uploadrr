@@ -27,6 +27,7 @@ import { CASTELLANO_OPCIONES, type EstadoCastellano } from '../utils/castellano'
 import { useTardanza } from '../hooks/useTardanza'
 import { useAlEntrar, useAlSalir } from '../context/SeccionVisible'
 import { IconoLibros, IconoTipo } from '../components/Iconos'
+import { formatNumero } from '../utils/format'
 
 // Una sola lista vacía: volver a ponerla no cuenta como cambio y no recarga la biblioteca.
 const NINGUNO: string[] = []
@@ -497,7 +498,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
                 Por eso no cambia al filtrar — la pregunta es "cuánto tengo". */}
             {/* Mientras carga no se sabe cuántos hay: "Sin elementos" mentía. */}
             {archivos > 0
-              ? `${archivos} archivos sincronizados`
+              ? `${formatNumero(archivos)} archivos sincronizados`
               : loading && !data ? 'Contando archivos…' : 'Sin elementos'}
           </div>
         </div>

@@ -53,7 +53,7 @@ export function EmuFieldChip({ itemId }: { itemId: number }) {
   const status = summarize(data)
 
   if (loading || status === null) {
-    return <span className="muted">–</span>
+    return <span className="muted">—</span>
   }
 
   const hasLocal = data?.mine_available ?? (data?.mine?.size != null)

@@ -134,7 +134,7 @@ function NomenclatureSection({ snapshot, mediaType, isStaging }: { snapshot: Upl
               return (
                 <tr key={r.key}>
                   <td style={{ fontWeight: 600 }}>{r.label}</td>
-                  <td style={{ fontFamily: 'monospace' }}>{value != null && value !== '' ? String(value) : '–'}</td>
+                  <td style={{ fontFamily: 'monospace' }}>{value != null && value !== '' ? String(value) : '—'}</td>
                 </tr>
               )
             })}
@@ -146,14 +146,14 @@ function NomenclatureSection({ snapshot, mediaType, isStaging }: { snapshot: Upl
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 3 }}>
             Nombre del torrent
           </div>
-          <div style={{ fontFamily: 'monospace', fontSize: 13, wordBreak: 'break-all' }}>{name || '–'}</div>
+          <div style={{ fontFamily: 'monospace', fontSize: 13, wordBreak: 'break-all' }}>{name || '—'}</div>
         </div>
         <div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 5 }}>
             {INTERNAL_TITLE_LABEL_TEXT}
             <InfoIcon text={INTERNAL_TITLE_TOOLTIP} />
           </div>
-          <div style={{ fontFamily: 'monospace', fontSize: 13, wordBreak: 'break-all' }}>{name || '–'}</div>
+          <div style={{ fontFamily: 'monospace', fontSize: 13, wordBreak: 'break-all' }}>{name || '—'}</div>
         </div>
       </div>
     </>
@@ -183,10 +183,10 @@ function EmptyRemuxShell() {
             {REMUX_TEMPLATE_ROWS.map(r => (
               <tr key={r.type} style={{ opacity: 0.5, fontStyle: 'italic' }}>
                 <td>{r.type}</td>
-                <td>–</td>
-                <td>–</td>
-                <td>–</td>
-                <td style={{ textAlign: 'center' }}>–</td>
+                <td>—</td>
+                <td>—</td>
+                <td>—</td>
+                <td style={{ textAlign: 'center' }}>—</td>
               </tr>
             ))}
           </tbody>
@@ -290,7 +290,7 @@ function ChecksSection({ snapshot, mediaType, isActive }: {
                   )}
                 </td>
                 <td style={{ color: 'var(--text-muted)' }}>
-                  {c ? [c.label, c.message].filter(Boolean).join(': ') : '–'}
+                  {c ? [c.label, c.message].filter(Boolean).join(': ') : '—'}
                 </td>
               </tr>
             )
@@ -338,7 +338,7 @@ const DEFAULT_PHASES: UploadProgressPhase[] = [
 // it, a stuck "running" phase's duration keeps counting up from Date.now()
 // forever, long after the job itself has stopped.
 function formatPhaseDuration(startedAt?: string | null, finishedAt?: string | null, fallbackEnd?: string | null): string {
-  if (!startedAt) return '–'
+  if (!startedAt) return '—'
   const start = parseServerDate(startedAt).getTime()
   const endSource = finishedAt ?? fallbackEnd
   const end = endSource ? parseServerDate(endSource).getTime() : Date.now()
@@ -402,8 +402,8 @@ function PhasesSection({ phases, globalPct, job }: { phases: UploadProgressPhase
                 </span>
               </td>
               <td><ProgressCell pct={p.pct} /></td>
-              <td style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.started_at ? formatDate(p.started_at) : '–'}</td>
-              <td style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.finished_at ? formatDate(p.finished_at) : (overrideStatus ? formatDate(job.finished_at) : '–')}</td>
+              <td style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.started_at ? formatDate(p.started_at) : '—'}</td>
+              <td style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.finished_at ? formatDate(p.finished_at) : (overrideStatus ? formatDate(job.finished_at) : '—')}</td>
               <td style={{ fontVariantNumeric: 'tabular-nums' }}>{formatPhaseDuration(p.started_at, p.finished_at, overrideStatus ? job.finished_at : null)}</td>
             </tr>
             )
@@ -423,7 +423,7 @@ function PhasesSection({ phases, globalPct, job }: { phases: UploadProgressPhase
             <td style={{ fontWeight: 700 }} colSpan={2}>Progreso global</td>
             <td><ProgressCell pct={globalPct} bold /></td>
             <td style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 700 }}>{formatDate(job.started_at ?? job.created_at ?? null)}</td>
-            <td style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 700 }}>{job.finished_at ? formatDate(job.finished_at) : '–'}</td>
+            <td style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 700 }}>{job.finished_at ? formatDate(job.finished_at) : '—'}</td>
             <td style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{formatPhaseDuration(job.started_at ?? job.created_at, job.finished_at)}</td>
           </tr>
         </tbody>
@@ -564,12 +564,12 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
             <Card title="Estado de la subida" icon={<StatusCardIcon />}>
               <FieldRow label="Estado"><span className={STATUS_CLASS[job.status] || 'badge req-unknown'}>{statusLabel(job.status)}</span></FieldRow>
               <FieldRow label="Tipo">
-                <ValueChip><ValueIcon><TypeValueIcon /></ValueIcon><span className="txt">{UPLOAD_TYPE_LABEL[job.media_type ?? ''] ?? '–'}</span></ValueChip>
+                <ValueChip><ValueIcon><TypeValueIcon /></ValueIcon><span className="txt">{UPLOAD_TYPE_LABEL[job.media_type ?? ''] ?? '—'}</span></ValueChip>
               </FieldRow>
               <FieldRow label="Origen">
                 {job.instance_type
                   ? <ValueChip><ServiceLabel type={job.instance_type} label={job.instance_name ?? job.instance_type} size={15} /></ValueChip>
-                  : <span className="muted">–</span>}
+                  : <span className="muted">—</span>}
               </FieldRow>
               <FieldRow label="Petición"><StatusBadge status={job.request_status || 'Sin petición'} type="request" /></FieldRow>
               <FieldRow label="Nomenclatura" help="Los campos que componen el nombre final del torrent, del archivo y de su título interno.">
@@ -623,7 +623,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
                           const elapsed = progressCounter(job)
                           return `${label}${counter}${elapsed ? ` · ${elapsed}` : ''}`
                         })()
-                      : '–'}
+                      : '—'}
                   </span>
                 </ValueChip>
               </FieldRow>
@@ -637,7 +637,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
                 <ValueChip><ValueIcon><ClockCardIcon /></ValueIcon><span className="txt">{formatElapsed(job)}</span></ValueChip>
               </FieldRow>
               <FieldRow label="Reintentos">
-                <ValueChip><ValueIcon><RetryButtonIcon /></ValueIcon><span className="txt">{(job.retry_count ?? 0) > 0 ? `x${job.retry_count}` : '–'}</span></ValueChip>
+                <ValueChip><ValueIcon><RetryButtonIcon /></ValueIcon><span className="txt">{(job.retry_count ?? 0) > 0 ? `x${job.retry_count}` : '—'}</span></ValueChip>
               </FieldRow>
             </Card>
           </div>

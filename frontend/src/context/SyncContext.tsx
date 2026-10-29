@@ -13,6 +13,7 @@ import {
 import { syncRequests, getSyncStatus } from '../api/requests'
 import { suscribirse, canalVivo } from '../api/eventos'
 import type { RequestSyncStatusResponse } from '../types/api'
+import { formatNumero } from '../utils/format'
 
 // Global sync state, shared by every page (Dashboard / Biblioteca / Peticiones).
 // The pages are unmounted when you switch tabs, so if this state lived inside a
@@ -181,7 +182,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         if (p.done || !p.active) {
           showMessage(p.error
             ? `Error durante la sincronización: ${p.error}`
-            : `Sincronizado: ${p.imported} elementos; ${p.missing} no disponibles`, !!p.error)
+            : `Sincronizado: ${formatNumero(p.imported)} elementos; ${formatNumero(p.missing)} no disponibles`, !!p.error)
           invalidarTodo()
           break
         }

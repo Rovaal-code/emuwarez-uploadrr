@@ -16,7 +16,7 @@
   --hud-ok: #28e394;
   --hud-warn: #ffb930;
   --hud-danger: #ff5470;
-  --hud-font: "Share Tech Mono", "Consolas", ui-monospace, monospace;
+  --hud-font: "Share Tech Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
   /* La voz de rótulo del HUD (títulos de página): la misma monoespaciada. */
   --font-display: var(--hud-font);
 
@@ -29,6 +29,15 @@
   --hud-well: #030c1a;
   --hud-bar: #030a16;
   --hud-panel-solid: #060e1c;
+}
+
+/* Dentro de la aplicación hay un solo acento: los enlaces y los estados
+   activos toman el azul cian del HUD en vez del azul genérico. Va en :root
+   (cuando la página tiene .hud-app) y no en .hud-app para que también lo
+   reciban los menús, tooltips y modales que se pintan en un portal fuera de
+   él. Login y asistente siguen en azul hasta que se les aplique el HUD. */
+:root:has(.hud-app) {
+  --text-accent: var(--hud-sky);
 }
 
 .hud-app {

@@ -51,9 +51,9 @@ describe('la punta de una cadena de reintentos', () => {
 })
 
 describe('las etiquetas de fase', () => {
-  it('sin fase, un guion', () => {
-    expect(phaseLabel(null)).toBe('–')
-    expect(phaseLabel(undefined)).toBe('–')
+  it('sin fase, la raya de "sin dato" de toda la app', () => {
+    expect(phaseLabel(null)).toBe('—')
+    expect(phaseLabel(undefined)).toBe('—')
   })
 
   it('traduce las fases del backend', () => {

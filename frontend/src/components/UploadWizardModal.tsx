@@ -2137,8 +2137,8 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                                 <FitTextPair
                                   min={9}
                                   items={[
-                                    { label: 'Nombre del torrent', text: current.torrent_name || '–', labelStyle },
-                                    { label: INTERNAL_TITLE_LABEL, text: current.internal_mkv_title || '–', labelStyle },
+                                    { label: 'Nombre del torrent', text: current.torrent_name || '—', labelStyle },
+                                    { label: INTERNAL_TITLE_LABEL, text: current.internal_mkv_title || '—', labelStyle },
                                   ]}
                                 />
                               )}
@@ -2449,14 +2449,14 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
               {targetIsSeason ? (
                 <>
                   <div style={labelStyle}>Nombre final del torrent (pack de temporada)</div>
-                  <FitText min={9} text={seasonDisplayTitle || '–'} />
+                  <FitText min={9} text={seasonDisplayTitle || '—'} />
                 </>
               ) : (
                 <FitTextPair
                   min={9}
                   items={[
-                    { label: 'Nombre final del torrent', text: preview?.torrent_name || '–', labelStyle },
-                    { label: INTERNAL_TITLE_LABEL, text: preview?.internal_mkv_title || '–', labelStyle },
+                    { label: 'Nombre final del torrent', text: preview?.torrent_name || '—', labelStyle },
+                    { label: INTERNAL_TITLE_LABEL, text: preview?.internal_mkv_title || '—', labelStyle },
                   ]}
                 />
               )}

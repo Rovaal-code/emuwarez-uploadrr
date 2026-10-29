@@ -98,7 +98,7 @@ function StartModal({ job, onClose, onDone }: { job: UploadJob; onClose: () => v
           <button className="btn-icon" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body">
-          <p style={{ marginBottom: 8 }}><strong>{job.title || '–'}</strong></p>
+          <p style={{ marginBottom: 8 }}><strong>{job.title || '—'}</strong></p>
           <div style={{ padding: '10px 14px', background: 'color-mix(in srgb, var(--color-error) 8%, transparent)', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--color-error) 20%, transparent)', marginBottom: 12 }}>
             <ul style={{ margin: 0, paddingLeft: 18, fontSize: '0.83rem', lineHeight: 1.6 }}>
               <li>Esta acción puede publicar/subir contenido a eMuwarez.</li>
@@ -182,7 +182,7 @@ function JobRow({ job, instances, onOpen, indent, retryToggle, onCancel, onRetry
               onClick={onOpen}
               {...titleTip}
             >
-              {job.title || '–'}
+              {job.title || '—'}
               {titleTooltip}
             </span>
             {job.year ? <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>({job.year})</span> : null}
@@ -192,7 +192,7 @@ function JobRow({ job, instances, onOpen, indent, retryToggle, onCancel, onRetry
       <td style={{ whiteSpace: 'nowrap' }}>
         {job.media_type
           ? <ValueChip><ValueIcon><TypeValueIcon /></ValueIcon><span className="txt">{UPLOAD_TYPE_LABEL[job.media_type] ?? job.media_type}</span></ValueChip>
-          : <span style={{ color: 'var(--text-muted)' }}>–</span>}
+          : <span style={{ color: 'var(--text-muted)' }}>—</span>}
       </td>
       <td style={{ whiteSpace: 'nowrap' }}>
         {job.instance_type
@@ -203,7 +203,7 @@ function JobRow({ job, instances, onOpen, indent, retryToggle, onCancel, onRetry
                 : <ServiceLabel type={job.instance_type} label={job.instance_name ?? job.instance_type} size={14} />}
             </ValueChip>
           )
-          : <span style={{ color: 'var(--text-muted)' }}>–</span>}
+          : <span style={{ color: 'var(--text-muted)' }}>—</span>}
       </td>
       <td style={{ whiteSpace: 'nowrap' }}>
         <StatusBadge status={job.request_status || 'Sin petición'} type="request" />
@@ -237,12 +237,12 @@ function JobRow({ job, instances, onOpen, indent, retryToggle, onCancel, onRetry
             <span className="spinner" style={{ width: 10, height: 10, borderWidth: 2 }} />
             {phaseLabelText}{phaseInfo?.counterText ? ` (${phaseInfo.counterText})` : ''}{phaseElapsedText ? ` · ${phaseElapsedText}` : ''}
           </span>
-        ) : '–'}
+        ) : '—'}
       </td>
       <td style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{formatDateTimeSeconds(job.created_at ?? null)}</td>
       <td style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{formatDateTimeSeconds(job.finished_at ?? null)}</td>
       <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-        {job.duration_seconds != null ? `${job.duration_seconds}s` : '–'}
+        {job.duration_seconds != null ? `${job.duration_seconds}s` : '—'}
       </td>
       <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
         {retryToggle ? (
@@ -255,7 +255,7 @@ function JobRow({ job, instances, onOpen, indent, retryToggle, onCancel, onRetry
             x{job.retry_count} <span style={{ fontSize: 10 }}>{retryToggle.expanded ? '▾' : '▸'}</span>
             {retryToggleTip.tooltipNode}
           </span>
-        ) : (job.retry_count ?? 0) > 0 ? `x${job.retry_count}` : '–'}
+        ) : (job.retry_count ?? 0) > 0 ? `x${job.retry_count}` : '—'}
       </td>
       <td className="col-actions">
         <div style={{ display: 'flex', gap: 6 }}>

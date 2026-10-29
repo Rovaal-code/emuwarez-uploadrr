@@ -1,5 +1,5 @@
 /* Hallmark · checked: 2026-10-29 · genre: modern-minimal (inferred) · shape: app screen
- * floor: 14 FAIL reported (11 × 19: el guion de celda vacía, decisión del dueño · 2 × 67: navegación y título en mayúsculas del HUD, caso permitido por 67 · 1 × 50: falso positivo, el ajuste está dentro de FieldRow) · fixed: 4, 7a, 10a, 11, 15, 17, 19, 26a, 26b, 27, 30a, 33, 34, 39a, 40, 41, 48, 63, 67, 75 · structural: 5 printed (Subidas, Configuración, Panel, móvil, fichas)
+ * floor: 14 FAIL reported (11 × 19: la raya (—) de celda vacía, elegida a propósito como marca de «sin dato» · 2 × 67: navegación y título en mayúsculas del HUD, caso permitido por 67 · 1 × 50: falso positivo, el ajuste está dentro de FieldRow) · fixed: 4, 7a, 10a, 11, 15, 17, 19, 26a, 26b, 27, 30a, 33, 34, 39a, 40, 41, 48, 63, 67, 75 · structural: 5 printed (Subidas, Configuración, Panel, móvil, fichas)
  * finish-review: subagent · fix · 5 findings · 4 resolved, 1 partial (formato de cifras: queda para el dueño)
  * built: the project · redesign: polish · v2.0.0 */
 /* Hallmark · dismissed 28a · carátulas pequeñas en tablas tras el inicio de sesión, ninguna es la imagen principal de la pantalla */
@@ -9,6 +9,18 @@
 /* Hallmark · answered F24 · el borde del modal lo recorta sobre el velo oscuro; la sombra lo separa del panel de debajo */
 
 /* eMuwarez Uploadrr — Global Styles */
+
+/* La voz del HUD (títulos, navegación, cifras). Va dentro del proyecto para
+   que se vea igual en todos los ordenadores: antes solo se veía si la tenías
+   instalada, y si no salía Consolas. Licencia SIL OFL 1.1, en
+   assets/fonts/OFL-share-tech-mono.txt. Solo existe en peso normal. */
+@font-face {
+  font-family: "Share Tech Mono";
+  src: url("../assets/fonts/share-tech-mono-latin-400-normal.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
 
 :root {
   /* Colors */
@@ -96,8 +108,10 @@
   --topbar-height: 56px;
 
   /* Typography */
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  /* Fuentes del sistema, elegidas a propósito: Inter y JetBrains Mono estaban
+     en la pila pero nunca se cargaban, así que siempre salía la del sistema. */
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
 
   /* Escalado global. Todo el CSS está en píxeles fijos calibrados para 2560px
      de ancho; utils/uiScale.ts pone aquí el factor que corresponde a la

@@ -37,7 +37,7 @@ import {
   PointsValueIcon, ThumbsUpValueIcon, CommentValueIcon,
 } from '../components/DetailCard'
 import { HeaderFilter } from '../components/HeaderFilter'
-import { formatBytes, timeAgo, formatDate } from '../utils/format'
+import { formatBytes, timeAgo, formatDate, formatNumero } from '../utils/format'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
 import { useAlEntrar, useAlSalir } from '../context/SeccionVisible'
 import { EMU_URL } from '../constants/emu'
@@ -130,7 +130,7 @@ const SORT_OPTIONS = [
   { value: 'comments_desc', label: 'Orden: Más comentarios' },
 ]
 
-const fmtNum = (n: number | null | undefined) => (n == null ? '—' : n.toLocaleString('es-ES'))
+const fmtNum = (n: number | null | undefined) => formatNumero(n)
 
 // Inline SVG icons for the votes/comments/points columns — emoji (👍💬🪙)
 // render as bare white outlines on some systems, so use real vector icons.
@@ -465,11 +465,11 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
               <IdField label="TMDb" id={tmdbId} href={idVerifyUrl('tmdb', tmdbId, isTv)} />
               <IdField label="IMDb" id={imdbId} href={idVerifyUrl('imdb', imdbId, isTv)} />
               <IdField label="TVDB" id={tvdbId} href={idVerifyUrl('tvdb', tvdbId, isTv)} />
-              {/* MAL always shown (mainly for anime); "–" when the request had none. */}
+              {/* MAL always shown (mainly for anime); "—" when the request had none. */}
               <FieldRow label="MAL">
                 {malId
                   ? <ValueChip linkable={Boolean(idVerifyUrl('mal', malId, isTv))}><ExternalIdLink id={malId} href={idVerifyUrl('mal', malId, isTv)} label="MAL" /></ValueChip>
-                  : <span className="muted">–</span>}
+                  : <span className="muted">—</span>}
               </FieldRow>
             </Card>
           </div>

@@ -51,7 +51,7 @@ export const STATUS_LABEL: Record<string, string> = {
 }
 
 export function statusLabel(status: string): string {
-  return STATUS_LABEL[status] || (status ? status.charAt(0).toUpperCase() + status.slice(1) : '–')
+  return STATUS_LABEL[status] || (status ? status.charAt(0).toUpperCase() + status.slice(1) : '—')
 }
 
 // A job in any of these statuses is still "alive" — a new upload for the
@@ -100,7 +100,7 @@ const PHASE_LABEL: Record<string, string> = {
 }
 
 export function phaseLabel(phase?: string | null): string {
-  if (!phase) return '–'
+  if (!phase) return '—'
   return PHASE_LABEL[phase] || phase
 }
 
@@ -179,7 +179,7 @@ export function formatElapsed(job: UploadJob): string {
     const secs = Math.max(0, Math.round((Date.now() - parseServerDate(job.started_at).getTime()) / 1000))
     return formatSecondsHM(secs)
   }
-  return '–'
+  return '—'
 }
 
 // Seconds left in the cancel-if-you-regret-it grace period, or null once it's

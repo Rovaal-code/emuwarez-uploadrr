@@ -1023,6 +1023,71 @@ optgroup {
 }
 .value-chip.chip-blink-live { animation: chip-blink-live 1.6s ease-in-out infinite; }
 
+/* Column-header (Excel-style) filter: the whole header cell is the button.
+   The <th> drops its own padding and the button takes it, so a click anywhere
+   in the cell opens the menu, not just on the caret. */
+.data-table th:has(> .hf-trigger) {
+  padding: 0;
+}
+.hf-trigger {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.hf-trigger:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+.hf-trigger:focus-visible {
+  outline: 2px solid var(--text-accent);
+  outline-offset: -2px;
+}
+.hf-caret {
+  font-size: 9px;
+  color: var(--text-muted);
+}
+.hf-count {
+  min-width: 15px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: rgba(59,130,246,0.2);
+  color: #3b82f6;
+  font-size: 10px;
+  line-height: 15px;
+  text-align: center;
+}
+.hf-hint {
+  padding: 4px 10px 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+.hf-option.hf-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.hf-option.hf-check input {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: #3b82f6;
+  cursor: pointer;
+}
+
 /* Column-header (Excel-style) filter menu options. */
 .hf-option {
   display: block;

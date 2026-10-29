@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { getLogs, type LogEntry } from '../api/logs'
 import { EmptyState } from '../components/EmptyState'
 import { useSeccionVisible } from '../context/SeccionVisible'
+import { IconoDocumento } from '../components/Iconos'
 
 const LEVELS = ['', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
 const LEVEL_COLOR: Record<string, string> = {
-  DEBUG: '#6b7280', INFO: '#60a5fa', WARNING: '#f59e0b', ERROR: '#ef4444', CRITICAL: '#f43f5e',
+  DEBUG: 'var(--color-neutral)', INFO: 'var(--color-accent-soft)', WARNING: 'var(--color-warning)', ERROR: 'var(--color-error)', CRITICAL: 'var(--hud-danger)',
 }
 
 export function LogsPage() {
@@ -77,13 +78,13 @@ export function LogsPage() {
         ) : error ? (
           <div style={{ padding: 20, color: 'var(--color-missing)' }}>{error}</div>
         ) : items.length === 0 ? (
-          <EmptyState icon="📄" title="Sin logs" body="No hay entradas que coincidan con el filtro." />
+          <EmptyState icon={<IconoDocumento />} title="Sin logs" body="No hay entradas que coincidan con el filtro." />
         ) : (
           <div style={{ maxHeight: 'calc(var(--vh100) * 0.7)', overflow: 'auto', fontFamily: 'monospace', fontSize: 12 }}>
             {items.map((e, i) => (
               <div key={i} style={{ display: 'flex', gap: 10, padding: '3px 12px', borderBottom: '1px solid var(--border)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                 <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>{e.time}</span>
-                <span style={{ color: LEVEL_COLOR[e.level] ?? '#9ca3af', fontWeight: 700, flexShrink: 0, width: 64 }}>{e.level}</span>
+                <span style={{ color: LEVEL_COLOR[e.level] ?? 'var(--text-secondary)', fontWeight: 700, flexShrink: 0, width: 64 }}>{e.level}</span>
                 <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>{e.logger}</span>
                 <span>{e.message}</span>
               </div>

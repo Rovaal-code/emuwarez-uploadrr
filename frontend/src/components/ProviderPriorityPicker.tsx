@@ -3,6 +3,7 @@ import { getEmuProviders } from '../api/nomenclature'
 import { Favicon } from './Favicon'
 import { SortableList, DragHandleIcon } from './SortableList'
 import { useTooltip, HoverTitle } from './Tooltip'
+import { IconoPelicula } from './Iconos'
 
 export interface ProviderOption {
   code: string
@@ -15,7 +16,7 @@ export interface ProviderOption {
 // the same list Configuración has, not meant to send you off-app mid-setup.
 function ProviderIcon({ domain, size = 16, link = true }: { domain?: string | null; size?: number; link?: boolean }) {
   const { triggerProps, tooltipNode } = useTooltip(domain && link ? `Abrir ${domain}` : null)
-  const icon = <Favicon domain={domain} size={size} fallback={<span aria-hidden style={{ opacity: 0.4 }}>🎬</span>} />
+  const icon = <Favicon domain={domain} size={size} fallback={<span style={{ display: 'inline-flex', opacity: 0.4 }}><IconoPelicula /></span>} />
   if (!domain || !link) return icon
   return (
     <a
@@ -109,8 +110,8 @@ export function ProviderPriorityPicker({ order, onChange, linkIcons = true }: Pr
             return (
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, fontSize: 13,
-                background: dragging ? 'rgba(37,99,235,0.15)' : 'rgba(139,92,246,0.06)',
-                border: `1px solid ${dragging ? 'var(--text-accent, #2563eb)' : 'var(--border)'}`,
+                background: dragging ? 'color-mix(in srgb, var(--color-primary) 15%, transparent)' : 'color-mix(in srgb, var(--color-uploading) 6%, transparent)',
+                border: `1px solid ${dragging ? 'var(--text-accent)' : 'var(--border)'}`,
               }}>
                 <span style={{ color: 'var(--text-muted)', fontSize: 11, width: 16, textAlign: 'center' }}>{idx + 1}</span>
                 <HoverTitle
@@ -158,7 +159,7 @@ export function ProviderPriorityPicker({ order, onChange, linkIcons = true }: Pr
                       style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-start', justifySelf: 'start', fontSize: 12 }}
                       onClick={() => enable(opt.code)}
                     >
-                      <Favicon domain={opt.domain} size={16} fallback={<span aria-hidden>🎬</span>} />
+                      <Favicon domain={opt.domain} size={16} fallback={<IconoPelicula />} />
                       {opt.label}
                     </button>
                   ))}

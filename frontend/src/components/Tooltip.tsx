@@ -1,6 +1,6 @@
-import { useState, useCallback, useRef, useLayoutEffect, useEffect } from 'react'
+import { useState, useCallback, useRef, useLayoutEffect, useEffect, useId } from 'react'
 import { createPortal } from 'react-dom'
-import { sinEscalar, anchoVentana } from '../utils/uiScale'
+import { sinEscalar, anchoVentana, medir } from '../utils/uiScale'
 
 // Custom hover tooltip styled like the app's cards (opaque surface, not the
 // native browser title box). Rendered in a fixed-position portal just below
@@ -23,6 +23,7 @@ export function useTooltip(content: React.ReactNode, maxWidth = 460) {
   const [pt, setPt] = useState({ x: 0, y: 0 })
   const ref = useRef<HTMLDivElement>(null)
   const timer = useRef<number | null>(null)
+  const id = useId()
 
   const track = useCallback((e: React.MouseEvent) => setPt(punto(e)), [])
   const open = useCallback((e: React.MouseEvent) => {
@@ -34,6 +35,18 @@ export function useTooltip(content: React.ReactNode, maxWidth = 460) {
     if (timer.current) { window.clearTimeout(timer.current); timer.current = null }
     setShow(false)
   }, [])
+  // Con el teclado no hay cursor ni espera: el foco lo abre al momento, bajo
+  // el elemento, y salir del foco o pulsar Escape lo cierra.
+  const openOnFocus = useCallback((e: React.FocusEvent) => {
+    if (!e.currentTarget.matches(':focus-visible')) return
+    const r = medir(e.currentTarget)
+    if (timer.current) { window.clearTimeout(timer.current); timer.current = null }
+    setPt({ x: r.left + r.width / 2, y: r.bottom - 8 })
+    setShow(true)
+  }, [])
+  const closeOnEscape = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') close()
+  }, [close])
 
   useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current) }, [])
 
@@ -62,12 +75,17 @@ export function useTooltip(content: React.ReactNode, maxWidth = 460) {
     onMouseEnter: open,
     onMouseMove: track,
     onMouseLeave: close,
+    onFocus: openOnFocus,
+    onBlur: close,
+    onKeyDown: closeOnEscape,
+    'aria-describedby': show && content != null ? id : undefined,
   }
 
   const tooltipNode = show && content != null
     ? createPortal(
         <div
           ref={ref}
+          id={id}
           role="tooltip"
           style={{
             position: 'fixed',
@@ -78,10 +96,10 @@ export function useTooltip(content: React.ReactNode, maxWidth = 460) {
             maxWidth,
             whiteSpace: 'normal',
             zIndex: 2000,
-            background: 'var(--bg-surface, #0f1420)',   // opaque
+            background: 'var(--bg-surface)',   // opaque
             border: '1px solid var(--border)',
             borderRadius: 10,
-            boxShadow: 'var(--shadow-modal, 0 10px 30px rgba(0,0,0,0.45))',
+            boxShadow: 'var(--shadow-modal)',
             padding: '10px 12px',
             fontSize: 12.5,
             lineHeight: 1.45,
@@ -124,7 +142,7 @@ export function HoverTitle({ as = 'div', className, style, onClick, onMouseDown,
   as?: 'div' | 'span'
   className?: string
   style?: React.CSSProperties
-  onClick?: (e: React.MouseEvent) => void
+  onClick?: (e: React.SyntheticEvent) => void
   onMouseDown?: (e: React.MouseEvent) => void
   onMouseUp?: (e: React.MouseEvent) => void
   tip: string
@@ -132,8 +150,20 @@ export function HoverTitle({ as = 'div', className, style, onClick, onMouseDown,
 }) {
   const { triggerProps, tooltipNode } = useTooltip(tip)
   const Tag = as as 'div'
+  // Con onClick es un enlace (abre una ficha o una subida): se alcanza con
+  // Tab y se abre con Intro, igual que con el ratón.
+  const comoEnlace = onClick
+    ? {
+        role: 'link',
+        tabIndex: 0,
+        onKeyDown: (e: React.KeyboardEvent) => {
+          triggerProps.onKeyDown(e)
+          if (e.key === 'Enter') onClick(e)
+        },
+      }
+    : {}
   return (
-    <Tag className={className} style={style} onClick={onClick} onMouseDown={onMouseDown} onMouseUp={onMouseUp} {...triggerProps}>
+    <Tag className={className} style={style} onClick={onClick} onMouseDown={onMouseDown} onMouseUp={onMouseUp} {...triggerProps} {...comoEnlace}>
       {children}
       {tooltipNode}
     </Tag>

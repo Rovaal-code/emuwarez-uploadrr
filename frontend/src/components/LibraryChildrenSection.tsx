@@ -43,7 +43,7 @@ export function LibraryChildrenSection({ parentId, childType, title, instances, 
 
   return (
     <div style={{ marginTop: 28, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-      <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 2 }}>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 2 }}>
         {title}
         {/* La flecha apunta a donde va a ir la tabla: arriba para comerse el
             hueco de la ficha, abajo para devolvérselo. Mismo .tree-expander

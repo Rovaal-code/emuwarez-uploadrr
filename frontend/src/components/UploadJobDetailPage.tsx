@@ -17,6 +17,7 @@ import {
   UPLOAD_TYPE_LABEL, STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo, progressCounter, formatElapsed, queuedWaitText, useTicker, formatSecondsHM,
 } from '../utils/uploadStatus'
 import { useRefrescoPorAvisos, AVISOS_SUBIDA, AVISOS_SUBIDA_PROGRESO } from '../hooks/useRefrescoPorAvisos'
+import { IconoDesplegar, IconoTipo } from './Iconos'
 
 // Dedicated page for one upload job (replaces the old JobProgressPanel modal)
 // — same Radarr/Sonarr-style layout LibraryDetailPage/RequestDetailPage use:
@@ -55,19 +56,19 @@ function Panel({ title, live, loading, help, collapsible, defaultExpanded = fals
           // (LibraryChildrenSection) — this is now the only other "fixed,
           // always-expanded section title" in the app, so they should read
           // the same size at a glance.
-          fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em',
+          fontSize: 12, fontWeight: 600,
           color: 'var(--text-secondary)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6,
           cursor: collapsible ? 'pointer' : undefined, userSelect: collapsible ? 'none' : undefined,
           flexShrink: 0,
         }}
       >
         {collapsible && (
-          <span style={{ display: 'inline-flex', fontSize: 10, transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>▶</span>
+          <IconoDesplegar abierto={open} size={12} />
         )}
         {title}
         {help && <span onClick={e => e.stopPropagation()}><InfoIcon text={help} /></span>}
         {loading && <span className="spinner" style={{ width: 13, height: 13, borderWidth: 2 }} />}
-        {live && <span style={{ color: '#22c55e', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(en directo)</span>}
+        {live && <span style={{ color: 'var(--color-available)', fontWeight: 400 }}>(en directo)</span>}
       </div>
       {open && (
         <div
@@ -142,13 +143,13 @@ function NomenclatureSection({ snapshot, mediaType, isStaging }: { snapshot: Upl
       </div>
       <div style={{ marginTop: 14, display: 'grid', gap: 10 }}>
         <div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 3 }}>
             Nombre del torrent
           </div>
           <div style={{ fontFamily: 'monospace', fontSize: 13, wordBreak: 'break-all' }}>{name || '–'}</div>
         </div>
         <div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 5 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 5 }}>
             {INTERNAL_TITLE_LABEL_TEXT}
             <InfoIcon text={INTERNAL_TITLE_TOOLTIP} />
           </div>
@@ -355,7 +356,7 @@ function ProgressCell({ pct, bold }: { pct: number; bold?: boolean }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
       <span style={{ fontWeight: bold ? 700 : undefined, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{pct}%</span>
       <div className="sync-chip-bar" style={{ width: 'auto', flex: 1 }}>
-        <div className="sync-chip-bar-fill" style={{ width: `${pct}%` }} />
+        <div className="sync-chip-bar-fill" style={{ transform: `scaleX(${pct / 100})` }} />
       </div>
     </div>
   )
@@ -521,7 +522,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
   }, [logs])
 
   const progress = job.progress
-  const mediaEmoji = job.media_type === 'series' || job.media_type === 'episode' ? '📺' : '🎬'
+  const mediaIcon = <IconoTipo serie={job.media_type === 'series' || job.media_type === 'episode'} />
 
   return (
     <div style={{ width: '100%', height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
@@ -529,7 +530,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
       <DetailHero backdropUrl={job.backdrop_url}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 16 }}>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button className="btn btn-ghost btn-sm" onClick={onBack}>← Volver a Subidas</button>
+          <button className="btn btn-ghost btn-sm" onClick={onBack}>Volver a Subidas</button>
         </div>
         <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
           {job.library_item_id != null && (
@@ -545,16 +546,16 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
       <div style={{ marginBottom: 20 }}>
         <DetailTitle>
           <DetailTitleText title={job.display_title || job.title || `Job ${jobId}`} />
-          {isRunning && <span style={{ fontSize: 11, color: '#22c55e' }}>● en vivo</span>}
+          {isRunning && <span style={{ fontSize: 11, color: 'var(--color-available)' }}>● en vivo</span>}
         </DetailTitle>
       </div>
 
       <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-        <DetailPoster url={job.poster_url ? posterUrl(job.poster_url, 'w500') : null} alt={job.title || `Job ${jobId}`} fallbackEmoji={mediaEmoji} />
+        <DetailPoster url={job.poster_url ? posterUrl(job.poster_url, 'w500') : null} alt={job.title || `Job ${jobId}`} fallbackIcon={mediaIcon} />
 
         <div style={{ flex: 1, minWidth: 300 }}>
           {retryError && (
-            <div style={{ padding: '8px 12px', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 6, fontSize: 12.5, color: '#fca5a5', marginBottom: 16 }}>
+            <div style={{ padding: '8px 12px', background: 'color-mix(in srgb, var(--color-error-soft) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--color-error-soft) 30%, transparent)', borderRadius: 6, fontSize: 12.5, color: 'var(--color-error-pale)', marginBottom: 16 }}>
               {retryError}
             </div>
           )}

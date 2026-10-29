@@ -35,7 +35,7 @@ export function DeleteUploadModal({ job, onClose, onDeleted }: {
         </div>
         <div className="modal-body">
           <p style={{ margin: 0, fontWeight: 600 }}>{job.title || `Job ${job.id}`}</p>
-          <div style={{ padding: '10px 14px', background: 'rgba(255,80,80,0.08)', borderRadius: 6, border: '1px solid rgba(255,80,80,0.2)', margin: '12px 0' }}>
+          <div style={{ padding: '10px 14px', background: 'color-mix(in srgb, var(--color-error) 8%, transparent)', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--color-error) 20%, transparent)', margin: '12px 0' }}>
             <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5 }}>
               Se va a borrar todo el material y todo lo que hay registrado de esta subida: registro de actividad,
               capturas y demás datos generados. Esta acción no se puede deshacer.

@@ -40,7 +40,7 @@ export function SyncProgressBanner() {
               ? `${libProgress.imported.toLocaleString('es-ES')}/${libProgress.total.toLocaleString('es-ES')}`
               : `${libProgress.imported.toLocaleString('es-ES')} elementos`,
             libProgress.missing ? `${libProgress.missing.toLocaleString('es-ES')} no disponibles` : null,
-          ].filter(Boolean).join(' · ')}
+          ].filter(Boolean).join('; ')}
           percent={!libProgress.error && libProgress.total ? Math.min(100, Math.round((libProgress.imported / libProgress.total) * 100)) : null}
           bar
         />
@@ -62,7 +62,7 @@ export function SyncProgressBanner() {
               // never shows literally nothing while something is happening.
               : catalogProgress.torrents ? `${catalogProgress.torrents} torrents` : catalogProgress.phase || null,
             catalogProgress.eta_seconds != null ? `~${fmtEta(catalogProgress.eta_seconds)}` : null,
-          ].filter(Boolean).join(' · ')}
+          ].filter(Boolean).join('; ')}
           percent={!catalogProgress.error && catalogProgress.total_pages
             ? Math.min(100, Math.round((catalogProgress.page / catalogProgress.total_pages) * 100)) : null}
           bar
@@ -114,7 +114,7 @@ function SyncChip({ error, icon, label, detail, percent, bar, fading }: {
       <span className={`sync-chip-detail${error ? ' sync-chip-detail-error' : ''}`}>{detail}</span>
       {bar && (
         <div className="sync-chip-bar">
-          <div className="sync-chip-bar-fill" style={{ width: `${percent ?? 0}%` }} />
+          <div className="sync-chip-bar-fill" style={{ transform: `scaleX(${(percent ?? 0) / 100})` }} />
         </div>
       )}
       {tooltipNode}

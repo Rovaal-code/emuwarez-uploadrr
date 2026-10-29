@@ -2,13 +2,14 @@ import { useState } from 'react'
 import type { SourceComparison, SourceEngineResult } from '../api/nomenclature'
 import { InfoIcon } from './InfoIcon'
 import { Tooltip } from './Tooltip'
+import { IconoAviso } from './Iconos'
 
 // Shared by the manual wizard's Source field: both the icon button and the
 // blinking value inside "Ver MediaInfo". Same modal and same detail-toggle
 // semantics for both entry points, instead of each re-implementing its own.
 const thStyle: React.CSSProperties = {
   textAlign: 'left', padding: '8px 10px', fontWeight: 600, color: 'var(--text-muted)',
-  position: 'sticky', top: 0, background: 'var(--bg-surface, #0f1420)',
+  position: 'sticky', top: 0, background: 'var(--bg-surface)',
 }
 
 // Shown next to every "Internal Source Tool" column header, with the same
@@ -54,7 +55,7 @@ function SourceCompareTable({ comparison, onShowEngineDetail }: { comparison: So
   )
 }
 
-const CERTAINTY_COLOR: Record<string, string> = { alto: '#22c55e', medio: '#eab308', bajo: '#ef4444' }
+const CERTAINTY_COLOR: Record<string, string> = { alto: 'var(--color-available)', medio: 'var(--color-req-pending)', bajo: 'var(--color-error)' }
 
 // Spanish display names for the Internal Source Tool's evidence feature
 // keys (the `feature` field itself stays the internal snake_case id — this
@@ -115,9 +116,9 @@ function SourceEngineDetail({ result }: { result: SourceEngineResult }) {
         <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', margin: '6px 0 0' }}>{explanation.winner_vs_runner_up}</p>
         {contradictions.length > 0 && (
           <div style={{ marginTop: 8 }}>
-            <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Contradicciones detectadas</span>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Contradicciones detectadas</span>
             {contradictions.map((c, i) => (
-              <p key={i} style={{ fontSize: 12, color: '#eab308', margin: '4px 0 0' }}>⚠ {c}</p>
+              <p key={i} style={{ fontSize: 12, color: 'var(--color-req-pending)', margin: '4px 0 0' }}><IconoAviso /> {c}</p>
             ))}
           </div>
         )}
@@ -131,7 +132,7 @@ function SourceEngineDetail({ result }: { result: SourceEngineResult }) {
               {orderedLabels.map(label => (
                 <th key={label} style={{
                   ...thStyle, textAlign: 'right', minWidth: 68,
-                  color: label === prediction.label ? '#22c55e' : thStyle.color,
+                  color: label === prediction.label ? 'var(--color-available)' : thStyle.color,
                 }}>
                   {label}
                 </th>
@@ -152,8 +153,8 @@ function SourceEngineDetail({ result }: { result: SourceEngineResult }) {
                   return (
                     <td key={label} style={{
                       padding: '6px 10px', textAlign: 'right', fontFamily: 'monospace',
-                      color: !v ? 'var(--text-muted)' : v > 0 ? '#4ade80' : '#f87171',
-                      background: label === prediction.label ? 'rgba(34,197,94,0.06)' : undefined,
+                      color: !v ? 'var(--text-muted)' : v > 0 ? 'var(--color-available-soft)' : 'var(--color-error-soft)',
+                      background: label === prediction.label ? 'color-mix(in srgb, var(--color-available) 6%, transparent)' : undefined,
                     }}>
                       {v ? (v > 0 ? `+${v.toFixed(1)}` : v.toFixed(1)) : '0'}
                     </td>
@@ -166,8 +167,8 @@ function SourceEngineDetail({ result }: { result: SourceEngineResult }) {
               {ranking.map(c => (
                 <td key={c.label} style={{
                   padding: '7px 10px', textAlign: 'right', fontFamily: 'monospace',
-                  color: c.label === prediction.label ? '#22c55e' : undefined,
-                  background: c.label === prediction.label ? 'rgba(34,197,94,0.1)' : undefined,
+                  color: c.label === prediction.label ? 'var(--color-available)' : undefined,
+                  background: c.label === prediction.label ? 'color-mix(in srgb, var(--color-available) 10%, transparent)' : undefined,
                 }}>
                   {c.raw_score.toFixed(1)}
                 </td>
@@ -178,7 +179,7 @@ function SourceEngineDetail({ result }: { result: SourceEngineResult }) {
               {ranking.map(c => (
                 <td key={c.label} style={{
                   padding: '5px 10px', textAlign: 'right', fontFamily: 'monospace', fontSize: 11,
-                  color: c.label === prediction.label ? '#22c55e' : 'var(--text-muted)',
+                  color: c.label === prediction.label ? 'var(--color-available)' : 'var(--text-muted)',
                 }}>
                   {(c.normalized_score * 100).toFixed(1)}%
                 </td>

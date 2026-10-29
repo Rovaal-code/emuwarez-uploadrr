@@ -41,6 +41,7 @@ import { formatBytes, timeAgo, formatDate } from '../utils/format'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
 import { useAlEntrar, useAlSalir } from '../context/SeccionVisible'
 import { EMU_URL } from '../constants/emu'
+import { IconoBloqueado, IconoDocumental, IconoPelicula, IconoSerie } from '../components/Iconos'
 
 // Fallback for "Consultar en eMuwarez" while we don't have the exact
 // per-request URL yet — points at the general requests listing instead of
@@ -87,13 +88,13 @@ export function contentKind(category: string | null): ContentKind {
   return null
 }
 
-function tipoOf(category: string | null): { icon: string; label: string } {
+function tipoOf(category: string | null): { icon: React.ReactNode; label: string } {
   switch (contentKind(category)) {
-    case 'series': return { icon: '📺', label: 'Serie' }
-    case 'doc': return { icon: '🎥', label: 'Documental' }
-    case 'movie': return { icon: '🎬', label: 'Película' }
+    case 'series': return { icon: <IconoSerie />, label: 'Serie' }
+    case 'doc': return { icon: <IconoDocumental />, label: 'Documental' }
+    case 'movie': return { icon: <IconoPelicula />, label: 'Película' }
     // Something we don't recognise: show it verbatim rather than guessing.
-    default: return { icon: '🎬', label: category || '—' }
+    default: return { icon: <IconoPelicula />, label: category || '—' }
   }
 }
 
@@ -153,7 +154,7 @@ const PointsIcon = () => (
 // Author cell — your own requests (author === emu.username) show in green + "(Yo)".
 function AuthorCell({ author, isMine }: { author: string | null; isMine: boolean }) {
   if (!author) return <span style={{ color: 'var(--text-muted)' }}>—</span>
-  if (isMine) return <span style={{ color: '#22c55e', fontWeight: 600 }}>{author} (Yo)</span>
+  if (isMine) return <span style={{ color: 'var(--color-available)', fontWeight: 600 }}>{author} (Yo)</span>
   return <span>{author}</span>
 }
 
@@ -231,11 +232,11 @@ function OriginCell({ item, instances, size = 13 }: {
 function ReadinessBadge({ status }: { status: string | null | undefined }) {
   if (!status) return <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>—</span>
   const color =
-    status === 'ready_to_upload' ? '#34d399' :
-    status === 'needs_nomenclature' ? '#f59e0b' :
-    status === 'preflight_needed' ? '#60a5fa' :
-    status === 'downloading' ? '#818cf8' :
-    status === 'uploaded' ? '#6ee7b7' :
+    status === 'ready_to_upload' ? 'var(--color-available-soft)' :
+    status === 'needs_nomenclature' ? 'var(--color-warning)' :
+    status === 'preflight_needed' ? 'var(--color-accent-soft)' :
+    status === 'downloading' ? 'var(--color-downloading)' :
+    status === 'uploaded' ? 'var(--color-available-pale)' :
     status === 'no_local_match' ? 'var(--text-muted)' :
     status.includes('error') || status.includes('missing') || status === 'blocked' ? 'var(--color-missing)' :
     'var(--text-secondary)'
@@ -260,12 +261,12 @@ function CandidatesPanel({ requestId, onClose }: { requestId: number; onClose: (
         <button className="btn-icon" onClick={onClose}>✕</button>
       </div>
       {loading ? <LoadingState label="Cargando candidatos…" /> : candidates.length === 0 ? (
-        <div className="empty-inline">Sin candidatos en biblioteca. Ejecuta "Recalcular readiness".</div>
+        <div className="empty-inline">Sin candidatos en biblioteca. Ejecuta “Recalcular readiness”.</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 0' }}>
           {candidates.map(c => (
             <div key={c.id} className="detail-card" style={{ padding: '10px 14px', borderRadius: 6, fontSize: 12 }}>
-              <div style={{ fontWeight: 600, marginBottom: 4 }}>#{c.candidate_rank} — {c.lib_title || `Lib #${c.library_item_id}`}</div>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>#{c.candidate_rank}: {c.lib_title || `Lib #${c.library_item_id}`}</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 12px', color: 'var(--text-secondary)' }}>
                 <span>Compat: <strong>{c.compatibility_score?.toFixed(0) ?? '—'}</strong></span>
                 <span>Readiness: <strong>{c.readiness_score?.toFixed(0) ?? '—'}</strong></span>
@@ -274,7 +275,7 @@ function CandidatesPanel({ requestId, onClose }: { requestId: number; onClose: (
               </div>
               {c.blockers.length > 0 && (
                 <div style={{ marginTop: 4, color: 'var(--color-missing)', fontSize: 11 }}>
-                  ⛔ {c.blockers.join(' · ')}
+                  <IconoBloqueado /> {c.blockers.join(', ')}
                 </div>
               )}
             </div>
@@ -340,7 +341,7 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
   const temporadaLabel = hasSeason ? String(item.req_season ?? '?') : 'Todas'
   const consultarTip = useTooltip(item.url
     ? 'Abrir la petición en eMuwarez (reclamarla, marcarla como llena, ver el ID del torrent…)'
-    : 'Todavía no tenemos la URL exacta de esta petición — abre el listado general de peticiones en eMuwarez')
+    : 'Todavía no tenemos la URL exacta de esta petición: abre el listado general de peticiones en eMuwarez')
   const subirTip = useTooltip(libId
     ? 'Subir el contenido de tu biblioteca a eMuwarez (mismo asistente que en Biblioteca)'
     : 'No tienes este contenido en tu biblioteca')
@@ -351,7 +352,7 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
       <DetailHero backdropUrl={item.backdrop_url}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 16 }}>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button className="btn btn-ghost btn-sm" onClick={onBack}>← Volver a peticiones</button>
+          <button className="btn btn-ghost btn-sm" onClick={onBack}>Volver a peticiones</button>
         </div>
         <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
           <a
@@ -410,7 +411,7 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
       </div>
 
       <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-        <DetailPoster url={item.poster_url ? posterUrl(item.poster_url, 'w500') : null} alt={item.title} fallbackEmoji={t.icon} />
+        <DetailPoster url={item.poster_url ? posterUrl(item.poster_url, 'w500') : null} alt={item.title} fallbackIcon={t.icon} />
 
         <div style={{ flex: 1, minWidth: 300 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16, minHeight: DETAIL_CARD_HEIGHT }}>
@@ -477,7 +478,7 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
       </DetailHero>
 
       <div style={{ marginTop: 17 }}>
-        <div style={{ fontSize: 11.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)', marginBottom: 15 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 15 }}>
           Petición vs. tu biblioteca
         </div>
         <div className="detail-card" style={{ borderRadius: 10, padding: '21px 19px' }}>
@@ -511,7 +512,7 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
                       <td style={{ color: 'var(--text-muted)' }}>—</td>
                       <td style={{ color: 'var(--text-muted)' }}>—</td>
                     </tr>
-                    <tr style={{ background: 'rgba(34,197,94,0.06)' }}>
+                    <tr style={{ background: 'color-mix(in srgb, var(--color-available) 6%, transparent)' }}>
                       <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>Tu biblioteca</td>
                       <td style={{ maxWidth: 320 }} {...libNameTip.triggerProps}>
                         {libId
@@ -541,7 +542,7 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
                     disk, so there is nothing real to compare against. Without
                     saying so, the table reads as a contradiction. */}
                 {m.local_status === 'Faltante' && (
-                  <p style={{ fontSize: 12.5, margin: '10px 0 0', color: '#f59e0b' }}>
+                  <p style={{ fontSize: 12.5, margin: '10px 0 0', color: 'var(--color-warning)' }}>
                     Este contenido está con el estado de Faltante en tu biblioteca local, así que
                     no es posible hacer la comparación.
                   </p>
@@ -557,14 +558,14 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
           <summary>Preparación de subida (avanzado)</summary>
           <div style={{ marginTop: 8 }}>
             <div className="detail-row"><span>Estado</span><ReadinessBadge status={readiness.status} /></div>
-            <div className="detail-row"><span>Acción</span><span style={{ fontSize: 12, color: '#a78bfa' }}>{readiness.recommended_action || '—'}</span></div>
+            <div className="detail-row"><span>Acción</span><span style={{ fontSize: 12, color: 'var(--color-uploading)' }}>{readiness.recommended_action || '—'}</span></div>
             <div className="detail-row"><span>Compat. score</span><span>{readiness.compatibility_score?.toFixed(0) ?? '—'}/100</span></div>
             <div className="detail-row"><span>Readiness score</span><span>{readiness.upload_readiness_score?.toFixed(0) ?? '—'}/100</span></div>
             {readiness.blockers.length > 0 && (
               <div style={{ marginTop: 8 }}>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>BLOQUEADORES</div>
                 {readiness.blockers.map((b, i) => (
-                  <div key={i} style={{ fontSize: 11, color: 'var(--color-missing)' }}>⛔ {b}</div>
+                  <div key={i} style={{ fontSize: 11, color: 'var(--color-missing)' }}><IconoBloqueado /> {b}</div>
                 ))}
               </div>
             )}

@@ -7,19 +7,20 @@ import { LoadingState } from '../components/LoadingState'
 import { ErrorState } from '../components/ErrorState'
 import { formatDate } from '../utils/format'
 import { useRefrescoPorAvisos } from '../hooks/useRefrescoPorAvisos'
+import { IconoAviso } from '../components/Iconos'
 
 const INTERVAL_OPTIONS_MINUTES = [15, 30, 45, 60, 90, 120, 180, 360, 720]
 
 const STATUS_COLOR: Record<string, string> = {
-  completed: '#22c55e',
-  failed: '#ef4444',
-  skipped: '#f59e0b',
-  running: '#3b82f6',
+  completed: 'var(--color-available)',
+  failed: 'var(--color-error)',
+  skipped: 'var(--color-warning)',
+  running: 'var(--text-accent)',
 }
 
 function statusColor(status: string | null): string {
-  if (!status) return '#6b7280'
-  return STATUS_COLOR[status] ?? '#6b7280'
+  if (!status) return 'var(--color-neutral)'
+  return STATUS_COLOR[status] ?? 'var(--color-neutral)'
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -67,7 +68,7 @@ function LogsModal({ taskKey, taskName, onClose }: { taskKey: string; taskName: 
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 700 }}>
         <div className="modal-header">
-          <h2 className="modal-title">Logs — {taskName}</h2>
+          <h2 className="modal-title">Logs: {taskName}</h2>
           <button className="btn-icon" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body" style={{ maxHeight: 480, overflowY: 'auto' }}>
@@ -86,7 +87,7 @@ function LogsModal({ taskKey, taskName, onClose }: { taskKey: string; taskName: 
                     <td style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{formatDate(log.finished_at)}</td>
                     <td style={{ fontSize: 12 }}>
                       {log.status === 'failed' && log.summary
-                        ? <span style={{ color: '#ef4444', display: 'inline-flex', alignItems: 'center', gap: 6 }}><span aria-hidden>⚠</span>{log.summary}</span>
+                        ? <span style={{ color: 'var(--color-error)', display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconoAviso />{log.summary}</span>
                         : (log.summary ?? '—')}
                     </td>
                   </tr>
@@ -160,7 +161,7 @@ function TaskCard({ task, onChanged }: { task: ScheduledTask; onChanged: () => v
         <span style={{
           fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6,
           color: statusColor(task.last_status),
-          background: 'rgba(255,255,255,0.04)',
+          background: 'color-mix(in srgb, var(--overlay-light) 4%, transparent)',
           whiteSpace: 'nowrap',
         }}>
           {task.last_status ? statusLabel(task.last_status) : 'sin ejecutar'}
@@ -184,19 +185,19 @@ function TaskCard({ task, onChanged }: { task: ScheduledTask; onChanged: () => v
         </div>
 
         <div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Última ejecución</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Última ejecución</div>
           <div style={{ fontSize: 13 }}>{formatDate(task.last_run_at)}</div>
         </div>
 
         <div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Próxima ejecución</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Próxima ejecución</div>
           <div style={{ fontSize: 13 }}>{formatCountdown(task.next_run_at, now)}</div>
         </div>
       </div>
 
       {task.last_summary && (
         task.last_status === 'failed'
-          ? <p style={{ fontSize: 12, color: '#ef4444', marginTop: 10, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 6 }}><span aria-hidden>⚠</span>{task.last_summary}</p>
+          ? <p style={{ fontSize: 12, color: 'var(--color-error)', marginTop: 10, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 6 }}><IconoAviso />{task.last_summary}</p>
           : <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 10, marginBottom: 0 }}>{task.last_summary}</p>
       )}
 
@@ -209,7 +210,7 @@ function TaskCard({ task, onChanged }: { task: ScheduledTask; onChanged: () => v
           </button>
         ) : (
           <span style={{ fontSize: 12, color: 'var(--text-muted)', alignSelf: 'center' }}>
-            Sin refresco manual (para no saturar el servicio) — próxima automática {formatCountdown(task.next_run_at, now)}
+            Sin refresco manual (para no saturar el servicio). Próxima automática: {formatCountdown(task.next_run_at, now)}
           </span>
         )}
         <button className="btn btn-secondary btn-sm" onClick={() => setLogsOpen(true)}>Ver logs</button>

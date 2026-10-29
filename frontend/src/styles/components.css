@@ -12,17 +12,17 @@
   border-radius: 0;
 }
 .settings-tab.active {
-  color: var(--color-accent, #7c6af7);
-  border-bottom-color: var(--color-accent, #7c6af7);
+  color: var(--color-tab-active);
+  border-bottom-color: var(--color-tab-active);
 }
 
 /* Detail-page semantic cards (DetailCard.tsx's <Card>) */
 .detail-card {
-  background: rgba(255, 255, 255, 0.03);
+  background: color-mix(in srgb, var(--overlay-light) 3%, transparent);
   border: 1px solid var(--border);
 }
 .detail-poster {
-  background: rgba(255, 255, 255, 0.04);
+  background: color-mix(in srgb, var(--overlay-light) 4%, transparent);
   border: 1px solid var(--border-input);
 }
 
@@ -30,7 +30,7 @@
    the Recomendaciones/Actividad de subida tables. Same color as
    .detail-poster, thinner border since these render much smaller. */
 .poster-thumb {
-  background: rgba(255, 255, 255, 0.04);
+  background: color-mix(in srgb, var(--overlay-light) 4%, transparent);
   border: 1px solid var(--border-input);
 }
 .detail-card-title {
@@ -62,8 +62,12 @@
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s, transform 0.08s;
   white-space: nowrap;
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 .btn:disabled {
@@ -72,14 +76,14 @@
 }
 
 .btn-primary {
-  background: #2563eb;
-  color: #fff;
-  border-color: #2563eb;
+  background: var(--color-primary);
+  color: var(--text-on-color);
+  border-color: var(--color-primary);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #1d4ed8;
-  border-color: #1d4ed8;
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
 }
 
 .btn-secondary {
@@ -94,13 +98,13 @@
 }
 
 .btn-danger {
-  background: rgba(239, 68, 68, 0.12);
-  color: #ef4444;
-  border-color: rgba(239, 68, 68, 0.25);
+  background: color-mix(in srgb, var(--color-error) 12%, transparent);
+  color: var(--color-error);
+  border-color: color-mix(in srgb, var(--color-error) 25%, transparent);
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.2);
+  background: color-mix(in srgb, var(--color-error) 20%, transparent);
 }
 
 .btn-ghost {
@@ -150,50 +154,50 @@
 }
 
 /* Status badges */
-.badge.status-available    { background: rgba(34,197,94,0.22);   color: #22c55e; }
-.badge.status-missing      { background: rgba(239,68,68,0.22);   color: #ef4444; }
-.badge.status-queued       { background: rgba(59,130,246,0.22);  color: #3b82f6; }
-.badge.status-downloading  { background: rgba(129,140,248,0.22); color: #818cf8; }
-.badge.status-pending      { background: rgba(245,158,11,0.22);  color: #f59e0b; }
-.badge.status-uploading    { background: rgba(168,85,247,0.22);  color: #a855f7; }
-.badge.status-uploaded     { background: rgba(22,163,74,0.22);   color: #16a34a; }
-.badge.status-error        { background: rgba(239,68,68,0.22);   color: #ef4444; }
-.badge.status-partial      { background: rgba(245,158,11,0.22);  color: #f59e0b; }
-.badge.status-unknown      { background: rgba(107,114,128,0.22); color: #9ca3af; }
+.badge.status-available    { background: color-mix(in srgb, var(--color-available) 22%, transparent);   color: var(--color-available); }
+.badge.status-missing      { background: color-mix(in srgb, var(--color-missing) 22%, transparent);   color: var(--color-missing); }
+.badge.status-queued       { background: color-mix(in srgb, var(--color-queued) 22%, transparent);  color: var(--color-queued); }
+.badge.status-downloading  { background: color-mix(in srgb, var(--color-downloading) 22%, transparent); color: var(--color-downloading); }
+.badge.status-pending      { background: color-mix(in srgb, var(--color-pending) 22%, transparent);  color: var(--color-pending); }
+.badge.status-uploading    { background: color-mix(in srgb, var(--color-uploading) 22%, transparent);  color: var(--color-uploading); }
+.badge.status-uploaded     { background: color-mix(in srgb, var(--color-uploaded) 22%, transparent);   color: var(--color-uploaded); }
+.badge.status-error        { background: color-mix(in srgb, var(--color-error) 22%, transparent);   color: var(--color-error); }
+.badge.status-partial      { background: color-mix(in srgb, var(--color-partial) 22%, transparent);  color: var(--color-partial); }
+.badge.status-unknown      { background: color-mix(in srgb, var(--color-neutral) 22%, transparent); color: var(--color-filled); }
 
 /* Request status badges */
-.badge.req-none            { background: rgba(107,114,128,0.20); color: #9ca3af; }
-.badge.req-compatible      { background: rgba(34,197,94,0.22);   color: #22c55e; }
-.badge.req-partial         { background: rgba(245,158,11,0.22);  color: #f59e0b; }
-.badge.req-not-compatible  { background: rgba(239,68,68,0.22);   color: #ef4444; }
+.badge.req-none            { background: color-mix(in srgb, var(--color-neutral) 20%, transparent); color: var(--color-filled); }
+.badge.req-compatible      { background: color-mix(in srgb, var(--color-compatible) 22%, transparent);   color: var(--color-compatible); }
+.badge.req-partial         { background: color-mix(in srgb, var(--color-partial) 22%, transparent);  color: var(--color-partial); }
+.badge.req-not-compatible  { background: color-mix(in srgb, var(--color-missing) 22%, transparent);   color: var(--color-missing); }
 /* 'No disponible' (there IS a library entry, but no file on disk) reads as
    "Faltante" and in red: it's the same thing Biblioteca calls Faltante, and
    it's actionable — you'd re-download it. It used to render as a plain dash,
    which hid a real verdict among the empty cells. */
 /* (nota histórica) .req-unavailable estuvo sin usar mientras
    (see StatusBadge's dash-fallback for type 'request'), never a badge. */
-.badge.req-unavailable     { background: rgba(239,68,68,0.22);   color: #ef4444; }
-.badge.req-claimed         { background: rgba(168,85,247,0.22);  color: #a855f7; }
-.badge.req-pending         { background: rgba(234,179,8,0.22);   color: #eab308; }
+.badge.req-unavailable     { background: color-mix(in srgb, var(--color-missing) 22%, transparent);   color: var(--color-missing); }
+.badge.req-claimed         { background: color-mix(in srgb, var(--color-uploading) 22%, transparent);  color: var(--color-uploading); }
+.badge.req-pending         { background: color-mix(in srgb, var(--color-req-pending) 22%, transparent);   color: var(--color-req-pending); }
 /* 'Llena' en un gris MÁS APAGADO que 'Sin petición': los dos eran idénticos
    (#9ca3af sobre el mismo fondo) y no había forma de distinguirlos de un
    vistazo. Además encaja con lo que significan: una petición llena ya está
    resuelta y no pide nada de ti, mientras que "Sin petición" sí es un hueco
    que podrías llenar. Se ve en Biblioteca, en Peticiones y en Subidas. */
-.badge.req-filled          { background: rgba(107,114,128,0.14); color: #6b7280; }
-.badge.req-unknown         { background: rgba(107,114,128,0.20); color: #9ca3af; }
+.badge.req-filled          { background: color-mix(in srgb, var(--color-neutral) 14%, transparent); color: var(--color-neutral); }
+.badge.req-unknown         { background: color-mix(in srgb, var(--color-neutral) 20%, transparent); color: var(--color-filled); }
 /* Nothing in your library matches this request at all — not even an entry
    without a file. Neutral white: it isn't a problem with your copy, you just
    don't have one. */
-.badge.req-not-imported    { background: rgba(255,255,255,0.14); color: #e5e7eb; }
+.badge.req-not-imported    { background: color-mix(in srgb, var(--overlay-light) 14%, transparent); color: var(--text-primary); }
 
 /* Nomenclature badges */
-.badge.nom-correct         { background: rgba(34,197,94,0.22);   color: #22c55e; }
-.badge.nom-unchecked       { background: rgba(107,114,128,0.22); color: #9ca3af; }
-.badge.nom-partial         { background: rgba(245,158,11,0.22);  color: #f59e0b; }
-.badge.nom-not-adapted     { background: rgba(239,68,68,0.22);   color: #ef4444; }
-.badge.nom-na              { background: rgba(107,114,128,0.20); color: #9ca3af; }
-.badge.nom-unknown         { background: rgba(107,114,128,0.20); color: #9ca3af; }
+.badge.nom-correct         { background: color-mix(in srgb, var(--color-available) 22%, transparent);   color: var(--color-available); }
+.badge.nom-unchecked       { background: color-mix(in srgb, var(--color-neutral) 22%, transparent); color: var(--text-secondary); }
+.badge.nom-partial         { background: color-mix(in srgb, var(--color-partial) 22%, transparent);  color: var(--color-partial); }
+.badge.nom-not-adapted     { background: color-mix(in srgb, var(--color-error) 22%, transparent);   color: var(--color-error); }
+.badge.nom-na              { background: color-mix(in srgb, var(--color-neutral) 20%, transparent); color: var(--text-secondary); }
+.badge.nom-unknown         { background: color-mix(in srgb, var(--color-neutral) 20%, transparent); color: var(--color-filled); }
 
 /* Inputs */
 .form-group {
@@ -206,8 +210,6 @@
   font-size: 12px;
   font-weight: 600;
   color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
 .form-input {
@@ -218,12 +220,14 @@
   border-radius: var(--radius-input);
   color: var(--text-primary);
   font-size: 13px;
-  outline: none;
+  outline: 2px solid transparent;
+  outline-offset: -2px;
   transition: border-color 0.15s;
 }
 
 .form-input:focus {
   border-color: var(--text-accent);
+  outline-color: var(--color-focus);
 }
 
 .form-input::placeholder {
@@ -255,7 +259,7 @@ select {
 
 option,
 optgroup {
-  background-color: #0f1420;
+  background-color: var(--bg-surface);
   color: var(--text-primary);
 }
 
@@ -266,15 +270,15 @@ optgroup {
 
 .form-error {
   font-size: 12px;
-  color: #ef4444;
+  color: var(--color-error);
 }
 
 .form-warning {
   font-size: 12px;
-  color: #f59e0b;
+  color: var(--color-warning);
   padding: 8px 12px;
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.2);
+  background: color-mix(in srgb, var(--color-warning) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-warning) 20%, transparent);
   border-radius: 6px;
 }
 
@@ -289,7 +293,7 @@ optgroup {
 .spinner {
   width: 20px;
   height: 20px;
-  border: 2px solid rgba(255, 255, 255, 0.1);
+  border: 2px solid color-mix(in srgb, var(--overlay-light) 10%, transparent);
   border-top-color: var(--text-accent);
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
@@ -314,27 +318,27 @@ optgroup {
 }
 
 .alert-error {
-  background: rgba(239, 68, 68, 0.08);
-  border-color: rgba(239, 68, 68, 0.25);
-  color: #fca5a5;
+  background: color-mix(in srgb, var(--color-error) 8%, transparent);
+  border-color: color-mix(in srgb, var(--color-error) 25%, transparent);
+  color: var(--color-error-pale);
 }
 
 .alert-success {
-  background: rgba(34, 197, 94, 0.08);
-  border-color: rgba(34, 197, 94, 0.25);
-  color: #86efac;
+  background: color-mix(in srgb, var(--color-available) 8%, transparent);
+  border-color: color-mix(in srgb, var(--color-available) 25%, transparent);
+  color: var(--color-available-pale);
 }
 
 .alert-warning {
-  background: rgba(245, 158, 11, 0.08);
-  border-color: rgba(245, 158, 11, 0.25);
-  color: #fde68a;
+  background: color-mix(in srgb, var(--color-warning) 8%, transparent);
+  border-color: color-mix(in srgb, var(--color-warning) 25%, transparent);
+  color: var(--color-warning-pale);
 }
 
 .alert-info {
-  background: rgba(59, 130, 246, 0.08);
-  border-color: rgba(59, 130, 246, 0.25);
-  color: #93c5fd;
+  background: color-mix(in srgb, var(--color-info) 8%, transparent);
+  border-color: color-mix(in srgb, var(--color-info) 25%, transparent);
+  color: var(--color-accent-pale);
 }
 
 /* Table */
@@ -342,15 +346,15 @@ optgroup {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
+  /* Cifras del mismo ancho: tamaños, fechas y duraciones se alinean. */
+  font-variant-numeric: tabular-nums;
 }
 
 .data-table th {
   text-align: left;
   padding: 8px 12px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   color: var(--text-muted);
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
@@ -374,6 +378,7 @@ optgroup {
   bottom: 0;
   z-index: 2;
   background: var(--bg-surface);
+  color: var(--text-primary);
   box-shadow: inset 0 1px 0 var(--border);
   /* A touch more room above the row's own content than the default cell
      padding gives, so it doesn't read as jammed right under the divider
@@ -390,13 +395,13 @@ optgroup {
 
 .data-table td {
   padding: 10px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid color-mix(in srgb, var(--overlay-light) 4%, transparent);
   color: var(--text-primary);
   vertical-align: middle;
 }
 
 .data-table tr:hover td {
-  background: rgba(255, 255, 255, 0.025);
+  background: color-mix(in srgb, var(--overlay-light) 2.5%, transparent);
 }
 
 .data-table tr.clickable {
@@ -489,6 +494,20 @@ optgroup {
   border-color: var(--border-hover);
 }
 
+/* La misma fila dentro del asistente, que ya es una tarjeta: sin caja propia,
+   separada por una línea fina. */
+.wizard-instance {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.wizard-instance:first-child {
+  border-top: 1px solid var(--border);
+}
+
 .instance-card-info {
   display: flex;
   align-items: center;
@@ -550,7 +569,7 @@ optgroup {
 
 /* Phase 5B — Requests page */
 .row-selected {
-  background: rgba(59, 130, 246, 0.08) !important;
+  background: color-mix(in srgb, var(--text-accent) 8%, transparent) !important;
 }
 
 .sync-info {
@@ -565,7 +584,7 @@ optgroup {
 }
 .sync-info__throttle {
   font-size: 12px;
-  color: var(--color-warning, #f59e0b);
+  color: var(--color-warning);
 }
 
 .detail-panel {
@@ -602,10 +621,8 @@ optgroup {
   margin-top: 12px;
 }
 .detail-panel__section-title {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   color: var(--text-muted);
   margin-bottom: 8px;
 }
@@ -685,8 +702,8 @@ optgroup {
   flex-direction: column;
 }
 .detail-card-rows > * + * {
-  margin-top: var(--row-gap, 14px);
-  padding-top: var(--row-gap, 14px);
+  margin-top: 14px;
+  padding-top: 14px;
   border-top: 1px solid var(--border);
 }
 .text-muted {
@@ -697,7 +714,7 @@ optgroup {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
+  background: color-mix(in srgb, var(--overlay-dark) 55%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -705,14 +722,14 @@ optgroup {
 }
 
 .modal {
-  background: var(--bg-surface, rgba(30, 30, 50, 0.98));
-  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
   border-radius: 12px;
   width: 90%;
   max-width: 600px;
   max-height: calc(var(--vh100) * 0.85);
   overflow-y: auto;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  box-shadow: 0 8px 32px color-mix(in srgb, var(--overlay-dark) 40%, transparent);
 }
 
 .modal-header {
@@ -720,7 +737,7 @@ optgroup {
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
+  border-bottom: 1px solid var(--border);
 }
 
 .modal-title {
@@ -734,20 +751,21 @@ optgroup {
 }
 
 .error-text {
-  color: var(--color-error, #f87171);
+  color: var(--color-error);
 }
 
 /* Phase 10A — NomenclatureFieldsModal */
 
 .modal-panel {
-  background: var(--bg-surface, rgba(30, 30, 50, 0.98));
-  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
   border-radius: 12px;
   width: 90%;
   max-width: 600px;
   max-height: calc(var(--vh100) * 0.9);
   overflow-y: auto;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  box-shadow: 0 8px 32px color-mix(in srgb, var(--overlay-dark) 40%, transparent);
 }
 
 .modal-wide {
@@ -767,7 +785,7 @@ optgroup {
 
 .modal-close:hover {
   color: var(--text-primary);
-  background: rgba(255,255,255,0.06);
+  background: color-mix(in srgb, var(--overlay-light) 6%, transparent);
 }
 
 .modal-actions {
@@ -798,9 +816,7 @@ optgroup {
   vertical-align: top;
 }
 .cmp-table thead th {
-  font-size: 10.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-size: 12px;
   color: var(--text-muted);
   font-weight: 600;
 }
@@ -858,29 +874,29 @@ optgroup {
   font-size: 12px;
   font-weight: 600;
   color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
 .fields-grid input,
 .fields-grid select {
   padding: 7px 10px;
-  background: var(--bg-input, rgba(0,0,0,0.3));
-  border: 1px solid var(--border-input, rgba(255,255,255,0.12));
+  background: var(--bg-input);
+  border: 1px solid var(--border-input);
   border-radius: 6px;
   color: var(--text-primary);
   font-size: 13px;
-  outline: none;
+  outline: 2px solid transparent;
+  outline-offset: -2px;
 }
 
 .fields-grid input:focus,
 .fields-grid select:focus {
-  border-color: var(--text-accent, #818cf8);
+  border-color: var(--text-accent);
+  outline-color: var(--color-focus);
 }
 
 .preview-box {
-  background: rgba(255,255,255,0.03);
-  border: 1px solid var(--border, rgba(255,255,255,0.08));
+  background: color-mix(in srgb, var(--overlay-light) 3%, transparent);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 12px 14px;
   font-size: 13px;
@@ -892,13 +908,13 @@ optgroup {
 }
 
 .preview-ok {
-  border-color: rgba(34,197,94,0.3);
-  background: rgba(34,197,94,0.05);
+  border-color: color-mix(in srgb, var(--color-available) 30%, transparent);
+  background: color-mix(in srgb, var(--color-available) 5%, transparent);
 }
 
 .preview-error {
-  border-color: rgba(239,68,68,0.3);
-  background: rgba(239,68,68,0.05);
+  border-color: color-mix(in srgb, var(--color-error) 30%, transparent);
+  background: color-mix(in srgb, var(--color-error) 5%, transparent);
 }
 
 .apply-section {
@@ -911,22 +927,24 @@ optgroup {
 .confirm-input {
   flex: 1;
   padding: 7px 10px;
-  background: rgba(0,0,0,0.3);
-  border: 1px solid rgba(255,255,255,0.12);
+  background: color-mix(in srgb, var(--overlay-dark) 30%, transparent);
+  border: 1px solid color-mix(in srgb, var(--overlay-light) 12%, transparent);
   border-radius: 6px;
   color: var(--text-primary);
   font-size: 13px;
-  font-family: monospace;
-  outline: none;
+  font-family: var(--font-mono);
+  outline: 2px solid transparent;
+  outline-offset: -2px;
 }
 
 .confirm-input:focus {
-  border-color: var(--text-accent, #818cf8);
+  border-color: var(--text-accent);
+  outline-color: var(--color-focus);
 }
 
-.text-error  { color: #f87171; }
-.text-success { color: #4ade80; }
-.text-warning { color: #fbbf24; }
+.text-error  { color: var(--color-error-soft); }
+.text-success { color: var(--color-available-soft); }
+.text-warning { color: var(--color-warning-soft); }
 .text-sm     { font-size: 12px; }
 
 .badge-tmdb {
@@ -934,19 +952,19 @@ optgroup {
   align-items: center;
   padding: 1px 6px;
   border-radius: 4px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
-  background: rgba(34,197,94,0.15);
-  color: #4ade80;
-  border: 1px solid rgba(34,197,94,0.3);
+  background: color-mix(in srgb, var(--color-available) 15%, transparent);
+  color: var(--color-available-soft);
+  border: 1px solid color-mix(in srgb, var(--color-available) 30%, transparent);
   margin-left: 4px;
 }
 
 
 /* Blinking "save" button when a form has unsaved changes. */
 @keyframes btn-unsaved-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0.55); opacity: 1; }
-  50%      { box-shadow: 0 0 0 5px rgba(59,130,246,0); opacity: 0.72; }
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--text-accent) 55%, transparent); opacity: 1; }
+  50%      { box-shadow: 0 0 0 5px transparent; opacity: 0.72; }
 }
 .btn-unsaved {
   animation: btn-unsaved-pulse 1.1s ease-in-out infinite;
@@ -968,7 +986,7 @@ optgroup {
  * accent blue) instead of an opacity pulse, so it reads as "clickable" without
  * an extra icon. Hovering freezes it solid blue. */
 @keyframes source-link-blink {
-  0%, 100% { color: #fff; }
+  0%, 100% { color: var(--text-on-color); }
   50%      { color: var(--text-accent); }
 }
 .source-bitrate-link {
@@ -992,14 +1010,14 @@ optgroup {
  * just "something dimming". Green = new/actionable (eMuwarez field);
  * red = failed (pre-upload verification field). */
 @keyframes chip-blink-new {
-  0%, 100% { border-color: rgba(34,197,94,0.85); box-shadow: 0 0 6px -1px rgba(34,197,94,0.55); }
-  50%      { border-color: rgba(59,130,246,0.3); box-shadow: none; }
+  0%, 100% { border-color: color-mix(in srgb, var(--color-available) 85%, transparent); box-shadow: 0 0 6px -1px color-mix(in srgb, var(--color-available) 55%, transparent); }
+  50%      { border-color: color-mix(in srgb, var(--text-accent) 30%, transparent); box-shadow: none; }
 }
 .value-chip.chip-blink-new { animation: chip-blink-new 1.6s ease-in-out infinite; }
 
 @keyframes chip-blink-alert {
-  0%, 100% { border-color: rgba(239,68,68,0.85); box-shadow: 0 0 6px -1px rgba(239,68,68,0.55); }
-  50%      { border-color: rgba(59,130,246,0.3); box-shadow: none; }
+  0%, 100% { border-color: color-mix(in srgb, var(--color-error) 85%, transparent); box-shadow: 0 0 6px -1px color-mix(in srgb, var(--color-error) 55%, transparent); }
+  50%      { border-color: color-mix(in srgb, var(--text-accent) 30%, transparent); box-shadow: none; }
 }
 .value-chip.chip-blink-alert { animation: chip-blink-alert 1.6s ease-in-out infinite; }
 
@@ -1008,10 +1026,22 @@ optgroup {
  * normal linkable-blue instead of introducing a new color, since nothing is
  * "new" or "failed" here, just actively happening right now. */
 @keyframes chip-blink-live {
-  0%, 100% { border-color: rgba(59,130,246,0.95); box-shadow: 0 0 6px -1px rgba(59,130,246,0.7); }
-  50%      { border-color: rgba(59,130,246,0.3); box-shadow: none; }
+  0%, 100% { border-color: color-mix(in srgb, var(--text-accent) 95%, transparent); box-shadow: 0 0 6px -1px color-mix(in srgb, var(--text-accent) 70%, transparent); }
+  50%      { border-color: color-mix(in srgb, var(--text-accent) 30%, transparent); box-shadow: none; }
 }
 .value-chip.chip-blink-live { animation: chip-blink-live 1.6s ease-in-out infinite; }
+
+/* Con "reducir movimiento" nada parpadea: cada estado se queda fijo en su
+   color de aviso, que ya lo distingue. El indicador de carga gira despacio. */
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation-duration: 2.4s; }
+  .btn-unsaved { animation: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--text-accent) 55%, transparent); }
+  .badge-blink { animation: none; }
+  .source-bitrate-link { animation: none; color: var(--text-accent); }
+  .value-chip.chip-blink-new { animation: none; border-color: color-mix(in srgb, var(--color-available) 85%, transparent); }
+  .value-chip.chip-blink-alert { animation: none; border-color: color-mix(in srgb, var(--color-missing) 85%, transparent); }
+  .value-chip.chip-blink-live { animation: none; border-color: color-mix(in srgb, var(--text-accent) 95%, transparent); }
+}
 
 /* Column-header (Excel-style) filter menu options. */
 .hf-option {
@@ -1031,12 +1061,12 @@ optgroup {
   background: var(--bg-card-hover);
 }
 .hf-option.selected {
-  background: rgba(59,130,246,0.16);
-  color: #3b82f6;
+  background: color-mix(in srgb, var(--text-accent) 16%, transparent);
+  color: var(--text-accent);
   font-weight: 600;
 }
 .hf-option.selected:hover {
-  background: rgba(59,130,246,0.26);
+  background: color-mix(in srgb, var(--text-accent) 26%, transparent);
 }
 
 /* Clickable text (dashboard recent-activity title, radarr/sonarr origin link):
@@ -1048,19 +1078,10 @@ optgroup {
   transition: color 0.12s;
 }
 .hover-link:hover {
-  color: var(--text-accent, #2563eb);
+  color: var(--text-accent);
   text-decoration: none;  /* beat the global a:hover underline */
 }
 
-/* Grow the service icon (Radarr/Sonarr) a touch when hovering its link. */
-.hover-link svg,
-.hover-link img {
-  transition: transform 0.12s ease;
-}
-.hover-link:hover svg,
-.hover-link:hover img {
-  transform: scale(1.18);
-}
 
 /* Field-value mini-card (dedicated detail pages — Biblioteca/Peticiones/
    Subidas): the FieldRow label stays plain text, but its value sits inside
@@ -1076,8 +1097,8 @@ optgroup {
   gap: 6px;
   min-width: 0;
   max-width: 100%;
-  background: rgba(255,255,255,0.035);
-  border: 1px solid rgba(255,255,255,0.09);
+  background: color-mix(in srgb, var(--overlay-light) 3.5%, transparent);
+  border: 1px solid color-mix(in srgb, var(--overlay-light) 9%, transparent);
   border-radius: 6px;
   padding: 4px 9px;
   font-size: 13.5px;
@@ -1096,11 +1117,11 @@ optgroup {
   cursor: pointer;
   /* Subtle blue border even before hovering, so a field with a link is
      recognizable at a glance. */
-  border-color: rgba(59,130,246,0.3);
+  border-color: color-mix(in srgb, var(--text-accent) 30%, transparent);
 }
 .value-chip.linkable:hover {
-  background: rgba(59,130,246,0.1);
-  border-color: rgba(59,130,246,0.4);
+  background: color-mix(in srgb, var(--text-accent) 10%, transparent);
+  border-color: color-mix(in srgb, var(--text-accent) 40%, transparent);
   color: var(--text-accent);
 }
 /* Monochrome contextual icon (currentColor) — follows the chip's own text
@@ -1115,15 +1136,11 @@ optgroup {
   color: var(--text-accent);
 }
 /* Brand-colored icons (Radarr/Sonarr, provider tiles, TMDb/IMDb, the folder
-   icon) keep their own fixed color on hover — only grow a touch, same rule
-   already used for .hover-link's own icon. */
+   icon) keep their own fixed color on hover. La respuesta al cursor la da la
+   ficha entera (borde y color), no el icono creciendo dentro. */
 .value-chip .brand-icon {
   display: inline-flex;
   flex-shrink: 0;
-  transition: transform 0.14s ease;
-}
-.value-chip.linkable:hover .brand-icon {
-  transform: scale(1.18);
 }
 /* When a value chip WRAPS an existing .hover-link (ServiceLabel/ProviderTag/
    ExternalIdLink render their own inner <a> already) instead of being the
@@ -1131,10 +1148,6 @@ optgroup {
    link's own snug hitbox (no chip padding) would react. */
 .value-chip.linkable:hover .hover-link {
   color: var(--text-accent);
-}
-.value-chip.linkable:hover .hover-link svg,
-.value-chip.linkable:hover .hover-link img {
-  transform: scale(1.18);
 }
 
 /* Plain muted placeholder ("–") for a field with no value — not a chip,
@@ -1179,8 +1192,8 @@ optgroup {
   z-index: -1;
   background: linear-gradient(
     180deg,
-    rgba(10, 13, 20, 0.2) 0%,
-    rgba(10, 13, 20, 0.55) 40%,
+    color-mix(in srgb, var(--bg-base) 20%, transparent) 0%,
+    color-mix(in srgb, var(--bg-base) 55%, transparent) 40%,
     var(--bg-base) 88%
   );
 }
@@ -1190,13 +1203,13 @@ optgroup {
    hero) so they read exactly as they do everywhere else in the app. */
 .detail-hero .btn-ghost,
 .detail-hero .btn-secondary {
-  background: rgba(10, 13, 20, 0.7);
+  background: color-mix(in srgb, var(--bg-base) 70%, transparent);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
 }
 .detail-hero .btn-ghost:hover:not(:disabled),
 .detail-hero .btn-secondary:hover:not(:disabled) {
-  background: rgba(10, 13, 20, 0.88);
+  background: color-mix(in srgb, var(--bg-base) 88%, transparent);
 }
 /* .btn-primary looks solid in the plain theme (components.css) but the HUD
    theme (hud-theme.css) repaints it as a translucent cyan gradient — fine
@@ -1207,23 +1220,23 @@ optgroup {
    HUD look but reads clearly regardless of what's behind it. */
 .hud-app .detail-hero .btn-primary {
   background:
-    linear-gradient(180deg, rgba(47, 216, 255, .28), rgba(28, 125, 255, .42)),
-    rgba(6, 14, 28, 0.92);
+    linear-gradient(180deg, color-mix(in srgb, var(--hud-cyan) 28%, transparent), color-mix(in srgb, var(--hud-azure) 42%, transparent)),
+    color-mix(in srgb, var(--hud-panel-solid) 92%, transparent);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
 }
 .hud-app .detail-hero .btn-primary:hover:not(:disabled) {
   background:
-    linear-gradient(180deg, rgba(47, 216, 255, .38), rgba(28, 125, 255, .52)),
-    rgba(6, 14, 28, 0.92);
+    linear-gradient(180deg, color-mix(in srgb, var(--hud-cyan) 38%, transparent), color-mix(in srgb, var(--hud-azure) 52%, transparent)),
+    color-mix(in srgb, var(--hud-panel-solid) 92%, transparent);
 }
 .detail-hero .btn-danger {
-  background: rgba(40, 12, 12, 0.75);
+  background: color-mix(in srgb, var(--bg-danger-deep) 75%, transparent);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
 }
 .detail-hero .btn-danger:hover:not(:disabled) {
-  background: rgba(56, 14, 14, 0.9);
+  background: color-mix(in srgb, var(--bg-danger-deep) 90%, transparent);
 }
 
 
@@ -1244,8 +1257,7 @@ optgroup {
 }
 .tree-expander:hover,
 .tree-expander:focus-visible {
-  color: #2fd8ff;
-  outline: none;
+  color: var(--color-focus);
 }
 
 /* Botón de acción sin texto: el icono ya lo dice y el tooltip lo explica.

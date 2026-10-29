@@ -11,6 +11,7 @@ import { posterUrl } from '../utils/libraryItem'
 import { UploadButtonIcon, CancelButtonIcon, RequestCardIcon } from './DetailCard'
 import { useTooltip } from './Tooltip'
 import { useRefrescoPorAvisos } from '../hooks/useRefrescoPorAvisos'
+import { IconoPelicula } from './Iconos'
 
 const POLL_MS = 30000
 
@@ -58,7 +59,7 @@ function NuevaVersionIcon() {
 // severity `level` and matching the event's meaning — reusing the app's own
 // action-button icons (DetailCard.tsx) where one already fits.
 function NotifTitleIcon({ eventType, level }: { eventType: string; level: string }) {
-  const color = level === 'success' ? '#22c55e' : level === 'error' ? '#ef4444' : level === 'warning' ? '#f59e0b' : '#6366f1'
+  const color = level === 'success' ? 'var(--color-available)' : level === 'error' ? 'var(--color-error)' : level === 'warning' ? 'var(--color-warning)' : 'var(--color-indigo)'
   const icon =
     eventType === 'upload_completed' ? <UploadButtonIcon /> :
     eventType === 'upload_failed' ? <CancelButtonIcon /> :
@@ -96,7 +97,7 @@ function NotifPoster({ url }: { url: string | null }) {
           onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
         />
       ) : (
-        <span aria-hidden style={{ fontSize: 14, opacity: 0.35 }}>🎬</span>
+        <span style={{ display: 'inline-flex', fontSize: 14, opacity: 0.35 }}><IconoPelicula /></span>
       )}
     </PosterBox>
   )

@@ -84,7 +84,7 @@ no compila nada. Lo que hay que mirar:
 
 | Clave | En el repo | Para qué |
 |---|---|---|
-| `image` | `ghcr.io/kisnov/emuwarez-uploadrr:${EMUWAREZ_UPLOADRR_TAG:-latest}` | `latest` es la última de `master`. Cada imagen se publica también con el SHA completo del commit como etiqueta, para fijar una versión. |
+| `image` | `ghcr.io/kisnov/emuwarez-uploadrr:${EMUWAREZ_UPLOADRR_TAG:-latest}` | `latest` es la última imagen publicada. Para quedarte en una versión o volver atrás, `EMUWAREZ_UPLOADRR_TAG` acepta también `X.Y.Z` o el SHA de un commit de `master`: ver [Versiones y volver atrás](../README.md#versiones-y-volver-atrás). |
 | `ports` | `${EMUWAREZ_UPLOADRR_PORT:-9494}:9494` | Interfaz web y API. |
 | `user` | `${PUID:-1000}:${PGID:-1000}` | El usuario con el que corre todo (sección 3). |
 | `cpus`, `mem_limit` | `"2"`, `"2g"` | Cada subida activa puede ocupar un núcleo entero (el hash del torrent) y unos 0,8 GB de RAM: con estos valores caben unas dos subidas en paralelo. Si subes *Máximo de Subidas en Paralelo* (Configuración → Otros), sube también estos dos. |
@@ -167,8 +167,9 @@ docker compose pull
 docker compose up -d
 ```
 
-La base de datos se migra sola. Si construyes la imagen tú, haz `git pull` y repite los dos comandos de
-[Construir la imagen tú mismo](#construir-la-imagen-tú-mismo).
+La base de datos se migra sola. Si la versión nueva falla, vuelve a la anterior con `EMUWAREZ_UPLOADRR_TAG`
+([Versiones y volver atrás](../README.md#versiones-y-volver-atrás)). Si construyes la imagen tú, haz `git pull` y
+repite los dos comandos de [Construir la imagen tú mismo](#construir-la-imagen-tú-mismo).
 
 ## 8. Backup
 

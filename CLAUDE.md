@@ -52,7 +52,10 @@ the upload with Uploadrr-EMU (`Kisnov/Uploadrr-EMU`, cloned into the image at `/
   a successful upload prints `Torrent URL: …`.
 - eMuwarez and TMDb keys travel in the URL query. Never log or return a raw URL: use
   `integrations.base.url_sin_claves`.
-- Image: `ghcr.io/kisnov/emuwarez-uploadrr`, built and published with `scripts/desplegar.sh`. Pass
+- Image: `ghcr.io/kisnov/emuwarez-uploadrr`. `.github/workflows/imagen.yml` builds it on every push to
+  `master` as `:<sha>` and `:latest`; a `vX.Y.Z` tag (pushed by `scripts/desplegar.sh` when it publishes a
+  version, or from a GitHub release) adds `:X.Y.Z` to that commit's image, and must match `__version__`.
+  `desplegar.sh` also builds and pushes `:latest` locally to publish the manifest. Pass
   `--build-arg UPLOADRR_COMMIT=…` or the Uploadrr-EMU clone layer comes from cache.
 - Version manifest: the Diagnóstico card compares the image's `APP_COMMIT` with `latest.json` in the public
   repo `Kisnov/uploadrr-version` (a fork of `Rovaal-code/uploadrr-version`); to test against another

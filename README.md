@@ -115,7 +115,9 @@ Abre `http://localhost:9494`: el asistente de configuración inicial se abre sol
 
 La imagen se publica con varias etiquetas, y `EMUWAREZ_UPLOADRR_TAG` (en el `.env`) elige cuál usa el compose:
 
-- `latest` (sin la variable): la última de `master`. Se actualiza con `docker compose pull && docker compose up -d`.
+- `latest` (sin la variable): la última imagen publicada. La publica el workflow con cada push a `master`, y
+  también `scripts/desplegar.sh`, desde el commit en que lo lances (normalmente la punta de `master`). Se
+  actualiza con `docker compose pull && docker compose up -d`.
 - `0.11.0`: una versión concreta, de las que tienen etiqueta `v0.11.0` en el repo. Sirve para quedarte en ella o
   para volver atrás si la nueva falla.
 - El sha de un commit de `master`: cada commit de `master` tiene su imagen.

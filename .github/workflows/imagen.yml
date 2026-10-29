@@ -19,12 +19,16 @@ permissions:
 
 jobs:
   publicar:
-    # Las construcciones van de una en una. GitHub solo guarda una pendiente
-    # por grupo: por eso el job de las etiquetas va en otro, para no poder
-    # sustituir (y cancelar) la construcción pendiente de su propio commit.
+    # Las construcciones van de una en una, y con `queue: max` esperan todas
+    # en la cola. Sin él GitHub guarda solo una pendiente por grupo, y un push
+    # nuevo cancelaría la del anterior: si ese commit tenía etiqueta vX.Y.Z, el
+    # job version esperaría una imagen que nadie construye. Ese job va en otro
+    # grupo porque espera a la imagen de su commit, y en este bloquearía la
+    # construcción que la hace.
     concurrency:
       group: imagen
       cancel-in-progress: false
+      queue: max
     # A mano también se puede elegir otra rama: solo master publica latest.
     if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest

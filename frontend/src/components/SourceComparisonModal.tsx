@@ -4,6 +4,7 @@ import { InfoIcon } from './InfoIcon'
 import { Tooltip } from './Tooltip'
 import { IconoAviso } from './Iconos'
 import { formatNumero } from '../utils/format'
+import { Modal } from './Modal'
 
 // Shared by the manual wizard's Source field: both the icon button and the
 // blinking value inside "Ver MediaInfo". Same modal and same detail-toggle
@@ -206,22 +207,16 @@ export function SourceComparisonModal({ comparison, initialShowDetail = false, o
 }) {
   const [showDetail, setShowDetail] = useState(initialShowDetail)
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: showDetail && comparison.engine ? 980 : 620 }}>
-        <div className="modal-header">
-          <h2 className="modal-title">Comparación del Source</h2>
-          <button className="modal-close" onClick={onClose}>✕</button>
-        </div>
-        <div className="modal-body">
-          <SourceCompareTable
-            comparison={comparison}
-            onShowEngineDetail={comparison.engine ? () => setShowDetail(true) : undefined}
-          />
-          {showDetail && comparison.engine && !comparison.engine.error && (
-            <SourceEngineDetail result={comparison.engine} />
-          )}
-        </div>
+    <Modal titulo="Comparación del Source" onClose={onClose} className="modal-wide" style={{ maxWidth: showDetail && comparison.engine ? 980 : 620 }}>
+      <div className="modal-body">
+        <SourceCompareTable
+          comparison={comparison}
+          onShowEngineDetail={comparison.engine ? () => setShowDetail(true) : undefined}
+        />
+        {showDetail && comparison.engine && !comparison.engine.error && (
+          <SourceEngineDetail result={comparison.engine} />
+        )}
       </div>
-    </div>
+    </Modal>
   )
 }

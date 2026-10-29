@@ -8,6 +8,7 @@ import { ErrorState } from '../components/ErrorState'
 import { formatDate } from '../utils/format'
 import { useRefrescoPorAvisos } from '../hooks/useRefrescoPorAvisos'
 import { IconoAviso } from '../components/Iconos'
+import { Modal } from '../components/Modal'
 
 const INTERVAL_OPTIONS_MINUTES = [15, 30, 45, 60, 90, 120, 180, 360, 720]
 
@@ -65,43 +66,37 @@ function LogsModal({ taskKey, taskName, onClose }: { taskKey: string; taskName: 
   useEffect(() => { load() }, [load])
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 700 }}>
-        <div className="modal-header">
-          <h2 className="modal-title">Logs: {taskName}</h2>
-          <button className="btn-icon" onClick={onClose}>✕</button>
-        </div>
-        <div className="modal-body" style={{ maxHeight: 480, overflowY: 'auto' }}>
-          {loading ? <p>Cargando…</p> : logs.length === 0 ? (
-            <p className="text-muted">Sin ejecuciones registradas todavía.</p>
-          ) : (
-            <table className="data-table">
-              <thead>
-                <tr><th>Estado</th><th>Iniciada</th><th>Finalizada</th><th>Resumen</th></tr>
-              </thead>
-              <tbody>
-                {logs.map(log => (
-                  <tr key={log.id}>
-                    <td><span style={{ color: statusColor(log.status), fontSize: 12, fontWeight: 600 }}>{statusLabel(log.status)}</span></td>
-                    <td style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{formatDate(log.started_at)}</td>
-                    <td style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{formatDate(log.finished_at)}</td>
-                    <td style={{ fontSize: 12 }}>
-                      {log.status === 'failed' && log.summary
-                        ? <span style={{ color: 'var(--color-error)', display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconoAviso />{log.summary}</span>
-                        : (log.summary ?? '—')}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-        <div className="detail-panel__actions" style={{ padding: '10px 16px' }}>
-          <button className="btn btn-secondary btn-sm" onClick={load} disabled={loading}>Actualizar</button>
-          <button className="btn btn-secondary" onClick={onClose} style={{ marginLeft: 'auto' }}>Cerrar</button>
-        </div>
+    <Modal titulo={<>Logs: {taskName}</>} onClose={onClose} style={{ maxWidth: 700 }}>
+      <div className="modal-body" style={{ maxHeight: 480, overflowY: 'auto' }}>
+        {loading ? <p>Cargando…</p> : logs.length === 0 ? (
+          <p className="text-muted">Sin ejecuciones registradas todavía.</p>
+        ) : (
+          <table className="data-table">
+            <thead>
+              <tr><th>Estado</th><th>Iniciada</th><th>Finalizada</th><th>Resumen</th></tr>
+            </thead>
+            <tbody>
+              {logs.map(log => (
+                <tr key={log.id}>
+                  <td><span style={{ color: statusColor(log.status), fontSize: 12, fontWeight: 600 }}>{statusLabel(log.status)}</span></td>
+                  <td style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{formatDate(log.started_at)}</td>
+                  <td style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{formatDate(log.finished_at)}</td>
+                  <td style={{ fontSize: 12 }}>
+                    {log.status === 'failed' && log.summary
+                      ? <span style={{ color: 'var(--color-error)', display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconoAviso />{log.summary}</span>
+                      : (log.summary ?? '—')}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
-    </div>
+      <div className="detail-panel__actions" style={{ padding: '10px 16px' }}>
+        <button className="btn btn-secondary btn-sm" onClick={load} disabled={loading}>Actualizar</button>
+        <button className="btn btn-secondary" onClick={onClose} style={{ marginLeft: 'auto' }}>Cerrar</button>
+      </div>
+    </Modal>
   )
 }
 

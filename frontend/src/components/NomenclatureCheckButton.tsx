@@ -9,6 +9,7 @@ import {
   type NomenclatureCheckInfo,
   type NomenclatureCheckSummary,
 } from '../api/library'
+import { Modal } from './Modal'
 
 // Turn a raw API error into a specific Spanish message. The most common one
 // here is a 404 with detail "Not Found" — that means the running server does
@@ -119,7 +120,6 @@ export function NomenclatureCheckButton({ item, onChecked, compact }: Props) {
   const canRun = !!info && info.available > 0
   const forceRerun = !!info && info.available > 0 && info.pending === 0
   const openTip = useTooltip('Comprobar nomenclatura')
-  const closeTip = useTooltip('Cerrar')
 
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -143,77 +143,71 @@ export function NomenclatureCheckButton({ item, onChecked, compact }: Props) {
       )}
 
       {open && (
-        <div className="modal-overlay" onClick={close}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 720 }}>
-            <div className="modal-header">
-              <h2 className="modal-title">Nomenclatura eMuwarez</h2>
-              <button className="btn-icon" onClick={close} {...closeTip.triggerProps}>✕{closeTip.tooltipNode}</button>
-            </div>
-            <div className="modal-body">
-              {loading && <div style={{ color: 'var(--text-muted)' }}>Cargando…</div>}
-              {error && <div style={{ color: 'var(--color-error)' }}>{error}</div>}
+        <Modal titulo="Nomenclatura eMuwarez" onClose={close} style={{ maxWidth: 720 }}>
+          <div className="modal-body">
+            {loading && <div style={{ color: 'var(--text-muted)' }}>Cargando…</div>}
+            {error && <div style={{ color: 'var(--color-error)' }}>{error}</div>}
 
-              {info && !loading && (
-                <div style={{ display: 'grid', gap: 14 }}>
-                  <div>
-                    <StatusBadge status={(info.status ?? item.nomenclature_status) ?? ''} type="nomenclature" />
+            {info && !loading && (
+              <div style={{ display: 'grid', gap: 14 }}>
+                <div>
+                  <StatusBadge status={(info.status ?? item.nomenclature_status) ?? ''} type="nomenclature" />
+                </div>
+
+                {info.available === 0 ? (
+                  <p style={{ color: 'var(--text-muted)' }}>No hay contenido disponible que comprobar.</p>
+                ) : (
+                  <p style={{ color: 'var(--text-secondary)', margin: 0 }}>{scopeText(info)}</p>
+                )}
+
+                {result && (
+                  <div style={{ display: 'grid', gap: 12, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+                    <div>
+                      <div style={labelStyle}>Nombre esperado</div>
+                      <FitText text={result.expected || '—'} />
+                    </div>
+                    <div>
+                      <div style={labelStyle}>Nombre real</div>
+                      <FitText text={result.actual || '—'} />
+                    </div>
+                    {result.status === 'Correcta' && (
+                      <p style={{ color: 'var(--color-available)', margin: 0 }}>El nombre cumple la nomenclatura de eMuwarez.</p>
+                    )}
+                    <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>
+                      El Proveedor/Source se obtiene del nombre del archivo y el Tag del Grupo (lo que va tras el último «-») no se compara.
+                    </p>
                   </div>
+                )}
 
-                  {info.available === 0 ? (
-                    <p style={{ color: 'var(--text-muted)' }}>No hay contenido disponible que comprobar.</p>
-                  ) : (
-                    <p style={{ color: 'var(--text-secondary)', margin: 0 }}>{scopeText(info)}</p>
-                  )}
-
-                  {result && (
-                    <div style={{ display: 'grid', gap: 12, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
-                      <div>
-                        <div style={labelStyle}>Nombre esperado</div>
-                        <FitText text={result.expected || '—'} />
-                      </div>
-                      <div>
-                        <div style={labelStyle}>Nombre real</div>
-                        <FitText text={result.actual || '—'} />
-                      </div>
-                      {result.status === 'Correcta' && (
-                        <p style={{ color: 'var(--color-available)', margin: 0 }}>El nombre cumple la nomenclatura de eMuwarez.</p>
-                      )}
-                      <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>
-                        El Proveedor/Source se obtiene del nombre del archivo y el Tag del Grupo (lo que va tras el último «-») no se compara.
+                {summary && (
+                  <div style={{ margin: 0, display: 'grid', gap: 6 }}>
+                    {summary.evaluated > 0 && (
+                      <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
+                        Comprobados {summary.evaluated}: {summary.correct} correcta(s), {summary.not_adapted} no adaptada(s).
                       </p>
-                    </div>
-                  )}
-
-                  {summary && (
-                    <div style={{ margin: 0, display: 'grid', gap: 6 }}>
-                      {summary.evaluated > 0 && (
-                        <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
-                          Comprobados {summary.evaluated}: {summary.correct} correcta(s), {summary.not_adapted} no adaptada(s).
-                        </p>
-                      )}
-                      {summary.errors > 0 && (
-                        <p style={{ margin: 0, color: 'var(--color-error)' }}>
-                          No se pudo leer {summary.errors} archivo(s) con MediaInfo, así que siguen «No comprobada».
-                          {summary.error_detail ? ` (${summary.error_detail})` : ''}
-                        </p>
-                      )}
-                      {summary.evaluated === 0 && summary.errors === 0 && (
-                        <p style={{ margin: 0, color: 'var(--text-muted)' }}>No había nada que comprobar.</p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-              {canRun && (
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
-                  <button className="btn btn-primary" onClick={() => run(forceRerun)} disabled={running}>
-                    {running ? 'Comprobando…' : forceRerun ? 'Volver a comprobar' : 'Comprobar'}
-                  </button>
-                </div>
-              )}
-            </div>
+                    )}
+                    {summary.errors > 0 && (
+                      <p style={{ margin: 0, color: 'var(--color-error)' }}>
+                        No se pudo leer {summary.errors} archivo(s) con MediaInfo, así que siguen «No comprobada».
+                        {summary.error_detail ? ` (${summary.error_detail})` : ''}
+                      </p>
+                    )}
+                    {summary.evaluated === 0 && summary.errors === 0 && (
+                      <p style={{ margin: 0, color: 'var(--text-muted)' }}>No había nada que comprobar.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+            {canRun && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+                <button className="btn btn-primary" onClick={() => run(forceRerun)} disabled={running}>
+                  {running ? 'Comprobando…' : forceRerun ? 'Volver a comprobar' : 'Comprobar'}
+                </button>
+              </div>
+            )}
           </div>
-        </div>
+        </Modal>
       )}
     </span>
   )

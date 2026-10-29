@@ -18,6 +18,7 @@ import {
 } from '../utils/uploadStatus'
 import { useRefrescoPorAvisos, AVISOS_SUBIDA, AVISOS_SUBIDA_PROGRESO } from '../hooks/useRefrescoPorAvisos'
 import { IconoDesplegar, IconoTipo } from './Iconos'
+import { Modal } from './Modal'
 
 // Dedicated page for one upload job (replaces the old JobProgressPanel modal)
 // — same Radarr/Sonarr-style layout LibraryDetailPage/RequestDetailPage use:
@@ -664,74 +665,50 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
       </Panel>
 
       {showNomenclatura && (
-        <div className="modal-overlay" onClick={() => setShowNomenclatura(false)}>
-          <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 720 }}>
-            <div className="modal-header">
-              <h2 className="modal-title">Nomenclatura</h2>
-              <button className="modal-close" onClick={() => setShowNomenclatura(false)}>✕</button>
-            </div>
-            <div className="modal-body">
-              <NomenclatureSection snapshot={job.nomenclature_snapshot} mediaType={job.media_type} isStaging={isStaging} />
-            </div>
+        <Modal titulo="Nomenclatura" onClose={() => setShowNomenclatura(false)} className="modal-wide" style={{ maxWidth: 720 }}>
+          <div className="modal-body">
+            <NomenclatureSection snapshot={job.nomenclature_snapshot} mediaType={job.media_type} isStaging={isStaging} />
           </div>
-        </div>
+        </Modal>
       )}
 
       {showRemux && (
-        <div className="modal-overlay" onClick={() => setShowRemux(false)}>
-          <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 780 }}>
-            <div className="modal-header">
-              <h2 className="modal-title">Reordenación/Renombrado</h2>
-              <button className="modal-close" onClick={() => setShowRemux(false)}>✕</button>
-            </div>
-            <div className="modal-body">
-              <RemuxSection snapshot={job.remux_snapshot} isStaging={isStaging} />
-            </div>
+        <Modal titulo="Reordenación/Renombrado" onClose={() => setShowRemux(false)} className="modal-wide" style={{ maxWidth: 780 }}>
+          <div className="modal-body">
+            <RemuxSection snapshot={job.remux_snapshot} isStaging={isStaging} />
           </div>
-        </div>
+        </Modal>
       )}
 
       {showChecks && (
-        <div className="modal-overlay" onClick={() => setShowChecks(false)}>
-          <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 720 }}>
-            <div className="modal-header">
-              <h2 className="modal-title">Verificación pre-subida</h2>
-              <button className="modal-close" onClick={() => setShowChecks(false)}>✕</button>
-            </div>
-            <div className="modal-body">
-              <ChecksSection
-                snapshot={job.checks_snapshot}
-                mediaType={job.media_type}
-                isActive={isQueued || isPreparing || isRunning || isStaging}
-              />
-            </div>
+        <Modal titulo="Verificación pre-subida" onClose={() => setShowChecks(false)} className="modal-wide" style={{ maxWidth: 720 }}>
+          <div className="modal-body">
+            <ChecksSection
+              snapshot={job.checks_snapshot}
+              mediaType={job.media_type}
+              isActive={isQueued || isPreparing || isRunning || isStaging}
+            />
           </div>
-        </div>
+        </Modal>
       )}
 
       {showActividad && (
-        <div className="modal-overlay" onClick={() => setShowActividad(false)}>
-          <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 680 }}>
-            <div className="modal-header">
-              <h2 className="modal-title">Actividad{isRunning ? ' (en directo)' : ''}</h2>
-              <button className="modal-close" onClick={() => setShowActividad(false)}>✕</button>
-            </div>
-            <div className="modal-body">
-              <pre ref={logsBoxRef} style={{ margin: 0, maxHeight: 420, overflowY: 'auto', fontSize: '0.76rem', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-                {loadingLogs ? 'Cargando…' : logs.length === 0 ? 'Sin actividad registrada todavía.' : logs.map(log => {
-                  // created_at is stored/sent in UTC — naively slicing the raw
-                  // string (the old approach) showed the UTC hour verbatim,
-                  // disagreeing with Creado/Finalizado above (which DO convert
-                  // to the browser's local time via parseServerDate).
-                  const ts = parseServerDate(log.created_at).toLocaleTimeString('es-ES', {
-                    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
-                  })
-                  return `[${ts}] ${log.message}\n`
-                })}
-              </pre>
-            </div>
+        <Modal titulo={<>Actividad{isRunning ? ' (en directo)' : ''}</>} onClose={() => setShowActividad(false)} className="modal-wide" style={{ maxWidth: 680 }}>
+          <div className="modal-body">
+            <pre ref={logsBoxRef} style={{ margin: 0, maxHeight: 420, overflowY: 'auto', fontSize: '0.76rem', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+              {loadingLogs ? 'Cargando…' : logs.length === 0 ? 'Sin actividad registrada todavía.' : logs.map(log => {
+                // created_at is stored/sent in UTC — naively slicing the raw
+                // string (the old approach) showed the UTC hour verbatim,
+                // disagreeing with Creado/Finalizado above (which DO convert
+                // to the browser's local time via parseServerDate).
+                const ts = parseServerDate(log.created_at).toLocaleTimeString('es-ES', {
+                  hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+                })
+                return `[${ts}] ${log.message}\n`
+              })}
+            </pre>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

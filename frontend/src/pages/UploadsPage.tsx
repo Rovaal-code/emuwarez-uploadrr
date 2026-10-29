@@ -22,6 +22,7 @@ import {
 import { useRefrescoPorAvisos, AVISOS_SUBIDA, AVISOS_SUBIDA_PROGRESO } from '../hooks/useRefrescoPorAvisos'
 import { useAlSalir, useSeccionVisible } from '../context/SeccionVisible'
 import { IconoSubida, IconoTipo } from '../components/Iconos'
+import { Modal } from '../components/Modal'
 
 // Backend-real gates — mirror cancel_upload_job()/queue_retry_for_job() in
 // services/upload_execution.py / upload_queue.py exactly, so the button is
@@ -91,36 +92,30 @@ function StartModal({ job, onClose, onDone }: { job: UploadJob; onClose: () => v
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 560 }}>
-        <div className="modal-header">
-          <h2 className="modal-title">Iniciar Uploadrr: job {jobId}</h2>
-          <button className="btn-icon" onClick={onClose}>✕</button>
+    <Modal titulo={<>Iniciar Uploadrr: job {jobId}</>} onClose={onClose} style={{ maxWidth: 560 }}>
+      <div className="modal-body">
+        <p style={{ marginBottom: 8 }}><strong>{job.title || '—'}</strong></p>
+        <div style={{ padding: '10px 14px', background: 'color-mix(in srgb, var(--color-error) 8%, transparent)', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--color-error) 20%, transparent)', marginBottom: 12 }}>
+          <ul style={{ margin: 0, paddingLeft: 18, fontSize: '0.83rem', lineHeight: 1.6 }}>
+            <li>Esta acción puede publicar/subir contenido a eMuwarez.</li>
+            <li>No se crearán peticiones automáticamente.</li>
+            <li>No se modificará el archivo original ni el título MKV.</li>
+          </ul>
         </div>
-        <div className="modal-body">
-          <p style={{ marginBottom: 8 }}><strong>{job.title || '—'}</strong></p>
-          <div style={{ padding: '10px 14px', background: 'color-mix(in srgb, var(--color-error) 8%, transparent)', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--color-error) 20%, transparent)', marginBottom: 12 }}>
-            <ul style={{ margin: 0, paddingLeft: 18, fontSize: '0.83rem', lineHeight: 1.6 }}>
-              <li>Esta acción puede publicar/subir contenido a eMuwarez.</li>
-              <li>No se crearán peticiones automáticamente.</li>
-              <li>No se modificará el archivo original ni el título MKV.</li>
-            </ul>
-          </div>
-          <label style={{ display: 'block', marginBottom: 6, fontSize: '0.83rem' }}>
-            Escribe <strong>{CONFIRMATION_TOKEN}</strong> para confirmar:
-          </label>
-          <input type="text" value={confirm} onChange={e => setConfirm(e.target.value)} placeholder={CONFIRMATION_TOKEN}
-            style={{ width: '100%', padding: '6px 10px', background: 'color-mix(in srgb, var(--overlay-light) 8%, transparent)', border: `1px solid ${confirm === CONFIRMATION_TOKEN ? 'var(--color-available-soft)' : 'color-mix(in srgb, var(--overlay-light) 15%, transparent)'}`, borderRadius: 4, color: 'inherit', fontFamily: 'var(--font-mono)', fontSize: '0.9rem', boxSizing: 'border-box' }} />
-          {message && <pre style={{ marginTop: 12, fontSize: '0.78rem', whiteSpace: 'pre-wrap', background: 'color-mix(in srgb, var(--overlay-dark) 20%, transparent)', padding: 8, borderRadius: 4 }}>{message}</pre>}
-          {error && <p className="error-text" style={{ marginTop: 8 }}>{error}</p>}
-        </div>
-        <div className="detail-panel__actions" style={{ padding: '10px 16px', gap: 8, display: 'flex' }}>
-          <button className="btn btn-secondary" onClick={handleDryRun} disabled={loading}>Dry-run</button>
-          <button className="btn btn-primary" onClick={handleStart} disabled={confirm !== CONFIRMATION_TOKEN || loading}>{loading ? 'Iniciando…' : 'Iniciar subida'}</button>
-          <button className="btn btn-secondary" onClick={onClose}>Cerrar</button>
-        </div>
+        <label style={{ display: 'block', marginBottom: 6, fontSize: '0.83rem' }}>
+          Escribe <strong>{CONFIRMATION_TOKEN}</strong> para confirmar:
+        </label>
+        <input type="text" value={confirm} onChange={e => setConfirm(e.target.value)} placeholder={CONFIRMATION_TOKEN}
+          style={{ width: '100%', padding: '6px 10px', background: 'color-mix(in srgb, var(--overlay-light) 8%, transparent)', border: `1px solid ${confirm === CONFIRMATION_TOKEN ? 'var(--color-available-soft)' : 'color-mix(in srgb, var(--overlay-light) 15%, transparent)'}`, borderRadius: 4, color: 'inherit', fontFamily: 'var(--font-mono)', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+        {message && <pre style={{ marginTop: 12, fontSize: '0.78rem', whiteSpace: 'pre-wrap', background: 'color-mix(in srgb, var(--overlay-dark) 20%, transparent)', padding: 8, borderRadius: 4 }}>{message}</pre>}
+        {error && <p className="error-text" style={{ marginTop: 8 }}>{error}</p>}
       </div>
-    </div>
+      <div className="detail-panel__actions" style={{ padding: '10px 16px', gap: 8, display: 'flex' }}>
+        <button className="btn btn-secondary" onClick={handleDryRun} disabled={loading}>Dry-run</button>
+        <button className="btn btn-primary" onClick={handleStart} disabled={confirm !== CONFIRMATION_TOKEN || loading}>{loading ? 'Iniciando…' : 'Iniciar subida'}</button>
+        <button className="btn btn-secondary" onClick={onClose}>Cerrar</button>
+      </div>
+    </Modal>
   )
 }
 
@@ -540,37 +535,31 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const modals = (
     <>
       {confirmCancel && (
-        <div className="modal-overlay" onClick={() => setConfirmCancel(null)}>
-          <div className="modal-panel" onClick={e => e.stopPropagation()} style={{ maxWidth: 520 }}>
-            <div className="modal-header">
-              <h2 className="modal-title">Cancelar una subida que se está preparando</h2>
-              <button className="modal-close" onClick={() => setConfirmCancel(null)}>✕</button>
-            </div>
-            <div className="modal-body">
-              <p style={{ fontSize: 13, marginTop: 0 }}>
-                <strong>«{confirmCancel.title}»</strong> está preparando ficheros: puede estar renombrando
-                o reordenando pistas. Eso no se puede interrumpir a mitad sin dejar un archivo a medias.
-              </p>
-              <p style={{ fontSize: 13 }}>
-                Se marcará como <strong>cancelada</strong> y se detendrá al terminar el paso en curso, no
-                al instante. Si el proceso ya no existe (por ejemplo, porque se paró la aplicación), queda
-                cancelada directamente.
-              </p>
-              <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                En ambos casos podrás <strong>reintentarla</strong> después. Revisa el archivo antes de
-                hacerlo, por si quedó algo a medio renombrar.
-              </p>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
-                <button className="btn btn-secondary" type="button" onClick={() => setConfirmCancel(null)}>
-                  Dejarla seguir
-                </button>
-                <button className="btn btn-primary" type="button" onClick={() => doCancel(confirmCancel.id!)}>
-                  Cancelar la subida
-                </button>
-              </div>
+        <Modal titulo="Cancelar una subida que se está preparando" onClose={() => setConfirmCancel(null)} style={{ maxWidth: 520 }}>
+          <div className="modal-body">
+            <p style={{ fontSize: 13, marginTop: 0 }}>
+              <strong>«{confirmCancel.title}»</strong> está preparando ficheros: puede estar renombrando
+              o reordenando pistas. Eso no se puede interrumpir a mitad sin dejar un archivo a medias.
+            </p>
+            <p style={{ fontSize: 13 }}>
+              Se marcará como <strong>cancelada</strong> y se detendrá al terminar el paso en curso, no
+              al instante. Si el proceso ya no existe (por ejemplo, porque se paró la aplicación), queda
+              cancelada directamente.
+            </p>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+              En ambos casos podrás <strong>reintentarla</strong> después. Revisa el archivo antes de
+              hacerlo, por si quedó algo a medio renombrar.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+              <button className="btn btn-secondary" type="button" onClick={() => setConfirmCancel(null)}>
+                Dejarla seguir
+              </button>
+              <button className="btn btn-primary" type="button" onClick={() => doCancel(confirmCancel.id!)}>
+                Cancelar la subida
+              </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
       {startJob && <StartModal job={startJob} onClose={() => setStartJob(null)} onDone={() => { setStartJob(null); load() }} />}
       {deleteJob && (

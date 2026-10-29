@@ -31,6 +31,7 @@ import { seguirProgreso } from '../api/eventos'
 import { fetchSettings } from '../api/settings'
 import { AVISO_MODO_PISTAS, normalizarModo, renombra, tocaElFichero } from '../utils/modoPistas'
 import { IconoAviso } from './Iconos'
+import { Modal } from './Modal'
 
 // Unified "Subir" wizard (replaces the separate Nomenclatura + Campos + Subir
 // buttons). For a Series/Season it first asks which season (and episode, or the
@@ -1924,604 +1925,580 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   )
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 900 }}>
-        <div className="modal-header">
-          <h2 className="modal-title">{item.title}</h2>
-          <button className="modal-close" onClick={onClose}>✕</button>
-        </div>
+    <Modal titulo={item.title} onClose={onClose} className="modal-wide" style={{ maxWidth: 900 }}>
 
-        <div style={{ display: 'flex', gap: 8, padding: '0 20px', marginTop: 8, fontSize: 12, flexWrap: 'wrap' }}>
-          {needsSelection && <><span style={{ fontWeight: step === 0 ? 700 : 400, color: step === 0 ? 'var(--text)' : 'var(--text-muted)' }}>0. Selección</span><span style={{ color: 'var(--text-muted)' }}>→</span></>}
-          <span style={{ fontWeight: step === 1 ? 700 : 400, color: step === 1 ? 'var(--text)' : 'var(--text-muted)' }}>1. Nomenclatura</span>
-          <span style={{ color: 'var(--text-muted)' }}>→</span>
-          <span style={{ fontWeight: step === 2 ? 700 : 400, color: step === 2 ? 'var(--text)' : 'var(--text-muted)' }}>2. Subida a eMuwarez</span>
-        </div>
+      <div style={{ display: 'flex', gap: 8, padding: '0 20px', marginTop: 8, fontSize: 12, flexWrap: 'wrap' }}>
+        {needsSelection && <><span style={{ fontWeight: step === 0 ? 700 : 400, color: step === 0 ? 'var(--text)' : 'var(--text-muted)' }}>0. Selección</span><span style={{ color: 'var(--text-muted)' }}>→</span></>}
+        <span style={{ fontWeight: step === 1 ? 700 : 400, color: step === 1 ? 'var(--text)' : 'var(--text-muted)' }}>1. Nomenclatura</span>
+        <span style={{ color: 'var(--text-muted)' }}>→</span>
+        <span style={{ fontWeight: step === 2 ? 700 : 400, color: step === 2 ? 'var(--text)' : 'var(--text-muted)' }}>2. Subida a eMuwarez</span>
+      </div>
 
-        {step === 0 && (
-          <div className="modal-body">
-            <p className="text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
-              {allowMultiSeason
-                ? <>Elige qué temporada(s) de <strong>{item.title}</strong> subir.</>
-                : isSeason
-                ? <>Elige cómo subir <strong>{item.title}</strong>.</>
-                : <>Elige qué subir de <strong>{item.title}</strong>: un episodio concreto, o la temporada entera.</>}
-            </p>
-            {allowMultiSeason ? multiSeasonChecklist : isSeason ? seasonModeSelection : singleSelectionFields}
-            {selError && <p className="text-error" style={{ marginTop: 10 }}>{selError}</p>}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
-              <button
-                className="btn btn-primary"
-                disabled={isSeason && !allowMultiSeason && seasonUploadMode === null}
-                onClick={
-                  allowMultiSeason ? confirmMultiSelection
-                  : isSeason ? (seasonUploadMode === 'episodes' ? confirmEpisodeSelection : confirmSeasonWhole)
-                  : confirmSelection
-                }
-                type="button"
-              >Continuar</button>
+      {step === 0 && (
+        <div className="modal-body">
+          <p className="text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
+            {allowMultiSeason
+              ? <>Elige qué temporada(s) de <strong>{item.title}</strong> subir.</>
+              : isSeason
+              ? <>Elige cómo subir <strong>{item.title}</strong>.</>
+              : <>Elige qué subir de <strong>{item.title}</strong>: un episodio concreto, o la temporada entera.</>}
+          </p>
+          {allowMultiSeason ? multiSeasonChecklist : isSeason ? seasonModeSelection : singleSelectionFields}
+          {selError && <p className="text-error" style={{ marginTop: 10 }}>{selError}</p>}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+            <button
+              className="btn btn-primary"
+              disabled={isSeason && !allowMultiSeason && seasonUploadMode === null}
+              onClick={
+                allowMultiSeason ? confirmMultiSelection
+                : isSeason ? (seasonUploadMode === 'episodes' ? confirmEpisodeSelection : confirmSeasonWhole)
+                : confirmSelection
+              }
+              type="button"
+            >Continuar</button>
+          </div>
+        </div>
+      )}
+
+      {step === 1 && targetIsSeason && (
+        <div className="modal-body">
+          {seasonQueue.length > 1 && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+              <select
+                className="form-input form-select" style={{ width: 'auto' }}
+                value={targetId ?? ''} onChange={e => switchActiveSeason(Number(e.target.value))}
+              >
+                {seasonQueue.map(id => {
+                  const s = seasons.find(x => x.id === id)
+                  return <option key={id} value={id}>{s?.title || `Temporada ${s?.season_number ?? id}`}</option>
+                })}
+              </select>
             </div>
-          </div>
-        )}
-
-        {step === 1 && targetIsSeason && (
-          <div className="modal-body">
-            {seasonQueue.length > 1 && (
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-                <select
-                  className="form-input form-select" style={{ width: 'auto' }}
-                  value={targetId ?? ''} onChange={e => switchActiveSeason(Number(e.target.value))}
-                >
-                  {seasonQueue.map(id => {
-                    const s = seasons.find(x => x.id === id)
-                    return <option key={id} value={id}>{s?.title || `Temporada ${s?.season_number ?? id}`}</option>
-                  })}
-                </select>
+          )}
+          {existingJobNotice}
+          {seasonPlanLoading && (
+            <div style={{ padding: '36px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+              <span className="spinner" style={{ width: 28, height: 28, borderWidth: 3 }} />
+              <div style={{ fontSize: 15, fontWeight: 600 }}>
+                {seasonProgress.total > 0
+                  ? `Generando Nomenclatura para eMuwarez… (${seasonProgress.done} de ${seasonProgress.total} capítulos)`
+                  : 'Generando Nomenclatura para eMuwarez…'}
               </div>
-            )}
-            {existingJobNotice}
-            {seasonPlanLoading && (
-              <div style={{ padding: '36px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-                <span className="spinner" style={{ width: 28, height: 28, borderWidth: 3 }} />
-                <div style={{ fontSize: 15, fontWeight: 600 }}>
-                  {seasonProgress.total > 0
-                    ? `Generando Nomenclatura para eMuwarez… (${seasonProgress.done} de ${seasonProgress.total} capítulos)`
-                    : 'Generando Nomenclatura para eMuwarez…'}
-                </div>
-                {seasonProgress.current_title && (
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{seasonProgress.current_title}</div>
-                )}
-              </div>
-            )}
-            {seasonPlanError && !seasonPlanLoading && (
-              <div style={{ padding: '20px 0' }}>
-                <p className="text-error" style={{ marginTop: 0, marginBottom: 10 }}><IconoAviso /> {seasonPlanError}</p>
-                <button className="btn btn-secondary btn-sm" type="button" onClick={loadSeasonPlan}>↻ Reintentar</button>
-              </div>
-            )}
-            {!seasonPlanLoading && !seasonPlanError && seasonPlan && (
-              <>
-                <p className="text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
-                  Se sube como un único pack de temporada. Todos los capítulos deben tener el mismo códec
-                  de audio/vídeo, los mismos idiomas de audio/subtítulos, la misma resolución y source —
-                  estos campos confirman que todos coinciden. Source, Proveedor y Tag se pueden corregir
-                  a mano si el detectado no es correcto (se aplica a todos los capítulos por igual).
-                </p>
-                {seasonFieldBox}
-                {seasonSummaryBox}
+              {seasonProgress.current_title && (
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{seasonProgress.current_title}</div>
+              )}
+            </div>
+          )}
+          {seasonPlanError && !seasonPlanLoading && (
+            <div style={{ padding: '20px 0' }}>
+              <p className="text-error" style={{ marginTop: 0, marginBottom: 10 }}><IconoAviso /> {seasonPlanError}</p>
+              <button className="btn btn-secondary btn-sm" type="button" onClick={loadSeasonPlan}>↻ Reintentar</button>
+            </div>
+          )}
+          {!seasonPlanLoading && !seasonPlanError && seasonPlan && (
+            <>
+              <p className="text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
+                Se sube como un único pack de temporada. Todos los capítulos deben tener el mismo códec
+                de audio/vídeo, los mismos idiomas de audio/subtítulos, la misma resolución y source —
+                estos campos confirman que todos coinciden. Source, Proveedor y Tag se pueden corregir
+                a mano si el detectado no es correcto (se aplica a todos los capítulos por igual).
+              </p>
+              {seasonFieldBox}
+              {seasonSummaryBox}
 
-                <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>MediaInfo y pistas de los capítulos</div>
-                      <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>
-                        Se elige capítulo con un desplegable, cada uno con su propio detalle de MediaInfo y
-                        su propio plan de reordenación/renombrado de pistas (sin edición manual para temporadas).
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                      <button className="btn btn-primary" onClick={() => { setShowMiCard(true); if (!seasonMi && !seasonMiLoading) loadSeasonMi() }} disabled={targetId == null}>
-                        Ver MediaInfo
-                      </button>
-                      <button className="btn btn-primary" onClick={() => { setShowRemuxCard(true); if (!seasonRemux && !seasonRemuxLoading) loadSeasonRemux() }} disabled={targetId == null}>
-                        Ver Pistas
-                      </button>
+              <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>MediaInfo y pistas de los capítulos</div>
+                    <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>
+                      Se elige capítulo con un desplegable, cada uno con su propio detalle de MediaInfo y
+                      su propio plan de reordenación/renombrado de pistas (sin edición manual para temporadas).
                     </div>
                   </div>
-                </div>
-
-                {showMiCard && (
-                  <div className="modal-overlay" onClick={() => setShowMiCard(false)}>
-                    <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 900 }}>
-                      <div className="modal-header">
-                        <h2 className="modal-title">MediaInfo de los capítulos</h2>
-                        <button className="modal-close" onClick={() => setShowMiCard(false)}>✕</button>
-                      </div>
-                      <div className="modal-body">
-                        {seasonMiLoading && !seasonMi && <TableLoadingSpinner label="Leyendo MediaInfo de cada capítulo…" />}
-                        {seasonMiError && !seasonMiLoading && (
-                          <>
-                            <p className="text-error" style={{ fontSize: 12, marginTop: 0, marginBottom: 10 }}>✗ {seasonMiError}</p>
-                            <button className="btn btn-secondary btn-sm" type="button" onClick={loadSeasonMi}>↻ Reintentar</button>
-                          </>
-                        )}
-                        {seasonMi && seasonMi.length > 0 && (() => {
-                          const current = seasonMi.find(e => e.episode_id === miEpisodeId) ?? seasonMi[0]
-                          return (
-                            <>
-                              <EpisodePicker episodes={seasonMi} currentId={current.episode_id} onChange={setMiEpisodeId} />
-                              <MediaInfoTable
-                                report={current.report}
-                                onSourceToolClick={current.source_comparison ? () => {
-                                  setSourceComparison(current.source_comparison!)
-                                  setShowEngineDetail(true)
-                                  setShowSourceCompare(true)
-                                } : undefined}
-                              />
-                            </>
-                          )
-                        })()}
-                      </div>
-                    </div>
-                  </div>
-                )}
-                {showSourceCompare && sourceComparison && (
-                  <SourceComparisonModal
-                    comparison={sourceComparison}
-                    initialShowDetail={showEngineDetail}
-                    onClose={() => setShowSourceCompare(false)}
-                  />
-                )}
-
-                {showRemuxCard && (
-                  <div className="modal-overlay" onClick={() => setShowRemuxCard(false)}>
-                    <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 780 }}>
-                      <div className="modal-header">
-                        <h2 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                          Ordenación y Nombre de las Pistas por Capítulo
-                          <AvisoModoPistas plan={seasonRemux?.[0]?.plan} />
-                        </h2>
-                        <button className="modal-close" onClick={() => setShowRemuxCard(false)}>✕</button>
-                      </div>
-                      <div className="modal-body">
-                        {seasonRemuxLoading && !seasonRemux && <TableLoadingSpinner label="Calculando las pistas de cada capítulo…" />}
-                        {seasonRemuxError && !seasonRemuxLoading && (
-                          <>
-                            <p className="text-error" style={{ fontSize: 12, marginTop: 0, marginBottom: 10 }}>✗ {seasonRemuxError}</p>
-                            <button className="btn btn-secondary btn-sm" type="button" onClick={loadSeasonRemux}>↻ Reintentar</button>
-                          </>
-                        )}
-                        {seasonRemux && seasonRemux.length > 0 && (() => {
-                          const current = seasonRemux.find(e => e.episode_id === remuxEpisodeId) ?? seasonRemux[0]
-                          return (
-                            <>
-                              <EpisodePicker episodes={seasonRemux} currentId={current.episode_id} onChange={setRemuxEpisodeId} />
-                              <RemuxTable plan={current.plan} editable={false} />
-                            </>
-                          )
-                        })()}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {showSeasonNamesCard && (
-                  <div className="modal-overlay" onClick={() => setShowSeasonNamesCard(false)}>
-                    <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 900 }}>
-                      <div className="modal-header">
-                        <h2 className="modal-title">Nombre de todos los capítulos</h2>
-                        <button className="modal-close" onClick={() => setShowSeasonNamesCard(false)}>✕</button>
-                      </div>
-                      <div className="modal-body">
-                        {seasonNamesLoading && !seasonNames && <TableLoadingSpinner label="Generando el nombre de cada capítulo…" />}
-                        {seasonNames && seasonNames.length > 0 && (() => {
-                          const current = seasonNames.find(e => e.episode_id === seasonNamesEpisodeId) ?? seasonNames[0]
-                          return (
-                            <>
-                              {seasonNames.length > 1 && (
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-                                  <select
-                                    className="form-input form-select" style={{ width: 'auto' }}
-                                    value={current.episode_id}
-                                    onChange={e => setSeasonNamesEpisodeId(Number(e.target.value))}
-                                  >
-                                    {seasonNames.map(ep => (
-                                      <option key={ep.episode_id} value={ep.episode_id}>{ep.display_title}</option>
-                                    ))}
-                                  </select>
-                                </div>
-                              )}
-                              {current.error ? (
-                                <p className="text-error" style={{ fontSize: 12, margin: 0 }}>✗ {current.error}</p>
-                              ) : (
-                                <FitTextPair
-                                  min={9}
-                                  items={[
-                                    { label: 'Nombre del torrent', text: current.torrent_name || '—', labelStyle },
-                                    { label: INTERNAL_TITLE_LABEL, text: current.internal_mkv_title || '—', labelStyle },
-                                  ]}
-                                />
-                              )}
-                            </>
-                          )
-                        })()}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
-                  {needsSelection
-                    ? <button className="btn btn-secondary" onClick={() => setStep(0)}>Volver a la selección</button>
-                    : <span />}
-                  <button className="btn btn-primary" onClick={goToUpload} disabled={preparing || seasonPlan.status !== 'valid' || existingJobBlocking}>
-                    {preparing ? 'Preparando…' : 'Continuar'}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {step === 1 && !targetIsSeason && (
-          <div className="modal-body">
-            {episodeQueue.length > 1 && (
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-                <select
-                  className="form-input form-select" style={{ width: 'auto' }}
-                  value={targetId ?? ''} onChange={e => switchActiveEpisode(Number(e.target.value))}
-                >
-                  {/* Canonical "Serie (Año) - SxxExx", same format the rest
-                      of the app uses for an episode. */}
-                  {episodeQueue.map(id => {
-                    const ep = episodes.find(x => x.id === id)
-                    return <option key={id} value={id}>{ep ? listDisplayTitle(ep) : id}</option>
-                  })}
-                </select>
-              </div>
-            )}
-            {existingJobNotice}
-            {episodePrepping && (
-              <div style={{ padding: '36px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-                <span className="spinner" style={{ width: 28, height: 28, borderWidth: 3 }} />
-                <div style={{ fontSize: 15, fontWeight: 600 }}>Generando Nomenclatura para eMuwarez…</div>
-                <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
-                  Capítulo {Math.min(episodePrepIndex + 1, episodeQueue.length)} de {episodeQueue.length}
-                  {(() => {
-                    const ep = episodes.find(x => x.id === episodeQueue[episodePrepIndex])
-                    return ep ? `: ${listDisplayTitle(ep)}` : ''
-                  })()}
-                </div>
-              </div>
-            )}
-            {loading && !episodePrepping && (
-              <div style={{ padding: '36px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-                <span className="spinner" style={{ width: 28, height: 28, borderWidth: 3 }} />
-                <div style={{ fontSize: 15, fontWeight: 600 }}>Generando Nomenclatura para eMuwarez…</div>
-              </div>
-            )}
-            {error && !loading && !episodePrepping && (
-              <div style={{ padding: '20px 0' }}>
-                <p className="text-error" style={{ marginTop: 0, marginBottom: 10 }}><IconoAviso /> {error}</p>
-                <button className="btn btn-secondary btn-sm" type="button" onClick={loadFields}>↻ Reintentar</button>
-              </div>
-            )}
-            {!loading && !error && !episodePrepping && (
-              <>
-                <p className="text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
-                  Los campos técnicos (audio por pista, códec, HDR/DV) se leen con MediaInfo del archivo
-                  real; el título/año vienen de Radarr/Sonarr y el Source/Provider del nombre del archivo.
-                  Puedes ajustar cualquier campo, o ver el detalle de MediaInfo abajo.
-                </p>
-                {fieldBox}
-
-                <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>MediaInfo y pistas del archivo</div>
-                      <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>
-                        Ver Pistas: muestra la reordenación y el nombre de las pistas de vídeo/audio/subtítulos del contenido (editable).
-                        <br />
-                        Ver MediaInfo: muestra el detalle técnico real del archivo.
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                      <button className="btn btn-primary" onClick={() => { runMediaInfo(); setShowMiCard(true) }} disabled={targetId == null}>
-                        Ver MediaInfo
-                      </button>
-                      <button
-                        className="btn btn-primary"
-                        onClick={() => {
-                          setShowRemuxCard(true)
-                          if (!remuxPreview && !remuxLoading) runTrackRemux()
-                        }}
-                        disabled={targetId == null}
-                      >
-                        Ver Pistas
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {showMiCard && (
-                  <div className="modal-overlay" onClick={() => setShowMiCard(false)}>
-                    <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 900 }}>
-                      <div className="modal-header">
-                        <h2 className="modal-title">MediaInfo del archivo</h2>
-                        <button className="modal-close" onClick={() => setShowMiCard(false)}>✕</button>
-                      </div>
-                      <div className="modal-body">
-                        {miLoading && !miReport && <TableLoadingSpinner label="Cargando MediaInfo…" />}
-                        {miError && !miLoading && (
-                          <>
-                            <p className="text-error" style={{ fontSize: 12, marginTop: 0, marginBottom: 10 }}>✗ {miError}</p>
-                            <button className="btn btn-secondary btn-sm" type="button" onClick={runMediaInfo}>↻ Reintentar</button>
-                          </>
-                        )}
-                        {miReport && (
-                          <MediaInfoTable
-                            report={miReport}
-                            // Closes this card before opening the comparison one — both are
-                            // modal-overlays at the same z-index, so having two open at once
-                            // would bury the newly-opened one behind this still-open card.
-                            onSourceToolClick={sourceComparison ? () => { setShowMiCard(false); setShowEngineDetail(true); setShowSourceCompare(true) } : undefined}
-                          />
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {showRemuxCard && (
-                  <div className="modal-overlay" onClick={() => setShowRemuxCard(false)}>
-                    <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 780 }}>
-                      <div className="modal-header">
-                        <h2 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                          Ordenación y Nombre de las Pistas
-                          <AvisoModoPistas plan={remuxPreview} />
-                        </h2>
-                        <button className="modal-close" onClick={() => setShowRemuxCard(false)}>✕</button>
-                      </div>
-                      <div className="modal-body">
-                        {remuxLoading && !remuxPreview && <TableLoadingSpinner label="Cargando pistas del archivo…" />}
-                        {remuxError && !remuxLoading && (
-                          <>
-                            <p className="text-error" style={{ fontSize: 12, marginTop: 0, marginBottom: 10 }}>✗ {remuxError}</p>
-                            <button className="btn btn-secondary btn-sm" type="button" onClick={runTrackRemux}>↻ Reintentar</button>
-                          </>
-                        )}
-                        {/* Editable solo si el modo renombra: sin eso la
-                            columna ofrece escribir un nombre que no se va a
-                            aplicar. Lo decide Configuración → Otros, no una
-                            casilla aquí: la casilla solo salía subiendo una
-                            película o un capítulo suelto, nunca en una
-                            temporada entera. */}
-                        {remuxPreview && (
-                          <RemuxTable
-                            plan={remuxPreview}
-                            editable={tocaElFichero(normalizarModo(remuxPreview.track_mode))}
-                            nameEditable={renombra(normalizarModo(remuxPreview.track_mode))}
-                            edits={remuxEdits}
-                            onEdit={setRemuxEdit}
-                          />
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
-                  {needsSelection
-                    ? <button className="btn btn-secondary" onClick={() => setStep(0)}>Volver a la selección</button>
-                    : <span />}
-                  <button className="btn btn-primary" onClick={goToUpload} disabled={preparing || !preview || existingJobBlocking}>
-                    {preparing ? 'Preparando…' : 'Continuar'}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Paso 2 con varios elegidos. Mismo aspecto que el de uno solo:
-            tarjeta de comprobaciones y desplegable arriba a la derecha para
-            recorrer los elementos, en vez del párrafo suelto de antes. */}
-        {step === 2 && batchQueue.length > 1 && (
-          <div className="modal-body">
-            {batchPhase === 'idle' && (() => {
-              const viewId = batchViewId ?? batchQueue[0]
-              const contentChecks = batchContentChecks.get(viewId)
-              const blocked = batchQueue.filter(id => batchContentChecks.get(id)?.ready === false)
-              const envReady = batchEnvChecks?.ready !== false
-              return (
-                <>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-                    <select
-                      className="form-input form-select" style={{ width: 'auto' }}
-                      value={viewId} onChange={e => setBatchViewId(Number(e.target.value))}
-                    >
-                      {batchQueue.map(id => {
-                        const failed = batchContentChecks.get(id)?.ready === false
-                        return <option key={id} value={id}>{failed ? '✗ ' : ''}{batchItemTitle(id)}</option>
-                      })}
-                    </select>
-                  </div>
-
-                  <div className="detail-card" style={{ padding: '12px 14px', borderRadius: 8 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                      <div style={labelStyle}>Comprobaciones previas</div>
-                      {batchChecksLoading && <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />}
-                    </div>
-
-                    {/* Las del elemento que estés mirando. */}
-                    {contentChecks
-                      ? contentChecks.checks.map(c => <CheckRow key={c.id} c={c} />)
-                      : <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                          Comprobando {batchIsEpisodes ? 'capítulo' : 'temporada'} {Math.min(batchChecksIndex + 1, batchQueue.length)} de {batchQueue.length}…
-                        </div>}
-
-                    {/* Y las compartidas, hechas una sola vez para la tanda. */}
-                    {batchEnvChecks && (
-                      <>
-                        <div style={{ ...labelStyle, marginTop: 14, marginBottom: 8 }}>
-                          Comunes a {batchIsEpisodes ? 'todos los capítulos' : 'todas las temporadas'}
-                        </div>
-                        {batchEnvChecks.checks.map(c => <CheckRow key={c.id} c={c} />)}
-                      </>
-                    )}
-
-                    {!batchChecksLoading && (
-                      <div style={{ marginTop: 14, fontWeight: 600, color: blocked.length === 0 && envReady ? 'var(--color-available)' : 'var(--color-error)' }}>
-                        {!envReady
-                          ? '✗ La subida no se puede realizar'
-                          : blocked.length === 0
-                          ? `✓ Todo listo: ${batchQueue.length} ${batchIsEpisodes ? 'capítulos' : 'temporadas'}`
-                          : `✗ ${blocked.length} de ${batchQueue.length} no se ${blocked.length === 1 ? 'puede' : 'pueden'} subir`}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Qué se va a saltar y por qué, antes de pulsar nada. */}
-                  {!batchChecksLoading && blocked.length > 0 && (
-                    <div className="detail-card" style={{ padding: '12px 14px', borderRadius: 8, marginTop: 12 }}>
-                      {blocked.map(id => (
-                        <p key={id} style={{ fontSize: 12.5, margin: '4px 0', color: 'var(--color-error-pale)' }}>
-                          ✗ {batchItemTitle(id)}: {batchContentChecks.get(id)?.checks.find(c => c.status === 'fail')?.message || 'Alguna comprobación falló'}
-                        </p>
-                      ))}
-                      <p style={{ fontSize: 12, margin: '10px 0 0', color: 'var(--text-muted)' }}>
-                        Se saltarán. El resto se subirá igualmente.
-                      </p>
-                    </div>
-                  )}
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
-                    <button className="btn btn-secondary" onClick={() => setStep(1)} type="button">Volver</button>
-                    <button
-                      className="btn btn-primary"
-                      onClick={batchIsEpisodes ? uploadAllEpisodes : uploadAllSeasons}
-                      disabled={batchChecksLoading || !envReady || blocked.length === batchQueue.length}
-                      type="button"
-                    >
-                      {batchIsEpisodes ? 'Subir todos' : 'Subir todas'}
+                  <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                    <button className="btn btn-primary" onClick={() => { setShowMiCard(true); if (!seasonMi && !seasonMiLoading) loadSeasonMi() }} disabled={targetId == null}>
+                      Ver MediaInfo
+                    </button>
+                    <button className="btn btn-primary" onClick={() => { setShowRemuxCard(true); if (!seasonRemux && !seasonRemuxLoading) loadSeasonRemux() }} disabled={targetId == null}>
+                      Ver Pistas
                     </button>
                   </div>
-                </>
-              )
-            })()}
-            {batchPhase === 'processing' && (
-              <div style={{ padding: '20px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-                <span className="spinner" style={{ width: 28, height: 28, borderWidth: 3 }} />
-                <div style={{ fontSize: 14, fontWeight: 600 }}>
-                  Subiendo {batchIsEpisodes ? 'capítulo' : 'temporada'} {batchIndex + 1} de {batchQueue.length}
-                  {`: ${batchItemTitle(batchQueue[batchIndex])}`}
                 </div>
               </div>
-            )}
-            {batchPhase === 'done' && (
-              <>
-                <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 12, textAlign: 'center' }}>
-                  {batchResults.filter(r => r.status === 'queued').length} de {batchResults.length} {batchIsEpisodes ? 'capítulo(s) encolado(s)' : 'temporada(s) encolada(s)'}
+
+              {showMiCard && (
+                <Modal titulo="MediaInfo de los capítulos" onClose={() => setShowMiCard(false)} className="modal-wide" style={{ maxWidth: 900 }}>
+                  <div className="modal-body">
+                    {seasonMiLoading && !seasonMi && <TableLoadingSpinner label="Leyendo MediaInfo de cada capítulo…" />}
+                    {seasonMiError && !seasonMiLoading && (
+                      <>
+                        <p className="text-error" style={{ fontSize: 12, marginTop: 0, marginBottom: 10 }}>✗ {seasonMiError}</p>
+                        <button className="btn btn-secondary btn-sm" type="button" onClick={loadSeasonMi}>↻ Reintentar</button>
+                      </>
+                    )}
+                    {seasonMi && seasonMi.length > 0 && (() => {
+                      const current = seasonMi.find(e => e.episode_id === miEpisodeId) ?? seasonMi[0]
+                      return (
+                        <>
+                          <EpisodePicker episodes={seasonMi} currentId={current.episode_id} onChange={setMiEpisodeId} />
+                          <MediaInfoTable
+                            report={current.report}
+                            onSourceToolClick={current.source_comparison ? () => {
+                              setSourceComparison(current.source_comparison!)
+                              setShowEngineDetail(true)
+                              setShowSourceCompare(true)
+                            } : undefined}
+                          />
+                        </>
+                      )
+                    })()}
+                  </div>
+                </Modal>
+              )}
+              {showSourceCompare && sourceComparison && (
+                <SourceComparisonModal
+                  comparison={sourceComparison}
+                  initialShowDetail={showEngineDetail}
+                  onClose={() => setShowSourceCompare(false)}
+                />
+              )}
+
+              {showRemuxCard && (
+                <Modal
+                  titulo={<>
+                    Ordenación y Nombre de las Pistas por Capítulo
+                    <AvisoModoPistas plan={seasonRemux?.[0]?.plan} />
+                  </>}
+                  onClose={() => setShowRemuxCard(false)}
+                  className="modal-wide"
+                  style={{ maxWidth: 780 }}
+                  tituloStyle={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}
+                >
+                  <div className="modal-body">
+                    {seasonRemuxLoading && !seasonRemux && <TableLoadingSpinner label="Calculando las pistas de cada capítulo…" />}
+                    {seasonRemuxError && !seasonRemuxLoading && (
+                      <>
+                        <p className="text-error" style={{ fontSize: 12, marginTop: 0, marginBottom: 10 }}>✗ {seasonRemuxError}</p>
+                        <button className="btn btn-secondary btn-sm" type="button" onClick={loadSeasonRemux}>↻ Reintentar</button>
+                      </>
+                    )}
+                    {seasonRemux && seasonRemux.length > 0 && (() => {
+                      const current = seasonRemux.find(e => e.episode_id === remuxEpisodeId) ?? seasonRemux[0]
+                      return (
+                        <>
+                          <EpisodePicker episodes={seasonRemux} currentId={current.episode_id} onChange={setRemuxEpisodeId} />
+                          <RemuxTable plan={current.plan} editable={false} />
+                        </>
+                      )
+                    })()}
+                  </div>
+                </Modal>
+              )}
+
+              {showSeasonNamesCard && (
+                <Modal titulo="Nombre de todos los capítulos" onClose={() => setShowSeasonNamesCard(false)} className="modal-wide" style={{ maxWidth: 900 }}>
+                  <div className="modal-body">
+                    {seasonNamesLoading && !seasonNames && <TableLoadingSpinner label="Generando el nombre de cada capítulo…" />}
+                    {seasonNames && seasonNames.length > 0 && (() => {
+                      const current = seasonNames.find(e => e.episode_id === seasonNamesEpisodeId) ?? seasonNames[0]
+                      return (
+                        <>
+                          {seasonNames.length > 1 && (
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+                              <select
+                                className="form-input form-select" style={{ width: 'auto' }}
+                                value={current.episode_id}
+                                onChange={e => setSeasonNamesEpisodeId(Number(e.target.value))}
+                              >
+                                {seasonNames.map(ep => (
+                                  <option key={ep.episode_id} value={ep.episode_id}>{ep.display_title}</option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                          {current.error ? (
+                            <p className="text-error" style={{ fontSize: 12, margin: 0 }}>✗ {current.error}</p>
+                          ) : (
+                            <FitTextPair
+                              min={9}
+                              items={[
+                                { label: 'Nombre del torrent', text: current.torrent_name || '—', labelStyle },
+                                { label: INTERNAL_TITLE_LABEL, text: current.internal_mkv_title || '—', labelStyle },
+                              ]}
+                            />
+                          )}
+                        </>
+                      )
+                    })()}
+                  </div>
+                </Modal>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
+                {needsSelection
+                  ? <button className="btn btn-secondary" onClick={() => setStep(0)}>Volver a la selección</button>
+                  : <span />}
+                <button className="btn btn-primary" onClick={goToUpload} disabled={preparing || seasonPlan.status !== 'valid' || existingJobBlocking}>
+                  {preparing ? 'Preparando…' : 'Continuar'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {step === 1 && !targetIsSeason && (
+        <div className="modal-body">
+          {episodeQueue.length > 1 && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+              <select
+                className="form-input form-select" style={{ width: 'auto' }}
+                value={targetId ?? ''} onChange={e => switchActiveEpisode(Number(e.target.value))}
+              >
+                {/* Canonical "Serie (Año) - SxxExx", same format the rest
+                    of the app uses for an episode. */}
+                {episodeQueue.map(id => {
+                  const ep = episodes.find(x => x.id === id)
+                  return <option key={id} value={id}>{ep ? listDisplayTitle(ep) : id}</option>
+                })}
+              </select>
+            </div>
+          )}
+          {existingJobNotice}
+          {episodePrepping && (
+            <div style={{ padding: '36px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+              <span className="spinner" style={{ width: 28, height: 28, borderWidth: 3 }} />
+              <div style={{ fontSize: 15, fontWeight: 600 }}>Generando Nomenclatura para eMuwarez…</div>
+              <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
+                Capítulo {Math.min(episodePrepIndex + 1, episodeQueue.length)} de {episodeQueue.length}
+                {(() => {
+                  const ep = episodes.find(x => x.id === episodeQueue[episodePrepIndex])
+                  return ep ? `: ${listDisplayTitle(ep)}` : ''
+                })()}
+              </div>
+            </div>
+          )}
+          {loading && !episodePrepping && (
+            <div style={{ padding: '36px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+              <span className="spinner" style={{ width: 28, height: 28, borderWidth: 3 }} />
+              <div style={{ fontSize: 15, fontWeight: 600 }}>Generando Nomenclatura para eMuwarez…</div>
+            </div>
+          )}
+          {error && !loading && !episodePrepping && (
+            <div style={{ padding: '20px 0' }}>
+              <p className="text-error" style={{ marginTop: 0, marginBottom: 10 }}><IconoAviso /> {error}</p>
+              <button className="btn btn-secondary btn-sm" type="button" onClick={loadFields}>↻ Reintentar</button>
+            </div>
+          )}
+          {!loading && !error && !episodePrepping && (
+            <>
+              <p className="text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
+                Los campos técnicos (audio por pista, códec, HDR/DV) se leen con MediaInfo del archivo
+                real; el título/año vienen de Radarr/Sonarr y el Source/Provider del nombre del archivo.
+                Puedes ajustar cualquier campo, o ver el detalle de MediaInfo abajo.
+              </p>
+              {fieldBox}
+
+              <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>MediaInfo y pistas del archivo</div>
+                    <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>
+                      Ver Pistas: muestra la reordenación y el nombre de las pistas de vídeo/audio/subtítulos del contenido (editable).
+                      <br />
+                      Ver MediaInfo: muestra el detalle técnico real del archivo.
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                    <button className="btn btn-primary" onClick={() => { runMediaInfo(); setShowMiCard(true) }} disabled={targetId == null}>
+                      Ver MediaInfo
+                    </button>
+                    <button
+                      className="btn btn-primary"
+                      onClick={() => {
+                        setShowRemuxCard(true)
+                        if (!remuxPreview && !remuxLoading) runTrackRemux()
+                      }}
+                      disabled={targetId == null}
+                    >
+                      Ver Pistas
+                    </button>
+                  </div>
                 </div>
-                {batchResults.some(r => r.status === 'failed') && (
-                  <div className="detail-card" style={{ padding: '12px 14px', borderRadius: 8, marginBottom: 14 }}>
-                    {batchResults.filter(r => r.status === 'failed').map(r => (
-                      <p key={r.seasonId} style={{ fontSize: 12.5, margin: '4px 0', color: 'var(--color-error-pale)' }}>
-                        ✗ {r.title}: {r.reason}
+              </div>
+
+              {showMiCard && (
+                <Modal titulo="MediaInfo del archivo" onClose={() => setShowMiCard(false)} className="modal-wide" style={{ maxWidth: 900 }}>
+                  <div className="modal-body">
+                    {miLoading && !miReport && <TableLoadingSpinner label="Cargando MediaInfo…" />}
+                    {miError && !miLoading && (
+                      <>
+                        <p className="text-error" style={{ fontSize: 12, marginTop: 0, marginBottom: 10 }}>✗ {miError}</p>
+                        <button className="btn btn-secondary btn-sm" type="button" onClick={runMediaInfo}>↻ Reintentar</button>
+                      </>
+                    )}
+                    {miReport && (
+                      <MediaInfoTable
+                        report={miReport}
+                        // Closes this card before opening the comparison one — both are
+                        // modal-overlays at the same z-index, so having two open at once
+                        // would bury the newly-opened one behind this still-open card.
+                        onSourceToolClick={sourceComparison ? () => { setShowMiCard(false); setShowEngineDetail(true); setShowSourceCompare(true) } : undefined}
+                      />
+                    )}
+                  </div>
+                </Modal>
+              )}
+
+              {showRemuxCard && (
+                <Modal
+                  titulo={<>
+                    Ordenación y Nombre de las Pistas
+                    <AvisoModoPistas plan={remuxPreview} />
+                  </>}
+                  onClose={() => setShowRemuxCard(false)}
+                  className="modal-wide"
+                  style={{ maxWidth: 780 }}
+                  tituloStyle={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}
+                >
+                  <div className="modal-body">
+                    {remuxLoading && !remuxPreview && <TableLoadingSpinner label="Cargando pistas del archivo…" />}
+                    {remuxError && !remuxLoading && (
+                      <>
+                        <p className="text-error" style={{ fontSize: 12, marginTop: 0, marginBottom: 10 }}>✗ {remuxError}</p>
+                        <button className="btn btn-secondary btn-sm" type="button" onClick={runTrackRemux}>↻ Reintentar</button>
+                      </>
+                    )}
+                    {/* Editable solo si el modo renombra: sin eso la
+                        columna ofrece escribir un nombre que no se va a
+                        aplicar. Lo decide Configuración → Otros, no una
+                        casilla aquí: la casilla solo salía subiendo una
+                        película o un capítulo suelto, nunca en una
+                        temporada entera. */}
+                    {remuxPreview && (
+                      <RemuxTable
+                        plan={remuxPreview}
+                        editable={tocaElFichero(normalizarModo(remuxPreview.track_mode))}
+                        nameEditable={renombra(normalizarModo(remuxPreview.track_mode))}
+                        edits={remuxEdits}
+                        onEdit={setRemuxEdit}
+                      />
+                    )}
+                  </div>
+                </Modal>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
+                {needsSelection
+                  ? <button className="btn btn-secondary" onClick={() => setStep(0)}>Volver a la selección</button>
+                  : <span />}
+                <button className="btn btn-primary" onClick={goToUpload} disabled={preparing || !preview || existingJobBlocking}>
+                  {preparing ? 'Preparando…' : 'Continuar'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Paso 2 con varios elegidos. Mismo aspecto que el de uno solo:
+          tarjeta de comprobaciones y desplegable arriba a la derecha para
+          recorrer los elementos, en vez del párrafo suelto de antes. */}
+      {step === 2 && batchQueue.length > 1 && (
+        <div className="modal-body">
+          {batchPhase === 'idle' && (() => {
+            const viewId = batchViewId ?? batchQueue[0]
+            const contentChecks = batchContentChecks.get(viewId)
+            const blocked = batchQueue.filter(id => batchContentChecks.get(id)?.ready === false)
+            const envReady = batchEnvChecks?.ready !== false
+            return (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+                  <select
+                    className="form-input form-select" style={{ width: 'auto' }}
+                    value={viewId} onChange={e => setBatchViewId(Number(e.target.value))}
+                  >
+                    {batchQueue.map(id => {
+                      const failed = batchContentChecks.get(id)?.ready === false
+                      return <option key={id} value={id}>{failed ? '✗ ' : ''}{batchItemTitle(id)}</option>
+                    })}
+                  </select>
+                </div>
+
+                <div className="detail-card" style={{ padding: '12px 14px', borderRadius: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <div style={labelStyle}>Comprobaciones previas</div>
+                    {batchChecksLoading && <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />}
+                  </div>
+
+                  {/* Las del elemento que estés mirando. */}
+                  {contentChecks
+                    ? contentChecks.checks.map(c => <CheckRow key={c.id} c={c} />)
+                    : <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                        Comprobando {batchIsEpisodes ? 'capítulo' : 'temporada'} {Math.min(batchChecksIndex + 1, batchQueue.length)} de {batchQueue.length}…
+                      </div>}
+
+                  {/* Y las compartidas, hechas una sola vez para la tanda. */}
+                  {batchEnvChecks && (
+                    <>
+                      <div style={{ ...labelStyle, marginTop: 14, marginBottom: 8 }}>
+                        Comunes a {batchIsEpisodes ? 'todos los capítulos' : 'todas las temporadas'}
+                      </div>
+                      {batchEnvChecks.checks.map(c => <CheckRow key={c.id} c={c} />)}
+                    </>
+                  )}
+
+                  {!batchChecksLoading && (
+                    <div style={{ marginTop: 14, fontWeight: 600, color: blocked.length === 0 && envReady ? 'var(--color-available)' : 'var(--color-error)' }}>
+                      {!envReady
+                        ? '✗ La subida no se puede realizar'
+                        : blocked.length === 0
+                        ? `✓ Todo listo: ${batchQueue.length} ${batchIsEpisodes ? 'capítulos' : 'temporadas'}`
+                        : `✗ ${blocked.length} de ${batchQueue.length} no se ${blocked.length === 1 ? 'puede' : 'pueden'} subir`}
+                    </div>
+                  )}
+                </div>
+
+                {/* Qué se va a saltar y por qué, antes de pulsar nada. */}
+                {!batchChecksLoading && blocked.length > 0 && (
+                  <div className="detail-card" style={{ padding: '12px 14px', borderRadius: 8, marginTop: 12 }}>
+                    {blocked.map(id => (
+                      <p key={id} style={{ fontSize: 12.5, margin: '4px 0', color: 'var(--color-error-pale)' }}>
+                        ✗ {batchItemTitle(id)}: {batchContentChecks.get(id)?.checks.find(c => c.status === 'fail')?.message || 'Alguna comprobación falló'}
                       </p>
                     ))}
+                    <p style={{ fontSize: 12, margin: '10px 0 0', color: 'var(--text-muted)' }}>
+                      Se saltarán. El resto se subirá igualmente.
+                    </p>
                   </div>
                 )}
-                <div style={{ display: 'flex', justifyContent: 'center' }}>
-                  <button className="btn btn-primary" onClick={() => { onDone?.(); onNavigate?.('uploads'); onClose() }} type="button">
-                    Ir a Subidas
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
+                  <button className="btn btn-secondary" onClick={() => setStep(1)} type="button">Volver</button>
+                  <button
+                    className="btn btn-primary"
+                    onClick={batchIsEpisodes ? uploadAllEpisodes : uploadAllSeasons}
+                    disabled={batchChecksLoading || !envReady || blocked.length === batchQueue.length}
+                    type="button"
+                  >
+                    {batchIsEpisodes ? 'Subir todos' : 'Subir todas'}
                   </button>
                 </div>
               </>
-            )}
-          </div>
-        )}
-
-
-        {step === 2 && seasonQueue.length <= 1 && episodeQueue.length <= 1 && (
-          <div className="modal-body">
-            <div className="detail-card" style={{ marginBottom: 14, padding: '12px 14px', borderRadius: 8 }}>
-              {targetIsSeason ? (
-                <>
-                  <div style={labelStyle}>Nombre final del torrent (pack de temporada)</div>
-                  <FitText min={9} text={seasonDisplayTitle || '—'} />
-                </>
-              ) : (
-                <FitTextPair
-                  min={9}
-                  items={[
-                    { label: 'Nombre final del torrent', text: preview?.torrent_name || '—', labelStyle },
-                    { label: INTERNAL_TITLE_LABEL, text: preview?.internal_mkv_title || '—', labelStyle },
-                  ]}
-                />
-              )}
-            </div>
-
-            {/* Pre-upload checks card */}
-            <div className="detail-card" style={{ padding: '12px 14px', borderRadius: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <div style={labelStyle}>Comprobaciones previas</div>
-                {checksLoading && <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />}
+            )
+          })()}
+          {batchPhase === 'processing' && (
+            <div style={{ padding: '20px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+              <span className="spinner" style={{ width: 28, height: 28, borderWidth: 3 }} />
+              <div style={{ fontSize: 14, fontWeight: 600 }}>
+                Subiendo {batchIsEpisodes ? 'capítulo' : 'temporada'} {batchIndex + 1} de {batchQueue.length}
+                {`: ${batchItemTitle(batchQueue[batchIndex])}`}
               </div>
-              {checksLoading ? (
-                // Progressive reveal: one line naming whichever check is
-                // currently running ("Comprobando si es accesible…"),
-                // replacing itself as each one finishes and the next starts —
-                // instead of a silent wait (the full run is real network
-                // calls, ~30s). liveChecks only holds COMPLETED checks, so
-                // its length is the index of the one in flight right now.
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                  {CHECK_STEP_PENDING_LABEL[(targetIsSeason ? CHECK_STEP_ORDER_SEASON : CHECK_STEP_ORDER)[liveChecks.length]] ?? 'Finalizando comprobaciones…'}
-                </div>
-              ) : (
-                checks?.checks.map(c => <CheckRow key={c.id} c={c} />)
-              )}
-              {!checksLoading && checks && (
-                <div style={{ marginTop: 14, fontWeight: 600, color: checks.ready ? 'var(--color-available)' : 'var(--color-error)' }}>
-                  {checks.ready ? '✓ Todo listo para subir' : '✗ La subida no se puede realizar'}
+            </div>
+          )}
+          {batchPhase === 'done' && (
+            <>
+              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 12, textAlign: 'center' }}>
+                {batchResults.filter(r => r.status === 'queued').length} de {batchResults.length} {batchIsEpisodes ? 'capítulo(s) encolado(s)' : 'temporada(s) encolada(s)'}
+              </div>
+              {batchResults.some(r => r.status === 'failed') && (
+                <div className="detail-card" style={{ padding: '12px 14px', borderRadius: 8, marginBottom: 14 }}>
+                  {batchResults.filter(r => r.status === 'failed').map(r => (
+                    <p key={r.seasonId} style={{ fontSize: 12.5, margin: '4px 0', color: 'var(--color-error-pale)' }}>
+                      ✗ {r.title}: {r.reason}
+                    </p>
+                  ))}
                 </div>
               )}
-              {!checksLoading && (
-                <button className="btn btn-secondary btn-sm" style={{ marginTop: 12, fontSize: 12 }} onClick={runChecks} type="button">
-                  ↻ Volver a comprobar
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <button className="btn btn-primary" onClick={() => { onDone?.(); onNavigate?.('uploads'); onClose() }} type="button">
+                  Ir a Subidas
                 </button>
-              )}
-            </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
-            {checks?.ready && (
-              <p style={{ marginTop: 12, fontSize: 13 }}>
-                ¿Seguro que quieres subir <strong>«{item.title}»</strong> a eMuwarez? Se iniciará la subida real.
-              </p>
-            )}
-            {uploadMsg && (
-              <p style={{
-                fontSize: 13, marginTop: 8, padding: '8px 12px', borderRadius: 6, fontWeight: 500,
-                background: uploadMsg.startsWith('✗') ? 'color-mix(in srgb, var(--color-error) 12%, transparent)' : 'color-mix(in srgb, var(--color-available) 12%, transparent)',
-                border: `1px solid ${uploadMsg.startsWith('✗') ? 'color-mix(in srgb, var(--color-error) 35%, transparent)' : 'color-mix(in srgb, var(--color-available) 35%, transparent)'}`,
-                color: uploadMsg.startsWith('✗') ? 'var(--color-error-pale)' : 'var(--color-available-pale)',
-              }}>{uploadMsg}</p>
-            )}
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
-              <button className="btn btn-secondary" onClick={() => setStep(1)} disabled={uploading}>Volver</button>
-              <button
-                className="btn btn-primary"
-                onClick={doUpload}
-                disabled={!canUpload || uploading || checksLoading}
-                {...uploadBtnTip.triggerProps}
-              >
-                {uploading ? 'Subiendo…' : 'Subir a eMuwarez'}
-                {uploadBtnTip.tooltipNode}
-              </button>
-            </div>
+      {step === 2 && seasonQueue.length <= 1 && episodeQueue.length <= 1 && (
+        <div className="modal-body">
+          <div className="detail-card" style={{ marginBottom: 14, padding: '12px 14px', borderRadius: 8 }}>
+            {targetIsSeason ? (
+              <>
+                <div style={labelStyle}>Nombre final del torrent (pack de temporada)</div>
+                <FitText min={9} text={seasonDisplayTitle || '—'} />
+              </>
+            ) : (
+              <FitTextPair
+                min={9}
+                items={[
+                  { label: 'Nombre final del torrent', text: preview?.torrent_name || '—', labelStyle },
+                  { label: INTERNAL_TITLE_LABEL, text: preview?.internal_mkv_title || '—', labelStyle },
+                ]}
+              />
+            )}
           </div>
-        )}
-      </div>
-    </div>
+
+          {/* Pre-upload checks card */}
+          <div className="detail-card" style={{ padding: '12px 14px', borderRadius: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <div style={labelStyle}>Comprobaciones previas</div>
+              {checksLoading && <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />}
+            </div>
+            {checksLoading ? (
+              // Progressive reveal: one line naming whichever check is
+              // currently running ("Comprobando si es accesible…"),
+              // replacing itself as each one finishes and the next starts —
+              // instead of a silent wait (the full run is real network
+              // calls, ~30s). liveChecks only holds COMPLETED checks, so
+              // its length is the index of the one in flight right now.
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                {CHECK_STEP_PENDING_LABEL[(targetIsSeason ? CHECK_STEP_ORDER_SEASON : CHECK_STEP_ORDER)[liveChecks.length]] ?? 'Finalizando comprobaciones…'}
+              </div>
+            ) : (
+              checks?.checks.map(c => <CheckRow key={c.id} c={c} />)
+            )}
+            {!checksLoading && checks && (
+              <div style={{ marginTop: 14, fontWeight: 600, color: checks.ready ? 'var(--color-available)' : 'var(--color-error)' }}>
+                {checks.ready ? '✓ Todo listo para subir' : '✗ La subida no se puede realizar'}
+              </div>
+            )}
+            {!checksLoading && (
+              <button className="btn btn-secondary btn-sm" style={{ marginTop: 12, fontSize: 12 }} onClick={runChecks} type="button">
+                ↻ Volver a comprobar
+              </button>
+            )}
+          </div>
+
+          {checks?.ready && (
+            <p style={{ marginTop: 12, fontSize: 13 }}>
+              ¿Seguro que quieres subir <strong>«{item.title}»</strong> a eMuwarez? Se iniciará la subida real.
+            </p>
+          )}
+          {uploadMsg && (
+            <p style={{
+              fontSize: 13, marginTop: 8, padding: '8px 12px', borderRadius: 6, fontWeight: 500,
+              background: uploadMsg.startsWith('✗') ? 'color-mix(in srgb, var(--color-error) 12%, transparent)' : 'color-mix(in srgb, var(--color-available) 12%, transparent)',
+              border: `1px solid ${uploadMsg.startsWith('✗') ? 'color-mix(in srgb, var(--color-error) 35%, transparent)' : 'color-mix(in srgb, var(--color-available) 35%, transparent)'}`,
+              color: uploadMsg.startsWith('✗') ? 'var(--color-error-pale)' : 'var(--color-available-pale)',
+            }}>{uploadMsg}</p>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
+            <button className="btn btn-secondary" onClick={() => setStep(1)} disabled={uploading}>Volver</button>
+            <button
+              className="btn btn-primary"
+              onClick={doUpload}
+              disabled={!canUpload || uploading || checksLoading}
+              {...uploadBtnTip.triggerProps}
+            >
+              {uploading ? 'Subiendo…' : 'Subir a eMuwarez'}
+              {uploadBtnTip.tooltipNode}
+            </button>
+          </div>
+        </div>
+      )}
+    </Modal>
   )
 }

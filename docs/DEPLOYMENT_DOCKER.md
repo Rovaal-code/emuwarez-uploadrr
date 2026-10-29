@@ -65,11 +65,11 @@ biblioteca nunca se toca.
 ## 3. Preparar el host
 
 ```bash
-# UID y GID del dueño de la media: son tu PUID y PGID
-id tu_usuario
+# UID y GID del dueño de la media: son tu PUID y PGID (van también al .env)
+PUID=$(id -u tu_usuario) PGID=$(id -g tu_usuario)
 
 mkdir -p /srv/emuwarez-uploadrr/config /srv/data/uploads/emu
-chown 1000:1000 /srv/emuwarez-uploadrr/config /srv/data/uploads/emu
+chown "$PUID:$PGID" /srv/emuwarez-uploadrr/config /srv/data/uploads/emu
 ```
 
 El contenedor corre directamente como `PUID:PGID` (la clave `user:` del compose), sin pasar por root, así que no
@@ -195,7 +195,7 @@ Si sale `mkdir: cannot create directory ‘/config/Uploadrr’: Permission denie
 puede escribir en `/config`. Arréglalo en el host y vuelve a arrancar:
 
 ```bash
-chown -R 1000:1000 /srv/emuwarez-uploadrr/config   # tu PUID:PGID
+chown -R "$PUID:$PGID" /srv/emuwarez-uploadrr/config   # los de la sección 3
 docker compose up -d
 ```
 
@@ -212,7 +212,7 @@ root. En el log de arranque sale `No se pudo crear la carpeta de subidas`. Créa
 
 ```bash
 mkdir -p /srv/data/uploads/emu
-chown 1000:1000 /srv/data/uploads/emu
+chown "$PUID:$PGID" /srv/data/uploads/emu   # los de la sección 3
 docker compose restart
 ```
 

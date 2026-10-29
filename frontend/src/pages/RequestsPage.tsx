@@ -465,11 +465,11 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
               <IdField label="TMDb" id={tmdbId} href={idVerifyUrl('tmdb', tmdbId, isTv)} />
               <IdField label="IMDb" id={imdbId} href={idVerifyUrl('imdb', imdbId, isTv)} />
               <IdField label="TVDB" id={tvdbId} href={idVerifyUrl('tvdb', tvdbId, isTv)} />
-              {/* MAL always shown (mainly for anime); "–" when the request had none. */}
+              {/* MAL always shown (mainly for anime); "—" when the request had none. */}
               <FieldRow label="MAL">
                 {malId
                   ? <ValueChip linkable={Boolean(idVerifyUrl('mal', malId, isTv))}><ExternalIdLink id={malId} href={idVerifyUrl('mal', malId, isTv)} label="MAL" /></ValueChip>
-                  : <span className="muted">–</span>}
+                  : <span className="muted">—</span>}
               </FieldRow>
             </Card>
           </div>

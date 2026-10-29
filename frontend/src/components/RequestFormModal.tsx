@@ -179,7 +179,7 @@ function ReadOnlyField({ label, value, gridColumn }: { label: string; value: str
   return (
     <label style={gridColumn ? { gridColumn } : undefined}>
       <span style={labelStyle}>{label}</span>
-      <input className="form-input" value={value || '–'} disabled readOnly style={{ opacity: 0.7 }} />
+      <input className="form-input" value={value || '—'} disabled readOnly style={{ opacity: 0.7 }} />
     </label>
   )
 }
@@ -193,7 +193,7 @@ function IdRow({ label, value, href }: { label: string; value: string; href?: st
       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
         <input
           className="form-input"
-          value={value || '–'}
+          value={value || '—'}
           disabled
           readOnly
           style={{ flex: 1, minWidth: 0, opacity: 0.7 }}

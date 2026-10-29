@@ -1225,7 +1225,7 @@ optgroup {
   color: var(--text-accent);
 }
 
-/* Plain muted placeholder ("–") for a field with no value — not a chip,
+/* Plain muted placeholder ("—") for a field with no value — not a chip,
    just dimmed text, same as an empty table cell elsewhere. */
 .muted {
   color: var(--text-muted);

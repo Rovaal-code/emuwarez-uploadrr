@@ -119,29 +119,29 @@ export function NomenclatureModal({ itemId, itemTitle, onClose }: Props) {
               </div>
               <div className="detail-row">
                 <span className="text-muted">Nombre actual:</span>
-                <span>{proposal.current_name || '–'}</span>
+                <span>{proposal.current_name || '—'}</span>
               </div>
               <div className="detail-row">
                 <span className="text-muted">Título propuesto:</span>
-                <span>{proposal.proposed_title || '–'}</span>
+                <span>{proposal.proposed_title || '—'}</span>
               </div>
               <div className="detail-row">
                 <span className="text-muted">Archivo propuesto:</span>
-                <span style={{ wordBreak: 'break-all' }}>{proposal.proposed_filename || '–'}</span>
+                <span style={{ wordBreak: 'break-all' }}>{proposal.proposed_filename || '—'}</span>
               </div>
               <div className="detail-row">
                 <span className="text-muted">Carpeta actual:</span>
                 <span style={{ wordBreak: 'break-all' }}>
-                  {proposal.current_path ? proposal.current_path.substring(0, proposal.current_path.lastIndexOf('/')) || '/' : '–'}
+                  {proposal.current_path ? proposal.current_path.substring(0, proposal.current_path.lastIndexOf('/')) || '/' : '—'}
                 </span>
               </div>
               <div className="detail-row">
                 <span className="text-muted">Resolución:</span>
-                <span>{proposal.resolution || '–'}</span>
+                <span>{proposal.resolution || '—'}</span>
               </div>
               <div className="detail-row">
                 <span className="text-muted">Source:</span>
-                <span>{proposal.source || '–'}</span>
+                <span>{proposal.source || '—'}</span>
               </div>
               {proposal.provider && (
                 <div className="detail-row">
@@ -151,15 +151,15 @@ export function NomenclatureModal({ itemId, itemTitle, onClose }: Props) {
               )}
               <div className="detail-row">
                 <span className="text-muted">Vídeo:</span>
-                <span>{proposal.video_codec || '–'}</span>
+                <span>{proposal.video_codec || '—'}</span>
               </div>
               <div className="detail-row">
                 <span className="text-muted">Audio:</span>
-                <span>{proposal.audio_summary || '–'}</span>
+                <span>{proposal.audio_summary || '—'}</span>
               </div>
               <div className="detail-row">
                 <span className="text-muted">Subtítulos:</span>
-                <span>{proposal.subtitle_summary || '–'}</span>
+                <span>{proposal.subtitle_summary || '—'}</span>
               </div>
               {proposal.warnings.length > 0 && (
                 <div className="detail-panel__section" style={{ marginTop: 12 }}>

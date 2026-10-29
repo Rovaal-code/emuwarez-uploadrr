@@ -142,7 +142,7 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
                         : <ServiceLabel type={item.instance_type} label={item.instance_name ?? item.instance_type} size={15} />}
                     </ValueChip>
                   )
-                  : <span className="muted">–</span>}
+                  : <span className="muted">—</span>}
               </FieldRow>
               <FieldRow label="Estado"><StatusBadge status={item.local_status} type="local" /></FieldRow>
               <FieldRow label="Petición"><StatusBadge status={item.request_status} type="request" /></FieldRow>
@@ -168,7 +168,7 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
                 suma de lo que hay debajo: "x264, x265". */}
             <Card title="Información técnica" icon={<TechInfoCardIcon />}>
               <FieldRow label="Resolución" help={rollupHelp}>
-                <ValueChip><ValueIcon><ResolutionValueIcon /></ValueIcon><span className="txt">{item.rollup_all?.resolution || item.resolution || '–'}</span></ValueChip>
+                <ValueChip><ValueIcon><ResolutionValueIcon /></ValueIcon><span className="txt">{item.rollup_all?.resolution || item.resolution || '—'}</span></ValueChip>
               </FieldRow>
               <FieldRow label="Proveedor" help={rollupHelp}>
                 {/* Con varios proveedores bajo una temporada se pinta uno por
@@ -182,16 +182,16 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
                     </span>
                   : item.provider
                   ? <ValueChip linkable><ProviderTag code={item.provider} label={item.provider_label} /></ValueChip>
-                  : <span className="muted">–</span>}
+                  : <span className="muted">—</span>}
               </FieldRow>
               <FieldRow label="Source" help={rollupHelp}>
-                <ValueChip><ValueIcon><SourceValueIcon /></ValueIcon><span className="txt">{item.rollup_all?.source || item.source || '–'}</span></ValueChip>
+                <ValueChip><ValueIcon><SourceValueIcon /></ValueIcon><span className="txt">{item.rollup_all?.source || item.source || '—'}</span></ValueChip>
               </FieldRow>
               <FieldRow label="Códec de vídeo" help={rollupHelp}>
-                <ValueChip><ValueIcon><VideoCodecValueIcon /></ValueIcon><span className="txt">{item.rollup_all?.video_codec || item.video_codec || '–'}</span></ValueChip>
+                <ValueChip><ValueIcon><VideoCodecValueIcon /></ValueIcon><span className="txt">{item.rollup_all?.video_codec || item.video_codec || '—'}</span></ValueChip>
               </FieldRow>
               <FieldRow label="Códec de audio" help={rollupHelp}>
-                <ValueChip><ValueIcon><AudioCodecValueIcon /></ValueIcon><span className="txt">{item.rollup_all?.audio_codec || item.audio_codec || '–'}</span></ValueChip>
+                <ValueChip><ValueIcon><AudioCodecValueIcon /></ValueIcon><span className="txt">{item.rollup_all?.audio_codec || item.audio_codec || '—'}</span></ValueChip>
               </FieldRow>
               {/* These two are the only fields that can carry a dozen values
                   (a multi-language release), so they're the ones the card's
@@ -199,12 +199,12 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
                   reachable. */}
               <FieldRow label="Idiomas de audio" help={rollupHelp}>
                 <ValueChip title={item.rollup_all?.audio_languages || item.audio_languages || undefined}>
-                  <ValueIcon><LanguageValueIcon /></ValueIcon><span className="txt">{item.rollup_all?.audio_languages || item.audio_languages || '–'}</span>
+                  <ValueIcon><LanguageValueIcon /></ValueIcon><span className="txt">{item.rollup_all?.audio_languages || item.audio_languages || '—'}</span>
                 </ValueChip>
               </FieldRow>
               <FieldRow label="Subtítulos" help={rollupHelp}>
                 <ValueChip title={item.rollup_all?.subtitle_languages || item.subtitle_languages || undefined}>
-                  <ValueIcon><SubtitleValueIcon /></ValueIcon><span className="txt">{item.rollup_all?.subtitle_languages || item.subtitle_languages || '–'}</span>
+                  <ValueIcon><SubtitleValueIcon /></ValueIcon><span className="txt">{item.rollup_all?.subtitle_languages || item.subtitle_languages || '—'}</span>
                 </ValueChip>
               </FieldRow>
               <FieldRow label="Tamaño">
@@ -214,13 +214,13 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
 
             <Card title="Identificadores externos" icon={<ExternalIdsCardIcon />}>
               <FieldRow label="TMDb">
-                {item.tmdb_id ? <ValueChip linkable={Boolean(idVerifyUrl('tmdb', item.tmdb_id, isTv))}><ExternalIdLink id={item.tmdb_id} href={idVerifyUrl('tmdb', item.tmdb_id, isTv)} label="TMDb" /></ValueChip> : <span className="muted">–</span>}
+                {item.tmdb_id ? <ValueChip linkable={Boolean(idVerifyUrl('tmdb', item.tmdb_id, isTv))}><ExternalIdLink id={item.tmdb_id} href={idVerifyUrl('tmdb', item.tmdb_id, isTv)} label="TMDb" /></ValueChip> : <span className="muted">—</span>}
               </FieldRow>
               <FieldRow label="IMDb">
-                {item.imdb_id ? <ValueChip linkable={Boolean(idVerifyUrl('imdb', item.imdb_id, isTv))}><ExternalIdLink id={item.imdb_id} href={idVerifyUrl('imdb', item.imdb_id, isTv)} label="IMDb" /></ValueChip> : <span className="muted">–</span>}
+                {item.imdb_id ? <ValueChip linkable={Boolean(idVerifyUrl('imdb', item.imdb_id, isTv))}><ExternalIdLink id={item.imdb_id} href={idVerifyUrl('imdb', item.imdb_id, isTv)} label="IMDb" /></ValueChip> : <span className="muted">—</span>}
               </FieldRow>
               {/* TVDB y TVmaze son bases de SERIES: Radarr no trae ninguno de
-                  los dos para una película, así que serían un "–" fijo y no se
+                  los dos para una película, así que serían un "—" fijo y no se
                   muestran. TVmaze lo da Sonarr en su payload (tvMazeId) y lo
                   trae el 96% de las series.
 
@@ -230,15 +230,15 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
               {item.item_type !== 'movie' && (
                 <>
                   <FieldRow label="TVDB">
-                    {item.tvdb_id ? <ValueChip linkable={Boolean(idVerifyUrl('tvdb', item.tvdb_id, isTv))}><ExternalIdLink id={item.tvdb_id} href={idVerifyUrl('tvdb', item.tvdb_id, isTv)} label="TVDB" /></ValueChip> : <span className="muted">–</span>}
+                    {item.tvdb_id ? <ValueChip linkable={Boolean(idVerifyUrl('tvdb', item.tvdb_id, isTv))}><ExternalIdLink id={item.tvdb_id} href={idVerifyUrl('tvdb', item.tvdb_id, isTv)} label="TVDB" /></ValueChip> : <span className="muted">—</span>}
                   </FieldRow>
                   <FieldRow label="TVmaze">
-                    {item.tvmaze_id ? <ValueChip linkable={Boolean(idVerifyUrl('tvmaze', item.tvmaze_id, isTv))}><ExternalIdLink id={item.tvmaze_id} href={idVerifyUrl('tvmaze', item.tvmaze_id, isTv)} label="TVmaze" /></ValueChip> : <span className="muted">–</span>}
+                    {item.tvmaze_id ? <ValueChip linkable={Boolean(idVerifyUrl('tvmaze', item.tvmaze_id, isTv))}><ExternalIdLink id={item.tvmaze_id} href={idVerifyUrl('tvmaze', item.tvmaze_id, isTv)} label="TVmaze" /></ValueChip> : <span className="muted">—</span>}
                   </FieldRow>
                 </>
               )}
               <FieldRow label="MAL">
-                {item.mal_id ? <ValueChip linkable={Boolean(idVerifyUrl('mal', item.mal_id, isTv))}><ExternalIdLink id={item.mal_id} href={idVerifyUrl('mal', item.mal_id, isTv)} label="MAL" /></ValueChip> : <span className="muted">–</span>}
+                {item.mal_id ? <ValueChip linkable={Boolean(idVerifyUrl('mal', item.mal_id, isTv))}><ExternalIdLink id={item.mal_id} href={idVerifyUrl('mal', item.mal_id, isTv)} label="MAL" /></ValueChip> : <span className="muted">—</span>}
               </FieldRow>
             </Card>
           </div>
@@ -254,7 +254,7 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
               <button className="modal-close" onClick={() => setShowRuta(false)}>✕</button>
             </div>
             <div className="modal-body">
-              <div style={{ fontFamily: 'monospace', fontSize: 13, color: 'var(--text-secondary)', wordBreak: 'break-all', lineHeight: 1.6 }}>{item.prepared_path || item.path || '–'}</div>
+              <div style={{ fontFamily: 'monospace', fontSize: 13, color: 'var(--text-secondary)', wordBreak: 'break-all', lineHeight: 1.6 }}>{item.prepared_path || item.path || '—'}</div>
             </div>
           </div>
         </div>

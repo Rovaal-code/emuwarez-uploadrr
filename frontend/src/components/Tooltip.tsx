@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useLayoutEffect, useEffect, useId, isValidElement, cloneElement } from 'react'
 import { createPortal } from 'react-dom'
 import { sinEscalar, anchoVentana, medir } from '../utils/uiScale'
+import { crearRegistroDescripciones } from '../utils/descripcionesCompartidas'
 
 // Custom hover tooltip styled like the app's cards (opaque surface, not the
 // native browser title box). Rendered in a fixed-position portal just below
@@ -18,15 +19,39 @@ function punto(e: React.MouseEvent) {
   return { x: sinEscalar(e.clientX), y: sinEscalar(e.clientY) }
 }
 
+// Las descripciones de texto van todas en un solo contenedor oculto al final
+// del body, una por texto distinto (ver utils/descripcionesCompartidas).
+let contenedorDescripciones: HTMLDivElement | null = null
+const descripciones = crearRegistroDescripciones((id, texto) => {
+  if (!contenedorDescripciones) {
+    contenedorDescripciones = document.createElement('div')
+    contenedorDescripciones.hidden = true
+    document.body.appendChild(contenedorDescripciones)
+  }
+  const el = document.createElement('span')
+  el.id = id
+  el.textContent = texto
+  contenedorDescripciones.appendChild(el)
+  return el
+})
+
 export function useTooltip(content: React.ReactNode, maxWidth = 460) {
   const [show, setShow] = useState(false)
   const [pt, setPt] = useState({ x: 0, y: 0 })
   const ref = useRef<HTMLDivElement>(null)
   const timer = useRef<number | null>(null)
-  // Id de la descripción oculta, que está montada siempre (no solo mientras se
-  // ve el tooltip): así aria-describedby apunta a algo que ya existe cuando el
-  // lector de pantalla pregunta al llegar el foco.
-  const id = useId()
+  // La descripción oculta existe antes del foco, para que aria-describedby
+  // apunte a algo cuando el lector de pantalla pregunta. Si es texto (casi
+  // siempre) se comparte con los demás disparadores que dicen lo mismo; si es
+  // contenido con marcado, cada tooltip lleva la suya en el portal.
+  const idPropio = useId()
+  const texto = typeof content === 'string' || typeof content === 'number' ? String(content) : null
+  const id = texto != null ? descripciones.idDe(texto) : idPropio
+  useLayoutEffect(() => {
+    if (texto == null) return
+    descripciones.montar(texto, id)
+    return () => descripciones.soltar(texto)
+  }, [texto, id])
   // El control que tiene el foco cuando no es el propio disparador (<Tooltip>
   // envuelve al botón en un <span>, y el foco cae en el botón de dentro), con
   // el aria-describedby que ya traía, para devolvérselo al salir.
@@ -117,13 +142,14 @@ export function useTooltip(content: React.ReactNode, maxWidth = 460) {
     'aria-describedby': content != null ? id : undefined,
   }
 
-  // La descripción oculta va también por el portal, al final del body: el
+  // El portal solo existe mientras se ve el tooltip, salvo con contenido con
+  // marcado, que lleva ahí su descripción oculta. Va al final del body: el
   // tooltipNode se pone a veces dentro de una tabla, donde un <span> suelto no
   // es HTML válido.
-  const tooltipNode = content != null
+  const tooltipNode = content != null && (show || texto == null)
     ? createPortal(
         <>
-        <span id={id} hidden>{content}</span>
+        {texto == null && <span id={id} hidden>{content}</span>}
         {show && <div
           ref={ref}
           role="tooltip"

@@ -3,6 +3,7 @@ import type { SourceComparison, SourceEngineResult } from '../api/nomenclature'
 import { InfoIcon } from './InfoIcon'
 import { Tooltip } from './Tooltip'
 import { IconoAviso } from './Iconos'
+import { formatNumero } from '../utils/format'
 
 // Shared by the manual wizard's Source field: both the icon button and the
 // blinking value inside "Ver MediaInfo". Same modal and same detail-toggle
@@ -106,11 +107,11 @@ function SourceEngineDetail({ result }: { result: SourceEngineResult }) {
       <div className="detail-card" style={{ borderRadius: 8, padding: '12px 14px', marginBottom: 12 }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 20px', fontSize: 12.5 }}>
           <span>Source estimado: <strong>{prediction.label}</strong></span>
-          <span>Confianza: <strong>{(prediction.confidence_score * 100).toFixed(1)}%</strong></span>
-          <span>Segundo candidato: <strong>{prediction.runner_up}</strong> ({(prediction.runner_up_score * 100).toFixed(1)}%)</span>
-          <span>Margen: <strong>{(prediction.margin * 100).toFixed(1)} pts</strong></span>
+          <span>Confianza: <strong>{formatNumero(prediction.confidence_score * 100, 1)}%</strong></span>
+          <span>Segundo candidato: <strong>{prediction.runner_up}</strong> ({formatNumero(prediction.runner_up_score * 100, 1)}%)</span>
+          <span>Margen: <strong>{formatNumero(prediction.margin * 100, 1)} pts</strong></span>
           <span>Nivel de evidencia: <strong style={{ color: certaintyColor }}>{prediction.certainty}</strong></span>
-          <span>Tiempo de análisis: <strong>{(performance.duration_ms / 1000).toFixed(1)}s</strong></span>
+          <span>Tiempo de análisis: <strong>{formatNumero(performance.duration_ms / 1000, 1)}s</strong></span>
         </div>
         <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', margin: '10px 0 0' }}>{explanation.winner}</p>
         <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', margin: '6px 0 0' }}>{explanation.winner_vs_runner_up}</p>
@@ -156,7 +157,7 @@ function SourceEngineDetail({ result }: { result: SourceEngineResult }) {
                       color: !v ? 'var(--text-muted)' : v > 0 ? 'var(--color-available-soft)' : 'var(--color-error-soft)',
                       background: label === prediction.label ? 'color-mix(in srgb, var(--color-available) 6%, transparent)' : undefined,
                     }}>
-                      {v ? (v > 0 ? `+${v.toFixed(1)}` : v.toFixed(1)) : '0'}
+                      {v ? (v > 0 ? `+${formatNumero(v, 1)}` : formatNumero(v, 1)) : '0'}
                     </td>
                   )
                 })}
@@ -170,7 +171,7 @@ function SourceEngineDetail({ result }: { result: SourceEngineResult }) {
                   color: c.label === prediction.label ? 'var(--color-available)' : undefined,
                   background: c.label === prediction.label ? 'color-mix(in srgb, var(--color-available) 10%, transparent)' : undefined,
                 }}>
-                  {c.raw_score.toFixed(1)}
+                  {formatNumero(c.raw_score, 1)}
                 </td>
               ))}
             </tr>
@@ -181,7 +182,7 @@ function SourceEngineDetail({ result }: { result: SourceEngineResult }) {
                   padding: '5px 10px', textAlign: 'right', fontFamily: 'monospace', fontSize: 11,
                   color: c.label === prediction.label ? 'var(--color-available)' : 'var(--text-muted)',
                 }}>
-                  {(c.normalized_score * 100).toFixed(1)}%
+                  {formatNumero(c.normalized_score * 100, 1)}%
                 </td>
               ))}
             </tr>

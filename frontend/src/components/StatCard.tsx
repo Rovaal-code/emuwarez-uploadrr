@@ -1,4 +1,5 @@
 import { useTooltip } from './Tooltip'
+import { formatNumero } from '../utils/format'
 
 interface StatCardProps {
   label: string
@@ -25,7 +26,7 @@ export function StatCard({ label, value, children, accentColor, info, icon }: St
       <div className="stat-card-text">
         <div className="stat-card-label">{label}</div>
         <div className="stat-card-value" style={accentColor ? { color: accentColor } : undefined}>
-          {value}
+          {typeof value === 'number' ? formatNumero(value) : value}
         </div>
         {children && <div className="stat-card-sub">{children}</div>}
       </div>

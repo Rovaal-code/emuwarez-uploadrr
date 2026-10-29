@@ -37,7 +37,7 @@ import {
   PointsValueIcon, ThumbsUpValueIcon, CommentValueIcon,
 } from '../components/DetailCard'
 import { HeaderFilter } from '../components/HeaderFilter'
-import { formatBytes, timeAgo, formatDate } from '../utils/format'
+import { formatBytes, timeAgo, formatDate, formatNumero } from '../utils/format'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
 import { useAlEntrar, useAlSalir } from '../context/SeccionVisible'
 import { EMU_URL } from '../constants/emu'
@@ -130,7 +130,7 @@ const SORT_OPTIONS = [
   { value: 'comments_desc', label: 'Orden: Más comentarios' },
 ]
 
-const fmtNum = (n: number | null | undefined) => (n == null ? '—' : n.toLocaleString('es-ES'))
+const fmtNum = (n: number | null | undefined) => formatNumero(n)
 
 // Inline SVG icons for the votes/comments/points columns — emoji (👍💬🪙)
 // render as bare white outlines on some systems, so use real vector icons.

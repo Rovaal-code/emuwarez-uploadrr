@@ -19,7 +19,7 @@ import { RequestFormModal } from '../components/RequestFormModal'
 import { useTooltip, HoverTitle } from '../components/Tooltip'
 import { getLibraryItem } from '../api/library'
 import type { LibraryItemResponse } from '../types/api'
-import { formatBytes, formatDate, formatItemType } from '../utils/format'
+import { formatBytes, formatDate, formatItemType, formatNumero } from '../utils/format'
 import { posterUrl, buildDeepLink } from '../utils/libraryItem'
 import { ValueChip, ValueIcon, SizeValueIcon, TypeValueIcon, RecommendationValueIcon, DetailTitleText } from '../components/DetailCard'
 
@@ -345,10 +345,10 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
         >
           <div style={{ maxHeight: 78, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
             <div className="stat-card-sub-row">
-              <ServiceLabel type="radarr" label={`Radarr: ${s.radarr_items}`} size={13} />
+              <ServiceLabel type="radarr" label={`Radarr: ${formatNumero(s.radarr_items)}`} size={13} />
             </div>
             <div className="stat-card-sub-row">
-              <ServiceLabel type="sonarr" label={`Sonarr: ${s.sonarr_items}`} size={13} />
+              <ServiceLabel type="sonarr" label={`Sonarr: ${formatNumero(s.sonarr_items)}`} size={13} />
             </div>
           </div>
         </StatCard>
@@ -373,12 +373,11 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
           icon={ICON_UNIQUE}
           label="Contenido único"
           value={s.unique_content ?? 0}
-          accentColor="var(--color-uploading)"
           info="Contenido disponible que aún no está en eMuwarez: las películas, las temporadas completas de series o documentales y sus capítulos. Son tus oportunidades de subida."
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <div className="stat-card-sub-row"><IconoPelicula /> {s.unique_movies ?? 0} películas</div>
-            <div className="stat-card-sub-row"><IconoSerie /> {s.unique_seasons ?? 0} temporadas, {s.unique_episodes ?? 0} capítulos</div>
+            <div className="stat-card-sub-row"><IconoPelicula /> {formatNumero(s.unique_movies ?? 0)} películas</div>
+            <div className="stat-card-sub-row"><IconoSerie /> {formatNumero(s.unique_seasons ?? 0)} temporadas, {formatNumero(s.unique_episodes ?? 0)} capítulos</div>
           </div>
         </StatCard>
 

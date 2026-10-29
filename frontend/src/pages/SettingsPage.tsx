@@ -32,6 +32,7 @@ import { TAMANOS, TAMANO_POR_DEFECTO, tamanoUi, guardarTamano } from '../utils/u
 import { isValidHttpUrl } from '../utils/validation'
 import { getUploadConcurrencyEstimate, type UploadConcurrencyEstimate } from '../api/system'
 import { MODOS_PISTAS, MODO_PISTAS_POR_DEFECTO, normalizarModo, type ModoPistas } from '../utils/modoPistas'
+import { formatNumero } from '../utils/format'
 
 type Tab = 'config' | 'notifications' | 'diagnostics' | 'backup' | 'maintenance'
 
@@ -46,8 +47,8 @@ export interface SaveExpose {
 
 function formatBytes(n: number) {
   if (n < 1024) return `${n} B`
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
-  return `${(n / 1024 / 1024).toFixed(2)} MB`
+  if (n < 1024 * 1024) return `${formatNumero(n / 1024, 1)} KB`
+  return `${formatNumero(n / 1024 / 1024, 2)} MB`
 }
 
 // Serialize the Config form's values so we can compare current vs. loaded and

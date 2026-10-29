@@ -117,10 +117,18 @@ echo "Digest ...... $DIGEST"
 # GitHub: la imagen de cada commit la construye el workflow Imagen con el push a
 # master, y la etiqueta solo le añade el nombre de la versión a esa imagen.
 etiquetar() {
-  local etiqueta="v$VERSION"
-  if git rev-parse -q --verify "refs/tags/$etiqueta" >/dev/null ||
-      git ls-remote --exit-code --tags origin "refs/tags/$etiqueta" >/dev/null 2>&1; then
-    echo "La etiqueta $etiqueta ya existe: no la toco."
+  local etiqueta="v$VERSION" remota local_
+  # Lo que manda es GitHub: es la etiqueta de allí la que dispara el workflow.
+  # De una etiqueta anotada, ls-remote da también la línea "^{}" con el commit
+  # al que apunta; de una ligera (las de una release hecha en la web), solo esa.
+  remota="$(git ls-remote --tags origin "refs/tags/$etiqueta" "refs/tags/$etiqueta^{}" |
+    sort -k2 | tail -1 | cut -f1)"
+  if [[ -n "$remota" ]]; then
+    if [[ "$remota" == "$COMMIT" ]]; then
+      echo "La etiqueta $etiqueta ya está en GitHub."
+    else
+      echo "La etiqueta $etiqueta ya está en GitHub, pero en $remota y no en este commit: no la toco." >&2
+    fi
     return 0
   fi
   git fetch -q origin master
@@ -129,7 +137,18 @@ etiquetar() {
     echo "Cuando lo sea:  git tag -a $etiqueta -m \"…\" $COMMIT && git push origin $etiqueta" >&2
     return 0
   fi
-  git tag -a "$etiqueta" -m "${NOTAS:-Versión $VERSION}" "$COMMIT"
+  # Puede estar ya aquí y no en GitHub: una ejecución anterior la creó y el push
+  # falló. Si es de este commit se sube; si es de otro, se avisa.
+  if local_="$(git rev-parse -q --verify "refs/tags/$etiqueta^{commit}")"; then
+    if [[ "$local_" != "$COMMIT" ]]; then
+      echo "La etiqueta $etiqueta existe aquí pero en $local_, no en este commit." >&2
+      echo "Si sobra:  git tag -d $etiqueta  y vuelve a lanzar esto." >&2
+      return 0
+    fi
+    echo "La etiqueta $etiqueta estaba creada aquí pero sin subir: la subo."
+  else
+    git tag -a "$etiqueta" -m "${NOTAS:-Versión $VERSION}" "$COMMIT"
+  fi
   git push -q origin "$etiqueta"
   echo "Etiqueta .... $etiqueta (la imagen :$VERSION la añade el workflow Imagen)"
 }

@@ -403,6 +403,16 @@ optgroup {
   cursor: pointer;
 }
 
+/* El hueco que ocupa el sitio de las filas que no se pintan (FilasVirtuales):
+   no es una fila de verdad, así que ni borde ni resaltado al pasar por encima.
+   tbody en el selector para ganar a `.hud-app .data-table tr:hover td`. */
+.data-table tbody tr.fila-hueco td,
+.data-table tbody tr.fila-hueco:hover td {
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
 /* Library list: only the title navigates to the dedicated detail card, so it
    gets its own affordance (pointer + highlight on hover) to make that clear. */
 .lib-title-link {

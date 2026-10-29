@@ -31,6 +31,15 @@
   --hud-panel-solid: #060e1c;
 }
 
+/* Dentro de la aplicación hay un solo acento: los enlaces y los estados
+   activos toman el azul cian del HUD en vez del azul genérico. Va en :root
+   (cuando la página tiene .hud-app) y no en .hud-app para que también lo
+   reciban los menús, tooltips y modales que se pintan en un portal fuera de
+   él. Login y asistente siguen en azul hasta que se les aplique el HUD. */
+:root:has(.hud-app) {
+  --text-accent: var(--hud-sky);
+}
+
 .hud-app {
   position: relative;
   background:

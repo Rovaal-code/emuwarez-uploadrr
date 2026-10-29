@@ -27,9 +27,10 @@ export function useTooltip(content: React.ReactNode, maxWidth = 460) {
   // ve el tooltip): así aria-describedby apunta a algo que ya existe cuando el
   // lector de pantalla pregunta al llegar el foco.
   const id = useId()
-  // El control que tiene el foco cuando no es el propio disparador: <Tooltip>
-  // envuelve al botón en un <span>, y el foco cae en el botón de dentro.
-  const descrito = useRef<Element | null>(null)
+  // El control que tiene el foco cuando no es el propio disparador (<Tooltip>
+  // envuelve al botón en un <span>, y el foco cae en el botón de dentro), con
+  // el aria-describedby que ya traía, para devolvérselo al salir.
+  const descrito = useRef<{ el: Element; previo: string | null } | null>(null)
   // Ratón y foco van por separado: el tooltip sigue abierto mientras quede
   // cualquiera de los dos, y Escape lo cierra siempre.
   const hover = useRef(false)
@@ -53,14 +54,16 @@ export function useTooltip(content: React.ReactNode, maxWidth = 460) {
   }, [ocultar])
   // Con el teclado no hay cursor ni espera: el foco lo abre al momento, bajo
   // el disparador. El foco puede caer en un hijo (el evento sube), así que se
-  // mira e.target, y si no es el disparador se le enlaza la descripción.
+  // mira e.target, y si no es el disparador se le añade la descripción a las
+  // que ya tuviera.
   const openOnFocus = useCallback((e: React.FocusEvent) => {
     const enfocado = e.target as Element
     if (!enfocado.matches(':focus-visible')) return
     foco.current = true
-    if (enfocado !== e.currentTarget && !enfocado.hasAttribute('aria-describedby')) {
-      enfocado.setAttribute('aria-describedby', id)
-      descrito.current = enfocado
+    const previo = enfocado.getAttribute('aria-describedby')
+    if (enfocado !== e.currentTarget && !previo?.split(/\s+/).includes(id)) {
+      enfocado.setAttribute('aria-describedby', previo ? `${previo} ${id}` : id)
+      descrito.current = { el: enfocado, previo }
     }
     const r = medir(e.currentTarget)
     if (timer.current) { window.clearTimeout(timer.current); timer.current = null }
@@ -69,8 +72,12 @@ export function useTooltip(content: React.ReactNode, maxWidth = 460) {
   }, [id])
   const closeOnBlur = useCallback(() => {
     foco.current = false
-    descrito.current?.removeAttribute('aria-describedby')
-    descrito.current = null
+    if (descrito.current) {
+      const { el, previo } = descrito.current
+      if (previo == null) el.removeAttribute('aria-describedby')
+      else el.setAttribute('aria-describedby', previo)
+      descrito.current = null
+    }
     if (!hover.current) ocultar()
   }, [ocultar])
   const closeOnEscape = useCallback((e: React.KeyboardEvent) => {

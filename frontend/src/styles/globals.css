@@ -13,7 +13,8 @@
 /* Las fuentes, como el resto de aplicaciones *arr (Sonarr, Tracearr): Inter
    para toda la interfaz y JetBrains Mono para código, logs y rutas. Van dentro
    del proyecto para que se vean igual en todos los ordenadores, sin depender de
-   ningún CDN. Licencia SIL OFL 1.1, en assets/fonts/OFL-*.txt. */
+   ningún CDN. Licencia SIL OFL 1.1, en public/fonts/OFL-*.txt: está en
+   public/ para que vaya en la build junto a las fuentes, como pide la licencia. */
 @font-face {
   font-family: "Inter";
   src: url("../assets/fonts/inter-latin-400-normal.woff2") format("woff2");

@@ -334,7 +334,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
         <SyncCard />
       </div>
 
-      {/* Stat cards */}
+      {/* Stat cards. El color de la cifra solo marca un estado (disponible,
+          faltante, compatible, parcial); el resto va en el color del texto. */}
       <div data-tour="dashboard-stats">
       <div className="stat-cards-row" style={{ flexShrink: 0 }}>
         <StatCard
@@ -385,7 +386,6 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
           icon={ICON_UPLOADS}
           label="Tus subidas"
           value={s.uploads_completed ?? 0}
-          accentColor="var(--text-accent)"
           info="Número de subidas a eMuwarez que has completado con Uploadrr."
         />
       </div>
@@ -419,14 +419,12 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
             icon={ICON_RECLAIMED}
             label="Peticiones reclamadas"
             value={s.requests_reclaimed ?? 0}
-            accentColor="var(--color-uploading)"
             info="Peticiones ya Reclamadas en eMuwarez. eMuwarez no permite saber si el reclamo es tuyo, así que es el total de reclamadas, no solo las tuyas."
           />
           <StatCard
             icon={ICON_MINE}
             label="Mis peticiones"
             value={s.requests_mine ?? 0}
-            accentColor="var(--text-accent)"
             info="Peticiones creadas por tu propio usuario de eMuwarez (según el nombre configurado en Ajustes)."
           />
         </div>

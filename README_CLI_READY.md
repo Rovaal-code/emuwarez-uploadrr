@@ -443,9 +443,7 @@ el contenedor (`docker-entrypoint.sh`) por symlinks a `/config/Uploadrr/data`
 y `/config/Uploadrr/tmp`, así que persisten en el mismo volumen `/config` que
 ya montas para la base de datos.
 
-El resto de settings de runtime se configuran desde el setup web, o desde
-**Configuración → Uploadrr** en la UI, tras el primer arranque. Ver
-`docs/DEPLOYMENT_DOCKER.md` sección 7b para el detalle completo.
+Ver `docs/DEPLOYMENT_DOCKER.md`, sección 6, para el detalle.
 
 ### Gestión del contenedor
 
@@ -478,8 +476,8 @@ y limpia automáticamente al terminar.
 python3 emuwarez_uploader.py web doctor
 ```
 
-Muestra el estado del CONFIG_DIR, base de datos, frontend, montaje de Uploadrr,
-`hardlink_base` y variables de entorno, sin mostrar secretos.
+Muestra el estado del CONFIG_DIR, base de datos, frontend, Uploadrr, rutas
+permitidas, claves e instancias, sin mostrar secretos.
 
 ### Guía de despliegue completa
 

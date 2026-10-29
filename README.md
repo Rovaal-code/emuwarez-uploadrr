@@ -109,7 +109,7 @@ Abre `http://localhost:9494`: el asistente de configuración inicial se abre sol
   ```
 - **qBittorrent** tiene que ver la carpeta de subidas en la misma ruta que este contenedor.
 - **Si Radarr/Sonarr ven la media en otra ruta** que este contenedor, añade una regla en Configuración →
-  *Mapeo de rutas (biblioteca remota)*.
+  Diagnóstico → *Mapeo de rutas (biblioteca remota)*.
 
 ### Construir la imagen tú mismo
 
@@ -155,7 +155,6 @@ los dos lados, cambia el otro a la vez.
 ## Documentación
 
 - [`docs/DEPLOYMENT_DOCKER.md`](docs/DEPLOYMENT_DOCKER.md): despliegue Docker paso a paso y troubleshooting.
-  **Desactualizada:** aún describe `hardlink_base` y pasos que ya no existen; para las rutas vale lo de arriba.
 - [`docs/source_engine.md`](docs/source_engine.md): motor de detección de source y nomenclatura.
 - [`README_CLI_READY.md`](README_CLI_READY.md): referencia de la CLI y del modelo SQLite.
 

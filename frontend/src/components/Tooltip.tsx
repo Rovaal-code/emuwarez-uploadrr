@@ -56,6 +56,13 @@ export function useTooltip(content: React.ReactNode, maxWidth = 460) {
   // envuelve al botón en un <span>, y el foco cae en el botón de dentro), con
   // el aria-describedby que ya traía, para devolvérselo al salir.
   const descrito = useRef<{ el: Element; previo: string | null } | null>(null)
+  // Si el texto cambia mientras ese hijo sigue con el foco, cambia el id de la
+  // descripción (y la vieja puede haberse quitado): se le pone el nuevo,
+  // conservando lo que traía de antes.
+  useLayoutEffect(() => {
+    const d = descrito.current
+    if (d) d.el.setAttribute('aria-describedby', d.previo ? `${d.previo} ${id}` : id)
+  }, [id])
   // Ratón y foco van por separado: el tooltip sigue abierto mientras quede
   // cualquiera de los dos, y Escape lo cierra siempre.
   const hover = useRef(false)

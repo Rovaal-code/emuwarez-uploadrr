@@ -23,41 +23,59 @@ export function useTooltip(content: React.ReactNode, maxWidth = 460) {
   const [pt, setPt] = useState({ x: 0, y: 0 })
   const ref = useRef<HTMLDivElement>(null)
   const timer = useRef<number | null>(null)
+  // Id de la descripción oculta, que está montada siempre (no solo mientras se
+  // ve el tooltip): así aria-describedby apunta a algo que ya existe cuando el
+  // lector de pantalla pregunta al llegar el foco.
   const id = useId()
-  // El control que tiene el foco y al que describe el tooltip. Puede no ser el
-  // disparador: <Tooltip> envuelve al botón en un <span>, y el foco cae en el
-  // botón de dentro.
+  // El control que tiene el foco cuando no es el propio disparador: <Tooltip>
+  // envuelve al botón en un <span>, y el foco cae en el botón de dentro.
   const descrito = useRef<Element | null>(null)
+  // Ratón y foco van por separado: el tooltip sigue abierto mientras quede
+  // cualquiera de los dos, y Escape lo cierra siempre.
+  const hover = useRef(false)
+  const foco = useRef(false)
 
+  const ocultar = useCallback(() => {
+    if (timer.current) { window.clearTimeout(timer.current); timer.current = null }
+    setShow(false)
+  }, [])
   const track = useCallback((e: React.MouseEvent) => setPt(punto(e)), [])
   const open = useCallback((e: React.MouseEvent) => {
+    hover.current = true
+    if (foco.current) return
     setPt(punto(e))
     if (timer.current) window.clearTimeout(timer.current)
     timer.current = window.setTimeout(() => setShow(true), HOVER_DELAY_MS)
   }, [])
-  const close = useCallback(() => {
-    if (timer.current) { window.clearTimeout(timer.current); timer.current = null }
-    descrito.current?.removeAttribute('aria-describedby')
-    descrito.current = null
-    setShow(false)
-  }, [])
+  const leave = useCallback(() => {
+    hover.current = false
+    if (!foco.current) ocultar()
+  }, [ocultar])
   // Con el teclado no hay cursor ni espera: el foco lo abre al momento, bajo
-  // el disparador, y salir del foco o pulsar Escape lo cierra. El foco puede
-  // caer en un hijo (el evento sube), así que se mira e.target, y es a ese
-  // control al que se le enlaza el tooltip con aria-describedby.
+  // el disparador. El foco puede caer en un hijo (el evento sube), así que se
+  // mira e.target, y si no es el disparador se le enlaza la descripción.
   const openOnFocus = useCallback((e: React.FocusEvent) => {
     const enfocado = e.target as Element
     if (!enfocado.matches(':focus-visible')) return
+    foco.current = true
+    if (enfocado !== e.currentTarget && !enfocado.hasAttribute('aria-describedby')) {
+      enfocado.setAttribute('aria-describedby', id)
+      descrito.current = enfocado
+    }
     const r = medir(e.currentTarget)
     if (timer.current) { window.clearTimeout(timer.current); timer.current = null }
-    enfocado.setAttribute('aria-describedby', id)
-    descrito.current = enfocado
     setPt({ x: r.left + r.width / 2, y: r.bottom - 8 })
     setShow(true)
   }, [id])
+  const closeOnBlur = useCallback(() => {
+    foco.current = false
+    descrito.current?.removeAttribute('aria-describedby')
+    descrito.current = null
+    if (!hover.current) ocultar()
+  }, [ocultar])
   const closeOnEscape = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') close()
-  }, [close])
+    if (e.key === 'Escape') ocultar()
+  }, [ocultar])
 
   useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current) }, [])
 
@@ -85,17 +103,22 @@ export function useTooltip(content: React.ReactNode, maxWidth = 460) {
   const triggerProps = {
     onMouseEnter: open,
     onMouseMove: track,
-    onMouseLeave: close,
+    onMouseLeave: leave,
     onFocus: openOnFocus,
-    onBlur: close,
+    onBlur: closeOnBlur,
     onKeyDown: closeOnEscape,
+    'aria-describedby': content != null ? id : undefined,
   }
 
-  const tooltipNode = show && content != null
+  // La descripción oculta va también por el portal, al final del body: el
+  // tooltipNode se pone a veces dentro de una tabla, donde un <span> suelto no
+  // es HTML válido.
+  const tooltipNode = content != null
     ? createPortal(
-        <div
+        <>
+        <span id={id} hidden>{content}</span>
+        {show && <div
           ref={ref}
-          id={id}
           role="tooltip"
           style={{
             position: 'fixed',
@@ -119,7 +142,8 @@ export function useTooltip(content: React.ReactNode, maxWidth = 460) {
           }}
         >
           {content}
-        </div>,
+        </div>}
+        </>,
         document.body,
       )
     : null

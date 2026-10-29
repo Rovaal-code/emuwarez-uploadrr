@@ -169,15 +169,24 @@ export function Tooltip({ content, children, style, maxWidth }: {
   // Lo normal es envolver un solo botón: la descripción va en él desde el
   // primer render, que es quien recibe el foco, y no en el <span> de fuera.
   // Con otros hijos se queda en el <span>, y openOnFocus la enlaza al control
-  // que reciba el foco.
-  const unHijo = isValidElement<{ 'aria-describedby'?: string }>(children)
-  const hijo = unHijo && descripcion
+  // que reciba el foco. Un botón desactivado no recibe el foco, y justo ahí el
+  // tooltip explica por qué lo está: entonces el foco y la descripción pasan
+  // al <span>.
+  const unHijo = isValidElement<{ 'aria-describedby'?: string; disabled?: boolean }>(children)
+  const hijoDesactivado = unHijo && children.props.disabled === true
+  const enHijo = unHijo && !hijoDesactivado
+  const hijo = enHijo && descripcion
     ? cloneElement(children, {
         'aria-describedby': [children.props['aria-describedby'], descripcion].filter(Boolean).join(' '),
       })
     : children
   return (
-    <span {...eventos} aria-describedby={unHijo ? undefined : descripcion} style={{ display: 'inline-flex', alignItems: 'center', ...style }}>
+    <span
+      {...eventos}
+      tabIndex={hijoDesactivado && descripcion ? 0 : undefined}
+      aria-describedby={enHijo ? undefined : descripcion}
+      style={{ display: 'inline-flex', alignItems: 'center', ...style }}
+    >
       {hijo}
       {tooltipNode}
     </span>

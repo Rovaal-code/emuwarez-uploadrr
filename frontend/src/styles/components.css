@@ -702,8 +702,8 @@ optgroup {
   flex-direction: column;
 }
 .detail-card-rows > * + * {
-  margin-top: 14px;
-  padding-top: 14px;
+  margin-top: var(--row-gap, 14px);
+  padding-top: var(--row-gap, 14px);
   border-top: 1px solid var(--border);
 }
 .text-muted {

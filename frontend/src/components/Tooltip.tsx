@@ -24,6 +24,10 @@ export function useTooltip(content: React.ReactNode, maxWidth = 460) {
   const ref = useRef<HTMLDivElement>(null)
   const timer = useRef<number | null>(null)
   const id = useId()
+  // El control que tiene el foco y al que describe el tooltip. Puede no ser el
+  // disparador: <Tooltip> envuelve al botón en un <span>, y el foco cae en el
+  // botón de dentro.
+  const descrito = useRef<Element | null>(null)
 
   const track = useCallback((e: React.MouseEvent) => setPt(punto(e)), [])
   const open = useCallback((e: React.MouseEvent) => {
@@ -33,17 +37,24 @@ export function useTooltip(content: React.ReactNode, maxWidth = 460) {
   }, [])
   const close = useCallback(() => {
     if (timer.current) { window.clearTimeout(timer.current); timer.current = null }
+    descrito.current?.removeAttribute('aria-describedby')
+    descrito.current = null
     setShow(false)
   }, [])
   // Con el teclado no hay cursor ni espera: el foco lo abre al momento, bajo
-  // el elemento, y salir del foco o pulsar Escape lo cierra.
+  // el disparador, y salir del foco o pulsar Escape lo cierra. El foco puede
+  // caer en un hijo (el evento sube), así que se mira e.target, y es a ese
+  // control al que se le enlaza el tooltip con aria-describedby.
   const openOnFocus = useCallback((e: React.FocusEvent) => {
-    if (!e.currentTarget.matches(':focus-visible')) return
+    const enfocado = e.target as Element
+    if (!enfocado.matches(':focus-visible')) return
     const r = medir(e.currentTarget)
     if (timer.current) { window.clearTimeout(timer.current); timer.current = null }
+    enfocado.setAttribute('aria-describedby', id)
+    descrito.current = enfocado
     setPt({ x: r.left + r.width / 2, y: r.bottom - 8 })
     setShow(true)
-  }, [])
+  }, [id])
   const closeOnEscape = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Escape') close()
   }, [close])
@@ -78,7 +89,6 @@ export function useTooltip(content: React.ReactNode, maxWidth = 460) {
     onFocus: openOnFocus,
     onBlur: close,
     onKeyDown: closeOnEscape,
-    'aria-describedby': show && content != null ? id : undefined,
   }
 
   const tooltipNode = show && content != null

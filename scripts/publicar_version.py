@@ -69,7 +69,7 @@ def construir_manifiesto(digest: str | None, notas: str | None) -> dict:
 
 def _leer_version() -> str:
     raiz = pathlib.Path(__file__).resolve().parents[1]
-    for linea in (raiz / "emuwarez_uploadrr" / "__init__.py").read_text().splitlines():
+    for linea in (raiz / "emuwarez_uploadrr" / "__init__.py").read_text(encoding="utf-8").splitlines():
         if linea.startswith("__version__"):
             return linea.split("=", 1)[1].strip().strip('"\'')
     return "?"
@@ -98,7 +98,10 @@ def publicar(manifiesto: dict, repo: str) -> None:
         subprocess.run(["gh", "repo", "clone", repo, tmp, "--", "--depth", "1"],
                        check=True, capture_output=True)
         destino = pathlib.Path(tmp) / FICHERO
-        destino.write_text(json.dumps(manifiesto, indent=2, ensure_ascii=False) + "\n")
+        # UTF-8 explícito: sin él, en Windows sale en cp1252 y la app, que lo
+        # lee como UTF-8, no puede decodificar la primera tilde de la nota.
+        destino.write_text(json.dumps(manifiesto, indent=2, ensure_ascii=False) + "\n",
+                           encoding="utf-8")
         subprocess.run(["git", "-C", tmp, "add", FICHERO], check=True)
         subprocess.run(["git", "-C", tmp, "commit", "-m",
                         f"{manifiesto['commit'][:7]}: {manifiesto['notas']}"], check=True)
@@ -151,7 +154,7 @@ def main() -> int:
 
     if not args.repo:
         salida = pathlib.Path("latest.json")
-        salida.write_text(texto + "\n")
+        salida.write_text(texto + "\n", encoding="utf-8")
         print(texto)
         print(f"\nEscrito en {salida.resolve()}. Para publicarlo de verdad:")
         print(f"  python3 {sys.argv[0]} --digest ... --repo")

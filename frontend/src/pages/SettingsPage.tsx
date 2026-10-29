@@ -22,7 +22,7 @@ import { ProviderPriorityPicker } from '../components/ProviderPriorityPicker'
 import { ServiceIcon } from '../components/ServiceIcon'
 import { InfoIcon } from '../components/InfoIcon'
 import { Favicon, domainOf } from '../components/Favicon'
-import { SortableList, DragHandleIcon } from '../components/SortableList'
+import { SortableList, DragHandleIcon, type DragHandleProps } from '../components/SortableList'
 import { REGION_OPTIONS } from '../constants/regionLanguage'
 import { CheckStatusIcon } from '../components/DetailCard'
 import { testResultLabel, testResultColor, emuTestCooldownSeconds } from '../utils/integrationResult'
@@ -221,9 +221,6 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const [imgTest, setImgTest] = useState<Record<string, IntegrationTestResult>>({})
   const [imgTesting, setImgTesting] = useState<string | null>(null)
   const [showAddImg, setShowAddImg] = useState(false)
-  // Full displayed order of image hosts, always including imgbox (which may not
-  // live in the saved list yet). imgbox is reorderable like the rest.
-  const imgOrder = () => (imgEnabled.includes('imgbox') ? [...imgEnabled] : ['imgbox', ...imgEnabled])
   // Uploadrr sandboxing: folder(s) where THIS container reaches the media,
   // comma-separated. Empty means real uploads fail closed until it's set.
   const [allowedRoots, setAllowedRoots] = useState('')
@@ -681,96 +678,104 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           <ServiceIcon type="imghost" size={18} /> Proveedores de imágenes
         </h3>
         <span className="form-hint" style={{ display: 'block', marginBottom: 12 }}>
-          Para las capturas que Uploadrr sube junto al torrent. Se prueban por orden de prioridad; arrastra para reordenar, o usa las flechas desde el asa de cada fila. <strong>imgbox</strong> es el fallback sin API key.
+          Para las capturas que Uploadrr sube junto al torrent. Se prueban por orden de prioridad; arrastra para reordenar, o usa las flechas desde el asa de cada fila. <strong>imgbox</strong>, sin API key, va siempre el último.
         </span>
         <label className="form-label" style={{ display: 'block', marginBottom: 8 }}>Prioridad de proveedores</label>
         {(() => {
           const avail = settings?.image_hosts_available ?? []
-          const configuredIds = imgOrder()
-          const notConfigured = avail.filter(h => !configuredIds.includes(h.id))
+          // imgbox no se ordena: la subida siempre lo prueba el último (fallback_order).
+          const configuredIds = imgEnabled.filter(id => id !== 'imgbox')
+          const notConfigured = avail.filter(h => h.id !== 'imgbox' && !configuredIds.includes(h.id))
           const metaOf = (id: string) => avail.find(h => h.id === id)
+          const fila = (id: string, idx: number, asa?: { dragging: boolean; handleProps: DragHandleProps }) => {
+            const h = metaOf(id); if (!h) return null
+            const isDefault = id === 'imgbox'
+            const dragging = !!asa?.dragging
+            const t = imgTest[id]
+            return (
+              <div style={{
+                padding: '8px 10px', borderRadius: 8,
+                background: dragging ? 'color-mix(in srgb, var(--color-primary) 15%, transparent)' : 'color-mix(in srgb, var(--color-uploading) 6%, transparent)',
+                border: `1px solid ${dragging ? 'var(--text-accent)' : 'var(--border)'}`,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ color: 'var(--text-muted)', fontSize: 11, width: 16, textAlign: 'center' }}>{idx + 1}</span>
+                  {asa ? (
+                    <HoverTitle
+                      as="span"
+                      tip="Arrastra para reordenar, o usa las flechas del teclado"
+                      {...asa.handleProps}
+                      className="drag-handle"
+                      style={{ ...asa.handleProps.style, color: 'var(--text-accent)', width: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginLeft: 8, marginRight: 8 }}
+                    ><DragHandleIcon /></HoverTitle>
+                  ) : <span style={{ width: 16, marginLeft: 8, marginRight: 8 }} />}
+                  <a href={h.url} target="_blank" rel="noreferrer" title={`Abrir ${h.label}`}
+                    onClick={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()}
+                    style={{ display: 'inline-flex' }}>
+                    <Favicon domain={domainOf(h.url)} src={h.favicon} size={15} background="var(--overlay-light)" fallback={<ServiceIcon type="imghost" size={15} />} />
+                  </a>
+                  <span style={{ fontSize: 13, fontWeight: 500, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.label}</span>
+                  {isDefault && <span className="badge status-available">por defecto</span>}
+                  {h.needs_key && (() => {
+                    // Verde cuando hay clave guardada; gris parpadeando
+                    // mientras no la haya, para que un proveedor recién
+                    // añadido pida lo que le falta en vez de quedarse
+                    // callado y fallar luego en plena subida.
+                    const guardada = !!settings?.image_host_keys_configured?.includes(id)
+                    return (
+                      <button
+                        type="button"
+                        title={guardada ? 'API key comprobada. Pulsa para cambiarla' : 'Falta la API key. Pulsa para añadirla'}
+                        className={`badge ${guardada ? 'status-available' : 'nom-na badge-blink'}`}
+                        // Sin border:none — .badge lleva su propio borde
+                        // y quitarlo era lo que lo hacía distinto del
+                        // "por defecto" de al lado. El resto neutraliza
+                        // lo que el navegador le añade a un <button>:
+                        // su tipografía, su interlineado y su margen.
+                        style={{
+                          fontSize: 10, cursor: 'pointer', appearance: 'none',
+                          fontFamily: 'inherit', lineHeight: 'inherit', margin: 0,
+                        }}
+                        onClick={e => { e.stopPropagation(); setKeyModalHost(id); setKeyDraft('') }}
+                        onMouseDown={e => e.stopPropagation()}
+                      >API key</button>
+                    )
+                  })()}
+                  {/* Los que llevan API key se prueban DENTRO de su
+                      tarjeta, que es donde está la clave. Aquí el botón
+                      dejaría su resultado donde ya no se enseña. */}
+                  {/* Los controles van juntos a la derecha, con la X al
+                      final. El empuje vive en el contenedor y no en el
+                      botón Probar: ese botón solo existe para los
+                      proveedores sin API key (los demás se prueban en su
+                      tarjeta), así que colgar de él la alineación dejaba
+                      la X pegada a las insignias en el resto. */}
+                  <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {!h.needs_key && (
+                      <button className="btn btn-secondary btn-sm" style={{ fontSize: 11, padding: '2px 8px' }}
+                        onClick={() => handleTestImghost(id)} disabled={imgTesting === id} type="button">
+                        {imgTesting === id ? 'Probando…' : 'Probar'}
+                      </button>
+                    )}
+                    {!isDefault && (
+                      <RemoveImgHostButton onClick={() => toggleImgHost(id)} />
+                    )}
+                  </div>
+                </div>
+                {/* Solo para los que no tienen tarjeta: los demás ya lo
+                    enseñan ahí y salía dos veces. */}
+                {!h.needs_key && t && <div style={{ fontSize: 11, marginTop: 4, color: testResultColor(t) }}>{testResultLabel(t)}</div>}
+              </div>
+            )
+          }
           return (
             <>
             <div className="provider-card__body">
               <div className="provider-card__list">
-                <SortableList etiqueta={id => metaOf(id)?.label ?? id} ids={configuredIds} onChange={setImgEnabled} gap={8} renderRow={(id, idx, { dragging, handleProps }) => {
-                  const h = metaOf(id); if (!h) return null
-                  const isDefault = id === 'imgbox'
-                  const t = imgTest[id]
-                  return (
-                    <div style={{
-                      padding: '8px 10px', borderRadius: 8,
-                      background: dragging ? 'color-mix(in srgb, var(--color-primary) 15%, transparent)' : 'color-mix(in srgb, var(--color-uploading) 6%, transparent)',
-                      border: `1px solid ${dragging ? 'var(--text-accent)' : 'var(--border)'}`,
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ color: 'var(--text-muted)', fontSize: 11, width: 16, textAlign: 'center' }}>{idx + 1}</span>
-                        <HoverTitle
-                          as="span"
-                          tip="Arrastra para reordenar, o usa las flechas del teclado"
-                          {...handleProps}
-                          className="drag-handle"
-                          style={{ ...handleProps.style, color: 'var(--text-accent)', width: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginLeft: 8, marginRight: 8 }}
-                        ><DragHandleIcon /></HoverTitle>
-                        <a href={h.url} target="_blank" rel="noreferrer" title={`Abrir ${h.label}`}
-                          onClick={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()}
-                          style={{ display: 'inline-flex' }}>
-                          <Favicon domain={domainOf(h.url)} src={h.favicon} size={15} background="var(--overlay-light)" fallback={<ServiceIcon type="imghost" size={15} />} />
-                        </a>
-                        <span style={{ fontSize: 13, fontWeight: 500, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.label}</span>
-                        {isDefault && <span className="badge status-available">por defecto</span>}
-                        {h.needs_key && (() => {
-                          // Verde cuando hay clave guardada; gris parpadeando
-                          // mientras no la haya, para que un proveedor recién
-                          // añadido pida lo que le falta en vez de quedarse
-                          // callado y fallar luego en plena subida.
-                          const guardada = !!settings?.image_host_keys_configured?.includes(id)
-                          return (
-                            <button
-                              type="button"
-                              title={guardada ? 'API key comprobada. Pulsa para cambiarla' : 'Falta la API key. Pulsa para añadirla'}
-                              className={`badge ${guardada ? 'status-available' : 'nom-na badge-blink'}`}
-                              // Sin border:none — .badge lleva su propio borde
-                              // y quitarlo era lo que lo hacía distinto del
-                              // "por defecto" de al lado. El resto neutraliza
-                              // lo que el navegador le añade a un <button>:
-                              // su tipografía, su interlineado y su margen.
-                              style={{
-                                fontSize: 10, cursor: 'pointer', appearance: 'none',
-                                fontFamily: 'inherit', lineHeight: 'inherit', margin: 0,
-                              }}
-                              onClick={e => { e.stopPropagation(); setKeyModalHost(id); setKeyDraft('') }}
-                              onMouseDown={e => e.stopPropagation()}
-                            >API key</button>
-                          )
-                        })()}
-                        {/* Los que llevan API key se prueban DENTRO de su
-                            tarjeta, que es donde está la clave. Aquí el botón
-                            dejaría su resultado donde ya no se enseña. */}
-                        {/* Los controles van juntos a la derecha, con la X al
-                            final. El empuje vive en el contenedor y no en el
-                            botón Probar: ese botón solo existe para los
-                            proveedores sin API key (los demás se prueban en su
-                            tarjeta), así que colgar de él la alineación dejaba
-                            la X pegada a las insignias en el resto. */}
-                        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-                          {!h.needs_key && (
-                            <button className="btn btn-secondary btn-sm" style={{ fontSize: 11, padding: '2px 8px' }}
-                              onClick={() => handleTestImghost(id)} disabled={imgTesting === id} type="button">
-                              {imgTesting === id ? 'Probando…' : 'Probar'}
-                            </button>
-                          )}
-                          {!isDefault && (
-                            <RemoveImgHostButton onClick={() => toggleImgHost(id)} />
-                          )}
-                        </div>
-                      </div>
-                      {/* Solo para los que no tienen tarjeta: los demás ya lo
-                          enseñan ahí y salía dos veces. */}
-                      {!h.needs_key && t && <div style={{ fontSize: 11, marginTop: 4, color: testResultColor(t) }}>{testResultLabel(t)}</div>}
-                    </div>
-                  )
-                }} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <SortableList etiqueta={id => metaOf(id)?.label ?? id} ids={configuredIds} onChange={setImgEnabled} gap={8} renderRow={fila} />
+                  {fila('imgbox', configuredIds.length)}
+                </div>
               </div>
               {notConfigured.length > 0 && (
                 <button className="btn btn-secondary btn-sm provider-card__add-btn" onClick={() => setShowAddImg(true)} type="button">

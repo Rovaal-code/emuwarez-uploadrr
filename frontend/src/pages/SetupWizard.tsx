@@ -10,6 +10,7 @@ import { testTmdbConnection, testEmuwarezConnection, testArrConnection, testQbit
 import { ServiceIcon } from '../components/ServiceIcon'
 import { Favicon, domainOf } from '../components/Favicon'
 import { ProviderPriorityPicker } from '../components/ProviderPriorityPicker'
+import { SortableList, DragHandleIcon, type DragHandleProps } from '../components/SortableList'
 import { InfoIcon } from '../components/InfoIcon'
 import { ExternalLinkButtonIcon } from '../components/DetailCard'
 import { REGION_OPTIONS } from '../constants/regionLanguage'
@@ -882,41 +883,59 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
           )}
 
           {/* Image hosts step */}
-          {step === 'imagehosts' && (
+          {step === 'imagehosts' && (() => {
+            // imgbox no se ordena: la subida siempre lo prueba el último (fallback_order).
+            const activos = imgEnabled.filter(id => id !== 'imgbox' && imgAvailable.some(h => h.id === id))
+            const resto = imgAvailable.filter(h => !activos.includes(h.id))
+              .sort((a, b) => Number(b.id === 'imgbox') - Number(a.id === 'imgbox'))
+            const fila = (id: string, asa?: DragHandleProps) => {
+              const h = imgAvailable.find(x => x.id === id); if (!h) return null
+              const enabled = imgEnabled.includes(h.id)
+              const isDefault = h.id === 'imgbox'
+              const t = imgTest[h.id]
+              return (
+                <div style={{ padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {asa ? (
+                      <HoverTitle
+                        as="span"
+                        tip="Arrastra para reordenar, o usa las flechas del teclado"
+                        {...asa}
+                        className="drag-handle"
+                        style={{ ...asa.style, color: 'var(--text-accent)', width: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                      ><DragHandleIcon /></HoverTitle>
+                    ) : <span style={{ width: 16 }} />}
+                    <input type="checkbox" aria-label={`Usar ${h.label}`} checked={enabled || isDefault} disabled={isDefault}
+                      onChange={() => setImgEnabled(p => p.includes(h.id) ? p.filter(x => x !== h.id) : [h.id, ...p])} />
+                    <Favicon domain={domainOf(h.url)} src={h.favicon} size={14} background="var(--overlay-light)" fallback={<ServiceIcon type="imghost" size={14} />} />
+                    <span style={{ fontSize: 13 }}>{h.label}</span>
+                    {isDefault && <span className="badge status-available">por defecto</span>}
+                    {h.needs_key && <span className="badge nom-na">API key</span>}
+                    {(enabled || isDefault) && (
+                      <button className="btn btn-secondary btn-sm" style={{ marginLeft: 'auto', fontSize: 11, padding: '2px 8px' }}
+                        onClick={() => handleTestImghost(h.id)} disabled={imgTesting === h.id} type="button">
+                        {imgTesting === h.id ? 'Probando…' : 'Probar'}
+                      </button>
+                    )}
+                  </div>
+                  {h.needs_key && enabled && (
+                    <input type="password" className="form-input" style={{ marginTop: 6 }} autoComplete="new-password"
+                      value={imgKeys[h.id] ?? ''} onChange={e => setImgKeys(p => ({ ...p, [h.id]: e.target.value }))}
+                      placeholder={`API key de ${h.label}`} />
+                  )}
+                  {t && <div style={{ fontSize: 11, marginTop: 4, color: testResultColor(t) }}>{testResultLabel(t)}</div>}
+                </div>
+              )
+            }
+            return (
             <>
               <div className="wizard-step-desc">
-                Dónde suben las capturas que acompañan al torrent. <strong>imgbox</strong> va por defecto (sin key); activa otros si quieres. Puedes cambiarlo luego en Configuración.
+                Dónde suben las capturas que acompañan al torrent. Se prueban en este orden: arrastra los activos para reordenarlos, o usa las flechas desde su asa. <strong>imgbox</strong>, sin key, va siempre el último.
               </div>
               <div className="wizard-fields" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {imgAvailable.map(h => {
-                  const enabled = imgEnabled.includes(h.id)
-                  const isDefault = h.id === 'imgbox'
-                  const t = imgTest[h.id]
-                  return (
-                    <div key={h.id} style={{ padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <input type="checkbox" checked={enabled || isDefault} disabled={isDefault}
-                          onChange={() => setImgEnabled(p => p.includes(h.id) ? p.filter(x => x !== h.id) : [h.id, ...p])} />
-                        <Favicon domain={domainOf(h.url)} src={h.favicon} size={14} background="var(--overlay-light)" fallback={<ServiceIcon type="imghost" size={14} />} />
-                        <span style={{ fontSize: 13 }}>{h.label}</span>
-                        {isDefault && <span className="badge status-available">por defecto</span>}
-                        {h.needs_key && <span className="badge nom-na">API key</span>}
-                        {(enabled || isDefault) && (
-                          <button className="btn btn-secondary btn-sm" style={{ marginLeft: 'auto', fontSize: 11, padding: '2px 8px' }}
-                            onClick={() => handleTestImghost(h.id)} disabled={imgTesting === h.id} type="button">
-                            {imgTesting === h.id ? 'Probando…' : 'Probar'}
-                          </button>
-                        )}
-                      </div>
-                      {h.needs_key && enabled && (
-                        <input type="password" className="form-input" style={{ marginTop: 6 }} autoComplete="new-password"
-                          value={imgKeys[h.id] ?? ''} onChange={e => setImgKeys(p => ({ ...p, [h.id]: e.target.value }))}
-                          placeholder={`API key de ${h.label}`} />
-                      )}
-                      {t && <div style={{ fontSize: 11, marginTop: 4, color: testResultColor(t) }}>{testResultLabel(t)}</div>}
-                    </div>
-                  )
-                })}
+                <SortableList etiqueta={id => imgAvailable.find(h => h.id === id)?.label ?? id} ids={activos} onChange={setImgEnabled} gap={8}
+                  renderRow={(id, _idx, { handleProps }) => fila(id, handleProps)} />
+                {resto.map(h => <div key={h.id}>{fila(h.id)}</div>)}
               </div>
               {error && <div className="alert alert-error" style={{ marginTop: 14 }}>{error}</div>}
               <div className="wizard-actions">
@@ -926,7 +945,8 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 </button>
               </div>
             </>
-          )}
+            )
+          })()}
 
           {/* Complete step */}
           {step === 'complete' && (

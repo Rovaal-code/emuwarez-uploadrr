@@ -77,6 +77,69 @@ echo "Versión ..... $VERSION"
 echo "Commit ...... $COMMIT"
 echo "Construida .. $FECHA"
 
+# La etiqueta vX.Y.Z de esta versión. Nunca se pisa: si ya existe en otro
+# commit, aquí o en GitHub, se para antes de construir nada y hay que
+# resolverlo a mano. Lo que manda es GitHub, porque es su etiqueta la que
+# dispara el workflow Imagen. De una etiqueta anotada, ls-remote da también la
+# línea "^{}" con el commit al que apunta; de una ligera (las de una release
+# hecha en la web), solo esa.
+ETIQUETA="v$VERSION"
+
+etiqueta_remota() {
+  git ls-remote --tags origin "refs/tags/$ETIQUETA" "refs/tags/$ETIQUETA^{}" |
+    sort -k2 | tail -1 | cut -f1
+}
+
+etiqueta_local() {
+  git rev-parse -q --verify "refs/tags/$ETIQUETA^{commit}" || true
+}
+
+comprobar_etiqueta() {
+  local remota local_
+  remota="$(etiqueta_remota)"
+  local_="$(etiqueta_local)"
+  if [[ -n "$remota" && "$remota" != "$COMMIT" ]]; then
+    echo "La etiqueta $ETIQUETA ya está en GitHub en $remota, no en este commit." >&2
+    echo "No se pisa: sube la versión (--version patch) o quita la etiqueta que sobra." >&2
+    return 1
+  fi
+  if [[ -n "$local_" && "$local_" != "$COMMIT" ]]; then
+    echo "La etiqueta $ETIQUETA existe aquí en $local_, no en este commit." >&2
+    echo "Si sobra:  git tag -d $ETIQUETA  y vuelve a lanzar esto." >&2
+    return 1
+  fi
+}
+
+# Al final, con el manifiesto ya publicado: crea la etiqueta, o sube la que
+# una ejecución anterior dejó solo aquí. Solo si el commit es la punta de
+# master en GitHub: la imagen de cada commit la construye el workflow Imagen
+# con el push a master, y la etiqueta solo le añade el nombre de la versión.
+etiquetar() {
+  # Otra vez, por si algo ha cambiado mientras se construía.
+  comprobar_etiqueta || return 1
+  if [[ -n "$(etiqueta_remota)" ]]; then
+    echo "La etiqueta $ETIQUETA ya está en GitHub."
+    return 0
+  fi
+  git fetch -q origin master
+  if [[ "$(git rev-parse origin/master)" != "$COMMIT" ]]; then
+    echo "Este commit no es la punta de master en GitHub, así que no creo $ETIQUETA." >&2
+    echo "Cuando lo sea:  git tag -a $ETIQUETA -m \"…\" $COMMIT && git push origin $ETIQUETA" >&2
+    return 0
+  fi
+  if [[ -n "$(etiqueta_local)" ]]; then
+    echo "La etiqueta $ETIQUETA estaba creada aquí pero sin subir: la subo."
+  else
+    git tag -a "$ETIQUETA" -m "${NOTAS:-Versión $VERSION}" "$COMMIT"
+  fi
+  git push -q origin "$ETIQUETA"
+  echo "Etiqueta .... $ETIQUETA (la imagen :$VERSION la añade el workflow Imagen)"
+}
+
+if [[ "$PUBLICAR" -eq 1 ]]; then
+  comprobar_etiqueta || exit 1
+fi
+
 echo "Resolviendo el HEAD del fork…"
 COMMIT_FORK="$(git ls-remote "$FORK" main | cut -f1)"
 if [[ -z "$COMMIT_FORK" ]]; then
@@ -112,46 +175,6 @@ echo "Subiendo…"
 docker push "$IMAGEN"
 DIGEST="$(docker image inspect "$IMAGEN" --format '{{index .RepoDigests 0}}' | cut -d@ -f2)"
 echo "Digest ...... $DIGEST"
-
-# La etiqueta vX.Y.Z en este commit. Solo si es la punta de master ya subida a
-# GitHub: la imagen de cada commit la construye el workflow Imagen con el push a
-# master, y la etiqueta solo le añade el nombre de la versión a esa imagen.
-etiquetar() {
-  local etiqueta="v$VERSION" remota local_
-  # Lo que manda es GitHub: es la etiqueta de allí la que dispara el workflow.
-  # De una etiqueta anotada, ls-remote da también la línea "^{}" con el commit
-  # al que apunta; de una ligera (las de una release hecha en la web), solo esa.
-  remota="$(git ls-remote --tags origin "refs/tags/$etiqueta" "refs/tags/$etiqueta^{}" |
-    sort -k2 | tail -1 | cut -f1)"
-  if [[ -n "$remota" ]]; then
-    if [[ "$remota" == "$COMMIT" ]]; then
-      echo "La etiqueta $etiqueta ya está en GitHub."
-    else
-      echo "La etiqueta $etiqueta ya está en GitHub, pero en $remota y no en este commit: no la toco." >&2
-    fi
-    return 0
-  fi
-  git fetch -q origin master
-  if [[ "$(git rev-parse origin/master)" != "$COMMIT" ]]; then
-    echo "Este commit no es la punta de master en GitHub, así que no creo $etiqueta." >&2
-    echo "Cuando lo sea:  git tag -a $etiqueta -m \"…\" $COMMIT && git push origin $etiqueta" >&2
-    return 0
-  fi
-  # Puede estar ya aquí y no en GitHub: una ejecución anterior la creó y el push
-  # falló. Si es de este commit se sube; si es de otro, se avisa.
-  if local_="$(git rev-parse -q --verify "refs/tags/$etiqueta^{commit}")"; then
-    if [[ "$local_" != "$COMMIT" ]]; then
-      echo "La etiqueta $etiqueta existe aquí pero en $local_, no en este commit." >&2
-      echo "Si sobra:  git tag -d $etiqueta  y vuelve a lanzar esto." >&2
-      return 0
-    fi
-    echo "La etiqueta $etiqueta estaba creada aquí pero sin subir: la subo."
-  else
-    git tag -a "$etiqueta" -m "${NOTAS:-Versión $VERSION}" "$COMMIT"
-  fi
-  git push -q origin "$etiqueta"
-  echo "Etiqueta .... $etiqueta (la imagen :$VERSION la añade el workflow Imagen)"
-}
 
 if [[ "$PUBLICAR" -eq 0 ]]; then
   echo

@@ -134,7 +134,7 @@ function NomenclatureSection({ snapshot, mediaType, isStaging }: { snapshot: Upl
               return (
                 <tr key={r.key}>
                   <td style={{ fontWeight: 600 }}>{r.label}</td>
-                  <td style={{ fontFamily: 'monospace' }}>{value != null && value !== '' ? String(value) : '—'}</td>
+                  <td style={{ fontFamily: 'var(--font-mono)' }}>{value != null && value !== '' ? String(value) : '—'}</td>
                 </tr>
               )
             })}
@@ -146,14 +146,14 @@ function NomenclatureSection({ snapshot, mediaType, isStaging }: { snapshot: Upl
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 3 }}>
             Nombre del torrent
           </div>
-          <div style={{ fontFamily: 'monospace', fontSize: 13, wordBreak: 'break-all' }}>{name || '—'}</div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, wordBreak: 'break-all' }}>{name || '—'}</div>
         </div>
         <div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 5 }}>
             {INTERNAL_TITLE_LABEL_TEXT}
             <InfoIcon text={INTERNAL_TITLE_TOOLTIP} />
           </div>
-          <div style={{ fontFamily: 'monospace', fontSize: 13, wordBreak: 'break-all' }}>{name || '—'}</div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, wordBreak: 'break-all' }}>{name || '—'}</div>
         </div>
       </div>
     </>

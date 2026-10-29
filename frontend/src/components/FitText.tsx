@@ -53,7 +53,7 @@ const textStyle: React.CSSProperties = {
   // overflowX:auto (not hidden+ellipsis): if even `min` doesn't fully
   // eliminate overflow, the leftover scrolls into view instead of being
   // silently clipped behind a "…".
-  fontFamily: 'monospace', whiteSpace: 'nowrap', overflowX: 'auto', overflowY: 'hidden', width: '100%', minWidth: 0,
+  fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', overflowX: 'auto', overflowY: 'hidden', width: '100%', minWidth: 0,
 }
 
 // Monospace one-liner (torrent name / internal title / expected name) that

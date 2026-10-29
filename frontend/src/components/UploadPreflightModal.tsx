@@ -218,7 +218,7 @@ export function UploadPreflightModal({ itemId, itemTitle, requestId, onClose }: 
                     border: `1px solid ${confirmInput === CONFIRMATION_TOKEN ? 'var(--color-available-soft)' : 'color-mix(in srgb, var(--overlay-light) 15%, transparent)'}`,
                     borderRadius: 4,
                     color: 'inherit',
-                    fontFamily: 'monospace',
+                    fontFamily: 'var(--font-mono)',
                     fontSize: '0.9rem',
                     boxSizing: 'border-box',
                   }}

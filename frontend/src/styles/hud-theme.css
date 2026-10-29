@@ -16,8 +16,10 @@
   --hud-ok: #28e394;
   --hud-warn: #ffb930;
   --hud-danger: #ff5470;
-  --hud-font: "Share Tech Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
-  /* La voz de rótulo del HUD (títulos de página): la misma monoespaciada. */
+  /* La voz del HUD (navegación, títulos, cifras): Inter, como el resto de la
+     interfaz y de las aplicaciones *arr. */
+  --hud-font: var(--font-sans);
+  /* La voz de rótulo del HUD (títulos de página): la misma. */
   --font-display: var(--hud-font);
 
   /* Bases de los marcos, brillos y fondos; se mezclan con transparencia. */

@@ -10,7 +10,7 @@ import { CheckStatusIcon } from '../components/DetailCard'
 
 function Mono({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ fontFamily: 'monospace', fontSize: 12.5, background: 'color-mix(in srgb, var(--overlay-dark) 20%, transparent)', padding: '10px 12px', borderRadius: 6, overflowX: 'auto', whiteSpace: 'pre' }}>
+    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12.5, background: 'color-mix(in srgb, var(--overlay-dark) 20%, transparent)', padding: '10px 12px', borderRadius: 6, overflowX: 'auto', whiteSpace: 'pre' }}>
       {children}
     </div>
   )
@@ -205,7 +205,7 @@ function TwoColTable({ head, rows }: { head: [string, string]; rows: [string, st
         <thead><tr><th>{head[0]}</th><th>{head[1]}</th></tr></thead>
         <tbody>
           {rows.map(([a, b], i) => (
-            <tr key={i}><td>{a}</td><td style={{ fontFamily: 'monospace' }}>{b}</td></tr>
+            <tr key={i}><td>{a}</td><td style={{ fontFamily: 'var(--font-mono)' }}>{b}</td></tr>
           ))}
         </tbody>
       </table>
@@ -240,7 +240,7 @@ function FieldSourcesContent() {
           {FIELD_SOURCES.map(f => (
             <tr key={f.field}>
               <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{f.field}</td>
-              <td style={{ fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{f.example}</td>
+              <td style={{ fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{f.example}</td>
               <td>{f.source}</td>
             </tr>
           ))}
@@ -540,8 +540,8 @@ function UploadConditionsContent() {
             {SPANISH_ROWS.map((r, i) => (
               <tr key={i}>
                 <td style={{ whiteSpace: 'nowrap' }}>{r.kind}</td>
-                <td style={{ fontFamily: 'monospace' }}>{r.audio}</td>
-                <td style={{ fontFamily: 'monospace' }}>{r.subs}</td>
+                <td style={{ fontFamily: 'var(--font-mono)' }}>{r.audio}</td>
+                <td style={{ fontFamily: 'var(--font-mono)' }}>{r.subs}</td>
                 <td><VerdictCell verdict={r.verdict} label={r.verdictLabel} /></td>
                 <td>{r.why}</td>
               </tr>
@@ -629,7 +629,7 @@ function UploadConditionsContent() {
             ] as [string, string, string][]).map(([tienen, nombre, why], i) => (
               <tr key={i}>
                 <td>{tienen}</td>
-                <td style={{ fontFamily: 'monospace' }}>{nombre}</td>
+                <td style={{ fontFamily: 'var(--font-mono)' }}>{nombre}</td>
                 <td>{why}</td>
               </tr>
             ))}
@@ -666,8 +666,8 @@ function UploadConditionsContent() {
               ['2160p · BluRay', '1080p · WEB-DL', 'blocked', 'Fallan los dos campos.'],
             ] as [string, string, Verdict, string][]).map(([pide, tengo, verdict, why], i) => (
               <tr key={i}>
-                <td style={{ fontFamily: 'monospace' }}>{pide}</td>
-                <td style={{ fontFamily: 'monospace' }}>{tengo}</td>
+                <td style={{ fontFamily: 'var(--font-mono)' }}>{pide}</td>
+                <td style={{ fontFamily: 'var(--font-mono)' }}>{tengo}</td>
                 <td><VerdictCell verdict={verdict} label={verdict === 'ok' ? 'Compatible' : verdict === 'warn' ? 'Parcial' : 'No compatible'} /></td>
                 <td>{why}</td>
               </tr>

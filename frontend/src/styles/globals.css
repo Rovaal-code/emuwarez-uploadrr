@@ -10,14 +10,49 @@
 
 /* eMuwarez Uploadrr — Global Styles */
 
-/* La voz del HUD (títulos, navegación, cifras). Va dentro del proyecto para
-   que se vea igual en todos los ordenadores: antes solo se veía si la tenías
-   instalada, y si no salía Consolas. Licencia SIL OFL 1.1, en
-   assets/fonts/OFL-share-tech-mono.txt. Solo existe en peso normal. */
+/* Las fuentes, como el resto de aplicaciones *arr (Sonarr, Tracearr): Inter
+   para toda la interfaz y JetBrains Mono para código, logs y rutas. Van dentro
+   del proyecto para que se vean igual en todos los ordenadores, sin depender de
+   ningún CDN. Licencia SIL OFL 1.1, en assets/fonts/OFL-*.txt. */
 @font-face {
-  font-family: "Share Tech Mono";
-  src: url("../assets/fonts/share-tech-mono-latin-400-normal.woff2") format("woff2");
+  font-family: "Inter";
+  src: url("../assets/fonts/inter-latin-400-normal.woff2") format("woff2");
   font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("../assets/fonts/inter-latin-500-normal.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("../assets/fonts/inter-latin-600-normal.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("../assets/fonts/inter-latin-700-normal.woff2") format("woff2");
+  font-weight: 700 800;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("../assets/fonts/jetbrains-mono-latin-400-normal.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("../assets/fonts/jetbrains-mono-latin-700-normal.woff2") format("woff2");
+  font-weight: 700;
   font-style: normal;
   font-display: swap;
 }
@@ -108,10 +143,10 @@
   --topbar-height: 56px;
 
   /* Typography */
-  /* Fuentes del sistema, elegidas a propósito: Inter y JetBrains Mono estaban
-     en la pila pero nunca se cargaban, así que siempre salía la del sistema. */
-  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+  /* Inter y JetBrains Mono, con los @font-face de arriba; detrás, las del
+     sistema por si un fichero no carga. */
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
 
   /* Escalado global. Todo el CSS está en píxeles fijos calibrados para 2560px
      de ancho; utils/uiScale.ts pone aquí el factor que corresponde a la
@@ -202,6 +237,10 @@ button {
 input, select, textarea {
   font-family: inherit;
   font-size: inherit;
+}
+
+code, kbd, pre, samp {
+  font-family: var(--font-mono);
 }
 
 ::-webkit-scrollbar {

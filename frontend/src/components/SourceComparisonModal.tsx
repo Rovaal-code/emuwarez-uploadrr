@@ -34,9 +34,9 @@ function SourceCompareTable({ comparison, onShowEngineDetail }: { comparison: So
         </thead>
         <tbody>
           <tr style={{ borderTop: '1px solid var(--border)' }}>
-            <td style={{ padding: '7px 12px', fontFamily: 'monospace' }}>{comparison.from_name || '—'}</td>
-            <td style={{ padding: '7px 12px', fontFamily: 'monospace' }}>{comparison.from_radarr || '—'}</td>
-            <td style={{ padding: '7px 12px', fontFamily: 'monospace' }}>
+            <td style={{ padding: '7px 12px', fontFamily: 'var(--font-mono)' }}>{comparison.from_name || '—'}</td>
+            <td style={{ padding: '7px 12px', fontFamily: 'var(--font-mono)' }}>{comparison.from_radarr || '—'}</td>
+            <td style={{ padding: '7px 12px', fontFamily: 'var(--font-mono)' }}>
               {onShowEngineDetail && comparison.from_mediainfo ? (
                 <Tooltip content="Ver comparación detallada">
                   <button
@@ -153,7 +153,7 @@ function SourceEngineDetail({ result }: { result: SourceEngineResult }) {
                   const v = ev.contributions[label]
                   return (
                     <td key={label} style={{
-                      padding: '6px 10px', textAlign: 'right', fontFamily: 'monospace',
+                      padding: '6px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)',
                       color: !v ? 'var(--text-muted)' : v > 0 ? 'var(--color-available-soft)' : 'var(--color-error-soft)',
                       background: label === prediction.label ? 'color-mix(in srgb, var(--color-available) 6%, transparent)' : undefined,
                     }}>
@@ -167,7 +167,7 @@ function SourceEngineDetail({ result }: { result: SourceEngineResult }) {
               <td style={{ padding: '7px 10px' }}>SCORE TOTAL</td>
               {ranking.map(c => (
                 <td key={c.label} style={{
-                  padding: '7px 10px', textAlign: 'right', fontFamily: 'monospace',
+                  padding: '7px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)',
                   color: c.label === prediction.label ? 'var(--color-available)' : undefined,
                   background: c.label === prediction.label ? 'color-mix(in srgb, var(--color-available) 10%, transparent)' : undefined,
                 }}>
@@ -179,7 +179,7 @@ function SourceEngineDetail({ result }: { result: SourceEngineResult }) {
               <td style={{ padding: '5px 10px', fontSize: 11, color: 'var(--text-muted)' }}>Confianza normalizada</td>
               {ranking.map(c => (
                 <td key={c.label} style={{
-                  padding: '5px 10px', textAlign: 'right', fontFamily: 'monospace', fontSize: 11,
+                  padding: '5px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 11,
                   color: c.label === prediction.label ? 'var(--color-available)' : 'var(--text-muted)',
                 }}>
                   {formatNumero(c.normalized_score * 100, 1)}%

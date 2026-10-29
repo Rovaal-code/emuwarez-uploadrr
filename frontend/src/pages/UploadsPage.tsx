@@ -110,7 +110,7 @@ function StartModal({ job, onClose, onDone }: { job: UploadJob; onClose: () => v
             Escribe <strong>{CONFIRMATION_TOKEN}</strong> para confirmar:
           </label>
           <input type="text" value={confirm} onChange={e => setConfirm(e.target.value)} placeholder={CONFIRMATION_TOKEN}
-            style={{ width: '100%', padding: '6px 10px', background: 'color-mix(in srgb, var(--overlay-light) 8%, transparent)', border: `1px solid ${confirm === CONFIRMATION_TOKEN ? 'var(--color-available-soft)' : 'color-mix(in srgb, var(--overlay-light) 15%, transparent)'}`, borderRadius: 4, color: 'inherit', fontFamily: 'monospace', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+            style={{ width: '100%', padding: '6px 10px', background: 'color-mix(in srgb, var(--overlay-light) 8%, transparent)', border: `1px solid ${confirm === CONFIRMATION_TOKEN ? 'var(--color-available-soft)' : 'color-mix(in srgb, var(--overlay-light) 15%, transparent)'}`, borderRadius: 4, color: 'inherit', fontFamily: 'var(--font-mono)', fontSize: '0.9rem', boxSizing: 'border-box' }} />
           {message && <pre style={{ marginTop: 12, fontSize: '0.78rem', whiteSpace: 'pre-wrap', background: 'color-mix(in srgb, var(--overlay-dark) 20%, transparent)', padding: 8, borderRadius: 4 }}>{message}</pre>}
           {error && <p className="error-text" style={{ marginTop: 8 }}>{error}</p>}
         </div>

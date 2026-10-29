@@ -254,7 +254,7 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
               <button className="modal-close" onClick={() => setShowRuta(false)}>✕</button>
             </div>
             <div className="modal-body">
-              <div style={{ fontFamily: 'monospace', fontSize: 13, color: 'var(--text-secondary)', wordBreak: 'break-all', lineHeight: 1.6 }}>{item.prepared_path || item.path || '—'}</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-secondary)', wordBreak: 'break-all', lineHeight: 1.6 }}>{item.prepared_path || item.path || '—'}</div>
             </div>
           </div>
         </div>

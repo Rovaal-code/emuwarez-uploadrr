@@ -1,11 +1,12 @@
+import { IconoBandeja } from './Iconos'
 interface EmptyStateProps {
-  icon?: string
+  icon?: React.ReactNode
   title: string
   body?: string
   action?: React.ReactNode
 }
 
-export function EmptyState({ icon = '📭', title, body, action }: EmptyStateProps) {
+export function EmptyState({ icon = <IconoBandeja />, title, body, action }: EmptyStateProps) {
   return (
     <div className="empty-state">
       <div className="empty-state-icon">{icon}</div>

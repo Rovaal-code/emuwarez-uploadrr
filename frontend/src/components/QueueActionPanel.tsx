@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { QueueActionPlan, QueueAvailableAction } from '../types/api'
 import { executeSafeAction, getQueueActionEvents } from '../api/operationalQueue'
+import { IconoAviso } from './Iconos'
 
 interface Props {
   itemId: number
@@ -31,11 +32,11 @@ const ROUTE_LABELS: Record<string, string> = {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  ready: '#22c55e',
-  waiting: '#f59e0b',
-  running: '#3b82f6',
-  blocked: '#ef4444',
-  open: '#6b7280',
+  ready: 'var(--color-available)',
+  waiting: 'var(--color-warning)',
+  running: 'var(--text-accent)',
+  blocked: 'var(--color-error)',
+  open: 'var(--color-neutral)',
 }
 
 export function QueueActionPanel({ itemId, plan, actions, onNavigate, onClose }: Props) {
@@ -77,13 +78,13 @@ export function QueueActionPanel({ itemId, plan, actions, onNavigate, onClose }:
 
   if (!plan) return null
 
-  const statusColor = STATUS_COLORS[plan.status] ?? '#6b7280'
+  const statusColor = STATUS_COLORS[plan.status] ?? 'var(--color-neutral)'
   const routeLabel = ROUTE_LABELS[plan.ui.route] ?? plan.ui.route
 
   return (
     <div style={{
-      background: 'rgba(17,24,39,0.98)',
-      border: '1px solid rgba(255,255,255,0.12)',
+      background: 'color-mix(in srgb, var(--bg-surface) 98%, transparent)',
+      border: '1px solid color-mix(in srgb, var(--overlay-light) 12%, transparent)',
       borderLeft: `3px solid ${statusColor}`,
       borderRadius: 8,
       padding: '14px 16px',
@@ -91,46 +92,46 @@ export function QueueActionPanel({ itemId, plan, actions, onNavigate, onClose }:
     }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <div style={{ fontWeight: 600, color: '#f3f4f6' }}>
+        <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
           Plan de acción · item #{itemId}
         </div>
         {onClose && (
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#6b7280', cursor: 'pointer', fontSize: '1rem' }}>✕</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--color-neutral)', cursor: 'pointer', fontSize: '1rem' }}>✕</button>
         )}
       </div>
 
       {/* Action summary */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px', marginBottom: 10 }}>
         <div>
-          <span style={{ color: '#9ca3af' }}>Acción: </span>
-          <strong style={{ color: '#e5e7eb' }}>{plan.action}</strong>
+          <span style={{ color: 'var(--text-secondary)' }}>Acción: </span>
+          <strong style={{ color: 'var(--text-primary)' }}>{plan.action}</strong>
         </div>
         <div>
-          <span style={{ color: '#9ca3af' }}>Flow: </span>
-          <span style={{ color: '#e5e7eb' }}>{FLOW_LABELS[plan.flow] ?? plan.flow}</span>
+          <span style={{ color: 'var(--text-secondary)' }}>Flow: </span>
+          <span style={{ color: 'var(--text-primary)' }}>{FLOW_LABELS[plan.flow] ?? plan.flow}</span>
         </div>
         <div>
-          <span style={{ color: '#9ca3af' }}>Estado: </span>
+          <span style={{ color: 'var(--text-secondary)' }}>Estado: </span>
           <span style={{ color: statusColor, fontWeight: 600 }}>{plan.status}</span>
         </div>
       </div>
 
       {/* UI route guidance */}
       <div style={{
-        background: 'rgba(59,130,246,0.1)',
-        border: '1px solid rgba(59,130,246,0.3)',
+        background: 'color-mix(in srgb, var(--text-accent) 10%, transparent)',
+        border: '1px solid color-mix(in srgb, var(--text-accent) 30%, transparent)',
         borderRadius: 6,
         padding: '8px 12px',
         marginBottom: 10,
       }}>
-        <div style={{ color: '#93c5fd', fontSize: '0.78rem', marginBottom: 4 }}>Dónde ejecutar esta acción:</div>
-        <div style={{ color: '#e5e7eb' }}>
+        <div style={{ color: 'var(--color-accent-pale)', fontSize: '0.78rem', marginBottom: 4 }}>Dónde ejecutar esta acción:</div>
+        <div style={{ color: 'var(--text-primary)' }}>
           <strong>{plan.ui.label}</strong>
-          {plan.ui.modal && <span style={{ color: '#9ca3af' }}> → modal: {plan.ui.modal}</span>}
+          {plan.ui.modal && <span style={{ color: 'var(--text-secondary)' }}> → modal: {plan.ui.modal}</span>}
         </div>
         {plan.requires_confirmation && (
-          <div style={{ color: '#fbbf24', fontSize: '0.75rem', marginTop: 4 }}>
-            Requiere confirmación · token: <code style={{ background: 'rgba(255,255,255,0.08)', padding: '1px 4px', borderRadius: 3 }}>{plan.confirmation_token}</code>
+          <div style={{ color: 'var(--color-warning-soft)', fontSize: '0.75rem', marginTop: 4 }}>
+            Requiere confirmación · token: <code style={{ background: 'color-mix(in srgb, var(--overlay-light) 8%, transparent)', padding: '1px 4px', borderRadius: 3 }}>{plan.confirmation_token}</code>
           </div>
         )}
         {onNavigate && (
@@ -138,16 +139,16 @@ export function QueueActionPanel({ itemId, plan, actions, onNavigate, onClose }:
             onClick={() => onNavigate(plan.ui.route)}
             style={{
               marginTop: 6,
-              background: 'rgba(59,130,246,0.2)',
-              border: '1px solid rgba(59,130,246,0.5)',
-              color: '#93c5fd',
+              background: 'color-mix(in srgb, var(--text-accent) 20%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--text-accent) 50%, transparent)',
+              color: 'var(--color-accent-pale)',
               borderRadius: 5,
               padding: '4px 10px',
               cursor: 'pointer',
               fontSize: '0.75rem',
             }}
           >
-            Abrir en {routeLabel} →
+            Abrir en {routeLabel}
           </button>
         )}
       </div>
@@ -155,21 +156,21 @@ export function QueueActionPanel({ itemId, plan, actions, onNavigate, onClose }:
       {/* Blockers / reasons */}
       {plan.blockers.length > 0 && (
         <div style={{ marginBottom: 8 }}>
-          <div style={{ color: '#ef4444', fontSize: '0.75rem', marginBottom: 2 }}>Bloqueadores:</div>
-          {plan.blockers.map((b, i) => <div key={i} style={{ color: '#fca5a5', paddingLeft: 10 }}>· {b}</div>)}
+          <div style={{ color: 'var(--color-error)', fontSize: '0.75rem', marginBottom: 2 }}>Bloqueadores:</div>
+          {plan.blockers.map((b, i) => <div key={i} style={{ color: 'var(--color-error-pale)', paddingLeft: 10 }}>· {b}</div>)}
         </div>
       )}
       {plan.reasons.length > 0 && (
         <div style={{ marginBottom: 8 }}>
-          <div style={{ color: '#9ca3af', fontSize: '0.75rem', marginBottom: 2 }}>Razones:</div>
-          {plan.reasons.map((r, i) => <div key={i} style={{ color: '#d1d5db', paddingLeft: 10 }}>· {r}</div>)}
+          <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginBottom: 2 }}>Razones:</div>
+          {plan.reasons.map((r, i) => <div key={i} style={{ color: 'var(--text-primary)', paddingLeft: 10 }}>· {r}</div>)}
         </div>
       )}
 
       {/* Safe inline actions */}
       {safeActions.length > 0 && (
-        <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 10, marginTop: 6 }}>
-          <div style={{ color: '#9ca3af', fontSize: '0.74rem', marginBottom: 6 }}>Acciones seguras (sin confirmación):</div>
+        <div style={{ borderTop: '1px solid color-mix(in srgb, var(--overlay-light) 8%, transparent)', paddingTop: 10, marginTop: 6 }}>
+          <div style={{ color: 'var(--text-secondary)', fontSize: '0.74rem', marginBottom: 6 }}>Acciones seguras (sin confirmación):</div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {safeActions.map(a => (
               <button
@@ -177,9 +178,9 @@ export function QueueActionPanel({ itemId, plan, actions, onNavigate, onClose }:
                 disabled={executing}
                 onClick={() => handleExecuteSafe(a.action)}
                 style={{
-                  background: 'rgba(16,185,129,0.15)',
-                  border: '1px solid rgba(16,185,129,0.4)',
-                  color: '#6ee7b7',
+                  background: 'color-mix(in srgb, var(--color-available) 15%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--color-available) 40%, transparent)',
+                  color: 'var(--color-available-pale)',
                   borderRadius: 5,
                   padding: '4px 10px',
                   cursor: executing ? 'wait' : 'pointer',
@@ -194,10 +195,10 @@ export function QueueActionPanel({ itemId, plan, actions, onNavigate, onClose }:
             <div style={{
               marginTop: 8,
               padding: '6px 10px',
-              background: execResult.startsWith('✓') ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)',
-              border: `1px solid ${execResult.startsWith('✓') ? 'rgba(16,185,129,0.3)' : 'rgba(245,158,11,0.3)'}`,
+              background: execResult.startsWith('✓') ? 'color-mix(in srgb, var(--color-available) 10%, transparent)' : 'color-mix(in srgb, var(--color-warning) 10%, transparent)',
+              border: `1px solid ${execResult.startsWith('✓') ? 'color-mix(in srgb, var(--color-available) 30%, transparent)' : 'color-mix(in srgb, var(--color-warning) 30%, transparent)'}`,
               borderRadius: 5,
-              color: execResult.startsWith('✓') ? '#6ee7b7' : '#fcd34d',
+              color: execResult.startsWith('✓') ? 'var(--color-available-pale)' : 'var(--color-warning-pale)',
               fontSize: '0.78rem',
             }}>
               {execResult}
@@ -207,20 +208,20 @@ export function QueueActionPanel({ itemId, plan, actions, onNavigate, onClose }:
       )}
 
       {/* Events */}
-      <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 8, marginTop: 8 }}>
+      <div style={{ borderTop: '1px solid color-mix(in srgb, var(--overlay-light) 8%, transparent)', paddingTop: 8, marginTop: 8 }}>
         <button
           onClick={loadEvents}
-          style={{ background: 'none', border: 'none', color: '#6b7280', cursor: 'pointer', fontSize: '0.74rem', padding: 0 }}
+          style={{ background: 'none', border: 'none', color: 'var(--color-neutral)', cursor: 'pointer', fontSize: '0.74rem', padding: 0 }}
         >
           {showEvents ? '▲ Ocultar eventos' : '▼ Ver historial de eventos'}
         </button>
         {showEvents && events.length === 0 && (
-          <div style={{ color: '#6b7280', fontSize: '0.75rem', marginTop: 4 }}>Sin eventos registrados.</div>
+          <div style={{ color: 'var(--color-neutral)', fontSize: '0.75rem', marginTop: 4 }}>Sin eventos registrados.</div>
         )}
         {showEvents && events.map((ev, i) => (
-          <div key={i} style={{ fontSize: '0.74rem', color: '#9ca3af', marginTop: 3 }}>
-            <span style={{ color: ev.status === 'ok' ? '#6ee7b7' : '#fca5a5' }}>
-              {ev.status === 'ok' ? '✓' : '⚠'}
+          <div key={i} style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', marginTop: 3 }}>
+            <span style={{ color: ev.status === 'ok' ? 'var(--color-available-pale)' : 'var(--color-error-pale)' }}>
+              {ev.status === 'ok' ? '✓' : <IconoAviso />}
             </span>
             {' '}{ev.created_at.slice(0, 19)} · {ev.message}
           </div>

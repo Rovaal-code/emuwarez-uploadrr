@@ -86,9 +86,9 @@ function SyncOption({ icon, title, desc, cadence, wait, blocked: externallyBlock
       onMouseLeave={() => setHover(false)}
       style={{
         display: 'block', width: '100%', textAlign: 'left', padding: '12px 14px',
-        border: `1px solid ${lit ? 'var(--text-accent, #2563eb)' : 'var(--border)'}`,
+        border: `1px solid ${lit ? 'var(--text-accent)' : 'var(--border)'}`,
         borderRadius: 10, cursor: blocked ? 'not-allowed' : 'pointer',
-        background: lit ? 'var(--bg-hover, rgba(255,255,255,0.06))' : 'var(--bg-card, transparent)',
+        background: lit ? 'color-mix(in srgb, var(--overlay-light) 6%, transparent)' : 'var(--bg-card)',
         color: 'var(--text-primary)', opacity: blocked ? 0.55 : 1,
         transition: 'background 0.12s, border-color 0.12s',
       }}

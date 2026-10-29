@@ -144,9 +144,9 @@ function SettingsMessageSlot({ msg }: { msg: SettingsMsg }) {
   const { triggerProps, tooltipNode } = useTooltip(recortado ? msg?.text ?? null : null)
   if (!msg) return null
   const colores: Record<TonoMensaje, { texto: string; fondo: string; borde: string }> = {
-    ok: { texto: '#22c55e', fondo: 'rgba(34,197,94,0.10)', borde: 'rgba(34,197,94,0.30)' },
-    error: { texto: '#ef4444', fondo: 'rgba(239,68,68,0.10)', borde: 'rgba(239,68,68,0.30)' },
-    aviso: { texto: '#f59e0b', fondo: 'rgba(245,158,11,0.10)', borde: 'rgba(245,158,11,0.30)' },
+    ok: { texto: 'var(--color-available)', fondo: 'color-mix(in srgb, var(--color-available) 10%, transparent)', borde: 'color-mix(in srgb, var(--color-available) 30%, transparent)' },
+    error: { texto: 'var(--color-error)', fondo: 'color-mix(in srgb, var(--color-error) 10%, transparent)', borde: 'color-mix(in srgb, var(--color-error) 30%, transparent)' },
+    aviso: { texto: 'var(--color-warning)', fondo: 'color-mix(in srgb, var(--color-warning) 10%, transparent)', borde: 'color-mix(in srgb, var(--color-warning) 30%, transparent)' },
   }
   const c = colores[msg.tono]
   return (
@@ -470,14 +470,14 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
 
       <div className="placeholder-card">
         <h3 style={{ marginTop: 0, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <ServiceIcon type="emu" size={18} /> Emuwarez
+          <ServiceIcon type="emu" size={18} /> eMuwarez
         </h3>
         <div className="form-group" style={{ marginBottom: 12 }}>
           <label className="form-label">Estado de la API key</label>
           <div style={{ fontSize: 13 }}>
             {settings?.emu_api_key_configured
-              ? <><span style={{ color: '#22c55e', display: 'inline-flex', alignItems: 'center', gap: 5 }}><CheckStatusIcon status="ok" /> Configurada</span>{settings.emu_api_key_masked && <code style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>{settings.emu_api_key_masked}</code>}</>
-              : <span style={{ color: '#ef4444' }}>✗ No configurada</span>}
+              ? <><span style={{ color: 'var(--color-available)', display: 'inline-flex', alignItems: 'center', gap: 5 }}><CheckStatusIcon status="ok" /> Configurada</span>{settings.emu_api_key_masked && <code style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>{settings.emu_api_key_masked}</code>}</>
+              : <span style={{ color: 'var(--color-error)' }}>✗ No configurada</span>}
           </div>
         </div>
         <div className="form-group" style={{ marginBottom: 12 }}>
@@ -487,10 +487,10 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
             className="form-input"
             value={newEmuKey}
             onChange={e => setNewEmuKey(e.target.value)}
-            placeholder="API key de Emuwarez"
+            placeholder="API key de eMuwarez"
             autoComplete="new-password"
           />
-          <span className="form-hint">Usada para leer el catálogo y las peticiones de Emuwarez.</span>
+          <span className="form-hint">Usada para leer el catálogo y las peticiones de eMuwarez.</span>
         </div>
         <div>
           <button
@@ -529,7 +529,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
               <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', fontSize: 13, fontWeight: 500 }}>{t}</span>
                 {i === 0
-                  ? <span className="badge status-available" style={{ fontSize: 10 }}>por defecto</span>
+                  ? <span className="badge status-available">por defecto</span>
                   : <button type="button" className="btn-icon" title="Usar por defecto" aria-label={`Usar ${t} por defecto`}
                       onClick={() => setTags([t, ...tags.filter(x => x !== t)])}>☆</button>}
                 {tags.length > 1 && (
@@ -556,8 +556,8 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           <label className="form-label">Estado de la API key</label>
           <div style={{ fontSize: 13 }}>
             {settings?.tmdb_api_key_configured
-              ? <><span style={{ color: '#22c55e', display: 'inline-flex', alignItems: 'center', gap: 5 }}><CheckStatusIcon status="ok" /> Configurada</span>{settings.tmdb_api_key_masked && <code style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>{settings.tmdb_api_key_masked}</code>}</>
-              : <span style={{ color: '#ef4444' }}>✗ No configurada</span>}
+              ? <><span style={{ color: 'var(--color-available)', display: 'inline-flex', alignItems: 'center', gap: 5 }}><CheckStatusIcon status="ok" /> Configurada</span>{settings.tmdb_api_key_masked && <code style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>{settings.tmdb_api_key_masked}</code>}</>
+              : <span style={{ color: 'var(--color-error)' }}>✗ No configurada</span>}
           </div>
         </div>
         <div className="form-group" style={{ marginBottom: 12 }}>
@@ -699,8 +699,8 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                   return (
                     <div style={{
                       padding: '8px 10px', borderRadius: 8,
-                      background: dragging ? 'rgba(37,99,235,0.15)' : 'rgba(139,92,246,0.06)',
-                      border: `1px solid ${dragging ? 'var(--text-accent, #2563eb)' : 'var(--border)'}`,
+                      background: dragging ? 'color-mix(in srgb, var(--color-primary) 15%, transparent)' : 'color-mix(in srgb, var(--color-uploading) 6%, transparent)',
+                      border: `1px solid ${dragging ? 'var(--text-accent)' : 'var(--border)'}`,
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span style={{ color: 'var(--text-muted)', fontSize: 11, width: 16, textAlign: 'center' }}>{idx + 1}</span>
@@ -715,10 +715,10 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                         <a href={h.url} target="_blank" rel="noreferrer" title={`Abrir ${h.label}`}
                           onClick={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()}
                           style={{ display: 'inline-flex' }}>
-                          <Favicon domain={domainOf(h.url)} src={h.favicon} size={15} background="#fff" fallback={<ServiceIcon type="imghost" size={15} />} />
+                          <Favicon domain={domainOf(h.url)} src={h.favicon} size={15} background="var(--overlay-light)" fallback={<ServiceIcon type="imghost" size={15} />} />
                         </a>
-                        <span style={{ fontSize: 13, fontWeight: 500 }}>{h.label}</span>
-                        {isDefault && <span className="badge status-available" style={{ fontSize: 10 }}>por defecto</span>}
+                        <span style={{ fontSize: 13, fontWeight: 500, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.label}</span>
+                        {isDefault && <span className="badge status-available">por defecto</span>}
                         {h.needs_key && (() => {
                           // Verde cuando hay clave guardada; gris parpadeando
                           // mientras no la haya, para que un proveedor recién
@@ -856,7 +856,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                             <button key={h.id} className="btn btn-ghost btn-sm" type="button"
                               style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-start', justifySelf: 'start', fontSize: 12 }}
                               onClick={() => toggleImgHost(h.id)}>
-                              <Favicon domain={domainOf(h.url)} src={h.favicon} size={16} background="#fff" fallback={<ServiceIcon type="imghost" size={16} />} /> {h.label} {h.needs_key && <span className="badge nom-na" style={{ fontSize: 9 }}>API key</span>}
+                              <Favicon domain={domainOf(h.url)} src={h.favicon} size={16} background="var(--overlay-light)" fallback={<ServiceIcon type="imghost" size={16} />} /> {h.label} {h.needs_key && <span className="badge nom-na">API key</span>}
                             </button>
                           ))}
                         </div>
@@ -951,7 +951,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         <div className="form-group">
           <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             Máximo de Subidas en Paralelo
-            <InfoIcon text="Cuántas subidas pueden estar en curso a la vez, de principio a fin (verificación previa, nomenclatura, remux, hasheo del torrent y transferencia a eMuwarez) — no es solo una cola visual: las demás no dan ni un paso hasta que se libera un hueco. Sin límite las deja correr todas a la vez. El botón «Ver Máximo» estima cuántas puede aguantar este equipo según su RAM y CPU disponibles." />
+            <InfoIcon text="Cuántas subidas pueden estar en curso a la vez, de principio a fin (verificación previa, nomenclatura, remux, hasheo del torrent y transferencia a eMuwarez). No es solo una cola visual: las demás no dan ni un paso hasta que se libera un hueco. Sin límite las deja correr todas a la vez. El botón «Ver Máximo» estima cuántas puede aguantar este equipo según su RAM y CPU disponibles." />
           </label>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <select className="form-input form-select" style={{ flex: 1 }} value={uploadMaxConcurrent} onChange={e => setUploadMaxConcurrent(Number(e.target.value))}>
@@ -1834,8 +1834,8 @@ function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | nul
           <label className="form-label">Webhook URL</label>
           <div style={{ fontSize: 13, marginBottom: 6 }}>
             {settings?.notify_discord_webhook_configured
-              ? <><span style={{ color: '#22c55e', display: 'inline-flex', alignItems: 'center', gap: 5 }}><CheckStatusIcon status="ok" /> Configurado</span>{settings.notify_discord_webhook_masked && <code style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>{settings.notify_discord_webhook_masked}</code>}</>
-              : <span style={{ color: '#ef4444' }}>✗ No configurado</span>}
+              ? <><span style={{ color: 'var(--color-available)', display: 'inline-flex', alignItems: 'center', gap: 5 }}><CheckStatusIcon status="ok" /> Configurado</span>{settings.notify_discord_webhook_masked && <code style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>{settings.notify_discord_webhook_masked}</code>}</>
+              : <span style={{ color: 'var(--color-error)' }}>✗ No configurado</span>}
           </div>
           <input
             type="password"
@@ -1870,8 +1870,8 @@ function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | nul
           <label className="form-label">Bot token</label>
           <div style={{ fontSize: 13, marginBottom: 6 }}>
             {settings?.notify_telegram_bot_token_configured
-              ? <><span style={{ color: '#22c55e', display: 'inline-flex', alignItems: 'center', gap: 5 }}><CheckStatusIcon status="ok" /> Configurado</span>{settings.notify_telegram_bot_token_masked && <code style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>{settings.notify_telegram_bot_token_masked}</code>}</>
-              : <span style={{ color: '#ef4444' }}>✗ No configurado</span>}
+              ? <><span style={{ color: 'var(--color-available)', display: 'inline-flex', alignItems: 'center', gap: 5 }}><CheckStatusIcon status="ok" /> Configurado</span>{settings.notify_telegram_bot_token_masked && <code style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>{settings.notify_telegram_bot_token_masked}</code>}</>
+              : <span style={{ color: 'var(--color-error)' }}>✗ No configurado</span>}
           </div>
           <input
             type="password"
@@ -1967,7 +1967,7 @@ export function SettingsPage() {
         </div>
         {saveAction && (
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-            {saveAction.dirty && <span style={{ fontSize: 12, color: '#f59e0b' }}>Cambios sin guardar</span>}
+            {saveAction.dirty && <span style={{ fontSize: 12, color: 'var(--color-warning)' }}>Cambios sin guardar</span>}
             <button
               className={`btn btn-primary btn-sm${saveAction.dirty ? ' btn-unsaved' : ''}`}
               onClick={saveAction.onSave}

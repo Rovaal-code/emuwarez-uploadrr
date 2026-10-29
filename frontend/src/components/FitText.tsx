@@ -230,7 +230,7 @@ function SizeControls({ value, auto, onChange }: {
       {value != null && (
         <button type="button" onClick={() => onChange(() => null)} style={debugBtnStyle} {...resetTip.triggerProps}>↺{resetTip.tooltipNode}</button>
       )}
-      <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
         {value != null ? `${value}px (manual)` : `${auto.toFixed(1)}px (auto)`}
       </span>
     </div>
@@ -239,6 +239,6 @@ function SizeControls({ value, auto, onChange }: {
 
 const debugBtnStyle: React.CSSProperties = {
   fontSize: 11, lineHeight: 1, padding: '2px 6px', borderRadius: 4,
-  border: '1px solid var(--border)', background: 'rgba(255,255,255,0.04)',
+  border: '1px solid var(--border)', background: 'color-mix(in srgb, var(--overlay-light) 4%, transparent)',
   color: 'var(--text-secondary)', cursor: 'pointer',
 }

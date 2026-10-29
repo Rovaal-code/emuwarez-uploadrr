@@ -79,11 +79,12 @@
 }
 
 .stat-card-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
   color: var(--text-muted);
+  /* Sitio para dos líneas siempre: así la cifra de cada tarjeta empieza a la
+     misma altura aunque la etiqueta quepa en una. */
+  min-height: 2lh;
 }
 
 .stat-card-value {
@@ -91,6 +92,13 @@
   font-weight: 700;
   color: var(--text-primary);
   line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* La tarjeta con explicación se recorre con Tab; en el HUD las esquinas van
+   recortadas, así que el anillo va por dentro. */
+.stat-card:focus-visible {
+  outline-offset: -4px;
 }
 
 .stat-card-sub {
@@ -285,15 +293,15 @@
   align-items: center;
   gap: 10px;
   padding: 7px 10px;
-  background: rgba(255, 255, 255, 0.025);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: color-mix(in srgb, var(--overlay-light) 2.5%, transparent);
+  border: 1px solid color-mix(in srgb, var(--overlay-light) 7%, transparent);
   border-radius: 6px;
   transition: border-color .15s ease, background .15s ease;
 }
 
 .wizard-feature-card:hover {
   border-color: var(--border);
-  background: rgba(59, 130, 246, 0.08);
+  background: color-mix(in srgb, var(--text-accent) 8%, transparent);
 }
 
 .wizard-feature-icon {
@@ -304,14 +312,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(160deg, rgba(59, 130, 246, .20), rgba(59, 130, 246, .06));
-  border: 1px solid rgba(59, 130, 246, .28);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--text-accent) 20%, transparent), color-mix(in srgb, var(--text-accent) 6%, transparent));
+  border: 1px solid color-mix(in srgb, var(--text-accent) 28%, transparent);
 }
 
 .wizard-feature-icon svg {
   width: 13px;
   height: 13px;
-  stroke: #7cb0ff;
+  stroke: var(--color-accent-soft);
 }
 
 .wizard-feature-text {
@@ -393,11 +401,15 @@
   overflow: hidden;
 }
 
+/* El avance se dibuja con scaleX (lo pone el componente), no con width: así
+   se anima sin recalcular la maquetación en cada paso. */
 .progress-fill {
+  width: 100%;
   height: 100%;
   background: var(--text-accent);
   border-radius: 2px;
-  transition: width 0.3s ease;
+  transform-origin: left center;
+  transition: transform 0.3s ease;
 }
 
 /* Placeholder page */
@@ -493,11 +505,10 @@
 .placeholder-tag {
   display: inline-block;
   padding: 3px 10px;
-  background: rgba(245, 158, 11, 0.12);
-  color: #f59e0b;
+  background: color-mix(in srgb, var(--color-warning) 12%, transparent);
+  color: var(--color-warning);
   border-radius: 100px;
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.04em;
   margin-bottom: 14px;
 }

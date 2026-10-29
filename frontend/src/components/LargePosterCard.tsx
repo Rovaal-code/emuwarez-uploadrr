@@ -2,6 +2,7 @@ import { memo } from 'react'
 import type { LibraryItemResponse } from '../types/api'
 import { PosterStatusIcon } from './PosterStatusIcon'
 import { posterUrl } from '../utils/libraryItem'
+import { IconoTipo } from './Iconos'
 
 // Bigger, Overseerr/Jellyseerr-style poster card for the "Pósters grandes"
 // view — additive alongside the existing small grid, not a replacement.
@@ -20,10 +21,10 @@ export const LargePosterCard = memo(function LargePosterCard({ item, onSelect, p
       style={{
         display: 'flex', flexDirection: 'column', borderRadius: 12, overflow: 'hidden',
         background: 'var(--bg-surface)', border: '1px solid var(--border)', cursor: 'pointer',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+        boxShadow: '0 2px 8px color-mix(in srgb, var(--overlay-dark) 15%, transparent)',
       }}
     >
-      <div style={{ position: 'relative', width: '100%', aspectRatio: '2 / 3', background: 'rgba(255,255,255,0.04)' }}>
+      <div style={{ position: 'relative', width: '100%', aspectRatio: '2 / 3', background: 'color-mix(in srgb, var(--overlay-light) 4%, transparent)' }}>
         {item.poster_url ? (
           <img
             src={posterUrl(item.poster_url, 'w342')}
@@ -35,7 +36,7 @@ export const LargePosterCard = memo(function LargePosterCard({ item, onSelect, p
           />
         ) : (
           <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 64, opacity: 0.35 }}>
-            {item.item_type === 'series' || item.item_type === 'episode' ? '📺' : '🎬'}
+            <IconoTipo serie={item.item_type === 'series' || item.item_type === 'episode'} />
           </div>
         )}
         <div style={{ position: 'absolute', top: 10, right: 10 }}>
@@ -43,10 +44,10 @@ export const LargePosterCard = memo(function LargePosterCard({ item, onSelect, p
         </div>
         <div style={{
           position: 'absolute', bottom: 0, left: 0, right: 0, padding: '20px 12px 10px',
-          background: 'linear-gradient(to top, rgba(0,0,0,0.85), transparent)',
+          background: 'linear-gradient(to top, color-mix(in srgb, var(--overlay-dark) 85%, transparent), transparent)',
         }}>
-          <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.3, color: '#fff' }}>{item.title}</div>
-          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 2 }}>
+          <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.3, color: 'var(--text-on-color)' }}>{item.title}</div>
+          <div style={{ fontSize: 12, color: 'color-mix(in srgb, var(--overlay-light) 75%, transparent)', marginTop: 2 }}>
             {item.year ?? '—'}
           </div>
         </div>

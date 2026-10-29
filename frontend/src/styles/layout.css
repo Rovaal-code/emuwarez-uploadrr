@@ -16,7 +16,6 @@
   flex-shrink: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  transition: width 0.15s ease;
   /* Same 24px .page-container already uses as its own bottom padding on
      every page — keeps the sidebar's bottom edge a consistent, aesthetic
      distance from the viewport bottom instead of running flush to it. */
@@ -30,17 +29,24 @@
 .sidebar-logo {
   height: var(--topbar-height);
   padding: 0 20px;
-  border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   gap: 10px;
   cursor: pointer;
   flex-shrink: 0;
   box-sizing: border-box;
+  /* Es un <button>: fuera el aspecto de botón del navegador. */
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
 }
 
 .sidebar-logo:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: color-mix(in srgb, var(--overlay-light) 4%, transparent);
 }
 
 .sidebar.collapsed .sidebar-logo {
@@ -69,19 +75,32 @@
   font-size: 15px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  /* Es un <button>: fuera el aspecto de botón del navegador. */
+  width: 100%;
+  border: 0;
   border-left: 3px solid transparent;
+  background: transparent;
+  font-family: inherit;
+  line-height: inherit;
+  text-align: left;
   user-select: none;
+}
+
+/* El HUD recorta las esquinas con clip-path, que se comería un anillo por
+   fuera: aquí va por dentro. */
+.nav-item:focus-visible {
+  outline-offset: -3px;
 }
 
 .nav-item:hover {
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.04);
+  background: color-mix(in srgb, var(--overlay-light) 4%, transparent);
 }
 
 .nav-item.active {
   color: var(--text-accent);
-  background: rgba(59, 130, 246, 0.08);
+  background: color-mix(in srgb, var(--text-accent) 8%, transparent);
   border-left-color: var(--text-accent);
 }
 
@@ -167,7 +186,7 @@
 }
 
 .sync-chip-error {
-  color: var(--color-missing, #ef4444);
+  color: var(--color-missing);
   font-size: 13px;
   line-height: 1;
 }
@@ -188,7 +207,7 @@
 }
 
 .sync-chip-detail-error {
-  color: var(--color-missing, #ef4444);
+  color: var(--color-missing);
 }
 
 .sync-chip-bar {
@@ -200,11 +219,14 @@
   flex-shrink: 0;
 }
 
+/* Igual que .progress-fill: el avance va en scaleX, no en width. */
 .sync-chip-bar-fill {
+  width: 100%;
   height: 100%;
   background: var(--text-accent);
   border-radius: 2px;
-  transition: width 0.3s ease;
+  transform-origin: left center;
+  transition: transform 0.3s ease;
 }
 
 /* Completion toast — replaces a sync's progress chip once it finishes,
@@ -225,11 +247,11 @@
 }
 
 .sync-toast-ok {
-  color: #22c55e;
+  color: var(--color-available);
 }
 
 .sync-toast-error {
-  color: var(--color-missing, #ef4444);
+  color: var(--color-missing);
 }
 
 .topbar-left {
@@ -261,7 +283,7 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
 }
 
 .topbar-btn:hover {
@@ -283,13 +305,16 @@
   height: 16px;
   padding: 0 4px;
   border-radius: 999px;
-  background: var(--color-missing, #ef4444);
-  color: #fff;
-  font-size: 10px;
+  /* Un rojo un paso más oscuro que el de "faltante": con el blanco encima
+     llega a 4,6:1 (con #ef4444 se quedaba en 3,8:1). */
+  background: var(--color-alert-strong);
+  color: var(--text-on-color);
+  font-size: 11px;
   font-weight: 700;
   line-height: 16px;
   text-align: center;
-  box-shadow: 0 0 0 2px var(--bg-app, #0b0f17);
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 2px var(--bg-base);
 }
 
 .notif-dropdown {
@@ -306,7 +331,7 @@
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: 10px;
-  box-shadow: var(--shadow-card, 0 8px 30px rgba(0, 0, 0, 0.35));
+  box-shadow: var(--shadow-card);
   /* Above .modal-overlay (1000, components.css) AND the other 2000-level
      floating layers (Tooltip.tsx, HeaderFilter.tsx) — notifications must
      stay on top of literally anything else in the UI. */
@@ -397,16 +422,16 @@
 }
 
 .notif-item-delete:hover {
-  color: var(--color-missing, #ef4444);
-  background: rgba(239, 68, 68, 0.12);
+  color: var(--color-missing);
+  background: color-mix(in srgb, var(--color-error) 12%, transparent);
 }
 
 .notif-clearall:hover {
-  color: var(--color-missing, #ef4444);
+  color: var(--color-missing);
 }
 
 .notif-item.unread {
-  background: rgba(99, 102, 241, 0.06);
+  background: color-mix(in srgb, var(--color-indigo) 6%, transparent);
 }
 
 .notif-item-dot {
@@ -415,7 +440,7 @@
   height: 8px;
   margin-top: 5px;
   border-radius: 50%;
-  background: var(--color-uploading, #6366f1);
+  background: var(--color-uploading);
 }
 
 .notif-item.read .notif-item-dot {
@@ -516,7 +541,7 @@
   align-items: center;
   padding: 4px;
   border-radius: 6px;
-  transition: all 0.15s;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
 }
 
 .topbar-eye:hover {

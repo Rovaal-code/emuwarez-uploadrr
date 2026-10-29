@@ -10,6 +10,7 @@ import { ApiClientError } from '../api/client'
 import { formatDate } from '../utils/format'
 import { testResultLabel, testResultColor } from '../utils/integrationResult'
 import { isValidHttpUrl } from '../utils/validation'
+import { IconoEnchufe } from '../components/Iconos'
 
 type InstanceKind = 'radarr' | 'sonarr'
 
@@ -128,10 +129,10 @@ export function InstancesPage() {
     setTestResults(p => ({ ...p, [inst.id]: 'Probando…' }))
     try {
       const res = await testInstance(inst.id)
-      const extra = res.username ? ` — ${res.username}` : ''
+      const extra = res.username ? ` (${res.username})` : ''
       setTestResults(p => ({
         ...p,
-        [inst.id]: res.ok ? `✓ OK — v${res.version ?? '?'}${extra}` : `✗ Error: ${res.error ?? 'desconocido'}`,
+        [inst.id]: res.ok ? `✓ OK: v${res.version ?? '?'}${extra}` : `✗ Error: ${res.error ?? 'desconocido'}`,
       }))
     } catch {
       setTestResults(p => ({ ...p, [inst.id]: '✗ Error de conexión' }))
@@ -296,7 +297,7 @@ export function InstancesPage() {
         <ErrorState message={error} onRetry={load} />
       ) : instances.length === 0 ? (
         <EmptyState
-          icon="🔌"
+          icon={<IconoEnchufe />}
           title="Sin instancias configuradas"
           body="Añade una instancia Radarr o Sonarr para empezar."
           action={<button className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>+ Añadir instancia</button>}
@@ -349,14 +350,16 @@ export function InstancesPage() {
                     <div className="instance-card-meta">
                       <div className="instance-card-name">
                         <ServiceLabel type={inst.type} label={inst.name} size={14} />
-                        {inst.is_4k && <span className="badge status-queued" style={{ fontSize: 10, padding: '1px 6px' }}>4K</span>}
-                        {inst.is_anime && <span className="badge status-uploading" style={{ fontSize: 10, padding: '1px 6px' }}>Anime</span>}
-                        {!inst.enabled && <span className="badge status-unknown" style={{ fontSize: 10, padding: '1px 6px' }}>Desactivada</span>}
+                        {inst.is_4k && <span className="badge status-queued" style={{ padding: '1px 6px' }}>4K</span>}
+                        {inst.is_anime && <span className="badge status-uploading" style={{ padding: '1px 6px' }}>Anime</span>}
+                        {!inst.enabled && <span className="badge status-unknown" style={{ padding: '1px 6px' }}>Desactivada</span>}
                       </div>
                       <div className="instance-card-url">{inst.url}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                        API key: {inst.api_key_masked} · Añadida: {formatDate(inst.created_at)}
-                        {inst.last_test_status && ` · Último test: ${inst.last_test_status}`}
+                      {/* Tres datos sueltos: cada uno en su hueco, no cosidos con puntos. */}
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, display: 'flex', flexWrap: 'wrap', columnGap: 16 }}>
+                        <span>API key: {inst.api_key_masked}</span>
+                        <span>Añadida: {formatDate(inst.created_at)}</span>
+                        {inst.last_test_status && <span>Último test: {inst.last_test_status}</span>}
                       </div>
                       {(testResults[inst.id] || syncResults[inst.id]) && (
                         <div style={{ fontSize: 12, marginTop: 4, color: 'var(--text-secondary)' }}>

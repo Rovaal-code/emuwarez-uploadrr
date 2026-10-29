@@ -90,7 +90,7 @@ export function ProviderIcon({ code, size = 18, link = true }: { code: string | 
   const url = BY_CODE[key]
   const visual = url
     ? (
-      <span style={{ ...box, background: '#fff' }} {...codeTip.triggerProps}>
+      <span style={{ ...box, background: 'var(--overlay-light)' }} {...codeTip.triggerProps}>
         <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 2 }} />
         {codeTip.tooltipNode}
       </span>

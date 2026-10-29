@@ -30,6 +30,7 @@ import { ACTIVE_JOB_STATUSES, statusLabel } from '../utils/uploadStatus'
 import { seguirProgreso } from '../api/eventos'
 import { fetchSettings } from '../api/settings'
 import { AVISO_MODO_PISTAS, normalizarModo, renombra, tocaElFichero } from '../utils/modoPistas'
+import { IconoAviso } from './Iconos'
 
 // Unified "Subir" wizard (replaces the separate Nomenclatura + Campos + Subir
 // buttons). For a Series/Season it first asks which season (and episode, or the
@@ -59,12 +60,12 @@ interface Props {
 }
 
 const labelStyle: React.CSSProperties = {
-  fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4, display: 'block',
+  fontSize: 12, color: 'var(--text-muted)', marginBottom: 4, display: 'block',
 }
 
 const thStyle: React.CSSProperties = {
   textAlign: 'left', padding: '8px 10px', fontWeight: 600, color: 'var(--text-muted)',
-  position: 'sticky', top: 0, background: 'var(--bg-surface, #0f1420)',
+  position: 'sticky', top: 0, background: 'var(--bg-surface)',
 }
 const TRACK_TYPE_LABEL: Record<string, string> = { video: 'Vídeo', audio: 'Audio', subtitles: 'Subs' }
 
@@ -115,7 +116,7 @@ function MediaInfoTable({ report, onSourceToolClick }: {
   onSourceToolClick?: () => void
 }) {
   if (!report.available) {
-    return <p className="text-warning" style={{ fontSize: 12, margin: 0 }}>⚠ {report.message}</p>
+    return <p className="text-warning" style={{ fontSize: 12, margin: 0 }}><IconoAviso /> {report.message}</p>
   }
   return (
     <div className="detail-card" style={{ maxHeight: 420, overflow: 'auto', borderRadius: 8 }}>
@@ -197,11 +198,11 @@ export function mergeRemuxTracks(
 function AvisoModoPistas({ plan }: { plan?: { track_mode?: string } | null }) {
   if (!plan?.track_mode) return null
   const aviso = AVISO_MODO_PISTAS[normalizarModo(plan.track_mode)]
-  const color = aviso.tono === 'info' ? '59,130,246' : aviso.tono === 'aviso' ? '245,158,11' : '239,68,68'
+  const color = aviso.tono === 'info' ? 'var(--color-info)' : aviso.tono === 'aviso' ? 'var(--color-warning)' : 'var(--color-error)'
   return (
     <span style={{
-      fontSize: 11, fontWeight: 500, color: `rgb(${color})`,
-      background: `rgba(${color},0.14)`, border: `1px solid rgba(${color},0.35)`,
+      fontSize: 11, fontWeight: 500, color,
+      background: `color-mix(in srgb, ${color} 14%, transparent)`, border: `1px solid color-mix(in srgb, ${color} 35%, transparent)`,
       borderRadius: 4, padding: '2px 8px',
     }}>
       {aviso.texto}
@@ -231,7 +232,7 @@ export function RemuxTable({ plan, editable, nameEditable, edits, onEdit }: {
         <p key={i} className="text-error" style={{ fontSize: 12, marginTop: 10 }}>✗ {e}</p>
       ))}
       {plan.warnings?.map((w, i) => (
-        <p key={i} className="text-warning" style={{ fontSize: 12, marginTop: 10 }}>⚠ {w}</p>
+        <p key={i} className="text-warning" style={{ fontSize: 12, marginTop: 10 }}><IconoAviso /> {w}</p>
       ))}
       {plan.ordered_tracks && plan.ordered_tracks.length > 0 && (
         <div className="detail-card" style={{ marginTop: 12, maxHeight: 260, overflow: 'auto', borderRadius: 8 }}>
@@ -356,14 +357,14 @@ export function EpisodeAccordionRow({ episodeNumber, title, expanded, onToggle, 
         type="button"
         onClick={onToggle}
         style={{
-          width: '100%', textAlign: 'left', padding: '8px 12px', background: 'rgba(255,255,255,0.03)',
+          width: '100%', textAlign: 'left', padding: '8px 12px', background: 'color-mix(in srgb, var(--overlay-light) 3%, transparent)',
           border: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between',
           alignItems: 'center', gap: 8, color: 'inherit', fontSize: 13,
         }}
         {...triggerProps}
       >
         <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {episodeNumber != null ? `E${String(episodeNumber).padStart(2, '0')} — ` : ''}{title}
+          {episodeNumber != null ? `E${String(episodeNumber).padStart(2, '0')}: ` : ''}{title}
         </span>
         <span style={{ color: 'var(--text-muted)', fontSize: 11, flexShrink: 0 }}>{expanded ? '▲' : '▼'}</span>
         {tooltipNode}
@@ -1402,7 +1403,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                 alignItems: 'flex-start', gap: 6, height: 'auto', width: '100%', minWidth: 0, whiteSpace: 'normal',
                 cursor: enabled ? 'pointer' : 'not-allowed',
                 opacity: enabled ? 1 : 0.45,
-                ...(selected ? { background: 'rgba(37,99,235,0.18)', borderColor: '#2563eb' } : {}),
+                ...(selected ? { background: 'color-mix(in srgb, var(--color-primary) 18%, transparent)', borderColor: 'var(--color-primary)' } : {}),
               }}
             >
               <span style={{ fontSize: 15, fontWeight: 700 }}>{m.title}</span>
@@ -1443,8 +1444,8 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                   style={{
                     width: '100%', padding: '12px 10px', borderRadius: 8, fontSize: 13, textAlign: 'center',
                     cursor: ready ? 'pointer' : 'not-allowed',
-                    background: selected ? 'rgba(37,99,235,0.18)' : 'var(--bg-card)',
-                    border: `1px solid ${selected ? '#2563eb' : 'var(--border-input)'}`,
+                    background: selected ? 'color-mix(in srgb, var(--color-primary) 18%, transparent)' : 'var(--bg-card)',
+                    border: `1px solid ${selected ? 'var(--color-primary)' : 'var(--border-input)'}`,
                     color: 'var(--text-primary)', opacity: ready ? 1 : 0.45,
                     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 0,
                   }}
@@ -1458,7 +1459,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                     {ep.episode_number != null ? `E${String(ep.episode_number).padStart(2, '0')}` : ep.title}
                   </span>
                   {onEmu && (
-                    <span style={{ fontSize: 10.5, color: '#f59e0b' }}>⚠ ya en eMuwarez</span>
+                    <span style={{ fontSize: 11, color: 'var(--color-warning)' }}><IconoAviso /> ya en eMuwarez</span>
                   )}
                 </button>
               )
@@ -1563,7 +1564,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
           <option value={WHOLE_SEASON}>★ Temporada entera</option>
           {episodes.map(ep => (
             <option key={ep.id} value={ep.id}>
-              {ep.episode_number != null ? `E${String(ep.episode_number).padStart(2, '0')} — ` : ''}{ep.title}
+              {ep.episode_number != null ? `E${String(ep.episode_number).padStart(2, '0')}: ` : ''}{ep.title}
             </option>
           ))}
         </select>
@@ -1610,8 +1611,8 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
               onClick={() => toggleMultiSeason(s.id)}
               style={{
                 width: '100%', padding: '16px 12px', borderRadius: 8, fontSize: 13, textAlign: 'center', cursor: ready ? 'pointer' : 'not-allowed',
-                background: selected ? 'rgba(37,99,235,0.18)' : 'var(--bg-card)',
-                border: `1px solid ${selected ? '#2563eb' : 'var(--border-input)'}`,
+                background: selected ? 'color-mix(in srgb, var(--color-primary) 18%, transparent)' : 'var(--bg-card)',
+                border: `1px solid ${selected ? 'var(--color-primary)' : 'var(--border-input)'}`,
                 color: 'var(--text-primary)', opacity: ready ? 1 : 0.45,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}
@@ -1640,8 +1641,8 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     <div style={{
       marginBottom: 14, padding: '10px 14px', borderRadius: 8, fontSize: 12.5, display: 'flex',
       alignItems: 'center', gap: 10, flexWrap: 'wrap',
-      background: existingJobBlocking ? 'rgba(248,113,113,0.1)' : 'rgba(59,130,246,0.1)',
-      border: `1px solid ${existingJobBlocking ? 'rgba(248,113,113,0.3)' : 'rgba(59,130,246,0.3)'}`,
+      background: existingJobBlocking ? 'color-mix(in srgb, var(--color-error-soft) 10%, transparent)' : 'color-mix(in srgb, var(--text-accent) 10%, transparent)',
+      border: `1px solid ${existingJobBlocking ? 'color-mix(in srgb, var(--color-error-soft) 30%, transparent)' : 'color-mix(in srgb, var(--text-accent) 30%, transparent)'}`,
     }}>
       <span>
         {existingJobBlocking
@@ -1674,7 +1675,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
             <input className="form-input" value={fields.title || ''} disabled />
           )}
           {titleWarning && (
-            <span style={{ display: 'block', marginTop: 4, fontSize: 11, color: '#f59e0b' }}>⚠ {titleWarning}</span>
+            <span style={{ display: 'block', marginTop: 4, fontSize: 11, color: 'var(--color-warning)' }}><IconoAviso /> {titleWarning}</span>
           )}
         </label>
         <label><FieldLabel label="Año" info={FIELD_INFO.year} />
@@ -1716,9 +1717,9 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                 >
                   <span
                     className={sourceComparison.agree ? undefined : 'badge-blink'}
-                    style={{ display: 'inline-flex', color: sourceComparison.agree ? 'var(--text-accent)' : '#eab308' }}
+                    style={{ display: 'inline-flex', color: sourceComparison.agree ? 'var(--text-accent)' : 'var(--color-req-pending)' }}
                   >
-                    <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg aria-hidden="true" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <rect x="2" y="5" width="20" height="14" rx="4" />
                       <path d="M10 9.3v5.4l5-2.7z" fill="currentColor" stroke="none" />
                     </svg>
@@ -1728,7 +1729,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
             )}
           </div>
           {sourceWarning && (
-            <span style={{ display: 'block', marginTop: 4, fontSize: 11, color: '#f59e0b' }}>⚠ {sourceWarning}</span>
+            <span style={{ display: 'block', marginTop: 4, fontSize: 11, color: 'var(--color-warning)' }}><IconoAviso /> {sourceWarning}</span>
           )}
         </label>
         {showSourceCompare && sourceComparison && (
@@ -1845,9 +1846,9 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
               >
                 <span
                   className={sourceComparison.agree ? undefined : 'badge-blink'}
-                  style={{ display: 'inline-flex', color: sourceComparison.agree ? 'var(--text-accent)' : '#eab308' }}
+                  style={{ display: 'inline-flex', color: sourceComparison.agree ? 'var(--text-accent)' : 'var(--color-req-pending)' }}
                 >
-                  <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg aria-hidden="true" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="2" y="5" width="20" height="14" rx="4" />
                     <path d="M10 9.3v5.4l5-2.7z" fill="currentColor" stroke="none" />
                   </svg>
@@ -1958,7 +1959,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                   : confirmSelection
                 }
                 type="button"
-              >Continuar →</button>
+              >Continuar</button>
             </div>
           </div>
         )}
@@ -1994,7 +1995,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
             )}
             {seasonPlanError && !seasonPlanLoading && (
               <div style={{ padding: '20px 0' }}>
-                <p className="text-error" style={{ marginTop: 0, marginBottom: 10 }}>⚠ {seasonPlanError}</p>
+                <p className="text-error" style={{ marginTop: 0, marginBottom: 10 }}><IconoAviso /> {seasonPlanError}</p>
                 <button className="btn btn-secondary btn-sm" type="button" onClick={loadSeasonPlan}>↻ Reintentar</button>
               </div>
             )}
@@ -2014,7 +2015,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 600 }}>MediaInfo y pistas de los capítulos</div>
                       <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>
-                        Se elige capítulo con un desplegable — cada uno con su propio detalle de MediaInfo y
+                        Se elige capítulo con un desplegable, cada uno con su propio detalle de MediaInfo y
                         su propio plan de reordenación/renombrado de pistas (sin edición manual para temporadas).
                       </div>
                     </div>
@@ -2151,10 +2152,10 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
                   {needsSelection
-                    ? <button className="btn btn-secondary" onClick={() => setStep(0)}>← Selección</button>
+                    ? <button className="btn btn-secondary" onClick={() => setStep(0)}>Volver a la selección</button>
                     : <span />}
                   <button className="btn btn-primary" onClick={goToUpload} disabled={preparing || seasonPlan.status !== 'valid' || existingJobBlocking}>
-                    {preparing ? 'Preparando…' : 'Continuar →'}
+                    {preparing ? 'Preparando…' : 'Continuar'}
                   </button>
                 </div>
               </>
@@ -2201,7 +2202,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
             )}
             {error && !loading && !episodePrepping && (
               <div style={{ padding: '20px 0' }}>
-                <p className="text-error" style={{ marginTop: 0, marginBottom: 10 }}>⚠ {error}</p>
+                <p className="text-error" style={{ marginTop: 0, marginBottom: 10 }}><IconoAviso /> {error}</p>
                 <button className="btn btn-secondary btn-sm" type="button" onClick={loadFields}>↻ Reintentar</button>
               </div>
             )}
@@ -2311,10 +2312,10 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
                   {needsSelection
-                    ? <button className="btn btn-secondary" onClick={() => setStep(0)}>← Selección</button>
+                    ? <button className="btn btn-secondary" onClick={() => setStep(0)}>Volver a la selección</button>
                     : <span />}
                   <button className="btn btn-primary" onClick={goToUpload} disabled={preparing || !preview || existingJobBlocking}>
-                    {preparing ? 'Preparando…' : 'Continuar →'}
+                    {preparing ? 'Preparando…' : 'Continuar'}
                   </button>
                 </div>
               </>
@@ -2370,7 +2371,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                     )}
 
                     {!batchChecksLoading && (
-                      <div style={{ marginTop: 14, fontWeight: 600, color: blocked.length === 0 && envReady ? '#22c55e' : '#ef4444' }}>
+                      <div style={{ marginTop: 14, fontWeight: 600, color: blocked.length === 0 && envReady ? 'var(--color-available)' : 'var(--color-error)' }}>
                         {!envReady
                           ? '✗ La subida no se puede realizar'
                           : blocked.length === 0
@@ -2384,7 +2385,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                   {!batchChecksLoading && blocked.length > 0 && (
                     <div className="detail-card" style={{ padding: '12px 14px', borderRadius: 8, marginTop: 12 }}>
                       {blocked.map(id => (
-                        <p key={id} style={{ fontSize: 12.5, margin: '4px 0', color: '#fca5a5' }}>
+                        <p key={id} style={{ fontSize: 12.5, margin: '4px 0', color: 'var(--color-error-pale)' }}>
                           ✗ {batchItemTitle(id)}: {batchContentChecks.get(id)?.checks.find(c => c.status === 'fail')?.message || 'Alguna comprobación falló'}
                         </p>
                       ))}
@@ -2395,7 +2396,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                   )}
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
-                    <button className="btn btn-secondary" onClick={() => setStep(1)} type="button">← Volver</button>
+                    <button className="btn btn-secondary" onClick={() => setStep(1)} type="button">Volver</button>
                     <button
                       className="btn btn-primary"
                       onClick={batchIsEpisodes ? uploadAllEpisodes : uploadAllSeasons}
@@ -2425,7 +2426,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                 {batchResults.some(r => r.status === 'failed') && (
                   <div className="detail-card" style={{ padding: '12px 14px', borderRadius: 8, marginBottom: 14 }}>
                     {batchResults.filter(r => r.status === 'failed').map(r => (
-                      <p key={r.seasonId} style={{ fontSize: 12.5, margin: '4px 0', color: '#fca5a5' }}>
+                      <p key={r.seasonId} style={{ fontSize: 12.5, margin: '4px 0', color: 'var(--color-error-pale)' }}>
                         ✗ {r.title}: {r.reason}
                       </p>
                     ))}
@@ -2481,7 +2482,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                 checks?.checks.map(c => <CheckRow key={c.id} c={c} />)
               )}
               {!checksLoading && checks && (
-                <div style={{ marginTop: 14, fontWeight: 600, color: checks.ready ? '#22c55e' : '#ef4444' }}>
+                <div style={{ marginTop: 14, fontWeight: 600, color: checks.ready ? 'var(--color-available)' : 'var(--color-error)' }}>
                   {checks.ready ? '✓ Todo listo para subir' : '✗ La subida no se puede realizar'}
                 </div>
               )}
@@ -2500,14 +2501,14 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
             {uploadMsg && (
               <p style={{
                 fontSize: 13, marginTop: 8, padding: '8px 12px', borderRadius: 6, fontWeight: 500,
-                background: uploadMsg.startsWith('✗') ? 'rgba(239,68,68,0.12)' : 'rgba(34,197,94,0.12)',
-                border: `1px solid ${uploadMsg.startsWith('✗') ? 'rgba(239,68,68,0.35)' : 'rgba(34,197,94,0.35)'}`,
-                color: uploadMsg.startsWith('✗') ? '#fca5a5' : '#86efac',
+                background: uploadMsg.startsWith('✗') ? 'color-mix(in srgb, var(--color-error) 12%, transparent)' : 'color-mix(in srgb, var(--color-available) 12%, transparent)',
+                border: `1px solid ${uploadMsg.startsWith('✗') ? 'color-mix(in srgb, var(--color-error) 35%, transparent)' : 'color-mix(in srgb, var(--color-available) 35%, transparent)'}`,
+                color: uploadMsg.startsWith('✗') ? 'var(--color-error-pale)' : 'var(--color-available-pale)',
               }}>{uploadMsg}</p>
             )}
 
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
-              <button className="btn btn-secondary" onClick={() => setStep(1)} disabled={uploading}>← Volver</button>
+              <button className="btn btn-secondary" onClick={() => setStep(1)} disabled={uploading}>Volver</button>
               <button
                 className="btn btn-primary"
                 onClick={doUpload}

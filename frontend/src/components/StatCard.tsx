@@ -17,10 +17,11 @@ export function StatCard({ label, value, children, accentColor, info, icon }: St
   return (
     <div
       className="stat-card"
-      {...(info != null ? triggerProps : {})}
+      // Con explicación, la tarjeta se alcanza con Tab para poder leerla.
+      {...(info != null ? { ...triggerProps, tabIndex: 0 } : {})}
       style={info != null ? { cursor: 'help' } : undefined}
     >
-      {icon && <div className="stat-card-icon" style={accentColor ? { color: accentColor } : undefined}>{icon}</div>}
+      {icon && <div className="stat-card-icon" aria-hidden="true" style={accentColor ? { color: accentColor } : undefined}>{icon}</div>}
       <div className="stat-card-text">
         <div className="stat-card-label">{label}</div>
         <div className="stat-card-value" style={accentColor ? { color: accentColor } : undefined}>

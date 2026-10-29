@@ -38,7 +38,7 @@ function PasswordChecklist({ password }: { password: string }) {
       {PASSWORD_RULES.map(rule => {
         const ok = rule.test(password)
         return (
-          <li key={rule.label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: ok ? '#22c55e' : 'var(--text-muted)' }}>
+          <li key={rule.label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: ok ? 'var(--color-available)' : 'var(--text-muted)' }}>
             <span>{ok ? '✓' : '○'}</span>
             <span>{rule.label}</span>
           </li>
@@ -545,7 +545,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                   <label className="form-label">Confirmar contraseña</label>
                   <input className="form-input" type="password" placeholder="Repite la contraseña" value={adminPass2} onChange={e => setAdminPass2(e.target.value)} />
                   {adminPass2 && (
-                    <span style={{ fontSize: 12.5, color: adminPass === adminPass2 ? '#22c55e' : '#ef4444', marginTop: 6, display: 'inline-block' }}>
+                    <span style={{ fontSize: 12.5, color: adminPass === adminPass2 ? 'var(--color-available)' : 'var(--color-error)', marginTop: 6, display: 'inline-block' }}>
                       {adminPass === adminPass2 ? '✓ Las contraseñas coinciden' : '✗ Las contraseñas no coinciden'}
                     </span>
                   )}
@@ -604,7 +604,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               </div>
               {!emuCanContinue && (
                 <div className="alert alert-error" style={{ marginTop: 10 }}>
-                  Necesitas una key de eMuwarez válida para continuar: pulsa "Probar conexión" y espera a
+                  Necesitas una key de eMuwarez válida para continuar: pulsa “Probar conexión” y espera a
                   que confirme que funciona.
                 </div>
               )}
@@ -624,7 +624,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               {instances.length > 0 && (
                 <div style={{ marginBottom: 14 }}>
                   {instances.map(inst => (
-                    <div key={inst.id} className="instance-card" style={{ marginBottom: 8 }}>
+                    <div key={inst.id} className="wizard-instance">
                       <div className="instance-card-info">
                         <ServiceIcon type={inst.type} size={22} />
                         <div>
@@ -641,7 +641,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                 </div>
               )}
               <div className="wizard-fields" style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 14 }}>
-                <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--text-muted)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
                   Añadir instancia
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
@@ -744,7 +744,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
           {step === 'tmdb' && (
             <>
               <div className="wizard-step-desc">Los títulos y pósters vienen de Radarr/Sonarr, no de aquí. La API key de TMDb se usa para tres cosas concretas:</div>
-              <div className="alert" style={{ marginBottom: 14, background: 'rgba(59,130,246,0.08)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', fontSize: 12.5, color: 'var(--text-secondary)' }}>
+              <div className="alert" style={{ marginBottom: 14, background: 'color-mix(in srgb, var(--text-accent) 8%, transparent)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', fontSize: 12.5, color: 'var(--text-secondary)' }}>
                 <div style={{ marginBottom: 6 }}>
                   <strong>1. Traducir títulos de series al español:</strong> según la guía de eMuwarez, si el título existe en español debe usarse en español. Sonarr toma los títulos de TVDB, a menudo en inglés («Los Serrano» → «The Serrano»); con la key se traducen, como ya hace Radarr con las películas.
                 </div>
@@ -799,7 +799,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               </div>
               {!tmdbCanContinue && (
                 <div className="alert alert-error" style={{ marginTop: 10 }}>
-                  Necesitas una key de TMDb válida para continuar: pulsa "Probar conexión" y espera a
+                  Necesitas una key de TMDb válida para continuar: pulsa “Probar conexión” y espera a
                   que confirme que funciona. Esta integración es obligatoria, así que aquí no se puede
                   saltar el paso.
                 </div>
@@ -897,10 +897,10 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <input type="checkbox" checked={enabled || isDefault} disabled={isDefault}
                           onChange={() => setImgEnabled(p => p.includes(h.id) ? p.filter(x => x !== h.id) : [h.id, ...p])} />
-                        <Favicon domain={domainOf(h.url)} src={h.favicon} size={14} background="#fff" fallback={<ServiceIcon type="imghost" size={14} />} />
+                        <Favicon domain={domainOf(h.url)} src={h.favicon} size={14} background="var(--overlay-light)" fallback={<ServiceIcon type="imghost" size={14} />} />
                         <span style={{ fontSize: 13 }}>{h.label}</span>
-                        {isDefault && <span className="badge status-available" style={{ fontSize: 10 }}>por defecto</span>}
-                        {h.needs_key && <span className="badge nom-na" style={{ fontSize: 10 }}>API key</span>}
+                        {isDefault && <span className="badge status-available">por defecto</span>}
+                        {h.needs_key && <span className="badge nom-na">API key</span>}
                         {(enabled || isDefault) && (
                           <button className="btn btn-secondary btn-sm" style={{ marginLeft: 'auto', fontSize: 11, padding: '2px 8px' }}
                             onClick={() => handleTestImghost(h.id)} disabled={imgTesting === h.id} type="button">

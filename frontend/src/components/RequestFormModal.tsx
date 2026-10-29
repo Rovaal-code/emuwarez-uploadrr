@@ -39,7 +39,7 @@ interface Props {
 }
 
 const labelStyle: React.CSSProperties = {
-  fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4, display: 'block',
+  fontSize: 12, color: 'var(--text-muted)', marginBottom: 4, display: 'block',
 }
 
 export function RequestFormModal({ item, onClose }: Props) {
@@ -150,7 +150,7 @@ export function RequestFormModal({ item, onClose }: Props) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px', marginTop: 12, alignItems: 'center' }}>
             <label><span style={labelStyle}>Recompensa (puntos)</span>
               <input className="form-input" value={reward} onChange={e => setReward(onlyDigits(e.target.value))} inputMode="numeric" />
-              {rewardTooLow && <span style={{ fontSize: 11, color: '#ef4444' }}>Mínimo {MIN_REWARD} puntos</span>}
+              {rewardTooLow && <span style={{ fontSize: 11, color: 'var(--color-error)' }}>Mínimo {MIN_REWARD} puntos</span>}
             </label>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 18 }}>
               <input type="checkbox" checked={anon} onChange={e => setAnon(e.target.checked)} /> Anónimo

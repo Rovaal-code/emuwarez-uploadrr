@@ -52,6 +52,7 @@ import { useRefrescoPorAvisos, AVISOS_SUBIDA, AVISOS_SUBIDA_PROGRESO } from '../
 import { queSalieron, soloVivas, idsDe, ESPERA_MS, DESVANECER_MS } from '../utils/despedidaSubidas'
 import { useSeccionVisible } from '../context/SeccionVisible'
 import { EMU_URL } from '../constants/emu'
+import { IconoEstrella, IconoLista, IconoPelicula, IconoSerie, IconoTipo } from '../components/Iconos'
 
 // Phase 11G — "Recomendaciones" groups, in the order they appear. The content
 // name always links to its Biblioteca detail; the "Acción" button is
@@ -62,15 +63,15 @@ const REC_GROUP_META: Record<number, {
   action: RecAction; actionLabel: string
   color: string; bg: string; border: string
 }> = {
-  1: { category: 'Petición Compatible', recommendation: 'Revisa la petición, quizás puedas reclamarla',
-       action: 'view-request', actionLabel: 'Ver Petición',
-       color: '#22c55e', bg: 'rgba(34,197,94,0.14)', border: 'rgba(34,197,94,0.35)' },
+  1: { category: 'Petición compatible', recommendation: 'Revisa la petición, quizás puedas reclamarla',
+       action: 'view-request', actionLabel: 'Ver petición',
+       color: 'var(--color-available)', bg: 'color-mix(in srgb, var(--color-available) 14%, transparent)', border: 'color-mix(in srgb, var(--color-available) 35%, transparent)' },
   2: { category: 'Contenido único', recommendation: 'Podrías subirlo a eMuwarez',
        action: 'upload', actionLabel: 'Subir a eMuwarez',
-       color: '#a855f7', bg: 'rgba(168,85,247,0.14)', border: 'rgba(168,85,247,0.35)' },
+       color: 'var(--color-uploading)', bg: 'color-mix(in srgb, var(--color-uploading) 14%, transparent)', border: 'color-mix(in srgb, var(--color-uploading) 35%, transparent)' },
   3: { category: 'Faltante', recommendation: 'Pídelo en eMuwarez',
        action: 'request', actionLabel: 'Petición a eMuwarez',
-       color: '#ef4444', bg: 'rgba(239,68,68,0.14)', border: 'rgba(239,68,68,0.35)' },
+       color: 'var(--color-error)', bg: 'color-mix(in srgb, var(--color-error) 14%, transparent)', border: 'color-mix(in srgb, var(--color-error) 35%, transparent)' },
 }
 
 // task_runs.name is the internal task key (services/scheduler.py's
@@ -122,7 +123,7 @@ function svgIcon(d: React.ReactNode) {
   // near-zero-length segment, the standard way to draw the exclamation
   // mark's dot) actually render as a dot instead of vanishing — without it
   // the default "butt" cap draws nothing for a zero-length line.
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">{d}</svg>
+  return <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">{d}</svg>
 }
 const ICON_LIBRARY = svgIcon(<><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5" /><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" /></>)
 const ICON_AVAILABLE = svgIcon(<><path d="M21 15V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9" /><path d="M2 15h20l-2 5H4l-2-5z" /></>)
@@ -372,12 +373,12 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
           icon={ICON_UNIQUE}
           label="Contenido único"
           value={s.unique_content ?? 0}
-          accentColor="#a855f7"
+          accentColor="var(--color-uploading)"
           info="Contenido disponible que aún no está en eMuwarez: las películas, las temporadas completas de series o documentales y sus capítulos. Son tus oportunidades de subida."
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <div className="stat-card-sub-row">🎬 {s.unique_movies ?? 0} películas</div>
-            <div className="stat-card-sub-row">📺 {s.unique_seasons ?? 0} temporadas · {s.unique_episodes ?? 0} capítulos</div>
+            <div className="stat-card-sub-row"><IconoPelicula /> {s.unique_movies ?? 0} películas</div>
+            <div className="stat-card-sub-row"><IconoSerie /> {s.unique_seasons ?? 0} temporadas, {s.unique_episodes ?? 0} capítulos</div>
           </div>
         </StatCard>
 
@@ -385,7 +386,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
           icon={ICON_UPLOADS}
           label="Tus subidas"
           value={s.uploads_completed ?? 0}
-          accentColor="#3b82f6"
+          accentColor="var(--text-accent)"
           info="Número de subidas a eMuwarez que has completado con Uploadrr."
         />
       </div>
@@ -403,30 +404,30 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
           />
           <StatCard
             icon={ICON_COMPATIBLE}
-            label="Peticiones Compatibles"
+            label="Peticiones compatibles"
             value={s.requests_compatible ?? 0}
-            accentColor="#22c55e"
+            accentColor="var(--color-available)"
             info="Peticiones cuya mejor coincidencia en tu biblioteca cumple resolución y source: quizás puedas cubrirlas."
           />
           <StatCard
             icon={ICON_PARTIAL}
-            label="Peticiones Parciales"
+            label="Peticiones parciales"
             value={s.requests_partial ?? 0}
-            accentColor="#f59e0b"
+            accentColor="var(--color-warning)"
             info="Peticiones cuya mejor coincidencia cumple solo parte de lo pedido (resolución o source, pero no ambos)."
           />
           <StatCard
             icon={ICON_RECLAIMED}
-            label="Peticiones Reclamadas"
+            label="Peticiones reclamadas"
             value={s.requests_reclaimed ?? 0}
-            accentColor="#a855f7"
+            accentColor="var(--color-uploading)"
             info="Peticiones ya Reclamadas en eMuwarez. eMuwarez no permite saber si el reclamo es tuyo, así que es el total de reclamadas, no solo las tuyas."
           />
           <StatCard
             icon={ICON_MINE}
-            label="Mis Peticiones"
+            label="Mis peticiones"
             value={s.requests_mine ?? 0}
-            accentColor="#3b82f6"
+            accentColor="var(--text-accent)"
             info="Peticiones creadas por tu propio usuario de eMuwarez (según el nombre configurado en Ajustes)."
           />
         </div>
@@ -447,7 +448,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
             </div>
             {recommendations.length === 0 ? (
               <EmptyState
-                icon="✨"
+                icon={<IconoEstrella />}
                 title="No hay recomendaciones todavía"
                 body="Sincroniza tu biblioteca, eMuwarez y las peticiones para ver aquí qué subir o pedir."
               />
@@ -486,7 +487,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                                 />
                               ) : (
                                 <span style={{ fontSize: 14, opacity: 0.35 }}>
-                                  {item.item_type === 'series' || item.item_type === 'season' || item.item_type === 'episode' ? '📺' : '🎬'}
+                                  <IconoTipo serie={item.item_type === 'series' || item.item_type === 'season' || item.item_type === 'episode'} />
                                 </span>
                               )}
                             </div>
@@ -531,7 +532,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
             </div>
             {taskRuns.length === 0 ? (
               <EmptyState
-                icon="🗒️"
+                icon={<IconoLista />}
                 title="No hay tareas ejecutadas todavía"
                 body="Las sincronizaciones automáticas y manuales aparecerán aquí."
               />
@@ -582,7 +583,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
               {filasDeSubida.length === 0 ? (
                 <div className="hud-projection" {...uploadEmptyTip} style={{ cursor: 'help' }}>
                   {uploadEmptyTooltip}
-                  <svg viewBox="0 0 260 196" className="hud-projection-svg">
+                  <svg aria-hidden="true" viewBox="0 0 260 196" className="hud-projection-svg">
                     <defs>
                       <linearGradient id="hudBeamGrad" x1="0" y1="1" x2="0" y2="0">
                         <stop offset="0%" stopColor="#2fd8ff" stopOpacity=".95" /><stop offset="100%" stopColor="#2fd8ff" stopOpacity="0" />
@@ -646,7 +647,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                           />
                         ) : (
                           <span style={{ fontSize: 18, opacity: 0.35 }}>
-                            {job.media_type === 'series' || job.media_type === 'episode' ? '📺' : '🎬'}
+                            <IconoTipo serie={job.media_type === 'series' || job.media_type === 'episode'} />
                           </span>
                         )}
                       </div>
@@ -690,7 +691,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                               estado no diga ya. */}
                           {isPreparingOrRunning && (
                             <div className="progress-bar" title={`${globalPct}%`}>
-                              <div className="progress-fill" style={{ width: `${globalPct}%` }} />
+                              <div className="progress-fill" style={{ transform: `scaleX(${globalPct / 100})` }} />
                             </div>
                           )}
                         </div>
@@ -731,7 +732,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                 const imgIds = Array.from(new Set(['imgbox', ...(connSettings?.image_hosts_enabled ?? [])]))
                 for (const id of imgIds) {
                   const meta = connSettings?.image_hosts_available?.find(h => h.id === id)
-                  rows.push(<ConnRow key={`img-${id}`} icon={<Favicon domain={domainOf(meta?.url)} src={meta?.favicon} size={16} background="#fff" fallback={<ServiceIcon type="imghost" size={16} />} />}
+                  rows.push(<ConnRow key={`img-${id}`} icon={<Favicon domain={domainOf(meta?.url)} src={meta?.favicon} size={16} background="var(--overlay-light)" fallback={<ServiceIcon type="imghost" size={16} />} />}
                     label={meta?.label ?? id} href={meta?.url} />)
                 }
                 if (connSettings?.notify_discord_webhook_configured)

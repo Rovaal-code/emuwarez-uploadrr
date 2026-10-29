@@ -28,10 +28,8 @@ function friendlyError(err: unknown): string {
 }
 
 const labelStyle: React.CSSProperties = {
-  fontSize: 11,
+  fontSize: 12,
   color: 'var(--text-muted)',
-  textTransform: 'uppercase',
-  letterSpacing: '0.04em',
   marginBottom: 3,
 }
 
@@ -153,7 +151,7 @@ export function NomenclatureCheckButton({ item, onChecked, compact }: Props) {
             </div>
             <div className="modal-body">
               {loading && <div style={{ color: 'var(--text-muted)' }}>Cargando…</div>}
-              {error && <div style={{ color: 'var(--danger, #ef4444)' }}>{error}</div>}
+              {error && <div style={{ color: 'var(--color-error)' }}>{error}</div>}
 
               {info && !loading && (
                 <div style={{ display: 'grid', gap: 14 }}>
@@ -178,7 +176,7 @@ export function NomenclatureCheckButton({ item, onChecked, compact }: Props) {
                         <FitText text={result.actual || '—'} />
                       </div>
                       {result.status === 'Correcta' && (
-                        <p style={{ color: 'var(--success, #22c55e)', margin: 0 }}>El nombre cumple la nomenclatura de eMuwarez.</p>
+                        <p style={{ color: 'var(--color-available)', margin: 0 }}>El nombre cumple la nomenclatura de eMuwarez.</p>
                       )}
                       <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>
                         El Proveedor/Source se obtiene del nombre del archivo y el Tag del Grupo (lo que va tras el último «-») no se compara.
@@ -194,7 +192,7 @@ export function NomenclatureCheckButton({ item, onChecked, compact }: Props) {
                         </p>
                       )}
                       {summary.errors > 0 && (
-                        <p style={{ margin: 0, color: 'var(--danger, #ef4444)' }}>
+                        <p style={{ margin: 0, color: 'var(--color-error)' }}>
                           No se pudo leer {summary.errors} archivo(s) con MediaInfo, así que siguen «No comprobada».
                           {summary.error_detail ? ` (${summary.error_detail})` : ''}
                         </p>

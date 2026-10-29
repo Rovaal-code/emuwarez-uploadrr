@@ -21,6 +21,7 @@ import {
 } from '../utils/uploadStatus'
 import { useRefrescoPorAvisos, AVISOS_SUBIDA, AVISOS_SUBIDA_PROGRESO } from '../hooks/useRefrescoPorAvisos'
 import { useAlSalir, useSeccionVisible } from '../context/SeccionVisible'
+import { IconoSubida, IconoTipo } from '../components/Iconos'
 
 // Backend-real gates — mirror cancel_upload_job()/queue_retry_for_job() in
 // services/upload_execution.py / upload_queue.py exactly, so the button is
@@ -93,12 +94,12 @@ function StartModal({ job, onClose, onDone }: { job: UploadJob; onClose: () => v
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 560 }}>
         <div className="modal-header">
-          <h2 className="modal-title">Iniciar Uploadrr — Job {jobId}</h2>
+          <h2 className="modal-title">Iniciar Uploadrr: job {jobId}</h2>
           <button className="btn-icon" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body">
           <p style={{ marginBottom: 8 }}><strong>{job.title || '–'}</strong></p>
-          <div style={{ padding: '10px 14px', background: 'rgba(255,80,80,0.08)', borderRadius: 6, border: '1px solid rgba(255,80,80,0.2)', marginBottom: 12 }}>
+          <div style={{ padding: '10px 14px', background: 'color-mix(in srgb, var(--color-error) 8%, transparent)', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--color-error) 20%, transparent)', marginBottom: 12 }}>
             <ul style={{ margin: 0, paddingLeft: 18, fontSize: '0.83rem', lineHeight: 1.6 }}>
               <li>Esta acción puede publicar/subir contenido a eMuwarez.</li>
               <li>No se crearán peticiones automáticamente.</li>
@@ -109,8 +110,8 @@ function StartModal({ job, onClose, onDone }: { job: UploadJob; onClose: () => v
             Escribe <strong>{CONFIRMATION_TOKEN}</strong> para confirmar:
           </label>
           <input type="text" value={confirm} onChange={e => setConfirm(e.target.value)} placeholder={CONFIRMATION_TOKEN}
-            style={{ width: '100%', padding: '6px 10px', background: 'rgba(255,255,255,0.08)', border: `1px solid ${confirm === CONFIRMATION_TOKEN ? 'var(--color-success, #4ade80)' : 'rgba(255,255,255,0.15)'}`, borderRadius: 4, color: 'inherit', fontFamily: 'monospace', fontSize: '0.9rem', boxSizing: 'border-box' }} />
-          {message && <pre style={{ marginTop: 12, fontSize: '0.78rem', whiteSpace: 'pre-wrap', background: 'rgba(0,0,0,0.2)', padding: 8, borderRadius: 4 }}>{message}</pre>}
+            style={{ width: '100%', padding: '6px 10px', background: 'color-mix(in srgb, var(--overlay-light) 8%, transparent)', border: `1px solid ${confirm === CONFIRMATION_TOKEN ? 'var(--color-available-soft)' : 'color-mix(in srgb, var(--overlay-light) 15%, transparent)'}`, borderRadius: 4, color: 'inherit', fontFamily: 'monospace', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+          {message && <pre style={{ marginTop: 12, fontSize: '0.78rem', whiteSpace: 'pre-wrap', background: 'color-mix(in srgb, var(--overlay-dark) 20%, transparent)', padding: 8, borderRadius: 4 }}>{message}</pre>}
           {error && <p className="error-text" style={{ marginTop: 8 }}>{error}</p>}
         </div>
         <div className="detail-panel__actions" style={{ padding: '10px 16px', gap: 8, display: 'flex' }}>
@@ -169,7 +170,7 @@ function JobRow({ job, instances, onOpen, indent, retryToggle, onCancel, onRetry
               />
             ) : (
               <span style={{ fontSize: 14, opacity: 0.35 }}>
-                {job.media_type === 'series' || job.media_type === 'episode' ? '📺' : '🎬'}
+                <IconoTipo serie={job.media_type === 'series' || job.media_type === 'episode'} />
               </span>
             )}
           </div>
@@ -635,7 +636,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
 
       {/* Ver RequestsPage: solo bloquea si no hay nada que enseñar todavía. */}
       {loading && jobs.length === 0 ? <LoadingState label="Cargando Subidas…" /> : error ? <ErrorState message={error} onRetry={load} /> : jobs.length === 0 ? (
-        <EmptyState icon="📤" title="No hay trabajos de subida." body="Usa el botón 'Subir' desde Biblioteca para generar un preflight." />
+        <EmptyState icon={<IconoSubida />} title="No hay trabajos de subida." body="Usa el botón 'Subir' desde Biblioteca para generar un preflight." />
       ) : (
         <div className="activity-section" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', marginBottom: 0 }}>
           <div style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>

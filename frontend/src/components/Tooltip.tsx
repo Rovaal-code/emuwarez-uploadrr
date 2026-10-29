@@ -1,6 +1,6 @@
-import { useState, useCallback, useRef, useLayoutEffect, useEffect } from 'react'
+import { useState, useCallback, useRef, useLayoutEffect, useEffect, useId, isValidElement, cloneElement } from 'react'
 import { createPortal } from 'react-dom'
-import { sinEscalar, anchoVentana } from '../utils/uiScale'
+import { sinEscalar, anchoVentana, medir } from '../utils/uiScale'
 
 // Custom hover tooltip styled like the app's cards (opaque surface, not the
 // native browser title box). Rendered in a fixed-position portal just below
@@ -23,17 +23,66 @@ export function useTooltip(content: React.ReactNode, maxWidth = 460) {
   const [pt, setPt] = useState({ x: 0, y: 0 })
   const ref = useRef<HTMLDivElement>(null)
   const timer = useRef<number | null>(null)
+  // Id de la descripción oculta, que está montada siempre (no solo mientras se
+  // ve el tooltip): así aria-describedby apunta a algo que ya existe cuando el
+  // lector de pantalla pregunta al llegar el foco.
+  const id = useId()
+  // El control que tiene el foco cuando no es el propio disparador (<Tooltip>
+  // envuelve al botón en un <span>, y el foco cae en el botón de dentro), con
+  // el aria-describedby que ya traía, para devolvérselo al salir.
+  const descrito = useRef<{ el: Element; previo: string | null } | null>(null)
+  // Ratón y foco van por separado: el tooltip sigue abierto mientras quede
+  // cualquiera de los dos, y Escape lo cierra siempre.
+  const hover = useRef(false)
+  const foco = useRef(false)
 
+  const ocultar = useCallback(() => {
+    if (timer.current) { window.clearTimeout(timer.current); timer.current = null }
+    setShow(false)
+  }, [])
   const track = useCallback((e: React.MouseEvent) => setPt(punto(e)), [])
   const open = useCallback((e: React.MouseEvent) => {
+    hover.current = true
+    if (foco.current) return
     setPt(punto(e))
     if (timer.current) window.clearTimeout(timer.current)
     timer.current = window.setTimeout(() => setShow(true), HOVER_DELAY_MS)
   }, [])
-  const close = useCallback(() => {
+  const leave = useCallback(() => {
+    hover.current = false
+    if (!foco.current) ocultar()
+  }, [ocultar])
+  // Con el teclado no hay cursor ni espera: el foco lo abre al momento, bajo
+  // el disparador. El foco puede caer en un hijo (el evento sube), así que se
+  // mira e.target, y si no es el disparador se le añade la descripción a las
+  // que ya tuviera.
+  const openOnFocus = useCallback((e: React.FocusEvent) => {
+    const enfocado = e.target as Element
+    if (!enfocado.matches(':focus-visible')) return
+    foco.current = true
+    const previo = enfocado.getAttribute('aria-describedby')
+    if (enfocado !== e.currentTarget && !previo?.split(/\s+/).includes(id)) {
+      enfocado.setAttribute('aria-describedby', previo ? `${previo} ${id}` : id)
+      descrito.current = { el: enfocado, previo }
+    }
+    const r = medir(e.currentTarget)
     if (timer.current) { window.clearTimeout(timer.current); timer.current = null }
-    setShow(false)
-  }, [])
+    setPt({ x: r.left + r.width / 2, y: r.bottom - 8 })
+    setShow(true)
+  }, [id])
+  const closeOnBlur = useCallback(() => {
+    foco.current = false
+    if (descrito.current) {
+      const { el, previo } = descrito.current
+      if (previo == null) el.removeAttribute('aria-describedby')
+      else el.setAttribute('aria-describedby', previo)
+      descrito.current = null
+    }
+    if (!hover.current) ocultar()
+  }, [ocultar])
+  const closeOnEscape = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') ocultar()
+  }, [ocultar])
 
   useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current) }, [])
 
@@ -61,12 +110,21 @@ export function useTooltip(content: React.ReactNode, maxWidth = 460) {
   const triggerProps = {
     onMouseEnter: open,
     onMouseMove: track,
-    onMouseLeave: close,
+    onMouseLeave: leave,
+    onFocus: openOnFocus,
+    onBlur: closeOnBlur,
+    onKeyDown: closeOnEscape,
+    'aria-describedby': content != null ? id : undefined,
   }
 
-  const tooltipNode = show && content != null
+  // La descripción oculta va también por el portal, al final del body: el
+  // tooltipNode se pone a veces dentro de una tabla, donde un <span> suelto no
+  // es HTML válido.
+  const tooltipNode = content != null
     ? createPortal(
-        <div
+        <>
+        <span id={id} hidden>{content}</span>
+        {show && <div
           ref={ref}
           role="tooltip"
           style={{
@@ -78,10 +136,10 @@ export function useTooltip(content: React.ReactNode, maxWidth = 460) {
             maxWidth,
             whiteSpace: 'normal',
             zIndex: 2000,
-            background: 'var(--bg-surface, #0f1420)',   // opaque
+            background: 'var(--bg-surface)',   // opaque
             border: '1px solid var(--border)',
             borderRadius: 10,
-            boxShadow: 'var(--shadow-modal, 0 10px 30px rgba(0,0,0,0.45))',
+            boxShadow: 'var(--shadow-modal)',
             padding: '10px 12px',
             fontSize: 12.5,
             lineHeight: 1.45,
@@ -91,7 +149,8 @@ export function useTooltip(content: React.ReactNode, maxWidth = 460) {
           }}
         >
           {content}
-        </div>,
+        </div>}
+        </>,
         document.body,
       )
     : null
@@ -106,9 +165,29 @@ export function Tooltip({ content, children, style, maxWidth }: {
   maxWidth?: number
 }) {
   const { triggerProps, tooltipNode } = useTooltip(content, maxWidth)
+  const { 'aria-describedby': descripcion, ...eventos } = triggerProps
+  // Lo normal es envolver un solo botón: la descripción va en él desde el
+  // primer render, que es quien recibe el foco, y no en el <span> de fuera.
+  // Con otros hijos se queda en el <span>, y openOnFocus la enlaza al control
+  // que reciba el foco. Un botón desactivado no recibe el foco, y justo ahí el
+  // tooltip explica por qué lo está: entonces el foco y la descripción pasan
+  // al <span>.
+  const unHijo = isValidElement<{ 'aria-describedby'?: string; disabled?: boolean }>(children)
+  const hijoDesactivado = unHijo && children.props.disabled === true
+  const enHijo = unHijo && !hijoDesactivado
+  const hijo = enHijo && descripcion
+    ? cloneElement(children, {
+        'aria-describedby': [children.props['aria-describedby'], descripcion].filter(Boolean).join(' '),
+      })
+    : children
   return (
-    <span {...triggerProps} style={{ display: 'inline-flex', alignItems: 'center', ...style }}>
-      {children}
+    <span
+      {...eventos}
+      tabIndex={hijoDesactivado && descripcion ? 0 : undefined}
+      aria-describedby={enHijo ? undefined : descripcion}
+      style={{ display: 'inline-flex', alignItems: 'center', ...style }}
+    >
+      {hijo}
       {tooltipNode}
     </span>
   )
@@ -124,7 +203,7 @@ export function HoverTitle({ as = 'div', className, style, onClick, onMouseDown,
   as?: 'div' | 'span'
   className?: string
   style?: React.CSSProperties
-  onClick?: (e: React.MouseEvent) => void
+  onClick?: (e: React.SyntheticEvent) => void
   onMouseDown?: (e: React.MouseEvent) => void
   onMouseUp?: (e: React.MouseEvent) => void
   tip: string
@@ -132,8 +211,20 @@ export function HoverTitle({ as = 'div', className, style, onClick, onMouseDown,
 }) {
   const { triggerProps, tooltipNode } = useTooltip(tip)
   const Tag = as as 'div'
+  // Con onClick es un enlace (abre una ficha o una subida): se alcanza con
+  // Tab y se abre con Intro, igual que con el ratón.
+  const comoEnlace = onClick
+    ? {
+        role: 'link',
+        tabIndex: 0,
+        onKeyDown: (e: React.KeyboardEvent) => {
+          triggerProps.onKeyDown(e)
+          if (e.key === 'Enter') onClick(e)
+        },
+      }
+    : {}
   return (
-    <Tag className={className} style={style} onClick={onClick} onMouseDown={onMouseDown} onMouseUp={onMouseUp} {...triggerProps}>
+    <Tag className={className} style={style} onClick={onClick} onMouseDown={onMouseDown} onMouseUp={onMouseUp} {...triggerProps} {...comoEnlace}>
       {children}
       {tooltipNode}
     </Tag>

@@ -1,3 +1,4 @@
+import { IconoAviso } from './Iconos'
 interface ErrorStateProps {
   title?: string
   message: string
@@ -7,7 +8,7 @@ interface ErrorStateProps {
 export function ErrorState({ title = 'Error', message, onRetry }: ErrorStateProps) {
   return (
     <div className="empty-state">
-      <div className="empty-state-icon">⚠️</div>
+      <div className="empty-state-icon"><IconoAviso /></div>
       <div className="empty-state-title">{title}</div>
       <div className="empty-state-body">{message}</div>
       {onRetry && (

@@ -62,3 +62,28 @@ def test_la_version_del_paquete_es_la_que_publica_el_manifiesto():
     publicar = _cargar("publicar_version")
     from emuwarez_uploadrr import __version__
     assert publicar._leer_version() == __version__
+
+
+def test_el_manifiesto_se_escribe_en_utf8(monkeypatch, tmp_path):
+    """La app lo lee como UTF-8. Sin `encoding`, en Windows salía en cp1252 y
+    la tarjeta de Diagnóstico fallaba en la primera tilde de la nota. En Linux
+    el defecto ya es UTF-8, así que se mira el argumento y no los bytes."""
+    publicar = _cargar("publicar_version")
+    codificaciones = []
+    original = pathlib.Path.write_text
+
+    def _write_text(self, datos, *args, **kwargs):
+        codificaciones.append(kwargs.get("encoding"))
+        return original(self, datos, *args, **kwargs)
+
+    monkeypatch.setattr(pathlib.Path, "write_text", _write_text)
+    monkeypatch.setattr(publicar.subprocess, "run", lambda *a, **k: None)
+    monkeypatch.chdir(tmp_path)
+
+    publicar.publicar({"commit": "abc1234", "notas": "Actualización"}, "x/y")
+    monkeypatch.setattr("sys.argv", ["publicar_version.py", "--notas", "Actualización"])
+    monkeypatch.setattr(publicar, "_git", lambda *a: "abc1234")
+    assert publicar.main() == 0
+
+    assert codificaciones == ["utf-8", "utf-8"]
+    assert "ó" in (tmp_path / "latest.json").read_bytes().decode("utf-8")

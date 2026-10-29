@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { medir, type RectoSinEscalar } from '../utils/uiScale'
+import { moverConTecla } from '../utils/reordenar'
 
 // 1×1 transparent GIF used to hide the browser's default (shrunk/translucent)
 // drag ghost — the feedback is the in-list illumination + slide instead.
@@ -10,6 +11,13 @@ const TRANSPARENT_IMG = typeof Image !== 'undefined'
 export interface DragHandleProps {
   onMouseDown: () => void
   onMouseUp: () => void
+  // Con el teclado: la asa se alcanza con Tab, y las flechas (o Inicio/Fin)
+  // mueven la fila. Quien la pinta solo tiene que pasarle todo esto.
+  onKeyDown: (e: React.KeyboardEvent) => void
+  tabIndex: number
+  role: 'button'
+  'aria-label': string
+  'data-asa': string
   style: React.CSSProperties
 }
 
@@ -35,13 +43,20 @@ export function DragHandleIcon({ size = 14 }: { size?: number }) {
 // A drag-to-reorder list where rows are only grabbable from a handle, the
 // grabbed row lights up, the native ghost is hidden, and rows slide to their
 // new positions (FLIP animation) as the order changes live under the cursor.
-export function SortableList({ ids, onChange, renderRow, gap = 6 }: {
+export function SortableList({ ids, onChange, renderRow, gap = 6, etiqueta = id => id }: {
   ids: string[]
   onChange: (ids: string[]) => void
   renderRow: (id: string, index: number, ctx: { dragging: boolean; handleProps: DragHandleProps }) => React.ReactNode
   gap?: number
+  // El nombre de cada fila para el lector de pantalla ("Reordenar ImgBB").
+  etiqueta?: (id: string) => string
 }) {
   const [grabbedId, setGrabbedId] = useState<string | null>(null)
+  // Lo que se anuncia al mover con el teclado ("ImgBB: posición 2 de 4").
+  const [anuncio, setAnuncio] = useState('')
+  // La fila que se acaba de mover con el teclado: al recolocarla, React mueve
+  // su nodo y el navegador le quita el foco, así que se le devuelve.
+  const enfocar = useRef<string | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const nodeRefs = useRef<Map<string, HTMLElement>>(new Map())
   const prevRects = useRef<Map<string, RectoSinEscalar>>(new Map())
@@ -85,6 +100,10 @@ export function SortableList({ ids, onChange, renderRow, gap = 6 }: {
     nodeRefs.current.forEach((node, id) => map.set(id, medir(node)))
     prevRects.current = map
     prevIds.current = ids
+    if (enfocar.current) {
+      nodeRefs.current.get(enfocar.current)?.querySelector<HTMLElement>('[data-asa]')?.focus()
+      enfocar.current = null
+    }
   }, [ids])
 
   // Reorder only once the cursor crosses the target row's midpoint in the
@@ -115,10 +134,23 @@ export function SortableList({ ids, onChange, renderRow, gap = 6 }: {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap }}>
+      <div className="solo-lector" role="status" aria-live="polite">{anuncio}</div>
       {ids.map((id, index) => {
         const handleProps: DragHandleProps = {
           onMouseDown: () => setGrabbedId(id),
           onMouseUp: () => setGrabbedId(null),
+          onKeyDown: e => {
+            const nueva = moverConTecla(ids, id, e.key)
+            if (!nueva) return
+            e.preventDefault()
+            enfocar.current = id
+            setAnuncio(`${etiqueta(id)}: posición ${nueva.indexOf(id) + 1} de ${nueva.length}`)
+            onChange(nueva)
+          },
+          tabIndex: 0,
+          role: 'button',
+          'aria-label': `Reordenar ${etiqueta(id)}`,
+          'data-asa': id,
           style: { cursor: 'grab', userSelect: 'none' },
         }
         return (

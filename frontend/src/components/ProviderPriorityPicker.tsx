@@ -105,7 +105,7 @@ export function ProviderPriorityPicker({ order, onChange, linkIcons = true }: Pr
       )}
       {order.length > 0 && (
         <div className="provider-card__list">
-          <SortableList ids={order} onChange={onChange} renderRow={(code, idx, { dragging, handleProps }) => {
+          <SortableList etiqueta={code => options.find(p => p.code === code)?.label ?? code} ids={order} onChange={onChange} renderRow={(code, idx, { dragging, handleProps }) => {
             const opt = options.find(p => p.code === code)
             return (
               <div style={{
@@ -116,9 +116,8 @@ export function ProviderPriorityPicker({ order, onChange, linkIcons = true }: Pr
                 <span style={{ color: 'var(--text-muted)', fontSize: 11, width: 16, textAlign: 'center' }}>{idx + 1}</span>
                 <HoverTitle
                   as="span"
-                  tip="Arrastrar para reordenar"
-                  onMouseDown={handleProps.onMouseDown}
-                  onMouseUp={handleProps.onMouseUp}
+                  tip="Arrastra para reordenar, o usa las flechas del teclado"
+                  {...handleProps}
                   className="drag-handle"
                   style={{ ...handleProps.style, color: 'var(--text-accent)', width: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginLeft: 8, marginRight: 8 }}
                 ><DragHandleIcon /></HoverTitle>

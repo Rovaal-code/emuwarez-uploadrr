@@ -867,7 +867,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
               <div className="wizard-step-desc">
                 Cuando el mismo contenido está disponible en varias plataformas de streaming (Amazon,
                 Netflix, Disney+...), esta prioridad decide cuál recomendar automáticamente para la subida.
-                Arrastra para reordenar: los de arriba tienen preferencia. Cada proveedor tiene su propio
+                Arrastra para reordenar (o usa las flechas desde el asa de cada fila): los de arriba tienen preferencia. Cada proveedor tiene su propio
                 icono para reconocerlo de un vistazo.
               </div>
               <ProviderPriorityPicker order={nomProviderOrder} onChange={handleNomProviderOrderChange} linkIcons={false} />

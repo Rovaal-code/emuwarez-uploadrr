@@ -82,7 +82,7 @@ def upsert_library_item(
         "item_type", "title", "year", "original_title", "english_title", "instance_id", "instance_type",
         "instance_name", "external_id", "tmdb_id", "imdb_id", "tvdb_id", "tvmaze_id", "title_slug",
         "season_number", "episode_number", "parent_id", "path",
-        "quality", "resolution", "source", "video_codec", "audio_codec", "audio_languages",
+        "quality", "resolution", "source", "release_group", "video_codec", "audio_codec", "audio_languages",
         "audio_channels", "dynamic_range", "subtitle_languages", "size_bytes", "local_status",
         "request_status", "nomenclature_status", "request_id", "added_at", "raw_json",
         "poster_url", "backdrop_url", "mal_id", "missing_since",
@@ -111,6 +111,7 @@ def upsert_library_item(
             quality = excluded.quality,
             resolution = excluded.resolution,
             source = excluded.source,
+            release_group = excluded.release_group,
             video_codec = excluded.video_codec,
             audio_codec = excluded.audio_codec,
             audio_languages = excluded.audio_languages,
@@ -1900,7 +1901,7 @@ def mark_nomenclature(conn: sqlite3.Connection, library_item_id: int, status: st
 
 
 _ROLLUP_EMPTY = {
-    "provider": None, "resolution": None, "source": None, "video_codec": None,
+    "provider": None, "resolution": None, "source": None, "release_group": None, "video_codec": None,
     "audio_codec": None, "audio_languages": None, "subtitle_languages": None,
 }
 
@@ -1972,6 +1973,7 @@ def _aggregate_quality(rows: list[dict]) -> dict:
         "provider": next(iter(providers)) if len(providers) == 1 else None,
         "resolution": uniq("resolution"),
         "source": uniq("source"),
+        "release_group": uniq("release_group"),
         "video_codec": uniq("video_codec"),
         "audio_codec": uniq("audio_codec"),
         "audio_languages": uniq("audio_languages"),
@@ -2161,7 +2163,7 @@ def _child_quality_rollup(conn, item_id: int, item_type: str, ignore_specials: b
         return dict(_ROLLUP_EMPTY)
     if item_type == "season":
         rows = conn.execute(
-            "SELECT path, resolution, source, video_codec, audio_codec, "
+            "SELECT path, resolution, source, release_group, video_codec, audio_codec, "
             "audio_languages, subtitle_languages FROM library_items "
             "WHERE parent_id = ? AND item_type = 'episode'",
             (item_id,),
@@ -2169,7 +2171,7 @@ def _child_quality_rollup(conn, item_id: int, item_type: str, ignore_specials: b
     elif item_type == "series":
         rows = conn.execute(
             "SELECT e.path AS path, e.resolution AS resolution, e.source AS source, "
-            "e.video_codec AS video_codec, e.audio_codec AS audio_codec, "
+            "e.release_group AS release_group, e.video_codec AS video_codec, e.audio_codec AS audio_codec, "
             "e.audio_languages AS audio_languages, e.subtitle_languages AS subtitle_languages "
             "FROM library_items e JOIN library_items se ON e.parent_id = se.id "
             "WHERE se.parent_id = ? AND e.item_type = 'episode'"
@@ -2196,6 +2198,7 @@ def _child_quality_rollup(conn, item_id: int, item_type: str, ignore_specials: b
         "provider": next(iter(providers)) if len(providers) == 1 else None,
         "resolution": uniq("resolution"),
         "source": uniq("source"),
+        "release_group": uniq("release_group"),
         "video_codec": uniq("video_codec"),
         "audio_codec": uniq("audio_codec"),
         "audio_languages": uniq("audio_languages"),
@@ -2212,7 +2215,7 @@ def _batch_rollups(conn, series_ids: list[int], season_ids: list[int], ignore_sp
     if season_ids:
         placeholders = ",".join("?" * len(season_ids))
         rows = conn.execute(
-            "SELECT parent_id AS gid, path, resolution, source, video_codec, audio_codec, "
+            "SELECT parent_id AS gid, path, resolution, source, release_group, video_codec, audio_codec, "
             "audio_languages, subtitle_languages, nomenclature_status, local_status, size_bytes "
             f"FROM library_items WHERE parent_id IN ({placeholders}) AND item_type = 'episode'",
             season_ids,
@@ -2224,7 +2227,7 @@ def _batch_rollups(conn, series_ids: list[int], season_ids: list[int], ignore_sp
         placeholders = ",".join("?" * len(series_ids))
         rows = conn.execute(
             "SELECT se.parent_id AS gid, e.path AS path, e.resolution AS resolution, e.source AS source, "
-            "e.video_codec AS video_codec, e.audio_codec AS audio_codec, "
+            "e.release_group AS release_group, e.video_codec AS video_codec, e.audio_codec AS audio_codec, "
             "e.audio_languages AS audio_languages, e.subtitle_languages AS subtitle_languages, "
             "e.nomenclature_status AS nomenclature_status, e.local_status AS local_status, e.size_bytes AS size_bytes "
             "FROM library_items e JOIN library_items se ON e.parent_id = se.id "
@@ -2284,6 +2287,10 @@ def library_filter_values(conn) -> dict:
         if c:
             codes.add(c)
     providers = sorted({lbl for c in codes if (lbl := _provider_label(c))})
+    release_groups = [r[0] for r in conn.execute(
+        "SELECT DISTINCT release_group FROM library_items "
+        "WHERE release_group IS NOT NULL AND release_group != '' ORDER BY release_group COLLATE NOCASE"
+    ).fetchall()]
 
     types = [r[0] for r in conn.execute(
         "SELECT DISTINCT item_type FROM library_items WHERE item_type IS NOT NULL ORDER BY item_type"
@@ -2363,6 +2370,7 @@ def library_filter_values(conn) -> dict:
     "providers": providers,
     "qualities": qualities,
     "sources": sources,
+    "release_groups": release_groups,
     "types": types,
     "statuses": statuses,
     "request_statuses": request_statuses,

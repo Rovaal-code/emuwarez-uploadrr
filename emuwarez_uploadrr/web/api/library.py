@@ -89,6 +89,7 @@ def _to_lib_response(row: dict, conn=None, rollups: Optional[dict] = None) -> Li
     provider = infer_provider_from_item(row)
     resolution = row.get("resolution")
     source = row.get("source")
+    release_group = row.get("release_group")
     path = row.get("path")
     prepared_path = row.get("prepared_path")
     video_codec = row.get("video_codec")
@@ -129,6 +130,7 @@ def _to_lib_response(row: dict, conn=None, rollups: Optional[dict] = None) -> Li
         provider = provider or rq["provider"]
         resolution = resolution or rq["resolution"]
         source = source or rq["source"]
+        release_group = release_group or rq["release_group"]
         video_codec = rq["video_codec"]
         audio_codec = rq["audio_codec"]
         audio_languages = rq["audio_languages"]
@@ -171,6 +173,7 @@ def _to_lib_response(row: dict, conn=None, rollups: Optional[dict] = None) -> Li
         quality=row.get("quality"),
         resolution=resolution,
         source=source,
+        release_group=release_group,
         provider=provider,
         provider_label=_provider_label(provider),
         video_codec=video_codec,

@@ -575,6 +575,7 @@ class LibraryItemResponse(BaseModel):
     quality: Optional[str] = None
     resolution: Optional[str] = None
     source: Optional[str] = None
+    release_group: Optional[str] = None
     provider: Optional[str] = None
     provider_label: Optional[str] = None
     video_codec: Optional[str] = None

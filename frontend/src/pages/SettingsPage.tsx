@@ -1396,7 +1396,9 @@ function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | null; on
       <div className="placeholder-card">
         <h3>Crear backup</h3>
         <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: '0 0 12px' }}>
-          Crea un archivo <code>.tar.gz</code> del directorio de configuración (sin secretos en el nombre).
+          Crea un archivo <code>.tar.gz</code> del directorio de configuración, sin las claves: las API keys, la
+          contraseña de qBittorrent, el webhook de Discord y el token de Telegram van vacíos, y no entran
+          el <code>config.yaml</code> ni las cookies de Uploadrr-EMU.
         </p>
         <button className="btn btn-primary" onClick={handleBackup} disabled={busy}>
           {busy ? 'Creando…' : 'Crear backup ahora'}
@@ -1437,7 +1439,8 @@ function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | null; on
       <div className="placeholder-card">
         <h3>Restaurar backup</h3>
         <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: '0 0 10px' }}>
-          Elige uno de los backups existentes en <code>{backupDir || '…'}</code>.
+          Elige uno de los backups existentes en <code>{backupDir || '…'}</code>. Las claves que el backup no
+          lleve se quedan como las tienes ahora.
         </p>
         <select
           className="form-input form-select"

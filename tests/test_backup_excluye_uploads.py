@@ -26,8 +26,8 @@ def config(tmp_path, monkeypatch):
     cfg = tmp_path / "config"
     (cfg / "Uploadrr" / "uploads").mkdir(parents=True)
     (cfg / "emuwarez_uploadrr.db").write_bytes(b"db" * 500)
-    (cfg / "Uploadrr" / "data").mkdir()
-    (cfg / "Uploadrr" / "data" / "config.yaml").write_text("clave: valor\n")
+    (cfg / "Uploadrr" / "data" / "templates").mkdir(parents=True)
+    (cfg / "Uploadrr" / "data" / "templates" / "plantilla.txt").write_text("texto\n")
 
     medios = tmp_path / "media"; medios.mkdir()
     peli = medios / "Peli 2020 1080p x264-EMU.mkv"
@@ -65,7 +65,7 @@ def test_la_copia_sigue_llevando_lo_que_importa(config):
     os.symlink(config["peli"], config["uploads"] / config["peli"].name)
     miembros = _miembros(create_config_backup()["archive_path"])
     assert "emuwarez_uploadrr.db" in miembros
-    assert "Uploadrr/data/config.yaml" in miembros
+    assert "Uploadrr/data/templates/plantilla.txt" in miembros
 
 
 def test_el_inventario_dice_lo_mismo_que_la_copia(config):
@@ -80,14 +80,14 @@ def test_el_inventario_dice_lo_mismo_que_la_copia(config):
 
 def test_la_copia_no_lleva_los_temporales_de_uploadrr(config):
     """Capturas y torrents de cada subida: en una instalación real eran 1,7 GB y
-    la copia tardaba 50 s. El config.yaml de Uploadrr sí entra."""
+    la copia tardaba 50 s. El resto de Uploadrr/data sí entra."""
     tmp = config["cfg"] / "Uploadrr" / "tmp" / "Peli 2020"
     tmp.mkdir(parents=True)
     (tmp / "captura.png").write_bytes(b"P" * 200_000)
     r = create_config_backup()
     miembros = _miembros(r["archive_path"])
     assert not any("Uploadrr/tmp" in n for n in miembros)
-    assert "Uploadrr/data/config.yaml" in miembros
+    assert "Uploadrr/data/templates/plantilla.txt" in miembros
     assert not any("Uploadrr/tmp" in f["name"] for f in get_config_inventory()["files"])
 
 

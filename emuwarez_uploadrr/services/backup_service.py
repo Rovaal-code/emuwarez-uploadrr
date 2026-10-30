@@ -1,4 +1,4 @@
-"""Backup and restore of CONFIG_DIR — no secrets in listing, confirmation required for restore."""
+"""Backup and restore of CONFIG_DIR — keys left out unless asked for, confirmation required for restore."""
 from __future__ import annotations
 
 import datetime
@@ -9,20 +9,78 @@ import tarfile
 import tempfile
 from pathlib import Path
 
+from ..database import CANONICAL_SETTING_ALIASES
+from .settings import all_settings, es_secreto, get_setting_canonical, set_setting
+
 RESTORE_CONFIRMATION = "RESTAURAR_CONFIG"
 _DB_NAME = "emuwarez_uploadrr.db"
+_CABECERA_SQLITE = b"SQLite format 3\x00"
 # Lo que no va en la copia: las copias anteriores, los enlaces de subida y los
 # temporales de Uploadrr (capturas, torrents; en una instalación real, 1,7 GB).
 # Una carpeta "backups" a cualquier profundidad tampoco: la copia no se mete a sí misma.
 _FUERA_DE_LA_COPIA = (("Uploadrr", "uploads"), ("Uploadrr", "tmp"))
+# Lo que solo va en la copia con secretos. El config.yaml de Uploadrr-EMU y su
+# .bak (donde van los cambios a mano) pueden llevar claves de cualquier tracker
+# y con cualquier nombre: taparlas línea a línea no da garantías. Las cookies
+# son sesiones abiertas. config.py, config.json y backup/old_config.py son
+# configuraciones antiguas de Uploadrr que aún reconoce (su .gitignore las
+# deja fuera por lo mismo). config.json y config.enc.json en la raíz son del
+# CLI antiguo (services/cli_config.py) y llevan la API key de eMuwarez.
+_CON_CLAVES = (
+    ("Uploadrr", "data", "config.yaml"),
+    ("Uploadrr", "data", "config.yaml.bak"),
+    ("Uploadrr", "data", "cookies"),
+    ("Uploadrr", "data", "config.py"),
+    ("Uploadrr", "data", "config.json"),
+    ("Uploadrr", "data", "backup", "old_config.py"),
+    ("config.json",),
+    ("config.enc.json",),
+)
 
 
-def _fuera_de_la_copia(rel_parts: tuple[str, ...]) -> bool:
-    return "backups" in rel_parts or any(rel_parts[:len(p)] == p for p in _FUERA_DE_LA_COPIA)
+def _fuera_de_la_copia(rel_parts: tuple[str, ...], include_secrets: bool = False) -> bool:
+    fuera = _FUERA_DE_LA_COPIA if include_secrets else _FUERA_DE_LA_COPIA + _CON_CLAVES
+    return "backups" in rel_parts or any(rel_parts[:len(p)] == p for p in fuera)
 
 
-def _add_db_snapshot(tar: tarfile.TarFile, db_file: Path, arcname: str) -> None:
-    """Mete en la copia una instantánea coherente de la base de datos.
+def _es_sqlite(path: Path) -> bool:
+    with open(path, "rb") as f:
+        return f.read(16) == _CABECERA_SQLITE
+
+
+def _vaciar_claves(snapshot: Path) -> None:
+    """Deja vacías las claves de la instantánea: los ajustes secretos
+    (settings.es_secreto) y la API key de cada instancia de Radarr/Sonarr.
+
+    El VACUUM no sobra: un UPDATE cambia la fila pero el valor anterior puede
+    seguir en los bytes del fichero, y la base viva ya trae en sus páginas
+    libres las claves que se cambiaron antes. VACUUM reescribe el fichero solo
+    con lo que está vivo.
+    """
+    conn = sqlite3.connect(str(snapshot))
+    conn.row_factory = sqlite3.Row
+    try:
+        # La instantánea hereda el modo WAL de la base viva. Fuera de WAL, el
+        # VACUUM reescribe el propio .db, que es lo único que entra en la copia.
+        conn.execute("PRAGMA journal_mode = DELETE")
+        for key, value in all_settings(conn).items():
+            if value and es_secreto(key):
+                set_setting(conn, key, "")
+        try:
+            conn.execute("UPDATE instances SET api_key = ''")
+        except sqlite3.OperationalError:
+            pass  # una base sin la tabla: no hay claves que vaciar
+        conn.commit()
+        conn.execute("VACUUM")
+    finally:
+        conn.close()
+
+
+def _add_db_snapshot(
+    tar: tarfile.TarFile, db_file: Path, arcname: str, *, include_secrets: bool = False,
+) -> None:
+    """Mete en la copia una instantánea coherente de la base de datos, con las
+    claves vacías salvo que se pidan.
 
     Con la app en marcha la base está en modo WAL: copiar el .db, el -wal y el
     -shm uno detrás de otro mientras alguien escribe da una copia rota. La API
@@ -37,13 +95,14 @@ def _add_db_snapshot(tar: tarfile.TarFile, db_file: Path, arcname: str) -> None:
             src.backup(dst)
         except sqlite3.DatabaseError:
             # Una base SQLite que falla no se copia en crudo: saldría rota.
-            with open(db_file, "rb") as f:
-                if f.read(16) == b"SQLite format 3\x00":
-                    raise
+            if _es_sqlite(db_file):
+                raise
             snapshot = db_file
         finally:
             dst.close()
             src.close()
+        if snapshot != db_file and not include_secrets:
+            _vaciar_claves(snapshot)
         tar.add(snapshot, arcname=arcname)
 
 
@@ -75,9 +134,10 @@ def get_config_inventory() -> dict:
     total = 0
     for f in sorted(config_dir.rglob("*")):
         rel_parts = f.relative_to(config_dir).parts
-        # Lo mismo que excluye create_config_backup: este inventario es lo que
-        # se le enseña al usuario como "esto es lo que se va a copiar", así que
-        # contar aquí algo que la copia no lleva sería mentir.
+        # Lo mismo que excluye create_config_backup en la copia normal, la que
+        # hace la interfaz: este inventario es lo que se le enseña al usuario
+        # como "esto es lo que se va a copiar", así que contar aquí algo que la
+        # copia no lleva sería mentir.
         if _fuera_de_la_copia(rel_parts):
             continue
         if f.is_file():
@@ -100,7 +160,10 @@ def create_config_backup(
 ) -> dict:
     """Creates a .tar.gz backup of CONFIG_DIR in output_dir (or default backups/).
 
-    include_secrets=True requires confirmation=RESTAURAR_CONFIG (reused token).
+    By default the keys stay out: the database goes with every secret setting
+    and every instance API key empty, and the files that carry keys
+    (_CON_CLAVES) are skipped. include_secrets=True keeps them all and
+    requires confirmation=RESTAURAR_CONFIG (reused token).
     The archive always excludes the backups/ subdirectory.
     """
     if include_secrets and confirmation != RESTORE_CONFIRMATION:
@@ -133,11 +196,11 @@ def create_config_backup(
     with tarfile.open(archive_path, "w:gz") as tar:
         for item in sorted(config_dir.rglob("*")):
             rel = item.relative_to(config_dir)
-            if _fuera_de_la_copia(rel.parts):
+            if _fuera_de_la_copia(rel.parts, include_secrets):
                 continue
             # La base antes que is_file(): si desaparece por el camino, la copia falla.
             if item.name == _DB_NAME:
-                _add_db_snapshot(tar, item, str(rel))
+                _add_db_snapshot(tar, item, str(rel), include_secrets=include_secrets)
                 continue
             if not item.is_file() or item.name in (f"{_DB_NAME}-wal", f"{_DB_NAME}-shm"):
                 continue
@@ -187,6 +250,8 @@ def restore_config_backup(
 
     dry_run=True (default) previews only.
     apply=True requires confirmation=RESTAURAR_CONFIG and dry_run=False.
+    Keys the backup doesn't carry (empty in its database, files not in it)
+    stay as they are in the current install.
     """
     path = Path(backup_path)
     if not path.exists():
@@ -220,9 +285,27 @@ def restore_config_backup(
         }
 
     config_dir.mkdir(parents=True, exist_ok=True)
+    conservadas: list[str] = []
     with tarfile.open(str(path), "r:gz") as tar:
-        tar.extractall(path=config_dir)  # noqa: S202 — trusted local backup
+        resto = []
+        for member in tar.getmembers():
+            if member.name != _DB_NAME or not member.isfile():
+                resto.append(member)
+                continue
+            # La base primero: si falla, el resto de ficheros sigue como estaba.
+            with tempfile.TemporaryDirectory() as tmp:
+                restaurada = Path(tmp) / _DB_NAME
+                with tar.extractfile(member) as origen, open(restaurada, "wb") as destino:
+                    shutil.copyfileobj(origen, destino)
+                conservadas = _colocar_base(restaurada, config_dir / _DB_NAME)
+        tar.extractall(path=config_dir, members=resto)  # noqa: S202 — trusted local backup
 
+    message = f"Restauración completada: {len(members)} archivos"
+    if conservadas:
+        message += (
+            f". Se han conservado {len(conservadas)} claves de la instalación actual"
+            " que el backup no llevaba"
+        )
     return {
         "ok": True,
         "dry_run": False,
@@ -230,5 +313,87 @@ def restore_config_backup(
         "archive": str(path),
         "target_dir": str(config_dir),
         "files_restored": len(members),
-        "message": f"Restauración completada: {len(members)} archivos",
+        "secrets_kept": conservadas,
+        "message": message,
     }
+
+
+def _canonica(key: str) -> str:
+    """La grafía con punto de un alias antiguo (tmdb_api_key -> tmdb.api_key)."""
+    return next((punto for punto, alias in CANONICAL_SETTING_ALIASES.items() if alias == key), key)
+
+
+def _conservar_claves(restaurada: Path, viva: Path) -> list[str]:
+    """Pone en la base restaurada las claves de la instalación actual que la
+    copia no trae, y devuelve cuáles.
+
+    Una copia normal las lleva vacías (_vaciar_claves): restaurarla tal cual
+    dejaría la instalación sin ninguna. Lo que la copia sí trae manda.
+    """
+    actual = sqlite3.connect(str(viva), timeout=30)
+    actual.row_factory = sqlite3.Row
+    try:
+        ajustes = {k: v for k, v in all_settings(actual).items() if v and es_secreto(k)}
+        try:
+            instancias = {
+                (r["type"], r["name"]): r["api_key"]
+                for r in actual.execute("SELECT type, name, api_key FROM instances")
+                if r["api_key"]
+            }
+        except sqlite3.OperationalError:
+            instancias = {}
+    finally:
+        actual.close()
+
+    conservadas: list[str] = []
+    conn = sqlite3.connect(str(restaurada))
+    conn.row_factory = sqlite3.Row
+    try:
+        # Por la grafía con punto: si la copia trae el alias antiguo con valor,
+        # la clave está, y ponerle al lado la actual la taparía. Se decide
+        # antes de escribir nada, o la clave con punto recién puesta haría
+        # creer que su alias también venía en la copia.
+        faltan = [k for k in ajustes if not get_setting_canonical(conn, _canonica(k))]
+        for key in faltan:
+            set_setting(conn, key, ajustes[key])
+            conservadas.append(key)
+        for (tipo, nombre), api_key in instancias.items():
+            try:
+                cur = conn.execute(
+                    "UPDATE instances SET api_key = ? WHERE type = ? AND name = ? AND api_key = ''",
+                    (api_key, tipo, nombre),
+                )
+            except sqlite3.OperationalError:
+                break  # una copia sin la tabla: no hay instancias que completar
+            if cur.rowcount:
+                conservadas.append(f"{tipo}:{nombre}")
+        conn.commit()
+    finally:
+        conn.close()
+    return conservadas
+
+
+def _colocar_base(restaurada: Path, viva: Path) -> list[str]:
+    """Pone la base de la copia en el sitio de la actual, conservando las
+    claves que la copia no trae. Devuelve cuáles ha conservado.
+
+    Se coloca con la API de backup de SQLite y no sobrescribiendo el .db: con
+    la app en marcha, junto a la base vive su -wal, y SQLite lo aplicaría
+    encima del fichero nuevo.
+    """
+    # Un fichero vacío sí vale: para SQLite es una base sin nada.
+    viva_no_es_base = viva.exists() and viva.stat().st_size > 0 and not _es_sqlite(viva)
+    if viva_no_es_base or not _es_sqlite(restaurada):
+        # La de la copia no es una base (_add_db_snapshot la copió en crudo),
+        # o la actual no lo es: no hay nada que fusionar, va tal cual.
+        shutil.copyfile(restaurada, viva)
+        return []
+    conservadas = _conservar_claves(restaurada, viva) if viva.exists() else []
+    src = sqlite3.connect(str(restaurada))
+    dst = sqlite3.connect(str(viva), timeout=30)
+    try:
+        src.backup(dst)
+    finally:
+        dst.close()
+        src.close()
+    return conservadas

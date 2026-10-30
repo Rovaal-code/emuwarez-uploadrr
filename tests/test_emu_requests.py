@@ -364,6 +364,18 @@ def test_compatible_notification_keeps_the_matched_poster(db_conn):
     assert notes[0]["poster_url"] == "http://poster"
 
 
+def test_muchas_compatibles_de_golpe_dan_un_solo_aviso(db_conn):
+    """La primera sincronización encuentra de golpe todo lo compatible: un aviso por petición llenaba la campana
+    (y Discord/Telegram)."""
+    movie = _add_library_item(db_conn, item_type="movie", title="Pelicula", year=2020)
+    for i in range(6):
+        _add_compatible_request(db_conn, title=f"Pelicula {i}", library_item_id=movie)
+
+    notes = _notify_and_read(db_conn)
+    assert len(notes) == 1
+    assert notes[0]["body"] == "Tienes contenido compatible con 6 peticiones."
+
+
 # ---------------------------------------------------------------------------
 # El estado de la petición aterriza en la fila que la petición pide
 # ---------------------------------------------------------------------------

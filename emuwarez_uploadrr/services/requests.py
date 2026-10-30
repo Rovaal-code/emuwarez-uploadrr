@@ -531,6 +531,9 @@ def match_all_requests(conn: sqlite3.Connection, *, emu_api_key: Optional[str] =
     return updated
 
 
+_MAX_AVISOS_SUELTOS = 5
+
+
 def _compatible_request_ids(conn: sqlite3.Connection) -> set[int]:
     """request_item_ids that currently have at least one 'Compatible' match."""
     rows = conn.execute(
@@ -547,6 +550,16 @@ def _notify_new_compatible_matches(conn: sqlite3.Connection, before_ids: set[int
         if not new_ids:
             return
         from .notification_center import emit
+        # La primera sincronización encuentra de golpe todo lo compatible: un aviso de resumen, no uno por petición.
+        if len(new_ids) > _MAX_AVISOS_SUELTOS:
+            emit(
+                conn, "request_match_found",
+                "Contenido compatible",
+                f"Tienes contenido compatible con {len(new_ids)} peticiones.",
+                link="/requests",
+                level="info",
+            )
+            return
         for rid in new_ids:
             row = conn.execute(
                 "SELECT title, url, req_scope, req_season, req_episode"

@@ -141,6 +141,7 @@ def sync_instance(
     current_user: dict = Depends(require_auth),
 ) -> SyncResponse:
     from emuwarez_uploadrr.services.instances import get_instance
+    from emuwarez_uploadrr.services.library import recompute_after_sync
     from emuwarez_uploadrr.services.library import sync_instance as _sync
     with _get_conn() as conn:
         inst = get_instance(conn, instance_id)
@@ -153,6 +154,7 @@ def sync_instance(
             )
         try:
             imported, missing = _sync(conn, inst, include_episodes=True)
+            recompute_after_sync(conn)
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"Error en sync: {exc}")
     return SyncResponse(

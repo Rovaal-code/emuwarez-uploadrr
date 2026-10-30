@@ -119,7 +119,7 @@ function NomenclatureSection({ snapshot, mediaType, isStaging }: { snapshot: Upl
     return <GeneratingSpinner text="Generando nomenclatura para eMuwarez…" />
   }
   const data = (snapshot ?? {}) as Record<string, unknown>
-  const name = snapshot?.proposed_filename || snapshot?.proposed_title || null
+  const name = snapshot?.proposed_torrent_name || snapshot?.proposed_filename || snapshot?.proposed_title || null
   const rows = NOMENCLATURE_FIELD_ROWS.filter(r => !mediaType || !r.hideFor?.includes(mediaType))
 
   return (

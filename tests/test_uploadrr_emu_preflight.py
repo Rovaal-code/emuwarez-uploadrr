@@ -112,6 +112,38 @@ def test_mt_uses_full_proposed_filename_not_bare_title(tmp_path, db_conn):
     assert result["contract_valid"] is True
 
 
+def test_mt_usa_el_titulo_con_espacios(tmp_path, db_conn):
+    """eMuwarez muestra el título con espacios, acentos y «:» («Anacleto: Agente secreto»).
+    La forma con puntos es solo para el archivo y no debe llegar a -mt."""
+    uploadrr_dir = tmp_path / "Uploadrr"
+    uploadrr_dir.mkdir()
+    (uploadrr_dir / "upload.py").write_text("# fake")
+    _set(db_conn, "uploadrr.path", str(uploadrr_dir))
+    _set(db_conn, "uploadrr.python_path", sys.executable)
+
+    root = tmp_path / "library"
+    root.mkdir()
+    prepared = root / "Anacleto.Agente.secreto.2015.1080p.BDRemux.AVC.ESP-CAT.TrueHD.5.1.SUBS-MATTS.mkv"
+    prepared.write_bytes(b"\x00")
+    _set(db_conn, "uploadrr.allowed_roots", f'["{root}"]')
+
+    item = {
+        "title": "Anacleto: Agente secreto", "local_status": "Disponible", "path": str(prepared),
+        "prepared_path": str(prepared), "item_type": "movie",
+        "tmdb_id": "300168", "resolution": "1080p",
+    }
+    proposal = {
+        "proposed_title": "Anacleto: Agente secreto",
+        "proposed_torrent_name": "Anacleto: Agente secreto 2015 1080p BDRemux AVC ESP-CAT TrueHD 5.1 SUBS-MATTS",
+        "proposed_filename": "Anacleto.Agente.secreto.2015.1080p.BDRemux.AVC.ESP-CAT.TrueHD.5.1.SUBS-MATTS",
+        "resolution": "1080p",
+    }
+    result = build_uploadrr_command_preview(item, proposal, conn=db_conn)
+
+    args = result["command_args"]
+    assert args[args.index("-mt") + 1] == "Anacleto: Agente secreto 2015 1080p BDRemux AVC ESP-CAT TrueHD 5.1 SUBS-MATTS"
+
+
 def test_can_execute_always_false(db_conn):
     item = {"title": "T", "local_status": "Disponible", "path": "/fake/movie.mkv", "item_type": "movie"}
     result = build_uploadrr_command_preview(item, conn=db_conn)

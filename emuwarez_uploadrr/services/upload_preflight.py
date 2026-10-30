@@ -123,10 +123,12 @@ def build_uploadrr_command_preview(
         # > meta['name']"). proposed_title is only the bare title ("Chappie"),
         # never meant to stand alone as the whole release name — using it
         # here made the torrent appear on eMuwarez literally named "Chappie"
-        # instead of the full nomenclature. proposed_filename is the complete,
-        # already-computed release name (just filesystem-sanitized).
+        # instead of the full nomenclature. proposed_torrent_name is the complete
+        # release name as eMuwarez shows it (spaces, accents); proposed_filename,
+        # its dotted file form, only stands in for proposals saved before it existed.
         title = (
-            (proposal or {}).get("proposed_filename")
+            (proposal or {}).get("proposed_torrent_name")
+            or (proposal or {}).get("proposed_filename")
             or (proposal or {}).get("proposed_title")
             or library_item.get("title")
             or "Sin título"

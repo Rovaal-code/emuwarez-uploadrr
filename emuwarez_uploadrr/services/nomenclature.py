@@ -445,6 +445,7 @@ def build_nomenclature_proposal(
             "current_name": current_name,
             "current_path": path,
             "proposed_title": title,
+            "proposed_torrent_name": proposed_torrent_name,
             "proposed_filename": proposed_filename,
             "proposed_folder": proposed_folder,
             "proposed_path": proposed_path,
@@ -489,12 +490,12 @@ def save_nomenclature_proposal(proposal: dict, conn=None) -> dict:
             """
             INSERT INTO nomenclature_proposals (
                 library_item_id, status, current_name, current_path,
-                proposed_title, proposed_filename, proposed_folder, proposed_path,
+                proposed_title, proposed_torrent_name, proposed_filename, proposed_folder, proposed_path,
                 media_type, tmdb_id, imdb_id, year, series_title, season_number,
                 resolution, source, provider_final,
                 video_codec, audio_summary, subtitle_summary, release_tag,
                 warnings_json, errors_json, raw_json, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 proposal["library_item_id"],
@@ -502,6 +503,7 @@ def save_nomenclature_proposal(proposal: dict, conn=None) -> dict:
                 proposal.get("current_name"),
                 proposal.get("current_path"),
                 proposal.get("proposed_title"),
+                proposal.get("proposed_torrent_name"),
                 proposal.get("proposed_filename"),
                 proposal.get("proposed_folder"),
                 proposal.get("proposed_path"),
@@ -960,14 +962,16 @@ def save_manual_nomenclature_fields(item_id: int, fields: dict, preview: dict, *
     )
     conn.execute(
         """INSERT INTO nomenclature_proposals
-           (library_item_id, status, proposed_filename, proposed_title,
+           (library_item_id, status, proposed_torrent_name, proposed_filename, proposed_title,
             fields_json, year, resolution, source, provider_final,
             video_codec, audio_summary, subtitle_summary, release_tag,
             internal_mkv_title, created_at, updated_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
             item_id, "valid",
             preview.get("torrent_name") or "",
+            # Con esta columna se renombra el archivo, así que va en la forma de archivo.
+            preview.get("internal_mkv_title") or "",
             fields.get("title"),
             _json.dumps(fields, ensure_ascii=False),
             fields.get("year"),

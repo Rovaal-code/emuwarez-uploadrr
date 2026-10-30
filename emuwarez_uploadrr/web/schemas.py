@@ -876,6 +876,7 @@ class NomenclatureProposalResponse(BaseModel):
     current_name: Optional[str] = None
     current_path: Optional[str] = None
     proposed_title: Optional[str] = None
+    proposed_torrent_name: Optional[str] = None
     proposed_filename: Optional[str] = None
     proposed_folder: Optional[str] = None
     proposed_path: Optional[str] = None

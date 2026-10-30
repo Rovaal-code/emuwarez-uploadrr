@@ -229,3 +229,15 @@ def test_las_dos_mitades_de_cada_modo_coinciden():
         delante = set(re.findall(r"'([^']+)'", m.group(1)))
         detras = {m_ for m_ in mkv_remux.MODOS_PISTAS if getattr(mkv_remux, funcion)(m_)}
         assert delante == detras, f"{funcion} no coincide entre Python y TypeScript"
+
+
+def test_las_categorias_de_la_peticion_coinciden():
+    """El enlace para crear una petición en eMuwarez lleva el id de categoría
+    escrito a mano en utils/peticionEmu.ts; el backend los tiene en
+    EMU_CATEGORIAS."""
+    from emuwarez_uploadrr.integrations.emu import EMU_CATEGORIAS
+
+    fuente = _texto("utils/peticionEmu.ts")
+    m = re.search(r"CATEGORY_IDS[^=]*=\s*\{(.*?)\}", fuente, re.S)
+    assert m, "no se encontró CATEGORY_IDS"
+    assert set(map(int, re.findall(r"'(\d+)'", m.group(1)))) == set(EMU_CATEGORIAS)

@@ -437,6 +437,24 @@ def test_con_dos_instancias_gana_la_copia_que_atiende_la_peticion(db_conn):
     assert casamiento() == (cuatro_k, "Compatible")
 
 
+def test_la_temporada_pedida_compite_con_la_serie(db_conn):
+    """La serie va primero, pero si no tiene la temporada pedida y la fila de esa temporada sí la atiende, gana la
+    temporada: antes solo competían las series entre sí."""
+    from emuwarez_uploadrr.services.requests import match_all_requests, upsert_request
+    from emuwarez_uploadrr.models import RequestItem
+    db_conn.execute("INSERT INTO library_items(item_type,title,local_status,tmdb_id) "
+                    "VALUES ('series','Serie','Disponible','77')")
+    temporada = db_conn.execute(
+        "INSERT INTO library_items(item_type,title,local_status,tmdb_id,season_number,resolution,source) "
+        "VALUES ('season','Serie - Temporada 2','Disponible','77',2,'1080p','WEB-DL')").lastrowid
+    db_conn.commit()
+    upsert_request(db_conn, RequestItem(id=None, emu_id="t2", title="Serie", category="Series", tmdb_id="77",
+                                        req_scope="season", req_season=2))
+    match_all_requests(db_conn)
+    fila = db_conn.execute("SELECT library_item_id, status FROM request_matches").fetchone()
+    assert (fila["library_item_id"], fila["status"]) == (temporada, "Compatible")
+
+
 def test_rematching_clears_a_status_left_on_the_wrong_row(db_conn):
     """Recalcular limpia antes: si no, un estado escrito una vez se quedaba
     pegado en esa fila para siempre, porque nadie lo volvía a tocar."""

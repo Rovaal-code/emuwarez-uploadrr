@@ -405,9 +405,7 @@ _ORDEN_DEL_CASAMIENTO = {"Compatible": 0, "No disponible": 1, "Parcial": 2, "No 
 def _mejor_candidato(conn: sqlite3.Connection, req: dict, candidates: list[dict]) -> tuple[dict, dict]:
     """De los candidatos igual de seguros (la misma película en Radarr y en Radarr 4K) el que mejor atiende la
     petición, con su clasificación: el primero de la lista podía ser la copia de 1080p de una petición de 2160p."""
-    primero = candidates[0]
-    empatados = [c for c in candidates if c["confidence"] == primero["confidence"]
-                 and (c["item"].get("item_type") == "season") == (primero["item"].get("item_type") == "season")]
+    empatados = [c for c in candidates if c["confidence"] == candidates[0]["confidence"]]
     clasificados = [(c, classify_request_match(
         req, _effective_target(conn, c["item"], req), id_match=c["id_match"],
         title_match=c["title_match"], base_confidence=c["confidence"],

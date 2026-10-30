@@ -117,6 +117,7 @@ jobs:
         if: env.ACCION == 'publicar'
         env:
           ESCALA: ${{ needs.decidir.outputs.escala }}
+          NOTAS: ${{ inputs.notas || 'Correcciones y mejoras' }}
           GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
@@ -135,6 +136,8 @@ jobs:
             fi
           else
             python3 scripts/subir_version.py "$ESCALA"
+            # La versión nueva contra la publicada, antes de commit e imagen (p. ej. una más alta desde desplegar.sh).
+            python3 scripts/publicar_version.py --solo-comprobar --notas "$NOTAS" --repo
             version="$(python3 scripts/subir_version.py --ver)"
             git commit -qam "chore: versión $version"
             git tag -a "v$version" -m "Versión $version"

@@ -399,6 +399,22 @@ def _effective_target(conn: sqlite3.Connection, matched_item: dict, req: dict) -
     return it
 
 
+_ORDEN_DEL_CASAMIENTO = {"Compatible": 0, "No disponible": 1, "Parcial": 2, "No compatible": 3}
+
+
+def _mejor_candidato(conn: sqlite3.Connection, req: dict, candidates: list[dict]) -> tuple[dict, dict]:
+    """De los candidatos igual de seguros (la misma película en Radarr y en Radarr 4K) el que mejor atiende la
+    petición, con su clasificación: el primero de la lista podía ser la copia de 1080p de una petición de 2160p."""
+    primero = candidates[0]
+    empatados = [c for c in candidates if c["confidence"] == primero["confidence"]
+                 and (c["item"].get("item_type") == "season") == (primero["item"].get("item_type") == "season")]
+    clasificados = [(c, classify_request_match(
+        req, _effective_target(conn, c["item"], req), id_match=c["id_match"],
+        title_match=c["title_match"], base_confidence=c["confidence"],
+    )) for c in empatados]
+    return min(clasificados, key=lambda par: _ORDEN_DEL_CASAMIENTO.get(par[1]["status"], 9))
+
+
 def _candidatas(conn: sqlite3.Connection) -> list[dict]:
     """Las filas que pueden atender una petición: sin los capítulos, que son casi todas y se alcanzan desde su serie."""
     return [dict(r) for r in conn.execute("SELECT * FROM library_items WHERE item_type != 'episode'").fetchall()]
@@ -433,14 +449,7 @@ def match_all_requests(conn: sqlite3.Connection) -> int:
         candidates = match_request_to_library(req, library)
         if not candidates:
             continue
-        best = candidates[0]
-        classification = classify_request_match(
-            req,
-            _effective_target(conn, best["item"], req),
-            id_match=best["id_match"],
-            title_match=best["title_match"],
-            base_confidence=best["confidence"],
-        )
+        best, classification = _mejor_candidato(conn, req, candidates)
         reasons_str = "\n".join(classification["reasons"])
         reasons_json = json.dumps(classification["reasons"], ensure_ascii=False)
         conn.execute(
@@ -573,14 +582,7 @@ def match_single_request(conn: sqlite3.Connection, request_id: int) -> Optional[
     if not candidates:
         conn.commit()
         return None
-    best = candidates[0]
-    classification = classify_request_match(
-        req,
-        _effective_target(conn, best["item"], req),
-        id_match=best["id_match"],
-        title_match=best["title_match"],
-        base_confidence=best["confidence"],
-    )
+    best, classification = _mejor_candidato(conn, req, candidates)
     reasons_str = "\n".join(classification["reasons"])
     conn.execute(
         """

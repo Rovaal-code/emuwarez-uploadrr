@@ -417,6 +417,26 @@ def test_recalcular_borra_el_casamiento_que_ya_no_vale(db_conn):
     assert (fila["request_status"], fila["request_id"]) == ("Sin petición", None)
 
 
+def test_con_dos_instancias_gana_la_copia_que_atiende_la_peticion(db_conn):
+    """Con Radarr y Radarr 4K la película sale dos veces con el mismo tmdb y ganaba la primera de la tabla: una
+    petición de 2160p quedaba «Parcial» contra la copia de 1080p aunque la de 4K la atendiera."""
+    from emuwarez_uploadrr.services.requests import match_all_requests, match_single_request, upsert_request
+    from emuwarez_uploadrr.models import RequestItem
+    fila = ("INSERT INTO library_items(item_type,title,local_status,tmdb_id,resolution,source) "
+            "VALUES ('movie','Dune','Disponible','438631',?,'WEB-DL')")
+    db_conn.execute(fila, ("1080p",))
+    cuatro_k = db_conn.execute(fila, ("2160p",)).lastrowid
+    db_conn.commit()
+    rid = upsert_request(db_conn, RequestItem(id=None, emu_id="dune-4k", title="Dune", category="Películas",
+                                              tmdb_id="438631", requested_resolution="2160p"))
+
+    match_all_requests(db_conn)
+    casamiento = lambda: tuple(db_conn.execute("SELECT library_item_id, status FROM request_matches").fetchone())
+    assert casamiento() == (cuatro_k, "Compatible")
+    match_single_request(db_conn, rid)
+    assert casamiento() == (cuatro_k, "Compatible")
+
+
 def test_rematching_clears_a_status_left_on_the_wrong_row(db_conn):
     """Recalcular limpia antes: si no, un estado escrito una vez se quedaba
     pegado en esa fila para siempre, porque nadie lo volvía a tocar."""

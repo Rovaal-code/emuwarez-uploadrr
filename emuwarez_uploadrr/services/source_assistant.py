@@ -286,20 +286,6 @@ def _get_tmdb_watch_region(conn) -> str:
     return "ES"
 
 
-def _get_default_tag(conn) -> str:
-    try:
-        from .settings import get_setting_canonical
-        raw = get_setting_canonical(conn, "default_release_tag")
-        if raw:
-            return raw
-        row2 = conn.execute("SELECT value FROM app_state WHERE key = 'release_tag'").fetchone()
-        if row2 and row2["value"]:
-            return row2["value"]
-    except Exception:
-        pass
-    return "EMUWAREZ"
-
-
 def suggest_provider_for_item(library_item_id: int, conn=None) -> dict:
     """Suggest the best EMU provider code for a library item.
 
@@ -441,6 +427,7 @@ def build_editable_nomenclature_fields(
             _infer_source_from_item,
             get_latest_nomenclature_proposal,
             infer_provider_from_item,
+            tag_por_defecto,
         )
 
         item = get_library_item_for_nomenclature(library_item_id, conn=conn)
@@ -527,7 +514,7 @@ def build_editable_nomenclature_fields(
             resolution = resolution or proposal.get("resolution")
             source = source or proposal.get("source")
 
-        tag = tag_override or _get_default_tag(conn)
+        tag = tag_override or tag_por_defecto([item.get("release_group")], conn=conn)
 
         season_episode = None
         if media_type in ("season", "episode"):

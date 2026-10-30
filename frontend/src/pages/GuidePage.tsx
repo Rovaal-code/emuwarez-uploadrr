@@ -70,7 +70,7 @@ const FIELD_SOURCES: { field: string; example: string; source: string }[] = [
   {
     field: 'Tag / Grupo',
     example: 'EMUWAREZ',
-    source: 'Ajustes de la aplicación (tag de subida configurado). Si no hay ninguno configurado, se usa "EMUWAREZ" por defecto.',
+    source: 'El grupo de release del archivo, el que Radarr/Sonarr leen del nombre (columna Grupo de Biblioteca). En un pack, el que comparten todos los capítulos. Si no hay uno solo, el tag de subida de Ajustes, y sin ninguno configurado, "EMUWAREZ". En el asistente se puede cambiar por cualquiera de los guardados.',
   },
 ]
 

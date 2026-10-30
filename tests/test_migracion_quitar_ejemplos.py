@@ -4,10 +4,6 @@ from __future__ import annotations
 from emuwarez_uploadrr.database import connect, db_path, init_db
 
 
-def _cuenta(conn, sql, *params):
-    return conn.execute(sql, params).fetchone()[0]
-
-
 def test_las_peticiones_de_ejemplo_se_borran_con_lo_que_colgaba_de_ellas(isolated_db):
     conn = connect(db_path())
     init_db(conn)

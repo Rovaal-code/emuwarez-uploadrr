@@ -356,6 +356,14 @@ def select_best_candidate(candidates: list[dict]) -> Optional[dict]:
     )[0]
 
 
+# Lo que se puntúa de la fila que pide la petición; ids, título y tipo siguen siendo los de la fila emparejada.
+_DATOS_DE_LA_FILA_PEDIDA = (
+    "local_status", "resolution", "source", "nomenclature_status", "prepared_path", "file_exists",
+    "arr_queue_status", "arr_history_status", "arr_history_event_type", "arr_history_error",
+    "emu_in_catalog", "emu_aportes",
+)
+
+
 def build_request_candidates(request_item_id: int, conn: sqlite3.Connection) -> list[dict]:
     """Find and score all library candidates for a request."""
     req_row = conn.execute(
@@ -388,11 +396,11 @@ def build_request_candidates(request_item_id: int, conn: sqlite3.Connection) -> 
     candidates = []
     for rank, m in enumerate(raw_matches[:10], start=1):
         lib = dict(m["item"])
-        # Si ya está en eMuwarez se mira en la temporada o el capítulo pedidos, no en toda la serie.
+        # La temporada o el capítulo pedidos se puntúan con sus propios datos, no con el resumen de la serie.
         fila = _scoped_library_id(conn, lib, req)
         if fila != lib["id"]:
             lib.update(dict(conn.execute(
-                "SELECT emu_in_catalog, emu_aportes FROM library_items WHERE id = ?", (fila,)).fetchone()))
+                f"SELECT {', '.join(_DATOS_DE_LA_FILA_PEDIDA)} FROM library_items WHERE id = ?", (fila,)).fetchone()))
         scored = score_request_candidate(req, lib)
         scored["candidate_rank"] = rank
         scored["library_item_id"] = lib["id"]

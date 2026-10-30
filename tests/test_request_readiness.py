@@ -276,6 +276,25 @@ def test_se_mira_la_temporada_pedida_y_no_la_serie(db_conn):
     assert evaluate_request_readiness(req_id, db_conn)["status"] == "already_exists"
 
 
+def test_una_peticion_de_capitulo_se_puntua_con_el_capitulo(db_conn):
+    """Los capítulos no son candidatos: un capítulo listo se puntuaba con el resumen «Parcial» de su serie."""
+    from emuwarez_uploadrr.services.request_readiness import evaluate_request_readiness
+    serie = _insert_library(db_conn, item_type="series", title="Serie Larga", tmdb_id="sl1",
+                            local_status="Parcial", file_exists=None)
+    temporada = _insert_library(db_conn, item_type="season", title="Serie Larga - Temporada 2", tmdb_id="sl1",
+                                local_status="Parcial", file_exists=None)
+    capitulo = _insert_library(db_conn, item_type="episode", title="Serie Larga S02E05", tmdb_id="sl1",
+                               nomenclature_status="Correcta", prepared_path="/data/prepared/s02e05.mkv")
+    db_conn.execute("UPDATE library_items SET parent_id = ?, season_number = 2 WHERE id = ?", (serie, temporada))
+    db_conn.execute("UPDATE library_items SET parent_id = ?, season_number = 2, episode_number = 5 WHERE id = ?",
+                    (temporada, capitulo))
+    req_id = _insert_request(db_conn, emu_id="emu-sl", title="Serie Larga", category="Series", tmdb_id="sl1")
+    db_conn.execute("UPDATE request_items SET req_scope = 'episode', req_season = 2, req_episode = 5 WHERE id = ?",
+                    (req_id,))
+    db_conn.commit()
+    assert evaluate_request_readiness(req_id, db_conn)["status"] == "ready_to_upload"
+
+
 def test_el_id_gana_a_un_titulo_que_esta_listo(db_conn):
     """Ganaba el candidato «listo para subir» aunque solo casara por el título y fuera otra película."""
     from emuwarez_uploadrr.services.request_readiness import evaluate_request_readiness

@@ -113,17 +113,22 @@ export function ProviderPriorityPicker({ order, onChange, linkIcons = true }: Pr
                 display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, fontSize: 13,
                 background: dragging ? 'color-mix(in srgb, var(--color-primary) 15%, transparent)' : 'color-mix(in srgb, var(--color-uploading) 6%, transparent)',
                 border: `1px solid ${dragging ? 'var(--text-accent)' : 'var(--border)'}`,
+                minWidth: 0,
               }}>
-                <span style={{ color: 'var(--text-muted)', fontSize: 11, width: 16, textAlign: 'center' }}>{idx + 1}</span>
+                <span style={{ color: 'var(--text-muted)', fontSize: 11, width: 16, textAlign: 'center', flexShrink: 0 }}>{idx + 1}</span>
                 <HoverTitle
                   as="span"
                   tip="Arrastra para reordenar, o usa las flechas del teclado"
                   {...handleProps}
                   className="drag-handle"
-                  style={{ ...handleProps.style, color: 'var(--text-accent)', width: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginLeft: 8, marginRight: 8 }}
+                  style={{ ...handleProps.style, color: 'var(--text-accent)', width: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginLeft: 8, marginRight: 8, flexShrink: 0 }}
                 ><DragHandleIcon /></HoverTitle>
                 <ProviderIcon domain={opt?.domain} size={16} link={linkIcons} />
-                <span style={{ flex: 1 }}>
+                {/* minWidth: 0 para que el flex:1 pueda encogerse por debajo
+                    del ancho natural del texto; sin esto, un nombre largo
+                    (o la tarjeta estrecha de abajo de 300px) empujaba el
+                    botón de quitar fuera de la tarjeta en vez de truncar. */}
+                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {opt?.label ?? code} <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>({code})</span>
                 </span>
                 <RemoveProviderButton onClick={() => disable(code)} />

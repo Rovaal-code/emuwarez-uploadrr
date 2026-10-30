@@ -433,16 +433,21 @@
   margin-bottom: 12px;
 }
 
-/* Configuración tab: ocho tarjetas en cuatro columnas de ancho, con el alto
-   que le pida el contenido de cada una (CSS `columns`, no grid). Antes
-   compartían una altura recortada a lo que cupiera entre la cabecera y el
-   borde de la ventana, con cada tarjeta desplazándose por dentro para lo que
-   no cabía — a 1080p eso escondía entre el 23 y el 47% de los campos de
-   varias tarjetas, y la lista de proveedores de vídeo (ver más abajo) perdía
-   hasta el 76%. Ahora la única barra de scroll de esta pestaña es la de la
-   página entera, igual que en las otras cuatro (ver SettingsPage()). */
+/* Configuración tab: ocho tarjetas en columnas de ancho, con el alto que le
+   pida el contenido de cada una (CSS `columns`, no grid). Antes compartían
+   una altura recortada a lo que cupiera entre la cabecera y el borde de la
+   ventana, con cada tarjeta desplazándose por dentro para lo que no cabía —
+   a 1080p eso escondía entre el 23 y el 47% de los campos de varias
+   tarjetas, y la lista de proveedores de vídeo (ver más abajo) perdía hasta
+   el 76%. Ahora la única barra de scroll de esta pestaña es la de la página
+   entera, igual que en las otras cuatro (ver SettingsPage()).
+   `columns: 4` a secas fijaba el número de columnas sin mirar el ancho
+   disponible: con la ventana estrecha, cuatro columnas de ~190px dejaban
+   los títulos partidos en tres líneas y el contenido apretado. El número
+   que sigue a 300px es un máximo, no un fijo: el navegador mete menos
+   columnas (hasta 1) en vez de encogerlas más allá de ese ancho. */
 .settings-config-grid {
-  columns: 4;
+  columns: 4 300px;
   column-gap: 16px;
 }
 .settings-config-grid > .placeholder-card {

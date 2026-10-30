@@ -77,15 +77,15 @@ def _get_prepared_path(library_item_id: int, conn) -> str | None:
 
 
 def _get_torrent_name_for_item(library_item_id: int, conn) -> str | None:
-    """Return the latest proposed_filename for the item."""
+    """Return the latest proposed torrent name for the item."""
     row = conn.execute(
-        """SELECT proposed_filename FROM nomenclature_proposals
+        """SELECT proposed_torrent_name, proposed_filename FROM nomenclature_proposals
            WHERE library_item_id = ? AND status != 'expired'
            ORDER BY created_at DESC LIMIT 1""",
         (library_item_id,),
     ).fetchone()
-    if row and row["proposed_filename"]:
-        return row["proposed_filename"]
+    if row and (row["proposed_torrent_name"] or row["proposed_filename"]):
+        return row["proposed_torrent_name"] or row["proposed_filename"]
     row2 = conn.execute(
         """SELECT fields_json FROM nomenclature_proposals
            WHERE library_item_id = ? AND status != 'expired'

@@ -587,7 +587,7 @@ def _check_trailer_and_log(job_id: int) -> None:
                 snapshot = json.loads(job.get("nomenclature_snapshot_json") or "{}") or {}
             except (TypeError, ValueError):
                 pass
-            candidate_names = [n for n in (snapshot.get("proposed_filename"), snapshot.get("proposed_title")) if n]
+            candidate_names = [n for n in (snapshot.get("proposed_torrent_name"), snapshot.get("proposed_filename"), snapshot.get("proposed_title")) if n]
 
             result = check_trailer_for_job(uploadrr_path, candidate_names)
             if result["found"]:

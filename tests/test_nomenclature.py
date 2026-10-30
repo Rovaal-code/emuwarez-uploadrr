@@ -10,6 +10,7 @@ from emuwarez_uploadrr.services.nomenclature import (
     get_latest_nomenclature_proposal,
     mark_nomenclature_status,
     _infer_provider_from_item,
+    _normalize_title_for_emu,
 )
 
 
@@ -250,3 +251,24 @@ def test_build_nomenclature_proposal_source_override_wins(db_conn):
     # really persisted as the new latest, not just returned once.
     again = build_nomenclature_proposal(item_id, conn=db_conn)
     assert again["source"] == "WEB-DL"
+
+
+def test_titulo_del_aporte_con_espacios_y_archivo_con_puntos(db_conn):
+    """El título que va a eMuwarez lleva espacios y conserva «:» y «?», como en las normas
+    («Anacleto: Agente secreto»); solo el nombre de archivo va con puntos y sin ellos."""
+    item_id = _insert_item(
+        db_conn, title="Anacleto: Agente secreto",
+        path="/movies/Anacleto/Anacleto.Agente.secreto.2015.1080p.WEB-DL.mkv",
+    )
+    result = build_nomenclature_proposal(item_id, conn=db_conn)
+
+    assert result["proposed_torrent_name"].startswith("Anacleto: Agente secreto ")
+    assert result["proposed_filename"].startswith("Anacleto.Agente.secreto.")
+    assert ":" not in result["proposed_filename"]
+    guardada = get_latest_nomenclature_proposal(item_id, conn=db_conn)
+    assert guardada["proposed_torrent_name"] == result["proposed_torrent_name"]
+
+
+def test_el_titulo_conserva_la_interrogacion():
+    assert _normalize_title_for_emu("Ali G: Kién es yo?") == "Ali G: Kién es yo?"
+    assert _normalize_title_for_emu('Uno/Dos "tres"') == "UnoDos tres"

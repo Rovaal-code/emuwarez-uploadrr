@@ -37,12 +37,6 @@ interface SyncContextValue {
   requestsStatus: RequestSyncStatusResponse | null
   startRequestsSync: (force: boolean) => void
   refreshRequestsStatus: () => void
-  // eMuwarez (UNIT3D) doesn't expose a requests endpoint at all — whatever
-  // the exact failure (404, 401, throttled...), none of it is meant to be
-  // shown to the user as a raw message anywhere. The top bar's sync chip
-  // shows a plain "No implementado" instead, briefly, then fades out.
-  requestsUnavailable: boolean
-  requestsFadingOut: boolean
   // True while any of the three syncs above is running — buttons for the
   // OTHER sync types use this to disable themselves, since running two syncs
   // at once caused a visual glitch in the top bar.
@@ -86,20 +80,16 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   const [catalogStatus, setCatalogStatus] = useState<EmuSyncStatus | null>(null)
   const [requestsSyncing, setRequestsSyncing] = useState(false)
   const [requestsStatus, setRequestsStatus] = useState<RequestSyncStatusResponse | null>(null)
-  const [requestsUnavailable, setRequestsUnavailable] = useState(false)
-  const [requestsFadingOut, setRequestsFadingOut] = useState(false)
   const [message, setMessageText] = useState<string | null>(null)
   const [messageIsError, setMessageIsError] = useState(false)
   const [messageFadingOut, setMessageFadingOut] = useState(false)
   const [lastInvalidatedAt, setLastInvalidatedAt] = useState(0)
 
-  const requestsUnavailableTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const requestsFadeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const messageTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const messageFadeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Shows a completion toast for 5s (then a 300ms fade, same feel as
-  // flashRequestsUnavailable below) — green on success, red on error.
+  // Shows a completion toast for 5s (then a 300ms fade) — green on success,
+  // red on error.
   const showMessage = useCallback((text: string, isError: boolean) => {
     if (messageTimer.current) clearTimeout(messageTimer.current)
     if (messageFadeTimer.current) clearTimeout(messageFadeTimer.current)
@@ -122,23 +112,6 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     if (messageFadeTimer.current) clearTimeout(messageFadeTimer.current)
     setMessageFadingOut(false)
     setMessageText(null)
-  }, [])
-
-  // Shows the "No implementado en esta versión" chip for a beat, then fades
-  // it out — same brief flash regardless of why this particular attempt
-  // failed (404, 401, throttled...), since none of that is ever shown raw.
-  const flashRequestsUnavailable = useCallback(() => {
-    if (requestsUnavailableTimer.current) clearTimeout(requestsUnavailableTimer.current)
-    if (requestsFadeTimer.current) clearTimeout(requestsFadeTimer.current)
-    setRequestsFadingOut(false)
-    setRequestsUnavailable(true)
-    requestsUnavailableTimer.current = setTimeout(() => {
-      setRequestsFadingOut(true)
-      requestsFadeTimer.current = setTimeout(() => {
-        setRequestsUnavailable(false)
-        setRequestsFadingOut(false)
-      }, 300)
-    }, 1500)
   }, [])
 
   // Guards so a resume-on-mount check can't start a second polling loop, and a
@@ -257,30 +230,20 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     requestsBusy.current = true
     setRequestsSyncing(true)
     hideMessage()
-    if (requestsUnavailableTimer.current) clearTimeout(requestsUnavailableTimer.current)
-    if (requestsFadeTimer.current) clearTimeout(requestsFadeTimer.current)
-    setRequestsUnavailable(false)
-    setRequestsFadingOut(false)
     syncRequests(force)
       .then(res => {
-        // eMuwarez/UNIT3D doesn't really support this endpoint — whatever
-        // shape that takes (throttled, unavailable, a raw 401/404...), none
-        // of it is a real error worth surfacing as text; only a genuine
-        // success gets the generic message banner.
-        if (res.ok) {
-          showMessage(res.message, false)
-          invalidarTodo()
-        } else {
-          flashRequestsUnavailable()
-        }
+        // "throttled" y "busy" llegan con ok: false y su propio mensaje.
+        showMessage(res.message, !res.ok)
+        if (res.ok) invalidarTodo()
       })
-      .catch(() => flashRequestsUnavailable())
+      // Un fallo de verdad: el mensaje del servidor (el detail del 502).
+      .catch((e: unknown) => showMessage(e instanceof Error ? e.message : 'Error al sincronizar las peticiones', true))
       .finally(() => {
         setRequestsSyncing(false)
         requestsBusy.current = false
         refreshRequestsStatus()
       })
-  }, [invalidarTodo, refreshRequestsStatus, flashRequestsUnavailable, hideMessage, showMessage])
+  }, [invalidarTodo, refreshRequestsStatus, hideMessage, showMessage])
 
   // Checks for a library (Radarr/Sonarr) sync already running server-side and
   // hands off to the normal follow loop if one is found — reused both on
@@ -371,7 +334,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   const value: SyncContextValue = {
     libSyncing, libProgress, startLibrarySync,
     catalogSyncing, catalogProgress, catalogStatus, startCatalogSync, refreshCatalogStatus,
-    requestsSyncing, requestsStatus, startRequestsSync, refreshRequestsStatus, requestsUnavailable, requestsFadingOut,
+    requestsSyncing, requestsStatus, startRequestsSync, refreshRequestsStatus,
     isAnySyncing: libSyncing || catalogSyncing || requestsSyncing,
     message, messageIsError, messageFadingOut, lastInvalidatedAt,
   }

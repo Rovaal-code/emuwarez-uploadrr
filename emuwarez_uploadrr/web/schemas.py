@@ -1099,6 +1099,11 @@ class UploadJobDetail(BaseModel):
     tmdb_id: Optional[str] = None
     title_slug: Optional[str] = None
     request_status: Optional[str] = None
+    # La petición que cubrió la subida, tal como era al encolarla (la fila de
+    # Peticiones se borra cuando deja de estar abierta). Sin ellas, Subidas
+    # cae al request_status de la ficha de biblioteca.
+    request_title: Optional[str] = None
+    request_url: Optional[str] = None
     # Grace-period deadline while status='queued' — lets the UI show a
     # countdown + Cancel before the server starts renaming/remuxing/uploading.
     queued_until: Optional[str] = None
@@ -1352,6 +1357,9 @@ class UploadChecksSnapshot(BaseModel):
 
 
 class UploadQueueBody(BaseModel):
+    # La petición desde la que se abrió el asistente, si fue así: la subida la
+    # cubre, y Subidas lo enseña.
+    request_item_id: Optional[int] = None
     # Manual edits the user made in the wizard's "Ver Pistas" card, carried
     # through to the server-side remux step that runs after the grace period.
     remux_overrides: Optional[Dict[str, TrackRemuxOverride]] = None

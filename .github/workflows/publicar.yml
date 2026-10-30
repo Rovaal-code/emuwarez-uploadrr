@@ -4,7 +4,7 @@
 # lee el aviso de actualización de la app.
 #
 # A mano (Actions → Publicar versión → Run workflow), o solo cada 12 h si desde
-# la última versión se han fusionado al menos 3 PR de ramas feat/ o fix/. Con «solo prueba» construye
+# la última versión se han fusionado al menos 3 PR de ramas feat/ o fix/ (aquí o en Uploadrr-EMU). Con «solo prueba» construye
 # :edge de la punta de master, sin tests, versión ni manifiesto.
 #
 # Necesita el secreto UPLOADRR_VERSION_TOKEN: un token con permiso de escritura
@@ -62,9 +62,13 @@ jobs:
             echo "accion=prueba" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # PR fusionados desde el último commit que cambió la versión, de ramas feat/ o fix/.
+          # PR fusionados desde el último commit que cambió la versión, de ramas feat/ o fix/,
+          # aquí y en Uploadrr-EMU (su main solo llega a la app al construir la imagen).
           base="$(git log -1 --format=%H -G'^__version__' -- emuwarez_uploadrr/__init__.py)"
           prs="$(git log --first-parent --merges --format=%s "$base"..HEAD | grep -E ' from [^/]+/(feat|fix)/' || true)"
+          git clone -q --bare --filter=blob:none --branch main https://github.com/Kisnov/Uploadrr-EMU.git "$RUNNER_TEMP/uploadrr"
+          prs="$prs"$'\n'"$(git -C "$RUNNER_TEMP/uploadrr" log --first-parent --merges --since="$(git log -1 --format=%cI "$base")" --format=%s |
+            grep -E ' from [^/]+/(feat|fix)/' || true)"
           n="$(printf '%s' "$prs" | grep -c . || true)"
           echo "$n PR feat/fix desde ${base:0:7}"
           if [ "$EVENTO" = schedule ] && [ "$n" -lt 3 ]; then

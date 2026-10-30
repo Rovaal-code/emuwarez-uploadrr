@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from .uploadrr_yaml import (
+    find_child_block,
     get_block_key,
     get_child_inline_mapping,
     get_emu_anon,
@@ -185,9 +186,39 @@ def stage_qbittorrent_config(
         merged["qbit_tag"] = tag.strip()
     else:
         merged.pop("qbit_tag", None)
+    # torrent_storage_dir es donde el fork busca un .torrent ya hecho para no
+    # volver a calcular el hash. El config de ejemplo trae una ruta de macOS
+    # (/Users/example/...) y cada subida acababa con "Invalid
+    # torrent_storage_dir path" en rojo. Si la carpeta no existe aquí no hay
+    # nada que reutilizar, y buscar en qBittorrent tampoco sirve: el hash que
+    # encuentre se busca como fichero en esa misma carpeta.
+    almacen = str(merged.get("torrent_storage_dir") or "").strip()
+    if not almacen or not Path(almacen).is_dir():
+        merged.pop("torrent_storage_dir", None)
+        merged["enable_search"] = False
     msg1 = set_child_inline_mapping(staged, "TORRENT_CLIENTS", QBIT_CLIENT_KEY, merged)
     msg2 = set_block_key(staged, "DEFAULT", "default_torrent_client", yaml_scalar(QBIT_CLIENT_KEY))
     return staged, f"{msg1}; {msg2}"
+
+
+def stage_blu_api_off(lines: list[str]) -> tuple[list[str], str]:
+    """Pone TRACKERS.BLU.useAPI a false si el bloque BLU existe.
+
+    Con useAPI activado, el fork (src/metascraper.py → BLU.api_match) pregunta
+    a la API de Blutopia por el nombre de cada fichero antes de subir. Aquí
+    solo se sube a eMuwarez, así que eso no aporta nada: con la clave de
+    ejemplo Blutopia contesta "Failed to search: HTTP 400", y aun así se
+    entera del nombre de todo lo que subes. Sin bloque BLU el fork ya no
+    pregunta, así que entonces no se toca nada."""
+    staged = list(lines)
+    start, end = find_child_block(staged, "TRACKERS", "BLU", indent=2)
+    if start < 0:
+        return staged, "TRACKERS.BLU sin cambios"
+    for i in range(start + 1, end):
+        if re.match(r"^\s{4}useAPI\s*:", staged[i]):
+            staged[i] = "    useAPI: false"
+            return staged, "TRACKERS.BLU.useAPI actualizado"
+    return staged, "TRACKERS.BLU sin cambios"
 
 
 def stage_emu_config(
@@ -250,6 +281,7 @@ __all__ = [
     "stage_tmdb_key",
     "stage_emu_config",
     "stage_add_logo",
+    "stage_blu_api_off",
     "stage_image_hosts",
     "stage_qbittorrent_config",
     "QBIT_CLIENT_KEY",

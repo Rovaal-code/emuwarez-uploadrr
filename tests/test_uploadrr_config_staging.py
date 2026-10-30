@@ -109,7 +109,7 @@ def test_stage_qbittorrent_config_overrides_stale_default_torrent_client():
     assert "default_torrent_client: 'qbit'" in text
 
 
-def test_stage_qbittorrent_config_preserves_unmanaged_existing_keys():
+def test_stage_qbittorrent_config_preserves_unmanaged_existing_keys(tmp_path):
     # torrent_storage_dir/content_layout/enable_search aren't fields we
     # manage — overwriting the whole inline mapping wholesale would silently
     # wipe out whatever the user (or the fork's own template) already had
@@ -117,14 +117,59 @@ def test_stage_qbittorrent_config_preserves_unmanaged_existing_keys():
     lines = [
         "TORRENT_CLIENTS:",
         "  qbit: {'torrent_client': 'qbit', 'enable_search': True, 'qbit_url': 'http://old', "
-        "'torrent_storage_dir': '/downloads', 'content_layout': 'Original'}",
+        f"'torrent_storage_dir': '{tmp_path.as_posix()}', 'content_layout': 'Original'}}",
     ]
     staged, _ = stage_qbittorrent_config(lines, url="http://new:9090", username="u2", password="p2")
     mapping = get_child_inline_mapping(staged, "TORRENT_CLIENTS", QBIT_CLIENT_KEY)
     assert mapping["qbit_url"] == "http://new"
     assert mapping["enable_search"] is True
-    assert mapping["torrent_storage_dir"] == "/downloads"
+    assert mapping["torrent_storage_dir"] == tmp_path.as_posix()
     assert mapping["content_layout"] == "Original"
+
+
+def test_stage_qbittorrent_config_drops_a_storage_dir_that_does_not_exist():
+    """El config de ejemplo del fork trae una ruta de macOS y cada subida
+    acababa con "Invalid torrent_storage_dir path" en rojo. Si la carpeta no
+    existe no hay .torrent que reutilizar, y buscar en qBittorrent tampoco
+    sirve de nada."""
+    lines = [
+        "TORRENT_CLIENTS:",
+        "  qbit: {'torrent_client': 'qbit', 'enable_search': True, "
+        "'torrent_storage_dir': '/Users/example/Library/Application Support/qBittorrent/BT_backup', "
+        "'content_layout': 'Original'}",
+    ]
+    staged, _ = stage_qbittorrent_config(lines, url="http://x:8080", username="u", password="p")
+    mapping = get_child_inline_mapping(staged, "TORRENT_CLIENTS", QBIT_CLIENT_KEY)
+    assert "torrent_storage_dir" not in mapping
+    assert mapping["enable_search"] is False
+    assert mapping["content_layout"] == "Original"
+
+
+def test_stage_blu_api_off_turns_off_the_blutopia_lookup():
+    """Con useAPI activado el fork pregunta a Blutopia por el nombre de cada
+    fichero ("Failed to search: HTTP 400" con la clave de ejemplo)."""
+    from emuwarez_uploadrr.services.uploadrr_config_staging import stage_blu_api_off
+    lines = [
+        "TRACKERS:",
+        "  BLU:",
+        "    useAPI: true",
+        "    api_key: \"BLU_API_KEY\"",
+        "  EMU:",
+        "    useAPI: true",
+    ]
+    staged, message = stage_blu_api_off(lines)
+    assert staged[2] == "    useAPI: false"
+    # El resto, incluido el useAPI de otro tracker, no se toca.
+    assert staged[3:] == lines[3:]
+    assert message == "TRACKERS.BLU.useAPI actualizado"
+
+
+def test_stage_blu_api_off_leaves_a_config_without_blu_alone():
+    from emuwarez_uploadrr.services.uploadrr_config_staging import stage_blu_api_off
+    lines = ["TRACKERS:", "  EMU:", "    useAPI: true"]
+    staged, message = stage_blu_api_off(lines)
+    assert staged == lines
+    assert message == "TRACKERS.BLU sin cambios"
 
 
 def test_get_child_inline_mapping_returns_empty_when_absent():

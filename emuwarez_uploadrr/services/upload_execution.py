@@ -48,6 +48,7 @@ from .uploadrr_config_staging import (
     stage_emu_config,
     stage_image_hosts,
     stage_add_logo,
+    stage_blu_api_off,
     stage_qbittorrent_config,
     stage_tmdb_key,
     write_staged_config,
@@ -731,6 +732,7 @@ def _stage_uploadrr_config(job_id: int, cwd: str) -> Path | None:
             lines, _msg = stage_emu_config(lines, api_key=emu_key)
             changed = True
         lines, _msg = stage_add_logo(lines, add_logo)
+        lines, _msg = stage_blu_api_off(lines)
         changed = True
         if img_hosts:
             # Always staged (imgbox is always in fallback_order()'s result,

@@ -345,15 +345,17 @@ def score_request_candidate(req: dict, lib: dict) -> dict:
 def select_best_candidate(candidates: list[dict]) -> Optional[dict]:
     """Pick the best candidate from a scored list: the surest match first (an ID
     match before a title one, so a wrong title match that happens to be ready
-    never beats the right item), then real readiness status (most-actionable
-    first, see _STATUS_RANK), then compatibility_score. This is candidate
-    matching, not a "priority" ranking — no numeric priority score/bucket involved."""
+    never beats the right item), then the copy that best meets the request
+    (compatibility_score: with Radarr and Radarr 4K, a ready 1080p copy must not
+    beat the 2160p one a 2160p request asks for), then real readiness status
+    (most-actionable first, see _STATUS_RANK). This is candidate matching, not a
+    "priority" ranking — no numeric priority score/bucket involved."""
     if not candidates:
         return None
     return sorted(
         candidates,
-        key=lambda c: (-c["match_confidence"], _STATUS_RANK.get(c["readiness_status"], 99),
-                       -c["compatibility_score"]),
+        key=lambda c: (-c["match_confidence"], -c["compatibility_score"],
+                       _STATUS_RANK.get(c["readiness_status"], 99)),
     )[0]
 
 

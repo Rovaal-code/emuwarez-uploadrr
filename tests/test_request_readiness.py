@@ -309,6 +309,19 @@ def test_una_temporada_que_no_esta_no_se_prepara(db_conn):
     assert evaluate_request_readiness(req_id, db_conn)["status"] == "no_local_match"
 
 
+def test_con_dos_instancias_se_prepara_la_copia_que_atiende_la_peticion(db_conn):
+    """Una copia de 1080p ya preparada ganaba a la 4K en una petición de 2160p y salía «lista para subir»."""
+    from emuwarez_uploadrr.services.request_readiness import evaluate_request_readiness
+    _insert_library(db_conn, title="Doble", tmdb_id="db1", resolution="1080p", source="WEB-DL",
+                    nomenclature_status="Correcta", prepared_path="/data/prepared/doble_1080.mkv")
+    cuatro_k = _insert_library(db_conn, title="Doble", tmdb_id="db1", resolution="2160p", source="WEB-DL",
+                               nomenclature_status="Correcta")
+    req_id = _insert_request(db_conn, emu_id="emu-db", title="Doble", tmdb_id="db1", requested_resolution="2160p")
+    result = evaluate_request_readiness(req_id, db_conn)
+    assert result["best_library_item_id"] == cuatro_k
+    assert result["status"] == "preflight_needed"
+
+
 def test_el_id_gana_a_un_titulo_que_esta_listo(db_conn):
     """Ganaba el candidato «listo para subir» aunque solo casara por el título y fuera otra película."""
     from emuwarez_uploadrr.services.request_readiness import evaluate_request_readiness

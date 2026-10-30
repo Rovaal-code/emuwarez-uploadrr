@@ -86,6 +86,17 @@ export function IconoSubida(props: IconoProps) {
   return <Svg {...props}><path d="M12 15V3M7 8l5-5 5 5" /><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" /></Svg>
 }
 
+/** La cuenta: el mismo en la barra superior, en Configuración y en el asistente. */
+export function IconoUsuario(props: IconoProps) {
+  return <Svg {...props}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></Svg>
+}
+
+/** El orden de una columna: un triángulo hacia arriba o hacia abajo, centrado como el ▼ de los filtros, o los dos si no ordena por ella. */
+export function IconoOrden({ sentido, ...props }: IconoProps & { sentido: 'asc' | 'desc' | null }) {
+  const forma = sentido === 'asc' ? 'M12 8 19 16H5z' : sentido === 'desc' ? 'M12 16 5 8h14z' : 'M12 3 19 11H5zM12 21 5 13h14z'
+  return <Svg {...props}><path d={forma} fill="currentColor" stroke="none" /></Svg>
+}
+
 /** El desplegable: apunta a la derecha cerrado y hacia abajo abierto. */
 export function IconoDesplegar({ abierto, ...props }: IconoProps & { abierto: boolean }) {
   return <Svg {...props} style={{ transform: abierto ? 'rotate(90deg)' : undefined, ...props.style }}><path d="m9 6 6 6-6 6" /></Svg>

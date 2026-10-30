@@ -1,10 +1,11 @@
-/* Hallmark · checked: 2026-10-29 · genre: modern-minimal (inferred) · shape: app screen
- * floor: 14 FAIL reported (11 × 19: la raya (—) de celda vacía, elegida a propósito como marca de «sin dato» · 2 × 67: navegación y título en mayúsculas del HUD, caso permitido por 67 · 1 × 50: falso positivo, el ajuste está dentro de FieldRow) · fixed: 4, 7a, 10a, 11, 15, 17, 19, 26a, 26b, 27, 30a, 33, 34, 39a, 40, 41, 48, 63, 67, 75 · structural: 5 printed (Subidas, Configuración, Panel, móvil, fichas)
- * finish-review: subagent · fix · 5 findings · 4 resolved, 1 partial (formato de cifras: queda para el dueño)
+/* Hallmark · checked: 2026-10-30 · genre: modern-minimal (inferred) · shape: app screen
+ * floor: 13 FAIL reported (11 × 19: la raya (—) de celda vacía, elegida a propósito como marca de «sin dato» · 2 × 67: navegación y título en mayúsculas del HUD, caso permitido por 67) · fixed: 4, 7a, 10a, 11, 15, 17, 19, 26a, 26b, 27, 30a, 33, 34, 39a, 40, 41, 48, 63, 67 (las etiquetas; la navegación y el título siguen en mayúsculas, arriba), 75 · structural: 5 printed (Subidas, Configuración, Panel, móvil, fichas) · 4 rehechas (Subidas #29, Configuración #32 y #35, Panel #33 y #34, fichas #36) · móvil descartado: la app no se usa en el móvil
+ * finish-review: subagent · fix · 5 findings · 5 resolved (el formato de cifras, en #20)
  * built: the project · redesign: polish · v2.0.0 */
 /* Hallmark · dismissed 28a · carátulas pequeñas en tablas tras el inicio de sesión, ninguna es la imagen principal de la pantalla */
 /* Hallmark · dismissed 49 · los dos botones son .btn, que ya lleva white-space: nowrap */
-/* Hallmark · dismissed 74 · el azul #3b82f6 es el acento propio del proyecto, anterior a este pulido; el índigo marca un nivel de aviso */
+/* Hallmark · dismissed 74 · el azul #3b82f6 queda en :root como acento de fuera del HUD y como color de «en cola»; dentro de .hud-app el acento es --hud-sky. El índigo marca un nivel de aviso */
+/* Hallmark · dismissed 41 · td.col-actions ya lleva color: var(--text-primary) de .data-table td; su fondo opaco solo tapa las celdas que pasan por detrás al desplazar */
 /* Hallmark · answered F6 · .empty-state-icon ya no muestra cifras: ahora es un icono de línea */
 /* Hallmark · answered F24 · el borde del modal lo recorta sobre el velo oscuro; la sombra lo separa del panel de debajo */
 

@@ -6,6 +6,7 @@ import { SyncProgressBanner } from './SyncProgressBanner'
 import { useTour } from '../context/TourContext'
 import { TOUR_STEPS } from '../tour/steps'
 import { useTooltip } from './Tooltip'
+import { IconoUsuario } from './Iconos'
 
 interface TopbarProps {
   user: CurrentUserResponse | null
@@ -68,10 +69,7 @@ export function Topbar({ user, pageTitle, onLogout }: TopbarProps) {
         {/* User info — username only, with a toggle to obfuscate it */}
         {user && (
           <div className="topbar-user">
-            <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="1.75">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-              <circle cx="12" cy="7" r="4" />
-            </svg>
+            <IconoUsuario size={15} style={{ color: 'var(--text-accent)' }} />
             <span className="topbar-username">
               {hideName ? '*'.repeat(Math.max(4, user.username.length)) : user.username}
             </span>

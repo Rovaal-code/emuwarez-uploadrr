@@ -25,7 +25,7 @@ import { necesitaTodosLosNiveles } from '../utils/filtrosBiblioteca'
 import { CASTELLANO_OPCIONES, type EstadoCastellano } from '../utils/castellano'
 import { useTardanza } from '../hooks/useTardanza'
 import { useAlEntrar, useAlSalir } from '../context/SeccionVisible'
-import { IconoLibros, IconoTipo } from '../components/Iconos'
+import { IconoLibros, IconoOrden, IconoTipo } from '../components/Iconos'
 import { formatNumero } from '../utils/format'
 
 // Una sola lista vacía: volver a ponerla no cuenta como cambio y no recarga la biblioteca.
@@ -587,7 +587,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
         >
           <span>Tamaño</span>
           <span aria-hidden className="hf-caret" style={{ color: sortBy.startsWith('size_') ? 'var(--text-accent)' : undefined }}>
-            {sortBy === 'size_asc' ? '▲' : sortBy === 'size_desc' ? '▼' : '↕'}
+            <IconoOrden sentido={sortBy === 'size_asc' ? 'asc' : sortBy === 'size_desc' ? 'desc' : null} size="1.4em" />
           </span>
         </button>
       </th>

@@ -6,6 +6,8 @@ functions.
 """
 from __future__ import annotations
 
+import pytest
+
 from emuwarez_uploadrr.services.uploadrr_contract import (
     DEFAULT_ALLOWED_ROOTS,
     build_uploadrr_emu_command,
@@ -107,7 +109,7 @@ def test_res_omitted_when_empty():
 
 
 def test_res_valid_choice_passthrough():
-    for good in ("2160p", "1080i", "720p", "480i", "other"):
+    for good in ("2160p", "1080i", "720p", "540p", "480i", "other"):
         assert _res_value(resolution=good) == good, good
 
 
@@ -127,6 +129,30 @@ def test_season_episode_absent_by_default():
     cmd = _build()
     assert "-season" not in cmd
     assert "-episode" not in cmd
+
+
+@pytest.mark.parametrize(
+    ("formato", "tipo"),
+    [
+        ("Full BluRay", "disc"),
+        ("FDVD", "disc"),
+        ("BDRemux", "remux"),
+        ("BDReMux", "remux"),
+        ("BluRay", "encode"),
+        ("MHD", "encode"),
+        ("WEB-DL", "webdl"),
+        ("WEBRip", "webrip"),
+        ("HDTV", "hdtv"),
+    ],
+)
+def test_release_format_goes_as_t(formato, tipo):
+    cmd = _build(release_format=formato)
+    assert cmd[cmd.index("-t") + 1] == tipo
+
+
+@pytest.mark.parametrize("formato", [None, "", "SD", "DVD", "bluray"])
+def test_release_format_without_uploadrr_type_sends_no_t(formato):
+    assert "-t" not in _build(release_format=formato)
 
 
 def test_no_legacy_broken_flags_present():
@@ -299,3 +325,8 @@ def test_contract_warns_without_tmdb_id(tmp_path):
     result = validate_uploadrr_emu_contract(**kwargs)
     assert result["valid"] is True
     assert any("tmdb" in w.lower() for w in result["warnings"])
+
+
+def test_season_zero_is_sent():
+    cmd = _build(season=0, episode=1)
+    assert cmd[cmd.index("-season") + 1] == "S00"

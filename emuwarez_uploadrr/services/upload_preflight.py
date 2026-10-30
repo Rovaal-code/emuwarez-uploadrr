@@ -142,8 +142,19 @@ def build_uploadrr_command_preview(
         # mismo desde que una ruta preparada muerta cede el paso a la de la
         # biblioteca.
         has_prepared = bool(active_path) and active_path == library_item.get("prepared_path")
-        season = (proposal or {}).get("season") or library_item.get("season")
-        episode = (proposal or {}).get("episode") or library_item.get("episode")
+        # Un episodio de la biblioteca lo trae en season_number/episode_number; un pack, en season. Vale el
+        # primero que venga, aunque sea 0 (especiales).
+        prop = proposal or {}
+        season = next(
+            (v for v in (prop.get("season"), library_item.get("season"), library_item.get("season_number")) if v is not None),
+            None,
+        )
+        episode = next(
+            (v for v in (prop.get("episode"), library_item.get("episode"), library_item.get("episode_number")) if v is not None),
+            None,
+        )
+        # El mismo formato que lleva el nombre del release (`-t` en Uploadrr-EMU).
+        release_format = prop.get("source") or library_item.get("release_format") or library_item.get("source")
 
         category = "tv" if media_type in ("tv", "series", "anime", "season", "episode") else "movie"
 
@@ -173,9 +184,11 @@ def build_uploadrr_command_preview(
                 resolution=resolution,
                 season=season,
                 episode=episode,
+                release_format=release_format,
             )
             command_preview = render_command_preview(command_args)
 
+            # Lo que lee la ejecución (build_uploadrr_execution_command): lo que falte aquí no llega a Uploadrr.
             return {
                 "runtime_type": RUNTIME_EMU,
                 "uploadrr_path": uploadrr_path,
@@ -184,6 +197,9 @@ def build_uploadrr_command_preview(
                 "title": title,
                 "tmdb_id": tmdb_id,
                 "resolution": resolution,
+                "season": season,
+                "episode": episode,
+                "release_format": release_format,
                 "source_path": active_path,
                 "using_prepared_path": has_prepared,
                 "command_preview": command_preview,

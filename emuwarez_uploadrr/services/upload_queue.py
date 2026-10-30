@@ -591,6 +591,7 @@ def _populate_ready(job_id: int, item_id: int, conn, season_overrides: dict | No
             "resolution": plan.get("resolution"),
             "season": plan.get("season_number"),
             "episode": None,
+            "release_format": plan.get("source"),
         }
         command_preview = build_uploadrr_command_preview(synthetic_item, None, None, conn=conn)
         return _marcar_lista(job_id, command_preview, conn)

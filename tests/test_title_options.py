@@ -261,9 +261,8 @@ def test_second_option_is_the_english_title_not_the_original_language_one(isolat
     assert asked["language"] == "en-US"
 
 
-def test_el_titulo_elegido_llega_al_comando_de_uploadrr(season, tmp_path):
-    """La cola rehacía el plan del pack sin lo editado en el asistente, así que
-    el nombre del torrent (-mt) salía siempre con el título por defecto."""
+def _comando_de_la_cola(season, tmp_path, season_overrides=None):
+    """El uploadrr_command_json que deja la cola para el pack: lo único que lee la ejecución."""
     import json
 
     from emuwarez_uploadrr.services import upload_queue as uq
@@ -281,8 +280,20 @@ def test_el_titulo_elegido_llega_al_comando_de_uploadrr(season, tmp_path):
     ).lastrowid
     conn.commit()
 
-    assert uq._populate_ready(job_id, season_id, conn, season_overrides={"title": "The Tudors"})
+    assert uq._populate_ready(job_id, season_id, conn, season_overrides=season_overrides)
 
-    comando = json.loads(conn.execute(
+    return json.loads(conn.execute(
         "SELECT uploadrr_command_json FROM upload_jobs WHERE id = ?", (job_id,)).fetchone()[0])
+
+
+def test_el_titulo_elegido_llega_al_comando_de_uploadrr(season, tmp_path):
+    """La cola rehacía el plan del pack sin lo editado en el asistente, así que
+    el nombre del torrent (-mt) salía siempre con el título por defecto."""
+    comando = _comando_de_la_cola(season, tmp_path, season_overrides={"title": "The Tudors"})
     assert comando["title"].startswith("The Tudors S02")
+
+
+def test_el_formato_y_la_temporada_del_pack_llegan_al_comando_de_uploadrr(season, tmp_path):
+    args = _comando_de_la_cola(season, tmp_path)["command_args"]
+    assert args[args.index("-season") + 1] == "S02"
+    assert args[args.index("-t") + 1] == "webdl"

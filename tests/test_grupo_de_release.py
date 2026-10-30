@@ -35,6 +35,22 @@ def test_un_capitulo_sin_archivo_no_tiene_grupo():
     assert item.release_group is None
 
 
+import pytest
+
+
+@pytest.mark.parametrize("falso", ["1080p", "2160p", "Aac", "AC3", "DD+", "5.1", "x265", "H.264", "WEB-DL", "BluRay", "6CH", "2ch", "SDTV", "SD-TV", " "])
+def test_un_dato_tecnico_no_es_un_grupo(falso):
+    """Sin grupo en el nombre, *Arr toma lo que va tras el último guion o punto."""
+    from emuwarez_uploadrr.integrations.base import extract_release_group
+    assert extract_release_group({"releaseGroup": falso}) is None
+
+
+@pytest.mark.parametrize("grupo", ["Loco87", "FLUX", "adrià & hakyra", "NTb", "HDO", "ACK"])
+def test_un_grupo_de_verdad_se_queda(grupo):
+    from emuwarez_uploadrr.integrations.base import extract_release_group
+    assert extract_release_group({"releaseGroup": grupo}) == grupo
+
+
 def test_la_sincronizacion_lo_guarda_y_lo_actualiza(isolated_db):
     from emuwarez_uploadrr.database import connect, db_path, init_db
     conn = connect(db_path()); init_db(conn)

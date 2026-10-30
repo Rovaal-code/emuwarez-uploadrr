@@ -42,6 +42,7 @@ from typing import Any, Optional
 from ..database import connect, row_to_dict
 from ..models import LocalStatus
 from .filesystem_apply import apply_rename_plan, build_safe_rename_plan
+from .mkv_title import to_filesystem_name
 from .nomenclature import (
     build_nomenclature_proposal,
     tag_por_defecto,
@@ -683,9 +684,11 @@ def build_season_pack_plan(
             proposed_filename = proposal.get("proposed_filename") or ep.get("title") or f"episode-{ep['id']}"
             # Cada capítulo lleva el Tag del pack, aunque su propuesta guardada
             # traiga otro (grupos mezclados): reconstruirla la sobrescribiría.
-            ep_tag = proposal.get("release_tag")
-            if ep_tag and ep_tag != release_tag and proposed_filename.endswith(f"-{ep_tag}"):
-                proposed_filename = f"{proposed_filename[:-len(ep_tag)]}{release_tag}"
+            # El nombre de archivo lleva el tag ya pasado por to_filesystem_name.
+            viejo = to_filesystem_name(proposal.get("release_tag") or "")
+            nuevo = to_filesystem_name(release_tag)
+            if viejo and viejo != nuevo and proposed_filename.endswith(f"-{viejo}"):
+                proposed_filename = f"{proposed_filename[:-len(viejo)]}{nuevo}"
             ext = ""
             if source_path and os.path.isfile(source_path):
                 ext = os.path.splitext(source_path)[1]

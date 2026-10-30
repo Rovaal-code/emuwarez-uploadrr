@@ -66,7 +66,7 @@ def _resolution_from_arr_media_info(media_info: dict) -> Optional[str]:
 # Lo que *Arr toma por grupo cuando el archivo no lleva ninguno y el nombre
 # acaba en un dato técnico ("…-AC3", "….1080p"). Comparado sin puntos ni guiones.
 _GRUPOS_FALSOS = {
-    "sd", "hd", "uhd", "4k", "8k",
+    "sd", "sdtv", "hd", "uhd", "4k", "8k",
     "x264", "x265", "h264", "h265", "hevc", "avc", "av1", "xvid", "divx", "vp9",
     "10bit", "8bit", "hdr", "hdr10", "dv", "sdr",
     "aac", "ac3", "eac3", "dd", "ddp", "dd+", "dts", "dtshd", "truehd", "atmos",

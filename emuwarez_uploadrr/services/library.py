@@ -700,6 +700,29 @@ def start_library_sync_background(include_episodes: bool = True) -> dict:
     return {"status": "started"}
 
 
+def recompute_after_sync(conn: sqlite3.Connection) -> None:
+    """Derived columns every library sync must refresh once its rows are in —
+    the global one and the per-instance button alike."""
+    # Newly-added/changed items have emu_in_catalog=NULL until compared —
+    # recompute now (against whatever eMu catalog snapshot is already
+    # stored, no network call) so they're immediately eligible for
+    # Recomendaciones' Group 2/3 instead of waiting on a separate eMu
+    # catalog sync that may not run again for a while.
+    try:
+        from .emu_catalog import recompute_emu_catalog_status
+        recompute_emu_catalog_status(conn)
+    except Exception:
+        logger.warning("No se pudo recalcular el estado de eMuwarez tras la sincronización de biblioteca", exc_info=True)
+    # Same reasoning for the Castilian flags: audio_languages and
+    # subtitle_languages just changed for whatever came in, and the season/
+    # series rollups above them can only be recomputed once every episode
+    # of the pass is stored.
+    try:
+        recompute_spanish_flags(conn)
+    except Exception:
+        logger.warning("No se pudo recalcular el castellano (audio/subtítulos) tras la sincronización de biblioteca", exc_info=True)
+
+
 def sync_all(conn: sqlite3.Connection, *, include_episodes: bool = False) -> dict:
     task_id = start_task(conn, "sync-library", "Sincronizando Radarr/Sonarr")
     total = 0
@@ -736,25 +759,8 @@ def sync_all(conn: sqlite3.Connection, *, include_episodes: bool = False) -> dic
                 errors.append(err)
                 details.append(f"ERROR — {err}")
                 logger.warning("Error sincronizando %s «%s»: %s", instance.type, instance.name, exc)
-        # Newly-added/changed items have emu_in_catalog=NULL until compared —
-        # recompute now (against whatever eMu catalog snapshot is already
-        # stored, no network call) so they're immediately eligible for
-        # Recomendaciones' Group 2/3 instead of waiting on a separate eMu
-        # catalog sync that may not run again for a while.
-        try:
-            from .emu_catalog import recompute_emu_catalog_status
-            recompute_emu_catalog_status(conn)
-        except Exception:
-            logger.warning("No se pudo recalcular el estado de eMuwarez tras la sincronización de biblioteca", exc_info=True)
-        # Same reasoning for the Castilian flags: audio_languages and
-        # subtitle_languages just changed for whatever came in, and the season/
-        # series rollups above them can only be recomputed once every episode
-        # of the pass is stored.
-        try:
-            recompute_spanish_flags(conn)
-        except Exception:
-            logger.warning("No se pudo recalcular el castellano (audio/subtítulos) tras la sincronización de biblioteca", exc_info=True)
-        summary = f"{total} elementos sincronizados; {missing} no disponibles"
+        recompute_after_sync(conn)
+        summary =f"{total} elementos sincronizados; {missing} no disponibles"
         finish_task(conn, task_id, "completed", summary, "\n".join(details))
         logger.info("Sincronización de biblioteca terminada: %d elementos, %d no disponibles%s",
                     total, missing, f" ({len(errors)} instancias con error)" if errors else "")

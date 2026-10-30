@@ -147,6 +147,40 @@ def test_instance_sync_endpoint(client, auth_headers):
     assert resp.json()["imported"] == 1
 
 
+def test_instance_sync_computes_spanish_flags(client, auth_headers):
+    """Same post-pass as /api/sync, or the upload gate sees no Castilian."""
+    client.post(
+        "/api/instances",
+        json={"type": "radarr", "name": "R3", "url": "http://r3:7878", "api_key": "k3"},
+        headers=auth_headers,
+    )
+    iid = client.get("/api/instances", headers=auth_headers).json()[0]["id"]
+    movies = [{"id": 6, "title": "Con castellano", "year": 2023, "tmdbId": 600,
+               "movieFile": {"id": 60, "path": "/m/C.mkv", "size": 1000,
+                             "quality": {"quality": {"name": "WEB-DL-1080p"}},
+                             "mediaInfo": {"audioLanguages": "spa / eng"}}}]
+    with (
+        patch("emuwarez_uploadrr.integrations.radarr.get_movies", return_value=movies),
+        patch("emuwarez_uploadrr.integrations.radarr.get_queue", return_value=[]),
+    ):
+        client.post(f"/api/instances/{iid}/sync", headers=auth_headers)
+    item = client.get("/api/library", headers=auth_headers).json()["items"][0]
+    assert item["has_spanish_ok"] == 1
+
+
+def test_instance_sync_refuses_while_library_sync_runs(client, auth_headers):
+    from emuwarez_uploadrr.services.library import _lib_sync_guard
+    client.post(
+        "/api/instances",
+        json={"type": "radarr", "name": "R4", "url": "http://r4:7878", "api_key": "k4"},
+        headers=auth_headers,
+    )
+    iid = client.get("/api/instances", headers=auth_headers).json()[0]["id"]
+    with _lib_sync_guard():
+        resp = client.post(f"/api/instances/{iid}/sync", headers=auth_headers)
+    assert resp.status_code == 429
+
+
 # ---------------------------------------------------------------------------
 # Dashboard API
 # ---------------------------------------------------------------------------

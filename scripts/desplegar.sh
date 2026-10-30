@@ -36,7 +36,7 @@ IMAGEN="ghcr.io/kisnov/emuwarez-uploadrr"
 FORK="https://github.com/Kisnov/Uploadrr-EMU.git"
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # En Git Bash de Windows no hay python3.
-PYTHON="$(command -v python3 || command -v python)"
+PYTHON="$(command -v python3 || command -v python)" || { echo "No encuentro python3 ni python en el PATH." >&2; exit 1; }
 
 NOTAS=""
 ESCALA=""

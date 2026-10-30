@@ -336,6 +336,20 @@ def test_lo_que_pide_la_peticion_va_antes_que_la_puntuacion(db_conn):
     assert evaluate_request_readiness(req_id, db_conn)["best_library_item_id"] == cuatro_k
 
 
+def test_si_cumplen_igual_gana_la_copia_lista_y_no_la_del_ano(db_conn):
+    """Con la resolución y la fuente igual de cumplidas, el +10 del año no puede hacer ganar a una copia cuyo
+    fichero falta frente a otra lista para subir."""
+    from emuwarez_uploadrr.services.request_readiness import evaluate_request_readiness
+    _insert_library(db_conn, title="Igual", tmdb_id="ig1", resolution="2160p", year=2021, file_exists=0)
+    lista = _insert_library(db_conn, title="Igual", tmdb_id="ig1", resolution="2160p", year=2020,
+                            nomenclature_status="Correcta", prepared_path="/data/prepared/igual.mkv")
+    req_id = _insert_request(db_conn, emu_id="emu-ig", title="Igual", tmdb_id="ig1", requested_resolution="2160p")
+    db_conn.execute("UPDATE request_items SET created_at = '2021-05-01' WHERE id = ?", (req_id,))
+    db_conn.commit()
+    result = evaluate_request_readiness(req_id, db_conn)
+    assert (result["best_library_item_id"], result["status"]) == (lista, "ready_to_upload")
+
+
 def test_el_id_gana_a_un_titulo_que_esta_listo(db_conn):
     """Ganaba el candidato «listo para subir» aunque solo casara por el título y fuera otra película."""
     from emuwarez_uploadrr.services.request_readiness import evaluate_request_readiness

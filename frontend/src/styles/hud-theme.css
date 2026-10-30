@@ -308,15 +308,15 @@
 .hud-app .stat-card {
   flex-direction: row;
   align-items: flex-start;
-  gap: 12px;
-  padding: 14px 15px;
+  gap: 10px;
+  padding: 10px 14px;
 }
 .hud-app .stat-card-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 46px;
-  height: 46px;
+  width: 36px;
+  height: 36px;
   flex-shrink: 0;
   border-radius: 3px;
   color: var(--hud-cyan);
@@ -325,12 +325,17 @@
   box-shadow: 0 0 14px -4px color-mix(in srgb, var(--hud-cyan) 60%, transparent), inset 0 0 10px color-mix(in srgb, var(--hud-cyan) 20%, transparent);
   clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%);
 }
-.hud-app .stat-card-icon svg { width: 24px; height: 24px; }
+.hud-app .stat-card-icon svg { width: 18px; height: 18px; }
 .hud-app .stat-card-label {
   font-family: var(--hud-font);
+  /* Las 10 tarjetas del Panel son icono + fila, nunca dos líneas en la
+     práctica: la reserva de dos líneas de .stat-card-label (pensada para
+     otro contexto) solo dejaba un hueco vacío antes de la cifra. */
+  min-height: 0;
 }
 .hud-app .stat-card-value {
   font-family: var(--hud-font);
+  font-size: 22px;
   text-shadow: 0 0 10px currentColor;
 }
 

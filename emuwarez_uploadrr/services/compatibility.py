@@ -10,6 +10,7 @@ Priority order for ranking:
 """
 from __future__ import annotations
 
+import functools
 import re
 import unicodedata
 from typing import Optional
@@ -36,9 +37,14 @@ _SOURCE_CANONICAL: dict[str, str] = {
     "dvdrip": "dvdrip", "dvd rip": "dvdrip", "dvd": "dvd",
     "cam": "cam", "ts": "ts", "tc": "tc",
     "hdcam": "hdcam",
+    # Tipos de las peticiones de eMuwarez y fuentes de la nomenclatura (source_assistant.EMU_SOURCES).
+    "remux": "bdremux", "encode": "bluray",
+    "fulldisc": "fulldisc", "fullbluray": "fulldisc",
+    "fdvd": "dvd", "sd": "dvd",
 }
 
 _SOURCE_RANK: dict[str, int] = {
+    "fulldisc": 105,
     "bdremux": 100,
     "bluray": 95,
     "bdrip": 85,
@@ -134,12 +140,34 @@ def compare_source(requested: str | None, local: str | None) -> Optional[bool]:
     return loc_rank >= req_rank
 
 
-def _word_overlap(t1: str, t2: str) -> float:
-    w1 = set(t1.split())
-    w2 = set(t2.split())
+def _word_overlap(w1: frozenset[str], w2: frozenset[str]) -> float:
     if not w1 or not w2:
         return 0.0
     return len(w1 & w2) / max(len(w1), len(w2))
+
+
+@functools.lru_cache(maxsize=65536)
+def _titulos(value: str | None) -> tuple[str, str, frozenset[str]]:
+    """Título normalizado, compacto y sus palabras; en caché porque cada petición recorre toda la biblioteca."""
+    norm = normalize_title(value)
+    return norm, compact_title(value), frozenset(norm.split())
+
+
+# Las temporadas y los capítulos son de su serie.
+TIPO_DE_FILA: dict[str, str] = {"movie": "movie", "series": "series", "season": "series", "episode": "series"}
+
+
+def tipo_de_peticion(category: str | None) -> Optional[str]:
+    """'movie', 'series' o None (documental o desconocida) según la categoría. Mismo criterio que contentKind()
+    de RequestsPage.tsx."""
+    c = (category or "").lower()
+    if "serie" in c or "tv" in c or "show" in c:
+        return "series"
+    if "docu" in c:
+        return None
+    if "pel" in c or "movie" in c or "film" in c:
+        return "movie"
+    return None
 
 
 def match_request_to_library(
@@ -155,10 +183,21 @@ def match_request_to_library(
     results: list[dict] = []
     req_tmdb = str(req.get("tmdb_id") or "").strip()
     req_imdb = str(req.get("imdb_id") or "").strip()
-    req_title_norm = normalize_title(req.get("title"))
-    req_title_compact = compact_title(req.get("title"))
+    # Una petición de temporada o capítulo es de serie aunque la categoría no lo diga (documentales).
+    req_tipo = tipo_de_peticion(req.get("category")) or (
+        "series" if req.get("req_scope") in ("season", "episode") else None)
+    req_title_norm, req_title_compact, req_words = _titulos(req.get("title"))
 
     for item in library:
+        # A los capítulos se llega desde su serie y una temporada solo vale si es la pedida (todas llevan el tmdb
+        # de la serie). Y TMDb numera aparte películas y series: un mismo id no hace que una película atienda una
+        # petición de serie.
+        tipo = item.get("item_type")
+        if tipo == "episode" or (tipo == "season" and item.get("season_number") != req.get("req_season")):
+            continue
+        if req_tipo and tipo and TIPO_DE_FILA.get(tipo) != req_tipo:
+            continue
+
         id_match = False
         title_match = False
         confidence = 0.0
@@ -166,15 +205,17 @@ def match_request_to_library(
         itm_tmdb = str(item.get("tmdb_id") or "").strip()
         itm_imdb = str(item.get("imdb_id") or "").strip()
 
-        if req_tmdb and itm_tmdb and req_tmdb == itm_tmdb:
+        if (req_tmdb and itm_tmdb and req_tmdb != itm_tmdb) or (req_imdb and itm_imdb and req_imdb != itm_imdb):
+            # Con un id distinto es otro contenido aunque el otro id o el título coincidan (Dune de 1984 y la de 2021).
+            continue
+        if req_tmdb and itm_tmdb:
             id_match = True
             confidence = 1.0
-        elif req_imdb and itm_imdb and req_imdb == itm_imdb:
+        elif req_imdb and itm_imdb:
             id_match = True
             confidence = 0.95
         else:
-            itm_title_norm = normalize_title(item.get("title"))
-            itm_title_compact = compact_title(item.get("title"))
+            itm_title_norm, itm_title_compact, itm_words = _titulos(item.get("title"))
             if (
                 req_title_compact
                 and req_title_compact == itm_title_compact
@@ -182,7 +223,7 @@ def match_request_to_library(
                 title_match = True
                 confidence = 0.90
             else:
-                sim = _word_overlap(req_title_norm, itm_title_norm)
+                sim = _word_overlap(req_words, itm_words)
                 if sim >= 0.75:
                     title_match = True
                     confidence = 0.55 + sim * 0.35
@@ -195,7 +236,8 @@ def match_request_to_library(
                 "confidence": confidence,
             })
 
-    results.sort(key=lambda x: x["confidence"], reverse=True)
+    # A igual confianza, la serie antes que su temporada: desde la serie se llega a lo pedido.
+    results.sort(key=lambda x: (-x["confidence"], x["item"].get("item_type") == "season"))
     return results
 
 
@@ -352,5 +394,5 @@ __all__ = [
     "parse_resolution", "parse_source",
     "compare_resolution", "compare_source",
     "match_request_to_library", "classify_request_match",
-    "rank_request_matches",
+    "rank_request_matches", "tipo_de_peticion", "TIPO_DE_FILA",
 ]

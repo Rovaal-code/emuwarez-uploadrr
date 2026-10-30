@@ -364,6 +364,18 @@ def test_compatible_notification_keeps_the_matched_poster(db_conn):
     assert notes[0]["poster_url"] == "http://poster"
 
 
+def test_muchas_compatibles_de_golpe_dan_un_solo_aviso(db_conn):
+    """La primera sincronización encuentra de golpe todo lo compatible: un aviso por petición llenaba la campana
+    (y Discord/Telegram)."""
+    movie = _add_library_item(db_conn, item_type="movie", title="Pelicula", year=2020)
+    for i in range(6):
+        _add_compatible_request(db_conn, title=f"Pelicula {i}", library_item_id=movie)
+
+    notes = _notify_and_read(db_conn)
+    assert len(notes) == 1
+    assert notes[0]["body"] == "Tienes contenido compatible con 6 peticiones."
+
+
 # ---------------------------------------------------------------------------
 # El estado de la petición aterriza en la fila que la petición pide
 # ---------------------------------------------------------------------------
@@ -401,6 +413,51 @@ def test_a_season_request_marks_the_season_not_the_series(db_conn):
         "SELECT request_status FROM library_items WHERE id = ?", (i,)).fetchone()["request_status"]
     assert estado(season_id) != "Sin petición", "la temporada tiene que llevar el estado"
     assert estado(series_id) == "Sin petición", "la serie no: la petición no es de la serie entera"
+
+
+def test_una_temporada_que_no_tienes_no_sale_compatible(db_conn):
+    """La petición de la Temporada 3 casa con la serie; si la serie estaba «Disponible», salía «Compatible»."""
+    from emuwarez_uploadrr.services.requests import match_all_requests, upsert_request
+    from emuwarez_uploadrr.models import RequestItem
+    serie = db_conn.execute("INSERT INTO library_items(item_type,title,year,local_status,tmdb_id) "
+                            "VALUES ('series','Serie',2019,'Disponible','555')").lastrowid
+    temporada = db_conn.execute("INSERT INTO library_items(item_type,title,local_status,parent_id,season_number) "
+                                "VALUES ('season','Serie - Temporada 1','Disponible',?,1)", (serie,)).lastrowid
+    db_conn.execute("INSERT INTO library_items(item_type,title,local_status,parent_id,season_number,episode_number,"
+                    "resolution,source) VALUES ('episode','Serie S01E01','Disponible',?,1,1,'1080p','WEB-DL')",
+                    (temporada,))
+    db_conn.commit()
+    upsert_request(db_conn, RequestItem(id=None, emu_id="req-t3", title="Serie", category="TV", tmdb_id="555"))
+    db_conn.execute("UPDATE request_items SET req_scope='season', req_season=3")
+    db_conn.commit()
+
+    match_all_requests(db_conn)
+    assert db_conn.execute("SELECT status FROM request_matches").fetchone()["status"] == "No disponible"
+
+
+def test_recalcular_borra_el_casamiento_que_ya_no_vale(db_conn):
+    """El «Compatible» de antes (Dune de 1984 para la petición de la de 2021) se quedaba en request_matches y la
+    lista lo seguía enseñando."""
+    from emuwarez_uploadrr.services.requests import match_all_requests, match_single_request
+    peli = db_conn.execute("INSERT INTO library_items(item_type,title,local_status,request_status,request_id,tmdb_id) "
+                           "VALUES ('movie','Dune','Disponible','Compatible',1,'841')").lastrowid
+    rid = db_conn.execute("INSERT INTO request_items(emu_id,title,category,tmdb_id) "
+                          "VALUES ('d21','Dune','Movie','438631')").lastrowid
+    viejo = ("INSERT INTO request_matches(library_item_id, request_item_id, status, confidence) "
+             "VALUES (?, ?, 'Compatible', 0.9)")
+    db_conn.execute(viejo, (peli, rid))
+    db_conn.commit()
+
+    match_all_requests(db_conn)
+    assert db_conn.execute("SELECT COUNT(*) AS n FROM request_matches").fetchone()["n"] == 0
+
+    db_conn.execute(viejo, (peli, rid))
+    db_conn.execute("UPDATE library_items SET request_status = 'Compatible', request_id = ? WHERE id = ?", (rid, peli))
+    db_conn.commit()
+    match_single_request(db_conn, rid)
+    assert db_conn.execute("SELECT COUNT(*) AS n FROM request_matches").fetchone()["n"] == 0
+    fila = db_conn.execute("SELECT request_status, request_id FROM library_items WHERE id = ?", (peli,)).fetchone()
+    assert (fila["request_status"], fila["request_id"]) == ("Sin petición", None)
 
 
 def test_rematching_clears_a_status_left_on_the_wrong_row(db_conn):

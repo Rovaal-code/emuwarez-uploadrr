@@ -414,6 +414,9 @@ def _effective_target(conn: sqlite3.Connection, matched_item: dict, req: dict) -
         conn, it["id"], it["item_type"], req.get("req_scope"),
         req.get("req_season"), req.get("req_episode"), ignore_specials)]
     if not eps:
+        # La serie no tiene la temporada o el capítulo pedidos: que esté disponible no los hace compatibles.
+        if it["item_type"] == "series":
+            it["local_status"] = "Faltante"
         return it
     single = eps[0] if len(eps) == 1 else None
     for key in ("resolution", "source", "video_codec", "audio_languages", "subtitle_languages"):
@@ -434,6 +437,11 @@ def _effective_target(conn: sqlite3.Connection, matched_item: dict, req: dict) -
             dirs = {os.path.dirname(p) for p in paths}
             it["path"] = next(iter(dirs)) if len(dirs) == 1 else os.path.commonpath(paths)
     return it
+
+
+def _candidatas(conn: sqlite3.Connection) -> list[dict]:
+    """Las filas que pueden atender una petición: sin los capítulos, que son casi todas y se alcanzan desde su serie."""
+    return [dict(r) for r in conn.execute("SELECT * FROM library_items WHERE item_type != 'episode'").fetchall()]
 
 
 def match_all_requests(conn: sqlite3.Connection, *, emu_api_key: Optional[str] = None) -> int:
@@ -463,10 +471,12 @@ def match_all_requests(conn: sqlite3.Connection, *, emu_api_key: Optional[str] =
         "UPDATE library_items SET request_status = 'Sin petición', request_id = NULL "
         "WHERE request_status != 'Sin petición' OR request_id IS NOT NULL"
     )
+    # Y los casamientos: uno que ya no vale (o que ahora es con otra fila) se seguía enseñando en la lista.
+    conn.execute("DELETE FROM request_matches")
     conn.commit()
 
     requests = [dict(r) for r in conn.execute("SELECT * FROM request_items").fetchall()]
-    library = [dict(r) for r in conn.execute("SELECT * FROM library_items").fetchall()]
+    library = _candidatas(conn)
     updated = 0
     for req in requests:
         candidates = match_request_to_library(req, library)
@@ -526,6 +536,9 @@ def match_all_requests(conn: sqlite3.Connection, *, emu_api_key: Optional[str] =
     return updated
 
 
+_MAX_AVISOS_SUELTOS = 5
+
+
 def _compatible_request_ids(conn: sqlite3.Connection) -> set[int]:
     """request_item_ids that currently have at least one 'Compatible' match."""
     rows = conn.execute(
@@ -542,6 +555,16 @@ def _notify_new_compatible_matches(conn: sqlite3.Connection, before_ids: set[int
         if not new_ids:
             return
         from .notification_center import emit
+        # La primera sincronización encuentra de golpe todo lo compatible: un aviso de resumen, no uno por petición.
+        if len(new_ids) > _MAX_AVISOS_SUELTOS:
+            emit(
+                conn, "request_match_found",
+                "Contenido compatible",
+                f"Tienes contenido compatible con {len(new_ids)} peticiones.",
+                link="/requests",
+                level="info",
+            )
+            return
         for rid in new_ids:
             row = conn.execute(
                 "SELECT title, url, req_scope, req_season, req_episode"
@@ -606,12 +629,17 @@ def match_single_request(
         # interfaz le salía None y la comprobación contra el catálogo de
         # eMuwarez se saltaba en silencio.
         emu_api_key = _resolve_emu_api_key(conn)
-    library = [dict(r) for r in conn.execute("SELECT * FROM library_items").fetchall()]
-    candidates = match_request_to_library(req, library)
+    # Lo de la vez anterior se recalcula entero: si ya no casa, no queda nada viejo enseñándose.
+    conn.execute("DELETE FROM request_matches WHERE request_item_id = ?", (request_id,))
+    conn.execute(
+        "UPDATE library_items SET request_status = 'Sin petición', request_id = NULL WHERE request_id = ?",
+        (request_id,),
+    )
+    candidates = match_request_to_library(req, _candidatas(conn))
     if not candidates:
         if emu_api_key and _should_check_emu_catalog(req, status=None):
             _check_emu_catalog_duplicate(conn, req, emu_api_key)
-            conn.commit()
+        conn.commit()
         return None
     best = candidates[0]
     classification = classify_request_match(

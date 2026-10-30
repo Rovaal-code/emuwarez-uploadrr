@@ -4,10 +4,6 @@ All actual sync work (library/eMuwarez/network) is mocked — these tests
 only exercise the scheduler's own bookkeeping (interval enforcement,
 claim/due logic, status recording), never real Radarr/Sonarr/eMuwarez
 traffic.
-
-Note: the eMuwarez request sync is intentionally NOT a scheduled task (it
-runs only from the "Sincronizar peticiones" button), so the only default
-scheduled task is the library sync.
 """
 from __future__ import annotations
 
@@ -47,10 +43,13 @@ def test_default_tasks_seeded_with_correct_intervals(db_conn):
     assert tasks[TASK_LIBRARY_SYNC]["manual_allowed"] == 1
 
 
-def test_emu_request_sync_is_not_scheduled(db_conn):
-    """The eMuwarez request sync must not be a scheduled task — button only."""
-    tasks = {t["task_key"] for t in list_scheduled_tasks(db_conn)}
-    assert TASK_EMU_SYNC not in tasks
+def test_emu_request_sync_is_daily_with_an_hourly_floor(db_conn):
+    """Cada 24 h, que son ≤ 9 llamadas a la API por sincronización; el botón sigue valiendo."""
+    tarea = {t["task_key"]: t for t in list_scheduled_tasks(db_conn)}[TASK_EMU_SYNC]
+    assert (tarea["interval_minutes"], tarea["min_interval_minutes"], tarea["manual_allowed"]) == (1440, 60, 1)
+    assert tarea["name"] == "Sincronizar peticiones eMuwarez"
+    with pytest.raises(ValueError, match="mínimo"):
+        set_task_interval(db_conn, TASK_EMU_SYNC, 30)
 
 
 def test_list_scheduled_tasks_idempotent(db_conn):
@@ -153,8 +152,10 @@ def test_tick_due_tasks_runs_all_on_first_tick(isolated_db):
     from emuwarez_uploadrr.services.scheduler import DEFAULT_TASKS
 
     with patch("emuwarez_uploadrr.services.library.sync_all") as mock_lib, \
+         patch("emuwarez_uploadrr.services.requests.sync_emu_requests") as mock_emu, \
          patch("emuwarez_uploadrr.services.version_info.estado_de_version") as mock_ver:
         mock_lib.return_value = {"imported": 0, "missing": 0, "instances": 0, "errors": []}
+        mock_emu.return_value = {"status": "ok", "imported": 0, "matched": 0}
         # Sin manifiesto publicado: la comprobación de versión no puede
         # comparar y se salta, que es un resultado válido de la tarea.
         mock_ver.return_value = {"estado": "desconocido", "motivo": "sin manifiesto",
@@ -173,3 +174,34 @@ def test_tick_due_tasks_second_tick_runs_nothing(isolated_db):
         second_results = tick_due_tasks()
 
     assert second_results == []
+
+
+# ---------------------------------------------------------------------------
+# Sincronización de peticiones de eMuwarez
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("resultado, estado, texto", [
+    ({"status": "ok", "imported": 12, "matched": 3}, "completed", "12 peticiones importadas, 3 cruces"),
+    ({"status": "throttled", "wait_seconds": 90}, "skipped", "Esperando 90s"),
+    ({"status": "busy", "message": "Hay una subida en marcha; vuelve a probar cuando termine."},
+     "skipped", "Hay una subida en marcha"),
+])
+def test_emu_request_sync_records_what_happened(db_conn, resultado, estado, texto):
+    with patch("emuwarez_uploadrr.services.requests.sync_emu_requests", return_value=resultado) as mock_emu:
+        run = run_scheduled_task(db_conn, TASK_EMU_SYNC)
+
+    mock_emu.assert_called_once_with(db_conn, force=False)
+    assert run["status"] == estado
+    assert texto in run["summary"]
+    assert get_scheduled_task(db_conn, TASK_EMU_SYNC)["last_status"] == estado
+
+
+def test_emu_request_sync_failure_is_recorded_with_its_message(db_conn):
+    from emuwarez_uploadrr.integrations.base import IntegrationError
+
+    error = IntegrationError("eMuwarez ha rechazado la API key (¿ratio por debajo de 1?)", status=401)
+    with patch("emuwarez_uploadrr.services.requests.sync_emu_requests", side_effect=error):
+        run = run_scheduled_task(db_conn, TASK_EMU_SYNC)
+
+    assert run["status"] == "failed"
+    assert run["summary"] == "eMuwarez ha rechazado la API key (¿ratio por debajo de 1?)"

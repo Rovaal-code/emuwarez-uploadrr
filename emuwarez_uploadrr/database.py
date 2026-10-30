@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 40
+SCHEMA_VERSION = 41
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -557,7 +557,8 @@ def _migrate_request_items_emu_catalog_check(conn: sqlite3.Connection) -> None:
 
     This is independent from request_matches (library vs request matching):
     it records whether eMuwarez's own torrent catalog already has content for
-    this request's tmdb_id, queried directly via emu_search_existing().
+    this request's tmdb_id. Sin uso desde que se quitó esa comprobación en vivo
+    (una llamada por petición); las columnas se quedan donde están.
     """
     new_cols = [
         ("emu_catalog_checked_at", "TEXT"),
@@ -1119,6 +1120,21 @@ def _migrate_request_items_is_example(conn: sqlite3.Connection) -> None:
         pass
 
 
+def _migrate_request_items_last_seen(conn: sqlite3.Connection) -> None:
+    """Cuándo vio por última vez la sincronización cada petición: lo que no sale
+    en un recorrido completo de eMuwarez es que ya no está abierta, y se borra."""
+    try:
+        conn.execute("ALTER TABLE request_items ADD COLUMN last_seen_at TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+
+def _migrate_quitar_peticiones_de_ejemplo(conn: sqlite3.Connection) -> None:
+    """Las peticiones de ejemplo se generaron mientras no había endpoint real;
+    ahora que se leen de eMuwarez, se borran con lo que colgaba de ellas."""
+    borrar_peticiones(conn, "is_example = 1")
+
+
 def _migrate_qbit_port_into_url(conn: sqlite3.Connection) -> None:
     """El puerto de qBittorrent deja de tener campo propio y pasa a ir dentro
     de la URL.
@@ -1568,11 +1584,28 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_library_items_tvmaze_id(conn)
         _migrate_dominio_emu_warez(conn)
         _migrate_nomenclature_torrent_name(conn)
+        _migrate_quitar_peticiones_de_ejemplo(conn)
+        _migrate_request_items_last_seen(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:
         if own:
             conn.close()
+
+
+def borrar_peticiones(conn: sqlite3.Connection, donde: str, params: tuple = ()) -> int:
+    """Borra las peticiones que cumplan `donde` y lo que depende de ellas.
+
+    Los cruces (request_matches) caen por la clave foránea; el resto guarda el
+    id sin clave, y la biblioteca puede llevar el estado de una petición que
+    ya no existe. `donde` lo escribe el código, nunca viene de fuera."""
+    ids = f"SELECT id FROM request_items WHERE {donde}"
+    conn.execute(
+        "UPDATE library_items SET request_status = 'Sin petición', request_id = NULL "
+        f"WHERE request_id IN ({ids})", params)
+    for tabla in ("request_readiness", "request_candidates", "operational_queue_items"):
+        conn.execute(f"DELETE FROM {tabla} WHERE request_item_id IN ({ids})", params)
+    return conn.execute(f"DELETE FROM request_items WHERE {donde}", params).rowcount
 
 
 def row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
@@ -1637,7 +1670,7 @@ def set_json_state(conn: sqlite3.Connection, key: str, value: Any) -> None:
 
 
 __all__ = [
-    "DB_FILE", "SCHEMA_VERSION", "db_path", "connect", "init_db",
+    "DB_FILE", "SCHEMA_VERSION", "db_path", "connect", "init_db", "borrar_peticiones",
     "row_to_dict", "rows_to_dicts", "get_state", "set_state",
     "get_json_state", "set_json_state",
     "CANONICAL_SETTING_ALIASES", "get_setting_canonical",

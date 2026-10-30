@@ -225,7 +225,9 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const { libSyncing, startLibrarySync, lastInvalidatedAt, isAnySyncing } = useSync()
   // Una sincronización puede traer valores nuevos (un grupo, un proveedor): se vuelven a pedir.
   useEffect(() => {
-    getLibraryFilterOptions().then(setFilterOptions).catch(() => {})
+    let alive = true
+    getLibraryFilterOptions().then(o => { if (alive) setFilterOptions(o) }).catch(() => {})
+    return () => { alive = false }
   }, [lastInvalidatedAt])
 
   // Filters

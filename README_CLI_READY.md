@@ -426,12 +426,13 @@ La interfaz web estará disponible en `http://localhost:9494`.
 
 ### Hardlinks y EXDEV
 
-Para que la creación de hardlinks funcione, el directorio fuente (`/data/media`) y
-el `hardlink_base` (`/data/uploads/emu`) deben estar en el **mismo filesystem**.
+Para que los enlaces sean duros, la media (`/data/media`) y la carpeta de subidas
+(`UPLOADRR_UPLOADS_DIR`, `/data/uploads/emu`) deben estar en el **mismo filesystem**.
 
-Si montas media y uploads en dispositivos distintos, la creación de hardlinks fallará
-con error `EXDEV (cross-device link)`. Configura `hardlink_base` en el setup web
-apuntando dentro del mismo montaje que el media.
+Si montas media y subidas en dispositivos distintos, el enlace duro falla con
+`EXDEV (cross-device link)` y la app pone uno simbólico, que solo siembra si
+qBittorrent ve la media en la misma ruta. Monta las dos bajo una misma raíz; las
+rutas están en `docs/DEPLOYMENT_DOCKER.md`, sección 2.
 
 ### Configuración de Uploadrr
 
@@ -443,9 +444,7 @@ el contenedor (`docker-entrypoint.sh`) por symlinks a `/config/Uploadrr/data`
 y `/config/Uploadrr/tmp`, así que persisten en el mismo volumen `/config` que
 ya montas para la base de datos.
 
-El resto de settings de runtime se configuran desde el setup web, o desde
-**Configuración → Uploadrr** en la UI, tras el primer arranque. Ver
-`docs/DEPLOYMENT_DOCKER.md` sección 7b para el detalle completo.
+Ver `docs/DEPLOYMENT_DOCKER.md`, sección 6, para el detalle.
 
 ### Gestión del contenedor
 
@@ -478,8 +477,8 @@ y limpia automáticamente al terminar.
 python3 emuwarez_uploader.py web doctor
 ```
 
-Muestra el estado del CONFIG_DIR, base de datos, frontend, montaje de Uploadrr,
-`hardlink_base` y variables de entorno, sin mostrar secretos.
+Muestra el estado del CONFIG_DIR, base de datos, frontend, Uploadrr, rutas
+permitidas, claves e instancias, sin mostrar secretos.
 
 ### Guía de despliegue completa
 

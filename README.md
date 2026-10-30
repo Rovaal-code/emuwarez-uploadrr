@@ -105,11 +105,11 @@ Abre `http://localhost:9494`: el asistente de configuración inicial se abre sol
 
   ```bash
   mkdir -p /srv/data/uploads/emu
-  chown 1000:1000 /srv/data/uploads/emu
+  chown 1000:1000 /srv/data/uploads/emu   # tu PUID:PGID
   ```
 - **qBittorrent** tiene que ver la carpeta de subidas en la misma ruta que este contenedor.
 - **Si Radarr/Sonarr ven la media en otra ruta** que este contenedor, añade una regla en Configuración →
-  *Mapeo de rutas (biblioteca remota)*.
+  Diagnóstico → *Mapeo de rutas (biblioteca remota)*.
 
 ### Versiones y volver atrás
 
@@ -132,7 +132,9 @@ EMUWAREZ_UPLOADRR_TAG=0.11.0 docker compose up -d
 git clone https://github.com/Kisnov/emuwarez-uploadrr.git
 cd emuwarez-uploadrr
 cp .env.example .env
-docker compose -f docker-compose.example.yml up -d --build
+docker compose -f docker-compose.example.yml build \
+  --build-arg UPLOADRR_COMMIT=$(git ls-remote https://github.com/Kisnov/Uploadrr-EMU.git main | cut -f1)
+docker compose -f docker-compose.example.yml up -d
 ```
 
 > Uploadrr-EMU va empaquetado dentro de la imagen: no hay que montar ni configurar nada aparte para él. Su
@@ -170,7 +172,6 @@ los dos lados, cambia el otro a la vez.
 ## Documentación
 
 - [`docs/DEPLOYMENT_DOCKER.md`](docs/DEPLOYMENT_DOCKER.md): despliegue Docker paso a paso y troubleshooting.
-  **Desactualizada:** aún describe `hardlink_base` y pasos que ya no existen; para las rutas vale lo de arriba.
 - [`docs/source_engine.md`](docs/source_engine.md): motor de detección de source y nomenclatura.
 - [`README_CLI_READY.md`](README_CLI_READY.md): referencia de la CLI y del modelo SQLite.
 

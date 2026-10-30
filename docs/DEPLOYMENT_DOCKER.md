@@ -1,509 +1,293 @@
-# eMuwarez Uploadrr — Guía de despliegue Docker
+# Despliegue con Docker
 
-Guía paso a paso para desplegar eMuwarez Uploadrr como contenedor Docker en un homelab.
+Cómo desplegar eMuwarez Uploadrr con Docker Compose en un servidor o NAS, y qué mirar cuando algo falla. El
+[README](../README.md) tiene el arranque rápido; aquí está el porqué de cada ruta y cada permiso.
 
----
+## 1. Qué necesitas
 
-## 1. Requisitos
+- Docker 24+ con Compose v2 (`docker compose`).
+- Un host Linux con la media de Radarr/Sonarr. El contenedor la lee, la renombra y la enlaza, así que tiene que verla
+  y poder escribir en ella.
+- qBittorrent para sembrar lo que subes. Es opcional: sin él, los torrents se añaden a mano.
+- Las claves: API key y usuario de eMuwarez, API key de TMDb y las de Radarr/Sonarr. Se introducen en el asistente
+  web o en Configuración, nunca en el compose ni en el `.env`.
 
-- Docker 24+ con BuildKit habilitado
-- Docker Compose v2 (`docker compose`, no `docker-compose`)
-- Sistema Linux con usuario con permisos Docker
-- Directorio de datos con espacio suficiente para media y uploads
+## 2. Las rutas
 
----
+Es lo único delicado del despliegue. El contenedor trabaja con tres:
 
-## 2. Preparar carpetas
+| En el contenedor | En el host (ejemplo) | Qué hay |
+|---|---|---|
+| `/config` | `/srv/emuwarez-uploadrr/config` | Base de datos SQLite, ajustes, backups (`/config/backups`) y el estado de Uploadrr-EMU (`/config/Uploadrr`). |
+| `/data` | `/srv/data` | Raíz común: la media de Radarr/Sonarr (`/data/media`) y la carpeta de subidas. |
+| `/data/uploads/emu` | `/srv/data/uploads/emu` | Carpeta de subidas, la que indica `UPLOADRR_UPLOADS_DIR`. |
+
+### Qué pasa al subir
+
+1. La app renombra el fichero en la biblioteca a la nomenclatura de eMuwarez.
+2. Lo enlaza en la carpeta de subidas. Una película o un capítulo suelto va directamente en la raíz; un pack de
+   temporada, en una carpeta con el nombre del release y un enlace por capítulo, para que el torrent se llame como
+   el release sin tocar la carpeta de Sonarr.
+3. Uploadrr-EMU crea el torrent desde ahí, lo sube a eMuwarez y se lo pasa a qBittorrent con esa carpeta como ruta
+   de guardado. qBittorrent siembra desde la carpeta de subidas.
+
+El enlace es **duro** siempre que se puede: otro nombre para los mismos datos, que no ocupa disco. Si no se puede,
+la app crea uno **simbólico**. Pasa en estos casos:
+
+- La carpeta de subidas está en otro sistema de ficheros que la media (`EXDEV`).
+- La media está en un montaje CIFS o NFS que no admite enlaces duros (`EPERM`).
+- `PUID:PGID` no es dueño del fichero de la media ni puede escribirlo: el kernel no deja enlazarlo
+  (`fs.protected_hardlinks`, también `EPERM`).
+- El fichero ha llegado a su límite de enlaces (`EMLINK`).
+
+Un enlace simbólico solo siembra si qBittorrent puede resolver a dónde apunta, es decir, si también ve la
+biblioteca en la misma ruta.
+
+De ahí salen las reglas:
+
+- **La carpeta de subidas va en el mismo sistema de ficheros que la media.** En el ejemplo, las dos cuelgan de
+  `/srv/data`, montado como `/data`. Sin `UPLOADRR_UPLOADS_DIR`, la carpeta es `/config/Uploadrr/uploads`. Si
+  está en otro disco que la media, que es lo normal, los enlaces duros fallan (`EXDEV`) y todos salen simbólicos.
+- **qBittorrent ve la carpeta de subidas en la misma ruta que este contenedor.** Si corre en Docker, móntale el
+  mismo `/srv/data:/data`. Si corre directamente en el host, donde la ruta es `/srv/data/uploads/emu`, monta la raíz
+  con la misma ruta en los dos lados (`/srv/data:/srv/data` y `UPLOADRR_UPLOADS_DIR: /srv/data/uploads/emu`).
+- **Si Radarr/Sonarr ven la media en otra ruta** que este contenedor, añade una regla en Configuración →
+  Diagnóstico → *Mapeo de rutas (biblioteca remota)*. Traduce la ruta que reportan a la ruta donde la app alcanza
+  el fichero, y se aplica al leer el MediaInfo, al verificar y al subir.
+- **Rutas permitidas.** La app comprueba que lo que entrega a Uploadrr-EMU está dentro de Configuración → *Acceso a
+  la biblioteca* → *Rutas permitidas*, que por defecto es `/data`. Si montas la raíz de datos en otra ruta,
+  ponla ahí.
+
+La app no borra los enlaces de una subida completada, porque qBittorrent siembra de ahí. Al borrar una subida en
+Subidas solo se quitan los enlaces de los intentos fallidos o cancelados que no use otra subida. El fichero de la
+biblioteca nunca se toca.
+
+## 3. Preparar el host
 
 ```bash
-# Directorio de configuración persistente (aquí vive también, automáticamente,
-# el config.yaml y los temporales de Uploadrr-EMU, bajo config/Uploadrr)
-mkdir -p /srv/emuwarez-uploadrr/config
+# UID y GID del dueño de la media: son tu PUID y PGID (van también al .env)
+PUID=$(id -u tu_usuario) PGID=$(id -g tu_usuario)
 
-# Raíz de datos — media y uploads en el MISMO filesystem para hardlinks
-mkdir -p /srv/data/media
-mkdir -p /srv/data/uploads/emu
+mkdir -p /srv/emuwarez-uploadrr/config /srv/data/uploads/emu
+chown "$PUID:$PGID" /srv/emuwarez-uploadrr/config /srv/data/uploads/emu
 ```
 
-> **Importante para hardlinks**: `/srv/data/media` y `/srv/data/uploads/emu` deben estar en el mismo dispositivo/partición para evitar el error `EXDEV (cross-device link)`. Usa una raíz común como `/srv/data` o `/data`.
+El contenedor corre directamente como `PUID:PGID` (la clave `user:` del compose), sin pasar por root, así que no
+puede crear ni cambiar de dueño nada dentro de una carpeta que no sea suya. Por eso las dos carpetas se crean antes
+de arrancar y con ese dueño. El mismo usuario tiene que ser dueño de la media, o al menos poder escribir en ella: el
+paso 1 de la subida renombra el fichero ahí, y si no puede, la comprobación «Se puede renombrar» para la subida
+antes de empezar.
 
----
+## 4. El compose
 
-## 3. Copiar .env
+[`docker-compose.yml`](../docker-compose.yml) usa la imagen publicada en `ghcr.io/kisnov/emuwarez-uploadrr`, así que
+no compila nada. Lo que hay que mirar:
 
-```bash
-cd ~/emuwarez_uploadrr_cli_ready_v2  # o donde hayas clonado el repositorio
-cp .env.example .env
-# Edita .env y ajusta PUID, PGID y TZ a tu entorno
-nano .env
-```
+| Clave | En el repo | Para qué |
+|---|---|---|
+| `image` | `ghcr.io/kisnov/emuwarez-uploadrr:${EMUWAREZ_UPLOADRR_TAG:-latest}` | `latest` es la última imagen publicada. Para quedarte en una versión o volver atrás, `EMUWAREZ_UPLOADRR_TAG` acepta también `X.Y.Z` o el SHA de un commit de `master`: ver [Versiones y volver atrás](../README.md#versiones-y-volver-atrás). |
+| `ports` | `${EMUWAREZ_UPLOADRR_PORT:-9494}:9494` | Interfaz web y API. |
+| `user` | `${PUID:-1000}:${PGID:-1000}` | El usuario con el que corre todo (sección 3). |
+| `cpus`, `mem_limit` | `"2"`, `"2g"` | Cada subida activa puede ocupar un núcleo entero (el hash del torrent) y unos 0,8 GB de RAM: con estos valores caben unas dos subidas en paralelo. Si subes *Máximo de Subidas en Paralelo* (Configuración → Otros), sube también estos dos. |
+| `TZ` | `Europe/Madrid` | Zona horaria. |
+| `CONFIG_DIR` | `/config` | Dónde vive la configuración. No lo cambies. |
+| `UPLOADRR_UPLOADS_DIR` | `/data/uploads/emu` | Carpeta de subidas (sección 2). |
+| `volumes` | `/srv/emuwarez-uploadrr/config:/config` y `/srv/data:/data` | Cambia la parte del host por tus rutas. |
 
-Ajusta `PUID` y `PGID` al UID/GID del usuario que posee los archivos de media:
+Si Radarr, Sonarr y qBittorrent corren en Docker, descomenta `networks` y pon el contenedor en su misma red: así
+los alcanzas por el nombre del servicio (`http://radarr:7878`).
 
-```bash
-id $(whoami)  # muestra tu UID y GID
-```
-
----
-
-## 4. Levantar con Compose
-
-Con la imagen ya publicada en `ghcr.io/kisnov/emuwarez-uploadrr` (no compila nada):
+Para no editar el compose, copia [`.env.example`](../.env.example) a `.env` al lado y ajusta `PUID`, `PGID`, `TZ`,
+`EMUWAREZ_UPLOADRR_PORT` y `EMUWAREZ_UPLOADRR_TAG`. Luego:
 
 ```bash
 docker compose up -d
+docker compose ps        # al cabo de unos segundos debe salir (healthy)
 ```
 
-Para construir la imagen tú mismo a partir del código local (incluye el build del frontend React, puede tardar 1-3 minutos) usa `docker-compose.example.yml` en su lugar:
+El estado `healthy` lo da el healthcheck de la imagen, que consulta `/api/health`.
+
+### Construir la imagen tú mismo
+
+[`docker-compose.example.yml`](../docker-compose.example.yml) es el mismo compose, pero construye la imagen desde
+el código:
 
 ```bash
-docker compose -f docker-compose.example.yml up -d --build
+git clone https://github.com/Kisnov/emuwarez-uploadrr.git
+cd emuwarez-uploadrr
+cp .env.example .env
+docker compose -f docker-compose.example.yml build \
+  --build-arg UPLOADRR_COMMIT=$(git ls-remote https://github.com/Kisnov/Uploadrr-EMU.git main | cut -f1)
+docker compose -f docker-compose.example.yml up -d
 ```
 
-El resto de esta guía usa `docker compose` (sin `-f`) para los comandos; si estás construyendo localmente añade `-f docker-compose.example.yml`.
+`UPLOADRR_COMMIT` hace que Uploadrr-EMU se vuelva a clonar cuando tiene commits nuevos. Sin él, Docker puede
+reutilizar de la caché una copia antigua.
 
----
+## 5. Primer arranque
 
-## 5. Abrir la interfaz web
+Abre `http://<IP-del-servidor>:9494`. El asistente de configuración se abre solo:
 
-Abre el navegador en:
+1. **Bienvenida.**
+2. **Crear admin**: usuario y contraseña de al menos 12 caracteres, con mayúsculas, minúsculas, un número y un
+   símbolo.
+3. **eMuwarez**: API key, tu usuario y el tag del grupo de subida. Para continuar hay que pulsar «Probar conexión» y
+   que funcione.
+4. **Instancias**: Radarr y/o Sonarr con nombre, URL y API key. La URL es la que alcanza este contenedor: dentro de
+   él, `localhost` es el propio contenedor, no el host. «Probar conexión» también avisa si las carpetas raíz de la
+   instancia no se ven desde aquí (sección 2).
+5. **TMDb**: API key y región. Es obligatoria: traduce los títulos de las series, detecta el proveedor de los
+   WEB-DL y la necesita Uploadrr-EMU para la ficha.
+6. **qBittorrent**: URL del WebUI, tag, usuario y contraseña. Se puede omitir.
+7. **Proveedores de vídeo**: el orden de preferencia cuando el contenido está en varias plataformas.
+8. **Imágenes**: dónde se suben las capturas. imgbox va por defecto y no necesita key.
+9. **Completar.**
 
-```
-http://localhost:9494
-```
+Todo se puede cambiar después en Configuración. Luego, en el Panel, sincroniza la biblioteca (↻ Biblioteca) y las
+peticiones; desde Tareas se repiten solas cada cierto tiempo.
 
-O si accedes desde otra máquina de la red:
+Para subir algo, pulsa **Subir** en la Biblioteca. El asistente comprueba el fichero (que se pueda leer, enlazar en
+la carpeta de subidas y renombrar), el directorio de salida de Uploadrr-EMU, qBittorrent, el host de imágenes y
+eMuwarez; después genera el nombre y lanza la subida. El progreso y los logs están en Subidas.
 
-```
-http://<IP-DEL-SERVIDOR>:9494
-```
+## 6. Uploadrr-EMU
 
----
+Va dentro de la imagen, en `/opt/Uploadrr`: no hay nada que montar ni configurar. Al arrancar,
+`docker-entrypoint.sh` sustituye `/opt/Uploadrr/data` y `/opt/Uploadrr/tmp` por enlaces a `/config/Uploadrr/data`
+y `/config/Uploadrr/tmp`, así que su `config.yaml` y sus temporales sobreviven a recrear el contenedor. La primera
+vez, `/config/Uploadrr/data` se copia del que trae la imagen.
 
-## 6. Crear el primer usuario administrador
+Antes de cada subida, la app escribe en `config.yaml` las claves de TMDb y eMuwarez, los hosts de imágenes y
+qBittorrent, y al terminar lo restaura desde `config.yaml.bak`. Si quieres tocar algo a mano, edita
+`/config/Uploadrr/data/config.yaml.bak`: un cambio en `config.yaml` se pierde en la siguiente subida.
 
-El setup wizard se abre automáticamente en el primer arranque.
-
-Desde CLI, si prefieres:
+## 7. Actualizar
 
 ```bash
-docker exec emuwarez-uploadrr python3 emuwarez_uploader.py web create-admin --username admin
-```
-
----
-
-## 7. Uploadrr-EMU: nada que montar
-
-Uploadrr-EMU va empaquetado dentro de la imagen (`/opt/Uploadrr`) — no es un
-bind mount externo, y no hay que crear ni indicar ninguna ruta para él. Lo
-único que necesita ser escribible y persistente (`data/config.yaml` y los
-temporales de cada subida) se guarda automáticamente bajo el propio volumen
-`/config` que ya montaste (`/config/Uploadrr/data` y `/config/Uploadrr/tmp`)
-— `docker-entrypoint.sh` deja esas dos rutas listas al arrancar el contenedor.
-
-`uploadrr.path` (Configuración → Uploadrr) ya viene puesto a `/opt/Uploadrr`
-por defecto; no hace falta tocarlo salvo que sepas lo que haces.
-
----
-
-## 7b. Configurar el runtime Uploadrr-EMU (Fases 10E/10F)
-
-El comando real que se construye para Uploadrr-EMU
-(`-tk EMU -mt <título> -tmdb <id> -ua -c movie|tv -res <resolución>`) depende
-de estos settings, editables desde **Configuración → Uploadrr** en la UI (o
-por API/CLI):
-
-| Setting | Valor por defecto | Notas |
-|---|---|---|
-| `uploadrr.path` | `/opt/Uploadrr` | Ruta dentro del contenedor al directorio de Uploadrr-EMU (bundled — no es un mount). |
-| `uploadrr.runtime_type` | `uploadrr_emu` | Perfil de flags a usar. El único runtime con ejecución controlada real soportada en la Fase 10F es `uploadrr_emu`; `uploadrr_generic` solo genera una previsualización best-effort y bloquea el inicio real. |
-| `uploadrr.python_path` | `/usr/local/bin/python` | Asume la imagen base Python del contenedor. Uploadrr-EMU necesita su **propio venv** con sus dependencias (`requirements.txt` del fork) — instálalo en un volumen propio y ajusta este setting a `<venv>/bin/python`. **Nunca reutilices el intérprete del backend** (`sys.executable`). |
-| `uploadrr.timeout` | `7200` (segundos) | Timeout del subproceso de subida. Si se excede, el job pasa a `failed`/`stage=timeout` y el proceso recibe `SIGKILL`. |
-| `uploadrr.allowed_roots` | `[]` (JSON, editable como CSV en la UI) | Rutas permitidas para `prepared_path`. Vacío → usa `hardlink_base` como raíz permitida. |
-
-Usa el botón **Probar configuración** en Settings para verificar (solo
-filesystem, nunca ejecuta Uploadrr-EMU) que la ruta, el script `upload.py` y
-`data/config.yaml` existen antes de intentar una subida real.
-
-Estos settings se leen con fallback automático a la forma legacy sin punto
-(`uploadrr_path`, etc.) pero solo el setup wizard/API escriben la forma con
-punto — no hace falta migrar nada manualmente.
-
-### Dónde escribe Uploadrr-EMU (automático, nada que montar)
-
-Antes de ejecutar una subida real, Uploadrr-EMU necesita dos subdirectorios
-escribibles bajo su propia ruta (`/opt/Uploadrr`):
-
-1. **`data/`**: antes de cada ejecución se hace backup de `data/config.yaml`
-   y se stagean ahí `DEFAULT.tmdb` y `TRACKERS.EMU.api_key`/`anon`; al
-   terminar (éxito, fallo, timeout o cancelación) se **restaura siempre** el
-   `config.yaml` original.
-2. **`tmp/`**: el fork escribe ahí temporales (torrents, capturas,
-   descripciones) durante la subida.
-
-`docker-entrypoint.sh` reemplaza esos dos subdirectorios por symlinks a
-`/config/Uploadrr/data` y `/config/Uploadrr/tmp` al arrancar el contenedor —
-viven dentro del volumen `/config` que ya montas, así que sobreviven a un
-`docker compose up -d --build`/recreación sin que montes nada aparte.
-
----
-
-## 8. Configurar hardlink_base
-
-En el setup web, en la sección **Base**, indica el directorio donde se crearán los hardlinks preparados para subida:
-
-```
-/data/uploads/emu
-```
-
-> Este directorio debe estar en el mismo filesystem que los archivos fuente (Radarr/Sonarr). Si usas el compose example con `-v /srv/data:/data`, tanto `/data/media` como `/data/uploads/emu` estarán en el mismo montaje y los hardlinks funcionarán sin errores EXDEV.
-
----
-
-## 9. Configurar TMDb API key
-
-En el setup web, sección **TMDb**, introduce tu API key de The Movie Database.
-
----
-
-## 10. Configurar eMuwarez API key
-
-En el setup web, sección **eMuwarez**, introduce tu API token de eMuwarez (UNIT3D).
-
----
-
-## 11. Añadir instancias Radarr y Sonarr
-
-En la sección **Instancias**, añade tus instancias:
-
-- Tipo: `radarr` o `sonarr`
-- URL: `http://radarr:7878` (nombre de servicio Docker si en la misma red) o `http://192.168.1.x:7878`
-- API key de Radarr/Sonarr
-
----
-
-## 12. Sincronizar la biblioteca
-
-Desde el Dashboard, pulsa **Sincronizar** o desde CLI:
-
-```bash
-docker exec emuwarez-uploadrr python3 emuwarez_uploader.py sync
-```
-
----
-
-## 13. Sincronizar peticiones eMuwarez
-
-Desde el Dashboard o CLI:
-
-```bash
-docker exec emuwarez-uploadrr python3 emuwarez_uploader.py requests sync
-```
-
----
-
-## 13b. Evaluar readiness de peticiones (Phase 8B)
-
-Tras sincronizar peticiones, puedes evaluar cuáles están listas para subir:
-
-```bash
-# Recalcular readiness de todas las peticiones
-docker exec emuwarez-uploadrr python3 emuwarez_uploader.py requests readiness-refresh
-
-# Ver peticiones priorizadas (high → medium → low → blocked)
-docker exec emuwarez-uploadrr python3 emuwarez_uploader.py requests prioritized
-
-# Ver readiness de una petición concreta
-docker exec emuwarez-uploadrr python3 emuwarez_uploader.py requests readiness <id>
-
-# Ver candidatos locales para una petición
-docker exec emuwarez-uploadrr python3 emuwarez_uploader.py requests candidates <id>
-```
-
-Desde la UI, en **Peticiones**, aparecen las columnas Readiness, Acción, Prioridad y Candidato, así como el panel "Peticiones accionables" en el Dashboard.
-
-**Garantías de seguridad**: el cálculo de readiness es de solo lectura. No modifica eMuwarez, Radarr, Sonarr ni el filesystem. No ejecuta Uploadrr. Solo escribe en tablas locales de la base de datos.
-
----
-
-## 14. Generar nomenclatura
-
-Desde la UI, en la sección **Biblioteca**, selecciona un ítem y pulsa **Adaptar nomenclatura** para ver la propuesta de nombre conforme a eMuwarez.
-
----
-
-## 15. Crear hardlink preparado
-
-En la UI, en el detalle del ítem con nomenclatura adaptada, confirma la creación del hardlink pulsando **Aplicar nomenclatura** e introduciendo el token de confirmación `APLICAR_NOMENCLATURA`.
-
----
-
-## 16. Preflight Uploadrr
-
-Antes de subir, genera el preflight para verificar que todo está listo:
-
-```bash
-docker exec emuwarez-uploadrr python3 emuwarez_uploader.py upload jobs
-```
-
----
-
-## 17. Ejecutar Uploadrr
-
-Desde la UI en **Subidas**, confirma la ejecución introduciendo el token exacto `INICIAR_UPLOADRR`. O desde CLI:
-
-```bash
-docker exec emuwarez-uploadrr python3 emuwarez_uploader.py upload start <job_id> --apply --confirm INICIAR_UPLOADRR
-```
-
-El comando usa el contrato real de Uploadrr-EMU (ver
-[7b](#7b-configurar-el-runtime-uploadrr-emu-fases-10e10f)): `shell=False`,
-argv como lista, `config.yaml` stageado/restaurado automáticamente, logs y
-`command_preview` con secretos redactados. La UI muestra el progreso
-(`Subidas` hace polling cada ~2.5s mientras el job está `running`), los logs
-recientes y el resultado (URL/torrent ID) al terminar.
-
-> La ejecución controlada real se ha validado exhaustivamente en tests y en
-> el E2E Docker usando un **Uploadrr-EMU fake** (`tests/fixtures/fake_uploadrr_emu.py`)
-> — nunca un fork real. La primera ejecución contra tu instalación real de
-> Uploadrr-EMU sigue siendo responsabilidad del operador; usa **Probar
-> configuración** en Settings y revisa los mounts de `data/`/`tmp/` (sección
-> 7b) antes de confiar en una subida real en producción.
-
----
-
-## 18. Ver logs y resultados
-
-```bash
-docker exec emuwarez-uploadrr python3 emuwarez_uploader.py upload status <job_id>   # alias de 'upload job'
-docker exec emuwarez-uploadrr python3 emuwarez_uploader.py upload logs <job_id>
-docker exec emuwarez-uploadrr python3 emuwarez_uploader.py upload artifacts <job_id>
-docker exec emuwarez-uploadrr python3 emuwarez_uploader.py upload cancel <job_id>    # cancela un job en ejecución
-```
-
----
-
-## 19. Backup de /config
-
-La base de datos SQLite y la configuración están en el volumen `/config`:
-
-```bash
-tar czf emuwarez-backup-$(date +%Y%m%d).tar.gz /srv/emuwarez-uploadrr/config
-```
-
----
-
-## 20. Actualización
-
-Para actualizar a una nueva versión, con la imagen publicada:
-
-```bash
-cd ~/emuwarez_uploadrr_cli_ready_v2
-git pull
 docker compose pull
 docker compose up -d
 ```
 
-O, si construyes localmente:
+La base de datos se migra sola. Si la versión nueva falla, vuelve a la anterior con `EMUWAREZ_UPLOADRR_TAG`
+([Versiones y volver atrás](../README.md#versiones-y-volver-atrás)). Si construyes la imagen tú, haz `git pull` y
+repite los dos comandos de [Construir la imagen tú mismo](#construir-la-imagen-tú-mismo).
+
+## 8. Backup
+
+En Configuración → Backup, «Crear backup ahora» genera un `.tar.gz` de `/config` en `/config/backups`, sin la
+carpeta de subidas por defecto (`/config/Uploadrr/uploads`) ni los temporales de Uploadrr-EMU. La de
+`UPLOADRR_UPLOADS_DIR` (`/data/uploads/emu`) está fuera de `/config`, así que tampoco entra: son enlaces, y para
+seguir sembrando tras restaurar en otro disco hay que respaldarla aparte. En la misma pestaña se restaura. Como el
+backup queda dentro de `/config`, cópialo a otro disco.
+
+El backup lleva las claves que la app guarda en su base de datos, aunque no lo hayas creado «con secretos»: esa
+opción solo pide confirmación y cambia el nombre del archivo. Guárdalo donde guardarías esas claves.
+
+Desde la línea de comandos:
 
 ```bash
-cd ~/emuwarez_uploadrr_cli_ready_v2
-git pull
-docker compose -f docker-compose.example.yml up -d --build
+docker exec emuwarez-uploadrr python3 emuwarez_uploader.py maintenance backup
 ```
 
-La base de datos se migra automáticamente al arrancar.
+## 9. Problemas frecuentes
 
----
-
-## 21. Troubleshooting
-
-### El contenedor no arranca
+### El contenedor se para nada más arrancar
 
 ```bash
 docker logs emuwarez-uploadrr
 ```
 
-Busca errores de permisos en `/config`, puertos ocupados o dependencias Python faltantes.
-
----
-
-### `/api/health` falla o no responde
-
-1. Verifica que el contenedor está corriendo: `docker ps`
-2. Verifica el puerto: `docker port emuwarez-uploadrr`
-3. Revisa los logs: `docker logs emuwarez-uploadrr --tail 50`
-
----
-
-### Permisos denegados en /config
-
-El usuario dentro del contenedor (PUID/PGID) no puede escribir en el volumen `/config`.
-
-Solución:
+Si sale `mkdir: cannot create directory ‘/config/Uploadrr’: Permission denied`, el `PUID:PGID` del contenedor no
+puede escribir en `/config`. Arréglalo en el host y vuelve a arrancar:
 
 ```bash
-# Ajusta PUID/PGID en .env al propietario real de los archivos
-id $(whoami)
-# Luego reinicia
-docker compose down
+chown -R "$PUID:$PGID" /srv/emuwarez-uploadrr/config   # los de la sección 3
 docker compose up -d
 ```
 
----
+### PUID/PGID no coinciden con el dueño de la media
 
-### PUID/PGID incorrectos
+Con otro usuario, la app no puede renombrar: el asistente de subida falla en «Se puede renombrar». Y aunque pueda
+leer la media, el enlace sale simbólico en vez de duro. Pon en el `.env` el UID y GID que da `id` para el dueño de
+la media y recrea el contenedor con `docker compose up -d`.
 
-Si los archivos de media pertenecen a otro usuario, ajusta en `.env`:
+### «No se puede preparar la carpeta de subida»
 
-```env
-PUID=1001
-PGID=1001
-```
-
----
-
-### "Directorio de salida no escribible" / Uploadrr-EMU no encontrado
-
-Uploadrr-EMU va empaquetado dentro de la imagen — no hay ningún mount que
-revisar. Si el diagnóstico o el checklist de subida se quejan de que
-`/opt/Uploadrr` (o su `data`/`tmp`) no es escribible, comprueba que
-`docker-entrypoint.sh` corrió sin errores al arrancar:
+La carpeta de subidas no existe y el contenedor no ha podido crearla, normalmente porque la carpeta padre es de
+root. En el log de arranque sale `No se pudo crear la carpeta de subidas`. Créala con el dueño correcto:
 
 ```bash
-docker logs emuwarez-uploadrr | head -20
-ls -la /config/Uploadrr   # visto desde el host, en tu ruta de /config
+mkdir -p /srv/data/uploads/emu
+chown "$PUID:$PGID" /srv/data/uploads/emu   # los de la sección 3
+docker compose restart
+```
+
+### La comprobación dice «enlace simbólico»
+
+Cuando todo va bien, el asistente muestra `/data/uploads/emu (enlace duro)`. Si dice `enlace simbólico`, mira los
+casos de la sección 2: carpeta de subidas en otro sistema de ficheros, montaje sin enlaces duros, o media que no es
+de `PUID:PGID`. Funciona solo si qBittorrent ve la biblioteca en la misma ruta, así que conviene arreglarlo:
+mueve la carpeta de subidas al sistema de ficheros de la media o corrige el dueño de la media.
+
+### qBittorrent no siembra
+
+Si el torrent sale en qBittorrent con ficheros que faltan, qBittorrent no ve la carpeta de subidas en la misma ruta
+que este contenedor. Monta en los dos la misma raíz con la misma ruta (sección 2).
+
+Si en cambio el asistente dice «qBittorrent no conectado», revisa la URL del WebUI en Configuración: tiene que ser
+alcanzable desde el contenedor, así que usa la IP del host o el nombre del servicio, no `127.0.0.1`.
+
+### «El archivo no es accesible», o la instancia no deja ver el contenido
+
+El contenedor no ve la media en la ruta que reporta Radarr/Sonarr. O montas la media igual que en Radarr/Sonarr
+(`/srv/data:/data` en todos), o añades una regla en Configuración → Diagnóstico → *Mapeo de rutas (biblioteca
+remota)*.
+
+### «Directorio de salida no escribible»
+
+Es `/opt/Uploadrr/tmp`, que apunta a `/config/Uploadrr/tmp`. Comprueba que los enlaces existen y que `/config` es
+del `PUID:PGID`:
+
+```bash
 docker exec emuwarez-uploadrr ls -la /opt/Uploadrr
+ls -la /srv/emuwarez-uploadrr/config/Uploadrr
 ```
 
-`/opt/Uploadrr/data` y `/opt/Uploadrr/tmp` deben verse como symlinks
-apuntando a `/config/Uploadrr/data` y `/config/Uploadrr/tmp`. Si no existen,
-revisa que el volumen `/config` esté montado y sea escribible por el
-PUID/PGID del contenedor.
+`data` y `tmp` tienen que verse como enlaces a `/config/Uploadrr/data` y `/config/Uploadrr/tmp`.
 
-El diagnóstico también lo detecta:
+### Pantalla en blanco o 404 en la raíz
+
+- Con la imagen publicada, vuelve a bajarla: `docker compose pull && docker compose up -d`.
+- Si la construyes tú, comprueba que el frontend llegó a la imagen:
+  `docker exec emuwarez-uploadrr ls /app/frontend/dist/` tiene que mostrar `index.html` y `assets`. Si no, la
+  compilación del frontend falló: reconstruye y mira la salida de `npm run build`.
+- Detrás de un proxy inverso, sírvela en la raíz de un dominio o subdominio. El frontend pide sus ficheros a
+  `/assets/…`, así que en una subruta (`https://servidor/emuwarez/`) la página sale en blanco.
+
+### Construida en Windows, el contenedor no arranca con «no such file or directory»
+
+Git ha convertido `docker-entrypoint.sh` a finales de línea CRLF. Construye desde una copia con LF:
 
 ```bash
+git -c core.autocrlf=false archive HEAD | docker build -t emuwarez-uploadrr:local -
+docker compose -f docker-compose.example.yml up -d
+```
+
+### He olvidado la contraseña
+
+```bash
+docker exec -it emuwarez-uploadrr python3 emuwarez_uploader.py web reset-password --username admin
+```
+
+## 10. Diagnóstico
+
+```bash
+docker logs emuwarez-uploadrr --tail 50
 docker exec emuwarez-uploadrr python3 emuwarez_uploader.py web doctor
-```
-
----
-
-### Hardlinks fallan con error EXDEV
-
-El error `EXDEV: cross-device link` significa que el directorio fuente y `hardlink_base` están en dispositivos distintos. Los hardlinks solo funcionan dentro del mismo filesystem.
-
-Solución: usa una raíz común para ambos directorios:
-
-```yaml
-volumes:
-  - /srv/data:/data  # media en /data/media, uploads en /data/uploads/emu
-```
-
-Configura en el setup:
-- Biblioteca Radarr: `/data/media/movies`
-- `hardlink_base`: `/data/uploads/emu`
-
----
-
-### API keys no configuradas
-
-Usa el setup web (`http://localhost:9494`) o:
-
-```bash
 docker exec emuwarez-uploadrr python3 emuwarez_uploader.py web setup-status
 ```
 
-En Settings (TMDb) y en el setup wizard (TMDb, eMuwarez) puedes usar "Probar conexión" para
-validar una key antes de guardarla (Phase 10C).
-
----
-
-### Radarr/Sonarr no conectan
-
-- Verifica que la URL es accesible desde dentro del contenedor
-- Si Radarr/Sonarr también corren en Docker, usa el nombre de servicio y la red compartida
-- Comprueba la API key en la interfaz de Radarr/Sonarr
-- Usa el botón "Probar conexión" en Settings/Instancias/setup wizard (Phase 10C) antes de
-  guardar: prueba la URL/API key escrita en el formulario sin necesidad de guardarla primero
-
----
-
-### El frontend no carga (pantalla en blanco o 404)
-
-El frontend debe estar construido dentro de la imagen Docker.
-
-Con la imagen publicada, vuelve a tirar de la última versión:
-
-```bash
-docker compose pull
-docker compose up -d
-```
-
-Si construyes localmente, reconstruye:
-
-```bash
-docker compose -f docker-compose.example.yml up -d --build
-```
-
-Verifica que `/app/frontend/dist/index.html` existe en el contenedor:
-
-```bash
-docker exec emuwarez-uploadrr ls /app/frontend/dist/
-```
-
----
-
-### Los logs de Uploadrr muestran secretos
-
-Los logs están automáticamente saneados. Si detectas alguna fuga, repórtala como issue. Las API keys nunca deben aparecer en `upload_job_logs`.
-
----
-
-## Diagnóstico rápido
-
-```bash
-# Desde el host
-python3 emuwarez_uploader.py web doctor
-
-# Desde el contenedor
-docker exec emuwarez-uploadrr python3 emuwarez_uploader.py web doctor
-```
-
----
-
-## Smoke test
-
-Para verificar que la imagen arranca y todos los endpoints responden:
-
-```bash
-bash scripts/docker-smoke-test.sh
-```
-
----
-
-## E2E controlado con datos simulados (Phase 9B)
-
-Valida el flujo completo end-to-end en Docker usando datos simulados (sin servicios reales):
-
-```bash
-# E2E completo
-bash scripts/docker-e2e-demo.sh
-
-# Mantener contenedor para depuración
-KEEP_CONTAINER=1 bash scripts/docker-e2e-demo.sh
-
-# Puerto alternativo
-PORT=9595 bash scripts/docker-e2e-demo.sh
-```
-
-El script:
-- Crea un `tmpdir` temporal con estructura de datos simulados
-- Construye la imagen Docker
-- Arranca el contenedor con volúmenes temporales
-- Siembra datos demo via `python3 emuwarez_uploader.py demo seed --confirm DEMO_SEED`
-- Valida el flujo: library verify, readiness, queue refresh, action-plan, nomenclature preview, upload preflight
-- Verifica que Uploadrr/ no está dentro de la imagen
-- Limpia el contenedor y el tmpdir al terminar (salvo `KEEP_CONTAINER=1`)
-
-**No usa Radarr/Sonarr reales. No usa eMuwarez real. No ejecuta Uploadrr real. No sube contenido real.**
+`web doctor` revisa que `/config` sea escribible, la base de datos, el frontend, Uploadrr-EMU, las rutas permitidas,
+las claves de TMDb y eMuwarez, y las instancias de Radarr/Sonarr. En la web, Configuración → Diagnóstico muestra la
+versión, la base de datos y el inventario de `/config`, y Logs, los registros de la app y de cada subida. La CLI
+completa está en [`README_CLI_READY.md`](../README_CLI_READY.md).

@@ -78,10 +78,10 @@ def test_ver_un_pack_mezclado_no_reescribe_las_propuestas_de_los_capitulos(isola
     assert all(e["proposed_filename"].endswith("-EMUWAREZ") for e in plan["episodes"])
 
 
-def test_el_tag_del_pack_cambia_aunque_el_grupo_lleve_espacios_o_acentos(isolated_db, tmp_path):
+def test_el_tag_del_pack_cambia_aunque_el_grupo_lleve_espacios_acentos_o_puntos(isolated_db, tmp_path):
     """El nombre de archivo lleva el grupo sin acentos y con puntos."""
     conn = _open(isolated_db)
-    season_id = _pack(conn, tmp_path, ["adrià & hakyra", "Okeda"])
+    season_id = _pack(conn, tmp_path, ["adrià & hakyra", ".GROUP"])
     build_season_pack_plan(season_id, conn=conn)
     plan = build_season_pack_plan(season_id, conn=conn)
     assert all(e["proposed_filename"].endswith("-EMUWAREZ") for e in plan["episodes"])

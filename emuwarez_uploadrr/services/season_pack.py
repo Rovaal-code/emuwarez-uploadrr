@@ -684,10 +684,10 @@ def build_season_pack_plan(
             proposed_filename = proposal.get("proposed_filename") or ep.get("title") or f"episode-{ep['id']}"
             # Cada capítulo lleva el Tag del pack, aunque su propuesta guardada
             # traiga otro (grupos mezclados): reconstruirla la sobrescribiría.
-            # El nombre de archivo lleva el tag ya pasado por to_filesystem_name.
-            viejo = to_filesystem_name(proposal.get("release_tag") or "")
-            nuevo = to_filesystem_name(release_tag)
-            if viejo and viejo != nuevo and proposed_filename.endswith(f"-{viejo}"):
+            # El nombre de archivo lleva "-tag" ya pasado por to_filesystem_name.
+            viejo = to_filesystem_name(f"-{proposal.get('release_tag')}") if proposal.get("release_tag") else ""
+            nuevo = to_filesystem_name(f"-{release_tag}")
+            if viejo and viejo != nuevo and proposed_filename.endswith(viejo):
                 proposed_filename = f"{proposed_filename[:-len(viejo)]}{nuevo}"
             ext = ""
             if source_path and os.path.isfile(source_path):

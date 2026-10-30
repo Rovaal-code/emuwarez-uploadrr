@@ -20,10 +20,12 @@
 #   scripts/desplegar.sh --notas "..." --version patch   # sube la versión antes
 #   scripts/desplegar.sh --notas "..." --sin-publicar    # construye y sube, sin anunciar
 #
-# Al publicar crea también la etiqueta vX.Y.Z en el commit y la sube. Con ella
-# el workflow Imagen le pone a la imagen de ese commit la etiqueta X.Y.Z, que es
-# la que se fija en el compose (EMUWAREZ_UPLOADRR_TAG=X.Y.Z) para quedarse en
-# una versión o volver a ella.
+# Al publicar crea también la etiqueta vX.Y.Z en el commit y la sube, y la
+# imagen sale también como :X.Y.Z, que es la que se fija en el compose
+# (EMUWAREZ_UPLOADRR_TAG=X.Y.Z) para quedarse en una versión o volver a ella.
+#
+# Lo normal es el workflow «Publicar versión», que hace lo mismo en GitHub tras
+# pasar los tests. Esto es la alternativa local, sin gastar minutos de Actions.
 #
 # Necesita `gh auth login` hecho, para publicar la versión.
 set -euo pipefail
@@ -80,7 +82,7 @@ echo "Construida .. $FECHA"
 # La etiqueta vX.Y.Z de esta versión. Nunca se pisa: si ya existe en otro
 # commit, aquí o en GitHub, se para antes de construir nada y hay que
 # resolverlo a mano. Lo que manda es GitHub, porque es su etiqueta la que
-# dispara el workflow Imagen. De una etiqueta anotada, ls-remote da también la
+# marca la versión publicada. De una etiqueta anotada, ls-remote da también la
 # línea "^{}" con el commit al que apunta; de una ligera (las de una release
 # hecha en la web), solo esa.
 ETIQUETA="v$VERSION"
@@ -120,8 +122,7 @@ comprobar_etiqueta() {
 
 # Al final, con el manifiesto ya publicado: crea la etiqueta, o sube la que
 # una ejecución anterior dejó solo aquí. Solo si el commit es la punta de
-# master en GitHub: la imagen de cada commit la construye el workflow Imagen
-# con el push a master, y la etiqueta solo le añade el nombre de la versión.
+# master en GitHub: la etiqueta marca en el repo el commit de esta versión.
 etiquetar() {
   # Otra vez, por si algo ha cambiado mientras se construía.
   comprobar_etiqueta || return 1
@@ -148,11 +149,20 @@ etiquetar() {
     git tag -a "$ETIQUETA" -m "${NOTAS:-Versión $VERSION}" "$COMMIT"
   fi
   git push -q origin "$ETIQUETA"
-  echo "Etiqueta .... $ETIQUETA (la imagen :$VERSION la añade el workflow Imagen)"
+  echo "Etiqueta .... $ETIQUETA"
 }
 
 if [[ "$PUBLICAR" -eq 1 ]]; then
   comprobar_etiqueta || exit 1
+  # Antes de construir: repetir una versión ya publicada movería :latest y :X.Y.Z a otro digest.
+  python3 scripts/publicar_version.py --solo-comprobar --notas "$NOTAS" --repo
+  # Y que gh puede escribir el manifiesto: el endpoint de push de git solo da 200 a quien puede.
+  # El token va por stdin (printf es interno), no en los argumentos de curl.
+  if ! printf 'user = "x:%s"\n' "$(gh auth token)" | curl -sf -o /dev/null --connect-timeout 10 --max-time 30 \
+      --config - "https://github.com/Kisnov/uploadrr-version.git/info/refs?service=git-receive-pack"; then
+    echo "gh no puede escribir en Kisnov/uploadrr-version: no se sube ninguna imagen." >&2
+    exit 1
+  fi
 fi
 
 echo "Resolviendo el HEAD del fork…"
@@ -187,6 +197,12 @@ fi
 echo "Sello verificado en la imagen."
 
 echo "Subiendo…"
+# :X.Y.Z solo al publicar (comprobar_etiqueta ya ha parado si esa versión es de otro commit), y
+# antes que :latest: si falla una de las dos, :latest no avanza a algo sin anunciar.
+if [[ "$PUBLICAR" -eq 1 ]]; then
+  docker tag "$IMAGEN" "${IMAGEN%:*}:$VERSION"
+  docker push "${IMAGEN%:*}:$VERSION"
+fi
 docker push "$IMAGEN"
 DIGEST="$(docker image inspect "$IMAGEN" --format '{{index .RepoDigests 0}}' | cut -d@ -f2)"
 echo "Digest ...... $DIGEST"
@@ -194,6 +210,7 @@ echo "Digest ...... $DIGEST"
 if [[ "$PUBLICAR" -eq 0 ]]; then
   echo
   echo "Sin publicar el manifiesto ni crear la etiqueta, como pediste. Para anunciarla:"
+  echo "  docker tag $IMAGEN ${IMAGEN%:*}:$VERSION && docker push ${IMAGEN%:*}:$VERSION"
   echo "  python3 scripts/publicar_version.py --digest $DIGEST --notas \"…\" --repo"
   echo "  git tag -a v$VERSION -m \"…\" $COMMIT && git push origin v$VERSION"
   exit 0

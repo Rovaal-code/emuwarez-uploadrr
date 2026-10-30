@@ -1,7 +1,7 @@
 # eMuwarez Uploadrr
 
 [![CI](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/ci.yml/badge.svg)](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/ci.yml)
-[![Imagen](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/imagen.yml/badge.svg)](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/imagen.yml)
+[![Publicar versión](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/publicar.yml/badge.svg)](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/publicar.yml)
 [![zizmor](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/zizmor.yml/badge.svg)](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/zizmor.yml)
 [![Revisión: CodeRabbit](https://img.shields.io/badge/revisi%C3%B3n-CodeRabbit-FF570A)](https://coderabbit.ai)
 [![Dependabot](https://img.shields.io/badge/dependabot-activo-025E8C?logo=dependabot&logoColor=white)](.github/dependabot.yml)
@@ -118,12 +118,14 @@ Abre `http://localhost:9494`: el asistente de configuración inicial se abre sol
 
 La imagen se publica con varias etiquetas, y `EMUWAREZ_UPLOADRR_TAG` (en el `.env`) elige cuál usa el compose:
 
-- `latest` (sin la variable): la última imagen publicada. La publica el workflow con cada push a `master`, y
-  también `scripts/desplegar.sh`, desde el commit en que lo lances (normalmente la punta de `master`). Se
-  actualiza con `docker compose pull && docker compose up -d`.
+- `latest` (sin la variable): la última versión publicada. La publica el workflow *Publicar versión*, a mano
+  o solo cada 12 h si hay cambios suficientes, siempre después de pasar los tests; o `scripts/desplegar.sh`
+  desde tu equipo (con `--sin-publicar` sube `latest` sin publicar el manifiesto, así que no es una versión
+  anunciada). Se actualiza con `docker compose pull && docker compose up -d`.
 - `0.11.0`: una versión concreta, de las que tienen etiqueta `v0.11.0` en el repo. Sirve para quedarte en ella o
   para volver atrás si la nueva falla.
-- El sha de un commit de `master`: cada commit de `master` tiene su imagen.
+- El sha del commit de una versión: cada versión publicada por el workflow tiene también esa etiqueta.
+- `edge`: la punta de `master` sin publicar como versión, solo cuando se lanza el workflow con *solo prueba*.
 
 ```bash
 EMUWAREZ_UPLOADRR_TAG=0.11.0 docker compose up -d

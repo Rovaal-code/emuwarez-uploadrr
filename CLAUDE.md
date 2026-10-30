@@ -28,8 +28,9 @@ the upload with Uploadrr-EMU (`Kisnov/Uploadrr-EMU`, cloned into the image at `/
 - `test_media_info_congelado.py` compares the mediainfo report against
   `tests/fixtures/mediainfo_informe_esperado.json`. For an intended change, regenerate it with
   `python -m tests.test_media_info_congelado --regenerar` and review the JSON diff.
-- CI (`.github/workflows/ci.yml`) runs pytest, critical ruff rules and the frontend checks on every PR, and uploads
-  coverage and test results to Codecov (informational only, `codecov.yml`; needs the `CODECOV_TOKEN` secret).
+- CI (`.github/workflows/ci.yml`) runs pytest, critical ruff rules and the frontend checks on every PR, and from
+  `publicar.yml` before a release; it uploads coverage and test results to Codecov (informational only,
+  `codecov.yml`; needs the `CODECOV_TOKEN` secret). Master has no CI of its own: merges cost no Actions minutes.
 - `zizmor.yml` audits the workflows and `dependabot.yml` when `.github/` changes; run `zizmor --gh-token "$(gh auth token)" .` locally (without a token it skips online audits) before pushing a workflow edit.
 
 ## Not obvious
@@ -56,11 +57,14 @@ the upload with Uploadrr-EMU (`Kisnov/Uploadrr-EMU`, cloned into the image at `/
   a successful upload prints `Torrent URL: …`.
 - eMuwarez and TMDb keys travel in the URL query. Never log or return a raw URL: use
   `integrations.base.url_sin_claves`.
-- Image: `ghcr.io/kisnov/emuwarez-uploadrr`. `.github/workflows/imagen.yml` builds it on every push to
-  `master` as `:<sha>` and `:latest`; a `vX.Y.Z` tag (pushed by `scripts/desplegar.sh` when it publishes a
-  version, or from a GitHub release) adds `:X.Y.Z` to that commit's image, and must match `__version__`.
-  `desplegar.sh` also builds and pushes `:latest` locally to publish the manifest. Pass
-  `--build-arg UPLOADRR_COMMIT=…` or the Uploadrr-EMU clone layer comes from cache.
+- Image: `ghcr.io/kisnov/emuwarez-uploadrr`, built only when a version is published. `publicar.yml` ("Publicar
+  versión": by hand, or every 12 h when 3+ PRs from `feat/` or `fix/` branches merged since the last `__version__` change) runs
+  the full CI on master's tip, bumps `__version__` (`auto`: minor if any `feat/` PR, else patch), pushes that commit
+  and `vX.Y.Z`, builds `:X.Y.Z`, `:<sha>` and `:latest`, and publishes the manifest (secret
+  `UPLOADRR_VERSION_TOKEN`). Release when Gabriel asks: `gh workflow run publicar.yml -f notas="…"`, with a
+  neutral public note. `solo_prueba=true` builds `:edge` from master's tip only. `scripts/desplegar.sh` is
+  the local fallback (no Actions minutes) and also pushes `:X.Y.Z`. Pass `--build-arg UPLOADRR_COMMIT=…` or
+  the Uploadrr-EMU clone layer comes from cache.
 - Version manifest: the Diagnóstico card compares the image's `APP_COMMIT` with `latest.json` in the public
   repo `Kisnov/uploadrr-version` (a fork of `Rovaal-code/uploadrr-version`); to test against another
   manifest, set `UPLOADRR_VERSION_MANIFEST_URL`. It is separate because this

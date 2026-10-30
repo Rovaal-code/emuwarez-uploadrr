@@ -81,15 +81,35 @@ def version_publicada(repo: str) -> str | None:
     Se pregunta a la API de GitHub y NO a raw.githubusercontent.com: esa URL
     sirve una copia cacheada varios minutos, así que justo después de publicar
     devuelve todavía la anterior. Con la caché de por medio este guardián no
-    saltaba (comprobado: dejó republicar la misma versión)."""
+    saltaba (comprobado: dejó republicar la misma versión).
+
+    None solo si el manifiesto no existe todavía. Si no se puede preguntar
+    (sin red, sin permiso, sin respuesta), lanza RuntimeError: seguir a ciegas
+    podría volver a subir una versión ya publicada."""
+    import base64
     try:
         salida = subprocess.run(
             ["gh", "api", f"repos/{repo}/contents/{FICHERO}", "--jq", ".content"],
             capture_output=True, text=True, check=True, timeout=20).stdout
-        import base64
-        return json.loads(base64.b64decode(salida)).get("version")
-    except Exception:
-        return None
+    except subprocess.CalledProcessError as e:
+        # 404 es también «ese repo no existe o no se ve»: solo es «nada publicado» si el repo responde.
+        if "HTTP 404" in (e.stderr or ""):
+            try:
+                subprocess.run(["gh", "api", f"repos/{repo}", "--silent"],
+                               capture_output=True, text=True, check=True, timeout=20)
+            except (subprocess.CalledProcessError, OSError, subprocess.TimeoutExpired) as e2:
+                raise RuntimeError(f"no se puede acceder al repositorio {repo}") from e2
+            return None
+        raise RuntimeError(f"no se pudo leer el manifiesto publicado: {(e.stderr or '').strip()}") from e
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise RuntimeError(f"no se pudo leer el manifiesto publicado: {e}") from e
+    return json.loads(base64.b64decode(salida)).get("version")
+
+
+def _numeros(version: str) -> tuple[int, ...] | None:
+    """X.Y.Z como números para compararlas; None si no tiene esa forma."""
+    partes = version.split(".")
+    return tuple(int(p) for p in partes) if all(p.isdigit() for p in partes) else None
 
 
 def publicar(manifiesto: dict, repo: str) -> None:
@@ -118,6 +138,8 @@ def main() -> int:
                    help="publicar aunque la nota mencione algo delicado")
     p.add_argument("--misma-version", action="store_true",
                    help="publicar aunque el número de versión no haya cambiado")
+    p.add_argument("--solo-comprobar", action="store_true",
+                   help="hacer las comprobaciones (nota y, con --repo, versión) y salir sin escribir nada")
     p.add_argument("--repo", nargs="?", const=REPO_POR_DEFECTO,
                    help=f"repositorio público donde publicar (por defecto {REPO_POR_DEFECTO})")
     args = p.parse_args()
@@ -139,7 +161,11 @@ def main() -> int:
     # notificación dirá lo mismo las dos veces. La comparación interna se hace
     # por commit y sigue funcionando, pero el aviso al usuario queda inútil.
     if args.repo:
-        anterior = version_publicada(args.repo)
+        try:
+            anterior = version_publicada(args.repo)
+        except RuntimeError as e:
+            print(f"✗ {e}", file=sys.stderr)
+            return 1
         if anterior and anterior == manifiesto["version"] and not args.misma_version:
             print(f"✗ La versión publicada ya es {anterior} y vas a publicar la misma.",
                   file=sys.stderr)
@@ -149,6 +175,17 @@ def main() -> int:
             print("\n  O repite con --misma-version si de verdad es una republicación.",
                   file=sys.stderr)
             return 1
+        nueva, vieja = _numeros(manifiesto["version"]), _numeros(anterior or "")
+        if nueva and vieja and nueva < vieja:
+            print(f"✗ La versión publicada es {anterior}, más nueva que la {manifiesto['version']} de este commit.",
+                  file=sys.stderr)
+            print("\n  Para volver a una versión anterior, fíjala en el compose"
+                  " (EMUWAREZ_UPLOADRR_TAG=X.Y.Z): no se republica.", file=sys.stderr)
+            return 1
+
+    # Antes de construir: una versión ya publicada no debe mover las etiquetas de la imagen.
+    if args.solo_comprobar:
+        return 0
 
     texto = json.dumps(manifiesto, indent=2, ensure_ascii=False)
 

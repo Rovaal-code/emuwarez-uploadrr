@@ -1,0 +1,213 @@
+# Publica una versión: pasa los tests completos sobre la punta de master, sube
+# __version__, la etiqueta vX.Y.Z, construye la imagen (:X.Y.Z, :<sha> y
+# :latest) y publica el manifiesto en Kisnov/uploadrr-version, que es lo que
+# lee el aviso de actualización de la app.
+#
+# A mano (Actions → Publicar versión → Run workflow), o solo cada 12 h si desde
+# la última versión se han fusionado al menos 3 PR de ramas feat/ o fix/. Con «solo prueba» construye
+# :edge de la punta de master, sin tests, versión ni manifiesto.
+#
+# Necesita el secreto UPLOADRR_VERSION_TOKEN: un token con permiso de escritura
+# solo en Kisnov/uploadrr-version (GITHUB_TOKEN no puede escribir en otro repo).
+name: Publicar versión
+
+on:
+  workflow_dispatch:
+    inputs:
+      escala:
+        description: "auto: minor si hay algún feat desde la última versión, si no patch"
+        type: choice
+        options: [auto, patch, minor, major]
+        default: auto
+      notas:
+        description: "Nota PÚBLICA del aviso, en neutro (vacía: «Correcciones y mejoras»)"
+        type: string
+        required: false
+      solo_prueba:
+        description: "Solo construir :edge, sin tests, versión ni manifiesto"
+        type: boolean
+        default: false
+  schedule:
+    - cron: "17 */12 * * *"
+
+permissions: {}
+
+concurrency:
+  group: publicar
+  cancel-in-progress: false
+
+jobs:
+  decidir:
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      accion: ${{ steps.d.outputs.accion }}
+      escala: ${{ steps.d.outputs.escala }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: d
+        env:
+          EVENTO: ${{ github.event_name }}
+          ESCALA: ${{ inputs.escala || 'auto' }}
+          PRUEBA: ${{ inputs.solo_prueba || false }}
+          NOTAS: ${{ inputs.notas || 'Correcciones y mejoras' }}
+          TOKEN: ${{ secrets.UPLOADRR_VERSION_TOKEN }}
+        run: |
+          if [ "$PRUEBA" = true ]; then
+            echo "accion=prueba" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # PR fusionados desde el último commit que cambió la versión, de ramas feat/ o fix/.
+          base="$(git log -1 --format=%H -G'^__version__' -- emuwarez_uploadrr/__init__.py)"
+          prs="$(git log --first-parent --merges --format=%s "$base"..HEAD | grep -E ' from [^/]+/(feat|fix)/' || true)"
+          n="$(printf '%s' "$prs" | grep -c . || true)"
+          echo "$n PR feat/fix desde ${base:0:7}"
+          if [ "$EVENTO" = schedule ] && [ "$n" -lt 3 ]; then
+            echo "accion=nada" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$ESCALA" != auto ]; then
+            escala="$ESCALA"
+          elif printf '%s\n' "$prs" | grep -qE ' from [^/]+/feat/'; then
+            escala="minor"
+          else
+            escala="patch"
+          fi
+          # Antes de los tests y la imagen, lo que podría pararlo al final.
+          # El endpoint de push de git solo responde 200 a quien puede escribir, y no escribe nada.
+          if [ -z "$TOKEN" ] || ! printf 'user = "x:%s"\n' "$TOKEN" | curl -sf -o /dev/null --connect-timeout 10 --max-time 30 \
+              --config - "https://github.com/Kisnov/uploadrr-version.git/info/refs?service=git-receive-pack"; then
+            echo "::error::UPLOADRR_VERSION_TOKEN falta, ha caducado o no puede escribir en Kisnov/uploadrr-version."
+            exit 1
+          fi
+          python3 scripts/publicar_version.py --solo-comprobar --notas "$NOTAS"
+          echo "accion=publicar" >> "$GITHUB_OUTPUT"
+          echo "escala=$escala" >> "$GITHUB_OUTPUT"
+
+  tests:
+    needs: decidir
+    if: needs.decidir.outputs.accion == 'publicar'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml  # zizmor: ignore[self-repository]
+
+  imagen:
+    needs: [decidir, tests]
+    if: >-
+      !cancelled() &&
+      ((needs.decidir.outputs.accion == 'publicar' && needs.tests.result == 'success') ||
+       needs.decidir.outputs.accion == 'prueba')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    env:
+      ACCION: ${{ needs.decidir.outputs.accion }}
+    steps:
+      # Con credenciales: este job sube a master el commit de la versión y su
+      # etiqueta. .dockerignore excluye .git, así que no llegan a la imagen.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4  # zizmor: ignore[artipacked]
+
+      - id: version
+        if: env.ACCION == 'publicar'
+        env:
+          ESCALA: ${{ needs.decidir.outputs.escala }}
+          NOTAS: ${{ inputs.notas || 'Correcciones y mejoras' }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch -q origin master
+          # Re-ejecución de un intento que falló después de subir la versión: se completa esa, no otra.
+          if [ "$(git rev-parse -q --verify origin/master^ 2>/dev/null)" = "$GITHUB_SHA" ] &&
+             git log -1 --format=%s origin/master | grep -q '^chore: versión '; then
+            git checkout -q origin/master
+            echo "subida=true" >> "$GITHUB_OUTPUT"
+            # Si el manifiesto ya la anuncia, estaba entera: reconstruir cambiaría el digest de :latest.
+            publicado="$(gh api repos/Kisnov/uploadrr-version/contents/latest.json --jq .content | base64 -d | jq -r .commit)"
+            if [ "$publicado" = "$(git rev-parse HEAD)" ]; then
+              echo "::notice::Esta versión ya estaba publicada entera; no se toca nada."
+              echo "hecha=true" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            python3 scripts/subir_version.py "$ESCALA"
+            # La versión nueva contra la publicada, antes de commit e imagen (p. ej. una más alta desde desplegar.sh).
+            python3 scripts/publicar_version.py --solo-comprobar --notas "$NOTAS" --repo
+            version="$(python3 scripts/subir_version.py --ver)"
+            git commit -qam "chore: versión $version"
+            git tag -a "v$version" -m "Versión $version"
+          fi
+          echo "version=$(python3 scripts/subir_version.py --ver)" >> "$GITHUB_OUTPUT"
+
+      - id: sello
+        if: steps.version.outputs.hecha != 'true'
+        run: |
+          uploadrr="$(git ls-remote --exit-code https://github.com/Kisnov/Uploadrr-EMU.git refs/heads/main | cut -f1)"
+          test -n "$uploadrr"
+          echo "uploadrr=$uploadrr" >> "$GITHUB_OUTPUT"
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "fecha=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+          # Una versión se construye solo con su sha; :X.Y.Z y :latest llegan cuando master ya la tiene.
+          imagen=ghcr.io/kisnov/emuwarez-uploadrr
+          if [ "$ACCION" = publicar ]; then
+            echo "tags=$imagen:$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          else
+            echo "tags=$imagen:edge" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+        if: steps.version.outputs.hecha != 'true'
+
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        if: steps.version.outputs.hecha != 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: build
+        if: steps.version.outputs.hecha != 'true'
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.sello.outputs.tags }}
+          build-args: |
+            UPLOADRR_COMMIT=${{ steps.sello.outputs.uploadrr }}
+            APP_COMMIT=${{ steps.sello.outputs.commit }}
+            APP_BUILD_DATE=${{ steps.sello.outputs.fecha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Con la imagen ya subida, y las dos a la vez: si master ha avanzado
+      # durante los tests se rechazan las dos y no queda ninguna versión a medias.
+      - if: env.ACCION == 'publicar' && steps.version.outputs.subida != 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: git push --atomic origin HEAD:master "v$VERSION"
+
+      - id: etiquetas
+        if: env.ACCION == 'publicar' && steps.version.outputs.hecha != 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          COMMIT: ${{ steps.sello.outputs.commit }}
+        run: |
+          imagen=ghcr.io/kisnov/emuwarez-uploadrr
+          docker buildx imagetools create --tag "$imagen:$VERSION" --tag "$imagen:latest" "$imagen:$COMMIT"
+          echo "digest=$(docker buildx imagetools inspect "$imagen:latest" --format '{{json .Manifest}}' | jq -r .digest)" >> "$GITHUB_OUTPUT"
+
+      - if: env.ACCION == 'publicar' && steps.version.outputs.hecha != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.UPLOADRR_VERSION_TOKEN }}
+          DIGEST: ${{ steps.etiquetas.outputs.digest }}
+          NOTAS: ${{ inputs.notas || 'Correcciones y mejoras' }}
+        run: |
+          gh auth setup-git
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          python3 scripts/publicar_version.py --digest "$DIGEST" --notas "$NOTAS" --repo

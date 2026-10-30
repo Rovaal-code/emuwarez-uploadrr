@@ -17,6 +17,7 @@ from ..integrations import emu
 from ..integrations.base import IntegrationError
 from ..models import RequestItem, RequestStatus, TaskStatus
 from .library import update_request_status, content_display_title
+from .request_readiness import refresh_request_readiness
 from .tasks import start_task, finish_task
 from .upload_states import ACTIVE_JOB_STATUSES
 from .compatibility import (
@@ -218,6 +219,8 @@ def _sincronizar_peticiones(conn: sqlite3.Connection) -> dict[str, int | str]:
         set_state(conn, SYNC_STATE_KEY, _utcnow().isoformat())
         conn.commit()
         matched = match_all_requests(conn)
+        # La preparación no se calcula sola: sin esto el detalle de cada petición nueva daba 404.
+        refresh_request_readiness(conn)
         summary = f"{len(items)} peticiones importadas, {matched} cruces"
         if removed:
             summary += f", {removed} retiradas"

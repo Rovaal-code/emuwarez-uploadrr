@@ -37,6 +37,14 @@ def _emu_ids(conn):
     return sorted(r[0] for r in conn.execute("SELECT emu_id FROM request_items"))
 
 
+def test_la_sincronizacion_deja_calculada_la_preparacion_de_cada_peticion(db_conn, sincroniza):
+    """Nada la calculaba: abrir una petición real pedía /readiness y daba 404."""
+    from emuwarez_uploadrr.services.request_readiness import get_request_readiness
+    sincroniza([_fila(1), _fila(2)], 2)
+    ids = [r[0] for r in db_conn.execute("SELECT id FROM request_items")]
+    assert len(ids) == 2 and all(get_request_readiness(i, db_conn) for i in ids)
+
+
 def test_un_recorrido_completo_borra_lo_que_ya_no_esta_con_lo_que_colgaba(db_conn, sincroniza):
     peli = db_conn.execute(
         "INSERT INTO library_items (item_type, title, year, tmdb_id, local_status)"
@@ -48,7 +56,9 @@ def test_un_recorrido_completo_borra_lo_que_ya_no_esta_con_lo_que_colgaba(db_con
     sincroniza([_fila(1, "Matrix", tmdb=603), _fila(2, "Dune", tmdb=438631), _fila(3, "Otra")], 3)
     ids = {r["emu_id"]: r["id"] for r in db_conn.execute("SELECT id, emu_id FROM request_items")}
     cuelgan = ids["1"]
-    db_conn.execute("INSERT INTO request_readiness (request_item_id, status) VALUES (?, 'ready')", (cuelgan,))
+    # La preparación la deja calculada la propia sincronización.
+    assert db_conn.execute("SELECT COUNT(*) FROM request_readiness WHERE request_item_id = ?",
+                           (cuelgan,)).fetchone()[0] == 1
     db_conn.execute("INSERT INTO request_candidates (request_item_id, library_item_id, candidate_rank, match_status)"
                     " VALUES (?, ?, 1, 'Compatible')", (cuelgan, peli))
     db_conn.execute("INSERT INTO operational_queue_items (queue_key, item_type, entity_type, request_item_id)"

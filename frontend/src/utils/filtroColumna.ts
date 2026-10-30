@@ -23,3 +23,13 @@ export function resumenFiltro(elegidos: readonly string[], opciones: readonly Op
     .map(v => opciones.find(o => o.value === v)?.label ?? v)
     .join(', ')
 }
+
+const plano = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
+
+/** Las opciones cuyo nombre contiene `texto`, sin mirar mayúsculas ni acentos.
+ *  «Desmarcar todo» ('') no se esconde nunca. */
+export function opcionesQueCoinciden<T extends OpcionFiltro>(opciones: readonly T[], texto: string): readonly T[] {
+  const buscado = plano(texto.trim())
+  if (!buscado) return opciones
+  return opciones.filter(o => o.value === '' || plano(o.label).includes(buscado))
+}

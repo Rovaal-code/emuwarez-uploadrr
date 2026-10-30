@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useLayoutEffect, useId } from 'react'
 import { createPortal } from 'react-dom'
 import { useTooltip } from './Tooltip'
 import { medir, anchoVentana, altoVentana } from '../utils/uiScale'
-import { resumenFiltro, siguienteSeleccion } from '../utils/filtroColumna'
+import { resumenFiltro, siguienteSeleccion, opcionesQueCoinciden } from '../utils/filtroColumna'
 
 export interface FilterOption { value: string; label: string }
 
@@ -59,6 +59,7 @@ export function HeaderFilter<T extends string | string[]>({ label, value, option
 }) {
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState({ top: 0, left: 0 })
+  const [texto, setTexto] = useState('')
   const btnRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const menuId = useId()
@@ -67,6 +68,9 @@ export function HeaderFilter<T extends string | string[]>({ label, value, option
   const active = elegidos.length > 0
   const accent = 'var(--text-accent)'
   const resumen = resumenFiltro(elegidos, options)
+  // Con muchas opciones (los grupos de release son cientos) se busca escribiendo.
+  const buscador = options.length > 10
+  const visibles = opcionesQueCoinciden(options, texto)
   const { triggerProps: caretTip, tooltipNode: caretTooltip } = useTooltip(
     active ? `Filtrado: ${resumen}` : multiple ? 'Filtrar (puedes marcar varios)' : 'Filtrar',
   )
@@ -108,6 +112,7 @@ export function HeaderFilter<T extends string | string[]>({ label, value, option
     // style.top/left, que el zoom del body vuelve a escalar. Ver utils/uiScale.
     const r = btnRef.current ? medir(btnRef.current) : null
     if (r) setPos({ top: r.bottom + 4, left: r.left })
+    setTexto('')
     setOpen(o => !o)
   }
 
@@ -153,7 +158,8 @@ export function HeaderFilter<T extends string | string[]>({ label, value, option
         <span>{label}</span>
         <span aria-hidden className="hf-caret" style={{ color: active ? accent : undefined }}>▼</span>
         {multiple && elegidos.length > 1 && <span aria-hidden className="hf-count">{elegidos.length}</span>}
-        {caretTooltip}
+        {/* Con el menú abierto taparía el buscador. */}
+        {!open && caretTooltip}
       </button>
 
       {open && createPortal(
@@ -171,8 +177,18 @@ export function HeaderFilter<T extends string | string[]>({ label, value, option
             borderRadius: 8, boxShadow: 'var(--shadow-modal)',
           }}
         >
+          {buscador && (
+            <input
+              type="search"
+              className="form-input hf-search"
+              placeholder="Buscar…"
+              aria-label={`Buscar en ${label}`}
+              value={texto}
+              onChange={e => setTexto(e.target.value)}
+            />
+          )}
           {multiple && <div className="hf-hint">Marca uno o varios</div>}
-          {options.map(o => (
+          {visibles.map(o => (
             <FilterOptionButton
               key={o.value || '__all__'}
               // En selección múltiple la opción '' no elige «Todos»: desmarca
@@ -185,6 +201,7 @@ export function HeaderFilter<T extends string | string[]>({ label, value, option
               onClick={() => elegir(o.value)}
             />
           ))}
+          {texto.trim() && visibles.every(o => o.value === '') && <div className="hf-hint hf-empty">Sin coincidencias</div>}
         </div>,
         document.body,
       )}

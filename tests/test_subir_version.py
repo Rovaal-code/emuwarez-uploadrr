@@ -112,13 +112,21 @@ def test_si_no_se_puede_leer_el_manifiesto_se_para(monkeypatch):
     (sin red, sin permiso) no: comprobar a ciegas dejaría repetir una versión."""
     publicar = _cargar("publicar_version")
 
-    def _gh(stderr):
-        def run(*a, **k):
+    def _gh(stderr, repo_responde=False):
+        def run(cmd, *a, **k):
+            if repo_responde and cmd[2] == "repos/x/y":
+                return None
             raise publicar.subprocess.CalledProcessError(1, "gh", stderr=stderr)
         return run
 
-    monkeypatch.setattr(publicar.subprocess, "run", _gh("gh: Not Found (HTTP 404)"))
+    monkeypatch.setattr(publicar.subprocess, "run",
+                        _gh("gh: Not Found (HTTP 404)", repo_responde=True))
     assert publicar.version_publicada("x/y") is None
+
+    # 404 también si el repo no existe o no se ve: eso no es «nada publicado».
+    monkeypatch.setattr(publicar.subprocess, "run", _gh("gh: Not Found (HTTP 404)"))
+    with pytest.raises(RuntimeError):
+        publicar.version_publicada("x/y")
 
     monkeypatch.setattr(publicar.subprocess, "run", _gh("gh: Bad credentials (HTTP 401)"))
     with pytest.raises(RuntimeError):
@@ -128,3 +136,19 @@ def test_si_no_se_puede_leer_el_manifiesto_se_para(monkeypatch):
     monkeypatch.setattr("sys.argv", ["publicar_version.py", "--solo-comprobar",
                                      "--notas", "Mejoras", "--repo"])
     assert publicar.main() == 1
+
+
+def test_una_version_mas_vieja_que_la_publicada_no_se_publica(monkeypatch, tmp_path):
+    """Desde un commit viejo, :latest retrocedería y el aviso anunciaría una
+    versión menor. Para volver atrás se fija la versión en el compose."""
+    publicar = _cargar("publicar_version")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(publicar, "_git", lambda *a: "abc1234")
+    monkeypatch.setattr(publicar, "_leer_version", lambda: "0.9.0")
+    monkeypatch.setattr(publicar, "version_publicada", lambda repo: "0.10.0")
+    monkeypatch.setattr("sys.argv", ["publicar_version.py", "--solo-comprobar",
+                                     "--notas", "Mejoras", "--repo"])
+    assert publicar.main() == 1
+
+    monkeypatch.setattr(publicar, "_leer_version", lambda: "0.10.1")
+    assert publicar.main() == 0

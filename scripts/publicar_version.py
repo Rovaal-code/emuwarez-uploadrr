@@ -92,12 +92,24 @@ def version_publicada(repo: str) -> str | None:
             ["gh", "api", f"repos/{repo}/contents/{FICHERO}", "--jq", ".content"],
             capture_output=True, text=True, check=True, timeout=20).stdout
     except subprocess.CalledProcessError as e:
+        # 404 es también «ese repo no existe o no se ve»: solo es «nada publicado» si el repo responde.
         if "HTTP 404" in (e.stderr or ""):
+            try:
+                subprocess.run(["gh", "api", f"repos/{repo}", "--silent"],
+                               capture_output=True, text=True, check=True, timeout=20)
+            except (subprocess.CalledProcessError, OSError, subprocess.TimeoutExpired) as e2:
+                raise RuntimeError(f"no se puede acceder al repositorio {repo}") from e2
             return None
         raise RuntimeError(f"no se pudo leer el manifiesto publicado: {(e.stderr or '').strip()}") from e
     except (OSError, subprocess.TimeoutExpired) as e:
         raise RuntimeError(f"no se pudo leer el manifiesto publicado: {e}") from e
     return json.loads(base64.b64decode(salida)).get("version")
+
+
+def _numeros(version: str) -> tuple[int, ...] | None:
+    """X.Y.Z como números para compararlas; None si no tiene esa forma."""
+    partes = version.split(".")
+    return tuple(int(p) for p in partes) if all(p.isdigit() for p in partes) else None
 
 
 def publicar(manifiesto: dict, repo: str) -> None:
@@ -162,6 +174,13 @@ def main() -> int:
             print("    python3 scripts/subir_version.py patch", file=sys.stderr)
             print("\n  O repite con --misma-version si de verdad es una republicación.",
                   file=sys.stderr)
+            return 1
+        nueva, vieja = _numeros(manifiesto["version"]), _numeros(anterior or "")
+        if nueva and vieja and nueva < vieja:
+            print(f"✗ La versión publicada es {anterior}, más nueva que la {manifiesto['version']} de este commit.",
+                  file=sys.stderr)
+            print("\n  Para volver a una versión anterior, fíjala en el compose"
+                  " (EMUWAREZ_UPLOADRR_TAG=X.Y.Z): no se republica.", file=sys.stderr)
             return 1
 
     # Antes de construir: una versión ya publicada no debe mover las etiquetas de la imagen.

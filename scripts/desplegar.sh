@@ -18,62 +18,67 @@
 # Uso:
 #   scripts/desplegar.sh --notas "Lo que cambia, en una línea"
 #   scripts/desplegar.sh --notas "..." --version patch   # sube la versión antes
-#   scripts/desplegar.sh --notas "..." --sin-publicar    # construye y sube, sin anunciar
+#   scripts/desplegar.sh --solo-prueba                   # sube solo :edge, sin versión ni manifiesto
 #
-# Al publicar crea también la etiqueta vX.Y.Z en el commit y la sube, y la
-# imagen sale también como :X.Y.Z, que es la que se fija en el compose
+# Al publicar sigue el orden del workflow: la imagen como :<sha>, la etiqueta
+# vX.Y.Z, la imagen como :X.Y.Z y :latest, y el manifiesto. Si algo falla,
+# relanzar completa la versión. :X.Y.Z es la que se fija en el compose
 # (EMUWAREZ_UPLOADRR_TAG=X.Y.Z) para quedarse en una versión o volver a ella.
 #
 # Lo normal es el workflow «Publicar versión», que hace lo mismo en GitHub tras
-# pasar los tests. Esto es la alternativa local, sin gastar minutos de Actions.
+# pasar los tests. Esto es la alternativa local, sin gastar minutos de Actions
+# y sin tests: pásalos antes.
 #
 # Necesita `gh auth login` hecho, para publicar la versión.
 set -euo pipefail
 
-IMAGEN="ghcr.io/kisnov/emuwarez-uploadrr:latest"
+IMAGEN="ghcr.io/kisnov/emuwarez-uploadrr"
 FORK="https://github.com/Kisnov/Uploadrr-EMU.git"
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# En Git Bash de Windows no hay python3.
+PYTHON="$(command -v python3 || command -v python)" || { echo "No encuentro python3 ni python en el PATH." >&2; exit 1; }
 
 NOTAS=""
 ESCALA=""
-PUBLICAR=1
+PRUEBA=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --notas)         NOTAS="$2"; shift 2 ;;
-    --version)       ESCALA="$2"; shift 2 ;;
-    --sin-publicar)  PUBLICAR=0; shift ;;
-    -h|--help)       sed -n '2,20p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    --notas)         NOTAS="${2:?falta el texto de --notas}"; shift 2 ;;
+    --version)       ESCALA="${2:?falta la escala de --version: patch, minor o major}"; shift 2 ;;
+    --solo-prueba)   PRUEBA=1; shift ;;
+    # La cabecera entera, hasta la primera línea que no es comentario.
+    -h|--help)       sed -n '2,${/^#/!q;p;}' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "Argumento no reconocido: $1" >&2; exit 2 ;;
   esac
 done
 
 cd "$RAIZ"
 
-if [[ -z "$NOTAS" && "$PUBLICAR" -eq 1 ]]; then
+if [[ -z "$NOTAS" && "$PRUEBA" -eq 0 ]]; then
   echo "Falta --notas: es la línea que verá el usuario en el aviso de versión." >&2
-  echo "(o --sin-publicar si esta vez no quieres anunciar nada)" >&2
+  echo "(o --solo-prueba para subir solo :edge, sin anunciar nada)" >&2
   exit 2
 fi
 
-# El árbol tiene que estar limpio ANTES de sellar: el sello es el commit, y un
-# cambio sin commitear se colaría en la imagen sin aparecer en ese commit.
+# El árbol tiene que estar limpio: la imagen se construye desde el commit, y un
+# cambio sin commitear no llegaría a ella.
 if [[ -n "$(git status --porcelain)" ]]; then
-  echo "Hay cambios sin commitear. El sello sería mentira: la imagen llevaría" >&2
-  echo "código que ese commit no tiene. Commitea primero." >&2
+  echo "Hay cambios sin commitear, y la imagen sale del commit: no los llevaría." >&2
+  echo "Commitea primero." >&2
   git status --short >&2
   exit 1
 fi
 
 if [[ -n "$ESCALA" ]]; then
-  python3 scripts/subir_version.py "$ESCALA"
+  "$PYTHON" scripts/subir_version.py "$ESCALA"
   echo "La versión ha cambiado: commitea ese cambio y vuelve a lanzar esto." >&2
   exit 1
 fi
 
 COMMIT="$(git rev-parse HEAD)"
-FECHA="$(date -u '+%Y-%m-%d %H:%M UTC')"
-VERSION="$(python3 scripts/subir_version.py --ver)"
+FECHA="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+VERSION="$("$PYTHON" scripts/subir_version.py --ver)"
 
 echo "Versión ..... $VERSION"
 echo "Commit ...... $COMMIT"
@@ -102,14 +107,15 @@ etiqueta_local() {
   git rev-parse -q --verify "refs/tags/$ETIQUETA^{commit}" || true
 }
 
+# Deja en REMOTA el commit de la etiqueta en GitHub, si existe.
 comprobar_etiqueta() {
-  local remota local_
+  local local_
   # Con `|| return 1` explícito: se llama dentro de un `||`, donde set -e no
   # actúa, y un fallo de la consulta pasaría por "no hay etiqueta".
-  remota="$(etiqueta_remota)" || return 1
+  REMOTA="$(etiqueta_remota)" || return 1
   local_="$(etiqueta_local)"
-  if [[ -n "$remota" && "$remota" != "$COMMIT" ]]; then
-    echo "La etiqueta $ETIQUETA ya está en GitHub en $remota, no en este commit." >&2
+  if [[ -n "$REMOTA" && "$REMOTA" != "$COMMIT" ]]; then
+    echo "La etiqueta $ETIQUETA ya está en GitHub en $REMOTA, no en este commit." >&2
     echo "No se pisa: sube la versión (--version patch) o quita la etiqueta que sobra." >&2
     return 1
   fi
@@ -120,20 +126,13 @@ comprobar_etiqueta() {
   fi
 }
 
-# Al final, con el manifiesto ya publicado: crea la etiqueta, o sube la que
-# una ejecución anterior dejó solo aquí. Solo si el commit es la punta de
+# Con :<sha> ya subida y antes que :X.Y.Z y :latest: crea la etiqueta, o sube
+# la que una ejecución anterior dejó solo aquí. Solo si el commit es la punta de
 # master en GitHub: la etiqueta marca en el repo el commit de esta versión.
 etiquetar() {
   # Otra vez, por si algo ha cambiado mientras se construía.
   comprobar_etiqueta || return 1
-  local remota
-  remota="$(etiqueta_remota)" || return 1
-  # Entre una consulta y otra alguien podría haberla creado en otro commit.
-  if [[ -n "$remota" && "$remota" != "$COMMIT" ]]; then
-    echo "La etiqueta $ETIQUETA ya está en GitHub en $remota, no en este commit." >&2
-    return 1
-  fi
-  if [[ -n "$remota" ]]; then
+  if [[ -n "$REMOTA" ]]; then
     echo "La etiqueta $ETIQUETA ya está en GitHub."
     return 0
   fi
@@ -148,14 +147,15 @@ etiquetar() {
   else
     git tag -a "$ETIQUETA" -m "${NOTAS:-Versión $VERSION}" "$COMMIT"
   fi
+  # Si alguien la ha subido en otro commit desde la comprobación, git push no la pisa.
   git push -q origin "$ETIQUETA"
   echo "Etiqueta .... $ETIQUETA"
 }
 
-if [[ "$PUBLICAR" -eq 1 ]]; then
+if [[ "$PRUEBA" -eq 0 ]]; then
   comprobar_etiqueta || exit 1
   # Antes de construir: repetir una versión ya publicada movería :latest y :X.Y.Z a otro digest.
-  python3 scripts/publicar_version.py --solo-comprobar --notas "$NOTAS" --repo
+  "$PYTHON" scripts/publicar_version.py --solo-comprobar --notas "$NOTAS" --repo
   # Y que gh puede escribir el manifiesto: el endpoint de push de git solo da 200 a quien puede.
   # El token va por stdin (printf es interno), no en los argumentos de curl.
   if ! printf 'user = "x:%s"\n' "$(gh auth token)" | curl -sf -o /dev/null --connect-timeout 10 --max-time 30 \
@@ -166,7 +166,7 @@ if [[ "$PUBLICAR" -eq 1 ]]; then
 fi
 
 echo "Resolviendo el HEAD del fork…"
-COMMIT_FORK="$(git ls-remote "$FORK" main | cut -f1)"
+COMMIT_FORK="$(git ls-remote "$FORK" refs/heads/main | cut -f1)"
 if [[ -z "$COMMIT_FORK" ]]; then
   echo "No se pudo leer el HEAD del fork. Sin eso la caché de Docker serviría" >&2
   echo "una copia vieja sin avisar, así que paramos aquí." >&2
@@ -176,11 +176,12 @@ echo "Fork ........ $COMMIT_FORK"
 
 REGISTRO="$(mktemp -t desplegar-XXXXXX.log)"
 echo "Construyendo (registro en $REGISTRO)…"
-if ! docker build \
+# Desde el commit y no desde el árbol: en Windows (autocrlf) el entrypoint iría con CRLF y el contenedor no arrancaría.
+if ! git -c core.autocrlf=false archive HEAD | docker build --pull \
     --build-arg "UPLOADRR_COMMIT=$COMMIT_FORK" \
     --build-arg "APP_COMMIT=$COMMIT" \
     --build-arg "APP_BUILD_DATE=$FECHA" \
-    -t "$IMAGEN" . > "$REGISTRO" 2>&1; then
+    -t "$IMAGEN:$COMMIT" - > "$REGISTRO" 2>&1; then
   echo "La construcción ha fallado. Últimas líneas:" >&2
   tail -30 "$REGISTRO" >&2
   exit 1
@@ -188,7 +189,7 @@ fi
 
 # Comprobar el sello en la imagen ya construida, no fiarse de haberlo pasado:
 # es justo el fallo que este script existe para evitar.
-SELLO="$(docker image inspect "$IMAGEN" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')"
+SELLO="$(docker image inspect "$IMAGEN:$COMMIT" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')"
 if [[ "$SELLO" != "$COMMIT" ]]; then
   echo "La imagen ha salido sellada como '$SELLO' en vez de '$COMMIT'." >&2
   echo "No se sube: quedaría otra build muda." >&2
@@ -196,26 +197,24 @@ if [[ "$SELLO" != "$COMMIT" ]]; then
 fi
 echo "Sello verificado en la imagen."
 
-echo "Subiendo…"
-# :X.Y.Z solo al publicar (comprobar_etiqueta ya ha parado si esa versión es de otro commit), y
-# antes que :latest: si falla una de las dos, :latest no avanza a algo sin anunciar.
-if [[ "$PUBLICAR" -eq 1 ]]; then
-  docker tag "$IMAGEN" "${IMAGEN%:*}:$VERSION"
-  docker push "${IMAGEN%:*}:$VERSION"
-fi
-docker push "$IMAGEN"
-DIGEST="$(docker image inspect "$IMAGEN" --format '{{index .RepoDigests 0}}' | cut -d@ -f2)"
-echo "Digest ...... $DIGEST"
+subir() {
+  docker tag "$IMAGEN:$COMMIT" "$IMAGEN:$1"
+  docker push "$IMAGEN:$1"
+}
 
-if [[ "$PUBLICAR" -eq 0 ]]; then
-  echo
-  echo "Sin publicar el manifiesto ni crear la etiqueta, como pediste. Para anunciarla:"
-  echo "  docker tag $IMAGEN ${IMAGEN%:*}:$VERSION && docker push ${IMAGEN%:*}:$VERSION"
-  echo "  python3 scripts/publicar_version.py --digest $DIGEST --notas \"…\" --repo"
-  echo "  git tag -a v$VERSION -m \"…\" $COMMIT && git push origin v$VERSION"
+echo "Subiendo…"
+if [[ "$PRUEBA" -eq 1 ]]; then
+  subir edge
+  echo "Subida como :edge, sin versión ni manifiesto. Para publicarla, relanza sin --solo-prueba."
   exit 0
 fi
+subir "$COMMIT"
+# Como el workflow: la etiqueta de git antes que :X.Y.Z y :latest, y el manifiesto lo último.
+etiquetar
+subir "$VERSION"
+subir latest
+DIGEST="$(docker image inspect "$IMAGEN:latest" --format '{{index .RepoDigests 0}}' | cut -d@ -f2)"
+echo "Digest ...... $DIGEST"
 
 echo "Publicando el manifiesto…"
-python3 scripts/publicar_version.py --digest "$DIGEST" --notas "$NOTAS" --repo
-etiquetar
+"$PYTHON" scripts/publicar_version.py --digest "$DIGEST" --notas "$NOTAS" --repo

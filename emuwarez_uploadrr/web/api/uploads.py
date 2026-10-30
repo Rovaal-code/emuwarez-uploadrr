@@ -144,6 +144,8 @@ def _job_to_detail(
         id=j.get("id"),
         library_item_id=j.get("library_item_id"),
         request_item_id=j.get("request_item_id"),
+        request_title=j.get("request_title"),
+        request_url=j.get("request_url"),
         status=j.get("status", "draft"),
         stage=j.get("stage"),
         title=j.get("title"),
@@ -283,7 +285,8 @@ def queue_upload(
     checks = body.checks.model_dump() if body.checks else None
     with _get_conn() as conn:
         result = queue_upload_for_item(
-            item_id, remux_overrides=overrides, remux_snapshot=body.remux_snapshot, checks=checks, conn=conn,
+            item_id, request_item_id=body.request_item_id,
+            remux_overrides=overrides, remux_snapshot=body.remux_snapshot, checks=checks, conn=conn,
             source_override=body.source, provider_override=body.provider, tag_override=body.tag,
             title_override=body.title,
         )

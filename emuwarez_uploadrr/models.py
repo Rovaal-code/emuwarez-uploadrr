@@ -183,6 +183,10 @@ class RequestItem:
     url: Optional[str] = None
     author: Optional[str] = None
     author_visible: bool = False
+    # Qué parte de la serie pide: toda (None), una temporada ('season') o un capítulo ('episode').
+    req_scope: Optional[str] = None
+    req_season: Optional[int] = None
+    req_episode: Optional[int] = None
     raw_json: Optional[str] = None
     updated_at: Optional[str] = None
 

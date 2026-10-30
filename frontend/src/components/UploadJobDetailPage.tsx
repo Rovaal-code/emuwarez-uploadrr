@@ -4,7 +4,7 @@ import { getUploadJobLogs } from '../api/uploads'
 import { posterUrl } from '../utils/libraryItem'
 import { formatDate, formatDateTimeSeconds, parseServerDate } from '../utils/format'
 import { InfoIcon } from './InfoIcon'
-import { StatusBadge } from './StatusBadge'
+import { PeticionDeSubida } from './PeticionDeSubida'
 import { ServiceLabel } from './ServiceIcon'
 import {
   Card, FieldRow, DetailPoster, ValueChip, ValueIcon, DETAIL_CARD_HEIGHT, DetailHero, DetailTitle, DetailTitleText,
@@ -573,7 +573,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
                   ? <ValueChip><ServiceLabel type={job.instance_type} label={job.instance_name ?? job.instance_type} size={15} /></ValueChip>
                   : <span className="muted">—</span>}
               </FieldRow>
-              <FieldRow label="Petición"><StatusBadge status={job.request_status || 'Sin petición'} type="request" /></FieldRow>
+              <FieldRow label="Petición"><PeticionDeSubida job={job} /></FieldRow>
               <FieldRow label="Nomenclatura" help="Los campos que componen el nombre final del torrent, del archivo y de su título interno.">
                 <ValueChip as="button" linkable onClick={() => setShowNomenclatura(true)} title="Ver nomenclatura">
                   {stagingLoadingNomenclature

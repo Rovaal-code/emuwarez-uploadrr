@@ -7,16 +7,18 @@ import logging
 import os
 import re
 import sqlite3
+import threading
 import unicodedata
 from typing import Optional
 
-from ..database import get_setting_canonical, get_state, set_state
-from . import cli_config
+from ..database import borrar_peticiones, get_setting_canonical, get_state, set_state
+from . import cli_config, emu_catalog
 from ..integrations import emu
 from ..integrations.base import IntegrationError
 from ..models import RequestItem, RequestStatus, TaskStatus
 from .library import update_request_status, content_display_title
 from .tasks import start_task, finish_task
+from .upload_states import ACTIVE_JOB_STATUSES
 from .compatibility import (
     match_request_to_library,
     classify_request_match,
@@ -28,14 +30,6 @@ logger = logging.getLogger("emuwarez.requests")
 
 SYNC_STATE_KEY = "last_emu_requests_sync_utc"
 MIN_SYNC_SECONDS = 3600
-
-# How long a "does this already exist on eMuwarez's own torrent catalog?"
-# check stays cached before it's worth re-querying the real API again. A
-# request's status on eMuwarez's catalog doesn't change minute to minute,
-# and this is a live network call (unlike the rest of matching, which is
-# pure in-memory comparison against already-synced local data) — so this
-# is deliberately much coarser than MIN_SYNC_SECONDS.
-EMU_CATALOG_CHECK_TTL_SECONDS = 24 * 3600
 
 
 def _utcnow() -> dt.datetime:
@@ -83,14 +77,18 @@ def get_request_sync_status(conn: sqlite3.Connection) -> dict:
     }
 
 
-def upsert_request(conn: sqlite3.Connection, item: RequestItem) -> int:
+def upsert_request(
+    conn: sqlite3.Connection, item: RequestItem, *, seen_at: Optional[str] = None, commit: bool = True
+) -> int:
+    """Inserta o actualiza una petición. `seen_at` marca cuándo la vio la sincronización
+    y `commit=False` deja la transacción abierta, para guardar varias de golpe."""
     conn.execute(
         """
         INSERT INTO request_items(
             emu_id, title, category, requested_source, requested_resolution,
             emu_status, points, comments, created_at, tmdb_id, imdb_id, tvdb_id, mal_id, url,
-            author, author_visible, raw_json, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            author, author_visible, req_scope, req_season, req_episode, raw_json, last_seen_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         ON CONFLICT(emu_id) DO UPDATE SET
             title = excluded.title,
             category = excluded.category,
@@ -106,29 +104,31 @@ def upsert_request(conn: sqlite3.Connection, item: RequestItem) -> int:
             mal_id = excluded.mal_id,
             url = excluded.url,
             author = excluded.author,
+            author_visible = excluded.author_visible,
+            req_scope = excluded.req_scope,
+            req_season = excluded.req_season,
+            req_episode = excluded.req_episode,
             raw_json = excluded.raw_json,
+            last_seen_at = COALESCE(excluded.last_seen_at, request_items.last_seen_at),
             updated_at = CURRENT_TIMESTAMP
         """,
         (
             item.emu_id, item.title, item.category, item.requested_source,
             item.requested_resolution, item.emu_status, item.points, item.comments,
             item.created_at, item.tmdb_id, item.imdb_id, item.tvdb_id, item.mal_id, item.url, item.author,
-            1 if item.author_visible else 0, item.raw_json,
+            1 if item.author_visible else 0, item.req_scope, item.req_season, item.req_episode, item.raw_json,
+            seen_at,
         ),
     )
     row = conn.execute("SELECT id FROM request_items WHERE emu_id = ?", (item.emu_id,)).fetchone()
-    conn.commit()
+    if commit:
+        conn.commit()
     return int(row["id"])
 
 
 # ---------------------------------------------------------------------------
 # Primary sync function — UNIT3D api_token auth (Phase 5B)
 # ---------------------------------------------------------------------------
-
-def _is_requests_endpoint_missing(exc: Exception) -> bool:
-    m = str(exc).lower()
-    return "404" in m and ("api/requests" in m or "could not be found" in m or "route" in m)
-
 
 def _resolve_emu_api_key(conn: sqlite3.Connection) -> Optional[str]:
     """La API key de eMuwarez: la interfaz la guarda en la BD
@@ -145,16 +145,46 @@ def _resolve_emu_api_key(conn: sqlite3.Connection) -> Optional[str]:
     return cli_config.emu_api_key()
 
 
+_SYNC_EN_CURSO = threading.Lock()
+
+
+def _motivo_ocupado(conn: sqlite3.Connection) -> Optional[str]:
+    """Por qué ahora no toca sincronizar: el catálogo y las subidas gastan las mismas 30 llamadas por minuto de la clave."""
+    if emu_catalog.get_sync_progress().get("active"):
+        return "Se está sincronizando el catálogo de eMuwarez; vuelve a probar cuando termine."
+    marcas = ",".join("?" * len(ACTIVE_JOB_STATUSES))
+    if conn.execute(
+        f"SELECT 1 FROM upload_jobs WHERE status IN ({marcas}) LIMIT 1", tuple(ACTIVE_JOB_STATUSES)
+    ).fetchone():
+        return "Hay una subida en marcha; vuelve a probar cuando termine."
+    return None
+
+
 def sync_emu_requests(
     conn: sqlite3.Connection,
     *,
     force: bool = False,
 ) -> dict[str, int | str]:
-    """Sync EMU requests using UNIT3D ?api_token= auth. Rate-limited to 1/hour."""
+    """Sync EMU requests using UNIT3D ?api_token= auth. Rate-limited to 1/hour.
+
+    Nunca a la vez que otra sincronización de peticiones, que la del catálogo o que una subida:
+    devuelve {"status": "busy", "message": ...} sin tocar nada.
+    """
     allowed, wait = can_sync_requests(conn, force=force)
     if not allowed:
         return {"status": "throttled", "wait_seconds": wait, "imported": 0, "matched": 0}
+    if not _SYNC_EN_CURSO.acquire(blocking=False):
+        return {"status": "busy", "message": "Ya hay una sincronización de peticiones en marcha."}
+    try:
+        motivo = _motivo_ocupado(conn)
+        if motivo:
+            return {"status": "busy", "message": motivo}
+        return _sincronizar_peticiones(conn)
+    finally:
+        _SYNC_EN_CURSO.release()
 
+
+def _sincronizar_peticiones(conn: sqlite3.Connection) -> dict[str, int | str]:
     task_id = start_task(conn, "sync-emu-requests", "Sincronizando peticiones EMU")
     api_key = _resolve_emu_api_key(conn)
     if not api_key:
@@ -162,40 +192,41 @@ def sync_emu_requests(
         raise IntegrationError("No hay API Key de eMuwarez configurada")
 
     # Record the throttle at START (not at the end), so a slow fetch or a page
-    # refresh mid-sync can't relaunch it. Restored if the sync fails / is
-    # unavailable, so a failed run doesn't lock the user out for an hour.
+    # refresh mid-sync can't relaunch it. Restored if the sync fails, so a
+    # failed run doesn't lock the user out for an hour.
     prev_sync = get_state(conn, SYNC_STATE_KEY)
     set_state(conn, SYNC_STATE_KEY, _utcnow().isoformat())
     conn.commit()
 
     def _restore_throttle() -> None:
+        conn.rollback()  # lo que se hubiera importado a medias no se queda
         set_state(conn, SYNC_STATE_KEY, prev_sync or "")
         conn.commit()
 
     logger.info("Sincronización de peticiones iniciada")
     try:
-        raw_items = emu.emu_fetch_all_pages(api_key)
+        raw_items, total = emu.emu_fetch_all_pages(api_key)
         items = emu.normalize_requests(raw_items)
+        sync_at = _utcnow().isoformat()
         for item in items:
-            upsert_request(conn, item)
+            upsert_request(conn, item, seen_at=sync_at, commit=False)
+        # Solo un recorrido que cuadra con el total de eMuwarez dice cuáles ya no están abiertas.
+        complete = total is not None and len(items) == total == len({i.emu_id for i in items})
+        if not complete:
+            logger.warning("El recorrido de peticiones no cuadra con el total de eMuwarez; no se borra ninguna")
+        removed = borrar_peticiones(conn, "last_seen_at IS NULL OR last_seen_at != ?", (sync_at,)) if complete else 0
         set_state(conn, SYNC_STATE_KEY, _utcnow().isoformat())
         conn.commit()
-        matched = match_all_requests(conn, emu_api_key=api_key)
+        matched = match_all_requests(conn)
         summary = f"{len(items)} peticiones importadas, {matched} cruces"
+        if removed:
+            summary += f", {removed} retiradas"
         finish_task(conn, task_id, TaskStatus.COMPLETED.value, summary)
-        logger.info("Sincronización de peticiones terminada: %d importadas, %d cruzadas con tu biblioteca",
-                    len(items), matched)
-        return {"status": "ok", "imported": len(items), "matched": matched}
+        logger.info("Sincronización de peticiones terminada: %d importadas, %d retiradas, %d cruzadas con tu biblioteca",
+                    len(items), removed, matched)
+        return {"status": "ok", "imported": len(items), "matched": matched, "removed": removed}
     except IntegrationError as exc:
-        # eMuwarez (UNIT3D) does not expose /api/requests — the endpoint 404s.
-        # That's a known tracker limitation, not a real failure: mark the task
-        # SKIPPED with a clear message instead of a scary raw HTTP 404.
         _restore_throttle()
-        if _is_requests_endpoint_missing(exc):
-            detail = "eMuwarez no expone el endpoint de peticiones (/api/requests); función no disponible aún."
-            finish_task(conn, task_id, TaskStatus.SKIPPED.value, "No implementado")
-            logger.info("Sincronización de peticiones omitida: %s", detail)
-            return {"status": "unavailable", "imported": 0, "matched": 0, "message": detail}
         finish_task(conn, task_id, TaskStatus.FAILED.value, str(exc))
         logger.warning("Sincronización de peticiones fallida: %s", exc)
         raise
@@ -207,92 +238,8 @@ def sync_emu_requests(
 
 
 # ---------------------------------------------------------------------------
-# Legacy sync (kept for backward compat with tests/CLI set-endpoint flow)
-# ---------------------------------------------------------------------------
-
-def sync_requests(
-    conn: sqlite3.Connection,
-    *,
-    endpoint_url: Optional[str] = None,
-    force: bool = False,
-) -> dict[str, int | str]:
-    """Legacy sync using explicit endpoint_url + Bearer header."""
-    allowed, wait = can_sync_requests(conn, force=force)
-    if not allowed:
-        return {"status": "throttled", "wait_seconds": wait, "imported": 0}
-    task_id = start_task(conn, "sync-emu-requests", "Sincronizando peticiones EMU")
-    # Mismo resolutor que sync_emu_requests: la BD primero. Esta función leía
-    # SOLO la configuración del CLI, así que decía "No hay API Key" a quien la
-    # tuviera puesta en la interfaz — justo el fallo que el docstring de
-    # _resolve_emu_api_key llevaba describiendo ochenta líneas más arriba.
-    api_key = _resolve_emu_api_key(conn)
-    if not api_key:
-        finish_task(conn, task_id, TaskStatus.FAILED.value, "No hay API Key de eMuwarez configurada")
-        raise IntegrationError("No hay API Key de eMuwarez configurada")
-    try:
-        raw = emu.get_requests(
-            api_key,
-            endpoint_url=endpoint_url or get_state(conn, "emu_requests_endpoint"),
-        )
-        items = emu.normalize_requests(raw)
-        for item in items:
-            upsert_request(conn, item)
-        set_state(conn, SYNC_STATE_KEY, _utcnow().isoformat())
-        conn.commit()
-        match_requests(conn)
-        summary = f"{len(items)} peticiones importadas"
-        finish_task(conn, task_id, TaskStatus.COMPLETED.value, summary)
-        return {"status": "ok", "imported": len(items)}
-    except Exception as exc:
-        finish_task(conn, task_id, TaskStatus.FAILED.value, str(exc))
-        raise
-
-
-# ---------------------------------------------------------------------------
 # Matching
 # ---------------------------------------------------------------------------
-
-def _should_check_emu_catalog(req: dict, *, status: Optional[str]) -> bool:
-    """Decide whether a request is worth an extra live check against
-    eMuwarez's real torrent catalog (/api/torrents/filter by tmdbId).
-
-    Only triggers for the cases that were flagged as likely false negatives:
-    no library candidate at all, or the internal matcher classified it as
-    "No compatible". Anything already Compatible/Parcial/Llena skips this —
-    those already have a usable answer, so spending a network call (and
-    eMuwarez API quota) on them would be waste, not signal.
-    """
-    if status not in (None, "No compatible"):
-        return False
-    if not req.get("tmdb_id"):
-        # Without a tmdb_id this would fall back to free-text `name` search,
-        # which has the exact same fuzziness problem this check exists to
-        # avoid — not worth the network call.
-        return False
-    checked_at = _parse_iso(req.get("emu_catalog_checked_at"))
-    if checked_at and (_utcnow() - checked_at).total_seconds() < EMU_CATALOG_CHECK_TTL_SECONDS:
-        return False
-    return True
-
-
-def _check_emu_catalog_duplicate(conn: sqlite3.Connection, req: dict, emu_api_key: str) -> None:
-    """Query eMuwarez's own torrent catalog directly by tmdb_id.
-
-    Never raises: a network failure here must not break the rest of a
-    sync/match run, so any error just gets cached as "error" (and will be
-    retried after the TTL) instead of propagating.
-    """
-    try:
-        response = emu.emu_search_existing(emu_api_key, tmdb_id=req.get("tmdb_id"))
-        data = response.get("data") if isinstance(response, dict) else None
-        result = "found" if isinstance(data, list) and data else "not_found"
-    except Exception:
-        result = "error"
-    conn.execute(
-        "UPDATE request_items SET emu_catalog_checked_at = ?, emu_catalog_result = ? WHERE id = ?",
-        (_utcnow().isoformat(), result, req["id"]),
-    )
-
 
 _AVAILABLE = {"Disponible", "Subido", "Subiendo", "Parcial"}
 
@@ -444,20 +391,11 @@ def _candidatas(conn: sqlite3.Connection) -> list[dict]:
     return [dict(r) for r in conn.execute("SELECT * FROM library_items WHERE item_type != 'episode'").fetchall()]
 
 
-def match_all_requests(conn: sqlite3.Connection, *, emu_api_key: Optional[str] = None) -> int:
+def match_all_requests(conn: sqlite3.Connection) -> int:
     """Re-run compatibility matching for all request items. Returns updated count.
 
-    `emu_api_key`: reuse an already-loaded key (e.g. from sync_emu_requests)
-    when available; falls back to loading config independently so this can
-    still be called standalone (CLI, "recompute matches" endpoint, etc.).
+    Es solo comparar con lo que ya hay en la base de datos: no llama a eMuwarez.
     """
-    if emu_api_key is None:
-        # Mismo resolutor que el resto: la BD primero. Antes leía SOLO la
-        # configuración del CLI, así que a quien tuviera la clave puesta en la
-        # interfaz le salía None y la comprobación contra el catálogo de
-        # eMuwarez se saltaba en silencio.
-        emu_api_key = _resolve_emu_api_key(conn)
-
     # Snapshot which requests already had compatible content, so afterwards we
     # only notify about the ones that *newly* became satisfiable this run.
     before_compatible = _compatible_request_ids(conn)
@@ -481,8 +419,6 @@ def match_all_requests(conn: sqlite3.Connection, *, emu_api_key: Optional[str] =
     for req in requests:
         candidates = match_request_to_library(req, library)
         if not candidates:
-            if emu_api_key and _should_check_emu_catalog(req, status=None):
-                _check_emu_catalog_duplicate(conn, req, emu_api_key)
             continue
         best = candidates[0]
         classification = classify_request_match(
@@ -528,8 +464,6 @@ def match_all_requests(conn: sqlite3.Connection, *, emu_api_key: Optional[str] =
             conn, _scoped_library_id(conn, best["item"], req),
             classification["status"], int(req["id"]),
         )
-        if emu_api_key and _should_check_emu_catalog(req, status=classification["status"]):
-            _check_emu_catalog_duplicate(conn, req, emu_api_key)
         updated += 1
     conn.commit()
     _notify_new_compatible_matches(conn, before_compatible)
@@ -610,25 +544,12 @@ def _notify_new_compatible_matches(conn: sqlite3.Connection, before_ids: set[int
         )
 
 
-# Keep old name as alias for backward compat
-def match_requests(conn: sqlite3.Connection) -> int:
-    return match_all_requests(conn)
-
-
-def match_single_request(
-    conn: sqlite3.Connection, request_id: int, *, emu_api_key: Optional[str] = None
-) -> Optional[dict]:
+def match_single_request(conn: sqlite3.Connection, request_id: int) -> Optional[dict]:
     """Re-match a single request against library. Returns best match dict or None."""
     req_row = conn.execute("SELECT * FROM request_items WHERE id = ?", (request_id,)).fetchone()
     if not req_row:
         return None
     req = dict(req_row)
-    if emu_api_key is None:
-        # Mismo resolutor que el resto: la BD primero. Antes leía SOLO la
-        # configuración del CLI, así que a quien tuviera la clave puesta en la
-        # interfaz le salía None y la comprobación contra el catálogo de
-        # eMuwarez se saltaba en silencio.
-        emu_api_key = _resolve_emu_api_key(conn)
     # Lo de la vez anterior se recalcula entero: si ya no casa, no queda nada viejo enseñándose.
     conn.execute("DELETE FROM request_matches WHERE request_item_id = ?", (request_id,))
     conn.execute(
@@ -637,8 +558,6 @@ def match_single_request(
     )
     candidates = match_request_to_library(req, _candidatas(conn))
     if not candidates:
-        if emu_api_key and _should_check_emu_catalog(req, status=None):
-            _check_emu_catalog_duplicate(conn, req, emu_api_key)
         conn.commit()
         return None
     best = candidates[0]
@@ -680,8 +599,6 @@ def match_single_request(
         conn, _scoped_library_id(conn, best["item"], req),
         classification["status"], int(req["id"]),
     )
-    if emu_api_key and _should_check_emu_catalog(req, status=classification["status"]):
-        _check_emu_catalog_duplicate(conn, req, emu_api_key)
     conn.commit()
     return {
         "library_item_id": best["item"]["id"],
@@ -1066,11 +983,6 @@ def get_match_for_request(conn: sqlite3.Connection, request_id: int) -> Optional
         (request_id,),
     ).fetchone()
     return dict(row) if row else None
-
-
-def set_requests_endpoint(conn: sqlite3.Connection, url: str) -> None:
-    set_state(conn, "emu_requests_endpoint", url)
-    conn.commit()
 
 
 # ---------------------------------------------------------------------------

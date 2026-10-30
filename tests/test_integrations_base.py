@@ -16,7 +16,7 @@ from unittest.mock import patch
 
 import pytest
 
-from emuwarez_uploadrr.integrations.base import IntegrationError, request_json, url_sin_claves
+from emuwarez_uploadrr.integrations.base import IntegrationError, build_url, request_json, url_sin_claves
 
 
 def test_hanging_call_raises_within_the_deadline_not_forever():
@@ -101,3 +101,8 @@ def test_el_cuerpo_del_error_no_repite_la_clave():
         with pytest.raises(IntegrationError) as info:
             request_json("GET", _URL_CON_CLAVE)
     assert "CLAVESECRETA123" not in str(info.value)
+
+
+def test_build_url_repite_la_clave_de_un_valor_lista_y_se_salta_los_none():
+    url = build_url("https://t.x", "/api/requests/filter", {"filled": 0, "category_id[]": [1, 2], "name": None})
+    assert url == "https://t.x/api/requests/filter?filled=0&category_id%5B%5D=1&category_id%5B%5D=2"

@@ -88,6 +88,8 @@ def trabajo_activo(conn, item_id: int) -> dict | None:
 def _insert_and_start_queued_job(
     conn, item: dict, *,
     request_item_id: int | None = None,
+    request_title: str | None = None,
+    request_url: str | None = None,
     retry_of_job_id: int | None = None,
     retry_count: int = 0,
     remux_overrides: dict | None = None,
@@ -125,6 +127,9 @@ def _insert_and_start_queued_job(
     (None for a single movie/episode). _run_queued_job() reads this back and
     forwards it to season_pack.apply_season_pack() so the choice actually
     reaches the real renamed files, not just the staging preview.
+
+    `request_title`/`request_url` — la petición que cubre la subida, copiada
+    tal cual estaba al encolar (ver _foto_de_la_peticion).
     """
     now = datetime.now(timezone.utc)
     queued_until = (now + timedelta(seconds=QUEUE_GRACE_SECONDS)).isoformat()
@@ -148,15 +153,16 @@ def _insert_and_start_queued_job(
         cursor = conn.execute(
             """
             INSERT INTO upload_jobs (
-                library_item_id, request_item_id, status, stage, title, path, source_path,
+                library_item_id, request_item_id, request_title, request_url,
+                status, stage, title, path, source_path,
                 queued_until, retry_of_job_id, retry_count, checks_snapshot_json,
                 nomenclature_proposal_id, nomenclature_snapshot_json,
                 remux_overrides_json, remux_snapshot_json, season_overrides_json,
                 created_at, updated_at
-            ) VALUES (?, ?, 'queued', 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, 'queued', 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                item["id"], request_item_id,
+                item["id"], request_item_id, request_title, request_url,
                 item.get("title") or "Sin título",
                 item.get("path") or "",
                 item.get("path"),
@@ -203,8 +209,20 @@ def _arm_queue_timer(job_id: int) -> None:
     timer.start()
 
 
+def _foto_de_la_peticion(conn, request_item_id: int | None) -> tuple[str | None, str | None]:
+    """Título y enlace de la petición, tal como están al encolar. La fila se
+    borra cuando la petición deja de estar abierta en eMuwarez: sin esta copia,
+    Subidas no podría decir qué petición cubrió la subida."""
+    if request_item_id is None:
+        return None, None
+    from .requests import get_request
+    peticion = get_request(conn, request_item_id)
+    return (peticion["title"], peticion["url"]) if peticion else (None, None)
+
+
 def queue_upload_for_item(
     item_id: int, *,
+    request_item_id: int | None = None,
     remux_overrides: dict | None = None,
     remux_snapshot: dict | None = None,
     checks: dict | None = None,
@@ -244,8 +262,10 @@ def queue_upload_for_item(
                 "tag": tag_override, "title": title_override,
             }
 
+        request_title, request_url = _foto_de_la_peticion(conn, request_item_id)
         return _insert_and_start_queued_job(
             conn, item,
+            request_item_id=request_item_id, request_title=request_title, request_url=request_url,
             remux_overrides=remux_overrides, remux_snapshot=remux_snapshot, checks=checks,
             nomenclature_proposal_id=proposal.get("id") if proposal else None,
             nomenclature_snapshot=proposal,
@@ -295,6 +315,8 @@ def queue_retry_for_job(original_job_id: int, conn=None) -> dict:
         return _insert_and_start_queued_job(
             conn, item,
             request_item_id=original.get("request_item_id"),
+            request_title=original.get("request_title"),
+            request_url=original.get("request_url"),
             retry_of_job_id=original_job_id,
             retry_count=(original.get("retry_count") or 0) + 1,
             nomenclature_proposal_id=original.get("nomenclature_proposal_id"),

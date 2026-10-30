@@ -55,6 +55,9 @@ interface Props {
   // Optional pre-selection (e.g. from a request's scope): season number and,
   // for a single episode, its episode number. Used to auto-fill step 0.
   preselect?: { season?: number | null; episode?: number | null }
+  // La petición desde la que se abrió, si fue así: todo lo que se suba aquí la
+  // cubre, y Subidas lo enseña.
+  requestId?: number
   // Only true when opened from a series' own dedicated Biblioteca page — the
   // one place multi-season selection is offered (never from the Biblioteca
   // list/table, never from a season's own page).
@@ -438,7 +441,7 @@ const INTERNAL_TITLE_LABEL = (
   </span>
 )
 
-export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNavigate, preselect }: Props) {
+export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNavigate, preselect, requestId }: Props) {
   const isSeries = item.item_type === 'series'
   const isSeason = item.item_type === 'season'
   const needsSelection = isSeries || isSeason
@@ -1292,6 +1295,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
         targetIsSeason
           ? { source: fields.source, provider: fields.provider, tag: fields.tag, title: fields.title }
           : undefined,
+        requestId,
       )
       if (r.status !== 'queued' || !r.job?.id) {
         setUploadMsg(`✗ No se pudo encolar la subida (estado: ${r.status}). ${(r.errors || []).join(' ')}`)
@@ -1349,7 +1353,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
           results.push({ seasonId, title, status: 'failed', reason })
           continue
         }
-        const r = await queueUpload(seasonId, undefined, checksResult, null, overridesMap.get(seasonId))
+        const r = await queueUpload(seasonId, undefined, checksResult, null, overridesMap.get(seasonId), requestId)
         if (r.status !== 'queued' || !r.job?.id) {
           results.push({ seasonId, title, status: 'failed', reason: (r.errors || []).join(' ') || 'No se pudo encolar' })
         } else {
@@ -1531,7 +1535,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
           results.push({ seasonId: episodeId, title, status: 'failed', reason })
           continue
         }
-        const r = await queueUpload(episodeId, undefined, checksResult, null)
+        const r = await queueUpload(episodeId, undefined, checksResult, null, undefined, requestId)
         if (r.status !== 'queued' || !r.job?.id) {
           results.push({ seasonId: episodeId, title, status: 'failed', reason: (r.errors || []).join(' ') || 'No se pudo encolar' })
         } else {

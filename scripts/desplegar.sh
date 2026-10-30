@@ -18,7 +18,7 @@
 # Uso:
 #   scripts/desplegar.sh --notas "Lo que cambia, en una línea"
 #   scripts/desplegar.sh --notas "..." --version patch   # sube la versión antes
-#   scripts/desplegar.sh --notas "..." --sin-publicar    # construye y sube, sin anunciar
+#   scripts/desplegar.sh --solo-prueba                   # sube solo :edge, sin versión ni manifiesto
 #
 # Al publicar sigue el orden del workflow: la imagen como :<sha>, la etiqueta
 # vX.Y.Z, la imagen como :X.Y.Z y :latest, y el manifiesto. Si algo falla,
@@ -39,13 +39,13 @@ PYTHON="$(command -v python3 || command -v python)"
 
 NOTAS=""
 ESCALA=""
-PUBLICAR=1
+PRUEBA=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --notas)         NOTAS="$2"; shift 2 ;;
     --version)       ESCALA="$2"; shift 2 ;;
-    --sin-publicar)  PUBLICAR=0; shift ;;
+    --solo-prueba)   PRUEBA=1; shift ;;
     -h|--help)       sed -n '2,20p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "Argumento no reconocido: $1" >&2; exit 2 ;;
   esac
@@ -53,9 +53,9 @@ done
 
 cd "$RAIZ"
 
-if [[ -z "$NOTAS" && "$PUBLICAR" -eq 1 ]]; then
+if [[ -z "$NOTAS" && "$PRUEBA" -eq 0 ]]; then
   echo "Falta --notas: es la línea que verá el usuario en el aviso de versión." >&2
-  echo "(o --sin-publicar si esta vez no quieres anunciar nada)" >&2
+  echo "(o --solo-prueba para subir solo :edge, sin anunciar nada)" >&2
   exit 2
 fi
 
@@ -150,7 +150,7 @@ etiquetar() {
   echo "Etiqueta .... $ETIQUETA"
 }
 
-if [[ "$PUBLICAR" -eq 1 ]]; then
+if [[ "$PRUEBA" -eq 0 ]]; then
   comprobar_etiqueta || exit 1
   # Antes de construir: repetir una versión ya publicada movería :latest y :X.Y.Z a otro digest.
   "$PYTHON" scripts/publicar_version.py --solo-comprobar --notas "$NOTAS" --repo
@@ -201,24 +201,18 @@ subir() {
 }
 
 echo "Subiendo…"
+if [[ "$PRUEBA" -eq 1 ]]; then
+  subir edge
+  echo "Subida como :edge, sin versión ni manifiesto. Para publicarla, relanza sin --solo-prueba."
+  exit 0
+fi
 subir "$COMMIT"
 # Como el workflow: la etiqueta de git antes que :X.Y.Z y :latest, y el manifiesto lo último.
-if [[ "$PUBLICAR" -eq 1 ]]; then
-  etiquetar
-  subir "$VERSION"
-fi
+etiquetar
+subir "$VERSION"
 subir latest
 DIGEST="$(docker image inspect "$IMAGEN:latest" --format '{{index .RepoDigests 0}}' | cut -d@ -f2)"
 echo "Digest ...... $DIGEST"
-
-if [[ "$PUBLICAR" -eq 0 ]]; then
-  echo
-  echo "Sin publicar el manifiesto ni crear la etiqueta, como pediste. Para anunciarla:"
-  echo "  docker tag $IMAGEN:latest $IMAGEN:$VERSION && docker push $IMAGEN:$VERSION"
-  echo "  python3 scripts/publicar_version.py --digest $DIGEST --notas \"…\" --repo"
-  echo "  git tag -a v$VERSION -m \"…\" $COMMIT && git push origin v$VERSION"
-  exit 0
-fi
 
 echo "Publicando el manifiesto…"
 "$PYTHON" scripts/publicar_version.py --digest "$DIGEST" --notas "$NOTAS" --repo

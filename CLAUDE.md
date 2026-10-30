@@ -63,14 +63,15 @@ the upload with Uploadrr-EMU (`Kisnov/Uploadrr-EMU`, cloned into the image at `/
   and `vX.Y.Z`, builds `:X.Y.Z`, `:<sha>` and `:latest`, and publishes the manifest (secret
   `UPLOADRR_VERSION_TOKEN`). Release when Gabriel asks: `gh workflow run publicar.yml -f notas="…"`, with a
   neutral public note. `solo_prueba=true` builds `:edge` from master's tip only. `scripts/desplegar.sh` is
-  the local fallback (no Actions minutes, no tests) and pushes in the same order. Pass `--build-arg UPLOADRR_COMMIT=…` or
+  the local fallback (no Actions minutes, no tests) and pushes in the same order; `--solo-prueba` pushes only
+  `:edge`. Pass `--build-arg UPLOADRR_COMMIT=…` or
   the Uploadrr-EMU clone layer comes from cache.
 - Version manifest: the Diagnóstico card compares the image's `APP_COMMIT` with `latest.json` in the public
   repo `Kisnov/uploadrr-version` (a fork of `Rovaal-code/uploadrr-version`); to test against another
   manifest, set `UPLOADRR_VERSION_MANIFEST_URL`. It is separate because this
   repo and the image are private, so the app can't ask GHCR or read a private raw URL without a token.
   `desplegar.sh` publishes it after `docker push` via `scripts/publicar_version.py --repo`; don't edit it by
-  hand, run that script (needed after `--sin-publicar`). The file is public: keep `--notas` neutral.
+  hand, run that script. The file is public: keep `--notas` neutral.
 - Building on Windows: the checkout is CRLF (autocrlf), and a CRLF `docker-entrypoint.sh` fails with
   "no such file or directory". Build from `git -c core.autocrlf=false archive HEAD`.
 

@@ -312,7 +312,7 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
   instances: InstanceSafeResponse[]
   onBack: () => void
   onShowCandidates: () => void
-  onUpload: (libraryItemId: number, preselect?: { season?: number | null; episode?: number | null }) => void
+  onUpload: (libraryItemId: number, preselect?: { season?: number | null; episode?: number | null }, requestId?: number) => void
   onOpenLibraryItem?: (id: number) => void
 }) {
   const m = item.match
@@ -376,7 +376,7 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
             onClick={() => libraryTargetId && onUpload(libraryTargetId, {
               season: item.req_season,
               episode: item.req_scope === 'episode' ? item.req_episode : null,
-            })}
+            }, item.id)}
             {...subirTip.triggerProps}
           >
             <UploadButtonIcon /> Subir a eMuwarez
@@ -631,6 +631,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   const [showCandidates, setShowCandidates] = useState(false)
   const [wizardItem, setWizardItem] = useState<LibraryItemResponse | null>(null)
   const [wizardPreselect, setWizardPreselect] = useState<{ season?: number | null; episode?: number | null } | undefined>(undefined)
+  const [wizardRequestId, setWizardRequestId] = useState<number | undefined>(undefined)
   const votesHeaderTip = useTooltip('Votos (otros usuarios que la quieren)')
   const commentsHeaderTip = useTooltip('Comentarios')
   const pointsHeaderTip = useTooltip('Puntos / recompensa')
@@ -638,10 +639,11 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   // "Subir a eMuwarez" — reuse the exact same upload wizard as Biblioteca by
   // loading the matched library item and handing it to UploadWizardModal, with
   // the request's scope (season / episode) so the selection is pre-filled.
-  const openUpload = useCallback(async (libraryItemId: number, preselect?: { season?: number | null; episode?: number | null }) => {
+  const openUpload = useCallback(async (libraryItemId: number, preselect?: { season?: number | null; episode?: number | null }, requestId?: number) => {
     try {
       const libItem = await getLibraryItem(libraryItemId)
       setWizardPreselect(preselect)
+      setWizardRequestId(requestId)
       setWizardItem(libItem)
     } catch { /* ignore — button only enabled when a match exists */ }
   }, [])
@@ -998,6 +1000,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
         <UploadWizardModal
           item={wizardItem}
           preselect={wizardPreselect}
+          requestId={wizardRequestId}
           onClose={() => setWizardItem(null)}
           onDone={() => { setWizardItem(null); loadItems(offset) }}
           onNavigate={onNavigate}

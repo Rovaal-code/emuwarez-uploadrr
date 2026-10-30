@@ -151,8 +151,9 @@ def test_season_pack_reaches_the_real_command_without_episode(db_conn, tmp_path)
 
 
 def test_movie_gets_no_season_or_episode(db_conn, tmp_path):
-    proposal = {"proposed_filename": "Peli 2020 1080p BluRay-GRP", "source": "BluRay"}
-    args = _real_args(db_conn, tmp_path, {"item_type": "movie"}, proposal)
+    # Sin source en la propuesta vale el de la biblioteca, con el mismo vocabulario.
+    proposal = {"proposed_filename": "Peli 2020 1080p BluRay-GRP"}
+    args = _real_args(db_conn, tmp_path, {"item_type": "movie", "source": "BluRay"}, proposal)
 
     assert "-season" not in args
     assert "-episode" not in args

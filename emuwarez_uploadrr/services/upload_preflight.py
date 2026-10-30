@@ -154,7 +154,7 @@ def build_uploadrr_command_preview(
             None,
         )
         # El mismo formato que lleva el nombre del release (`-t` en Uploadrr-EMU).
-        release_format = prop.get("source") or library_item.get("release_format")
+        release_format = prop.get("source") or library_item.get("release_format") or library_item.get("source")
 
         category = "tv" if media_type in ("tv", "series", "anime", "season", "episode") else "movie"
 

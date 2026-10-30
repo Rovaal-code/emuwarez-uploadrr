@@ -80,7 +80,7 @@ def extract_release_group(file_entry: Any) -> Optional[str]:
     """El `releaseGroup` de movieFile/episodeFile, salvo que sea un dato técnico."""
     grupo = (file_entry.get("releaseGroup") if isinstance(file_entry, dict) else None) or ""
     plano = re.sub(r"[.\- ]", "", grupo.strip().lower())
-    if not plano or plano in _GRUPOS_FALSOS or re.fullmatch(r"\d{3,4}[pi]", plano):
+    if not plano or plano in _GRUPOS_FALSOS or re.fullmatch(r"\d{3,4}[pi]|\d{1,2}ch", plano):
         return None
     return grupo.strip()
 

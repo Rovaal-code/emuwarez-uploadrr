@@ -38,7 +38,7 @@ def test_un_capitulo_sin_archivo_no_tiene_grupo():
 import pytest
 
 
-@pytest.mark.parametrize("falso", ["1080p", "2160p", "Aac", "AC3", "DD+", "5.1", "x265", "H.264", "WEB-DL", "BluRay", " "])
+@pytest.mark.parametrize("falso", ["1080p", "2160p", "Aac", "AC3", "DD+", "5.1", "x265", "H.264", "WEB-DL", "BluRay", "6CH", "2ch", " "])
 def test_un_dato_tecnico_no_es_un_grupo(falso):
     """Sin grupo en el nombre, *Arr toma lo que va tras el último guion o punto."""
     from emuwarez_uploadrr.integrations.base import extract_release_group

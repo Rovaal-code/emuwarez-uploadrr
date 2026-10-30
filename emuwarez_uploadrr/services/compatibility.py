@@ -10,6 +10,7 @@ Priority order for ranking:
 """
 from __future__ import annotations
 
+import functools
 import re
 import unicodedata
 from typing import Optional
@@ -139,12 +140,42 @@ def compare_source(requested: str | None, local: str | None) -> Optional[bool]:
     return loc_rank >= req_rank
 
 
-def _word_overlap(t1: str, t2: str) -> float:
-    w1 = set(t1.split())
-    w2 = set(t2.split())
+def _word_overlap(w1: frozenset[str], w2: frozenset[str]) -> float:
     if not w1 or not w2:
         return 0.0
     return len(w1 & w2) / max(len(w1), len(w2))
+
+
+@functools.lru_cache(maxsize=65536)
+def _titulos(value: str | None) -> tuple[str, str, frozenset[str]]:
+    """Título normalizado, compacto y sus palabras; en caché porque cada petición recorre toda la biblioteca."""
+    norm = normalize_title(value)
+    return norm, compact_title(value), frozenset(norm.split())
+
+
+# Las temporadas y los capítulos son de su serie.
+TIPO_DE_FILA: dict[str, str] = {"movie": "movie", "series": "series", "season": "series", "episode": "series"}
+
+
+def tipo_de_peticion(category: str | None) -> Optional[str]:
+    """'movie', 'series' o None (documental o desconocida) según la categoría. Mismo criterio que contentKind()
+    de RequestsPage.tsx."""
+    c = (category or "").lower()
+    if "serie" in c or "tv" in c or "show" in c:
+        return "series"
+    if "docu" in c:
+        return None
+    if "pel" in c or "movie" in c or "film" in c:
+        return "movie"
+    return None
+
+
+def _preferencia(item: dict, req: dict) -> int:
+    """A igual confianza, la película o la serie antes que una temporada suelta (desde la serie se llega a la
+    temporada pedida), y entre temporadas la que pide la petición."""
+    if item.get("item_type") != "season":
+        return 0
+    return 1 if item.get("season_number") == req.get("req_season") else 2
 
 
 def match_request_to_library(
@@ -160,10 +191,16 @@ def match_request_to_library(
     results: list[dict] = []
     req_tmdb = str(req.get("tmdb_id") or "").strip()
     req_imdb = str(req.get("imdb_id") or "").strip()
-    req_title_norm = normalize_title(req.get("title"))
-    req_title_compact = compact_title(req.get("title"))
+    req_tipo = tipo_de_peticion(req.get("category"))
+    req_title_norm, req_title_compact, req_words = _titulos(req.get("title"))
 
     for item in library:
+        # A los capítulos se llega desde su serie, y TMDb numera aparte películas y series: un mismo id no
+        # hace que una película atienda una petición de serie.
+        tipo = item.get("item_type")
+        if tipo == "episode" or (req_tipo and tipo and TIPO_DE_FILA.get(tipo) != req_tipo):
+            continue
+
         id_match = False
         title_match = False
         confidence = 0.0
@@ -177,9 +214,11 @@ def match_request_to_library(
         elif req_imdb and itm_imdb and req_imdb == itm_imdb:
             id_match = True
             confidence = 0.95
+        elif (req_tmdb and itm_tmdb) or (req_imdb and itm_imdb):
+            # Con ids distintos es otro contenido aunque se llame igual (Dune de 1984 y la de 2021).
+            continue
         else:
-            itm_title_norm = normalize_title(item.get("title"))
-            itm_title_compact = compact_title(item.get("title"))
+            itm_title_norm, itm_title_compact, itm_words = _titulos(item.get("title"))
             if (
                 req_title_compact
                 and req_title_compact == itm_title_compact
@@ -187,7 +226,7 @@ def match_request_to_library(
                 title_match = True
                 confidence = 0.90
             else:
-                sim = _word_overlap(req_title_norm, itm_title_norm)
+                sim = _word_overlap(req_words, itm_words)
                 if sim >= 0.75:
                     title_match = True
                     confidence = 0.55 + sim * 0.35
@@ -200,7 +239,7 @@ def match_request_to_library(
                 "confidence": confidence,
             })
 
-    results.sort(key=lambda x: x["confidence"], reverse=True)
+    results.sort(key=lambda x: (-x["confidence"], _preferencia(x["item"], req)))
     return results
 
 
@@ -357,5 +396,5 @@ __all__ = [
     "parse_resolution", "parse_source",
     "compare_resolution", "compare_source",
     "match_request_to_library", "classify_request_match",
-    "rank_request_matches",
+    "rank_request_matches", "tipo_de_peticion", "TIPO_DE_FILA",
 ]

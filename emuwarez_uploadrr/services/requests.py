@@ -436,6 +436,11 @@ def _effective_target(conn: sqlite3.Connection, matched_item: dict, req: dict) -
     return it
 
 
+def _candidatas(conn: sqlite3.Connection) -> list[dict]:
+    """Las filas que pueden atender una petición: sin los capítulos, que son casi todas y se alcanzan desde su serie."""
+    return [dict(r) for r in conn.execute("SELECT * FROM library_items WHERE item_type != 'episode'").fetchall()]
+
+
 def match_all_requests(conn: sqlite3.Connection, *, emu_api_key: Optional[str] = None) -> int:
     """Re-run compatibility matching for all request items. Returns updated count.
 
@@ -466,7 +471,7 @@ def match_all_requests(conn: sqlite3.Connection, *, emu_api_key: Optional[str] =
     conn.commit()
 
     requests = [dict(r) for r in conn.execute("SELECT * FROM request_items").fetchall()]
-    library = [dict(r) for r in conn.execute("SELECT * FROM library_items").fetchall()]
+    library = _candidatas(conn)
     updated = 0
     for req in requests:
         candidates = match_request_to_library(req, library)
@@ -606,8 +611,7 @@ def match_single_request(
         # interfaz le salía None y la comprobación contra el catálogo de
         # eMuwarez se saltaba en silencio.
         emu_api_key = _resolve_emu_api_key(conn)
-    library = [dict(r) for r in conn.execute("SELECT * FROM library_items").fetchall()]
-    candidates = match_request_to_library(req, library)
+    candidates = match_request_to_library(req, _candidatas(conn))
     if not candidates:
         if emu_api_key and _should_check_emu_catalog(req, status=None):
             _check_emu_catalog_duplicate(conn, req, emu_api_key)

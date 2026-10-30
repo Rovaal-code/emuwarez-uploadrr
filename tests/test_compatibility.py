@@ -14,6 +14,7 @@ from emuwarez_uploadrr.services.compatibility import (
     classify_request_match,
     rank_request_matches,
     emu_override_status,
+    tipo_de_peticion,
 )
 
 
@@ -283,6 +284,55 @@ def test_tmdb_beats_title():
     # TMDb match should have higher confidence
     assert results[0]["item"]["id"] == 10
     assert results[0]["id_match"] is True
+
+
+def test_ids_distintos_no_se_casan_por_titulo():
+    """Dune (1984) no atiende una petición de Dune (2021): se llaman igual, pero TMDb dice que no son lo mismo."""
+    req = _make_req(title="Dune", tmdb_id="438631")
+    assert match_request_to_library(req, [_make_item(title="Dune", tmdb_id="841")]) == []
+    req = _make_req(title="Dune", imdb_id="tt1160419")
+    assert match_request_to_library(req, [_make_item(title="Dune", imdb_id="tt0087182")]) == []
+    # Si a una de las dos le falta el id, el título sigue valiendo.
+    assert match_request_to_library(req, [_make_item(title="Dune")])[0]["title_match"] is True
+
+
+@pytest.mark.parametrize("category,expected", [
+    ("Películas", "movie"), ("Pelicula", "movie"), ("Movie", "movie"), ("Movies", "movie"),
+    ("Series", "series"), ("TV", "series"),
+    ("Documentales", None), ("Musica", None), (None, None),
+])
+def test_tipo_de_peticion(category, expected):
+    assert tipo_de_peticion(category) == expected
+
+
+def test_una_pelicula_no_atiende_una_peticion_de_serie():
+    """TMDb numera aparte películas y series: el mismo id puede ser una película y una serie distintas."""
+    library = [_make_item(id=1, item_type="movie", tmdb_id="1399"),
+               _make_item(id=2, item_type="series", tmdb_id="1399")]
+    serie = match_request_to_library(_make_req(category="TV", tmdb_id="1399"), library)
+    assert [r["item"]["id"] for r in serie] == [2]
+    peli = match_request_to_library(_make_req(category="Movie", tmdb_id="1399"), library)
+    assert [r["item"]["id"] for r in peli] == [1]
+    # Un documental puede ser cualquiera de las dos.
+    docu = match_request_to_library(_make_req(category="Documentales", tmdb_id="1399"), library)
+    assert sorted(r["item"]["id"] for r in docu) == [1, 2]
+
+
+def test_una_peticion_de_serie_cae_en_la_serie_y_no_en_sus_capitulos():
+    """Temporadas y capítulos llevan el tmdb de la serie: antes cientos de capítulos empataban a 1.0 y
+    ganaba el primero que saliera."""
+    library = [_make_item(id=5, item_type="episode", tmdb_id="77", season_number=2),
+               _make_item(id=4, item_type="season", tmdb_id="77", season_number=2),
+               _make_item(id=3, item_type="series", tmdb_id="77")]
+    results = match_request_to_library(_make_req(category="Series", tmdb_id="77", req_season=2), library)
+    assert [r["item"]["id"] for r in results] == [3, 4]
+
+
+def test_sin_serie_gana_la_temporada_pedida():
+    library = [_make_item(id=1, item_type="season", tmdb_id="77", season_number=1),
+               _make_item(id=2, item_type="season", tmdb_id="77", season_number=2)]
+    results = match_request_to_library(_make_req(category="Series", tmdb_id="77", req_season=2), library)
+    assert results[0]["item"]["id"] == 2
 
 
 # ---------------------------------------------------------------------------

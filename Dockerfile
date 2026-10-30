@@ -27,6 +27,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     mediainfo ffmpeg mktorrent mkvtoolnix git \
     && rm -rf /var/lib/apt/lists/*
 
+# mkbrr: Uploadrr-EMU crea el .torrent con él si está en el PATH (si no, con torf).
+# Versión y checksums fijados: al subir MKBRR_VERSION hay que cambiar los dos sha256
+# (mkbrr_<versión>_checksums.txt de la release).
+ARG TARGETARCH
+ARG MKBRR_VERSION=1.27.0
+RUN set -eu; \
+    case "${TARGETARCH:-amd64}" in \
+      amd64) arch=x86_64; sum=962323dd30083154fd6f5e1a46a5951a49db726ad93510c3e3c5f74a33d6912f ;; \
+      arm64) arch=arm64; sum=63529e28c05e2d29c9d1327bbc43ef84f9e2ab4c25f2dd853ecf0f0a35c5a675 ;; \
+      *) echo "mkbrr no tiene binario para ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    python3 -c "import sys, urllib.request; urllib.request.urlretrieve(sys.argv[1], '/tmp/mkbrr.tar.gz')" \
+      "https://github.com/autobrr/mkbrr/releases/download/v${MKBRR_VERSION}/mkbrr_${MKBRR_VERSION}_linux_${arch}.tar.gz"; \
+    echo "${sum}  /tmp/mkbrr.tar.gz" | sha256sum -c -; \
+    tar -xzf /tmp/mkbrr.tar.gz -C /usr/local/bin mkbrr; \
+    rm /tmp/mkbrr.tar.gz; \
+    mkbrr version
+
 WORKDIR /app
 
 # Bundle Uploadrr-EMU as an internal dependency — like mediainfo/ffmpeg, the

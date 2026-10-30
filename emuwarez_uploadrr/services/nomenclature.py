@@ -229,6 +229,15 @@ def _get_release_tag(conn=None) -> str:
             _conn.close()
 
 
+def tag_por_defecto(grupos, conn=None) -> str:
+    """El grupo de release que comparten los archivos (la columna Grupo de
+    Biblioteca) o, si no tienen uno solo, el tag de Ajustes."""
+    distintos = {(g or "").strip() for g in grupos}
+    if len(distintos) == 1 and "" not in distintos:
+        return distintos.pop()
+    return _get_release_tag(conn=conn)
+
+
 def validate_nomenclature_preconditions(library_item: dict, conn=None) -> dict:
     errors = []
     warnings = []
@@ -355,7 +364,7 @@ def build_nomenclature_proposal(
 
         resolution = _infer_resolution_from_item(item)
         source = source_override or _infer_source_from_item(item)
-        release_tag = tag_override or _get_release_tag(conn=conn)
+        release_tag = tag_override or tag_por_defecto([item.get("release_group")], conn=conn)
 
         stat_info = safe_stat(path) if path else {}
         current_name = stat_info.get("name") or (path.split("/")[-1] if path else None)

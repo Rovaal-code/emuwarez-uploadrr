@@ -43,8 +43,8 @@ from ..database import connect, row_to_dict
 from ..models import LocalStatus
 from .filesystem_apply import apply_rename_plan, build_safe_rename_plan
 from .nomenclature import (
-    _get_release_tag,
     build_nomenclature_proposal,
+    tag_por_defecto,
 )
 
 # Progress reporting while build_season_pack_plan() churns through episodes
@@ -606,6 +606,10 @@ def build_season_pack_plan(
         # codec/audio/provider (Phases 6A/6E), not recomputed here. Progress
         # published as each one completes so the wizard can show "Comprobando
         # N de M capítulos…" while this (possibly slow) request is in flight.
+        grupos = [e.get("release_group") for e in available_episodes]
+        release_tag = tag_override or tag_por_defecto(grupos, conn=conn)
+        # Con grupos mezclados cada capítulo propondría el suyo: se fija el del pack.
+        tag_capitulos = tag_override or (release_tag if len({(g or "").strip() for g in grupos}) > 1 else None)
         total = len(available_episodes)
         _clear_season_plan_cancel(season_id)
         _set_season_plan_progress(season_id, done=0, total=total)
@@ -625,7 +629,7 @@ def build_season_pack_plan(
             proposal = build_nomenclature_proposal(
                 ep["id"], conn=conn,
                 source_override=source_override, provider_override=provider_override,
-                tag_override=tag_override, title_override=title_override,
+                tag_override=tag_capitulos, title_override=title_override,
             )
             episode_entries.append({"episode": ep, "proposal": proposal})
         _set_season_plan_progress(season_id, done=total, total=total, current_title=None)
@@ -634,7 +638,6 @@ def build_season_pack_plan(
         errors.extend(_spanish_errors(episode_entries))
 
         first_proposal = episode_entries[0]["proposal"]
-        release_tag = tag_override or _get_release_tag(conn=conn)
 
         # Internal Source Tool comparison (name vs Radarr/Sonarr vs
         # MediaInfo-bitrate), computed once from the first available episode

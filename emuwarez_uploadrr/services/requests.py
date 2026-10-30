@@ -468,6 +468,8 @@ def match_all_requests(conn: sqlite3.Connection, *, emu_api_key: Optional[str] =
         "UPDATE library_items SET request_status = 'Sin petición', request_id = NULL "
         "WHERE request_status != 'Sin petición' OR request_id IS NOT NULL"
     )
+    # Y los casamientos: uno que ya no vale (o que ahora es con otra fila) se seguía enseñando en la lista.
+    conn.execute("DELETE FROM request_matches")
     conn.commit()
 
     requests = [dict(r) for r in conn.execute("SELECT * FROM request_items").fetchall()]
@@ -624,11 +626,17 @@ def match_single_request(
         # interfaz le salía None y la comprobación contra el catálogo de
         # eMuwarez se saltaba en silencio.
         emu_api_key = _resolve_emu_api_key(conn)
+    # Lo de la vez anterior se recalcula entero: si ya no casa, no queda nada viejo enseñándose.
+    conn.execute("DELETE FROM request_matches WHERE request_item_id = ?", (request_id,))
+    conn.execute(
+        "UPDATE library_items SET request_status = 'Sin petición', request_id = NULL WHERE request_id = ?",
+        (request_id,),
+    )
     candidates = match_request_to_library(req, _candidatas(conn))
     if not candidates:
         if emu_api_key and _should_check_emu_catalog(req, status=None):
             _check_emu_catalog_duplicate(conn, req, emu_api_key)
-            conn.commit()
+        conn.commit()
         return None
     best = candidates[0]
     classification = classify_request_match(

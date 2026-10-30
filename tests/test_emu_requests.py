@@ -415,6 +415,31 @@ def test_a_season_request_marks_the_season_not_the_series(db_conn):
     assert estado(series_id) == "Sin petición", "la serie no: la petición no es de la serie entera"
 
 
+def test_recalcular_borra_el_casamiento_que_ya_no_vale(db_conn):
+    """El «Compatible» de antes (Dune de 1984 para la petición de la de 2021) se quedaba en request_matches y la
+    lista lo seguía enseñando."""
+    from emuwarez_uploadrr.services.requests import match_all_requests, match_single_request
+    peli = db_conn.execute("INSERT INTO library_items(item_type,title,local_status,request_status,request_id,tmdb_id) "
+                           "VALUES ('movie','Dune','Disponible','Compatible',1,'841')").lastrowid
+    rid = db_conn.execute("INSERT INTO request_items(emu_id,title,category,tmdb_id) "
+                          "VALUES ('d21','Dune','Movie','438631')").lastrowid
+    viejo = ("INSERT INTO request_matches(library_item_id, request_item_id, status, confidence) "
+             "VALUES (?, ?, 'Compatible', 0.9)")
+    db_conn.execute(viejo, (peli, rid))
+    db_conn.commit()
+
+    match_all_requests(db_conn)
+    assert db_conn.execute("SELECT COUNT(*) AS n FROM request_matches").fetchone()["n"] == 0
+
+    db_conn.execute(viejo, (peli, rid))
+    db_conn.execute("UPDATE library_items SET request_status = 'Compatible', request_id = ? WHERE id = ?", (rid, peli))
+    db_conn.commit()
+    match_single_request(db_conn, rid)
+    assert db_conn.execute("SELECT COUNT(*) AS n FROM request_matches").fetchone()["n"] == 0
+    fila = db_conn.execute("SELECT request_status, request_id FROM library_items WHERE id = ?", (peli,)).fetchone()
+    assert (fila["request_status"], fila["request_id"]) == ("Sin petición", None)
+
+
 def test_rematching_clears_a_status_left_on_the_wrong_row(db_conn):
     """Recalcular limpia antes: si no, un estado escrito una vez se quedaba
     pegado en esa fila para siempre, porque nadie lo volvía a tocar."""

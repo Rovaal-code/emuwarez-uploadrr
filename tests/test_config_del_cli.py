@@ -54,20 +54,6 @@ def test_la_sincronizacion_ve_la_clave_de_la_interfaz(db_conn, monkeypatch):
     assert llamadas["api_key"] == "clave-de-la-interfaz"
 
 
-def test_el_recalculo_de_coincidencias_tambien_la_ve(db_conn, monkeypatch):
-    """match_all_requests y match_single_request leían solo el fichero del CLI:
-    con la clave en la interfaz les salía None y la comprobación contra el
-    catálogo de eMuwarez se saltaba en silencio."""
-    _con_clave(db_conn)
-    vistas = []
-    monkeypatch.setattr(rq, "_check_emu_catalog_duplicate",
-                        lambda conn, req, key, **kw: vistas.append(key))
-    # Sin peticiones no hay nada que comprobar, pero el resolutor sí corre:
-    # lo que se fija aquí es que ya no pasa por load_app_config.
-    rq.match_all_requests(db_conn)
-    assert rq._resolve_emu_api_key(db_conn) == "clave-de-la-interfaz"
-
-
 def test_la_config_cifrada_del_cli_no_mata_el_proceso(tmp_path, monkeypatch):
     """legacy.load_app_config llamaba a die() -> SystemExit cuando había
     configuración cifrada y no se le daba contraseña. Desde un servicio web eso

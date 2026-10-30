@@ -67,18 +67,6 @@ def test_detalle_de_una_peticion(pedidas):
     assert _partes(pedidas["urls"][0])[1] == "/api/requests/42"
 
 
-def test_busqueda_de_duplicados_por_tmdb_nombre_y_categoria(pedidas):
-    emu.emu_search_existing("KEY", query="Dune", base_url="https://t.x", tmdb_id=438631, category="1")
-    _, ruta, params = _partes(pedidas["urls"][0])
-    assert ruta == "/api/torrents/filter"
-    assert params == {"api_token": "KEY", "perPage": "25", "tmdbId": "438631", "name": "Dune", "categories[]": "1"}
-
-
-def test_busqueda_sin_filtros_solo_lleva_la_clave(pedidas):
-    emu.emu_search_existing("KEY", base_url="https://t.x")
-    assert _partes(pedidas["urls"][0])[2] == {"api_token": "KEY", "perPage": "25"}
-
-
 def test_por_defecto_va_al_dominio_de_emuwarez(pedidas):
     emu.emu_get_requests("KEY")
     assert _partes(pedidas["urls"][0])[0] == urllib.parse.urlsplit(emu.EMU_BASE_URL).netloc

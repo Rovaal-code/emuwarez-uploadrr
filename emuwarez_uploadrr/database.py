@@ -557,7 +557,8 @@ def _migrate_request_items_emu_catalog_check(conn: sqlite3.Connection) -> None:
 
     This is independent from request_matches (library vs request matching):
     it records whether eMuwarez's own torrent catalog already has content for
-    this request's tmdb_id, queried directly via emu_search_existing().
+    this request's tmdb_id. Sin uso desde que se quitó esa comprobación en vivo
+    (una llamada por petición); las columnas se quedan donde están.
     """
     new_cols = [
         ("emu_catalog_checked_at", "TEXT"),

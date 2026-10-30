@@ -153,7 +153,7 @@ def _con_clave(conn, clave="configured-key-123"):
 def sin_cruce(monkeypatch):
     """Estas pruebas son de lo que se importa, no de cruzarlo con la biblioteca."""
     from emuwarez_uploadrr.services import requests as reqs
-    monkeypatch.setattr(reqs, "match_all_requests", lambda conn, emu_api_key=None: 0)
+    monkeypatch.setattr(reqs, "match_all_requests", lambda conn: 0)
 
 
 def test_sync_requests_reads_key_from_db_settings(db_conn, monkeypatch, sin_cruce):
@@ -388,3 +388,49 @@ def test_rematching_clears_a_status_left_on_the_wrong_row(db_conn):
         "SELECT request_status, request_id FROM library_items WHERE id = ?", (item_id,)).fetchone()
     assert row["request_status"] == "Sin petición"
     assert row["request_id"] is None
+
+
+# ---------------------------------------------------------------------------
+# Cruzar peticiones no llama a eMuwarez
+# ---------------------------------------------------------------------------
+
+def test_cruzar_peticiones_no_llama_a_emuwarez(db_conn, monkeypatch):
+    """Cada petición sin cruce hacía una llamada en vivo a la API, sin pausa: con cientos de
+    peticiones eran cientos de llamadas seguidas contra las 30 por minuto de la clave."""
+    from emuwarez_uploadrr.services.requests import match_all_requests, match_single_request
+    _con_clave(db_conn)
+    llamadas = []
+    monkeypatch.setattr(emu, "request_json", lambda *a, **kw: llamadas.append(a) or {})
+    ids = [
+        db_conn.execute(
+            "INSERT INTO request_items(emu_id, title, tmdb_id, emu_status) VALUES (?, ?, ?, 'unfilled')",
+            (f"x{i}", f"Sin cruce {i}", str(900 + i)),
+        ).lastrowid
+        for i in range(5)
+    ]
+    db_conn.commit()
+
+    assert match_all_requests(db_conn) == 0
+    assert all(match_single_request(db_conn, i) is None for i in ids)
+    assert llamadas == []
+
+
+def test_una_sync_entera_solo_pide_las_paginas_de_peticiones(db_conn, monkeypatch):
+    """Con peticiones que no cruzan con nada, lo único que sale a la red son las páginas del listado."""
+    import types
+    from emuwarez_uploadrr.services import requests as reqs
+    _con_clave(db_conn)
+    paginas = [
+        {"data": [{"id": i, "name": f"Peli {i}", "category_id": 1, "tmdb": 500 + i} for i in (1, 2)],
+         "meta": {"last_page": 2, "total": 3}},
+        {"data": [{"id": 3, "name": "Peli 3", "category_id": 1, "tmdb": 503}],
+         "meta": {"last_page": 2, "total": 3}},
+    ]
+    pedidas = []
+    monkeypatch.setattr(emu, "request_json", lambda method, url, **kw: pedidas.append(url) or paginas.pop(0))
+    monkeypatch.setattr(emu, "time", types.SimpleNamespace(sleep=lambda s: None))
+
+    result = reqs.sync_emu_requests(db_conn, force=True)
+
+    assert (result["status"], result["imported"], result["matched"]) == ("ok", 3, 0)
+    assert len(pedidas) == 2 and all("/api/requests/filter" in u for u in pedidas)

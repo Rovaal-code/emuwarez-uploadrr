@@ -42,9 +42,10 @@ from typing import Any, Optional
 from ..database import connect, row_to_dict
 from ..models import LocalStatus
 from .filesystem_apply import apply_rename_plan, build_safe_rename_plan
+from .mkv_title import to_filesystem_name
 from .nomenclature import (
-    _get_release_tag,
     build_nomenclature_proposal,
+    tag_por_defecto,
 )
 
 # Progress reporting while build_season_pack_plan() churns through episodes
@@ -606,6 +607,8 @@ def build_season_pack_plan(
         # codec/audio/provider (Phases 6A/6E), not recomputed here. Progress
         # published as each one completes so the wizard can show "Comprobando
         # N de M capítulos…" while this (possibly slow) request is in flight.
+        grupos = [e.get("release_group") for e in available_episodes]
+        release_tag = tag_override or tag_por_defecto(grupos, conn=conn)
         total = len(available_episodes)
         _clear_season_plan_cancel(season_id)
         _set_season_plan_progress(season_id, done=0, total=total)
@@ -634,7 +637,6 @@ def build_season_pack_plan(
         errors.extend(_spanish_errors(episode_entries))
 
         first_proposal = episode_entries[0]["proposal"]
-        release_tag = tag_override or _get_release_tag(conn=conn)
 
         # Internal Source Tool comparison (name vs Radarr/Sonarr vs
         # MediaInfo-bitrate), computed once from the first available episode
@@ -680,6 +682,13 @@ def build_season_pack_plan(
             raw_source_path = ep.get("path")
             source_path = local_paths.get(ep["id"]) or raw_source_path
             proposed_filename = proposal.get("proposed_filename") or ep.get("title") or f"episode-{ep['id']}"
+            # Cada capítulo lleva el Tag del pack, aunque su propuesta guardada
+            # traiga otro (grupos mezclados): reconstruirla la sobrescribiría.
+            # El nombre de archivo lleva "-tag" ya pasado por to_filesystem_name.
+            viejo = to_filesystem_name(f"-{proposal.get('release_tag')}") if proposal.get("release_tag") else ""
+            nuevo = to_filesystem_name(f"-{release_tag}")
+            if viejo and viejo != nuevo and proposed_filename.endswith(viejo):
+                proposed_filename = f"{proposed_filename[:-len(viejo)]}{nuevo}"
             ext = ""
             if source_path and os.path.isfile(source_path):
                 ext = os.path.splitext(source_path)[1]

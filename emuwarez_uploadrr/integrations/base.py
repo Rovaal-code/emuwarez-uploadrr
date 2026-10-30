@@ -63,6 +63,28 @@ def _resolution_from_arr_media_info(media_info: dict) -> Optional[str]:
     return resolution_code(int(m.group(1)), int(m.group(2)))
 
 
+# Lo que *Arr toma por grupo cuando el archivo no lleva ninguno y el nombre
+# acaba en un dato técnico ("…-AC3", "….1080p"). Comparado sin puntos ni guiones.
+_GRUPOS_FALSOS = {
+    "sd", "sdtv", "hd", "uhd", "4k", "8k",
+    "x264", "x265", "h264", "h265", "hevc", "avc", "av1", "xvid", "divx", "vp9",
+    "10bit", "8bit", "hdr", "hdr10", "dv", "sdr",
+    "aac", "ac3", "eac3", "dd", "ddp", "dd+", "dts", "dtshd", "truehd", "atmos",
+    "flac", "opus", "mp3", "pcm", "lpcm", "20", "51", "71",
+    "web", "webdl", "webrip", "bluray", "bdrip", "brrip", "bdremux", "remux",
+    "hdtv", "dvd", "dvdrip", "hdrip",
+}
+
+
+def extract_release_group(file_entry: Any) -> Optional[str]:
+    """El `releaseGroup` de movieFile/episodeFile, salvo que sea un dato técnico."""
+    grupo = (file_entry.get("releaseGroup") if isinstance(file_entry, dict) else None) or ""
+    plano = re.sub(r"[.\- ]", "", grupo.strip().lower())
+    if not plano or plano in _GRUPOS_FALSOS or re.fullmatch(r"\d{3,4}[pi]|\d{1,2}ch", plano):
+        return None
+    return grupo.strip()
+
+
 def extract_media_info(file_entry: Any) -> MediaInfoSummary:
     """Pull codec/audio/subtitle info out of Radarr's `movieFile` or Sonarr's
     `episodeFile` — both come from the same underlying *arr `mediaInfo`

@@ -1026,6 +1026,16 @@ def _migrate_library_items_tvmaze_id(conn: sqlite3.Connection) -> None:
         pass
 
 
+def _migrate_library_items_release_group(conn: sqlite3.Connection) -> None:
+    """Grupo de release del archivo, el `releaseGroup` que Radarr/Sonarr ya
+    mandan en movieFile/episodeFile. Se rellena en la siguiente sincronización.
+    Purely additive."""
+    try:
+        conn.execute("ALTER TABLE library_items ADD COLUMN release_group TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+
 def _migrate_library_items_backdrop_url(conn: sqlite3.Connection) -> None:
     """Add backdrop_url to library_items — the fanart/backdrop counterpart to
     poster_url (Phase 11E), same Radarr/Sonarr `images` array, just
@@ -1601,6 +1611,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_request_items_is_example(conn)
         _migrate_qbit_port_into_url(conn)
         _migrate_library_items_tvmaze_id(conn)
+        _migrate_library_items_release_group(conn)
         _migrate_dominio_emu_warez(conn)
         _migrate_nomenclature_torrent_name(conn)
         _migrate_quitar_peticiones_de_ejemplo(conn)

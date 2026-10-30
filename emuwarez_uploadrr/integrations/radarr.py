@@ -8,7 +8,10 @@ from .arr_base import (
     ArrClientError, ArrConnectionError, ArrAuthError,
     arr_request, join_api_path, safe_api_key,
 )
-from .base import build_url, extract_backdrop_url, extract_media_info, extract_poster_url, request_json
+from .base import (
+    build_url, extract_backdrop_url, extract_media_info, extract_poster_url, extract_release_group,
+    request_json,
+)
 from ..models import LibraryItem, LocalStatus, MediaKind, NomenclatureStatus
 from ..constants import DEFAULT_TAG
 
@@ -272,6 +275,7 @@ def movie_to_library_item(
         # "Raw-HD"), la resolución real que ya manda *Arr en su mediaInfo.
         resolution=_resolution_from_quality(quality_name) or media_info.get("resolution"),
         source=_source_from_quality(quality_name),
+        release_group=extract_release_group(movie_file),
         video_codec=media_info.get("video_codec"),
         audio_codec=media_info.get("audio_codec"),
         audio_languages=media_info.get("audio_languages"),

@@ -415,7 +415,7 @@ const FIELD_INFO = {
   video_codec: 'Se lee con MediaInfo del archivo real.',
   audio: 'Se lee con MediaInfo del archivo real (por pista).',
   subs: 'Se genera con MediaInfo del archivo real: «SUBS» si tiene pistas de subtítulos.',
-  tag: 'El tag de tu grupo de subida, configurado en Ajustes.',
+  tag: 'Por defecto, el grupo de release del archivo (columna Grupo de Biblioteca); si no lo tiene, el de Ajustes. Puedes elegir otro de los guardados.',
 }
 
 // Monospace one-liner (torrent name / internal title) that shrinks its font so

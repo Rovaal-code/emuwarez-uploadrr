@@ -1,0 +1,132 @@
+"""Proveedor, Resolución, Source, Grupo, eMuwarez y Aportes miran la biblioteca
+entera.
+
+Se filtraban en el navegador sobre lo que había cargado, y con un filtro puesto
+eso eran las primeras LOAD_LIMIT (20.000) filas en plano. La biblioteca de
+verdad tiene unas 52.400, así que un valor que el desplegable ofrecía podía no
+devolver nada. Ahora filtra el servidor, sobre lo que enseña cada columna (en
+una serie o temporada, lo que comparten sus capítulos).
+"""
+from __future__ import annotations
+
+import pytest
+
+from emuwarez_uploadrr.services.library import filtrar_por_lo_que_se_ve
+
+LIMITE = 20000  # el tope del endpoint, y LOAD_LIMIT en LibraryPage
+
+
+@pytest.fixture
+def biblioteca_grande(client, auth_headers):
+    """Más películas de relleno que el tope, y detrás lo que se busca: en plano
+    las temporadas y capítulos van después de todo lo de arriba, y por título
+    las Z al final."""
+    from emuwarez_uploadrr.database import connect, db_path, init_db
+
+    conn = connect(db_path()); init_db(conn)
+    conn.executemany(
+        "INSERT INTO library_items (item_type, title, local_status, resolution) "
+        "VALUES ('movie', ?, 'Disponible', '1080p')",
+        [(f"a{n:05d}",) for n in range(LIMITE + 1)])
+    conn.execute(
+        """INSERT INTO library_items (item_type, title, local_status, resolution, source, path)
+           VALUES ('movie', 'Zulu', 'Disponible', '2160p', 'WEB-DL',
+                   '/data/Zulu.2020.2160p.AMZN.WEB-DL.DDP5.1.H.265-GRP.mkv')""")
+
+    def serie(titulo, resoluciones):
+        sid = conn.execute(
+            "INSERT INTO library_items (item_type, title, local_status) VALUES ('series', ?, 'Disponible')",
+            (titulo,)).lastrowid
+        temporadas = {}
+        for t, res in enumerate(resoluciones, start=1):
+            tid = conn.execute(
+                """INSERT INTO library_items (item_type, title, local_status, parent_id, season_number)
+                   VALUES ('season', ?, 'Disponible', ?, ?)""", (f"{titulo} T{t}", sid, t)).lastrowid
+            temporadas[t] = tid
+            for e in (1, 2):
+                conn.execute(
+                    """INSERT INTO library_items (item_type, title, local_status, parent_id,
+                                                  season_number, episode_number, resolution,
+                                                  source, release_group)
+                       VALUES ('episode', ?, 'Disponible', ?, ?, ?, ?, 'BluRay', 'GRP')""",
+                    (f"{titulo} S{t:02d}E{e:02d}", tid, t, e, res))
+        return sid, temporadas
+
+    uniforme, _ = serie("Zyx", ["2160p", "2160p"])
+    mezclada, temporadas = serie("Zzz", ["2160p", "1080p"])
+    conn.commit(); conn.close()
+    return client, auth_headers, {"uniforme": uniforme, "mezclada": mezclada, "t1": temporadas[1]}
+
+
+def _pedir(cliente, cab, **filtros):
+    r = cliente.get("/api/library", params={"limit": LIMITE, **filtros}, headers=cab)
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def test_lo_que_cumple_queda_mas_alla_del_tope(biblioteca_grande):
+    """El punto de partida: lo que se busca no estaba en lo que se cargaba."""
+    cliente, cab, _ = biblioteca_grande
+    titulos = {i["title"] for i in _pedir(cliente, cab)["items"]}
+    assert "Zulu" not in titulos and "Zzz T1" not in titulos
+
+
+def test_resolucion_mira_la_biblioteca_entera_y_sube_al_nivel_mas_alto(biblioteca_grande):
+    cliente, cab, ids = biblioteca_grande
+    datos = _pedir(cliente, cab, resolution="2160p")
+    # Zyx cumple entera (sale la serie, no sus temporadas); de Zzz solo cumple T1.
+    assert {i["title"] for i in datos["items"]} == {"Zulu", "Zyx", "Zzz T1"}
+    assert datos["total"] == 3
+    assert ids["t1"] in {i["id"] for i in datos["items"]}
+
+
+def test_proveedor_source_y_grupo_tambien(biblioteca_grande):
+    cliente, cab, _ = biblioteca_grande
+    proveedores = cliente.get("/api/library/filter-options", headers=cab).json()["providers"]
+    assert proveedores == ["Amazon (AMZN)"]
+    assert [i["title"] for i in _pedir(cliente, cab, provider="Amazon (AMZN)")["items"]] == ["Zulu"]
+    assert {i["title"] for i in _pedir(cliente, cab, source="BluRay")["items"]} == {"Zyx", "Zzz"}
+    assert {i["title"] for i in _pedir(cliente, cab, release_group="GRP")["items"]} == {"Zyx", "Zzz"}
+    # Entre columnas se cruzan.
+    assert {i["title"] for i in _pedir(cliente, cab, source="BluRay", resolution="2160p")["items"]} == {"Zyx", "Zzz T1"}
+
+
+def test_el_tope_y_el_desplazamiento_van_despues_de_filtrar(biblioteca_grande):
+    cliente, cab, _ = biblioteca_grande
+    r = cliente.get("/api/library?resolution=2160p&limit=1&offset=1", headers=cab).json()
+    assert r["total"] == 3 and [i["title"] for i in r["items"]] == ["Zyx"]
+
+
+def _fila(id_, parent_id=None, *, emu=None, aportes=None, estado="Disponible"):
+    return {"id": id_, "parent_id": parent_id, "provider_label": None, "resolution": None,
+            "source": None, "release_group": None, "local_status": estado,
+            "emu_in_catalog": emu, "emu_aportes": aportes}
+
+
+def test_emuwarez_una_serie_a_medias_deja_paso_a_sus_temporadas():
+    filas = [_fila(1, emu=2), _fila(2, 1, emu=0), _fila(3, 1, emu=1), _fila(4, 2, emu=0)]
+    assert [f["id"] for f in filtrar_por_lo_que_se_ve(filas, emu=["candidate"])] == [2]
+    assert [f["id"] for f in filtrar_por_lo_que_se_ve(filas, emu=["candidate", "present"])] == [2, 3]
+
+
+def test_lo_tapa_cualquier_ancestro_que_cumpla():
+    """La serie cumple, su temporada no (p. ej. la de especiales) y un capítulo
+    de esa temporada sí: sale la serie sola."""
+    filas = [_fila(1, emu=0), _fila(2, 1, emu=1), _fila(3, 2, emu=0)]
+    assert [f["id"] for f in filtrar_por_lo_que_se_ve(filas, emu=["candidate"])] == [1]
+
+
+def test_aportes_solo_cuenta_lo_que_se_tiene():
+    filas = [
+        _fila(1, emu=0),                          # nuevo: se aporta entero
+        _fila(2, emu=1, aportes=[{"x": 1}]),      # está, pero se mejora
+        _fila(3, emu=1),                          # está y no hay nada que aportar
+        _fila(4, emu=0, estado="Faltante"),       # no lo tienes
+    ]
+    assert [f["id"] for f in filtrar_por_lo_que_se_ve(filas, aporte="yes")] == [1, 2]
+    assert [f["id"] for f in filtrar_por_lo_que_se_ve(filas, aporte="no")] == [3]
+
+
+def test_sin_filtros_no_toca_nada():
+    filas = [_fila(1), _fila(2, 1)]
+    assert filtrar_por_lo_que_se_ve(filas, provider=[], emu=None) is filas

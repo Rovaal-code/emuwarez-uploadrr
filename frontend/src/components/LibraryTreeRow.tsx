@@ -8,7 +8,7 @@ import { buildDeepLink, posterUrl, listDisplayTitle } from '../utils/libraryItem
 import { ProviderTag } from './ProviderIcon'
 import { LibraryActionButtons } from './LibraryActionButtons'
 import { useTooltip } from './Tooltip'
-import { ValueChip, ValueIcon, TypeValueIcon, ResolutionValueIcon, SourceValueIcon, SizeValueIcon, DetailTitleText } from './DetailCard'
+import { ValueChip, ValueIcon, TypeValueIcon, ResolutionValueIcon, SourceValueIcon, ReleaseGroupValueIcon, SizeValueIcon, DetailTitleText } from './DetailCard'
 import { estadoCastellano, CASTELLANO_INFO } from '../utils/castellano'
 import { IconoDesplegar, IconoTipo } from './Iconos'
 
@@ -141,7 +141,7 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
   }
 
   const indent = depth * 20
-  const colSpan = compact ? 11 : 12
+  const colSpan = compact ? 12 : 13
 
   return (
     <>
@@ -230,6 +230,11 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
         <td style={{ whiteSpace: 'nowrap' }}>
           {item.source
             ? <ValueChip><ValueIcon><SourceValueIcon /></ValueIcon><span className="txt">{item.source}</span></ValueChip>
+            : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+        </td>
+        <td style={{ whiteSpace: 'nowrap' }}>
+          {item.release_group
+            ? <ValueChip><ValueIcon><ReleaseGroupValueIcon /></ValueIcon><span className="txt">{item.release_group}</span></ValueChip>
             : <span style={{ color: 'var(--text-muted)' }}>—</span>}
         </td>
         <td style={{ whiteSpace: 'nowrap' }}><SpanishAudioCell item={item} /></td>

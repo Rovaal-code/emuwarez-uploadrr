@@ -57,14 +57,14 @@ function formatBytes(n: number) {
 // know whether there are unsaved changes. Array order is fixed on purpose.
 function configSignature(v: {
   tags: string[]; providerOrder: string[]; region: string
-  emuUsername: string; ignoreSpecials: boolean; sourceEngine: boolean; addLogo: boolean; modoDePistas: ModoPistas
+  emuUsername: string; ignoreSpecials: boolean; sourceEngine: boolean; addLogo: boolean; capturasPorCapitulo: boolean; modoDePistas: ModoPistas
   recentLimit: number; uploadMaxConcurrent: number; qbitUrl: string; qbitTag: string; qbitUser: string
   imgEnabled: string[]; allowedRoots: string
   newKey?: string; newEmuKey?: string; qbitPass?: string
 }): string {
   return JSON.stringify([
     v.tags, v.providerOrder, v.region, v.emuUsername,
-    v.ignoreSpecials, v.sourceEngine, v.addLogo, v.modoDePistas, v.recentLimit, v.uploadMaxConcurrent, v.qbitUrl, v.qbitTag, v.qbitUser, v.imgEnabled, v.allowedRoots,
+    v.ignoreSpecials, v.sourceEngine, v.addLogo, v.capturasPorCapitulo, v.modoDePistas, v.recentLimit, v.uploadMaxConcurrent, v.qbitUrl, v.qbitTag, v.qbitUser, v.imgEnabled, v.allowedRoots,
     v.newKey ?? '', v.newEmuKey ?? '', v.qbitPass ?? '',
   ])
 }
@@ -198,6 +198,8 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const [sourceEngine, setSourceEngine] = useState(false)
   // El logo del contenido en la descripción: se sube por defecto.
   const [addLogo, setAddLogo] = useState(true)
+  // Capturas de un pack: solo del primer capítulo por defecto.
+  const [capturasPorCapitulo, setCapturasPorCapitulo] = useState(false)
   // Reordenar pistas: apagado por defecto, reescribe el contenedor entero.
   const [modoDePistas, setModoDePistas] = useState<ModoPistas>(MODO_PISTAS_POR_DEFECTO)
   const [recentLimit, setRecentLimit] = useState(100)
@@ -234,7 +236,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const tagsAGuardar = borrador && !tags.includes(borrador) ? [...tags, borrador] : tags
   const currentSig = configSignature({
     tags: tagsAGuardar, providerOrder, region, emuUsername,
-    ignoreSpecials, sourceEngine, addLogo, modoDePistas, recentLimit, uploadMaxConcurrent, qbitUrl, qbitTag, qbitUser, imgEnabled, allowedRoots,
+    ignoreSpecials, sourceEngine, addLogo, capturasPorCapitulo, modoDePistas, recentLimit, uploadMaxConcurrent, qbitUrl, qbitTag, qbitUser, imgEnabled, allowedRoots,
     newKey, newEmuKey, qbitPass,
   })
   const dirty = baseline !== '' && currentSig !== baseline
@@ -289,6 +291,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         setIgnoreSpecials(s.series_ignore_specials ?? true)
         setSourceEngine(s.source_engine_enabled ?? false)
         setAddLogo(s.emu_add_logo ?? true)
+        setCapturasPorCapitulo(s.emu_per_episode_screens ?? false)
         setModoDePistas(normalizarModo(s.remux_track_mode))
         setRecentLimit(s.recent_activity_limit ?? 100)
         setUploadMaxConcurrent(s.upload_max_concurrent ?? 1)
@@ -301,7 +304,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           tags: s.upload_tags?.length ? s.upload_tags : [s.default_release_tag], providerOrder: s.provider_priority_order,
           region: s.tmdb_watch_region,
           emuUsername: s.emu_username ?? '',
-          ignoreSpecials: s.series_ignore_specials ?? true, sourceEngine: s.source_engine_enabled ?? false, addLogo: s.emu_add_logo ?? true, modoDePistas: normalizarModo(s.remux_track_mode),
+          ignoreSpecials: s.series_ignore_specials ?? true, sourceEngine: s.source_engine_enabled ?? false, addLogo: s.emu_add_logo ?? true, capturasPorCapitulo: s.emu_per_episode_screens ?? false, modoDePistas: normalizarModo(s.remux_track_mode),
           recentLimit: s.recent_activity_limit ?? 100,
           uploadMaxConcurrent: s.upload_max_concurrent ?? 1,
           qbitUrl: s.qbit_url ?? '', qbitTag: s.qbit_tag ?? '', qbitUser: s.qbit_username ?? '',
@@ -404,6 +407,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         series_ignore_specials: ignoreSpecials,
         source_engine_enabled: sourceEngine,
         emu_add_logo: addLogo,
+        emu_per_episode_screens: capturasPorCapitulo,
         remux_track_mode: modoDePistas,
         recent_activity_limit: recentLimit,
         upload_max_concurrent: uploadMaxConcurrent,
@@ -441,7 +445,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         tags: updated.upload_tags?.length ? updated.upload_tags : [updated.default_release_tag], providerOrder: updated.provider_priority_order,
         region: updated.tmdb_watch_region,
         emuUsername: updated.emu_username ?? '',
-        ignoreSpecials: updated.series_ignore_specials ?? true, sourceEngine: updated.source_engine_enabled ?? false, addLogo: updated.emu_add_logo ?? true, modoDePistas: normalizarModo(updated.remux_track_mode),
+        ignoreSpecials: updated.series_ignore_specials ?? true, sourceEngine: updated.source_engine_enabled ?? false, addLogo: updated.emu_add_logo ?? true, capturasPorCapitulo: updated.emu_per_episode_screens ?? false, modoDePistas: normalizarModo(updated.remux_track_mode),
         recentLimit: updated.recent_activity_limit ?? 100,
         uploadMaxConcurrent: updated.upload_max_concurrent ?? 1,
         qbitUrl: updated.qbit_url ?? '', qbitTag: updated.qbit_tag ?? '', qbitUser: updated.qbit_username ?? '',
@@ -940,6 +944,16 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           <select className="form-input form-select" value={addLogo ? 'true' : 'false'} onChange={e => setAddLogo(e.target.value === 'true')}>
             <option value="true">Sí</option>
             <option value="false">No</option>
+          </select>
+        </div>
+        <div className="form-group">
+          <label className="form-label" htmlFor="capturas-de-los-packs" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            Capturas de los packs
+            <InfoIcon text="En un pack de temporada o de serie completa, de qué capítulos genera y sube capturas Uploadrr. Por defecto, solo del primero (el de número más bajo, sin contar los especiales si el pack trae otra temporada). Con todos los capítulos, cada uno lleva además las suyas en un desplegable de la descripción, y con muchos capítulos la subida tarda bastante más." />
+          </label>
+          <select id="capturas-de-los-packs" className="form-input form-select" value={capturasPorCapitulo ? 'true' : 'false'} onChange={e => setCapturasPorCapitulo(e.target.value === 'true')}>
+            <option value="false">Solo del primer capítulo</option>
+            <option value="true">De todos los capítulos</option>
           </select>
         </div>
         <div className="form-group">

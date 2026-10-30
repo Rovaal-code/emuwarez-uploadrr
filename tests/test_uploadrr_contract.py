@@ -143,6 +143,7 @@ def test_season_episode_absent_by_default():
         ("WEB-DL", "webdl"),
         ("WEBRip", "webrip"),
         ("HDTV", "hdtv"),
+        ("SD", "sd"),
     ],
 )
 def test_release_format_goes_as_t(formato, tipo):
@@ -150,7 +151,7 @@ def test_release_format_goes_as_t(formato, tipo):
     assert cmd[cmd.index("-t") + 1] == tipo
 
 
-@pytest.mark.parametrize("formato", [None, "", "SD", "DVD", "bluray"])
+@pytest.mark.parametrize("formato", [None, "", "DVD", "bluray"])
 def test_release_format_without_uploadrr_type_sends_no_t(formato):
     assert "-t" not in _build(release_format=formato)
 

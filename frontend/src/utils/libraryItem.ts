@@ -1,14 +1,5 @@
 import type { LibraryItemResponse, InstanceSafeResponse } from '../types/api'
 
-// "Aportes" only makes sense for content you actually have: a leaf item
-// (movie/episode) that's Disponible/Subido/Subiendo, or a series/season
-// rollup that's at least Parcial. A Faltante item has nothing to contribute,
-// even if eMuwarez's catalog happens not to have it either.
-const APORTE_ELIGIBLE_STATUS = new Set(['Disponible', 'Subido', 'Subiendo', 'Parcial'])
-export function isAporteEligible(item: LibraryItemResponse): boolean {
-  return APORTE_ELIGIBLE_STATUS.has(item.local_status ?? '')
-}
-
 // Episode title in the Biblioteca LIST/tree view: just "NombreSerie - SxEx",
 // never the per-episode title (Sonarr's own episode titles can be very
 // long and break the row layout) — the full descriptive title still shows

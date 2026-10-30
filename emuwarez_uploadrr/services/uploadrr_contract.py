@@ -104,7 +104,7 @@ def path_within_allowed_roots(path: str, allowed_roots: list[str]) -> bool:
 
 
 # Formato de la nomenclatura → `-t` de Uploadrr-EMU, que si no lo deduce del nombre (y «Charlotte's Web»
-# pasaba por WEB-DL). SD y DVD no tienen tipo allí: sin `-t`, como antes.
+# pasaba por WEB-DL).
 _UPLOADRR_TYPES = {
     "Full BluRay": "disc",
     "FBD": "disc",
@@ -117,6 +117,7 @@ _UPLOADRR_TYPES = {
     "WEBRip": "webrip",
     "WEBRIP": "webrip",
     "HDTV": "hdtv",
+    "SD": "sd",
 }
 
 

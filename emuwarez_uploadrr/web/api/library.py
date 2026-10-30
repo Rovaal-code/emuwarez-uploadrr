@@ -82,6 +82,12 @@ def _ignore_specials(conn) -> bool:
 
 
 def _to_lib_response(row: dict, conn=None, rollups: Optional[dict] = None) -> LibraryItemResponse:
+    return LibraryItemResponse(**_campos_de_fila(row, conn, rollups))
+
+
+# Lo que enseña la fila, sin montar el modelo: los filtros por columna lo miran
+# en la biblioteca entera y solo se monta lo que se devuelve.
+def _campos_de_fila(row: dict, conn=None, rollups: Optional[dict] = None) -> dict:
     file_exists_raw = row.get("file_exists")
     nomenclature_status = row["nomenclature_status"]
     local_status = row["local_status"]
@@ -89,6 +95,7 @@ def _to_lib_response(row: dict, conn=None, rollups: Optional[dict] = None) -> Li
     provider = infer_provider_from_item(row)
     resolution = row.get("resolution")
     source = row.get("source")
+    release_group = row.get("release_group")
     path = row.get("path")
     prepared_path = row.get("prepared_path")
     video_codec = row.get("video_codec")
@@ -129,6 +136,7 @@ def _to_lib_response(row: dict, conn=None, rollups: Optional[dict] = None) -> Li
         provider = provider or rq["provider"]
         resolution = resolution or rq["resolution"]
         source = source or rq["source"]
+        release_group = release_group or rq["release_group"]
         video_codec = rq["video_codec"]
         audio_codec = rq["audio_codec"]
         audio_languages = rq["audio_languages"]
@@ -146,7 +154,7 @@ def _to_lib_response(row: dict, conn=None, rollups: Optional[dict] = None) -> Li
             own_name = episode_own_name(row)
             if own_name:
                 display_title = f"{display_title} - {own_name}"
-    return LibraryItemResponse(
+    return dict(
         id=row["id"],
         item_type=row["item_type"],
         title=row["title"],
@@ -171,6 +179,7 @@ def _to_lib_response(row: dict, conn=None, rollups: Optional[dict] = None) -> Li
         quality=row.get("quality"),
         resolution=resolution,
         source=source,
+        release_group=release_group,
         provider=provider,
         provider_label=_provider_label(provider),
         video_codec=video_codec,
@@ -312,11 +321,22 @@ def library_list(
     # Los cinco estados de la columna Español: uno desconocido es un 422, no
     # un filtro que en silencio no devuelve nada.
     spanish: Optional[list[Literal["ambos", "audio", "subs", "no", "desconocido"]]] = Query(None),
+    # Filtran por lo que enseña la columna (en series y temporadas, lo que
+    # comparten sus capítulos), así que van después de montar las filas.
+    provider: Optional[list[str]] = Query(None),
+    resolution: Optional[list[str]] = Query(None),
+    source: Optional[list[str]] = Query(None),
+    release_group: Optional[list[str]] = Query(None),
+    emu: Optional[list[Literal["candidate", "present"]]] = Query(None),
+    aporte: Optional[Literal["yes", "no"]] = Query(None),
     sort: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=20000),
     offset: int = Query(0, ge=0),
 ) -> LibraryListResponse:
-    from emuwarez_uploadrr.services.library import list_library, count_library
+    from emuwarez_uploadrr.services.library import list_library, count_library, filtrar_por_lo_que_se_ve
+    por_lo_que_se_ve = dict(provider=provider, resolution=resolution, source=source,
+                            release_group=release_group, emu=emu, aporte=aporte)
+    filtra_lo_que_se_ve = any(por_lo_que_se_ve.values())
     with _get_conn() as conn:
         rows = list_library(
             conn,
@@ -330,8 +350,9 @@ def library_list(
             search=search,
             spanish=spanish,
             sort=sort,
-            limit=limit,
-            offset=offset,
+            # Sin tope (LIMIT -1): el recorte va después de filtrar.
+            limit=-1 if filtra_lo_que_se_ve else limit,
+            offset=0 if filtra_lo_que_se_ve else offset,
             ignore_specials=_ignore_specials(conn),
         )
         total = count_library(
@@ -354,7 +375,13 @@ def library_list(
             _batch_rollups(conn, series_ids, season_ids, _ignore_specials(conn))
             if (series_ids or season_ids) else {}
         )
-        items = [_to_lib_response(r, conn, rollups) for r in rows]
+        if filtra_lo_que_se_ve:
+            filas = filtrar_por_lo_que_se_ve(
+                [_campos_de_fila(r, conn, rollups) for r in rows], **por_lo_que_se_ve)
+            total = len(filas)
+            items = [LibraryItemResponse(**f) for f in filas[offset:offset + limit]]
+        else:
+            items = [_to_lib_response(r, conn, rollups) for r in rows]
     return LibraryListResponse(
         items=items,
         total=total,
@@ -470,7 +497,7 @@ def library_nomenclature_info(
     confirmation message (¿Comprobar N capítulos? / N temporadas con X...)."""
     from emuwarez_uploadrr.services.nomenclature_check import count_pending, compare
     from emuwarez_uploadrr.services.mkv_title import to_filesystem_name
-    from emuwarez_uploadrr.services.source_assistant import _get_default_tag
+    from emuwarez_uploadrr.services.nomenclature import tag_por_defecto
 
     with _get_conn() as conn:
         from ...services.library import get_library_item
@@ -485,9 +512,9 @@ def library_nomenclature_info(
         if item_type in ("movie", "episode") and expected and path:
             base = os.path.basename(path)
             matches, diff = compare(base, expected)
-            # Show the user's configured group tag in the expected name (it is
+            # Show the item's group tag in the expected name (it is
             # NOT part of the comparison — the group is always ignored).
-            tag = _get_default_tag(conn)
+            tag = tag_por_defecto([item.get("release_group")], conn=conn)
             expected_display = f"{expected}-{tag}" if tag else expected
             result = {
                 "status": item.get("nomenclature_status"),

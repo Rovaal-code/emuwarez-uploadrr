@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef, useTransition, memo } from 'react'
+import { useState, useEffect, useCallback, useRef, useTransition, memo } from 'react'
 import { getLibrary, TOP_LEVEL_PARENT_FILTER, getLibraryFilterOptions, getLibraryItem, type LibraryFilterOptions } from '../api/library'
 import { Tooltip } from '../components/Tooltip'
 import { getLocalStatusInfo } from '../utils/status'
@@ -19,7 +19,7 @@ import { LargePosterCard } from '../components/LargePosterCard'
 import { LibraryDetailPage } from '../components/LibraryDetailPage'
 import { HeaderFilter } from '../components/HeaderFilter'
 import { FilasVirtuales } from '../components/FilasVirtuales'
-import { posterUrl, isAporteEligible } from '../utils/libraryItem'
+import { posterUrl } from '../utils/libraryItem'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
 import { hayAlgunFiltro, necesitaTodosLosNiveles } from '../utils/filtrosBiblioteca'
 import { CASTELLANO_OPCIONES, type EstadoCastellano } from '../utils/castellano'
@@ -59,7 +59,7 @@ const LIST_PRIORITY_COUNT = 40
 // Lo que mide una fila de la lista antes de pintarla (FilasVirtuales la
 // corrige con la primera que mide de verdad).
 const LIST_ROW_HEIGHT = 50
-const LIST_COLUMNS = 12
+const LIST_COLUMNS = 13
 const claveDeItem = (it: LibraryItemResponse) => it.id
 
 // Memoized: a plain inline onClick={() => onSelect(item)} arrow would be a
@@ -149,10 +149,10 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // resultado filtrado bajo unos filtros vacíos parecería que faltan cosas.
   const [data, setData] = useState<LibraryListResponse | null>(null)
   const [loading, setLoading] = useState(true)
-  // Applying a Provider/Resolución filter fetches every level (up to LOAD_LIMIT)
+  // Applying a column filter fetches every level (up to LOAD_LIMIT)
   // and re-renders a large list — a synchronous commit that briefly froze the
   // UI after `loading` had already flipped back to false. Committing the data
-  // (and the client-side filter changes) inside a transition keeps `isPending`
+  // inside a transition keeps `isPending`
   // true through that heavy render so we can keep showing "Cargando…".
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
@@ -213,18 +213,22 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // otherwise), never an invented fixed list (e.g. LocalStatus has ~10
   // possible values; only offer the ones some item actually has).
   const [filterOptions, setFilterOptions] = useState<LibraryFilterOptions | null>(null)
-  useEffect(() => {
-    getLibraryFilterOptions().then(setFilterOptions).catch(() => {})
-  }, [])
   const providerOptions = filterOptions?.providers ?? []
   const qualityOptions = filterOptions?.qualities ?? []
   const sourceOptions = filterOptions?.sources ?? []
+  const groupOptions = filterOptions?.release_groups ?? []
 
   // Diagnostic actions — relocated here from the removed standalone
   // Library + eMuwarez syncs are global (shared with the Dashboard/Peticiones
   // and the progress banner), so a running sync stays visible and its button
   // stays disabled on every tab.
   const { libSyncing, startLibrarySync, lastInvalidatedAt, isAnySyncing } = useSync()
+  // Una sincronización puede traer valores nuevos (un grupo, un proveedor): se vuelven a pedir.
+  useEffect(() => {
+    let alive = true
+    getLibraryFilterOptions().then(o => { if (alive) setFilterOptions(o) }).catch(() => {})
+    return () => { alive = false }
+  }, [lastInvalidatedAt])
 
   // Filters
   const [search, setSearch] = useState('')
@@ -242,15 +246,13 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const [filterStatus, setFilterStatus] = useState<string[]>(NINGUNO)
   const [filterInstanceId, setFilterInstanceId] = useState<string[]>(NINGUNO)
   const [filterRequest, setFilterRequest] = useState<string[]>(NINGUNO)
-  // Client-side text filters (no backend param) over the loaded items.
   // Las columnas admiten varios valores: lista vacía = sin filtro.
   const [searchProvider, setSearchProvider] = useState<string[]>(NINGUNO)
   const [searchQuality, setSearchQuality] = useState<string[]>(NINGUNO)
   const [searchSource, setSearchSource] = useState<string[]>(NINGUNO)
+  const [searchGroup, setSearchGroup] = useState<string[]>(NINGUNO)
   const [filterEmu, setFilterEmu] = useState<string[]>(NINGUNO)
   const [filterAporte, setFilterAporte] = useState('')
-  // Backend-side filter (unlike the four above it), so it never forces the
-  // whole library to be fetched just to be thrown away in the browser.
   const [filterSpanish, setFilterSpanish] = useState<string[]>(NINGUNO)
   const [sortBy, setSortBy] = useState('title_asc')
   const [offset, setOffset] = useState(0)
@@ -260,18 +262,20 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // tabla vacía para valores que el propio desplegable ofrecía.
   const filtros = {
     search: debouncedSearch, filterType, filterStatus, filterInstanceId,
-    filterRequest, filterSpanish, searchProvider, searchQuality, searchSource,
+    filterRequest, filterSpanish, searchProvider, searchQuality, searchSource, searchGroup,
     filterEmu, filterAporte,
   }
   const flatFilter = necesitaTodosLosNiveles(filtros)
   const filtrando = hayAlgunFiltro(filtros)
 
-  // Proveedor, Resolución, Source, eMuwarez y Aportes se filtran en el
-  // navegador, sobre lo ya cargado: no van al servidor, así que cambiarlos no
-  // tiene por qué volver a pedir nada. De ellos solo cuenta si obligan a pedir
-  // en plano, que es lo que dice `flatFilter`. Antes cada clic en uno de esos
-  // desplegables volvía a bajar la biblioteca entera (21 MB con 15.900 archivos).
+  // Todos los filtros van al servidor. Proveedor, Resolución, Source, Grupo,
+  // eMuwarez y Aportes se filtraban aquí sobre lo cargado, que con más de
+  // LOAD_LIMIT filas no era la biblioteca entera; el servidor ya devuelve el
+  // nivel más alto que cumple (la serie, o solo sus temporadas que cumplen).
+  // Solo cuenta la última petición: una vieja más lenta no pisa la nueva.
+  const ultimaCarga = useRef(0)
   const load = useCallback(async () => {
+    const esta = ++ultimaCarga.current
     setLoading(true)
     setError(null)
     try {
@@ -282,18 +286,25 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
         instance_id: filterInstanceId.map(Number),
         request_status: filterRequest,
         spanish: filterSpanish as EstadoCastellano[],
+        provider: searchProvider,
+        resolution: searchQuality,
+        source: searchSource,
+        release_group: searchGroup,
+        emu: filterEmu,
+        aporte: filterAporte || undefined,
         sort: sortBy,
         parent_id: flatFilter ? undefined : TOP_LEVEL_PARENT_FILTER,
         limit: LOAD_LIMIT,
         offset,
       })
-      startTransition(() => setData(result))
+      if (esta === ultimaCarga.current) startTransition(() => setData(result))
     } catch {
-      setError('Error al cargar la biblioteca')
+      if (esta === ultimaCarga.current) setError('Error al cargar la biblioteca')
     } finally {
-      setLoading(false)
+      if (esta === ultimaCarga.current) setLoading(false)
     }
-  }, [debouncedSearch, filterType, filterStatus, filterInstanceId, filterRequest, flatFilter, filterSpanish, sortBy, offset])
+  }, [debouncedSearch, filterType, filterStatus, filterInstanceId, filterRequest, flatFilter, filterSpanish,
+    searchProvider, searchQuality, searchSource, searchGroup, filterEmu, filterAporte, sortBy, offset])
 
   useEffect(() => { load() }, [load])
 
@@ -316,7 +327,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   function quitarFiltros() {
     setSearch(''); setDebouncedSearch('')
     setFilterType(NINGUNO); setFilterStatus(NINGUNO); setFilterInstanceId(NINGUNO); setFilterRequest(NINGUNO)
-    setSearchProvider(NINGUNO); setSearchQuality(NINGUNO); setSearchSource(NINGUNO)
+    setSearchProvider(NINGUNO); setSearchQuality(NINGUNO); setSearchSource(NINGUNO); setSearchGroup(NINGUNO)
     setFilterEmu(NINGUNO); setFilterAporte(''); setFilterSpanish(NINGUNO)
     setOffset(0)
   }
@@ -427,44 +438,6 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     ? { opacity: 0.5, pointerEvents: 'none' as const, transition: 'opacity 120ms' }
     : undefined
 
-  // Memorizado: con todo cargado en plano son unas 20.000 filas, y sin esto se
-  // volvían a recorrer en cada render de la página (cada tecla del buscador).
-  const filteredItems = useMemo(() => {
-    // Same "aporte" definition the eMuwarez filter/notification hand-off use:
-    // emu_in_catalog === 0 ("Nuevo" — you'd contribute the whole thing) or
-    // === 1 with at least one emu_aportes entry (you'd contribute a specific
-    // improvement). Only counts for content you actually have — a Faltante
-    // item has nothing to give. The "Aportes" column itself was removed from
-    // the list view, but this still backs the notification-driven filter.
-    const isAporte = (it: LibraryItemResponse) =>
-      isAporteEligible(it) && (it.emu_in_catalog === 0 || (it.emu_in_catalog === 1 && (it.emu_aportes?.length ?? 0) > 0))
-
-    const matchesFilter = (it: LibraryItemResponse) => {
-      const cumple = (elegidos: string[], v: string | null | undefined) => !elegidos.length || elegidos.includes(v ?? '')
-      const provOk = cumple(searchProvider, it.provider_label)
-      const qualOk = cumple(searchQuality, it.resolution)
-      const sourceOk = cumple(searchSource, it.source)
-      // "candidate" = No (not on eMuwarez), "present" = Sí. A partial series
-      // (emu_in_catalog === 2) matches neither on its own — its Sí/No seasons do,
-      // so filtering surfaces those seasons instead of the misleading series row.
-      const emuOk = !filterEmu.length
-        || (filterEmu.includes('candidate') && it.emu_in_catalog === 0)
-        || (filterEmu.includes('present') && it.emu_in_catalog === 1)
-      // Same rollup caveat as emuOk: an ambiguous/partial item (emu_in_catalog
-      // null or 2) matches neither "yes" nor "no" on its own.
-      const aporteOk = !filterAporte || (filterAporte === 'yes' ? isAporte(it) : (it.emu_in_catalog === 1 && !isAporte(it)))
-      return provOk && qualOk && sourceOk && emuOk && aporteOk
-    }
-    // With a Provider/Resolución/Source/eMuwarez/Aporte filter active, `items` holds every level.
-    // Show the matching items at the highest matching level: if a whole series
-    // matches, show the series (not each of its seasons); if only some seasons
-    // match (mixed series), show those seasons.
-    const clientFilter = !!(searchProvider.length || searchQuality.length || searchSource.length || filterEmu.length || filterAporte)
-    if (!clientFilter) return items
-    const matchIds = new Set(items.filter(matchesFilter).map(i => i.id))
-    return items.filter(it => matchIds.has(it.id) && !(it.parent_id != null && matchIds.has(it.parent_id)))
-  }, [items, searchProvider, searchQuality, searchSource, filterEmu, filterAporte])
-
   // La lista solo pinta lo que se ve (FilasVirtuales). Las series desplegadas
   // se pintan siempre, para no perder lo que tienen abierto al salir de vista.
   const listaRef = useRef<HTMLDivElement>(null)
@@ -567,6 +540,9 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
       ]} /></th>
       <th><HeaderFilter label="Source" value={searchSource} onChange={setSearchSource} options={[
         { value: '', label: 'Todos' }, ...sourceOptions.map(s => ({ value: s, label: s })),
+      ]} /></th>
+      <th><HeaderFilter label="Grupo" value={searchGroup} onChange={setSearchGroup} options={[
+        { value: '', label: 'Todos' }, ...groupOptions.map(g => ({ value: g, label: g })),
       ]} /></th>
       <th><HeaderFilter label="Español" value={filterSpanish} onChange={v => { setFilterSpanish(v); setOffset(0) }} options={[
         { value: '', label: 'Todos' },
@@ -714,12 +690,12 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
           title="Biblioteca vacía"
           body="Añade instancias Radarr/Sonarr en la sección Instancias y sincroniza para ver el contenido aquí."
         />
-      ) : filteredItems.length === 0 && viewMode !== 'list' ? (
+      ) : items.length === 0 && viewMode !== 'list' ? (
         <EmptyState icon={<IconoLibros />} {...sinResultados} />
       ) : viewMode === 'grid' ? (
         <div className="activity-section" style={{ padding: 20, flex: 1, minHeight: 0, overflowY: 'auto', marginBottom: 0, ...refreshingStyle }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 16 }}>
-            {filteredItems.map((item, i) => (
+            {items.map((item, i) => (
               <PosterCard key={item.id} item={item} onSelect={openDetail} priority={i < GRID_PRIORITY_COUNT} />
             ))}
           </div>
@@ -727,7 +703,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
       ) : viewMode === 'grid-lg' ? (
         <div className="activity-section" style={{ padding: 20, flex: 1, minHeight: 0, overflowY: 'auto', marginBottom: 0, ...refreshingStyle }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 20 }}>
-            {filteredItems.map((item, i) => (
+            {items.map((item, i) => (
               <LargePosterCard key={item.id} item={item} onSelect={openDetail} priority={i < GRID_PRIORITY_COUNT} />
             ))}
           </div>
@@ -737,11 +713,11 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
           <div ref={listaRef} style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
             <table className="data-table">
               <thead ref={cabeceraRef}>{tableHeadRow}</thead>
-              {filteredItems.length === 0 ? (
+              {items.length === 0 ? (
                 <FilaVacia columnas={LIST_COLUMNS} icon={<IconoLibros />} {...sinResultados} />
               ) : (
                 <FilasVirtuales
-                  items={filteredItems}
+                  items={items}
                   clave={claveDeItem}
                   alturaEstimada={LIST_ROW_HEIGHT}
                   columnas={LIST_COLUMNS}

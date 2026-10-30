@@ -384,15 +384,15 @@
 }
 
 /* ---- upload activity rows ---- */
-.hud-app .upload-panel-body .hover-link {
-  color: var(--text-primary);
+/* Mismo borde y resaltado que una fila de las tablas del Panel. */
+.hud-app .upload-row {
+  border-bottom-color: color-mix(in srgb, var(--hud-sky) 9%, transparent);
 }
-/* ...pero al pasar el cursor manda el azul, igual que el título de una serie
-   o una película en Biblioteca (.lib-title-link:hover). La regla de arriba
-   tiene más especificidad que `.hover-link:hover`, así que sin esta el color
-   de reposo ganaba siempre y el título no reaccionaba. */
-.hud-app .upload-panel-body .hover-link:hover {
-  color: var(--text-accent);
+.hud-app .upload-row:hover {
+  background: color-mix(in srgb, var(--hud-cyan) 6%, transparent);
+}
+.hud-app .upload-panel-group {
+  font-family: var(--hud-font);
 }
 
 /* ---- Sidebar System Status (CPU/RAM/disk/GPU/VRAM + network) ---- */

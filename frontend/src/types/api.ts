@@ -131,6 +131,7 @@ export interface LibraryItemResponse {
   quality: string | null
   resolution: string | null
   source: string | null
+  release_group?: string | null
   provider: string | null
   provider_label: string | null
   video_codec: string | null

@@ -12,13 +12,6 @@ export const TOUR_STEPS: TourStep[] = [
     description: 'Biblioteca trae los cambios de Radarr/Sonarr, eMuwarez descarga su catálogo para comparar, y Peticiones trae las peticiones abiertas.',
   },
   {
-    id: 'dashboard-stats',
-    tab: 'dashboard',
-    selector: '[data-tour="dashboard-stats"]',
-    title: 'Tus números de un vistazo',
-    description: 'Cuánto de tu biblioteca está sincronizado, disponible o falta, cuánto contenido único tienes para subir, y el resumen de tus peticiones en eMuwarez.',
-  },
-  {
     id: 'dashboard-recommendations',
     tab: 'dashboard',
     selector: '[data-tour="dashboard-recommendations"]',
@@ -45,6 +38,15 @@ export const TOUR_STEPS: TourStep[] = [
     selector: '[data-tour="dashboard-connections"]',
     title: 'Conexiones',
     description: 'Un vistazo rápido a qué servicios tienes conectados: Radarr, Sonarr, eMuwarez, TMDb, qBittorrent, hosts de imágenes...',
+  },
+  // Las cifras van al final del recorrido: en la pantalla también están
+  // ahora al final, debajo de la cuadrícula principal (ver DashboardPage).
+  {
+    id: 'dashboard-stats',
+    tab: 'dashboard',
+    selector: '[data-tour="dashboard-stats"]',
+    title: 'Tus números de un vistazo',
+    description: 'Cuánto de tu biblioteca está sincronizado, disponible o falta, cuánto contenido único tienes para subir, y el resumen de tus peticiones en eMuwarez.',
   },
   {
     id: 'library',

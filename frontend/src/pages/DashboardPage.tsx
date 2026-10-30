@@ -21,7 +21,7 @@ import { getLibraryItem } from '../api/library'
 import type { LibraryItemResponse } from '../types/api'
 import { formatBytes, formatDate, formatItemType, formatNumero } from '../utils/format'
 import { posterUrl, buildDeepLink } from '../utils/libraryItem'
-import { ValueChip, ValueIcon, SizeValueIcon, TypeValueIcon, RecommendationValueIcon, DetailTitleText } from '../components/DetailCard'
+import { ValueChip, ValueIcon, SizeValueIcon, TypeValueIcon, DetailTitleText } from '../components/DetailCard'
 
 // The recommendations item doesn't carry the configured instance name
 // (unlike a full LibraryItemResponse), only the raw instance_type — capitalize
@@ -59,17 +59,17 @@ import { IconoEstrella, IconoLista, IconoPelicula, IconoSerie, IconoTipo } from 
 // group-specific: view the existing request, upload, or create a request.
 type RecAction = 'view-request' | 'upload' | 'request'
 const REC_GROUP_META: Record<number, {
-  category: string; recommendation: string
+  category: string
   action: RecAction; actionLabel: string
   color: string; bg: string; border: string
 }> = {
-  1: { category: 'Petición compatible', recommendation: 'Revisa la petición, quizás puedas reclamarla',
+  1: { category: 'Petición compatible',
        action: 'view-request', actionLabel: 'Ver petición',
        color: 'var(--color-available)', bg: 'color-mix(in srgb, var(--color-available) 14%, transparent)', border: 'color-mix(in srgb, var(--color-available) 35%, transparent)' },
-  2: { category: 'Contenido único', recommendation: 'Podrías subirlo a eMuwarez',
+  2: { category: 'Contenido único',
        action: 'upload', actionLabel: 'Subir a eMuwarez',
        color: 'var(--color-uploading)', bg: 'color-mix(in srgb, var(--color-uploading) 14%, transparent)', border: 'color-mix(in srgb, var(--color-uploading) 35%, transparent)' },
-  3: { category: 'Faltante', recommendation: 'Pídelo en eMuwarez',
+  3: { category: 'Faltante',
        action: 'request', actionLabel: 'Petición a eMuwarez',
        color: 'var(--color-error)', bg: 'color-mix(in srgb, var(--color-error) 14%, transparent)', border: 'color-mix(in srgb, var(--color-error) 35%, transparent)' },
 }
@@ -334,103 +334,6 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
         <SyncCard />
       </div>
 
-      {/* Stat cards. El color de la cifra solo marca un estado (disponible,
-          faltante, compatible, parcial); el resto va en el color del texto. */}
-      <div data-tour="dashboard-stats">
-      <div className="stat-cards-row" style={{ flexShrink: 0 }}>
-        <StatCard
-          icon={ICON_LIBRARY}
-          label="Biblioteca sincronizada"
-          value={s.library_total}
-          info="Total de películas y episodios importados desde tus instancias de Radarr y Sonarr."
-        >
-          <div style={{ maxHeight: 78, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <div className="stat-card-sub-row">
-              <ServiceLabel type="radarr" label={`Radarr: ${formatNumero(s.radarr_items)}`} size={13} />
-            </div>
-            <div className="stat-card-sub-row">
-              <ServiceLabel type="sonarr" label={`Sonarr: ${formatNumero(s.sonarr_items)}`} size={13} />
-            </div>
-          </div>
-        </StatCard>
-
-        <StatCard
-          icon={ICON_AVAILABLE}
-          label="Disponibles"
-          value={s.available}
-          accentColor="var(--color-available)"
-          info="Contenido cuyo archivo está presente en disco, listo para comparar o subir."
-        />
-
-        <StatCard
-          icon={ICON_MISSING}
-          label="Faltantes"
-          value={s.missing}
-          accentColor="var(--color-missing)"
-          info="Contenido que Radarr/Sonarr conocen pero cuyo archivo aún no está en disco (falta, en cola o con error)."
-        />
-
-        <StatCard
-          icon={ICON_UNIQUE}
-          label="Contenido único"
-          value={s.unique_content ?? 0}
-          info="Contenido disponible que aún no está en eMuwarez: las películas, las temporadas completas de series o documentales y sus capítulos. Son tus oportunidades de subida."
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <div className="stat-card-sub-row"><IconoPelicula /> {formatNumero(s.unique_movies ?? 0)} películas</div>
-            <div className="stat-card-sub-row"><IconoSerie /> {formatNumero(s.unique_seasons ?? 0)} temporadas, {formatNumero(s.unique_episodes ?? 0)} capítulos</div>
-          </div>
-        </StatCard>
-
-        <StatCard
-          icon={ICON_UPLOADS}
-          label="Tus subidas"
-          value={s.uploads_completed ?? 0}
-          info="Número de subidas a eMuwarez que has completado con Uploadrr."
-        />
-      </div>
-
-      {/* eMuwarez requests — cards + a "Sincronizar peticiones" button below.
-          20px bottom margin = the flex gap between the activity panels and
-          their lower cards, so spacing above and below each panel matches. */}
-      <div style={{ marginBottom: 20, flexShrink: 0 }}>
-        <div className="stat-cards-row">
-          <StatCard
-            icon={ICON_REQUESTS}
-            label="Peticiones eMuwarez"
-            value={s.requests_total ?? 0}
-            info="Total de peticiones activas descargadas de eMuwarez."
-          />
-          <StatCard
-            icon={ICON_COMPATIBLE}
-            label="Peticiones compatibles"
-            value={s.requests_compatible ?? 0}
-            accentColor="var(--color-available)"
-            info="Peticiones cuya mejor coincidencia en tu biblioteca cumple resolución y source: quizás puedas cubrirlas."
-          />
-          <StatCard
-            icon={ICON_PARTIAL}
-            label="Peticiones parciales"
-            value={s.requests_partial ?? 0}
-            accentColor="var(--color-warning)"
-            info="Peticiones cuya mejor coincidencia cumple solo parte de lo pedido (resolución o source, pero no ambos)."
-          />
-          <StatCard
-            icon={ICON_RECLAIMED}
-            label="Peticiones reclamadas"
-            value={s.requests_reclaimed ?? 0}
-            info="Peticiones ya Reclamadas en eMuwarez. eMuwarez no permite saber si el reclamo es tuyo, así que es el total de reclamadas, no solo las tuyas."
-          />
-          <StatCard
-            icon={ICON_MINE}
-            label="Mis peticiones"
-            value={s.requests_mine ?? 0}
-            info="Peticiones creadas por tu propio usuario de eMuwarez (según el nombre configurado en Ajustes)."
-          />
-        </div>
-      </div>
-      </div>
-
       {/* Main grid — fills the remaining height exactly (flex:1, minHeight:0)
           so the page itself never scrolls; each panel below keeps its own
           internal scroll via its inner `overflow: auto` div. */}
@@ -458,7 +361,6 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                       <th>Tipo</th>
                       <th>Origen</th>
                       <th>Categoría</th>
-                      <th>Recomendación</th>
                       <th>Tamaño</th>
                       <th className="col-actions">Acción</th>
                     </tr>
@@ -499,9 +401,6 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
                           <span className="badge" style={{
                             color: meta.color, background: meta.bg, border: `1px solid ${meta.border}`, whiteSpace: 'nowrap',
                           }}>{meta.category}</span>
-                        </td>
-                        <td style={{ whiteSpace: 'nowrap' }}>
-                          <ValueChip><ValueIcon><RecommendationValueIcon /></ValueIcon><span className="txt">{meta.recommendation}</span></ValueChip>
                         </td>
                         <td style={{ whiteSpace: 'nowrap' }}>
                           {item.size_bytes
@@ -741,6 +640,106 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Las cifras van al final, no al principio: lo primero que se ve ahora
+          es la cuadrícula principal (Recomendaciones, Actividad de subida...),
+          que es lo que de verdad se usa. El color de la cifra solo marca un
+          estado (disponible, faltante, compatible, parcial); el resto va en
+          el color del texto. */}
+      <div data-tour="dashboard-stats">
+      <div className="stat-cards-row" style={{ flexShrink: 0 }}>
+        <StatCard
+          icon={ICON_LIBRARY}
+          label="Biblioteca sincronizada"
+          value={s.library_total}
+          info="Total de películas y episodios importados desde tus instancias de Radarr y Sonarr."
+        >
+          <div style={{ maxHeight: 78, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <div className="stat-card-sub-row">
+              <ServiceLabel type="radarr" label={`Radarr: ${formatNumero(s.radarr_items)}`} size={13} />
+            </div>
+            <div className="stat-card-sub-row">
+              <ServiceLabel type="sonarr" label={`Sonarr: ${formatNumero(s.sonarr_items)}`} size={13} />
+            </div>
+          </div>
+        </StatCard>
+
+        <StatCard
+          icon={ICON_AVAILABLE}
+          label="Disponibles"
+          value={s.available}
+          accentColor="var(--color-available)"
+          info="Contenido cuyo archivo está presente en disco, listo para comparar o subir."
+        />
+
+        <StatCard
+          icon={ICON_MISSING}
+          label="Faltantes"
+          value={s.missing}
+          accentColor="var(--color-missing)"
+          info="Contenido que Radarr/Sonarr conocen pero cuyo archivo aún no está en disco (falta, en cola o con error)."
+        />
+
+        <StatCard
+          icon={ICON_UNIQUE}
+          label="Contenido único"
+          value={s.unique_content ?? 0}
+          info="Contenido disponible que aún no está en eMuwarez: las películas, las temporadas completas de series o documentales y sus capítulos. Son tus oportunidades de subida."
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <div className="stat-card-sub-row"><IconoPelicula /> {formatNumero(s.unique_movies ?? 0)} películas</div>
+            <div className="stat-card-sub-row"><IconoSerie /> {formatNumero(s.unique_seasons ?? 0)} temporadas, {formatNumero(s.unique_episodes ?? 0)} capítulos</div>
+          </div>
+        </StatCard>
+
+        <StatCard
+          icon={ICON_UPLOADS}
+          label="Tus subidas"
+          value={s.uploads_completed ?? 0}
+          info="Número de subidas a eMuwarez que has completado con Uploadrr."
+        />
+      </div>
+
+      {/* eMuwarez requests — cards + a "Sincronizar peticiones" button below.
+          20px bottom margin = the flex gap between the activity panels and
+          their lower cards, so spacing above and below each panel matches. */}
+      <div style={{ marginBottom: 20, flexShrink: 0 }}>
+        <div className="stat-cards-row">
+          <StatCard
+            icon={ICON_REQUESTS}
+            label="Peticiones eMuwarez"
+            value={s.requests_total ?? 0}
+            info="Total de peticiones activas descargadas de eMuwarez."
+          />
+          <StatCard
+            icon={ICON_COMPATIBLE}
+            label="Peticiones compatibles"
+            value={s.requests_compatible ?? 0}
+            accentColor="var(--color-available)"
+            info="Peticiones cuya mejor coincidencia en tu biblioteca cumple resolución y source: quizás puedas cubrirlas."
+          />
+          <StatCard
+            icon={ICON_PARTIAL}
+            label="Peticiones parciales"
+            value={s.requests_partial ?? 0}
+            accentColor="var(--color-warning)"
+            info="Peticiones cuya mejor coincidencia cumple solo parte de lo pedido (resolución o source, pero no ambos)."
+          />
+          <StatCard
+            icon={ICON_RECLAIMED}
+            label="Peticiones reclamadas"
+            value={s.requests_reclaimed ?? 0}
+            info="Peticiones ya Reclamadas en eMuwarez. eMuwarez no permite saber si el reclamo es tuyo, así que es el total de reclamadas, no solo las tuyas."
+          />
+          <StatCard
+            icon={ICON_MINE}
+            label="Mis peticiones"
+            value={s.requests_mine ?? 0}
+            info="Peticiones creadas por tu propio usuario de eMuwarez (según el nombre configurado en Ajustes)."
+          />
+        </div>
+      </div>
       </div>
     </div>
   )

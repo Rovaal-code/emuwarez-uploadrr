@@ -346,6 +346,7 @@ def build_uploadrr_execution_command(job: dict, conn=None) -> dict:
                 resolution=resolution,
                 season=season,
                 episode=episode,
+                release_format=cmd_data.get("release_format"),
             )
             executable = full_argv[0]
             args = full_argv[1:]

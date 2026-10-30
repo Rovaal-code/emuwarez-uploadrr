@@ -37,6 +37,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("-res", dest="resolution", default=None)
     parser.add_argument("-season", dest="season", default=None)
     parser.add_argument("-episode", dest="episode", default=None)
+    parser.add_argument("-t", dest="release_type", default=None)
     parser.add_argument("--fake-fail", dest="fake_fail", action="store_true")
     parser.add_argument("--fake-sleep", dest="fake_sleep", type=float, default=None)
     args, _unknown = parser.parse_known_args(argv)

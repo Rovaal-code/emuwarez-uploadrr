@@ -103,6 +103,23 @@ def path_within_allowed_roots(path: str, allowed_roots: list[str]) -> bool:
     return any(ensure_path_under_base(path, root) for root in allowed_roots if root)
 
 
+# Formato de la nomenclatura → `-t` de Uploadrr-EMU, que si no lo deduce del nombre (y «Charlotte's Web»
+# pasaba por WEB-DL). SD y DVD no tienen tipo allí: sin `-t`, como antes.
+_UPLOADRR_TYPES = {
+    "Full BluRay": "disc",
+    "FBD": "disc",
+    "FDVD": "disc",
+    "BDRemux": "remux",
+    "BDReMux": "remux",
+    "BluRay": "encode",
+    "MHD": "encode",
+    "WEB-DL": "webdl",
+    "WEBRip": "webrip",
+    "WEBRIP": "webrip",
+    "HDTV": "hdtv",
+}
+
+
 def _format_season(value) -> str:
     if isinstance(value, int):
         return f"S{value:02d}"
@@ -155,8 +172,11 @@ def build_uploadrr_emu_command(
     resolution: str = "",
     season: Optional[int | str] = None,
     episode: Optional[int | str] = None,
+    release_format: Optional[str] = None,
 ) -> list[str]:
     """Build the real Uploadrr-EMU argv. Always a list[str], never a shell string.
+
+    `release_format` is the nomenclature's source code (WEB-DL, BDRemux…), sent as `-t`.
 
     Only accepts prepared_path (or applied_path passed as prepared_path by
     the caller) — there is intentionally no source_path parameter, so the
@@ -175,10 +195,14 @@ def build_uploadrr_emu_command(
     resolution = _normalize_resolution(resolution)
     if resolution:
         cmd += ["-res", resolution]
-    if season:
+    # La temporada 0 (especiales) también cuenta: «if season» la perdía.
+    if season is not None and season != "":
         cmd += ["-season", _format_season(season)]
-    if episode:
+    if episode is not None and episode != "":
         cmd += ["-episode", _format_episode(episode)]
+    release_type = _UPLOADRR_TYPES.get(str(release_format or "").strip())
+    if release_type:
+        cmd += ["-t", release_type]
     return cmd
 
 

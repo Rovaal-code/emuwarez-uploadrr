@@ -97,6 +97,68 @@ def test_command_uses_real_emu_flags_not_legacy(db_conn, tmp_path):
     assert "--resolution" not in joined
 
 
+def _real_args(db_conn, tmp_path, item, proposal):
+    """Del preflight a la ejecución: lo guardado en uploadrr_command_json es lo único que lee la segunda."""
+    from emuwarez_uploadrr.services.upload_preflight import build_uploadrr_command_preview
+
+    uploadrr_dir = tmp_path / "Uploadrr"
+    uploadrr_dir.mkdir()
+    (uploadrr_dir / "upload.py").write_text("# stub")
+    prepared = tmp_path / "release.mkv"
+    prepared.write_bytes(b"\x00")
+    _insert_settings(db_conn, uploadrr_dir, "/usr/bin/python3")
+    item = {"title": "Serie", "path": str(prepared), "prepared_path": str(prepared), "tmdb_id": "1", **item}
+    preview = build_uploadrr_command_preview(item, proposal, conn=db_conn)
+    jid = _insert_job(db_conn, prepared_path=str(prepared))
+    db_conn.execute("UPDATE upload_jobs SET uploadrr_command_json = ? WHERE id = ?", (json.dumps(preview), jid))
+    db_conn.commit()
+    return build_uploadrr_execution_command(get_upload_job(jid, conn=db_conn), conn=db_conn)["args"]
+
+
+def test_episode_season_number_and_format_reach_the_real_command(db_conn, tmp_path):
+    args = _real_args(
+        db_conn,
+        tmp_path,
+        {"item_type": "episode", "season_number": 1, "episode_number": 3},
+        {"proposed_filename": "Serie S01E03 1080p WEB-DL-GRP", "resolution": "1080p", "source": "WEB-DL"},
+    )
+
+    assert args[args.index("-season") + 1] == "S01"
+    assert args[args.index("-episode") + 1] == "E03"
+    assert args[args.index("-t") + 1] == "webdl"
+
+
+def test_specials_season_zero_reaches_the_real_command(db_conn, tmp_path):
+    args = _real_args(
+        db_conn,
+        tmp_path,
+        {"item_type": "episode", "season_number": 0, "episode_number": 2},
+        {"proposed_filename": "Serie S00E02 1080p WEB-DL-GRP", "resolution": "1080p", "source": "WEB-DL"},
+    )
+
+    assert args[args.index("-season") + 1] == "S00"
+    assert args[args.index("-episode") + 1] == "E02"
+
+
+def test_season_pack_reaches_the_real_command_without_episode(db_conn, tmp_path):
+    args = _real_args(
+        db_conn, tmp_path, {"item_type": "season", "season": 2, "episode": None, "release_format": "BDRemux"}, None
+    )
+
+    assert args[args.index("-season") + 1] == "S02"
+    assert "-episode" not in args
+    assert args[args.index("-t") + 1] == "remux"
+
+
+def test_movie_gets_no_season_or_episode(db_conn, tmp_path):
+    proposal = {"proposed_filename": "Peli 2020 1080p BluRay-GRP", "source": "BluRay"}
+    args = _real_args(db_conn, tmp_path, {"item_type": "movie"}, proposal)
+
+    assert "-season" not in args
+    assert "-episode" not in args
+    assert args[args.index("-t") + 1] == "encode"
+
+
 def test_apply_with_fake_runner_succeeds(db_conn, tmp_path, fake_uploadrr_emu_dir, fake_uploadrr_python_path):
     prepared = tmp_path / "prepared.mkv"
     prepared.write_bytes(b"\x00" * 16)

@@ -589,8 +589,11 @@ def cmd_requests(args) -> int:
         if args.requests_command == "readiness-refresh":
             from .services.request_readiness import refresh_request_readiness
             result = refresh_request_readiness(conn)
-            print(f"✓ Readiness recalculado: {result['items_updated']} peticiones  |  errores: {result['errors']}")
-            return 0
+            # Ninguna calculada y alguna con error (p. ej. no se pudo leer la biblioteca): un script tiene que enterarse.
+            fallo = result["errors"] and not result["items_updated"]
+            print(f"{'✗' if fallo else '✓'} Readiness recalculado: {result['items_updated']} peticiones  |  "
+                  f"errores: {result['errors']}")
+            return 1 if fallo else 0
         if args.requests_command == "readiness":
             from .services.request_readiness import list_request_readiness, get_request_readiness
             req_id = getattr(args, "id", None)

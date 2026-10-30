@@ -65,6 +65,14 @@ def test_cli_readiness_refresh_empty(isolated_env):
     assert "Readiness recalculado" in result.stdout or "recalculado" in result.stdout.lower()
 
 
+def test_cli_readiness_refresh_sin_calcular_ninguna_sale_con_1(isolated_db, monkeypatch):
+    """Si no se calculó ninguna (no se pudo leer la biblioteca), el CLI salía con 0 y un script no se enteraba."""
+    from emuwarez_uploadrr import cli
+    from emuwarez_uploadrr.services import request_readiness as rr
+    monkeypatch.setattr(rr, "refresh_request_readiness", lambda conn: {"ok": True, "items_updated": 0, "errors": 2})
+    assert cli.main(["requests", "readiness-refresh"]) == 1
+
+
 # ---------------------------------------------------------------------------
 # requests readiness-refresh with data
 # ---------------------------------------------------------------------------

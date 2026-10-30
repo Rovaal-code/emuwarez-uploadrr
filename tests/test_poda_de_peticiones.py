@@ -49,22 +49,25 @@ def test_una_preparacion_que_falla_sale_en_el_resumen_y_en_el_log(db_conn, sincr
     """Se contaba y se callaba: la tarea salía completada sin decir que alguna se había quedado sin calcular."""
     from emuwarez_uploadrr.services import request_readiness as rr
     real = rr.evaluate_request_readiness
+    evaluadas = []
 
-    def falla_la_1(request_item_id, conn, library=None):
-        if conn.execute("SELECT emu_id FROM request_items WHERE id = ?", (request_item_id,)).fetchone()[0] == "1":
+    def falla_la_primera(request_item_id, conn, library=None):
+        evaluadas.append(request_item_id)
+        if len(evaluadas) == 1:
             conn.execute("INSERT INTO request_readiness (request_item_id, status) VALUES (?, 'a medias')",
                          (request_item_id,))
             raise RuntimeError("rota")
         return real(request_item_id, conn, library)
 
-    monkeypatch.setattr(rr, "evaluate_request_readiness", falla_la_1)
+    monkeypatch.setattr(rr, "evaluate_request_readiness", falla_la_primera)
     assert sincroniza([_fila(1), _fila(2)], 2)["status"] == "ok"
     resumen = db_conn.execute(
         "SELECT summary FROM task_runs WHERE name = 'sync-emu-requests' ORDER BY id DESC LIMIT 1").fetchone()[0]
     assert "1 sin preparación" in resumen
     assert "No se pudo calcular la preparación de la petición" in caplog.text
-    # Lo que la petición rota dejó a medias no se guardó con la siguiente.
+    # Lo que la petición rota dejó a medias no se guardó con la siguiente, y la siguiente sí se calculó.
     assert db_conn.execute("SELECT COUNT(*) FROM request_readiness WHERE status = 'a medias'").fetchone()[0] == 0
+    assert len(evaluadas) == 2 and rr.get_request_readiness(evaluadas[1], db_conn)
 
 
 def _rota(*_a, **_kw):

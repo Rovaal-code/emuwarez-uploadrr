@@ -19,7 +19,7 @@ import { RequestFormModal } from '../components/RequestFormModal'
 import { useTooltip, HoverTitle } from '../components/Tooltip'
 import { getLibraryItem } from '../api/library'
 import type { LibraryItemResponse } from '../types/api'
-import { formatBytes, formatDate, formatItemType, formatNumero } from '../utils/format'
+import { formatBytes, formatDate, formatItemType, formatNumero, timeAgo } from '../utils/format'
 import { posterUrl, buildDeepLink } from '../utils/libraryItem'
 import { ValueChip, ValueIcon, SizeValueIcon, TypeValueIcon, DetailTitleText } from '../components/DetailCard'
 
@@ -45,11 +45,11 @@ function RecOriginCell({ item, instances }: { item: DashboardRecommendationItem;
   )
 }
 import {
-  STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo,
-  progressCounter, queuedWaitText, useTicker,
+  STATUS_CLASS, ACTIVE_JOB_STATUSES, statusLabel, phaseLabel, currentPhaseInfo,
+  progressCounter, queuedWaitText, formatSecondsHM, useTicker,
 } from '../utils/uploadStatus'
 import { useRefrescoPorAvisos, AVISOS_SUBIDA, AVISOS_SUBIDA_PROGRESO } from '../hooks/useRefrescoPorAvisos'
-import { queSalieron, soloVivas, idsDe, ESPERA_MS, DESVANECER_MS } from '../utils/despedidaSubidas'
+import { queSalieron, soloVivas, idsDe, ultimasTerminadas, ESPERA_MS, DESVANECER_MS } from '../utils/despedidaSubidas'
 import { useSeccionVisible } from '../context/SeccionVisible'
 import { EMU_URL } from '../constants/emu'
 import { IconoEstrella, IconoLista, IconoPelicula, IconoSerie, IconoSubida, IconoTipo } from '../components/Iconos'
@@ -115,6 +115,95 @@ function ConnRow({ icon, label, href, badge = 'Configurado', tone = 'ok' }: {
   )
 }
 
+// Una fila de "Actividad de subida": entera es un enlace al detalle de la
+// subida en Subidas. Lleva su propio reloj para que el tiempo corra sin
+// repintar el Panel entero cada segundo.
+function FilaSubida({ job, yendose = false, compacta = false, onOpen }: {
+  job: UploadJob; yendose?: boolean; compacta?: boolean; onOpen: (jobId: number) => void
+}) {
+  useTicker(ACTIVE_JOB_STATUSES.has(job.status))
+  const isPreparingOrRunning = job.status === 'preparing' || job.status === 'running'
+  const phaseInfo = isPreparingOrRunning ? currentPhaseInfo(job) : null
+  const phaseLabelText = phaseInfo?.label ?? (isPreparingOrRunning ? phaseLabel(job.progress_phase) : null)
+  // Total time since the job started (not just this sub-phase) — the
+  // number that actually answers "how long has this been going".
+  const totalElapsedText = isPreparingOrRunning ? progressCounter(job) : null
+  const terminada = !ACTIVE_JOB_STATUSES.has(job.status)
+  // El global que ya calcula el backend (uploadrr_progress.PHASES
+  // pondera cada fase); se acota por si llega algo raro.
+  const globalPct = Math.min(100, Math.max(0, Math.round(job.progress?.global_pct ?? 0)))
+  return (
+    <HoverTitle className="upload-row" tip="Ver detalle de la subida" onClick={() => onOpen(job.id!)} style={{
+      // Terminada, se queda quieta ESPERA_MS y luego se va poco a
+      // poco. Las que se despiden van al final de la lista, así
+      // que al desaparecer no mueven de sitio a las de arriba.
+      opacity: yendose ? 0 : 1,
+      transition: `opacity ${DESVANECER_MS}ms ease-out`,
+      pointerEvents: yendose ? 'none' : undefined,
+    }}>
+      {/* 36x54: el texto de la derecha ocupa unos 55 px (título 16,
+          estado 17, barra con su % 11 y los huecos), así que el póster tiene
+          que ser al menos eso para que la fila no crezca por debajo
+          de él. Las recientes, sin barra, van al tamaño de Recomendaciones. */}
+      <div className="poster-thumb" style={{ width: compacta ? 28 : 36, height: compacta ? 42 : 54, borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        {job.poster_url ? (
+          <img
+            src={posterUrl(job.poster_url, 'w154')}
+            alt=""
+            loading="lazy"
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+          />
+        ) : (
+          <span style={{ fontSize: compacta ? 14 : 18, opacity: 0.35 }}>
+            <IconoTipo serie={job.media_type === 'series' || job.media_type === 'episode'} />
+          </span>
+        )}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+          <span className="upload-row-title">{job.title ?? `Job #${job.id}`}</span>
+          {(totalElapsedText || terminada) && (
+            <span style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+              {totalElapsedText ?? timeAgo(job.finished_at ?? job.updated_at)}
+            </span>
+          )}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 4 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', minWidth: 0 }}>
+            <span className={`${STATUS_CLASS[job.status] || 'badge req-unknown'}${isPreparingOrRunning ? ' badge-blink' : ''}`}>{statusLabel(job.status)}</span>
+            {job.status === 'queued' && (
+              <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{queuedWaitText(job)}</span>
+            )}
+            {isPreparingOrRunning && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-secondary)', minWidth: 0, overflow: 'hidden' }}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{phaseLabelText}</span>
+                {phaseInfo?.counterText && <span style={{ flexShrink: 0, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{phaseInfo.counterText}</span>}
+                <span className="spinner" style={{ width: 10, height: 10, borderWidth: 2, flexShrink: 0 }} />
+              </span>
+            )}
+            {terminada && job.duration_seconds != null && (
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>en {formatSecondsHM(job.duration_seconds)}</span>
+            )}
+          </div>
+          {/* Progreso global, en la misma barra fina que usa el resto
+              del Panel, con su porcentaje al lado. Solo mientras trabaja: en
+              cola no hay nada que medir todavía, y terminada la barra no dice
+              nada que el estado no diga ya. */}
+          {isPreparingOrRunning && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div className="progress-bar" style={{ flex: 1 }}>
+                <div className="progress-fill" style={{ transform: `scaleX(${globalPct / 100})` }} />
+              </div>
+              <span style={{ fontSize: 11, lineHeight: 1, color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{globalPct}%</span>
+            </div>
+          )}
+        </div>
+      </div>
+    </HoverTitle>
+  )
+}
+
 // Panel HUD stat-card icons — large, single-purpose per metric (matches the
 // approved holographic reference; other pages' StatCard usage is unaffected
 // since the `icon` prop only renders inside `.panel-hud`'s CSS scope).
@@ -150,7 +239,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
     onNavigate?.('library')
   }
 
-  // "Actividad de subida" title → same stash-and-navigate handoff, opening
+  // A row of "Actividad de subida" → same stash-and-navigate handoff, opening
   // that job's own detail page in Subidas.
   const goToUpload = (jobId: number) => {
     try { sessionStorage.setItem('emuwarez_open_upload', String(jobId)) } catch { /* ignore */ }
@@ -197,7 +286,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   // SyncProgressBanner), not duplicated here.
   const { lastInvalidatedAt } = useSync()
 
-  useTicker(activeUploads.some(j => j.status === 'queued'))
+  // Toda la respuesta, para sacar de ella las que han terminado hace poco.
+  const [todasLasSubidas, setTodasLasSubidas] = useState<UploadJob[]>([])
 
   // Las que acaban de terminar se quedan con su estado final y luego se
   // desvanecen (ver utils/despedidaSubidas). Aparte de `activeUploads` porque
@@ -217,6 +307,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
     const salieron = queSalieron(todas, vivasAntes.current)
     vivasAntes.current = idsVivas
     setActiveUploads(vivas)
+    setTodasLasSubidas(todas)
 
     setDespidiendose(prev => {
       // Una que vuelve a estar viva (la reintentaste) deja de despedirse.
@@ -240,6 +331,9 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
     ...activeUploads.map(job => ({ job, yendose: false })),
     ...despidiendose,
   ]
+  // Debajo, las últimas terminadas: una subida fallida sigue a la vista cuando
+  // acaba su despedida, y la tarjeta no se queda vacía entre subida y subida.
+  const recientes = ultimasTerminadas(todasLasSubidas, idsDe(despidiendose.map(d => d.job)))
 
   const loadData = useCallback(async () => {
     setLoadingData(true)
@@ -459,115 +553,36 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
           </div>
         </div>
 
-        {/* Right — Actividad de subida: real running upload jobs, honest data only.
-            Stretches to the full height of "Actividad reciente" on its left. */}
+        {/* Right — Actividad de subida: real running upload jobs, honest data only,
+            and the last few that finished below them. Stretches to the full
+            height of "Actividad reciente" on its left. */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minHeight: 0 }}>
           <div data-tour="dashboard-uploads" className="upload-panel" style={{ flex: 2, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
             <div className="section-header">
               <div className="section-title">Actividad de subida</div>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                <HoverTitle as="span" className="hover-link" onClick={() => onNavigate?.('uploads')} tip="Abrir Subidas">Ver todas</HoverTitle>
+              </span>
             </div>
-            <div className="upload-panel-body" style={{
-              padding: '12px 16px', display: 'flex', flexDirection: 'column',
-              alignItems: 'stretch',
-              minHeight: 'auto', flex: 1, overflowY: 'auto',
-            }}>
-              {filasDeSubida.length === 0 ? (
+            <div className="upload-panel-body">
+              {filasDeSubida.length === 0 && recientes.length === 0 ? (
                 <EmptyState
                   icon={<IconoSubida />}
                   title="No hay subidas en curso"
                   body="Sube contenido desde Biblioteca o una recomendación para verlo aquí, con su progreso en vivo."
                 />
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {filasDeSubida.map(({ job, yendose }) => {
-                    const isPreparingOrRunning = job.status === 'preparing' || job.status === 'running'
-                    const phaseInfo = isPreparingOrRunning ? currentPhaseInfo(job) : null
-                    const phaseLabelText = phaseInfo?.label ?? (isPreparingOrRunning ? phaseLabel(job.progress_phase) : null)
-                    // Total time since the job started (not just this sub-phase) — the
-                    // number that actually answers "how long has this been going".
-                    const totalElapsedText = isPreparingOrRunning ? progressCounter(job) : null
-                    // El global que ya calcula el backend (uploadrr_progress.PHASES
-                    // pondera cada fase); se acota por si llega algo raro.
-                    const globalPct = Math.min(100, Math.max(0, Math.round(job.progress?.global_pct ?? 0)))
-                    return (
-                    <div key={job.id} style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
-                      borderBottom: '1px solid var(--border)', paddingBottom: 12,
-                      // Terminada, se queda quieta ESPERA_MS y luego se va poco a
-                      // poco. Las que se despiden van al final de la lista, así
-                      // que al desaparecer no mueven de sitio a las de arriba.
-                      opacity: yendose ? 0 : 1,
-                      transition: `opacity ${DESVANECER_MS}ms ease-out`,
-                      pointerEvents: yendose ? 'none' : undefined,
-                    }}>
-                      {/* 36x54: el texto de la derecha ocupa unos 45 px (título 16,
-                          estado 17, barra 4 y los huecos), así que el póster tiene
-                          que ser al menos eso para que la fila no crezca por debajo
-                          de él. Antes era 28x42 y se quedaba corto al añadir la barra. */}
-                      <div className="poster-thumb" style={{ width: 36, height: 54, borderRadius: 4, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        {job.poster_url ? (
-                          <img
-                            src={posterUrl(job.poster_url, 'w154')}
-                            alt=""
-                            loading="lazy"
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                            onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
-                          />
-                        ) : (
-                          <span style={{ fontSize: 18, opacity: 0.35 }}>
-                            <IconoTipo serie={job.media_type === 'series' || job.media_type === 'episode'} />
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
-                          <HoverTitle
-                            className="hover-link"
-                            style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}
-                            onClick={() => goToUpload(job.id!)}
-                            tip="Ver progreso / detalle"
-                          >
-                            {job.title ?? `Job #${job.id}`}
-                          </HoverTitle>
-                          {totalElapsedText && (
-                            <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>{totalElapsedText}</span>
-                          )}
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 4 }}>
-                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', minWidth: 0 }}>
-                            {job.status === 'queued' ? (
-                              <span className="badge status-queued">En cola</span>
-                            ) : isPreparingOrRunning ? (
-                              <span className={`${STATUS_CLASS[job.status] || 'badge req-unknown'} badge-blink`}>{statusLabel(job.status)}</span>
-                            ) : (
-                              <span className={STATUS_CLASS[job.status] || 'badge req-unknown'}>{statusLabel(job.status)}</span>
-                            )}
-                            {job.status === 'queued' && (
-                              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{queuedWaitText(job)}</span>
-                            )}
-                            {isPreparingOrRunning && (
-                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-muted)', minWidth: 0, overflow: 'hidden' }}>
-                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{phaseLabelText}</span>
-                                {phaseInfo?.counterText && <span style={{ flexShrink: 0 }}>{phaseInfo.counterText}</span>}
-                                <span className="spinner" style={{ width: 10, height: 10, borderWidth: 2, flexShrink: 0 }} />
-                              </span>
-                            )}
-                          </div>
-                          {/* Progreso global, en la misma barra fina que usa el resto
-                              del Panel. Solo mientras trabaja: en cola no hay nada que
-                              medir todavía, y terminada la barra no dice nada que el
-                              estado no diga ya. */}
-                          {isPreparingOrRunning && (
-                            <div className="progress-bar" title={`${globalPct}%`}>
-                              <div className="progress-fill" style={{ transform: `scaleX(${globalPct / 100})` }} />
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    )
-                  })}
-                </div>
+                <>
+                  {filasDeSubida.length === 0
+                    ? <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '10px 8px' }}>No hay subidas en curso.</div>
+                    : filasDeSubida.map(({ job, yendose }) => <FilaSubida key={job.id} job={job} yendose={yendose} onOpen={goToUpload} />)}
+                  {recientes.length > 0 && (
+                    <>
+                      <div className="upload-panel-group">Recientes</div>
+                      {recientes.map(job => <FilaSubida key={job.id} job={job} compacta onOpen={goToUpload} />)}
+                    </>
+                  )}
+                </>
               )}
             </div>
           </div>

@@ -14,6 +14,7 @@ Only local tables (request_readiness, request_candidates, request_items) are wri
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -364,16 +365,9 @@ _LEER_FILA_PEDIDA = (
 )
 
 
-def build_request_candidates(request_item_id: int, conn: sqlite3.Connection) -> list[dict]:
-    """Find and score all library candidates for a request."""
-    req_row = conn.execute(
-        "SELECT * FROM request_items WHERE id = ?", (request_item_id,)
-    ).fetchone()
-    if not req_row:
-        return []
-    req = dict(req_row)
-
-    lib_rows = conn.execute(
+def _biblioteca(conn: sqlite3.Connection) -> list[dict]:
+    """Las filas candidatas. Recorre la tabla entera (con su raw_json): un refresco la lee una vez, no por petición."""
+    return [dict(r) for r in conn.execute(
         """
         SELECT id, item_type, title, year, tmdb_id, imdb_id, local_status,
                resolution, source, nomenclature_status, prepared_path,
@@ -384,10 +378,21 @@ def build_request_candidates(request_item_id: int, conn: sqlite3.Connection) -> 
         WHERE item_type != 'episode'
         ORDER BY updated_at DESC
         """
-    ).fetchall()
-    library = [dict(r) for r in lib_rows]
+    ).fetchall()]
 
-    raw_matches = match_request_to_library(req, library)
+
+def build_request_candidates(
+    request_item_id: int, conn: sqlite3.Connection, library: Optional[list[dict]] = None,
+) -> list[dict]:
+    """Find and score all library candidates for a request."""
+    req_row = conn.execute(
+        "SELECT * FROM request_items WHERE id = ?", (request_item_id,)
+    ).fetchone()
+    if not req_row:
+        return []
+    req = dict(req_row)
+
+    raw_matches = match_request_to_library(req, _biblioteca(conn) if library is None else library)
     if not raw_matches:
         return []
 
@@ -412,7 +417,9 @@ def build_request_candidates(request_item_id: int, conn: sqlite3.Connection) -> 
     return candidates
 
 
-def evaluate_request_readiness(request_item_id: int, conn: sqlite3.Connection) -> dict[str, Any]:
+def evaluate_request_readiness(
+    request_item_id: int, conn: sqlite3.Connection, library: Optional[list[dict]] = None,
+) -> dict[str, Any]:
     """Compute and persist readiness for a single request."""
     req_row = conn.execute(
         "SELECT * FROM request_items WHERE id = ?", (request_item_id,)
@@ -421,7 +428,7 @@ def evaluate_request_readiness(request_item_id: int, conn: sqlite3.Connection) -
         return {"ok": False, "error": f"Request {request_item_id} no encontrada"}
     req = dict(req_row)
 
-    candidates = build_request_candidates(request_item_id, conn)
+    candidates = build_request_candidates(request_item_id, conn, library)
     best = select_best_candidate(candidates)
 
     now = _now_utc()
@@ -563,14 +570,24 @@ def refresh_request_readiness(
         params.append(int(effective_limit))
 
     rows = conn.execute(sql, params).fetchall()
+    try:
+        library = _biblioteca(conn)
+    except Exception:
+        # Como cuando se leía por petición: todas cuentan como error, en vez de un 500 en «Recalcular».
+        logging.getLogger("emuwarez.requests").exception("No se pudo leer la biblioteca para calcular la preparación")
+        return {"ok": True, "items_updated": 0, "errors": len(rows)}
     updated = 0
     errors = 0
 
     for row in rows:
         try:
-            evaluate_request_readiness(row["id"], conn)
+            evaluate_request_readiness(row["id"], conn, library)
             updated += 1
         except Exception:
+            # Lo que la petición rota llegara a escribir no se cuela en el commit de la siguiente.
+            conn.rollback()
+            logging.getLogger("emuwarez.requests").exception(
+                "No se pudo calcular la preparación de la petición %s", row["id"])
             errors += 1
 
     return {"ok": True, "items_updated": updated, "errors": errors}

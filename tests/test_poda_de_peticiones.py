@@ -37,6 +37,77 @@ def _emu_ids(conn):
     return sorted(r[0] for r in conn.execute("SELECT emu_id FROM request_items"))
 
 
+def test_la_sincronizacion_deja_calculada_la_preparacion_de_cada_peticion(db_conn, sincroniza):
+    """Nada la calculaba: abrir una petición real pedía /readiness y daba 404."""
+    from emuwarez_uploadrr.services.request_readiness import get_request_readiness
+    sincroniza([_fila(1), _fila(2)], 2)
+    ids = [r[0] for r in db_conn.execute("SELECT id FROM request_items")]
+    assert len(ids) == 2 and all(get_request_readiness(i, db_conn) for i in ids)
+
+
+def test_una_preparacion_que_falla_sale_en_el_resumen_y_en_el_log(db_conn, sincroniza, monkeypatch, caplog):
+    """Se contaba y se callaba: la tarea salía completada sin decir que alguna se había quedado sin calcular."""
+    from emuwarez_uploadrr.services import request_readiness as rr
+    real = rr.evaluate_request_readiness
+    evaluadas = []
+
+    def falla_la_primera(request_item_id, conn, library=None):
+        evaluadas.append(request_item_id)
+        if len(evaluadas) == 1:
+            conn.execute("INSERT INTO request_readiness (request_item_id, status) VALUES (?, 'a medias')",
+                         (request_item_id,))
+            raise RuntimeError("rota")
+        return real(request_item_id, conn, library)
+
+    monkeypatch.setattr(rr, "evaluate_request_readiness", falla_la_primera)
+    assert sincroniza([_fila(1), _fila(2)], 2)["status"] == "ok"
+    resumen = db_conn.execute(
+        "SELECT summary FROM task_runs WHERE name = 'sync-emu-requests' ORDER BY id DESC LIMIT 1").fetchone()[0]
+    assert "1 sin preparación" in resumen
+    assert "No se pudo calcular la preparación de la petición" in caplog.text
+    # Lo que la petición rota dejó a medias no se guardó con la siguiente, y la siguiente sí se calculó.
+    assert db_conn.execute("SELECT COUNT(*) FROM request_readiness WHERE status = 'a medias'").fetchone()[0] == 0
+    assert len(evaluadas) == 2 and rr.get_request_readiness(evaluadas[1], db_conn)
+
+
+def _rota(*_a, **_kw):
+    raise RuntimeError("rota")
+
+
+def _ultimo_resumen(conn):
+    return conn.execute(
+        "SELECT summary FROM task_runs WHERE name = 'sync-emu-requests' ORDER BY id DESC LIMIT 1").fetchone()[0]
+
+
+def test_con_la_biblioteca_rota_la_sincronizacion_sigue_valiendo(db_conn, sincroniza, monkeypatch, caplog):
+    """Un fallo antes de preparar la primera (al leer la biblioteca) tumbaba la sincronización y devolvía la espera,
+    así que reintentar volvía a llamar a eMuwarez."""
+    from emuwarez_uploadrr.services import request_readiness as rr
+    monkeypatch.setattr(rr, "_biblioteca", _rota)
+    assert sincroniza([_fila(1), _fila(2)], 2)["status"] == "ok"
+    assert "2 sin preparación" in _ultimo_resumen(db_conn)
+    assert "No se pudo leer la biblioteca para calcular la preparación" in caplog.text
+    assert reqs.seconds_until_next_sync(db_conn) > 0
+
+
+def test_recalcular_con_la_biblioteca_rota_cuenta_errores_en_vez_de_fallar(db_conn, sincroniza, monkeypatch):
+    """La biblioteca se lee una vez fuera del bucle: «Recalcular» y el CLI daban un 500 si fallaba esa lectura."""
+    from emuwarez_uploadrr.services import request_readiness as rr
+    sincroniza([_fila(1), _fila(2)], 2)
+    monkeypatch.setattr(rr, "_biblioteca", _rota)
+    assert rr.refresh_request_readiness(db_conn) == {"ok": True, "items_updated": 0, "errors": 2}
+
+
+def test_si_la_preparacion_falla_entera_lo_dice_aunque_no_llegara_ninguna(db_conn, sincroniza, monkeypatch, caplog):
+    """Con un recorrido sin filas el aviso se perdía: se contaban las importadas, 0."""
+    sincroniza([_fila(1)], 1)
+    monkeypatch.setattr(reqs, "refresh_request_readiness", _rota)
+    assert sincroniza([], None)["status"] == "ok"
+    assert "preparación sin calcular" in _ultimo_resumen(db_conn)
+    assert "No se pudo calcular la preparación de las peticiones" in caplog.text
+    assert reqs.seconds_until_next_sync(db_conn) > 0
+
+
 def test_un_recorrido_completo_borra_lo_que_ya_no_esta_con_lo_que_colgaba(db_conn, sincroniza):
     peli = db_conn.execute(
         "INSERT INTO library_items (item_type, title, year, tmdb_id, local_status)"
@@ -48,7 +119,9 @@ def test_un_recorrido_completo_borra_lo_que_ya_no_esta_con_lo_que_colgaba(db_con
     sincroniza([_fila(1, "Matrix", tmdb=603), _fila(2, "Dune", tmdb=438631), _fila(3, "Otra")], 3)
     ids = {r["emu_id"]: r["id"] for r in db_conn.execute("SELECT id, emu_id FROM request_items")}
     cuelgan = ids["1"]
-    db_conn.execute("INSERT INTO request_readiness (request_item_id, status) VALUES (?, 'ready')", (cuelgan,))
+    # La preparación la deja calculada la propia sincronización.
+    assert db_conn.execute("SELECT COUNT(*) FROM request_readiness WHERE request_item_id = ?",
+                           (cuelgan,)).fetchone()[0] == 1
     db_conn.execute("INSERT INTO request_candidates (request_item_id, library_item_id, candidate_rank, match_status)"
                     " VALUES (?, ?, 1, 'Compatible')", (cuelgan, peli))
     db_conn.execute("INSERT INTO operational_queue_items (queue_key, item_type, entity_type, request_item_id)"

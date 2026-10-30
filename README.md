@@ -2,6 +2,9 @@
 
 [![CI](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/ci.yml/badge.svg)](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/ci.yml)
 [![Imagen](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/imagen.yml/badge.svg)](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/imagen.yml)
+[![zizmor](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/zizmor.yml/badge.svg)](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/zizmor.yml)
+[![Revisión: CodeRabbit](https://img.shields.io/badge/revisi%C3%B3n-CodeRabbit-FF570A)](https://coderabbit.ai)
+[![Dependabot](https://img.shields.io/badge/dependabot-activo-025E8C?logo=dependabot&logoColor=white)](.github/dependabot.yml)
 
 Aplicación web autoalojada (+ CLI) para subir a **[eMuwarez](https://emu-warez.com)** (tracker UNIT3D) desde tu
 biblioteca de **Radarr**/**Sonarr**. Sincroniza la biblioteca, la cruza con las peticiones abiertas de eMuwarez,

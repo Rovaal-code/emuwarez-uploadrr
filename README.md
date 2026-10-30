@@ -172,7 +172,7 @@ workflows y `dependabot.yml`.
 
 Dependabot propone cada semana las versiones nuevas de pip, npm, la imagen base del `Dockerfile` y las GitHub
 Actions, cuando llevan 7 días publicadas: las menores y los parches juntos en un PR por ecosistema, y cada versión
-mayor en el suyo. Las actualizaciones de seguridad llegan en cuanto sale el aviso.
+mayor en el suyo. Las de seguridad no esperan esos 7 días: llegan en cuanto un aviso tiene versión corregida.
 
 `CLAUDE.md` recoge las reglas de arquitectura y el
 contrato con Uploadrr-EMU (argumentos, claves de `config.yaml` y líneas de salida que se leen): si cambias uno de

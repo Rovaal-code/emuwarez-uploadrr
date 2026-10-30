@@ -3,6 +3,7 @@ import type { LibraryItemResponse } from '../types/api'
 import { useTooltip } from './Tooltip'
 import { episodeListLabel } from '../utils/libraryItem'
 import { Favicon, domainOf } from './Favicon'
+import { Modal } from './Modal'
 
 // eMuwarez "Petición" (request) creation form. Built from the field spec the
 // user captured from eMuwarez's web form. Submission is intentionally gated:
@@ -101,74 +102,68 @@ export function RequestFormModal({ item, onClose }: Props) {
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 640 }}>
-        <div className="modal-header">
-          <h2 className="modal-title">Nueva petición en eMuwarez</h2>
-          <button className="modal-close" onClick={onClose}>✕</button>
-        </div>
-        <div className="modal-body">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
-            <ReadOnlyField label="Título" value={title} gridColumn="1 / -1" />
-            <ReadOnlyField label="Categoría" value={CATEGORY_LABELS[category] ?? category} gridColumn={isSeries ? undefined : '1 / -1'} />
-            {isSeries && <ReadOnlyField label="Alcance de la petición" value={SCOPE_LABELS[scope]} />}
+    <Modal titulo="Nueva petición en eMuwarez" onClose={onClose} className="modal-wide" style={{ maxWidth: 640 }}>
+      <div className="modal-body">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
+          <ReadOnlyField label="Título" value={title} gridColumn="1 / -1" />
+          <ReadOnlyField label="Categoría" value={CATEGORY_LABELS[category] ?? category} gridColumn={isSeries ? undefined : '1 / -1'} />
+          {isSeries && <ReadOnlyField label="Alcance de la petición" value={SCOPE_LABELS[scope]} />}
 
-            <label><span style={labelStyle}>Tipo</span>
-              <select className="form-input" value={type} onChange={e => setType(e.target.value)}>
-                {TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </label>
-
-            <label><span style={labelStyle}>Resolución</span>
-              <select className="form-input" value={resolution} onChange={e => setResolution(e.target.value)}>
-                {RESOLUTIONS.map(r => <option key={r} value={r}>{r}</option>)}
-              </select>
-            </label>
-
-            {isSeries && (
-              <>
-                {scope !== 'all' && <ReadOnlyField label="Nº de temporada" value={season} />}
-                {scope === 'episode' && <ReadOnlyField label="Nº de episodio" value={episode} />}
-              </>
-            )}
-          </div>
-
-          {/* External IDs — read-only: whatever the library item already has. */}
-          <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 16px' }}>
-            <IdRow label="TMDB ID" value={tmdbId} href={idVerifyUrl('tmdb', tmdbId, isSeries)} />
-            <IdRow label="IMDB ID" value={imdbId} href={idVerifyUrl('imdb', imdbId, isSeries)} />
-            <IdRow label="MAL ID (anime)" value={malId} href={idVerifyUrl('mal', malId, isSeries)} />
-            {isSeries && (
-              <IdRow label="TVDB ID" value={tvdbId} href={idVerifyUrl('tvdb', tvdbId, isSeries)} />
-            )}
-          </div>
-
-          <label style={{ display: 'block', marginTop: 16 }}><span style={labelStyle}>Descripción personal</span>
-            <textarea className="form-input" value={description} onChange={e => setDescription(e.target.value)} rows={3} style={{ resize: 'vertical' }} placeholder="No olvides dar las gracias!" />
+          <label><span style={labelStyle}>Tipo</span>
+            <select className="form-input" value={type} onChange={e => setType(e.target.value)}>
+              {TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
           </label>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px', marginTop: 12, alignItems: 'center' }}>
-            <label><span style={labelStyle}>Recompensa (puntos)</span>
-              <input className="form-input" value={reward} onChange={e => setReward(onlyDigits(e.target.value))} inputMode="numeric" />
-              {rewardTooLow && <span style={{ fontSize: 11, color: 'var(--color-error)' }}>Mínimo {MIN_REWARD} puntos</span>}
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 18 }}>
-              <input type="checkbox" checked={anon} onChange={e => setAnon(e.target.checked)} /> Anónimo
-            </label>
-          </div>
+          <label><span style={labelStyle}>Resolución</span>
+            <select className="form-input" value={resolution} onChange={e => setResolution(e.target.value)}>
+              {RESOLUTIONS.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </label>
 
-          {msg && <p style={{ fontSize: 12, marginTop: 10, fontWeight: 600 }} className="text-error">{msg}</p>}
+          {isSeries && (
+            <>
+              {scope !== 'all' && <ReadOnlyField label="Nº de temporada" value={season} />}
+              {scope === 'episode' && <ReadOnlyField label="Nº de episodio" value={episode} />}
+            </>
+          )}
+        </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
-            <button className="btn btn-secondary" onClick={onClose}>Cancelar</button>
-            <button className="btn btn-primary" onClick={handleSubmit} disabled={!canSubmit} {...submitTip.triggerProps}>
-              Enviar petición
-              {submitTip.tooltipNode}
-            </button>
-          </div>
+        {/* External IDs — read-only: whatever the library item already has. */}
+        <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 16px' }}>
+          <IdRow label="TMDB ID" value={tmdbId} href={idVerifyUrl('tmdb', tmdbId, isSeries)} />
+          <IdRow label="IMDB ID" value={imdbId} href={idVerifyUrl('imdb', imdbId, isSeries)} />
+          <IdRow label="MAL ID (anime)" value={malId} href={idVerifyUrl('mal', malId, isSeries)} />
+          {isSeries && (
+            <IdRow label="TVDB ID" value={tvdbId} href={idVerifyUrl('tvdb', tvdbId, isSeries)} />
+          )}
+        </div>
+
+        <label style={{ display: 'block', marginTop: 16 }}><span style={labelStyle}>Descripción personal</span>
+          <textarea className="form-input" value={description} onChange={e => setDescription(e.target.value)} rows={3} style={{ resize: 'vertical' }} placeholder="No olvides dar las gracias!" />
+        </label>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px', marginTop: 12, alignItems: 'center' }}>
+          <label><span style={labelStyle}>Recompensa (puntos)</span>
+            <input className="form-input" value={reward} onChange={e => setReward(onlyDigits(e.target.value))} inputMode="numeric" />
+            {rewardTooLow && <span style={{ fontSize: 11, color: 'var(--color-error)' }}>Mínimo {MIN_REWARD} puntos</span>}
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 18 }}>
+            <input type="checkbox" checked={anon} onChange={e => setAnon(e.target.checked)} /> Anónimo
+          </label>
+        </div>
+
+        {msg && <p style={{ fontSize: 12, marginTop: 10, fontWeight: 600 }} className="text-error">{msg}</p>}
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+          <button className="btn btn-secondary" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-primary" onClick={handleSubmit} disabled={!canSubmit} {...submitTip.triggerProps}>
+            Enviar petición
+            {submitTip.tooltipNode}
+          </button>
         </div>
       </div>
-    </div>
+    </Modal>
   )
 }
 

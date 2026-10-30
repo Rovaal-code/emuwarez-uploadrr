@@ -20,6 +20,7 @@ import {
   FolderIcon, CalendarValueIcon,
 } from './DetailCard'
 import { IconoTipo } from './Iconos'
+import { Modal } from './Modal'
 
 // Full dedicated detail page (Radarr/Sonarr-style) — replaces the old small
 // modal and the large card. Rendered in place of the library list, with a
@@ -247,17 +248,11 @@ export function LibraryDetailPage({ item, instances, onBack, onSelect, onAction 
       </DetailHero>
 
       {showRuta && (
-        <div className="modal-overlay" onClick={() => setShowRuta(false)}>
-          <div className="modal-panel" onClick={e => e.stopPropagation()} style={{ width: 'max-content', maxWidth: 'calc(var(--vw100) * 0.9)', minWidth: 320 }}>
-            <div className="modal-header">
-              <h2 className="modal-title">Ruta</h2>
-              <button className="modal-close" onClick={() => setShowRuta(false)}>✕</button>
-            </div>
-            <div className="modal-body">
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-secondary)', wordBreak: 'break-all', lineHeight: 1.6 }}>{item.prepared_path || item.path || '—'}</div>
-            </div>
+        <Modal titulo="Ruta" onClose={() => setShowRuta(false)} style={{ width: 'max-content', maxWidth: 'calc(var(--vw100) * 0.9)', minWidth: 320 }}>
+          <div className="modal-body">
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-secondary)', wordBreak: 'break-all', lineHeight: 1.6 }}>{item.prepared_path || item.path || '—'}</div>
           </div>
-        </div>
+        </Modal>
       )}
       </div>
 

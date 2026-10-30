@@ -597,29 +597,6 @@ optgroup {
   color: var(--color-warning);
 }
 
-.detail-panel {
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-card);
-  padding: 16px;
-  position: sticky;
-  top: 72px;
-  max-height: calc(var(--vh100) - 100px);
-  overflow-y: auto;
-}
-.detail-panel__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 14px;
-}
-.detail-panel__title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
-  line-height: 1.4;
-}
 .detail-panel__subtitle {
   font-size: 11px;
   color: var(--text-muted);
@@ -745,17 +722,6 @@ optgroup {
   z-index: 1000;
 }
 
-.modal {
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  width: 90%;
-  max-width: 600px;
-  max-height: calc(var(--vh100) * 0.85);
-  overflow-y: auto;
-  box-shadow: 0 8px 32px color-mix(in srgb, var(--overlay-dark) 40%, transparent);
-}
-
 .modal-header {
   display: flex;
   align-items: center;
@@ -791,6 +757,11 @@ optgroup {
   overflow-y: auto;
   box-shadow: 0 8px 32px color-mix(in srgb, var(--overlay-dark) 40%, transparent);
 }
+/* El panel recibe el foco al abrirse para que el lector anuncie el título; el
+   anillo es para lo que se maneja con Tab, no para el modal entero. */
+.modal-panel:focus-visible {
+  outline: none;
+}
 
 .modal-wide {
   max-width: 780px;
@@ -805,6 +776,7 @@ optgroup {
   padding: 4px 8px;
   border-radius: 4px;
   line-height: 1;
+  display: inline-flex;
 }
 
 .modal-close:hover {

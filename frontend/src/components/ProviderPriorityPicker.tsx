@@ -4,6 +4,7 @@ import { Favicon } from './Favicon'
 import { SortableList, DragHandleIcon } from './SortableList'
 import { useTooltip, HoverTitle } from './Tooltip'
 import { IconoPelicula } from './Iconos'
+import { Modal } from './Modal'
 
 export interface ProviderOption {
   code: string
@@ -139,34 +140,28 @@ export function ProviderPriorityPicker({ order, onChange, linkIcons = true }: Pr
     </div>
 
       {showAdd && (
-        <div className="modal-overlay" onClick={() => setShowAdd(false)}>
-          <div className="modal-panel" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
-            <div className="modal-header">
-              <h2 className="modal-title">Añadir proveedor de vídeo</h2>
-              <button className="modal-close" onClick={() => setShowAdd(false)}>✕</button>
-            </div>
-            <div className="modal-body">
-              {available.length === 0 ? (
-                <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Ya están todos añadidos.</p>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 6, maxHeight: 'calc(var(--vh100) * 0.55)', overflowY: 'auto' }}>
-                  {available.map(opt => (
-                    <button
-                      key={opt.code}
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-start', justifySelf: 'start', fontSize: 12 }}
-                      onClick={() => enable(opt.code)}
-                    >
-                      <Favicon domain={opt.domain} size={16} fallback={<IconoPelicula />} />
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+        <Modal titulo="Añadir proveedor de vídeo" onClose={() => setShowAdd(false)} style={{ maxWidth: 480 }}>
+          <div className="modal-body">
+            {available.length === 0 ? (
+              <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Ya están todos añadidos.</p>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 6, maxHeight: 'calc(var(--vh100) * 0.55)', overflowY: 'auto' }}>
+                {available.map(opt => (
+                  <button
+                    key={opt.code}
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-start', justifySelf: 'start', fontSize: 12 }}
+                    onClick={() => enable(opt.code)}
+                  >
+                    <Favicon domain={opt.domain} size={16} fallback={<IconoPelicula />} />
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-        </div>
+        </Modal>
       )}
     </>
   )

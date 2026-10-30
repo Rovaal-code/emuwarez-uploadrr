@@ -9,6 +9,7 @@ import {
   VideoCodecValueIcon, LanguageValueIcon, SizeValueIcon,
 } from './DetailCard'
 import { ServiceIcon } from './ServiceIcon'
+import { Modal } from './Modal'
 
 // Three-state summary shown in the "eMuwarez" field chip (Información
 // técnica card) — collapses EmuComparison's several branches (not in
@@ -68,18 +69,13 @@ export function EmuFieldChip({ itemId }: { itemId: number }) {
         <span className="txt">{STATUS_LABEL[status]}</span>
       </ValueChip>
       {showModal && createPortal(
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()} style={{ maxWidth: 'calc(var(--vw100) * 0.95)', width: 'max-content' }}>
-            <div className="modal-header">
-              <h2 className="modal-title">Comparación con eMuwarez</h2>
-              <button className="modal-close" onClick={() => setShowModal(false)}>✕</button>
-            </div>
-            <div className="modal-body">
-              <EmuComparisonContent data={data} />
-            </div>
+        <Modal titulo="Comparación con eMuwarez" onClose={() => setShowModal(false)} className="modal-wide" style={{ maxWidth: 'calc(var(--vw100) * 0.95)', width: 'max-content' }}>
+          <div className="modal-body">
+            <EmuComparisonContent data={data} />
           </div>
-        </div>,
-        document.body,
+        </Modal>,
+        // Fuera de la tarjeta de la ficha, pero dentro de .hud-app: en body perdía el estilo del HUD.
+        document.querySelector('.hud-app') ?? document.body,
       )}
     </>
   )

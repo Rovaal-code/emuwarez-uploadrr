@@ -42,6 +42,7 @@ import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/d
 import { useAlEntrar, useAlSalir } from '../context/SeccionVisible'
 import { EMU_URL } from '../constants/emu'
 import { IconoBloqueado, IconoDocumental, IconoPelicula, IconoSerie } from '../components/Iconos'
+import { Modal } from '../components/Modal'
 
 // Fallback for "Consultar en eMuwarez" while we don't have the exact
 // per-request URL yet — points at the general requests listing instead of
@@ -243,7 +244,7 @@ function ReadinessBadge({ status }: { status: string | null | undefined }) {
   return <span style={{ fontSize: 11, color, fontWeight: 500 }}>{status}</span>
 }
 
-function CandidatesPanel({ requestId, onClose }: { requestId: number; onClose: () => void }) {
+function CandidatesPanel({ requestId }: { requestId: number }) {
   const [candidates, setCandidates] = useState<RequestCandidateResponse[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -255,11 +256,7 @@ function CandidatesPanel({ requestId, onClose }: { requestId: number; onClose: (
   }, [requestId])
 
   return (
-    <div className="detail-panel">
-      <div className="detail-panel__header">
-        <div className="detail-panel__title">Candidatos locales</div>
-        <button className="btn-icon" onClick={onClose}>✕</button>
-      </div>
+    <div className="modal-body">
       {loading ? <LoadingState label="Cargando candidatos…" /> : candidates.length === 0 ? (
         <div className="empty-inline">Sin candidatos en biblioteca. Ejecuta “Recalcular readiness”.</div>
       ) : (
@@ -1084,11 +1081,9 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
       )}
 
       {showCandidates && selectedId !== null && (
-        <div className="modal-overlay" onClick={() => setShowCandidates(false)}>
-          <div className="modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
-            <CandidatesPanel requestId={selectedId} onClose={() => setShowCandidates(false)} />
-          </div>
-        </div>
+        <Modal titulo="Candidatos locales" onClose={() => setShowCandidates(false)} style={{ maxWidth: 520 }}>
+          <CandidatesPanel requestId={selectedId} />
+        </Modal>
       )}
 
       {wizardItem && (

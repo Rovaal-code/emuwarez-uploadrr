@@ -16,6 +16,7 @@ import {
   applyMkvTitle,
 } from '../api/nomenclature'
 import { IconoAviso } from './Iconos'
+import { Modal } from './Modal'
 
 const MKV_TOKEN = 'APLICAR_TITULO_MKV'
 const PROVIDER_SOURCES = new Set(['WEB-DL'])
@@ -135,135 +136,129 @@ export function NomenclatureFieldsModal({ itemId, itemTitle, onClose, onSaved }:
   }))
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-panel modal-wide" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2 className="modal-title">Campos de nomenclatura: {itemTitle}</h2>
-          <button className="modal-close" onClick={onClose}>✕</button>
-        </div>
+    <Modal titulo={<>Campos de nomenclatura: {itemTitle}</>} onClose={onClose} className="modal-wide">
 
-        {loading && <div className="modal-body"><p className="text-muted">Cargando…</p></div>}
-        {error && <div className="modal-body"><p className="text-error">{error}</p></div>}
+      {loading && <div className="modal-body"><p className="text-muted">Cargando…</p></div>}
+      {error && <div className="modal-body"><p className="text-error">{error}</p></div>}
 
-        {!loading && (
-          <div className="modal-body">
-            <div className="fields-grid">
-              <label>Título
-                <input value={fields.title || ''} onChange={e => handleField('title', e.target.value)} />
-              </label>
-              <label>Año
-                <input value={fields.year || ''} onChange={e => handleField('year', e.target.value)} />
-              </label>
-              <label>Resolución
-                <input value={fields.resolution || ''} onChange={e => handleField('resolution', e.target.value)} />
-              </label>
-              <label>Source
-                <select value={fields.source || ''} onChange={e => handleField('source', e.target.value)}>
-                  <option value="">Seleccionar…</option>
-                  {sources.map(s => (
-                    <option key={s.code} value={s.code}>{s.label}</option>
+      {!loading && (
+        <div className="modal-body">
+          <div className="fields-grid">
+            <label>Título
+              <input value={fields.title || ''} onChange={e => handleField('title', e.target.value)} />
+            </label>
+            <label>Año
+              <input value={fields.year || ''} onChange={e => handleField('year', e.target.value)} />
+            </label>
+            <label>Resolución
+              <input value={fields.resolution || ''} onChange={e => handleField('resolution', e.target.value)} />
+            </label>
+            <label>Source
+              <select value={fields.source || ''} onChange={e => handleField('source', e.target.value)}>
+                <option value="">Seleccionar…</option>
+                {sources.map(s => (
+                  <option key={s.code} value={s.code}>{s.label}</option>
+                ))}
+              </select>
+            </label>
+            {sourceRequiresProvider && (
+              <label>Proveedor
+                <select value={fields.provider || ''} onChange={e => handleField('provider', e.target.value || null)}>
+                  <option value="">— Sin proveedor —</option>
+                  {providerOptions.map(p => (
+                    <option key={p.code} value={p.code}>
+                      {p.label}{p.tmdb_available ? ' ★' : ''}
+                    </option>
                   ))}
                 </select>
               </label>
-              {sourceRequiresProvider && (
-                <label>Proveedor
-                  <select value={fields.provider || ''} onChange={e => handleField('provider', e.target.value || null)}>
-                    <option value="">— Sin proveedor —</option>
-                    {providerOptions.map(p => (
-                      <option key={p.code} value={p.code}>
-                        {p.label}{p.tmdb_available ? ' ★' : ''}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-              <label>Códec vídeo
-                <input value={fields.video_codec || ''} onChange={e => handleField('video_codec', e.target.value)} />
-              </label>
-              <label>Audio
-                <input value={fields.audio_summary || ''} onChange={e => handleField('audio_summary', e.target.value)} />
-              </label>
-              <label>Subtítulos
-                <input value={fields.subs || ''} onChange={e => handleField('subs', e.target.value)} />
-              </label>
-              <label>Tag
-                <input value={fields.tag || ''} onChange={e => handleField('tag', e.target.value)} />
-              </label>
-            </div>
+            )}
+            <label>Códec vídeo
+              <input value={fields.video_codec || ''} onChange={e => handleField('video_codec', e.target.value)} />
+            </label>
+            <label>Audio
+              <input value={fields.audio_summary || ''} onChange={e => handleField('audio_summary', e.target.value)} />
+            </label>
+            <label>Subtítulos
+              <input value={fields.subs || ''} onChange={e => handleField('subs', e.target.value)} />
+            </label>
+            <label>Tag
+              <input value={fields.tag || ''} onChange={e => handleField('tag', e.target.value)} />
+            </label>
+          </div>
 
-            {preview && (
+          {preview && (
+            <div className="preview-box">
+              <p><strong>Torrent name:</strong> <code>{preview.torrent_name}</code></p>
+              <p><strong>Título MKV interno:</strong> <code>{preview.internal_mkv_title}</code></p>
+            </div>
+          )}
+
+          <div className="modal-actions">
+            <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+              {saving ? 'Guardando…' : 'Guardar campos'}
+            </button>
+            {saved && <span className="text-success">✓ Guardado</span>}
+          </div>
+
+          <hr />
+
+          <section>
+            <h3>Título interno MKV</h3>
+            <p className="text-muted text-sm">
+              Aplica el título interno al fichero .mkv en prepared_path usando mkvpropedit.
+              Requiere token de confirmación: <code>{MKV_TOKEN}</code>
+            </p>
+            <div className="modal-actions">
+              <button className="btn btn-secondary" onClick={handleMkvPreview} disabled={mkvLoading}>
+                {mkvLoading ? 'Calculando…' : 'Previsualizar MKV'}
+              </button>
+            </div>
+            {mkvPreview && (
               <div className="preview-box">
-                <p><strong>Torrent name:</strong> <code>{preview.torrent_name}</code></p>
-                <p><strong>Título MKV interno:</strong> <code>{preview.internal_mkv_title}</code></p>
+                <p><strong>Status:</strong> {mkvPreview.status}</p>
+                {mkvPreview.internal_mkv_title && (
+                  <p><strong>Título a aplicar:</strong> <code>{mkvPreview.internal_mkv_title}</code></p>
+                )}
+                {mkvPreview.command_preview && (
+                  <p><strong>Comando:</strong> <code>{mkvPreview.command_preview}</code></p>
+                )}
+                {mkvPreview.errors?.map((e, i) => (
+                  <p key={i} className="text-error">✗ {e}</p>
+                ))}
+                {mkvPreview.warnings?.map((w, i) => (
+                  <p key={i} className="text-warning"><IconoAviso /> {w}</p>
+                ))}
+                {mkvPreview.status === 'ready' && (
+                  <div className="apply-section">
+                    <input
+                      placeholder={MKV_TOKEN}
+                      value={mkvToken}
+                      onChange={e => setMkvToken(e.target.value)}
+                      className="confirm-input"
+                    />
+                    <button
+                      className="btn btn-danger"
+                      onClick={handleMkvApply}
+                      disabled={mkvToken !== MKV_TOKEN || mkvApplying}
+                    >
+                      {mkvApplying ? 'Aplicando…' : 'Aplicar título MKV'}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
-
-            <div className="modal-actions">
-              <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-                {saving ? 'Guardando…' : 'Guardar campos'}
-              </button>
-              {saved && <span className="text-success">✓ Guardado</span>}
-            </div>
-
-            <hr />
-
-            <section>
-              <h3>Título interno MKV</h3>
-              <p className="text-muted text-sm">
-                Aplica el título interno al fichero .mkv en prepared_path usando mkvpropedit.
-                Requiere token de confirmación: <code>{MKV_TOKEN}</code>
-              </p>
-              <div className="modal-actions">
-                <button className="btn btn-secondary" onClick={handleMkvPreview} disabled={mkvLoading}>
-                  {mkvLoading ? 'Calculando…' : 'Previsualizar MKV'}
-                </button>
+            {mkvResult && (
+              <div className={`preview-box ${mkvResult.status === 'applied' ? 'preview-ok' : 'preview-error'}`}>
+                <p><strong>Resultado:</strong> {mkvResult.status}</p>
+                {mkvResult.errors?.map((e, i) => (
+                  <p key={i} className="text-error">✗ {e}</p>
+                ))}
               </div>
-              {mkvPreview && (
-                <div className="preview-box">
-                  <p><strong>Status:</strong> {mkvPreview.status}</p>
-                  {mkvPreview.internal_mkv_title && (
-                    <p><strong>Título a aplicar:</strong> <code>{mkvPreview.internal_mkv_title}</code></p>
-                  )}
-                  {mkvPreview.command_preview && (
-                    <p><strong>Comando:</strong> <code>{mkvPreview.command_preview}</code></p>
-                  )}
-                  {mkvPreview.errors?.map((e, i) => (
-                    <p key={i} className="text-error">✗ {e}</p>
-                  ))}
-                  {mkvPreview.warnings?.map((w, i) => (
-                    <p key={i} className="text-warning"><IconoAviso /> {w}</p>
-                  ))}
-                  {mkvPreview.status === 'ready' && (
-                    <div className="apply-section">
-                      <input
-                        placeholder={MKV_TOKEN}
-                        value={mkvToken}
-                        onChange={e => setMkvToken(e.target.value)}
-                        className="confirm-input"
-                      />
-                      <button
-                        className="btn btn-danger"
-                        onClick={handleMkvApply}
-                        disabled={mkvToken !== MKV_TOKEN || mkvApplying}
-                      >
-                        {mkvApplying ? 'Aplicando…' : 'Aplicar título MKV'}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-              {mkvResult && (
-                <div className={`preview-box ${mkvResult.status === 'applied' ? 'preview-ok' : 'preview-error'}`}>
-                  <p><strong>Resultado:</strong> {mkvResult.status}</p>
-                  {mkvResult.errors?.map((e, i) => (
-                    <p key={i} className="text-error">✗ {e}</p>
-                  ))}
-                </div>
-              )}
-            </section>
-          </div>
-        )}
-      </div>
-    </div>
+            )}
+          </section>
+        </div>
+      )}
+    </Modal>
   )
 }

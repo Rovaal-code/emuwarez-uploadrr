@@ -33,6 +33,7 @@ import { isValidHttpUrl } from '../utils/validation'
 import { getUploadConcurrencyEstimate, type UploadConcurrencyEstimate } from '../api/system'
 import { MODOS_PISTAS, MODO_PISTAS_POR_DEFECTO, normalizarModo, type ModoPistas } from '../utils/modoPistas'
 import { formatNumero } from '../utils/format'
+import { Modal } from '../components/Modal'
 
 type Tab = 'config' | 'notifications' | 'diagnostics' | 'backup' | 'maintenance'
 
@@ -806,69 +807,57 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                   finally { setKeySaving(false) }
                 }
                 return (
-                  <div className="modal-overlay" onClick={() => setKeyModalHost(null)}>
-                    <div className="modal-panel" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
-                      <div className="modal-header">
-                        <h2 className="modal-title">API key de {host?.label ?? keyModalHost}</h2>
-                        <button className="modal-close" onClick={() => setKeyModalHost(null)}>✕</button>
+                  <Modal titulo={<>API key de {host?.label ?? keyModalHost}</>} onClose={() => setKeyModalHost(null)} style={{ maxWidth: 480 }}>
+                    <div className="modal-body">
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
+                        <input
+                          type="password" className="form-input" style={{ flex: 1 }} autoComplete="new-password"
+                          value={keyDraft} onChange={e => setKeyDraft(e.target.value)}
+                          placeholder={guardada ? '•••••••• (hay una guardada)' : `API key de ${host?.label ?? ''}`}
+                          autoFocus
+                        />
+                        <button
+                          className="btn btn-secondary" type="button"
+                          onClick={() => handleTestImghost(keyModalHost)}
+                          disabled={imgTesting === keyModalHost || !keyDraft.trim()}
+                        >
+                          {imgTesting === keyModalHost ? 'Probando…' : 'Probar'}
+                        </button>
                       </div>
-                      <div className="modal-body">
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
-                          <input
-                            type="password" className="form-input" style={{ flex: 1 }} autoComplete="new-password"
-                            value={keyDraft} onChange={e => setKeyDraft(e.target.value)}
-                            placeholder={guardada ? '•••••••• (hay una guardada)' : `API key de ${host?.label ?? ''}`}
-                            autoFocus
-                          />
-                          <button
-                            className="btn btn-secondary" type="button"
-                            onClick={() => handleTestImghost(keyModalHost)}
-                            disabled={imgTesting === keyModalHost || !keyDraft.trim()}
-                          >
-                            {imgTesting === keyModalHost ? 'Probando…' : 'Probar'}
-                          </button>
-                        </div>
-                        {t && <div style={{ fontSize: 12, marginTop: 8, color: testResultColor(t) }}>{testResultLabel(t)}</div>}
-                        <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 10, marginBottom: 0 }}>
-                          La clave se comprueba contra el proveedor, sin subir ninguna imagen. Guardar la
-                          comprueba también: si no vale, no se guarda.
-                        </p>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
-                          <button className="btn btn-secondary" type="button" onClick={() => setKeyModalHost(null)}>Cancelar</button>
-                          <button className="btn btn-primary" type="button" onClick={guardar} disabled={!keyDraft.trim() || keySaving}>
-                            {keySaving ? 'Comprobando…' : 'Guardar'}
-                          </button>
-                        </div>
+                      {t && <div style={{ fontSize: 12, marginTop: 8, color: testResultColor(t) }}>{testResultLabel(t)}</div>}
+                      <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 10, marginBottom: 0 }}>
+                        La clave se comprueba contra el proveedor, sin subir ninguna imagen. Guardar la
+                        comprueba también: si no vale, no se guarda.
+                      </p>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+                        <button className="btn btn-secondary" type="button" onClick={() => setKeyModalHost(null)}>Cancelar</button>
+                        <button className="btn btn-primary" type="button" onClick={guardar} disabled={!keyDraft.trim() || keySaving}>
+                          {keySaving ? 'Comprobando…' : 'Guardar'}
+                        </button>
                       </div>
                     </div>
-                  </div>
+                  </Modal>
                 )
               })()}
 
               {showAddImg && (
-                <div className="modal-overlay" onClick={() => setShowAddImg(false)}>
-                  <div className="modal-panel" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
-                    <div className="modal-header">
-                      <h2 className="modal-title">Añadir proveedor de imágenes</h2>
-                      <button className="modal-close" onClick={() => setShowAddImg(false)}>✕</button>
-                    </div>
-                    <div className="modal-body">
-                      {notConfigured.length === 0 ? (
-                        <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Ya están todos añadidos.</p>
-                      ) : (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 6, maxHeight: 'calc(var(--vh100) * 0.55)', overflowY: 'auto' }}>
-                          {notConfigured.map(h => (
-                            <button key={h.id} className="btn btn-ghost btn-sm" type="button"
-                              style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-start', justifySelf: 'start', fontSize: 12 }}
-                              onClick={() => toggleImgHost(h.id)}>
-                              <Favicon domain={domainOf(h.url)} src={h.favicon} size={16} background="var(--overlay-light)" fallback={<ServiceIcon type="imghost" size={16} />} /> {h.label} {h.needs_key && <span className="badge nom-na">API key</span>}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                <Modal titulo="Añadir proveedor de imágenes" onClose={() => setShowAddImg(false)} style={{ maxWidth: 480 }}>
+                  <div className="modal-body">
+                    {notConfigured.length === 0 ? (
+                      <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Ya están todos añadidos.</p>
+                    ) : (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 6, maxHeight: 'calc(var(--vh100) * 0.55)', overflowY: 'auto' }}>
+                        {notConfigured.map(h => (
+                          <button key={h.id} className="btn btn-ghost btn-sm" type="button"
+                            style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-start', justifySelf: 'start', fontSize: 12 }}
+                            onClick={() => toggleImgHost(h.id)}>
+                            <Favicon domain={domainOf(h.url)} src={h.favicon} size={16} background="var(--overlay-light)" fallback={<ServiceIcon type="imghost" size={16} />} /> {h.label} {h.needs_key && <span className="badge nom-na">API key</span>}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </div>
+                </Modal>
               )}
             </>
           )
@@ -973,64 +962,58 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
             </button>
           </div>
           {concurrencyEstimate && (
-            <div className="modal-overlay" onClick={() => setConcurrencyEstimate(null)}>
-              <div className="modal-panel" onClick={e => e.stopPropagation()} style={{ maxWidth: 860 }}>
-                <div className="modal-header">
-                  <h2 className="modal-title">Máximo de subidas en paralelo</h2>
-                  <button className="modal-close" onClick={() => setConcurrencyEstimate(null)}>✕</button>
-                </div>
-                <div className="modal-body">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Recurso</th>
-                        <th>Disponible</th>
-                        <th>Uso estimado por 1 subida</th>
-                        <th>Qué lo consume</th>
-                        <th>Subidas soportadas</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td>RAM</td>
-                        <td>{concurrencyEstimate.available_ram_gb} GB</td>
-                        <td>{concurrencyEstimate.assumed_ram_gb_per_slot} GB</td>
-                        <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                          Capturas con FFmpeg: extraer y escalar fotogramas. Es casi todo el gasto.
-                        </td>
-                        <td>{concurrencyEstimate.ram_limited_to}</td>
-                      </tr>
-                      <tr>
-                        <td>CPU</td>
-                        <td>{concurrencyEstimate.cpu_cores} núcleos</td>
-                        <td>1 núcleo</td>
-                        <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                          Hasheo del torrent con torf: satura un núcleo entero. Y las capturas con FFmpeg.
-                        </td>
-                        <td>{concurrencyEstimate.cpu_limited_to}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 14 }}>
-                    <span className="form-hint">
-                      Estimación orientativa, no tiene en cuenta la velocidad del disco o de la red.
-                      El trabajo sobre las pistas no entra en estos números, ni activando «Reordenar
-                      pistas»: reordenar con mkvmerge copia los flujos sin recodificar, así que tarda
-                      lo que tarde el disco pero apenas gasta RAM ni CPU. Y solo renombrar es aún más
-                      barato: mkvpropedit toca la cabecera en el sitio, sin releer el archivo.
-                    </span>
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      type="button"
-                      style={{ flexShrink: 0 }}
-                      onClick={() => { setUploadMaxConcurrent(concurrencyEstimate.recommended); setConcurrencyEstimate(null) }}
-                    >
-                      Establecer {concurrencyEstimate.recommended}
-                    </button>
-                  </div>
+            <Modal titulo="Máximo de subidas en paralelo" onClose={() => setConcurrencyEstimate(null)} style={{ maxWidth: 860 }}>
+              <div className="modal-body">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Recurso</th>
+                      <th>Disponible</th>
+                      <th>Uso estimado por 1 subida</th>
+                      <th>Qué lo consume</th>
+                      <th>Subidas soportadas</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>RAM</td>
+                      <td>{concurrencyEstimate.available_ram_gb} GB</td>
+                      <td>{concurrencyEstimate.assumed_ram_gb_per_slot} GB</td>
+                      <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                        Capturas con FFmpeg: extraer y escalar fotogramas. Es casi todo el gasto.
+                      </td>
+                      <td>{concurrencyEstimate.ram_limited_to}</td>
+                    </tr>
+                    <tr>
+                      <td>CPU</td>
+                      <td>{concurrencyEstimate.cpu_cores} núcleos</td>
+                      <td>1 núcleo</td>
+                      <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                        Hasheo del torrent con torf: satura un núcleo entero. Y las capturas con FFmpeg.
+                      </td>
+                      <td>{concurrencyEstimate.cpu_limited_to}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 14 }}>
+                  <span className="form-hint">
+                    Estimación orientativa, no tiene en cuenta la velocidad del disco o de la red.
+                    El trabajo sobre las pistas no entra en estos números, ni activando «Reordenar
+                    pistas»: reordenar con mkvmerge copia los flujos sin recodificar, así que tarda
+                    lo que tarde el disco pero apenas gasta RAM ni CPU. Y solo renombrar es aún más
+                    barato: mkvpropedit toca la cabecera en el sitio, sin releer el archivo.
+                  </span>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    type="button"
+                    style={{ flexShrink: 0 }}
+                    onClick={() => { setUploadMaxConcurrent(concurrencyEstimate.recommended); setConcurrencyEstimate(null) }}
+                  >
+                    Establecer {concurrencyEstimate.recommended}
+                  </button>
                 </div>
               </div>
-            </div>
+            </Modal>
           )}
         </div>
         <div className="form-group">

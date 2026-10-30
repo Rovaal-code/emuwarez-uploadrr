@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useSync } from '../context/SyncContext'
 import { Tooltip } from './Tooltip'
+import { Modal } from './Modal'
 
 function fmtWait(seconds: number): string {
   const m = Math.ceil(seconds / 60)
@@ -38,34 +39,28 @@ export function EmuSyncButton({ label = 'Sincronizar eMuwarez' }: { label?: stri
       </Tooltip>
 
       {open && (
-        <div className="modal-overlay" onClick={() => setOpen(false)}>
-          <div className="modal-panel" onClick={e => e.stopPropagation()} style={{ maxWidth: 460 }}>
-            <div className="modal-header">
-              <h2 className="modal-title">Sincronizar eMuwarez</h2>
-              <button className="modal-close" onClick={() => setOpen(false)}>✕</button>
-            </div>
-            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <SyncOption
-                icon="↻"
-                title="Solo nuevos"
-                desc="Trae solo los torrents subidos a eMuwarez desde la última vez. Rápido."
-                cadence="1 vez/hora"
-                wait={incWait}
-                blocked={isAnySyncing}
-                onClick={() => pick('incremental')}
-              />
-              <SyncOption
-                icon="⇅"
-                title="Completo"
-                desc="Re-descarga todo el catálogo y quita los torrents borrados del tracker. Lento (varios minutos)."
-                cadence="1 vez/día"
-                wait={fullWait}
-                blocked={isAnySyncing}
-                onClick={() => pick('full')}
-              />
-            </div>
+        <Modal titulo="Sincronizar eMuwarez" onClose={() => setOpen(false)} style={{ maxWidth: 460 }}>
+          <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <SyncOption
+              icon="↻"
+              title="Solo nuevos"
+              desc="Trae solo los torrents subidos a eMuwarez desde la última vez. Rápido."
+              cadence="1 vez/hora"
+              wait={incWait}
+              blocked={isAnySyncing}
+              onClick={() => pick('incremental')}
+            />
+            <SyncOption
+              icon="⇅"
+              title="Completo"
+              desc="Re-descarga todo el catálogo y quita los torrents borrados del tracker. Lento (varios minutos)."
+              cadence="1 vez/día"
+              wait={fullWait}
+              blocked={isAnySyncing}
+              onClick={() => pick('full')}
+            />
           </div>
-        </div>
+        </Modal>
       )}
     </>
   )

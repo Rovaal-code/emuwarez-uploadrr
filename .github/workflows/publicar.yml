@@ -79,8 +79,8 @@ jobs:
             escala="patch"
           fi
           # Antes de los tests y la imagen, lo que podría pararlo al final.
-          if [ -z "$TOKEN" ]; then
-            echo "::error::Falta el secreto UPLOADRR_VERSION_TOKEN: sin él no se puede publicar el manifiesto."
+          if [ -z "$TOKEN" ] || ! GH_TOKEN="$TOKEN" gh api repos/Kisnov/uploadrr-version --silent; then
+            echo "::error::UPLOADRR_VERSION_TOKEN falta o ha caducado: sin él no se puede publicar el manifiesto."
             exit 1
           fi
           python3 scripts/publicar_version.py --notas "$NOTAS" > /dev/null
@@ -116,28 +116,33 @@ jobs:
         env:
           ESCALA: ${{ needs.decidir.outputs.escala }}
         run: |
-          python3 scripts/subir_version.py "$ESCALA"
-          version="$(python3 scripts/subir_version.py --ver)"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -qam "chore: versión $version"
-          git tag -a "v$version" -m "Versión $version"
-          # Si master ha avanzado durante los tests, esto falla y no se publica nada.
-          git push origin HEAD:master "v$version"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          git fetch -q origin master
+          # Re-ejecución de un intento que falló después de subir la versión: se completa esa, no otra.
+          if [ "$(git rev-parse -q --verify origin/master^ 2>/dev/null)" = "$GITHUB_SHA" ] &&
+             git log -1 --format=%s origin/master | grep -q '^chore: versión '; then
+            git checkout -q origin/master
+            echo "subida=true" >> "$GITHUB_OUTPUT"
+          else
+            python3 scripts/subir_version.py "$ESCALA"
+            version="$(python3 scripts/subir_version.py --ver)"
+            git commit -qam "chore: versión $version"
+            git tag -a "v$version" -m "Versión $version"
+          fi
+          echo "version=$(python3 scripts/subir_version.py --ver)" >> "$GITHUB_OUTPUT"
 
       - id: sello
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
         run: |
           uploadrr="$(git ls-remote --exit-code https://github.com/Kisnov/Uploadrr-EMU.git refs/heads/main | cut -f1)"
           test -n "$uploadrr"
           echo "uploadrr=$uploadrr" >> "$GITHUB_OUTPUT"
           echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "fecha=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+          # Una versión se construye solo con su sha; :X.Y.Z y :latest llegan cuando master ya la tiene.
           imagen=ghcr.io/kisnov/emuwarez-uploadrr
           if [ "$ACCION" = publicar ]; then
-            echo "tags=$imagen:$VERSION,$imagen:$(git rev-parse HEAD),$imagen:latest" >> "$GITHUB_OUTPUT"
+            echo "tags=$imagen:$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           else
             echo "tags=$imagen:edge" >> "$GITHUB_OUTPUT"
           fi
@@ -163,10 +168,27 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # Con la imagen ya subida, y las dos a la vez: si master ha avanzado
+      # durante los tests se rechazan las dos y no queda ninguna versión a medias.
+      - if: env.ACCION == 'publicar' && steps.version.outputs.subida != 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: git push --atomic origin HEAD:master "v$VERSION"
+
+      - id: etiquetas
+        if: env.ACCION == 'publicar'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          COMMIT: ${{ steps.sello.outputs.commit }}
+        run: |
+          imagen=ghcr.io/kisnov/emuwarez-uploadrr
+          docker buildx imagetools create --tag "$imagen:$VERSION" --tag "$imagen:latest" "$imagen:$COMMIT"
+          echo "digest=$(docker buildx imagetools inspect "$imagen:latest" --format '{{json .Manifest}}' | jq -r .digest)" >> "$GITHUB_OUTPUT"
+
       - if: env.ACCION == 'publicar'
         env:
           GH_TOKEN: ${{ secrets.UPLOADRR_VERSION_TOKEN }}
-          DIGEST: ${{ steps.build.outputs.digest }}
+          DIGEST: ${{ steps.etiquetas.outputs.digest }}
           NOTAS: ${{ inputs.notas || 'Correcciones y mejoras' }}
         run: |
           gh auth setup-git

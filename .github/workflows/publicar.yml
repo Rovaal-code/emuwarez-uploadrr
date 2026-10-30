@@ -66,9 +66,9 @@ jobs:
           # aquí y en Uploadrr-EMU (su main solo llega a la app al construir la imagen).
           base="$(git log -1 --format=%H -G'^__version__' -- emuwarez_uploadrr/__init__.py)"
           prs="$(git log --first-parent --merges --format=%s "$base"..HEAD | grep -E ' from [^/]+/(feat|fix)/' || true)"
-          git clone -q --bare --filter=blob:none --branch main https://github.com/Kisnov/Uploadrr-EMU.git "$RUNNER_TEMP/uploadrr"
-          prs="$prs"$'\n'"$(git -C "$RUNNER_TEMP/uploadrr" log --first-parent --merges --since="$(git log -1 --format=%cI "$base")" --format=%s |
-            grep -E ' from [^/]+/(feat|fix)/' || true)"
+          git clone -q --bare --filter=blob:none --single-branch --no-tags --branch main https://github.com/Kisnov/Uploadrr-EMU.git "$RUNNER_TEMP/uploadrr"
+          merges="$(git -C "$RUNNER_TEMP/uploadrr" log --first-parent --merges --since="$(git log -1 --format=%cI "$base")" --format=%s)"
+          prs="$prs"$'\n'"$(printf '%s\n' "$merges" | grep -E ' from [^/]+/(feat|fix)/' || true)"
           n="$(printf '%s' "$prs" | grep -c . || true)"
           echo "$n PR feat/fix desde ${base:0:7}"
           if [ "$EVENTO" = schedule ] && [ "$n" -lt 3 ]; then

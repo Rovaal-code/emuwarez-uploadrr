@@ -59,7 +59,7 @@ export function Modal({ titulo, onClose, className, style, tituloStyle, children
   }, [])
 
   return (
-    <div className="modal-overlay" onMouseDown={onClose}>
+    <div className="modal-overlay" onMouseDown={e => { if (e.button === 0) onClose() }}>
       <div
         ref={panel}
         className={className ? `modal-panel ${className}` : 'modal-panel'}

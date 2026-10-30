@@ -34,6 +34,7 @@ import { getUploadConcurrencyEstimate, type UploadConcurrencyEstimate } from '..
 import { MODOS_PISTAS, MODO_PISTAS_POR_DEFECTO, normalizarModo, type ModoPistas } from '../utils/modoPistas'
 import { formatNumero } from '../utils/format'
 import { Modal } from '../components/Modal'
+import { IconoUsuario } from '../components/Iconos'
 
 type Tab = 'config' | 'notifications' | 'diagnostics' | 'backup' | 'maintenance'
 
@@ -1084,10 +1085,7 @@ function AccountCard() {
   return (
     <div className="placeholder-card">
       <h3 style={{ marginTop: 0, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
-        <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="1.75" aria-hidden>
-          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-          <circle cx="12" cy="7" r="4" />
-        </svg> Cuenta
+        <IconoUsuario size={18} style={{ color: 'var(--text-accent)' }} /> Cuenta
       </h3>
       <p className="form-hint" style={{ marginTop: 0, marginBottom: 14 }}>
         Cambia el usuario y/o la contraseña con la que inicias sesión en esta aplicación.

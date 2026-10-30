@@ -22,6 +22,7 @@ import { isValidHttpUrl } from '../utils/validation'
 import { useCooldown } from '../hooks/useCooldown'
 import { HoverTitle } from '../components/Tooltip'
 import { EMU_URL } from '../constants/emu'
+import { IconoUsuario } from '../components/Iconos'
 
 // Mirrors validate_password_strength() in web/security.py exactly (same
 // regexes) so the checklist never drifts from what the backend enforces.
@@ -70,16 +71,11 @@ interface InstanceDraft {
 // instancias, completado) don't have a matching Settings card, so no icon.
 function StepTitleIcon({ step }: { step: string }) {
   if (step === 'admin') {
-    // Same person shape (and blue) as the Configuración > Cuenta card's own
+    // Same person shape (and colour) as the Configuración > Cuenta card's own
     // icon (SettingsPage.tsx) — this step IS that same card (creating/
     // naming the admin account), so it should read as the same thing, not
     // as the general Configuración gear.
-    return (
-      <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="1.75" aria-hidden>
-        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-        <circle cx="12" cy="7" r="4" />
-      </svg>
-    )
+    return <IconoUsuario size={20} style={{ color: 'var(--text-accent)' }} />
   }
   if (step === 'emu') return <ServiceIcon type="emu" size={20} />
   if (step === 'instances') {

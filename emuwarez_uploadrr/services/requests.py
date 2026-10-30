@@ -226,11 +226,13 @@ def _sincronizar_peticiones(conn: sqlite3.Connection) -> dict[str, int | str]:
         except Exception:
             conn.rollback()
             logger.exception("No se pudo calcular la preparación de las peticiones")
-            sin_preparar = len(items)
+            sin_preparar = None
         summary = f"{len(items)} peticiones importadas, {matched} cruces"
         if removed:
             summary += f", {removed} retiradas"
-        if sin_preparar:
+        if sin_preparar is None:
+            summary += ", preparación sin calcular (ver el log)"
+        elif sin_preparar:
             summary += f", {sin_preparar} sin preparación (ver el log)"
         finish_task(conn, task_id, TaskStatus.COMPLETED.value, summary)
         logger.info("Sincronización de peticiones terminada: %d importadas, %d retiradas, %d cruzadas con tu biblioteca",

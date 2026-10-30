@@ -67,19 +67,40 @@ def test_una_preparacion_que_falla_sale_en_el_resumen_y_en_el_log(db_conn, sincr
     assert db_conn.execute("SELECT COUNT(*) FROM request_readiness WHERE status = 'a medias'").fetchone()[0] == 0
 
 
-def test_si_la_preparacion_falla_entera_la_sincronizacion_sigue_valiendo(db_conn, sincroniza, monkeypatch, caplog):
+def _rota(*_a, **_kw):
+    raise RuntimeError("rota")
+
+
+def _ultimo_resumen(conn):
+    return conn.execute(
+        "SELECT summary FROM task_runs WHERE name = 'sync-emu-requests' ORDER BY id DESC LIMIT 1").fetchone()[0]
+
+
+def test_con_la_biblioteca_rota_la_sincronizacion_sigue_valiendo(db_conn, sincroniza, monkeypatch, caplog):
     """Un fallo antes de preparar la primera (al leer la biblioteca) tumbaba la sincronización y devolvía la espera,
     así que reintentar volvía a llamar a eMuwarez."""
     from emuwarez_uploadrr.services import request_readiness as rr
-
-    def rota(conn):
-        raise RuntimeError("biblioteca rota")
-
-    monkeypatch.setattr(rr, "_biblioteca", rota)
+    monkeypatch.setattr(rr, "_biblioteca", _rota)
     assert sincroniza([_fila(1), _fila(2)], 2)["status"] == "ok"
-    resumen = db_conn.execute(
-        "SELECT summary FROM task_runs WHERE name = 'sync-emu-requests' ORDER BY id DESC LIMIT 1").fetchone()[0]
-    assert "2 sin preparación" in resumen
+    assert "2 sin preparación" in _ultimo_resumen(db_conn)
+    assert "No se pudo leer la biblioteca para calcular la preparación" in caplog.text
+    assert reqs.seconds_until_next_sync(db_conn) > 0
+
+
+def test_recalcular_con_la_biblioteca_rota_cuenta_errores_en_vez_de_fallar(db_conn, sincroniza, monkeypatch):
+    """La biblioteca se lee una vez fuera del bucle: «Recalcular» y el CLI daban un 500 si fallaba esa lectura."""
+    from emuwarez_uploadrr.services import request_readiness as rr
+    sincroniza([_fila(1), _fila(2)], 2)
+    monkeypatch.setattr(rr, "_biblioteca", _rota)
+    assert rr.refresh_request_readiness(db_conn) == {"ok": True, "items_updated": 0, "errors": 2}
+
+
+def test_si_la_preparacion_falla_entera_lo_dice_aunque_no_llegara_ninguna(db_conn, sincroniza, monkeypatch, caplog):
+    """Con un recorrido sin filas el aviso se perdía: se contaban las importadas, 0."""
+    sincroniza([_fila(1)], 1)
+    monkeypatch.setattr(reqs, "refresh_request_readiness", _rota)
+    assert sincroniza([], None)["status"] == "ok"
+    assert "preparación sin calcular" in _ultimo_resumen(db_conn)
     assert "No se pudo calcular la preparación de las peticiones" in caplog.text
     assert reqs.seconds_until_next_sync(db_conn) > 0
 

@@ -570,7 +570,12 @@ def refresh_request_readiness(
         params.append(int(effective_limit))
 
     rows = conn.execute(sql, params).fetchall()
-    library = _biblioteca(conn)
+    try:
+        library = _biblioteca(conn)
+    except Exception:
+        # Como cuando se leía por petición: todas cuentan como error, en vez de un 500 en «Recalcular».
+        logging.getLogger("emuwarez.requests").exception("No se pudo leer la biblioteca para calcular la preparación")
+        return {"ok": True, "items_updated": 0, "errors": len(rows)}
     updated = 0
     errors = 0
 

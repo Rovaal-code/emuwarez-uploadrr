@@ -1269,6 +1269,34 @@ optgroup {
   color: var(--text-muted);
 }
 
+/* Fila/tarjeta en forma de lo que va a cargar (Biblioteca, 51k elementos:
+   antes solo había un spinner suelto durante toda la carga). Una barra que
+   brilla en vez de un color plano, para que se note que está cargando y no
+   simplemente vacío. */
+@keyframes skeleton-shimmer {
+  0% { background-position: -200px 0; }
+  100% { background-position: 200px 0; }
+}
+.skeleton-bar {
+  display: inline-block;
+  height: 0.85em;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--overlay-light) 6%, transparent) 25%,
+    color-mix(in srgb, var(--overlay-light) 14%, transparent) 37%,
+    color-mix(in srgb, var(--overlay-light) 6%, transparent) 63%
+  );
+  background-size: 400px 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-bar {
+    animation: none;
+    background: color-mix(in srgb, var(--overlay-light) 8%, transparent);
+  }
+}
+
 /* Drag handle (SortableList rows — e.g. Proveedores de imágenes priority
    list): lights up accent-blue on hover so it reads as grabbable. */
 .drag-handle:hover {

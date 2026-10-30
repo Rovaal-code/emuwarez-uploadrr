@@ -662,11 +662,12 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           <input type="password" className="form-input" value={qbitPass} onChange={e => setQbitPass(e.target.value)} placeholder={settings?.qbit_password_configured ? '••••••••' : 'Contraseña del WebUI'} autoComplete="new-password" />
         </div>
         <div className="form-group" style={{ marginBottom: 12 }}>
-          <label className="form-label">
+          <label className="form-label" htmlFor="qbit-qui-proxy">
             Proxy de <a href="https://getqui.com/docs/features/reverse-proxy" target="_blank" rel="noreferrer">qui</a>{' '}
             <span className="form-hint">(opcional; con él no hacen falta usuario ni contraseña)</span>
           </label>
           <input
+            id="qbit-qui-proxy"
             type="password"
             className="form-input"
             value={qbitQui}

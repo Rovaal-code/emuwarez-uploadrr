@@ -154,15 +154,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_req = sub.add_parser("requests", help="Peticiones EMU")
     req_sub = p_req.add_subparsers(dest="requests_command", required=True)
     p_req_sync = req_sub.add_parser("sync", help="Sincronizar peticiones EMU. Mínimo 1 vez/hora salvo --force")
-    p_req_sync.add_argument("--endpoint-url", help="Endpoint capturado de eMuwarez para listar peticiones")
     p_req_sync.add_argument("--force", action="store_true", help="Forzar sincronización ignorando el límite de una hora")
     p_req_list = req_sub.add_parser("list", help="Listar peticiones sincronizadas")
     p_req_list.add_argument("--search")
     p_req_list.add_argument("--limit", type=int, default=50)
     p_req_show = req_sub.add_parser("show", help="Detalle de petición y cruce con biblioteca")
     p_req_show.add_argument("id", type=int)
-    p_req_endpoint = req_sub.add_parser("set-endpoint", help="Guardar endpoint de lectura de peticiones EMU")
-    p_req_endpoint.add_argument("url")
     req_sub.add_parser("match", help="Recalcular cruces petición/biblioteca")
     p_req_reviewed = req_sub.add_parser("mark-reviewed", help="Marcar petición como revisada")
     p_req_reviewed.add_argument("id", type=int)
@@ -536,16 +533,8 @@ def cmd_library(args) -> int:
 
 def cmd_requests(args) -> int:
     with _open_conn(args) as conn:
-        if args.requests_command == "set-endpoint":
-            request_service.set_requests_endpoint(conn, args.url)
-            print("✓ Endpoint de peticiones guardado")
-            return 0
         if args.requests_command == "sync":
-            ep = getattr(args, "endpoint_url", None)
-            if ep:
-                result = request_service.sync_requests(conn, endpoint_url=ep, force=args.force)
-            else:
-                result = request_service.sync_emu_requests(conn, force=args.force)
+            result = request_service.sync_emu_requests(conn, force=args.force)
             if result.get("status") == "throttled":
                 wait = int(result["wait_seconds"])
                 print(f"⚠ Peticiones actualizadas hace menos de una hora. Disponible en {wait // 60} min {wait % 60} s.")

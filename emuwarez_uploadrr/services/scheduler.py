@@ -126,10 +126,6 @@ def _run_emu_sync(conn: sqlite3.Connection) -> tuple[str, str]:
     result = sync_emu_requests(conn, force=False)
     if result.get("status") == "throttled":
         return "skipped", f"Esperando {result.get('wait_seconds', 0)}s (mínimo 1 hora entre sincronizaciones)"
-    if result.get("status") == "unavailable":
-        # eMuwarez no expone /api/requests todavía — no es un fallo, es que la
-        # función aún no está disponible en el tracker.
-        return "skipped", str(result.get("message") or "Sincronización de peticiones no disponible.")
     return "completed", f"{result.get('imported', 0)} peticiones importadas, {result.get('matched', 0)} cruces"
 
 

@@ -213,5 +213,6 @@ def url_sin_claves(url: str) -> str:
 def build_url(base_url: str, path: str, params: Optional[dict[str, Any]] = None) -> str:
     url = normalize_base_url(base_url) + "/" + path.lstrip("/")
     if params:
-        url += "?" + urllib.parse.urlencode({k: v for k, v in params.items() if v is not None})
+        # doseq: un valor lista repite la clave (category_id[]=1&category_id[]=2).
+        url += "?" + urllib.parse.urlencode({k: v for k, v in params.items() if v is not None}, doseq=True)
     return url

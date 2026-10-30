@@ -143,8 +143,6 @@ def setup_emu(
     set_setting(conn, "emu.api_key", api_key)
     if endpoint_url and endpoint_url.strip():
         set_setting(conn, "emu.endpoint_url", endpoint_url.strip())
-        # Also update the app_state key used by the CLI requests sync
-        set_state(conn, "emu_requests_endpoint", endpoint_url.strip())
 
 
 def setup_add_instance(

@@ -1,4 +1,4 @@
-"""Tests for emuwarez_uploadrr/integrations/emu.py — Phase 5B."""
+"""Tests for emuwarez_uploadrr/integrations/emu.py: las peticiones reales de eMuwarez."""
 from __future__ import annotations
 
 import json
@@ -8,10 +8,19 @@ from emuwarez_uploadrr.integrations import emu
 from emuwarez_uploadrr.integrations.emu import (
     normalize_request,
     normalize_requests,
-    _flatten_unit3d,
     EMU_BASE_URL,
 )
 from emuwarez_uploadrr.models import RequestItem
+
+
+# Una fila tal como la devuelve /api/requests/filter (plana, con ids numéricos).
+FILA = {
+    "id": 1234, "name": "Dune", "description": "[b]texto[/b]",
+    "category_id": 2, "type_id": 4, "resolution_id": 10,
+    "user": "Nocturno", "tmdb": 1032, "imdb": 440981, "tvdb": None, "mal": None, "igdb": None,
+    "bounty": "100.00", "status": "filled", "claimed": None, "filled_by": 77,
+    "created": "2025-01-02T23:41:34+00:00", "updated_at": "2025-01-03T10:00:00+00:00",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -23,152 +32,100 @@ def test_emu_base_url():
 
 
 # ---------------------------------------------------------------------------
-# _flatten_unit3d
-# ---------------------------------------------------------------------------
-
-def test_flatten_unit3d_flat_passthrough():
-    raw = {"id": "1", "title": "Movie"}
-    assert _flatten_unit3d(raw) == raw
-
-
-def test_flatten_unit3d_nested():
-    raw = {
-        "id": 5,
-        "type": "requests",
-        "attributes": {
-            "name": "A Movie",
-            "resolution": "1080p",
-            "tmdb": "12345",
-            "anon": True,
-        },
-        "links": {"self": "https://emu-warez.com/requests/5"},
-    }
-    flat = _flatten_unit3d(raw)
-    assert flat["name"] == "A Movie"
-    assert flat["resolution"] == "1080p"
-    assert flat["tmdb"] == "12345"
-    assert flat["url"] == "https://emu-warez.com/requests/5"
-
-
-def test_flatten_unit3d_existing_url_preserved():
-    raw = {
-        "id": 1,
-        "url": "https://emu-warez.com/requests/1",
-        "attributes": {"name": "Foo"},
-        "links": {"self": "https://emu-warez.com/api/requests/1"},
-    }
-    flat = _flatten_unit3d(raw)
-    assert flat["url"] == "https://emu-warez.com/requests/1"
-
-
-# ---------------------------------------------------------------------------
 # normalize_request
 # ---------------------------------------------------------------------------
 
-def test_normalize_request_flat():
-    raw = {
-        "id": "42",
-        "title": "Some Movie",
-        "category": "Movies",
-        "type": "BluRay",
-        "resolution": "1080p",
-        "tmdb_id": "12345",
-        "imdb_id": "tt0000001",
-        "bounty": "500",
-        "comments": "3",
-        "filled": False,
-        "created_at": "2024-01-01T00:00:00Z",
-        "url": "https://emu-warez.com/requests/42",
-        "anon": True,
-    }
-    item = normalize_request(raw)
+def test_normalize_request_con_la_respuesta_real():
+    item = normalize_request(FILA)
     assert isinstance(item, RequestItem)
-    assert item.emu_id == "42"
-    assert item.title == "Some Movie"
-    assert item.category == "Movies"
-    assert item.requested_source == "BluRay"
-    assert item.requested_resolution == "1080p"
-    assert item.tmdb_id == "12345"
-    assert item.imdb_id == "tt0000001"
-    assert item.points == 500
-    assert item.comments == 3
-    assert item.url == "https://emu-warez.com/requests/42"
-    assert item.author is None  # anon=True
-    assert item.author_visible is False
-
-
-def test_normalize_request_unit3d_nested():
-    raw = {
-        "id": 7,
-        "type": "requests",
-        "attributes": {
-            "name": "Película de Prueba",
-            "resolution": "720p",
-            "type": "WEB-DL",
-            "tmdb": "99999",
-            "imdb": "tt1234567",
-            "bounty": 100,
-            "comments": 0,
-            "filled": False,
-            "anon": False,
-            "username": "usuario_emu",
-            "created_at": "2025-06-01T12:00:00Z",
-        },
-        "links": {"self": "https://emu-warez.com/requests/7"},
-    }
-    item = normalize_request(raw)
-    assert item.emu_id == "7"
-    assert item.title == "Película de Prueba"
-    assert item.requested_resolution == "720p"
+    assert item.emu_id == "1234"
+    assert item.title == "Dune"
+    assert item.category == "Series"
     assert item.requested_source == "WEB-DL"
-    assert item.tmdb_id == "99999"
-    assert item.imdb_id == "tt1234567"
-    assert item.url == "https://emu-warez.com/requests/7"
-    # anon=False, so author should be set
-    assert item.author == "usuario_emu"
-    assert item.author_visible is False  # always hidden by default
+    assert item.requested_resolution == "Otras"
+    assert item.emu_status == "filled"
+    assert item.points == 100
+    assert item.created_at == "2025-01-02T23:41:34+00:00"
+    assert (item.tmdb_id, item.imdb_id, item.tvdb_id, item.mal_id) == ("1032", "tt0440981", None, None)
+    assert item.url == f"{EMU_BASE_URL}/requests/1234"
+    assert (item.author, item.author_visible) == ("Nocturno", True)
+    assert (item.req_scope, item.req_season, item.req_episode) == (None, None, None)
+    assert json.loads(item.raw_json) == FILA
 
 
-def test_normalize_request_imdb_extraction():
-    raw = {"id": "1", "title": "Test", "imdb_url": "https://imdb.com/title/tt9876543/"}
-    item = normalize_request(raw)
-    assert item.imdb_id == "tt9876543"
+@pytest.mark.parametrize("id_, nombre", [(1, "Películas"), (2, "Series"), (4, "Documentales")])
+def test_categorias(id_, nombre):
+    assert normalize_request({**FILA, "category_id": id_}).category == nombre
 
 
-def test_normalize_request_auto_url():
-    raw = {"id": "15", "title": "Test Movie"}
-    item = normalize_request(raw)
-    assert item.url == f"{EMU_BASE_URL}/requests/15"
+@pytest.mark.parametrize("id_, nombre", [
+    (1, "Full Disc"), (2, "Remux"), (3, "Encode"), (4, "WEB-DL"),
+    (5, "WEBRIP"), (6, "HDTV"), (7, "SD"), (8, "STEAMRIP"),
+])
+def test_tipos(id_, nombre):
+    assert normalize_request({**FILA, "type_id": id_}).requested_source == nombre
 
 
-def test_normalize_request_missing_title():
-    raw = {"id": "3"}
-    item = normalize_request(raw)
-    assert item.title == "Sin título"
+@pytest.mark.parametrize("id_, nombre", [
+    (1, "4320p"), (2, "2160p"), (3, "1080p"), (4, "1080i"), (5, "720p"),
+    (6, "576p"), (7, "540p"), (8, "480p"), (10, "Otras"),
+])
+def test_resoluciones(id_, nombre):
+    assert normalize_request({**FILA, "resolution_id": id_}).requested_resolution == nombre
 
 
-def test_normalize_request_raw_json_stored():
-    raw = {"id": "1", "title": "Movie", "extra_field": "value"}
-    item = normalize_request(raw)
-    stored = json.loads(item.raw_json)
-    assert stored["extra_field"] == "value"
+def test_sin_resolucion_o_con_ids_desconocidos_no_hay_restriccion():
+    """resolution_id falta cuando la petición no pide ninguna; un id nuevo del tracker tampoco rompe nada."""
+    fila = {k: v for k, v in FILA.items() if k != "resolution_id"}
+    assert normalize_request(fila).requested_resolution is None
+    item = normalize_request({**FILA, "category_id": 99, "type_id": 99, "resolution_id": 99})
+    assert (item.category, item.requested_source, item.requested_resolution) == (None, None, None)
+
+
+def test_el_autor_anonimo_no_se_guarda():
+    item = normalize_request({**FILA, "user": "anonymous"})
+    assert (item.author, item.author_visible) == (None, False)
+    item = normalize_request({k: v for k, v in FILA.items() if k != "user"})
+    assert (item.author, item.author_visible) == (None, False)
+
+
+@pytest.mark.parametrize("bounty, puntos", [("15000.00", 15000), ("100.00", 100), (250, 250), (None, None), ("x", None)])
+def test_el_bounty_pasa_a_puntos_enteros(bounty, puntos):
+    assert normalize_request({**FILA, "bounty": bounty}).points == puntos
+
+
+def test_ids_externos():
+    item = normalize_request({**FILA, "tmdb": 0, "tvdb": 81189, "mal": 0, "imdb": 0})
+    assert (item.tmdb_id, item.tvdb_id, item.mal_id, item.imdb_id) == (None, "81189", None, None)
+    assert normalize_request({**FILA, "imdb": None}).imdb_id is None
+    # Siete cifras como mínimo, y las de ocho se quedan como son.
+    assert normalize_request({**FILA, "imdb": 133093}).imdb_id == "tt0133093"
+    assert normalize_request({**FILA, "imdb": 10872600}).imdb_id == "tt10872600"
+
+
+def test_temporada_y_capitulo_dan_el_alcance():
+    assert [normalize_request({**FILA, **extra}).req_scope for extra in (
+        {}, {"season_number": 2}, {"season_number": 2, "episode_number": 5},
+    )] == [None, "season", "episode"]
+    item = normalize_request({**FILA, "season_number": 2, "episode_number": 5})
+    assert (item.req_season, item.req_episode) == (2, 5)
+    # Un capítulo 0 no es un capítulo: es la temporada entera.
+    assert normalize_request({**FILA, "season_number": 2, "episode_number": 0}).req_scope == "season"
+
+
+def test_una_fila_sin_casi_nada_no_falla():
+    item = normalize_request({"id": 7})
+    assert (item.emu_id, item.title, item.url) == ("7", "Sin título", f"{EMU_BASE_URL}/requests/7")
+    assert normalize_request({}).title == "Sin título"
 
 
 # ---------------------------------------------------------------------------
 # normalize_requests
 # ---------------------------------------------------------------------------
 
-def test_normalize_requests_filters_non_dicts():
-    raw = [
-        {"id": "1", "title": "Movie 1"},
-        "not a dict",
-        None,
-        {"id": "2", "title": "Movie 2"},
-    ]
-    items = normalize_requests(raw)
-    assert len(items) == 2
-    assert items[0].title == "Movie 1"
-    assert items[1].title == "Movie 2"
+def test_normalize_requests_se_salta_lo_que_no_es_una_fila_con_id():
+    raw = [{"id": 1, "name": "Movie 1"}, "not a dict", None, {"name": "sin id"}, {"id": 2, "name": "Movie 2"}]
+    assert [i.title for i in normalize_requests(raw)] == ["Movie 1", "Movie 2"]
 
 
 def test_normalize_requests_empty():
@@ -176,57 +133,7 @@ def test_normalize_requests_empty():
 
 
 # ---------------------------------------------------------------------------
-# emu_fetch_all_pages (with monkeypatched emu_get_requests)
-# ---------------------------------------------------------------------------
-
-def test_emu_fetch_all_pages_single(monkeypatch):
-    page_data = {
-        "data": [{"id": 1, "title": "M1"}, {"id": 2, "title": "M2"}],
-        "meta": {"current_page": 1, "last_page": 1, "total": 2},
-    }
-    monkeypatch.setattr(emu, "emu_get_requests", lambda api_key, base_url=None, page=1, per_page=100: page_data)
-    items = emu.emu_fetch_all_pages("test-key")
-    assert len(items) == 2
-    assert items[0]["id"] == 1
-
-
-def test_emu_fetch_all_pages_multi(monkeypatch):
-    def fake_get(api_key, base_url=None, page=1, per_page=100):
-        pages = {
-            1: {"data": [{"id": 1}], "meta": {"current_page": 1, "last_page": 2}},
-            2: {"data": [{"id": 2}], "meta": {"current_page": 2, "last_page": 2}},
-        }
-        return pages.get(page, {"data": [], "meta": {"current_page": page, "last_page": 2}})
-    monkeypatch.setattr(emu, "emu_get_requests", fake_get)
-    items = emu.emu_fetch_all_pages("test-key")
-    assert len(items) == 2
-    assert {i["id"] for i in items} == {1, 2}
-
-
-def test_emu_fetch_all_pages_list_response(monkeypatch):
-    monkeypatch.setattr(emu, "emu_get_requests", lambda *a, **kw: [{"id": 1}, {"id": 2}])
-    items = emu.emu_fetch_all_pages("test-key")
-    assert len(items) == 2
-
-
-def test_emu_fetch_all_pages_empty(monkeypatch):
-    monkeypatch.setattr(emu, "emu_get_requests", lambda *a, **kw: {"data": [], "meta": {"current_page": 1, "last_page": 1}})
-    items = emu.emu_fetch_all_pages("test-key")
-    assert items == []
-
-
-# ---------------------------------------------------------------------------
-# create_request (should always raise)
-# ---------------------------------------------------------------------------
-
-def test_create_request_blocked():
-    from emuwarez_uploadrr.integrations.base import IntegrationError
-    with pytest.raises(IntegrationError):
-        emu.create_request(title="Test")
-
-
-# ---------------------------------------------------------------------------
-# sync_emu_requests — API key resolution + missing /api/requests endpoint
+# sync_emu_requests
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
@@ -237,43 +144,93 @@ def db_conn(isolated_db):
     return conn
 
 
-def test_sync_requests_reads_key_from_db_settings(db_conn, monkeypatch):
+def _con_clave(conn, clave="configured-key-123"):
+    from emuwarez_uploadrr.services.settings import set_setting
+    set_setting(conn, "emu.api_key", clave)
+
+
+@pytest.fixture
+def sin_cruce(monkeypatch):
+    """Estas pruebas son de lo que se importa, no de cruzarlo con la biblioteca."""
+    from emuwarez_uploadrr.services import requests as reqs
+    monkeypatch.setattr(reqs, "match_all_requests", lambda conn, emu_api_key=None: 0)
+
+
+def test_sync_requests_reads_key_from_db_settings(db_conn, monkeypatch, sin_cruce):
     """The key configured in the Settings UI (settings.emu.api_key) must be
     used — regression for the task reporting 'No hay API Key' when it was set."""
-    from emuwarez_uploadrr.services.settings import set_setting
     from emuwarez_uploadrr.services import requests as reqs
-    set_setting(db_conn, "emu.api_key", "configured-key-123")
+    _con_clave(db_conn)
 
     seen = {}
     def fake_fetch(api_key, *a, **kw):
         seen["key"] = api_key
-        return []
+        return [], 0
     monkeypatch.setattr(reqs.emu, "emu_fetch_all_pages", fake_fetch)
-    monkeypatch.setattr(reqs, "match_all_requests", lambda conn, emu_api_key=None: 0)
 
     result = reqs.sync_emu_requests(db_conn, force=True)
     assert seen["key"] == "configured-key-123"
     assert result["status"] == "ok"
 
 
-def test_sync_requests_missing_endpoint_is_skipped_not_failed(db_conn, monkeypatch):
-    from emuwarez_uploadrr.services.settings import set_setting
-    from emuwarez_uploadrr.integrations.base import IntegrationError
+def test_la_sync_guarda_las_filas_reales_de_una_vez(db_conn, monkeypatch, sin_cruce):
     from emuwarez_uploadrr.services import requests as reqs
-    set_setting(db_conn, "emu.api_key", "configured-key-123")
-
-    def fake_fetch(*a, **kw):
-        raise IntegrationError(
-            "HTTP 404 en https://emu-warez.com/api/requests: The route api/requests could not be found."
-        )
-    monkeypatch.setattr(reqs.emu, "emu_fetch_all_pages", fake_fetch)
+    _con_clave(db_conn)
+    filas = [FILA, {**FILA, "id": 1235, "name": "Los Tudor", "category_id": 2, "season_number": 2,
+                    "user": "anonymous", "tmdb": 0}]
+    monkeypatch.setattr(reqs.emu, "emu_fetch_all_pages", lambda *a, **kw: (filas, 2))
+    vistas = []
+    db_conn.set_trace_callback(vistas.append)
 
     result = reqs.sync_emu_requests(db_conn, force=True)
-    assert result["status"] == "unavailable"
+    db_conn.set_trace_callback(None)
+
+    assert result["status"] == "ok" and result["imported"] == 2
+    rows = {r["emu_id"]: dict(r) for r in db_conn.execute("SELECT * FROM request_items")}
+    dune, tudor = rows["1234"], rows["1235"]
+    assert (dune["title"], dune["category"], dune["points"], dune["author"], dune["author_visible"]) == (
+        "Dune", "Series", 100, "Nocturno", 1)
+    assert (tudor["req_scope"], tudor["req_season"], tudor["req_episode"]) == ("season", 2, None)
+    assert (tudor["author"], tudor["author_visible"], tudor["tmdb_id"]) == (None, 0, None)
+    # Un solo COMMIT para todos los upserts, no uno por fila.
+    inserts = [i for i, s in enumerate(vistas) if s.lstrip().startswith("INSERT INTO request_items")]
+    assert len(inserts) == 2 and "COMMIT" not in vistas[inserts[0]:inserts[-1] + 1]
+
+
+def test_volver_a_sincronizar_actualiza_el_alcance_y_el_autor(db_conn, monkeypatch, sin_cruce):
+    from emuwarez_uploadrr.services import requests as reqs
+    _con_clave(db_conn)
+    respuestas = [[FILA], [{**FILA, "season_number": 3, "user": "anonymous"}]]
+    monkeypatch.setattr(reqs.emu, "emu_fetch_all_pages", lambda *a, **kw: (respuestas.pop(0), 1))
+
+    reqs.sync_emu_requests(db_conn, force=True)
+    reqs.sync_emu_requests(db_conn, force=True)
+
+    fila = dict(db_conn.execute("SELECT * FROM request_items").fetchone())
+    assert (fila["req_scope"], fila["req_season"], fila["author"], fila["author_visible"]) == ("season", 3, None, 0)
+
+
+def test_si_el_recorrido_falla_no_se_toca_nada_y_se_devuelve_el_turno(db_conn, monkeypatch, sin_cruce):
+    from emuwarez_uploadrr.database import get_state
+    from emuwarez_uploadrr.integrations.base import IntegrationError
+    from emuwarez_uploadrr.services import requests as reqs
+    _con_clave(db_conn)
+    monkeypatch.setattr(reqs.emu, "emu_fetch_all_pages", lambda *a, **kw: ([FILA], 1))
+    reqs.sync_emu_requests(db_conn, force=True)
+    antes = get_state(db_conn, reqs.SYNC_STATE_KEY)
+
+    def roto(*a, **kw):
+        raise IntegrationError("eMuwarez ha limitado las peticiones; prueba en unos minutos", status=429)
+    monkeypatch.setattr(reqs.emu, "emu_fetch_all_pages", roto)
+    with pytest.raises(IntegrationError):
+        reqs.sync_emu_requests(db_conn, force=True)
+
+    assert db_conn.execute("SELECT COUNT(*) FROM request_items").fetchone()[0] == 1
+    assert get_state(db_conn, reqs.SYNC_STATE_KEY) == antes
     row = db_conn.execute(
-        "SELECT status FROM task_runs WHERE name='sync-emu-requests' ORDER BY id DESC LIMIT 1"
+        "SELECT status, summary FROM task_runs WHERE name='sync-emu-requests' ORDER BY id DESC LIMIT 1"
     ).fetchone()
-    assert row["status"] == "skipped"
+    assert (row["status"], row["summary"]) == ("failed", "eMuwarez ha limitado las peticiones; prueba en unos minutos")
 
 
 # ---------------------------------------------------------------------------

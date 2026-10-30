@@ -37,18 +37,18 @@ def test_la_clave_de_la_interfaz_gana(db_conn):
     assert rq._resolve_emu_api_key(db_conn) == esperada
 
 
-def test_la_sincronizacion_vieja_ve_la_clave_de_la_interfaz(db_conn, monkeypatch):
-    """El fallo 3.6: sync_requests leía SOLO la configuración del CLI, así que
+def test_la_sincronizacion_ve_la_clave_de_la_interfaz(db_conn, monkeypatch):
+    """El fallo 3.6: la sincronización leía SOLO la configuración del CLI, así que
     reventaba con "No hay API Key" teniéndola configurada."""
     _con_clave(db_conn)
     llamadas = {}
 
-    def falso_get_requests(api_key, endpoint_url=None):
+    def falso_fetch(api_key, *a, **kw):
         llamadas["api_key"] = api_key
-        return []
+        return [], 0
 
-    monkeypatch.setattr(rq.emu, "get_requests", falso_get_requests)
-    r = rq.sync_requests(db_conn, endpoint_url="http://ejemplo/api/requests", force=True)
+    monkeypatch.setattr(rq.emu, "emu_fetch_all_pages", falso_fetch)
+    r = rq.sync_emu_requests(db_conn, force=True)
     assert r["status"] == "ok"
     # Y la clave que llega a la red es la de verdad, no una vacía.
     assert llamadas["api_key"] == "clave-de-la-interfaz"

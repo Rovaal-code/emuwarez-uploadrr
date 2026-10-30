@@ -43,7 +43,6 @@ PYTHON_CANDIDATES = ("python3.11", "python3.10", "python3.12", "python3.13", "py
 
 TMDB_BASE = "https://api.themoviedb.org/3"
 EMU_BASE_URL = "https://emu-warez.com"
-EMU_TEST_URL = f"{EMU_BASE_URL}/api/torrents/filter?perPage=1"
 
 VIDEO_EXTS = {".mkv", ".mp4", ".avi", ".mov", ".m2ts", ".ts"}
 

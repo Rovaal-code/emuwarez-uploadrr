@@ -83,14 +83,15 @@ def get_request_sync_status(conn: sqlite3.Connection) -> dict:
     }
 
 
-def upsert_request(conn: sqlite3.Connection, item: RequestItem) -> int:
+def upsert_request(conn: sqlite3.Connection, item: RequestItem, *, commit: bool = True) -> int:
+    """Inserta o actualiza una petición. `commit=False` deja la transacción abierta, para guardar varias de golpe."""
     conn.execute(
         """
         INSERT INTO request_items(
             emu_id, title, category, requested_source, requested_resolution,
             emu_status, points, comments, created_at, tmdb_id, imdb_id, tvdb_id, mal_id, url,
-            author, author_visible, raw_json, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            author, author_visible, req_scope, req_season, req_episode, raw_json, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         ON CONFLICT(emu_id) DO UPDATE SET
             title = excluded.title,
             category = excluded.category,
@@ -106,6 +107,10 @@ def upsert_request(conn: sqlite3.Connection, item: RequestItem) -> int:
             mal_id = excluded.mal_id,
             url = excluded.url,
             author = excluded.author,
+            author_visible = excluded.author_visible,
+            req_scope = excluded.req_scope,
+            req_season = excluded.req_season,
+            req_episode = excluded.req_episode,
             raw_json = excluded.raw_json,
             updated_at = CURRENT_TIMESTAMP
         """,
@@ -113,22 +118,18 @@ def upsert_request(conn: sqlite3.Connection, item: RequestItem) -> int:
             item.emu_id, item.title, item.category, item.requested_source,
             item.requested_resolution, item.emu_status, item.points, item.comments,
             item.created_at, item.tmdb_id, item.imdb_id, item.tvdb_id, item.mal_id, item.url, item.author,
-            1 if item.author_visible else 0, item.raw_json,
+            1 if item.author_visible else 0, item.req_scope, item.req_season, item.req_episode, item.raw_json,
         ),
     )
     row = conn.execute("SELECT id FROM request_items WHERE emu_id = ?", (item.emu_id,)).fetchone()
-    conn.commit()
+    if commit:
+        conn.commit()
     return int(row["id"])
 
 
 # ---------------------------------------------------------------------------
 # Primary sync function — UNIT3D api_token auth (Phase 5B)
 # ---------------------------------------------------------------------------
-
-def _is_requests_endpoint_missing(exc: Exception) -> bool:
-    m = str(exc).lower()
-    return "404" in m and ("api/requests" in m or "could not be found" in m or "route" in m)
-
 
 def _resolve_emu_api_key(conn: sqlite3.Connection) -> Optional[str]:
     """La API key de eMuwarez: la interfaz la guarda en la BD
@@ -162,22 +163,23 @@ def sync_emu_requests(
         raise IntegrationError("No hay API Key de eMuwarez configurada")
 
     # Record the throttle at START (not at the end), so a slow fetch or a page
-    # refresh mid-sync can't relaunch it. Restored if the sync fails / is
-    # unavailable, so a failed run doesn't lock the user out for an hour.
+    # refresh mid-sync can't relaunch it. Restored if the sync fails, so a
+    # failed run doesn't lock the user out for an hour.
     prev_sync = get_state(conn, SYNC_STATE_KEY)
     set_state(conn, SYNC_STATE_KEY, _utcnow().isoformat())
     conn.commit()
 
     def _restore_throttle() -> None:
+        conn.rollback()  # lo que se hubiera importado a medias no se queda
         set_state(conn, SYNC_STATE_KEY, prev_sync or "")
         conn.commit()
 
     logger.info("Sincronización de peticiones iniciada")
     try:
-        raw_items = emu.emu_fetch_all_pages(api_key)
+        raw_items, _total = emu.emu_fetch_all_pages(api_key)
         items = emu.normalize_requests(raw_items)
         for item in items:
-            upsert_request(conn, item)
+            upsert_request(conn, item, commit=False)
         set_state(conn, SYNC_STATE_KEY, _utcnow().isoformat())
         conn.commit()
         matched = match_all_requests(conn, emu_api_key=api_key)
@@ -187,15 +189,7 @@ def sync_emu_requests(
                     len(items), matched)
         return {"status": "ok", "imported": len(items), "matched": matched}
     except IntegrationError as exc:
-        # eMuwarez (UNIT3D) does not expose /api/requests — the endpoint 404s.
-        # That's a known tracker limitation, not a real failure: mark the task
-        # SKIPPED with a clear message instead of a scary raw HTTP 404.
         _restore_throttle()
-        if _is_requests_endpoint_missing(exc):
-            detail = "eMuwarez no expone el endpoint de peticiones (/api/requests); función no disponible aún."
-            finish_task(conn, task_id, TaskStatus.SKIPPED.value, "No implementado")
-            logger.info("Sincronización de peticiones omitida: %s", detail)
-            return {"status": "unavailable", "imported": 0, "matched": 0, "message": detail}
         finish_task(conn, task_id, TaskStatus.FAILED.value, str(exc))
         logger.warning("Sincronización de peticiones fallida: %s", exc)
         raise
@@ -203,48 +197,6 @@ def sync_emu_requests(
         _restore_throttle()
         finish_task(conn, task_id, TaskStatus.FAILED.value, str(exc))
         logger.error("Sincronización de peticiones fallida: %s", exc)
-        raise
-
-
-# ---------------------------------------------------------------------------
-# Legacy sync (kept for backward compat with tests/CLI set-endpoint flow)
-# ---------------------------------------------------------------------------
-
-def sync_requests(
-    conn: sqlite3.Connection,
-    *,
-    endpoint_url: Optional[str] = None,
-    force: bool = False,
-) -> dict[str, int | str]:
-    """Legacy sync using explicit endpoint_url + Bearer header."""
-    allowed, wait = can_sync_requests(conn, force=force)
-    if not allowed:
-        return {"status": "throttled", "wait_seconds": wait, "imported": 0}
-    task_id = start_task(conn, "sync-emu-requests", "Sincronizando peticiones EMU")
-    # Mismo resolutor que sync_emu_requests: la BD primero. Esta función leía
-    # SOLO la configuración del CLI, así que decía "No hay API Key" a quien la
-    # tuviera puesta en la interfaz — justo el fallo que el docstring de
-    # _resolve_emu_api_key llevaba describiendo ochenta líneas más arriba.
-    api_key = _resolve_emu_api_key(conn)
-    if not api_key:
-        finish_task(conn, task_id, TaskStatus.FAILED.value, "No hay API Key de eMuwarez configurada")
-        raise IntegrationError("No hay API Key de eMuwarez configurada")
-    try:
-        raw = emu.get_requests(
-            api_key,
-            endpoint_url=endpoint_url or get_state(conn, "emu_requests_endpoint"),
-        )
-        items = emu.normalize_requests(raw)
-        for item in items:
-            upsert_request(conn, item)
-        set_state(conn, SYNC_STATE_KEY, _utcnow().isoformat())
-        conn.commit()
-        match_requests(conn)
-        summary = f"{len(items)} peticiones importadas"
-        finish_task(conn, task_id, TaskStatus.COMPLETED.value, summary)
-        return {"status": "ok", "imported": len(items)}
-    except Exception as exc:
-        finish_task(conn, task_id, TaskStatus.FAILED.value, str(exc))
         raise
 
 
@@ -603,11 +555,6 @@ def _notify_new_compatible_matches(conn: sqlite3.Connection, before_ids: set[int
         logging.getLogger("emuwarez.notifications").exception(
             "No se pudieron emitir notificaciones de peticiones compatibles"
         )
-
-
-# Keep old name as alias for backward compat
-def match_requests(conn: sqlite3.Connection) -> int:
-    return match_all_requests(conn)
 
 
 def match_single_request(
@@ -1055,11 +1002,6 @@ def get_match_for_request(conn: sqlite3.Connection, request_id: int) -> Optional
         (request_id,),
     ).fetchone()
     return dict(row) if row else None
-
-
-def set_requests_endpoint(conn: sqlite3.Connection, url: str) -> None:
-    set_state(conn, "emu_requests_endpoint", url)
-    conn.commit()
 
 
 # ---------------------------------------------------------------------------

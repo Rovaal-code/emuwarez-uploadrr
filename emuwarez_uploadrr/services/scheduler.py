@@ -126,6 +126,8 @@ def _run_emu_sync(conn: sqlite3.Connection) -> tuple[str, str]:
     result = sync_emu_requests(conn, force=False)
     if result.get("status") == "throttled":
         return "skipped", f"Esperando {result.get('wait_seconds', 0)}s (mínimo 1 hora entre sincronizaciones)"
+    if result.get("status") == "busy":
+        return "skipped", str(result["message"])
     return "completed", f"{result.get('imported', 0)} peticiones importadas, {result.get('matched', 0)} cruces"
 
 

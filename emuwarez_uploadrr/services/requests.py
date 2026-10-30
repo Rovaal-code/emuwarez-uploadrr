@@ -7,16 +7,18 @@ import logging
 import os
 import re
 import sqlite3
+import threading
 import unicodedata
 from typing import Optional
 
 from ..database import borrar_peticiones, get_setting_canonical, get_state, set_state
-from . import cli_config
+from . import cli_config, emu_catalog
 from ..integrations import emu
 from ..integrations.base import IntegrationError
 from ..models import RequestItem, RequestStatus, TaskStatus
 from .library import update_request_status, content_display_title
 from .tasks import start_task, finish_task
+from .upload_states import ACTIVE_JOB_STATUSES
 from .compatibility import (
     match_request_to_library,
     classify_request_match,
@@ -143,16 +145,46 @@ def _resolve_emu_api_key(conn: sqlite3.Connection) -> Optional[str]:
     return cli_config.emu_api_key()
 
 
+_SYNC_EN_CURSO = threading.Lock()
+
+
+def _motivo_ocupado(conn: sqlite3.Connection) -> Optional[str]:
+    """Por qué ahora no toca sincronizar: el catálogo y las subidas gastan las mismas 30 llamadas por minuto de la clave."""
+    if emu_catalog.get_sync_progress().get("active"):
+        return "Se está sincronizando el catálogo de eMuwarez; vuelve a probar cuando termine."
+    marcas = ",".join("?" * len(ACTIVE_JOB_STATUSES))
+    if conn.execute(
+        f"SELECT 1 FROM upload_jobs WHERE status IN ({marcas}) LIMIT 1", tuple(ACTIVE_JOB_STATUSES)
+    ).fetchone():
+        return "Hay una subida en marcha; vuelve a probar cuando termine."
+    return None
+
+
 def sync_emu_requests(
     conn: sqlite3.Connection,
     *,
     force: bool = False,
 ) -> dict[str, int | str]:
-    """Sync EMU requests using UNIT3D ?api_token= auth. Rate-limited to 1/hour."""
+    """Sync EMU requests using UNIT3D ?api_token= auth. Rate-limited to 1/hour.
+
+    Nunca a la vez que otra sincronización de peticiones, que la del catálogo o que una subida:
+    devuelve {"status": "busy", "message": ...} sin tocar nada.
+    """
     allowed, wait = can_sync_requests(conn, force=force)
     if not allowed:
         return {"status": "throttled", "wait_seconds": wait, "imported": 0, "matched": 0}
+    if not _SYNC_EN_CURSO.acquire(blocking=False):
+        return {"status": "busy", "message": "Ya hay una sincronización de peticiones en marcha."}
+    try:
+        motivo = _motivo_ocupado(conn)
+        if motivo:
+            return {"status": "busy", "message": motivo}
+        return _sincronizar_peticiones(conn)
+    finally:
+        _SYNC_EN_CURSO.release()
 
+
+def _sincronizar_peticiones(conn: sqlite3.Connection) -> dict[str, int | str]:
     task_id = start_task(conn, "sync-emu-requests", "Sincronizando peticiones EMU")
     api_key = _resolve_emu_api_key(conn)
     if not api_key:

@@ -539,6 +539,9 @@ def cmd_requests(args) -> int:
                 wait = int(result["wait_seconds"])
                 print(f"⚠ Peticiones actualizadas hace menos de una hora. Disponible en {wait // 60} min {wait % 60} s.")
                 return 0
+            if result.get("status") == "busy":
+                print(f"⚠ {result['message']}")
+                return 0
             imported = result.get("imported", 0)
             matched = result.get("matched", 0)
             print(f"✓ Peticiones sincronizadas: {imported} importadas, {matched} cruces")

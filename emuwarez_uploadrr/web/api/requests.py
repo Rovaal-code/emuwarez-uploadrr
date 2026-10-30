@@ -168,6 +168,8 @@ def sync_requests(
             wait_seconds=wait,
             message=f"Peticiones actualizadas recientemente. Disponible en {mins}m {secs}s.",
         )
+    if result.get("status") == "busy":
+        return RequestSyncResponse(ok=False, status="busy", message=str(result["message"]))
     return RequestSyncResponse(
         ok=True,
         status="ok",

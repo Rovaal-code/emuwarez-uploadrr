@@ -54,6 +54,7 @@ def _proposal_to_response(p: dict) -> NomenclatureProposalResponse:
         current_name=p.get("current_name"),
         current_path=p.get("current_path"),
         proposed_title=p.get("proposed_title"),
+        proposed_torrent_name=p.get("proposed_torrent_name"),
         proposed_filename=p.get("proposed_filename"),
         proposed_folder=p.get("proposed_folder"),
         proposed_path=p.get("proposed_path"),

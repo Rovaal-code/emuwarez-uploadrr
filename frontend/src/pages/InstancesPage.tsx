@@ -147,8 +147,8 @@ export function InstancesPage() {
     try {
       const res = await syncInstance(id)
       setSyncResults(p => ({ ...p, [id]: `↻ ${res.imported} elementos · ${res.missing} faltantes` }))
-    } catch {
-      setSyncResults(p => ({ ...p, [id]: '✗ Error de sincronización' }))
+    } catch (e: unknown) {
+      setSyncResults(p => ({ ...p, [id]: `✗ ${e instanceof Error ? e.message : 'Error de sincronización'}` }))
     } finally {
       setSyncingId(null)
     }

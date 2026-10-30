@@ -984,6 +984,15 @@ def _migrate_library_items_mal_id(conn: sqlite3.Connection) -> None:
         pass
 
 
+def _migrate_nomenclature_torrent_name(conn: sqlite3.Connection) -> None:
+    """El título del aporte (con espacios y acentos) aparte del nombre de archivo
+    (con puntos): `proposed_filename` guardaba uno u otro según quién escribiera."""
+    try:
+        conn.execute("ALTER TABLE nomenclature_proposals ADD COLUMN proposed_torrent_name TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+
 def _migrate_library_items_tvmaze_id(conn: sqlite3.Connection) -> None:
     """TVmaze id, que Sonarr ya trae en su payload (`tvMazeId`) y no se estaba
     guardando. 50 de 52 series lo traen con valor.
@@ -1569,6 +1578,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_library_items_tvmaze_id(conn)
         _migrate_library_items_release_group(conn)
         _migrate_dominio_emu_warez(conn)
+        _migrate_nomenclature_torrent_name(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

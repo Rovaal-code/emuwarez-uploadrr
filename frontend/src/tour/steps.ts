@@ -30,7 +30,7 @@ export const TOUR_STEPS: TourStep[] = [
     tab: 'dashboard',
     selector: '[data-tour="dashboard-uploads"]',
     title: 'Actividad de subida',
-    description: 'Tus subidas en curso ahora mismo, con su progreso en vivo.',
+    description: 'Tus subidas en curso ahora mismo, con su progreso en vivo, y las últimas que han terminado.',
   },
   {
     id: 'dashboard-connections',

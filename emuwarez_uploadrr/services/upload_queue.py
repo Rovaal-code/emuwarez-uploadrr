@@ -857,6 +857,7 @@ def _run_queued_job(job_id: int) -> None:
             _write_snapshot(job_id, "nomenclature_snapshot_json", {
                 "media_type": "season",
                 "proposed_title": applied.get("season_pack_title"),
+                "proposed_torrent_name": applied.get("season_pack_title"),
                 "proposed_filename": applied.get("season_pack_title"),
                 "series_title": applied.get("series_title"),
                 "year": applied.get("year"),

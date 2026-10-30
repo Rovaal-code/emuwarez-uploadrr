@@ -395,6 +395,7 @@ export interface NomenclatureProposal {
   current_name?: string
   current_path?: string
   proposed_title?: string
+  proposed_torrent_name?: string
   proposed_filename?: string
   proposed_folder?: string
   proposed_path?: string
@@ -483,6 +484,7 @@ export interface UploadSnapshotTrack {
 export interface UploadNomenclatureSnapshot {
   media_type?: string | null
   proposed_title?: string | null
+  proposed_torrent_name?: string | null
   proposed_filename?: string | null
   series_title?: string | null
   year?: number | null

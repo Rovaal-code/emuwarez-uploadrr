@@ -177,3 +177,8 @@ def test_save_fields_creates_proposal(client, auth_headers):
     assert row["audio_summary"] == "DTS-HD"
     assert row["subtitle_summary"] == "SPA"
     assert row["release_tag"] == "EMUWAREZ"
+    # El título del aporte va con espacios; el archivo, que se renombra con
+    # proposed_filename, con puntos.
+    assert row["proposed_torrent_name"] == data["torrent_name"]
+    assert row["proposed_torrent_name"].startswith("SaveTest 2024 ")
+    assert row["proposed_filename"].startswith("SaveTest.2024.")

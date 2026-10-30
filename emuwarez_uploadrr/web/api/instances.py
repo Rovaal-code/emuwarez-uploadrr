@@ -141,6 +141,12 @@ def sync_instance(
     current_user: dict = Depends(require_auth),
 ) -> SyncResponse:
     from emuwarez_uploadrr.services.instances import get_instance
+    from emuwarez_uploadrr.services.library import (
+        SyncAlreadyRunning,
+        _lib_sync_guard,
+        _set_lib_progress,
+        recompute_after_sync,
+    )
     from emuwarez_uploadrr.services.library import sync_instance as _sync
     with _get_conn() as conn:
         inst = get_instance(conn, instance_id)
@@ -152,7 +158,20 @@ def sync_instance(
                 detail=f"Sincronización de biblioteca no soportada para el tipo '{inst.type}'.",
             )
         try:
-            imported, missing = _sync(conn, inst, include_episodes=True)
+            # Mismo candado y barra de progreso que la sincronización global.
+            with _lib_sync_guard():
+                _set_lib_progress(phase=f"Sincronizando {inst.type.capitalize()}: {inst.name}…",
+                                  instance=inst.name, instance_type=inst.type)
+                try:
+                    imported, missing = _sync(
+                        conn, inst, include_episodes=True,
+                        on_progress=lambda c: _set_lib_progress(imported=c),
+                        on_total=lambda t: _set_lib_progress(total=t),
+                    )
+                finally:
+                    recompute_after_sync(conn)
+        except SyncAlreadyRunning:
+            raise HTTPException(status_code=429, detail="Ya hay una sincronización de biblioteca en marcha")
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"Error en sync: {exc}")
     return SyncResponse(

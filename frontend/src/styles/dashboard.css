@@ -154,14 +154,49 @@
   overflow: hidden;
 }
 
+/* Una lista: las filas empiezan arriba y se apilan, no se centran. */
 .upload-panel-body {
   flex: 1;
-  padding: 20px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 8px;
   display: flex;
   flex-direction: column;
+}
+
+.upload-row {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  min-height: 200px;
+  gap: 10px;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.upload-row:hover {
+  background: var(--bg-card-hover);
+}
+
+.upload-row-title {
+  font-size: 13px;
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upload-row:hover .upload-row-title {
+  color: var(--text-accent);
+}
+
+/* Mismo aspecto que la cabecera de las tablas del Panel (.data-table th). */
+.upload-panel-group {
+  padding: 14px 8px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
 }
 
 /* Tasks/events panels */

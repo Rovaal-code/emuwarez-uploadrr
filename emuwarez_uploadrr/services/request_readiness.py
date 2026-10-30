@@ -357,10 +357,10 @@ def select_best_candidate(candidates: list[dict]) -> Optional[dict]:
 
 
 # Lo que se puntúa de la fila que pide la petición; ids, título y tipo siguen siendo los de la fila emparejada.
-_DATOS_DE_LA_FILA_PEDIDA = (
-    "local_status", "resolution", "source", "nomenclature_status", "prepared_path", "file_exists",
-    "arr_queue_status", "arr_history_status", "arr_history_event_type", "arr_history_error",
-    "emu_in_catalog", "emu_aportes",
+_LEER_FILA_PEDIDA = (
+    "SELECT item_type, local_status, resolution, source, nomenclature_status, prepared_path, file_exists, "
+    "arr_queue_status, arr_history_status, arr_history_event_type, arr_history_error, emu_in_catalog, emu_aportes "
+    "FROM library_items WHERE id = ?"
 )
 
 
@@ -397,10 +397,12 @@ def build_request_candidates(request_item_id: int, conn: sqlite3.Connection) -> 
     for rank, m in enumerate(raw_matches[:10], start=1):
         lib = dict(m["item"])
         # La temporada o el capítulo pedidos se puntúan con sus propios datos, no con el resumen de la serie.
-        fila = _scoped_library_id(conn, lib, req)
-        if fila != lib["id"]:
-            lib.update(dict(conn.execute(
-                f"SELECT {', '.join(_DATOS_DE_LA_FILA_PEDIDA)} FROM library_items WHERE id = ?", (fila,)).fetchone()))
+        pedida = dict(conn.execute(_LEER_FILA_PEDIDA, (_scoped_library_id(conn, lib, req),)).fetchone())
+        if req.get("req_scope") in ("season", "episode") and pedida["item_type"] != req["req_scope"]:
+            # Lo pedido no está en la biblioteca, solo su serie o su temporada: no hay nada que preparar.
+            pedida.update(local_status="Faltante", emu_in_catalog=None)
+        del pedida["item_type"]
+        lib.update(pedida)
         scored = score_request_candidate(req, lib)
         scored["candidate_rank"] = rank
         scored["library_item_id"] = lib["id"]

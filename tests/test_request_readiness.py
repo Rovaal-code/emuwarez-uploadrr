@@ -295,6 +295,20 @@ def test_una_peticion_de_capitulo_se_puntua_con_el_capitulo(db_conn):
     assert evaluate_request_readiness(req_id, db_conn)["status"] == "ready_to_upload"
 
 
+def test_una_temporada_que_no_esta_no_se_prepara(db_conn):
+    """Pedían la Temporada 3, que no está: salía «listo» por la serie o por la Temporada 1, que sí lo estaban."""
+    from emuwarez_uploadrr.services.request_readiness import evaluate_request_readiness
+    serie = _insert_library(db_conn, item_type="series", title="Serie Corta", tmdb_id="sc1",
+                            nomenclature_status="Correcta", prepared_path="/data/prepared/serie_corta")
+    temporada1 = _insert_library(db_conn, item_type="season", title="Serie Corta - Temporada 1", tmdb_id="sc1",
+                                 nomenclature_status="Correcta", prepared_path="/data/prepared/serie_corta_t1")
+    db_conn.execute("UPDATE library_items SET parent_id = ?, season_number = 1 WHERE id = ?", (serie, temporada1))
+    req_id = _insert_request(db_conn, emu_id="emu-sc", title="Serie Corta", category="Series", tmdb_id="sc1")
+    db_conn.execute("UPDATE request_items SET req_scope = 'season', req_season = 3 WHERE id = ?", (req_id,))
+    db_conn.commit()
+    assert evaluate_request_readiness(req_id, db_conn)["status"] == "no_local_match"
+
+
 def test_el_id_gana_a_un_titulo_que_esta_listo(db_conn):
     """Ganaba el candidato «listo para subir» aunque solo casara por el título y fuera otra película."""
     from emuwarez_uploadrr.services.request_readiness import evaluate_request_readiness

@@ -947,11 +947,11 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           </select>
         </div>
         <div className="form-group">
-          <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <label className="form-label" htmlFor="capturas-de-los-packs" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             Capturas de los packs
             <InfoIcon text="En un pack de temporada o de serie completa, de qué capítulos genera y sube capturas Uploadrr. Por defecto, solo del primero (el de número más bajo, sin contar los especiales si el pack trae otra temporada). Con todos los capítulos, cada uno lleva además las suyas en un desplegable de la descripción, y con muchos capítulos la subida tarda bastante más." />
           </label>
-          <select className="form-input form-select" value={capturasPorCapitulo ? 'true' : 'false'} onChange={e => setCapturasPorCapitulo(e.target.value === 'true')}>
+          <select id="capturas-de-los-packs" className="form-input form-select" value={capturasPorCapitulo ? 'true' : 'false'} onChange={e => setCapturasPorCapitulo(e.target.value === 'true')}>
             <option value="false">Solo del primer capítulo</option>
             <option value="true">De todos los capítulos</option>
           </select>

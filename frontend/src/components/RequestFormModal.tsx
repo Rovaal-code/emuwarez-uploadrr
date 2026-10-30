@@ -1,24 +1,20 @@
-import { useState } from 'react'
 import type { LibraryItemResponse } from '../types/api'
 import { useTooltip } from './Tooltip'
 import { episodeListLabel } from '../utils/libraryItem'
 import { Favicon, domainOf } from './Favicon'
 import { Modal } from './Modal'
+import { urlCrearPeticion } from '../utils/peticionEmu'
 
-// eMuwarez "Petición" (request) creation form. Built from the field spec the
-// user captured from eMuwarez's web form. Submission is intentionally gated:
-// the real create/edit endpoints haven't been captured yet, so "Enviar"
-// validates and previews the payload but does not POST. The form is prefilled
-// from the library item so peticiones start from content you already track.
-// category/scope aren't user choices — both are fixed by the library item
-// the request was opened from, just shown here for context.
+// Vista previa de la petición en eMuwarez, sacada del elemento de la
+// biblioteca. La API de UNIT3D no permite crear peticiones, así que el botón
+// abre el formulario de eMuwarez (/requests/create) ya rellenado en otra
+// pestaña y la petición se envía desde allí, con la sesión del navegador.
+// Tipo, resolución, temporada, episodio, descripción y recompensa se completan
+// en ese formulario: /requests/create no los acepta por la URL.
 const CATEGORY_LABELS: Record<string, string> = { movie: 'Películas', tv: 'Series', doc: 'Documentales' }
 const SCOPE_LABELS: Record<'all' | 'season' | 'episode', string> = {
   all: 'Todas las temporadas', season: 'Una temporada', episode: 'Un episodio',
 }
-const TYPES = ['Any', 'Full Disc', 'Remux', 'Encode', 'WEB-DL', 'WEBRIP', 'HDTV', 'SD', 'STEAMRIP']
-const RESOLUTIONS = ['Any', '4320p', '2160p', '1080p', '1080i', '720p', '540p', '576p', '480p', 'Otras']
-const MIN_REWARD = 100
 
 const onlyDigits = (v: string) => v.replace(/\D+/g, '')
 
@@ -47,9 +43,7 @@ export function RequestFormModal({ item, onClose }: Props) {
   const isSeriesLike = item.item_type === 'series' || item.item_type === 'season' || item.item_type === 'episode'
 
   // Everything below is fixed by the library item the request was opened
-  // from — a petición always targets that exact title/season/episode, so
-  // none of it is a user choice (only Tipo/Resolución/Descripción/
-  // Recompensa/Anónimo are editable, further down).
+  // from — a petición always targets that exact title/season/episode.
   const category: string = isSeriesLike ? 'tv' : 'movie'
   // eMuwarez expects the year right after the series/movie name:
   // "Título (AÑO)" for a movie/series, "Serie (AÑO) - Temporada X" or
@@ -78,28 +72,11 @@ export function RequestFormModal({ item, onClose }: Props) {
   const scope: 'all' | 'season' | 'episode' =
     item.episode_number != null ? 'episode' : item.season_number != null ? 'season' : 'all'
 
-  // Tipo por defecto "Any" (una petición no suele exigir un source concreto).
-  const [type, setType] = useState('Any')
-  const [resolution, setResolution] = useState(item.resolution && RESOLUTIONS.includes(item.resolution) ? item.resolution : 'Any')
-  const [description, setDescription] = useState('')
-  const [reward, setReward] = useState(String(MIN_REWARD))
-  const [anon, setAnon] = useState(false)
-
-  const [msg, setMsg] = useState<string | null>(null)
-
   // Documentaries share the Series field set (season/episode, tvdb), so they
   // inherit the exact same behaviour here.
   const isSeries = category === 'tv' || category === 'doc'
-  const rewardNum = parseInt(reward || '0', 10)
-  const rewardTooLow = rewardNum < MIN_REWARD
-  const canSubmit = !rewardTooLow
-  const submitTip = useTooltip(canSubmit ? null : 'Introduce una recompensa válida')
 
-  const handleSubmit = () => {
-    // No real endpoint yet — eMuwarez's create-request endpoint hasn't been
-    // captured, so there's nothing to actually POST to.
-    setMsg('No implementado')
-  }
+  const createUrl = urlCrearPeticion({ category, title, imdb: imdbId, tmdb: tmdbId, tvdb: tvdbId, mal: malId })
 
   return (
     <Modal titulo="Nueva petición en eMuwarez" onClose={onClose} className="modal-wide" style={{ maxWidth: 640 }}>
@@ -108,18 +85,6 @@ export function RequestFormModal({ item, onClose }: Props) {
           <ReadOnlyField label="Título" value={title} gridColumn="1 / -1" />
           <ReadOnlyField label="Categoría" value={CATEGORY_LABELS[category] ?? category} gridColumn={isSeries ? undefined : '1 / -1'} />
           {isSeries && <ReadOnlyField label="Alcance de la petición" value={SCOPE_LABELS[scope]} />}
-
-          <label><span style={labelStyle}>Tipo</span>
-            <select className="form-input" value={type} onChange={e => setType(e.target.value)}>
-              {TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </label>
-
-          <label><span style={labelStyle}>Resolución</span>
-            <select className="form-input" value={resolution} onChange={e => setResolution(e.target.value)}>
-              {RESOLUTIONS.map(r => <option key={r} value={r}>{r}</option>)}
-            </select>
-          </label>
 
           {isSeries && (
             <>
@@ -139,28 +104,15 @@ export function RequestFormModal({ item, onClose }: Props) {
           )}
         </div>
 
-        <label style={{ display: 'block', marginTop: 16 }}><span style={labelStyle}>Descripción personal</span>
-          <textarea className="form-input" value={description} onChange={e => setDescription(e.target.value)} rows={3} style={{ resize: 'vertical' }} placeholder="No olvides dar las gracias!" />
-        </label>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px', marginTop: 12, alignItems: 'center' }}>
-          <label><span style={labelStyle}>Recompensa (puntos)</span>
-            <input className="form-input" value={reward} onChange={e => setReward(onlyDigits(e.target.value))} inputMode="numeric" />
-            {rewardTooLow && <span style={{ fontSize: 11, color: 'var(--color-error)' }}>Mínimo {MIN_REWARD} puntos</span>}
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 18 }}>
-            <input type="checkbox" checked={anon} onChange={e => setAnon(e.target.checked)} /> Anónimo
-          </label>
-        </div>
-
-        {msg && <p style={{ fontSize: 12, marginTop: 10, fontWeight: 600 }} className="text-error">{msg}</p>}
+        <p style={{ fontSize: 12, marginTop: 16 }} className="text-muted">
+          Se abre el formulario de eMuwarez rellenado con estos datos. Allí completas tipo, resolución{scope !== 'all' && ', temporada, episodio'}, descripción y recompensa, y envías la petición.
+        </p>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
           <button className="btn btn-secondary" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary" onClick={handleSubmit} disabled={!canSubmit} {...submitTip.triggerProps}>
-            Enviar petición
-            {submitTip.tooltipNode}
-          </button>
+          <a className="btn btn-primary" href={createUrl} target="_blank" rel="noreferrer" onClick={onClose} style={{ textDecoration: 'none' }}>
+            Abrir en eMuwarez
+          </a>
         </div>
       </div>
     </Modal>

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useTooltip } from './Tooltip'
 import { IconoCerrar } from './Iconos'
 import { siguienteFoco } from '../utils/foco'
@@ -29,12 +29,15 @@ export function Modal({ titulo, onClose, className, style, tituloStyle, children
   const cerrar = useRef(onClose)
   cerrar.current = onClose
 
+  // Se lee en el primer render: ahí el foco sigue en quien abrió el modal.
+  const [antes] = useState(() => document.activeElement instanceof HTMLElement ? document.activeElement : null)
+
   useEffect(() => {
     const el = panel.current
     if (!el) return
-    const antes = document.activeElement instanceof HTMLElement ? document.activeElement : null
     abiertos.push(el)
-    el.focus()
+    // Un hijo con autoFocus ya tiene el foco: no se lo quitamos.
+    if (!el.contains(document.activeElement)) el.focus()
     const teclas = (e: KeyboardEvent) => {
       if (e.defaultPrevented || abiertos[abiertos.length - 1] !== el) return
       if (e.key === 'Escape') {

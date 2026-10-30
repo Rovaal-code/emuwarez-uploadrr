@@ -63,7 +63,7 @@ the upload with Uploadrr-EMU (`Kisnov/Uploadrr-EMU`, cloned into the image at `/
   and `vX.Y.Z`, builds `:X.Y.Z`, `:<sha>` and `:latest`, and publishes the manifest (secret
   `UPLOADRR_VERSION_TOKEN`). Release when Gabriel asks: `gh workflow run publicar.yml -f notas="…"`, with a
   neutral public note. `solo_prueba=true` builds `:edge` from master's tip only. `scripts/desplegar.sh` is
-  the local fallback (no Actions minutes) and also pushes `:X.Y.Z`. Pass `--build-arg UPLOADRR_COMMIT=…` or
+  the local fallback (no Actions minutes, no tests) and pushes in the same order. Pass `--build-arg UPLOADRR_COMMIT=…` or
   the Uploadrr-EMU clone layer comes from cache.
 - Version manifest: the Diagnóstico card compares the image's `APP_COMMIT` with `latest.json` in the public
   repo `Kisnov/uploadrr-version` (a fork of `Rovaal-code/uploadrr-version`); to test against another

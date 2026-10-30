@@ -124,7 +124,7 @@ La imagen se publica con varias etiquetas, y `EMUWAREZ_UPLOADRR_TAG` (en el `.en
   anunciada). Se actualiza con `docker compose pull && docker compose up -d`.
 - `0.11.0`: una versión concreta, de las que tienen etiqueta `v0.11.0` en el repo. Sirve para quedarte en ella o
   para volver atrás si la nueva falla.
-- El sha del commit de una versión: cada versión publicada por el workflow tiene también esa etiqueta.
+- El sha del commit de una versión: cada versión publicada tiene también esa etiqueta.
 - `edge`: la punta de `master` sin publicar como versión, solo cuando se lanza el workflow con *solo prueba*.
 
 ```bash

@@ -409,7 +409,8 @@ def test_concurrent_create_admin_creates_only_one(client):
         with connect(db_path()) as conn:
             conn.execute("DELETE FROM users")
             conn.commit()
-        salida = threading.Event()
+        # Los dos hilos y este: ninguno pide nada hasta que los tres han llegado.
+        salida = threading.Barrier(3)
         estados = []
 
         def crear(nombre):
@@ -421,7 +422,7 @@ def test_concurrent_create_admin_creates_only_one(client):
         hilos = [threading.Thread(target=crear, args=(f"admin{ronda}{i}",)) for i in range(2)]
         for h in hilos:
             h.start()
-        salida.set()
+        salida.wait()
         for h in hilos:
             h.join()
         with connect(db_path()) as conn:

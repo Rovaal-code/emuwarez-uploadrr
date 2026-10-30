@@ -922,7 +922,8 @@ def test_the_reconciliation_actually_runs_when_the_app_boots(db_conn, isolated_d
 # Lo que recibe Uploadrr: el enlace de la carpeta de subidas
 # ---------------------------------------------------------------------------
 
-def _correr_cola_hasta_el_inicio(db_conn, tmp_path, monkeypatch, *, enlace_duro=True):
+def _correr_cola_hasta_el_inicio(db_conn, tmp_path, monkeypatch, *, enlace_duro=True,
+                                 resincronizar=lambda *a, **k: None):
     """Pasa un trabajo por toda la cola (con los pasos pesados simulados) y
     devuelve lo que hay en la fila justo cuando se arranca Uploadrr."""
     import errno
@@ -961,7 +962,7 @@ def _correr_cola_hasta_el_inicio(db_conn, tmp_path, monkeypatch, *, enlace_duro=
 
     with patch("emuwarez_uploadrr.services.upload_execution.start_upload_job", arrancar), \
          patch("emuwarez_uploadrr.services.nomenclature.apply_nomenclature_proposal", lambda *a, **k: {"status": "applied"}), \
-         patch("emuwarez_uploadrr.services.library.refresh_arr_and_resync", lambda *a, **k: None), \
+         patch("emuwarez_uploadrr.services.library.refresh_arr_and_resync", resincronizar), \
          patch("emuwarez_uploadrr.services.mkv_remux.modo_pistas", lambda c: "ninguno"), \
          patch("emuwarez_uploadrr.services.mkv_remux.toca_el_fichero", lambda m: False), \
          patch("emuwarez_uploadrr.services.upload_queue._apply_mkv_title_best_effort", lambda *a, **k: None):
@@ -982,6 +983,25 @@ def test_uploadrr_recibe_el_enlace_de_la_carpeta_de_subidas(db_conn, tmp_path, m
     assert visto["status"] == "ready"
     assert Path(visto["prepared_path"]).is_relative_to(visto["uploads"])
     assert visto["errores"] == []
+
+
+def test_la_resincronizacion_no_cuela_un_fichero_fuera_de_allowed_roots(db_conn, tmp_path, monkeypatch):
+    """La comprobación de integridad es anterior a la resincronización con Arr,
+    que puede cambiar la ruta: el enlace se vuelve a comprobar."""
+    from emuwarez_uploadrr.services import uploadrr_contract
+    monkeypatch.setattr(uploadrr_contract, "DEFAULT_ALLOWED_ROOTS", [str(tmp_path / "lib")])
+    fuera = tmp_path / "fuera.mkv"
+    fuera.write_bytes(b"x" * 100)
+
+    def resincronizar(*a, **k):
+        db_conn.execute("UPDATE library_items SET path = ?, prepared_path = ?", (str(fuera), str(fuera)))
+        db_conn.commit()
+
+    visto = _correr_cola_hasta_el_inicio(db_conn, tmp_path, monkeypatch, resincronizar=resincronizar)
+    assert "status" not in visto  # Uploadrr no llega a arrancar
+    job = db_conn.execute("SELECT status, error_message FROM upload_jobs").fetchone()
+    assert job["status"] == "failed" and "allowed_roots" in job["error_message"]
+    assert not (tmp_path / "uploads").exists() or not any((tmp_path / "uploads").iterdir())
 
 
 def test_un_enlace_simbolico_en_la_carpeta_de_subidas_vale_para_subir(db_conn, tmp_path, monkeypatch):

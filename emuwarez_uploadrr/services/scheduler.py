@@ -38,19 +38,22 @@ DEFAULT_TASKS: list[tuple[str, str, str, int, int, int]] = [
         30, 15, 1,
     ),
     (
+        TASK_EMU_SYNC,
+        "Sincronizar peticiones eMuwarez",
+        "Descarga las peticiones abiertas de eMuwarez y las cruza con tu biblioteca. Una vez al día, para gastar pocas llamadas de la API.",
+        1440, 60, 1,
+    ),
+    (
         TASK_CHECK_VERSION,
         "Comprobar versión",
         "Consulta si hay una imagen más nueva publicada y avisa una sola vez por versión.",
         60, 60, 1,
     ),
-    # NOTE: the eMuwarez request sync (TASK_EMU_SYNC) is intentionally NOT a
-    # scheduled task — it runs only from the "Sincronizar peticiones" button.
-    # The 1h throttle in services/requests.py still applies.
 ]
 
 # Task keys that used to be scheduled but were removed — pruned on seed so they
 # stop appearing in the Tareas page.
-OBSOLETE_TASKS: list[str] = [TASK_EMU_SYNC]
+OBSOLETE_TASKS: list[str] = []
 
 
 def _now() -> datetime:

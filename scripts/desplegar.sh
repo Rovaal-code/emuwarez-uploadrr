@@ -26,7 +26,8 @@
 # (EMUWAREZ_UPLOADRR_TAG=X.Y.Z) para quedarse en una versión o volver a ella.
 #
 # Lo normal es el workflow «Publicar versión», que hace lo mismo en GitHub tras
-# pasar los tests. Esto es la alternativa local, sin gastar minutos de Actions.
+# pasar los tests. Esto es la alternativa local, sin gastar minutos de Actions
+# y sin tests: pásalos antes.
 #
 # Necesita `gh auth login` hecho, para publicar la versión.
 set -euo pipefail
@@ -43,10 +44,11 @@ PRUEBA=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --notas)         NOTAS="$2"; shift 2 ;;
-    --version)       ESCALA="$2"; shift 2 ;;
+    --notas)         NOTAS="${2:?falta el texto de --notas}"; shift 2 ;;
+    --version)       ESCALA="${2:?falta la escala de --version: patch, minor o major}"; shift 2 ;;
     --solo-prueba)   PRUEBA=1; shift ;;
-    -h|--help)       sed -n '2,20p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    # La cabecera entera, hasta la primera línea que no es comentario.
+    -h|--help)       sed -n '2,${/^#/!q;p;}' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "Argumento no reconocido: $1" >&2; exit 2 ;;
   esac
 done

@@ -149,6 +149,21 @@ export function ValueIcon({ children }: { children: React.ReactNode }) {
   return <span className="vicon">{children}</span>
 }
 
+// Icon + text with no chip box, for a table row (Peticiones, Subidas): a
+// `ValueChip` there is read as a button whether it does anything or not —
+// with ten of them per row, everything on the screen looks clickable. This
+// is for the ones that DON'T open anything (a spec, a type); an actual link
+// keeps its `ValueChip linkable` (see OriginCell/deepLink in both pages),
+// so a chip border still means "this opens something".
+export function PlainValue({ icon, children }: { icon?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+      {icon && <span className="vicon">{icon}</span>}
+      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{children}</span>
+    </span>
+  )
+}
+
 // Same mini-tarjeta (icon + value) the "Información técnica" card uses,
 // reused in comparison tables (eMuwarez vs. tu copia, Petición vs. tu
 // biblioteca) so their cells read the same way instead of plain text. Falls

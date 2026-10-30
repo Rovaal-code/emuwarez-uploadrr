@@ -43,6 +43,8 @@ export function testQbitConnection(params: {
   port?: string
   username?: string
   password?: string
+  // "" prueba sin qui aunque esté guardado.
+  qui_proxy_url?: string
 } = {}): Promise<IntegrationTestResult> {
   return api.post<IntegrationTestResult>('/integrations/test/qbit', params)
 }

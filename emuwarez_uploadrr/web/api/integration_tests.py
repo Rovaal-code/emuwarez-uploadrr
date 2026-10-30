@@ -86,6 +86,7 @@ def test_qbit(
             port=body.port or None,
             username=body.username if body.username is not None else None,
             password=body.password if body.password is not None else None,
+            qui_proxy_url=body.qui_proxy_url,
             conn=conn,
         )
     return IntegrationTestResult(**result)

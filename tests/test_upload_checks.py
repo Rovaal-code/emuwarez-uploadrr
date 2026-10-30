@@ -278,3 +278,20 @@ def test_a_failed_content_check_is_not_ready(db_conn, tmp_path):
     r = uc.run_upload_checks(db_conn, iid, scope="content")
     assert r["ready"] is False
     assert any(c["status"] == "fail" for c in r["checks"])
+
+
+def test_qui_alone_counts_as_configured_qbit(db_conn, tmp_path, monkeypatch):
+    """Con solo el proxy de qui, qBittorrent se comprueba en vez de omitirse."""
+    from emuwarez_uploadrr.services.settings import set_setting
+    f = tmp_path / "movie.mkv"; f.write_bytes(b"x" * 2048)
+    (tmp_path / "tmp").mkdir()
+    set_setting(db_conn, "uploadrr.path", str(tmp_path))
+    set_setting(db_conn, "qbit.qui_proxy_url", "http://qui:7476/proxy/clave")
+    import emuwarez_uploadrr.services.integration_tests as it
+    monkeypatch.setattr(it, "test_qbit_connection", lambda **k: {"ok": True, "message": "ok"})
+    monkeypatch.setattr(it, "test_emuwarez_connection", lambda **k: {"ok": True, "message": "ok"})
+    import emuwarez_uploadrr.services.image_hosts as ih
+    monkeypatch.setattr(ih, "test_image_host", lambda hid, key=None, **k: {"ok": True})
+
+    r = uc.run_upload_checks(db_conn, _movie_with_path(db_conn, str(f)))
+    assert {c["id"]: c for c in r["checks"]}["qbittorrent"]["status"] != "skip"

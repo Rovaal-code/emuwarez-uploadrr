@@ -405,3 +405,19 @@ def test_every_host_that_needs_a_key_gets_it_staged():
     assert set(SCREENS_API_KEY_HOSTS) == esperados
     # Y ninguno de los que NO necesitan clave se cuela.
     assert not (set(SCREENS_API_KEY_HOSTS) & {h["id"] for h in IMAGE_HOSTS if not h["needs_key"]})
+
+
+def test_stage_qbittorrent_config_with_qui_only():
+    """Con el proxy de qui no hacen falta url ni credenciales: Uploadrr-EMU habla por qui."""
+    lines = ["DEFAULT:", "  default_torrent_client: watch"]
+    staged, _ = stage_qbittorrent_config(lines, qui_proxy_url=" http://qui:7476/proxy/clave ")
+    mapping = get_child_inline_mapping(staged, "TORRENT_CLIENTS", QBIT_CLIENT_KEY)
+    assert mapping["qui_proxy_url"] == "http://qui:7476/proxy/clave"
+    assert "qbit_url" not in mapping and "qbit_pass" not in mapping
+    assert "default_torrent_client: 'qbit'" in "\n".join(staged)
+
+
+def test_stage_qbittorrent_config_without_qui_drops_a_previous_one():
+    lines = ["TORRENT_CLIENTS:", "  qbit: {'torrent_client': 'qbit', 'qui_proxy_url': 'http://qui/proxy/vieja'}"]
+    staged, _ = stage_qbittorrent_config(lines, url="http://x:8080", username="u", password="p")
+    assert "qui_proxy_url" not in get_child_inline_mapping(staged, "TORRENT_CLIENTS", QBIT_CLIENT_KEY)

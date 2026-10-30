@@ -978,3 +978,11 @@ def test_a_cancelled_job_does_not_notify_that_the_upload_failed(db_conn, monkeyp
     jid2 = _insert_job(db_conn, status="running")
     upload_queue._fail(jid2, "mkvmerge devolvió error")
     assert len(avisos) == 1
+
+
+def test_collect_secrets_includes_qbittorrent_password_and_qui(db_conn):
+    from emuwarez_uploadrr.services.settings import set_setting
+    from emuwarez_uploadrr.services.upload_execution import _collect_secrets
+    set_setting(db_conn, "qbit.password", "contrasena-qbit")
+    set_setting(db_conn, "qbit.qui_proxy_url", "http://qui:7476/proxy/clave-de-qui")
+    assert {"contrasena-qbit", "http://qui:7476/proxy/clave-de-qui"} <= set(_collect_secrets(db_conn))

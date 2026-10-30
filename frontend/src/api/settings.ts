@@ -17,6 +17,7 @@ export interface SettingsData {
   remux_track_mode: ModoPistas
   qbit_username: string | null
   qbit_password_configured: boolean
+  qbit_qui_configured: boolean
   qbit_configured: boolean
   image_hosts_available: { id: string; label: string; needs_key: boolean; url?: string; favicon?: string | null }[]
   image_hosts_enabled: string[]
@@ -63,6 +64,8 @@ export interface SettingsUpdatePayload {
   remux_track_mode?: ModoPistas
   qbit_username?: string
   qbit_password?: string
+  qbit_qui_proxy_url?: string
+  qbit_qui_proxy_clear?: boolean
   image_hosts_enabled?: string[]
   image_host_keys?: Record<string, string>
   tmdb_api_key?: string

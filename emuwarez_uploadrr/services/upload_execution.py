@@ -159,7 +159,8 @@ def _get_setting(conn, key: str, default=None):
 
 def _collect_secrets(conn) -> list[str]:
     secrets = []
-    for key in ("emu.api_key", "tmdb.api_key"):
+    # Los dos de qBittorrent también: un error de conexión de Uploadrr-EMU escribe la URL de qui, clave incluida.
+    for key in ("emu.api_key", "tmdb.api_key", "qbit.password", "qbit.qui_proxy_url"):
         val = get_setting_canonical(conn, key)
         if val:
             secrets.append(val)
@@ -726,6 +727,7 @@ def _stage_uploadrr_config(job_id: int, cwd: str) -> Path | None:
         per_episode_screens = get_setting_canonical(conn, "emu.per_episode_screens") == "true"
         qbit_username = get_setting_canonical(conn, "qbit.username")
         qbit_password = get_setting_canonical(conn, "qbit.password")
+        qbit_qui = get_setting_canonical(conn, "qbit.qui_proxy_url")
     finally:
         conn.close()
 
@@ -749,14 +751,14 @@ def _stage_uploadrr_config(job_id: int, cwd: str) -> Path | None:
             # instead of it silently defaulting to its own img_hosts order.
             lines, _msg = stage_image_hosts(lines, img_hosts=img_hosts, api_keys=img_api_keys)
             changed = True
-        if qbit_url and qbit_username and qbit_password:
+        if (qbit_url and qbit_username and qbit_password) or qbit_qui:
             # Without this, Uploadrr-EMU falls back to whatever
             # DEFAULT.default_torrent_client its own config.yaml ships with
             # (confirmed: "watch", not "qbit") — the job finishes
             # "successfully" but silently never touches qBittorrent's API.
             lines, _msg = stage_qbittorrent_config(
-                lines, url=qbit_url, username=qbit_username, password=qbit_password, tag=qbit_tag,
-                base_dir=cwd,
+                lines, url=qbit_url or "", username=qbit_username or "", password=qbit_password or "", tag=qbit_tag,
+                base_dir=cwd, qui_proxy_url=qbit_qui,
             )
             changed = True
         if not changed:

@@ -72,12 +72,18 @@ def test_qbit_connection(
     port: Optional[str] = None,
     username: Optional[str] = None,
     password: Optional[str] = None,
+    qui_proxy_url: Optional[str] = None,
     *,
     conn=None,
 ) -> dict:
     """Validate host + login against the qBittorrent WebUI. Falls back to the
     stored config (settings.qbit.*) for any field left None. Read-only."""
     from ..integrations.qbittorrent import qbit_test_connection
+
+    # Con el proxy de qui se prueba ese, como hará la subida; "" pide no usarlo.
+    _qui = qui_proxy_url if qui_proxy_url is not None else _setting(conn, "qbit.qui_proxy_url")
+    if _qui and str(_qui).strip():
+        url, port, username, password = str(_qui).strip(), None, "", ""
 
     _url = url if url is not None else _setting(conn, "qbit.url")
     # El puerto ya no es un ajuste propio: va dentro de qbit.url, y

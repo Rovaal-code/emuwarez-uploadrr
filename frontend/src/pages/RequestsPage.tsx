@@ -121,8 +121,6 @@ const SORT_OPTIONS = [
   { value: 'title', label: 'Orden: Título (A-Z)' },
   { value: 'points_desc', label: 'Orden: Más puntos' },
   { value: 'points_asc', label: 'Orden: Menos puntos' },
-  { value: 'votes_desc', label: 'Orden: Más me gusta' },
-  { value: 'comments_desc', label: 'Orden: Más comentarios' },
 ]
 
 const fmtNum = (n: number | null | undefined) => formatNumero(n)
@@ -452,12 +450,17 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
               <FieldRow label="Puntos">
                 <ValueChip><ValueIcon><PointsValueIcon /></ValueIcon><span className="txt">{fmtNum(item.points)}</span></ValueChip>
               </FieldRow>
-              <FieldRow label="Votos">
-                <ValueChip><ValueIcon><ThumbsUpValueIcon /></ValueIcon><span className="txt">{item.votes ?? 0}</span></ValueChip>
-              </FieldRow>
-              <FieldRow label="Comentarios">
-                <ValueChip><ValueIcon><CommentValueIcon /></ValueIcon><span className="txt">{item.comments ?? 0}</span></ValueChip>
-              </FieldRow>
+              {/* eMuwarez no da votos ni comentarios: sin dato, sin fila. */}
+              {item.votes != null && (
+                <FieldRow label="Votos">
+                  <ValueChip><ValueIcon><ThumbsUpValueIcon /></ValueIcon><span className="txt">{item.votes}</span></ValueChip>
+                </FieldRow>
+              )}
+              {item.comments != null && (
+                <FieldRow label="Comentarios">
+                  <ValueChip><ValueIcon><CommentValueIcon /></ValueIcon><span className="txt">{item.comments}</span></ValueChip>
+                </FieldRow>
+              )}
             </Card>
 
             <Card title="Identificadores externos" icon={<ExternalIdsCardIcon />}>
@@ -815,6 +818,9 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   }, [])
 
   const displayItems = items
+  // Las peticiones reales no traen votos ni comentarios: sin dato, sin columna.
+  const hayVotos = displayItems.some(i => i.votes != null)
+  const hayComentarios = displayItems.some(i => i.comments != null)
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1
@@ -912,15 +918,15 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                     <th><HeaderFilter label="Source" value={sourceFilter} onChange={setSourceFilter} options={[
                       { value: '', label: 'Todos' }, ...facets.sources.map(s => ({ value: s, label: s })),
                     ]} /></th>
-                    <th style={{ textAlign: 'center' }} {...votesHeaderTip.triggerProps}><VotesIcon />{votesHeaderTip.tooltipNode}</th>
-                    <th style={{ textAlign: 'center' }} {...commentsHeaderTip.triggerProps}><CommentsIcon />{commentsHeaderTip.tooltipNode}</th>
+                    {hayVotos && <th style={{ textAlign: 'center' }} {...votesHeaderTip.triggerProps}><VotesIcon />{votesHeaderTip.tooltipNode}</th>}
+                    {hayComentarios && <th style={{ textAlign: 'center' }} {...commentsHeaderTip.triggerProps}><CommentsIcon />{commentsHeaderTip.tooltipNode}</th>}
                     <th style={{ textAlign: 'center' }} {...pointsHeaderTip.triggerProps}><PointsIcon />{pointsHeaderTip.tooltipNode}</th>
                     <th>Creada</th>
                   </tr>
                 </thead>
                 {displayItems.length === 0 && (
                   <FilaVacia
-                    columnas={11}
+                    columnas={9 + Number(hayVotos) + Number(hayComentarios)}
                     title="Sin peticiones"
                     body="No hay peticiones que coincidan con los filtros."
                     action={<button className="btn btn-primary btn-sm" onClick={quitarFiltros}>Quitar filtros</button>}
@@ -959,8 +965,8 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                         <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}><AuthorCell author={item.author} isMine={item.is_mine} /></td>
                         <td style={{ whiteSpace: 'nowrap' }}><SpecPlainValue value={item.requested_resolution} icon={ResolutionValueIcon} /></td>
                         <td style={{ whiteSpace: 'nowrap' }}><SpecPlainValue value={item.requested_source} icon={SourceValueIcon} /></td>
-                        <td style={{ textAlign: 'center', fontSize: 12 }}>{item.votes ?? 0}</td>
-                        <td style={{ textAlign: 'center', fontSize: 12 }}>{item.comments ?? 0}</td>
+                        {hayVotos && <td style={{ textAlign: 'center', fontSize: 12 }}>{item.votes ?? '—'}</td>}
+                        {hayComentarios && <td style={{ textAlign: 'center', fontSize: 12 }}>{item.comments ?? '—'}</td>}
                         <td style={{ textAlign: 'center', fontSize: 12, whiteSpace: 'nowrap' }}>{fmtNum(item.points)}</td>
                         <CreatedAtCell createdAt={item.created_at} />
                       </tr>

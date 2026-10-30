@@ -94,6 +94,8 @@ class SettingsResponse(BaseModel):
     source_engine_enabled: bool = False
     # El logo del contenido en la descripción. Se sube por defecto.
     emu_add_logo: bool = True
+    # Capturas de todos los capítulos de un pack. Por defecto, solo del primero.
+    emu_per_episode_screens: bool = False
     # Qué se le hace a las pistas: uno de mkv_remux.MODOS_PISTAS. De fábrica
     # solo se renombran, que es lo barato (ver mkv_remux.MODO_PISTAS_POR_DEFECTO).
     remux_track_mode: str = "solo_renombrar"
@@ -142,6 +144,7 @@ class SettingsUpdateRequest(BaseModel):
     series_ignore_specials: Optional[bool] = None
     source_engine_enabled: Optional[bool] = None
     emu_add_logo: Optional[bool] = None
+    emu_per_episode_screens: Optional[bool] = None
     remux_track_mode: Optional[str] = None
     recent_activity_limit: Optional[int] = None
     upload_max_concurrent: Optional[int] = None
@@ -312,6 +315,7 @@ def _build_response(conn) -> SettingsResponse:
         series_ignore_specials=(get_setting_canonical(conn, "series.ignore_specials") or "true") != "false",
         source_engine_enabled=get_setting_canonical(conn, "source_engine.enabled") == "true",
         emu_add_logo=get_setting_canonical(conn, "emu.add_logo") != "false",
+        emu_per_episode_screens=get_setting_canonical(conn, "emu.per_episode_screens") == "true",
         remux_track_mode=modo_pistas(conn),
         recent_activity_limit=_read_recent_activity_limit(conn),
         upload_max_concurrent=get_upload_max_concurrent(conn),
@@ -493,6 +497,8 @@ def update_settings(
             set_setting(conn, "source_engine.enabled", "true" if body.source_engine_enabled else "false")
         if body.emu_add_logo is not None:
             set_setting(conn, "emu.add_logo", "true" if body.emu_add_logo else "false")
+        if body.emu_per_episode_screens is not None:
+            set_setting(conn, "emu.per_episode_screens", "true" if body.emu_per_episode_screens else "false")
         if body.remux_track_mode is not None:
             if body.remux_track_mode not in MODOS_PISTAS:
                 raise HTTPException(

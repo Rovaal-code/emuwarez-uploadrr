@@ -608,8 +608,6 @@ def build_season_pack_plan(
         # N de M capítulos…" while this (possibly slow) request is in flight.
         grupos = [e.get("release_group") for e in available_episodes]
         release_tag = tag_override or tag_por_defecto(grupos, conn=conn)
-        # Con grupos mezclados cada capítulo propondría el suyo: se fija el del pack.
-        tag_capitulos = tag_override or (release_tag if len({(g or "").strip() for g in grupos}) > 1 else None)
         total = len(available_episodes)
         _clear_season_plan_cancel(season_id)
         _set_season_plan_progress(season_id, done=0, total=total)
@@ -629,7 +627,7 @@ def build_season_pack_plan(
             proposal = build_nomenclature_proposal(
                 ep["id"], conn=conn,
                 source_override=source_override, provider_override=provider_override,
-                tag_override=tag_capitulos, title_override=title_override,
+                tag_override=tag_override, title_override=title_override,
             )
             episode_entries.append({"episode": ep, "proposal": proposal})
         _set_season_plan_progress(season_id, done=total, total=total, current_title=None)
@@ -683,6 +681,11 @@ def build_season_pack_plan(
             raw_source_path = ep.get("path")
             source_path = local_paths.get(ep["id"]) or raw_source_path
             proposed_filename = proposal.get("proposed_filename") or ep.get("title") or f"episode-{ep['id']}"
+            # Cada capítulo lleva el Tag del pack, aunque su propuesta guardada
+            # traiga otro (grupos mezclados): reconstruirla la sobrescribiría.
+            ep_tag = proposal.get("release_tag")
+            if ep_tag and ep_tag != release_tag and proposed_filename.endswith(f"-{ep_tag}"):
+                proposed_filename = f"{proposed_filename[:-len(ep_tag)]}{release_tag}"
             ext = ""
             if source_path and os.path.isfile(source_path):
                 ext = os.path.splitext(source_path)[1]

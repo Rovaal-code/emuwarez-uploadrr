@@ -67,6 +67,17 @@ def test_un_pack_con_grupos_mezclados_usa_uno_para_todos(isolated_db, tmp_path):
     assert all(e["proposed_filename"].endswith("-EMUWAREZ") for e in plan["episodes"])
 
 
+def test_ver_un_pack_mezclado_no_reescribe_las_propuestas_de_los_capitulos(isolated_db, tmp_path):
+    """Rehacer la propuesta de un capítulo caduca la guardada, con lo editado a mano."""
+    conn = _open(isolated_db)
+    season_id = _pack(conn, tmp_path, ["Loco87", "Okeda"])
+    build_season_pack_plan(season_id, conn=conn)
+    antes = conn.execute("SELECT COUNT(*) FROM nomenclature_proposals").fetchone()[0]
+    plan = build_season_pack_plan(season_id, conn=conn)
+    assert conn.execute("SELECT COUNT(*) FROM nomenclature_proposals").fetchone()[0] == antes
+    assert all(e["proposed_filename"].endswith("-EMUWAREZ") for e in plan["episodes"])
+
+
 def test_el_tag_elegido_gana_al_grupo(isolated_db, tmp_path):
     conn = _open(isolated_db)
     season_id = _pack(conn, tmp_path, ["Loco87", "Loco87"])

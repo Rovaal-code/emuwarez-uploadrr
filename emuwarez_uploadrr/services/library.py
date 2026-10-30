@@ -1106,6 +1106,63 @@ def list_library(
     return [dict(row) for row in conn.execute(sql, params).fetchall()]
 
 
+# Aportar solo tiene sentido con algo que tienes: una película o un capítulo
+# en disco, o una serie/temporada al menos Parcial.
+APORTE_ELIGIBLE_STATUS = frozenset({"Disponible", "Subido", "Subiendo", "Parcial"})
+
+
+def _es_aporte(it: dict) -> bool:
+    return it["local_status"] in APORTE_ELIGIBLE_STATUS and (
+        it["emu_in_catalog"] == 0 or (it["emu_in_catalog"] == 1 and bool(it["emu_aportes"])))
+
+
+def filtrar_por_lo_que_se_ve(
+    filas: list[dict],
+    *,
+    provider: Filtro = None,
+    resolution: Filtro = None,
+    source: Filtro = None,
+    release_group: Filtro = None,
+    emu: Filtro = None,
+    aporte: Optional[str] = None,
+) -> list[dict]:
+    """Proveedor, Resolución, Source, Grupo, eMuwarez y Aportes filtran por lo
+    que ENSEÑA la columna, que en una serie o temporada es lo que comparten sus
+    capítulos: `filas` son las ya montadas para la respuesta, en todos los niveles.
+
+    Se queda el nivel más alto que cumple: si cumple la serie entera sale la
+    serie, y si solo cumplen algunas temporadas, esas temporadas.
+    """
+    elegidos = [(k, _valores(v)) for k, v in (
+        ("provider_label", provider), ("resolution", resolution),
+        ("source", source), ("release_group", release_group)) if _valores(v)]
+    emus = _valores(emu)
+    if not (elegidos or emus or aporte):
+        return filas
+
+    def cumple(it: dict) -> bool:
+        # Una serie a medias (emu_in_catalog 2) no es ni Sí ni No: lo son sus temporadas.
+        return (all(it[k] in vs for k, vs in elegidos)
+                and (not emus or ("candidate" in emus and it["emu_in_catalog"] == 0)
+                     or ("present" in emus and it["emu_in_catalog"] == 1))
+                and (not aporte or (_es_aporte(it) if aporte == "yes"
+                                    else it["emu_in_catalog"] == 1 and not _es_aporte(it))))
+
+    ids = {it["id"] for it in filas if cumple(it)}
+    padre = {it["id"]: it["parent_id"] for it in filas}
+
+    # Por toda la cadena: un capítulo cumple, su temporada no, y la serie sí.
+    def lo_tapa_un_ancestro(it: dict) -> bool:
+        p = it["parent_id"]
+        while p is not None:
+            if p in ids:
+                return True
+            p = padre.get(p)
+        return False
+
+    return [it for it in filas if it["id"] in ids and not lo_tapa_un_ancestro(it)]
+
+
 def count_library(
     conn: sqlite3.Connection,
     *,

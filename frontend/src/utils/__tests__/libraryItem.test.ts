@@ -10,7 +10,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import {
-  isSeasonReady, episodeNotReadyReason, seasonNotReadyReason, isAporteEligible,
+  isSeasonReady, episodeNotReadyReason, seasonNotReadyReason,
 } from '../libraryItem'
 import type { LibraryItemResponse } from '../../types/api'
 
@@ -118,12 +118,5 @@ describe('un capítulo suelto', () => {
     // Un capítulo lleva su propio nombre y puede declarar su propio códec, así
     // que no le afecta que sus hermanos no coincidan.
     expect(episodeNotReadyReason(cap({ resolution: null, video_codec: null }))).toBeNull()
-  })
-})
-
-describe('elegibilidad de aporte', () => {
-  it('solo cuenta lo que se tiene en disco', () => {
-    expect(isAporteEligible(item({ local_status: 'Disponible' }))).toBe(true)
-    expect(isAporteEligible(item({ local_status: 'Faltante' }))).toBe(false)
   })
 })

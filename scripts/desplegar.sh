@@ -20,10 +20,12 @@
 #   scripts/desplegar.sh --notas "..." --version patch   # sube la versión antes
 #   scripts/desplegar.sh --notas "..." --sin-publicar    # construye y sube, sin anunciar
 #
-# Al publicar crea también la etiqueta vX.Y.Z en el commit y la sube. Con ella
-# el workflow Imagen le pone a la imagen de ese commit la etiqueta X.Y.Z, que es
-# la que se fija en el compose (EMUWAREZ_UPLOADRR_TAG=X.Y.Z) para quedarse en
-# una versión o volver a ella.
+# Al publicar crea también la etiqueta vX.Y.Z en el commit y la sube, y la
+# imagen sale también como :X.Y.Z, que es la que se fija en el compose
+# (EMUWAREZ_UPLOADRR_TAG=X.Y.Z) para quedarse en una versión o volver a ella.
+#
+# Lo normal es el workflow «Publicar versión», que hace lo mismo en GitHub tras
+# pasar los tests. Esto es la alternativa local, sin gastar minutos de Actions.
 #
 # Necesita `gh auth login` hecho, para publicar la versión.
 set -euo pipefail
@@ -80,7 +82,7 @@ echo "Construida .. $FECHA"
 # La etiqueta vX.Y.Z de esta versión. Nunca se pisa: si ya existe en otro
 # commit, aquí o en GitHub, se para antes de construir nada y hay que
 # resolverlo a mano. Lo que manda es GitHub, porque es su etiqueta la que
-# dispara el workflow Imagen. De una etiqueta anotada, ls-remote da también la
+# marca la versión publicada. De una etiqueta anotada, ls-remote da también la
 # línea "^{}" con el commit al que apunta; de una ligera (las de una release
 # hecha en la web), solo esa.
 ETIQUETA="v$VERSION"
@@ -120,8 +122,7 @@ comprobar_etiqueta() {
 
 # Al final, con el manifiesto ya publicado: crea la etiqueta, o sube la que
 # una ejecución anterior dejó solo aquí. Solo si el commit es la punta de
-# master en GitHub: la imagen de cada commit la construye el workflow Imagen
-# con el push a master, y la etiqueta solo le añade el nombre de la versión.
+# master en GitHub: la etiqueta marca en el repo el commit de esta versión.
 etiquetar() {
   # Otra vez, por si algo ha cambiado mientras se construía.
   comprobar_etiqueta || return 1
@@ -148,7 +149,7 @@ etiquetar() {
     git tag -a "$ETIQUETA" -m "${NOTAS:-Versión $VERSION}" "$COMMIT"
   fi
   git push -q origin "$ETIQUETA"
-  echo "Etiqueta .... $ETIQUETA (la imagen :$VERSION la añade el workflow Imagen)"
+  echo "Etiqueta .... $ETIQUETA"
 }
 
 if [[ "$PUBLICAR" -eq 1 ]]; then
@@ -188,6 +189,11 @@ echo "Sello verificado en la imagen."
 
 echo "Subiendo…"
 docker push "$IMAGEN"
+# :X.Y.Z solo al publicar: comprobar_etiqueta ya ha parado si esa versión es de otro commit.
+if [[ "$PUBLICAR" -eq 1 ]]; then
+  docker tag "$IMAGEN" "${IMAGEN%:*}:$VERSION"
+  docker push "${IMAGEN%:*}:$VERSION"
+fi
 DIGEST="$(docker image inspect "$IMAGEN" --format '{{index .RepoDigests 0}}' | cut -d@ -f2)"
 echo "Digest ...... $DIGEST"
 

@@ -8,7 +8,7 @@ import { getInstances } from '../api/instances'
 import type { LibraryItemResponse, LibraryListResponse, InstanceSafeResponse } from '../types/api'
 import { PosterStatusIcon } from '../components/PosterStatusIcon'
 import { ErrorState } from '../components/ErrorState'
-import { EmptyState } from '../components/EmptyState'
+import { EmptyState, FilaVacia } from '../components/EmptyState'
 import { NomenclatureModal } from '../components/NomenclatureModal'
 import { NomenclatureFieldsModal } from '../components/NomenclatureFieldsModal'
 import { UploadPreflightModal } from '../components/UploadPreflightModal'
@@ -21,7 +21,7 @@ import { HeaderFilter } from '../components/HeaderFilter'
 import { FilasVirtuales } from '../components/FilasVirtuales'
 import { posterUrl, isAporteEligible } from '../utils/libraryItem'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
-import { necesitaTodosLosNiveles } from '../utils/filtrosBiblioteca'
+import { hayAlgunFiltro, necesitaTodosLosNiveles } from '../utils/filtrosBiblioteca'
 import { CASTELLANO_OPCIONES, type EstadoCastellano } from '../utils/castellano'
 import { useTardanza } from '../hooks/useTardanza'
 import { useAlEntrar, useAlSalir } from '../context/SeccionVisible'
@@ -260,11 +260,13 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // Con cualquier filtro puesto se pide la biblioteca en plano. Ver
   // utils/filtrosBiblioteca: recortar a la raíz mientras filtras dejaba la
   // tabla vacía para valores que el propio desplegable ofrecía.
-  const flatFilter = necesitaTodosLosNiveles({
+  const filtros = {
     search: debouncedSearch, filterType, filterStatus, filterInstanceId,
     filterRequest, filterSpanish, searchProvider, searchQuality, searchSource, searchGroup,
     filterEmu, filterAporte,
-  })
+  }
+  const flatFilter = necesitaTodosLosNiveles(filtros)
+  const filtrando = hayAlgunFiltro(filtros)
 
   // Proveedor, Resolución, Source, Grupo, eMuwarez y Aportes se filtran en el
   // navegador, sobre lo ya cargado: no van al servidor, así que cambiarlos no
@@ -313,6 +315,14 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     getLibraryItem(Number(pending)).then(openDetail).catch(() => { /* ignore */ })
   })
 
+  function quitarFiltros() {
+    setSearch(''); setDebouncedSearch('')
+    setFilterType(NINGUNO); setFilterStatus(NINGUNO); setFilterInstanceId(NINGUNO); setFilterRequest(NINGUNO)
+    setSearchProvider(NINGUNO); setSearchQuality(NINGUNO); setSearchSource(NINGUNO); setSearchGroup(NINGUNO)
+    setFilterEmu(NINGUNO); setFilterAporte(''); setFilterSpanish(NINGUNO)
+    setOffset(0)
+  }
+
   // Al SALIR, la sección vuelve a su estado de partida: la tabla, sin filtros
   // y con el orden por defecto. Si no, volver te dejaba en la ficha que
   // abriste hace media hora o con un filtro que ya no recuerdas haber puesto.
@@ -322,12 +332,8 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   useAlSalir(() => {
     setSelected(null)
     closeDetailPath('library')
-    setSearch(''); setDebouncedSearch('')
-    setFilterType(NINGUNO); setFilterStatus(NINGUNO); setFilterInstanceId(NINGUNO); setFilterRequest(NINGUNO)
-    setSearchProvider(NINGUNO); setSearchQuality(NINGUNO); setSearchSource(NINGUNO); setSearchGroup(NINGUNO)
-    setFilterEmu(NINGUNO); setFilterAporte(''); setFilterSpanish(NINGUNO)
+    quitarFiltros()
     setSortBy('title_asc')
-    setOffset(0)
   })
 
   // Deep link: /library/:id (bookmark, reload, or a link shared elsewhere) —
@@ -601,6 +607,12 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     </tr>
   )
 
+  const sinResultados = {
+    title: 'Sin resultados',
+    body: 'Nada de la biblioteca cumple estos filtros.',
+    action: <button className="btn btn-primary btn-sm" onClick={quitarFiltros}>Quitar filtros</button>,
+  }
+
   return (
     <div data-tour="library-content" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div className="page-header">
@@ -685,7 +697,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
         </div>
       </div>
 
-      {(loading || isPending) && !data ? (
+      {(loading || isPending) && !items.length ? (
         viewMode === 'list' ? (
           <div className="activity-section" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', marginBottom: 0 }}>
             <div style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
@@ -702,12 +714,14 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
         )
       ) : error ? (
         <ErrorState message={error} onRetry={load} />
-      ) : items.length === 0 ? (
+      ) : items.length === 0 && !filtrando ? (
         <EmptyState
           icon={<IconoLibros />}
           title="Biblioteca vacía"
           body="Añade instancias Radarr/Sonarr en la sección Instancias y sincroniza para ver el contenido aquí."
         />
+      ) : filteredItems.length === 0 && viewMode !== 'list' ? (
+        <EmptyState icon={<IconoLibros />} {...sinResultados} />
       ) : viewMode === 'grid' ? (
         <div className="activity-section" style={{ padding: 20, flex: 1, minHeight: 0, overflowY: 'auto', marginBottom: 0, ...refreshingStyle }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 16 }}>
@@ -729,16 +743,20 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
           <div ref={listaRef} style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
             <table className="data-table">
               <thead ref={cabeceraRef}>{tableHeadRow}</thead>
-              <FilasVirtuales
-                items={filteredItems}
-                clave={claveDeItem}
-                alturaEstimada={LIST_ROW_HEIGHT}
-                columnas={LIST_COLUMNS}
-                contenedor={listaRef}
-                cabecera={cabeceraRef}
-                fijas={desplegadas}
-                pintar={pintarFila}
-              />
+              {filteredItems.length === 0 ? (
+                <FilaVacia columnas={LIST_COLUMNS} icon={<IconoLibros />} {...sinResultados} />
+              ) : (
+                <FilasVirtuales
+                  items={filteredItems}
+                  clave={claveDeItem}
+                  alturaEstimada={LIST_ROW_HEIGHT}
+                  columnas={LIST_COLUMNS}
+                  contenedor={listaRef}
+                  cabecera={cabeceraRef}
+                  fijas={desplegadas}
+                  pintar={pintarFila}
+                />
+              )}
             </table>
           </div>
         </div>

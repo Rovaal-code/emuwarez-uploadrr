@@ -16,3 +16,12 @@ export function EmptyState({ icon = <IconoBandeja />, title, body, action }: Emp
     </div>
   )
 }
+
+// Vacío dentro de la tabla, para que la cabecera (y sus filtros) siga a mano.
+export function FilaVacia({ columnas, ...props }: EmptyStateProps & { columnas: number }) {
+  return (
+    <tbody>
+      <tr className="fila-hueco"><td colSpan={columnas}><EmptyState {...props} /></td></tr>
+    </tbody>
+  )
+}

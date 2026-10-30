@@ -36,6 +36,8 @@ the upload with Uploadrr-EMU (`Kisnov/Uploadrr-EMU`, cloned into the image at `/
   must never raise. The server stays a single process (no extra uvicorn workers): the event bus is in memory.
   A new `setInterval` in the frontend fails `test_no_han_aparecido_sondeos_nuevos` unless it is listed in
   `SONDEOS_ESPERADOS` or `RELOJES`: push from the server instead of polling.
+- CI on a PR that only touches `frontend/`, `docs/` or `.md` runs just the test files that contain the word
+  `frontend` (`grep -l frontend tests/test_*.py`). A test that reads frontend files must name `frontend` in its own file.
 
 - Migrations: bump `SCHEMA_VERSION` in `database.py` and add a `_migrate_*` call at the end of the cascade in
   `init_db`. `init_db` runs on every authenticated request and returns early when the version matches.

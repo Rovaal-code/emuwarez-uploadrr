@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 40
+SCHEMA_VERSION = 41
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -515,6 +515,18 @@ def _migrate_upload_jobs_season_overrides(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE upload_jobs ADD COLUMN season_overrides_json TEXT")
     except sqlite3.OperationalError:
         pass
+
+
+def _migrate_upload_jobs_request_snapshot(conn: sqlite3.Connection) -> None:
+    """Esquema 41: el título y el enlace de la petición que cubrió la subida,
+    copiados al encolarla. La fila de request_items se borra cuando la petición
+    deja de estar abierta en eMuwarez, y el historial de Subidas tiene que seguir
+    diciendo qué petición cubrió cada subida."""
+    for col in ("request_title", "request_url"):
+        try:
+            conn.execute(f"ALTER TABLE upload_jobs ADD COLUMN {col} TEXT")
+        except sqlite3.OperationalError:
+            pass
 
 
 def _migrate_requests(conn: sqlite3.Connection) -> None:
@@ -1568,6 +1580,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_library_items_tvmaze_id(conn)
         _migrate_dominio_emu_warez(conn)
         _migrate_nomenclature_torrent_name(conn)
+        _migrate_upload_jobs_request_snapshot(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

@@ -16,9 +16,14 @@ export interface LibraryQueryParams {
   request_status?: string | string[]
   nomenclature?: string
   search?: string
-  // Español column. Filtered in SQL by the backend (unlike the provider/
-  // quality/source ones, which are client-side over the loaded rows).
   spanish?: EstadoCastellano | EstadoCastellano[]
+  // Filtran por lo que enseña la columna; el servidor devuelve el nivel más alto que cumple.
+  provider?: string[]
+  resolution?: string[]
+  source?: string[]
+  release_group?: string[]
+  emu?: string[]
+  aporte?: string
   sort?: string
   limit?: number
   offset?: number
@@ -38,6 +43,12 @@ export async function getLibrary(params: LibraryQueryParams = {}): Promise<Libra
   poner('nomenclature', params.nomenclature)
   if (params.search) qs.set('search', params.search)
   poner('spanish', params.spanish)
+  poner('provider', params.provider)
+  poner('resolution', params.resolution)
+  poner('source', params.source)
+  poner('release_group', params.release_group)
+  poner('emu', params.emu)
+  poner('aporte', params.aporte)
   if (params.sort) qs.set('sort', params.sort)
   if (params.limit !== undefined) qs.set('limit', String(params.limit))
   if (params.offset !== undefined) qs.set('offset', String(params.offset))

@@ -28,7 +28,7 @@ import { ServiceLabel } from '../components/ServiceIcon'
 import { ExternalIdLink } from '../components/ExternalIdLink'
 import { InfoIcon } from '../components/InfoIcon'
 import {
-  Card, FieldRow, DetailPoster, ValueChip, ValueIcon, TechChip, CheckStatusIcon, DETAIL_CARD_HEIGHT, DetailHero, DetailTitle, DetailTitleText,
+  Card, FieldRow, DetailPoster, ValueChip, ValueIcon, PlainValue, TechChip, CheckStatusIcon, DETAIL_CARD_HEIGHT, DetailHero, DetailTitle, DetailTitleText,
   StatusCardIcon, RequestCardIcon, ExternalIdsCardIcon,
   UploadButtonIcon, ExternalLinkButtonIcon, LibraryButtonIcon,
   TypeValueIcon, AuthorValueIcon, CalendarValueIcon,
@@ -176,6 +176,13 @@ function SpecValueChip({ value, icon: BaseIcon }: { value: string | null; icon: 
   return <ValueChip><ValueIcon><Icon /></ValueIcon><span className="txt">{noReq(value)}</span></ValueChip>
 }
 
+// Misma lógica, en texto plano para la tabla de peticiones — ahí no hay
+// enlace que dar, así que no hace falta la caja de la ficha de detalle.
+function SpecPlainValue({ value, icon: BaseIcon }: { value: string | null; icon: React.ComponentType }) {
+  const Icon = isAny(value) ? AnyValueIcon : BaseIcon
+  return <PlainValue icon={<Icon />}>{noReq(value)}</PlainValue>
+}
+
 // Whether your library value satisfies the request. If the request has no
 // restriction ("Cualquiera") it's satisfied as long as you have the content
 // (any resolution/source you own counts) → green ✓.
@@ -205,10 +212,13 @@ function CompatibilityBadge({ status }: { status: string | null }) {
 // cruza con nada ("No importada") no tiene instancia: guion, como cualquier
 // otra celda sin valor. Es un componente y no JSX suelto porque useTooltip no
 // puede vivir dentro del .map() de la tabla.
-function OriginCell({ item, instances, size = 13 }: {
+function OriginCell({ item, instances, size = 13, alwaysChip = true }: {
   item: RequestItemResponse | RequestDetailResponse
   instances: InstanceSafeResponse[]
   size?: number
+  // La ficha de detalle enseña todos sus campos en caja, abran algo o no; la
+  // tabla de peticiones solo pone caja a lo que de verdad abre algo (3.4).
+  alwaysChip?: boolean
 }) {
   const deepLink = buildDeepLink({
     instance_id: item.instance_id,
@@ -221,13 +231,11 @@ function OriginCell({ item, instances, size = 13 }: {
   const label = item.instance_name ?? item.instance_type ?? ''
   const { triggerProps, tooltipNode } = useTooltip(deepLink ? `Abrir en ${label}` : null)
   if (!item.instance_type) return <span style={{ color: 'var(--text-muted)' }}>—</span>
-  return (
-    <ValueChip linkable={!!deepLink}>
-      {deepLink
-        ? <a className="hover-link" href={deepLink} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} {...triggerProps}><ServiceLabel type={item.instance_type} label={label} size={size} />{tooltipNode}</a>
-        : <ServiceLabel type={item.instance_type} label={label} size={size} />}
-    </ValueChip>
-  )
+  const inner = deepLink
+    ? <a className="hover-link" href={deepLink} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} {...triggerProps}><ServiceLabel type={item.instance_type} label={label} size={size} />{tooltipNode}</a>
+    : <ServiceLabel type={item.instance_type} label={label} size={size} />
+  if (!deepLink && !alwaysChip) return inner
+  return <ValueChip linkable={!!deepLink}>{inner}</ValueChip>
 }
 
 function ReadinessBadge({ status }: { status: string | null | undefined }) {
@@ -1050,13 +1058,13 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                           </div>
                         </td>
                         <td style={{ whiteSpace: 'nowrap' }}>
-                          <ValueChip><ValueIcon><TypeValueIcon /></ValueIcon><span className="txt">{tipoOf(item.category).label}</span></ValueChip>
+                          <PlainValue icon={<TypeValueIcon />}>{tipoOf(item.category).label}</PlainValue>
                         </td>
-                        <td style={{ whiteSpace: 'nowrap' }}><OriginCell item={item} instances={instances} /></td>
+                        <td style={{ whiteSpace: 'nowrap' }}><OriginCell item={item} instances={instances} alwaysChip={false} /></td>
                         <td><CompatibilityBadge status={item.compatibility_status} /></td>
                         <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}><AuthorCell author={item.author} isMine={item.is_mine} /></td>
-                        <td style={{ whiteSpace: 'nowrap' }}><SpecValueChip value={item.requested_resolution} icon={ResolutionValueIcon} /></td>
-                        <td style={{ whiteSpace: 'nowrap' }}><SpecValueChip value={item.requested_source} icon={SourceValueIcon} /></td>
+                        <td style={{ whiteSpace: 'nowrap' }}><SpecPlainValue value={item.requested_resolution} icon={ResolutionValueIcon} /></td>
+                        <td style={{ whiteSpace: 'nowrap' }}><SpecPlainValue value={item.requested_source} icon={SourceValueIcon} /></td>
                         <td style={{ textAlign: 'center', fontSize: 12 }}>{item.votes ?? 0}</td>
                         <td style={{ textAlign: 'center', fontSize: 12 }}>{item.comments ?? 0}</td>
                         <td style={{ textAlign: 'center', fontSize: 12, whiteSpace: 'nowrap' }}>{fmtNum(item.points)}</td>

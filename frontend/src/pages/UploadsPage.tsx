@@ -10,7 +10,7 @@ import { UploadJobDetailPage } from '../components/UploadJobDetailPage'
 import { DeleteUploadModal } from '../components/DeleteUploadModal'
 import { StatusBadge } from '../components/StatusBadge'
 import { ServiceLabel } from '../components/ServiceIcon'
-import { CancelButtonIcon, RetryButtonIcon, DeleteButtonIcon, ValueChip, ValueIcon, TypeValueIcon } from '../components/DetailCard'
+import { CancelButtonIcon, RetryButtonIcon, DeleteButtonIcon, ValueChip, PlainValue, TypeValueIcon } from '../components/DetailCard'
 import { useTooltip } from '../components/Tooltip'
 import { formatDateTimeSeconds } from '../utils/format'
 import { posterUrl, buildDeepLink } from '../utils/libraryItem'
@@ -186,17 +186,15 @@ function JobRow({ job, instances, onOpen, indent, retryToggle, onCancel, onRetry
       </td>
       <td style={{ whiteSpace: 'nowrap' }}>
         {job.media_type
-          ? <ValueChip><ValueIcon><TypeValueIcon /></ValueIcon><span className="txt">{UPLOAD_TYPE_LABEL[job.media_type] ?? job.media_type}</span></ValueChip>
+          ? <PlainValue icon={<TypeValueIcon />}>{UPLOAD_TYPE_LABEL[job.media_type] ?? job.media_type}</PlainValue>
           : <span style={{ color: 'var(--text-muted)' }}>—</span>}
       </td>
       <td style={{ whiteSpace: 'nowrap' }}>
         {job.instance_type
           ? (
-            <ValueChip linkable={!!deepLink}>
-              {deepLink
-                ? <a className="hover-link" href={deepLink} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} {...originTip}><ServiceLabel type={job.instance_type} label={job.instance_name ?? job.instance_type} size={14} />{originTooltip}</a>
-                : <ServiceLabel type={job.instance_type} label={job.instance_name ?? job.instance_type} size={14} />}
-            </ValueChip>
+            deepLink
+              ? <ValueChip linkable><a className="hover-link" href={deepLink} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} {...originTip}><ServiceLabel type={job.instance_type} label={job.instance_name ?? job.instance_type} size={14} />{originTooltip}</a></ValueChip>
+              : <ServiceLabel type={job.instance_type} label={job.instance_name ?? job.instance_type} size={14} />
           )
           : <span style={{ color: 'var(--text-muted)' }}>—</span>}
       </td>

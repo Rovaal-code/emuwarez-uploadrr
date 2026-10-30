@@ -1149,7 +1149,18 @@ def filtrar_por_lo_que_se_ve(
                                     else it["emu_in_catalog"] == 1 and not _es_aporte(it))))
 
     ids = {it["id"] for it in filas if cumple(it)}
-    return [it for it in filas if it["id"] in ids and it["parent_id"] not in ids]
+    padre = {it["id"]: it["parent_id"] for it in filas}
+
+    # Por toda la cadena: un capítulo cumple, su temporada no, y la serie sí.
+    def lo_tapa_un_ancestro(it: dict) -> bool:
+        p = it["parent_id"]
+        while p is not None:
+            if p in ids:
+                return True
+            p = padre.get(p)
+        return False
+
+    return [it for it in filas if it["id"] in ids and not lo_tapa_un_ancestro(it)]
 
 
 def count_library(

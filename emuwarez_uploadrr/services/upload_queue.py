@@ -998,7 +998,7 @@ def _run_queued_job(job_id: int) -> None:
                 preparada = preparar_carpeta_de_pack(
                     _sanitize_pack_folder_name(plan_final.get("season_pack_title") or ""), ficheros)
                 destino_uploadrr = preparada.get("carpeta")
-                que = f"{preparada.get('cuantos', 0)} capítulo(s)"
+                que = f"{preparada.get('cuantos', 0)} capítulo(s) enlazado(s)"
             else:
                 # Se relee: la nomenclatura y el remux de arriba han cambiado
                 # prepared_path, y el `item` de antes es de antes de eso.
@@ -1008,7 +1008,7 @@ def _run_queued_job(job_id: int) -> None:
                 fichero = resolve_local_path(elegida, conn=conn) or elegida
                 preparada = preparar_fichero_suelto(fichero)
                 destino_uploadrr = preparada.get("ruta")
-                que = "el archivo"
+                que = "el archivo enlazado"
 
             if preparada["status"] != "ready":
                 _fail(job_id, "No se pudo preparar la subida en la carpeta de subidas: "
@@ -1019,7 +1019,7 @@ def _run_queued_job(job_id: int) -> None:
             conn.commit()
         append_upload_log(
             job_id, "info",
-            f"Preparado para subir: {que} enlazado(s) en «{os.path.basename(destino_uploadrr)}» "
+            f"Preparado para subir: {que} en «{os.path.basename(destino_uploadrr)}» "
             f"(enlace {'/'.join(preparada['enlaces'])}). El original no se ha tocado.",
             stream="system", conn=conn,
         )

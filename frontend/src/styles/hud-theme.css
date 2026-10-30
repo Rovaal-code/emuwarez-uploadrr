@@ -395,42 +395,6 @@
   color: var(--text-accent);
 }
 
-/* ---- projected empty-state hologram (Actividad de subida) ---- */
-.hud-app .hud-projection {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding-top: 4px;
-}
-.hud-app .hud-projection-svg {
-  width: 100%;
-  max-width: 240px;
-  height: auto;
-  overflow: visible;
-}
-.hud-app .hud-beam {
-  transform-origin: 130px 150px;
-  animation: panelHudSweep 6s linear infinite;
-}
-.hud-app .hud-particle {
-  animation: panelHudRise 4.2s ease-in-out infinite;
-}
-.hud-app .hud-bar {
-  animation: panelHudPulse 3.4s ease-in-out infinite;
-  transform-origin: bottom;
-}
-@keyframes panelHudSweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-@keyframes panelHudRise { 0% { opacity: 0; transform: translateY(0); } 30% { opacity: 1; } 100% { opacity: 0; transform: translateY(-40px); } }
-@keyframes panelHudPulse { 0%, 100% { transform: scaleY(.7); opacity: .55; } 50% { transform: scaleY(1); opacity: 1; } }
-
-@media (prefers-reduced-motion: reduce) {
-  .hud-app .hud-beam,
-  .hud-app .hud-particle,
-  .hud-app .hud-bar {
-    animation: none;
-  }
-}
-
 /* ---- Sidebar System Status (CPU/RAM/disk/GPU/VRAM + network) ---- */
 /* Fills 100% of whatever room is left below the nav (no title, no
    margin-top:auto gap) — every gauge gets an equal flex share of that

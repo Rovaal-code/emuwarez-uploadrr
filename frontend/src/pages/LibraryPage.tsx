@@ -7,7 +7,6 @@ import { EmuSyncButton } from '../components/EmuSyncButton'
 import { getInstances } from '../api/instances'
 import type { LibraryItemResponse, LibraryListResponse, InstanceSafeResponse } from '../types/api'
 import { PosterStatusIcon } from '../components/PosterStatusIcon'
-import { LoadingState } from '../components/LoadingState'
 import { ErrorState } from '../components/ErrorState'
 import { EmptyState } from '../components/EmptyState'
 import { NomenclatureModal } from '../components/NomenclatureModal'
@@ -98,6 +97,50 @@ const PosterCard = memo(function PosterCard({ item, onSelect, priority }: { item
     </div>
   )
 })
+
+// Ancho de cada barra, variado a propósito (no todas iguales) para que la
+// fila lea como texto esperando a llegar y no como un bloque gris plano.
+const SkeletonBar = ({ width }: { width: number | string }) => (
+  <span className="skeleton-bar" style={{ width }} />
+)
+
+// Mientras carga la primera página de Biblioteca (3.6): solo pasa una vez
+// por sesión (ver el comentario de `data`/`loading` más abajo — volver a la
+// pestaña reutiliza lo último cargado), pero con 51k elementos tarda de
+// sobra para que un spinner suelto se sienta como que la app no ha hecho
+// nada. La forma de las filas/tarjetas es la real, para que no haya salto
+// cuando lleguen los datos de verdad.
+function LibraryTableSkeleton({ rows = 14 }: { rows?: number }) {
+  return (
+    <>
+      {Array.from({ length: rows }, (_, i) => (
+        <tr key={i} aria-hidden="true">
+          <td>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <div className="poster-thumb skeleton-bar" style={{ width: 30, height: 45, borderRadius: 4, flexShrink: 0 }} />
+              <SkeletonBar width={120 + (i % 3) * 40} />
+            </div>
+          </td>
+          {Array.from({ length: LIST_COLUMNS - 1 }, (_, c) => (
+            <td key={c}><SkeletonBar width={40 + ((i + c) % 3) * 16} /></td>
+          ))}
+        </tr>
+      ))}
+    </>
+  )
+}
+
+function LibraryGridSkeleton({ large }: { large?: boolean }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${large ? 220 : 140}px, 1fr))`, gap: large ? 20 : 16 }}>
+      {Array.from({ length: large ? 12 : 24 }, (_, i) => (
+        <div key={i} aria-hidden="true" style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)' }}>
+          <div className="skeleton-bar" style={{ width: '100%', aspectRatio: '2 / 3', borderRadius: 0, display: 'block' }} />
+        </div>
+      ))}
+    </div>
+  )
+}
 
 export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => void } = {}) {
   // Volver a Biblioteca no vuelve a enseñar "Cargando…": se parte de lo último
@@ -487,6 +530,71 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     )
   }
 
+  // Se calcula una vez y se usa en dos sitios (la tabla real y su esqueleto
+  // de carga, más abajo) para que no haya dos copias de las columnas que
+  // acaben diciendo cosas distintas.
+  const tableHeadRow = (
+    <tr>
+      <th style={{ width: '100%' }}>Título</th>
+      <th><HeaderFilter label="Tipo" value={filterType} onChange={v => { setFilterType(v); setOffset(0) }} options={[
+        { value: '', label: 'Todos' }, ...(filterOptions?.types ?? []).map(t => ({ value: t, label: TYPE_LABELS[t] ?? t })),
+      ]} /></th>
+      <th><HeaderFilter label="Origen" value={filterInstanceId} onChange={v => { setFilterInstanceId(v); setOffset(0) }} options={[
+        { value: '', label: 'Todos' },
+        ...(filterOptions?.instances ?? []).map(inst => ({ value: String(inst.id), label: `${inst.type === 'radarr' ? 'Radarr' : 'Sonarr'}: ${inst.name.length > 15 ? inst.name.slice(0, 15) + '…' : inst.name}` })),
+      ]} /></th>
+      <th><HeaderFilter label="Estado" value={filterStatus} onChange={v => { setFilterStatus(v); setOffset(0) }} options={[
+        { value: '', label: 'Todos' },
+        // Through the same label map the badges use, or the filter
+        // would offer "Error de importación" for a column showing
+        // "Importación".
+        ...(filterOptions?.statuses ?? []).map(s => ({ value: s, label: getLocalStatusInfo(s).label })),
+      ]} /></th>
+      <th><HeaderFilter label="Petición" value={filterRequest} onChange={v => { setFilterRequest(v); setOffset(0) }} options={[
+        { value: '', label: 'Todas' }, ...(filterOptions?.request_statuses ?? []).map(s => ({ value: s, label: s })),
+      ]} /></th>
+      <th><HeaderFilter label="Resolución" value={searchQuality} onChange={setSearchQuality} options={[
+        { value: '', label: 'Todas' }, ...qualityOptions.map(q => ({ value: q, label: q })),
+      ]} /></th>
+      <th><HeaderFilter label="Proveedor" value={searchProvider} onChange={setSearchProvider} options={[
+        { value: '', label: 'Todos' }, ...providerOptions.map(p => ({ value: p, label: p })),
+      ]} /></th>
+      <th><HeaderFilter label="Source" value={searchSource} onChange={setSearchSource} options={[
+        { value: '', label: 'Todos' }, ...sourceOptions.map(s => ({ value: s, label: s })),
+      ]} /></th>
+      <th><HeaderFilter label="Español" value={filterSpanish} onChange={v => { setFilterSpanish(v); setOffset(0) }} options={[
+        { value: '', label: 'Todos' },
+        // Las etiquetas salen de la misma tabla que pinta la celda
+        // (utils/castellano), para que el desplegable no pueda
+        // ofrecer un nombre que la columna no usa.
+        ...(filterOptions?.spanish_states ?? []).map(s => ({
+          value: s,
+          label: CASTELLANO_OPCIONES.find(o => o.value === s)?.label ?? s,
+        })),
+      ]} /></th>
+      <th><HeaderFilter label="EMuwarez" value={filterEmu} onChange={v => { setFilterEmu(v); setOffset(0) }} options={[
+        { value: '', label: 'Todos' }, ...(filterOptions?.emu_states ?? []).map(s => ({ value: s, label: s === 'present' ? 'Sí' : 'No' })),
+      ]} /></th>
+      <th aria-sort={sortBy === 'size_desc' ? 'descending' : sortBy === 'size_asc' ? 'ascending' : 'none'}>
+        {/* Igual que «Orden: Tamaño» del selector: el primer clic
+            pone el más grande arriba y los siguientes alternan. */}
+        <button
+          type="button"
+          className={`hf-trigger${sortBy.startsWith('size_') ? ' active' : ''}`}
+          onClick={() => { setSortBy(sortBy === 'size_desc' ? 'size_asc' : 'size_desc'); setOffset(0) }}
+          title={sortBy === 'size_desc' ? 'Ordenar de menor a mayor' : 'Ordenar de mayor a menor'}
+          style={{ color: sortBy.startsWith('size_') ? 'var(--text-accent)' : undefined }}
+        >
+          <span>Tamaño</span>
+          <span aria-hidden className="hf-caret" style={{ color: sortBy.startsWith('size_') ? 'var(--text-accent)' : undefined }}>
+            {sortBy === 'size_asc' ? '▲' : sortBy === 'size_desc' ? '▼' : '↕'}
+          </span>
+        </button>
+      </th>
+      <th className="col-actions">Acciones</th>
+    </tr>
+  )
+
   return (
     <div data-tour="library-content" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div className="page-header">
@@ -572,7 +680,20 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
       </div>
 
       {(loading || isPending) && !data ? (
-        <LoadingState label="Cargando biblioteca…" />
+        viewMode === 'list' ? (
+          <div className="activity-section" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', marginBottom: 0 }}>
+            <div style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
+              <table className="data-table">
+                <thead>{tableHeadRow}</thead>
+                <tbody><LibraryTableSkeleton /></tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <div className="activity-section" style={{ padding: 20, flex: 1, minHeight: 0, overflowY: 'auto', marginBottom: 0 }}>
+            <LibraryGridSkeleton large={viewMode === 'grid-lg'} />
+          </div>
+        )
       ) : error ? (
         <ErrorState message={error} onRetry={load} />
       ) : items.length === 0 ? (
@@ -601,67 +722,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
         <div className="activity-section" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', marginBottom: 0, ...refreshingStyle }}>
           <div ref={listaRef} style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
             <table className="data-table">
-              <thead ref={cabeceraRef}>
-                <tr>
-                  <th style={{ width: '100%' }}>Título</th>
-                  <th><HeaderFilter label="Tipo" value={filterType} onChange={v => { setFilterType(v); setOffset(0) }} options={[
-                    { value: '', label: 'Todos' }, ...(filterOptions?.types ?? []).map(t => ({ value: t, label: TYPE_LABELS[t] ?? t })),
-                  ]} /></th>
-                  <th><HeaderFilter label="Origen" value={filterInstanceId} onChange={v => { setFilterInstanceId(v); setOffset(0) }} options={[
-                    { value: '', label: 'Todos' },
-                    ...(filterOptions?.instances ?? []).map(inst => ({ value: String(inst.id), label: `${inst.type === 'radarr' ? 'Radarr' : 'Sonarr'}: ${inst.name.length > 15 ? inst.name.slice(0, 15) + '…' : inst.name}` })),
-                  ]} /></th>
-                  <th><HeaderFilter label="Estado" value={filterStatus} onChange={v => { setFilterStatus(v); setOffset(0) }} options={[
-                    { value: '', label: 'Todos' },
-                    // Through the same label map the badges use, or the filter
-                    // would offer "Error de importación" for a column showing
-                    // "Importación".
-                    ...(filterOptions?.statuses ?? []).map(s => ({ value: s, label: getLocalStatusInfo(s).label })),
-                  ]} /></th>
-                  <th><HeaderFilter label="Petición" value={filterRequest} onChange={v => { setFilterRequest(v); setOffset(0) }} options={[
-                    { value: '', label: 'Todas' }, ...(filterOptions?.request_statuses ?? []).map(s => ({ value: s, label: s })),
-                  ]} /></th>
-                  <th><HeaderFilter label="Resolución" value={searchQuality} onChange={setSearchQuality} options={[
-                    { value: '', label: 'Todas' }, ...qualityOptions.map(q => ({ value: q, label: q })),
-                  ]} /></th>
-                  <th><HeaderFilter label="Proveedor" value={searchProvider} onChange={setSearchProvider} options={[
-                    { value: '', label: 'Todos' }, ...providerOptions.map(p => ({ value: p, label: p })),
-                  ]} /></th>
-                  <th><HeaderFilter label="Source" value={searchSource} onChange={setSearchSource} options={[
-                    { value: '', label: 'Todos' }, ...sourceOptions.map(s => ({ value: s, label: s })),
-                  ]} /></th>
-                  <th><HeaderFilter label="Español" value={filterSpanish} onChange={v => { setFilterSpanish(v); setOffset(0) }} options={[
-                    { value: '', label: 'Todos' },
-                    // Las etiquetas salen de la misma tabla que pinta la celda
-                    // (utils/castellano), para que el desplegable no pueda
-                    // ofrecer un nombre que la columna no usa.
-                    ...(filterOptions?.spanish_states ?? []).map(s => ({
-                      value: s,
-                      label: CASTELLANO_OPCIONES.find(o => o.value === s)?.label ?? s,
-                    })),
-                  ]} /></th>
-                  <th><HeaderFilter label="EMuwarez" value={filterEmu} onChange={v => { setFilterEmu(v); setOffset(0) }} options={[
-                    { value: '', label: 'Todos' }, ...(filterOptions?.emu_states ?? []).map(s => ({ value: s, label: s === 'present' ? 'Sí' : 'No' })),
-                  ]} /></th>
-                  <th aria-sort={sortBy === 'size_desc' ? 'descending' : sortBy === 'size_asc' ? 'ascending' : 'none'}>
-                    {/* Igual que «Orden: Tamaño» del selector: el primer clic
-                        pone el más grande arriba y los siguientes alternan. */}
-                    <button
-                      type="button"
-                      className={`hf-trigger${sortBy.startsWith('size_') ? ' active' : ''}`}
-                      onClick={() => { setSortBy(sortBy === 'size_desc' ? 'size_asc' : 'size_desc'); setOffset(0) }}
-                      title={sortBy === 'size_desc' ? 'Ordenar de menor a mayor' : 'Ordenar de mayor a menor'}
-                      style={{ color: sortBy.startsWith('size_') ? 'var(--text-accent)' : undefined }}
-                    >
-                      <span>Tamaño</span>
-                      <span aria-hidden className="hf-caret" style={{ color: sortBy.startsWith('size_') ? 'var(--text-accent)' : undefined }}>
-                        {sortBy === 'size_asc' ? '▲' : sortBy === 'size_desc' ? '▼' : '↕'}
-                      </span>
-                    </button>
-                  </th>
-                  <th className="col-actions">Acciones</th>
-                </tr>
-              </thead>
+              <thead ref={cabeceraRef}>{tableHeadRow}</thead>
               <FilasVirtuales
                 items={filteredItems}
                 clave={claveDeItem}

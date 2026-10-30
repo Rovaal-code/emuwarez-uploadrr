@@ -52,7 +52,7 @@ import { useRefrescoPorAvisos, AVISOS_SUBIDA, AVISOS_SUBIDA_PROGRESO } from '../
 import { queSalieron, soloVivas, idsDe, ESPERA_MS, DESVANECER_MS } from '../utils/despedidaSubidas'
 import { useSeccionVisible } from '../context/SeccionVisible'
 import { EMU_URL } from '../constants/emu'
-import { IconoEstrella, IconoLista, IconoPelicula, IconoSerie, IconoTipo } from '../components/Iconos'
+import { IconoEstrella, IconoLista, IconoPelicula, IconoSerie, IconoSubida, IconoTipo } from '../components/Iconos'
 
 // Phase 11G — "Recomendaciones" groups, in the order they appear. The content
 // name always links to its Biblioteca detail; the "Acción" button is
@@ -196,10 +196,6 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   // — the completion message itself is shown centrally in the topbar (see
   // SyncProgressBanner), not duplicated here.
   const { lastInvalidatedAt } = useSync()
-  // The empty-state hologram has no room for a caption of its own — the
-  // explanation lives in a hover tooltip instead, styled like the rest of
-  // the app's tooltips (not a native title box).
-  const { triggerProps: uploadEmptyTip, tooltipNode: uploadEmptyTooltip } = useTooltip('No hay subidas en curso ahora mismo.')
 
   useTicker(activeUploads.some(j => j.status === 'queued'))
 
@@ -472,39 +468,15 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
             </div>
             <div className="upload-panel-body" style={{
               padding: '12px 16px', display: 'flex', flexDirection: 'column',
-              justifyContent: filasDeSubida.length === 0 ? 'flex-end' : 'flex-start',
               alignItems: 'stretch',
               minHeight: 'auto', flex: 1, overflowY: 'auto',
             }}>
               {filasDeSubida.length === 0 ? (
-                <div className="hud-projection" {...uploadEmptyTip} style={{ cursor: 'help' }}>
-                  {uploadEmptyTooltip}
-                  <svg aria-hidden="true" viewBox="0 0 260 196" className="hud-projection-svg">
-                    <defs>
-                      <linearGradient id="hudBeamGrad" x1="0" y1="1" x2="0" y2="0">
-                        <stop offset="0%" stopColor="#2fd8ff" stopOpacity=".95" /><stop offset="100%" stopColor="#2fd8ff" stopOpacity="0" />
-                      </linearGradient>
-                      <radialGradient id="hudFloorGrad" cx="50%" cy="50%" r="50%">
-                        <stop offset="0%" stopColor="#2fd8ff" stopOpacity=".5" /><stop offset="100%" stopColor="#2fd8ff" stopOpacity="0" />
-                      </radialGradient>
-                    </defs>
-                    <ellipse cx="130" cy="150" rx="18" ry="6" fill="url(#hudFloorGrad)" />
-                    <ellipse cx="130" cy="150" rx="105" ry="20" fill="none" stroke="#2fd8ff" opacity=".18" strokeWidth="1" />
-                    <ellipse cx="130" cy="150" rx="80" ry="15" fill="none" stroke="#2fd8ff" opacity=".28" strokeWidth="1" />
-                    <ellipse cx="130" cy="150" rx="55" ry="10" fill="none" stroke="#2fd8ff" opacity=".35" strokeWidth="1" />
-                    <ellipse cx="130" cy="150" rx="28" ry="5.5" fill="none" stroke="#a9ecff" opacity=".55" strokeWidth="1.2" />
-                    <rect className="hud-bar" x="96" y="112" width="4" height="30" fill="#2fd8ff" opacity=".7" style={{ animationDelay: '.2s' }} />
-                    <rect className="hud-bar" x="106" y="100" width="4" height="42" fill="#a9ecff" opacity=".8" style={{ animationDelay: '.9s' }} />
-                    <rect className="hud-bar" x="150" y="106" width="4" height="36" fill="#2fd8ff" opacity=".75" style={{ animationDelay: '1.6s' }} />
-                    <rect className="hud-bar" x="160" y="118" width="4" height="24" fill="#a9ecff" opacity=".65" style={{ animationDelay: '.5s' }} />
-                    <line x1="130" y1="150" x2="130" y2="4" stroke="url(#hudBeamGrad)" strokeWidth="3" className="hud-beam" />
-                    <line x1="130" y1="150" x2="130" y2="10" stroke="#a9ecff" strokeWidth="1" opacity=".5" />
-                    <circle cx="130" cy="150" r="4" fill="#a9ecff" />
-                    <circle className="hud-particle" cx="112" cy="128" r="1.8" fill="#a9ecff" style={{ animationDelay: '.3s' }} />
-                    <circle className="hud-particle" cx="150" cy="132" r="1.8" fill="#a9ecff" style={{ animationDelay: '1.6s' }} />
-                    <circle className="hud-particle" cx="128" cy="118" r="1.8" fill="#a9ecff" style={{ animationDelay: '2.8s' }} />
-                  </svg>
-                </div>
+                <EmptyState
+                  icon={<IconoSubida />}
+                  title="No hay subidas en curso"
+                  body="Sube contenido desde Biblioteca o una recomendación para verlo aquí, con su progreso en vivo."
+                />
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {filasDeSubida.map(({ job, yendose }) => {

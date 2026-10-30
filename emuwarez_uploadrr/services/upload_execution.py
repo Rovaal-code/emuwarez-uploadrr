@@ -1278,7 +1278,11 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
                         f" → {result['urls'][0]}" if result["urls"] else "")
             _check_trailer_and_log(job_id)
             if result["season_pack_warning"]:
-                append_upload_log(job_id, "warning", result["season_pack_warning"], stream="system")
+                # Un aviso que no se puede registrar no cambia una subida ya hecha.
+                try:
+                    append_upload_log(job_id, "warning", result["season_pack_warning"], stream="system")
+                except Exception:
+                    logger.exception("Subida %s: no se pudo registrar el aviso de pack incompleto", job_id)
             _notify_upload_completed(
                 job_id, result["urls"][0] if result["urls"] else None, aviso=result["season_pack_warning"]
             )

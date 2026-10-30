@@ -322,6 +322,20 @@ def test_con_dos_instancias_se_prepara_la_copia_que_atiende_la_peticion(db_conn)
     assert result["status"] == "preflight_needed"
 
 
+def test_lo_que_pide_la_peticion_va_antes_que_la_puntuacion(db_conn):
+    """La puntuación suma +10 si el año coincide con el de la petición: la copia de 1080p empataba con la 4K y,
+    por estar preparada, ganaba en una petición de 2160p."""
+    from emuwarez_uploadrr.services.request_readiness import evaluate_request_readiness
+    _insert_library(db_conn, title="Doble", tmdb_id="db2", resolution="1080p", year=2021,
+                    nomenclature_status="Correcta", prepared_path="/data/prepared/doble2_1080.mkv")
+    cuatro_k = _insert_library(db_conn, title="Doble", tmdb_id="db2", resolution="2160p", year=2020,
+                               nomenclature_status="Correcta")
+    req_id = _insert_request(db_conn, emu_id="emu-db2", title="Doble", tmdb_id="db2", requested_resolution="2160p")
+    db_conn.execute("UPDATE request_items SET created_at = '2021-05-01' WHERE id = ?", (req_id,))
+    db_conn.commit()
+    assert evaluate_request_readiness(req_id, db_conn)["best_library_item_id"] == cuatro_k
+
+
 def test_el_id_gana_a_un_titulo_que_esta_listo(db_conn):
     """Ganaba el candidato «listo para subir» aunque solo casara por el título y fuera otra película."""
     from emuwarez_uploadrr.services.request_readiness import evaluate_request_readiness

@@ -167,7 +167,7 @@ cd frontend && npm ci && npx tsc --noEmit && npx vitest run && npx vite build
 
 En cada PR, el CI pasa las reglas graves de `ruff`, los tests del backend con una cobertura mínima del 78 % y `tsc`
 y `vitest` del frontend (`vite build` no). Un PR que solo toca `frontend/`, `docs/` o ficheros `.md` pasa solo los
-tests del backend que mencionan el frontend. Si toca `.github/`, [zizmor](https://docs.zizmor.sh) revisa los
+tests del backend que mencionan el frontend, sin mínimo de cobertura. Si toca `.github/`, [zizmor](https://docs.zizmor.sh) revisa los
 workflows y `dependabot.yml`.
 
 Dependabot propone cada semana las versiones nuevas de pip, npm, la imagen base del `Dockerfile` y las GitHub

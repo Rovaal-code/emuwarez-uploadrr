@@ -31,9 +31,10 @@ _SECRET_KEYS: frozenset[str] = frozenset(
 
 
 # Lo que también es una clave aunque no salga en el estado de la configuración:
-# los alias antiguos de las de arriba, la contraseña de qBittorrent y las API
-# keys de los hosts de imágenes (una por host, imghost.key.<id>).
-_OTROS_SECRETOS: frozenset[str] = frozenset(["tmdb_api_key", "emu_api_key", "qbit.password"])
+# los alias antiguos de las de arriba, la contraseña de qBittorrent, la URL del
+# proxy de qui (lleva su clave dentro) y las API keys de los hosts de imágenes
+# (una por host, imghost.key.<id>).
+_OTROS_SECRETOS: frozenset[str] = frozenset(["tmdb_api_key", "emu_api_key", "qbit.password", "qbit.qui_proxy_url"])
 _PREFIJOS_SECRETOS: tuple[str, ...] = ("imghost.key.",)
 
 

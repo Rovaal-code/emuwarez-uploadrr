@@ -60,12 +60,12 @@ function configSignature(v: {
   emuUsername: string; ignoreSpecials: boolean; sourceEngine: boolean; addLogo: boolean; capturasPorCapitulo: boolean; modoDePistas: ModoPistas
   recentLimit: number; uploadMaxConcurrent: number; qbitUrl: string; qbitTag: string; qbitUser: string
   imgEnabled: string[]; allowedRoots: string
-  newKey?: string; newEmuKey?: string; qbitPass?: string
+  newKey?: string; newEmuKey?: string; qbitPass?: string; qbitQui?: string; quitarQui?: boolean
 }): string {
   return JSON.stringify([
     v.tags, v.providerOrder, v.region, v.emuUsername,
     v.ignoreSpecials, v.sourceEngine, v.addLogo, v.capturasPorCapitulo, v.modoDePistas, v.recentLimit, v.uploadMaxConcurrent, v.qbitUrl, v.qbitTag, v.qbitUser, v.imgEnabled, v.allowedRoots,
-    v.newKey ?? '', v.newEmuKey ?? '', v.qbitPass ?? '',
+    v.newKey ?? '', v.newEmuKey ?? '', v.qbitPass ?? '', v.qbitQui ?? '', v.quitarQui ?? false,
   ])
 }
 
@@ -210,6 +210,9 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const [qbitTag, setQbitTag] = useState('')
   const [qbitUser, setQbitUser] = useState('')
   const [qbitPass, setQbitPass] = useState('')
+  // El proxy de qui es un secreto como la contraseña: no se carga, y quitarlo se pide aparte.
+  const [qbitQui, setQbitQui] = useState('')
+  const [quitarQui, setQuitarQui] = useState(false)
   const [testingQbit, setTestingQbit] = useState(false)
   const [qbitTestResult, setQbitTestResult] = useState<IntegrationTestResult | null>(null)
   const [showQbitUser, setShowQbitUser] = useState(false)
@@ -237,7 +240,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const currentSig = configSignature({
     tags: tagsAGuardar, providerOrder, region, emuUsername,
     ignoreSpecials, sourceEngine, addLogo, capturasPorCapitulo, modoDePistas, recentLimit, uploadMaxConcurrent, qbitUrl, qbitTag, qbitUser, imgEnabled, allowedRoots,
-    newKey, newEmuKey, qbitPass,
+    newKey, newEmuKey, qbitPass, qbitQui, quitarQui,
   })
   const dirty = baseline !== '' && currentSig !== baseline
   const dirtyRef = useRef(false)
@@ -372,6 +375,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         url: qbitUrl.trim() || undefined,
         username: qbitUser.trim() || undefined,
         password: qbitPass.trim() || undefined,
+        qui_proxy_url: quitarQui ? '' : (qbitQui.trim() || undefined),
       })
       setQbitTestResult(r)
     } catch {
@@ -390,6 +394,10 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   async function handleSave() {
     if (qbitUrl.trim() && !isValidHttpUrl(qbitUrl)) {
       setMsg({ ok: false, text: 'La URL de qBittorrent debe empezar por http:// o https:// e incluir un host válido' })
+      return
+    }
+    if (qbitQui.trim() && !isValidHttpUrl(qbitQui)) {
+      setMsg({ ok: false, text: 'La URL del proxy de qui debe empezar por http:// o https:// e incluir un host válido' })
       return
     }
     setSaving(true)
@@ -420,6 +428,8 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
       if (newKey.trim()) payload.tmdb_api_key = newKey.trim()
       if (newEmuKey.trim()) payload.emu_api_key = newEmuKey.trim()
       if (qbitPass.trim()) payload.qbit_password = qbitPass.trim()
+      if (quitarQui) payload.qbit_qui_proxy_clear = true
+      else if (qbitQui.trim()) payload.qbit_qui_proxy_url = qbitQui.trim()
       // Las API keys de imágenes ya NO viajan aquí: cada una se guarda desde
       // su propia tarjeta, en el momento, sin depender del Guardar global.
       const updated = await updateSettings(payload)
@@ -437,6 +447,8 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
       setQbitTag(updated.qbit_tag ?? '')
       setQbitUser(updated.qbit_username ?? '')
       setQbitPass('')
+      setQbitQui('')
+      setQuitarQui(false)
       setImgEnabled(updated.image_hosts_enabled ?? [])
       setNewKey('')
       setNewEmuKey('')
@@ -648,6 +660,25 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         <div className="form-group" style={{ marginBottom: 12 }}>
           <label className="form-label">Contraseña <span className="form-hint">(dejar vacío para mantener la actual)</span></label>
           <input type="password" className="form-input" value={qbitPass} onChange={e => setQbitPass(e.target.value)} placeholder={settings?.qbit_password_configured ? '••••••••' : 'Contraseña del WebUI'} autoComplete="new-password" />
+        </div>
+        <div className="form-group" style={{ marginBottom: 12 }}>
+          <label className="form-label">
+            Proxy de <a href="https://getqui.com/docs/features/reverse-proxy" target="_blank" rel="noreferrer">qui</a>{' '}
+            <span className="form-hint">(opcional; con él no hacen falta usuario ni contraseña)</span>
+          </label>
+          <input
+            type="password"
+            className="form-input"
+            value={qbitQui}
+            onChange={e => { setQbitQui(e.target.value); setQuitarQui(false) }}
+            placeholder={quitarQui ? 'Se quitará al guardar' : settings?.qbit_qui_configured ? '••••••••' : 'http://qui:7476/proxy/<clave>'}
+            autoComplete="off"
+          />
+          {settings?.qbit_qui_configured && !qbitQui && (
+            <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: 6, alignSelf: 'flex-start' }} onClick={() => setQuitarQui(q => !q)}>
+              {quitarQui ? 'No quitarlo' : 'Quitar el proxy de qui'}
+            </button>
+          )}
         </div>
         <div>
           <button className="btn btn-secondary btn-sm" onClick={handleTestQbit} disabled={testingQbit} type="button">

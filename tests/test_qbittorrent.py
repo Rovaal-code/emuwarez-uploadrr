@@ -262,3 +262,41 @@ def test_migration_leaves_a_url_that_already_had_its_port_alone(isolated_db):
     _migrate_qbit_port_into_url(conn)
     conn.commit()
     assert conn.execute("SELECT value FROM settings WHERE key = 'qbit.url'").fetchone()["value"] == "http://host:9999"
+
+
+QUI = "http://qui:7476/proxy/clave-de-qui"
+
+
+def test_settings_qui_is_a_secret_and_can_be_cleared(client, auth_headers):
+    client.put("/api/settings", json={"qbit_qui_proxy_url": QUI}, headers=auth_headers)
+    s = client.get("/api/settings", headers=auth_headers)
+    assert s.json()["qbit_qui_configured"] is True and s.json()["qbit_configured"] is True
+    assert "clave-de-qui" not in s.text
+
+    client.put("/api/settings", json={"qbit_qui_proxy_url": ""}, headers=auth_headers)  # vacío: se queda
+    assert client.get("/api/settings", headers=auth_headers).json()["qbit_qui_configured"] is True
+
+    client.put("/api/settings", json={"qbit_qui_proxy_clear": True}, headers=auth_headers)
+    assert client.get("/api/settings", headers=auth_headers).json()["qbit_qui_configured"] is False
+
+
+def test_settings_rejects_invalid_qui_url(client, auth_headers):
+    assert client.put("/api/settings", json={"qbit_qui_proxy_url": "qui:7476"}, headers=auth_headers).status_code == 422
+
+
+def test_service_test_goes_through_qui_when_stored(isolated_db, monkeypatch):
+    from emuwarez_uploadrr.database import connect, init_db
+    from emuwarez_uploadrr.services.integration_tests import test_qbit_connection
+    from emuwarez_uploadrr.services.settings import set_setting
+    conn = connect(isolated_db / "emuwarez_uploadrr.db")
+    init_db(conn)
+    set_setting(conn, "qbit.url", "http://qbit:8080")
+    set_setting(conn, "qbit.qui_proxy_url", QUI)
+    probado = []
+    monkeypatch.setattr(qb, "qbit_test_connection", lambda *a, **k: probado.append(a) or {"ok": True, "version": "v5.1.0"})
+
+    assert test_qbit_connection(conn=conn)["ok"] is True
+    assert test_qbit_connection(url="http://otro:8080", username="u", password="p", conn=conn)["ok"] is True
+    test_qbit_connection(url="http://otro:8080", username="u", password="p", qui_proxy_url="", conn=conn)
+
+    assert probado == [(QUI, None, "", ""), (QUI, None, "", ""), ("http://otro:8080", None, "u", "p")]

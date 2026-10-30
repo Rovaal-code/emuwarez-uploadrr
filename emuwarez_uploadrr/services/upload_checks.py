@@ -303,7 +303,7 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int, *, scope: str = "a
         return done()
 
     # 3. qBittorrent — WebUI login; skipped (yellow) when it isn't configured.
-    qbit_url = get_setting_canonical(conn, "qbit.url")
+    qbit_url = get_setting_canonical(conn, "qbit.url") or get_setting_canonical(conn, "qbit.qui_proxy_url")
     if not (qbit_url and qbit_url.strip()):
         add_skip("qbittorrent", "qBittorrent sin configurar (se omite)",
                  "Configúralo en Ajustes para sembrar automáticamente tras subir")

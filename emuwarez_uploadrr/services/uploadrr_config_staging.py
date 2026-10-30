@@ -173,8 +173,8 @@ def _es_carpeta(ruta: str) -> bool:
 
 
 def stage_qbittorrent_config(
-    lines: list[str], *, url: str, username: str, password: str, tag: str | None = None,
-    base_dir: str | None = None,
+    lines: list[str], *, url: str = "", username: str = "", password: str = "", tag: str | None = None,
+    base_dir: str | None = None, qui_proxy_url: str | None = None,
 ) -> tuple[list[str], str]:
     """Stage TORRENT_CLIENTS.qbit (host/port/user/pass, merged into whatever
     that entry already had — torrent_storage_dir/content_layout/enable_search
@@ -194,15 +194,15 @@ def stage_qbittorrent_config(
     # La app guarda UNA url con el puerto dentro; Uploadrr-EMU quiere host y
     # puerto en dos claves (src/clients.py: host=qbit_url, port=qbit_port), así
     # que se separan aquí con la inversa de build_base_url.
-    host, port = split_base_url(url)
-    merged = {
-        **existing,
-        "torrent_client": "qbit",
-        "qbit_url": host,
-        "qbit_port": port,
-        "qbit_user": username,
-        "qbit_pass": password,
-    }
+    merged = {**existing, "torrent_client": "qbit"}
+    if url:
+        host, port = split_base_url(url)
+        merged.update({"qbit_url": host, "qbit_port": port, "qbit_user": username, "qbit_pass": password})
+    # Con el proxy de qui Uploadrr-EMU habla con qBittorrent por él y no usa lo de arriba.
+    if (qui_proxy_url or "").strip():
+        merged["qui_proxy_url"] = qui_proxy_url.strip()
+    else:
+        merged.pop("qui_proxy_url", None)
     # La etiqueta que qBittorrent le pone al torrent, para reconocer tus
     # subidas entre lo demás. Vacía significa "no etiquetes", así que se borra
     # la que hubiera: si no, quitarla en Ajustes no la quitaría de verdad.

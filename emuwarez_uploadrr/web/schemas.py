@@ -1415,6 +1415,8 @@ class TestQbitRequest(BaseModel):
     port: Optional[str] = None
     username: Optional[str] = None
     password: Optional[str] = None
+    # "" prueba sin qui aunque esté guardado; sin el campo, se usa el guardado.
+    qui_proxy_url: Optional[str] = None
 
 
 class TestImghostRequest(BaseModel):

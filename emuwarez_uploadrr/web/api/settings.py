@@ -60,6 +60,8 @@ class SettingsResponse(BaseModel):
     qbit_tag: Optional[str] = None
     qbit_username: Optional[str] = None
     qbit_password_configured: bool = False
+    # El proxy de qui no se devuelve: lleva su clave dentro.
+    qbit_qui_configured: bool = False
     qbit_configured: bool = False
     # Image hosts (screenshots)
     image_hosts_available: list = []          # [{id, label, needs_key, url, favicon}]
@@ -119,6 +121,9 @@ class SettingsUpdateRequest(BaseModel):
     qbit_tag: Optional[str] = None
     qbit_username: Optional[str] = None
     qbit_password: Optional[str] = None
+    # Vacío deja el que haya, como la contraseña; quitarlo es qbit_qui_proxy_clear.
+    qbit_qui_proxy_url: Optional[str] = None
+    qbit_qui_proxy_clear: Optional[bool] = None
     # Image hosts
     image_hosts_enabled: Optional[list[str]] = None
     image_host_keys: Optional[dict] = None  # {host_id: api_key}
@@ -150,7 +155,7 @@ class SettingsUpdateRequest(BaseModel):
     upload_max_concurrent: Optional[int] = None
     path_mappings: Optional[list[dict]] = None
 
-    @field_validator("qbit_url")
+    @field_validator("qbit_url", "qbit_qui_proxy_url")
     @classmethod
     def valid_qbit_url(cls, v: Optional[str]) -> Optional[str]:
         if v is None:
@@ -244,8 +249,10 @@ def _build_response(conn) -> SettingsResponse:
     qbit_url = get_setting_canonical(conn, "qbit.url")
     qbit_pass = get_setting_canonical(conn, "qbit.password")
     qbit_pass_configured = bool(qbit_pass and qbit_pass.strip())
-    # qBittorrent is "configured" once a host is set (login is optional).
-    qbit_configured = bool(qbit_url and qbit_url.strip())
+    qbit_qui = get_setting_canonical(conn, "qbit.qui_proxy_url")
+    qbit_qui_configured = bool(qbit_qui and qbit_qui.strip())
+    # qBittorrent is "configured" once a host is set (login is optional), o con el proxy de qui.
+    qbit_configured = bool(qbit_url and qbit_url.strip()) or qbit_qui_configured
 
     from emuwarez_uploadrr.services.image_hosts import IMAGE_HOSTS, get_enabled_hosts, get_host_key
     img_available = [{"id": h["id"], "label": h["label"], "needs_key": h["needs_key"], "url": h["url"], "favicon": h.get("favicon")} for h in IMAGE_HOSTS]
@@ -296,6 +303,7 @@ def _build_response(conn) -> SettingsResponse:
         qbit_tag=get_setting_canonical(conn, "qbit.tag"),
         qbit_username=get_setting_canonical(conn, "qbit.username"),
         qbit_password_configured=qbit_pass_configured,
+        qbit_qui_configured=qbit_qui_configured,
         qbit_configured=qbit_configured,
         image_hosts_available=img_available,
         image_hosts_enabled=img_enabled,
@@ -442,6 +450,10 @@ def update_settings(
         # Blank password left untouched (keeps the stored one), same as api keys.
         if body.qbit_password is not None and body.qbit_password.strip():
             set_setting(conn, "qbit.password", body.qbit_password.strip())
+        if body.qbit_qui_proxy_clear:
+            set_setting(conn, "qbit.qui_proxy_url", "")
+        elif body.qbit_qui_proxy_url:
+            set_setting(conn, "qbit.qui_proxy_url", body.qbit_qui_proxy_url)
 
         if body.image_hosts_enabled is not None or body.image_host_keys is not None:
             from emuwarez_uploadrr.services.image_hosts import set_config, get_enabled_hosts

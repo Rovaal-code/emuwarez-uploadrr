@@ -105,3 +105,26 @@ def test_solo_comprobar_para_antes_de_construir_si_la_version_ya_esta(monkeypatc
     monkeypatch.setattr(publicar, "version_publicada", lambda repo: "0.0.1")
     assert publicar.main() == 0
     assert not (tmp_path / "latest.json").exists()
+
+
+def test_si_no_se_puede_leer_el_manifiesto_se_para(monkeypatch):
+    """Un manifiesto que no existe es «nada publicado»; uno que no se puede leer
+    (sin red, sin permiso) no: comprobar a ciegas dejaría repetir una versión."""
+    publicar = _cargar("publicar_version")
+
+    def _gh(stderr):
+        def run(*a, **k):
+            raise publicar.subprocess.CalledProcessError(1, "gh", stderr=stderr)
+        return run
+
+    monkeypatch.setattr(publicar.subprocess, "run", _gh("gh: Not Found (HTTP 404)"))
+    assert publicar.version_publicada("x/y") is None
+
+    monkeypatch.setattr(publicar.subprocess, "run", _gh("gh: Bad credentials (HTTP 401)"))
+    with pytest.raises(RuntimeError):
+        publicar.version_publicada("x/y")
+
+    monkeypatch.setattr(publicar, "_git", lambda *a: "abc1234")
+    monkeypatch.setattr("sys.argv", ["publicar_version.py", "--solo-comprobar",
+                                     "--notas", "Mejoras", "--repo"])
+    assert publicar.main() == 1

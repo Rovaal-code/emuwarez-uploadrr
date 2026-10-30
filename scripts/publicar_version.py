@@ -81,15 +81,23 @@ def version_publicada(repo: str) -> str | None:
     Se pregunta a la API de GitHub y NO a raw.githubusercontent.com: esa URL
     sirve una copia cacheada varios minutos, así que justo después de publicar
     devuelve todavía la anterior. Con la caché de por medio este guardián no
-    saltaba (comprobado: dejó republicar la misma versión)."""
+    saltaba (comprobado: dejó republicar la misma versión).
+
+    None solo si el manifiesto no existe todavía. Si no se puede preguntar
+    (sin red, sin permiso, sin respuesta), lanza RuntimeError: seguir a ciegas
+    podría volver a subir una versión ya publicada."""
+    import base64
     try:
         salida = subprocess.run(
             ["gh", "api", f"repos/{repo}/contents/{FICHERO}", "--jq", ".content"],
             capture_output=True, text=True, check=True, timeout=20).stdout
-        import base64
-        return json.loads(base64.b64decode(salida)).get("version")
-    except Exception:
-        return None
+    except subprocess.CalledProcessError as e:
+        if "HTTP 404" in (e.stderr or ""):
+            return None
+        raise RuntimeError(f"no se pudo leer el manifiesto publicado: {(e.stderr or '').strip()}") from e
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise RuntimeError(f"no se pudo leer el manifiesto publicado: {e}") from e
+    return json.loads(base64.b64decode(salida)).get("version")
 
 
 def publicar(manifiesto: dict, repo: str) -> None:
@@ -141,7 +149,11 @@ def main() -> int:
     # notificación dirá lo mismo las dos veces. La comparación interna se hace
     # por commit y sigue funcionando, pero el aviso al usuario queda inútil.
     if args.repo:
-        anterior = version_publicada(args.repo)
+        try:
+            anterior = version_publicada(args.repo)
+        except RuntimeError as e:
+            print(f"✗ {e}", file=sys.stderr)
+            return 1
         if anterior and anterior == manifiesto["version"] and not args.misma_version:
             print(f"✗ La versión publicada ya es {anterior} y vas a publicar la misma.",
                   file=sys.stderr)

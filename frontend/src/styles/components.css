@@ -1142,6 +1142,19 @@ optgroup {
   border-bottom: 1px solid var(--border);
   margin-bottom: 4px;
 }
+.hf-search {
+  position: sticky;
+  top: -4px;
+  z-index: 1;
+  margin-bottom: 4px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  /* --bg-input es translúcido: sin el fondo del menú debajo, al bajar se verían las opciones a través. */
+  background: linear-gradient(var(--bg-input), var(--bg-input)), var(--bg-surface);
+}
+.hf-empty {
+  border-bottom: none;
+}
 .hf-option.hf-check {
   display: flex;
   align-items: center;

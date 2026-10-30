@@ -66,6 +66,19 @@ def test_lo_que_no_tiene_tamano_va_al_final(biblioteca, orden):
     assert _raices(biblioteca, orden)[-1] == "Peli sin descargar"
 
 
+def test_la_temporada_con_tamano_propio_no_cuenta_doble(biblioteca):
+    """La sincronización guarda en la temporada la suma de sus capítulos. Si
+    el orden sumaba temporada + capítulos, la serie valía 22 GB en vez de 11 y
+    adelantaba a una película de 15 que la columna enseña más grande."""
+    biblioteca.execute(
+        "UPDATE library_items SET size_bytes = 11000000000 WHERE item_type = 'season'")
+    biblioteca.execute(
+        """INSERT INTO library_items (item_type, title, local_status, size_bytes)
+           VALUES ('movie', 'Peli enorme', 'Disponible', 15000000000)""")
+    biblioteca.commit()
+    assert _raices(biblioteca, "size_desc")[:2] == ["Peli enorme", "Serie grande"]
+
+
 def test_ordenar_por_tamano_no_pierde_ni_duplica_filas(biblioteca):
     """La subconsulta del tamaño efectivo va en el ORDER BY, no en el WHERE:
     si se colara en el filtro, dejaría fuera lo que no tiene tamaño."""

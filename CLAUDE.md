@@ -29,6 +29,7 @@ the upload with Uploadrr-EMU (`Kisnov/Uploadrr-EMU`, cloned into the image at `/
   `tests/fixtures/mediainfo_informe_esperado.json`. For an intended change, regenerate it with
   `python -m tests.test_media_info_congelado --regenerar` and review the JSON diff.
 - CI (`.github/workflows/ci.yml`) runs pytest, critical ruff rules and the frontend checks on every PR.
+- `zizmor.yml` audits the workflows and `dependabot.yml` when `.github/` changes; run `zizmor .` locally before pushing a workflow edit.
 
 ## Not obvious
 

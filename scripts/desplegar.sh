@@ -33,6 +33,8 @@ set -euo pipefail
 IMAGEN="ghcr.io/kisnov/emuwarez-uploadrr:latest"
 FORK="https://github.com/Kisnov/Uploadrr-EMU.git"
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# En Git Bash de Windows no hay python3.
+PYTHON="$(command -v python3 || command -v python)"
 
 NOTAS=""
 ESCALA=""
@@ -56,24 +58,24 @@ if [[ -z "$NOTAS" && "$PUBLICAR" -eq 1 ]]; then
   exit 2
 fi
 
-# El árbol tiene que estar limpio ANTES de sellar: el sello es el commit, y un
-# cambio sin commitear se colaría en la imagen sin aparecer en ese commit.
+# El árbol tiene que estar limpio: la imagen se construye desde el commit, y un
+# cambio sin commitear no llegaría a ella.
 if [[ -n "$(git status --porcelain)" ]]; then
-  echo "Hay cambios sin commitear. El sello sería mentira: la imagen llevaría" >&2
-  echo "código que ese commit no tiene. Commitea primero." >&2
+  echo "Hay cambios sin commitear, y la imagen sale del commit: no los llevaría." >&2
+  echo "Commitea primero." >&2
   git status --short >&2
   exit 1
 fi
 
 if [[ -n "$ESCALA" ]]; then
-  python3 scripts/subir_version.py "$ESCALA"
+  "$PYTHON" scripts/subir_version.py "$ESCALA"
   echo "La versión ha cambiado: commitea ese cambio y vuelve a lanzar esto." >&2
   exit 1
 fi
 
 COMMIT="$(git rev-parse HEAD)"
-FECHA="$(date -u '+%Y-%m-%d %H:%M UTC')"
-VERSION="$(python3 scripts/subir_version.py --ver)"
+FECHA="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+VERSION="$("$PYTHON" scripts/subir_version.py --ver)"
 
 echo "Versión ..... $VERSION"
 echo "Commit ...... $COMMIT"
@@ -155,7 +157,7 @@ etiquetar() {
 if [[ "$PUBLICAR" -eq 1 ]]; then
   comprobar_etiqueta || exit 1
   # Antes de construir: repetir una versión ya publicada movería :latest y :X.Y.Z a otro digest.
-  python3 scripts/publicar_version.py --solo-comprobar --notas "$NOTAS" --repo
+  "$PYTHON" scripts/publicar_version.py --solo-comprobar --notas "$NOTAS" --repo
   # Y que gh puede escribir el manifiesto: el endpoint de push de git solo da 200 a quien puede.
   # El token va por stdin (printf es interno), no en los argumentos de curl.
   if ! printf 'user = "x:%s"\n' "$(gh auth token)" | curl -sf -o /dev/null --connect-timeout 10 --max-time 30 \
@@ -166,7 +168,7 @@ if [[ "$PUBLICAR" -eq 1 ]]; then
 fi
 
 echo "Resolviendo el HEAD del fork…"
-COMMIT_FORK="$(git ls-remote "$FORK" main | cut -f1)"
+COMMIT_FORK="$(git ls-remote "$FORK" refs/heads/main | cut -f1)"
 if [[ -z "$COMMIT_FORK" ]]; then
   echo "No se pudo leer el HEAD del fork. Sin eso la caché de Docker serviría" >&2
   echo "una copia vieja sin avisar, así que paramos aquí." >&2
@@ -176,11 +178,12 @@ echo "Fork ........ $COMMIT_FORK"
 
 REGISTRO="$(mktemp -t desplegar-XXXXXX.log)"
 echo "Construyendo (registro en $REGISTRO)…"
-if ! docker build \
+# Desde el commit y no desde el árbol: en Windows (autocrlf) el entrypoint iría con CRLF y el contenedor no arrancaría.
+if ! git -c core.autocrlf=false archive HEAD | docker build --pull \
     --build-arg "UPLOADRR_COMMIT=$COMMIT_FORK" \
     --build-arg "APP_COMMIT=$COMMIT" \
     --build-arg "APP_BUILD_DATE=$FECHA" \
-    -t "$IMAGEN" . > "$REGISTRO" 2>&1; then
+    -t "$IMAGEN" - > "$REGISTRO" 2>&1; then
   echo "La construcción ha fallado. Últimas líneas:" >&2
   tail -30 "$REGISTRO" >&2
   exit 1
@@ -217,5 +220,5 @@ if [[ "$PUBLICAR" -eq 0 ]]; then
 fi
 
 echo "Publicando el manifiesto…"
-python3 scripts/publicar_version.py --digest "$DIGEST" --notas "$NOTAS" --repo
+"$PYTHON" scripts/publicar_version.py --digest "$DIGEST" --notas "$NOTAS" --repo
 etiquetar

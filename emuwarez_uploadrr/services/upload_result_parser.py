@@ -64,6 +64,23 @@ def build_error_summary(stderr: str, stdout: str, exit_code: int | None) -> str 
     return "\n".join(lines) if lines else None
 
 
+SEASON_PACK_PATTERN = re.compile(r"^Incomplete season pack: season (\d+|\?)(?:, missing episodes ([\d, ]+))?", re.MULTILINE)
+
+
+def season_pack_warning(text: str) -> str | None:
+    """Aviso en castellano si Uploadrr-EMU (mkbrr) vio un pack de temporada incompleto; None si no."""
+    m = SEASON_PACK_PATTERN.search(text or "")
+    if not m:
+        return None
+    aviso = f"Pack de temporada posiblemente incompleto (temporada {m.group(1)})"
+    episodios = [e.strip() for e in (m.group(2) or "").split(",") if e.strip()]
+    if len(episodios) == 1:
+        aviso += f": falta el episodio {episodios[0]}"
+    elif episodios:
+        aviso += f": faltan los episodios {', '.join(episodios[:-1])} y {episodios[-1]}"
+    return aviso + "."
+
+
 def classify_upload_result(
     stdout: str,
     stderr: str,
@@ -77,6 +94,7 @@ def classify_upload_result(
         torrent_ids: list[str]
         error_summary: str | None
         exit_code: int | None
+        season_pack_warning: str | None
     """
     combined = (stdout or "") + "\n" + (stderr or "")
     urls = extract_urls(combined)
@@ -95,6 +113,7 @@ def classify_upload_result(
         "torrent_ids": torrent_ids,
         "error_summary": error_summary,
         "exit_code": exit_code,
+        "season_pack_warning": season_pack_warning(stdout or ""),
     }
 
 
@@ -115,4 +134,5 @@ __all__ = [
     "build_error_summary",
     "classify_upload_result",
     "parse_uploadrr_output",
+    "season_pack_warning",
 ]

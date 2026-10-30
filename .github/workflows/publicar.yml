@@ -80,8 +80,8 @@ jobs:
           fi
           # Antes de los tests y la imagen, lo que podría pararlo al final.
           # El endpoint de push de git solo responde 200 a quien puede escribir, y no escribe nada.
-          if [ -z "$TOKEN" ] || ! curl -sf -o /dev/null -u "x:$TOKEN" \
-              "https://github.com/Kisnov/uploadrr-version.git/info/refs?service=git-receive-pack"; then
+          if [ -z "$TOKEN" ] || ! printf 'user = "x:%s"\n' "$TOKEN" | curl -sf -o /dev/null --connect-timeout 10 --max-time 30 \
+              --config - "https://github.com/Kisnov/uploadrr-version.git/info/refs?service=git-receive-pack"; then
             echo "::error::UPLOADRR_VERSION_TOKEN falta, ha caducado o no puede escribir en Kisnov/uploadrr-version."
             exit 1
           fi

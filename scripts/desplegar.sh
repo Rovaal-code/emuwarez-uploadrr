@@ -157,8 +157,9 @@ if [[ "$PUBLICAR" -eq 1 ]]; then
   # Antes de construir: repetir una versión ya publicada movería :latest y :X.Y.Z a otro digest.
   python3 scripts/publicar_version.py --solo-comprobar --notas "$NOTAS" --repo
   # Y que gh puede escribir el manifiesto: el endpoint de push de git solo da 200 a quien puede.
-  if ! curl -sf -o /dev/null -u "x:$(gh auth token)" \
-      "https://github.com/Kisnov/uploadrr-version.git/info/refs?service=git-receive-pack"; then
+  # El token va por stdin (printf es interno), no en los argumentos de curl.
+  if ! printf 'user = "x:%s"\n' "$(gh auth token)" | curl -sf -o /dev/null --connect-timeout 10 --max-time 30 \
+      --config - "https://github.com/Kisnov/uploadrr-version.git/info/refs?service=git-receive-pack"; then
     echo "gh no puede escribir en Kisnov/uploadrr-version: no se sube ninguna imagen." >&2
     exit 1
   fi

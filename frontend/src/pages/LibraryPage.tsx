@@ -272,7 +272,10 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // eMuwarez y Aportes se filtraban aquí sobre lo cargado, que con más de
   // LOAD_LIMIT filas no era la biblioteca entera; el servidor ya devuelve el
   // nivel más alto que cumple (la serie, o solo sus temporadas que cumplen).
+  // Solo cuenta la última petición: una vieja más lenta no pisa la nueva.
+  const ultimaCarga = useRef(0)
   const load = useCallback(async () => {
+    const esta = ++ultimaCarga.current
     setLoading(true)
     setError(null)
     try {
@@ -294,11 +297,11 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
         limit: LOAD_LIMIT,
         offset,
       })
-      startTransition(() => setData(result))
+      if (esta === ultimaCarga.current) startTransition(() => setData(result))
     } catch {
-      setError('Error al cargar la biblioteca')
+      if (esta === ultimaCarga.current) setError('Error al cargar la biblioteca')
     } finally {
-      setLoading(false)
+      if (esta === ultimaCarga.current) setLoading(false)
     }
   }, [debouncedSearch, filterType, filterStatus, filterInstanceId, filterRequest, flatFilter, filterSpanish,
     searchProvider, searchQuality, searchSource, searchGroup, filterEmu, filterAporte, sortBy, offset])

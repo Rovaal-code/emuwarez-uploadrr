@@ -296,6 +296,13 @@ def test_ids_distintos_no_se_casan_por_titulo():
     assert match_request_to_library(req, [_make_item(title="Dune")])[0]["title_match"] is True
 
 
+def test_un_id_distinto_descarta_aunque_el_otro_coincida():
+    """El mismo número de TMDb puede ser una película y una serie distintas; si el IMDb no coincide, no es lo mismo."""
+    req = _make_req(tmdb_id="1399", imdb_id="tt0944947")
+    assert match_request_to_library(req, [_make_item(tmdb_id="1399", imdb_id="tt9999999")]) == []
+    assert match_request_to_library(req, [_make_item(tmdb_id="1399")])[0]["confidence"] == 1.0
+
+
 @pytest.mark.parametrize("category,expected", [
     ("Películas", "movie"), ("Pelicula", "movie"), ("Movie", "movie"), ("Movies", "movie"),
     ("Series", "series"), ("TV", "series"),

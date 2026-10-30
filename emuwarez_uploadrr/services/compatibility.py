@@ -203,15 +203,15 @@ def match_request_to_library(
         itm_tmdb = str(item.get("tmdb_id") or "").strip()
         itm_imdb = str(item.get("imdb_id") or "").strip()
 
-        if req_tmdb and itm_tmdb and req_tmdb == itm_tmdb:
+        if (req_tmdb and itm_tmdb and req_tmdb != itm_tmdb) or (req_imdb and itm_imdb and req_imdb != itm_imdb):
+            # Con un id distinto es otro contenido aunque el otro id o el título coincidan (Dune de 1984 y la de 2021).
+            continue
+        if req_tmdb and itm_tmdb:
             id_match = True
             confidence = 1.0
-        elif req_imdb and itm_imdb and req_imdb == itm_imdb:
+        elif req_imdb and itm_imdb:
             id_match = True
             confidence = 0.95
-        elif (req_tmdb and itm_tmdb) or (req_imdb and itm_imdb):
-            # Con ids distintos es otro contenido aunque se llame igual (Dune de 1984 y la de 2021).
-            continue
         else:
             itm_title_norm, itm_title_compact, itm_words = _titulos(item.get("title"))
             if (

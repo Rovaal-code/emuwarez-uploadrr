@@ -168,6 +168,19 @@ def test_instance_sync_computes_spanish_flags(client, auth_headers):
     assert item["has_spanish_ok"] == 1
 
 
+def test_instance_sync_refuses_while_library_sync_runs(client, auth_headers):
+    from emuwarez_uploadrr.services.library import _lib_sync_guard
+    client.post(
+        "/api/instances",
+        json={"type": "radarr", "name": "R4", "url": "http://r4:7878", "api_key": "k4"},
+        headers=auth_headers,
+    )
+    iid = client.get("/api/instances", headers=auth_headers).json()[0]["id"]
+    with _lib_sync_guard():
+        resp = client.post(f"/api/instances/{iid}/sync", headers=auth_headers)
+    assert resp.status_code == 429
+
+
 # ---------------------------------------------------------------------------
 # Dashboard API
 # ---------------------------------------------------------------------------

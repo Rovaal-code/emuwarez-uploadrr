@@ -164,15 +164,12 @@ def test_stage_qbittorrent_config_resolves_a_relative_storage_dir_against_upload
 def test_stage_qbittorrent_config_treats_an_unreadable_storage_dir_as_missing(monkeypatch):
     """Si comprobar la carpeta da error (sin permisos), se trata como que no
     está en vez de tumbar el staging entero."""
-    import pathlib
-
     llamadas = []
 
     def sin_permiso(*args, **kwargs):
         llamadas.append(args)
         raise PermissionError("denegado")
 
-    monkeypatch.setattr(pathlib.Path, "stat", sin_permiso)
     monkeypatch.setattr("os.stat", sin_permiso)
     lines = [
         "TORRENT_CLIENTS:",

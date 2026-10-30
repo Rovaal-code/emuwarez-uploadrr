@@ -22,6 +22,7 @@ import difflib
 import hashlib
 import os
 import re
+import stat
 from pathlib import Path
 from typing import Any, Optional
 
@@ -150,6 +151,16 @@ def stage_image_hosts(
     return staged, "; ".join(messages) if messages else "SCREENS sin cambios"
 
 
+def _es_carpeta(ruta: str) -> bool:
+    """Como os.path.isdir, pero cualquier error al mirarla (sin permisos en
+    una carpeta de la ruta, p. ej.) cuenta como que no está: Path.is_dir()
+    deja pasar PermissionError, y eso tumbaría el staging entero."""
+    try:
+        return stat.S_ISDIR(os.stat(ruta).st_mode)
+    except (OSError, ValueError):
+        return False
+
+
 def stage_qbittorrent_config(
     lines: list[str], *, url: str, username: str, password: str, tag: str | None = None,
     base_dir: str | None = None,
@@ -195,10 +206,9 @@ def stage_qbittorrent_config(
     # nada que reutilizar, y buscar en qBittorrent tampoco sirve: el hash que
     # encuentre se busca como fichero en esa misma carpeta. Una ruta relativa
     # el fork la resuelve contra su propia carpeta (base_dir), no contra la
-    # nuestra. os.path.isdir y no Path.is_dir: este lanza PermissionError si
-    # no se puede leer una carpeta de la ruta, y eso tumbaría todo el staging.
+    # nuestra.
     almacen = str(merged.get("torrent_storage_dir") or "").strip()
-    if not almacen or not os.path.isdir(os.path.join(base_dir or ".", almacen)):
+    if not almacen or not _es_carpeta(os.path.join(base_dir or ".", almacen)):
         merged.pop("torrent_storage_dir", None)
         merged["enable_search"] = False
     msg1 = set_child_inline_mapping(staged, "TORRENT_CLIENTS", QBIT_CLIENT_KEY, merged)

@@ -42,7 +42,9 @@ def _normalize_title_for_emu(title: str) -> str:
     if not title:
         return ""
     normalized = unicodedata.normalize("NFC", title)
-    cleaned = re.sub(r'[<>:"/\\|?*]', "", normalized)
+    # «:» y «?» se quedan: eMuwarez los conserva en el título («Anacleto: Agente secreto»).
+    # El nombre de archivo los quita en to_filesystem_name.
+    cleaned = re.sub(r'[<>"/\\|*]', "", normalized)
     return cleaned.strip()
 
 

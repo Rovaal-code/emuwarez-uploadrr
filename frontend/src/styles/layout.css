@@ -177,12 +177,6 @@
   gap: 7px;
   min-width: 0;
   cursor: default;
-  opacity: 1;
-  transition: opacity 300ms ease;
-}
-
-.sync-chip-fading {
-  opacity: 0;
 }
 
 .sync-chip-error {

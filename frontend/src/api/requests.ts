@@ -44,30 +44,6 @@ export async function syncRequests(force = false): Promise<RequestSyncResponse> 
   return api.post('/requests/sync', { force })
 }
 
-// --- Demo requests (TEMPORARY) ---------------------------------------------
-// Goes away with the real eMuwarez requests endpoint.
-
-export interface ExamplesResult {
-  created: number
-  by_group: Record<string, number>
-  // What the matcher actually decided, which can differ from what each group
-  // aimed for — see request_examples.generate_examples.
-  by_status: Record<string, number>
-  shortfalls: string[]
-}
-
-export async function getExamplesCount(): Promise<{ count: number }> {
-  return api.get<{ count: number }>('/requests/examples')
-}
-
-export async function generateExamples(): Promise<ExamplesResult> {
-  return api.post<ExamplesResult>('/requests/examples', {})
-}
-
-export async function deleteExamples(): Promise<{ deleted: number }> {
-  return api.delete<{ deleted: number }>('/requests/examples')
-}
-
 export async function getRequestDetail(id: number): Promise<RequestDetailResponse> {
   return api.get(`/requests/${id}`)
 }

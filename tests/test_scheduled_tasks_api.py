@@ -35,15 +35,13 @@ def test_list_returns_default_tasks(client, auth_headers):
     assert keys == {t[0] for t in DEFAULT_TASKS}
 
 
-def test_la_sincronizacion_de_peticiones_ya_no_es_una_tarea_programada(client, auth_headers):
-    """Se quitó a propósito: las peticiones se sincronizan desde su botón, con
-    su propio límite de una por hora (services/requests.py). Queda listada en
-    OBSOLETE_TASKS para que se borre de instalaciones antiguas."""
+def test_la_sincronizacion_de_peticiones_vuelve_a_ser_una_tarea_programada(client, auth_headers):
+    """Cada 24 h, y el botón sigue valiendo (con su límite de una por hora, en services/requests.py)."""
     from emuwarez_uploadrr.services.scheduler import OBSOLETE_TASKS
 
-    keys = {t["task_key"] for t in client.get("/api/tasks/scheduled", headers=auth_headers).json()}
-    assert "sync-emu-requests" not in keys
-    assert "sync-emu-requests" in OBSOLETE_TASKS
+    tareas = {t["task_key"]: t for t in client.get("/api/tasks/scheduled", headers=auth_headers).json()}
+    assert tareas["sync-emu-requests"]["interval_minutes"] == 1440
+    assert "sync-emu-requests" not in OBSOLETE_TASKS
 
 
 def test_update_interval_success(client, auth_headers):
@@ -72,12 +70,13 @@ def test_run_library_sync_now(client, auth_headers):
     assert data["task_key"] == "sync-library"
 
 
-def test_run_emu_sync_manually_returns_404(client, auth_headers):
-    """Ya no existe como tarea programada, así que ejecutarla es pedir algo que
-    no está: 404. Antes daba 400 ("no admite ejecución manual"), y esta prueba
-    llevaba en rojo desde que la tarea se retiró."""
-    resp = client.post("/api/tasks/scheduled/sync-emu-requests/run", headers=auth_headers)
-    assert resp.status_code == 404
+def test_run_emu_sync_now(client, auth_headers):
+    with patch("emuwarez_uploadrr.services.requests.sync_emu_requests") as mock_sync:
+        mock_sync.return_value = {"status": "ok", "imported": 3, "matched": 1}
+        resp = client.post("/api/tasks/scheduled/sync-emu-requests/run", headers=auth_headers)
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "completed"
+    assert resp.json()["summary"] == "3 peticiones importadas, 1 cruces"
 
 
 def test_run_unknown_task_returns_404(client, auth_headers):

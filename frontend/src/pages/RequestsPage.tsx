@@ -1,11 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import {
-  getRequests,
-  getRequestDetail,
-  getExamplesCount,
-  generateExamples,
-  deleteExamples,
-} from '../api/requests'
+import { getRequests, getRequestDetail } from '../api/requests'
 import { getCandidates } from '../api/requestReadiness'
 import type {
   RequestItemResponse, RequestDetailResponse,
@@ -17,7 +11,7 @@ import { EmptyState, FilaVacia } from '../components/EmptyState'
 import { SyncInfo } from '../components/SyncInfo'
 import { StatusBadge } from '../components/StatusBadge'
 import { getRequestStatusInfo } from '../utils/status'
-import { HoverTitle, Tooltip, useTooltip } from '../components/Tooltip'
+import { HoverTitle, useTooltip } from '../components/Tooltip'
 import { useSync } from '../context/SyncContext'
 import { UploadWizardModal } from '../components/UploadWizardModal'
 import { getLibraryItem } from '../api/library'
@@ -127,8 +121,6 @@ const SORT_OPTIONS = [
   { value: 'title', label: 'Orden: Título (A-Z)' },
   { value: 'points_desc', label: 'Orden: Más puntos' },
   { value: 'points_asc', label: 'Orden: Menos puntos' },
-  { value: 'votes_desc', label: 'Orden: Más me gusta' },
-  { value: 'comments_desc', label: 'Orden: Más comentarios' },
 ]
 
 const fmtNum = (n: number | null | undefined) => formatNumero(n)
@@ -320,7 +312,7 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
   instances: InstanceSafeResponse[]
   onBack: () => void
   onShowCandidates: () => void
-  onUpload: (libraryItemId: number, preselect?: { season?: number | null; episode?: number | null }) => void
+  onUpload: (libraryItemId: number, preselect?: { season?: number | null; episode?: number | null }, requestId?: number) => void
   onOpenLibraryItem?: (id: number) => void
 }) {
   const m = item.match
@@ -384,7 +376,7 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
             onClick={() => libraryTargetId && onUpload(libraryTargetId, {
               season: item.req_season,
               episode: item.req_scope === 'episode' ? item.req_episode : null,
-            })}
+            }, item.id)}
             {...subirTip.triggerProps}
           >
             <UploadButtonIcon /> Subir a eMuwarez
@@ -458,12 +450,17 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
               <FieldRow label="Puntos">
                 <ValueChip><ValueIcon><PointsValueIcon /></ValueIcon><span className="txt">{fmtNum(item.points)}</span></ValueChip>
               </FieldRow>
-              <FieldRow label="Votos">
-                <ValueChip><ValueIcon><ThumbsUpValueIcon /></ValueIcon><span className="txt">{item.votes ?? 0}</span></ValueChip>
-              </FieldRow>
-              <FieldRow label="Comentarios">
-                <ValueChip><ValueIcon><CommentValueIcon /></ValueIcon><span className="txt">{item.comments ?? 0}</span></ValueChip>
-              </FieldRow>
+              {/* eMuwarez no da votos ni comentarios: sin dato, sin fila. */}
+              {item.votes != null && (
+                <FieldRow label="Votos">
+                  <ValueChip><ValueIcon><ThumbsUpValueIcon /></ValueIcon><span className="txt">{item.votes}</span></ValueChip>
+                </FieldRow>
+              )}
+              {item.comments != null && (
+                <FieldRow label="Comentarios">
+                  <ValueChip><ValueIcon><CommentValueIcon /></ValueIcon><span className="txt">{item.comments}</span></ValueChip>
+                </FieldRow>
+              )}
             </Card>
 
             <Card title="Identificadores externos" icon={<ExternalIdsCardIcon />}>
@@ -623,58 +620,6 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   // and the progress banner), so it can't be launched twice across tabs.
   const { requestsSyncing, requestsStatus, startRequestsSync, lastInvalidatedAt, isAnySyncing } = useSync()
 
-  // --- Demo requests (TEMPORARY) --------------------------------------------
-  // Only exists until eMuwarez hands over the real requests endpoint; the whole
-  // block goes away with it. `exampleCount` comes from the SERVER, not from
-  // local state: deriving "already generated" from the frontend would let a
-  // page reload re-enable Generar and stack another round of them.
-  const [examplesOpen, setExamplesOpen] = useState(false)
-  const [exampleCount, setExampleCount] = useState<number | null>(null)
-  const [examplesBusy, setExamplesBusy] = useState(false)
-  const [examplesMsg, setExamplesMsg] = useState<string | null>(null)
-
-  const refreshExampleCount = useCallback(() => {
-    getExamplesCount().then(r => setExampleCount(r.count)).catch(() => setExampleCount(null))
-  }, [])
-  useEffect(() => { refreshExampleCount() }, [refreshExampleCount])
-
-  const runExamples = async (action: 'generate' | 'delete') => {
-    setExamplesBusy(true); setExamplesMsg(null)
-    try {
-      if (action === 'generate') {
-        const r = await generateExamples()
-        // Reports what the matcher decided, not what was aimed for: a request
-        // is matched against the whole library, so it can land on a different
-        // item than the one it was built from.
-        const real = Object.entries(r.by_status)
-          .sort((a, b) => b[1] - a[1])
-          .map(([status, n]) => `${n} ${status}`)
-          .join(', ')
-        setExamplesMsg(
-          `${r.created} peticiones de ejemplo generadas: ${real}.`
-          + (r.shortfalls.length ? ` Tu biblioteca no daba para todo: ${r.shortfalls.join('; ')}.` : '')
-          + ' La tabla de Recomendaciones del Panel se ha actualizado con ellas.',
-        )
-      } else {
-        const r = await deleteExamples()
-        setExamplesMsg(
-          `${r.deleted} peticiones de ejemplo borradas.`
-          + ' La tabla de Recomendaciones del Panel se ha actualizado.',
-        )
-      }
-      refreshExampleCount()
-      loadItems(0)
-      loadFacets()
-      // Recomendaciones se calcula en cada lectura, así que basta con avisar a
-      // quien la muestre de que los datos han cambiado.
-      window.dispatchEvent(new CustomEvent('emuwarez:data-changed'))
-    } catch (e: unknown) {
-      setExamplesMsg(e instanceof Error ? e.message : 'No se pudo completar la acción')
-    } finally {
-      setExamplesBusy(false)
-      setExamplesOpen(false)
-    }
-  }
   // Solo para el enlace de la columna Origen, igual que en Subidas: el nombre
   // de la instancia ya viene en cada petición, pero su URL no.
   const [instances, setInstances] = useState<InstanceSafeResponse[]>([])
@@ -686,6 +631,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   const [showCandidates, setShowCandidates] = useState(false)
   const [wizardItem, setWizardItem] = useState<LibraryItemResponse | null>(null)
   const [wizardPreselect, setWizardPreselect] = useState<{ season?: number | null; episode?: number | null } | undefined>(undefined)
+  const [wizardRequestId, setWizardRequestId] = useState<number | undefined>(undefined)
   const votesHeaderTip = useTooltip('Votos (otros usuarios que la quieren)')
   const commentsHeaderTip = useTooltip('Comentarios')
   const pointsHeaderTip = useTooltip('Puntos / recompensa')
@@ -693,10 +639,11 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   // "Subir a eMuwarez" — reuse the exact same upload wizard as Biblioteca by
   // loading the matched library item and handing it to UploadWizardModal, with
   // the request's scope (season / episode) so the selection is pre-filled.
-  const openUpload = useCallback(async (libraryItemId: number, preselect?: { season?: number | null; episode?: number | null }) => {
+  const openUpload = useCallback(async (libraryItemId: number, preselect?: { season?: number | null; episode?: number | null }, requestId?: number) => {
     try {
       const libItem = await getLibraryItem(libraryItemId)
       setWizardPreselect(preselect)
+      setWizardRequestId(requestId)
       setWizardItem(libItem)
     } catch { /* ignore — button only enabled when a match exists */ }
   }, [])
@@ -873,6 +820,9 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   }, [])
 
   const displayItems = items
+  // Las peticiones reales no traen votos ni comentarios: sin dato, sin columna.
+  const hayVotos = displayItems.some(i => i.votes != null)
+  const hayComentarios = displayItems.some(i => i.comments != null)
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1
@@ -911,61 +861,8 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
               label="Sincronizar peticiones"
               title="Descarga de eMuwarez las peticiones activas y las cruza con tu biblioteca local para ver cuáles puedes cubrir. Limitado a una vez por hora."
             />
-            {/* TEMPORARY: goes away with the real requests endpoint. */}
-            <div style={{ position: 'relative' }}>
-              <Tooltip content="Genera peticiones de prueba a partir de tu propia biblioteca, para ver Peticiones y Recomendaciones con contenido mientras eMuwarez no da el endpoint real.">
-                <button
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => setExamplesOpen(v => !v)}
-                  disabled={examplesBusy}
-                  type="button"
-                >
-                  {examplesBusy && <span className="spinner" style={{ width: 12, height: 12, borderWidth: 2, marginRight: 6 }} />}
-                  {examplesBusy ? 'Trabajando…' : `Ejemplos${exampleCount ? ` (${exampleCount})` : ''}`}
-                </button>
-              </Tooltip>
-              {examplesOpen && (
-                <div
-                  className="detail-card"
-                  style={{
-                    position: 'absolute', right: 0, top: '100%', marginTop: 6, zIndex: 30,
-                    padding: 8, borderRadius: 8, display: 'flex', flexDirection: 'column',
-                    gap: 6, minWidth: 150,
-                  }}
-                >
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => runExamples('generate')}
-                    disabled={examplesBusy || !!exampleCount}
-                    type="button"
-                  >
-                    {examplesBusy ? 'Generando…' : 'Generar'}
-                  </button>
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => runExamples('delete')}
-                    disabled={examplesBusy || !exampleCount}
-                    type="button"
-                  >
-                    Borrar
-                  </button>
-                </div>
-              )}
-            </div>
           </div>
         </div>
-
-        {examplesMsg && (
-          <div className="detail-card" style={{ padding: '12px 14px', borderRadius: 8, marginBottom: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-              <span style={{ marginTop: 1 }}><CheckStatusIcon status="ok" /></span>
-              <div style={{ fontSize: 12.5 }}>
-                <div style={{ fontWeight: 600, marginBottom: 2 }}>Peticiones de ejemplo</div>
-                {examplesMsg}
-              </div>
-            </div>
-          </div>
-        )}
 
         <div className="filters-bar">
           <input
@@ -1023,15 +920,15 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                     <th><HeaderFilter label="Source" value={sourceFilter} onChange={setSourceFilter} options={[
                       { value: '', label: 'Todos' }, ...facets.sources.map(s => ({ value: s, label: s })),
                     ]} /></th>
-                    <th style={{ textAlign: 'center' }} {...votesHeaderTip.triggerProps}><VotesIcon />{votesHeaderTip.tooltipNode}</th>
-                    <th style={{ textAlign: 'center' }} {...commentsHeaderTip.triggerProps}><CommentsIcon />{commentsHeaderTip.tooltipNode}</th>
+                    {hayVotos && <th style={{ textAlign: 'center' }} {...votesHeaderTip.triggerProps}><VotesIcon />{votesHeaderTip.tooltipNode}</th>}
+                    {hayComentarios && <th style={{ textAlign: 'center' }} {...commentsHeaderTip.triggerProps}><CommentsIcon />{commentsHeaderTip.tooltipNode}</th>}
                     <th style={{ textAlign: 'center' }} {...pointsHeaderTip.triggerProps}><PointsIcon />{pointsHeaderTip.tooltipNode}</th>
                     <th>Creada</th>
                   </tr>
                 </thead>
                 {displayItems.length === 0 && (
                   <FilaVacia
-                    columnas={11}
+                    columnas={9 + Number(hayVotos) + Number(hayComentarios)}
                     title="Sin peticiones"
                     body="No hay peticiones que coincidan con los filtros."
                     action={<button className="btn btn-primary btn-sm" onClick={quitarFiltros}>Quitar filtros</button>}
@@ -1070,8 +967,8 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                         <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}><AuthorCell author={item.author} isMine={item.is_mine} /></td>
                         <td style={{ whiteSpace: 'nowrap' }}><SpecPlainValue value={item.requested_resolution} icon={ResolutionValueIcon} /></td>
                         <td style={{ whiteSpace: 'nowrap' }}><SpecPlainValue value={item.requested_source} icon={SourceValueIcon} /></td>
-                        <td style={{ textAlign: 'center', fontSize: 12 }}>{item.votes ?? 0}</td>
-                        <td style={{ textAlign: 'center', fontSize: 12 }}>{item.comments ?? 0}</td>
+                        {hayVotos && <td style={{ textAlign: 'center', fontSize: 12 }}>{item.votes ?? '—'}</td>}
+                        {hayComentarios && <td style={{ textAlign: 'center', fontSize: 12 }}>{item.comments ?? '—'}</td>}
                         <td style={{ textAlign: 'center', fontSize: 12, whiteSpace: 'nowrap' }}>{fmtNum(item.points)}</td>
                         <CreatedAtCell createdAt={item.created_at} />
                       </tr>
@@ -1103,6 +1000,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
         <UploadWizardModal
           item={wizardItem}
           preselect={wizardPreselect}
+          requestId={wizardRequestId}
           onClose={() => setWizardItem(null)}
           onDone={() => { setWizardItem(null); loadItems(offset) }}
           onNavigate={onNavigate}

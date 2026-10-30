@@ -904,22 +904,6 @@ def test_pack_fields_are_emptied_when_they_differ_and_audios_are_summed(isolated
     conn.close()
 
 
-def test_the_examples_generator_agrees_with_the_real_rule(isolated_db, tmp_path):
-    """_season_is_packable predice lo que hará build_season_pack_plan. Cuando
-    la regla cambió, esa copia se quedó atrás más de una vez."""
-    from emuwarez_uploadrr.services.request_examples import _season_is_packable
-    ok = {"resolution": "1080p", "video_codec": "x264", "has_spanish_ok": 1}
-    assert _season_is_packable(ok) is True
-    # Lo que bloquea: resolución, códec de vídeo y castellano.
-    assert _season_is_packable({**ok, "resolution": None}) is False
-    assert _season_is_packable({**ok, "video_codec": None}) is False
-    assert _season_is_packable({**ok, "has_spanish_ok": 0}) is False
-    # Y lo que no bloquea, no bloquea: sin source ni códec de audio comunes,
-    # sube igual y esos campos se quedan fuera del nombre.
-    assert _season_is_packable({**ok, "source": None, "audio_codec": None,
-                                "audio_languages": None}) is True
-
-
 def test_rollup_all_sums_what_the_episodes_have(isolated_db, tmp_path):
     """La ficha de una temporada enseña TODO lo que hay debajo ("x264, x265"),
     no un guion. Las columnas de la fila siguen guardando el valor único o

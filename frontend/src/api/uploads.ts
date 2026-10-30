@@ -44,8 +44,12 @@ export async function queueUpload(
   seasonOverrides?: {
     source?: string | null; provider?: string | null; tag?: string | null; title?: string | null
   },
+  // La petición desde la que se abrió el asistente: la subida la cubre y
+  // Subidas la enseña.
+  requestItemId?: number | null,
 ): Promise<UploadQueueResult> {
   return api.post<UploadQueueResult>(`/library/${itemId}/upload/queue`, {
+    request_item_id: requestItemId ?? null,
     remux_overrides: remuxOverrides ?? null,
     checks: checks ?? null,
     remux_snapshot: remuxSnapshot ?? null,

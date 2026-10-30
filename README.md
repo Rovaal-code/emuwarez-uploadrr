@@ -2,6 +2,9 @@
 
 [![CI](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/ci.yml/badge.svg)](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/ci.yml)
 [![Publicar versión](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/publicar.yml/badge.svg)](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/publicar.yml)
+[![zizmor](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/zizmor.yml/badge.svg)](https://github.com/Kisnov/emuwarez-uploadrr/actions/workflows/zizmor.yml)
+[![Revisión: CodeRabbit](https://img.shields.io/badge/revisi%C3%B3n-CodeRabbit-FF570A)](https://coderabbit.ai)
+[![Dependabot](https://img.shields.io/badge/dependabot-activo-025E8C?logo=dependabot&logoColor=white)](.github/dependabot.yml)
 
 Aplicación web autoalojada (+ CLI) para subir a **[eMuwarez](https://emu-warez.com)** (tracker UNIT3D) desde tu
 biblioteca de **Radarr**/**Sonarr**. Sincroniza la biblioteca, la cruza con las peticiones abiertas de eMuwarez,
@@ -166,7 +169,16 @@ python -m pytest tests -q -p no:cacheprovider
 cd frontend && npm ci && npx tsc --noEmit && npx vitest run && npx vite build
 ```
 
-El CI pasa lo mismo y las reglas graves de `ruff` en cada PR. `CLAUDE.md` recoge las reglas de arquitectura y el
+En cada PR, el CI pasa las reglas graves de `ruff`, los tests del backend con una cobertura mínima del 78 % y `tsc`
+y `vitest` del frontend (`vite build` no). Un PR que solo toca `frontend/`, `docs/` o ficheros `.md` limita los
+tests del backend a los que mencionan el frontend, sin mínimo de cobertura. Si toca `.github/`, [zizmor](https://docs.zizmor.sh) revisa los
+workflows y `dependabot.yml`.
+
+Dependabot propone cada semana las versiones nuevas de pip, npm, la imagen base del `Dockerfile` y las GitHub
+Actions, cuando llevan 7 días publicadas: las menores y los parches juntos en un PR por ecosistema, y cada versión
+mayor en el suyo. Las de seguridad no esperan esos 7 días: llegan en cuanto un aviso tiene versión corregida.
+
+`CLAUDE.md` recoge las reglas de arquitectura y el
 contrato con Uploadrr-EMU (argumentos, claves de `config.yaml` y líneas de salida que se leen): si cambias uno de
 los dos lados, cambia el otro a la vez.
 

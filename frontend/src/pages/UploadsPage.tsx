@@ -8,7 +8,7 @@ import { ErrorState } from '../components/ErrorState'
 import { HeaderFilter } from '../components/HeaderFilter'
 import { UploadJobDetailPage } from '../components/UploadJobDetailPage'
 import { DeleteUploadModal } from '../components/DeleteUploadModal'
-import { StatusBadge } from '../components/StatusBadge'
+import { PeticionDeSubida } from '../components/PeticionDeSubida'
 import { ServiceLabel } from '../components/ServiceIcon'
 import { CancelButtonIcon, RetryButtonIcon, DeleteButtonIcon, ValueChip, PlainValue, TypeValueIcon } from '../components/DetailCard'
 import { useTooltip } from '../components/Tooltip'
@@ -198,8 +198,8 @@ function JobRow({ job, instances, onOpen, indent, retryToggle, onCancel, onRetry
           )
           : <span style={{ color: 'var(--text-muted)' }}>—</span>}
       </td>
-      <td className="col-prioridad-baja" style={{ whiteSpace: 'nowrap' }}>
-        <StatusBadge status={job.request_status || 'Sin petición'} type="request" />
+      <td className="col-prioridad-baja" style={{ whiteSpace: 'nowrap', maxWidth: 240 }}>
+        <PeticionDeSubida job={job} />
       </td>
       <td>
         {job.status === 'queued' ? (

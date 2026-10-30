@@ -46,8 +46,8 @@ biblioteca en la misma ruta.
 De ahí salen las reglas:
 
 - **La carpeta de subidas va en el mismo sistema de ficheros que la media.** En el ejemplo, las dos cuelgan de
-  `/srv/data`, montado como `/data`. Sin `UPLOADRR_UPLOADS_DIR`, la carpeta es `/config/Uploadrr/uploads`, que
-  normalmente está en otro disco, y todos los enlaces saldrían simbólicos.
+  `/srv/data`, montado como `/data`. Sin `UPLOADRR_UPLOADS_DIR`, la carpeta es `/config/Uploadrr/uploads`. Si
+  está en otro disco que la media, que es lo normal, los enlaces duros fallan (`EXDEV`) y todos salen simbólicos.
 - **qBittorrent ve la carpeta de subidas en la misma ruta que este contenedor.** Si corre en Docker, móntale el
   mismo `/srv/data:/data`. Si corre directamente en el host, donde la ruta es `/srv/data/uploads/emu`, monta la raíz
   con la misma ruta en los dos lados (`/srv/data:/srv/data` y `UPLOADRR_UPLOADS_DIR: /srv/data/uploads/emu`).

@@ -15,7 +15,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
   publicar:
@@ -32,17 +31,24 @@ jobs:
     # A mano también se puede elegir otra rama: solo master publica latest.
     if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - id: sello
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           uploadrr="$(git ls-remote --exit-code https://github.com/Kisnov/Uploadrr-EMU.git refs/heads/main | cut -f1)"
           test -n "$uploadrr"
           echo "uploadrr=$uploadrr" >> "$GITHUB_OUTPUT"
           # latest solo si este commit sigue siendo la punta de master: re-ejecutar uno viejo no lo retrasa.
           tags="ghcr.io/kisnov/emuwarez-uploadrr:${GITHUB_SHA}"
-          if [ "$(git ls-remote --exit-code origin refs/heads/master | cut -f1)" = "$GITHUB_SHA" ]; then
+          if [ "$(gh api "repos/$GITHUB_REPOSITORY/commits/master" --jq .sha)" = "$GITHUB_SHA" ]; then
             tags="$tags,ghcr.io/kisnov/emuwarez-uploadrr:latest"
           fi
           echo "tags=$tags" >> "$GITHUB_OUTPUT"
@@ -76,8 +82,13 @@ jobs:
       cancel-in-progress: false
     # Lo que más puede tardar es esperar a que termine la construcción del commit.
     timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       # La etiqueta tiene que decir la misma versión que el código de ese
       # commit: si no, el compose fijaría una versión con otra dentro.

@@ -2044,6 +2044,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                           <MediaInfoTable
                             report={current.report}
                             onSourceToolClick={current.source_comparison ? () => {
+                              setShowMiCard(false)
                               setSourceComparison(current.source_comparison!)
                               setShowEngineDetail(true)
                               setShowSourceCompare(true)

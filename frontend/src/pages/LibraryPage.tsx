@@ -213,9 +213,6 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // otherwise), never an invented fixed list (e.g. LocalStatus has ~10
   // possible values; only offer the ones some item actually has).
   const [filterOptions, setFilterOptions] = useState<LibraryFilterOptions | null>(null)
-  useEffect(() => {
-    getLibraryFilterOptions().then(setFilterOptions).catch(() => {})
-  }, [])
   const providerOptions = filterOptions?.providers ?? []
   const qualityOptions = filterOptions?.qualities ?? []
   const sourceOptions = filterOptions?.sources ?? []
@@ -226,6 +223,10 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // and the progress banner), so a running sync stays visible and its button
   // stays disabled on every tab.
   const { libSyncing, startLibrarySync, lastInvalidatedAt, isAnySyncing } = useSync()
+  // Una sincronización puede traer valores nuevos (un grupo, un proveedor): se vuelven a pedir.
+  useEffect(() => {
+    getLibraryFilterOptions().then(setFilterOptions).catch(() => {})
+  }, [lastInvalidatedAt])
 
   // Filters
   const [search, setSearch] = useState('')

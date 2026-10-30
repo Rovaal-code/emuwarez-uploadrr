@@ -263,9 +263,6 @@ export interface RequestMatchResponse {
 }
 
 export interface RequestItemResponse {
-  // Generated demo request, not one that came from the tracker (TEMPORARY —
-  // goes away with the real requests endpoint).
-  is_example?: boolean
   id: number
   emu_id: string
   title: string

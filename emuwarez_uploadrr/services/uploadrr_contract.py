@@ -139,7 +139,7 @@ def _format_episode(value) -> str:
 # convention on whatever upstream stored in proposal.resolution.
 _UPLOADRR_RES_CHOICES = {
     "2160p", "1080p", "1080i", "720p", "576p", "576i",
-    "480p", "480i", "8640p", "4320p", "other",
+    "540p", "480p", "480i", "8640p", "4320p", "other",
 }
 
 

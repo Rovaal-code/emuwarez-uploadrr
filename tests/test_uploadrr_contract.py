@@ -109,7 +109,7 @@ def test_res_omitted_when_empty():
 
 
 def test_res_valid_choice_passthrough():
-    for good in ("2160p", "1080i", "720p", "480i", "other"):
+    for good in ("2160p", "1080i", "720p", "540p", "480i", "other"):
         assert _res_value(resolution=good) == good, good
 
 

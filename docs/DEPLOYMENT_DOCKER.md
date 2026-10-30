@@ -180,13 +180,19 @@ carpeta de subidas por defecto (`/config/Uploadrr/uploads`) ni los temporales de
 seguir sembrando tras restaurar en otro disco hay que respaldarla aparte. En la misma pestaña se restaura. Como el
 backup queda dentro de `/config`, cópialo a otro disco.
 
-El backup lleva las claves que la app guarda en su base de datos, aunque no lo hayas creado «con secretos»: esa
-opción solo pide confirmación y cambia el nombre del archivo. Guárdalo donde guardarías esas claves.
+El backup no lleva las claves. En la base de datos van vacías las API keys (TMDb, eMuwarez, Radarr/Sonarr, hosts
+de imágenes), la contraseña de qBittorrent, el webhook de Discord y el token de Telegram, y de
+`/config/Uploadrr/data` no entran `config.yaml`, `config.yaml.bak` ni `cookies/`, que pueden llevar claves de
+cualquier tracker. La contraseña de acceso a la app sí va, como hash. Al restaurarlo, las claves que tengas
+puestas y esos ficheros se quedan como están; en una instalación nueva, vuelve a poner las claves en Configuración.
 
-Desde la línea de comandos:
+Desde la línea de comandos se crea el mismo backup. Con `--include-secrets` lleva también las claves y esos
+ficheros, por ejemplo para pasar la instalación a otra máquina; al restaurarlo, sus claves sustituyen a las que
+tengas. Guárdalo donde guardarías esas claves.
 
 ```bash
 docker exec emuwarez-uploadrr python3 emuwarez_uploader.py maintenance backup
+docker exec emuwarez-uploadrr python3 emuwarez_uploader.py maintenance backup --include-secrets --confirm RESTAURAR_CONFIG
 ```
 
 ## 9. Problemas frecuentes

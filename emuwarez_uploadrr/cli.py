@@ -316,7 +316,10 @@ def build_parser() -> argparse.ArgumentParser:
     maint_sub.add_parser("status", help="Estado general: inventario config, BD y backups")
 
     p_backup = maint_sub.add_parser("backup", help="Crear backup comprimido del directorio de configuración")
-    p_backup.add_argument("--include-secrets", action="store_true", help="Incluir secretos en el backup")
+    p_backup.add_argument(
+        "--include-secrets", action="store_true",
+        help="Incluir las claves (sin esto van vacías, y sin el config.yaml ni las cookies de Uploadrr-EMU)",
+    )
     p_backup.add_argument("--confirm", metavar="TOKEN", dest="confirm", help="Token de confirmación para incluir secretos: RESTAURAR_CONFIG")
 
     maint_sub.add_parser("list-backups", help="Listar backups existentes")

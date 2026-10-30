@@ -30,8 +30,21 @@ _SECRET_KEYS: frozenset[str] = frozenset(
 )
 
 
+# Lo que también es una clave aunque no salga en el estado de la configuración:
+# los alias antiguos de las de arriba, la contraseña de qBittorrent y las API
+# keys de los hosts de imágenes (una por host, imghost.key.<id>).
+_OTROS_SECRETOS: frozenset[str] = frozenset(["tmdb_api_key", "emu_api_key", "qbit.password"])
+_PREFIJOS_SECRETOS: tuple[str, ...] = ("imghost.key.",)
+
+
+def es_secreto(key: str) -> bool:
+    """Si el ajuste guarda una clave. Lo usa también la copia de configuración
+    (services/backup_service.py), que las deja vacías si no se piden."""
+    return key in _SECRET_KEYS or key in _OTROS_SECRETOS or key.startswith(_PREFIJOS_SECRETOS)
+
+
 def _is_secret(key: str) -> int:
-    return 1 if key in _SECRET_KEYS else 0
+    return 1 if es_secreto(key) else 0
 
 
 def mask_secret(value: str) -> str:

@@ -1024,15 +1024,25 @@ def _build_library_filter(
 # detrás de una película de 4 GB en "Tamaño (Más)" — el orden contradecía a la
 # vista (auditoría de tablas).
 #
-# El COALESCE corta en cuanto encuentra un valor, así que la subconsulta solo
-# corre para las filas sin tamaño propio (series y temporadas, una minoría), y
-# va por el índice idx_library_parent. Dos niveles porque eso es lo que hay:
-# serie → temporada → capítulo.
-_TAMANO_EFECTIVO = """COALESCE(size_bytes, (
-    SELECT SUM(d.size_bytes) FROM library_items d
-     WHERE d.parent_id = library_items.id
-        OR d.parent_id IN (SELECT s.id FROM library_items s WHERE s.parent_id = library_items.id)
-))"""
+# Suma solo capítulos, igual que _size_rollup: la sincronización SÍ guarda en
+# la temporada la suma de sus capítulos (_update_season_rollup), así que sumar
+# temporadas + capítulos contaba la serie dos veces, y una serie de 54 GB se
+# ordenaba como si tuviera 109 y adelantaba a una película de 76.
+#
+# Solo corre la subconsulta para series y temporadas (una minoría), y va por
+# el índice idx_library_parent. Si no tienen capítulos con tamaño, se queda con
+# el propio, igual que la columna. Con «ignorar especiales» la serie deja fuera
+# la temporada 0, como _batch_rollups al pintarla.
+def _tamano_efectivo(ignore_specials: bool) -> str:
+    return f"""COALESCE(CASE item_type
+    WHEN 'season' THEN (
+        SELECT SUM(e.size_bytes) FROM library_items e
+         WHERE e.parent_id = library_items.id AND e.item_type = 'episode')
+    WHEN 'series' THEN (
+        SELECT SUM(e.size_bytes) FROM library_items e
+          JOIN library_items se ON e.parent_id = se.id
+         WHERE se.parent_id = library_items.id AND e.item_type = 'episode'{_specials_clause("se", ignore_specials)})
+END, size_bytes)"""
 
 _LIBRARY_SORT = {
     "title_asc": "title COLLATE TITLE_SORT ASC, updated_at DESC",
@@ -1040,12 +1050,12 @@ _LIBRARY_SORT = {
     "updated_desc": "updated_at DESC, title COLLATE TITLE_SORT ASC",
     "year_desc": "year IS NULL, year DESC, title COLLATE TITLE_SORT ASC",
     "year_asc": "year IS NULL, year ASC, title COLLATE TITLE_SORT ASC",
-    # Ver _TAMANO_EFECTIVO: hay que ordenar por lo MISMO que enseña la columna.
+    # Ver _tamano_efectivo: hay que ordenar por lo MISMO que enseña la columna.
     # Lo que sigue sin tener tamaño (nada descargado) va al final en los dos
     # sentidos, en vez de amontonarse arriba en el ascendente, que nunca es lo
     # que estás buscando.
-    "size_desc": f"{_TAMANO_EFECTIVO} IS NULL, {_TAMANO_EFECTIVO} DESC, title COLLATE TITLE_SORT ASC",
-    "size_asc": f"{_TAMANO_EFECTIVO} IS NULL, {_TAMANO_EFECTIVO} ASC, title COLLATE TITLE_SORT ASC",
+    "size_desc": "{tamano} IS NULL, {tamano} DESC, title COLLATE TITLE_SORT ASC",
+    "size_asc": "{tamano} IS NULL, {tamano} ASC, title COLLATE TITLE_SORT ASC",
 }
 DEFAULT_LIBRARY_SORT = "title_asc"
 
@@ -1065,6 +1075,7 @@ def list_library(
     sort: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
+    ignore_specials: bool = True,
 ) -> list[dict]:
     where, params = _build_library_filter(
         status=status, request=request, nomenclature=nomenclature,
@@ -1078,7 +1089,8 @@ def list_library(
     # numerically (Temporada 1, 2, …, 10, not string order). Top-level rows
     # (movies/series) have both NULL, so they tie there and fall through to the
     # user-selected sort.
-    sort_sql = _LIBRARY_SORT.get(sort or DEFAULT_LIBRARY_SORT, _LIBRARY_SORT[DEFAULT_LIBRARY_SORT])
+    sort_sql = _LIBRARY_SORT.get(sort or DEFAULT_LIBRARY_SORT, _LIBRARY_SORT[DEFAULT_LIBRARY_SORT]).format(
+        tamano=_tamano_efectivo(ignore_specials))
     sql += (
         " ORDER BY season_number IS NOT NULL, season_number, episode_number,"
         f" {sort_sql} LIMIT ? OFFSET ?"

@@ -332,6 +332,7 @@ def library_list(
             sort=sort,
             limit=limit,
             offset=offset,
+            ignore_specials=_ignore_specials(conn),
         )
         total = count_library(
             conn,

@@ -66,6 +66,45 @@ def test_lo_que_no_tiene_tamano_va_al_final(biblioteca, orden):
     assert _raices(biblioteca, orden)[-1] == "Peli sin descargar"
 
 
+def test_la_temporada_con_tamano_propio_no_cuenta_doble(biblioteca):
+    """La sincronización guarda en la temporada la suma de sus capítulos. Si
+    el orden sumaba temporada + capítulos, la serie valía 22 GB en vez de 11 y
+    adelantaba a una película de 15 que la columna enseña más grande."""
+    biblioteca.execute(
+        "UPDATE library_items SET size_bytes = 11000000000 WHERE item_type = 'season'")
+    biblioteca.execute(
+        """INSERT INTO library_items (item_type, title, local_status, size_bytes)
+           VALUES ('movie', 'Peli enorme', 'Disponible', 15000000000)""")
+    biblioteca.commit()
+    assert _raices(biblioteca, "size_desc")[:2] == ["Peli enorme", "Serie grande"]
+
+
+def test_los_especiales_cuentan_solo_si_la_columna_los_cuenta(biblioteca):
+    """Con «ignorar especiales» la columna no suma la temporada 0 de la serie
+    (_batch_rollups), así que el orden tampoco: 11 GB, por detrás de 15.
+    Sin ignorarlos la serie vale 11 + 10 = 21 y va delante."""
+    serie = biblioteca.execute(
+        "SELECT id FROM library_items WHERE item_type = 'series'").fetchone()[0]
+    cur = biblioteca.execute(
+        """INSERT INTO library_items (item_type, title, local_status, parent_id, season_number)
+           VALUES ('season', 'Especiales', 'Disponible', ?, 0)""", (serie,))
+    biblioteca.execute(
+        """INSERT INTO library_items (item_type, title, local_status, parent_id,
+                                      season_number, episode_number, size_bytes)
+           VALUES ('episode', 'S0E1', 'Disponible', ?, 0, 1, 10000000000)""", (cur.lastrowid,))
+    biblioteca.execute(
+        """INSERT INTO library_items (item_type, title, local_status, size_bytes)
+           VALUES ('movie', 'Peli enorme', 'Disponible', 15000000000)""")
+    biblioteca.commit()
+
+    def orden(ignorar):
+        return [r["title"] for r in list_library(
+            biblioteca, parent_id=0, sort="size_desc", limit=100, ignore_specials=ignorar)][:2]
+
+    assert orden(True) == ["Peli enorme", "Serie grande"]
+    assert orden(False) == ["Serie grande", "Peli enorme"]
+
+
 def test_ordenar_por_tamano_no_pierde_ni_duplica_filas(biblioteca):
     """La subconsulta del tamaño efectivo va en el ORDER BY, no en el WHERE:
     si se colara en el filtro, dejaría fuera lo que no tiene tamaño."""

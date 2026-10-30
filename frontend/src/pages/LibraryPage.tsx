@@ -575,7 +575,22 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
       <th><HeaderFilter label="EMuwarez" value={filterEmu} onChange={v => { setFilterEmu(v); setOffset(0) }} options={[
         { value: '', label: 'Todos' }, ...(filterOptions?.emu_states ?? []).map(s => ({ value: s, label: s === 'present' ? 'Sí' : 'No' })),
       ]} /></th>
-      <th>Tamaño</th>
+      <th aria-sort={sortBy === 'size_desc' ? 'descending' : sortBy === 'size_asc' ? 'ascending' : 'none'}>
+        {/* Igual que «Orden: Tamaño» del selector: el primer clic
+            pone el más grande arriba y los siguientes alternan. */}
+        <button
+          type="button"
+          className={`hf-trigger${sortBy.startsWith('size_') ? ' active' : ''}`}
+          onClick={() => { setSortBy(sortBy === 'size_desc' ? 'size_asc' : 'size_desc'); setOffset(0) }}
+          title={sortBy === 'size_desc' ? 'Ordenar de menor a mayor' : 'Ordenar de mayor a menor'}
+          style={{ color: sortBy.startsWith('size_') ? 'var(--text-accent)' : undefined }}
+        >
+          <span>Tamaño</span>
+          <span aria-hidden className="hf-caret" style={{ color: sortBy.startsWith('size_') ? 'var(--text-accent)' : undefined }}>
+            {sortBy === 'size_asc' ? '▲' : sortBy === 'size_desc' ? '▼' : '↕'}
+          </span>
+        </button>
+      </th>
       <th className="col-actions">Acciones</th>
     </tr>
   )

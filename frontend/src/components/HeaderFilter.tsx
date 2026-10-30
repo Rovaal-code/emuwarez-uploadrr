@@ -14,7 +14,8 @@ export interface FilterOption { value: string; label: string }
 // botón con una ✓ que solo salía al marcarlo, y nada decía que se pudiera
 // elegir más de uno. Un <input type="checkbox"> se ve como tal, se marca con
 // la barra espaciadora y el lector de pantalla lo anuncia como casilla.
-// «Todos» se queda como botón: quita el filtro, no es un valor más.
+// «Desmarcar todo» (la opción de valor '') se queda como botón: quita el
+// filtro, no es un valor más.
 function FilterOptionButton({ option, selected, multiple, onClick }: { option: FilterOption; selected: boolean; multiple: boolean; onClick: () => void }) {
   const { triggerProps, tooltipNode } = useTooltip(option.label)
   if (multiple) {
@@ -49,7 +50,7 @@ function FilterOptionButton({ option, selected, multiple, onClick }: { option: F
 // `th:has(> .hf-trigger)`) para que el botón ocupe la celda entera.
 //
 // Con `value` como lista es de selección múltiple: cada opción se marca o
-// desmarca sin cerrar el menú, y la de valor '' («Todos») las quita todas.
+// desmarca sin cerrar el menú, y la de valor '' («Desmarcar todo») las quita.
 export function HeaderFilter<T extends string | string[]>({ label, value, options, onChange }: {
   label: string
   value: T
@@ -174,9 +175,11 @@ export function HeaderFilter<T extends string | string[]>({ label, value, option
           {options.map(o => (
             <FilterOptionButton
               key={o.value || '__all__'}
-              option={o}
+              // En selección múltiple la opción '' no elige «Todos»: desmarca
+              // lo marcado. Llamarla «Todos» al lado de casillas confundía.
+              option={multiple && o.value === '' ? { ...o, label: 'Desmarcar todo' } : o}
               selected={o.value === '' ? !active : elegidos.includes(o.value)}
-              // «Todos» no es una casilla sino el botón que lo quita todo: con
+              // «Desmarcar todo» no es una casilla sino el botón que lo quita: con
               // nada elegido saldría marcada y desmarcarla no haría nada.
               multiple={multiple && o.value !== ''}
               onClick={() => elegir(o.value)}

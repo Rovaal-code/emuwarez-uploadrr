@@ -28,7 +28,8 @@ the upload with Uploadrr-EMU (`Kisnov/Uploadrr-EMU`, cloned into the image at `/
 - `test_media_info_congelado.py` compares the mediainfo report against
   `tests/fixtures/mediainfo_informe_esperado.json`. For an intended change, regenerate it with
   `python -m tests.test_media_info_congelado --regenerar` and review the JSON diff.
-- CI (`.github/workflows/ci.yml`) runs pytest, critical ruff rules and the frontend checks on every PR.
+- CI (`.github/workflows/ci.yml`) runs pytest, critical ruff rules and the frontend checks on every PR, and uploads
+  coverage and test results to Codecov (informational only, `codecov.yml`; needs the `CODECOV_TOKEN` secret).
 - `zizmor.yml` audits the workflows and `dependabot.yml` when `.github/` changes; run `zizmor --gh-token "$(gh auth token)" .` locally (without a token it skips online audits) before pushing a workflow edit.
 
 ## Not obvious

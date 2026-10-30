@@ -50,6 +50,7 @@ export interface FiltrosActivos {
   searchProvider?: Valor
   searchQuality?: Valor
   searchSource?: Valor
+  searchGroup?: Valor
   filterEmu?: Valor
   filterAporte?: Valor
 }

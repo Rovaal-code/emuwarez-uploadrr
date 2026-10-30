@@ -139,6 +139,8 @@ class LibraryItem:
     quality: Optional[str] = None
     resolution: Optional[str] = None
     source: Optional[str] = None
+    # El grupo de release que *Arr lee del nombre del archivo (`releaseGroup`).
+    release_group: Optional[str] = None
     video_codec: Optional[str] = None
     audio_codec: Optional[str] = None
     audio_languages: Optional[str] = None

@@ -118,6 +118,7 @@ export interface LibraryFilterOptions {
   providers: string[]
   qualities: string[]
   sources: string[]
+  release_groups: string[]
   types: string[]
   statuses: string[]
   request_statuses: string[]

@@ -59,7 +59,7 @@ const LIST_PRIORITY_COUNT = 40
 // Lo que mide una fila de la lista antes de pintarla (FilasVirtuales la
 // corrige con la primera que mide de verdad).
 const LIST_ROW_HEIGHT = 50
-const LIST_COLUMNS = 12
+const LIST_COLUMNS = 13
 const claveDeItem = (it: LibraryItemResponse) => it.id
 
 // Memoized: a plain inline onClick={() => onSelect(item)} arrow would be a
@@ -213,18 +213,22 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // otherwise), never an invented fixed list (e.g. LocalStatus has ~10
   // possible values; only offer the ones some item actually has).
   const [filterOptions, setFilterOptions] = useState<LibraryFilterOptions | null>(null)
-  useEffect(() => {
-    getLibraryFilterOptions().then(setFilterOptions).catch(() => {})
-  }, [])
   const providerOptions = filterOptions?.providers ?? []
   const qualityOptions = filterOptions?.qualities ?? []
   const sourceOptions = filterOptions?.sources ?? []
+  const groupOptions = filterOptions?.release_groups ?? []
 
   // Diagnostic actions — relocated here from the removed standalone
   // Library + eMuwarez syncs are global (shared with the Dashboard/Peticiones
   // and the progress banner), so a running sync stays visible and its button
   // stays disabled on every tab.
   const { libSyncing, startLibrarySync, lastInvalidatedAt, isAnySyncing } = useSync()
+  // Una sincronización puede traer valores nuevos (un grupo, un proveedor): se vuelven a pedir.
+  useEffect(() => {
+    let alive = true
+    getLibraryFilterOptions().then(o => { if (alive) setFilterOptions(o) }).catch(() => {})
+    return () => { alive = false }
+  }, [lastInvalidatedAt])
 
   // Filters
   const [search, setSearch] = useState('')
@@ -247,6 +251,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const [searchProvider, setSearchProvider] = useState<string[]>(NINGUNO)
   const [searchQuality, setSearchQuality] = useState<string[]>(NINGUNO)
   const [searchSource, setSearchSource] = useState<string[]>(NINGUNO)
+  const [searchGroup, setSearchGroup] = useState<string[]>(NINGUNO)
   const [filterEmu, setFilterEmu] = useState<string[]>(NINGUNO)
   const [filterAporte, setFilterAporte] = useState('')
   // Backend-side filter (unlike the four above it), so it never forces the
@@ -260,13 +265,13 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // tabla vacía para valores que el propio desplegable ofrecía.
   const filtros = {
     search: debouncedSearch, filterType, filterStatus, filterInstanceId,
-    filterRequest, filterSpanish, searchProvider, searchQuality, searchSource,
+    filterRequest, filterSpanish, searchProvider, searchQuality, searchSource, searchGroup,
     filterEmu, filterAporte,
   }
   const flatFilter = necesitaTodosLosNiveles(filtros)
   const filtrando = hayAlgunFiltro(filtros)
 
-  // Proveedor, Resolución, Source, eMuwarez y Aportes se filtran en el
+  // Proveedor, Resolución, Source, Grupo, eMuwarez y Aportes se filtran en el
   // navegador, sobre lo ya cargado: no van al servidor, así que cambiarlos no
   // tiene por qué volver a pedir nada. De ellos solo cuenta si obligan a pedir
   // en plano, que es lo que dice `flatFilter`. Antes cada clic en uno de esos
@@ -316,7 +321,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   function quitarFiltros() {
     setSearch(''); setDebouncedSearch('')
     setFilterType(NINGUNO); setFilterStatus(NINGUNO); setFilterInstanceId(NINGUNO); setFilterRequest(NINGUNO)
-    setSearchProvider(NINGUNO); setSearchQuality(NINGUNO); setSearchSource(NINGUNO)
+    setSearchProvider(NINGUNO); setSearchQuality(NINGUNO); setSearchSource(NINGUNO); setSearchGroup(NINGUNO)
     setFilterEmu(NINGUNO); setFilterAporte(''); setFilterSpanish(NINGUNO)
     setOffset(0)
   }
@@ -444,6 +449,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
       const provOk = cumple(searchProvider, it.provider_label)
       const qualOk = cumple(searchQuality, it.resolution)
       const sourceOk = cumple(searchSource, it.source)
+      const groupOk = cumple(searchGroup, it.release_group)
       // "candidate" = No (not on eMuwarez), "present" = Sí. A partial series
       // (emu_in_catalog === 2) matches neither on its own — its Sí/No seasons do,
       // so filtering surfaces those seasons instead of the misleading series row.
@@ -453,17 +459,17 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
       // Same rollup caveat as emuOk: an ambiguous/partial item (emu_in_catalog
       // null or 2) matches neither "yes" nor "no" on its own.
       const aporteOk = !filterAporte || (filterAporte === 'yes' ? isAporte(it) : (it.emu_in_catalog === 1 && !isAporte(it)))
-      return provOk && qualOk && sourceOk && emuOk && aporteOk
+      return provOk && qualOk && sourceOk && groupOk && emuOk && aporteOk
     }
-    // With a Provider/Resolución/Source/eMuwarez/Aporte filter active, `items` holds every level.
+    // With a Provider/Resolución/Source/Grupo/eMuwarez/Aporte filter active, `items` holds every level.
     // Show the matching items at the highest matching level: if a whole series
     // matches, show the series (not each of its seasons); if only some seasons
     // match (mixed series), show those seasons.
-    const clientFilter = !!(searchProvider.length || searchQuality.length || searchSource.length || filterEmu.length || filterAporte)
+    const clientFilter = !!(searchProvider.length || searchQuality.length || searchSource.length || searchGroup.length || filterEmu.length || filterAporte)
     if (!clientFilter) return items
     const matchIds = new Set(items.filter(matchesFilter).map(i => i.id))
     return items.filter(it => matchIds.has(it.id) && !(it.parent_id != null && matchIds.has(it.parent_id)))
-  }, [items, searchProvider, searchQuality, searchSource, filterEmu, filterAporte])
+  }, [items, searchProvider, searchQuality, searchSource, searchGroup, filterEmu, filterAporte])
 
   // La lista solo pinta lo que se ve (FilasVirtuales). Las series desplegadas
   // se pintan siempre, para no perder lo que tienen abierto al salir de vista.
@@ -567,6 +573,9 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
       ]} /></th>
       <th><HeaderFilter label="Source" value={searchSource} onChange={setSearchSource} options={[
         { value: '', label: 'Todos' }, ...sourceOptions.map(s => ({ value: s, label: s })),
+      ]} /></th>
+      <th><HeaderFilter label="Grupo" value={searchGroup} onChange={setSearchGroup} options={[
+        { value: '', label: 'Todos' }, ...groupOptions.map(g => ({ value: g, label: g })),
       ]} /></th>
       <th><HeaderFilter label="Español" value={filterSpanish} onChange={v => { setFilterSpanish(v); setOffset(0) }} options={[
         { value: '', label: 'Todos' },

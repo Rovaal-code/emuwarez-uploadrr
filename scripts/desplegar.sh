@@ -197,12 +197,13 @@ fi
 echo "Sello verificado en la imagen."
 
 echo "Subiendo…"
-docker push "$IMAGEN"
-# :X.Y.Z solo al publicar: comprobar_etiqueta ya ha parado si esa versión es de otro commit.
+# :X.Y.Z solo al publicar (comprobar_etiqueta ya ha parado si esa versión es de otro commit), y
+# antes que :latest: si falla una de las dos, :latest no avanza a algo sin anunciar.
 if [[ "$PUBLICAR" -eq 1 ]]; then
   docker tag "$IMAGEN" "${IMAGEN%:*}:$VERSION"
   docker push "${IMAGEN%:*}:$VERSION"
 fi
+docker push "$IMAGEN"
 DIGEST="$(docker image inspect "$IMAGEN" --format '{{index .RepoDigests 0}}' | cut -d@ -f2)"
 echo "Digest ...... $DIGEST"
 

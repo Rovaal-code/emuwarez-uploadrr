@@ -54,7 +54,7 @@ from .uploadrr_config_staging import (
     write_staged_config,
 )
 from .image_hosts import fallback_order, get_host_key
-from .eventos import EVENTO_SUBIDA_LOG, EVENTO_SUBIDA_PROGRESO, publicar_agrupado
+from .eventos import EVENTO_SUBIDA_LOG, EVENTO_SUBIDA_PROGRESO, publicar, publicar_agrupado
 
 logger = logging.getLogger("emuwarez.upload")
 
@@ -959,6 +959,19 @@ def mark_phase_done(job_id: int, stage_key: str) -> None:
     completed.add(stage_key)
     new_state = build_phase_state(list(completed))
     _write_progress_json(job_id, with_phase_timestamps(new_state, state.get("phases")))
+    # Sin agrupar: es el último cambio de la fase, y el aviso de estado del job puede haber salido antes.
+    publicar(EVENTO_SUBIDA_PROGRESO, {"job_id": job_id, "phase": stage_key})
+
+
+def mark_phase_failed(job_id: int, stage_key: str) -> None:
+    """Deja una fase como fallida aunque el job acabe bien (qBittorrent tras una subida que sí se hizo)."""
+    state = _read_progress_state(job_id)
+    for p in state.get("phases", []):
+        if p["key"] == stage_key:
+            p["status"] = "failed"
+            p["finished_at"] = p.get("finished_at") or _now()
+    _write_progress_json(job_id, state)
+    publicar(EVENTO_SUBIDA_PROGRESO, {"job_id": job_id, "phase": stage_key})
 
 
 def update_phase_progress(job_id: int, stage_key: str, pct: int) -> None:
@@ -1143,6 +1156,14 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
                         "to...\" más arriba). La subida a eMuwarez sí se completó.",
                         stream="system",
                     )
+                elif "Torrent client add failed:" in line:
+                    motivo = redact_secrets(line.split("Torrent client add failed:", 1)[1].strip(), secrets)
+                    append_upload_log(
+                        job_id, "error",
+                        f"qBittorrent: falló al añadir o etiquetar el torrent ({motivo}). Revisa qBittorrent. "
+                        "La subida a eMuwarez sí se completó.",
+                        stream="system",
+                    )
                 else:
                     append_upload_log(
                         job_id, "error",
@@ -1163,7 +1184,9 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
                 except Exception:
                     logger.exception("Subida %s: no se pudo registrar una línea de %s", job_id, stream_name)
                 try:
-                    _track_uploadrr_progress(safe_line)
+                    # La línea sin redactar: un secreto que coincida con una palabra de las marcas las rompería.
+                    # Lo que se registra de ella se redacta allí.
+                    _track_uploadrr_progress(line)
                 except Exception:
                     logger.exception("Subida %s: no se pudo actualizar el progreso", job_id)
 
@@ -1271,7 +1294,10 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
             # But NOT if we actually saw it fail (bad qBittorrent login) —
             # that's a real, detected failure, not silence, and force-marking
             # it "done" would hide it behind a fully green Fases table.
-            if not progress_state.get("qbittorrent_add_failed"):
+            # Y si falló se guarda como fallida: si no, se quedaba «En curso» con la duración contando.
+            if progress_state.get("qbittorrent_add_failed"):
+                mark_phase_failed(job_id, "qbittorrent_add")
+            else:
                 mark_phase_done(job_id, "qbittorrent_add")
             append_upload_log(
                 job_id, "info",

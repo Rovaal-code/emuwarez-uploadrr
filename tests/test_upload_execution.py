@@ -308,7 +308,77 @@ def test_run_subprocess_qbittorrent_bad_login_logs_and_skips_done(db_conn, tmp_p
     row = db_conn.execute("SELECT progress_json FROM upload_jobs WHERE id=?", (jid,)).fetchone()
     state = json.loads(row["progress_json"])
     by_key = {p["key"]: p for p in state["phases"]}
-    assert by_key["qbittorrent_add"]["status"] != "done"
+    assert by_key["qbittorrent_add"]["status"] == "failed"
+
+
+def test_run_subprocess_qbittorrent_unreachable_logs_reason_and_skips_done(db_conn, tmp_path):
+    """qBittorrent sin responder: Uploadrr-EMU deja «Torrent client add failed: …» y antes la red de seguridad
+    daba la fase por hecha."""
+    src = tmp_path / "movie.mkv"
+    src.write_bytes(b"\x00" * 10)
+    jid = _insert_job(db_conn, source_path=str(src))
+
+    mock_proc = _make_mock_proc(returncode=0, stdout_lines=[
+        "Torrent uploaded successfully",
+        "Adding and rechecking torrent",
+        "Torrent client add failed: Failed to connect to qBittorrent. Connection refused",
+    ])
+
+    with patch("subprocess.Popen", return_value=mock_proc):
+        from emuwarez_uploadrr.services.upload_execution import _run_uploadrr_subprocess
+        _run_uploadrr_subprocess(
+            jid,
+            {
+                "executable": "/usr/bin/python3",
+                "args": ["/fake/upload.py", str(src)],
+                "cwd": str(tmp_path),
+                "command_preview": "python3 upload.py movie.mkv",
+            },
+            [],
+        )
+
+    assert get_upload_job(jid, conn=db_conn)["status"] == "completed"
+    mensajes = [log["message"] for log in get_upload_job_logs(jid, conn=db_conn)["logs"]]
+    assert "qBittorrent: falló al añadir o etiquetar el torrent (Failed to connect to qBittorrent. Connection refused). " \
+        "Revisa qBittorrent. La subida a eMuwarez sí se completó." in mensajes
+    assert not any("credenciales" in m for m in mensajes)
+
+    state = json.loads(db_conn.execute("SELECT progress_json FROM upload_jobs WHERE id=?", (jid,)).fetchone()[0])
+    fase = {p["key"]: p for p in state["phases"]}["qbittorrent_add"]
+    assert fase["status"] == "failed" and fase["finished_at"]
+
+
+def test_run_subprocess_client_add_failed_with_secret_words(db_conn, tmp_path):
+    """El parser lee la línea sin redactar: un secreto «client» dejaba la marca en «Torrent ***REDACTED*** add
+    failed» y la fase no salía fallida. Lo que se registra del motivo sí va redactado."""
+    src = tmp_path / "movie.mkv"
+    src.write_bytes(b"\x00" * 10)
+    jid = _insert_job(db_conn, source_path=str(src))
+
+    mock_proc = _make_mock_proc(returncode=0, stdout_lines=[
+        "Torrent uploaded successfully",
+        "Adding and rechecking torrent",
+        "Torrent client add failed: login rechazado para qbitsecreto",
+    ])
+
+    with patch("subprocess.Popen", return_value=mock_proc):
+        from emuwarez_uploadrr.services.upload_execution import _run_uploadrr_subprocess
+        _run_uploadrr_subprocess(
+            jid,
+            {
+                "executable": "/usr/bin/python3",
+                "args": ["/fake/upload.py", str(src)],
+                "cwd": str(tmp_path),
+                "command_preview": "python3 upload.py movie.mkv",
+            },
+            ["client", "qbitsecreto"],
+        )
+
+    mensajes = [log["message"] for log in get_upload_job_logs(jid, conn=db_conn)["logs"]]
+    assert any("falló al añadir o etiquetar el torrent (login rechazado para ***REDACTED***)" in m for m in mensajes)
+    assert not any("qbitsecreto" in m for m in mensajes)
+    state = json.loads(db_conn.execute("SELECT progress_json FROM upload_jobs WHERE id=?", (jid,)).fetchone()[0])
+    assert {p["key"]: p for p in state["phases"]}["qbittorrent_add"]["status"] == "failed"
 
 
 def test_run_subprocess_torrent_redownload_403_logs_and_skips_done(db_conn, tmp_path):

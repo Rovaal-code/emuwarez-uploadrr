@@ -166,6 +166,10 @@ def parse_uploadrr_progress(fragment: str) -> Optional[tuple[str, int, Optional[
     if not clean:
         return None
 
+    # Cualquier fallo del cliente tras subir (src/utils/upload.py::upload_to_tracker). Va primero: el motivo
+    # puede traer textos de los patrones de abajo («Validation Error»).
+    if clean.startswith("Torrent client add failed:"):
+        return "qbittorrent_add", 0, False
     if "Rejected Upload" in clean or "Validation Error" in clean or '"success":false' in clean:
         return "uploading_emu", 100, False
     if re.search(r"(?:Torrent uploaded successfully|Uploaded successfully|Upload complete|Upload completed)", clean, re.I):

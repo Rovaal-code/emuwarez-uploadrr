@@ -158,3 +158,22 @@ def test_crear_un_trabajo_avisa(client, monkeypatch):
     assert [a[0] for a in avisos] == ["subida-estado"]
     assert avisos[0][1]["status"] == "queued"
     assert avisos[0][1]["job_id"] > 0
+
+
+def test_cerrar_una_fase_avisa_con_la_fase_ya_escrita(trabajo, monkeypatch):
+    """El aviso de estado del job sale antes que las dos últimas fases: sin uno propio, la tabla podía quedarse con
+    la de qBittorrent «En curso»."""
+    from emuwarez_uploadrr.services import upload_execution as ue
+
+    vistos = []
+
+    def espia(tipo, datos=None):
+        fases = {p["key"]: p["status"] for p in ue._read_progress_state(datos["job_id"])["phases"]}
+        vistos.append((tipo, datos["phase"], fases[datos["phase"]]))
+        return 0
+
+    monkeypatch.setattr(ue, "publicar", espia)
+    ue.mark_phase_done(trabajo, "uploading_emu")
+    ue.mark_phase_failed(trabajo, "qbittorrent_add")
+
+    assert vistos == [("subida-progreso", "uploading_emu", "done"), ("subida-progreso", "qbittorrent_add", "failed")]

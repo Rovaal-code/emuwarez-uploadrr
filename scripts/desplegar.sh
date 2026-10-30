@@ -154,6 +154,8 @@ etiquetar() {
 
 if [[ "$PUBLICAR" -eq 1 ]]; then
   comprobar_etiqueta || exit 1
+  # Antes de construir: repetir una versión ya publicada movería :latest y :X.Y.Z a otro digest.
+  python3 scripts/publicar_version.py --solo-comprobar --notas "$NOTAS" --repo
 fi
 
 echo "Resolviendo el HEAD del fork…"

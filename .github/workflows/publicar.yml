@@ -85,7 +85,7 @@ jobs:
             echo "::error::UPLOADRR_VERSION_TOKEN falta, ha caducado o no puede escribir en Kisnov/uploadrr-version."
             exit 1
           fi
-          python3 scripts/publicar_version.py --notas "$NOTAS" > /dev/null
+          python3 scripts/publicar_version.py --solo-comprobar --notas "$NOTAS"
           echo "accion=publicar" >> "$GITHUB_OUTPUT"
           echo "escala=$escala" >> "$GITHUB_OUTPUT"
 

@@ -118,6 +118,8 @@ def main() -> int:
                    help="publicar aunque la nota mencione algo delicado")
     p.add_argument("--misma-version", action="store_true",
                    help="publicar aunque el número de versión no haya cambiado")
+    p.add_argument("--solo-comprobar", action="store_true",
+                   help="hacer las comprobaciones (nota y, con --repo, versión) y salir sin escribir nada")
     p.add_argument("--repo", nargs="?", const=REPO_POR_DEFECTO,
                    help=f"repositorio público donde publicar (por defecto {REPO_POR_DEFECTO})")
     args = p.parse_args()
@@ -149,6 +151,10 @@ def main() -> int:
             print("\n  O repite con --misma-version si de verdad es una republicación.",
                   file=sys.stderr)
             return 1
+
+    # Antes de construir: una versión ya publicada no debe mover las etiquetas de la imagen.
+    if args.solo_comprobar:
+        return 0
 
     texto = json.dumps(manifiesto, indent=2, ensure_ascii=False)
 

@@ -87,3 +87,21 @@ def test_el_manifiesto_se_escribe_en_utf8(monkeypatch, tmp_path):
 
     assert codificaciones == ["utf-8", "utf-8"]
     assert "ó" in (tmp_path / "latest.json").read_bytes().decode("utf-8")
+
+
+def test_solo_comprobar_para_antes_de_construir_si_la_version_ya_esta(monkeypatch, tmp_path):
+    """desplegar.sh lo llama antes de construir: repetir una versión ya publicada
+    movería :latest y :X.Y.Z a otro digest mientras el manifiesto sigue en el viejo."""
+    publicar = _cargar("publicar_version")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(publicar, "_git", lambda *a: "abc1234")
+    monkeypatch.setattr(publicar, "publicar", lambda *a: pytest.fail("no debe publicar"))
+    monkeypatch.setattr("sys.argv", ["publicar_version.py", "--solo-comprobar",
+                                     "--notas", "Mejoras", "--repo"])
+
+    monkeypatch.setattr(publicar, "version_publicada", lambda repo: publicar._leer_version())
+    assert publicar.main() == 1
+
+    monkeypatch.setattr(publicar, "version_publicada", lambda repo: "0.0.1")
+    assert publicar.main() == 0
+    assert not (tmp_path / "latest.json").exists()

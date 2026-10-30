@@ -23,8 +23,10 @@ LABEL org.opencontainers.image.description="Upload manager for eMuwarez with Rad
 # ffmpeg's ffprobe, mkvtoolnix's mkvmerge) are also the whole toolset behind
 # services/source_engine (see docs/source_engine.md) — no extra package
 # needed for it.
+# mesa-vulkan-drivers: Vulkan por CPU para el libplacebo de ffmpeg, con el que Uploadrr-EMU saca las capturas de
+# un Dolby Vision perfil 5.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    mediainfo ffmpeg mktorrent mkvtoolnix git \
+    mediainfo ffmpeg mktorrent mkvtoolnix git mesa-vulkan-drivers \
     && rm -rf /var/lib/apt/lists/*
 
 # mkbrr: Uploadrr-EMU crea el .torrent con él si está en el PATH (si no, con torf).

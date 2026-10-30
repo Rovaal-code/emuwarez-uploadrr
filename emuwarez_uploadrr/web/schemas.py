@@ -694,9 +694,6 @@ class RequestItemResponse(BaseModel):
     id: int
     emu_id: str
     title: str
-    # Generated demo request (services/request_examples.py), not one that came
-    # from the tracker. Temporary, until the real requests endpoint exists.
-    is_example: bool = False
     category: Optional[str] = None
     requested_source: Optional[str] = None
     requested_resolution: Optional[str] = None

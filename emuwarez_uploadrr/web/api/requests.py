@@ -36,7 +36,6 @@ def _row_to_item(r: dict, my_username: str | None = None) -> RequestItemResponse
         id=r["id"],
         emu_id=r["emu_id"],
         title=r["title"],
-        is_example=bool(r.get("is_example")),
         category=r.get("category"),
         requested_source=r.get("requested_source"),
         requested_resolution=r.get("requested_resolution"),
@@ -185,38 +184,6 @@ def sync_requests(
             f"{result.get('matched', 0)} cruces actualizados."
         ),
     )
-
-
-# --- Demo requests (TEMPORARY) ---------------------------------------------
-# Goes away with the real eMuwarez requests endpoint; see
-# services/request_examples.py. Declared BEFORE /{request_id} so "examples"
-# isn't swallowed as a request id.
-
-@router.get("/examples")
-def get_examples_status(current_user: dict = Depends(require_auth)) -> dict:
-    """How many demo requests exist. The Generar button derives its disabled
-    state from THIS, not from frontend state — otherwise reloading the page
-    would re-enable it and you'd end up with several rounds of them."""
-    from emuwarez_uploadrr.services.request_examples import count_examples
-    with _get_conn() as conn:
-        return {"count": count_examples(conn)}
-
-
-@router.post("/examples")
-def create_examples(current_user: dict = Depends(require_auth)) -> dict:
-    from emuwarez_uploadrr.services.request_examples import generate_examples
-    with _get_conn() as conn:
-        result = generate_examples(conn)
-    if result.get("error"):
-        raise HTTPException(status_code=409, detail=result["error"])
-    return result
-
-
-@router.delete("/examples")
-def remove_examples(current_user: dict = Depends(require_auth)) -> dict:
-    from emuwarez_uploadrr.services.request_examples import delete_examples
-    with _get_conn() as conn:
-        return {"deleted": delete_examples(conn)}
 
 
 @router.get("/{request_id}", response_model=RequestDetailResponse)

@@ -376,6 +376,60 @@ def test_change_password_success(client, auth_headers):
     assert new.status_code == 200
 
 
+def test_change_password_revokes_other_sessions(client, auth_headers):
+    otra = client.post("/api/auth/login", json={"username": "testadmin", "password": "TestPass1!secret"}).json()["token"]
+    resp = client.post("/api/auth/change-credentials", headers=auth_headers, json={
+        "current_password": "TestPass1!secret",
+        "new_password": "NewerPass2!secret",
+    })
+    assert resp.status_code == 200, resp.text
+    # La sesión que cambia la contraseña sigue; la otra ya no vale.
+    assert client.get("/api/auth/me", headers=auth_headers).status_code == 200
+    assert client.get("/api/auth/me", headers={"Authorization": f"Bearer {otra}"}).status_code == 401
+
+
+def test_reset_password_revokes_every_session(client, auth_headers):
+    from emuwarez_uploadrr.database import connect, db_path
+    from emuwarez_uploadrr.web.services.auth_service import get_user_by_username, update_password
+    # Lo que hace `web reset-password`: sin token que conservar.
+    with connect(db_path()) as conn:
+        update_password(conn, get_user_by_username(conn, "testadmin")["id"], "NewerPass2!secret")
+        conn.commit()
+    assert client.get("/api/auth/me", headers=auth_headers).status_code == 401
+
+
+def test_concurrent_create_admin_creates_only_one(client):
+    import threading
+
+    from emuwarez_uploadrr.database import connect, db_path
+    from emuwarez_uploadrr.web.app import create_app
+
+    client.get("/api/setup/status")  # crea las tablas
+    for ronda in range(3):
+        with connect(db_path()) as conn:
+            conn.execute("DELETE FROM users")
+            conn.commit()
+        salida = threading.Event()
+        estados = []
+
+        def crear(nombre):
+            otro = TestClient(create_app())
+            salida.wait()
+            r = otro.post("/api/setup/admin", json={"username": nombre, "password": "TestPass1!secret"})
+            estados.append(r.status_code)
+
+        hilos = [threading.Thread(target=crear, args=(f"admin{ronda}{i}",)) for i in range(2)]
+        for h in hilos:
+            h.start()
+        salida.set()
+        for h in hilos:
+            h.join()
+        with connect(db_path()) as conn:
+            admins = conn.execute("SELECT COUNT(*) FROM users WHERE role='admin'").fetchone()[0]
+        assert admins == 1, estados
+        assert sorted(estados)[0] == 201 and sorted(estados)[1] in (400, 409)
+
+
 def test_change_username_success(client, auth_headers):
     resp = client.post("/api/auth/change-credentials", headers=auth_headers, json={
         "current_password": "TestPass1!secret",

@@ -103,11 +103,23 @@ def update_username(conn: sqlite3.Connection, user_id: int, new_username: str) -
     )
 
 
-def update_password(conn: sqlite3.Connection, user_id: int, new_password: str) -> None:
+def update_password(
+    conn: sqlite3.Connection, user_id: int, new_password: str, keep_token: Optional[str] = None
+) -> None:
+    """Change the password and revoke every session of the user except *keep_token*."""
     ph = hash_password(new_password)
     conn.execute(
         "UPDATE users SET password_hash = ? WHERE id = ?",
         (ph, user_id),
+    )
+    # Cambiar la contraseña tras una fuga tiene que echar al que tenga un token viejo.
+    conn.execute(
+        """
+        UPDATE auth_sessions
+        SET revoked_at = CURRENT_TIMESTAMP
+        WHERE user_id = ? AND revoked_at IS NULL AND token_hash IS NOT ?
+        """,
+        (user_id, hash_token(keep_token) if keep_token else None),
     )
 
 

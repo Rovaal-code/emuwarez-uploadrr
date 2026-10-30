@@ -121,7 +121,7 @@ export function NomenclatureModal({ itemId, itemTitle, onClose }: Props) {
             </div>
             <div className="detail-row">
               <span className="text-muted">Título en eMuwarez:</span>
-              <span style={{ wordBreak: 'break-all' }}>{proposal.proposed_torrent_name || '—'}</span>
+              <span style={{ wordBreak: 'break-all' }}>{proposal.proposed_torrent_name || proposal.proposed_filename || '—'}</span>
             </div>
             <div className="detail-row">
               <span className="text-muted">Archivo propuesto:</span>

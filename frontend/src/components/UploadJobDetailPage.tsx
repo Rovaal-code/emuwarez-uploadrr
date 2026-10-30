@@ -103,7 +103,7 @@ const NOMENCLATURE_FIELD_ROWS: { key: string; label: string; hideFor?: string[] 
 // Same label/tooltip UploadWizardModal's INTERNAL_TITLE_LABEL uses — kept in
 // sync manually since this page and the wizard don't share a components file.
 const INTERNAL_TITLE_LABEL_TEXT = 'Título del archivo'
-const INTERNAL_TITLE_TOOLTIP = 'Es el mismo texto que el nombre del torrent: también es el título interno, el que se graba dentro del propio contenedor .mkv.'
+const INTERNAL_TITLE_TOOLTIP = 'Es el nombre del torrent sin acentos y con puntos: también es el título interno, el que se graba dentro del propio contenedor .mkv.'
 
 function GeneratingSpinner({ text }: { text: string }) {
   return (
@@ -120,6 +120,7 @@ function NomenclatureSection({ snapshot, mediaType, isStaging }: { snapshot: Upl
   }
   const data = (snapshot ?? {}) as Record<string, unknown>
   const name = snapshot?.proposed_torrent_name || snapshot?.proposed_filename || snapshot?.proposed_title || null
+  const fileName = snapshot?.proposed_filename || name
   const rows = NOMENCLATURE_FIELD_ROWS.filter(r => !mediaType || !r.hideFor?.includes(mediaType))
 
   return (
@@ -154,7 +155,7 @@ function NomenclatureSection({ snapshot, mediaType, isStaging }: { snapshot: Upl
             {INTERNAL_TITLE_LABEL_TEXT}
             <InfoIcon text={INTERNAL_TITLE_TOOLTIP} />
           </div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, wordBreak: 'break-all' }}>{name || '—'}</div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, wordBreak: 'break-all' }}>{fileName || '—'}</div>
         </div>
       </div>
     </>

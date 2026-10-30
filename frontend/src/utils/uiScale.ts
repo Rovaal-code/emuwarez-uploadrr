@@ -51,6 +51,13 @@ const LLAVE = 'uploadrr.tamano-interfaz'
  */
 export const ANCHO_ESTRECHO = 1400
 
+/**
+ * Igual que `ANCHO_ESTRECHO`, pero para las tablas con columnas de prioridad
+ * baja (ver Subidas): se queda sin sitio antes, así que el corte está más
+ * arriba. Se publica como la clase `ui-tabla-estrecha`.
+ */
+export const ANCHO_TABLA_ESTRECHA = 1600
+
 /** El porcentaje válido más cercano al valor dado. */
 export function normalizarTamano(valor: unknown): number {
   const n = typeof valor === 'string' ? Number(valor) : valor
@@ -62,6 +69,11 @@ export function normalizarTamano(valor: unknown): number {
 /** Si con este tamaño la ventana se queda sin ancho de contenido suficiente. */
 export function esEstrecha(anchoDeVentana: number, porcentaje: number): boolean {
   return anchoDeVentana / (porcentaje / 100) < ANCHO_ESTRECHO
+}
+
+/** Lo mismo, para el corte de `ANCHO_TABLA_ESTRECHA`. */
+export function esTablaEstrecha(anchoDeVentana: number, porcentaje: number): boolean {
+  return anchoDeVentana / (porcentaje / 100) < ANCHO_TABLA_ESTRECHA
 }
 
 export function tamanoGuardado(): number {
@@ -111,6 +123,7 @@ export function guardarTamano(porcentaje: number): number {
 
 function refrescarEstrecha() {
   document.body.classList.toggle('ui-estrecha', esEstrecha(window.innerWidth, tamano))
+  document.body.classList.toggle('ui-tabla-estrecha', esTablaEstrecha(window.innerWidth, tamano))
 }
 
 /** Se llama una vez al arrancar (main.tsx). Devuelve cómo desengancharlo. */

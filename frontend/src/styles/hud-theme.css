@@ -368,6 +368,11 @@
 .hud-app .data-table tr:hover td {
   background: color-mix(in srgb, var(--hud-cyan) 6%, transparent);
 }
+/* La columna de acciones fija (Subidas) necesita fondo opaco incluso en
+   :hover — ver components.css, mismo motivo que el pie de tabla fijo. */
+.hud-app .data-table tr:hover td.col-actions {
+  background: var(--bg-surface);
+}
 .hud-app .badge {
   font-family: var(--hud-font);
   border-radius: 2px;

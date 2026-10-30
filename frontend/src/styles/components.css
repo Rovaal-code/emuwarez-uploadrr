@@ -443,6 +443,37 @@ optgroup {
   text-align: left;
 }
 
+/* Pinned to the right of the scroll container (Subidas, a tabla ancha): las
+   acciones de cada fila se ven siempre, aunque el resto de la tabla necesite
+   scroll horizontal. Fondo opaco + sombra como separador, igual que el
+   encabezado fijo de arriba — un borde de verdad se queda debajo del
+   contenido que pasa por detrás al hacer scroll. */
+.data-table td.col-actions {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background: var(--bg-surface);
+  box-shadow: inset 1px 0 0 var(--border);
+}
+/* La celda de la esquina está fija por arriba Y por la derecha a la vez: se
+   suma al box-shadow que ya le da `.data-table thead th` (borde inferior). */
+.data-table th.col-actions {
+  right: 0;
+  box-shadow: inset 0 -1px 0 var(--border), inset 1px 0 0 var(--border);
+}
+/* Mismo motivo que `.data-table tr.sticky-footer-row:hover td`: sin esto, el
+   tinte de :hover (translúcido) dejaría ver las filas de detrás al pasar el
+   ratón mientras la tabla está desplazada. */
+.data-table tr:hover td.col-actions {
+  background: var(--bg-surface);
+}
+
+/* Columnas de prioridad baja (Subidas): con poco ancho se esconden, no se
+   pierden — su dato sigue en el detalle de la subida (clic en el título). */
+.ui-tabla-estrecha .col-prioridad-baja {
+  display: none;
+}
+
 /* Service icons inline */
 .service-inline {
   display: inline-flex;

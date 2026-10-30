@@ -2,9 +2,11 @@ import { describe, it, expect } from 'vitest'
 import {
   normalizarTamano,
   esEstrecha,
+  esTablaEstrecha,
   TAMANOS,
   TAMANO_POR_DEFECTO,
   ANCHO_ESTRECHO,
+  ANCHO_TABLA_ESTRECHA,
 } from '../uiScale'
 
 describe('TAMANOS', () => {
@@ -73,5 +75,24 @@ describe('esEstrecha', () => {
     for (const ancho of [800, 1024, 1280, 1399, 1400, 1401, 1920, 2560, 3840]) {
       expect(esEstrecha(ancho, 100)).toBe(ancho < 1400)
     }
+  })
+})
+
+describe('esTablaEstrecha', () => {
+  // Mismo corte que esEstrecha(), pero más arriba: las tablas con columnas de
+  // prioridad baja (Subidas) se quedan sin sitio antes que el resto de la app.
+  it('el corte cae exactamente en ANCHO_TABLA_ESTRECHA', () => {
+    expect(esTablaEstrecha(ANCHO_TABLA_ESTRECHA, 100)).toBe(false)
+    expect(esTablaEstrecha(ANCHO_TABLA_ESTRECHA - 1, 100)).toBe(true)
+  })
+
+  it('mira el ancho de contenido, no el de la ventana', () => {
+    expect(esTablaEstrecha(1920, 150)).toBe(true)   // 1280 de contenido
+    expect(esTablaEstrecha(1920, 100)).toBe(false)
+  })
+
+  it('salta antes que esEstrecha, con la misma ventana', () => {
+    expect(esTablaEstrecha(1500, 100)).toBe(true)
+    expect(esEstrecha(1500, 100)).toBe(false)
   })
 })

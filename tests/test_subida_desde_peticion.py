@@ -185,3 +185,18 @@ def test_una_base_del_esquema_anterior_gana_las_columnas(db_conn):
 
     columnas = {fila["name"] for fila in db_conn.execute("PRAGMA table_info(upload_jobs)")}
     assert {"request_title", "request_url"} <= columnas
+
+
+def test_la_migracion_copia_la_peticion_de_las_subidas_que_ya_la_llevaban(db_conn):
+    rid = _peticion(db_conn)
+    job = db_conn.execute("INSERT INTO upload_jobs(title, path, request_item_id) VALUES ('x', '/x', ?)",
+                          (rid,)).lastrowid
+    db_conn.execute("ALTER TABLE upload_jobs DROP COLUMN request_title")
+    db_conn.execute("ALTER TABLE upload_jobs DROP COLUMN request_url")
+    set_state(db_conn, "schema_version", "40")
+    db_conn.commit()
+
+    init_db(db_conn)
+
+    peticion = db_conn.execute("SELECT title, url FROM request_items WHERE id = ?", (rid,)).fetchone()
+    assert _fila(db_conn, job)[1:] == (peticion["title"], peticion["url"])

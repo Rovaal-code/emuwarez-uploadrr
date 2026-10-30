@@ -527,6 +527,13 @@ def _migrate_upload_jobs_request_snapshot(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE upload_jobs ADD COLUMN {col} TEXT")
         except sqlite3.OperationalError:
             pass
+    # Las subidas de antes que ya llevaban la petición (CLI, rutas antiguas) la copian mientras aún existe.
+    conn.execute(
+        "UPDATE upload_jobs SET "
+        "request_title = (SELECT title FROM request_items WHERE id = upload_jobs.request_item_id), "
+        "request_url = (SELECT url FROM request_items WHERE id = upload_jobs.request_item_id) "
+        "WHERE request_item_id IS NOT NULL AND request_title IS NULL"
+    )
 
 
 def _migrate_requests(conn: sqlite3.Connection) -> None:

@@ -166,6 +166,10 @@ def parse_uploadrr_progress(fragment: str) -> Optional[tuple[str, int, Optional[
     if not clean:
         return None
 
+    # Cualquier fallo del cliente tras subir (src/utils/upload.py::upload_to_tracker). Va primero: el motivo
+    # puede traer textos de los patrones de abajo («Validation Error»).
+    if clean.startswith("Torrent client add failed:"):
+        return "qbittorrent_add", 0, False
     if "Rejected Upload" in clean or "Validation Error" in clean or '"success":false' in clean:
         return "uploading_emu", 100, False
     if re.search(r"(?:Torrent uploaded successfully|Uploaded successfully|Upload complete|Upload completed)", clean, re.I):
@@ -249,10 +253,6 @@ def parse_uploadrr_progress(fragment: str) -> Optional[tuple[str, int, Optional[
     # this is the real, observed cause of a "successful" job whose torrent
     # never reaches qBittorrent (2026-07-28 Chappie re-upload).
     if "Torrent upload succeeded, but failed to" in clean:
-        return "qbittorrent_add", 0, False
-    # Cualquier otro fallo del cliente tras subir (qBittorrent no responde, el torrent no aparece):
-    # src/utils/upload.py::upload_to_tracker.
-    if clean.startswith("Torrent client add failed:"):
         return "qbittorrent_add", 0, False
     return None
 

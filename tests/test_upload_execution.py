@@ -308,7 +308,7 @@ def test_run_subprocess_qbittorrent_bad_login_logs_and_skips_done(db_conn, tmp_p
     row = db_conn.execute("SELECT progress_json FROM upload_jobs WHERE id=?", (jid,)).fetchone()
     state = json.loads(row["progress_json"])
     by_key = {p["key"]: p for p in state["phases"]}
-    assert by_key["qbittorrent_add"]["status"] != "done"
+    assert by_key["qbittorrent_add"]["status"] == "failed"
 
 
 def test_run_subprocess_qbittorrent_unreachable_logs_reason_and_skips_done(db_conn, tmp_path):
@@ -339,12 +339,13 @@ def test_run_subprocess_qbittorrent_unreachable_logs_reason_and_skips_done(db_co
 
     assert get_upload_job(jid, conn=db_conn)["status"] == "completed"
     mensajes = [log["message"] for log in get_upload_job_logs(jid, conn=db_conn)["logs"]]
-    assert "qBittorrent: no se pudo añadir el torrent (Failed to connect to qBittorrent. Connection refused). " \
-        "La subida a eMuwarez sí se completó." in mensajes
+    assert "qBittorrent: falló al añadir o etiquetar el torrent (Failed to connect to qBittorrent. Connection refused). " \
+        "Revisa qBittorrent. La subida a eMuwarez sí se completó." in mensajes
     assert not any("credenciales" in m for m in mensajes)
 
     state = json.loads(db_conn.execute("SELECT progress_json FROM upload_jobs WHERE id=?", (jid,)).fetchone()[0])
-    assert {p["key"]: p for p in state["phases"]}["qbittorrent_add"]["status"] != "done"
+    fase = {p["key"]: p for p in state["phases"]}["qbittorrent_add"]
+    assert fase["status"] == "failed" and fase["finished_at"]
 
 
 def test_run_subprocess_torrent_redownload_403_logs_and_skips_done(db_conn, tmp_path):

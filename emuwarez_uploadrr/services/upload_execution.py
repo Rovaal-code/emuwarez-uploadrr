@@ -961,6 +961,16 @@ def mark_phase_done(job_id: int, stage_key: str) -> None:
     _write_progress_json(job_id, with_phase_timestamps(new_state, state.get("phases")))
 
 
+def mark_phase_failed(job_id: int, stage_key: str) -> None:
+    """Deja una fase como fallida aunque el job acabe bien (qBittorrent tras una subida que sí se hizo)."""
+    state = _read_progress_state(job_id)
+    for p in state.get("phases", []):
+        if p["key"] == stage_key:
+            p["status"] = "failed"
+            p["finished_at"] = p.get("finished_at") or _now()
+    _write_progress_json(job_id, state)
+
+
 def update_phase_progress(job_id: int, stage_key: str, pct: int) -> None:
     """Update the live in-progress percentage of one phase (remux via
     mkvmerge --gui-mode), keeping whatever phases were already marked done
@@ -1147,7 +1157,8 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
                     motivo = line.split("Torrent client add failed:", 1)[1].strip()
                     append_upload_log(
                         job_id, "error",
-                        f"qBittorrent: no se pudo añadir el torrent ({motivo}). La subida a eMuwarez sí se completó.",
+                        f"qBittorrent: falló al añadir o etiquetar el torrent ({motivo}). Revisa qBittorrent. "
+                        "La subida a eMuwarez sí se completó.",
                         stream="system",
                     )
                 else:
@@ -1278,7 +1289,10 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
             # But NOT if we actually saw it fail (bad qBittorrent login) —
             # that's a real, detected failure, not silence, and force-marking
             # it "done" would hide it behind a fully green Fases table.
-            if not progress_state.get("qbittorrent_add_failed"):
+            # Y si falló se guarda como fallida: si no, se quedaba «En curso» con la duración contando.
+            if progress_state.get("qbittorrent_add_failed"):
+                mark_phase_failed(job_id, "qbittorrent_add")
+            else:
                 mark_phase_done(job_id, "qbittorrent_add")
             append_upload_log(
                 job_id, "info",

@@ -3,6 +3,8 @@ real progress from Uploadrr-EMU's own output (originally in legacy.py), the
 mkvmerge --gui-mode parser, and the fixed-weight phase state builder."""
 from __future__ import annotations
 
+import pytest
+
 from emuwarez_uploadrr.services.uploadrr_progress import (
     PHASE_KEY_ALIASES,
     PHASES,
@@ -171,9 +173,9 @@ def test_parse_uploadrr_progress_qbittorrent_bad_login():
     assert ok is False
 
 
-def test_parse_uploadrr_progress_client_add_failed():
-    line = "Torrent client add failed: Failed to connect to qBittorrent. Connection refused"
-    assert parse_uploadrr_progress(line) == ("qbittorrent_add", 0, False)
+@pytest.mark.parametrize("motivo", ["Failed to connect to qBittorrent. Connection refused", "Validation Error"])
+def test_parse_uploadrr_progress_client_add_failed(motivo):
+    assert parse_uploadrr_progress(f"Torrent client add failed: {motivo}") == ("qbittorrent_add", 0, False)
 
 
 def test_parse_uploadrr_progress_torrent_redownload_failed():

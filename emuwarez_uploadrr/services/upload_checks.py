@@ -303,11 +303,12 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int, *, scope: str = "a
         return done()
 
     # 3. qBittorrent — WebUI login; skipped (yellow) when it isn't configured.
-    qbit_url = get_setting_canonical(conn, "qbit.url") or get_setting_canonical(conn, "qbit.qui_proxy_url")
-    if not (qbit_url and qbit_url.strip()):
+    configurado = get_setting_canonical(conn, "qbit.url") or get_setting_canonical(conn, "qbit.qui_proxy_url")
+    if not (configurado and configurado.strip()):
         add_skip("qbittorrent", "qBittorrent sin configurar (se omite)",
                  "Configúralo en Ajustes para sembrar automáticamente tras subir")
     else:
+        # Con qui guardado se prueba qui, que es por donde irá la subida (Uploadrr-EMU lo antepone a la URL directa).
         r = test_qbit_connection(conn=conn)
         if not add("qbittorrent", "qBittorrent conectado", "qBittorrent no conectado",
                    bool(r.get("ok")), r.get("message", "")):

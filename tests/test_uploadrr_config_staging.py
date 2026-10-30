@@ -356,6 +356,41 @@ def test_stage_add_logo_creates_the_key_when_the_config_lacks_it():
     assert get_block_key(staged, "DEFAULT", "add_logo") == "false"
 
 
+def test_stage_per_episode_screens_leaves_only_the_first_episode_by_default():
+    """SCREENS.per_episode a 0 es lo que hace que el fork solo capture el primer
+    capítulo de un pack; con todos se respeta el valor del config."""
+    from emuwarez_uploadrr.services.uploadrr_config_staging import stage_per_episode_screens
+    from emuwarez_uploadrr.services.uploadrr_yaml import get_block_key
+    lines = ["SCREENS:", "  per_episode: 3 # for tv will take x screens for every episode"]
+    staged, _ = stage_per_episode_screens(lines, False)
+    assert get_block_key(staged, "SCREENS", "per_episode") == "0"
+    staged, _ = stage_per_episode_screens(lines, True)
+    assert staged == lines
+
+
+def test_stage_uploadrr_config_screenshots_only_the_first_episode_unless_asked(tmp_path, monkeypatch):
+    from emuwarez_uploadrr.database import connect, init_db
+    from emuwarez_uploadrr.services import upload_execution as ue
+    from emuwarez_uploadrr.services.settings import set_setting
+    from emuwarez_uploadrr.services.uploadrr_yaml import get_block_key
+    config = tmp_path / "Uploadrr" / "data" / "config.yaml"
+    config.parent.mkdir(parents=True)
+    config.write_text("DEFAULT:\n  tmdb: ''\nSCREENS:\n  per_episode: 3\n", encoding="utf-8")
+    monkeypatch.setattr(ue, "append_upload_log", lambda *a, **k: None)
+
+    assert ue._stage_uploadrr_config(1, str(tmp_path / "Uploadrr")) == config
+    assert get_block_key(read_config_lines(config), "SCREENS", "per_episode") == "0"
+
+    restore_config_from_backup(config)
+    conn = connect()
+    init_db(conn)
+    set_setting(conn, "emu.per_episode_screens", "true")
+    conn.commit()
+    conn.close()
+    ue._stage_uploadrr_config(1, str(tmp_path / "Uploadrr"))
+    assert get_block_key(read_config_lines(config), "SCREENS", "per_episode") == "3"
+
+
 def test_every_host_that_needs_a_key_gets_it_staged():
     """La lista de claves que se escriben en el config del fork estaba puesta a
     mano y se quedó en cinco: hamster e imghost.dev también necesitan clave y

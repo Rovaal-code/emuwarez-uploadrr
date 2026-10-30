@@ -128,6 +128,17 @@ def stage_add_logo(lines: list[str], enabled: bool) -> tuple[list[str], str]:
     return staged, message
 
 
+def stage_per_episode_screens(lines: list[str], all_episodes: bool) -> tuple[list[str], str]:
+    """Stage SCREENS.per_episode — las capturas de cada capítulo de un pack.
+
+    A 0, el fork (src/screenshots/generator.py) solo captura el primer capítulo.
+    Con todos los capítulos se deja el valor del config."""
+    staged = list(lines)
+    if all_episodes:
+        return staged, "SCREENS.per_episode sin cambios"
+    return staged, set_block_key(staged, "SCREENS", "per_episode", "0")
+
+
 def stage_image_hosts(
     lines: list[str], *, img_hosts: Optional[list[str]] = None, api_keys: Optional[dict[str, str]] = None,
 ) -> tuple[list[str], str]:
@@ -296,6 +307,7 @@ __all__ = [
     "stage_tmdb_key",
     "stage_emu_config",
     "stage_add_logo",
+    "stage_per_episode_screens",
     "stage_blu_api_off",
     "stage_image_hosts",
     "stage_qbittorrent_config",

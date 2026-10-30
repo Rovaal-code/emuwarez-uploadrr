@@ -49,6 +49,7 @@ from .uploadrr_config_staging import (
     stage_image_hosts,
     stage_add_logo,
     stage_blu_api_off,
+    stage_per_episode_screens,
     stage_qbittorrent_config,
     stage_tmdb_key,
     write_staged_config,
@@ -721,6 +722,8 @@ def _stage_uploadrr_config(job_id: int, cwd: str) -> Path | None:
         qbit_tag = get_setting_canonical(conn, "qbit.tag")
         # El logo va en la descripción salvo que se haya apagado a mano.
         add_logo = get_setting_canonical(conn, "emu.add_logo") != "false"
+        # Las capturas de un pack, solo del primer capítulo salvo que se pidan todas.
+        per_episode_screens = get_setting_canonical(conn, "emu.per_episode_screens") == "true"
         qbit_username = get_setting_canonical(conn, "qbit.username")
         qbit_password = get_setting_canonical(conn, "qbit.password")
     finally:
@@ -736,6 +739,7 @@ def _stage_uploadrr_config(job_id: int, cwd: str) -> Path | None:
             lines, _msg = stage_emu_config(lines, api_key=emu_key)
             changed = True
         lines, _msg = stage_add_logo(lines, add_logo)
+        lines, _msg = stage_per_episode_screens(lines, per_episode_screens)
         lines, _msg = stage_blu_api_off(lines)
         changed = True
         if img_hosts:

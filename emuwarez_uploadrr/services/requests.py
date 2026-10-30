@@ -211,7 +211,7 @@ def _sincronizar_peticiones(conn: sqlite3.Connection) -> dict[str, int | str]:
         for item in items:
             upsert_request(conn, item, seen_at=sync_at, commit=False)
         # Solo un recorrido que cuadra con el total de eMuwarez dice cuáles ya no están abiertas.
-        complete = total is not None and len({i.emu_id for i in items}) == total
+        complete = total is not None and len(items) == total == len({i.emu_id for i in items})
         if not complete:
             logger.warning("El recorrido de peticiones no cuadra con el total de eMuwarez; no se borra ninguna")
         removed = borrar_peticiones(conn, "last_seen_at IS NULL OR last_seen_at != ?", (sync_at,)) if complete else 0

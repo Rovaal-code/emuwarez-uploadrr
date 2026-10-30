@@ -81,6 +81,7 @@ def test_la_sincronizacion_anota_cuando_vio_cada_peticion(db_conn, sincroniza):
 @pytest.mark.parametrize("filas, total, motivo", [
     ([_fila(1)], 3, "faltan filas respecto al total"),
     ([_fila(1), _fila(1), _fila(2)], 3, "una fila repetida no cuenta dos veces"),
+    ([_fila(1), _fila(1), _fila(2), _fila(3)], 3, "una fila repetida: las páginas se movieron aunque los ids cuadren"),
     ([_fila(1), {"name": "sin id"}, _fila(2)], 3, "una fila sin id no cuenta"),
     ([_fila(1), _fila(2), _fila(3)], None, "eMuwarez no dio el total o cambió a mitad"),
     ([_fila(1), _fila(2), _fila(3)], 2, "sobran filas respecto al total"),

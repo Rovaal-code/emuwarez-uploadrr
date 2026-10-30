@@ -97,8 +97,7 @@ def test_score_tmdb_match(db_conn):
            "file_exists": 1, "nomenclature_status": "N/A", "prepared_path": None,
            "resolution": None, "source": None,
            "arr_queue_status": None, "arr_history_status": None,
-           "arr_history_event_type": None, "arr_history_error": None,
-           "emu_existence_status": None}
+           "arr_history_event_type": None, "arr_history_error": None}
     result = score_request_candidate(req, lib)
     assert result["compatibility_score"] >= 40
     assert result["compatibility_status"] == "Compatible"
@@ -113,8 +112,7 @@ def test_score_no_match_low(db_conn):
            "file_exists": 0, "nomenclature_status": "N/A", "prepared_path": None,
            "resolution": None, "source": None,
            "arr_queue_status": None, "arr_history_status": None,
-           "arr_history_event_type": None, "arr_history_error": None,
-           "emu_existence_status": None}
+           "arr_history_event_type": None, "arr_history_error": None}
     result = score_request_candidate(req, lib)
     assert result["compatibility_score"] < 40
 
@@ -234,6 +232,61 @@ def test_ready_to_upload(db_conn):
 
 
 # ---------------------------------------------------------------------------
+# already_exists — ya está en eMuwarez y tu copia no aporta nada
+# ---------------------------------------------------------------------------
+
+def _en_emuwarez(conn, lib_id, aportes="[]"):
+    conn.execute("UPDATE library_items SET emu_in_catalog = 1, emu_aportes = ? WHERE id = ?", (aportes, lib_id))
+    conn.commit()
+
+
+def test_ya_en_emuwarez_sin_aportes_es_duplicado(db_conn):
+    """Se leía una columna que no existe (emu_existence_status), así que salía «Subir» igualmente."""
+    from emuwarez_uploadrr.services.request_readiness import evaluate_request_readiness
+    lib_id = _insert_library(db_conn, title="Ya Subida", tmdb_id="ys1", nomenclature_status="Correcta",
+                             prepared_path="/data/prepared/ya_subida.mkv")
+    _en_emuwarez(db_conn, lib_id)
+    req_id = _insert_request(db_conn, emu_id="emu-ys", title="Ya Subida", tmdb_id="ys1")
+    result = evaluate_request_readiness(req_id, db_conn)
+    assert result["status"] == "already_exists"
+    assert result["recommended_action"] == "ignore_already_exists"
+
+
+def test_ya_en_emuwarez_pero_aporta_se_puede_subir(db_conn):
+    from emuwarez_uploadrr.services.request_readiness import evaluate_request_readiness
+    lib_id = _insert_library(db_conn, title="Mejor Copia", tmdb_id="mc1", nomenclature_status="Correcta",
+                             prepared_path="/data/prepared/mejor_copia.mkv")
+    _en_emuwarez(db_conn, lib_id, aportes='[{"dim": "resolucion", "detail": "2160p"}]')
+    req_id = _insert_request(db_conn, emu_id="emu-mc", title="Mejor Copia", tmdb_id="mc1")
+    assert evaluate_request_readiness(req_id, db_conn)["status"] == "ready_to_upload"
+
+
+def test_se_mira_la_temporada_pedida_y_no_la_serie(db_conn):
+    """La serie solo marca 1 si están todas sus temporadas; la que pide la petición puede estar aunque la serie no."""
+    from emuwarez_uploadrr.services.request_readiness import evaluate_request_readiness
+    serie = _insert_library(db_conn, item_type="series", title="Serie Mitad", tmdb_id="sm1",
+                            nomenclature_status="Correcta", prepared_path="/data/prepared/serie_mitad")
+    temporada = _insert_library(db_conn, item_type="season", title="Serie Mitad - Temporada 2", tmdb_id="sm1")
+    db_conn.execute("UPDATE library_items SET parent_id = ?, season_number = 2 WHERE id = ?", (serie, temporada))
+    db_conn.execute("UPDATE library_items SET emu_in_catalog = 2 WHERE id = ?", (serie,))  # parcial
+    _en_emuwarez(db_conn, temporada)
+    req_id = _insert_request(db_conn, emu_id="emu-sm", title="Serie Mitad", category="Series", tmdb_id="sm1")
+    db_conn.execute("UPDATE request_items SET req_scope = 'season', req_season = 2 WHERE id = ?", (req_id,))
+    db_conn.commit()
+    assert evaluate_request_readiness(req_id, db_conn)["status"] == "already_exists"
+
+
+def test_el_id_gana_a_un_titulo_que_esta_listo(db_conn):
+    """Ganaba el candidato «listo para subir» aunque solo casara por el título y fuera otra película."""
+    from emuwarez_uploadrr.services.request_readiness import evaluate_request_readiness
+    buena = _insert_library(db_conn, title="Titulo Comun", tmdb_id="tc1", local_status="Faltante", file_exists=0)
+    _insert_library(db_conn, title="Titulo Comun", nomenclature_status="Correcta",
+                    prepared_path="/data/prepared/otra.mkv")
+    req_id = _insert_request(db_conn, emu_id="emu-tc", title="Titulo Comun", tmdb_id="tc1")
+    assert evaluate_request_readiness(req_id, db_conn)["best_library_item_id"] == buena
+
+
+# ---------------------------------------------------------------------------
 # preflight_needed — nomenclature correct but no prepared_path
 # ---------------------------------------------------------------------------
 
@@ -263,8 +316,7 @@ def test_scoring_is_deterministic(db_conn):
            "prepared_path": "/data/prep.mkv",
            "resolution": "1080p", "source": "bluray",
            "arr_queue_status": None, "arr_history_status": None,
-           "arr_history_event_type": None, "arr_history_error": None,
-           "emu_existence_status": None}
+           "arr_history_event_type": None, "arr_history_error": None}
     r1 = score_request_candidate(req, lib)
     r2 = score_request_candidate(req, lib)
     assert r1["readiness_status"] == r2["readiness_status"]

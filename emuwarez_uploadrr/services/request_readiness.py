@@ -20,11 +20,13 @@ from typing import Any, Optional
 
 from ..models import LocalStatus
 from .compatibility import (
+    TIPO_DE_FILA,
     match_request_to_library,
     classify_request_match,
     normalize_title,
     parse_resolution,
     parse_source,
+    tipo_de_peticion,
     _SOURCE_RANK,
 )
 
@@ -87,15 +89,11 @@ def _compute_compatibility_score(req: dict, lib: dict) -> tuple[float, str, list
         reasons.append(f"year match ({lib_year})")
 
     # Type match
-    req_cat = (req.get("category") or "").lower()
+    req_type = tipo_de_peticion(req.get("category"))
     lib_type = (lib.get("item_type") or "").lower()
-    if req_cat and lib_type:
-        cat_map = {"pelicula": "movie", "película": "movie", "movie": "movie",
-                   "serie": "series", "series": "series"}
-        req_type = cat_map.get(req_cat)
-        if req_type and req_type == lib_type:
-            score += 10
-            reasons.append(f"type match ({lib_type})")
+    if req_type and req_type == TIPO_DE_FILA.get(lib_type):
+        score += 10
+        reasons.append(f"type match ({lib_type})")
 
     # Resolution
     req_res = req.get("requested_resolution")
@@ -251,7 +249,6 @@ def _evaluate_readiness(
     history_status = lib.get("arr_history_status") or ""
     history_event = lib.get("arr_history_event_type") or ""
     has_history_error = history_status == "error" or "Fail" in history_event or bool(history_error)
-    emu_exist = lib.get("emu_existence_status") or ""
     upload_status = lib.get("local_status") or ""
 
     # Already uploaded/uploading
@@ -260,8 +257,8 @@ def _evaluate_readiness(
     if upload_status in ("Subido", "uploaded"):
         return {"status": "uploaded", "action": "view_upload", "blockers": [], "reasons": reasons}
 
-    # Exists in eMuwarez
-    if emu_exist in ("exists", "duplicate_confirmed"):
+    # Ya está en eMuwarez y tu copia no aporta nada (ni resolución, ni fuente, ni idioma): sería un duplicado.
+    if lib.get("emu_in_catalog") == 1 and not json.loads(lib.get("emu_aportes") or "[]"):
         blockers.append("ya existe en eMuwarez")
         return {"status": "already_exists", "action": "ignore_already_exists", "blockers": blockers, "reasons": reasons}
 
@@ -345,15 +342,17 @@ def score_request_candidate(req: dict, lib: dict) -> dict:
 
 
 def select_best_candidate(candidates: list[dict]) -> Optional[dict]:
-    """Pick the best candidate from a scored list — ties broken by real
-    readiness status (most-actionable first, see _STATUS_RANK) then by
-    match quality (compatibility_score). This is candidate matching, not a
-    "priority" ranking — no numeric priority score/bucket involved."""
+    """Pick the best candidate from a scored list: the surest match first (an ID
+    match before a title one, so a wrong title match that happens to be ready
+    never beats the right item), then real readiness status (most-actionable
+    first, see _STATUS_RANK), then compatibility_score. This is candidate
+    matching, not a "priority" ranking — no numeric priority score/bucket involved."""
     if not candidates:
         return None
     return sorted(
         candidates,
-        key=lambda c: (_STATUS_RANK.get(c["readiness_status"], 99), -c["compatibility_score"]),
+        key=lambda c: (-c["match_confidence"], _STATUS_RANK.get(c["readiness_status"], 99),
+                       -c["compatibility_score"]),
     )[0]
 
 
@@ -371,8 +370,10 @@ def build_request_candidates(request_item_id: int, conn: sqlite3.Connection) -> 
         SELECT id, item_type, title, year, tmdb_id, imdb_id, local_status,
                resolution, source, nomenclature_status, prepared_path,
                file_exists, arr_queue_status, arr_history_status,
-               arr_history_event_type, arr_history_error
+               arr_history_event_type, arr_history_error, season_number,
+               emu_in_catalog, emu_aportes
         FROM library_items
+        WHERE item_type != 'episode'
         ORDER BY updated_at DESC
         """
     ).fetchall()
@@ -382,12 +383,20 @@ def build_request_candidates(request_item_id: int, conn: sqlite3.Connection) -> 
     if not raw_matches:
         return []
 
+    from .requests import _scoped_library_id
+
     candidates = []
     for rank, m in enumerate(raw_matches[:10], start=1):
-        lib = m["item"]
+        lib = dict(m["item"])
+        # Si ya está en eMuwarez se mira en la temporada o el capítulo pedidos, no en toda la serie.
+        fila = _scoped_library_id(conn, lib, req)
+        if fila != lib["id"]:
+            lib.update(dict(conn.execute(
+                "SELECT emu_in_catalog, emu_aportes FROM library_items WHERE id = ?", (fila,)).fetchone()))
         scored = score_request_candidate(req, lib)
         scored["candidate_rank"] = rank
         scored["library_item_id"] = lib["id"]
+        scored["match_confidence"] = m["confidence"]
         candidates.append(scored)
 
     return candidates

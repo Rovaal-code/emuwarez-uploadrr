@@ -12,6 +12,13 @@ import pytest
 from emuwarez_uploadrr.services import upload_queue as uq
 
 
+@pytest.fixture(autouse=True)
+def _biblioteca_en_tmp(tmp_path, monkeypatch):
+    """Las bibliotecas de estos tests viven en tmp_path, no en /data."""
+    from emuwarez_uploadrr.services import uploadrr_contract
+    monkeypatch.setattr(uploadrr_contract, "DEFAULT_ALLOWED_ROOTS", [str(tmp_path)])
+
+
 @pytest.fixture
 def db_conn(isolated_db):
     from emuwarez_uploadrr.database import connect, init_db
@@ -203,6 +210,26 @@ def test_run_queued_job_fails_fast_when_file_inaccessible(db_conn):
     assert job["status"] == "failed"
     assert job["stage"] == "failed"
     assert "no es accesible" in (job["error_message"] or "")
+
+
+def test_run_queued_job_fails_when_file_outside_allowed_roots(db_conn, tmp_path, monkeypatch):
+    from emuwarez_uploadrr.services import uploadrr_contract
+    (tmp_path / "medios").mkdir()
+    monkeypatch.setattr(uploadrr_contract, "DEFAULT_ALLOWED_ROOTS", [str(tmp_path / "medios")])
+    fuera = tmp_path / "fuera" / "Peli.2024.mkv"
+    fuera.parent.mkdir()
+    fuera.write_bytes(b"x" * 100)
+    iid = _movie_with_path(db_conn, str(fuera))
+    job_id = _queued_job_row(db_conn, iid, path=str(fuera))
+
+    uq._run_queued_job(job_id)
+
+    from emuwarez_uploadrr.services.upload_execution import get_upload_job
+    job = get_upload_job(job_id, conn=db_conn)
+    assert job["status"] == "failed"
+    assert "fuera de los allowed_roots" in (job["error_message"] or "")
+    # Ni renombrado ni enlazado: el fichero sigue como estaba.
+    assert [p.name for p in fuera.parent.iterdir()] == ["Peli.2024.mkv"]
 
 
 def test_run_queued_job_releases_concurrency_slot_on_early_failure(db_conn):

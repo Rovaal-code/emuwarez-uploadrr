@@ -164,6 +164,13 @@ def _collect_secrets(conn) -> list[str]:
         val = get_setting_canonical(conn, key)
         if val:
             secrets.append(val)
+    # urllib3 escribe la ruta sin el host ("url: /proxy/<clave>/api/v2/..."): la clave de qui, sola.
+    qui = (get_setting_canonical(conn, "qbit.qui_proxy_url") or "").strip().rstrip("/")
+    if "/proxy/" in qui:
+        secrets.append(qui.rsplit("/", 1)[-1])
+    # Las de los hosts de imágenes también se stagean en el config.yaml del hijo.
+    from .settings import all_settings
+    secrets += [v for k, v in all_settings(conn).items() if k.startswith("imghost.key.") and v]
     return secrets
 
 

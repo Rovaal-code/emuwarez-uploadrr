@@ -651,6 +651,15 @@ def _marcar_lista(job_id: int, command_preview: dict, conn) -> bool:
     )
 
 
+def _fuera_de_raices(path: str, conn) -> bool:
+    """True si el fichero de la biblioteca cae fuera de uploadrr.allowed_roots.
+
+    Se mira antes de renombrar, remuxear o enlazar: la ruta la da Radarr/Sonarr.
+    """
+    from .uploadrr_contract import get_allowed_roots, path_within_allowed_roots
+    return not path_within_allowed_roots(path, get_allowed_roots(conn))
+
+
 def _check_season_integrity(job_id: int, season_id: int, conn) -> bool:
     """Season equivalent of the single-file integrity stage below — same
     three checks (accessible / MediaInfo reads it / mkvtoolnix reads it),
@@ -678,6 +687,9 @@ def _check_season_integrity(job_id: int, season_id: int, conn) -> bool:
         ep_path = resolve_local_path(ep.get("path"), conn=conn) or ep.get("path")
         if not ep_path or not os.path.isfile(ep_path):
             _fail(job_id, f"El archivo del {label} no es accesible: {ep_path or ep.get('path') or '(sin ruta)'}")
+            return False
+        if _fuera_de_raices(ep_path, conn):
+            _fail(job_id, f"El archivo del {label} está fuera de los allowed_roots configurados: {ep_path}")
             return False
         if mediainfo_available():
             info = read_media_info_summary(ep_path)
@@ -841,6 +853,9 @@ def _run_queued_job(job_id: int) -> None:
             local_path = resolve_local_path(candidate_path) or candidate_path
             if not local_path or not os.path.isfile(local_path):
                 _fail(job_id, f"El archivo no es accesible: {local_path or candidate_path or '(sin ruta)'}")
+                return
+            if _fuera_de_raices(local_path, conn):
+                _fail(job_id, f"El archivo está fuera de los allowed_roots configurados: {local_path}")
                 return
             if mediainfo_available():
                 info = read_media_info_summary(local_path)
@@ -1019,6 +1034,11 @@ def _run_queued_job(job_id: int) -> None:
                 ficheros = [resolve_local_path(ep.get("destination_path") or ep.get("source_path"), conn=conn)
                             or ep.get("source_path")
                             for ep in plan_final.get("episodes", [])]
+                # Otra vez: la resincronización con Arr de arriba puede haber cambiado las rutas.
+                fuera = next((f for f in ficheros if f and _fuera_de_raices(f, conn)), None)
+                if fuera:
+                    _fail(job_id, f"El archivo está fuera de los allowed_roots configurados: {fuera}")
+                    return
                 preparada = preparar_carpeta_de_pack(
                     _sanitize_pack_folder_name(plan_final.get("season_pack_title") or ""), ficheros)
                 destino_uploadrr = preparada.get("carpeta")
@@ -1030,6 +1050,9 @@ def _run_queued_job(job_id: int) -> None:
                     conn.execute("SELECT * FROM library_items WHERE id = ?", (item_id,)).fetchone()) or {}
                 elegida = ruta_de_lectura(item_final, conn=conn)
                 fichero = resolve_local_path(elegida, conn=conn) or elegida
+                if fichero and _fuera_de_raices(fichero, conn):
+                    _fail(job_id, f"El archivo está fuera de los allowed_roots configurados: {fichero}")
+                    return
                 preparada = preparar_fichero_suelto(fichero)
                 destino_uploadrr = preparada.get("ruta")
                 que = "el archivo enlazado"

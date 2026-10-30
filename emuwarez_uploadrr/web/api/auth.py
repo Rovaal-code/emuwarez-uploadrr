@@ -66,7 +66,9 @@ def me(current_user: dict = Depends(require_auth)) -> CurrentUserResponse:
 def change_credentials(
     body: ChangeCredentialsRequest,
     current_user: dict = Depends(require_auth),
+    authorization: Optional[str] = Header(None),
 ) -> ChangeCredentialsResponse:
+    from ..dependencies import _resolve_token
     from ..services.auth_service import update_password, update_username
     from ..security import verify_password
     if not body.new_username and not body.new_password:
@@ -82,7 +84,9 @@ def change_credentials(
             if body.new_username and body.new_username != current_user["username"]:
                 update_username(conn, current_user["id"], body.new_username)
             if body.new_password:
-                update_password(conn, current_user["id"], body.new_password)
+                update_password(
+                    conn, current_user["id"], body.new_password, keep_token=_resolve_token(authorization)
+                )
             conn.commit()
         except sqlite3.IntegrityError:
             raise HTTPException(status_code=400, detail="Ese nombre de usuario ya está en uso.")

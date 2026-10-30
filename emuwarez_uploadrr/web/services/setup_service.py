@@ -67,7 +67,10 @@ def next_step(state: dict) -> Optional[str]:
 
 def setup_admin(conn: sqlite3.Connection, username: str, password: str) -> int:
     """Create the first admin user. Raises SetupError if one already exists."""
+    # El bloqueo de escritura antes de comprobar: dos peticiones a la vez no pueden crear dos admins.
+    conn.execute("BEGIN IMMEDIATE")
     if admin_exists(conn):
+        conn.rollback()
         raise SetupError("Ya existe un usuario administrador")
     user_id = create_user(conn, username, password, role="admin")
     return user_id

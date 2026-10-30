@@ -986,3 +986,17 @@ def test_collect_secrets_includes_qbittorrent_password_and_qui(db_conn):
     set_setting(db_conn, "qbit.password", "contrasena-qbit")
     set_setting(db_conn, "qbit.qui_proxy_url", "http://qui:7476/proxy/clave-de-qui")
     assert {"contrasena-qbit", "http://qui:7476/proxy/clave-de-qui"} <= set(_collect_secrets(db_conn))
+
+
+def test_collect_secrets_tapa_la_clave_de_qui_sin_host_y_las_de_imagenes(db_conn):
+    from emuwarez_uploadrr.services.settings import set_setting
+    from emuwarez_uploadrr.services.upload_execution import _collect_secrets, redact_secrets
+    set_setting(db_conn, "qbit.qui_proxy_url", "http://qui:7476/proxy/clave0de0qui/")
+    set_setting(db_conn, "imghost.key.lensdump", "clave0de0lensdump")
+    # La línea tal cual la escribe Uploadrr-EMU cuando qui no responde.
+    linea = ("Torrent client add failed: Failed to connect to qBittorrent. Connection Error: "
+             "HTTPConnectionPool(host='qui', port=7476): Max retries exceeded with url: "
+             "/proxy/clave0de0qui/api/v2/auth/login {'X-API-Key': 'clave0de0lensdump'}")
+    limpia = redact_secrets(linea, _collect_secrets(db_conn))
+    assert "clave0de0qui" not in limpia and "clave0de0lensdump" not in limpia
+    assert limpia.startswith("Torrent client add failed:")

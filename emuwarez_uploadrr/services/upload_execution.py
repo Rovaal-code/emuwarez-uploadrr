@@ -748,6 +748,7 @@ def _stage_uploadrr_config(job_id: int, cwd: str) -> Path | None:
             # "successfully" but silently never touches qBittorrent's API.
             lines, _msg = stage_qbittorrent_config(
                 lines, url=qbit_url, username=qbit_username, password=qbit_password, tag=qbit_tag,
+                base_dir=cwd,
             )
             changed = True
         if not changed:

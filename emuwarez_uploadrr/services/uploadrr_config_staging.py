@@ -151,6 +151,7 @@ def stage_image_hosts(
 
 def stage_qbittorrent_config(
     lines: list[str], *, url: str, username: str, password: str, tag: str | None = None,
+    base_dir: str | None = None,
 ) -> tuple[list[str], str]:
     """Stage TORRENT_CLIENTS.qbit (host/port/user/pass, merged into whatever
     that entry already had — torrent_storage_dir/content_layout/enable_search
@@ -191,9 +192,11 @@ def stage_qbittorrent_config(
     # (/Users/example/...) y cada subida acababa con "Invalid
     # torrent_storage_dir path" en rojo. Si la carpeta no existe aquí no hay
     # nada que reutilizar, y buscar en qBittorrent tampoco sirve: el hash que
-    # encuentre se busca como fichero en esa misma carpeta.
+    # encuentre se busca como fichero en esa misma carpeta. Una ruta relativa
+    # el fork la resuelve contra su propia carpeta (base_dir), no contra la
+    # nuestra.
     almacen = str(merged.get("torrent_storage_dir") or "").strip()
-    if not almacen or not Path(almacen).is_dir():
+    if not almacen or not (Path(base_dir or ".") / almacen).is_dir():
         merged.pop("torrent_storage_dir", None)
         merged["enable_search"] = False
     msg1 = set_child_inline_mapping(staged, "TORRENT_CLIENTS", QBIT_CLIENT_KEY, merged)

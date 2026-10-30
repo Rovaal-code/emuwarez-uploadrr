@@ -145,6 +145,22 @@ def test_stage_qbittorrent_config_drops_a_storage_dir_that_does_not_exist():
     assert mapping["content_layout"] == "Original"
 
 
+def test_stage_qbittorrent_config_resolves_a_relative_storage_dir_against_uploadrr(tmp_path):
+    """El fork corre con cwd en su carpeta, así que una ruta relativa se
+    comprueba contra ella y no contra la carpeta de la app."""
+    (tmp_path / "BT_backup").mkdir()
+    lines = [
+        "TORRENT_CLIENTS:",
+        "  qbit: {'torrent_client': 'qbit', 'enable_search': True, 'torrent_storage_dir': 'BT_backup'}",
+    ]
+    staged, _ = stage_qbittorrent_config(
+        lines, url="http://x:8080", username="u", password="p", base_dir=str(tmp_path),
+    )
+    mapping = get_child_inline_mapping(staged, "TORRENT_CLIENTS", QBIT_CLIENT_KEY)
+    assert mapping["torrent_storage_dir"] == "BT_backup"
+    assert mapping["enable_search"] is True
+
+
 def test_stage_blu_api_off_turns_off_the_blutopia_lookup():
     """Con useAPI activado el fork pregunta a Blutopia por el nombre de cada
     fichero ("Failed to search: HTTP 400" con la clave de ejemplo)."""

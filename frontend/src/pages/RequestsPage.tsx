@@ -986,7 +986,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
             Al ordenar o filtrar la tabla se queda puesta: cambiarla por un
             "Cargando…" para volver medio segundo después es un parpadeo, y
             encima te deja sin la referencia de lo que estabas mirando. */}
-        {loading && items.length === 0 ? (
+        {loading && items.length === 0 && isUnfiltered ? (
           <LoadingState label="Cargando peticiones…" />
         ) : error ? (
           <ErrorState message={error} onRetry={() => loadItems()} />

@@ -691,7 +691,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
         </div>
       </div>
 
-      {(loading || isPending) && !data ? (
+      {(loading || isPending) && !items.length ? (
         viewMode === 'list' ? (
           <div className="activity-section" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', marginBottom: 0 }}>
             <div style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>

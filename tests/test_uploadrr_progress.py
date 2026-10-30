@@ -171,6 +171,11 @@ def test_parse_uploadrr_progress_qbittorrent_bad_login():
     assert ok is False
 
 
+def test_parse_uploadrr_progress_client_add_failed():
+    line = "Torrent client add failed: Failed to connect to qBittorrent. Connection refused"
+    assert parse_uploadrr_progress(line) == ("qbittorrent_add", 0, False)
+
+
 def test_parse_uploadrr_progress_torrent_redownload_failed():
     # UNIT3D.py's follow-up GET for the tracker-signed .torrent 403'd — the
     # eMuwarez upload itself still succeeded, but no [tracker]{name}.torrent

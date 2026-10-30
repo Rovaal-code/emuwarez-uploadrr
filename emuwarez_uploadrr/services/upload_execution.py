@@ -1143,6 +1143,13 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
                         "to...\" más arriba). La subida a eMuwarez sí se completó.",
                         stream="system",
                     )
+                elif "Torrent client add failed:" in line:
+                    motivo = line.split("Torrent client add failed:", 1)[1].strip()
+                    append_upload_log(
+                        job_id, "error",
+                        f"qBittorrent: no se pudo añadir el torrent ({motivo}). La subida a eMuwarez sí se completó.",
+                        stream="system",
+                    )
                 else:
                     append_upload_log(
                         job_id, "error",

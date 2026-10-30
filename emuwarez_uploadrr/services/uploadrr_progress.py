@@ -250,6 +250,10 @@ def parse_uploadrr_progress(fragment: str) -> Optional[tuple[str, int, Optional[
     # never reaches qBittorrent (2026-07-28 Chappie re-upload).
     if "Torrent upload succeeded, but failed to" in clean:
         return "qbittorrent_add", 0, False
+    # Cualquier otro fallo del cliente tras subir (qBittorrent no responde, el torrent no aparece):
+    # src/utils/upload.py::upload_to_tracker.
+    if clean.startswith("Torrent client add failed:"):
+        return "qbittorrent_add", 0, False
     return None
 
 

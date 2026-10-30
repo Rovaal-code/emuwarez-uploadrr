@@ -210,6 +210,7 @@ echo "Digest ...... $DIGEST"
 if [[ "$PUBLICAR" -eq 0 ]]; then
   echo
   echo "Sin publicar el manifiesto ni crear la etiqueta, como pediste. Para anunciarla:"
+  echo "  docker tag $IMAGEN ${IMAGEN%:*}:$VERSION && docker push ${IMAGEN%:*}:$VERSION"
   echo "  python3 scripts/publicar_version.py --digest $DIGEST --notas \"…\" --repo"
   echo "  git tag -a v$VERSION -m \"…\" $COMMIT && git push origin v$VERSION"
   exit 0

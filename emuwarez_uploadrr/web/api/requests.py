@@ -176,6 +176,7 @@ def sync_requests(
         message=(
             f"{result.get('imported', 0)} peticiones importadas, "
             f"{result.get('matched', 0)} cruces actualizados."
+            + (f" {result['removed']} retiradas." if result.get("removed") else "")
         ),
     )
 

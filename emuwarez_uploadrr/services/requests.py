@@ -10,7 +10,7 @@ import sqlite3
 import unicodedata
 from typing import Optional
 
-from ..database import get_setting_canonical, get_state, set_state
+from ..database import borrar_peticiones, get_setting_canonical, get_state, set_state
 from . import cli_config
 from ..integrations import emu
 from ..integrations.base import IntegrationError
@@ -75,15 +75,18 @@ def get_request_sync_status(conn: sqlite3.Connection) -> dict:
     }
 
 
-def upsert_request(conn: sqlite3.Connection, item: RequestItem, *, commit: bool = True) -> int:
-    """Inserta o actualiza una petición. `commit=False` deja la transacción abierta, para guardar varias de golpe."""
+def upsert_request(
+    conn: sqlite3.Connection, item: RequestItem, *, seen_at: Optional[str] = None, commit: bool = True
+) -> int:
+    """Inserta o actualiza una petición. `seen_at` marca cuándo la vio la sincronización
+    y `commit=False` deja la transacción abierta, para guardar varias de golpe."""
     conn.execute(
         """
         INSERT INTO request_items(
             emu_id, title, category, requested_source, requested_resolution,
             emu_status, points, comments, created_at, tmdb_id, imdb_id, tvdb_id, mal_id, url,
-            author, author_visible, req_scope, req_season, req_episode, raw_json, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            author, author_visible, req_scope, req_season, req_episode, raw_json, last_seen_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         ON CONFLICT(emu_id) DO UPDATE SET
             title = excluded.title,
             category = excluded.category,
@@ -104,6 +107,7 @@ def upsert_request(conn: sqlite3.Connection, item: RequestItem, *, commit: bool 
             req_season = excluded.req_season,
             req_episode = excluded.req_episode,
             raw_json = excluded.raw_json,
+            last_seen_at = COALESCE(excluded.last_seen_at, request_items.last_seen_at),
             updated_at = CURRENT_TIMESTAMP
         """,
         (
@@ -111,6 +115,7 @@ def upsert_request(conn: sqlite3.Connection, item: RequestItem, *, commit: bool 
             item.requested_resolution, item.emu_status, item.points, item.comments,
             item.created_at, item.tmdb_id, item.imdb_id, item.tvdb_id, item.mal_id, item.url, item.author,
             1 if item.author_visible else 0, item.req_scope, item.req_season, item.req_episode, item.raw_json,
+            seen_at,
         ),
     )
     row = conn.execute("SELECT id FROM request_items WHERE emu_id = ?", (item.emu_id,)).fetchone()
@@ -168,18 +173,26 @@ def sync_emu_requests(
 
     logger.info("Sincronización de peticiones iniciada")
     try:
-        raw_items, _total = emu.emu_fetch_all_pages(api_key)
+        raw_items, total = emu.emu_fetch_all_pages(api_key)
         items = emu.normalize_requests(raw_items)
+        sync_at = _utcnow().isoformat()
         for item in items:
-            upsert_request(conn, item, commit=False)
+            upsert_request(conn, item, seen_at=sync_at, commit=False)
+        # Solo un recorrido que cuadra con el total de eMuwarez dice cuáles ya no están abiertas.
+        complete = total is not None and len({i.emu_id for i in items}) == total
+        if not complete:
+            logger.warning("El recorrido de peticiones no cuadra con el total de eMuwarez; no se borra ninguna")
+        removed = borrar_peticiones(conn, "last_seen_at IS NULL OR last_seen_at != ?", (sync_at,)) if complete else 0
         set_state(conn, SYNC_STATE_KEY, _utcnow().isoformat())
         conn.commit()
         matched = match_all_requests(conn)
         summary = f"{len(items)} peticiones importadas, {matched} cruces"
+        if removed:
+            summary += f", {removed} retiradas"
         finish_task(conn, task_id, TaskStatus.COMPLETED.value, summary)
-        logger.info("Sincronización de peticiones terminada: %d importadas, %d cruzadas con tu biblioteca",
-                    len(items), matched)
-        return {"status": "ok", "imported": len(items), "matched": matched}
+        logger.info("Sincronización de peticiones terminada: %d importadas, %d retiradas, %d cruzadas con tu biblioteca",
+                    len(items), removed, matched)
+        return {"status": "ok", "imported": len(items), "matched": matched, "removed": removed}
     except IntegrationError as exc:
         _restore_throttle()
         finish_task(conn, task_id, TaskStatus.FAILED.value, str(exc))

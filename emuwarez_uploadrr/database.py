@@ -1120,6 +1120,15 @@ def _migrate_request_items_is_example(conn: sqlite3.Connection) -> None:
         pass
 
 
+def _migrate_request_items_last_seen(conn: sqlite3.Connection) -> None:
+    """Cuándo vio por última vez la sincronización cada petición: lo que no sale
+    en un recorrido completo de eMuwarez es que ya no está abierta, y se borra."""
+    try:
+        conn.execute("ALTER TABLE request_items ADD COLUMN last_seen_at TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+
 def _migrate_quitar_peticiones_de_ejemplo(conn: sqlite3.Connection) -> None:
     """Las peticiones de ejemplo se generaron mientras no había endpoint real;
     ahora que se leen de eMuwarez, se borran con lo que colgaba de ellas."""
@@ -1576,6 +1585,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_dominio_emu_warez(conn)
         _migrate_nomenclature_torrent_name(conn)
         _migrate_quitar_peticiones_de_ejemplo(conn)
+        _migrate_request_items_last_seen(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

@@ -165,7 +165,16 @@ python -m pytest tests -q -p no:cacheprovider
 cd frontend && npm ci && npx tsc --noEmit && npx vitest run && npx vite build
 ```
 
-El CI pasa lo mismo y las reglas graves de `ruff` en cada PR. `CLAUDE.md` recoge las reglas de arquitectura y el
+En cada PR, el CI pasa las reglas graves de `ruff`, los tests del backend con una cobertura mínima del 78 % y `tsc`
+y `vitest` del frontend (`vite build` no). Un PR que solo toca `frontend/`, `docs/` o ficheros `.md` pasa solo los
+tests del backend que mencionan el frontend. Si toca `.github/`, [zizmor](https://docs.zizmor.sh) revisa los
+workflows y `dependabot.yml`.
+
+Dependabot propone cada semana las versiones nuevas de pip, npm, la imagen base del `Dockerfile` y las GitHub
+Actions, cuando llevan 7 días publicadas: las menores y los parches juntos en un PR por ecosistema, y cada versión
+mayor en el suyo. Las actualizaciones de seguridad llegan en cuanto sale el aviso.
+
+`CLAUDE.md` recoge las reglas de arquitectura y el
 contrato con Uploadrr-EMU (argumentos, claves de `config.yaml` y líneas de salida que se leen): si cambias uno de
 los dos lados, cambia el otro a la vez.
 

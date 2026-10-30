@@ -325,6 +325,15 @@ def test_una_pelicula_no_atiende_una_peticion_de_serie():
     assert sorted(r["item"]["id"] for r in docu) == [1, 2]
 
 
+def test_un_documental_de_temporada_no_casa_con_una_pelicula():
+    """La categoría «Documentales» no dice si es película o serie, pero una petición de temporada sí."""
+    library = [_make_item(id=1, item_type="movie", tmdb_id="500"),
+               _make_item(id=2, item_type="series", tmdb_id="500"),
+               _make_item(id=3, item_type="season", tmdb_id="500", season_number=1)]
+    req = _make_req(category="Documentales", tmdb_id="500", req_scope="season", req_season=1)
+    assert [r["item"]["id"] for r in match_request_to_library(req, library)] == [2, 3]
+
+
 def test_una_peticion_de_serie_cae_en_la_serie_y_no_en_sus_capitulos():
     """Temporadas y capítulos llevan el tmdb de la serie: antes cientos de capítulos empataban a 1.0 y
     ganaba el primero que saliera."""

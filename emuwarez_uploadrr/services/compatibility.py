@@ -183,7 +183,9 @@ def match_request_to_library(
     results: list[dict] = []
     req_tmdb = str(req.get("tmdb_id") or "").strip()
     req_imdb = str(req.get("imdb_id") or "").strip()
-    req_tipo = tipo_de_peticion(req.get("category"))
+    # Una petición de temporada o capítulo es de serie aunque la categoría no lo diga (documentales).
+    req_tipo = tipo_de_peticion(req.get("category")) or (
+        "series" if req.get("req_scope") in ("season", "episode") else None)
     req_title_norm, req_title_compact, req_words = _titulos(req.get("title"))
 
     for item in library:

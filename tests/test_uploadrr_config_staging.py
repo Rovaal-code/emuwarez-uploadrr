@@ -166,7 +166,10 @@ def test_stage_qbittorrent_config_treats_an_unreadable_storage_dir_as_missing(mo
     está en vez de tumbar el staging entero."""
     import pathlib
 
-    def sin_permiso(self, *args, **kwargs):
+    llamadas = []
+
+    def sin_permiso(*args, **kwargs):
+        llamadas.append(args)
         raise PermissionError("denegado")
 
     monkeypatch.setattr(pathlib.Path, "stat", sin_permiso)
@@ -179,6 +182,8 @@ def test_stage_qbittorrent_config_treats_an_unreadable_storage_dir_as_missing(mo
     mapping = get_child_inline_mapping(staged, "TORRENT_CLIENTS", QBIT_CLIENT_KEY)
     assert "torrent_storage_dir" not in mapping
     assert mapping["enable_search"] is False
+    # Que de verdad se llegó a mirar la carpeta, no que se saltó la comprobación.
+    assert llamadas
 
 
 def test_stage_blu_api_off_turns_off_the_blutopia_lookup():

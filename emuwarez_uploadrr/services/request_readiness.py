@@ -14,6 +14,7 @@ Only local tables (request_readiness, request_candidates, request_items) are wri
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -578,6 +579,10 @@ def refresh_request_readiness(
             evaluate_request_readiness(row["id"], conn, library)
             updated += 1
         except Exception:
+            # Lo que la petición rota llegara a escribir no se cuela en el commit de la siguiente.
+            conn.rollback()
+            logging.getLogger("emuwarez.requests").exception(
+                "No se pudo calcular la preparación de la petición %s", row["id"])
             errors += 1
 
     return {"ok": True, "items_updated": updated, "errors": errors}

@@ -45,6 +45,24 @@ def test_la_sincronizacion_deja_calculada_la_preparacion_de_cada_peticion(db_con
     assert len(ids) == 2 and all(get_request_readiness(i, db_conn) for i in ids)
 
 
+def test_una_preparacion_que_falla_sale_en_el_resumen_y_en_el_log(db_conn, sincroniza, monkeypatch, caplog):
+    """Se contaba y se callaba: la tarea salía completada sin decir que alguna se había quedado sin calcular."""
+    from emuwarez_uploadrr.services import request_readiness as rr
+    real = rr.evaluate_request_readiness
+
+    def falla_la_1(request_item_id, conn, library=None):
+        if conn.execute("SELECT emu_id FROM request_items WHERE id = ?", (request_item_id,)).fetchone()[0] == "1":
+            raise RuntimeError("rota")
+        return real(request_item_id, conn, library)
+
+    monkeypatch.setattr(rr, "evaluate_request_readiness", falla_la_1)
+    assert sincroniza([_fila(1), _fila(2)], 2)["status"] == "ok"
+    resumen = db_conn.execute(
+        "SELECT summary FROM task_runs WHERE name = 'sync-emu-requests' ORDER BY id DESC LIMIT 1").fetchone()[0]
+    assert "1 sin preparación" in resumen
+    assert "No se pudo calcular la preparación de la petición" in caplog.text
+
+
 def test_un_recorrido_completo_borra_lo_que_ya_no_esta_con_lo_que_colgaba(db_conn, sincroniza):
     peli = db_conn.execute(
         "INSERT INTO library_items (item_type, title, year, tmdb_id, local_status)"

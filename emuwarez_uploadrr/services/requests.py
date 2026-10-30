@@ -220,10 +220,13 @@ def _sincronizar_peticiones(conn: sqlite3.Connection) -> dict[str, int | str]:
         conn.commit()
         matched = match_all_requests(conn)
         # La preparación no se calcula sola: sin esto el detalle de cada petición nueva daba 404.
-        refresh_request_readiness(conn)
+        sin_preparar = refresh_request_readiness(conn)["errors"]
         summary = f"{len(items)} peticiones importadas, {matched} cruces"
         if removed:
             summary += f", {removed} retiradas"
+        # No tumba la sincronización: lo importado vale, y «Recalcular» lo repite sin volver a llamar a eMuwarez.
+        if sin_preparar:
+            summary += f", {sin_preparar} sin preparación (ver el log)"
         finish_task(conn, task_id, TaskStatus.COMPLETED.value, summary)
         logger.info("Sincronización de peticiones terminada: %d importadas, %d retiradas, %d cruzadas con tu biblioteca",
                     len(items), removed, matched)

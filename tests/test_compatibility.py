@@ -328,11 +328,13 @@ def test_una_peticion_de_serie_cae_en_la_serie_y_no_en_sus_capitulos():
     assert [r["item"]["id"] for r in results] == [3, 4]
 
 
-def test_sin_serie_gana_la_temporada_pedida():
+def test_solo_cuenta_la_temporada_pedida():
+    """Todas las temporadas llevan el tmdb de la serie: una petición de la Temporada 3 salía compatible con la 1."""
     library = [_make_item(id=1, item_type="season", tmdb_id="77", season_number=1),
                _make_item(id=2, item_type="season", tmdb_id="77", season_number=2)]
-    results = match_request_to_library(_make_req(category="Series", tmdb_id="77", req_season=2), library)
-    assert results[0]["item"]["id"] == 2
+    pedida = match_request_to_library(_make_req(category="Series", tmdb_id="77", req_season=2), library)
+    assert [r["item"]["id"] for r in pedida] == [2]
+    assert match_request_to_library(_make_req(category="Series", tmdb_id="77", req_season=3), library) == []
 
 
 # ---------------------------------------------------------------------------

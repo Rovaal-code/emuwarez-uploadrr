@@ -170,14 +170,6 @@ def tipo_de_peticion(category: str | None) -> Optional[str]:
     return None
 
 
-def _preferencia(item: dict, req: dict) -> int:
-    """A igual confianza, la película o la serie antes que una temporada suelta (desde la serie se llega a la
-    temporada pedida), y entre temporadas la que pide la petición."""
-    if item.get("item_type") != "season":
-        return 0
-    return 1 if item.get("season_number") == req.get("req_season") else 2
-
-
 def match_request_to_library(
     req: dict,
     library: list[dict],
@@ -195,10 +187,13 @@ def match_request_to_library(
     req_title_norm, req_title_compact, req_words = _titulos(req.get("title"))
 
     for item in library:
-        # A los capítulos se llega desde su serie, y TMDb numera aparte películas y series: un mismo id no
-        # hace que una película atienda una petición de serie.
+        # A los capítulos se llega desde su serie y una temporada solo vale si es la pedida (todas llevan el tmdb
+        # de la serie). Y TMDb numera aparte películas y series: un mismo id no hace que una película atienda una
+        # petición de serie.
         tipo = item.get("item_type")
-        if tipo == "episode" or (req_tipo and tipo and TIPO_DE_FILA.get(tipo) != req_tipo):
+        if tipo == "episode" or (tipo == "season" and item.get("season_number") != req.get("req_season")):
+            continue
+        if req_tipo and tipo and TIPO_DE_FILA.get(tipo) != req_tipo:
             continue
 
         id_match = False
@@ -239,7 +234,8 @@ def match_request_to_library(
                 "confidence": confidence,
             })
 
-    results.sort(key=lambda x: (-x["confidence"], _preferencia(x["item"], req)))
+    # A igual confianza, la serie antes que su temporada: desde la serie se llega a lo pedido.
+    results.sort(key=lambda x: (-x["confidence"], x["item"].get("item_type") == "season"))
     return results
 
 

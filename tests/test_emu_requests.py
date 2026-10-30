@@ -415,6 +415,26 @@ def test_a_season_request_marks_the_season_not_the_series(db_conn):
     assert estado(series_id) == "Sin petición", "la serie no: la petición no es de la serie entera"
 
 
+def test_una_temporada_que_no_tienes_no_sale_compatible(db_conn):
+    """La petición de la Temporada 3 casa con la serie; si la serie estaba «Disponible», salía «Compatible»."""
+    from emuwarez_uploadrr.services.requests import match_all_requests, upsert_request
+    from emuwarez_uploadrr.models import RequestItem
+    serie = db_conn.execute("INSERT INTO library_items(item_type,title,year,local_status,tmdb_id) "
+                            "VALUES ('series','Serie',2019,'Disponible','555')").lastrowid
+    temporada = db_conn.execute("INSERT INTO library_items(item_type,title,local_status,parent_id,season_number) "
+                                "VALUES ('season','Serie - Temporada 1','Disponible',?,1)", (serie,)).lastrowid
+    db_conn.execute("INSERT INTO library_items(item_type,title,local_status,parent_id,season_number,episode_number,"
+                    "resolution,source) VALUES ('episode','Serie S01E01','Disponible',?,1,1,'1080p','WEB-DL')",
+                    (temporada,))
+    db_conn.commit()
+    upsert_request(db_conn, RequestItem(id=None, emu_id="req-t3", title="Serie", category="TV", tmdb_id="555"))
+    db_conn.execute("UPDATE request_items SET req_scope='season', req_season=3")
+    db_conn.commit()
+
+    match_all_requests(db_conn)
+    assert db_conn.execute("SELECT status FROM request_matches").fetchone()["status"] == "No disponible"
+
+
 def test_recalcular_borra_el_casamiento_que_ya_no_vale(db_conn):
     """El «Compatible» de antes (Dune de 1984 para la petición de la de 2021) se quedaba en request_matches y la
     lista lo seguía enseñando."""

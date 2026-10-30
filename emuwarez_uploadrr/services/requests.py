@@ -414,6 +414,9 @@ def _effective_target(conn: sqlite3.Connection, matched_item: dict, req: dict) -
         conn, it["id"], it["item_type"], req.get("req_scope"),
         req.get("req_season"), req.get("req_episode"), ignore_specials)]
     if not eps:
+        # La serie no tiene la temporada o el capítulo pedidos: que esté disponible no los hace compatibles.
+        if it["item_type"] == "series":
+            it["local_status"] = "Faltante"
         return it
     single = eps[0] if len(eps) == 1 else None
     for key in ("resolution", "source", "video_codec", "audio_languages", "subtitle_languages"):

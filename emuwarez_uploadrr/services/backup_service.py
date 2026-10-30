@@ -22,12 +22,17 @@ _FUERA_DE_LA_COPIA = (("Uploadrr", "uploads"), ("Uploadrr", "tmp"))
 # Lo que solo va en la copia con secretos. El config.yaml de Uploadrr-EMU y su
 # .bak (donde van los cambios a mano) pueden llevar claves de cualquier tracker
 # y con cualquier nombre: taparlas línea a línea no da garantías. Las cookies
-# son sesiones abiertas. config.json y config.enc.json son del CLI antiguo
-# (services/cli_config.py) y llevan la API key de eMuwarez.
+# son sesiones abiertas. config.py, config.json y backup/old_config.py son
+# configuraciones antiguas de Uploadrr que aún reconoce (su .gitignore las
+# deja fuera por lo mismo). config.json y config.enc.json en la raíz son del
+# CLI antiguo (services/cli_config.py) y llevan la API key de eMuwarez.
 _CON_CLAVES = (
     ("Uploadrr", "data", "config.yaml"),
     ("Uploadrr", "data", "config.yaml.bak"),
     ("Uploadrr", "data", "cookies"),
+    ("Uploadrr", "data", "config.py"),
+    ("Uploadrr", "data", "config.json"),
+    ("Uploadrr", "data", "backup", "old_config.py"),
     ("config.json",),
     ("config.enc.json",),
 )

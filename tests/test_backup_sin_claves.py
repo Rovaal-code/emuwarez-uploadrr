@@ -124,6 +124,24 @@ def test_la_copia_normal_no_lleva_los_ficheros_con_claves_de_uploadrr(cfg):
     assert "emuwarez_uploadrr.db" in miembros
 
 
+def test_ni_las_configuraciones_antiguas_de_uploadrr(cfg):
+    """Uploadrr-EMU aún reconoce config.py (y su .gitignore deja fuera también
+    config.json y backup/old_config*): quien se trajo una, se trajo sus claves."""
+    data = cfg / "Uploadrr" / "data"
+    (data / "backup").mkdir()
+    (data / "config.py").write_text("config = {'api_key': 'antigua-py'}\n")
+    (data / "config.json").write_text('{"api_key": "antigua-json"}')
+    (data / "backup" / "old_config.py").write_text("config = {'api_key': 'antigua-old'}\n")
+    (data / "backup" / "example_config.yaml").write_text("api_key: ''\n")
+    miembros = _miembros(create_config_backup()["archive_path"])
+    assert "Uploadrr/data/config.py" not in miembros
+    assert "Uploadrr/data/config.json" not in miembros
+    assert "Uploadrr/data/backup/old_config.py" not in miembros
+    assert "Uploadrr/data/backup/example_config.yaml" in miembros
+    con_secretos = create_config_backup(include_secrets=True, confirmation=RESTORE_CONFIRMATION)
+    assert "Uploadrr/data/config.py" in _miembros(con_secretos["archive_path"])
+
+
 def test_ni_el_config_del_cli_antiguo(cfg):
     (cfg / "config.json").write_text('{"emu_api_key": "cli-antiguo"}')
     (cfg / "config.enc.json").write_text("{}")

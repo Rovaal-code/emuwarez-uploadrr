@@ -183,7 +183,8 @@ backup queda dentro de `/config`, cópialo a otro disco.
 El backup no lleva las claves. En la base de datos van vacías las API keys (TMDb, eMuwarez, Radarr/Sonarr, hosts
 de imágenes), la contraseña de qBittorrent, el webhook de Discord y el token de Telegram, y de
 `/config/Uploadrr/data` no entran `config.yaml`, `config.yaml.bak` ni `cookies/`, que pueden llevar claves de
-cualquier tracker. La contraseña de acceso a la app sí va, como hash. Al restaurarlo, las claves que tengas
+cualquier tracker, ni las configuraciones antiguas de Uploadrr (`config.py`, `config.json`,
+`backup/old_config.py`). La contraseña de acceso a la app sí va, como hash. Al restaurarlo, las claves que tengas
 puestas y esos ficheros se quedan como están; en una instalación nueva, vuelve a poner las claves en Configuración.
 
 Desde la línea de comandos se crea el mismo backup. Con `--include-secrets` lleva también las claves y esos

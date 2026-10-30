@@ -13,7 +13,7 @@ import type {
 } from '../types/api'
 import { LoadingState } from '../components/LoadingState'
 import { ErrorState } from '../components/ErrorState'
-import { EmptyState } from '../components/EmptyState'
+import { EmptyState, FilaVacia } from '../components/EmptyState'
 import { SyncInfo } from '../components/SyncInfo'
 import { StatusBadge } from '../components/StatusBadge'
 import { getRequestStatusInfo } from '../utils/status'
@@ -824,14 +824,17 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
     if (!Number.isNaN(id)) handleRowClick(id)
   })
 
-  // Al salir, de vuelta a la tabla sin filtros y con el orden por defecto.
-  useAlSalir(() => {
-    closeRequestDetail()
+  function quitarFiltros() {
     setSearch(''); setDebouncedSearch('')
     setStatusFilter(''); setCategoryFilter(''); setResolutionFilter('')
     setSourceFilter(''); setAuthorFilter('')
-    setSortBy('created_desc')
     setOffset(0)
+  }
+  // Al salir, de vuelta a la tabla sin filtros y con el orden por defecto.
+  useAlSalir(() => {
+    closeRequestDetail()
+    quitarFiltros()
+    setSortBy('created_desc')
   })
 
   // Same hand-off, but live — the sessionStorage read above only fires on
@@ -987,17 +990,11 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
           <LoadingState label="Cargando peticiones…" />
         ) : error ? (
           <ErrorState message={error} onRetry={() => loadItems()} />
-        ) : displayItems.length === 0 ? (
+        ) : displayItems.length === 0 && isUnfiltered ? (
           <EmptyState
             title="Sin peticiones"
-            body={
-              total === 0 && !search && !statusFilter && !categoryFilter && !resolutionFilter && !sourceFilter && !authorFilter
-                ? 'Sincroniza las peticiones de eMuwarez para verlas aquí.'
-                : 'No hay peticiones que coincidan con los filtros.'
-            }
-            action={total === 0 ? (
-              <button className="btn btn-primary btn-sm" onClick={() => startRequestsSync(false)} disabled={isAnySyncing}>Sincronizar peticiones</button>
-            ) : undefined}
+            body="Sincroniza las peticiones de eMuwarez para verlas aquí."
+            action={<button className="btn btn-primary btn-sm" onClick={() => startRequestsSync(false)} disabled={isAnySyncing}>Sincronizar peticiones</button>}
           />
         ) : (
           <div className="activity-section" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', marginBottom: 0 }}>
@@ -1032,6 +1029,14 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                     <th>Creada</th>
                   </tr>
                 </thead>
+                {displayItems.length === 0 && (
+                  <FilaVacia
+                    columnas={11}
+                    title="Sin peticiones"
+                    body="No hay peticiones que coincidan con los filtros."
+                    action={<button className="btn btn-primary btn-sm" onClick={quitarFiltros}>Quitar filtros</button>}
+                  />
+                )}
                 <tbody>
                   {displayItems
                     .map(item => {

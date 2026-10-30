@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef, Fragment } from 'react'
 import { getUploads, getUploadJob, startUploadJob, retryUploadJobQueued, cancelUploadJob } from '../api/uploads'
 import { getInstances } from '../api/instances'
 import type { UploadJob, InstanceSafeResponse } from '../types/api'
-import { EmptyState } from '../components/EmptyState'
+import { EmptyState, FilaVacia } from '../components/EmptyState'
 import { LoadingState } from '../components/LoadingState'
 import { ErrorState } from '../components/ErrorState'
 import { HeaderFilter } from '../components/HeaderFilter'
@@ -365,11 +365,15 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
     openUpload(Number(pending))
   }, [jobs, subidasALaVista])
 
+  function quitarFiltros() {
+    setSearch('')
+    setStatusFilter(''); setTypeFilter('')
+  }
+  const filtrando = !!(search || statusFilter || typeFilter)
   // Al salir, de vuelta a la tabla sin filtros y con el orden por defecto.
   useAlSalir(() => {
     closeUpload()
-    setSearch('')
-    setStatusFilter(''); setTypeFilter('')
+    quitarFiltros()
     setSortBy('created_desc')
   })
 
@@ -622,7 +626,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
       </div>
 
       {/* Ver RequestsPage: solo bloquea si no hay nada que enseñar todavía. */}
-      {loading && jobs.length === 0 ? <LoadingState label="Cargando Subidas…" /> : error ? <ErrorState message={error} onRetry={load} /> : jobs.length === 0 ? (
+      {loading && jobs.length === 0 ? <LoadingState label="Cargando Subidas…" /> : error ? <ErrorState message={error} onRetry={load} /> : jobs.length === 0 && !filtrando ? (
         <EmptyState icon={<IconoSubida />} title="No hay trabajos de subida." body="Usa el botón 'Subir' desde Biblioteca para generar un preflight." />
       ) : (
         <div className="activity-section" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', marginBottom: 0 }}>
@@ -647,6 +651,15 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
                   <th className="col-actions" style={{ width: '1%' }}>Acciones</th>
                 </tr>
               </thead>
+              {visibleJobs.length === 0 && filtrando && (
+                <FilaVacia
+                  columnas={11}
+                  icon={<IconoSubida />}
+                  title="Sin resultados"
+                  body="No hay subidas que coincidan con los filtros."
+                  action={<button className="btn btn-primary btn-sm" onClick={quitarFiltros}>Quitar filtros</button>}
+                />
+              )}
               <tbody>
                 {visibleJobs.map(job => {
                   const ancestors = ancestorsOf(job)

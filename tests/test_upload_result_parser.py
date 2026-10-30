@@ -6,6 +6,7 @@ from emuwarez_uploadrr.services.upload_result_parser import (
     build_error_summary,
     classify_upload_result,
     parse_uploadrr_output,
+    season_pack_warning,
 )
 
 
@@ -129,3 +130,35 @@ def test_parse_uploadrr_output_returns_dict():
     assert "torrent_ids" in result
     assert "https://emu.me/t/100" in result["urls"]
     assert "100" in result["torrent_ids"]
+
+
+# ---------------------------------------------------------------------------
+# Pack de temporada incompleto (aviso de mkbrr que imprime Uploadrr-EMU)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize(
+    ("linea", "aviso"),
+    [
+        (
+            "Incomplete season pack: season 1, missing episodes 3, 5, 7",
+            "Pack de temporada posiblemente incompleto (temporada 1): faltan los episodios 3, 5 y 7.",
+        ),
+        (
+            "Incomplete season pack: season 2, missing episodes 4",
+            "Pack de temporada posiblemente incompleto (temporada 2): falta el episodio 4.",
+        ),
+        ("Incomplete season pack: season 1", "Pack de temporada posiblemente incompleto (temporada 1)."),
+    ],
+)
+def test_season_pack_warning(linea, aviso):
+    assert season_pack_warning(f"Hashing with mkbrr: 100.0%\n{linea}\nUploading to EMU") == aviso
+
+
+def test_season_pack_warning_none_without_line():
+    assert season_pack_warning("Hashing with mkbrr: 100.0%\nUploading to EMU") is None
+
+
+def test_classify_includes_season_pack_warning():
+    result = classify_upload_result("Incomplete season pack: season 1, missing episodes 2", "", 0)
+    assert result["season_pack_warning"] == "Pack de temporada posiblemente incompleto (temporada 1): falta el episodio 2."
+    assert classify_upload_result("ok", "", 0)["season_pack_warning"] is None

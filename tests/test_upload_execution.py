@@ -476,6 +476,18 @@ def test_notify_upload_completed_no_flag_when_trailer_artifact_present(db_conn):
     assert "Requiere Trailer" not in bodies[0]
 
 
+def test_notify_upload_completed_appends_season_pack_warning(db_conn):
+    from emuwarez_uploadrr.services.upload_execution import _notify_upload_completed
+    jid = _insert_job(db_conn, status="completed")
+    aviso = "Pack de temporada posiblemente incompleto (temporada 1): faltan los episodios 3 y 5."
+
+    _notify_upload_completed(jid, "https://emu-warez.com/torrents/1", aviso=aviso)
+
+    bodies = _notification_bodies(db_conn, jid)
+    assert len(bodies) == 1
+    assert bodies[0].endswith(aviso)
+
+
 def test_check_trailer_and_log_records_artifact_and_logs(db_conn, tmp_path):
     from emuwarez_uploadrr.services.upload_execution import _check_trailer_and_log, get_upload_job_artifacts
     jid = _insert_job(db_conn)

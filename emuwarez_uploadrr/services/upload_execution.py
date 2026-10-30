@@ -620,9 +620,10 @@ def _job_poster_url(conn, job: dict | None) -> str | None:
     return row["poster_url"] if row else None
 
 
-def _notify_upload_completed(job_id: int, result_url: str | None) -> None:
+def _notify_upload_completed(job_id: int, result_url: str | None, aviso: str | None = None) -> None:
     """Emit a 'subida completada' notification. Best-effort: never lets a
-    notification failure affect the upload result."""
+    notification failure affect the upload result. `aviso` se añade al texto
+    (p. ej. un pack de temporada incompleto)."""
     try:
         from .notification_center import emit
         conn = _get_db_conn()
@@ -634,6 +635,8 @@ def _notify_upload_completed(job_id: int, result_url: str | None) -> None:
             body = "Se ha subido a eMuwarez correctamente."
             if not has_trailer:
                 body += " Requiere Trailer."
+            if aviso:
+                body += f" {aviso}"
             emit(
                 conn, "upload_completed",
                 "Subida completada",
@@ -1274,7 +1277,11 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
             logger.info("Subida completada (job %s) en %ss%s", job_id, duration_seconds,
                         f" → {result['urls'][0]}" if result["urls"] else "")
             _check_trailer_and_log(job_id)
-            _notify_upload_completed(job_id, result["urls"][0] if result["urls"] else None)
+            if result["season_pack_warning"]:
+                append_upload_log(job_id, "warning", result["season_pack_warning"], stream="system")
+            _notify_upload_completed(
+                job_id, result["urls"][0] if result["urls"] else None, aviso=result["season_pack_warning"]
+            )
         else:
             err_summary = build_error_summary(stderr_text, stdout_text, returncode)
             safe_err = redact_secrets(err_summary or f"exit code {returncode}", secrets)

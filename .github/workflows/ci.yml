@@ -40,9 +40,32 @@ jobs:
       - run: ruff check --select E9,F63,F7,F82 --output-format github .
       # Sin red (tests/conftest.py). Cobertura mínima del 78 % (hoy, 80 % en el runner, sin mediainfo ni mkvtoolnix).
       - if: steps.alcance.outputs.solo_frontend != 'true'
-        run: pytest -q --cov=emuwarez_uploadrr --cov-report=term-missing --cov-fail-under=78
+        run: pytest -q --cov=emuwarez_uploadrr --cov-report=term-missing --cov-report=xml --cov-fail-under=78 --junitxml=junit.xml -o junit_family=legacy
       - if: steps.alcance.outputs.solo_frontend == 'true'
-        run: pytest -q $(grep -l frontend tests/test_*.py)
+        run: pytest -q $(grep -l frontend tests/test_*.py) --junitxml=junit.xml -o junit_family=legacy
+      # Codecov solo informa (continue-on-error): sin CODECOV_TOKEN (Dependabot, workflow_call) la subida falla sin tumbar el CI.
+      # fail_ci_if_error hace que pare si la firma de su CLI no cuadra, en vez de ejecutarla igual.
+      - if: ${{ !cancelled() && steps.alcance.outputs.solo_frontend != 'true' }}
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        timeout-minutes: 5
+        continue-on-error: true
+        with:
+          files: coverage.xml
+          disable_search: true
+          flags: backend
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+      - if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        timeout-minutes: 5
+        continue-on-error: true
+        with:
+          report_type: test_results
+          files: junit.xml
+          disable_search: true
+          flags: backend
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
 
   frontend:
     runs-on: ubuntu-latest
@@ -60,4 +83,15 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run typecheck
-      - run: npm test
+      - run: npm test -- --reporter=default --reporter=junit --outputFile.junit=junit.xml
+      - if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        timeout-minutes: 5
+        continue-on-error: true
+        with:
+          report_type: test_results
+          files: frontend/junit.xml
+          disable_search: true
+          flags: frontend
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true

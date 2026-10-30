@@ -14,3 +14,23 @@ export function siguienteFoco<T>(enfocables: T[], actual: T | null, atras: boole
   if (!atras && i === enfocables.length - 1) return primero
   return null
 }
+
+/**
+ * Al cerrar un modal, a quién devolver el foco. Normalmente a quien lo abrió,
+ * pero si ese botón ya no está en la página (era de otro modal que se cerró al
+ * abrir este, como MediaInfo al pasar a la comparación de fuentes), se sigue la
+ * cadena: el foco va a donde lo habría devuelto aquel modal. `heredado` dice
+ * eso para un elemento que ya no está; null si no hay nada mejor.
+ */
+export function destinoAlCerrar<T extends { isConnected: boolean }>(
+  antes: T | null,
+  heredado: (quitado: T) => T | null | undefined,
+): T | null {
+  const vistos = new Set<T>()
+  let destino = antes
+  while (destino && !destino.isConnected && !vistos.has(destino)) {
+    vistos.add(destino)
+    destino = heredado(destino) ?? null
+  }
+  return destino?.isConnected ? destino : null
+}

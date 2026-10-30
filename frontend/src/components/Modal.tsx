@@ -1,13 +1,18 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { useTooltip } from './Tooltip'
 import { IconoCerrar } from './Iconos'
-import { siguienteFoco } from '../utils/foco'
+import { destinoAlCerrar, siguienteFoco } from '../utils/foco'
 
 const ENFOCABLES = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
 // Los modales abiertos, el de arriba al final: el asistente de subida abre
 // MediaInfo encima de sí mismo, y Escape o Tab solo son para el de arriba.
 const abiertos: HTMLElement[] = []
+
+// Adónde devolvía el foco cada modal ya cerrado, por su panel. Si un modal se
+// abre desde un botón de otro que se cierra en ese mismo paso, al cerrarse
+// el segundo el foco vuelve a donde lo habría devuelto el primero.
+const devolvia = new WeakMap<HTMLElement, HTMLElement | null>()
 
 // Todos los modales de la app. Es un diálogo de verdad: el lector anuncia su
 // título, el foco entra al abrirlo y vuelve a donde estaba al cerrarlo, Tab no
@@ -54,7 +59,11 @@ export function Modal({ titulo, onClose, className, style, tituloStyle, children
     return () => {
       document.removeEventListener('keydown', teclas)
       abiertos.splice(abiertos.indexOf(el), 1)
-      if (antes?.isConnected) antes.focus()
+      devolvia.set(el, antes)
+      destinoAlCerrar(antes, quitado => {
+        const suPanel = quitado.closest<HTMLElement>('.modal-panel')
+        return suPanel ? devolvia.get(suPanel) : null
+      })?.focus()
     }
   }, [])
 

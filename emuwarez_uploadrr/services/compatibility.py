@@ -36,9 +36,14 @@ _SOURCE_CANONICAL: dict[str, str] = {
     "dvdrip": "dvdrip", "dvd rip": "dvdrip", "dvd": "dvd",
     "cam": "cam", "ts": "ts", "tc": "tc",
     "hdcam": "hdcam",
+    # Tipos de las peticiones de eMuwarez y fuentes de la nomenclatura (source_assistant.EMU_SOURCES).
+    "remux": "bdremux", "encode": "bluray",
+    "fulldisc": "fulldisc", "fullbluray": "fulldisc",
+    "fdvd": "dvd", "sd": "dvd",
 }
 
 _SOURCE_RANK: dict[str, int] = {
+    "fulldisc": 105,
     "bdremux": 100,
     "bluray": 95,
     "bdrip": 85,

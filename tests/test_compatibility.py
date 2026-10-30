@@ -136,6 +136,14 @@ def test_parse_resolution(value, expected):
     ("WEBRip", "webrip"),
     ("HDTV", "hdtv"),
     ("BDRemux", "bdremux"),
+    # Tipos de las peticiones de eMuwarez y fuentes de la nomenclatura
+    ("Remux", "bdremux"),
+    ("Encode", "bluray"),
+    ("Full Disc", "fulldisc"),
+    ("Full BluRay", "fulldisc"),
+    ("WEBRIP", "webrip"),
+    ("SD", "dvd"),
+    ("FDVD", "dvd"),
     (None, None),
     ("", None),
     ("totally-unknown-src", None),
@@ -193,6 +201,16 @@ def test_compare_source_fails():
 
 def test_compare_source_unknown_local():
     assert compare_source("BluRay", None) is False
+
+
+def test_una_peticion_de_remux_no_la_cumple_un_webdl():
+    """Antes «Remux», «Encode» y «Full Disc» no se reconocían y contaban como «sin restricción»."""
+    assert compare_source("Remux", "WEB-DL") is False
+    assert compare_source("Remux", "BDRemux") is True
+    assert compare_source("Encode", "WEB-DL") is False
+    assert compare_source("Encode", "BluRay") is True
+    assert compare_source("Full Disc", "BDRemux") is False
+    assert compare_source("Full Disc", "Full BluRay") is True
 
 
 # ---------------------------------------------------------------------------

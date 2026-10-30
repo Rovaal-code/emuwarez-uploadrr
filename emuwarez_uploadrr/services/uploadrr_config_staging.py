@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import difflib
 import hashlib
+import os
 import re
 from pathlib import Path
 from typing import Any, Optional
@@ -194,9 +195,10 @@ def stage_qbittorrent_config(
     # nada que reutilizar, y buscar en qBittorrent tampoco sirve: el hash que
     # encuentre se busca como fichero en esa misma carpeta. Una ruta relativa
     # el fork la resuelve contra su propia carpeta (base_dir), no contra la
-    # nuestra.
+    # nuestra. os.path.isdir y no Path.is_dir: este lanza PermissionError si
+    # no se puede leer una carpeta de la ruta, y eso tumbaría todo el staging.
     almacen = str(merged.get("torrent_storage_dir") or "").strip()
-    if not almacen or not (Path(base_dir or ".") / almacen).is_dir():
+    if not almacen or not os.path.isdir(os.path.join(base_dir or ".", almacen)):
         merged.pop("torrent_storage_dir", None)
         merged["enable_search"] = False
     msg1 = set_child_inline_mapping(staged, "TORRENT_CLIENTS", QBIT_CLIENT_KEY, merged)

@@ -161,6 +161,26 @@ def test_stage_qbittorrent_config_resolves_a_relative_storage_dir_against_upload
     assert mapping["enable_search"] is True
 
 
+def test_stage_qbittorrent_config_treats_an_unreadable_storage_dir_as_missing(monkeypatch):
+    """Si comprobar la carpeta da error (sin permisos), se trata como que no
+    está en vez de tumbar el staging entero."""
+    import pathlib
+
+    def sin_permiso(self, *args, **kwargs):
+        raise PermissionError("denegado")
+
+    monkeypatch.setattr(pathlib.Path, "stat", sin_permiso)
+    monkeypatch.setattr("os.stat", sin_permiso)
+    lines = [
+        "TORRENT_CLIENTS:",
+        "  qbit: {'torrent_client': 'qbit', 'enable_search': True, 'torrent_storage_dir': '/protegida/BT_backup'}",
+    ]
+    staged, _ = stage_qbittorrent_config(lines, url="http://x:8080", username="u", password="p")
+    mapping = get_child_inline_mapping(staged, "TORRENT_CLIENTS", QBIT_CLIENT_KEY)
+    assert "torrent_storage_dir" not in mapping
+    assert mapping["enable_search"] is False
+
+
 def test_stage_blu_api_off_turns_off_the_blutopia_lookup():
     """Con useAPI activado el fork pregunta a Blutopia por el nombre de cada
     fichero ("Failed to search: HTTP 400" con la clave de ejemplo)."""

@@ -52,6 +52,8 @@ def test_una_preparacion_que_falla_sale_en_el_resumen_y_en_el_log(db_conn, sincr
 
     def falla_la_1(request_item_id, conn, library=None):
         if conn.execute("SELECT emu_id FROM request_items WHERE id = ?", (request_item_id,)).fetchone()[0] == "1":
+            conn.execute("INSERT INTO request_readiness (request_item_id, status) VALUES (?, 'a medias')",
+                         (request_item_id,))
             raise RuntimeError("rota")
         return real(request_item_id, conn, library)
 
@@ -61,6 +63,25 @@ def test_una_preparacion_que_falla_sale_en_el_resumen_y_en_el_log(db_conn, sincr
         "SELECT summary FROM task_runs WHERE name = 'sync-emu-requests' ORDER BY id DESC LIMIT 1").fetchone()[0]
     assert "1 sin preparación" in resumen
     assert "No se pudo calcular la preparación de la petición" in caplog.text
+    # Lo que la petición rota dejó a medias no se guardó con la siguiente.
+    assert db_conn.execute("SELECT COUNT(*) FROM request_readiness WHERE status = 'a medias'").fetchone()[0] == 0
+
+
+def test_si_la_preparacion_falla_entera_la_sincronizacion_sigue_valiendo(db_conn, sincroniza, monkeypatch, caplog):
+    """Un fallo antes de preparar la primera (al leer la biblioteca) tumbaba la sincronización y devolvía la espera,
+    así que reintentar volvía a llamar a eMuwarez."""
+    from emuwarez_uploadrr.services import request_readiness as rr
+
+    def rota(conn):
+        raise RuntimeError("biblioteca rota")
+
+    monkeypatch.setattr(rr, "_biblioteca", rota)
+    assert sincroniza([_fila(1), _fila(2)], 2)["status"] == "ok"
+    resumen = db_conn.execute(
+        "SELECT summary FROM task_runs WHERE name = 'sync-emu-requests' ORDER BY id DESC LIMIT 1").fetchone()[0]
+    assert "2 sin preparación" in resumen
+    assert "No se pudo calcular la preparación de las peticiones" in caplog.text
+    assert reqs.seconds_until_next_sync(db_conn) > 0
 
 
 def test_un_recorrido_completo_borra_lo_que_ya_no_esta_con_lo_que_colgaba(db_conn, sincroniza):

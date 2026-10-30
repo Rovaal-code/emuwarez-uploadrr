@@ -219,12 +219,17 @@ def _sincronizar_peticiones(conn: sqlite3.Connection) -> dict[str, int | str]:
         set_state(conn, SYNC_STATE_KEY, _utcnow().isoformat())
         conn.commit()
         matched = match_all_requests(conn)
-        # La preparación no se calcula sola: sin esto el detalle de cada petición nueva daba 404.
-        sin_preparar = refresh_request_readiness(conn)["errors"]
+        # La preparación no se calcula sola: sin esto el detalle de cada petición nueva daba 404. Si falla no tumba
+        # la sincronización: lo importado vale, y «Recalcular» la repite sin volver a llamar a eMuwarez.
+        try:
+            sin_preparar = refresh_request_readiness(conn)["errors"]
+        except Exception:
+            conn.rollback()
+            logger.exception("No se pudo calcular la preparación de las peticiones")
+            sin_preparar = len(items)
         summary = f"{len(items)} peticiones importadas, {matched} cruces"
         if removed:
             summary += f", {removed} retiradas"
-        # No tumba la sincronización: lo importado vale, y «Recalcular» lo repite sin volver a llamar a eMuwarez.
         if sin_preparar:
             summary += f", {sin_preparar} sin preparación (ver el log)"
         finish_task(conn, task_id, TaskStatus.COMPLETED.value, summary)

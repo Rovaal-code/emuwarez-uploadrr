@@ -458,13 +458,12 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   if (loading) return <p style={{ padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>Cargando…</p>
 
   return (
-    <div data-tour="settings-content" style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%', minHeight: 0 }}>
-      {/* Ocho tarjetas en cuatro columnas, o sea dos filas exactas. Las filas
-          se reparten el alto disponible (1fr cada una) en vez de medir 460px
-          fijos: así las dos juntas nunca pasan del alto de la ventana, que es
-          el mismo techo que respeta la barra lateral. Cada tarjeta ya se
-          desplaza por dentro (.settings-config-grid > .placeholder-card). */}
-      <div className="settings-config-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gridTemplateRows: 'repeat(2, minmax(0, 1fr))', gap: 16, alignItems: 'stretch', flex: 1, minHeight: 0 }}>
+    <div data-tour="settings-content" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Ocho tarjetas en cuatro columnas de ancho: cada una con el alto que
+          le pida su contenido (ver settings-config-grid en dashboard.css). La
+          página entera se desplaza si no caben todas, no cada tarjeta por
+          separado. */}
+      <div className="settings-config-grid">
       <AccountCard />
 
       <div className="placeholder-card">
@@ -1942,11 +1941,10 @@ export function SettingsPage() {
   ]
 
   return (
-    // Llena el alto de la página y no más: mismo patrón que Biblioteca, para
-    // que las tarjetas de Configuración quepan entre la cabecera y el borde
-    // inferior en vez de desbordar y poner la página entera a hacer scroll.
-    // Lo que sobra se lo queda el contenido de la pestaña, y cada pestaña
-    // decide si lo rellena (Configuración) o lo desplaza (las demás).
+    // Llena el alto de la página y no más: la cabecera y las pestañas se
+    // quedan fijas arriba, y el contenido de la pestaña activa se desplaza
+    // por dentro (el div de más abajo) cuando no cabe entero — las cinco
+    // pestañas se comportan igual, Configuración incluida.
     <div style={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <div className="page-header" style={{ flexShrink: 0 }}>
         <div>
@@ -1984,9 +1982,8 @@ export function SettingsPage() {
         />
       </div>
 
-      {/* overflowY auto y no hidden: Configuración se ajusta sola y nunca lo
-          usa, pero las otras pestañas sí crecen más que la pantalla y tienen
-          que poder desplazarse. */}
+      {/* overflowY auto y no hidden: todas las pestañas pueden crecer más
+          que la pantalla y necesitan poder desplazarse por dentro. */}
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
         <SettingsMessageContext.Provider value={showMessage}>
           {tab === 'config' && <ConfigTab onExposeSave={setSaveAction} />}

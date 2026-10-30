@@ -59,7 +59,7 @@ export function Modal({ titulo, onClose, className, style, tituloStyle, children
   }, [])
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onMouseDown={onClose}>
       <div
         ref={panel}
         className={className ? `modal-panel ${className}` : 'modal-panel'}
@@ -68,6 +68,7 @@ export function Modal({ titulo, onClose, className, style, tituloStyle, children
         aria-labelledby={idTitulo}
         tabIndex={-1}
         style={style}
+        onMouseDown={e => e.stopPropagation()}
         onClick={e => e.stopPropagation()}
       >
         <div className="modal-header">

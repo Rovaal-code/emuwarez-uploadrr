@@ -75,7 +75,8 @@ chown "$PUID:$PGID" /srv/emuwarez-uploadrr/config /srv/data/uploads/emu
 El contenedor corre directamente como `PUID:PGID` (la clave `user:` del compose), sin pasar por root, así que no
 puede crear ni cambiar de dueño nada dentro de una carpeta que no sea suya. Por eso las dos carpetas se crean antes
 de arrancar y con ese dueño. El mismo usuario tiene que ser dueño de la media, o al menos poder escribir en ella: el
-paso 1 de la subida renombra el fichero ahí, y sin eso el enlace del paso 2 sale simbólico.
+paso 1 de la subida renombra el fichero ahí, y si no puede, la comprobación «Se puede renombrar» para la subida
+antes de empezar.
 
 ## 4. El compose
 
@@ -178,6 +179,9 @@ carpeta de subidas por defecto (`/config/Uploadrr/uploads`) ni los temporales de
 `UPLOADRR_UPLOADS_DIR` (`/data/uploads/emu`) está fuera de `/config`, así que tampoco entra: son enlaces, y para
 seguir sembrando tras restaurar en otro disco hay que respaldarla aparte. En la misma pestaña se restaura. Como el
 backup queda dentro de `/config`, cópialo a otro disco.
+
+El backup lleva las claves que la app guarda en su base de datos, aunque no lo hayas creado «con secretos»: esa
+opción solo pide confirmación y cambia el nombre del archivo. Guárdalo donde guardarías esas claves.
 
 Desde la línea de comandos:
 

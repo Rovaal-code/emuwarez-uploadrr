@@ -448,10 +448,13 @@ def compute_nomenclature_proposal(
     if not video_codec:
         warnings.append("Codec de vídeo no detectado. Sincroniza de nuevo la biblioteca o invoca MediaInfo desde 'Adaptar nomenclatura'.")
 
-    audio_codec = item.get("audio_codec")
-    audio_languages = item.get("audio_languages")
-    audio_summary = " ".join(p for p in (audio_codec, audio_languages) if p) or None
-    subtitle_summary = item.get("subtitle_languages")
+    # Lo de Radarr/Sonarr, pero ya con los tokens del tracker: sin MediaInfo
+    # llegaban tal cual ("DD+ spa / eng spa / eng") al nombre.
+    from .emu_format import build_audio_string, format_video_codec
+    video_codec = format_video_codec(video_codec)
+    audio_summary = build_audio_string(item.get("audio_codec"), item.get("audio_languages"),
+                                       item.get("audio_channels"))
+    subtitle_summary = "SUBS" if (item.get("subtitle_languages") or "").strip() else None
     dynamic_range = item.get("dynamic_range")
 
     # Real MediaInfo read of the actual file (cached per file by mtime+
@@ -476,6 +479,9 @@ def compute_nomenclature_proposal(
             audio_summary = mi_report.get("audio_summary") or audio_summary
             subtitle_summary = emu_by_field.get("Subtítulos") or subtitle_summary
             dynamic_range = emu_by_field.get("HDR/DV") or dynamic_range
+        else:
+            warnings.append("Sin MediaInfo del archivo: el audio y los subtítulos del nombre salen "
+                            "de Radarr/Sonarr y pueden no ser exactos.")
 
     # UND no es un idioma del tracker: el nombre no puede salir así.
     if audio_summary and "UND" in re.split(r"[\s-]+", audio_summary):

@@ -982,7 +982,9 @@ def apply_nomenclature_proposal(
                 conn.commit()
             except Exception as exc:
                 # El fichero ya se movió: si la biblioteca no lo sigue, los
-                # pasos siguientes lo buscarían en la ruta vieja.
+                # pasos siguientes lo buscarían en la ruta vieja. Lo escrito a
+                # medias se deshace para que un commit posterior no lo guarde.
+                conn.rollback()
                 logger.exception("Renombrado hecho pero sin anotar en la biblioteca (item %s)", item_id)
                 result["status"] = "failed"
                 result["errors"] = list(result.get("errors") or []) + [

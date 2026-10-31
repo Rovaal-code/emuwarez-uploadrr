@@ -203,6 +203,30 @@ def test_si_falla_el_historial_la_biblioteca_sigue_al_fichero(isolated_db, tmp_p
     conn.close()
 
 
+def test_si_falla_anotar_el_renombrado_no_queda_nada_a_medias(isolated_db, tmp_path):
+    """Si la fila de la biblioteca no se puede actualizar, la propuesta tampoco
+    queda como aplicada esperando al siguiente commit."""
+    src = tmp_path / "source.mkv"
+    src.write_bytes(b"video bytes")
+    conn = _open(isolated_db)
+    item_id = _insert_item(conn, title="Test Film", path=str(src))
+    conn.execute(
+        "CREATE TRIGGER sin_biblioteca BEFORE UPDATE OF prepared_path ON library_items "
+        "BEGIN SELECT RAISE(ABORT, 'base bloqueada'); END")
+    conn.commit()
+
+    result = apply_nomenclature_proposal(
+        item_id, dry_run=False, apply=True, confirmation=CONFIRMATION_TOKEN, conn=conn
+    )
+    assert result["status"] == "failed"
+    assert any("base bloqueada" in e for e in result["errors"])
+    conn.commit()
+    estados = [r[0] for r in conn.execute(
+        "SELECT status FROM nomenclature_proposals WHERE library_item_id = ?", (item_id,))]
+    assert "applied" not in estados
+    conn.close()
+
+
 # ---------------------------------------------------------------------------
 # filesystem_operations always saved
 # ---------------------------------------------------------------------------

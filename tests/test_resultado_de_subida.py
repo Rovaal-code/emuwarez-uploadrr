@@ -1,6 +1,7 @@
 """La ficha del torrent de cada subida, el motivo real de un fallo y lo que dicen los avisos."""
 from __future__ import annotations
 
+import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -141,6 +142,45 @@ def test_un_fallo_tras_subir_el_torrent_conserva_su_ficha_y_la_enlaza(db_conn, t
     (aviso,) = _notificaciones(db_conn, jid)
     assert aviso["link"] == "https://emu-warez.com/torrents/123456"
     assert "llegó a subirse" in aviso["body"]
+
+
+def test_un_corte_por_tiempo_tras_subir_el_torrent_conserva_su_ficha_y_la_enlaza(db_conn, tmp_path):
+    """El tiempo agotado es una forma normal de fallar tras subir: el tracker ya tiene el torrent."""
+    jid = _job(db_conn, "ready")
+    codigo = "import time; print('Torrent URL: https://emu-warez.com/torrents/321', flush=True); time.sleep(60)"
+    _run_uploadrr_subprocess(jid, {
+        "executable": sys.executable,
+        "args": ["-c", codigo],
+        "cwd": str(tmp_path),
+        "command_preview": "python -c ...",
+        "timeout": 1,
+    }, [])
+
+    job = get_upload_job(jid, conn=db_conn)
+    assert job["status"] == "failed" and job["stage"] == "timeout"
+    assert job["result_url"] == "https://emu-warez.com/torrents/321"
+    assert job["result_torrent_id"] == "321"
+    assert job["torrent_subido"] == 1
+    (aviso,) = _notificaciones(db_conn, jid)
+    assert aviso["link"] == "https://emu-warez.com/torrents/321"
+    assert "llegó a subirse" in aviso["body"]
+
+
+def test_un_corte_por_tiempo_sin_haber_subido_no_inventa_ficha(db_conn, tmp_path):
+    jid = _job(db_conn, "ready")
+    _run_uploadrr_subprocess(jid, {
+        "executable": sys.executable,
+        "args": ["-c", "import time; print('Hashing 10%', flush=True); time.sleep(60)"],
+        "cwd": str(tmp_path),
+        "command_preview": "python -c ...",
+        "timeout": 1,
+    }, [])
+
+    job = get_upload_job(jid, conn=db_conn)
+    assert job["stage"] == "timeout"
+    assert job["result_url"] is None and job["torrent_subido"] == 0
+    (aviso,) = _notificaciones(db_conn, jid)
+    assert aviso["link"] is None
 
 
 def test_el_aviso_de_fallo_sin_ficha_no_lleva_enlace(db_conn):

@@ -111,6 +111,52 @@ def test_la_migracion_marca_las_subidas_que_ya_lo_dejaron_escrito(db_conn):
     assert "idx_upload_job_logs_job_sequence" in indices
 
 
+def test_la_migracion_completa_el_relleno_si_una_pasada_cayo_tras_anadir_la_columna(db_conn):
+    """El ALTER se confirma solo: si la pasada cae antes del UPDATE, la siguiente ya ve la columna y debe rellenar igual."""
+    jid = _job(db_conn, "failed")
+    db_conn.execute(
+        "INSERT INTO upload_job_logs (upload_job_id, level, message, stream, created_at, sequence)"
+        " VALUES (?, 'info', 'Torrent URL: https://emu-warez.com/torrents/7', 'stdout', CURRENT_TIMESTAMP, 1)", (jid,))
+    db_conn.commit()
+    assert _marca(db_conn, jid) == 0
+
+    _migrate_upload_jobs_torrent_subido(db_conn)
+
+    assert _marca(db_conn, jid) == 1
+
+
+def test_una_base_del_esquema_43_se_migra_al_arrancar_con_copia_previa(isolated_db):
+    """Como la deja la versión anterior: sin la columna ni el índice, con una subida que ya subió el torrent."""
+    from emuwarez_uploadrr.database import SCHEMA_VERSION, olvidar_esquema, preparar_base
+
+    olvidar_esquema()
+    ruta = db_path()
+    conn = connect(ruta)
+    init_db(conn)
+    jid = _job(conn, "failed")
+    conn.execute(
+        "INSERT INTO upload_job_logs (upload_job_id, level, message, stream, created_at, sequence)"
+        " VALUES (?, 'info', 'Torrent URL: https://emu-warez.com/torrents/7', 'stdout', CURRENT_TIMESTAMP, 1)", (jid,))
+    conn.execute("DROP INDEX idx_upload_job_logs_job_sequence")
+    conn.execute("ALTER TABLE upload_jobs DROP COLUMN torrent_subido")
+    conn.execute("UPDATE app_state SET value = '43' WHERE key = 'schema_version'")
+    conn.commit()
+    conn.close()
+    olvidar_esquema()
+
+    preparar_base()
+
+    conn = connect(ruta)
+    try:
+        assert _marca(conn, jid) == 1
+        assert conn.execute("SELECT value FROM app_state WHERE key = 'schema_version'").fetchone()[0] == str(SCHEMA_VERSION)
+        assert "idx_upload_job_logs_job_sequence" in {f[1] for f in conn.execute("PRAGMA index_list(upload_job_logs)")}
+    finally:
+        conn.close()
+    assert list((ruta.parent / "backups").glob("pre-migracion-*-v43.db"))
+    olvidar_esquema()
+
+
 def test_la_migracion_se_puede_repetir(db_conn):
     jid = _job(db_conn, "failed")
     append_upload_log(jid, "info", "Torrent URL: https://emu-warez.com/torrents/7", stream="stdout", conn=db_conn)

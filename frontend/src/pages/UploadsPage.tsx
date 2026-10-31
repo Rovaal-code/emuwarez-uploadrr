@@ -355,10 +355,14 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
       // STATUS_LABEL) — so it can't be a single exact server-side match;
       // fetch unfiltered and narrow client-side in visibleJobs instead.
       const filtros = { status: statusFilter && statusFilter !== 'running' ? statusFilter : undefined, hide_preparatory: true }
-      const [data, cuantas] = await Promise.all([getUploads({ ...filtros, limit: limite }), countUploads(filtros)])
+      // Si falla solo el recuento, la lista se enseña igual y se queda el total de antes.
+      const [data, cuantas] = await Promise.all([
+        getUploads({ ...filtros, limit: limite }),
+        countUploads(filtros).catch(() => undefined),
+      ])
       if (seq === loadSeqRef.current) {
         setJobs(data)
-        setTotal(cuantas)
+        if (cuantas !== undefined) setTotal(cuantas)
         setCargado(true)
       }
     } catch {

@@ -1254,22 +1254,20 @@ def _migrate_upload_jobs_torrent_subido(conn: sqlite3.Connection) -> None:
     registro) y el índice del registro, que sirve a MAX(sequence) y a leer el final o lo posterior a una línea."""
     try:
         conn.execute("ALTER TABLE upload_jobs ADD COLUMN torrent_subido INTEGER NOT NULL DEFAULT 0")
-        nueva = True
     except sqlite3.OperationalError:
         # Solo se calla si la columna ya está (la añadió otro init_db a la vez), no un «database is locked».
         if "torrent_subido" not in {fila[1] for fila in conn.execute("PRAGMA table_info(upload_jobs)")}:
             raise
-        nueva = False
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_upload_job_logs_job_sequence ON upload_job_logs(upload_job_id, sequence)"
     )
-    if nueva:
-        # Las de antes, por lo que dejaron escrito (QBIT_AÑADIDO de upload_execution, y la línea fija de Uploadrr-EMU).
-        conn.execute(
-            "UPDATE upload_jobs SET torrent_subido = 1 WHERE id IN ("
-            "SELECT upload_job_id FROM upload_job_logs "
-            "WHERE message = 'qBittorrent: torrent añadido correctamente.' OR message LIKE 'Torrent URL: %')"
-        )
+    # Las de antes, por lo que dejaron escrito (QBIT_AÑADIDO de upload_execution, y la línea fija de Uploadrr-EMU).
+    # Siempre, no solo con la columna nueva: si una pasada cayó entre el ALTER y este UPDATE, la siguiente lo completa.
+    conn.execute(
+        "UPDATE upload_jobs SET torrent_subido = 1 WHERE torrent_subido = 0 AND id IN ("
+        "SELECT upload_job_id FROM upload_job_logs "
+        "WHERE message = 'qBittorrent: torrent añadido correctamente.' OR message LIKE 'Torrent URL: %')"
+    )
 
 
 def _migrate_quitar_peticiones_de_ejemplo(conn: sqlite3.Connection) -> None:

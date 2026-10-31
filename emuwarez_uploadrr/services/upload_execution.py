@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from ..database import connect, init_db, row_to_dict, rows_to_dicts, get_setting_canonical
-from .upload_result_parser import classify_upload_result, extract_torrent_url
+from .upload_result_parser import classify_upload_result, extract_torrent_url, torrent_id_from_url
 from .upload_states import PREPARATORY_STATUSES
 from .uploadrr_progress import (
     RUNNING_DISPLAY_ORDER,
@@ -420,6 +420,14 @@ def _avisar_de_log(job_id: int) -> None:
     consigo todo lo que se perdieron los que no salieron.
     """
     publicar_agrupado(f"log-{job_id}", EVENTO_SUBIDA_LOG, {"job_id": job_id}, cada=1.0)
+
+
+def _ficha_del_torrent(stdout_text: str) -> dict:
+    """Lo que guarda una subida que falla después de subir el torrent: su ficha, su id y la marca del enlace."""
+    url = extract_torrent_url(stdout_text)
+    if not url:
+        return {}
+    return {"result_url": url, "result_torrent_id": torrent_id_from_url(url), "torrent_subido": 1}
 
 
 def _marca_torrent_subido(message: str) -> bool:
@@ -1293,6 +1301,7 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
             finished_at = finished_dt.isoformat()
             duration_seconds = int((finished_dt - started_dt).total_seconds())
             msg = f"Proceso cancelado por timeout ({timeout}s)."
+            subido = _ficha_del_torrent("\n".join(stdout_lines))
             _finalize_job_status(
                 job_id, "failed",
                 stage="timeout",
@@ -1300,11 +1309,12 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
                 finished_at=finished_at,
                 duration_seconds=duration_seconds,
                 error_message=msg,
+                **subido,
                 last_log_at=_now(),
                 last_error_at=finished_at,
             )
             append_upload_log(job_id, "error", msg, stream="system")
-            _notify_upload_failed(job_id, msg)
+            _notify_upload_failed(job_id, msg, result_url=subido.get("result_url"))
             return
 
         returncode = proc.wait()
@@ -1382,10 +1392,7 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
         else:
             safe_err = redact_secrets(result["error_summary"] or f"exit code {returncode}", secrets)
             # Si el torrent llegó a subirse antes de fallar, su ficha sigue siendo útil y su enlace no se borra.
-            subido = (
-                {"result_url": result["result_url"], "result_torrent_id": result["torrent_id"], "torrent_subido": 1}
-                if result["result_url"] else {}
-            )
+            subido = _ficha_del_torrent(stdout_text)
 
             _finalize_job_status(
                 job_id, "failed",
@@ -1404,7 +1411,7 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
                 stream="system",
             )
             logger.warning("Subida fallida (job %s, exit %s): %s", job_id, returncode, safe_err[:300])
-            _notify_upload_failed(job_id, safe_err, result_url=result["result_url"])
+            _notify_upload_failed(job_id, safe_err, result_url=subido.get("result_url"))
 
     except FileNotFoundError as exc:
         finished_at = _now()

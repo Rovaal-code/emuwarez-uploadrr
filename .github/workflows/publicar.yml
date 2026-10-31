@@ -222,6 +222,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
           NOTAS: ${{ inputs.notas || 'Correcciones y mejoras' }}
+        shell: bash  # con pipefail: si falla la lista de etiquetas, no se crea con otra anterior
         run: |
           gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 && exit 0
           anterior="$(gh api --paginate "repos/$GITHUB_REPOSITORY/tags" --jq '.[].name' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | grep -vx "v$VERSION" | sort -V | tail -1)"

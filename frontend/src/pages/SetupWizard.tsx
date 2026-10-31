@@ -262,7 +262,8 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
 
   // Instances step state
   const [instances, setInstances] = useState<InstanceDraft[]>([])
-  // Las ya guardadas salen del borrador, pero siguen contando para la sincronización final.
+  // Las ya guardadas salen del borrador, pero siguen contando para la sincronización final
+  // (las de antes de recargar, en setupStatus).
   const [instancesGuardadas, setInstancesGuardadas] = useState(0)
   const [instDraft, setInstDraft] = useState<Partial<InstanceDraft>>({ type: 'radarr', is_4k: false, is_anime: false })
   const [instError, setInstError] = useState<string | null>(null)
@@ -462,7 +463,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
 
   const handleComplete = wrap(async () => {
     await setupComplete()
-    if (instances.length > 0 || instancesGuardadas > 0) {
+    if (instances.length > 0 || instancesGuardadas > 0 || setupStatus.radarr_instances + setupStatus.sonarr_instances > 0) {
       // Fire-and-forget: a full sync can take a while (or even a few
       // minutes on a real library), and awaiting it here used to leave this
       // screen looking frozen — only the button's own label quietly changed

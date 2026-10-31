@@ -111,6 +111,28 @@ def test_recargar_tras_tmdb_retoma_los_pasos_opcionales(client, auth_headers):
     assert client.get("/api/setup/status").json()["next_step"] == "complete"
 
 
+def test_recargar_sin_instancias_tampoco_vuelve_al_paso_de_instancias(client, auth_headers):
+    """Las instancias se pueden saltar: tras TMDb la recarga retoma el paso
+    apuntado, no el de instancias."""
+    client.post("/api/setup/emu", json={"api_key": "emukey"}, headers=auth_headers)
+    client.post("/api/setup/tmdb", json={"api_key": "tmdbkey"}, headers=auth_headers)
+    assert client.get("/api/setup/status").json()["next_step"] == "qbit"
+
+    client.post("/api/setup/qbit", json={"url": ""}, headers=auth_headers)
+    assert client.get("/api/setup/status").json()["next_step"] == "providers"
+
+    client.post("/api/setup/imghosts", json={"enabled": [], "keys": {}}, headers=auth_headers)
+    assert client.get("/api/setup/status").json()["next_step"] == "complete"
+
+
+def test_un_paso_opcional_apuntado_no_salta_a_tmdb(client, auth_headers):
+    """TMDb es obligatorio: aunque se llame antes a un paso opcional, hasta que
+    esté configurado el siguiente sigue siendo TMDb."""
+    client.post("/api/setup/emu", json={"api_key": "emukey"}, headers=auth_headers)
+    client.post("/api/setup/qbit", json={"url": ""}, headers=auth_headers)
+    assert client.get("/api/setup/status").json()["next_step"] == "tmdb"
+
+
 def test_repetir_un_paso_no_hace_retroceder_el_asistente(client, auth_headers):
     _hasta_tmdb(client, auth_headers)
     client.post("/api/setup/qbit", json={"url": ""}, headers=auth_headers)

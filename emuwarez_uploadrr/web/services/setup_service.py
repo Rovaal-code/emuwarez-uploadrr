@@ -22,14 +22,14 @@ class SetupError(Exception):
 
 # Los pasos opcionales que la interfaz recorre tras TMDb, en orden.
 PASOS_OPCIONALES = ("qbit", "providers", "imagehosts")
+_ORDEN_PASOS = (*PASOS_OPCIONALES, "complete")
 
 
 def _avanzar_paso(conn: sqlite3.Connection, paso: str) -> None:
     """Apunta hasta qué paso opcional llegó el asistente, para retomarlo ahí
     tras recargar. Solo avanza: repetir un paso no hace volver atrás."""
-    orden = (*PASOS_OPCIONALES, "complete")
     actual = get_state(conn, "wizard_step")
-    if actual in orden and orden.index(actual) >= orden.index(paso):
+    if actual in _ORDEN_PASOS and _ORDEN_PASOS.index(actual) >= _ORDEN_PASOS.index(paso):
         return
     set_state(conn, "wizard_step", paso)
 
@@ -75,12 +75,16 @@ def next_step(state: dict) -> Optional[str]:
         return None
     if not state["emu_configured"]:
         return "emu"
+    # Antes que las instancias: se pueden saltar, y el paso ya apuntado vale
+    # más que volver a pedirlas. TMDb sigue siendo lo primero.
+    paso = state.get("wizard_step")
+    if paso in _ORDEN_PASOS:
+        return paso if state["tmdb_configured"] else "tmdb"
     if state["radarr_instances"] == 0 and state["sonarr_instances"] == 0:
         return "instances"
     if not state["tmdb_configured"]:
         return "tmdb"
-    paso = state.get("wizard_step")
-    return paso if paso in PASOS_OPCIONALES else "complete"
+    return "complete"
 
 
 def setup_admin(conn: sqlite3.Connection, username: str, password: str) -> int:

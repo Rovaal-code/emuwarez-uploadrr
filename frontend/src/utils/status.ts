@@ -94,6 +94,46 @@ const TASK_STATUS_MAP: Record<string, StatusInfo> = {
   'pending':    { label: 'Pendiente',   color: '#f59e0b', cssClass: 'status-pending' },
 }
 
+// Preparación de una petición: request_readiness.status y recommended_action (services/request_readiness.py).
+// tests/test_copias_frontend.py vigila que no falte ninguno.
+const READINESS_STATUS_LABELS: Record<string, string> = {
+  ready_to_upload: 'Lista para subir',
+  preflight_needed: 'Falta la comprobación previa',
+  needs_nomenclature: 'Falta adaptar la nomenclatura',
+  downloading: 'Descargando',
+  pending_import: 'Pendiente de importar',
+  uploading: 'Subiendo',
+  partially_available: 'Parcialmente disponible',
+  spec_mismatch: 'La copia no cumple lo pedido',
+  no_local_match: 'Sin copia en la biblioteca',
+  file_missing: 'Archivo no encontrado',
+  import_error: 'Error de importación',
+  claimed: 'Reclamada o pendiente en eMuwarez',
+  filled: 'Ya llena en eMuwarez',
+  already_exists: 'Ya existe en eMuwarez',
+  uploaded: 'Subida',
+}
+
+const READINESS_ACTION_LABELS: Record<string, string> = {
+  upload: 'Subir',
+  run_preflight: 'Hacer la comprobación previa',
+  adapt_nomenclature: 'Adaptar la nomenclatura',
+  wait_download: 'Esperar la descarga',
+  view_upload: 'Ver la subida',
+  review_arr: 'Revisar en Radarr/Sonarr',
+  verify_file: 'Comprobar el archivo',
+  ignore_already_exists: 'Ignorar: ya existe',
+  none: 'Ninguna',
+}
+
+export function getReadinessLabel(status: string): string {
+  return READINESS_STATUS_LABELS[status] ?? status
+}
+
+export function getReadinessActionLabel(action: string): string {
+  return READINESS_ACTION_LABELS[action] ?? action
+}
+
 export function getLocalStatusInfo(status: string): StatusInfo {
   return LOCAL_STATUS_MAP[status] ?? { label: status, color: '#6b7280', cssClass: 'status-unknown' }
 }

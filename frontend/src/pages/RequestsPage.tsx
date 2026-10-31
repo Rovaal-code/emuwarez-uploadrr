@@ -10,7 +10,7 @@ import { ErrorState } from '../components/ErrorState'
 import { EmptyState, FilaVacia } from '../components/EmptyState'
 import { SyncInfo } from '../components/SyncInfo'
 import { StatusBadge } from '../components/StatusBadge'
-import { getRequestStatusInfo } from '../utils/status'
+import { getReadinessActionLabel, getReadinessLabel, getRequestStatusInfo } from '../utils/status'
 import { HoverTitle, useTooltip } from '../components/Tooltip'
 import { useSync } from '../context/SyncContext'
 import { UploadWizardModal } from '../components/UploadWizardModal'
@@ -239,10 +239,11 @@ function ReadinessBadge({ status }: { status: string | null | undefined }) {
     status === 'preflight_needed' ? 'var(--color-accent-soft)' :
     status === 'downloading' ? 'var(--color-downloading)' :
     status === 'uploaded' ? 'var(--color-available-pale)' :
-    status === 'no_local_match' ? 'var(--text-muted)' :
+    status === 'no_local_match' || status === 'claimed' || status === 'filled' ? 'var(--text-muted)' :
+    status === 'spec_mismatch' ? 'var(--color-warning)' :
     status.includes('error') || status.includes('missing') || status === 'blocked' ? 'var(--color-missing)' :
     'var(--text-secondary)'
-  return <span style={{ fontSize: 11, color, fontWeight: 500 }}>{status}</span>
+  return <span style={{ fontSize: 11, color, fontWeight: 500 }}>{getReadinessLabel(status)}</span>
 }
 
 function CandidatesPanel({ requestId }: { requestId: number }) {
@@ -561,7 +562,7 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
           <summary>Preparación de subida (avanzado)</summary>
           <div style={{ marginTop: 8 }}>
             <div className="detail-row"><span>Estado</span><ReadinessBadge status={readiness.status} /></div>
-            <div className="detail-row"><span>Acción</span><span style={{ fontSize: 12, color: 'var(--color-uploading)' }}>{readiness.recommended_action || '—'}</span></div>
+            <div className="detail-row"><span>Acción</span><span style={{ fontSize: 12, color: 'var(--color-uploading)' }}>{readiness.recommended_action ? getReadinessActionLabel(readiness.recommended_action) : '—'}</span></div>
             <div className="detail-row"><span>Compat. score</span><span>{readiness.compatibility_score?.toFixed(0) ?? '—'}/100</span></div>
             <div className="detail-row"><span>Readiness score</span><span>{readiness.upload_readiness_score?.toFixed(0) ?? '—'}/100</span></div>
             {readiness.blockers.length > 0 && (

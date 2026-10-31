@@ -482,3 +482,33 @@ def test_un_pack_de_la_biblioteca_va_a_su_carpeta_con_los_nombres_de_emuwarez(en
         assert enlazados == inodos                    # enlaces duros
     episodios = json.loads(r["job"]["remux_snapshot_json"])["episodes"]
     assert len(episodios) == 2
+
+
+@pytest.mark.parametrize("como", ["completada", "fallida con el torrent en qBittorrent"])
+def test_no_se_rehace_el_enlace_que_siembra_otra_subida(entorno, mkv_base, monkeypatch, como):
+    """Quitar ese enlace dejaba el original con un solo enlace: se editaba en el
+    sitio y se volvía a enlazar con el mismo nombre, y el torrent sembrado leía
+    otros bytes."""
+    from emuwarez_uploadrr.services import carpeta_subida
+    from emuwarez_uploadrr.services.upload_execution import QBIT_AÑADIDO, append_upload_log
+    monkeypatch.setattr(carpeta_subida, "clonar", _reflink("no"))
+    _modo(entorno, "ninguno")
+    peli = _pelicula(entorno, mkv_base, carpeta=entorno["tmp"] / "media" / "Peli (2024)", semilla=False)
+    primera = _subir(entorno, peli["id"], peli["proposal_id"])
+    _modo(entorno, "solo_renombrar")       # la segunda sí editaría el original
+    conn = entorno["conn"]
+    if como == "completada":
+        conn.execute("UPDATE upload_jobs SET status = 'completed' WHERE id = ?", (primera["id"],))
+    else:
+        conn.execute("UPDATE upload_jobs SET status = 'failed' WHERE id = ?", (primera["id"],))
+        append_upload_log(primera["id"], "info", QBIT_AÑADIDO, stream="system", conn=conn)
+    conn.commit()
+    destino = entorno["uploads"] / f"{PROPUESTO}.mkv"
+    sembrado, inodo = _sha(destino), destino.stat().st_ino
+
+    r = _subir(entorno, peli["id"], peli["proposal_id"])
+
+    assert r["job"]["status"] == "failed"
+    assert f"es de la subida #{primera['id']}" in r["job"]["error_message"]
+    assert destino.stat().st_ino == inodo and _sha(destino) == sembrado
+    assert _sha(peli["f"]) == sembrado

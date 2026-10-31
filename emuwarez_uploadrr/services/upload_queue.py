@@ -695,6 +695,18 @@ def _renombrar_si_esta_en_subidas(job_id: int, item_id: int, origen: str | None,
     return destino
 
 
+def _subida_que_lo_usa(conn, ruta: str, job_id: int) -> int | None:
+    """La otra subida que siembra (o prepara) desde `ruta`, con el mismo criterio
+    que el borrado: quitarle el enlace o reescribirlo rompería su torrent."""
+    from .upload_execution import QBIT_AÑADIDO
+    fila = conn.execute(
+        "SELECT id FROM upload_jobs WHERE prepared_path = ? AND id != ? "
+        "AND (status NOT IN ('cancelled', 'failed') "
+        "OR id IN (SELECT upload_job_id FROM upload_job_logs WHERE message = ?)) LIMIT 1",
+        (ruta, job_id, QBIT_AÑADIDO)).fetchone()
+    return fila["id"] if fila else None
+
+
 def _motivo_para_no_tocar(origen: str) -> str | None:
     """None si se puede escribir en el original; si no, por qué no."""
     enlaces = os.stat(origen).st_nlink
@@ -1032,9 +1044,16 @@ def _run_queued_job(job_id: int) -> None:
             destino_uploadrr = os.path.join(RAIZ_SUBIDAS, ficheros[0][2])
         # La ruta se apunta ANTES de crearla: así un borrado de otra subida la ve en uso.
         with ENLACES:
-            conn.execute("UPDATE upload_jobs SET prepared_path = ?, updated_at = ? WHERE id = ?",
-                         (destino_uploadrr, _now_iso(), job_id))
-            conn.commit()
+            otra = _subida_que_lo_usa(conn, destino_uploadrr, job_id)
+            if otra is None:
+                conn.execute("UPDATE upload_jobs SET prepared_path = ?, updated_at = ? WHERE id = ?",
+                             (destino_uploadrr, _now_iso(), job_id))
+                conn.commit()
+        if otra is not None:
+            _fail(job_id, f"«{os.path.basename(destino_uploadrr)}» es de la subida #{otra}, que lo siembra "
+                          "o lo tiene en qBittorrent: no se rehace para no romper ese torrent. "
+                          "Bórrala antes si quieres volver a subirlo.")
+            return
 
         por_nombre = {n: i for i, _f, n in ficheros}
         resultados: list[dict] = []

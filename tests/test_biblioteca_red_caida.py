@@ -37,6 +37,19 @@ def test_la_lista_de_anime_se_intenta_una_vez_por_recorrido_y_no_en_cada_ficha(c
     assert len(intentos) == 2
 
 
+def test_si_el_reemplazo_de_la_lista_de_anime_falla_se_conserva_la_anterior(conn, monkeypatch):
+    conn.execute("INSERT INTO anime_id_map (tvdb_id, season_number, tmdb_movie_id, mal_id) VALUES ('1', 1, NULL, '10')")
+    conn.commit()
+    # Un número que SQLite no puede guardar hace fallar el INSERT con la tabla ya vaciada.
+    malo = [{"tvdb_id": 2, "mal_id": 20, "season": {"tvdb": 10 ** 30}}]
+    monkeypatch.setattr(anime_lists, "request_json", lambda *a, **kw: malo)
+
+    anime_lists.ensure_anime_id_map(conn, force=True)
+
+    assert [tuple(r) for r in conn.execute("SELECT tvdb_id, mal_id FROM anime_id_map")] == [("1", "10")]
+    assert get_state(conn, "last_anime_id_map_failure_utc") is not None
+
+
 def test_un_404_de_tmdb_se_recuerda_y_no_se_vuelve_a_preguntar(conn, monkeypatch):
     llamadas = []
 

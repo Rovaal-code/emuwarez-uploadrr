@@ -89,6 +89,7 @@ def update_instance_endpoint(
                 enabled=body.enabled,
                 is_4k=body.is_4k,
                 is_anime=body.is_anime,
+                test_connection=True,
             )
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))

@@ -71,7 +71,9 @@ def update_instance(
     enabled: Optional[bool] = None,
     is_4k: Optional[bool] = None,
     is_anime: Optional[bool] = None,
+    test_connection: bool = False,
 ) -> bool:
+    """Con `test_connection` (la edición web), cambiar la URL o la clave exige que la instancia responda."""
     sets = []
     params = []
     if url is not None:
@@ -80,6 +82,18 @@ def update_instance(
     if api_key is not None:
         sets.append("api_key = ?")
         params.append(api_key.strip())
+    actual = None
+    if test_connection and (url is not None or api_key is not None):
+        actual = conn.execute("SELECT type, name, url, api_key FROM instances WHERE id = ?", (instance_id,)).fetchone()
+    if actual:
+        nueva_url = normalize_base_url(url) if url is not None else actual["url"]
+        nueva_clave = api_key.strip() if api_key is not None else actual["api_key"]
+        if (nueva_url, nueva_clave) != (actual["url"], actual["api_key"]):
+            result = test_connection_params(actual["type"], nueva_url, nueva_clave, name or actual["name"])
+            if not result.get("ok"):
+                raise ValueError(
+                    f"No se pudo conectar con la instancia {actual['type']}: {result.get('error') or 'error desconocido'}"
+                )
     if name is not None:
         name = name.strip()
         conflict = conn.execute(
@@ -106,6 +120,10 @@ def update_instance(
         f"UPDATE instances SET {', '.join(sets)} WHERE id = ?",
         params,
     )
+    if name is not None:
+        # La biblioteca guarda el nombre de la instancia en cada ficha; si no, hasta la próxima sincronización
+        # (días, con la instancia apagada) la interfaz sigue enseñando el viejo.
+        conn.execute("UPDATE library_items SET instance_name = ? WHERE instance_id = ?", (name, instance_id))
     conn.commit()
     return cur.rowcount > 0
 

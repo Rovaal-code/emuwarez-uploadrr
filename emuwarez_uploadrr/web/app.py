@@ -31,7 +31,7 @@ async def _scheduler_loop() -> None:
             # A scheduler tick must never crash the app — errors from
             # individual tasks are already captured per-task by
             # run_scheduled_task(); this is a last-resort guard.
-            pass
+            logging.getLogger("emuwarez.web").exception("Falló un ciclo del planificador")
         await asyncio.sleep(_SCHEDULER_TICK_SECONDS)
 
 
@@ -43,14 +43,10 @@ def _backfill_spanish_flags() -> None:
     keeps both flags correct after an upgrade even if nothing else changes.
     Best-effort: never blocks startup."""
     try:
-        from emuwarez_uploadrr.database import connect, db_path, init_db
+        from emuwarez_uploadrr.database import db
         from emuwarez_uploadrr.services.library import recompute_spanish_flags
-        conn = connect(db_path())
-        try:
-            init_db(conn)
+        with db() as conn:
             recompute_spanish_flags(conn)
-        finally:
-            conn.close()
     except Exception:
         logging.getLogger("emuwarez.web").warning(
             "No se pudo recalcular el castellano (audio/subtítulos) al arrancar", exc_info=True)
@@ -71,8 +67,24 @@ def _reconcile_interrupted_jobs() -> None:
             "No se pudieron reconciliar las subidas interrumpidas al arrancar", exc_info=True)
 
 
+def _preparar_base() -> None:
+    """Comprueba y migra la base una sola vez, antes de atender nada. Si es de
+    una versión más nueva o la migración falla, la aplicación no arranca."""
+    from emuwarez_uploadrr.database import BaseMasNuevaError, preparar_base
+    log = logging.getLogger("emuwarez.web")
+    try:
+        preparar_base()
+    except BaseMasNuevaError as exc:
+        log.critical("%s", exc)
+        raise
+    except Exception:
+        log.critical("La migración de la base de datos falló; no se arranca", exc_info=True)
+        raise
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
+    _preparar_base()
     # La carpeta donde se preparan los packs para subir, creada de entrada:
     # así existe antes de la primera subida en vez de aparecer a mitad, y la
     # comprobación del asistente puede probar el enlace sin crearla ella.

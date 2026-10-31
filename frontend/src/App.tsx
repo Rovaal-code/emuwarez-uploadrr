@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { getSetupStatus } from './api/setup'
 import { getMe } from './api/auth'
-import { getToken, clearToken, setUnauthorizedHandler } from './api/client'
+import { getToken, clearToken, esSesionCaducada, setUnauthorizedHandler } from './api/client'
+import { esperaDelIntento } from './api/eventos'
 import type { SetupStatusResponse, CurrentUserResponse } from './types/api'
 import { LoginPage } from './pages/LoginPage'
 import { SetupWizard } from './pages/SetupWizard'
@@ -11,7 +12,7 @@ import { SyncProvider } from './context/SyncContext'
 import { PerfilEmuProvider } from './context/PerfilEmuContext'
 import { TourProvider } from './context/TourContext'
 
-type AppState = 'loading' | 'setup' | 'login' | 'app'
+type AppState = 'loading' | 'reconectando' | 'setup' | 'login' | 'app'
 
 // The backend's SPA fallback serves index.html for any non-/api path, so
 // visiting an arbitrary URL (or a normal deep link like /library) while the
@@ -47,8 +48,24 @@ export function App() {
   const [setupStatus, setSetupStatus] = useState<SetupStatusResponse | null>(null)
   const [user, setUser] = useState<CurrentUserResponse | null>(null)
 
-  async function bootstrap() {
-    setState('loading')
+  // Los intentos seguidos que han fallado: la espera crece igual que la del canal de avisos.
+  const intentos = useRef(0)
+  const reintento = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const montada = useRef(false)
+
+  // El servidor no contesta bien (red, 502, base ocupada): ni login ni asistente, que
+  // serían mentira. Se muestra «reconectando» y se vuelve a probar sin tirar el token.
+  function reconectar() {
+    if (!montada.current) return   // un arranque que falla tras desmontar no reprograma nada
+    setState('reconectando')
+    reintento.current = setTimeout(() => bootstrap(true), esperaDelIntento(intentos.current++))
+  }
+
+  async function bootstrap(reintentando = false) {
+    if (!reintentando) {
+      intentos.current = 0
+      setState('loading')
+    }
     try {
       const status = await getSetupStatus()
       setSetupStatus(status)
@@ -83,7 +100,9 @@ export function App() {
             setState('app')
           }
           return
-        } catch {
+        } catch (err) {
+          // Solo un 401 es un token que ya no vale; cualquier otro fallo no dice nada de él.
+          if (!esSesionCaducada(err)) { reconectar(); return }
           clearToken()
         }
       }
@@ -92,13 +111,18 @@ export function App() {
       normalizeToLogin()
       setState('login')
     } catch {
-      // Backend not available — show login and let it fail with an error
-      normalizeToLogin()
-      setState('login')
+      reconectar()
     }
   }
 
-  useEffect(() => { bootstrap() }, [])
+  useEffect(() => {
+    montada.current = true
+    bootstrap()
+    return () => {
+      montada.current = false
+      if (reintento.current) clearTimeout(reintento.current)
+    }
+  }, [])
 
   function handleLoginSuccess() {
     bootstrap()
@@ -130,6 +154,10 @@ export function App() {
 
   if (state === 'loading') {
     return <LoadingState label="Conectando con el servidor…" />
+  }
+
+  if (state === 'reconectando') {
+    return <LoadingState label="No se puede conectar con el servidor. Reintentando…" />
   }
 
   if (state === 'setup' && setupStatus) {

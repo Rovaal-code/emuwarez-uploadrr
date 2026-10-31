@@ -1,13 +1,14 @@
 """Application-wide logging capture.
 
 Wires the ROOT logger so *everything* any module logs is captured into an
-in-memory ring buffer (served by GET /api/logs) and a rotating file under
-CONFIG_DIR/logs/app.log. uvicorn's own loggers are made to propagate here too,
-so HTTP access/errors are logged as well.
+in-memory ring buffer (served by GET /api/logs), a rotating file under
+CONFIG_DIR/logs/app.log and stdout (what `docker logs` shows). uvicorn's own
+loggers are made to propagate here too, so HTTP access/errors are logged as well.
 """
 from __future__ import annotations
 
 import logging
+import sys
 import time
 from collections import deque
 from logging.handlers import RotatingFileHandler
@@ -36,6 +37,10 @@ class RingBufferHandler(logging.Handler):
             })
         except Exception:
             pass
+
+
+class _StdoutHandler(logging.StreamHandler):
+    """stdout, for `docker logs`."""
 
 
 def _levels_at_or_above(level: str) -> set[str]:
@@ -84,9 +89,17 @@ def setup_app_logging() -> None:
     except Exception:
         pass  # file logging is best-effort; the ring buffer always works
 
+    if not any(isinstance(h, _StdoutHandler) for h in root.handlers):
+        sh = _StdoutHandler(sys.stdout)
+        sh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+        root.addHandler(sh)
+
     # Make uvicorn/fastapi loggers flow into our root handlers too.
     for name in ("uvicorn", "uvicorn.access", "uvicorn.error", "fastapi"):
         logging.getLogger(name).propagate = True
+    # Drop uvicorn's own console handlers, or every line would print twice.
+    for name in ("uvicorn", "uvicorn.access"):
+        logging.getLogger(name).handlers.clear()
 
     # Noise control:
     #  • uvicorn.access duplicates our own request middleware line-for-line, so

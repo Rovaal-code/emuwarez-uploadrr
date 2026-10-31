@@ -168,7 +168,8 @@ docker compose pull
 docker compose up -d
 ```
 
-La base de datos se migra sola. Si la versión nueva falla, vuelve a la anterior con `EMUWAREZ_UPLOADRR_TAG`
+La base de datos se migra sola, y antes deja una copia en `/config/backups/pre-migracion-*.db`. Si la versión nueva
+falla, vuelve a la anterior con `EMUWAREZ_UPLOADRR_TAG`; si cambió el esquema, hay que restaurar esa copia
 ([Versiones y volver atrás](../README.md#versiones-y-volver-atrás)). Si construyes la imagen tú, haz `git pull` y
 repite los dos comandos de [Construir la imagen tú mismo](#construir-la-imagen-tú-mismo).
 

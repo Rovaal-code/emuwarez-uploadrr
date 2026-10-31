@@ -9,9 +9,11 @@ POST /api/setup/complete       — finalize setup (requires auth)
 """
 from __future__ import annotations
 
+import sqlite3
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from ..dependencies import require_auth
+from ..dependencies import ERRORES_DE_BASE, base_no_disponible, get_db, require_auth
 from ..errors import AppError
 from ..runtime import _db_path
 from ..schemas import (
@@ -41,17 +43,13 @@ def _get_conn():
 # ---------------------------------------------------------------------------
 
 @router.get("/setup/status", response_model=SetupStatusResponse)
-def setup_status() -> SetupStatusResponse:
+def setup_status(conn: sqlite3.Connection = Depends(get_db)) -> SetupStatusResponse:
     from ..services.setup_service import get_setup_state, next_step
     try:
-        with _get_conn() as conn:
-            state = get_setup_state(conn)
-    except Exception:
-        state = {
-            "initialized": False, "admin_configured": False,
-            "tmdb_configured": False, "emu_configured": False,
-            "radarr_instances": 0, "sonarr_instances": 0,
-        }
+        state = get_setup_state(conn)
+    except ERRORES_DE_BASE:
+        # Un error de la base no es «aún no hay admin»: eso mandaría al asistente de primer arranque.
+        raise base_no_disponible("setup/status")
     return SetupStatusResponse(**state, next_step=next_step(state))
 
 

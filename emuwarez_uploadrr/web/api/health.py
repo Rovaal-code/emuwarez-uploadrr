@@ -1,12 +1,12 @@
-"""Health and runtime endpoints."""
+"""Health endpoint."""
 from __future__ import annotations
 
 import logging
 
 from fastapi import APIRouter, Response, status
 
-from ..runtime import get_app_version, get_runtime_info, _db_path
-from ..schemas import HealthResponse, RuntimeInfoResponse
+from ..runtime import get_app_version, _db_path
+from ..schemas import HealthResponse
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +37,3 @@ def health(response: Response) -> HealthResponse:
         database="ok" if db_ok else "error",
         initialized=initialized,
     )
-
-
-@router.get("/runtime", response_model=RuntimeInfoResponse)
-def runtime_info() -> RuntimeInfoResponse:
-    info = get_runtime_info()
-    return RuntimeInfoResponse(**info)

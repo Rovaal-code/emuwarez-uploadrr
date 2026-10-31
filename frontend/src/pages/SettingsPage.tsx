@@ -35,7 +35,7 @@ import { formatNumero } from '../utils/format'
 import { Modal } from '../components/Modal'
 import { IconoUsuario } from '../components/Iconos'
 
-type Tab = 'config' | 'notifications' | 'diagnostics' | 'backup' | 'maintenance'
+type Tab = 'config' | 'notifications' | 'diagnostics' | 'backup'
 
 // A tab exposes its save action so the page-header (top-right) can render the
 // button, like the sync buttons in Biblioteca/Peticiones.
@@ -1335,7 +1335,59 @@ function VersionCard() {
   )
 }
 
-function DiagnosticsTab({ status }: { status: MaintenanceStatus | null }) {
+// Integridad y VACUUM, dentro de la tarjeta "Base de datos" de Diagnóstico.
+function DatabaseActions({ onRefresh }: { onRefresh: () => void }) {
+  const [busy, setBusy] = useState(false)
+  const [vacuumConfirm, setVacuumConfirm] = useState('')
+  const showMessage = useSettingsMessage()
+
+  async function handleIntegrity() {
+    setBusy(true)
+    try {
+      const r = await runIntegrityCheck()
+      showMessage(r.ok, r.ok ? `✓ ${r.message}` : `✗ ${r.message || r.error}`)
+    } catch (e: unknown) {
+      showMessage(false, `✗ ${e instanceof Error ? e.message : String(e)}`)
+    } finally { setBusy(false) }
+  }
+
+  async function handleVacuum(dry: boolean) {
+    if (!dry && vacuumConfirm !== 'MANTENIMIENTO_DB') {
+      showMessage(false, 'Escribe MANTENIMIENTO_DB para confirmar'); return
+    }
+    setBusy(true)
+    try {
+      const r = await runVacuum({ dry_run: dry, apply: !dry, confirmation: dry ? undefined : vacuumConfirm })
+      showMessage(r.ok ?? false, r.ok ? `✓ ${r.message}` : `✗ ${r.error}`)
+      if (r.ok && !dry) onRefresh()
+    } catch (e: unknown) {
+      showMessage(false, `✗ ${e instanceof Error ? e.message : String(e)}`)
+    } finally { setBusy(false) }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}>
+      <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: 0 }}>
+        <strong>Verificar integridad</strong> ejecuta <code>PRAGMA integrity_check</code> (solo lectura).{' '}
+        <strong>VACUUM</strong> compacta la BD y libera las páginas libres; escribe <code>MANTENIMIENTO_DB</code> para ejecutarlo.
+      </p>
+      <input
+        type="text"
+        placeholder="Confirmación: MANTENIMIENTO_DB"
+        value={vacuumConfirm}
+        onChange={e => setVacuumConfirm(e.target.value)}
+        style={{ width: '100%', padding: '6px 10px', fontSize: 13, boxSizing: 'border-box' }}
+      />
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button className="btn btn-secondary" onClick={handleIntegrity} disabled={busy}>Verificar integridad</button>
+        <button className="btn btn-secondary" onClick={() => handleVacuum(true)} disabled={busy}>Previsualizar VACUUM</button>
+        <button className="btn btn-danger" onClick={() => handleVacuum(false)} disabled={busy}>Ejecutar VACUUM</button>
+      </div>
+    </div>
+  )
+}
+
+function DiagnosticsTab({ status, onRefresh }: { status: MaintenanceStatus | null; onRefresh: () => void }) {
   const db = status?.database
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -1364,6 +1416,7 @@ function DiagnosticsTab({ status }: { status: MaintenanceStatus | null }) {
             </tbody>
           </table>
         )}
+        <DatabaseActions onRefresh={onRefresh} />
       </div>
       <div className="placeholder-card">
         <h3>Inventario de configuración</h3>
@@ -1509,69 +1562,6 @@ function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | null; on
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-secondary" onClick={() => handleRestore(true)} disabled={busy}>Previsualizar</button>
           <button className="btn btn-danger" onClick={() => handleRestore(false)} disabled={busy}>Restaurar</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ---------- Maintenance tab ----------
-function MaintenanceTab() {
-  const [busy, setBusy] = useState(false)
-  const [vacuumConfirm, setVacuumConfirm] = useState('')
-
-  const showMessage = useSettingsMessage()
-  // Se apilaban hasta 10 resultados; ahora se enseña el último, como el resto
-  // de la página. Estas operaciones se lanzan de una en una y cada una tapaba
-  // a la anterior de todas formas.
-  function addResult(_key: string, ok: boolean, text: string) {
-    showMessage(ok, text)
-  }
-
-  async function handleIntegrity() {
-    setBusy(true)
-    try {
-      const r = await runIntegrityCheck()
-      addResult('integrity', r.ok, r.ok ? `✓ ${r.message}` : `✗ ${r.message || r.error}`)
-    } catch (e: unknown) {
-      addResult('integrity', false, `✗ ${e instanceof Error ? e.message : String(e)}`)
-    } finally { setBusy(false) }
-  }
-
-  async function handleVacuum(dry: boolean) {
-    if (!dry && vacuumConfirm !== 'MANTENIMIENTO_DB') {
-      addResult('vacuum', false, 'Escribe MANTENIMIENTO_DB para confirmar'); return
-    }
-    setBusy(true)
-    try {
-      const r = await runVacuum({ dry_run: dry, apply: !dry, confirmation: dry ? undefined : vacuumConfirm })
-      addResult('vacuum', r.ok ?? false, r.ok ? `✓ ${r.message}` : `✗ ${r.error}`)
-    } catch (e: unknown) {
-      addResult('vacuum', false, `✗ ${e instanceof Error ? e.message : String(e)}`)
-    } finally { setBusy(false) }
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div className="placeholder-card">
-        <h3>Integridad de la base de datos</h3>
-        <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: '0 0 10px' }}>Ejecuta <code>PRAGMA integrity_check</code> (solo lectura).</p>
-        <button className="btn btn-secondary" onClick={handleIntegrity} disabled={busy}>Verificar integridad</button>
-      </div>
-
-      <div className="placeholder-card">
-        <h3>VACUUM de la base de datos</h3>
-        <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: '0 0 10px' }}>Compacta la BD y libera espacio. Escribe <code>MANTENIMIENTO_DB</code> para ejecutar.</p>
-        <input
-          type="text"
-          placeholder="Confirmación: MANTENIMIENTO_DB"
-          value={vacuumConfirm}
-          onChange={e => setVacuumConfirm(e.target.value)}
-          style={{ width: '100%', marginBottom: 8, padding: '6px 10px', fontSize: 13, boxSizing: 'border-box' }}
-        />
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-secondary" onClick={() => handleVacuum(true)} disabled={busy}>Previsualizar</button>
-          <button className="btn btn-danger" onClick={() => handleVacuum(false)} disabled={busy}>Ejecutar VACUUM</button>
         </div>
       </div>
     </div>
@@ -1923,19 +1913,18 @@ export function SettingsPage() {
     { key: 'notifications', label: 'Notificaciones' },
     { key: 'diagnostics', label: 'Diagnóstico' },
     { key: 'backup', label: 'Backup' },
-    { key: 'maintenance', label: 'Mantenimiento' },
   ]
 
   return (
     // Llena el alto de la página y no más: la cabecera y las pestañas se
     // quedan fijas arriba, y el contenido de la pestaña activa se desplaza
-    // por dentro (el div de más abajo) cuando no cabe entero — las cinco
+    // por dentro (el div de más abajo) cuando no cabe entero — las cuatro
     // pestañas se comportan igual, Configuración incluida.
     <div style={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <div className="page-header" style={{ flexShrink: 0 }}>
         <div>
           <div className="page-title">Configuración</div>
-          <div className="page-subtitle">Ajustes, diagnóstico, backup y mantenimiento</div>
+          <div className="page-subtitle">Ajustes, diagnóstico y backup</div>
         </div>
         {saveAction && (
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -1974,9 +1963,8 @@ export function SettingsPage() {
         <SettingsMessageContext.Provider value={showMessage}>
           {tab === 'config' && <ConfigTab onExposeSave={setSaveAction} />}
           {tab === 'notifications' && <NotificationsTab onExposeSave={setSaveAction} />}
-          {tab === 'diagnostics' && <DiagnosticsTab status={status} />}
+          {tab === 'diagnostics' && <DiagnosticsTab status={status} onRefresh={loadStatus} />}
           {tab === 'backup' && <BackupTab status={status} onRefresh={loadStatus} />}
-          {tab === 'maintenance' && <MaintenanceTab />}
         </SettingsMessageContext.Provider>
       </div>
     </div>

@@ -328,6 +328,11 @@ def test_clear_con_un_valor_nuevo_a_la_vez_deja_el_nuevo(client, auth_headers):
         "clear": ["qbit_password"], "qbit_password": "otra-clave",
     }, headers=auth_headers).json()
     assert data["qbit_password_configured"] is True
+    # La vieja también dejaba "configurada": se mira lo guardado.
+    from emuwarez_uploadrr.database import connect, get_setting_canonical
+    from emuwarez_uploadrr.web.runtime import _db_path
+    with connect(_db_path()) as conn:
+        assert get_setting_canonical(conn, "qbit.password") == "otra-clave"
 
 
 @pytest.mark.parametrize("nombre", ["tmdb_api_key", "emu_api_key", "image_host_key:noexiste", "qbit_url"])

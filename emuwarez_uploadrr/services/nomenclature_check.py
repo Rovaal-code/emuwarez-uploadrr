@@ -6,7 +6,7 @@ can only be built by reading MediaInfo from the actual file. This module:
 
   1. needs a MediaInfo read of the file (or it counts as an error),
   2. builds the expected file name with the SAME generator the upload uses
-     (nomenclature.compute_nomenclature_proposal), so the two can't disagree,
+     (nomenclature.build_nomenclature_proposal), so the two can't disagree,
   3. compares it to the real file name, ignoring the group after the last '-',
   4. yields 'Correcta' / 'No adaptada' + a per-token diff for the UI.
 
@@ -196,7 +196,7 @@ def evaluate_file(conn, item: dict) -> dict:
     """El veredicto para un elemento: {status, expected, actual, diff}.
     Necesita el fichero y el binario `mediainfo`; si no, lanza una excepción."""
     from .media_info_service import build_mediainfo_report
-    from .nomenclature import compute_nomenclature_proposal
+    from .nomenclature import build_nomenclature_proposal
     from .path_mapping import resolve_local_path, ruta_de_lectura
     leida = ruta_de_lectura(item, conn=conn)
     local = resolve_local_path(leida, conn=conn) or leida
@@ -206,7 +206,7 @@ def evaluate_file(conn, item: dict) -> dict:
     report = build_mediainfo_report(local)
     if not report.get("available"):
         raise RuntimeError(report.get("message") or "MediaInfo no devolvió datos")
-    proposal = compute_nomenclature_proposal(item, conn=conn)
+    proposal = build_nomenclature_proposal(item["id"], conn=conn, guardar=False)
     exp = _strip_group(proposal.get("proposed_filename") or "")
     actual_name = os.path.basename(item.get("path") or local)
     matches, diff = compare(actual_name, exp)

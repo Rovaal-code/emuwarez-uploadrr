@@ -13,7 +13,7 @@ import pytest
 
 from emuwarez_uploadrr.database import connect, init_db
 from emuwarez_uploadrr.services import nomenclature_check as nc
-from emuwarez_uploadrr.services.nomenclature import compute_nomenclature_proposal
+from emuwarez_uploadrr.services.nomenclature import build_nomenclature_proposal
 
 from .mkv_sinteticos import hacer_mkv, requiere_herramientas
 
@@ -43,7 +43,7 @@ def _fila(conn, **kw) -> dict:
 def _renombrar_como_la_app(conn, item: dict) -> str:
     """Renombra el fichero al nombre que propone la app y devuelve el título."""
     import os
-    prop = compute_nomenclature_proposal(item, conn=conn)
+    prop = build_nomenclature_proposal(item["id"], conn=conn, guardar=False)
     nuevo = os.path.join(os.path.dirname(item["path"]), prop["proposed_filename"] + ".mkv")
     os.replace(item["path"], nuevo)
     conn.execute("UPDATE library_items SET path = ? WHERE id = ?", (nuevo, item["id"]))
@@ -138,7 +138,7 @@ def test_el_castellano_de_MAX_sigue_siendo_castellano(tmp_path):
 def test_una_pista_sin_idioma_bloquea_el_nombre(conn, tmp_path):
     ruta = hacer_mkv(tmp_path / "Peli.WEB-DL.mkv", audios=({"lang": "es"}, {"lang": "und"}))
     item = _fila(conn, title="Peli", year=2024, path=str(ruta), resolution="1080p")
-    prop = compute_nomenclature_proposal(item, conn=conn)
+    prop = build_nomenclature_proposal(item["id"], conn=conn, guardar=False)
     assert "UND" in prop["proposed_torrent_name"]
     assert prop["status"] == "blocked"
 
@@ -148,7 +148,7 @@ def test_la_resolucion_sale_del_fichero_y_no_de_la_etiqueta(conn, tmp_path):
     ruta = hacer_mkv(tmp_path / "Peli.1080p.WEB-DL.mkv", ancho=1280, alto=720, audios=({"lang": "es"},))
     item = _fila(conn, title="Peli", year=2024, path=str(ruta), resolution="1080p",
                  quality="WEBDL-1080p")
-    prop = compute_nomenclature_proposal(item, conn=conn)
+    prop = build_nomenclature_proposal(item["id"], conn=conn, guardar=False)
     assert prop["resolution"] == "720p"
     assert " 720p WEB-DL " in prop["proposed_torrent_name"]
     assert not any("Resolución" in w for w in __import__("json").loads(prop["warnings_json"]))

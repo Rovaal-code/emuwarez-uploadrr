@@ -340,9 +340,11 @@ def build_nomenclature_proposal(
     item_id: int, *, force_refresh: bool = False, conn=None,
     source_override: str | None = None, provider_override: str | None = None,
     tag_override: str | None = None, title_override: str | None = None,
+    guardar: bool = True,
 ) -> dict:
     """Generate a nomenclature proposal for a library item. Never modifies the
-    filesystem.
+    filesystem. `guardar=False` la calcula sin guardarla ni reutilizar la
+    guardada: es lo que compara Comprobar nomenclatura.
 
     `source_override`/`provider_override`/`tag_override`/`title_override` let a
     caller that already resolved an ambiguity by hand (the automated-upload
@@ -359,7 +361,7 @@ def build_nomenclature_proposal(
     conn = conn or connect()
     try:
         if (source_override is not None or provider_override is not None
-                or tag_override is not None or title_override is not None):
+                or tag_override is not None or title_override is not None or not guardar):
             force_refresh = True
         item = get_library_item_for_nomenclature(item_id, conn=conn)
         if not force_refresh and item:
@@ -377,200 +379,186 @@ def build_nomenclature_proposal(
                 "errors_json": json.dumps(["Item no encontrado."]),
                 "warnings_json": json.dumps([]),
             }
-        proposal = compute_nomenclature_proposal(
-            item, conn=conn, source_override=source_override, provider_override=provider_override,
-            tag_override=tag_override, title_override=title_override,
+        preconditions = validate_nomenclature_preconditions(item, conn=conn)
+        errors = preconditions["errors"]
+        warnings = list(preconditions["warnings"])
+
+        title = item.get("title") or "Sin título"
+        year = item.get("year")
+        media_type = item.get("item_type") or "movie"
+        tmdb_id = item.get("tmdb_id")
+        imdb_id = item.get("imdb_id")
+        # Cuál de las dos rutas se lee: path_mapping.py::ruta_de_lectura.
+        from .path_mapping import ruta_de_lectura
+        path = ruta_de_lectura(item, conn=conn)
+
+        # For episodes/seasons the eMuwarez title must be the SERIES name
+        # (not the per-episode title Sonarr stores, e.g. "Serie S01E01 -
+        # Nombre del capítulo") — same resolution
+        # build_editable_nomenclature_fields() (the wizard's live preview)
+        # already does; without this the REAL applied name diverged from
+        # what the wizard showed and the user approved.
+        if media_type in ("season", "episode"):
+            from .source_assistant import _resolve_series_row
+            srow = _resolve_series_row(item, conn)
+            if srow:
+                title = srow.get("title") or title
+                tmdb_id = srow.get("tmdb_id") or tmdb_id
+        from .tmdb_titles import resolve_localized_title
+        title, _title_warning = resolve_localized_title(conn, media_type, tmdb_id, title)
+        if _title_warning:
+            warnings.append(_title_warning)
+        # An explicit pick wins over whatever TMDb resolved: the user chose it
+        # in the Título dropdown precisely to override the default.
+        if (title_override or "").strip():
+            title = title_override.strip()
+        # `title` above is already the series name for season/episode (see the
+        # resolution above) — surfaced again under its own key so consumers
+        # that show "Serie" and "Título propuesto" as separate rows (the
+        # automated upload job's nomenclature snapshot table) have both.
+        series_title = title if media_type in ("season", "episode") else None
+
+        resolution = _infer_resolution_from_item(item)
+        source = source_override or _infer_source_from_item(item)
+        release_tag = tag_override or tag_por_defecto([item.get("release_group")], conn=conn)
+
+        stat_info = safe_stat(path) if path else {}
+        current_name = stat_info.get("name") or (path.split("/")[-1] if path else None)
+
+        # Phase 6A: real values parsed from Radarr/Sonarr's own movieFile/
+        # episodeFile mediaInfo at sync time (integrations/base.py::
+        # extract_media_info), not a guess against the quality profile NAME —
+        # the starting point/fallback. Real MediaInfo of the actual file
+        # (below) wins when it's reachable, since it has proper per-track
+        # codec labels and the DUAL/MULTI-aware audio summary the eMuwarez
+        # guide expects — Radarr/Sonarr's own columns are coarser.
+        video_codec = item.get("video_codec")
+        if video_codec is None:
+            quality = item.get("quality") or ""
+            for codec in ("HEVC", "H.265", "x265", "AVC", "H.264", "x264", "AV1", "VP9"):
+                if codec.lower() in quality.lower():
+                    video_codec = codec
+                    break
+        if not video_codec:
+            warnings.append("Codec de vídeo no detectado. Sincroniza de nuevo la biblioteca o invoca MediaInfo desde 'Adaptar nomenclatura'.")
+
+        # Lo de Radarr/Sonarr, pero ya con los tokens del tracker: sin MediaInfo
+        # llegaban tal cual ("DD+ spa / eng spa / eng") al nombre.
+        from .emu_format import build_audio_string, format_video_codec
+        video_codec = format_video_codec(video_codec)
+        audio_summary = build_audio_string(item.get("audio_codec"), item.get("audio_languages"),
+                                           item.get("audio_channels"))
+        subtitle_summary = "SUBS" if (item.get("subtitle_languages") or "").strip() else None
+        dynamic_range = item.get("dynamic_range")
+
+        # Real MediaInfo read of the actual file (cached per file by mtime+
+        # size, so repeat calls for the same unchanged file are instant) —
+        # same source build_editable_nomenclature_fields() uses. Best-effort:
+        # any failure just keeps the Radarr/Sonarr-derived values above.
+        if path:
+            from .path_mapping import resolve_local_path
+            from .media_info_service import build_mediainfo_report
+            local_path = resolve_local_path(path, conn=conn) or path
+            mi_report = build_mediainfo_report(local_path)
+            if mi_report.get("available"):
+                emu_by_field = {
+                    r["field"]: (None if r["emu"] in (None, "—", "") else r["emu"])
+                    for r in mi_report.get("rows", [])
+                }
+                # La resolución del fichero, no la etiqueta de calidad de Radarr/Sonarr.
+                if mi_report.get("resolution"):
+                    resolution = mi_report["resolution"]
+                    warnings = [w for w in warnings if w != _AVISO_SIN_RESOLUCION]
+                video_codec = emu_by_field.get("Códec de vídeo") or video_codec
+                audio_summary = mi_report.get("audio_summary") or audio_summary
+                subtitle_summary = emu_by_field.get("Subtítulos") or subtitle_summary
+                dynamic_range = emu_by_field.get("HDR/DV") or dynamic_range
+            else:
+                warnings.append("Sin MediaInfo del archivo: el audio y los subtítulos del nombre salen "
+                                "de Radarr/Sonarr y pueden no ser exactos.")
+
+        # UND no es un idioma del tracker: el nombre no puede salir así.
+        if audio_summary and "UND" in re.split(r"[\s-]+", audio_summary):
+            errors.append("Una pista de audio no tiene idioma (UND). Ponle idioma a la pista antes de subir.")
+
+        # Phase 6E — provider (AMZN/NF/DSNP...) already present in the
+        # current filename, kept in the proposal instead of silently
+        # dropped. Detection only, no TMDb re-recommendation here.
+        provider = provider_override or _infer_provider_from_item(item, source)
+
+        # Full nomenclature with spaces + accents = the torrent/aporte title.
+        proposed_torrent_name = _build_proposed_filename(
+            title=title,
+            year=year,
+            resolution=resolution,
+            source=source,
+            video_codec=video_codec,
+            audio_summary=audio_summary,
+            subtitle_summary=subtitle_summary,
+            release_tag=release_tag,
+            media_type=media_type,
+            provider=provider,
+            season=item.get("season_number"),
+            episode=item.get("episode_number"),
+            dynamic_range=dynamic_range,
         )
-        return save_nomenclature_proposal(proposal, conn=conn)
+        # File name (and folder) use the cleaned, accent-free, dotted form.
+        from .mkv_title import to_filesystem_name
+        proposed_filename = to_filesystem_name(proposed_torrent_name)
+
+        proposed_folder = proposed_filename
+        proposed_path = None
+        if path and proposed_filename:
+            parent = os.path.dirname(path)
+            ext = os.path.splitext(path)[1] if os.path.isfile(path) else ""
+            proposed_path = os.path.join(parent, proposed_filename + ext) if ext else os.path.join(parent, proposed_filename)
+        largo = error_de_longitud(proposed_filename + (os.path.splitext(path)[1] if path else ""))
+        if largo:
+            errors.append(largo)
+
+        if errors:
+            status = STATUS_BLOCKED
+        elif warnings:
+            status = STATUS_WARNING
+        else:
+            status = STATUS_VALID
+
+        proposal = {
+            "library_item_id": item_id,
+            "status": status,
+            "current_name": current_name,
+            "current_path": path,
+            "proposed_title": title,
+            "proposed_torrent_name": proposed_torrent_name,
+            "proposed_filename": proposed_filename,
+            "proposed_folder": proposed_folder,
+            "proposed_path": proposed_path,
+            "media_type": media_type,
+            "tmdb_id": tmdb_id,
+            "imdb_id": imdb_id,
+            "year": year,
+            "series_title": series_title,
+            "season_number": item.get("season_number"),
+            "resolution": resolution,
+            "source": source,
+            # Stored under the same provider_final column name the 'editar
+            # campos' flow already uses (web/api/nomenclature.py's
+            # save-fields endpoint) — same underlying table, same meaning.
+            "provider_final": provider,
+            "video_codec": video_codec,
+            "audio_summary": audio_summary,
+            "subtitle_summary": subtitle_summary,
+            "release_tag": release_tag,
+            "warnings_json": json.dumps(warnings, ensure_ascii=False),
+            "errors_json": json.dumps(errors, ensure_ascii=False),
+            # dynamic_range no tiene columna y el pack lo necesita para su título.
+            "raw_json": json.dumps({"item_id": item_id, "title": title, "huella": _huella(item),
+                                    "dynamic_range": dynamic_range}, ensure_ascii=False),
+        }
+        return save_nomenclature_proposal(proposal, conn=conn) if guardar else proposal
     finally:
         if own:
             conn.close()
-
-
-def compute_nomenclature_proposal(
-    item: dict, *, conn, source_override: str | None = None, provider_override: str | None = None,
-    tag_override: str | None = None, title_override: str | None = None,
-) -> dict:
-    """La propuesta de un elemento, calculada y sin guardar. Es lo que usa la
-    subida y también lo que compara Comprobar nomenclatura."""
-    item_id = item["id"]
-    preconditions = validate_nomenclature_preconditions(item, conn=conn)
-    errors = preconditions["errors"]
-    warnings = list(preconditions["warnings"])
-
-    title = item.get("title") or "Sin título"
-    year = item.get("year")
-    media_type = item.get("item_type") or "movie"
-    tmdb_id = item.get("tmdb_id")
-    imdb_id = item.get("imdb_id")
-    # Cuál de las dos rutas se lee: path_mapping.py::ruta_de_lectura.
-    from .path_mapping import ruta_de_lectura
-    path = ruta_de_lectura(item, conn=conn)
-
-    # For episodes/seasons the eMuwarez title must be the SERIES name
-    # (not the per-episode title Sonarr stores, e.g. "Serie S01E01 -
-    # Nombre del capítulo") — same resolution
-    # build_editable_nomenclature_fields() (the wizard's live preview)
-    # already does; without this the REAL applied name diverged from
-    # what the wizard showed and the user approved.
-    if media_type in ("season", "episode"):
-        from .source_assistant import _resolve_series_row
-        srow = _resolve_series_row(item, conn)
-        if srow:
-            title = srow.get("title") or title
-            tmdb_id = srow.get("tmdb_id") or tmdb_id
-    from .tmdb_titles import resolve_localized_title
-    title, _title_warning = resolve_localized_title(conn, media_type, tmdb_id, title)
-    if _title_warning:
-        warnings.append(_title_warning)
-    # An explicit pick wins over whatever TMDb resolved: the user chose it
-    # in the Título dropdown precisely to override the default.
-    if (title_override or "").strip():
-        title = title_override.strip()
-    # `title` above is already the series name for season/episode (see the
-    # resolution above) — surfaced again under its own key so consumers
-    # that show "Serie" and "Título propuesto" as separate rows (the
-    # automated upload job's nomenclature snapshot table) have both.
-    series_title = title if media_type in ("season", "episode") else None
-
-    resolution = _infer_resolution_from_item(item)
-    source = source_override or _infer_source_from_item(item)
-    release_tag = tag_override or tag_por_defecto([item.get("release_group")], conn=conn)
-
-    stat_info = safe_stat(path) if path else {}
-    current_name = stat_info.get("name") or (path.split("/")[-1] if path else None)
-
-    # Phase 6A: real values parsed from Radarr/Sonarr's own movieFile/
-    # episodeFile mediaInfo at sync time (integrations/base.py::
-    # extract_media_info), not a guess against the quality profile NAME —
-    # the starting point/fallback. Real MediaInfo of the actual file
-    # (below) wins when it's reachable, since it has proper per-track
-    # codec labels and the DUAL/MULTI-aware audio summary the eMuwarez
-    # guide expects — Radarr/Sonarr's own columns are coarser.
-    video_codec = item.get("video_codec")
-    if video_codec is None:
-        quality = item.get("quality") or ""
-        for codec in ("HEVC", "H.265", "x265", "AVC", "H.264", "x264", "AV1", "VP9"):
-            if codec.lower() in quality.lower():
-                video_codec = codec
-                break
-    if not video_codec:
-        warnings.append("Codec de vídeo no detectado. Sincroniza de nuevo la biblioteca o invoca MediaInfo desde 'Adaptar nomenclatura'.")
-
-    # Lo de Radarr/Sonarr, pero ya con los tokens del tracker: sin MediaInfo
-    # llegaban tal cual ("DD+ spa / eng spa / eng") al nombre.
-    from .emu_format import build_audio_string, format_video_codec
-    video_codec = format_video_codec(video_codec)
-    audio_summary = build_audio_string(item.get("audio_codec"), item.get("audio_languages"),
-                                       item.get("audio_channels"))
-    subtitle_summary = "SUBS" if (item.get("subtitle_languages") or "").strip() else None
-    dynamic_range = item.get("dynamic_range")
-
-    # Real MediaInfo read of the actual file (cached per file by mtime+
-    # size, so repeat calls for the same unchanged file are instant) —
-    # same source build_editable_nomenclature_fields() uses. Best-effort:
-    # any failure just keeps the Radarr/Sonarr-derived values above.
-    if path:
-        from .path_mapping import resolve_local_path
-        from .media_info_service import build_mediainfo_report
-        local_path = resolve_local_path(path, conn=conn) or path
-        mi_report = build_mediainfo_report(local_path)
-        if mi_report.get("available"):
-            emu_by_field = {
-                r["field"]: (None if r["emu"] in (None, "—", "") else r["emu"])
-                for r in mi_report.get("rows", [])
-            }
-            # La resolución del fichero, no la etiqueta de calidad de Radarr/Sonarr.
-            if mi_report.get("resolution"):
-                resolution = mi_report["resolution"]
-                warnings = [w for w in warnings if w != _AVISO_SIN_RESOLUCION]
-            video_codec = emu_by_field.get("Códec de vídeo") or video_codec
-            audio_summary = mi_report.get("audio_summary") or audio_summary
-            subtitle_summary = emu_by_field.get("Subtítulos") or subtitle_summary
-            dynamic_range = emu_by_field.get("HDR/DV") or dynamic_range
-        else:
-            warnings.append("Sin MediaInfo del archivo: el audio y los subtítulos del nombre salen "
-                            "de Radarr/Sonarr y pueden no ser exactos.")
-
-    # UND no es un idioma del tracker: el nombre no puede salir así.
-    if audio_summary and "UND" in re.split(r"[\s-]+", audio_summary):
-        errors.append("Una pista de audio no tiene idioma (UND). Ponle idioma a la pista antes de subir.")
-
-    # Phase 6E — provider (AMZN/NF/DSNP...) already present in the
-    # current filename, kept in the proposal instead of silently
-    # dropped. Detection only, no TMDb re-recommendation here.
-    provider = provider_override or _infer_provider_from_item(item, source)
-
-    # Full nomenclature with spaces + accents = the torrent/aporte title.
-    proposed_torrent_name = _build_proposed_filename(
-        title=title,
-        year=year,
-        resolution=resolution,
-        source=source,
-        video_codec=video_codec,
-        audio_summary=audio_summary,
-        subtitle_summary=subtitle_summary,
-        release_tag=release_tag,
-        media_type=media_type,
-        provider=provider,
-        season=item.get("season_number"),
-        episode=item.get("episode_number"),
-        dynamic_range=dynamic_range,
-    )
-    # File name (and folder) use the cleaned, accent-free, dotted form.
-    from .mkv_title import to_filesystem_name
-    proposed_filename = to_filesystem_name(proposed_torrent_name)
-
-    proposed_folder = proposed_filename
-    proposed_path = None
-    if path and proposed_filename:
-        parent = os.path.dirname(path)
-        ext = os.path.splitext(path)[1] if os.path.isfile(path) else ""
-        proposed_path = os.path.join(parent, proposed_filename + ext) if ext else os.path.join(parent, proposed_filename)
-    largo = error_de_longitud(proposed_filename + (os.path.splitext(path)[1] if path else ""))
-    if largo:
-        errors.append(largo)
-
-    if errors:
-        status = STATUS_BLOCKED
-    elif warnings:
-        status = STATUS_WARNING
-    else:
-        status = STATUS_VALID
-
-    proposal = {
-        "library_item_id": item_id,
-        "status": status,
-        "current_name": current_name,
-        "current_path": path,
-        "proposed_title": title,
-        "proposed_torrent_name": proposed_torrent_name,
-        "proposed_filename": proposed_filename,
-        "proposed_folder": proposed_folder,
-        "proposed_path": proposed_path,
-        "media_type": media_type,
-        "tmdb_id": tmdb_id,
-        "imdb_id": imdb_id,
-        "year": year,
-        "series_title": series_title,
-        "season_number": item.get("season_number"),
-        "resolution": resolution,
-        "source": source,
-        # Stored under the same provider_final column name the 'editar
-        # campos' flow already uses (web/api/nomenclature.py's
-        # save-fields endpoint) — same underlying table, same meaning.
-        "provider_final": provider,
-        "video_codec": video_codec,
-        "audio_summary": audio_summary,
-        "subtitle_summary": subtitle_summary,
-        "release_tag": release_tag,
-        "warnings_json": json.dumps(warnings, ensure_ascii=False),
-        "errors_json": json.dumps(errors, ensure_ascii=False),
-        # dynamic_range no tiene columna y el pack lo necesita para su título.
-        "raw_json": json.dumps({"item_id": item_id, "title": title, "huella": _huella(item),
-                                "dynamic_range": dynamic_range}, ensure_ascii=False),
-    }
-    return proposal
 
 
 def save_nomenclature_proposal(proposal: dict, conn=None) -> dict:

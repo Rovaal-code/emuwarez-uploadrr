@@ -270,3 +270,74 @@ def test_no_se_guarda_un_grupo_de_subida_vacio(client, auth_headers):
 @pytest.mark.parametrize("cuerpo", [{"upload_tags": ["../fuera"]}, {"default_release_tag": r"a\b"}])
 def test_un_grupo_de_subida_no_lleva_barras(client, auth_headers, cuerpo):
     assert client.put("/api/settings", json=cuerpo, headers=auth_headers).status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Quitar un secreto: un valor vacío deja el que hay, así que se pide con `clear`
+# ---------------------------------------------------------------------------
+
+def _guardar_secretos(client, auth_headers):
+    resp = client.put("/api/settings", json={
+        "qbit_url": "http://qbit:8080", "qbit_password": "clave-qbit",
+        "notify_discord_webhook_url": "https://discord.com/api/webhooks/1/abcdefghi",
+        "notify_telegram_bot_token": "123456:SECRETTOKEN",
+        "image_host_keys": {"lensdump": "pk", "imgbb": "ik"},
+    }, headers=auth_headers)
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["qbit_password_configured"] is True
+    assert data["notify_discord_webhook_configured"] is True
+    assert data["notify_telegram_bot_token_configured"] is True
+
+
+def test_un_valor_vacio_no_quita_los_secretos(client, auth_headers):
+    _guardar_secretos(client, auth_headers)
+    data = client.put("/api/settings", json={
+        "qbit_password": "", "notify_discord_webhook_url": "", "notify_telegram_bot_token": "",
+    }, headers=auth_headers).json()
+    assert data["qbit_password_configured"] is True
+    assert data["notify_discord_webhook_configured"] is True
+    assert data["notify_telegram_bot_token_configured"] is True
+
+
+def test_clear_quita_cada_secreto(client, auth_headers):
+    _guardar_secretos(client, auth_headers)
+    data = client.put("/api/settings", json={"clear": [
+        "qbit_password", "notify_discord_webhook_url", "notify_telegram_bot_token",
+    ]}, headers=auth_headers).json()
+    assert data["qbit_password_configured"] is False
+    assert data["notify_discord_webhook_configured"] is False
+    assert data["notify_discord_webhook_masked"] is None
+    assert data["notify_telegram_bot_token_configured"] is False
+    assert data["notify_telegram_bot_token_masked"] is None
+    # Lo demás se queda como estaba.
+    assert data["qbit_url"] == "http://qbit:8080"
+    assert set(data["image_host_keys_configured"]) >= {"lensdump", "imgbb"}
+
+
+def test_clear_quita_la_clave_de_un_proveedor_de_imagenes(client, auth_headers):
+    _guardar_secretos(client, auth_headers)
+    data = client.put("/api/settings", json={"clear": ["image_host_key:lensdump"]}, headers=auth_headers).json()
+    assert "lensdump" not in data["image_host_keys_configured"]
+    assert "imgbb" in data["image_host_keys_configured"]
+
+
+def test_clear_con_un_valor_nuevo_a_la_vez_deja_el_nuevo(client, auth_headers):
+    _guardar_secretos(client, auth_headers)
+    data = client.put("/api/settings", json={
+        "clear": ["qbit_password"], "qbit_password": "otra-clave",
+    }, headers=auth_headers).json()
+    assert data["qbit_password_configured"] is True
+    # La vieja también dejaba "configurada": se mira lo guardado.
+    from emuwarez_uploadrr.database import connect, get_setting_canonical
+    from emuwarez_uploadrr.web.runtime import _db_path
+    with connect(_db_path()) as conn:
+        assert get_setting_canonical(conn, "qbit.password") == "otra-clave"
+
+
+@pytest.mark.parametrize("nombre", ["tmdb_api_key", "emu_api_key", "image_host_key:noexiste", "qbit_url"])
+def test_clear_rechaza_lo_que_no_es_un_secreto_borrable(client, auth_headers, nombre):
+    """Las claves de TMDb y eMuwarez son obligatorias: no se pueden quitar."""
+    resp = client.put("/api/settings", json={"clear": [nombre]}, headers=auth_headers)
+    assert resp.status_code == 422
+    assert nombre in resp.json()["detail"]

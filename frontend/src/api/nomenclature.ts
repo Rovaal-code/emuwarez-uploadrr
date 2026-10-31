@@ -138,11 +138,15 @@ export async function getNomenclatureFields(itemId: number): Promise<{
   return api.get(`/library/${itemId}/nomenclature/fields`)
 }
 
+// `conProveedores: false` salta la consulta a TMDb de los proveedores: el
+// asistente de subida llama en cada edición y no los usa.
 export async function previewNomenclatureFields(
   itemId: number,
   fields: NomenclatureFields,
+  conProveedores = true,
 ): Promise<FieldsPreviewResult> {
-  return api.post<FieldsPreviewResult>(`/library/${itemId}/nomenclature/preview-fields`, { fields })
+  const query = conProveedores ? '' : '?provider_options=false'
+  return api.post<FieldsPreviewResult>(`/library/${itemId}/nomenclature/preview-fields${query}`, { fields })
 }
 
 export async function saveNomenclatureFields(

@@ -144,3 +144,18 @@ def test_un_403_de_cloudflare_en_la_portada_no_es_caido(monkeypatch):
         raise _respuesta({}, status=403)
     monkeypatch.setattr(ih.urllib.request, "urlopen", _falla)
     assert ih.test_image_host("imgbox")["ok"] is True
+
+
+def test_una_clave_sin_comprobar_no_se_guarda_como_buena(monkeypatch):
+    """La API no contesta y la portada da 403: responde, pero la clave no está
+    comprobada, así que Ajustes no puede darla por buena."""
+    from emuwarez_uploadrr.services.integration_tests import test_imghost_connection
+    monkeypatch.setattr(ih, "validate_image_host_key",
+                        lambda *a, **k: {"ok": False, "error": "No se pudo comprobar: timeout", "checked": False})
+
+    def _portada(*a, **kw):
+        raise _respuesta({}, status=403)
+    monkeypatch.setattr(ih.urllib.request, "urlopen", _portada)
+    r = test_imghost_connection("imgbb", "clave")
+    assert r["ok"] is False and r["status"] == "key_unchecked"
+    assert "timeout" in r["message"]

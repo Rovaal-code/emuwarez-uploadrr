@@ -182,16 +182,19 @@ def test_image_host(host_id: str, api_key: Optional[str] = None, *, timeout: int
                           "error": f"API key no válida: {check['error']}"})
         # No se pudo comprobar la clave: se cae al ping de siempre, avisando de
         # que la clave se queda sin verificar en vez de fingir que está bien.
+        motivo = check.get("error")
+    else:
+        motivo = None
     try:
         req = urllib.request.Request(meta["url"], method="GET", headers={"User-Agent": "emuwarez-uploadrr/2"})
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             if 200 <= resp.status < 400:
-                return {"ok": True, "key_checked": not meta["needs_key"]}
+                return {"ok": True, "key_checked": not meta["needs_key"], "key_error": motivo}
             return {"ok": False, "error": f"HTTP {resp.status}"}
     except urllib.error.HTTPError as exc:
         # Un 403/429 de Cloudflare a la portada: el servidor está, y subir funciona.
         if exc.code < 500:
-            return {"ok": True, "key_checked": not meta["needs_key"]}
+            return {"ok": True, "key_checked": not meta["needs_key"], "key_error": motivo}
         return {"ok": False, "error": f"HTTP {exc.code}"}
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": f"No responde: {exc}"}

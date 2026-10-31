@@ -34,6 +34,9 @@ _SOURCE_URL = "https://raw.githubusercontent.com/Fribb/anime-lists/master/anime-
 # weekly refresh is plenty; no need to redownload a ~7MB file every sync.
 _REFRESH_SECONDS = 7 * 86400
 _SYNC_STATE_KEY = "last_anime_id_map_sync_utc"
+# Tras un intento fallido no se vuelve a probar durante una hora.
+_FAILURE_STATE_KEY = "last_anime_id_map_failure_utc"
+_RETRY_AFTER_FAILURE_SECONDS = 3600
 
 
 def _download_and_store(conn: sqlite3.Connection) -> int:
@@ -81,6 +84,14 @@ def _needs_refresh(conn: sqlite3.Connection) -> bool:
     return (time.time() - last_ts) >= _REFRESH_SECONDS
 
 
+def _failed_recently(conn: sqlite3.Connection) -> bool:
+    try:
+        last = int(get_state(conn, _FAILURE_STATE_KEY) or 0)
+    except ValueError:
+        return False
+    return (time.time() - last) < _RETRY_AFTER_FAILURE_SECONDS
+
+
 def ensure_anime_id_map(conn: sqlite3.Connection, *, force: bool = False) -> None:
     """Populate/refresh `anime_id_map` when empty or stale. Best-effort — a
     failed/slow download must never block a library sync: on any error this
@@ -90,10 +101,14 @@ def ensure_anime_id_map(conn: sqlite3.Connection, *, force: bool = False) -> Non
         has_any = conn.execute("SELECT 1 FROM anime_id_map LIMIT 1").fetchone() is not None
         if has_any and not _needs_refresh(conn):
             return
+        if _failed_recently(conn):
+            return
     try:
         _download_and_store(conn)
     except Exception:
         logger.warning("No se pudo descargar/actualizar anime-list-full.json (Fribb/anime-lists)", exc_info=True)
+        set_state(conn, _FAILURE_STATE_KEY, str(int(time.time())))
+        conn.commit()
 
 
 def get_mal_id(

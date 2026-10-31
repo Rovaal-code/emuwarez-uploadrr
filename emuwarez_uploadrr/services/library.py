@@ -551,7 +551,8 @@ def volver_a_cruzar_peticiones(conn: sqlite3.Connection, peticiones: list[int]) 
         for rid in peticiones:
             match_single_request(conn, rid)
             evaluate_request_readiness(rid, conn, biblioteca)
-        rellenar_posters(conn)
+        # Solo estas: tras actualizar, todas las que no casan esperan aún su primer póster.
+        rellenar_posters(conn, peticiones)
     except Exception:
         conn.rollback()
         logger.exception("No se pudieron volver a cruzar las peticiones de lo borrado de la biblioteca")

@@ -29,6 +29,26 @@ con [Uploadrr-EMU](https://github.com/Kisnov/Uploadrr-EMU), que va dentro de la 
 - **Configuración**: claves de TMDb, eMuwarez y hosts de imágenes (se comprueban contra el proveedor),
   mapeo de rutas, notificaciones (Discord, Telegram, webhook), diagnóstico, backup y mantenimiento.
 
+**Panel**
+
+![Panel](docs/capturas/panel.webp)
+
+**Biblioteca**
+
+![Biblioteca](docs/capturas/biblioteca.webp)
+
+**Peticiones**
+
+![Peticiones](docs/capturas/peticiones.webp)
+
+**Asistente de subida**, con la revisión de las pistas de cada capítulo
+
+![Asistente de subida con la revisión de pistas](docs/capturas/pistas.webp)
+
+**Detalle de una subida**, con el progreso de cada fase
+
+![Detalle de una subida completada](docs/capturas/subida.webp)
+
 ## Arranque rápido (Docker Compose)
 
 Requiere Docker 24+ con Compose v2. No hace falta clonar el repo: copia esto en un `docker-compose.yml`, ajusta
@@ -94,6 +114,8 @@ docker compose up -d
 
 Abre `http://localhost:9494`: el asistente de configuración inicial se abre solo.
 
+<p align="center"><img src="docs/capturas/asistente.png" width="460" alt="Pantalla de bienvenida del asistente de configuración"></p>
+
 > Las API keys (TMDb, eMuwarez, Radarr/Sonarr…) se configuran desde el asistente web o desde Configuración, nunca
 > en el compose ni en el `.env`.
 
@@ -113,6 +135,10 @@ Abre `http://localhost:9494`: el asistente de configuración inicial se abre sol
 - **qBittorrent** tiene que ver la carpeta de subidas en la misma ruta que este contenedor.
 - **Si Radarr/Sonarr ven la media en otra ruta** que este contenedor, añade una regla en Configuración →
   Diagnóstico → *Mapeo de rutas (biblioteca remota)*.
+- **Rutas permitidas** (Configuración → *Acceso a la biblioteca*) es `/data` por defecto. Si montas la raíz de
+  datos en otra ruta, ponla ahí.
+
+![Configuración: cuenta, qBittorrent y acceso a la biblioteca](docs/capturas/configuracion.png)
 
 ### Versiones y volver atrás
 

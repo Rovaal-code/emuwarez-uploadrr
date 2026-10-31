@@ -739,6 +739,11 @@ def build_nomenclature_apply_plan(
         from .path_mapping import resolve_local_path
         elegida = ruta_de_lectura(item, conn=conn)
         source_path = (resolve_local_path(elegida, conn=conn) or elegida) if elegida else elegida
+        # Un prepared_path en la carpeta de subidas con `path` fuera es un enlace
+        # viejo de una subida, no el archivo: se parte del de Radarr/Sonarr.
+        biblioteca = resolve_local_path(item.get("path"), conn=conn) or item.get("path")
+        if source_path and biblioteca and en_carpeta_de_subidas(source_path)                 and not en_carpeta_de_subidas(biblioteca):
+            source_path = biblioteca
         if not source_path:
             return {
                 "status": "blocked",

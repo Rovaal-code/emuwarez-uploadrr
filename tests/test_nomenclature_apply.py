@@ -339,3 +339,32 @@ def test_a_library_file_is_never_renamed(isolated_db, tmp_path, monkeypatch):
     row = conn.execute("SELECT path, prepared_path FROM library_items WHERE id = ?", (item_id,)).fetchone()
     assert row["path"] == str(src) and row["prepared_path"] is None
     conn.close()
+
+
+def test_an_old_uploads_link_in_prepared_path_is_not_renamed(isolated_db, tmp_path, monkeypatch):
+    """Una fila de la biblioteca con prepared_path apuntando a un enlace viejo de
+    la carpeta de subidas: ni se renombra ese enlace ni `path` cambia."""
+    import os
+    from emuwarez_uploadrr.services import carpeta_subida
+    monkeypatch.setattr(carpeta_subida, "RAIZ_SUBIDAS", str(tmp_path / "uploads"))
+    (tmp_path / "media").mkdir()
+    (tmp_path / "uploads").mkdir()
+    src = tmp_path / "media" / "Test Film (2021).mkv"
+    src.write_bytes(b"video bytes")
+    enlace = tmp_path / "uploads" / "Test.Film.2021.viejo.mkv"
+    os.link(src, enlace)
+    conn = _open(isolated_db)
+    item_id = _insert_item(conn, title="Test Film", path=str(src))
+    conn.execute("UPDATE library_items SET prepared_path = ? WHERE id = ?", (str(enlace), item_id))
+    conn.commit()
+
+    plan = build_nomenclature_apply_plan(item_id, conn=conn)
+    result = apply_nomenclature_proposal(
+        item_id, dry_run=False, apply=True, confirmation=CONFIRMATION_TOKEN, conn=conn)
+
+    assert plan["source_path"] == str(src) and plan["renombrable"] is False
+    assert result["status"] == "blocked"
+    assert enlace.exists() and src.exists()
+    row = conn.execute("SELECT path FROM library_items WHERE id = ?", (item_id,)).fetchone()
+    assert row["path"] == str(src)
+    conn.close()

@@ -651,6 +651,23 @@ def test_una_reclamada_por_ti_sin_cruce_no_sale_como_reclamado_en_el_filtro(db_c
     assert ids  # las tres existen
 
 
+def test_el_filtro_entiende_el_claimed_by_con_name_igual_que_la_lista(db_conn):
+    """reclamante() acepta {"username"} y {"name"}; el SQL del filtro también, o la fila no salía donde la lista la pinta."""
+    import json
+    from emuwarez_uploadrr.database import set_json_state
+    from emuwarez_uploadrr.services.requests import list_request_items
+    set_json_state(db_conn, "emu.perfil", {"perfil": {"username": "Gabriel"}})
+    for nombre, quien in (("con-name", {"name": "gabriel"}), ("con-username", {"username": "Gabriel"}),
+                          ("de-otro", {"name": "Ana"})):
+        db_conn.execute("INSERT INTO request_items(emu_id,title,category,tmdb_id,emu_status,raw_json) "
+                        "VALUES (?, 'Sin cruce', 'Películas', '1', 'claimed', ?)",
+                        (nombre, json.dumps({"status": "claimed", "claimed_by": quien})))
+    db_conn.commit()
+    titulos = lambda estado: sorted(i["emu_id"] for i in list_request_items(db_conn, status=[estado])["items"])
+    assert titulos("Sin coincidencia") == ["con-name", "con-username"]
+    assert titulos("Reclamado") == ["de-otro"]
+
+
 def test_el_endpoint_de_la_lista_trae_reclamada_por(client, auth_headers, db_conn):
     ids = _peticiones_reclamadas(db_conn)
     items = {i["id"]: i for i in client.get("/api/requests", headers=auth_headers).json()["items"]}

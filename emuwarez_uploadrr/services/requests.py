@@ -859,6 +859,7 @@ def list_request_items(
                     WHEN LOWER(COALESCE(ri.emu_status,'')) LIKE '%reclam%' OR LOWER(COALESCE(ri.emu_status,'')) LIKE '%claim%' THEN
                         CASE WHEN ? != '' AND LOWER(TRIM(COALESCE(CASE WHEN json_valid(ri.raw_json) THEN
                                 COALESCE(json_extract(ri.raw_json, '$.claimed_by.username'),
+                                         json_extract(ri.raw_json, '$.claimed_by.name'),
                                          json_extract(ri.raw_json, '$.claimed_by')) END, ''))) = ?
                              THEN 'Sin coincidencia' ELSE 'Reclamado' END
                     WHEN LOWER(COALESCE(ri.emu_status,'')) LIKE '%pend%' THEN 'Pendiente'

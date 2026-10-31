@@ -71,9 +71,7 @@ def update_instance(
     enabled: Optional[bool] = None,
     is_4k: Optional[bool] = None,
     is_anime: Optional[bool] = None,
-    test_connection: bool = False,
 ) -> bool:
-    """Con `test_connection` (la edición web), cambiar la URL o la clave exige que la instancia responda."""
     sets = []
     params = []
     if url is not None:
@@ -82,18 +80,6 @@ def update_instance(
     if api_key is not None:
         sets.append("api_key = ?")
         params.append(api_key.strip())
-    actual = None
-    if test_connection and (url is not None or api_key is not None):
-        actual = conn.execute("SELECT type, name, url, api_key FROM instances WHERE id = ?", (instance_id,)).fetchone()
-    if actual:
-        nueva_url = normalize_base_url(url) if url is not None else actual["url"]
-        nueva_clave = api_key.strip() if api_key is not None else actual["api_key"]
-        if (nueva_url, nueva_clave) != (actual["url"], actual["api_key"]):
-            result = test_connection_params(actual["type"], nueva_url, nueva_clave, name or actual["name"])
-            if not result.get("ok"):
-                raise ValueError(
-                    f"No se pudo conectar con la instancia {actual['type']}: {result.get('error') or 'error desconocido'}"
-                )
     if name is not None:
         name = name.strip()
         conflict = conn.execute(
@@ -126,6 +112,24 @@ def update_instance(
         conn.execute("UPDATE library_items SET instance_name = ? WHERE instance_id = ?", (name, instance_id))
     conn.commit()
     return cur.rowcount > 0
+
+
+AVISO_SIN_RESPUESTA = (
+    "Guardado, pero la instancia no responde: no se ha podido comprobar que sea el mismo servidor. "
+    "Si apunta a otro, sincronizar mezclará elementos."
+)
+
+
+def aviso_si_cambia_el_destino(instance: InstanceConfig, *, url: Optional[str], api_key: Optional[str]) -> Optional[str]:
+    """Con otra URL o clave, prueba la nueva: si no responde devuelve el aviso (se guarda igual, hay instancias apagadas
+    días). Las fichas se casan por su id de Radarr/Sonarr, así que si apunta a otro servidor la sincronización las mezcla."""
+    nueva_url = normalize_base_url(url) if url is not None else instance.url
+    nueva_clave = api_key.strip() if api_key is not None else instance.api_key
+    if (nueva_url, nueva_clave) == (instance.url, instance.api_key):
+        return None
+    if test_connection_params(instance.type, nueva_url, nueva_clave, instance.name).get("ok"):
+        return None
+    return AVISO_SIN_RESPUESTA
 
 
 def remove_instance(conn: sqlite3.Connection, instance_id: int) -> bool:

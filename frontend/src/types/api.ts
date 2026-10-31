@@ -97,6 +97,8 @@ export interface InstanceSafeResponse {
   last_test_at: string | null
   created_at: string
   updated_at: string | null
+  /** Solo al editar: lo que se ha guardado y conviene mirar (p. ej. la instancia no respondía). */
+  warning?: string | null
 }
 
 export interface InstanceTestResponse {

@@ -89,13 +89,13 @@ def update_instance_endpoint(
                 enabled=body.enabled,
                 is_4k=body.is_4k,
                 is_anime=body.is_anime,
-                test_connection=True,
             )
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-        from ...services.instances import get_instance_row
+        from ...services.instances import aviso_si_cambia_el_destino, get_instance_row
         row = get_instance_row(instance_id, conn)
-    return _row_to_safe(row)
+        aviso = aviso_si_cambia_el_destino(inst, url=body.url, api_key=body.api_key)
+    return _row_to_safe(row).model_copy(update={"warning": aviso})
 
 
 @router.delete("/{instance_id}", response_model=OkResponse)

@@ -5,6 +5,7 @@ It only reads library_items from the database and generates proposals.
 """
 from __future__ import annotations
 
+import functools
 import json
 import logging
 import os
@@ -155,6 +156,13 @@ def infer_provider_from_item(item: dict) -> str | None:
     """Public: detect the EMU provider code (AMZN/NF/DSNP…) from an item's
     filename, inferring the source first (provider is only meaningful for
     provider-carrying sources like WEB-DL). Returns None when not detectable."""
+    return _proveedor_de(item.get("path"), item.get("source"), item.get("quality"))
+
+
+# En caché: Biblioteca lo pide para cada fila y cada capítulo en cada carga.
+@functools.lru_cache(maxsize=131072)
+def _proveedor_de(path: str | None, source: str | None, quality: str | None) -> str | None:
+    item = {"path": path, "source": source, "quality": quality}
     return _infer_provider_from_item(item, _infer_source_from_item(item))
 
 

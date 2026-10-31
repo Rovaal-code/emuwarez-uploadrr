@@ -420,3 +420,102 @@ def test_el_apagado_de_la_aplicacion_detiene_los_procesos():
             uploadrr.assert_not_called()
         uploadrr.assert_called_once()
         remux.assert_called_once()
+
+
+# --- Apagar el servidor: nada se lanza durante el apagado ni se escapa de la lista -------------
+
+class _MkvmergeFalso:
+    """Lo que devuelve el Popen de mkvmerge en estos tests, con un proceso real detrás."""
+    def __init__(self, real):
+        self._real = real
+        self.pid = real.pid
+        self.stdout = iter([])
+
+    def wait(self, timeout=None):
+        return self._real.wait(timeout)
+
+    def kill(self):
+        self._real.kill()
+
+
+def _remux_de_prueba(conn, tmp_path):
+    from tests.test_mkv_remux import _SAMPLE_MKV_JSON, _enable_reorder, _insert_library_item
+
+    mkv = tmp_path / "Film.2024.mkv"
+    mkv.write_bytes(b"fake mkv original")
+    item_id = _insert_library_item(conn, prepared_path=str(mkv))
+    _enable_reorder(conn)
+    patches = (
+        patch("emuwarez_uploadrr.services.mkv_remux.check_mkvmerge_available",
+              return_value={"available": True, "path": "/usr/bin/mkvmerge"}),
+        patch("emuwarez_uploadrr.services.mkv_remux.read_tracks_json",
+              return_value={"ok": True, "data": _SAMPLE_MKV_JSON}),
+    )
+    return item_id, patches
+
+
+def _aplicar_remux(item_id):
+    # Sin conexión: apply_remux abre la suya, en el hilo desde el que se llama.
+    from emuwarez_uploadrr.services.mkv_remux import REMUX_CONFIRMATION_TOKEN, apply_remux
+    return apply_remux(item_id, dry_run=False, apply=True, confirmation=REMUX_CONFIRMATION_TOKEN)
+
+
+def test_un_remux_que_se_lanza_mientras_se_apaga_no_se_escapa(db_conn, tmp_path):
+    """El apagado hacía una foto de los mkvmerge en marcha, y uno lanzado justo
+    antes de apuntarse quedaba fuera y seguía escribiendo tras apagar."""
+    from emuwarez_uploadrr.services import mkv_remux
+
+    item_id, (p_mkvmerge, p_pistas) = _remux_de_prueba(db_conn, tmp_path)
+    real = _proceso_ajeno()
+    lanzando, seguir = threading.Event(), threading.Event()
+
+    def lanzar(*args, **kwargs):
+        lanzando.set()
+        assert seguir.wait(10)
+        return _MkvmergeFalso(real)
+
+    resultado = []
+    try:
+        with p_mkvmerge, p_pistas, patch("emuwarez_uploadrr.services.mkv_remux.subprocess.Popen", side_effect=lanzar):
+            remux = threading.Thread(target=lambda: resultado.append(_aplicar_remux(item_id)), daemon=True)
+            remux.start()
+            assert lanzando.wait(5)
+            apagado = threading.Thread(target=mkv_remux.detener_remuxes, daemon=True)
+            apagado.start()
+            apagado.join(timeout=0.5)
+            assert apagado.is_alive(), "el apagado no esperó a que el proceso en lanzamiento se apuntara"
+
+            seguir.set()
+            apagado.join(timeout=5)
+            remux.join(timeout=10)
+
+        assert _esperar(lambda: real.poll() is not None, 5), "el mkvmerge lanzado durante el apagado no se detuvo"
+        assert resultado and resultado[0]["status"] == "error"
+    finally:
+        if real.poll() is None:
+            real.kill()
+        real.wait()
+
+
+def test_no_se_lanza_un_remux_una_vez_empezado_el_apagado(db_conn, tmp_path):
+    from emuwarez_uploadrr.services import mkv_remux
+
+    item_id, (p_mkvmerge, p_pistas) = _remux_de_prueba(db_conn, tmp_path)
+    mkv_remux.detener_remuxes()
+
+    with p_mkvmerge, p_pistas, patch("emuwarez_uploadrr.services.mkv_remux.subprocess.Popen") as popen:
+        resultado = _aplicar_remux(item_id)
+
+    popen.assert_not_called()
+    assert resultado["status"] == "error" and "apagando" in resultado["errors"][0]
+
+
+def test_no_se_lanza_uploadrr_una_vez_empezado_el_apagado(db_conn, tmp_path):
+    jid = _job(db_conn)
+    ue.detener_procesos_en_marcha()
+
+    with patch("subprocess.Popen") as popen:
+        ue._run_uploadrr_subprocess(jid, _cmd(tmp_path), [])
+
+    popen.assert_not_called()
+    assert _estado(db_conn, jid)["status"] == "failed"

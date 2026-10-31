@@ -43,6 +43,7 @@ logger = logging.getLogger("emuwarez.mkv_remux")
 # Los mkvmerge en marcha, para pararlos al apagar el servidor (detener_remuxes).
 _REMUXES: set[subprocess.Popen] = set()
 _REMUXES_LOCK = threading.Lock()
+_apagando = False
 
 REMUX_CONFIRMATION_TOKEN = "REORDENAR_PISTAS"
 
@@ -956,17 +957,22 @@ def apply_remux(
         os.remove(tmp_path)  # mkvmerge must create the file itself
 
         args = build_mkvmerge_args(tmp_path, prepared_path, plan, gui_mode=True)
-        try:
-            proc = subprocess.Popen(
-                args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                text=True, bufsize=1, start_new_session=True,
-            )
-        except FileNotFoundError:
-            return {**preview, "status": "error", "dry_run": False, "apply": True,
-                     "errors": ["mkvmerge no encontrado al ejecutar."]}
-
+        # Lanzar y apuntar, bajo el candado con que se apaga el servidor: una vez
+        # empezado el apagado no se lanza otro, y ninguno se escapa de la lista.
         with _REMUXES_LOCK:
+            if _apagando:
+                return {**preview, "status": "error", "dry_run": False, "apply": True,
+                        "errors": ["El servidor se está apagando; no se lanza mkvmerge."]}
+            try:
+                proc = subprocess.Popen(
+                    args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                    text=True, bufsize=1, start_new_session=True,
+                )
+            except FileNotFoundError:
+                return {**preview, "status": "error", "dry_run": False, "apply": True,
+                        "errors": ["mkvmerge no encontrado al ejecutar."]}
             _REMUXES.add(proc)
+
         output_lines: list[str] = []
 
         def _read_output() -> None:
@@ -1022,8 +1028,11 @@ def apply_remux(
 
 
 def detener_remuxes() -> None:
-    """Al apagar el servidor: mkvmerge va en su propia sesión y ya no cae con él."""
+    """Al apagar el servidor: mkvmerge va en su propia sesión y ya no cae con él.
+    Desde aquí no se lanza ningún remux más."""
+    global _apagando
     with _REMUXES_LOCK:
+        _apagando = True
         procesos = list(_REMUXES)
     for proc in procesos:
         try:

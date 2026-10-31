@@ -1096,6 +1096,7 @@ def advance_running_phase(job_id: int, phase_key: str, pct: int) -> None:
 # Los Uploadrr en marcha de ESTE proceso, por trabajo: Cancelar los señala.
 _PROCESOS: dict[int, subprocess.Popen] = {}
 _PROCESOS_LOCK = threading.Lock()
+_apagando = False
 # Segundos entre SIGTERM y SIGKILL, y de margen a las tuberías tras salir Uploadrr.
 _GRACIA_SIGKILL = 10
 _GRACIA_LECTORES = 15
@@ -1125,8 +1126,11 @@ def _detener_proceso(proc: subprocess.Popen) -> bool:
 
 
 def detener_procesos_en_marcha() -> None:
-    """Al apagar el servidor: Uploadrr va en su propia sesión y ya no cae con él."""
+    """Al apagar el servidor: Uploadrr va en su propia sesión y ya no cae con él.
+    Desde aquí no se lanza ninguno más."""
+    global _apagando
     with _PROCESOS_LOCK:
+        _apagando = True
         procesos = list(_PROCESOS.values())
     for proc in procesos:
         _detener_proceso(proc)
@@ -1249,18 +1253,22 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
 
         # Sesión propia: Cancelar y el timeout señalan el grupo entero (Uploadrr,
         # mkbrr, ffmpeg…) y no solo el PID de Python.
-        proc = subprocess.Popen(
-            [executable] + args,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            stdin=subprocess.DEVNULL,
-            text=True,
-            errors="replace",
-            cwd=cwd if os.path.isdir(cwd) else None,
-            env=env,
-            start_new_session=True,
-        )
+        # Lanzar y apuntar, bajo el candado con que se apaga el servidor: una vez
+        # empezado el apagado no se lanza otro, y ninguno se escapa de la lista.
         with _PROCESOS_LOCK:
+            if _apagando:
+                raise RuntimeError("El servidor se está apagando; no se lanza Uploadrr.")
+            proc = subprocess.Popen(
+                [executable] + args,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                stdin=subprocess.DEVNULL,
+                text=True,
+                errors="replace",
+                cwd=cwd if os.path.isdir(cwd) else None,
+                env=env,
+                start_new_session=True,
+            )
             _PROCESOS[job_id] = proc
 
         if not _avanzar_job(job_id, "running", process_id=proc.pid):

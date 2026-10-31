@@ -206,7 +206,8 @@ export function NomenclatureFieldsModal({ itemId, itemTitle, onClose, onSaved }:
           <section>
             <h3>Título interno MKV</h3>
             <p className="text-muted text-sm">
-              Aplica el título interno al fichero .mkv en prepared_path usando mkvpropedit.
+              Solo en un archivo de la carpeta de subidas que no comparta nadie. En la biblioteca no se
+              toca: al subir, el título se pone en la copia de la carpeta de subidas.
               Requiere token de confirmación: <code>{MKV_TOKEN}</code>
             </p>
             <div className="modal-actions">

@@ -849,6 +849,41 @@ def test_cancelling_while_preparing_marks_the_job_and_stops_it(db_conn, tmp_path
     assert uq.job_was_cancelled(job_id, conn=db_conn) is True
 
 
+def test_un_job_cancelado_cuenta_como_activo_hasta_que_su_hilo_termina(db_conn, tmp_path):
+    """Cancelar en 'preparing' solo marca la fila: el hilo sigue renombrando o
+    remuxeando hasta el siguiente punto limpio. Un Reintentar en ese momento
+    lanzaba una segunda preparación sobre el mismo fichero."""
+    import threading
+    from unittest.mock import patch
+
+    f = tmp_path / "peli.mkv"
+    f.write_bytes(b"x")
+    iid = _movie_with_path(db_conn, str(f))
+    job_id = _failed_job_row(db_conn, iid, status="cancelled")
+
+    en_el_paso = threading.Event()
+    seguir = threading.Event()
+
+    def preparando(_job_id):
+        en_el_paso.set()
+        seguir.wait(timeout=5)
+
+    with patch.object(uq, "_run_queued_job", preparando):
+        hilo = threading.Thread(target=uq._correr_trabajo, args=(job_id,))
+        hilo.start()
+        assert en_el_paso.wait(timeout=5)
+
+        assert uq.trabajo_activo(db_conn, iid)["id"] == job_id
+        reintento = uq.queue_retry_for_job(job_id, conn=db_conn)
+        assert reintento["status"] == "blocked"
+        assert "terminando" in reintento["errors"][0]
+
+        seguir.set()
+        hilo.join(timeout=5)
+
+    assert uq.trabajo_activo(db_conn, iid) is None
+
+
 # ---------------------------------------------------------------------------
 # Jobs que se quedaron a medias al pararse la aplicación
 # ---------------------------------------------------------------------------

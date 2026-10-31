@@ -2234,7 +2234,7 @@ def _local_status_rollup(conn, item_id: int, item_type: str, ignore_specials: bo
     return "Parcial"
 
 
-def _size_rollup(conn, item_id: int, item_type: str) -> Optional[int]:
+def _size_rollup(conn, item_id: int, item_type: str, ignore_specials: bool = False) -> Optional[int]:
     """Total size of a Season/Series as the sum of its episodes' file sizes —
     season/series rows have no file of their own, so their size only makes
     sense as the aggregate of the episodes below them."""
@@ -2250,7 +2250,7 @@ def _size_rollup(conn, item_id: int, item_type: str) -> Optional[int]:
         r = conn.execute(
             "SELECT SUM(e.size_bytes) AS s FROM library_items e "
             "JOIN library_items se ON e.parent_id = se.id "
-            "WHERE se.parent_id = ? AND e.item_type = 'episode'",
+            "WHERE se.parent_id = ? AND e.item_type = 'episode'" + _specials_clause("se", ignore_specials),
             (item_id,),
         ).fetchone()
     else:
@@ -2347,35 +2347,39 @@ def _child_quality_rollup(conn, item_id: int, item_type: str, ignore_specials: b
 
 def _batch_rollups(conn, series_ids: list[int], season_ids: list[int], ignore_specials: bool) -> dict[int, dict]:
     """{item_id: {"nomenclature", "size", "local_status", "quality", "path"}}
-    for every id in series_ids/season_ids, computed from at most 2 queries
-    total (one per grouping depth) instead of ~5 queries per id."""
+    for every id in series_ids/season_ids, computed from a single query
+    instead of ~5 queries per id."""
     groups: dict[int, list[dict]] = {}
+    if not (series_ids or season_ids):
+        return {}
 
+    # Una sola lectura de los capítulos: en plano están la serie y sus
+    # temporadas a la vez, y cada capítulo se leía una vez para cada una. Los
+    # ids van como un JSON por lista, sin el tope de parámetros de SQLite.
+    condiciones, params = [], []
     if season_ids:
-        placeholders = ",".join("?" * len(season_ids))
-        rows = conn.execute(
-            "SELECT parent_id AS gid, path, resolution, source, release_group, video_codec, audio_codec, "
-            "audio_languages, subtitle_languages, nomenclature_status, local_status, size_bytes "
-            f"FROM library_items WHERE parent_id IN ({placeholders}) AND item_type = 'episode'",
-            season_ids,
-        ).fetchall()
-        for r in rows:
-            groups.setdefault(r["gid"], []).append(dict(r))
-
+        condiciones.append("se.id IN (SELECT value FROM json_each(?))")
+        params.append(json.dumps(season_ids))
     if series_ids:
-        placeholders = ",".join("?" * len(series_ids))
-        rows = conn.execute(
-            "SELECT se.parent_id AS gid, e.path AS path, e.resolution AS resolution, e.source AS source, "
-            "e.release_group AS release_group, e.video_codec AS video_codec, e.audio_codec AS audio_codec, "
-            "e.audio_languages AS audio_languages, e.subtitle_languages AS subtitle_languages, "
-            "e.nomenclature_status AS nomenclature_status, e.local_status AS local_status, e.size_bytes AS size_bytes "
-            "FROM library_items e JOIN library_items se ON e.parent_id = se.id "
-            f"WHERE se.parent_id IN ({placeholders}) AND e.item_type = 'episode'"
-            + _specials_clause("se", ignore_specials),
-            series_ids,
-        ).fetchall()
-        for r in rows:
-            groups.setdefault(r["gid"], []).append(dict(r))
+        condiciones.append("se.parent_id IN (SELECT value FROM json_each(?))")
+        params.append(json.dumps(series_ids))
+    rows = conn.execute(
+        "SELECT se.id AS season_id, se.parent_id AS series_id, se.season_number AS season_number, "
+        "e.path AS path, e.resolution AS resolution, e.source AS source, "
+        "e.release_group AS release_group, e.video_codec AS video_codec, e.audio_codec AS audio_codec, "
+        "e.audio_languages AS audio_languages, e.subtitle_languages AS subtitle_languages, "
+        "e.nomenclature_status AS nomenclature_status, e.local_status AS local_status, e.size_bytes AS size_bytes "
+        "FROM library_items e JOIN library_items se ON e.parent_id = se.id "
+        f"WHERE e.item_type = 'episode' AND ({' OR '.join(condiciones)})",
+        params,
+    ).fetchall()
+    temporadas, series = set(season_ids), set(series_ids)
+    for r in rows:
+        fila = dict(r)
+        if r["season_id"] in temporadas:
+            groups.setdefault(r["season_id"], []).append(fila)
+        if r["series_id"] in series and not (ignore_specials and r["season_number"] == 0):
+            groups.setdefault(r["series_id"], []).append(fila)
 
     result: dict[int, dict] = {}
     for gid, episode_rows in groups.items():

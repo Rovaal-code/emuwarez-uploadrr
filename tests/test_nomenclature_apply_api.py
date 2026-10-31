@@ -8,6 +8,13 @@ import pytest
 from pathlib import Path
 
 
+@pytest.fixture(autouse=True)
+def _tmp_es_la_carpeta_de_subidas(tmp_path, monkeypatch):
+    """Solo se renombra lo que está en la carpeta de subidas: aquí, tmp_path."""
+    from emuwarez_uploadrr.services import carpeta_subida
+    monkeypatch.setattr(carpeta_subida, "RAIZ_SUBIDAS", str(tmp_path))
+
+
 def _insert_item(isolated_db, title="Test Movie", path=None, local_status="Disponible"):
     from emuwarez_uploadrr.database import connect, init_db
     conn = connect(isolated_db / "emuwarez_uploadrr.db")
@@ -157,7 +164,7 @@ def test_get_nomenclature_operations_empty(client, auth_headers, isolated_db):
     assert r.json() == []
 
 
-def test_get_nomenclature_operations_after_dry_run(client, auth_headers, isolated_db, tmp_path):
+def test_get_nomenclature_operations_after_apply(client, auth_headers, isolated_db, tmp_path):
     src = tmp_path / "film.mkv"
     src.write_bytes(b"data")
 
@@ -165,7 +172,7 @@ def test_get_nomenclature_operations_after_dry_run(client, auth_headers, isolate
 
     client.post(
         f"/api/library/{item_id}/adapt-nomenclature",
-        json={"dry_run": True},
+        json={"dry_run": False, "apply": True, "confirmation": "APLICAR_NOMENCLATURA"},
         headers=auth_headers,
     )
     r = client.get(
@@ -177,7 +184,7 @@ def test_get_nomenclature_operations_after_dry_run(client, auth_headers, isolate
     assert isinstance(ops, list)
     assert len(ops) >= 1
     op = ops[0]
-    assert op["dry_run"] is True
+    assert op["dry_run"] is False
     assert op["operation_type"] == "nomenclature_rename"
 
 
@@ -223,3 +230,24 @@ def test_adapt_nomenclature_real_apply_renames_file(client, auth_headers, isolat
         assert row["prepared_path"] == body["destination_path"]
         assert row["path"] == body["destination_path"]  # `path` follows the rename
         conn.close()
+
+
+def test_adapt_nomenclature_says_a_library_file_is_not_renamed(client, auth_headers, isolated_db,
+                                                               tmp_path, monkeypatch):
+    """El modal de Biblioteca lo desactiva para esos con la explicación."""
+    from emuwarez_uploadrr.services import carpeta_subida
+    monkeypatch.setattr(carpeta_subida, "RAIZ_SUBIDAS", str(tmp_path / "uploads"))
+    (tmp_path / "media").mkdir()
+    src = tmp_path / "media" / "film.mkv"
+    src.write_bytes(b"film data")
+    item_id = _insert_item(isolated_db, title="Test Film", path=str(src))
+
+    body = client.post(
+        f"/api/library/{item_id}/adapt-nomenclature",
+        json={"dry_run": False, "apply": True, "confirmation": "APLICAR_NOMENCLATURA"},
+        headers=auth_headers,
+    ).json()
+    assert body["status"] == "blocked"
+    assert body["renombrable"] is False
+    assert "no se renombran" in body["message"]
+    assert src.exists()

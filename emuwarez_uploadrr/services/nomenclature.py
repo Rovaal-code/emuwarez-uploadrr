@@ -596,7 +596,7 @@ def mark_nomenclature_status(item_id: int, status: str, conn=None) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Phase 6B — safe rename apply
+# Phase 6B — el nombre que lleva el enlace de la carpeta de subidas
 # ---------------------------------------------------------------------------
 
 CONFIRMATION_TOKEN = "APLICAR_NOMENCLATURA"
@@ -668,9 +668,14 @@ def build_nomenclature_apply_plan(
     source_override: str | None = None,
     provider_override: str | None = None,
 ) -> dict:
-    """Build a dry-run plan for applying nomenclature — renames the original
-    file in place. Never modifies the filesystem."""
-    from .filesystem_apply import build_safe_rename_plan
+    """Con qué nombre de eMuwarez va el archivo a la carpeta de subidas. No toca nada.
+
+    Devuelve la propuesta, el archivo (`source_path`, ruta local) y el nombre
+    de eMuwarez (`nombre`, con extensión). Un archivo de la biblioteca conserva
+    el nombre de Radarr/Sonarr y el de eMuwarez lo lleva su enlace; solo uno que
+    ya está en la carpeta de subidas (`renombrable`) se renombra en su sitio,
+    a `destination_path`."""
+    from .carpeta_subida import en_carpeta_de_subidas
     from .path_mapping import ruta_de_lectura
     import os as _os
 
@@ -729,35 +734,11 @@ def build_nomenclature_apply_plan(
                 "destination_path": None,
             }
 
-        # Map the Radarr/Sonarr-reported path (e.g. /data/media/…) to where this
-        # app actually reaches the file (e.g. an SSHFS/NFS mount). All real
-        # filesystem work uses the mapped local path; `path` in the DB stays in
-        # the raw convention. If nomenclature was already applied once,
-        # prepared_path IS that local path already (no mapping needed) and is
-        # the only field guaranteed to still point at the real current file —
-        # `path` can go stale (e.g. overwritten by a later Radarr/Sonarr sync)
-        # without ever being renamed back, which would otherwise make this
-        # rename read from — and compute a fresh proposal against — a file
-        # that no longer exists under that name.
+        # La ruta de Radarr/Sonarr (/data/media/…) traducida a donde esta app
+        # llega al fichero (un montaje SSHFS/NFS, por ejemplo).
         from .path_mapping import resolve_local_path
         elegida = ruta_de_lectura(item, conn=conn)
         source_path = (resolve_local_path(elegida, conn=conn) or elegida) if elegida else elegida
-        # `path` se guarda SIEMPRE en el convenio de Radarr/Sonarr, así que la
-        # ruta que se anotará después del renombrado sale de ahí y no de la
-        # que se acabe leyendo: leyendo de la carpeta de subidas, apuntar
-        # `path` a esa carpeta dejaría la fila mirando a un enlace en vez de a
-        # la biblioteca.
-        raw_source = item.get("path")
-        proposed_filename = (
-            proposal.get("proposed_filename")
-            or proposal.get("proposed_title")
-            or "archivo"
-        )
-        ext = _os.path.splitext(source_path)[1] if source_path else ""
-
-        # Rename the original in place (same folder → same filesystem, so it
-        # works even when the media lives on an SSHFS/NFS mount where a
-        # hardlink to local disk would be cross-device).
         if not source_path:
             return {
                 "status": "blocked",
@@ -765,22 +746,83 @@ def build_nomenclature_apply_plan(
                 "warnings": [], "proposal": proposal,
                 "source_path": None, "destination_path": None,
             }
-        destination_path = _os.path.join(
-            _os.path.dirname(source_path), proposed_filename + ext
+        proposed_filename = (
+            proposal.get("proposed_filename")
+            or proposal.get("proposed_title")
+            or "archivo"
         )
-        plan = build_safe_rename_plan(source_path, destination_path)
-        plan["proposal"] = proposal
-        plan["item"] = {"id": item_id, "title": item.get("title")}
-        # Raw-convention path the DB should point to after the rename (same
-        # folder, new filename) — keeps `path` consistent for future mapping.
-        plan["raw_destination_path"] = (
-            _os.path.join(_os.path.dirname(raw_source), proposed_filename + ext)
-            if raw_source else destination_path
-        )
-        return plan
+        nombre = proposed_filename + _os.path.splitext(source_path)[1]
+        renombrable = en_carpeta_de_subidas(source_path)
+        # `path` se guarda en el convenio de Radarr/Sonarr: tras renombrar, la misma carpeta.
+        raw_source = item.get("path")
+        return {
+            "status": "ready",
+            "errors": [],
+            "warnings": [],
+            "proposal": proposal,
+            "item": {"id": item_id, "title": item.get("title")},
+            "source_path": source_path,
+            "nombre": nombre,
+            "renombrable": renombrable,
+            "destination_path": _os.path.join(_os.path.dirname(source_path), nombre) if renombrable else None,
+            "raw_destination_path": (_os.path.join(_os.path.dirname(raw_source), nombre)
+                                     if renombrable and raw_source else None),
+        }
     finally:
         if own:
             conn.close()
+
+
+def renombrar_en_subidas(item_id: int, origen: str, destino: str, *, conn,
+                         raw_destino: str | None = None, proposal_id: int | None = None,
+                         dry_run: bool = False) -> dict:
+    """Renombra en su sitio un archivo de la carpeta de subidas (filesystem_apply
+    veta cualquier otro) y apunta la fila de la biblioteca al nombre nuevo."""
+    from .filesystem_apply import apply_rename_plan, build_safe_rename_plan
+
+    now = datetime.now(timezone.utc).isoformat()
+    plan = build_safe_rename_plan(origen, destino)
+    result = apply_rename_plan(plan, dry_run=dry_run)
+    if dry_run:
+        return result
+    if result.get("status") == "applied":
+        logger.info("Renombrado en la carpeta de subidas: %s → %s", origen, destino)
+    else:
+        logger.warning("No se renombró %s [%s]: %s", origen, result.get("status"),
+                       "; ".join(result.get("errors", [])) or result.get("message") or "")
+    try:
+        cursor = conn.execute(
+            """
+            INSERT INTO filesystem_operations (
+                operation_type, status, library_item_id, proposal_id,
+                source_path, destination_path, base_path,
+                dry_run, warnings_json, errors_json, result_json,
+                created_at, updated_at, applied_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                plan.get("operation_type", "nomenclature_rename"), result.get("status", "planned"),
+                item_id, proposal_id, origen, destino, None, 0,
+                json.dumps(result.get("warnings", []), ensure_ascii=False),
+                json.dumps(result.get("errors", []), ensure_ascii=False),
+                json.dumps(result, ensure_ascii=False, default=str),
+                now, now, result.get("applied_at"),
+            ),
+        )
+        result["operation_id"] = cursor.lastrowid
+        if result.get("status") == "applied":
+            # `path` en el convenio de Radarr/Sonarr; prepared_path, el archivo local.
+            conn.execute(
+                """UPDATE library_items
+                   SET path = ?, prepared_path = ?, nomenclature_applied_at = ?,
+                       nomenclature_status = 'Correcta', updated_at = ?
+                   WHERE id = ?""",
+                (raw_destino or destino, destino, now, now, item_id),
+            )
+        conn.commit()
+    except Exception:
+        logger.warning("No se pudo registrar el renombrado de %s", origen, exc_info=True)
+    return result
 
 
 def apply_nomenclature_proposal(
@@ -794,134 +836,83 @@ def apply_nomenclature_proposal(
     source_override: str | None = None,
     provider_override: str | None = None,
 ) -> dict:
-    """Apply nomenclature proposal — renames the original file in place."""
-    from .filesystem_apply import apply_rename_plan
+    """Renombra en su sitio, solo si el archivo está en la carpeta de subidas.
+
+    Uno de la biblioteca no se renombra nunca (Jellyfin lo lee con el nombre de
+    Radarr/Sonarr): para ese queda en vista previa, con `renombrable` a False."""
+    from .filesystem_apply import SOLO_EN_SUBIDAS
 
     own = conn is None
     conn = conn or connect()
     try:
-        now = datetime.now(timezone.utc).isoformat()
-
         if dry_run:
             apply = False
-
         plan = build_nomenclature_apply_plan(
             item_id, proposal_id=proposal_id, conn=conn,
             source_override=source_override, provider_override=provider_override,
         )
-
         base_result = {
-            "dry_run": dry_run,
-            "apply": apply,
+            "dry_run": True,
+            "apply": False,
+            "status": plan["status"],
             "source_path": plan.get("source_path"),
             "destination_path": plan.get("destination_path"),
+            "nombre": plan.get("nombre"),
+            "renombrable": bool(plan.get("renombrable")),
             "proposal": plan.get("proposal"),
             "warnings": plan.get("warnings", []),
             "errors": list(plan.get("errors", [])),
+            "message": None,
+            "operation_id": None,
         }
-
         if plan["status"] == "blocked":
-            base_result["status"] = "blocked"
             base_result["message"] = "Plan bloqueado. Ver errors."
             return base_result
+        if not plan.get("renombrable"):
+            base_result["status"] = "blocked"
+            base_result["message"] = SOLO_EN_SUBIDAS
+            if apply:
+                base_result["errors"].append(SOLO_EN_SUBIDAS)
+            return base_result
+        if apply and confirmation != CONFIRMATION_TOKEN:
+            base_result["status"] = "blocked"
+            base_result["errors"].append(
+                f"Para aplicar cambios reales debes confirmar escribiendo {CONFIRMATION_TOKEN}.")
+            base_result["message"] = f"Confirmación requerida: {CONFIRMATION_TOKEN}"
+            return base_result
 
-        if apply and not dry_run:
-            if confirmation != CONFIRMATION_TOKEN:
-                base_result["status"] = "blocked"
-                base_result["errors"] = base_result["errors"] + [
-                    f"Para aplicar cambios reales debes confirmar escribiendo "
-                    f"{CONFIRMATION_TOKEN}."
-                ]
-                base_result["message"] = f"Confirmación requerida: {CONFIRMATION_TOKEN}"
-                return base_result
-
-        effective_dry_run = dry_run or not apply
-        result = apply_rename_plan(plan, dry_run=effective_dry_run)
-
-        # Only log REAL applies (the wizard preview runs this as a dry-run each
-        # keystroke — that would flood the log).
-        if not effective_dry_run:
-            title = (plan.get("item") or {}).get("title") or f"item {item_id}"
-            if result.get("status") == "applied":
-                logger.info("Nomenclatura aplicada (renombrado) a «%s» → %s",
-                            title, result.get("destination_path"))
-            else:
-                reason = "; ".join(result.get("errors", [])) or result.get("message") or ""
-                logger.warning("Nomenclatura NO aplicada (renombrado) a «%s» [%s]: %s",
-                               title, result.get("status"), reason)
-
-        fs_op_id = None
-        try:
-            cursor = conn.execute(
-                """
-                INSERT INTO filesystem_operations (
-                    operation_type, status, library_item_id, proposal_id,
-                    source_path, destination_path, base_path,
-                    dry_run, warnings_json, errors_json, result_json,
-                    created_at, updated_at, applied_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    plan.get("operation_type", "nomenclature_rename"),
-                    result.get("status", "planned"),
-                    item_id,
-                    (plan.get("proposal") or {}).get("id"),
-                    plan.get("source_path"),
-                    plan.get("destination_path"),
-                    None,
-                    1 if effective_dry_run else 0,
-                    json.dumps(result.get("warnings", []), ensure_ascii=False),
-                    json.dumps(result.get("errors", []), ensure_ascii=False),
-                    json.dumps(
-                        {k: v for k, v in result.items() if k != "proposal"},
-                        ensure_ascii=False,
-                        default=str,
-                    ),
-                    now,
-                    now,
-                    result.get("applied_at"),
-                ),
-            )
-            fs_op_id = cursor.lastrowid
-
-            if result.get("status") == "applied":
-                proposal = plan.get("proposal") or {}
-                pid = proposal.get("id")
-                dst = plan.get("destination_path")
-                if pid:
-                    conn.execute(
-                        """UPDATE nomenclature_proposals
-                           SET status = 'applied', applied_path = ?,
-                               applied_at = ?, operation_id = ?, updated_at = ?
-                           WHERE id = ?""",
-                        (dst, now, fs_op_id, now, pid),
-                    )
-                # The original file was moved, so the library's path must
-                # follow it (until the next Radarr/Sonarr sync refreshes it).
-                # `path` stays in the raw convention; prepared_path is the
-                # real local file the uploader will use.
-                raw_dst = plan.get("raw_destination_path") or dst
-                conn.execute(
-                    """UPDATE library_items
-                       SET path = ?, prepared_path = ?, nomenclature_applied_at = ?,
-                           nomenclature_status = 'Correcta', updated_at = ?
-                       WHERE id = ?""",
-                    (raw_dst, dst, now, now, item_id),
-                )
-            conn.commit()
-        except Exception:
-            pass
-
-        result["operation_id"] = fs_op_id
-        for k, v in base_result.items():
-            if k not in result:
-                result[k] = v
-        result["dry_run"] = effective_dry_run
-        result["apply"] = apply and not dry_run
-        return result
+        pid = (plan.get("proposal") or {}).get("id")
+        result = renombrar_en_subidas(
+            item_id, plan["source_path"], plan["destination_path"], conn=conn,
+            raw_destino=plan.get("raw_destination_path"), proposal_id=pid, dry_run=not apply,
+        )
+        if apply and result.get("status") == "applied" and pid:
+            marcar_nombre_aplicado(item_id, plan["destination_path"], conn=conn, proposal_id=pid)
+        return {**base_result, **{k: v for k, v in result.items() if k != "proposal"},
+                "dry_run": not apply, "apply": apply,
+                "destination_path": plan["destination_path"]}
     finally:
         if own:
             conn.close()
+
+
+def marcar_nombre_aplicado(item_id: int, ruta: str, *, conn, proposal_id: int | None = None) -> None:
+    """La propuesta se aplicó a `ruta`, en la carpeta de subidas: el enlace, la
+    copia o el propio archivo renombrado.
+
+    Solo la propuesta: la fila de un archivo de la biblioteca sigue describiendo
+    el de Radarr/Sonarr, que no cambia de nombre (su nomenclature_status es el
+    veredicto sobre ESE nombre)."""
+    now = datetime.now(timezone.utc).isoformat()
+    conn.execute(
+        """UPDATE nomenclature_proposals SET status = 'applied', applied_path = ?,
+               applied_at = ?, updated_at = ?
+           WHERE id = COALESCE(?, (SELECT id FROM nomenclature_proposals
+                                   WHERE library_item_id = ? AND status != 'expired'
+                                   ORDER BY created_at DESC LIMIT 1))""",
+        (ruta, now, now, proposal_id, item_id),
+    )
+    conn.commit()
 
 
 # ---------------------------------------------------------------------------

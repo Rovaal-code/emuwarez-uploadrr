@@ -16,7 +16,7 @@ LO QUE SE HACE AHORA. Una carpeta aparte, con el nombre del release, dentro de
 /config/Uploadrr/uploads, y dentro ENLACES DUROS a los ficheros reales:
 
     …/Sherlock Hound/Season 1/cap1.mkv        ← intacto, de Sonarr
-    /config/Uploadrr/uploads/Sherlock Hound S01 …/cap1.mkv   ← enlace duro
+    /config/Uploadrr/uploads/Sherlock Hound S01 …/Sherlock.Hound.S01E01….mkv   ← enlace duro
 
 Un enlace duro es otro nombre para los MISMOS datos: no ocupa disco, no copia
 nada, y borrar uno de los dos no toca al otro. Uploadrr recibe la carpeta
@@ -28,11 +28,15 @@ en otro disco, y ahí `os.link` falla con EXDEV. En ese caso se cae a un enlace
 simbólico, que cruza sistemas de ficheros sin copiar: mkvmerge y qBittorrent
 leen a través de él sin enterarse.
 
-TODO PASA POR AQUÍ, no solo los packs. Una película o un capítulo suelto no
-necesitaban esto —a Uploadrr se le entrega el FICHERO, y torf nombra el torrent
-con el nombre del fichero, que la nomenclatura ya dejó bien— pero se enlazan
-igual para que todo lo que subas esté en el mismo sitio: qBittorrent siembra
-siempre desde uploads y la biblioteca no aparece en ninguna ruta de subida.
+TODO PASA POR AQUÍ, no solo los packs, y el nombre de eMuwarez se pone AQUÍ:
+el fichero de la biblioteca conserva el nombre de Radarr/Sonarr (Jellyfin lo
+lee así) y el enlace de uploads lleva el del release. torf nombra el torrent
+con el nombre del fichero o de la carpeta, así que es lo que recibe quien lo baje.
+
+CUANDO HAY QUE EDITAR (nombres de pistas, título interno): un enlace duro es el
+MISMO fichero, y escribir en él cambia también el torrent que ya sembrabas.
+Entonces se usa una copia por reflink (`clonar`): un inodo nuevo que comparte
+los datos en disco hasta que se escribe en él, y solo copia lo que cambia.
 
 Un fichero suelto se enlaza DIRECTAMENTE en uploads, nunca dentro de una
 carpeta propia: metido en una, torf haría un torrent de varios ficheros con esa
@@ -48,7 +52,7 @@ import logging
 import os
 import shutil
 import threading
-from typing import Iterable, Optional
+from typing import Callable, Iterable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -75,29 +79,68 @@ def _enlazar(origen: str, destino: str) -> str:
         return "simbólico"
 
 
+# El ioctl de Linux que usa `cp --reflink=always`.
+_FICLONE = 0x40049409
+
+
+def clonar(origen: str, destino: str) -> None:
+    """Copia por reflink: inodo propio, mismos datos en disco hasta que se edita.
+
+    Lanza OSError si el sistema de ficheros no lo admite (ext4, tmpfs, otro
+    disco): nunca cae a una copia entera."""
+    try:
+        import fcntl
+    except ImportError:
+        raise OSError(errno.EOPNOTSUPP, "reflink no disponible en este sistema") from None
+    with open(origen, "rb") as src:
+        dst = open(destino, "xb")
+        try:
+            with dst:
+                fcntl.ioctl(dst.fileno(), _FICLONE, src.fileno())
+        except BaseException:
+            os.unlink(destino)
+            raise
+
+
+def enlace_simple(origen: str, destino: str) -> str:
+    """Lo que se hace con un fichero que no hay que editar."""
+    return f"enlace {_enlazar(origen, destino)}"
+
+
+class NoSePudoPreparar(Exception):
+    """Un fichero no se pudo dejar en la carpeta de subidas; el mensaje dice por qué."""
+
+
 def preparar_carpeta_de_pack(
     nombre_release: str,
-    ficheros: Iterable[str],
+    ficheros: Iterable[tuple[str, str]],
     *,
     raiz: Optional[str] = None,
+    preparar: Callable[[str, str], str] = enlace_simple,
 ) -> dict:
     """Deja lista la carpeta que se le pasa a Uploadrr y devuelve qué pasó.
 
     `nombre_release` es el título del pack, ya saneado como nombre de carpeta.
-    `ficheros` son las rutas LOCALES de los capítulos, ya renombrados.
+    `ficheros` son pares (ruta LOCAL del capítulo, nombre que lleva en el pack).
+    `preparar(origen, destino)` pone cada uno y devuelve cómo lo hizo.
 
-    Si la carpeta existe de antes (un reintento), se rehace: los enlaces son
-    baratos y así no queda un capítulo viejo de una tanda anterior.
+    Si la carpeta existe de antes (un reintento), se rehace: así no queda un
+    capítulo viejo de una tanda anterior, ni un enlace propio que cuente como
+    si otro compartiera el fichero.
     """
     raiz = raiz or RAIZ_SUBIDAS
+    # Sin esto, un título vacío daba la propia raíz y se borraba entera.
+    if not nombre_release.strip(" .") or os.path.basename(nombre_release) != nombre_release:
+        return {"status": "blocked", "carpeta": None,
+                "errors": [f"El título del pack no vale como carpeta: «{nombre_release}»"]}
     destino = os.path.join(raiz, nombre_release)
 
-    ficheros = [f for f in ficheros if f]
+    ficheros = [(f, n) for f, n in ficheros if f]
     if not ficheros:
         return {"status": "blocked", "carpeta": None,
                 "errors": ["No hay ficheros que enlazar."]}
 
-    faltan = [f for f in ficheros if not os.path.isfile(f)]
+    faltan = [f for f, _ in ficheros if not os.path.isfile(f)]
     if faltan:
         return {"status": "blocked", "carpeta": None,
                 "errors": [f"No existe: {f}" for f in faltan]}
@@ -115,28 +158,35 @@ def preparar_carpeta_de_pack(
         return {"status": "blocked", "carpeta": None,
                 "errors": [f"No se pudo preparar {destino}: {e}"]}
 
-    tipos: set[str] = set()
+    metodos: set[str] = set()
     try:
-        for origen in ficheros:
-            tipos.add(_enlazar(origen, os.path.join(destino, os.path.basename(origen))))
-    except OSError as e:
+        for origen, nombre in ficheros:
+            metodos.add(preparar(origen, os.path.join(destino, nombre)))
+    except (OSError, NoSePudoPreparar) as e:
         shutil.rmtree(destino, ignore_errors=True)
         return {"status": "blocked", "carpeta": None,
-                "errors": [f"No se pudieron enlazar los capítulos: {e}"]}
+                "errors": [str(e) if isinstance(e, NoSePudoPreparar)
+                           else f"No se pudieron enlazar los capítulos: {e}"]}
 
     return {"status": "ready", "carpeta": destino, "errors": [],
-            "enlaces": sorted(tipos), "cuantos": len(ficheros)}
+            "metodos": sorted(metodos), "cuantos": len(ficheros)}
 
 
-def preparar_fichero_suelto(fichero: str, *, raiz: Optional[str] = None) -> dict:
-    """Enlaza UN fichero (película o capítulo) en la carpeta de subidas.
+def preparar_fichero_suelto(
+    fichero: str,
+    nombre: Optional[str] = None,
+    *,
+    raiz: Optional[str] = None,
+    preparar: Callable[[str, str], str] = enlace_simple,
+) -> dict:
+    """Pone UN fichero (película o capítulo) en la carpeta de subidas.
 
     Directamente en la raíz, sin carpeta propia: dentro de una, torf haría un
     torrent de varios ficheros con esa carpeta dentro y el release dejaría de
     ser un fichero suelto.
 
-    El nombre se conserva tal cual, que ya es el de la nomenclatura: es lo que
-    torf usa para nombrar el torrent.
+    `nombre` es el de eMuwarez, que es lo que torf usa para nombrar el torrent;
+    sin él se conserva el del fichero.
     """
     raiz = raiz or RAIZ_SUBIDAS
     if not fichero or not os.path.isfile(fichero):
@@ -146,19 +196,20 @@ def preparar_fichero_suelto(fichero: str, *, raiz: Optional[str] = None) -> dict
         return {"status": "blocked", "ruta": None,
                 "errors": [f"No se pudo crear la carpeta de subidas: {raiz}"]}
 
-    destino = os.path.join(raiz, os.path.basename(fichero))
+    destino = os.path.join(raiz, nombre or os.path.basename(fichero))
     try:
-        if os.path.lexists(destino):
-            # Un reintento, o un enlace de una subida anterior del mismo
-            # contenido: se rehace, que es más barato que averiguar si sirve.
+        # Lo que dejó un intento anterior: se rehace, y así tampoco cuenta como
+        # otro enlace del mismo fichero. Salvo que sea el propio fichero.
+        if os.path.lexists(destino) and os.path.abspath(destino) != os.path.abspath(fichero):
             os.unlink(destino)
-        tipo = _enlazar(fichero, destino)
-    except OSError as e:
+        metodo = preparar(fichero, destino)
+    except (OSError, NoSePudoPreparar) as e:
         return {"status": "blocked", "ruta": None,
-                "errors": [f"No se pudo enlazar en {raiz}: {e}"]}
+                "errors": [str(e) if isinstance(e, NoSePudoPreparar)
+                           else f"No se pudo enlazar en {raiz}: {e}"]}
 
     return {"status": "ready", "ruta": destino, "errors": [],
-            "enlaces": [tipo], "cuantos": 1}
+            "metodos": [metodo], "cuantos": 1}
 
 
 def en_carpeta_de_subidas(ruta: str, *, raiz: Optional[str] = None) -> bool:

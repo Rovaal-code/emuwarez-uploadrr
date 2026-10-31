@@ -1,11 +1,13 @@
 """Filesystem apply service for nomenclature preparation.
 
-Renames the original file IN PLACE to the Emuwarez nomenclature (same
-directory → same filesystem, so it works across SSHFS/NFS mounts). This is
-the only sanctioned path that moves/renames a source file.
+Renames a file IN PLACE to the Emuwarez nomenclature (same directory → same
+filesystem, so it works across SSHFS/NFS mounts). This is the only sanctioned
+path that renames a file.
 
 SAFETY CONTRACT:
 - Only allowed filesystem write: os.rename (when dry_run=False).
+- Solo dentro de la carpeta de subidas (p. ej. lo de las instancias "Up"). La
+  biblioteca conserva el nombre de Radarr/Sonarr: Jellyfin la lee así.
 - Destination must stay in the same directory as the source.
 - No path traversal (/../).
 - No symlinks as source.
@@ -16,6 +18,11 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from .carpeta_subida import en_carpeta_de_subidas
+
+SOLO_EN_SUBIDAS = ("Los archivos de la biblioteca no se renombran: conservan el nombre de "
+                   "Radarr/Sonarr y el de eMuwarez lo lleva el enlace de la carpeta de subidas.")
 
 VIDEO_EXTENSIONS = {
     ".mkv", ".mp4", ".avi", ".mov", ".ts", ".m2ts",
@@ -57,6 +64,8 @@ def build_safe_rename_plan(source_path: str, destination_path: str) -> dict[str,
     elif src.suffix.lower() not in VIDEO_EXTENSIONS:
         warnings.append(f"El archivo origen no parece un vídeo ({src.suffix}). Continuando con precaución.")
 
+    if source_path and not en_carpeta_de_subidas(source_path):
+        errors.append(SOLO_EN_SUBIDAS)
     if not destination_path:
         errors.append("destination_path no proporcionado.")
     elif src is not None and src.exists():
@@ -94,6 +103,8 @@ def _destino_seguro(src: str | None, dst: str | None) -> str | None:
     garantía."""
     if not src or not dst:
         return "Faltan las rutas de origen o destino."
+    if not en_carpeta_de_subidas(src):
+        return SOLO_EN_SUBIDAS
     origen, destino = Path(src), Path(dst)
     if ".." in destino.parts:
         return f"El destino no puede contener '..': {dst}"

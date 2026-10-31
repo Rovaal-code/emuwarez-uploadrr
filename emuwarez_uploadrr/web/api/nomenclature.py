@@ -133,6 +133,7 @@ def adapt_nomenclature(
         warnings=result.get("warnings", []),
         errors=result.get("errors", []),
         message=result.get("message"),
+        renombrable=result.get("renombrable", True),
     )
 
 

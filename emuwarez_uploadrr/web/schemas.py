@@ -940,6 +940,9 @@ class NomenclatureApplyResult(BaseModel):
     # silently stripped from the response.
     warnings: list[str] = []
     errors: list[str] = []
+    message: Optional[str] = None
+    # Solo se renombra lo que ya está en la carpeta de subidas, nunca la biblioteca.
+    renombrable: bool = True
 
 
 # Phase 6 (Series/Season/Episode hierarchy) — season pack: one release for
@@ -950,7 +953,8 @@ class SeasonPackEpisodePlan(BaseModel):
     title: Optional[str] = None
     episode_number: Optional[int] = None
     source_path: Optional[str] = None
-    destination_path: Optional[str] = None
+    # El nombre del capítulo dentro de la carpeta del pack, en la de subidas.
+    nombre: Optional[str] = None
     proposed_filename: Optional[str] = None
 
 

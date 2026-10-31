@@ -1,5 +1,5 @@
-"""Tests for apply_nomenclature_proposal service — renames the original file
-in place (same directory, so it works across SSHFS/NFS mounts too).
+"""Tests for apply_nomenclature_proposal service — renames in place (same
+directory) a file of the uploads folder; a library file is never renamed.
 
 conftest.py provides isolated_db (autouse) pointing CONFIG_DIR to a tmp dir.
 """
@@ -16,6 +16,13 @@ from emuwarez_uploadrr.services.nomenclature import (
     build_nomenclature_apply_plan,
     CONFIRMATION_TOKEN,
 )
+
+
+@pytest.fixture(autouse=True)
+def _tmp_es_la_carpeta_de_subidas(tmp_path, monkeypatch):
+    """Solo se renombra lo que está en la carpeta de subidas: aquí, tmp_path."""
+    from emuwarez_uploadrr.services import carpeta_subida
+    monkeypatch.setattr(carpeta_subida, "RAIZ_SUBIDAS", str(tmp_path))
 
 
 # ---------------------------------------------------------------------------
@@ -187,18 +194,18 @@ def test_apply_real_renames_file_and_updates_db(isolated_db, tmp_path):
 # filesystem_operations always saved
 # ---------------------------------------------------------------------------
 
-def test_filesystem_operation_saved_on_dry_run(isolated_db, tmp_path):
+def test_a_dry_run_records_nothing(isolated_db, tmp_path):
+    """El historial es de lo que se hizo; una vista previa no hace nada."""
     src = tmp_path / "movie.mkv"
     src.write_bytes(b"v")
     conn = _open(isolated_db)
     item_id = _insert_item(conn, title="Movie", path=str(src))
 
-    result = apply_nomenclature_proposal(item_id, dry_run=True, conn=conn)
+    apply_nomenclature_proposal(item_id, dry_run=True, conn=conn)
     ops = conn.execute(
         "SELECT * FROM filesystem_operations WHERE library_item_id = ?", (item_id,)
     ).fetchall()
-    assert len(ops) >= 1
-    assert ops[-1]["dry_run"] == 1
+    assert ops == []
     conn.close()
 
 
@@ -303,4 +310,32 @@ def test_apply_plan_falls_back_when_mediainfo_unavailable(isolated_db, tmp_path)
 
     # No mediainfo available — the Phase 6A synced value must survive untouched.
     assert plan["proposal"]["video_codec"] == "AVC"
+    conn.close()
+
+
+# ---------------------------------------------------------------------------
+# La biblioteca no se renombra: Jellyfin la lee con los nombres de Radarr/Sonarr
+# ---------------------------------------------------------------------------
+
+def test_a_library_file_is_never_renamed(isolated_db, tmp_path, monkeypatch):
+    from emuwarez_uploadrr.services import carpeta_subida
+    from emuwarez_uploadrr.services.filesystem_apply import SOLO_EN_SUBIDAS
+    monkeypatch.setattr(carpeta_subida, "RAIZ_SUBIDAS", str(tmp_path / "uploads"))
+    media = tmp_path / "media"
+    media.mkdir()
+    src = media / "Test Film (2021).mkv"
+    src.write_bytes(b"video bytes")
+    conn = _open(isolated_db)
+    item_id = _insert_item(conn, title="Test Film", path=str(src))
+
+    preview = apply_nomenclature_proposal(item_id, dry_run=True, conn=conn)
+    result = apply_nomenclature_proposal(
+        item_id, dry_run=False, apply=True, confirmation=CONFIRMATION_TOKEN, conn=conn)
+
+    assert preview["renombrable"] is False and preview["message"] == SOLO_EN_SUBIDAS
+    assert result["status"] == "blocked" and SOLO_EN_SUBIDAS in result["errors"]
+    assert [p.name for p in media.iterdir()] == ["Test Film (2021).mkv"]
+    assert src.read_bytes() == b"video bytes"
+    row = conn.execute("SELECT path, prepared_path FROM library_items WHERE id = ?", (item_id,)).fetchone()
+    assert row["path"] == str(src) and row["prepared_path"] is None
     conn.close()

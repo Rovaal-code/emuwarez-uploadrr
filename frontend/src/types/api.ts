@@ -442,7 +442,7 @@ export interface SeasonPackEpisodePlan {
   title?: string
   episode_number?: number
   source_path?: string
-  destination_path?: string
+  nombre?: string
   proposed_filename?: string
 }
 
@@ -517,11 +517,14 @@ export interface UploadRemuxEpisodeSnapshot {
   title?: string | null
   episode_number?: number | null
   ordered_tracks?: UploadSnapshotTrack[]
+  omitida?: string
 }
 
 export interface UploadRemuxSnapshot {
   ordered_tracks?: UploadSnapshotTrack[]
   episodes?: UploadRemuxEpisodeSnapshot[]
+  // Por qué no se tocaron las pistas ("Ninguno", "sin reflink"…).
+  omitida?: string
 }
 
 export interface UploadCheckResult {
@@ -684,6 +687,7 @@ export interface NomenclatureApplyResult {
   warnings: string[]
   errors: string[]
   message?: string
+  renombrable?: boolean
 }
 
 export interface CommandPreview {

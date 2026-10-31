@@ -84,12 +84,6 @@ def validate_upload_preconditions(library_item: dict, proposal: dict | None = No
         if proposal and proposal.get("status") == "blocked":
             errors.append("Hay errores en la propuesta de nomenclatura que bloquean la subida.")
 
-        if not library_item.get("prepared_path"):
-            warnings.append(
-                "Nomenclatura no aplicada: se usaría el archivo original. "
-                "Considera aplicar la nomenclatura antes de subir."
-            )
-
         return {"ok": len(errors) == 0, "errors": errors, "warnings": warnings}
     finally:
         if own:

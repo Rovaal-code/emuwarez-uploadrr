@@ -1,8 +1,8 @@
 """Tests for services/season_pack.py — one season-pack release for a whole
 Temporada, ported from legacy.py::build_plan()'s season_pack branch, now
 extended with: live progress, blocking (not warning) on an incomplete
-season, cross-episode consistency validation, a rename-in-place technique
-requiring every episode to already share one folder, and the per-episode
+season, cross-episode consistency validation, every episode already sharing
+one folder, and the per-episode
 read views (names/mediainfo/remux) backing the wizard.
 
 conftest.py provides isolated_db (autouse) pointing CONFIG_DIR to a tmp dir.
@@ -16,7 +16,6 @@ from emuwarez_uploadrr.database import init_db, connect
 from emuwarez_uploadrr.services import media_info_service
 from emuwarez_uploadrr.services.season_pack import (
     build_season_pack_plan,
-    apply_season_pack,
     get_season_plan_progress,
     get_season_episode_names,
     get_season_episode_mediainfo,
@@ -134,10 +133,9 @@ def test_plan_full_season_all_episodes_present(isolated_db, tmp_path):
     assert plan["season_pack_title"].startswith("One Piece S01")
     # All available episodes already share tmp_path — that becomes the pack folder.
     assert plan["pack_folder"] == str(tmp_path)
-    # Each episode gets its own individually-named destination inside the
-    # SAME shared season folder — not the season pack title verbatim.
-    folders = {ep["destination_path"].rsplit("/", 1)[0] for ep in plan["episodes"]}
-    assert len(folders) == 1
+    # Cada capítulo lleva su propio nombre, con la extensión del archivo: el
+    # que tendrá dentro de la carpeta del pack, en la de subidas.
+    assert all(ep["nombre"] == ep["proposed_filename"] + ".mkv" for ep in plan["episodes"])
     filenames = {ep["proposed_filename"] for ep in plan["episodes"]}
     assert len(filenames) == 2
     conn.close()
@@ -279,65 +277,12 @@ def test_plan_progress_reaches_total(isolated_db, tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# apply_season_pack
+# El plan no toca la biblioteca: los nombres van a la carpeta de subidas
 # ---------------------------------------------------------------------------
 
-def test_apply_pack_blocked_when_plan_invalid(isolated_db, tmp_path):
-    conn = _open(isolated_db)
-    _series_id, season_id = _seed_series_season(conn)
-    _seed_episode(conn, season_id, number=1, title="One Piece S01E01", available=False)
-
-    result = apply_season_pack(season_id, conn)
-
-    assert result["status"] == "blocked"
-    assert result["episodes"] == []
-    conn.close()
-
-
-def test_apply_pack_renames_files_in_place_and_updates_path(isolated_db, tmp_path):
-    conn = _open(isolated_db)
-    _series_id, season_id = _seed_series_season(conn)
-    season_dir = tmp_path / "Season 1"
-    season_dir.mkdir()
-    ep_ids = []
-    for i in (1, 2):
-        src = season_dir / f"S01E0{i}.mkv"
-        src.write_bytes(b"video")
-        ep_ids.append(_seed_episode(conn, season_id, number=i, title=f"One Piece S01E0{i}", path=str(src), quality="WEBDL-1080p"))
-
-    result = apply_season_pack(season_id, conn)
-
-    assert result["status"] == "applied"
-    # Los ficheros se renombran EN SU SITIO: la carpeta de la temporada sigue
-    # siendo la misma y con el mismo nombre (ver
-    # test_apply_pack_no_toca_la_carpeta_de_sonarr).
-    pack_folder = Path(result["pack_folder"])
-    assert pack_folder == season_dir
-    assert season_dir.exists()
-    renamed_files = list(pack_folder.glob("*.mkv"))
-    assert len(renamed_files) == 2  # originals renamed in place, none duplicated
-    for ep_id in ep_ids:
-        row = conn.execute("SELECT path, prepared_path, nomenclature_status FROM library_items WHERE id = ?", (ep_id,)).fetchone()
-        assert row["path"] in [str(f) for f in renamed_files]
-        assert row["prepared_path"] == row["path"]
-        assert row["nomenclature_status"] == "Correcta"
-    conn.close()
-
-
-def test_apply_pack_no_toca_la_carpeta_de_sonarr(isolated_db, tmp_path):
-    """La carpeta de la temporada se queda EXACTAMENTE donde estaba.
-
-    Antes se renombraba al título del release, porque torf toma el nombre del
-    torrent del nombre de la carpeta. Funcionaba, pero tocaba la biblioteca del
-    usuario —Sonarr gestiona esa carpeta— y dejaba rutas guardadas apuntando a
-    un sitio que ya no existía, de donde salían nombres calculados con datos de
-    Radarr/Sonarr en vez de con el fichero.
-
-    Ahora lo que se le entrega a Uploadrr es una carpeta de ENLACES aparte, y
-    se crea después del remux (upload_queue.py), no aquí: el remux sustituye
-    cada fichero con os.replace y un enlace anterior apuntaría a los datos
-    viejos.
-    """
+def test_el_plan_no_renombra_nada(isolated_db, tmp_path):
+    """Los capítulos conservan el nombre de Sonarr: el de eMuwarez lo lleva su
+    enlace en la carpeta de subidas (upload_queue)."""
     conn = _open(isolated_db)
     _series_id, season_id = _seed_series_season(conn)
     season_dir = tmp_path / "Season 1"
@@ -346,53 +291,19 @@ def test_apply_pack_no_toca_la_carpeta_de_sonarr(isolated_db, tmp_path):
         src = season_dir / f"S01E0{i}.mkv"
         src.write_bytes(b"video")
         _seed_episode(conn, season_id, number=i, title=f"One Piece S01E0{i}", path=str(src), quality="WEBDL-1080p")
-
-    result = apply_season_pack(season_id, conn)
-
-    assert result["status"] == "applied"
-    assert Path(result["pack_folder"]) == season_dir
-    assert season_dir.is_dir(), "la carpeta original tiene que seguir existiendo"
-    assert season_dir.name == "Season 1", "el nombre de la carpeta no se toca"
-    conn.close()
-
-
-def test_apply_pack_leaves_folder_untouched_when_a_file_rename_fails(isolated_db, tmp_path):
-    """The folder rename is deliberately the LAST step — if any episode file
-    fails to rename, the shared folder must be left exactly as it was, so a
-    retry doesn't find episodes pointing at a folder name that no longer
-    exists on disk."""
-    conn = _open(isolated_db)
-    _series_id, season_id = _seed_series_season(conn)
-    season_dir = tmp_path / "Season 1"
-    season_dir.mkdir()
-    ep_ids = []
-    for i in (1, 2):
-        src = season_dir / f"S01E0{i}.mkv"
-        src.write_bytes(b"video")
-        ep_ids.append(_seed_episode(conn, season_id, number=i, title=f"One Piece S01E0{i}", path=str(src), quality="WEBDL-1080p"))
 
     plan = build_season_pack_plan(season_id, conn=conn)
+
     assert plan["status"] == "valid"
-    # Pre-create the second episode's own destination filename so its rename
-    # is blocked (destination already exists) — simulates a real mid-loop
-    # failure without needing to mock the rename primitives.
-    colliding_dst = plan["episodes"][1]["destination_path"]
-    Path(colliding_dst).write_bytes(b"already here")
-
-    result = apply_season_pack(season_id, conn)
-
-    assert result["status"] == "failed"
-    assert season_dir.exists()  # folder rename never attempted
-    assert result["pack_folder"] == str(season_dir)
+    assert sorted(p.name for p in season_dir.iterdir()) == ["S01E01.mkv", "S01E02.mkv"]
+    assert {ep["source_path"] for ep in plan["episodes"]} == {str(season_dir / "S01E01.mkv"),
+                                                             str(season_dir / "S01E02.mkv")}
     conn.close()
 
 
-def test_apply_pack_forwards_overrides_to_real_files(isolated_db, tmp_path):
-    """Regression: apply_season_pack() used to call build_season_pack_plan()
-    with NO overrides at all, silently discarding whatever source/provider/
-    tag the caller had already resolved — so even the Automático
-    source-disparity gate's choice never actually reached the renamed
-    files, only a preview snapshot."""
+def test_el_plan_lleva_los_ajustes_a_los_nombres(isolated_db, tmp_path):
+    """El source y el tag elegidos a mano llegan al título del pack y al nombre
+    de cada capítulo, que es lo que lleva su enlace."""
     conn = _open(isolated_db)
     _series_id, season_id = _seed_series_season(conn)
     season_dir = tmp_path / "Season 1"
@@ -402,13 +313,12 @@ def test_apply_pack_forwards_overrides_to_real_files(isolated_db, tmp_path):
         src.write_bytes(b"video")
         _seed_episode(conn, season_id, number=i, title=f"One Piece S01E0{i}", path=str(src), quality="WEBDL-1080p")
 
-    result = apply_season_pack(season_id, conn, source_override="BluRay", tag_override="MYTAG")
+    plan = build_season_pack_plan(season_id, conn=conn, source_override="BluRay", tag_override="MYTAG")
 
-    assert result["status"] == "applied"
-    assert result["source"] == "BluRay"
-    assert result["release_tag"] == "MYTAG"
-    assert result["season_pack_title"].endswith("-MYTAG")
-    assert "BluRay" in result["season_pack_title"]
+    assert plan["status"] == "valid"
+    assert plan["source"] == "BluRay"
+    assert plan["season_pack_title"].endswith("-MYTAG")
+    assert all(ep["nombre"].endswith("-MYTAG.mkv") for ep in plan["episodes"])
     conn.close()
 
 

@@ -40,6 +40,7 @@ jobs:
   decidir:
     if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     outputs:
@@ -62,13 +63,16 @@ jobs:
             echo "accion=prueba" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # PR fusionados desde el último commit que cambió la versión, de ramas feat/ o fix/,
-          # aquí y en Uploadrr-EMU (su main solo llega a la app al construir la imagen).
+          # PR fusionados desde el último commit que cambió la versión, aquí y en Uploadrr-EMU (su main solo
+          # llega a la app al construir la imagen): el merge de una rama feat/ o fix/, o el commit feat:/fix:
+          # de un squash o un rebase.
+          feat='Merge pull request #[0-9]+ from [^/]+/feat/|feat(\([^)]*\))?!?: '
+          fix='Merge pull request #[0-9]+ from [^/]+/fix/|fix(\([^)]*\))?!?: '
           base="$(git log -1 --format=%H -G'^__version__' -- emuwarez_uploadrr/__init__.py)"
-          prs="$(git log --first-parent --merges --format=%s "$base"..HEAD | grep -E ' from [^/]+/(feat|fix)/' || true)"
+          prs="$(git log --first-parent --format=%s "$base"..HEAD | grep -E "^($feat|$fix)" || true)"
           git clone -q --bare --filter=blob:none --single-branch --no-tags --branch main https://github.com/Kisnov/Uploadrr-EMU.git "$RUNNER_TEMP/uploadrr"
-          merges="$(git -C "$RUNNER_TEMP/uploadrr" log --first-parent --merges --since="$(git log -1 --format=%cI "$base")" --format=%s)"
-          prs="$prs"$'\n'"$(printf '%s\n' "$merges" | grep -E ' from [^/]+/(feat|fix)/' || true)"
+          commits="$(git -C "$RUNNER_TEMP/uploadrr" log --first-parent --since="$(git log -1 --format=%cI "$base")" --format=%s)"
+          prs="$prs"$'\n'"$(printf '%s\n' "$commits" | grep -E "^($feat|$fix)" || true)"
           n="$(printf '%s' "$prs" | grep -c . || true)"
           echo "$n PR feat/fix desde ${base:0:7}"
           if [ "$EVENTO" = schedule ] && [ "$n" -lt 3 ]; then
@@ -77,7 +81,7 @@ jobs:
           fi
           if [ "$ESCALA" != auto ]; then
             escala="$ESCALA"
-          elif printf '%s\n' "$prs" | grep -qE ' from [^/]+/feat/'; then
+          elif printf '%s\n' "$prs" | grep -qE "^($feat)"; then
             escala="minor"
           else
             escala="patch"
@@ -107,6 +111,7 @@ jobs:
       ((needs.decidir.outputs.accion == 'publicar' && needs.tests.result == 'success') ||
        needs.decidir.outputs.accion == 'prueba')
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       contents: write
       packages: write
@@ -127,16 +132,20 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch -q origin master
-          # Re-ejecución de un intento que falló después de subir la versión: se completa esa, no otra.
-          if [ "$(git rev-parse -q --verify origin/master^ 2>/dev/null)" = "$GITHUB_SHA" ] &&
-             git log -1 --format=%s origin/master | grep -q '^chore: versión '; then
-            git checkout -q origin/master
+          # Re-ejecución de un intento que falló después de subir la versión: se completa esa, no otra, aunque
+          # master ya haya avanzado. La versión es el primer commit de master sobre el que se lanzó este flujo.
+          subida="$(git log --first-parent --reverse --format='%H %P %s' "$GITHUB_SHA"..origin/master | head -n1 | grep -E "^[0-9a-f]{40} $GITHUB_SHA chore: versión " | cut -d' ' -f1)"
+          if [ -n "$subida" ]; then
+            git checkout -q "$subida"
             echo "subida=true" >> "$GITHUB_OUTPUT"
             # Si el manifiesto ya la anuncia, estaba entera: reconstruir cambiaría el digest de :latest.
             publicado="$(gh api repos/Kisnov/uploadrr-version/contents/latest.json --jq .content | base64 -d | jq -r .commit)"
             if [ "$publicado" = "$(git rev-parse HEAD)" ]; then
               echo "::notice::Esta versión ya estaba publicada entera; no se toca nada."
               echo "hecha=true" >> "$GITHUB_OUTPUT"
+            else
+              # Si ya hay una más nueva publicada, no se vuelve atrás moviendo :latest y :edge.
+              python3 scripts/publicar_version.py --solo-comprobar --notas "$NOTAS" --repo
             fi
           else
             python3 scripts/subir_version.py "$ESCALA"
@@ -200,7 +209,12 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
           COMMIT: ${{ steps.sello.outputs.commit }}
+          NOTAS: ${{ inputs.notas || 'Correcciones y mejoras' }}
+          GH_TOKEN: ${{ github.token }}
         run: |
+          # Otra vez justo antes de mover las etiquetas: desde la primera comprobación pasó lo que tarda la imagen,
+          # y pudo salir una versión más nueva (p. ej. con desplegar.sh). Así :latest y :edge no vuelven atrás.
+          python3 scripts/publicar_version.py --solo-comprobar --notas "$NOTAS" --repo
           imagen=ghcr.io/kisnov/emuwarez-uploadrr
           docker buildx imagetools create --tag "$imagen:$VERSION" --tag "$imagen:latest" --tag "$imagen:edge" "$imagen:$COMMIT"
           echo "digest=$(docker buildx imagetools inspect "$imagen:latest" --format '{{json .Manifest}}' | jq -r .digest)" >> "$GITHUB_OUTPUT"

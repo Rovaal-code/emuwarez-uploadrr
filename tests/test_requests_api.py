@@ -245,6 +245,49 @@ def test_requests_list_pagination(client, auth_headers, isolated_db):
     assert not (ids1 & ids2)  # no overlap
 
 
+def test_requests_list_column_filters_take_several_values(client, auth_headers, isolated_db):
+    """Los filtros de columna de Peticiones, como los de Biblioteca: varios valores en una columna
+    suman (OR), columnas distintas restringen (AND). «Cualquiera» es la petición sin resolución
+    o source pedidos, que antes no se podía filtrar, y Origen filtra por la instancia del cruce."""
+    from emuwarez_uploadrr.database import connect, init_db
+    from emuwarez_uploadrr.services.requests import upsert_request
+    from emuwarez_uploadrr.models import RequestItem
+    import os
+    os.environ["CONFIG_DIR"] = str(isolated_db)
+    conn = connect()
+    init_db(conn)
+    filas = {
+        "A": ("Movies", "1080p", "WEB-DL", "ana"),
+        "B": ("Movies", "2160p", None, "ana"),
+        "C": ("TV", None, "Remux", "bea"),
+        "D": ("TV", "720p", "WEB-DL", "carla"),
+    }
+    for title, (cat, res, src, autor) in filas.items():
+        upsert_request(conn, RequestItem(id=None, emu_id=f"col-{title}", title=title, category=cat,
+                                         requested_resolution=res, requested_source=src,
+                                         author=autor, author_visible=True))
+    for title, inst in (("A", 3), ("C", 4)):
+        lib = conn.execute("""INSERT INTO library_items(item_type, title, local_status, instance_type, instance_id)
+                              VALUES ('movie', ?, 'Disponible', 'radarr', ?)""", (title, inst)).lastrowid
+        rid = conn.execute("SELECT id FROM request_items WHERE title = ?", (title,)).fetchone()["id"]
+        conn.execute("""INSERT INTO request_matches(library_item_id, request_item_id, status, confidence)
+                        VALUES (?, ?, 'Compatible', 1.0)""", (lib, rid))
+    conn.commit()
+    conn.close()
+
+    def titulos(qs: str) -> tuple[list[str], int]:
+        data = client.get(f"/api/requests?{qs}", headers=auth_headers).json()
+        return [i["title"] for i in data["items"]], data["total"]
+
+    assert titulos("resolution=1080p&resolution=720p&sort=title") == (["A", "D"], 2)
+    assert titulos("resolution=Cualquiera&sort=title") == (["C"], 1)
+    assert titulos("source=Cualquiera&source=Remux&sort=title") == (["B", "C"], 2)
+    assert titulos("category=TV&source=WEB-DL") == (["D"], 1)
+    assert titulos("author=ana&author=bea&sort=title") == (["A", "B", "C"], 3)
+    assert titulos("instance_id=3&instance_id=4&sort=title") == (["A", "C"], 2)
+    assert titulos("status=Compatible&status=Sin coincidencia&category=Movies&sort=title") == (["A", "B"], 2)
+
+
 # ---------------------------------------------------------------------------
 # POST /api/requests/sync
 # ---------------------------------------------------------------------------

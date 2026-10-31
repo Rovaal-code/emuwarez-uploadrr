@@ -31,6 +31,7 @@ import {
   PointsValueIcon, ThumbsUpValueIcon, CommentValueIcon,
 } from '../components/DetailCard'
 import { HeaderFilter } from '../components/HeaderFilter'
+import { HeaderSort } from '../components/HeaderSort'
 import { formatBytes, timeAgo, formatDate, formatNumero } from '../utils/format'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
 import { useAlEntrar, useAlSalir } from '../context/SeccionVisible'
@@ -640,7 +641,6 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   const [wizardRequestId, setWizardRequestId] = useState<number | undefined>(undefined)
   const votesHeaderTip = useTooltip('Votos (otros usuarios que la quieren)')
   const commentsHeaderTip = useTooltip('Comentarios')
-  const pointsHeaderTip = useTooltip('Puntos / recompensa')
 
   // "Subir a eMuwarez" — reuse the exact same upload wizard as Biblioteca by
   // loading the matched library item and handing it to UploadWizardModal, with
@@ -943,8 +943,8 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                     ]} /></th>
                     {hayVotos && <th style={{ textAlign: 'center' }} {...votesHeaderTip.triggerProps}><VotesIcon />{votesHeaderTip.tooltipNode}</th>}
                     {hayComentarios && <th style={{ textAlign: 'center' }} {...commentsHeaderTip.triggerProps}><CommentsIcon />{commentsHeaderTip.tooltipNode}</th>}
-                    <th style={{ textAlign: 'center' }} {...pointsHeaderTip.triggerProps}><PointsIcon />{pointsHeaderTip.tooltipNode}</th>
-                    <th>Creada</th>
+                    <HeaderSort label={<PointsIcon />} nombre="Puntos / recompensa" desc="points_desc" asc="points_asc" sortBy={sortBy} onSort={setSortBy} align="center" />
+                    <HeaderSort label="Creada" desc="created_desc" asc="created_asc" sortBy={sortBy} onSort={setSortBy} />
                   </tr>
                 </thead>
                 {displayItems.length === 0 && (

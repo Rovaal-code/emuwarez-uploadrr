@@ -18,6 +18,7 @@ import { LibraryTreeRow, type LibraryActionKind } from '../components/LibraryTre
 import { LargePosterCard } from '../components/LargePosterCard'
 import { LibraryDetailPage } from '../components/LibraryDetailPage'
 import { HeaderFilter } from '../components/HeaderFilter'
+import { HeaderSort } from '../components/HeaderSort'
 import { FilasVirtuales } from '../components/FilasVirtuales'
 import { posterUrl } from '../utils/libraryItem'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
@@ -25,7 +26,7 @@ import { hayAlgunFiltro, necesitaTodosLosNiveles } from '../utils/filtrosBibliot
 import { CASTELLANO_OPCIONES, type EstadoCastellano } from '../utils/castellano'
 import { useTardanza } from '../hooks/useTardanza'
 import { useAlEntrar, useAlSalir } from '../context/SeccionVisible'
-import { IconoLibros, IconoOrden, IconoTipo } from '../components/Iconos'
+import { IconoLibros, IconoTipo } from '../components/Iconos'
 import { formatNumero } from '../utils/format'
 
 // Una sola lista vacía: volver a ponerla no cuenta como cambio y no recarga la biblioteca.
@@ -557,22 +558,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
       <th><HeaderFilter label="EMuwarez" value={filterEmu} onChange={v => { setFilterEmu(v); setOffset(0) }} options={[
         { value: '', label: 'Todos' }, ...(filterOptions?.emu_states ?? []).map(s => ({ value: s, label: s === 'present' ? 'Sí' : 'No' })),
       ]} /></th>
-      <th aria-sort={sortBy === 'size_desc' ? 'descending' : sortBy === 'size_asc' ? 'ascending' : 'none'}>
-        {/* Igual que «Orden: Tamaño» del selector: el primer clic
-            pone el más grande arriba y los siguientes alternan. */}
-        <button
-          type="button"
-          className={`hf-trigger${sortBy.startsWith('size_') ? ' active' : ''}`}
-          onClick={() => { setSortBy(sortBy === 'size_desc' ? 'size_asc' : 'size_desc'); setOffset(0) }}
-          title={sortBy === 'size_desc' ? 'Ordenar de menor a mayor' : 'Ordenar de mayor a menor'}
-          style={{ color: sortBy.startsWith('size_') ? 'var(--text-accent)' : undefined }}
-        >
-          <span>Tamaño</span>
-          <span aria-hidden className="hf-caret" style={{ color: sortBy.startsWith('size_') ? 'var(--text-accent)' : undefined }}>
-            <IconoOrden sentido={sortBy === 'size_asc' ? 'asc' : sortBy === 'size_desc' ? 'desc' : null} size="1.4em" />
-          </span>
-        </button>
-      </th>
+      <HeaderSort label="Tamaño" desc="size_desc" asc="size_asc" sortBy={sortBy} onSort={v => { setSortBy(v); setOffset(0) }} />
       <th className="col-actions">Acciones</th>
     </tr>
   )

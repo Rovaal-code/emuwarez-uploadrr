@@ -424,6 +424,21 @@ def _is_forced(props: dict) -> bool:
     return bool(_FORCED_NAME_RE.search(name))
 
 
+# Lo que dice una pista además de su idioma, por la bandera de mkvmerge o por
+# su nombre de antes. Renombrar no puede perderlo: dos castellanos (normal y
+# comentarios, completo y SDH) quedaban con el mismo nombre.
+_CUALIFICADORES = (
+    ("flag_commentary", re.compile(r"coment|comment", re.I), "Comentarios"),
+    ("flag_visual_impaired", re.compile(r"(?i:audio\s*descri|descriptive)|\bAD\b"), "Audiodescripción"),
+    ("flag_hearing_impaired", re.compile(r"\bsdh\b|\bcc\b|hearing|sordos", re.I), "SDH"),
+)
+
+
+def _cualificadores(props: dict) -> list[str]:
+    nombre = props.get("track_name") or ""
+    return [etiqueta for bandera, patron, etiqueta in _CUALIFICADORES
+            if props.get(bandera) or patron.search(nombre)]
+
 
 def _default_subtitle_id(audio_sorted: list[dict], subs_sorted: list[dict]) -> int | None:
     """Which subtitle track (if any) should come out flagged as default.
@@ -496,6 +511,9 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None,
             "current_name": props.get("track_name"),
             "default_before": bool(props.get("default_track")),
             "forced": _is_forced(props),
+            # La bandera del contenedor, que es la que obedece el reproductor.
+            "forced_flag": bool(props.get("forced_track")),
+            "qualifiers": _cualificadores(props),
             "audio_channels": props.get("audio_channels"),
             "pixel_dimensions": props.get("pixel_dimensions"),
             # UID de la pista dentro del MKV: es como mkvpropedit la
@@ -510,7 +528,11 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None,
     for t in audio + subs:
         t["_priority"] = lang_priority(t["language"], ietf_by_id.get(t["id"]), t["current_name"])
 
-    audio_sorted = sorted(audio, key=lambda t: t["_priority"])
+    # Dentro de un idioma, los comentarios y la audiodescripción van detrás:
+    # la primera pista es la que queda predeterminada.
+    def _secundaria(t: dict) -> bool:
+        return bool({"Comentarios", "Audiodescripción"} & set(t["qualifiers"]))
+    audio_sorted = sorted(audio, key=lambda t: (t["_priority"], _secundaria(t)))
     # Secondary key `not t["forced"]` (False < True, so forced wins the tie):
     # within a language the forced track goes FIRST, giving
     #   Español Forzado, Español, Català Forzado, Català, Inglés Forzado, Inglés, resto
@@ -534,13 +556,15 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None,
         t["new_name"] = " ".join(x for x in (res, codec) if x) or codec
         t["default_after"] = t["default_before"]  # never touch video default
 
-    for i, t in enumerate(audio_sorted):
+    principal = next((t for t in audio_sorted if not _secundaria(t)), audio_sorted[0] if audio_sorted else None)
+    for t in audio_sorted:
         lang_name = lang_display_name(t["language"], ietf_by_id.get(t["id"]), t["current_name"])
         codec = _audio_codec_label(t["codec"])
         # Los mismos canales que el nombre del release; ninguno si no se sabe.
         ch = format_channels(t["audio_channels"])
-        t["new_name"] = f"{lang_name} - " + " ".join(x for x in (codec, ch) if x)
-        t["default_after"] = (i == 0)  # first in the new order becomes default
+        t["new_name"] = " - ".join([lang_name, " ".join(x for x in (codec, ch) if x)] + t["qualifiers"])
+        # La predeterminada es la primera que no es de comentarios ni audiodescripción.
+        t["default_after"] = t is principal
 
     default_sub_id = _default_subtitle_id(audio_sorted, subs_sorted)
     for t in subs_sorted:
@@ -549,7 +573,8 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None,
         # {Canales}" — consistent separator across track types, whatever the
         # qualifier ends up being (Forzado today; Full/SDH etc. would follow
         # the same pattern if ever added).
-        t["new_name"] = f"{lang_name} - Forzado" if t["forced"] else lang_name
+        quals = (["Forzado"] if t["forced"] else []) + [q for q in t["qualifiers"] if q == "SDH"]
+        t["new_name"] = " - ".join([lang_name] + quals)
         # Unlike audio, the default subtitle is NOT simply the first one: it
         # depends on what the audio offers (see _default_subtitle_id).
         t["default_after"] = (t["id"] == default_sub_id)
@@ -566,9 +591,13 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None,
     # ("Ninguno"): la columna tiene que enseñar la que ya trae, no la que se
     # elegiría. Marcada la que se elegiría, la tabla prometía un cambio que
     # nadie iba a hacer (visto en el navegador con un MKV real).
+    # Un subtítulo forzado solo por el nombre se marca también en el contenedor.
+    for t in video + audio_sorted + subs_sorted:
+        t["forced_flag_after"] = t["forced_flag"] or (t["type"] == "subtitles" and t["forced"])
     if not mark_default:
         for t in video + audio_sorted + subs_sorted:
             t["default_after"] = t["default_before"]
+            t["forced_flag_after"] = t["forced_flag"]
 
     # La tabla de "Ver Pistas" sigue el orden que va a quedar en el fichero.
     by_id = {t["id"]: t for t in (video + audio_sorted + subs_sorted)}
@@ -579,6 +608,7 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None,
             order_changed
             or t.get("current_name") != t.get("new_name")
             or t.get("default_before") != t.get("default_after")
+            or t.get("forced_flag") != t.get("forced_flag_after")
         )
         t.pop("_priority", None)
 
@@ -623,6 +653,7 @@ def apply_track_overrides(plan: dict, overrides: dict[int, dict] | None) -> dict
             plan["order_changed"]
             or t.get("current_name") != t.get("new_name")
             or t.get("default_before") != t.get("default_after")
+            or t.get("forced_flag") != t.get("forced_flag_after")
         )
         return t
 
@@ -644,9 +675,13 @@ def build_mkvmerge_args(
         args.append("--gui-mode")
     args += ["-o", output_path]
     for t in plan["ordered_tracks"]:
-        args += ["--track-name", f"{t['id']}:{t['new_name']}"]
+        # Sin nombre nuevo (solo reordenar) se queda el que tiene: antes salía "None".
+        if t.get("new_name") is not None and t.get("new_name") != t.get("current_name"):
+            args += ["--track-name", f"{t['id']}:{t['new_name']}"]
         if t["type"] in ("audio", "subtitles"):
             args += ["--default-track-flag", f"{t['id']}:{'1' if t['default_after'] else '0'}"]
+        if t.get("forced_flag_after") and not t.get("forced_flag"):
+            args += ["--forced-display-flag", f"{t['id']}:1"]
     args += ["--track-order", ",".join(f"0:{tid}" for tid in plan["new_order"])]
     args += [source_path]
     return args
@@ -672,11 +707,18 @@ def build_mkvpropedit_args(path: str, plan: dict) -> list[str]:
     """
     args: list[str] = ["mkvpropedit", path]
     for t in plan["ordered_tracks"]:
-        uid = t.get("uid")
-        selector = f"track:={uid}" if uid else f"track:{int(t['id']) + 1}"
-        args += ["--edit", selector, "--set", f"name={t['new_name']}"]
-        if t["type"] in ("audio", "subtitles"):
-            args += ["--set", f"flag-default={'1' if t['default_after'] else '0'}"]
+        # Solo lo que cambia: sin nombre nuevo (solo reordenar) antes salía "None".
+        cambios: list[str] = []
+        if t.get("new_name") is not None and t.get("new_name") != t.get("current_name"):
+            cambios += ["--set", f"name={t['new_name']}"]
+        if t["type"] in ("audio", "subtitles") and t.get("default_after") != t.get("default_before"):
+            cambios += ["--set", f"flag-default={'1' if t['default_after'] else '0'}"]
+        if t.get("forced_flag_after") and not t.get("forced_flag"):
+            cambios += ["--set", "flag-forced=1"]
+        if cambios:
+            uid = t.get("uid")
+            selector = f"track:={uid}" if uid else f"track:{int(t['id']) + 1}"
+            args += ["--edit", selector, *cambios]
     return args
 
 

@@ -159,6 +159,9 @@ export function buildDeepLink(item: DeepLinkable, instances: InstanceSafeRespons
 export type PosterSize = 'w92' | 'w154' | 'w185' | 'w342' | 'w500'
 export function posterUrl(url: string | null | undefined, size: PosterSize = 'w342'): string | undefined {
   if (!url) return undefined
+  // TheTVDB (los pósters de Sonarr) no tiene tamaños, pero sí una miniatura de
+  // 340×500 con "_t"; el original llega a 700 kB. Basta para todo menos la ficha.
+  if (url.includes('artworks.thetvdb.com/')) return size === 'w500' ? url : url.replace(/(?<!_t)\.jpg$/, '_t.jpg')
   return url.replace(/\/t\/p\/(original|w\d+)\//, `/t/p/${size}/`)
 }
 

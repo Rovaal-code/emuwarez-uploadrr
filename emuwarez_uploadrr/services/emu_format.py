@@ -139,8 +139,10 @@ def format_audio_codec(codec: Optional[str], fallback: Optional[str] = None) -> 
         base = "FLAC"
     elif "alac" in t:
         base = "ALAC"
-    elif "mp3" in t or "mpeg audio" in t:
+    elif "mp3" in t or ("mpeg audio" in t and "layer 3" in t):
         base = "MP3"
+    elif "mp2" in t or ("mpeg audio" in t and "layer 2" in t):
+        base = "MP2"
     elif "pcm" in t:
         base = "PCM"
     else:

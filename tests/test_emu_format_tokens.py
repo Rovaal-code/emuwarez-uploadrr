@@ -128,3 +128,9 @@ def test_el_motor_de_source_no_confunde_ma_con_dts_x():
     x = {**ma, "Format_AdditionalFeatures": "XLL X"}
     pistas = build_audio_tracks({"media": {"track": [ma, x]}}, None, None)
     assert [(p["dts_x"], p["lossless"]) for p in pistas] == [(False, True), (True, True)]
+
+
+def test_el_mp2_no_es_mp3():
+    """MPEG Audio Layer 2 (DVD, HDTV) salía MP3 en el nombre."""
+    from emuwarez_uploadrr.services.media_probe import audio_codec
+    assert audio_codec({"Format": "MPEG Audio", "Format_Profile": "Layer 2"}) == "MP2"

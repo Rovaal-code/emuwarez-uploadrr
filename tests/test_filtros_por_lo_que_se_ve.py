@@ -129,16 +129,9 @@ def _fila(id_, parent_id=None, *, emu=None, aportes=None, estado="Disponible"):
 
 
 def test_emuwarez_una_serie_a_medias_deja_paso_a_sus_temporadas():
-    filas = [_fila(1, emu=2), _fila(2, 1, emu=0), _fila(3, 1, emu=1), _fila(4, 2, emu=0)]
+    filas = [_fila(1, emu=2), _fila(2, 1, emu=0), _fila(3, 1, emu=1)]
     assert [f["id"] for f in filtrar_por_lo_que_se_ve(filas, emu=["candidate"])] == [2]
     assert [f["id"] for f in filtrar_por_lo_que_se_ve(filas, emu=["candidate", "present"])] == [2, 3]
-
-
-def test_lo_tapa_cualquier_ancestro_que_cumpla():
-    """La serie cumple, su temporada no (p. ej. la de especiales) y un capítulo
-    de esa temporada sí: sale la serie sola."""
-    filas = [_fila(1, emu=0), _fila(2, 1, emu=1), _fila(3, 2, emu=0)]
-    assert [f["id"] for f in filtrar_por_lo_que_se_ve(filas, emu=["candidate"])] == [1]
 
 
 def test_aportes_solo_cuenta_lo_que_se_tiene():

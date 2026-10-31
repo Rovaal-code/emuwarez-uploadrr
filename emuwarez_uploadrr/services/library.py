@@ -1206,8 +1206,7 @@ def filtrar_por_lo_que_se_ve(
     que ENSEÑA la columna, que en una serie o temporada es lo que comparten sus
     capítulos: `filas` son las ya montadas para la respuesta, en todos los niveles.
 
-    Se queda el nivel más alto que cumple: si cumple la serie entera sale la
-    serie, y si solo cumplen algunas temporadas, esas temporadas.
+    Quedarse con el nivel más alto que cumple es cosa de quedarse_con_lo_mas_alto.
     """
     elegidos = [(k, _valores(v)) for k, v in (
         ("provider_label", provider), ("resolution", resolution),
@@ -1224,19 +1223,30 @@ def filtrar_por_lo_que_se_ve(
                 and (not aporte or (_es_aporte(it) if aporte == "yes"
                                     else it["emu_in_catalog"] == 1 and not _es_aporte(it))))
 
-    ids = {it["id"] for it in filas if cumple(it)}
-    padre = {it["id"]: it["parent_id"] for it in filas}
+    return [it for it in filas if cumple(it)]
 
-    # Por toda la cadena: un capítulo cumple, su temporada no, y la serie sí.
+
+def quedarse_con_lo_mas_alto(conn: sqlite3.Connection, filas: list[dict]) -> list[dict]:
+    """La biblioteca en plano (con algún filtro puesto) se queda con el nivel
+    más alto que cumple: si cumple la serie sale la serie, y sus temporadas y
+    capítulos se ven desplegándola; si solo cumplen algunas temporadas, esas.
+
+    Sin esto, filtrar por Origen o Español sacaba cada capítulo como una fila
+    suelta al lado de su serie, porque los tres niveles cumplen a la vez.
+    """
+    ids = {it["id"] for it in filas}
+    # De la base y no de `filas`: la temporada puede no cumplir y la serie sí.
+    serie_de = dict(conn.execute("SELECT id, parent_id FROM library_items WHERE item_type = 'season'"))
+
     def lo_tapa_un_ancestro(it: dict) -> bool:
         p = it["parent_id"]
         while p is not None:
             if p in ids:
                 return True
-            p = padre.get(p)
+            p = serie_de.get(p)
         return False
 
-    return [it for it in filas if it["id"] in ids and not lo_tapa_un_ancestro(it)]
+    return [it for it in filas if not lo_tapa_un_ancestro(it)]
 
 
 def count_library(

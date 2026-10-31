@@ -1,0 +1,6 @@
+# Texto siempre en LF, también en Windows: un .sh o un Dockerfile con CRLF no arranca en Linux.
+* text=auto eol=lf
+*.png binary
+*.webp binary
+*.ico binary
+*.woff2 binary

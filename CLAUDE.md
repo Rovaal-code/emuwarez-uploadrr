@@ -73,8 +73,9 @@ the upload with Uploadrr-EMU (`Kisnov/Uploadrr-EMU`, cloned into the image at `/
   repo and the image are private, so the app can't ask GHCR or read a private raw URL without a token.
   `desplegar.sh` publishes it after `docker push` via `scripts/publicar_version.py --repo`; don't edit it by
   hand, run that script. The file is public: keep `--notas` neutral.
-- Building on Windows: the checkout is CRLF (autocrlf), and a CRLF `docker-entrypoint.sh` fails with
-  "no such file or directory". Build from `git -c core.autocrlf=false archive HEAD`.
+- Building on Windows: `.gitattributes` keeps text files LF, so a new checkout builds with `docker build .`. A checkout
+  made before it is still CRLF, and a CRLF `docker-entrypoint.sh` fails with "no such file or directory": build
+  from `git -c core.autocrlf=false archive HEAD`.
 
 ## Plan
 

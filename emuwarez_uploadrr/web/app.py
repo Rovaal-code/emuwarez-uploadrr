@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -134,6 +135,9 @@ def create_app() -> FastAPI:
         openapi_url="/api/openapi.json",
         lifespan=_lifespan,
     )
+    # La lista de Biblioteca son decenas de MB de JSON. El canal de avisos
+    # (text/event-stream) queda fuera: Starlette no lo comprime.
+    app.add_middleware(GZipMiddleware, minimum_size=1024)
 
     # HTTP request logging. To keep the INFO stream meaningful (not drowned in
     # polling), we classify each request:

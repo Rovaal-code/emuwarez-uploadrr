@@ -975,7 +975,7 @@ def _rollup_spanish(yes: int, no: int, unknown: int) -> Optional[int]:
     return 1 if yes else None  # nothing held → unknown, not a vacuous "Sí"
 
 
-def recompute_spanish_flags(conn: sqlite3.Connection) -> int:
+def recompute_spanish_flags(conn: sqlite3.Connection, ignore_specials: Optional[bool] = None) -> int:
     """Recompute has_spanish_audio/has_spanish_subs/has_spanish_ok for every
     row, and return how many rows ended up with a known (non-NULL) audio value.
 
@@ -984,9 +984,15 @@ def recompute_spanish_flags(conn: sqlite3.Connection) -> int:
     of all its seasons. Folding the series over episodes rather than over its
     seasons' stored values is deliberate and equivalent: a season with no held
     episodes is unknown, and letting it propagate would turn the whole series
-    unknown instead of just skipping it."""
+    unknown instead of just skipping it.
+
+    La serie no cuenta los especiales (temporada 0) con «ignorar especiales», igual que su estado, tamaño y
+    nomenclatura; sin indicarlo se lee de los ajustes."""
     from .emu_format import has_castellano
 
+    if ignore_specials is None:
+        from ..database import get_setting_canonical
+        ignore_specials = (get_setting_canonical(conn, "series.ignore_specials") or "true") != "false"
     held = ",".join("?" * len(_HELD_STATUSES))
 
     # Read once, reused by all three flags.
@@ -1033,6 +1039,7 @@ def recompute_spanish_flags(conn: sqlite3.Connection) -> int:
               FROM library_items e
               JOIN library_items s ON e.parent_id = s.id AND s.item_type = 'season'
              WHERE e.item_type = 'episode' AND s.parent_id IS NOT NULL AND e.local_status IN ({held})
+               {_specials_clause("s", ignore_specials)}
              GROUP BY s.parent_id
             """,
             _HELD_STATUSES,

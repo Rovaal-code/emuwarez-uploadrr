@@ -59,7 +59,8 @@ the upload with Uploadrr-EMU (`Kisnov/Uploadrr-EMU`, cloned into the image at `/
 - eMuwarez and TMDb keys travel in the URL query. Never log or return a raw URL: use
   `integrations.base.url_sin_claves`.
 - Image: `ghcr.io/kisnov/emuwarez-uploadrr`, built only when a version is published. `publicar.yml` ("Publicar
-  versión": by hand, or on odd days of the month when 3+ PRs from `feat/` or `fix/` branches merged since the last `__version__` change) runs
+  versión": by hand, or on odd days of the month when 3+ PRs from `feat/` or `fix/` branches (merge commits, or `feat:`/`fix:` squash
+  commits) merged since the last `__version__` change) runs
   the full CI on master's tip, bumps `__version__` (`auto`: minor if any `feat/` PR, else patch), pushes that commit
   and `vX.Y.Z`, builds `:X.Y.Z`, `:<sha>`, `:latest` and `:edge`, publishes the manifest (secret
   `UPLOADRR_VERSION_TOKEN`) and creates the GitHub release with the PRs merged since the previous tag. Release when Gabriel asks: `gh workflow run publicar.yml -f notas="…"`, with a

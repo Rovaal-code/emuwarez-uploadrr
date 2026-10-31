@@ -63,13 +63,16 @@ jobs:
             echo "accion=prueba" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # PR fusionados desde el último commit que cambió la versión, de ramas feat/ o fix/,
-          # aquí y en Uploadrr-EMU (su main solo llega a la app al construir la imagen).
+          # PR fusionados desde el último commit que cambió la versión, aquí y en Uploadrr-EMU (su main solo
+          # llega a la app al construir la imagen): el merge de una rama feat/ o fix/, o el commit feat:/fix:
+          # de un squash o un rebase.
+          feat='Merge pull request #[0-9]+ from [^/]+/feat/|feat(\([^)]*\))?!?: '
+          fix='Merge pull request #[0-9]+ from [^/]+/fix/|fix(\([^)]*\))?!?: '
           base="$(git log -1 --format=%H -G'^__version__' -- emuwarez_uploadrr/__init__.py)"
-          prs="$(git log --first-parent --merges --format=%s "$base"..HEAD | grep -E ' from [^/]+/(feat|fix)/' || true)"
+          prs="$(git log --first-parent --format=%s "$base"..HEAD | grep -E "^($feat|$fix)" || true)"
           git clone -q --bare --filter=blob:none --single-branch --no-tags --branch main https://github.com/Kisnov/Uploadrr-EMU.git "$RUNNER_TEMP/uploadrr"
-          merges="$(git -C "$RUNNER_TEMP/uploadrr" log --first-parent --merges --since="$(git log -1 --format=%cI "$base")" --format=%s)"
-          prs="$prs"$'\n'"$(printf '%s\n' "$merges" | grep -E ' from [^/]+/(feat|fix)/' || true)"
+          commits="$(git -C "$RUNNER_TEMP/uploadrr" log --first-parent --since="$(git log -1 --format=%cI "$base")" --format=%s)"
+          prs="$prs"$'\n'"$(printf '%s\n' "$commits" | grep -E "^($feat|$fix)" || true)"
           n="$(printf '%s' "$prs" | grep -c . || true)"
           echo "$n PR feat/fix desde ${base:0:7}"
           if [ "$EVENTO" = schedule ] && [ "$n" -lt 3 ]; then
@@ -78,7 +81,7 @@ jobs:
           fi
           if [ "$ESCALA" != auto ]; then
             escala="$ESCALA"
-          elif printf '%s\n' "$prs" | grep -qE ' from [^/]+/feat/'; then
+          elif printf '%s\n' "$prs" | grep -qE "^($feat)"; then
             escala="minor"
           else
             escala="patch"

@@ -147,18 +147,26 @@ def get_sync_status(current_user: dict = Depends(require_auth)) -> RequestSyncSt
     return RequestSyncStatusResponse(**status)
 
 
+@router.get("/sync-progress")
+def get_sync_progress(current_user: dict = Depends(require_auth)) -> dict:
+    """Progreso en vivo de la sincronización de peticiones, para la barra de arriba."""
+    from emuwarez_uploadrr.services.requests import get_request_sync_progress
+    return get_request_sync_progress()
+
+
 @router.post("/sync", response_model=RequestSyncResponse)
 def sync_requests(
     body: RequestSyncBody = RequestSyncBody(),
     current_user: dict = Depends(require_auth),
 ) -> RequestSyncResponse:
-    from emuwarez_uploadrr.services.requests import sync_emu_requests
+    """Arranca la sincronización en segundo plano (el progreso, en /sync-progress): con las pausas entre páginas
+    dura minutos, y un proxy inverso corta la respuesta a los 60 s."""
+    from emuwarez_uploadrr.services.requests import start_requests_sync_background
     from emuwarez_uploadrr.integrations.base import IntegrationError
-    with _get_conn() as conn:
-        try:
-            result = sync_emu_requests(conn, force=body.force)
-        except IntegrationError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
+    try:
+        result = start_requests_sync_background(force=body.force)
+    except IntegrationError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     if result.get("status") == "throttled":
         wait = int(result.get("wait_seconds", 0))
         mins = wait // 60
@@ -171,17 +179,7 @@ def sync_requests(
         )
     if result.get("status") == "busy":
         return RequestSyncResponse(ok=False, status="busy", message=str(result["message"]))
-    return RequestSyncResponse(
-        ok=True,
-        status="ok",
-        imported=int(result.get("imported", 0)),
-        matched=int(result.get("matched", 0)),
-        message=(
-            f"{result.get('imported', 0)} peticiones importadas, "
-            f"{result.get('matched', 0)} cruces actualizados."
-            + (f" {result['removed']} retiradas." if result.get("removed") else "")
-        ),
-    )
+    return RequestSyncResponse(ok=True, status="started", message="Sincronizando las peticiones…")
 
 
 @router.get("/{request_id}", response_model=RequestDetailResponse)

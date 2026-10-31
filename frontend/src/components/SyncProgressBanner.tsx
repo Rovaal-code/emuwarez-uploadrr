@@ -15,7 +15,7 @@ function fmtEta(s: number): string {
 // this is empty or full.
 export function SyncProgressBanner() {
   const {
-    libProgress, catalogProgress, requestsSyncing,
+    libProgress, catalogProgress, requestsSyncing, requestsProgress,
     message, messageIsError, messageFadingOut,
   } = useSync()
   if (!libProgress && !catalogProgress && !requestsSyncing && !message) return null
@@ -74,11 +74,13 @@ export function SyncProgressBanner() {
           error={null}
           icon={<ServiceIcon type="emu" size={13} />}
           label="Peticiones"
-          // No real progress to report for this one (it's a single blocking
-          // call, not a paged fetch) — the bar just simulates activity while
-          // in flight, same visual language as Biblioteca/eMuwarez.
-          detail="Sincronizando…"
-          percent={0}
+          // Mientras baja las páginas, la página; después, lo que está haciendo (cruzar, preparar, pósters).
+          detail={requestsProgress
+            ? (requestsProgress.phase.startsWith('Descargando') && requestsProgress.total_pages
+              ? `pág. ${requestsProgress.page}/${requestsProgress.total_pages}` : requestsProgress.phase)
+            : 'Sincronizando…'}
+          percent={requestsProgress?.total_pages
+            ? Math.min(100, Math.round((requestsProgress.page / requestsProgress.total_pages) * 100)) : 0}
           bar
         />
       )}

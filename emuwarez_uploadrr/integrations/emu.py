@@ -81,13 +81,15 @@ def emu_get_user(api_key: str, base_url: str | None = None) -> dict[str, Any]:
 
 
 def emu_fetch_all_pages(
-    api_key: str, base_url: str | None = None
+    api_key: str, base_url: str | None = None, progress=None
 ) -> tuple[list[dict[str, Any]], Optional[int]]:
     """Recorre las peticiones abiertas página a página, con una pausa entre una y otra.
 
     Devuelve (filas, total). `total` es el meta.total de eMuwarez, o None si no
     vino o cambió durante el recorrido: entonces no se puede dar por completo.
     Lanza IntegrationError si el recorrido no puede terminar.
+
+    `progress(pagina, ultima_pagina, filas_hasta_ahora)` se llama tras cada página.
     """
     filas: list[dict[str, Any]] = []
     totales: set[Optional[int]] = set()
@@ -110,6 +112,11 @@ def emu_fetch_all_pages(
             raise IntegrationError(
                 f"eMuwarez tiene más de {EMU_PETICIONES_MAX_PAGINAS} páginas de peticiones abiertas; no se sincronizan")
         totales.add(_entero(meta.get("total")))
+        if progress:
+            try:
+                progress(pagina, ultima, len(filas))
+            except Exception:  # noqa: BLE001 — el progreso es lo de menos
+                pass
         pagina += 1
     return filas, (totales.pop() if len(totales) == 1 else None)
 

@@ -43,8 +43,24 @@ export async function getSyncStatus(): Promise<RequestSyncStatusResponse> {
   return api.get('/requests/sync-status')
 }
 
+// Arranca la sincronización en segundo plano: status 'started' y a seguirla con getRequestsSyncProgress.
 export async function syncRequests(force = false): Promise<RequestSyncResponse> {
   return api.post('/requests/sync', { force })
+}
+
+export interface RequestsSyncProgress {
+  active: boolean
+  done: boolean
+  phase: string
+  page: number
+  total_pages: number | null
+  imported: number
+  message: string
+  error: string | null
+}
+
+export async function getRequestsSyncProgress(): Promise<RequestsSyncProgress> {
+  return api.get<RequestsSyncProgress>('/requests/sync-progress')
 }
 
 export async function getRequestDetail(id: number): Promise<RequestDetailResponse> {

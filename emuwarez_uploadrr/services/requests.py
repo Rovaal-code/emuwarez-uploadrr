@@ -18,6 +18,7 @@ from ..integrations.base import IntegrationError
 from ..models import RequestItem, RequestStatus, TaskStatus
 from .library import content_display_title
 from .request_readiness import _biblioteca, refresh_request_readiness
+from .eventos import EVENTO_SYNC_EMPEZADA, EVENTO_SYNC_TERMINADA, publicar
 from .tasks import start_task, finish_task
 from .tmdb_titles import tmdb_configured
 from .upload_states import ACTIVE_JOB_STATUSES
@@ -196,7 +197,88 @@ def sync_emu_requests(
         _SYNC_EN_CURSO.release()
 
 
+# Progreso de la sincronización de peticiones, para que la interfaz enseñe la barra y no tenga una petición HTTP
+# colgada durante minutos. Un solo proceso: un dict en memoria basta, igual que en el catálogo (emu_catalog).
+_PROGRESO_LOCK = threading.Lock()
+_PROGRESO: dict = {"active": False, "done": False, "phase": "", "page": 0, "total_pages": None,
+                   "imported": 0, "message": "", "error": None}
+
+
+def get_request_sync_progress() -> dict:
+    with _PROGRESO_LOCK:
+        return dict(_PROGRESO)
+
+
+def _set_progress(**kw) -> None:
+    with _PROGRESO_LOCK:
+        _PROGRESO.update(kw)
+
+
 def _sincronizar_peticiones(conn: sqlite3.Connection) -> dict[str, int | str]:
+    """Una sincronización, con su progreso y sus avisos: es el único sitio donde corre, la arranque quien la
+    arranque (el botón, la tarea programada o el CLI)."""
+    _set_progress(active=True, done=False, phase="Iniciando…", page=0, total_pages=None, imported=0, message="",
+                  error=None)
+    publicar(EVENTO_SYNC_EMPEZADA, {"que": "peticiones"})
+    try:
+        return _importar_peticiones(conn)
+    except Exception as exc:  # noqa: BLE001 — se enseña en la barra y se vuelve a lanzar
+        _set_progress(error=str(exc), phase="Error")
+        raise
+    finally:
+        _set_progress(active=False, done=True)
+        publicar(EVENTO_SYNC_TERMINADA, {"que": "peticiones"})
+
+
+def resumen_de_sincronizacion(result: dict) -> str:
+    texto = f"{result.get('imported', 0)} peticiones importadas, {result.get('matched', 0)} cruces actualizados."
+    return texto + (f" {result['removed']} retiradas." if result.get("removed") else "")
+
+
+def start_requests_sync_background(force: bool = False) -> dict:
+    """Arranca la sincronización en un hilo y vuelve al instante; la interfaz sigue el progreso.
+
+    Devuelve {"status": "started"}, {"status": "throttled", "wait_seconds"} o {"status": "busy", "message"}.
+    Sin API key lanza IntegrationError, como antes: no hace falta un hilo para saber que no va a salir."""
+    from ..database import connect, db_path
+    conn = connect(db_path())
+    try:
+        with _PROGRESO_LOCK:
+            if _PROGRESO["active"]:
+                return {"status": "started"}  # ya hay una: se sigue esa
+        allowed, wait = can_sync_requests(conn, force=force)
+        if not allowed:
+            return {"status": "throttled", "wait_seconds": wait}
+        motivo = _motivo_ocupado(conn)
+        if motivo:
+            return {"status": "busy", "message": motivo}
+        if not _resolve_emu_api_key(conn):
+            raise IntegrationError("No hay API Key de eMuwarez configurada")
+    finally:
+        conn.close()
+    # Ya activa antes de que arranque el hilo: otra pulsación entre medias se encuentra con «ya hay una».
+    _set_progress(active=True, done=False, phase="Iniciando…", page=0, total_pages=None, imported=0, message="",
+                  error=None)
+
+    def _run() -> None:
+        c = connect(db_path())
+        try:
+            result = sync_emu_requests(c, force=True)  # el turno ya se comprobó arriba
+            if result.get("status") == "ok":
+                _set_progress(message=resumen_de_sincronizacion(result), imported=int(result.get("imported", 0)))
+            else:
+                # Otra sincronización se coló entre la comprobación y aquí: su barra es la que vale.
+                _set_progress(error=str(result.get("message") or ""), active=False, done=True)
+        except Exception:  # noqa: BLE001 — _sincronizar_peticiones ya dejó el error en el progreso
+            pass
+        finally:
+            c.close()
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"status": "started"}
+
+
+def _importar_peticiones(conn: sqlite3.Connection) -> dict[str, int | str]:
     task_id = start_task(conn, "sync-emu-requests", "Sincronizando peticiones EMU")
     api_key = _resolve_emu_api_key(conn)
     if not api_key:
@@ -217,8 +299,11 @@ def _sincronizar_peticiones(conn: sqlite3.Connection) -> dict[str, int | str]:
 
     logger.info("Sincronización de peticiones iniciada")
     try:
-        raw_items, total = emu.emu_fetch_all_pages(api_key)
+        _set_progress(phase="Descargando peticiones…")
+        raw_items, total = emu.emu_fetch_all_pages(
+            api_key, progress=lambda pagina, ultima, filas: _set_progress(page=pagina, total_pages=ultima, imported=filas))
         items = emu.normalize_requests(raw_items)
+        _set_progress(phase="Guardando peticiones…", imported=len(items))
         sync_at = _utcnow().isoformat()
         for item in items:
             upsert_request(conn, item, seen_at=sync_at, commit=False)
@@ -229,9 +314,11 @@ def _sincronizar_peticiones(conn: sqlite3.Connection) -> dict[str, int | str]:
         removed = borrar_peticiones(conn, "last_seen_at IS NULL OR last_seen_at != ?", (sync_at,)) if complete else 0
         set_state(conn, SYNC_STATE_KEY, _utcnow().isoformat())
         conn.commit()
+        _set_progress(phase="Cruzando con tu biblioteca…")
         matched = match_all_requests(conn)
         # La preparación no se calcula sola: sin esto el detalle de cada petición nueva daba 404. Si falla no tumba
         # la sincronización: lo importado vale, y «Recalcular» la repite sin volver a llamar a eMuwarez.
+        _set_progress(phase="Calculando qué está listo para subir…")
         try:
             sin_preparar = refresh_request_readiness(conn)["errors"]
         except Exception:
@@ -239,6 +326,7 @@ def _sincronizar_peticiones(conn: sqlite3.Connection) -> dict[str, int | str]:
             logger.exception("No se pudo calcular la preparación de las peticiones")
             sin_preparar = None
         # Igual que la preparación: unos pósters que no llegan no tumban la sincronización.
+        _set_progress(phase="Trayendo los pósters…")
         try:
             rellenar_posters(conn)
         except Exception:

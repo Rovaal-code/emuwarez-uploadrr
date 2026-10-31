@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react'
 import { logout } from '../api/auth'
 import type { CurrentUserResponse } from '../types/api'
 import { NotificationBell } from './NotificationBell'
@@ -6,7 +5,10 @@ import { SyncProgressBanner } from './SyncProgressBanner'
 import { useTour } from '../context/TourContext'
 import { TOUR_STEPS } from '../tour/steps'
 import { useTooltip } from './Tooltip'
-import { IconoUsuario } from './Iconos'
+import { IconoCampana, IconoCorreo, IconoUsuario } from './Iconos'
+import { ServiceIcon } from './ServiceIcon'
+import { tapar, usePerfilEmu } from '../context/PerfilEmuContext'
+import { enlacesCuentaEmu } from '../utils/cuentaEmu'
 
 interface TopbarProps {
   user: CurrentUserResponse | null
@@ -14,19 +16,15 @@ interface TopbarProps {
   onLogout: () => void
 }
 
-const HIDE_NAME_KEY = 'emuwarez_uploadrr_hide_username'
-
 export function Topbar({ user, pageTitle, onLogout }: TopbarProps) {
   const { start: startTour } = useTour()
-  // Persisted so obfuscation survives a reload — the name only reappears when
-  // the user explicitly toggles it back on.
-  const [hideName, setHideName] = useState(() => localStorage.getItem(HIDE_NAME_KEY) === '1')
-  useEffect(() => {
-    localStorage.setItem(HIDE_NAME_KEY, hideName ? '1' : '0')
-  }, [hideName])
+  const { perfil, ocultarNombre: hideName, setOcultarNombre: setHideName } = usePerfilEmu()
   const tourTip = useTooltip('Ver el tour guiado')
   const eyeTip = useTooltip(hideName ? 'Mostrar usuario' : 'Ocultar usuario')
   const logoutTip = useTooltip('Cerrar sesión')
+  const mensajesTip = useTooltip('Mensajes en eMuwarez')
+  const notificacionesTip = useTooltip('Notificaciones en eMuwarez')
+  const cuentaEmu = perfil?.username ? enlacesCuentaEmu(perfil.username) : null
 
   async function handleLogout() {
     try {
@@ -64,6 +62,22 @@ export function Topbar({ user, pageTitle, onLogout }: TopbarProps) {
           </svg>
           {tourTip.tooltipNode}
         </button>
+        {/* Mensajes y notificaciones de eMuwarez, con su logo delante para no confundirlos con la campana de la app */}
+        {cuentaEmu && (
+          <div className="topbar-emu" role="group" aria-label="Tu cuenta en eMuwarez">
+            <ServiceIcon type="emu" size={16} />
+            <a className="topbar-emu-enlace" href={cuentaEmu.mensajes} target="_blank" rel="noreferrer"
+              aria-label="Mensajes en eMuwarez (se abre en otra pestaña)" {...mensajesTip.triggerProps}>
+              <IconoCorreo size={16} />
+              {mensajesTip.tooltipNode}
+            </a>
+            <a className="topbar-emu-enlace" href={cuentaEmu.notificaciones} target="_blank" rel="noreferrer"
+              aria-label="Notificaciones en eMuwarez (se abre en otra pestaña)" {...notificacionesTip.triggerProps}>
+              <IconoCampana size={16} />
+              {notificacionesTip.tooltipNode}
+            </a>
+          </div>
+        )}
         {/* Notifications */}
         <NotificationBell />
         {/* User info — username only, with a toggle to obfuscate it */}
@@ -71,7 +85,7 @@ export function Topbar({ user, pageTitle, onLogout }: TopbarProps) {
           <div className="topbar-user">
             <IconoUsuario size={15} style={{ color: 'var(--text-accent)' }} />
             <span className="topbar-username">
-              {hideName ? '*'.repeat(Math.max(4, user.username.length)) : user.username}
+              {hideName ? tapar(user.username) : user.username}
             </span>
             <button
               type="button"

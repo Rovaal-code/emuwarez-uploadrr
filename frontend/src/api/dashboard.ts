@@ -1,5 +1,5 @@
 import { api } from './client'
-import type { DashboardSummaryResponse, DashboardActivityResponse, LibraryListResponse } from '../types/api'
+import type { DashboardSummaryResponse, DashboardActivityResponse, EmuPerfil, LibraryListResponse } from '../types/api'
 
 // Phase 11G — dashboard "Recomendaciones": actionable content in three ranked
 // groups (1 compatible request · 2 unique/upload · 3 missing/request).
@@ -35,6 +35,14 @@ export async function getDashboardSummary(): Promise<DashboardSummaryResponse> {
 
 export async function getDashboardActivity(): Promise<DashboardActivityResponse> {
   return api.get<DashboardActivityResponse>('/dashboard/activity')
+}
+
+export async function getEmuPerfil(): Promise<EmuPerfil> {
+  return api.get<EmuPerfil>('/dashboard/emu-perfil')
+}
+
+export async function actualizarEmuPerfil(): Promise<EmuPerfil> {
+  return api.post<EmuPerfil>('/dashboard/emu-perfil/actualizar')
 }
 
 // Phase 11F — library items prioritized by EMU request satisfaction

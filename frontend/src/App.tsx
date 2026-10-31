@@ -8,6 +8,7 @@ import { SetupWizard } from './pages/SetupWizard'
 import { AppShell } from './components/AppShell'
 import { LoadingState } from './components/LoadingState'
 import { SyncProvider } from './context/SyncContext'
+import { PerfilEmuProvider } from './context/PerfilEmuContext'
 import { TourProvider } from './context/TourContext'
 
 type AppState = 'loading' | 'setup' | 'login' | 'app'
@@ -141,9 +142,11 @@ export function App() {
 
   return (
     <SyncProvider>
-      <TourProvider>
-        <AppShell user={user} onLogout={handleLogout} />
-      </TourProvider>
+      <PerfilEmuProvider>
+        <TourProvider>
+          <AppShell user={user} onLogout={handleLogout} />
+        </TourProvider>
+      </PerfilEmuProvider>
     </SyncProvider>
   )
 }

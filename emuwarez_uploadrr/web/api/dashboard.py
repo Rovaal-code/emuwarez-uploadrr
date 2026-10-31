@@ -8,7 +8,7 @@ from ..runtime import _db_path
 from ..schemas import (
     DashboardActivityItem, DashboardActivityResponse,
     DashboardRecommendationItem, DashboardRecommendationsResponse,
-    DashboardSummaryResponse, LibraryListResponse,
+    DashboardSummaryResponse, EmuPerfilResponse, LibraryListResponse,
 )
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -89,6 +89,22 @@ def dashboard_recommendations(
             for r in rows
         ]
     )
+
+
+@router.get("/emu-perfil", response_model=EmuPerfilResponse)
+def dashboard_emu_perfil(current_user: dict = Depends(require_auth)) -> EmuPerfilResponse:
+    """Tu cuenta de eMuwarez; se vuelve a leer del tracker como mucho una vez por hora."""
+    from emuwarez_uploadrr.services.emu_perfil import perfil_emu
+    with _get_conn() as conn:
+        return EmuPerfilResponse(**perfil_emu(conn))
+
+
+@router.post("/emu-perfil/actualizar", response_model=EmuPerfilResponse)
+def dashboard_emu_perfil_actualizar(current_user: dict = Depends(require_auth)) -> EmuPerfilResponse:
+    """«Actualizar»: la vuelve a leer si la última vez fue hace más de un minuto."""
+    from emuwarez_uploadrr.services.emu_perfil import perfil_emu
+    with _get_conn() as conn:
+        return EmuPerfilResponse(**perfil_emu(conn, actualizar=True))
 
 
 @router.get("/library-activity", response_model=LibraryListResponse)

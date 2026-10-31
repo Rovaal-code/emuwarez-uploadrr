@@ -7,6 +7,7 @@ import type { InstanceSafeResponse } from '../types/api'
 import type { DashboardSummaryResponse, DashboardActivityResponse, UploadJob } from '../types/api'
 import { StatCard } from '../components/StatCard'
 import { SyncCard } from '../components/SyncCard'
+import { CuentaEmu } from '../components/CuentaEmu'
 import { useSync } from '../context/SyncContext'
 import { EmptyState } from '../components/EmptyState'
 import { LoadingState } from '../components/LoadingState'
@@ -421,6 +422,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
         <div>
           <div className="page-title">Panel</div>
         </div>
+        <CuentaEmu />
         <SyncCard />
       </div>
 

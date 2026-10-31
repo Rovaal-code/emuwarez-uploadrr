@@ -286,6 +286,34 @@
   border-color: var(--border-hover);
 }
 
+/* Mensajes y notificaciones de eMuwarez: el logo delante y los dos enlaces dentro de una misma caja */
+.topbar-emu {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 34px;
+  padding: 0 3px 0 9px;
+  border-radius: 8px;
+  border: 1px solid var(--border-hover);
+  background: var(--bg-card);
+}
+
+.topbar-emu-enlace {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  color: var(--text-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.topbar-emu-enlace:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+
 /* Notification bell + dropdown */
 .notif-bell {
   position: relative;

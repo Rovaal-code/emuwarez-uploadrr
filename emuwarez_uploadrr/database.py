@@ -87,7 +87,11 @@ def db(path: Optional[Path] = None, *, entre_hilos: bool = False) -> Iterator[sq
         yield conn
         conn.commit()
     except BaseException:
-        conn.rollback()
+        try:
+            conn.rollback()
+        except sqlite3.Error:
+            # Si deshacer también falla, que no tape el error de verdad.
+            logger.warning("No se pudo deshacer la transacción", exc_info=True)
         raise
     finally:
         conn.close()

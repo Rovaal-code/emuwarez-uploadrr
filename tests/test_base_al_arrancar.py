@@ -74,6 +74,24 @@ def test_db_deshace_si_falla_y_cierra():
         assert get_state(otra, "prueba") is None
 
 
+def test_si_deshacer_tambien_falla_se_ve_el_error_original(monkeypatch):
+    conectar = database.connect
+
+    def _con_rollback_roto(*args, **kwargs):
+        conn = conectar(*args, **kwargs)
+
+        def _roto():
+            raise sqlite3.OperationalError("conexión rota")
+
+        conn.rollback = _roto
+        return conn
+
+    monkeypatch.setattr(database, "connect", _con_rollback_roto)
+    with pytest.raises(ValueError, match="el de verdad"):
+        with db():
+            raise ValueError("el de verdad")
+
+
 # ---------------------------------------------------------------------------
 # C1: el esquema se comprueba una vez
 # ---------------------------------------------------------------------------

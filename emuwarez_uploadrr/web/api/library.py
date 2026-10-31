@@ -114,7 +114,7 @@ def _campos_de_fila(row: dict, conn=None, rollups: Optional[dict] = None) -> dic
             ignore_specials = _ignore_specials(conn)
             precomputed = {
                 "nomenclature": _nomenclature_rollup(conn, row["id"], row["item_type"], ignore_specials),
-                "size": _size_rollup(conn, row["id"], row["item_type"]),
+                "size": _size_rollup(conn, row["id"], row["item_type"], ignore_specials),
                 # Availability now rolls up from real episodes (Sonarr's own
                 # status reports 'Disponible' even with missing episodes).
                 "local_status": _local_status_rollup(conn, row["id"], row["item_type"], ignore_specials),

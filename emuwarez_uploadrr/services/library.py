@@ -2234,7 +2234,7 @@ def _local_status_rollup(conn, item_id: int, item_type: str, ignore_specials: bo
     return "Parcial"
 
 
-def _size_rollup(conn, item_id: int, item_type: str) -> Optional[int]:
+def _size_rollup(conn, item_id: int, item_type: str, ignore_specials: bool = False) -> Optional[int]:
     """Total size of a Season/Series as the sum of its episodes' file sizes —
     season/series rows have no file of their own, so their size only makes
     sense as the aggregate of the episodes below them."""
@@ -2250,7 +2250,7 @@ def _size_rollup(conn, item_id: int, item_type: str) -> Optional[int]:
         r = conn.execute(
             "SELECT SUM(e.size_bytes) AS s FROM library_items e "
             "JOIN library_items se ON e.parent_id = se.id "
-            "WHERE se.parent_id = ? AND e.item_type = 'episode'",
+            "WHERE se.parent_id = ? AND e.item_type = 'episode'" + _specials_clause("se", ignore_specials),
             (item_id,),
         ).fetchone()
     else:

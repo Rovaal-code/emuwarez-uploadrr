@@ -86,16 +86,51 @@ def yaml_scalar(value: Any) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
-def python_literal_scalar(value: Any) -> str:
-    if isinstance(value, bool):
-        return "True" if value else "False"
-    if value is None:
-        return "None"
-    return repr(str(value))
-
-
 def render_inline_mapping(mapping: dict[str, Any]) -> str:
-    return "{" + ", ".join(f"{repr(k)}: {python_literal_scalar(v)}" for k, v in mapping.items()) + "}"
+    # Escalares YAML: repr() de Python escapa con `\`, que en una cadena entre
+    # comillas simples de YAML es literal (una contraseña con `\` se leía mal).
+    return "{" + ", ".join(f"{yaml_scalar(k)}: {yaml_scalar(v)}" for k, v in mapping.items()) + "}"
+
+
+_CLAVE = r"""'(?:[^']|'')*'|"(?:[^"\\]|\\.)*"|[^,{}:'"]+"""
+_VALOR = r"""'(?:[^']|'')*'|"(?:[^"\\]|\\.)*"|[^,{}]*?"""
+_PAR = re.compile(rf"\s*({_CLAVE})\s*:\s*({_VALOR})\s*(?:,|$)")
+
+
+def _leer_escalar(texto: str) -> Any:
+    texto = texto.strip()
+    if len(texto) >= 2 and texto[0] == texto[-1] == "'":
+        return texto[1:-1].replace("''", "'")
+    if len(texto) >= 2 and texto[0] == texto[-1] == '"':
+        try:
+            return ast.literal_eval(texto)
+        except (ValueError, SyntaxError):
+            return texto[1:-1]
+    if texto.lower() in {"true", "false"}:
+        return texto.lower() == "true"
+    if texto.lower() in {"", "null", "none", "~"}:
+        return None
+    if re.fullmatch(r"-?\d+", texto):
+        return int(texto)
+    if re.fullmatch(r"-?\d+\.\d+", texto):
+        return float(texto)
+    return texto
+
+
+def _leer_mapa_en_linea(cuerpo: str) -> Optional[dict[str, Any]]:
+    """Lee `k: v, k: v` con escalares YAML (comillas simples o dobles, o sin
+    comillas), que es lo que escribe render_inline_mapping y lo que trae el
+    config de ejemplo del fork. None si algo no encaja."""
+    cuerpo = cuerpo.strip()
+    resultado: dict[str, Any] = {}
+    pos = 0
+    while pos < len(cuerpo):
+        par = _PAR.match(cuerpo, pos)
+        if not par:
+            return None
+        resultado[str(_leer_escalar(par.group(1)))] = _leer_escalar(par.group(2))
+        pos = par.end()
+    return resultado
 
 
 def find_child_block(lines: list[str], top_block: str, child: str, indent: int = 2) -> tuple[int, int]:
@@ -120,8 +155,8 @@ def find_child_block(lines: list[str], top_block: str, child: str, indent: int =
 
 
 def get_child_inline_mapping(lines: list[str], top_block: str, child: str, indent: int = 2) -> dict[str, Any]:
-    """Parse an existing `child: {...}` inline mapping (Python-literal dict
-    syntax, as written by render_inline_mapping) back into a dict. Returns {}
+    """Parse an existing `child: {...}` inline mapping (YAML flow mapping, as
+    written by render_inline_mapping) back into a dict. Returns {}
     if the child is absent or its value isn't a parseable inline mapping —
     callers that only want to ADD/OVERRIDE specific keys without wiping out
     unrelated ones (e.g. torrent_storage_dir, content_layout) read this
@@ -134,11 +169,7 @@ def get_child_inline_mapping(lines: list[str], top_block: str, child: str, inden
     m = re.match(rf"^\s*{re.escape(child)}\s*:\s*(\{{.*\}})\s*(?:#.*)?$", text)
     if not m:
         return {}
-    try:
-        value = ast.literal_eval(m.group(1))
-    except (ValueError, SyntaxError):
-        return {}
-    return value if isinstance(value, dict) else {}
+    return _leer_mapa_en_linea(m.group(1)[1:-1]) or {}
 
 
 def set_child_inline_mapping(lines: list[str], top_block: str, child: str, mapping: dict[str, Any], indent: int = 2) -> str:

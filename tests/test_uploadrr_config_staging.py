@@ -5,6 +5,8 @@ tests) never touch a real Uploadrr/ installation.
 """
 from __future__ import annotations
 
+import pytest
+
 from emuwarez_uploadrr.services.uploadrr_yaml import get_child_inline_mapping
 from emuwarez_uploadrr.services.uploadrr_config_staging import (
     QBIT_CLIENT_KEY,
@@ -421,3 +423,47 @@ def test_stage_qbittorrent_config_without_qui_drops_a_previous_one():
     lines = ["TORRENT_CLIENTS:", "  qbit: {'torrent_client': 'qbit', 'qui_proxy_url': 'http://qui/proxy/vieja'}"]
     staged, _ = stage_qbittorrent_config(lines, url="http://x:8080", username="u", password="p")
     assert "qui_proxy_url" not in get_child_inline_mapping(staged, "TORRENT_CLIENTS", QBIT_CLIENT_KEY)
+
+
+# --- EJEC-1: contraseñas y claves con caracteres que YAML trata aparte --------
+
+_VALORES_DIFICILES = [
+    "a\\b", "\\", "\\\\", "it's \"q\"", "'", "''", "tab\taqui", "con # almohadilla",
+    "con: dos puntos", "llaves } { y , comas [ ]", "ñandú", "  con espacios  ", "true", "123",
+]
+
+
+@pytest.mark.parametrize("valor", _VALORES_DIFICILES, ids=repr)
+def test_la_contrasena_de_qbittorrent_se_lee_igual_que_se_escribio(valor):
+    """repr() de Python escapaba con la barra invertida (que YAML no entiende
+    entre comillas simples): una contraseña con ella se leía mal, y con las dos
+    comillas el config.yaml no se podía leer."""
+    yaml = pytest.importorskip("yaml")
+    staged, _ = stage_qbittorrent_config([], url="http://x:8080", username=valor, password=valor)
+
+    cargado = yaml.safe_load("\n".join(staged))["TORRENT_CLIENTS"][QBIT_CLIENT_KEY]
+    assert cargado["qbit_pass"] == valor
+    assert cargado["qbit_user"] == valor
+    assert cargado["enable_search"] is False
+    mapa = get_child_inline_mapping(staged, "TORRENT_CLIENTS", QBIT_CLIENT_KEY)
+    assert mapa["qbit_pass"] == valor and mapa["qbit_user"] == valor
+
+
+@pytest.mark.parametrize("valor", _VALORES_DIFICILES, ids=repr)
+def test_la_clave_de_un_host_de_imagenes_se_lee_igual_que_se_escribio(valor):
+    yaml = pytest.importorskip("yaml")
+    staged, _ = stage_image_hosts([], api_keys={"imgbb": valor, "ptpimg": "otra"})
+
+    assert yaml.safe_load("\n".join(staged))["SCREENS"]["API_KEYS"] == {"imgbb": valor, "ptpimg": "otra"}
+
+
+def test_el_config_de_ejemplo_del_fork_se_sigue_leyendo():
+    lines = [
+        "TORRENT_CLIENTS:",
+        "  qbit: {'torrent_client': 'qbit', 'enable_search': True, 'qbit_url': 'http://127.0.0.1', "
+        "'qbit_port': '8080', 'content_layout': 'Original', 'VERIFY_WEBUI_CERTIFICATE': False} # un comentario",
+    ]
+    assert get_child_inline_mapping(lines, "TORRENT_CLIENTS", "qbit") == {
+        "torrent_client": "qbit", "enable_search": True, "qbit_url": "http://127.0.0.1",
+        "qbit_port": "8080", "content_layout": "Original", "VERIFY_WEBUI_CERTIFICATE": False,
+    }

@@ -1133,13 +1133,39 @@ def list_library(
     limit: int = 50,
     offset: int = 0,
     ignore_specials: bool = True,
+    provider: Filtro = None,
+    resolution: Filtro = None,
+    source: Filtro = None,
+    release_group: Filtro = None,
+    emu: Filtro = None,
 ) -> list[dict]:
     where, params = _build_library_filter(
         status=status, request=request, nomenclature=nomenclature,
         item_type=item_type, origin=origin, instance_id=instance_id,
         parent_id=parent_id, search=search, spanish=spanish,
     )
-    sql = "SELECT * FROM library_items"
+    # Recorte previo para filtrar_por_lo_que_se_ve: en películas y capítulos la
+    # columna es su propio valor, así que los que no cumplen ni se leen. Series
+    # y temporadas se quedan: lo suyo sale de sus capítulos.
+    hoja: list[str] = []
+    hoja_params: list = []
+    proveedores = set(_valores(provider))
+    if proveedores:
+        # El proveedor sale de la ruta: basta con que lleve alguno de sus nombres.
+        from .nomenclature import _PROVIDER_TOKEN_MAP
+        tokens = [t for t, c in _PROVIDER_TOKEN_MAP.items() if _provider_label(c) in proveedores]
+        hoja.append(f"({' OR '.join(['path LIKE ?'] * len(tokens))})" if tokens else "0")
+        hoja_params.extend(f"%{t}%" for t in tokens)
+    _en("resolution", _valores(resolution), hoja, hoja_params)
+    _en("source", _valores(source), hoja, hoja_params)
+    _en("release_group", _valores(release_group), hoja, hoja_params)
+    _en("emu_in_catalog", [{"candidate": 0, "present": 1}[v] for v in _valores(emu)], hoja, hoja_params)
+    if hoja:
+        where.append(f"(item_type IN ('series', 'season') OR ({' AND '.join(hoja)}))")
+        params.extend(hoja_params)
+    # Todo menos raw_json: la lista no lo usa y es lo que más pesa de cada fila.
+    columnas = ", ".join(c[1] for c in conn.execute("PRAGMA table_info(library_items)") if c[1] != "raw_json")
+    sql = f"SELECT {columnas} FROM library_items"
     if where:
         sql += " WHERE " + " AND ".join(where)
     # Seasons/episodes carry season_number/episode_number and must sort

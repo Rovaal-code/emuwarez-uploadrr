@@ -275,8 +275,13 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // nivel más alto que cumple (la serie, o solo sus temporadas que cumplen).
   // Solo cuenta la última petición: una vieja más lenta no pisa la nueva.
   const ultimaCarga = useRef(0)
+  // Un aviso de "recarga" que llegó con una carga en marcha: se atiende al acabar.
+  const recargaPendiente = useRef(false)
+  const cargando = useRef(false)
   const load = useCallback(async () => {
     const esta = ++ultimaCarga.current
+    recargaPendiente.current = false
+    cargando.current = true
     setLoading(true)
     setError(null)
     try {
@@ -302,7 +307,11 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     } catch {
       if (esta === ultimaCarga.current) setError('Error al cargar la biblioteca')
     } finally {
-      if (esta === ultimaCarga.current) setLoading(false)
+      if (esta === ultimaCarga.current) {
+        cargando.current = false
+        setLoading(false)
+        if (recargaPendiente.current) load()
+      }
     }
   }, [debouncedSearch, filterType, filterStatus, filterInstanceId, filterRequest, flatFilter, filterSpanish,
     searchProvider, searchQuality, searchSource, searchGroup, filterEmu, filterAporte, sortBy, offset])
@@ -419,7 +428,14 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // que suben esta marca son raros (una sincronización, una tarea), así que
   // mantenerlas todas al día cuesta poco y a cambio cambiar de pestaña enseña
   // lo actual y no lo actual tras un parpadeo.
-  useEffect(() => { if (lastInvalidatedAt) load() }, [lastInvalidatedAt])
+  // Con una carga en marcha no se relanza: volver a la pestaña del navegador
+  // la tiraba y empezaba otra, y con un filtro lento no acababa nunca. Se
+  // apunta y se repide una vez al acabar, por si fue una sincronización.
+  useEffect(() => {
+    if (!lastInvalidatedAt) return
+    if (cargando.current) recargaPendiente.current = true
+    else load()
+  }, [lastInvalidatedAt])
 
   function applyFilters() {
     setOffset(0)
@@ -619,6 +635,12 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
           <option value="size_desc">Orden: Tamaño (Más)</option>
           <option value="size_asc">Orden: Tamaño (Menos)</option>
         </select>
+        {/* La tabla apagada sola no decía que estuviera cargando. */}
+        {tarda && (
+          <span role="status" style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13, color: 'var(--text-secondary)' }}>
+            <span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Cargando…
+          </span>
+        )}
         <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
           <Tooltip content="Vista de pósters">
             <button

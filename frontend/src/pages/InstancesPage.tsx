@@ -192,7 +192,7 @@ export function InstancesPage() {
     }
     setEditSaving(true)
     try {
-      await updateInstance(inst.id, {
+      const saved = await updateInstance(inst.id, {
         name: editForm.name.trim(),
         url: editForm.url.trim(),
         api_key: editForm.api_key.trim() || undefined,
@@ -201,6 +201,8 @@ export function InstancesPage() {
         is_anime: editForm.is_anime,
       })
       cancelEdit()
+      // Guardado, pero con un aviso (la instancia no respondía): se enseña en su tarjeta, donde van los resultados.
+      setTestResults(p => ({ ...p, [inst.id]: saved.warning ? `⚠ ${saved.warning}` : '' }))
       await load()
     } catch (err) {
       setEditError(err instanceof ApiClientError ? err.message : 'Error al guardar los cambios')

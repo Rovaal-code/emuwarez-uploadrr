@@ -60,6 +60,16 @@ def _instance_dict(inst) -> dict:
     return {"url": inst.url, "api_key": inst.api_key, "name": inst.name}
 
 
+def _limpiar_cola(conn: sqlite3.Connection, instance_id: int) -> None:
+    """La cola de la instancia es lo que Radarr/Sonarr dicen ahora: lo que ya no está en ella deja de figurar."""
+    conn.execute(
+        "UPDATE library_items SET arr_queue_status = NULL, arr_queue_title = NULL, arr_queue_progress = NULL, "
+        "arr_queue_timeleft = NULL, arr_queue_error = NULL, arr_queue_raw_json = NULL "
+        "WHERE instance_id = ? AND arr_queue_status IS NOT NULL",
+        (instance_id,),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -155,11 +165,13 @@ def refresh_arr_queue_diagnostics(
         try:
             if inst.type == "radarr":
                 queue = radarr_get_queue(inst_dict)
+                _limpiar_cola(conn, inst.id)
                 mapped = _map_radarr_queue(queue, inst.id, conn)
                 updated += mapped
                 queue_items_total += len(queue)
             elif inst.type == "sonarr":
                 queue = sonarr_get_queue(inst_dict)
+                _limpiar_cola(conn, inst.id)
                 mapped = _map_sonarr_queue(queue, inst.id, conn)
                 updated += mapped
                 queue_items_total += len(queue)

@@ -106,8 +106,30 @@ def update_instance(
         f"UPDATE instances SET {', '.join(sets)} WHERE id = ?",
         params,
     )
+    if name is not None:
+        # La biblioteca guarda el nombre de la instancia en cada ficha; si no, hasta la próxima sincronización
+        # (días, con la instancia apagada) la interfaz sigue enseñando el viejo.
+        conn.execute("UPDATE library_items SET instance_name = ? WHERE instance_id = ?", (name, instance_id))
     conn.commit()
     return cur.rowcount > 0
+
+
+AVISO_SIN_RESPUESTA = (
+    "Guardado, pero la instancia no responde: no se ha podido comprobar que sea el mismo servidor. "
+    "Si apunta a otro, sincronizar mezclará elementos."
+)
+
+
+def aviso_si_cambia_el_destino(instance: InstanceConfig, *, url: Optional[str], api_key: Optional[str]) -> Optional[str]:
+    """Con otra URL o clave, prueba la nueva: si no responde devuelve el aviso (se guarda igual, hay instancias apagadas
+    días). Las fichas se casan por su id de Radarr/Sonarr, así que si apunta a otro servidor la sincronización las mezcla."""
+    nueva_url = normalize_base_url(url) if url is not None else instance.url
+    nueva_clave = api_key.strip() if api_key is not None else instance.api_key
+    if (nueva_url, nueva_clave) == (instance.url, instance.api_key):
+        return None
+    if test_connection_params(instance.type, nueva_url, nueva_clave, instance.name).get("ok"):
+        return None
+    return AVISO_SIN_RESPUESTA
 
 
 def remove_instance(conn: sqlite3.Connection, instance_id: int) -> bool:

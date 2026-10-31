@@ -107,10 +107,11 @@ def test_radarr_get_movies():
     assert result[0]["title"] == "Test Movie"
 
 
-def test_radarr_get_queue_empty_on_error():
+def test_radarr_get_queue_raises_on_error():
+    """Una instancia caída no es una cola vacía: sus diagnósticos no se limpian ni dan «ok»."""
     with patch("emuwarez_uploadrr.integrations.radarr.arr_request", side_effect=ArrConnectionError("down")):
-        result = radarr.radarr_get_queue(_RADARR_INSTANCE)
-    assert result == []
+        with pytest.raises(ArrConnectionError):
+            radarr.radarr_get_queue(_RADARR_INSTANCE)
 
 
 def test_radarr_get_quality_profiles():

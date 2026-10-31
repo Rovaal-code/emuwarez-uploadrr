@@ -34,10 +34,9 @@ _SOURCE_URL = "https://raw.githubusercontent.com/Fribb/anime-lists/master/anime-
 # weekly refresh is plenty; no need to redownload a ~7MB file every sync.
 _REFRESH_SECONDS = 7 * 86400
 _SYNC_STATE_KEY = "last_anime_id_map_sync_utc"
-# Tras un intento fallido (red, lista vacía o recortada) no se vuelve a bajar
-# en cada fila de la sincronización: se espera una hora.
-_FAIL_STATE_KEY = "last_anime_id_map_failure_utc"
-_RETRY_SECONDS = 3600
+# Tras un intento fallido no se vuelve a probar durante una hora.
+_FAILURE_STATE_KEY = "last_anime_id_map_failure_utc"
+_RETRY_AFTER_FAILURE_SECONDS = 3600
 
 
 def _download_and_store(conn: sqlite3.Connection) -> int:
@@ -72,9 +71,8 @@ def _download_and_store(conn: sqlite3.Connection) -> int:
     # Full replace, not incremental — the upstream file is small enough to
     # redownload whole, and a partial diff would need to track deletions too
     # (an anidb entry can get its ids corrected/removed upstream).
-    # En un savepoint: si un INSERT falla después del DELETE, la tabla vieja
-    # vuelve entera en vez de quedarse a medias (sin tocar lo del que llama).
-    conn.execute("SAVEPOINT anime_id_map")
+    # Con un savepoint: si un dato malo hace fallar el INSERT, se conserva la tabla anterior en vez de dejarla borrada.
+    conn.execute("SAVEPOINT anime_id_map_replace")
     try:
         conn.execute("DELETE FROM anime_id_map")
         conn.executemany(
@@ -83,26 +81,30 @@ def _download_and_store(conn: sqlite3.Connection) -> int:
         )
         set_state(conn, _SYNC_STATE_KEY, str(int(time.time())))
     except Exception:
-        conn.execute("ROLLBACK TO SAVEPOINT anime_id_map")
-        conn.execute("RELEASE SAVEPOINT anime_id_map")
+        conn.execute("ROLLBACK TO SAVEPOINT anime_id_map_replace")
+        conn.execute("RELEASE SAVEPOINT anime_id_map_replace")
         raise
-    conn.execute("RELEASE SAVEPOINT anime_id_map")
+    conn.execute("RELEASE SAVEPOINT anime_id_map_replace")
     conn.commit()
     logger.info("anime_id_map actualizado: %d filas desde %d entradas de anime-list-full.json", len(rows), len(data))
     return len(rows)
 
 
-def _segundos_desde(conn: sqlite3.Connection, key: str) -> float:
-    last = get_state(conn, key)
+def _needs_refresh(conn: sqlite3.Connection) -> bool:
+    last = get_state(conn, _SYNC_STATE_KEY)
     try:
         last_ts = int(last) if last else 0
     except ValueError:
         last_ts = 0
-    return time.time() - last_ts
+    return (time.time() - last_ts) >= _REFRESH_SECONDS
 
 
-def _needs_refresh(conn: sqlite3.Connection) -> bool:
-    return _segundos_desde(conn, _SYNC_STATE_KEY) >= _REFRESH_SECONDS
+def _failed_recently(conn: sqlite3.Connection) -> bool:
+    try:
+        last = int(get_state(conn, _FAILURE_STATE_KEY) or 0)
+    except ValueError:
+        return False
+    return (time.time() - last) < _RETRY_AFTER_FAILURE_SECONDS
 
 
 def ensure_anime_id_map(conn: sqlite3.Connection, *, force: bool = False) -> None:
@@ -114,17 +116,14 @@ def ensure_anime_id_map(conn: sqlite3.Connection, *, force: bool = False) -> Non
         has_any = conn.execute("SELECT 1 FROM anime_id_map LIMIT 1").fetchone() is not None
         if has_any and not _needs_refresh(conn):
             return
-        if _segundos_desde(conn, _FAIL_STATE_KEY) < _RETRY_SECONDS:
+        if _failed_recently(conn):
             return
     try:
         _download_and_store(conn)
     except Exception:
         logger.warning("No se pudo descargar/actualizar anime-list-full.json (Fribb/anime-lists)", exc_info=True)
-        try:
-            set_state(conn, _FAIL_STATE_KEY, str(int(time.time())))
-            conn.commit()
-        except Exception:
-            logger.warning("No se pudo anotar el fallo de anime-list-full.json", exc_info=True)
+        set_state(conn, _FAILURE_STATE_KEY, str(int(time.time())))
+        conn.commit()
 
 
 def get_mal_id(

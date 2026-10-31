@@ -17,6 +17,10 @@ from ..integrations import tmdb
 
 _SETTING_KEY = "tmdb.localize_series_titles"
 
+# Un título que TMDb no tenía se vuelve a preguntar al cabo de 30 días: puede
+# que lo hayan añadido. Los que sí tenía se quedan.
+_VIGENTE = " AND (title IS NOT NULL OR fetched_at >= datetime('now', '-30 days'))"
+
 
 def series_titles_localized(conn: sqlite3.Connection) -> bool:
     """Whether to replace Sonarr/TVDB series titles with TMDb localized ones.
@@ -45,7 +49,8 @@ def resolve_series_title(
     lang = language or _configured_language(conn)
 
     row = conn.execute(
-        "SELECT title FROM tmdb_title_cache WHERE tmdb_id = ? AND media_type = 'tv' AND language = ?",
+        "SELECT title FROM tmdb_title_cache WHERE tmdb_id = ? AND media_type = 'tv' AND language = ?"
+        + _VIGENTE,
         (tmdb_id, lang),
     ).fetchone()
     if row is not None:
@@ -86,7 +91,8 @@ def resolve_movie_title(
     tmdb_id = str(tmdb_id)
     lang = language or _configured_language(conn)
     row = conn.execute(
-        "SELECT title FROM tmdb_title_cache WHERE tmdb_id = ? AND media_type = 'movie' AND language = ?",
+        "SELECT title FROM tmdb_title_cache WHERE tmdb_id = ? AND media_type = 'movie' AND language = ?"
+        + _VIGENTE,
         (tmdb_id, lang),
     ).fetchone()
     if row is not None:

@@ -58,6 +58,13 @@ def _download_and_store(conn: sqlite3.Connection) -> int:
         for tm in tmdb_movie_ids:
             rows.append((None, None, str(tm), mal_id))
 
+    # Una lista vacía o recortada no sustituye a la tabla: se queda la que había
+    # y se reintenta en la próxima sincronización.
+    previas = conn.execute("SELECT COUNT(*) FROM anime_id_map").fetchone()[0]
+    if not rows or len(rows) < previas // 2:
+        raise IntegrationError(
+            f"anime-list-full.json trae {len(rows)} filas y la tabla tiene {previas}: no se reemplaza")
+
     # Full replace, not incremental — the upstream file is small enough to
     # redownload whole, and a partial diff would need to track deletions too
     # (an anidb entry can get its ids corrected/removed upstream).

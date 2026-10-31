@@ -1,14 +1,16 @@
 import { useState, useEffect, useRef } from 'react'
 import type { UploadJob, UploadJobLog, UploadProgressPhase } from '../types/api'
 import { getUploadJobLogs } from '../api/uploads'
+import { aplicarLineas, ultimaSecuenciaDe } from '../utils/registroSubida'
 import { posterUrl } from '../utils/libraryItem'
 import { formatDate, formatDateTimeSeconds, parseServerDate } from '../utils/format'
 import { InfoIcon } from './InfoIcon'
 import { PeticionDeSubida } from './PeticionDeSubida'
+import { ExternalIdLink } from './ExternalIdLink'
 import { ServiceLabel } from './ServiceIcon'
 import {
   Card, FieldRow, DetailPoster, ValueChip, ValueIcon, DETAIL_CARD_HEIGHT, DetailHero, DetailTitle, DetailTitleText,
-  StatusCardIcon, ClockCardIcon, UploadButtonIcon, LibraryButtonIcon, RetryButtonIcon, CancelButtonIcon, DeleteButtonIcon,
+  StatusCardIcon, ClockCardIcon, UploadButtonIcon, LibraryButtonIcon, ExternalLinkButtonIcon, RetryButtonIcon, CancelButtonIcon, DeleteButtonIcon,
   TypeValueIcon, CalendarValueIcon, ProgressValueIcon,
   NomenclatureValueIcon, AudioCodecValueIcon, ChecksValueIcon, LogsValueIcon,
 } from './DetailCard'
@@ -19,6 +21,10 @@ import {
 import { useRefrescoPorAvisos, AVISOS_SUBIDA, AVISOS_SUBIDA_PROGRESO } from '../hooks/useRefrescoPorAvisos'
 import { IconoDesplegar, IconoTipo } from './Iconos'
 import { Modal } from './Modal'
+
+// Líneas del registro que se piden al abrir «Actividad», y las que se guardan como mucho en pantalla.
+const LINEAS_INICIALES = 2000
+const LINEAS_MAX = 5000
 
 // Dedicated page for one upload job (replaces the old JobProgressPanel modal)
 // — same Radarr/Sonarr-style layout LibraryDetailPage/RequestDetailPage use:
@@ -482,20 +488,40 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
   const checksFailed = job.checks_snapshot != null && checksReady === false
   const checksLabel = !job.checks_snapshot ? 'Pendiente' : checksReady ? 'OK' : 'Error'
 
+  // El registro solo se pide con «Actividad» abierta: las últimas líneas al abrir y luego solo las posteriores a la
+  // última que se tiene (`sequence`). Antes se bajaba entero cada segundo de una subida, aunque nadie lo mirara.
   const [logs, setLogs] = useState<UploadJobLog[]>([])
+  const [logsTotal, setLogsTotal] = useState(0)
   const [loadingLogs, setLoadingLogs] = useState(true)
+  const actividadAbierta = useRef(false)
+  actividadAbierta.current = showActividad
+  const ultimaSecuencia = useRef(0)
+  // Solo la respuesta de la última petición se aplica: una lenta que llegue tarde no pisa a otra más nueva.
+  const logsSeq = useRef(0)
   const loadLogs = async () => {
+    if (!actividadAbierta.current) return
+    const seq = ++logsSeq.current
+    const desde = ultimaSecuencia.current
     try {
-      // tail=true + a very high limit: effectively the WHOLE log, not just a
-      // window of it — a season with many episodes (real Uploadrr-EMU
-      // output per chapter) can easily produce many thousands of lines, and
-      // a small fixed limit (previously 300) silently hid everything before
-      // the last window, with no way to see full activity for that upload.
-      const r = await getUploadJobLogs(jobId, 100000, 0, true)
-      setLogs([...r.logs].sort((a, b) => a.created_at.localeCompare(b.created_at)))
-    } catch { /* ignore */ } finally { setLoadingLogs(false) }
+      const r = desde > 0
+        ? await getUploadJobLogs(jobId, LINEAS_MAX, 0, false, desde)
+        : await getUploadJobLogs(jobId, LINEAS_INICIALES, 0, true)
+      if (seq !== logsSeq.current) return
+      setLogsTotal(r.total)
+      ultimaSecuencia.current = ultimaSecuenciaDe(r.logs, desde)
+      setLogs(prev => aplicarLineas(prev, r.logs, desde, LINEAS_MAX))
+    } catch { /* ignore */ } finally { if (seq === logsSeq.current) setLoadingLogs(false) }
   }
-  useEffect(() => { loadLogs(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [jobId])
+  useEffect(() => {
+    ultimaSecuencia.current = 0
+    logsSeq.current++   // lo que esté en vuelo ya no vale
+    setLogs([])
+    setLogsTotal(0)
+    if (!showActividad) return
+    setLoadingLogs(true)
+    loadLogs()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobId, showActividad])
   // El registro se recarga cuando el servidor avisa de que hay líneas nuevas.
   // El aviso NO trae las líneas —el proceso escupe cientos por segundo— y va
   // agrupado a una vez por segundo en el servidor: solo dice que las hay. El
@@ -503,7 +529,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
   useRefrescoPorAvisos([...AVISOS_SUBIDA, 'subida-log'], loadLogs, {
     soloVisible: AVISOS_SUBIDA_PROGRESO,
     cadaSinCanal: 2000,
-    activo: isRunning || isPreparing || isStaging,
+    activo: showActividad && (isRunning || isPreparing || isStaging),
     // Con varias subidas a la vez, el detalle de una no se recarga porque otra
     // distinta esté avanzando.
     filtro: aviso => aviso.job_id === jobId,
@@ -535,6 +561,11 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
           <button className="btn btn-ghost btn-sm" onClick={onBack}>Volver a Subidas</button>
         </div>
         <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
+          {job.result_url && (
+            <a className="btn btn-primary btn-sm" href={job.result_url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
+              <ExternalLinkButtonIcon /> Ver en eMuwarez
+            </a>
+          )}
           {job.library_item_id != null && (
             <button className="btn btn-primary btn-sm" onClick={() => onOpenLibraryItem?.(job.library_item_id!)}><LibraryButtonIcon /> Ver en Biblioteca</button>
           )}
@@ -574,6 +605,13 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
                   : <span className="muted">—</span>}
               </FieldRow>
               <FieldRow label="Petición"><PeticionDeSubida job={job} /></FieldRow>
+              {job.result_url && (
+                <FieldRow label="Torrent" help="La ficha del torrent en eMuwarez, con su número.">
+                  <ValueChip linkable>
+                    <ExternalIdLink id={job.result_torrent_id ? `#${job.result_torrent_id}` : 'Ver torrent'} href={job.result_url} label="eMuwarez" />
+                  </ValueChip>
+                </FieldRow>
+              )}
               <FieldRow label="Nomenclatura" help="Los campos que componen el nombre final del torrent, del archivo y de su título interno.">
                 <ValueChip as="button" linkable onClick={() => setShowNomenclatura(true)} title="Ver nomenclatura">
                   {stagingLoadingNomenclature
@@ -696,6 +734,11 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
       {showActividad && (
         <Modal titulo={<>Actividad{isRunning ? ' (en directo)' : ''}</>} onClose={() => setShowActividad(false)} className="modal-wide" style={{ maxWidth: 680 }}>
           <div className="modal-body">
+            {logsTotal > logs.length && (
+              <p style={{ margin: '0 0 6px', fontSize: 11.5, color: 'var(--text-muted)' }}>
+                Mostrando las últimas {logs.length} de {logsTotal} líneas.
+              </p>
+            )}
             <pre ref={logsBoxRef} style={{ margin: 0, maxHeight: 420, overflowY: 'auto', fontSize: '0.76rem', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
               {loadingLogs ? 'Cargando…' : logs.length === 0 ? 'Sin actividad registrada todavía.' : logs.map(log => {
                 // created_at is stored/sent in UTC — naively slicing the raw

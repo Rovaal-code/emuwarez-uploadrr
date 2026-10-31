@@ -1142,6 +1142,7 @@ class UploadJobLog(BaseModel):
     message: str
     stream: Optional[str] = None
     created_at: str
+    sequence: Optional[int] = None
 
 
 class UploadJobLogsResponse(BaseModel):

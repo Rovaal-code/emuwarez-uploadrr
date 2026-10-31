@@ -646,6 +646,8 @@ export interface UploadJobLog {
   message: string
   stream: string | null
   created_at: string
+  // Orden de la línea dentro de su subida: de aquí se sigue el registro en vivo.
+  sequence?: number | null
 }
 
 export interface UploadJobLogsResponse {

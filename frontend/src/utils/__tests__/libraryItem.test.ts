@@ -10,7 +10,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import {
-  isSeasonReady, episodeNotReadyReason, seasonNotReadyReason,
+  isSeasonReady, episodeNotReadyReason, seasonNotReadyReason, posterUrl,
 } from '../libraryItem'
 import type { LibraryItemResponse } from '../../types/api'
 
@@ -118,5 +118,25 @@ describe('un capítulo suelto', () => {
     // Un capítulo lleva su propio nombre y puede declarar su propio códec, así
     // que no le afecta que sus hermanos no coincidan.
     expect(episodeNotReadyReason(cap({ resolution: null, video_codec: null }))).toBeNull()
+  })
+})
+
+describe('el tamaño del póster', () => {
+  const tvdb = 'https://artworks.thetvdb.com/banners/v4/series/397934/posters/6345afeb2f65d.jpg'
+
+  it('TMDb cambia el tamaño en la ruta', () => {
+    expect(posterUrl('https://image.tmdb.org/t/p/original/a.jpg', 'w154')).toBe('https://image.tmdb.org/t/p/w154/a.jpg')
+  })
+
+  it('TheTVDB usa su miniatura en las listas y el original en la ficha', () => {
+    expect(posterUrl(tvdb, 'w342')).toBe(tvdb.replace('.jpg', '_t.jpg'))
+    expect(posterUrl('https://artworks.thetvdb.com/banners/posters/334824-1.jpg', 'w154'))
+      .toBe('https://artworks.thetvdb.com/banners/posters/334824-1_t.jpg')
+    expect(posterUrl(tvdb, 'w500')).toBe(tvdb)
+  })
+
+  it('una miniatura de TheTVDB no se vuelve a marcar', () => {
+    const t = tvdb.replace('.jpg', '_t.jpg')
+    expect(posterUrl(t, 'w154')).toBe(t)
   })
 })

@@ -166,16 +166,21 @@ def _proveedor_de(path: str | None, source: str | None, quality: str | None) -> 
     return _infer_provider_from_item(item, _infer_source_from_item(item))
 
 
+_MARCAS_RESOLUCION = ("2160p", "4K", "1080p", "720p", "576p", "540p", "480p")
+
+
 def _infer_resolution_from_item(item: dict) -> str | None:
+    """La etiqueta de Radarr/Sonarr. Solo de reserva: la propuesta usa la del
+    fichero cuando MediaInfo lo puede leer."""
     res = item.get("resolution")
     if res:
         return res
     quality = item.get("quality") or ""
-    for marker in ("2160p", "4K", "1080p", "720p", "480p"):
+    for marker in _MARCAS_RESOLUCION:
         if marker.lower() in quality.lower():
             return marker
     path = item.get("path") or ""
-    for marker in ("2160p", "4K", "1080p", "720p", "480p"):
+    for marker in _MARCAS_RESOLUCION:
         if marker.lower() in path.lower():
             return marker
     return None
@@ -246,6 +251,9 @@ def tag_por_defecto(grupos, conn=None) -> str:
     return _get_release_tag(conn=conn)
 
 
+_AVISO_SIN_RESOLUCION = "Resolución no detectada. Se usará campo vacío."
+
+
 def validate_nomenclature_preconditions(library_item: dict, conn=None) -> dict:
     errors = []
     warnings = []
@@ -284,7 +292,7 @@ def validate_nomenclature_preconditions(library_item: dict, conn=None) -> dict:
         errors.append("El ítem no tiene título.")
 
     if not _infer_resolution_from_item(library_item):
-        warnings.append("Resolución no detectada. Se usará campo vacío.")
+        warnings.append(_AVISO_SIN_RESOLUCION)
 
     if not _infer_source_from_item(library_item):
         warnings.append("Source/medio no detectado. Se usará campo vacío.")
@@ -430,6 +438,10 @@ def compute_nomenclature_proposal(
                 r["field"]: (None if r["emu"] in (None, "—", "") else r["emu"])
                 for r in mi_report.get("rows", [])
             }
+            # La resolución del fichero, no la etiqueta de calidad de Radarr/Sonarr.
+            if mi_report.get("resolution"):
+                resolution = mi_report["resolution"]
+                warnings = [w for w in warnings if w != _AVISO_SIN_RESOLUCION]
             video_codec = emu_by_field.get("Códec de vídeo") or video_codec
             audio_summary = mi_report.get("audio_summary") or audio_summary
             subtitle_summary = emu_by_field.get("Subtítulos") or subtitle_summary

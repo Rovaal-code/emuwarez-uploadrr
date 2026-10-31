@@ -350,6 +350,7 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
     add("Subtítulos", sub_langs or None, "SUBS" if sub_tracks else None)
 
     report = {"available": True, "message": None, "rows": rows, "audio_summary": audio_summary,
+              "resolution": resolution,
                "audio_by_language": audio_by_language,
                "source_signals": source_signals}
     if cache_key is not None:

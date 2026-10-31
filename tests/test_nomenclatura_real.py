@@ -141,3 +141,14 @@ def test_una_pista_sin_idioma_bloquea_el_nombre(conn, tmp_path):
     prop = compute_nomenclature_proposal(item, conn=conn)
     assert "UND" in prop["proposed_torrent_name"]
     assert prop["status"] == "blocked"
+
+
+def test_la_resolucion_sale_del_fichero_y_no_de_la_etiqueta(conn, tmp_path):
+    """Radarr etiquetó 1080p un fichero que es 720p: manda el fichero."""
+    ruta = hacer_mkv(tmp_path / "Peli.1080p.WEB-DL.mkv", ancho=1280, alto=720, audios=({"lang": "es"},))
+    item = _fila(conn, title="Peli", year=2024, path=str(ruta), resolution="1080p",
+                 quality="WEBDL-1080p")
+    prop = compute_nomenclature_proposal(item, conn=conn)
+    assert prop["resolution"] == "720p"
+    assert " 720p WEB-DL " in prop["proposed_torrent_name"]
+    assert not any("Resolución" in w for w in __import__("json").loads(prop["warnings_json"]))

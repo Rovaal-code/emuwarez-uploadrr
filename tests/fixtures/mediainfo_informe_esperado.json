@@ -13,6 +13,7 @@
   "audio_summary": "DUAL DD Mono",
   "available": true,
   "message": null,
+  "resolution": "480p",
   "rows": [
    {
     "emu": "480p",
@@ -121,6 +122,7 @@
   "audio_summary": "ING DD+ Mono ESP DD Mono",
   "available": true,
   "message": null,
+  "resolution": "480p",
   "rows": [
    {
     "emu": "480p",

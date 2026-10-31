@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 41
+SCHEMA_VERSION = 42
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -1149,6 +1149,16 @@ def _migrate_request_items_is_example(conn: sqlite3.Connection) -> None:
         pass
 
 
+def _migrate_request_items_posters(conn: sqlite3.Connection) -> None:
+    """Esquema 42: el póster y el fondo de TMDb de las peticiones que no casan con nada de la biblioteca,
+    de donde salía el póster. '' = TMDb no tiene."""
+    for col in ("tmdb_poster_url", "tmdb_backdrop_url"):
+        try:
+            conn.execute(f"ALTER TABLE request_items ADD COLUMN {col} TEXT")
+        except sqlite3.OperationalError:
+            pass
+
+
 def _migrate_request_items_last_seen(conn: sqlite3.Connection) -> None:
     """Cuándo vio por última vez la sincronización cada petición: lo que no sale
     en un recorrido completo de eMuwarez es que ya no está abierta, y se borra."""
@@ -1617,6 +1627,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_quitar_peticiones_de_ejemplo(conn)
         _migrate_request_items_last_seen(conn)
         _migrate_upload_jobs_request_snapshot(conn)
+        _migrate_request_items_posters(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

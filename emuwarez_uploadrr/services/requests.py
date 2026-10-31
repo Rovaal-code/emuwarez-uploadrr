@@ -13,18 +13,20 @@ from typing import Optional
 
 from ..database import borrar_peticiones, get_setting_canonical, get_state, set_state
 from . import cli_config, emu_catalog
-from ..integrations import emu
+from ..integrations import emu, tmdb
 from ..integrations.base import IntegrationError
 from ..models import RequestItem, RequestStatus, TaskStatus
 from .library import update_request_status, content_display_title
 from .request_readiness import refresh_request_readiness
 from .tasks import start_task, finish_task
+from .tmdb_titles import tmdb_configured
 from .upload_states import ACTIVE_JOB_STATUSES
 from .compatibility import (
     match_request_to_library,
     classify_request_match,
     rank_request_matches,
     emu_override_status,
+    tipo_de_peticion,
 )
 
 logger = logging.getLogger("emuwarez.requests")
@@ -227,6 +229,12 @@ def _sincronizar_peticiones(conn: sqlite3.Connection) -> dict[str, int | str]:
             conn.rollback()
             logger.exception("No se pudo calcular la preparación de las peticiones")
             sin_preparar = None
+        # Igual que la preparación: unos pósters que no llegan no tumban la sincronización.
+        try:
+            rellenar_posters(conn)
+        except Exception:
+            conn.rollback()
+            logger.exception("No se pudieron traer los pósters de TMDb")
         summary = f"{len(items)} peticiones importadas, {matched} cruces"
         if removed:
             summary += f", {removed} retiradas"
@@ -248,6 +256,48 @@ def _sincronizar_peticiones(conn: sqlite3.Connection) -> dict[str, int | str]:
         finish_task(conn, task_id, TaskStatus.FAILED.value, str(exc))
         logger.error("Sincronización de peticiones fallida: %s", exc)
         raise
+
+
+_TMDB_IMAGEN = "https://image.tmdb.org/t/p/original"  # el frontend cambia "original" por el tamaño (posterUrl)
+_FALLOS_SEGUIDOS_TMDB = 3
+
+
+def rellenar_posters(conn: sqlite3.Connection) -> int:
+    """Póster y fondo de TMDb para las peticiones que no casan con nada de la biblioteca, que es de donde salía el
+    póster. Una vez por petición: '' guarda que TMDb no tiene. Devuelve cuántos pósters ha traído."""
+    if not tmdb_configured(conn):
+        return 0
+    pendientes = conn.execute(
+        "SELECT ri.id, ri.category, ri.req_scope, ri.tmdb_id, ri.imdb_id FROM request_items ri "
+        "WHERE ri.tmdb_poster_url IS NULL AND NOT EXISTS (SELECT 1 FROM request_matches rm "
+        "JOIN library_items li ON li.id = rm.library_item_id "
+        "WHERE rm.request_item_id = ri.id AND li.poster_url IS NOT NULL)").fetchall()
+    traidos = fallos = 0
+    for p in pendientes:
+        tipo = tipo_de_peticion(p["category"]) or ("series" if p["req_scope"] in ("season", "episode") else None)
+        try:
+            if tipo and p["tmdb_id"]:
+                poster, fondo = tmdb.get_images("movie" if tipo == "movie" else "tv", p["tmdb_id"], conn=conn)
+            elif p["imdb_id"]:
+                # Un documental sin temporada puede ser película o serie: con el tmdb se podría coger otra cosa.
+                poster, fondo = tmdb.find_images_by_imdb(p["imdb_id"], conn=conn)
+            else:
+                poster = fondo = None
+        except IntegrationError as exc:
+            if exc.status != 404:
+                # Red, límite o clave: no se guarda y la siguiente sincronización lo vuelve a probar.
+                fallos += 1
+                if fallos == _FALLOS_SEGUIDOS_TMDB:
+                    logger.warning("TMDb no responde; los pósters que faltan se piden en la próxima sincronización")
+                    break
+                continue
+            poster = fondo = None
+        fallos = 0
+        conn.execute("UPDATE request_items SET tmdb_poster_url = ?, tmdb_backdrop_url = ? WHERE id = ?",
+                     (_TMDB_IMAGEN + poster if poster else "", _TMDB_IMAGEN + fondo if fondo else "", p["id"]))
+        traidos += bool(poster)
+    conn.commit()
+    return traidos
 
 
 # ---------------------------------------------------------------------------
@@ -733,8 +783,9 @@ def list_request_items(
             li.title AS library_title,
             li.year AS library_year,
             li.local_status,
-            li.poster_url AS poster_url,
-            li.backdrop_url AS backdrop_url,
+            -- Sin cruce con póster, el que se trajo de TMDb ('' = TMDb no tiene).
+            COALESCE(li.poster_url, NULLIF(ri.tmdb_poster_url, '')) AS poster_url,
+            COALESCE(li.backdrop_url, NULLIF(ri.tmdb_backdrop_url, '')) AS backdrop_url,
             -- Origen: la instancia de Radarr/Sonarr donde tienes el contenido.
             -- Sale del item de biblioteca cruzado, así que una petición sin
             -- cruce (No importada) los trae en NULL y la columna pinta un
@@ -827,6 +878,9 @@ def get_request_detail(conn: sqlite3.Connection, request_id: int) -> Optional[di
     if not req_row:
         return None
     result = _safe_request_dict(dict(req_row))
+    # El de TMDb ('' = no tiene); el de la biblioteca, si hay cruce con póster, va delante.
+    result["poster_url"] = result.get("tmdb_poster_url") or None
+    result["backdrop_url"] = result.get("tmdb_backdrop_url") or None
     match_row = conn.execute(
         """
         SELECT rm.*, li.title AS library_title, li.year AS library_year, li.local_status, li.resolution AS local_resolution,
@@ -847,8 +901,8 @@ def get_request_detail(conn: sqlite3.Connection, request_id: int) -> Optional[di
     if match_row:
         md = dict(match_row)
         reasons = md.get("reasons") or ""
-        result["poster_url"] = md.get("poster_url")
-        result["backdrop_url"] = md.get("backdrop_url")
+        result["poster_url"] = md.get("poster_url") or result["poster_url"]
+        result["backdrop_url"] = md.get("backdrop_url") or result["backdrop_url"]
         result["library_year"] = md.get("library_year")
         # Mismos nombres que en la lista, para que la columna Origen de la
         # tabla y el campo Origen de la ficha lean lo mismo.

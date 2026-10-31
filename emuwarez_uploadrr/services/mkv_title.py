@@ -256,8 +256,11 @@ def apply_internal_title_update(
             }
 
         now = datetime.now(timezone.utc).isoformat()
-        status_val = "applied" if result.returncode == 0 else "error"
-        error_msg = result.stderr.strip() if result.returncode != 0 else None
+        # 1 son avisos con el cambio escrito. mkvpropedit escribe los errores en
+        # stdout, así que el motivo se busca en las dos salidas.
+        status_val = "applied" if result.returncode in (0, 1) else "error"
+        salida = "\n".join(x.strip() for x in (result.stdout, result.stderr) if x and x.strip())
+        error_msg = (salida or f"mkvpropedit salió con código {result.returncode}") if status_val == "error" else None
 
         try:
             conn.execute(

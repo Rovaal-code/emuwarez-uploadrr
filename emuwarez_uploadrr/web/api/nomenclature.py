@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ...database import connect, init_db
 from ...services.nomenclature import (
@@ -216,13 +216,16 @@ def get_nomenclature_fields(item_id: int, current_user: dict = Depends(require_a
 def preview_nomenclature_fields(
     item_id: int,
     body: NomenclatureFieldsPreviewBody,
+    # El asistente de subida no usa los proveedores y llama en cada edición:
+    # con false se salta la consulta a TMDb.
+    con_proveedores: bool = Query(True, alias="provider_options"),
     current_user: dict = Depends(require_auth),
 ):
     with _get_conn() as conn:
         preview = update_nomenclature_fields_preview(item_id, body.fields, conn=conn)
         provider_options = []
         source = body.fields.get("source")
-        if source in PROVIDER_SOURCES:
+        if con_proveedores and source in PROVIDER_SOURCES:
             from ...services.nomenclature import item_tmdb_reference
             item_tmdb_id, item_tipo = item_tmdb_reference(item_id, conn=conn)
             tmdb_codes: list[str] = []

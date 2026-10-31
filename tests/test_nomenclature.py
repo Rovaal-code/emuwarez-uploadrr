@@ -300,3 +300,12 @@ def test_el_titulo_conserva_la_interrogacion():
     assert _normalize_title_for_emu("Ali G: Kién es yo?") == "Ali G: Kién es yo?"
     # La barra separa palabras («Fate/Zero» → «Fate Zero»), no las pega.
     assert _normalize_title_for_emu('Uno/Dos "tres"') == "Uno Dos tres"
+
+
+def test_un_nombre_de_mas_de_255_bytes_bloquea_la_propuesta(db_conn):
+    """Antes el plan salía "listo" y el renombrado fallaba con Errno 36."""
+    titulo = "Una película con un título larguísimo de verdad " * 6
+    item_id = _insert_item(db_conn, title=titulo, path="/fake/peli.mkv")
+    result = build_nomenclature_proposal(item_id, conn=db_conn)
+    assert result["status"] == "blocked"
+    assert any("255" in e for e in json.loads(result["errors_json"]))

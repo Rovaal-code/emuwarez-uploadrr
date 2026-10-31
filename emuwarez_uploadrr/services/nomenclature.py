@@ -57,6 +57,19 @@ def get_library_item_for_nomenclature(item_id: int, conn=None) -> dict | None:
             conn.close()
 
 
+# Lo más largo que admite un nombre de fichero o carpeta (ext4, btrfs).
+_MAX_BYTES_NOMBRE = 255
+
+
+def error_de_longitud(nombre: str) -> str | None:
+    """El error si `nombre` no cabe como nombre de fichero; None si cabe."""
+    n = len((nombre or "").encode("utf-8"))
+    if n <= _MAX_BYTES_NOMBRE:
+        return None
+    return (f"El nombre ocupa {n} bytes y un nombre de archivo admite {_MAX_BYTES_NOMBRE}: "
+            f"acorta el título. ({nombre[:60]}…)")
+
+
 def _normalize_title_for_emu(title: str) -> str:
     if not title:
         return ""
@@ -518,6 +531,9 @@ def compute_nomenclature_proposal(
         parent = os.path.dirname(path)
         ext = os.path.splitext(path)[1] if os.path.isfile(path) else ""
         proposed_path = os.path.join(parent, proposed_filename + ext) if ext else os.path.join(parent, proposed_filename)
+    largo = error_de_longitud(proposed_filename + (os.path.splitext(path)[1] if path else ""))
+    if largo:
+        errors.append(largo)
 
     if errors:
         status = STATUS_BLOCKED

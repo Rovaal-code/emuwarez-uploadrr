@@ -685,6 +685,20 @@ def test_el_pack_se_escribe_igual_que_sus_capitulos():
         "Fate Zero S01 2011 2160p 4K UHD NF WEB-DL DV HDR HEVC ESP-JAP DD+ 5.1 SUBS-EMUWAREZ")
 
 
+def test_un_pack_con_un_nombre_demasiado_largo_se_bloquea(isolated_db, tmp_path):
+    conn = _open(isolated_db)
+    season_id = _pack_de_dos(conn, tmp_path)
+    plan = build_season_pack_plan(season_id, conn=conn, title_override="Título larguísimo " * 14)
+    assert plan["status"] == "blocked"
+    assert any("255" in e for e in plan["errors"]), plan["errors"]
+    conn.close()
+
+
+def test_la_carpeta_del_pack_no_lleva_caracteres_que_windows_rechaza():
+    assert _sanitize_pack_folder_name(r'Anacleto: ¿Quién? S01 "x" a|b*c<d>e/f\g.') == (
+        "Anacleto ¿Quién S01 x a b c d e f g")
+
+
 def test_preview_season_pack_title_basic():
     result = preview_season_pack_title({
         "title": "One Piece", "year": 1999, "season_number": 1,

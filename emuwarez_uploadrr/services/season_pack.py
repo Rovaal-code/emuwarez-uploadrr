@@ -35,6 +35,7 @@ nomenclature step) — this module has no confirmation token of its own.
 from __future__ import annotations
 
 import os
+import re
 import threading
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -711,6 +712,15 @@ def build_season_pack_plan(
                 "proposed_filename": proposed_filename,
             })
 
+        # Un nombre de más de 255 bytes no se puede crear: que se vea ahora, no
+        # a mitad de la subida con la mitad de los capítulos renombrados.
+        from .nomenclature import error_de_longitud
+        for nombre in [os.path.basename(e["destination_path"]) for e in episodes_out] + [
+                _sanitize_pack_folder_name(season_pack_title)]:
+            largo = error_de_longitud(nombre)
+            if largo:
+                errors.append(largo)
+
         status = "blocked" if errors else "valid"
 
         return {
@@ -765,9 +775,11 @@ def build_season_pack_plan(
 def _sanitize_pack_folder_name(name: str) -> str:
     """A season_pack_title is built from free-text metadata (title, tag...)
     and is safe to use as a torrent/release name, but not blindly as a
-    filesystem folder name — strip path separators and trim the whitespace/
-    dots some filesystems reject at the edges of a name."""
-    return name.replace("/", " ").replace("\\", " ").strip(" .")
+    filesystem folder name — strip path separators and the characters a
+    Windows/SMB folder name rejects, and trim the whitespace/dots some
+    filesystems reject at the edges of a name."""
+    limpio = re.sub(r'[/\\<>:"|?*]', " ", name)
+    return re.sub(r"\s+", " ", limpio).strip(" .")
 
 
 def apply_season_pack(

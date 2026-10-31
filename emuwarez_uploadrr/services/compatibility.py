@@ -248,7 +248,8 @@ def match_request_to_library(
         elif req_tvdb and itm_tvdb and req_tvdb == itm_tvdb:
             id_match = True
             confidence = 0.95
-        else:
+        elif not (req_tvdb and itm_tvdb):
+            # Con dos tvdb distintos son otras series aunque se llamen igual (Shameless UK y US): no hay cruce por título.
             same_title, sim = _comparar_titulos(req_title_norm, req_title_compact, req_words, item)
             if same_title:
                 title_match = True

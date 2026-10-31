@@ -553,3 +553,22 @@ def test_una_peticion_solo_con_tvdb_se_casa_por_tvdb():
     res = match_request_to_library(req, library)
     assert [r["item"]["id"] for r in res] == [1]
     assert res[0]["id_match"] is True and res[0]["confidence"] == 0.95
+
+
+def test_dos_tvdb_distintos_no_se_casan_por_titulo():
+    """Shameless (UK) y Shameless (US) se llaman igual: con un tvdb distinto son otras series."""
+    req = _make_req(title="Shameless", category="Series")
+    req["tvdb_id"] = "79744"
+    library = [
+        _make_item(id=1, item_type="series", title="Shameless", tvdb_id="161511"),
+        _make_item(id=2, item_type="series", title="Shameless", tvdb_id="79744"),
+        _make_item(id=3, item_type="series", title="Shameless"),
+    ]
+    assert [r["item"]["id"] for r in match_request_to_library(req, library)] == [2, 3]
+
+
+def test_un_tvdb_distinto_no_descarta_lo_que_confirma_el_tmdb():
+    """El tvdb del tracker puede ir por detrás del de Sonarr: si el tmdb coincide, la serie es esa."""
+    req = _make_req(title="Serie", tmdb_id="55", category="Series")
+    req["tvdb_id"] = "1"
+    assert len(match_request_to_library(req, [_make_item(item_type="series", title="Serie", tmdb_id="55", tvdb_id="2")])) == 1

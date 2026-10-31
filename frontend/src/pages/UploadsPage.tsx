@@ -546,9 +546,11 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // La de la lista o, si es más antigua que las cargadas (enlace /uploads/123, notificación, Panel), la pedida por su id.
   const [jobSuelto, setJobSuelto] = useState<UploadJob | null>(null)
   const enLista = selectedJobId != null ? jobs.find(j => j.id === selectedJobId) : undefined
+  // Depende de si está en la lista, no de la lista entera: cada recarga la sustituye y cancelaría la petición en vuelo.
+  const seleccionadaEnLista = enLista != null
   useEffect(() => {
     if (selectedJobId == null || !cargado) return
-    if (enLista) { setJobSuelto(null); return }
+    if (seleccionadaEnLista) { setJobSuelto(null); return }
     let alive = true
     getUploadJob(selectedJobId)
       .then(j => { if (alive) setJobSuelto(j) })
@@ -557,7 +559,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
         if (alive && e instanceof ApiClientError && e.status === 404) closeUpload()
       })
     return () => { alive = false }
-  }, [selectedJobId, cargado, jobs])
+  }, [selectedJobId, cargado, seleccionadaEnLista])
   const selectedJob = enLista ?? (jobSuelto?.id === selectedJobId ? jobSuelto : undefined)
 
   // The list row (above) never carries display_title — only the single-job

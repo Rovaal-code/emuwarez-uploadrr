@@ -30,7 +30,8 @@ the upload with Uploadrr-EMU (`Kisnov/Uploadrr-EMU`, cloned into the image at `/
   `python -m tests.test_media_info_congelado --regenerar` and review the JSON diff.
 - CI (`.github/workflows/ci.yml`) runs pytest, critical ruff rules and the frontend checks on every PR, and from
   `publicar.yml` before a release; it uploads coverage, test results and the frontend bundle size to Codecov
-  (informational only, `codecov.yml`; needs the `CODECOV_TOKEN` secret). Master has no CI of its own: `bundle.yml`
+  (`codecov.yml`: the changed lines of a PR need 70 % coverage or `codecov/patch` fails; the total is informational;
+  needs the `CODECOV_TOKEN` secret). Master has no CI of its own: `bundle.yml`
   only builds the frontend on each push that touches `frontend/` (~40 s) so PRs have a bundle size to compare against.
 - `zizmor.yml` audits the workflows and `dependabot.yml` when `.github/` changes; run `zizmor --gh-token "$(gh auth token)" .` locally (without a token it skips online audits) before pushing a workflow edit.
 

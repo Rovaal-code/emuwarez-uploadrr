@@ -1,6 +1,8 @@
 """Tu cuenta de eMuwarez (/api/user): una llamada por hora como mucho, y el último perfil bueno si falla."""
 from __future__ import annotations
 
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -133,13 +135,54 @@ def test_rellena_el_usuario_de_ajustes_solo_si_esta_vacio(conn, llamadas):
     assert get_setting_canonical(conn, "emu.username") == "OtroNombre"
 
 
-def test_si_otra_peticion_ya_esta_pidiendo_no_llama(conn, llamadas):
-    assert emu_perfil._PIDIENDO.acquire(blocking=False)
-    try:
-        perfil = perfil_emu(conn)
-    finally:
-        emu_perfil._PIDIENDO.release()
-    assert llamadas == [] and perfil["ratio"] is None
+def test_dos_pestanas_a_la_vez_hacen_una_sola_llamada(conn, monkeypatch):
+    dentro, seguir = threading.Event(), threading.Event()
+    hechas = []
+
+    def lenta(api_key, base_url=None):
+        hechas.append(api_key)
+        dentro.set()
+        seguir.wait(5)
+        return dict(USUARIO)
+
+    monkeypatch.setattr(emu_perfil, "emu_get_user", lenta)
+    resultados = {}
+
+    def pestana(nombre):
+        c = connect(db_path())
+        try:
+            resultados[nombre] = perfil_emu(c)
+        finally:
+            c.close()
+
+    primera = threading.Thread(target=pestana, args=("primera",))
+    primera.start()
+    assert dentro.wait(5)
+    segunda = threading.Thread(target=pestana, args=("segunda",))
+    segunda.start()
+    time.sleep(0.2)  # que la segunda llegue a esperar a la primera
+    seguir.set()
+    primera.join(5)
+    segunda.join(5)
+    assert hechas == ["clave"]
+    assert resultados["primera"]["ratio"] == resultados["segunda"]["ratio"] == "4.1"
+
+
+def test_otra_clave_no_ensena_el_perfil_de_la_anterior(conn, llamadas, monkeypatch):
+    perfil_emu(conn)
+    set_setting(conn, "emu.api_key", "nueva")
+    conn.commit()
+    perfil_emu(conn)
+    assert llamadas == ["clave", "nueva"]  # sin esperar la hora
+
+    def falla(api_key, base_url=None):
+        raise IntegrationError("eMuwarez ha rechazado la API key (¿ratio por debajo de 1?)", status=401)
+
+    monkeypatch.setattr(emu_perfil, "emu_get_user", falla)
+    set_setting(conn, "emu.api_key", "otra")
+    conn.commit()
+    perfil = perfil_emu(conn)
+    assert perfil["error"] and perfil["ratio"] is None and perfil["updated_at"] is None
 
 
 def test_endpoint(client, auth_headers, conn, llamadas):

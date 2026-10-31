@@ -7,6 +7,7 @@ que de ellos la interfaz solo pone el enlace.
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 import sqlite3
 import threading
@@ -27,7 +28,7 @@ ESPERA_ACTUALIZAR = timedelta(minutes=1)
 CAMPOS = ("username", "group", "uploaded", "downloaded", "ratio", "buffer",
           "seeding", "leeching", "seedbonus", "hit_and_runs")
 
-# Con el Panel y la barra superior abiertos en varias pestañas, solo una va a eMuwarez.
+# Con el Panel abierto en varias pestañas, solo una va a eMuwarez: las demás esperan y se llevan lo que guarde.
 _PIDIENDO = threading.Lock()
 
 
@@ -37,12 +38,12 @@ def perfil_emu(conn: sqlite3.Connection, *, actualizar: bool = False) -> dict[st
     clave = (get_setting_canonical(conn, "emu.api_key") or "").strip()
     guardado: dict[str, Any] = {}
     if clave:
-        guardado = get_json_state(conn, PERFIL_STATE_KEY) or {}
-        if _caducado(guardado, ESPERA_ACTUALIZAR if actualizar else DURACION) and _PIDIENDO.acquire(blocking=False):
-            try:
+        with _PIDIENDO:
+            guardado = get_json_state(conn, PERFIL_STATE_KEY) or {}
+            if guardado.get("huella") != _huella(clave):
+                guardado = {}  # era de otra clave: se pide ya con la nueva
+            if _caducado(guardado, ESPERA_ACTUALIZAR if actualizar else DURACION):
                 guardado = _pedir(conn, clave, guardado)
-            finally:
-                _PIDIENDO.release()
     perfil = guardado.get("perfil") or {}
     return {
         "configured": bool(clave),
@@ -61,8 +62,12 @@ def _caducado(guardado: dict[str, Any], plazo: timedelta) -> bool:
         return True
 
 
+def _huella(clave: str) -> str:
+    return hashlib.sha256(clave.encode()).hexdigest()
+
+
 def _pedir(conn: sqlite3.Connection, clave: str, guardado: dict[str, Any]) -> dict[str, Any]:
-    nuevo = {**guardado, "intento_at": datetime.now(timezone.utc).isoformat()}
+    nuevo = {**guardado, "intento_at": datetime.now(timezone.utc).isoformat(), "huella": _huella(clave)}
     try:
         datos = emu_get_user(clave)
     except IntegrationError as exc:

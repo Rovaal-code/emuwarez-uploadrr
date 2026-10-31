@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { actualizarEmuPerfil, getEmuPerfil } from '../api/dashboard'
 import type { EmuPerfil } from '../types/api'
 import { useSync } from './SyncContext'
@@ -43,13 +43,19 @@ export function PerfilEmuProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(HIDE_NAME_KEY, ocultarNombre ? '1' : '0')
   }, [ocultarNombre])
 
-  useEffect(() => {
-    getEmuPerfil().then(setPerfil).catch(() => { /* sin perfil: no se enseña */ })
-  }, [lastInvalidatedAt])
-
-  const actualizar = useCallback(async () => {
-    setPerfil(await actualizarEmuPerfil())
+  // Manda la última petición: una lectura que llega tarde no pisa un «Actualizar» posterior.
+  const ultima = useRef(0)
+  const cargar = useCallback(async (pedir: () => Promise<EmuPerfil>) => {
+    const esta = ++ultima.current
+    const nuevo = await pedir()
+    if (esta === ultima.current) setPerfil(nuevo)
   }, [])
+
+  useEffect(() => {
+    cargar(getEmuPerfil).catch(() => { /* sin perfil: no se enseña */ })
+  }, [lastInvalidatedAt, cargar])
+
+  const actualizar = useCallback(() => cargar(actualizarEmuPerfil), [cargar])
 
   return (
     <PerfilEmuContext.Provider value={{ perfil, actualizar, ocultarNombre, setOcultarNombre }}>

@@ -50,6 +50,9 @@ FULL_SYNC_STATE_KEY = "last_emu_catalog_full_utc"
 UNIQUE_CONTENT_COUNTS_STATE_KEY = "notify.content_unique_last_counts"
 MIN_SYNC_SECONDS = 3600        # incremental: 1/hour
 MIN_FULL_SYNC_SECONDS = 86400  # full re-download: 1/day
+# Una descarga completa que trae menos que esto de lo que se esperaba no sustituye al catálogo guardado.
+MIN_CATALOG_VS_TOTAL = 0.98     # contra el meta.total de eMuwarez, si lo manda
+MIN_CATALOG_VS_PREVIOUS = 0.90  # contra lo que había, si no
 
 # --- Parsing -----------------------------------------------------------------
 
@@ -61,6 +64,9 @@ _CODEC_RE = re.compile(r"\b(AV1|x265|H\.?265|HEVC|x264|H\.?264|AVC|VP9)\b", re.I
 _ES_TOKENS = {"ESP", "CAST", "CASTELLANO", "ESPANOL", "LATINO", "LAT", "DUAL", "MULTI"}
 _ORIG_TOKENS = {"ING", "ENG", "JAP", "JPN", "KOR", "ITA", "FRA", "GER", "RUS", "POR", "VO", "VOSE", "VOST", "VOSTFR"}
 _SEASON_RE = re.compile(r"\bS(\d{1,3})(?:E\d{1,4})?\b", re.I)
+_SEASON_RANGE_RE = re.compile(r"\bS(\d{1,3})\s*-\s*S?(\d{1,3})\b", re.I)
+_SEASON_WORD_RE = re.compile(r"\b(?:temporadas?|seasons?)\s+(\d{1,3})(?:\s*-\s*(\d{1,3}))?\b", re.I)
+_YEAR_RE = re.compile(r"\b(?:19|20)\d{2}\b")
 
 
 def _norm_codec(name: str) -> Optional[str]:
@@ -87,9 +93,37 @@ def _has_spanish(name: str) -> Optional[int]:
     return None
 
 
-def _parse_season(name: str) -> Optional[int]:
-    m = _SEASON_RE.search(name or "")
-    return int(m.group(1)) if m else None
+def _season_range(first: int, last: int) -> list[int]:
+    return list(range(first, last + 1)) if first <= last and last - first < 100 else [first]
+
+
+def _seasons_in(text: str) -> list[int]:
+    m = _SEASON_RANGE_RE.search(text)
+    if m:
+        return _season_range(int(m.group(1)), int(m.group(2)))
+    tokens = _SEASON_RE.findall(text)
+    if tokens:
+        return [int(tokens[-1])]  # el último: «The S1 Files S02» es la 2
+    m = _SEASON_WORD_RE.search(text)
+    if m:
+        return _season_range(int(m.group(1)), int(m.group(2) or m.group(1)))
+    return []
+
+
+def _parse_seasons(name: str) -> list[int]:
+    """Las temporadas que trae un torrent: S02, S01-S03, S01-03, «Temporada 2». Lo que va antes del año es el título."""
+    name = name or ""
+    year = _YEAR_RE.search(name)
+    return (_seasons_in(name[year.end():]) if year else []) or _seasons_in(name)
+
+
+def _row_seasons(row: dict) -> list[int]:
+    """Las temporadas de una fila del catálogo: se leen del nombre, y lo guardado (la primera) es el respaldo."""
+    return _parse_seasons(row["name"]) or ([row["season_number"]] if row["season_number"] is not None else [])
+
+
+def _is_series(row: dict) -> bool:
+    return row["category"] == "Series" or bool(_row_seasons(row))
 
 
 # --- Throttle ----------------------------------------------------------------
@@ -149,7 +183,7 @@ def _index_catalog(torrents: list[dict]) -> list[dict]:
             "category": a.get("category"),
             "tmdb_id": str(a["tmdb_id"]) if a.get("tmdb_id") else None,
             "tvdb_id": str(a["tvdb_id"]) if a.get("tvdb_id") else None,
-            "season_number": _parse_season(name) if (a.get("category") == "Series") else None,
+            "season_number": min(_parse_seasons(name), default=None),
             "resolution": a.get("resolution"),
             "source": a.get("type"),
             "codec": _norm_codec(name),
@@ -180,6 +214,16 @@ def _append_catalog(conn: sqlite3.Connection, rows: list[dict]) -> None:
     if rows:
         conn.executemany(_INSERT_CATALOG_SQL, rows)
         conn.commit()
+
+
+def _check_catalog_complete(rows: list[dict], total: Optional[int], previous: int) -> None:
+    """Sustituir el catálogo con una descarga cortada a mitad (una página vacía o corta con un 200) lo dejaría
+    sin torrents y daría por únicos los que ya están en eMuwarez: sin cambiar nada, se avisa del fallo."""
+    got = len({r["torrent_id"] for r in rows})
+    expected, minimum = (total, MIN_CATALOG_VS_TOTAL) if total else (previous, MIN_CATALOG_VS_PREVIOUS)
+    if expected and got < expected * minimum:
+        raise IntegrationError(
+            f"La descarga del catálogo está incompleta ({got} de unos {expected} torrents); se conserva el anterior")
 
 
 def _max_torrent_id(rows: list[dict]) -> int:
@@ -319,19 +363,26 @@ def _compute_and_store_item_status(conn: sqlite3.Connection) -> int:
     """Compute emu_in_catalog/emu_aportes for every movie, season and series."""
     # Load the catalog into in-memory indexes.
     cat = [dict(r) for r in conn.execute("SELECT * FROM emu_catalog").fetchall()]
-    by_tmdb: dict[str, list] = {}
-    by_tvdb_season: dict[tuple, list] = {}
-    by_tvdb_season_episode: dict[tuple, list] = {}
+    # TMDb numera aparte películas y series: un mismo id no es el mismo contenido. Las series se indexan por su
+    # tvdb y por su tmdb (hay torrents con uno solo), y una temporada de un pack S01-S03 está en las tres.
+    movies: dict[str, list] = {}
+    seasons_idx: dict[tuple, list] = {}
     for c in cat:
-        if c["tmdb_id"] and c["category"] != "Series":
-            by_tmdb.setdefault(c["tmdb_id"], []).append(c)
-        if c["tvdb_id"] and c["season_number"] is not None:
-            by_tvdb_season.setdefault((c["tvdb_id"], c["season_number"]), []).append(c)
-            # The catalog has no episode_number column — parse it from the name
-            # (e.g. "…S01E08…") so each episode can be matched to its torrent.
-            ep = _parse_episode_number(c["name"] or "")
-            if ep is not None:
-                by_tvdb_season_episode.setdefault((c["tvdb_id"], c["season_number"], ep), []).append(c)
+        if _is_series(c):
+            for n in _row_seasons(c):
+                for kind in ("tvdb", "tmdb"):
+                    if c[f"{kind}_id"]:
+                        seasons_idx.setdefault((kind, c[f"{kind}_id"], n), []).append(c)
+        elif c["tmdb_id"]:
+            movies.setdefault(c["tmdb_id"], []).append(c)
+
+    def season_rows(tvdb, tmdb, n) -> list[dict]:
+        found: dict[int, dict] = {}
+        for kind, ident in (("tvdb", tvdb), ("tmdb", tmdb)):
+            if ident:
+                for c in seasons_idx.get((kind, str(ident), n), []):
+                    found[c["id"]] = c
+        return list(found.values())
 
     # Honor the same "Ignorar especiales" setting the Estado/Nomenclatura
     # rollups use, so the three series statuses stay consistent. Default True
@@ -352,7 +403,7 @@ def _compute_and_store_item_status(conn: sqlite3.Connection) -> int:
     for m in conn.execute("SELECT id, tmdb_id, resolution, source, video_codec, audio_languages, size_bytes "
                           "FROM library_items WHERE item_type = 'movie'").fetchall():
         m = dict(m)
-        matches = by_tmdb.get(str(m["tmdb_id"]), []) if m["tmdb_id"] else []
+        matches = movies.get(str(m["tmdb_id"]), []) if m["tmdb_id"] else []
         if not matches:
             save(m["id"], 0, [])
             continue
@@ -364,7 +415,7 @@ def _compute_and_store_item_status(conn: sqlite3.Connection) -> int:
     # Seasons (aggregate their episodes) — series' tvdb_id + id come from the join.
     seasons = conn.execute(
         "SELECT se.id AS id, se.season_number AS season_number, "
-        "sr.id AS series_id, sr.tvdb_id AS tvdb_id "
+        "sr.id AS series_id, sr.tvdb_id AS tvdb_id, sr.tmdb_id AS tmdb_id "
         "FROM library_items se JOIN library_items sr ON se.parent_id = sr.id "
         "WHERE se.item_type = 'season'"
     ).fetchall()
@@ -381,7 +432,7 @@ def _compute_and_store_item_status(conn: sqlite3.Connection) -> int:
             "SELECT resolution, source, video_codec, audio_languages, size_bytes "
             "FROM library_items WHERE parent_id = ? AND item_type = 'episode'", (s["id"],)
         ).fetchall()]
-        matches = by_tvdb_season.get((str(s["tvdb_id"]), s["season_number"]), []) if s["tvdb_id"] else []
+        matches = season_rows(s["tvdb_id"], s["tmdb_id"], s["season_number"]) if s["season_number"] is not None else []
         mine = {
             "resolution": _mode([e["resolution"] for e in eps]),
             "source": _mode([e["source"] for e in eps]),
@@ -409,15 +460,19 @@ def _compute_and_store_item_status(conn: sqlite3.Connection) -> int:
     for e in conn.execute(
         "SELECT e.id AS id, e.season_number AS season_number, e.episode_number AS episode_number, "
         "e.resolution AS resolution, e.source AS source, e.video_codec AS video_codec, "
-        "e.audio_languages AS audio_languages, e.size_bytes AS size_bytes, sr.tvdb_id AS tvdb_id "
+        "e.audio_languages AS audio_languages, e.size_bytes AS size_bytes, sr.tvdb_id AS tvdb_id, "
+        "sr.tmdb_id AS tmdb_id "
         "FROM library_items e JOIN library_items se ON e.parent_id = se.id "
         "JOIN library_items sr ON se.parent_id = sr.id "
         "WHERE e.item_type = 'episode'"
     ).fetchall():
         e = dict(e)
         matches = []
-        if e["tvdb_id"] and e["season_number"] is not None and e["episode_number"] is not None:
-            matches = by_tvdb_season_episode.get((str(e["tvdb_id"]), e["season_number"], e["episode_number"]), [])
+        if e["season_number"] is not None and e["episode_number"] is not None:
+            # The catalog has no episode_number column — parse it from the name (e.g. "…S01E08…") so each
+            # episode can be matched to its torrent.
+            matches = [c for c in season_rows(e["tvdb_id"], e["tmdb_id"], e["season_number"])
+                       if _parse_episode_number(c["name"] or "") == e["episode_number"]]
         if not matches:
             save(e["id"], 0, [])
             continue
@@ -472,6 +527,73 @@ def _best_codec(codecs: list) -> Optional[str]:
     return best
 
 
+# --- Per-item catalog rows ----------------------------------------------------
+
+def _series_ids(conn: sqlite3.Connection, series_id: Optional[int]) -> tuple[Optional[str], Optional[str]]:
+    row = conn.execute("SELECT tvdb_id, tmdb_id FROM library_items WHERE id = ?", (series_id,)).fetchone()
+    return (row["tvdb_id"], row["tmdb_id"]) if row else (None, None)
+
+
+def _series_rows(conn: sqlite3.Connection, tvdb, tmdb) -> list[dict]:
+    """Los torrents de series con ese tvdb o ese tmdb: el mismo criterio que _compute_and_store_item_status."""
+    ids = [(col, str(v)) for col, v in (("tvdb_id", tvdb), ("tmdb_id", tmdb)) if v]
+    if not ids:
+        return []
+    rows = conn.execute("SELECT * FROM emu_catalog WHERE " + " OR ".join(f"{col} = ?" for col, _ in ids),
+                        [v for _, v in ids]).fetchall()
+    return [r for r in map(dict, rows) if _is_series(r)]
+
+
+def filas_del_catalogo(conn: sqlite3.Connection, item: dict) -> list[dict]:
+    """Los torrents de eMuwarez de una película, temporada, capítulo o serie de la biblioteca."""
+    kind = item["item_type"]
+    if kind == "movie":
+        if not item["tmdb_id"]:
+            return []
+        rows = conn.execute("SELECT * FROM emu_catalog WHERE tmdb_id = ?", (str(item["tmdb_id"]),)).fetchall()
+        return [r for r in map(dict, rows) if not _is_series(r)]
+    if kind == "series":
+        return _series_rows(conn, item["tvdb_id"], item["tmdb_id"])
+    if kind == "season":
+        if item["season_number"] is None:
+            return []
+        tvdb, tmdb = _series_ids(conn, item["parent_id"])
+        return [r for r in _series_rows(conn, tvdb, tmdb) if item["season_number"] in _row_seasons(r)]
+    if kind == "episode":
+        # Series → temporada → capítulo: el tvdb/tmdb salen de la serie y el capítulo se reconoce por su SxxExx.
+        season = conn.execute("SELECT parent_id FROM library_items WHERE id = ?", (item["parent_id"],)).fetchone()
+        tvdb, tmdb = _series_ids(conn, season["parent_id"] if season else None)
+        season_n, ep_n = item["season_number"], item["episode_number"]
+        if season_n is None or ep_n is None:
+            return []
+        return [r for r in _series_rows(conn, tvdb, tmdb)
+                if season_n in _row_seasons(r) and _parse_episode_number(r["name"]) == ep_n]
+    return []
+
+
+def catalogo_cubre(conn: sqlite3.Connection, item_id: int, resolucion: Optional[str], tipo: Optional[str]) -> bool:
+    """Si eMuwarez ya tiene un torrent de ese contenido con la resolución y el tipo pedidos (None = da igual)."""
+    item = conn.execute("SELECT * FROM library_items WHERE id = ?", (item_id,)).fetchone()
+    if not item:
+        return False
+    item = dict(item)
+    filas = filas_del_catalogo(conn, item)
+    if item["item_type"] in ("season", "series"):
+        # Un capítulo suelto no cubre una temporada entera.
+        filas = [r for r in filas if _parse_episode_number(r["name"] or "") is None]
+    cumplen = [r for r in filas
+               if (not resolucion or r["resolution"] == resolucion)
+               and (not tipo or (r["source"] or "").lower() == tipo.lower())]
+    if item["item_type"] != "series":
+        return bool(cumplen)
+    # Una serie entera está cubierta si cada temporada que cuenta (como en el resumen de la serie) tiene la variante.
+    ignorar_especiales = (get_setting_canonical(conn, "series.ignore_specials") or "true") != "false"
+    temporadas = [n for (n,) in conn.execute(
+        "SELECT season_number FROM library_items WHERE parent_id = ? AND item_type = 'season' "
+        "AND season_number IS NOT NULL", (item_id,)) if not (ignorar_especiales and n == 0)]
+    return bool(temporadas) and all(any(n in _row_seasons(r) for r in cumplen) for n in temporadas)
+
+
 # --- Per-item comparison detail (for the detail card) ------------------------
 
 def get_item_comparison(conn: sqlite3.Connection, item_id: int) -> dict:
@@ -494,21 +616,12 @@ def get_item_comparison(conn: sqlite3.Connection, item_id: int) -> dict:
     if not get_state(conn, SYNC_COMPLETED_STATE_KEY):
         return {"available": False, "message": "Sincroniza con eMuwarez para ver la comparación.", "matches": []}
 
+    rows = filas_del_catalogo(conn, item)
     if itype == "movie":
-        rows = conn.execute(
-            "SELECT * FROM emu_catalog WHERE tmdb_id = ? AND category != 'Series'",
-            (str(item["tmdb_id"]),),
-        ).fetchall() if item["tmdb_id"] else []
         mine = {"resolution": item["resolution"], "source": item["source"],
                 "codec": _norm_codec(item["video_codec"] or "") or item["video_codec"],
                 "has_es": _episode_lang_has_es(item["audio_languages"]), "size": item["size_bytes"]}
     elif itype == "season":
-        parent = conn.execute("SELECT tvdb_id FROM library_items WHERE id = ?", (item["parent_id"],)).fetchone()
-        tvdb = parent["tvdb_id"] if parent else None
-        rows = conn.execute(
-            "SELECT * FROM emu_catalog WHERE tvdb_id = ? AND season_number = ?",
-            (str(tvdb), item["season_number"]),
-        ).fetchall() if tvdb else []
         eps = [dict(e) for e in conn.execute(
             "SELECT resolution, source, video_codec, audio_languages, size_bytes "
             "FROM library_items WHERE parent_id = ? AND item_type = 'episode'", (item_id,)
@@ -521,21 +634,6 @@ def get_item_comparison(conn: sqlite3.Connection, item_id: int) -> dict:
             "size": sum(e["size_bytes"] or 0 for e in eps) or None,
         }
     elif itype == "episode":
-        # Match this episode to its own torrent (parsed SxxExx). tvdb comes from
-        # the series (episode → season → series).
-        season_row = conn.execute("SELECT parent_id FROM library_items WHERE id = ?", (item["parent_id"],)).fetchone()
-        series_id = season_row["parent_id"] if season_row else None
-        tvdb = None
-        if series_id:
-            sr = conn.execute("SELECT tvdb_id FROM library_items WHERE id = ?", (series_id,)).fetchone()
-            tvdb = sr["tvdb_id"] if sr else None
-        season_n, ep_n = item.get("season_number"), item.get("episode_number")
-        rows = []
-        if tvdb and season_n is not None and ep_n is not None:
-            all_rows = conn.execute(
-                "SELECT * FROM emu_catalog WHERE tvdb_id = ? AND season_number = ?", (str(tvdb), season_n)
-            ).fetchall()
-            rows = [r for r in all_rows if _parse_episode_number(r["name"]) == ep_n]
         mine = {"resolution": item["resolution"], "source": item["source"],
                 "codec": _norm_codec(item["video_codec"] or "") or item["video_codec"],
                 "has_es": _episode_lang_has_es(item["audio_languages"]), "size": item["size_bytes"]}
@@ -547,7 +645,7 @@ def get_item_comparison(conn: sqlite3.Connection, item_id: int) -> dict:
 
     matches = [{"name": r["name"], "resolution": r["resolution"], "source": r["source"],
                 "codec": r["codec"], "has_spanish": r["has_spanish"], "size": r["size"]}
-               for r in map(dict, rows)]
+               for r in rows]
     result = {
         "available": True,
         "message": None,
@@ -557,7 +655,7 @@ def get_item_comparison(conn: sqlite3.Connection, item_id: int) -> dict:
         "mine_available": mine.get("size") is not None,
         "matches": matches,
         "in_catalog": 1 if matches else 0,
-        "aportes": _compute_aportes(mine, [dict(r) for r in rows]) if matches else [],
+        "aportes": _compute_aportes(mine, rows) if matches else [],
     }
     if itype == "season":
         # Distinguish "there is a season pack" from "only loose episodes". When
@@ -746,8 +844,10 @@ def sync_emu_catalog(conn: sqlite3.Connection, *, force: bool = False, mode: str
         logger.info("Sincronización de eMuwarez iniciada (modo %s)", "incremental" if incremental else "completo")
         _set_progress(phase=phase_label, page=0, total_pages=None, eta_seconds=None)
         _dl_start = time.time()
+        reported_total: dict[str, Optional[int]] = {"n": None}
 
         def _on_page(page: int, total_pages, items_so_far: int, total_items) -> None:
+            reported_total["n"] = total_items or reported_total["n"]
             tp = total_pages or est_full_pages
             elapsed = time.time() - _dl_start
             eta = None
@@ -766,6 +866,7 @@ def sync_emu_catalog(conn: sqlite3.Connection, *, force: bool = False, mode: str
             _set_progress(phase="Guardando torrents nuevos…", torrents=len(rows), eta_seconds=None)
             _append_catalog(conn, rows)
         else:
+            _check_catalog_complete(rows, reported_total["n"], prev_count)
             _set_progress(phase="Guardando catálogo…", torrents=len(rows), eta_seconds=None)
             _store_catalog(conn, rows)
 

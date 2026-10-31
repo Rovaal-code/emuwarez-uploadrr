@@ -6,6 +6,7 @@ UNIT3D API authentication uses ?api_token=<key> as a query parameter.
 from __future__ import annotations
 
 import json
+import re
 import time
 from typing import Any, Iterable, Optional
 
@@ -80,13 +81,15 @@ def emu_get_user(api_key: str, base_url: str | None = None) -> dict[str, Any]:
 
 
 def emu_fetch_all_pages(
-    api_key: str, base_url: str | None = None
+    api_key: str, base_url: str | None = None, progress=None
 ) -> tuple[list[dict[str, Any]], Optional[int]]:
     """Recorre las peticiones abiertas página a página, con una pausa entre una y otra.
 
     Devuelve (filas, total). `total` es el meta.total de eMuwarez, o None si no
     vino o cambió durante el recorrido: entonces no se puede dar por completo.
     Lanza IntegrationError si el recorrido no puede terminar.
+
+    `progress(pagina, ultima_pagina, filas_hasta_ahora)` se llama tras cada página.
     """
     filas: list[dict[str, Any]] = []
     totales: set[Optional[int]] = set()
@@ -109,6 +112,11 @@ def emu_fetch_all_pages(
             raise IntegrationError(
                 f"eMuwarez tiene más de {EMU_PETICIONES_MAX_PAGINAS} páginas de peticiones abiertas; no se sincronizan")
         totales.add(_entero(meta.get("total")))
+        if progress:
+            try:
+                progress(pagina, ultima, len(filas))
+            except Exception:  # noqa: BLE001 — el progreso es lo de menos
+                pass
         pagina += 1
     return filas, (totales.pop() if len(totales) == 1 else None)
 
@@ -124,6 +132,9 @@ EMU_PETICIONES_MAX_PAGINAS = 50
 # Si aun así llega un 429, se espera a que se vacíe la ventana del minuto y se repite la página.
 EMU_ESPERA_429 = 60.0
 EMU_REINTENTOS_429 = 3
+
+# Con estos estados, en la primera página, se prueba otra vez sin pedir un orden (puede ser lo que rechaza).
+_RECHAZO_DE_ORDEN = (400, 422, 500)
 
 # Lo que se enseña en vez del texto de request_json, que lleva la URL.
 _MENSAJE_POR_ESTADO = {
@@ -158,8 +169,11 @@ def emu_fetch_all_torrents(
     Incremental: when `stop_after_id` is given, the walk stops as soon as a
     torrent already known (id <= stop_after_id) is reached — so only the
     newly-uploaded torrents come back, instead of re-downloading the whole
-    catalog. The catalog's default order is created_at desc, so ids decrease as
-    we page and the first known id means everything after it is known too.
+    catalog. Se pide ordenado por created_at desc (UNIT3D ordena por defecto por bumped_at, y un torrent
+    antiguo resubido saldría el primero y cortaría el recorrido): los ids bajan página a página y el primer
+    id conocido significa que lo que sigue también se conoce. Si el tracker rechaza el orden en la primera
+    página, el recorrido completo sigue sin él (su orden por defecto) en vez de dejar la sincronización sin
+    funcionar; el incremental falla, porque sin orden no puede fiarse de dónde parar.
 
     Requests are paced to `min_interval` seconds apart (rate limit).
 
@@ -171,11 +185,24 @@ def emu_fetch_all_torrents(
     total_items: int | None = None
     page = 1
     reached_known = False
+    orden = {"sortField": "created_at", "sortDirection": "desc"}
+
+    def pedir(n: int) -> Any:
+        return _pedir_pagina(build_url(base, "/api/torrents/filter", {
+            "api_token": api_key, "perPage": str(per_page), "page": str(n), **orden}))
+
     while page <= max_pages and not reached_known:
         if page > 1:
             time.sleep(min_interval)  # rate limit (see EMU_MIN_REQUEST_INTERVAL)
-        url = build_url(base, "/api/torrents/filter", {"api_token": api_key, "perPage": str(per_page), "page": str(page)})
-        data = _pedir_pagina(url)
+        try:
+            data = pedir(page)
+        except IntegrationError as exc:
+            # Sin orden, un torrent resubido saldría el primero y cortaría el recorrido incremental: solo se prueba
+            # sin él en el completo.
+            if page > 1 or not orden or exc.status not in _RECHAZO_DE_ORDEN or stop_after_id is not None:
+                raise
+            orden = {}
+            data = pedir(page)
         items = data.get("data") if isinstance(data, dict) else None
         meta = data.get("meta") if isinstance(data, dict) else None
         if isinstance(meta, dict):
@@ -223,17 +250,24 @@ def _id_externo(value: Any) -> Optional[str]:
     return str(n) if n else None
 
 
+_ESPECIALES = re.compile(r"\b(?:especiales?|specials?)\b", re.I)
+
+
 def normalize_request(raw: dict[str, Any]) -> RequestItem:
     """Una fila plana de /api/requests/filter. Sea cual sea el campo que falte, no falla."""
     emu_id = str(raw.get("id", ""))
     imdb = _entero(raw.get("imdb"))
     usuario = raw.get("user")
     autor = usuario if usuario and str(usuario).lower() != "anonymous" else None
+    titulo = str(raw.get("name") or "Sin título")
     temporada, capitulo = _entero(raw.get("season_number")), _entero(raw.get("episode_number"))
+    # UNIT3D guarda 0 para «sin temporada»: es la serie entera salvo que el nombre diga Especiales.
+    if temporada == 0 and not capitulo and not _ESPECIALES.search(titulo):
+        temporada = None
     return RequestItem(
         id=None,
         emu_id=emu_id,
-        title=str(raw.get("name") or "Sin título"),
+        title=titulo,
         category=EMU_CATEGORIAS.get(_entero(raw.get("category_id"))),
         requested_source=EMU_TIPOS.get(_entero(raw.get("type_id"))),
         requested_resolution=EMU_RESOLUCIONES.get(_entero(raw.get("resolution_id"))),

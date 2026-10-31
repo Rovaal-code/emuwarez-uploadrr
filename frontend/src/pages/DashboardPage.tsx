@@ -336,7 +336,28 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   // acaba su despedida, y la tarjeta no se queda vacía entre subida y subida.
   const recientes = ultimasTerminadas(todasLasSubidas, idsDe(despidiendose.map(d => d.job)))
 
+  // "Actividad de subida" se refresca aparte del Panel, por el aviso del servidor (con el sondeo de 2,5 s de red
+  // de seguridad), y es la única que pide las subidas. Con un número de orden por petición: una respuesta lenta
+  // que llegara tarde repondría el estado de antes (la barra iba hacia atrás y una subida acabada reaparecía viva).
+  // Sin las preparatorias, que no ocupan sitio, y con 100.
+  const subidasSeq = useRef(0)
+  const loadActiveUploads = useCallback(async () => {
+    const seq = ++subidasSeq.current
+    try {
+      const todas = await getUploads({ hide_preparatory: true, limit: 100 })
+      if (seq === subidasSeq.current) registrarSubidas(todas)
+    } catch { /* ignore — next tick retries */ }
+  }, [registrarSubidas])
+
+  // Las subidas se piden aquí solo la primera vez: de ahí en adelante las
+  // refresca el aviso del servidor, sin esperar a que dé la vuelta el Panel.
+  const subidasPedidas = useRef(false)
+
   const loadData = useCallback(async () => {
+    if (!subidasPedidas.current) {
+      subidasPedidas.current = true
+      void loadActiveUploads()
+    }
     setLoadingData(true)
     setDataError(null)
     // Settings first, so "Recomendaciones" honours the configured limit.
@@ -349,14 +370,10 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
     const recentLimit = cfg?.recent_activity_limit ?? 100
     // Promise.allSettled never rejects — each branch's own status carries
     // its outcome, so failures are handled per-item below, not via catch.
-    const [s, a, la, up] = await Promise.allSettled([
+    const [s, a, la] = await Promise.allSettled([
       getDashboardSummary(),
       getDashboardActivity(),
       getDashboardRecommendations(recentLimit),
-      // Unfiltered — 'running' alone would miss 'staging'/'queued'/'preparing'
-      // jobs (e.g. a job that was just retried starts 'queued', not
-      // 'running'); narrowed to the live statuses client-side below.
-      getUploads({ limit: 50 }),
     ])
     if (s.status === 'fulfilled') setSummary(s.value)
     else {
@@ -364,9 +381,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
     }
     if (a.status === 'fulfilled') setTaskActivity(a.value)
     if (la.status === 'fulfilled') setRecommendations(la.value.items)
-    if (up.status === 'fulfilled') registrarSubidas(up.value)
     setLoadingData(false)
-  }, [])
+  }, [loadActiveUploads])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -380,23 +396,22 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   // Red de seguridad del Panel entero (resumen/recomendaciones/tareas). Solo
   // mientras se ve: la sección se queda montada al cambiar de pestaña, así que
   // sin esta condición seguiría preguntando cada 15 s para nadie.
+  //
+  // Encadenado: la siguiente vuelta se programa cuando acaba la anterior. Con
+  // un temporizador fijo, mientras una sincronización tenía bloqueada la base
+  // se acumulaban peticiones sin terminar.
   const panelALaVista = useSeccionVisible()
   useEffect(() => {
     if (!panelALaVista) return
-    const t = setInterval(loadData, 15000)
-    return () => clearInterval(t)
+    let vivo = true
+    let t: ReturnType<typeof setTimeout>
+    const vuelta = async () => {
+      try { await loadData() } finally { if (vivo) t = setTimeout(vuelta, 15000) }
+    }
+    t = setTimeout(vuelta, 15000)
+    return () => { vivo = false; clearTimeout(t) }
   }, [loadData, panelALaVista])
 
-  // "Actividad de subida" needs a much faster refresh than the rest of the
-  // dashboard — at 15s, a job's progress visibly jumps in big steps instead
-  // of reading as live. Ahora lo lleva el aviso del servidor (la barra se mueve
-  // cuando se mueve, no a saltos), con el sondeo de 2,5 s de red de seguridad,
-  // y solo esta petición y no el Panel entero.
-  const loadActiveUploads = useCallback(async () => {
-    try {
-      registrarSubidas(await getUploads({ limit: 50 }))
-    } catch { /* ignore — next tick retries */ }
-  }, [])
   const hasLiveUpload = activeUploads.length > 0
   // Ver UploadsPage: la cadencia depende de si hay algo vivo, pero el sondeo
   // no se apaga — es la red de seguridad por si se pierde un aviso.
@@ -412,7 +427,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {wizardItem && (
-        <UploadWizardModal item={wizardItem} preselect={wizardPreselect} onClose={() => setWizardItem(null)} onDone={loadData} onNavigate={onNavigate} />
+        <UploadWizardModal item={wizardItem} preselect={wizardPreselect} onClose={() => setWizardItem(null)} onDone={() => { loadData(); loadActiveUploads() }} onNavigate={onNavigate} />
       )}
       {requestItem && (
         <RequestFormModal item={requestItem} onClose={() => setRequestItem(null)} />
@@ -719,7 +734,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
             icon={ICON_RECLAIMED}
             label="Peticiones reclamadas"
             value={s.requests_reclaimed ?? 0}
-            info="Peticiones ya Reclamadas en eMuwarez. eMuwarez no permite saber si el reclamo es tuyo, así que es el total de reclamadas, no solo las tuyas."
+            info="Peticiones ya Reclamadas en eMuwarez, tuyas y de otros: es el total. En Peticiones, cada una dice si la reclamaste tú, la reclamó otro usuario o eMuwarez no indica quién."
           />
           <StatCard
             icon={ICON_MINE}

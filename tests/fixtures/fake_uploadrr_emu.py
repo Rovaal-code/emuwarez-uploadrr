@@ -80,8 +80,8 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     emit("[EMU] Torrent creado correctamente")
-    print("[EMU] URL: https://fake-emu.invalid.test/torrents/999999", flush=True)
-    print("[EMU] Torrent ID: 999999", flush=True)
+    # La línea fija que imprime el Uploadrr-EMU real (src/trackers/UNIT3D.py).
+    print("Torrent URL: https://fake-emu.invalid.test/torrents/999999", flush=True)
     return 0
 
 

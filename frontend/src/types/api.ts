@@ -294,6 +294,8 @@ export interface RequestItemResponse {
   votes: number | null
   author: string | null
   is_mine: boolean
+  // Quién la tiene reclamada en eMuwarez; null si no está reclamada.
+  reclamada_por?: 'ti' | 'otro' | 'desconocido' | null
   req_scope: string | null
   req_season: number | null
   req_episode: number | null
@@ -649,6 +651,8 @@ export interface UploadJobLog {
   message: string
   stream: string | null
   created_at: string
+  // Orden de la línea dentro de su subida: de aquí se sigue el registro en vivo.
+  sequence?: number | null
 }
 
 export interface UploadJobLogsResponse {

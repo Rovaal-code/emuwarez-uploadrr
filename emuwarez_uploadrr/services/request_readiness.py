@@ -21,16 +21,12 @@ from typing import Any, Optional
 
 from ..models import LocalStatus
 from .compatibility import (
-    TIPO_DE_FILA,
-    compare_resolution,
-    compare_source,
-    match_request_to_library,
     classify_request_match,
-    normalize_title,
+    estado_emu_de,
+    match_request_to_library,
     parse_resolution,
     parse_source,
-    tipo_de_peticion,
-    _SOURCE_RANK,
+    reclamada_por,
 )
 
 
@@ -41,112 +37,6 @@ def _now_utc() -> str:
 # ---------------------------------------------------------------------------
 # Scoring helpers
 # ---------------------------------------------------------------------------
-
-def _compute_compatibility_score(req: dict, lib: dict) -> tuple[float, str, list[str]]:
-    """
-    Returns (score 0-100, compat_status, reasons).
-
-    Scoring:
-        +40  strong ID match (TMDb/IMDb)
-        +20  title match
-        +10  year match
-        +10  type match (movie/series)
-        +10  resolution compatible
-        +10  source compatible
-    """
-    score = 0.0
-    reasons: list[str] = []
-
-    # ID match
-    req_tmdb = str(req.get("tmdb_id") or "").strip()
-    req_imdb = str(req.get("imdb_id") or "").strip()
-    lib_tmdb = str(lib.get("tmdb_id") or "").strip()
-    lib_imdb = str(lib.get("imdb_id") or "").strip()
-
-    id_match = False
-    if req_tmdb and lib_tmdb and req_tmdb == lib_tmdb:
-        score += 40
-        id_match = True
-        reasons.append("TMDb match")
-    elif req_imdb and lib_imdb and req_imdb == lib_imdb:
-        score += 38
-        id_match = True
-        reasons.append("IMDb match")
-
-    # Title match
-    req_title = normalize_title(req.get("title"))
-    lib_title = normalize_title(lib.get("title"))
-    if not id_match:
-        if req_title == lib_title:
-            score += 18
-            reasons.append("title exact match")
-        elif req_title and lib_title and (req_title in lib_title or lib_title in req_title):
-            score += 12
-            reasons.append("title partial match")
-
-    # Year match
-    req_year = req.get("created_at", "")[:4] if req.get("created_at") else None
-    lib_year = str(lib.get("year") or "")
-    if req_year and lib_year and req_year == lib_year:
-        score += 10
-        reasons.append(f"year match ({lib_year})")
-
-    # Type match
-    req_type = tipo_de_peticion(req.get("category"))
-    lib_type = (lib.get("item_type") or "").lower()
-    if req_type and req_type == TIPO_DE_FILA.get(lib_type):
-        score += 10
-        reasons.append(f"type match ({lib_type})")
-
-    # Resolution
-    req_res = req.get("requested_resolution")
-    lib_res = lib.get("resolution")
-    if req_res:
-        req_rank = parse_resolution(req_res)
-        lib_rank = parse_resolution(lib_res)
-        if req_rank and lib_rank and lib_rank >= req_rank:
-            score += 10
-            reasons.append(f"resolution ok ({lib_res} >= {req_res})")
-        elif req_rank and lib_rank and lib_rank < req_rank:
-            reasons.append(f"resolution low ({lib_res} < {req_res})")
-    else:
-        score += 10  # no restriction → ok
-        reasons.append("no resolution restriction")
-
-    # Source
-    req_src = req.get("requested_source")
-    lib_src = lib.get("source")
-    if req_src:
-        from .compatibility import parse_source as _ps
-        req_can = _ps(req_src)
-        lib_can = _ps(lib_src)
-        if req_can and lib_can:
-            if _SOURCE_RANK.get(lib_can, 0) >= _SOURCE_RANK.get(req_can, 0):
-                score += 10
-                reasons.append(f"source ok ({lib_src} >= {req_src})")
-            else:
-                reasons.append(f"source low ({lib_src} < {req_src})")
-        else:
-            score += 5
-    else:
-        score += 10  # no restriction
-        reasons.append("no source restriction")
-
-    score = min(100.0, score)
-
-    # Derive compat_status
-    emu_status = str(req.get("emu_status") or "").lower()
-    if "lleno" in emu_status or "filled" in emu_status:
-        compat_status = "Llena"
-    elif score >= 70:
-        compat_status = "Compatible"
-    elif score >= 40:
-        compat_status = "Parcial"
-    else:
-        compat_status = "No compatible"
-
-    return round(score, 1), compat_status, reasons
-
 
 def _compute_upload_readiness_score(lib: dict) -> tuple[float, list[str]]:
     """
@@ -203,13 +93,8 @@ def _compute_upload_readiness_score(lib: dict) -> tuple[float, list[str]]:
 # Readiness rules
 # ---------------------------------------------------------------------------
 
-# Fixed ranking of real readiness statuses, most-actionable first. Used only
-# internally by select_best_candidate() to break ties between several
-# library-item candidates for the SAME request — this is match quality, not
-# a user-facing "priority" ranking (the numeric priority_score/priority_bucket
-# system was removed at the user's request; 'blocked'-style statuses like
-# file_missing/import_error/already_exists still exist as real `status`
-# values, just without a derived priority label on top).
+# Estados de preparación, el más accionable primero. Es el único orden: desempata entre los candidatos de una
+# misma petición (select_best_candidate) y ordena la lista (list_request_readiness).
 _STATUS_RANK: dict[str, int] = {
     "ready_to_upload": 0,
     "preflight_needed": 1,
@@ -218,19 +103,42 @@ _STATUS_RANK: dict[str, int] = {
     "pending_import": 4,
     "uploading": 5,
     "partially_available": 6,
-    "no_local_match": 7,
-    "file_missing": 8,
-    "import_error": 9,
-    "already_exists": 10,
-    "uploaded": 11,
+    "spec_mismatch": 7,
+    "no_local_match": 8,
+    "file_missing": 9,
+    "import_error": 10,
+    "claimed": 11,
+    "claimed_unknown": 12,
+    "pending_approval": 13,
+    "filled": 14,
+    "already_exists": 15,
+    "uploaded": 16,
 }
+
+# Por qué una petición que no está abierta para ti no es «lista para subir». La reclamada por ti no está aquí:
+# esa sí se puede subir. Si no se sabe quién la reclamó, se trata como de otro.
+_ESTADO_EMU_BLOQUEA = {
+    ("Reclamado", "otro"): ("claimed", "petición reclamada por otro usuario en eMuwarez"),
+    ("Reclamado", "desconocido"): (
+        "claimed_unknown", "petición reclamada en eMuwarez; no se sabe por quién y se trata como de otro"),
+    ("Pendiente", None): ("pending_approval", "petición pendiente de aprobación en eMuwarez"),
+    ("Llena", None): ("filled", "petición ya llena en eMuwarez"),
+}
+
 
 def _evaluate_readiness(
     lib: Optional[dict],
+    req: dict,
+    cls: Optional[dict],
     compat_reasons: list[str],
     readiness_reasons: list[str],
+    variante_en_emuwarez: bool = True,
+    mi_usuario: Optional[str] = None,
 ) -> dict:
-    """Apply readiness rules. Returns status, action, blockers, reasons."""
+    """Apply readiness rules. Returns status, action, blockers, reasons.
+
+    `cls` es la clasificación de classify_request_match (la misma que enseña la lista de peticiones).
+    `variante_en_emuwarez`: si eMuwarez ya tiene la resolución y el tipo que pide la petición."""
     blockers: list[str] = []
     reasons: list[str] = list(compat_reasons) + list(readiness_reasons)
 
@@ -260,8 +168,19 @@ def _evaluate_readiness(
     if upload_status in ("Subido", "uploaded"):
         return {"status": "uploaded", "action": "view_upload", "blockers": [], "reasons": reasons}
 
+    # La petición no está abierta para ti: otro la ha reclamado, espera aprobación o ya está llena.
+    estado = estado_emu_de(req, mi_usuario)
+    if estado:
+        quien = reclamada_por(req, mi_usuario) if estado == "Reclamado" else None
+        status, motivo = _ESTADO_EMU_BLOQUEA[(estado, quien)]
+        return {"status": status, "action": "none", "blockers": [motivo], "reasons": reasons}
+    if reclamada_por(req, mi_usuario) == "ti":
+        reasons.append("petición reclamada por ti")
+
     # Ya está en eMuwarez y tu copia no aporta nada (ni resolución, ni fuente, ni idioma): sería un duplicado.
-    if lib.get("emu_in_catalog") == 1 and not json.loads(lib.get("emu_aportes") or "[]"):
+    # Pero una petición está abierta porque falta SU variante: si eMuwarez no la tiene, no es un duplicado.
+    if (lib.get("emu_in_catalog") == 1 and not json.loads(lib.get("emu_aportes") or "[]")
+            and variante_en_emuwarez):
         blockers.append("ya existe en eMuwarez")
         return {"status": "already_exists", "action": "ignore_already_exists", "blockers": blockers, "reasons": reasons}
 
@@ -303,6 +222,12 @@ def _evaluate_readiness(
         blockers.append("archivo no encontrado en disco")
         return {"status": "file_missing", "action": "verify_file", "blockers": blockers, "reasons": reasons}
 
+    # La copia tiene que cumplir lo pedido (igual o mejor): una de 1080p WEB-DL no atiende un 2160p Remux.
+    if cls and (cls["resolution_match"] is False or cls["source_match"] is False):
+        faltan = [n for n, ok in (("resolución", cls["resolution_match"]), ("fuente", cls["source_match"])) if ok is False]
+        blockers.append(f"la copia no cumple lo pedido ({', '.join(faltan)})")
+        return {"status": "spec_mismatch", "action": "review_arr", "blockers": blockers, "reasons": reasons}
+
     # Nomenclature
     if nomenclature in ("No adaptada", "not_adapted"):
         return {"status": "needs_nomenclature", "action": "adapt_nomenclature", "blockers": [], "reasons": reasons}
@@ -323,19 +248,25 @@ def _evaluate_readiness(
 # Core evaluation
 # ---------------------------------------------------------------------------
 
-def score_request_candidate(req: dict, lib: dict) -> dict:
-    """Score a single (request, library_item) pair."""
-    compat_score, compat_status, compat_reasons = _compute_compatibility_score(req, lib)
+def score_request_candidate(
+    req: dict, lib: dict, cls: Optional[dict] = None, variante_en_emuwarez: bool = True,
+    mi_usuario: Optional[str] = None,
+) -> dict:
+    """Score a single (request, library_item) pair. `cls`: su clasificación, si ya se calculó con lo que de verdad
+    tiene lo pedido (los capítulos de una temporada); si no, se clasifica `lib` tal cual."""
+    if cls is None:
+        cls = classify_request_match(req, lib, mi_usuario=mi_usuario)
     readiness_score, readiness_reasons = _compute_upload_readiness_score(lib)
 
-    readiness_result = _evaluate_readiness(lib, compat_reasons, readiness_reasons)
+    readiness_result = _evaluate_readiness(
+        lib, req, cls, cls["reasons"], readiness_reasons, variante_en_emuwarez, mi_usuario)
 
     return {
         "library_item_id": lib.get("id"),
-        "match_status": compat_status,
-        "match_score": compat_score / 100.0,
-        "compatibility_status": compat_status,
-        "compatibility_score": compat_score,
+        "match_status": cls["status"],
+        "match_score": cls["confidence"],
+        "compatibility_status": cls["status"],
+        "compatibility_score": round(cls["confidence"] * 100, 1),
         "readiness_status": readiness_result["status"],
         "readiness_score": readiness_score,
         "blockers": readiness_result["blockers"],
@@ -351,8 +282,7 @@ def select_best_candidate(candidates: list[dict]) -> Optional[dict]:
     request asks (resolution and source: with Radarr and Radarr 4K, a ready 1080p
     copy must not beat the 2160p one a 2160p request asks for), then real
     readiness status (most-actionable first, see _STATUS_RANK), and only then
-    compatibility_score, whose remaining bonuses (the request's year) say nothing
-    about the copy. This is candidate matching, not a "priority" ranking — no
+    compatibility_score. This is candidate matching, not a "priority" ranking — no
     numeric priority score/bucket involved."""
     if not candidates:
         return None
@@ -372,10 +302,10 @@ _LEER_FILA_PEDIDA = (
 
 
 def _biblioteca(conn: sqlite3.Connection) -> list[dict]:
-    """Las filas candidatas. Recorre la tabla entera (con su raw_json): un refresco la lee una vez, no por petición."""
+    """Las filas candidatas, sin los capítulos ni el raw_json. Recorre la tabla entera: un refresco la lee una vez."""
     return [dict(r) for r in conn.execute(
         """
-        SELECT id, item_type, title, year, tmdb_id, imdb_id, local_status,
+        SELECT id, item_type, title, year, tmdb_id, imdb_id, tvdb_id, local_status,
                resolution, source, nomenclature_status, prepared_path,
                file_exists, arr_queue_status, arr_history_status,
                arr_history_event_type, arr_history_error, season_number,
@@ -402,26 +332,37 @@ def build_request_candidates(
     if not raw_matches:
         return []
 
-    from .requests import _scoped_library_id
+    from .emu_catalog import catalogo_cubre
+    from .requests import _scoped_library_id, clasificar_peticion, mi_usuario_emu
+
+    mi_usuario = mi_usuario_emu(conn) or ""
 
     candidates = []
     for rank, m in enumerate(raw_matches[:10], start=1):
         lib = dict(m["item"])
         # La temporada o el capítulo pedidos se puntúan con sus propios datos, no con el resumen de la serie.
-        pedida = dict(conn.execute(_LEER_FILA_PEDIDA, (_scoped_library_id(conn, lib, req),)).fetchone())
+        destino = _scoped_library_id(conn, lib, req)
+        pedida = dict(conn.execute(_LEER_FILA_PEDIDA, (destino,)).fetchone())
         if req.get("req_scope") in ("season", "episode") and pedida["item_type"] != req["req_scope"]:
             # Lo pedido no está en la biblioteca, solo su serie o su temporada: no hay nada que preparar.
             pedida.update(local_status="Faltante", emu_in_catalog=None)
         del pedida["item_type"]
+        # «Compatible» lo decide la misma función que la lista de peticiones (resolución y fuente pedidas, y la
+        # temporada por su peor capítulo); aquí solo se añade lo que hace falta para poder subirlo.
+        _, cls = clasificar_peticion(conn, req, lib, id_match=m["id_match"], title_match=m["title_match"],
+                                     base_confidence=m["confidence"], mi_usuario=mi_usuario)
         lib.update(pedida)
-        scored = score_request_candidate(req, lib)
+        variante = True
+        if lib.get("emu_in_catalog") == 1 and not json.loads(lib.get("emu_aportes") or "[]"):
+            pide_res = req.get("requested_resolution") if parse_resolution(req.get("requested_resolution")) else None
+            pide_tipo = req.get("requested_source") if parse_source(req.get("requested_source")) else None
+            variante = not (pide_res or pide_tipo) or catalogo_cubre(conn, destino, pide_res, pide_tipo)
+        scored = score_request_candidate(req, lib, cls, variante, mi_usuario)
         scored["candidate_rank"] = rank
         scored["library_item_id"] = lib["id"]
         scored["match_confidence"] = m["confidence"]
         # Cuántas de las dos cosas que se piden (resolución y fuente) cumple esta copia.
-        scored["cumple"] = sum(r is not False for r in (
-            compare_resolution(req.get("requested_resolution"), lib.get("resolution")),
-            compare_source(req.get("requested_source"), lib.get("source"))))
+        scored["cumple"] = sum(r is not False for r in (cls["resolution_match"], cls["source_match"]))
         candidates.append(scored)
 
     return candidates
@@ -647,8 +588,8 @@ def list_request_readiness(
         params.append(f"%{filters['search']}%")
 
     where = " WHERE " + " AND ".join(clauses) if clauses else ""
-    # Order by real readiness status (most-actionable first, same ranking as
-    # _STATUS_RANK) — no numeric priority score/bucket involved anymore.
+    # Order by real readiness status (most-actionable first), con el mismo ranking que _STATUS_RANK.
+    orden = " ".join(f"WHEN '{estado}' THEN {n}" for estado, n in _STATUS_RANK.items())
     sql = f"""
         SELECT rr.*, ri.title, ri.emu_id, ri.category, ri.points,
                ri.requested_resolution, ri.requested_source
@@ -656,20 +597,7 @@ def list_request_readiness(
         JOIN request_items ri ON ri.id = rr.request_item_id
         {where}
         ORDER BY
-            CASE rr.status
-                WHEN 'ready_to_upload' THEN 0
-                WHEN 'preflight_needed' THEN 1
-                WHEN 'needs_nomenclature' THEN 2
-                WHEN 'downloading' THEN 3
-                WHEN 'pending_import' THEN 4
-                WHEN 'uploading' THEN 5
-                WHEN 'no_local_match' THEN 6
-                WHEN 'file_missing' THEN 7
-                WHEN 'import_error' THEN 8
-                WHEN 'already_exists' THEN 9
-                WHEN 'uploaded' THEN 10
-                ELSE 99
-            END,
+            CASE rr.status {orden} ELSE 99 END,
             rr.last_evaluated_at DESC
         LIMIT ? OFFSET ?
     """

@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import datetime as dt
-import json
 import logging
 import os
 import re
@@ -11,13 +10,15 @@ import threading
 import unicodedata
 from typing import Optional, Sequence
 
-from ..database import borrar_peticiones, get_setting_canonical, get_state, set_state
+from ..database import borrar_peticiones, get_json_state, get_setting_canonical, get_state, set_state
 from . import cli_config, emu_catalog
+from .emu_perfil import PERFIL_STATE_KEY
 from ..integrations import emu, tmdb
 from ..integrations.base import IntegrationError
 from ..models import RequestItem, RequestStatus, TaskStatus
-from .library import update_request_status, content_display_title
-from .request_readiness import refresh_request_readiness
+from .library import content_display_title
+from .request_readiness import _biblioteca, refresh_request_readiness
+from .eventos import EVENTO_SYNC_EMPEZADA, EVENTO_SYNC_TERMINADA, publicar
 from .tasks import start_task, finish_task
 from .tmdb_titles import tmdb_configured
 from .upload_states import ACTIVE_JOB_STATUSES
@@ -25,7 +26,10 @@ from .compatibility import (
     match_request_to_library,
     classify_request_match,
     rank_request_matches,
-    emu_override_status,
+    estado_emu_de,
+    peor_resolucion,
+    peor_source,
+    reclamada_por,
     tipo_de_peticion,
 )
 
@@ -194,7 +198,100 @@ def sync_emu_requests(
         _SYNC_EN_CURSO.release()
 
 
+# Progreso de la sincronización de peticiones, para que la interfaz enseñe la barra y no tenga una petición HTTP
+# colgada durante minutos. Un solo proceso: un dict en memoria basta, igual que en el catálogo (emu_catalog).
+_PROGRESO_LOCK = threading.Lock()
+_PROGRESO: dict = {"active": False, "done": False, "phase": "", "page": 0, "total_pages": None,
+                   "imported": 0, "message": "", "error": None}
+
+
+def get_request_sync_progress() -> dict:
+    with _PROGRESO_LOCK:
+        return dict(_PROGRESO)
+
+
+def _set_progress(**kw) -> None:
+    with _PROGRESO_LOCK:
+        _PROGRESO.update(kw)
+
+
 def _sincronizar_peticiones(conn: sqlite3.Connection) -> dict[str, int | str]:
+    """Una sincronización, con su progreso y sus avisos: es el único sitio donde corre, la arranque quien la
+    arranque (el botón, la tarea programada o el CLI)."""
+    _set_progress(active=True, done=False, phase="Iniciando…", page=0, total_pages=None, imported=0, message="",
+                  error=None)
+    publicar(EVENTO_SYNC_EMPEZADA, {"que": "peticiones"})
+    try:
+        result = _importar_peticiones(conn)
+        _set_progress(message=resumen_de_sincronizacion(result), imported=int(result.get("imported", 0)))
+        return result
+    except Exception as exc:  # noqa: BLE001 — se enseña en la barra y se vuelve a lanzar
+        _set_progress(error=str(exc), phase="Error")
+        raise
+    finally:
+        _set_progress(active=False, done=True)
+        publicar(EVENTO_SYNC_TERMINADA, {"que": "peticiones"})
+
+
+def resumen_de_sincronizacion(result: dict) -> str:
+    texto = f"{result.get('imported', 0)} peticiones importadas, {result.get('matched', 0)} cruces actualizados."
+    return texto + (f" {result['removed']} retiradas." if result.get("removed") else "")
+
+
+def start_requests_sync_background(force: bool = False) -> dict:
+    """Arranca la sincronización en un hilo y vuelve al instante; la interfaz sigue el progreso.
+
+    Devuelve {"status": "started"}, {"status": "throttled", "wait_seconds"} o {"status": "busy", "message"}.
+    Sin API key lanza IntegrationError, como antes: no hace falta un hilo para saber que no va a salir.
+
+    El candado de sync_emu_requests se toma aquí y pasa al hilo, que lo suelta al terminar: así dos pulsaciones
+    seguidas, o la tarea programada, no pueden arrancar dos a la vez ni pisarse el progreso."""
+    from ..database import connect, db_path
+    if not _SYNC_EN_CURSO.acquire(blocking=False):
+        if get_request_sync_progress()["active"]:
+            return {"status": "started"}  # ya hay una: se sigue esa
+        return {"status": "busy", "message": "Ya hay una sincronización de peticiones en marcha."}
+
+    def _run() -> None:
+        c = connect(db_path())
+        try:
+            _sincronizar_peticiones(c)  # el candado ya es nuestro
+        except Exception as exc:  # noqa: BLE001 — _sincronizar_peticiones ya dejó su error; esto es lo que falle antes
+            if not get_request_sync_progress()["error"]:
+                _set_progress(error=str(exc))
+        finally:
+            c.close()
+            _set_progress(active=False, done=True)  # pase lo que pase, la barra no se queda encendida
+            _SYNC_EN_CURSO.release()
+
+    lanzado = False
+    conn = connect(db_path())
+    try:
+        allowed, wait = can_sync_requests(conn, force=force)
+        if not allowed:
+            return {"status": "throttled", "wait_seconds": wait}
+        motivo = _motivo_ocupado(conn)
+        if motivo:
+            return {"status": "busy", "message": motivo}
+        if not _resolve_emu_api_key(conn):
+            raise IntegrationError("No hay API Key de eMuwarez configurada")
+        # Activa antes de que el hilo arranque: la interfaz la sigue desde que esta respuesta llega.
+        _set_progress(active=True, done=False, phase="Iniciando…", page=0, total_pages=None, imported=0, message="",
+                      error=None)
+        try:
+            threading.Thread(target=_run, daemon=True).start()
+        except Exception:
+            _set_progress(active=False, done=True)
+            raise
+        lanzado = True
+        return {"status": "started"}
+    finally:
+        conn.close()
+        if not lanzado:
+            _SYNC_EN_CURSO.release()
+
+
+def _importar_peticiones(conn: sqlite3.Connection) -> dict[str, int | str]:
     task_id = start_task(conn, "sync-emu-requests", "Sincronizando peticiones EMU")
     api_key = _resolve_emu_api_key(conn)
     if not api_key:
@@ -215,8 +312,11 @@ def _sincronizar_peticiones(conn: sqlite3.Connection) -> dict[str, int | str]:
 
     logger.info("Sincronización de peticiones iniciada")
     try:
-        raw_items, total = emu.emu_fetch_all_pages(api_key)
+        _set_progress(phase="Descargando peticiones…")
+        raw_items, total = emu.emu_fetch_all_pages(
+            api_key, progress=lambda pagina, ultima, filas: _set_progress(page=pagina, total_pages=ultima, imported=filas))
         items = emu.normalize_requests(raw_items)
+        _set_progress(phase="Guardando peticiones…", imported=len(items))
         sync_at = _utcnow().isoformat()
         for item in items:
             upsert_request(conn, item, seen_at=sync_at, commit=False)
@@ -227,9 +327,11 @@ def _sincronizar_peticiones(conn: sqlite3.Connection) -> dict[str, int | str]:
         removed = borrar_peticiones(conn, "last_seen_at IS NULL OR last_seen_at != ?", (sync_at,)) if complete else 0
         set_state(conn, SYNC_STATE_KEY, _utcnow().isoformat())
         conn.commit()
+        _set_progress(phase="Cruzando con tu biblioteca…")
         matched = match_all_requests(conn)
         # La preparación no se calcula sola: sin esto el detalle de cada petición nueva daba 404. Si falla no tumba
         # la sincronización: lo importado vale, y «Recalcular» la repite sin volver a llamar a eMuwarez.
+        _set_progress(phase="Calculando qué está listo para subir…")
         try:
             sin_preparar = refresh_request_readiness(conn)["errors"]
         except Exception:
@@ -237,6 +339,7 @@ def _sincronizar_peticiones(conn: sqlite3.Connection) -> dict[str, int | str]:
             logger.exception("No se pudo calcular la preparación de las peticiones")
             sin_preparar = None
         # Igual que la preparación: unos pósters que no llegan no tumban la sincronización.
+        _set_progress(phase="Trayendo los pósters…")
         try:
             rellenar_posters(conn)
         except Exception:
@@ -424,8 +527,9 @@ def _effective_target(conn: sqlite3.Connection, matched_item: dict, req: dict) -
     """A copy of the matched library item with resolution/source/codecs/audio/
     subs/size/path/local_status reflecting the request's SCOPE, so a
     series/season rollup (which stores none of its own) is classified and shown
-    against its real episodes: the specific episode, or the uniform value across
-    the relevant episodes (None when they differ)."""
+    against its real episodes: the specific episode, or the WORST of the available
+    episodes (la resolución y la fuente más bajas: si esas cumplen lo pedido,
+    cumplen todas; un capítulo que falta no cuenta)."""
     it = dict(matched_item)
     if it.get("item_type") not in ("series", "season"):
         return it
@@ -439,8 +543,16 @@ def _effective_target(conn: sqlite3.Connection, matched_item: dict, req: dict) -
             it["local_status"] = "Faltante"
         return it
     single = eps[0] if len(eps) == 1 else None
+    disponibles = [e for e in eps if e.get("local_status") in _AVAILABLE]
     for key in ("resolution", "source", "video_codec", "audio_languages", "subtitle_languages"):
-        it[key] = single[key] if single else _uniq(e.get(key) for e in eps)
+        if single:
+            it[key] = single[key]
+        elif key == "resolution":
+            it[key] = peor_resolucion(e.get(key) for e in disponibles)
+        elif key == "source":
+            it[key] = peor_source(e.get(key) for e in disponibles)
+        else:
+            it[key] = _uniq(e.get(key) for e in disponibles) if disponibles else None
     if single:
         it["size_bytes"] = single.get("size_bytes")
         it["path"] = single.get("path")
@@ -462,20 +574,107 @@ def _effective_target(conn: sqlite3.Connection, matched_item: dict, req: dict) -
 _ORDEN_DEL_CASAMIENTO = {"Compatible": 0, "No disponible": 1, "Parcial": 2, "No compatible": 3}
 
 
-def _mejor_candidato(conn: sqlite3.Connection, req: dict, candidates: list[dict]) -> tuple[dict, dict]:
+def mi_usuario_emu(conn: sqlite3.Connection) -> Optional[str]:
+    """Tu usuario de eMuwarez sin llamar a la API: el del perfil guardado (emu_perfil) y, si aún no hay, el de
+    Ajustes. Sirve para saber si una petición reclamada la has reclamado tú."""
+    perfil = (get_json_state(conn, PERFIL_STATE_KEY) or {}).get("perfil") or {}
+    return perfil.get("username") or get_setting_canonical(conn, "emu.username") or None
+
+
+def clasificar_peticion(
+    conn: sqlite3.Connection, req: dict, item: dict, *, id_match: bool = False, title_match: bool = False,
+    base_confidence: float = 0.90, mi_usuario: Optional[str] = None,
+) -> tuple[dict, dict]:
+    """(fila con lo que de verdad tiene lo pedido, clasificación). Es LA definición de «compatible»: la usan el cruce
+    guardado, el detalle y «lista para subir», para que la lista, el Panel y los avisos digan lo mismo que la ficha."""
+    efectiva = _effective_target(conn, item, req)
+    if mi_usuario is None:
+        mi_usuario = mi_usuario_emu(conn)
+    cls = classify_request_match(req, efectiva, id_match=id_match, title_match=title_match,
+                                 base_confidence=base_confidence, mi_usuario=mi_usuario)
+    # Una petición de temporada o serie completa se cubre con un PACK. Si ese pack no puede armarse (los capítulos no
+    # coinciden en resolución o en códec de vídeo), "Compatible" prometería algo que la subida va a rechazar: baja
+    # a Parcial y se dice por qué. Los capítulos sueltos sí se pueden subir, y el motivo lo dice.
+    if cls["status"] == "Compatible":
+        motivo = _pack_blocked_reason(conn, item, req)
+        if motivo:
+            cls["status"] = "Parcial"
+            cls["reasons"] = [*cls["reasons"], motivo]
+    return efectiva, cls
+
+
+def _mejor_candidato(
+    conn: sqlite3.Connection, req: dict, candidates: list[dict], mi_usuario: Optional[str] = None,
+) -> tuple[dict, dict]:
     """De los candidatos igual de seguros (la misma película en Radarr y en Radarr 4K) el que mejor atiende la
     petición, con su clasificación: el primero de la lista podía ser la copia de 1080p de una petición de 2160p."""
     empatados = [c for c in candidates if c["confidence"] == candidates[0]["confidence"]]
-    clasificados = [(c, classify_request_match(
-        req, _effective_target(conn, c["item"], req), id_match=c["id_match"],
-        title_match=c["title_match"], base_confidence=c["confidence"],
-    )) for c in empatados]
+    clasificados = [(c, clasificar_peticion(
+        conn, req, c["item"], id_match=c["id_match"], title_match=c["title_match"], base_confidence=c["confidence"],
+        mi_usuario=mi_usuario,
+    )[1]) for c in empatados]
     return min(clasificados, key=lambda par: _ORDEN_DEL_CASAMIENTO.get(par[1]["status"], 9))
 
 
-def _candidatas(conn: sqlite3.Connection) -> list[dict]:
-    """Las filas que pueden atender una petición: sin los capítulos, que son casi todas y se alcanzan desde su serie."""
-    return [dict(r) for r in conn.execute("SELECT * FROM library_items WHERE item_type != 'episode'").fetchall()]
+_INSERTAR_CASAMIENTO = """
+    INSERT INTO request_matches(
+        library_item_id, request_item_id, status, confidence,
+        resolution_match, source_match, type_match, reasons, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+"""
+
+
+def _casar(
+    conn: sqlite3.Connection, req: dict, library: list[dict], mi_usuario: Optional[str] = None,
+) -> Optional[tuple]:
+    """(petición, candidata, clasificación, fila a la que va el estado) o None si no casa con nada. Solo lee."""
+    candidates = match_request_to_library(req, library)
+    if not candidates:
+        return None
+    best, classification = _mejor_candidato(conn, req, candidates, mi_usuario)
+    # A la fila que la petición pide DE VERDAD, no a la que cruzó el emparejador. Para una petición de temporada
+    # eso es la temporada y no la serie entera (todas las temporadas comparten su tmdb_id).
+    return req, best, classification, _scoped_library_id(conn, best["item"], req)
+
+
+def _guardar_casamientos(conn: sqlite3.Connection, casamientos: list[tuple], peticion: Optional[int] = None) -> None:
+    """Cambia de una vez lo guardado (de todas las peticiones, o solo de `peticion`) por los casamientos nuevos.
+
+    Se limpia antes de escribir: sin esto, un estado se quedaba pegado en la fila donde se escribió una vez y ya
+    nadie lo movía, y un casamiento que ya no vale se seguía enseñando en la lista. Todo en una transacción:
+    si algo falla a mitad, queda lo de antes en vez de las peticiones sin cruce."""
+    try:
+        if peticion is None:
+            conn.execute(
+                "UPDATE library_items SET request_status = 'Sin petición', request_id = NULL "
+                "WHERE request_status != 'Sin petición' OR request_id IS NOT NULL"
+            )
+            conn.execute("DELETE FROM request_matches")
+        else:
+            conn.execute("DELETE FROM request_matches WHERE request_item_id = ?", (peticion,))
+            conn.execute(
+                "UPDATE library_items SET request_status = 'Sin petición', request_id = NULL WHERE request_id = ?",
+                (peticion,),
+            )
+        for req, best, cls, destino in casamientos:
+            conn.execute(_INSERTAR_CASAMIENTO, (
+                best["item"]["id"],
+                req["id"],
+                cls["status"],
+                cls["confidence"],
+                None if cls["resolution_match"] is None else int(bool(cls["resolution_match"])),
+                None if cls["source_match"] is None else int(bool(cls["source_match"])),
+                1 if best["id_match"] else 0,
+                "\n".join(cls["reasons"]),
+            ))
+            conn.execute(
+                "UPDATE library_items SET request_status = ?, request_id = ?, updated_at = CURRENT_TIMESTAMP "
+                "WHERE id = ?", (cls["status"], int(req["id"]), destino),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
 
 def match_all_requests(conn: sqlite3.Connection) -> int:
@@ -487,67 +686,13 @@ def match_all_requests(conn: sqlite3.Connection) -> int:
     # only notify about the ones that *newly* became satisfiable this run.
     before_compatible = _compatible_request_ids(conn)
 
-    # Se limpia antes de recalcular: sin esto, un estado se quedaba pegado en
-    # la fila donde se escribió una vez y ya nadie lo movía. Con el arreglo de
-    # arriba (escribir en la temporada y no en la serie), las series que ya
-    # llevaban el estado de una petición de temporada se habrían quedado con
-    # él para siempre.
-    conn.execute(
-        "UPDATE library_items SET request_status = 'Sin petición', request_id = NULL "
-        "WHERE request_status != 'Sin petición' OR request_id IS NOT NULL"
-    )
-    # Y los casamientos: uno que ya no vale (o que ahora es con otra fila) se seguía enseñando en la lista.
-    conn.execute("DELETE FROM request_matches")
-    conn.commit()
-
     requests = [dict(r) for r in conn.execute("SELECT * FROM request_items").fetchall()]
-    library = _candidatas(conn)
-    updated = 0
-    for req in requests:
-        candidates = match_request_to_library(req, library)
-        if not candidates:
-            continue
-        best, classification = _mejor_candidato(conn, req, candidates)
-        reasons_str = "\n".join(classification["reasons"])
-        reasons_json = json.dumps(classification["reasons"], ensure_ascii=False)
-        conn.execute(
-            """
-            INSERT INTO request_matches(
-                library_item_id, request_item_id, status, confidence,
-                resolution_match, source_match, type_match, reasons, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            ON CONFLICT(library_item_id, request_item_id) DO UPDATE SET
-                status = excluded.status,
-                confidence = excluded.confidence,
-                resolution_match = excluded.resolution_match,
-                source_match = excluded.source_match,
-                type_match = excluded.type_match,
-                reasons = excluded.reasons,
-                updated_at = CURRENT_TIMESTAMP
-            """,
-            (
-                best["item"]["id"],
-                req["id"],
-                classification["status"],
-                classification["confidence"],
-                None if classification["resolution_match"] is None else int(bool(classification["resolution_match"])),
-                None if classification["source_match"] is None else int(bool(classification["source_match"])),
-                1 if best["id_match"] else 0,
-                reasons_str,
-            ),
-        )
-        # A la fila que la petición pide DE VERDAD, no a la que cruzó el
-        # emparejador. Para una petición de temporada eso es la serie entera
-        # (todas las temporadas comparten su tmdb_id), así que el estado
-        # aterrizaba en la serie y la temporada seguía diciendo "Sin petición".
-        update_request_status(
-            conn, _scoped_library_id(conn, best["item"], req),
-            classification["status"], int(req["id"]),
-        )
-        updated += 1
-    conn.commit()
+    library = _biblioteca(conn)
+    usuario = mi_usuario_emu(conn) or ""
+    casamientos = [c for c in (_casar(conn, req, library, usuario) for req in requests) if c]
+    _guardar_casamientos(conn, casamientos)
     _notify_new_compatible_matches(conn, before_compatible)
-    return updated
+    return len(casamientos)
 
 
 _MAX_AVISOS_SUELTOS = 5
@@ -629,50 +774,12 @@ def match_single_request(conn: sqlite3.Connection, request_id: int) -> Optional[
     req_row = conn.execute("SELECT * FROM request_items WHERE id = ?", (request_id,)).fetchone()
     if not req_row:
         return None
-    req = dict(req_row)
     # Lo de la vez anterior se recalcula entero: si ya no casa, no queda nada viejo enseñándose.
-    conn.execute("DELETE FROM request_matches WHERE request_item_id = ?", (request_id,))
-    conn.execute(
-        "UPDATE library_items SET request_status = 'Sin petición', request_id = NULL WHERE request_id = ?",
-        (request_id,),
-    )
-    candidates = match_request_to_library(req, _candidatas(conn))
-    if not candidates:
-        conn.commit()
+    casamiento = _casar(conn, dict(req_row), _biblioteca(conn))
+    _guardar_casamientos(conn, [casamiento] if casamiento else [], peticion=request_id)
+    if not casamiento:
         return None
-    best, classification = _mejor_candidato(conn, req, candidates)
-    reasons_str = "\n".join(classification["reasons"])
-    conn.execute(
-        """
-        INSERT INTO request_matches(
-            library_item_id, request_item_id, status, confidence,
-            resolution_match, source_match, type_match, reasons, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        ON CONFLICT(library_item_id, request_item_id) DO UPDATE SET
-            status = excluded.status,
-            confidence = excluded.confidence,
-            resolution_match = excluded.resolution_match,
-            source_match = excluded.source_match,
-            type_match = excluded.type_match,
-            reasons = excluded.reasons,
-            updated_at = CURRENT_TIMESTAMP
-        """,
-        (
-            best["item"]["id"],
-            req["id"],
-            classification["status"],
-            classification["confidence"],
-            None if classification["resolution_match"] is None else int(bool(classification["resolution_match"])),
-            None if classification["source_match"] is None else int(bool(classification["source_match"])),
-            1 if best["id_match"] else 0,
-            reasons_str,
-        ),
-    )
-    update_request_status(
-        conn, _scoped_library_id(conn, best["item"], req),
-        classification["status"], int(req["id"]),
-    )
-    conn.commit()
+    _, best, classification, _ = casamiento
     return {
         "library_item_id": best["item"]["id"],
         "library_title": best["item"].get("title"),
@@ -738,16 +845,23 @@ def list_request_items(
     if search:
         where_clauses.append("ri.title LIKE ?")
         params.append(f"%{search}%")
+    mi_usuario = mi_usuario_emu(conn) or ""
     if status:
-        # Mirrors compatibility.emu_override_status() — a request with zero
+        # Mirrors compatibility.estado_emu_de() — a request with zero
         # library candidates has no request_matches row at all, but can still
         # be Reclamado/Pendiente/Llena on the tracker itself; keep this SQL
         # fallback in sync with that function if its substring rules change.
+        # Una reclamada por ti no cuenta como Reclamado: el claimed_by sale del raw_json.
         where_clauses.append(f"""
             COALESCE(
                 rm.status,
                 CASE
-                    WHEN LOWER(COALESCE(ri.emu_status,'')) LIKE '%reclam%' OR LOWER(COALESCE(ri.emu_status,'')) LIKE '%claim%' THEN 'Reclamado'
+                    WHEN LOWER(COALESCE(ri.emu_status,'')) LIKE '%reclam%' OR LOWER(COALESCE(ri.emu_status,'')) LIKE '%claim%' THEN
+                        CASE WHEN ? != '' AND LOWER(TRIM(COALESCE(CASE WHEN json_valid(ri.raw_json) THEN
+                                COALESCE(json_extract(ri.raw_json, '$.claimed_by.username'),
+                                         json_extract(ri.raw_json, '$.claimed_by.name'),
+                                         json_extract(ri.raw_json, '$.claimed_by')) END, ''))) = ?
+                             THEN 'Sin coincidencia' ELSE 'Reclamado' END
                     WHEN LOWER(COALESCE(ri.emu_status,'')) LIKE '%pend%' THEN 'Pendiente'
                     -- "Sin llenar" = petición abierta: no es un override, y
                     -- como aquí ya no hay cruce con la biblioteca (rm.status
@@ -764,7 +878,7 @@ def list_request_items(
                 END
             ) IN ({','.join('?' * len(status))})
         """)
-        params.extend(status)
+        params.extend([mi_usuario.strip().lower()] * 2 + list(status))
     en("ri.category", category)
     pedido("ri.requested_resolution", resolution)
     pedido("ri.requested_source", source)
@@ -837,7 +951,7 @@ def list_request_items(
     """
     rows = conn.execute(items_sql, params + [limit, offset]).fetchall()
     return {
-        "items": [_safe_request_dict(dict(r)) for r in rows],
+        "items": [_safe_request_dict(dict(r), mi_usuario) for r in rows],
         "total": total,
         "limit": limit,
         "offset": offset,
@@ -847,7 +961,7 @@ def list_request_items(
 def get_request_item(conn: sqlite3.Connection, request_id: int) -> Optional[dict]:
     """Return a single request_item dict (no match info)."""
     row = conn.execute("SELECT * FROM request_items WHERE id = ?", (request_id,)).fetchone()
-    return _safe_request_dict(dict(row)) if row else None
+    return _safe_request_dict(dict(row), mi_usuario_emu(conn) or "") if row else None
 
 
 def _series_title_year(conn, lib: dict) -> tuple:
@@ -904,7 +1018,8 @@ def get_request_detail(conn: sqlite3.Connection, request_id: int) -> Optional[di
     req_row = conn.execute("SELECT * FROM request_items WHERE id = ?", (request_id,)).fetchone()
     if not req_row:
         return None
-    result = _safe_request_dict(dict(req_row))
+    mi_usuario = mi_usuario_emu(conn) or ""
+    result = _safe_request_dict(dict(req_row), mi_usuario)
     # El de TMDb ('' = no tiene); el de la biblioteca, si hay cruce con póster, va delante.
     result["poster_url"] = result.get("tmdb_poster_url") or None
     result["backdrop_url"] = result.get("tmdb_backdrop_url") or None
@@ -988,27 +1103,11 @@ def get_request_detail(conn: sqlite3.Connection, request_id: int) -> Optional[di
                 scope=result.get("req_scope"),
             )
         if lib_row and dict(lib_row).get("item_type") in ("series", "season"):
-            eff = _effective_target(conn, dict(lib_row), result)
-            cls = classify_request_match(
-                result, eff,
+            eff, cls = clasificar_peticion(
+                conn, result, dict(lib_row), mi_usuario=mi_usuario,
                 id_match=bool(md.get("type_match")),
                 base_confidence=float(md["confidence"]),
             )
-            # Una petición de temporada o serie completa se cubre con un
-            # PACK. Si ese pack no puede armarse (los capítulos no coinciden
-            # en resolución o en códec de vídeo), "Compatible" prometería algo
-            # que la subida va a rechazar: baja a Parcial y se dice por qué.
-            #
-            # Pasa cuando la petición no restringe la resolución: entonces la
-            # comparación no tiene nada que exigir y salía Compatible aunque
-            # la temporada estuviera descuadrada.
-            #
-            # Los capítulos sueltos SÍ se pueden subir, y el motivo lo dice.
-            if cls["status"] == "Compatible":
-                blocker = _pack_blocked_reason(conn, dict(lib_row), result)
-                if blocker:
-                    cls["status"] = "Parcial"
-                    cls["reasons"] = list(cls.get("reasons") or []) + [blocker]
             result["match"].update({
                 "status": cls["status"],
                 "resolution_match": cls["resolution_match"],
@@ -1093,7 +1192,7 @@ def normalize_title(value: str | None) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
-def _safe_request_dict(d: dict) -> dict:
+def _safe_request_dict(d: dict, mi_usuario: Optional[str] = None) -> dict:
     """Remove author info if author_visible=0.
 
     Also fills in compatibility_status when there's no request_matches row at
@@ -1107,11 +1206,14 @@ def _safe_request_dict(d: dict) -> dict:
     rather than staying null. The status filter above already resolves this
     same case to that exact string, so leaving it null here made a row the
     UI could paint but not filter: it showed a bare dash and had no entry in
-    the Compatibilidad dropdown."""
+    the Compatibilidad dropdown.
+
+    `reclamada_por` («ti», «otro», «desconocido» o None) dice quién la tiene reclamada; la tuya no es Reclamado."""
     if not d.get("author_visible"):
         d.pop("author", None)
     if not d.get("compatibility_status"):
-        d["compatibility_status"] = emu_override_status(d.get("emu_status")) or "Sin coincidencia"
+        d["compatibility_status"] = estado_emu_de(d, mi_usuario) or "Sin coincidencia"
+    d["reclamada_por"] = reclamada_por(d, mi_usuario)
     return d
 
 
@@ -1157,7 +1259,8 @@ def dashboard_request_counters(conn: sqlite3.Connection) -> dict[str, int | str 
     usuario = get_setting_canonical(conn, "emu.username")
     if usuario:
         mias = _cuenta(
-            "SELECT COUNT(*) AS cnt FROM request_items WHERE author_visible = 1 AND author = ?",
+            "SELECT COUNT(*) AS cnt FROM request_items "
+            "WHERE author_visible = 1 AND LOWER(TRIM(author)) = LOWER(TRIM(?))",
             (usuario,),
         )
 

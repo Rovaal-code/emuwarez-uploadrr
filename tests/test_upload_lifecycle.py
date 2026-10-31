@@ -201,7 +201,7 @@ def test_artifacts_created_on_url_detected(db_conn, tmp_path):
 
     mock_proc = _make_mock_proc(
         returncode=0,
-        stdout_lines=["Uploaded: https://emuwarez.me/torrents/99999\n"],
+        stdout_lines=["Torrent URL: https://emuwarez.me/torrents/99999\n"],
     )
     patcher = patch("emuwarez_uploadrr.services.upload_execution.subprocess.Popen", return_value=mock_proc)
     patcher.start()

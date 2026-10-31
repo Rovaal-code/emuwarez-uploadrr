@@ -1,4 +1,5 @@
-# Solo informa: ni el total ni el parche bloquean un PR (el mínimo lo pone pytest en el CI).
+# El total solo informa (su mínimo lo pone pytest en el CI); las líneas nuevas o cambiadas de emuwarez_uploadrr/ deben
+# llevar tests. El frontend no se mide.
 coverage:
   status:
     project:
@@ -6,7 +7,7 @@ coverage:
         informational: true
     patch:
       default:
-        informational: true
+        target: 70%
 comment:
   layout: "diff, flags, files"
   require_changes: true

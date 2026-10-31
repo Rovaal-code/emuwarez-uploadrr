@@ -1,67 +1,63 @@
 """Tests for upload_result_parser — pure functions, no DB."""
 import pytest
 from emuwarez_uploadrr.services.upload_result_parser import (
-    extract_urls,
-    extract_possible_torrent_ids,
     build_error_summary,
     classify_upload_result,
-    parse_uploadrr_output,
+    extract_torrent_url,
     season_pack_warning,
+    torrent_id_from_url,
 )
 
+# La salida real de Uploadrr-EMU al subir (src/trackers/UNIT3D.py): la ficha del torrent va en una línea fija.
+SALIDA_SUBIDA = """\
+Searching for existing torrents on EMU...
+No dupes found
+[pixhost] https://t.pixhost.to/thumbs/1/captura.jpg
+TMDb: https://www.themoviedb.org/movie/550
+Torrent URL: https://emu-warez.com/torrents/123456
+Torrent uploaded successfully!
+Added to: /data/uploads/Peli
+"""
 
-def test_extract_urls_finds_https():
-    text = "Subida completada: https://emuwarez.me/torrents/12345"
-    urls = extract_urls(text)
-    assert len(urls) == 1
-    assert urls[0] == "https://emuwarez.me/torrents/12345"
-
-
-def test_extract_urls_finds_http():
-    text = "Ver en http://tracker.example.com/t/42"
-    urls = extract_urls(text)
-    assert "http://tracker.example.com/t/42" in urls
-
-
-def test_extract_urls_multiple_deduplicates():
-    text = "https://a.com/1 https://b.com/2 https://a.com/1"
-    urls = extract_urls(text)
-    assert len(urls) == 2
-
-
-def test_extract_urls_empty_on_no_urls():
-    assert extract_urls("No hay ninguna URL aquí.") == []
+# Con cualquier fallo, Uploadrr-EMU acaba con el resumen y la despedida.
+PIE_DE_FALLO = """\
+╭───────────────────────── Upload Summary ─────────────────────────╮
+│ Processed 1 Unique Uploads                                       │
+│ Successful Uploads: 0                                            │
+│ Failed Uploads: 1                                                │
+╰──────────────────────────────────────────────────────────────────╯
+                         see you soon ^.<
+"""
 
 
-def test_extract_urls_empty_string():
-    assert extract_urls("") == []
+def _panel(titulo: str) -> str:
+    return (
+        f"╭──────────────────── {titulo} ────────────────────╮\n"
+        "│ Path: /data/uploads/                             │\n"
+        "│ • Peli.2020.1080p.mkv                            │\n"
+        "╰──────────────────────────────────────────────────╯\n"
+    )
 
 
-def test_extract_torrent_id_with_explicit_pattern():
-    text = "Upload successful! torrent_id: 98765"
-    ids = extract_possible_torrent_ids(text)
-    assert "98765" in ids
+def test_extract_torrent_url_reads_the_fixed_line():
+    assert extract_torrent_url(SALIDA_SUBIDA) == "https://emu-warez.com/torrents/123456"
 
 
-def test_extract_torrent_id_uploaded_id_pattern():
-    text = "uploaded_id=42000"
-    ids = extract_possible_torrent_ids(text)
-    assert "42000" in ids
+def test_extract_torrent_url_ignores_other_urls():
+    """Antes valía la primera URL de la salida: la de una imagen o la de TMDb."""
+    texto = "[pixhost] https://t.pixhost.to/a.jpg\nTMDb: https://www.themoviedb.org/movie/1"
+    assert extract_torrent_url(texto) is None
 
 
-def test_extract_torrent_id_does_not_invent():
-    text = "Proceso completado sin error."
-    ids = extract_possible_torrent_ids(text)
-    assert ids == []
+def test_extract_torrent_url_needs_the_whole_line():
+    assert extract_torrent_url("Visto en Torrent URL: https://emu-warez.com/torrents/1") is None
+    assert extract_torrent_url("") is None
 
 
-def test_extract_torrent_id_no_pattern_match():
-    text = "El ID de la película en TMDb es 550."
-    # short number without explicit keyword should not match
-    ids = extract_possible_torrent_ids(text)
-    # This might or might not match depending on regex — what matters is it doesn't invent from thin air
-    # The key invariant: no false positives when the text has no upload-related ID patterns
-    assert isinstance(ids, list)
+def test_torrent_id_comes_from_the_url():
+    assert torrent_id_from_url("https://emu-warez.com/torrents/123456") == "123456"
+    assert torrent_id_from_url("https://emu-warez.com/otra/ruta") is None
+    assert torrent_id_from_url(None) is None
 
 
 def test_classify_exit_0_is_completed():
@@ -69,6 +65,8 @@ def test_classify_exit_0_is_completed():
     assert result["status"] == "completed"
     assert result["error_summary"] is None
     assert result["exit_code"] == 0
+    assert result["result_url"] is None
+    assert result["torrent_id"] is None
 
 
 def test_classify_exit_1_is_failed():
@@ -77,17 +75,17 @@ def test_classify_exit_1_is_failed():
     assert result["exit_code"] == 1
 
 
-def test_classify_with_url_in_stdout():
-    stdout = "Uploaded to https://emuwarez.me/torrents/999"
-    result = classify_upload_result(stdout, "", 0)
+def test_classify_takes_the_torrent_url_and_its_id():
+    result = classify_upload_result(SALIDA_SUBIDA, "", 0)
     assert result["status"] == "completed"
-    assert "https://emuwarez.me/torrents/999" in result["urls"]
+    assert result["result_url"] == "https://emu-warez.com/torrents/123456"
+    assert result["torrent_id"] == "123456"
 
 
-def test_classify_with_torrent_id():
-    stdout = "torrent id: 77777"
-    result = classify_upload_result(stdout, "", 0)
-    assert "77777" in result["torrent_ids"]
+def test_classify_does_not_take_a_torrent_id_from_loose_text():
+    """Un `id: 12345` suelto (el id de TMDb con el modo debug) no es el torrent."""
+    result = classify_upload_result("tmdb id: 54321\ntorrent_id: 77777\n", "", 0)
+    assert result["torrent_id"] is None
 
 
 def test_classify_exit_none_is_failed():
@@ -114,22 +112,69 @@ def test_build_error_summary_fallback_stdout():
     assert "last line from stdout" in summary
 
 
+def test_error_summary_is_the_reason_not_the_closing_banner():
+    """Las dos últimas líneas de la salida eran el marco del último panel y «see you soon»."""
+    stdout = (
+        "Searching for existing torrents on EMU...\n"
+        "Exact size match. Aborting..\n"
+        + _panel("Potential duplicate on EMU")
+        + _panel("Pre-upload checks failed")
+        + PIE_DE_FALLO
+    )
+    assert build_error_summary("", stdout, 1) == "Potential duplicate on EMU\nExit code: 1"
+
+
+def test_error_summary_of_a_tracker_rejection_keeps_message_and_details():
+    stdout = (
+        "Uploading to EMU\n"
+        "Upload failed: The name has already been taken.\n"
+        "Error details: {'name': ['The name has already been taken.']}\n"
+        + _panel("EMU Rejected Upload")
+        + PIE_DE_FALLO
+    )
+    lineas = build_error_summary("", stdout, 1).splitlines()
+    assert lineas[0] == "Upload failed: The name has already been taken."
+    assert lineas[1].startswith("Error details:")
+    assert lineas[2] == "EMU Rejected Upload"
+    assert "see you soon" not in "\n".join(lineas)
+
+
+def test_error_summary_of_a_missing_tmdb_id():
+    stdout = _panel("TMDb ID not found") + PIE_DE_FALLO
+    assert build_error_summary("", stdout, 1) == "TMDb ID not found\nExit code: 1"
+
+
+def test_error_summary_reads_log_handler_errors_without_level_or_path():
+    stdout = (
+        "ERROR    Forbidden (403): la cuenta no tiene permiso de subida                UNIT3D.py:384\n"
+        + PIE_DE_FALLO
+    )
+    assert build_error_summary("", stdout, 1) == "Forbidden (403): la cuenta no tiene permiso de subida\nExit code: 1"
+
+
+def test_error_summary_ignores_an_old_error_when_a_verdict_exists():
+    """El fallo de un host de imágenes, ya superado, no es el motivo de un duplicado."""
+    stdout = (
+        "ERROR    [pixhost] Upload failed: timeout                                  pixhost.py:47\n"
+        + _panel("Potential duplicate on EMU")
+        + PIE_DE_FALLO
+    )
+    assert build_error_summary("", stdout, 1) == "Potential duplicate on EMU\nExit code: 1"
+
+
+def test_error_summary_without_markers_skips_banner_and_summary():
+    """Sin ninguna marca, las últimas líneas que no sean decoración."""
+    stdout = "Algo inesperado ha pasado\n" + PIE_DE_FALLO
+    assert build_error_summary("", stdout, 2) == "Algo inesperado ha pasado\nExit code: 2"
+
+
 def test_api_token_in_output_not_in_result():
     """Caller must redact before passing, but parser itself must not leak."""
     # Simulate already-redacted output arriving at classifier
-    stdout = "api_token=***REDACTED*** Subida OK https://emu.me/t/1"
+    stdout = "api_token=***REDACTED*** Subida OK\nTorrent URL: https://emu.me/torrents/1"
     result = classify_upload_result(stdout, "", 0)
     # The real token is not in the output — redaction happened upstream
     assert "***REDACTED***" not in str(result.get("error_summary") or "")
-
-
-def test_parse_uploadrr_output_returns_dict():
-    text = "torrent_id: 100  https://emu.me/t/100"
-    result = parse_uploadrr_output(text)
-    assert "urls" in result
-    assert "torrent_ids" in result
-    assert "https://emu.me/t/100" in result["urls"]
-    assert "100" in result["torrent_ids"]
 
 
 # ---------------------------------------------------------------------------

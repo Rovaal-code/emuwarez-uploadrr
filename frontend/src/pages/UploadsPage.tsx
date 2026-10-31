@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react'
-import { getUploads, getUploadJob, startUploadJob, retryUploadJobQueued, cancelUploadJob } from '../api/uploads'
+import { getUploads, countUploads, getUploadJob, startUploadJob, retryUploadJobQueued, cancelUploadJob } from '../api/uploads'
 import { getInstances } from '../api/instances'
+import { ApiClientError } from '../api/client'
 import type { UploadJob, InstanceSafeResponse } from '../types/api'
 import { EmptyState, FilaVacia } from '../components/EmptyState'
 import { LoadingState } from '../components/LoadingState'
@@ -10,11 +11,12 @@ import { UploadJobDetailPage } from '../components/UploadJobDetailPage'
 import { DeleteUploadModal } from '../components/DeleteUploadModal'
 import { PeticionDeSubida } from '../components/PeticionDeSubida'
 import { ServiceLabel } from '../components/ServiceIcon'
-import { CancelButtonIcon, RetryButtonIcon, DeleteButtonIcon, ValueChip, PlainValue, TypeValueIcon } from '../components/DetailCard'
+import { CancelButtonIcon, RetryButtonIcon, DeleteButtonIcon, ExternalLinkButtonIcon, ValueChip, PlainValue, TypeValueIcon } from '../components/DetailCard'
 import { useTooltip } from '../components/Tooltip'
 import { formatDateTimeSeconds } from '../utils/format'
 import { posterUrl, buildDeepLink } from '../utils/libraryItem'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
+import { hayMasPorCargar } from '../utils/paginarSubidas'
 import {
   UPLOAD_TYPE_LABEL, STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo,
   progressCounter, queuedWaitText, useTicker,
@@ -52,6 +54,11 @@ const CONFIRMATION_TOKEN = 'INICIAR_UPLOADRR'
 const STATUS_OPTIONS = ['', 'staging', 'queued', 'running', 'completed', 'failed', 'cancelled']
 // Preparatory states never represent a real upload — hide any stale leftovers.
 const HIDDEN_STATES = new Set(['draft', 'preflight', 'blocked', 'ready', 'config_staging'])
+
+// Cuántas subidas se piden de una vez, y cuántas como mucho (el máximo que acepta GET /uploads). Pasado el
+// límite, «Cargar más» pide otra tanda: la lista es siempre las más recientes, sin huecos.
+const PAGINA = 100
+const MAX_LIMITE = 2000
 
 // "Orden: Estado" ordenaba por el CÓDIGO interno, no por lo que se ve, y salía
 // una secuencia sin sentido para nadie: Cancelado, Completado, Fallido, En
@@ -141,6 +148,7 @@ function JobRow({ job, instances, onOpen, indent, retryToggle, onCancel, onRetry
   const phaseElapsedText = isPreparingOrRunning ? progressCounter(job) : null
   const deepLink = buildDeepLink(job, instances)
   const { triggerProps: titleTip, tooltipNode: titleTooltip } = useTooltip('Ver progreso / detalle')
+  const { triggerProps: emuTip, tooltipNode: emuTooltip } = useTooltip(job.result_url ? 'Ver en eMuwarez' : null)
   const { triggerProps: originTip, tooltipNode: originTooltip } = useTooltip(deepLink ? `Abrir en ${job.instance_name ?? job.instance_type}` : null)
   const retryToggleTip = useTooltip(retryToggle ? (retryToggle.expanded ? 'Ocultar intentos anteriores' : 'Ver intentos anteriores') : null)
   const retryBtnTip = useTooltip(canRetry ? 'Reintentar subida' : 'Solo se puede reintentar una subida cancelada o fallida')
@@ -181,6 +189,13 @@ function JobRow({ job, instances, onOpen, indent, retryToggle, onCancel, onRetry
               {titleTooltip}
             </span>
             {job.year ? <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>({job.year})</span> : null}
+            {job.result_url && (
+              <a className="hover-link" href={job.result_url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+                style={{ display: 'inline-flex', flexShrink: 0, alignSelf: 'center' }} aria-label="Ver en eMuwarez" {...emuTip}>
+                <ExternalLinkButtonIcon />
+                {emuTooltip}
+              </a>
+            )}
           </div>
         </div>
       </td>
@@ -303,6 +318,11 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const [sortBy, setSortBy] = useState('created_desc')
   const [typeFilter, setTypeFilter] = useState('')
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null)
+  // Cuántas se piden (las más recientes), cuántas hay en total con el filtro de estado, y si ya llegó la primera
+  // respuesta (hasta entonces «no está en la lista» no quiere decir nada).
+  const [limite, setLimite] = useState(PAGINA)
+  const [total, setTotal] = useState<number | null>(null)
+  const [cargado, setCargado] = useState(false)
 
   // Keeps /uploads/:id in sync with whichever job's detail page is open.
   function openUpload(id: number) {
@@ -333,11 +353,17 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
     try {
       // The "Subiendo" filter option (value 'running') must also catch
       // 'preparing' jobs — they display identically as "Subiendo" now (see
-      // STATUS_LABEL) — so it can't be a single exact server-side match;
-      // fetch unfiltered and narrow client-side in visibleJobs instead.
-      const data = await getUploads(statusFilter && statusFilter !== 'running' ? { status: statusFilter } : undefined)
+      // STATUS_LABEL) — so the server filters on both, before paginating and counting.
+      const filtros = { status: statusFilter === 'running' ? 'running,preparing' : statusFilter || undefined, hide_preparatory: true }
+      // Si falla solo el recuento, la lista se enseña igual y el total queda sin conocer.
+      const [data, cuantas] = await Promise.all([
+        getUploads({ ...filtros, limit: limite }),
+        countUploads(filtros).catch(() => null),
+      ])
       if (seq === loadSeqRef.current) {
         setJobs(data)
+        setTotal(cuantas)
+        setCargado(true)
       }
     } catch {
       if (!opts?.silent) setError('Error al cargar los trabajos de subida.')
@@ -345,31 +371,34 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
     finally { if (!opts?.silent) setLoading(false) }
   }
 
-  useEffect(() => { load() }, [statusFilter])
+  useEffect(() => { load() }, [statusFilter, limite])
 
   // Opened from the dashboard "Actividad de subida" (clicking a title): pick
   // up the stashed job id once the list has loaded and show its detail page.
   //
-  // Depende de `jobs` porque hay que comprobar que el trabajo exista antes de
-  // abrirlo, y además de `seVe`: la sección ya no se levanta de cero en cada
-  // visita, así que sin eso solo se recogía el salto si los datos llegaban
-  // justo después (ver context/SeccionVisible).
+  // Depende de `cargado` y de `seVe`: la sección ya no se levanta de cero en
+  // cada visita, así que sin eso solo se recogía el salto si los datos
+  // llegaban justo después (ver context/SeccionVisible). Se abre aunque no esté
+  // en la lista (una antigua): la ficha la pide por su id.
   const subidasALaVista = useSeccionVisible()
   useEffect(() => {
-    if (!subidasALaVista || jobs.length === 0) return
+    if (!subidasALaVista || !cargado) return
     let pending: string | null = null
     try { pending = sessionStorage.getItem('emuwarez_open_upload') } catch { /* ignore */ }
     if (!pending) return
-    if (!jobs.some(j => j.id === Number(pending))) return
     try { sessionStorage.removeItem('emuwarez_open_upload') } catch { /* ignore */ }
     openUpload(Number(pending))
-  }, [jobs, subidasALaVista])
+  }, [cargado, subidasALaVista])
 
   function quitarFiltros() {
     setSearch('')
     setStatusFilter(''); setTypeFilter('')
   }
   const filtrando = !!(search || statusFilter || typeFilter)
+  // Las que faltan por cargar (sin total conocido, si la lista llena el límite pedido). La búsqueda por título y el
+  // filtro de tipo miran solo las cargadas.
+  const hayMas = hayMasPorCargar(total, jobs.length, limite, MAX_LIMITE)
+  const cargarMas = () => setLimite(l => Math.min(l + PAGINA, MAX_LIMITE))
   // Al salir, de vuelta a la tabla sin filtros y con el orden por defecto.
   useAlSalir(() => {
     closeUpload()
@@ -491,8 +520,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
     })
   }
 
-  // Client-side filter + sort over the loaded jobs (status stays server-side,
-  // except 'running' — see load() — which also has to catch 'preparing').
+  // Client-side filter + sort over the loaded jobs (status stays server-side).
   const visibleJobs = useMemo(() => {
     const q = search.trim().toLowerCase()
     const out = jobs.filter(j => {
@@ -500,8 +528,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
       if (hasNewerRetry.has(j.id!)) return false // shown nested under its retry instead
       const titleOk = !q || (j.title || '').toLowerCase().includes(q)
       const typeOk = !typeFilter || j.media_type === typeFilter
-      const statusOk = statusFilter !== 'running' || j.status === 'running' || j.status === 'preparing'
-      return titleOk && typeOk && statusOk
+      return titleOk && typeOk
     })
     const dt = (s?: string | null) => (s ? new Date(s).getTime() : 0)
     out.sort((a, b) => {
@@ -514,9 +541,26 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
       }
     })
     return out
-  }, [jobs, search, sortBy, typeFilter, statusFilter, hasNewerRetry])
+  }, [jobs, search, sortBy, typeFilter, hasNewerRetry])
 
-  const selectedJob = selectedJobId != null ? jobs.find(j => j.id === selectedJobId) : undefined
+  // La de la lista o, si es más antigua que las cargadas (enlace /uploads/123, notificación, Panel), la pedida por su id.
+  const [jobSuelto, setJobSuelto] = useState<UploadJob | null>(null)
+  const enLista = selectedJobId != null ? jobs.find(j => j.id === selectedJobId) : undefined
+  // Depende de si está en la lista, no de la lista entera: cada recarga la sustituye y cancelaría la petición en vuelo.
+  const seleccionadaEnLista = enLista != null
+  useEffect(() => {
+    if (selectedJobId == null || !cargado) return
+    if (seleccionadaEnLista) { setJobSuelto(null); return }
+    let alive = true
+    getUploadJob(selectedJobId)
+      .then(j => { if (alive) setJobSuelto(j) })
+      .catch(e => {
+        // Ya no existe (la borraron): fuera de una ficha vacía.
+        if (alive && e instanceof ApiClientError && e.status === 404) closeUpload()
+      })
+    return () => { alive = false }
+  }, [selectedJobId, cargado, seleccionadaEnLista])
+  const selectedJob = enLista ?? (jobSuelto?.id === selectedJobId ? jobSuelto : undefined)
 
   // The list row (above) never carries display_title — only the single-job
   // GET computes the canonical "Serie (Año)"-style title, to avoid a
@@ -601,7 +645,9 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
       <div className="page-header" style={{ flexShrink: 0 }}>
         <div>
           <div className="page-title">Subidas</div>
-          <div className="page-subtitle">{visibleJobs.length} subidas</div>
+          <div className="page-subtitle">
+            {visibleJobs.length} subidas{total != null && jobs.length < total ? ` · ${jobs.length} de ${total} cargadas` : ''}
+          </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {hasLiveJob && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>● actualizando en vivo</span>}
@@ -656,8 +702,15 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
                   columnas={11}
                   icon={<IconoSubida />}
                   title="Sin resultados"
-                  body="No hay subidas que coincidan con los filtros."
-                  action={<button className="btn btn-primary btn-sm" onClick={quitarFiltros}>Quitar filtros</button>}
+                  body={hayMas
+                    ? 'No hay subidas cargadas que coincidan con los filtros. Quedan más sin cargar.'
+                    : 'No hay subidas que coincidan con los filtros.'}
+                  action={
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                      <button className="btn btn-primary btn-sm" onClick={quitarFiltros}>Quitar filtros</button>
+                      {hayMas && <button className="btn btn-secondary btn-sm" onClick={cargarMas}>Cargar más</button>}
+                    </div>
+                  }
                 />
               )}
               <tbody>
@@ -684,6 +737,14 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
               </tbody>
             </table>
           </div>
+          {hayMas && (
+            <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '10px 0' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                {total != null ? `${jobs.length} de ${total} subidas cargadas` : `${jobs.length} subidas cargadas`}
+              </span>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={cargarMas}>Cargar más</button>
+            </div>
+          )}
         </div>
       )}
     </div>

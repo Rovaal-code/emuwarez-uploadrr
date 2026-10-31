@@ -56,3 +56,16 @@ def test_un_forzado_por_el_nombre_se_marca_en_el_contenedor(tmp_path):
     subs = [t for t in _pistas(ruta) if t["type"] == "subtitles"]
     forzados = {t["properties"]["track_name"]: bool(t["properties"].get("forced_track")) for t in subs}
     assert forzados == {"Español (Castellano) - Forzado": True, "Español (Castellano)": False}
+
+
+def test_unos_comentarios_en_castellano_no_cuentan_como_doblaje(tmp_path):
+    """Audio inglés y comentarios en castellano: hacen falta los subtítulos
+    castellanos completos, como en una versión original."""
+    ruta = hacer_mkv(
+        tmp_path / "Peli.mkv",
+        audios=({"lang": "en"}, {"lang": "es", "canales": 2, "comentario": True}),
+        subs=({"lang": "es"}, {"lang": "es", "titulo": "Comentarios del director"}),
+    )
+    plan = build_track_plan(read_tracks_json(str(ruta))["data"])
+    subs = [(t["new_name"], t["default_after"]) for t in plan["ordered_tracks"] if t["type"] == "subtitles"]
+    assert subs == [("Español (Castellano)", True), ("Español (Castellano) - Comentarios", False)]

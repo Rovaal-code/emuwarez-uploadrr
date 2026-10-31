@@ -440,6 +440,11 @@ def _cualificadores(props: dict) -> list[str]:
             if props.get(bandera) or patron.search(nombre)]
 
 
+def _secundaria(t: dict) -> bool:
+    """Audio de comentarios o audiodescripción: nunca el principal."""
+    return bool({"Comentarios", "Audiodescripción"} & set(t.get("qualifiers") or ()))
+
+
 def _default_subtitle_id(audio_sorted: list[dict], subs_sorted: list[dict]) -> int | None:
     """Which subtitle track (if any) should come out flagged as default.
 
@@ -460,7 +465,8 @@ def _default_subtitle_id(audio_sorted: list[dict], subs_sorted: list[dict]) -> i
 
     Returns the track id, or None when nothing should be default.
     """
-    castilian_audio = any(t["_priority"] == _PRIORITY_CASTILIAN for t in audio_sorted)
+    # Un castellano de comentarios o audiodescripción no es "audio en castellano".
+    castilian_audio = any(t["_priority"] == _PRIORITY_CASTILIAN and not _secundaria(t) for t in audio_sorted)
     castilian_subs = [t for t in subs_sorted if t["_priority"] == _PRIORITY_CASTILIAN]
 
     if castilian_audio:
@@ -530,8 +536,6 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None,
 
     # Dentro de un idioma, los comentarios y la audiodescripción van detrás:
     # la primera pista es la que queda predeterminada.
-    def _secundaria(t: dict) -> bool:
-        return bool({"Comentarios", "Audiodescripción"} & set(t["qualifiers"]))
     audio_sorted = sorted(audio, key=lambda t: (t["_priority"], _secundaria(t)))
     # Secondary key `not t["forced"]` (False < True, so forced wins the tie):
     # within a language the forced track goes FIRST, giving
@@ -573,7 +577,7 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None,
         # {Canales}" — consistent separator across track types, whatever the
         # qualifier ends up being (Forzado today; Full/SDH etc. would follow
         # the same pattern if ever added).
-        quals = (["Forzado"] if t["forced"] else []) + [q for q in t["qualifiers"] if q == "SDH"]
+        quals = (["Forzado"] if t["forced"] else []) + [q for q in t["qualifiers"] if q in ("SDH", "Comentarios")]
         t["new_name"] = " - ".join([lang_name] + quals)
         # Unlike audio, the default subtitle is NOT simply the first one: it
         # depends on what the audio offers (see _default_subtitle_id).

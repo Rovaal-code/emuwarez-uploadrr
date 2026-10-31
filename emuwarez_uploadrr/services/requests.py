@@ -473,14 +473,33 @@ def _effective_target(conn: sqlite3.Connection, matched_item: dict, req: dict) -
 _ORDEN_DEL_CASAMIENTO = {"Compatible": 0, "No disponible": 1, "Parcial": 2, "No compatible": 3}
 
 
+def clasificar_peticion(
+    conn: sqlite3.Connection, req: dict, item: dict, *, id_match: bool = False, title_match: bool = False,
+    base_confidence: float = 0.90,
+) -> tuple[dict, dict]:
+    """(fila con lo que de verdad tiene lo pedido, clasificación). Es LA definición de «compatible»: la usan el cruce
+    guardado, el detalle y «lista para subir», para que la lista, el Panel y los avisos digan lo mismo que la ficha."""
+    efectiva = _effective_target(conn, item, req)
+    cls = classify_request_match(req, efectiva, id_match=id_match, title_match=title_match,
+                                 base_confidence=base_confidence)
+    # Una petición de temporada o serie completa se cubre con un PACK. Si ese pack no puede armarse (los capítulos no
+    # coinciden en resolución o en códec de vídeo), "Compatible" prometería algo que la subida va a rechazar: baja
+    # a Parcial y se dice por qué. Los capítulos sueltos sí se pueden subir, y el motivo lo dice.
+    if cls["status"] == "Compatible":
+        motivo = _pack_blocked_reason(conn, item, req)
+        if motivo:
+            cls["status"] = "Parcial"
+            cls["reasons"] = [*cls["reasons"], motivo]
+    return efectiva, cls
+
+
 def _mejor_candidato(conn: sqlite3.Connection, req: dict, candidates: list[dict]) -> tuple[dict, dict]:
     """De los candidatos igual de seguros (la misma película en Radarr y en Radarr 4K) el que mejor atiende la
     petición, con su clasificación: el primero de la lista podía ser la copia de 1080p de una petición de 2160p."""
     empatados = [c for c in candidates if c["confidence"] == candidates[0]["confidence"]]
-    clasificados = [(c, classify_request_match(
-        req, _effective_target(conn, c["item"], req), id_match=c["id_match"],
-        title_match=c["title_match"], base_confidence=c["confidence"],
-    )) for c in empatados]
+    clasificados = [(c, clasificar_peticion(
+        conn, req, c["item"], id_match=c["id_match"], title_match=c["title_match"], base_confidence=c["confidence"],
+    )[1]) for c in empatados]
     return min(clasificados, key=lambda par: _ORDEN_DEL_CASAMIENTO.get(par[1]["status"], 9))
 
 
@@ -999,27 +1018,11 @@ def get_request_detail(conn: sqlite3.Connection, request_id: int) -> Optional[di
                 scope=result.get("req_scope"),
             )
         if lib_row and dict(lib_row).get("item_type") in ("series", "season"):
-            eff = _effective_target(conn, dict(lib_row), result)
-            cls = classify_request_match(
-                result, eff,
+            eff, cls = clasificar_peticion(
+                conn, result, dict(lib_row),
                 id_match=bool(md.get("type_match")),
                 base_confidence=float(md["confidence"]),
             )
-            # Una petición de temporada o serie completa se cubre con un
-            # PACK. Si ese pack no puede armarse (los capítulos no coinciden
-            # en resolución o en códec de vídeo), "Compatible" prometería algo
-            # que la subida va a rechazar: baja a Parcial y se dice por qué.
-            #
-            # Pasa cuando la petición no restringe la resolución: entonces la
-            # comparación no tiene nada que exigir y salía Compatible aunque
-            # la temporada estuviera descuadrada.
-            #
-            # Los capítulos sueltos SÍ se pueden subir, y el motivo lo dice.
-            if cls["status"] == "Compatible":
-                blocker = _pack_blocked_reason(conn, dict(lib_row), result)
-                if blocker:
-                    cls["status"] = "Parcial"
-                    cls["reasons"] = list(cls.get("reasons") or []) + [blocker]
             result["match"].update({
                 "status": cls["status"],
                 "resolution_match": cls["resolution_match"],
@@ -1168,7 +1171,8 @@ def dashboard_request_counters(conn: sqlite3.Connection) -> dict[str, int | str 
     usuario = get_setting_canonical(conn, "emu.username")
     if usuario:
         mias = _cuenta(
-            "SELECT COUNT(*) AS cnt FROM request_items WHERE author_visible = 1 AND author = ?",
+            "SELECT COUNT(*) AS cnt FROM request_items "
+            "WHERE author_visible = 1 AND LOWER(TRIM(author)) = LOWER(TRIM(?))",
             (usuario,),
         )
 

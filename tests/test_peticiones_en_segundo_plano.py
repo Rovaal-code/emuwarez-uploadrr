@@ -162,3 +162,14 @@ def test_el_endpoint_arranca_y_el_progreso_se_consulta(client, auth_headers, db_
     progreso = client.get("/api/requests/sync-progress", headers=auth_headers).json()
     assert progreso["error"] is None and progreso["active"] is False
     assert client.get("/api/requests/sync-progress").status_code == 401
+
+
+def test_si_el_hilo_falla_antes_de_sincronizar_la_barra_no_se_queda_encendida(db_conn, monkeypatch, avisos):
+    def rota(*a, **kw):
+        raise RuntimeError("base de datos bloqueada")
+
+    monkeypatch.setattr(reqs, "sync_emu_requests", rota)
+    reqs.start_requests_sync_background(force=True)
+    assert _esperar(lambda: reqs.get_request_sync_progress()["done"])
+    progreso = reqs.get_request_sync_progress()
+    assert (progreso["active"], progreso["error"]) == (False, "base de datos bloqueada")

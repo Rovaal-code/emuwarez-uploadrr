@@ -220,7 +220,9 @@ def _sincronizar_peticiones(conn: sqlite3.Connection) -> dict[str, int | str]:
                   error=None)
     publicar(EVENTO_SYNC_EMPEZADA, {"que": "peticiones"})
     try:
-        return _importar_peticiones(conn)
+        result = _importar_peticiones(conn)
+        _set_progress(message=resumen_de_sincronizacion(result), imported=int(result.get("imported", 0)))
+        return result
     except Exception as exc:  # noqa: BLE001 — se enseña en la barra y se vuelve a lanzar
         _set_progress(error=str(exc), phase="Error")
         raise
@@ -263,15 +265,15 @@ def start_requests_sync_background(force: bool = False) -> dict:
         c = connect(db_path())
         try:
             result = sync_emu_requests(c, force=True)  # el turno ya se comprobó arriba
-            if result.get("status") == "ok":
-                _set_progress(message=resumen_de_sincronizacion(result), imported=int(result.get("imported", 0)))
-            else:
-                # Otra sincronización se coló entre la comprobación y aquí: su barra es la que vale.
-                _set_progress(error=str(result.get("message") or ""), active=False, done=True)
-        except Exception:  # noqa: BLE001 — _sincronizar_peticiones ya dejó el error en el progreso
-            pass
+            if result.get("status") != "ok":
+                # Otra sincronización se coló entre la comprobación y aquí.
+                _set_progress(error=str(result.get("message") or ""))
+        except Exception as exc:  # noqa: BLE001 — _sincronizar_peticiones ya dejó su error; esto es lo que falle antes
+            if not get_request_sync_progress()["error"]:
+                _set_progress(error=str(exc))
         finally:
             c.close()
+            _set_progress(active=False, done=True)  # pase lo que pase, la barra no se queda encendida
 
     threading.Thread(target=_run, daemon=True).start()
     return {"status": "started"}

@@ -10,7 +10,7 @@ the upload with Uploadrr-EMU (`Kisnov/Uploadrr-EMU`, cloned into the image at `/
 - Sole maintainer: Gabriel (Kisnov). Main repo `Kisnov/emuwarez-uploadrr`, base `master`. `upstream`
   (Rovaal-code) is abandoned.
 - Branch and PR, never commit to `master`. Group related changes: no PR per one-line fix. Open PRs as
-  non-draft so CodeRabbit reviews them.
+  non-draft so CodeRabbit reviews them; its standing rules per path live in `.coderabbit.yaml`.
 - Code comments, commits and UI text are in Spanish. Conventional Commits with a one-line Spanish summary of
   the user-visible outcome (`fix: la subida usa el enlace de la carpeta de subidas`).
 - Don't bump the version in a PR: `scripts/desplegar.sh --version` does it at release.

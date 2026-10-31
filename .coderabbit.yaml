@@ -1,0 +1,88 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# Reglas fijas del proyecto para las revisiones: lo que hasta ahora CodeRabbit solo aprendía de las respuestas.
+language: es-ES
+tone_instructions: "Directo y breve. Prioriza fallos reales (comportamiento, pérdida de datos, seguridad) sobre estilo. No pidas comentarios largos ni guardas para casos imposibles."
+
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: true
+  auto_review:
+    enabled: true
+    drafts: false
+  path_filters:
+    - "!frontend/package-lock.json"
+    - "!tests/fixtures/**"
+    - "!docs/capturas/**"
+  path_instructions:
+    - path: "**/*"
+      instructions: |
+        - Comentarios de código, commits y textos de la interfaz en castellano; comentarios de una línea.
+        - Un solo proceso de uvicorn: el bus de eventos (services/eventos.py) vive en memoria. `eventos.publicar` se
+          llama desde el sitio que escribe el dato y nunca lanza.
+        - Los ajustes solo se leen y escriben a través de services/settings.py o database.py; services/ no importa
+          nada de web/; web/ no habla SQL.
+        - Las claves de eMuwarez y TMDb viajan en la query: nunca se registra ni se devuelve una URL cruda
+          (usar integrations.base.url_sin_claves).
+    - path: "emuwarez_uploadrr/services/{library,instances,arr_health}.py"
+      instructions: |
+        Gabriel apaga sus instancias de Radarr/Sonarr durante días. Una instancia que no responde, da error, está
+        desactivada o devuelve un listado vacío teniendo filas es un ERROR: nunca se poda, nunca se marca Faltante,
+        no se notifica "falta" y no se pierden cruces de peticiones ni enlaces de subidas. `[]` solo es válido para
+        una instancia sin filas. Un fallo de la cola (/queue) no para la sincronización ni cambia estados.
+    - path: "emuwarez_uploadrr/integrations/{radarr,sonarr,arr_base,base}.py"
+      instructions: |
+        Un listado que falla, viene cortado o con forma rara se trata como error, nunca como lista vacía.
+    - path: "emuwarez_uploadrr/services/{upload_queue,carpeta_subida,mkv_remux,mkv_title,filesystem_apply,season_pack,nomenclature}.py"
+      instructions: |
+        Los ficheros de la biblioteca suelen compartir inodo con torrents que se siembran:
+        - Nunca se renombra un fichero fuera de UPLOADRR_UPLOADS_DIR (la biblioteca de Jellyfin usa los nombres de
+          Sonarr/Radarr). El nombre de eMuwarez va en el enlace o el clon dentro de la carpeta de subidas.
+        - Nunca se escriben bytes en un fichero con st_nlink > 1: las ediciones van a un clon reflink dentro de
+          uploads o se omiten con aviso; reordenar un fichero compartido se omite. Nombre y orden de pistas en el
+          original solo con st_nlink == 1. El título interno del MKV nunca en la biblioteca.
+        - Nunca se borra nada fuera de la carpeta de subidas, ni un enlace que otra subida está sembrando.
+        - Rutas comparadas por componentes (commonpath / en_carpeta_de_subidas), nunca con startswith.
+    - path: "emuwarez_uploadrr/services/{uploadrr_contract,uploadrr_progress,upload_result_parser,uploadrr_config_staging,uploadrr_yaml,upload_execution}.py"
+      instructions: |
+        Contrato con Kisnov/Uploadrr-EMU: argv, claves de config.yaml y líneas de salida se cambian en los dos repos a
+        la vez. Uploadrr-EMU sale con 0 solo si subió algo, y el enlace del torrent sale de la línea `Torrent URL:`.
+        config.yaml se restaura desde data/config.yaml.bak tras cada trabajo. Los subprocesos van en su propio grupo
+        y se cancelan con killpg.
+    - path: "emuwarez_uploadrr/database.py"
+      instructions: |
+        Migraciones: subir SCHEMA_VERSION y añadir el `_migrate_*` al final de la cascada de init_db; idempotentes.
+        Se ejecutan una vez al arrancar (preparar_base, tras una copia VACUUM INTO), nunca dentro de una petición.
+    - path: "emuwarez_uploadrr/{services/requests,services/request_readiness,services/compatibility,services/emu_catalog,integrations/emu}.py"
+      instructions: |
+        Una sola definición de compatible / "lista para subir": resolución y source iguales o mejores que los
+        pedidos, petición abierta (las reclamadas por el propio usuario cuentan como abiertas) y la temporada o
+        capítulo correctos. season_number 0 sin capítulo es la serie entera salvo que el nombre diga Especiales.
+        La API de eMuwarez admite 30 llamadas por minuto compartidas con Uploadrr-EMU; nada de borrar el catálogo ni
+        las peticiones con un recorrido incompleto.
+    - path: "emuwarez_uploadrr/services/{emu_format,media_info_service,nomenclature_check,season_pack}.py"
+      instructions: |
+        Un solo constructor de nombres y un solo resolvedor de idiomas (es-419, es-MX, es-AR, es-US y "Latino" son
+        LAT). El comprobador de nomenclatura llama al generador; no se duplica la lógica.
+    - path: "frontend/src/**"
+      instructions: |
+        Textos en castellano. Nada de `setInterval` nuevos (el servidor avisa por /api/eventos; lo vigila
+        test_no_han_aparecido_sondeos_nuevos). Diálogos con components/Modal.tsx. Colores y tamaños con los tokens y
+        clases existentes, no estilos en línea nuevos. Las copias de constantes del backend deben coincidir
+        (test_copias_frontend.py).
+    - path: "tests/**"
+      instructions: |
+        Las pruebas corren en Linux (Docker) y sin red. Cada arreglo de un fallo lleva una prueba que falla sin él.
+    - path: ".github/workflows/**"
+      instructions: |
+        Acciones fijadas por SHA; la entrada no confiable llega a `run:` solo por `env:`; permisos mínimos.
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  learnings:
+    scope: auto

@@ -633,6 +633,11 @@ def build_season_pack_plan(
         _set_season_plan_progress(season_id, done=total, total=total, current_title=None)
 
         errors.extend(_consistency_errors(episode_entries))
+        # Un capítulo sin proveedor en el nombre no cuenta; dos distintos sí.
+        proveedores = sorted({e["proposal"].get("provider_final") for e in episode_entries} - {None, ""})
+        if len(proveedores) > 1:
+            errors.append(f"Los capítulos vienen de proveedores distintos ({', '.join(proveedores)}): "
+                          "elige uno en Proveedor.")
         errors.extend(_spanish_errors(episode_entries))
 
         first_proposal = episode_entries[0]["proposal"]
@@ -652,7 +657,8 @@ def build_season_pack_plan(
         # first (nomenclature.py's _infer_provider_from_item); if NONE
         # revealed one and the source is WEB-DL, ONE TMDb lookup for the
         # whole season — not repeated per episode.
-        provider = first_proposal.get("provider_final")
+        provider = next((e["proposal"].get("provider_final") for e in episode_entries
+                         if e["proposal"].get("provider_final")), None)
         if not provider and (first_proposal.get("source") or "").upper() == "WEB-DL":
             from .source_assistant import suggest_provider_for_item
             suggestion = suggest_provider_for_item(available_episodes[0]["id"], conn=conn)

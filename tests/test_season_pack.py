@@ -667,6 +667,22 @@ def test_un_pack_con_hdr_y_sdr_se_bloquea(isolated_db, tmp_path):
     conn.close()
 
 
+def test_un_pack_con_proveedores_distintos_se_bloquea(isolated_db, tmp_path):
+    """El título decía el proveedor del primer capítulo aunque otro fuera de NF."""
+    conn = _open(isolated_db)
+    season_id = _pack_de_dos(conn, tmp_path)
+    for i, nombre in ((1, "S01E01.AMZN.WEB-DL.mkv"), (2, "S01E02.NF.WEB-DL.mkv")):
+        viejo = tmp_path / "One Piece" / "Season 1" / f"S01E0{i}.mkv"
+        nuevo = viejo.with_name(nombre)
+        viejo.rename(nuevo)
+        conn.execute("UPDATE library_items SET path = ? WHERE path = ?", (str(nuevo), str(viejo)))
+    conn.commit()
+    plan = build_season_pack_plan(season_id, conn=conn)
+    assert plan["status"] == "blocked"
+    assert any("proveedores distintos (AMZN, NF)" in e for e in plan["errors"]), plan["errors"]
+    conn.close()
+
+
 def test_el_titulo_del_pack_lleva_el_hdr_de_sus_capitulos(isolated_db, tmp_path):
     conn = _open(isolated_db)
     plan = build_season_pack_plan(_pack_de_dos(conn, tmp_path, dynamic_range=["HDR10", "HDR10"]), conn=conn)

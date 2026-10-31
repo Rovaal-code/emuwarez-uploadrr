@@ -3,7 +3,9 @@
 SAFETY CONTRACT:
 - dry_run=True by default.
 - apply_internal_title_update() requires confirmation="APLICAR_TITULO_MKV".
-- Only operates on prepared_path/applied_path, never on source_path.
+- El título es parte del nombre: solo se escribe en un fichero de la carpeta de
+  subidas que no comparte nadie (la copia por reflink, o el propio si ya está
+  ahí), nunca en uno de la biblioteca.
 - Uses subprocess without shell=True.
 - mkvpropedit is never called in tests (caller must mock subprocess).
 """
@@ -49,6 +51,22 @@ def build_internal_mkv_title(torrent_name: str) -> str:
     return to_filesystem_name(torrent_name)
 
 
+TITULO_NO_EN_BIBLIOTECA = ("El título interno no se escribe en el archivo de la biblioteca: "
+                           "se pone en la copia de la carpeta de subidas al subir.")
+
+
+def _por_que_no_se_escribe(ruta: str | None) -> str | None:
+    """None si se puede escribir el título en `ruta` (de la carpeta de subidas y
+    sin otro enlace duro); si no, el motivo."""
+    from .carpeta_subida import en_carpeta_de_subidas
+    if not ruta or not en_carpeta_de_subidas(ruta):
+        return TITULO_NO_EN_BIBLIOTECA
+    enlaces = Path(ruta).stat().st_nlink if Path(ruta).exists() else 1
+    if enlaces > 1:
+        return f"No se edita {Path(ruta).name}: lo comparten {enlaces} enlaces duros."
+    return None
+
+
 def check_mkvpropedit_available() -> dict:
     """Check whether mkvpropedit is installed and callable."""
     path = shutil.which("mkvpropedit")
@@ -58,22 +76,15 @@ def check_mkvpropedit_available() -> dict:
 
 
 def _get_prepared_path(library_item_id: int, conn) -> str | None:
-    """Return prepared_path or applied_path from the latest nomenclature proposal."""
+    """El archivo del elemento ya renombrado (prepared_path).
+
+    No el applied_path de la propuesta: ahora es el enlace o la copia que
+    siembra qBittorrent para eMuwarez, y retitularlo rompería ese torrent."""
     row = conn.execute(
         "SELECT prepared_path FROM library_items WHERE id = ?",
         (library_item_id,),
     ).fetchone()
-    if row and row["prepared_path"]:
-        return row["prepared_path"]
-    row2 = conn.execute(
-        """SELECT applied_path FROM nomenclature_proposals
-           WHERE library_item_id = ? AND status != 'expired'
-           ORDER BY created_at DESC LIMIT 1""",
-        (library_item_id,),
-    ).fetchone()
-    if row2 and row2["applied_path"]:
-        return row2["applied_path"]
-    return None
+    return row["prepared_path"] if row and row["prepared_path"] else None
 
 
 def _get_torrent_name_for_item(library_item_id: int, conn) -> str | None:
@@ -102,14 +113,25 @@ def _get_torrent_name_for_item(library_item_id: int, conn) -> str | None:
     return None
 
 
-def preview_internal_title_update(library_item_id: int, conn=None) -> dict:
-    """Return a dry-run preview of the MKV title update. Never modifies anything."""
+def titulo_actual(ruta: str) -> str | None:
+    """El título interno que trae el MKV, o None si no tiene o no se lee."""
+    from .mkv_remux import read_tracks_json
+    leido = read_tracks_json(ruta)
+    if not leido.get("ok"):
+        return None
+    return ((leido["data"].get("container") or {}).get("properties") or {}).get("title")
+
+
+def preview_internal_title_update(library_item_id: int, conn=None, *, ruta: str | None = None) -> dict:
+    """Return a dry-run preview of the MKV title update. Never modifies anything.
+
+    `ruta`: el fichero sobre el que se aplicaría, si no es el del elemento."""
     own = conn is None
     conn = conn or connect()
     try:
         mkv_check = check_mkvpropedit_available()
 
-        prepared_path = _get_prepared_path(library_item_id, conn)
+        prepared_path = ruta or _get_prepared_path(library_item_id, conn)
         if not prepared_path:
             return {
                 "status": "blocked",
@@ -141,6 +163,9 @@ def preview_internal_title_update(library_item_id: int, conn=None) -> dict:
             warnings.append("mkvpropedit no está instalado. Instala mkvtoolnix para aplicar el título interno.")
         if not p.exists():
             warnings.append(f"El archivo preparado no existe todavía en disco: {prepared_path}")
+        veto = _por_que_no_se_escribe(prepared_path)
+        if veto:
+            warnings.append(veto)
 
         cmd_preview = [
             "mkvpropedit",
@@ -173,16 +198,18 @@ def apply_internal_title_update(
     apply: bool = False,
     confirmation: str | None = None,
     conn=None,
+    ruta: str | None = None,
 ) -> dict:
     """Apply or preview the MKV internal title update.
 
     Real execution requires:
-      dry_run=False, apply=True, confirmation='APLICAR_TITULO_MKV'
+      dry_run=False, apply=True, confirmation='APLICAR_TITULO_MKV',
+      y un fichero de la carpeta de subidas sin otro enlace duro.
     """
     own = conn is None
     conn = conn or connect()
     try:
-        preview = preview_internal_title_update(library_item_id, conn=conn)
+        preview = preview_internal_title_update(library_item_id, conn=conn, ruta=ruta)
 
         if preview["status"] == "blocked":
             return {**preview, "dry_run": True, "apply": False}
@@ -223,6 +250,10 @@ def apply_internal_title_update(
                 "errors": [f"El archivo no existe: {prepared_path}"],
             }
 
+        veto = _por_que_no_se_escribe(prepared_path)
+        if veto:
+            return {**preview, "status": "blocked", "dry_run": False, "apply": False, "errors": [veto]}
+
         cmd = [
             "mkvpropedit",
             prepared_path,
@@ -256,8 +287,10 @@ def apply_internal_title_update(
             }
 
         now = datetime.now(timezone.utc).isoformat()
-        status_val = "applied" if result.returncode == 0 else "error"
-        error_msg = result.stderr.strip() if result.returncode != 0 else None
+        # 1 = avisos con el cambio ya escrito. El motivo de un error sale por stdout.
+        status_val = "applied" if result.returncode in (0, 1) else "error"
+        error_msg = (((result.stdout or "") + (result.stderr or "")).strip()[:500]
+                     or f"mkvpropedit terminó con código {result.returncode}") if status_val == "error" else None
 
         try:
             conn.execute(

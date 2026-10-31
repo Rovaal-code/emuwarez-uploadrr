@@ -100,7 +100,8 @@ def test_avisa_a_la_interfaz_al_empezar_y_al_terminar(db_conn, monkeypatch, avis
     estado = _fetch_lento(monkeypatch)
     estado["seguir"].set()
     reqs.start_requests_sync_background(force=True)
-    assert _esperar(lambda: reqs.get_request_sync_progress()["done"])
+    # `done` se marca justo antes de publicar el aviso de fin: se espera al aviso mismo.
+    assert _esperar(lambda: len(avisos) >= 2)
     assert avisos == [("sync-empezada", {"que": "peticiones"}), ("sync-terminada", {"que": "peticiones"})]
 
 
@@ -229,7 +230,8 @@ def test_dos_arranques_a_la_vez_lanzan_un_solo_hilo_y_no_se_pisan_el_progreso(db
     assert estado["veces"] == 1
     assert salida.count("started") >= 1 and set(salida) <= {"started", "busy"}
     assert reqs.get_request_sync_progress()["error"] is None
-    assert _candado_libre()
+    # El hilo marca `done` y después suelta el candado: se espera al candado.
+    assert _esperar(_candado_libre)
 
 
 def test_con_otra_sincronizacion_en_marcha_no_se_toca_su_progreso(db_conn, monkeypatch, avisos):

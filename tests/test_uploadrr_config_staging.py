@@ -430,6 +430,7 @@ def test_stage_qbittorrent_config_without_qui_drops_a_previous_one():
 _VALORES_DIFICILES = [
     "a\\b", "\\", "\\\\", "it's \"q\"", "'", "''", "tab\taqui", "con # almohadilla",
     "con: dos puntos", "llaves } { y , comas [ ]", "ñandú", "  con espacios  ", "true", "123",
+    "dos\nlineas", "retorno\r\ny tab\t", "control\x01", "\x7f", "nel\x85", "separador ", "mezcla \"q\" \n \\ '",
 ]
 
 
@@ -455,6 +456,33 @@ def test_la_clave_de_un_host_de_imagenes_se_lee_igual_que_se_escribio(valor):
     staged, _ = stage_image_hosts([], api_keys={"imgbb": valor, "ptpimg": "otra"})
 
     assert yaml.safe_load("\n".join(staged))["SCREENS"]["API_KEYS"] == {"imgbb": valor, "ptpimg": "otra"}
+
+
+def test_las_listas_de_un_cliente_sobreviven_al_staging():
+    """Uploadrr acepta una lista en automatic_management_paths: perderla (o
+    convertirla en una cadena) se llevaba por delante el resto de la entrada."""
+    yaml = pytest.importorskip("yaml")
+    lines = [
+        "TORRENT_CLIENTS:",
+        "  qbit: {'torrent_client': 'qbit', 'automatic_management_paths': ['/data/tv', '/data/mo vies', 'it''s'], "
+        "'content_layout': 'Original'}",
+    ]
+    staged, _ = stage_qbittorrent_config(lines, url="http://x:8080", username="u", password="p")
+
+    cargado = yaml.safe_load("\n".join(staged))["TORRENT_CLIENTS"][QBIT_CLIENT_KEY]
+    assert cargado["automatic_management_paths"] == ["/data/tv", "/data/mo vies", "it's"]
+    assert cargado["content_layout"] == "Original"
+    assert cargado["qbit_pass"] == "p"
+    assert get_child_inline_mapping(staged, "TORRENT_CLIENTS", QBIT_CLIENT_KEY)["automatic_management_paths"] == [
+        "/data/tv", "/data/mo vies", "it's"]
+
+
+def test_las_palabras_booleanas_de_yaml_11_se_leen_como_booleanos():
+    """PyYAML (el que lee Uploadrr) toma `no` como False: guardarlo como la
+    cadena 'no' dejaba la verificación del certificado activa."""
+    lines = ["TORRENT_CLIENTS:", "  qbit: {VERIFY_WEBUI_CERTIFICATE: no, enable_search: Yes, other: off, on: 'no'}"]
+    mapa = get_child_inline_mapping(lines, "TORRENT_CLIENTS", QBIT_CLIENT_KEY)
+    assert mapa == {"VERIFY_WEBUI_CERTIFICATE": False, "enable_search": True, "other": False, "on": "no"}
 
 
 def test_el_config_de_ejemplo_del_fork_se_sigue_leyendo():

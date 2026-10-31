@@ -17,6 +17,7 @@ seguro.
 from __future__ import annotations
 
 import ast
+import json
 import re
 from typing import Any, Optional
 
@@ -77,12 +78,23 @@ def set_block_key(lines: list[str], block: str, key: str, value: str, indent: in
     return f"{block}.{key} creado"
 
 
+# Entre comillas simples YAML pliega los saltos de línea y no admite controles.
+_NO_CABE_EN_COMILLAS_SIMPLES = re.compile("[\x00-\x08\x0a-\x1f\x7f-\x9f  ]")
+
+
 def yaml_scalar(value: Any) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
     if value is None:
         return "null"
+    if isinstance(value, (list, tuple)):
+        return "[" + ", ".join(yaml_scalar(v) for v in value) + "]"
     value = str(value)
+    if _NO_CABE_EN_COMILLAS_SIMPLES.search(value):
+        # Entre dobles y con escapes; los controles C1 y los separadores Unicode
+        # (que json deja tal cual) también, o YAML los leería como salto de línea.
+        doble = json.dumps(value, ensure_ascii=False)
+        return re.sub("[\x7f-\x9f  ]", lambda m: f"\\u{ord(m.group()):04x}", doble)
     return "'" + value.replace("'", "''") + "'"
 
 
@@ -92,13 +104,17 @@ def render_inline_mapping(mapping: dict[str, Any]) -> str:
     return "{" + ", ".join(f"{yaml_scalar(k)}: {yaml_scalar(v)}" for k, v in mapping.items()) + "}"
 
 
-_CLAVE = r"""'(?:[^']|'')*'|"(?:[^"\\]|\\.)*"|[^,{}:'"]+"""
-_VALOR = r"""'(?:[^']|'')*'|"(?:[^"\\]|\\.)*"|[^,{}]*?"""
-_PAR = re.compile(rf"\s*({_CLAVE})\s*:\s*({_VALOR})\s*(?:,|$)")
+_SIMPLES = r"'(?:[^']|'')*'"
+_DOBLES = r'"(?:[^"\\]|\\.)*"'
+_LISTA = r"\[(?:" + _SIMPLES + "|" + _DOBLES + r"|[^\]'\"])*\]"
+_CLAVE = _SIMPLES + "|" + _DOBLES + r"|[^,{}:'\"]+"
+_VALOR = _SIMPLES + "|" + _DOBLES + "|" + _LISTA + r"|[^,{}]*?"
+_PAR = re.compile(r"\s*(" + _CLAVE + r")\s*:\s*(" + _VALOR + r")\s*(?:,|$)")
+_ITEM = re.compile(r"\s*(" + _SIMPLES + "|" + _DOBLES + r"|[^,'\"]+?)\s*(?:,|$)")
 
 
-def _leer_escalar(texto: str) -> Any:
-    texto = texto.strip()
+def _sin_comillas(texto: str) -> Optional[str]:
+    """El contenido de un escalar entre comillas; None si no lo está."""
     if len(texto) >= 2 and texto[0] == texto[-1] == "'":
         return texto[1:-1].replace("''", "'")
     if len(texto) >= 2 and texto[0] == texto[-1] == '"':
@@ -106,8 +122,22 @@ def _leer_escalar(texto: str) -> Any:
             return ast.literal_eval(texto)
         except (ValueError, SyntaxError):
             return texto[1:-1]
-    if texto.lower() in {"true", "false"}:
-        return texto.lower() == "true"
+    return None
+
+
+def _leer_escalar(texto: str) -> Any:
+    texto = texto.strip()
+    entrecomillado = _sin_comillas(texto)
+    if entrecomillado is not None:
+        return entrecomillado
+    if texto[:1] == "[" and texto[-1:] == "]":
+        lista = _leer_lista(texto[1:-1])
+        return texto if lista is None else lista
+    # Las palabras que PyYAML (YAML 1.1) lee como booleano: solo en valores.
+    if re.fullmatch(r"yes|Yes|YES|true|True|TRUE|on|On|ON", texto):
+        return True
+    if re.fullmatch(r"no|No|NO|false|False|FALSE|off|Off|OFF", texto):
+        return False
     if texto.lower() in {"", "null", "none", "~"}:
         return None
     if re.fullmatch(r"-?\d+", texto):
@@ -117,10 +147,24 @@ def _leer_escalar(texto: str) -> Any:
     return texto
 
 
+def _leer_lista(cuerpo: str) -> Optional[list[Any]]:
+    """Los elementos de `[a, b]` (sin anidar), p. ej. automatic_management_paths."""
+    cuerpo = cuerpo.strip()
+    elementos: list[Any] = []
+    pos = 0
+    while pos < len(cuerpo):
+        elemento = _ITEM.match(cuerpo, pos)
+        if not elemento:
+            return None
+        elementos.append(_leer_escalar(elemento.group(1)))
+        pos = elemento.end()
+    return elementos
+
+
 def _leer_mapa_en_linea(cuerpo: str) -> Optional[dict[str, Any]]:
     """Lee `k: v, k: v` con escalares YAML (comillas simples o dobles, o sin
-    comillas), que es lo que escribe render_inline_mapping y lo que trae el
-    config de ejemplo del fork. None si algo no encaja."""
+    comillas) y listas de ellos, que es lo que escribe render_inline_mapping y
+    lo que trae el config de ejemplo del fork. None si algo no encaja."""
     cuerpo = cuerpo.strip()
     resultado: dict[str, Any] = {}
     pos = 0
@@ -128,7 +172,9 @@ def _leer_mapa_en_linea(cuerpo: str) -> Optional[dict[str, Any]]:
         par = _PAR.match(cuerpo, pos)
         if not par:
             return None
-        resultado[str(_leer_escalar(par.group(1)))] = _leer_escalar(par.group(2))
+        clave = par.group(1).strip()
+        entrecomillada = _sin_comillas(clave)
+        resultado[clave if entrecomillada is None else entrecomillada] = _leer_escalar(par.group(2))
         pos = par.end()
     return resultado
 

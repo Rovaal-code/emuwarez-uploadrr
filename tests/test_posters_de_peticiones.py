@@ -185,3 +185,28 @@ def test_la_migracion_no_se_traga_una_base_de_datos_bloqueada(db_conn, isolated_
     _migrate_request_items_posters(db_conn)
     columnas = {fila[1] for fila in db_conn.execute("PRAGMA table_info(request_items)")}
     assert {"tmdb_poster_url", "tmdb_backdrop_url"} <= columnas
+
+
+def test_dos_init_db_a_la_vez_no_fallan_por_la_columna_repetida(db_conn, isolated_db):
+    """La primera carga tras actualizar lanza varias peticiones y cada una pasa por init_db: si otra conexión añade la
+    columna justo antes, el ALTER de esta da «duplicate column name», que en require_auth sería un 401."""
+    from emuwarez_uploadrr.database import _migrate_request_items_posters, connect
+    for col in ("tmdb_poster_url", "tmdb_backdrop_url"):
+        db_conn.execute(f"ALTER TABLE request_items DROP COLUMN {col}")
+    db_conn.commit()
+    otra = connect(isolated_db / "emuwarez_uploadrr.db")
+
+    class OtraLaAnadeAntes:
+        primera = True
+
+        def execute(self, sql, *args):
+            if self.primera and sql.startswith("ALTER TABLE"):
+                self.primera = False
+                otra.execute(sql)
+                otra.commit()
+            return db_conn.execute(sql, *args)
+
+    _migrate_request_items_posters(OtraLaAnadeAntes())
+    otra.close()
+    columnas = {fila[1] for fila in db_conn.execute("PRAGMA table_info(request_items)")}
+    assert {"tmdb_poster_url", "tmdb_backdrop_url"} <= columnas

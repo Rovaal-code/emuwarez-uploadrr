@@ -1,4 +1,5 @@
-# El total solo informa (su mínimo lo pone pytest en el CI); las líneas nuevas o cambiadas de un PR deben llevar tests.
+# El total solo informa (su mínimo lo pone pytest en el CI); las líneas nuevas o cambiadas de emuwarez_uploadrr/ deben
+# llevar tests. El frontend no se mide.
 coverage:
   status:
     project:

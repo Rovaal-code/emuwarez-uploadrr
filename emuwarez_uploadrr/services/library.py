@@ -732,7 +732,8 @@ def sync_instance(
         # Sin capítulos no se recorren temporadas ni capítulos: no haberlos visto no dice que ya no estén.
         donde += " AND item_type IN ('movie', 'series')"
     borrados, peticiones = borrar_biblioteca(conn, donde, (instance.id, visto))
-    set_state(conn, sin_acabar, "0")
+    # Con series sin sincronizar el primer recorrido sigue sin acabar: sus capítulos aún no están y saldrían como nuevos.
+    set_state(conn, sin_acabar, "1" if fallos and not notify_missing else "0")
     conn.commit()
     if borrados:
         logger.info("Borrados %d elementos que %s «%s» ya no tiene", borrados, instance.type, instance.name)

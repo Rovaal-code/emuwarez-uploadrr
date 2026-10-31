@@ -60,17 +60,32 @@ export async function queueUpload(
   })
 }
 
-export async function getUploads(params?: {
+export interface UploadsQuery {
   status?: string; limit?: number; offset?: number; search?: string; library_item_id?: number
-}): Promise<UploadJob[]> {
+  // Sin las filas de antes de que un trabajo solo naciera al pulsar Subir: se quitan en el servidor,
+  // antes de aplicar el límite, para que no ocupen sitio en la página.
+  hide_preparatory?: boolean
+}
+
+function uploadsQueryString(params?: UploadsQuery): string {
   const qs = new URLSearchParams()
   if (params?.status) qs.set('status', params.status)
+  if (params?.hide_preparatory) qs.set('hide_preparatory', 'true')
   if (params?.limit != null) qs.set('limit', String(params.limit))
   if (params?.offset != null) qs.set('offset', String(params.offset))
   if (params?.search) qs.set('search', params.search)
   if (params?.library_item_id != null) qs.set('library_item_id', String(params.library_item_id))
   const query = qs.toString()
-  return api.get<UploadJob[]>(`/uploads${query ? `?${query}` : ''}`)
+  return query ? `?${query}` : ''
+}
+
+export async function getUploads(params?: UploadsQuery): Promise<UploadJob[]> {
+  return api.get<UploadJob[]>(`/uploads${uploadsQueryString(params)}`)
+}
+
+// Cuántas subidas hay con esos filtros, sin el límite de la lista: el «M» de «N de M».
+export async function countUploads(params?: Omit<UploadsQuery, 'limit' | 'offset'>): Promise<number> {
+  return (await api.get<{ total: number }>(`/uploads/count${uploadsQueryString(params)}`)).total
 }
 
 // "Automático": no wizard involved. The job appears immediately in Subidas
@@ -89,13 +104,17 @@ export async function getUploadJob(jobId: number): Promise<UploadJob> {
   return api.get<UploadJob>(`/uploads/${jobId}`)
 }
 
+// `afterSequence`: solo las líneas posteriores a esa (la `sequence` de la última que ya se tiene), para seguir una
+// subida en vivo sin bajar el registro entero cada vez.
 export async function getUploadJobLogs(
   jobId: number,
   limit = 500,
   offset = 0,
   tail = false,
+  afterSequence?: number,
 ): Promise<UploadJobLogsResponse> {
-  return api.get<UploadJobLogsResponse>(`/uploads/${jobId}/logs?limit=${limit}&offset=${offset}&tail=${tail}`)
+  const after = afterSequence != null ? `&after_sequence=${afterSequence}` : ''
+  return api.get<UploadJobLogsResponse>(`/uploads/${jobId}/logs?limit=${limit}&offset=${offset}&tail=${tail}${after}`)
 }
 
 export async function getUploadJobArtifacts(jobId: number): Promise<UploadArtifactsResponse> {

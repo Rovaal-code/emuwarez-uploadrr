@@ -183,6 +183,26 @@ def test_apply_real_renames_file_and_updates_db(isolated_db, tmp_path):
     conn.close()
 
 
+def test_si_falla_el_historial_la_biblioteca_sigue_al_fichero(isolated_db, tmp_path):
+    """El renombrado ya está hecho: aunque no se pueda guardar el historial,
+    `path` tiene que apuntar al nombre nuevo (antes se tragaba el error y la
+    fila seguía en la ruta vieja)."""
+    src = tmp_path / "source.mkv"
+    src.write_bytes(b"video bytes")
+    conn = _open(isolated_db)
+    item_id = _insert_item(conn, title="Test Film", path=str(src))
+    conn.execute("DROP TABLE filesystem_operations")
+    conn.commit()
+
+    result = apply_nomenclature_proposal(
+        item_id, dry_run=False, apply=True, confirmation=CONFIRMATION_TOKEN, conn=conn
+    )
+    assert result["status"] == "applied", result
+    row = conn.execute("SELECT path, prepared_path FROM library_items WHERE id = ?", (item_id,)).fetchone()
+    assert row["path"] == result["destination_path"] and Path(row["path"]).exists()
+    conn.close()
+
+
 # ---------------------------------------------------------------------------
 # filesystem_operations always saved
 # ---------------------------------------------------------------------------

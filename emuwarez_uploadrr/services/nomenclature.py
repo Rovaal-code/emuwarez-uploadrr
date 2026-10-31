@@ -965,8 +965,13 @@ def apply_nomenclature_proposal(
                 ),
             )
             fs_op_id = cursor.lastrowid
+            conn.commit()
+        except Exception:
+            # El historial es opcional; lo de abajo no.
+            logger.warning("No se pudo guardar el historial del renombrado (item %s)", item_id, exc_info=True)
 
-            if result.get("status") == "applied":
+        if result.get("status") == "applied":
+            try:
                 proposal = plan.get("proposal") or {}
                 pid = proposal.get("id")
                 dst = plan.get("destination_path")
@@ -990,9 +995,15 @@ def apply_nomenclature_proposal(
                        WHERE id = ?""",
                     (raw_dst, dst, now, now, item_id),
                 )
-            conn.commit()
-        except Exception:
-            pass
+                conn.commit()
+            except Exception as exc:
+                # El fichero ya se movió: si la biblioteca no lo sigue, los
+                # pasos siguientes lo buscarían en la ruta vieja.
+                logger.exception("Renombrado hecho pero sin anotar en la biblioteca (item %s)", item_id)
+                result["status"] = "failed"
+                result["errors"] = list(result.get("errors") or []) + [
+                    f"El archivo se renombró a {plan.get('destination_path')}, pero no se pudo "
+                    f"anotar en la base de datos: {exc}"]
 
         result["operation_id"] = fs_op_id
         for k, v in base_result.items():

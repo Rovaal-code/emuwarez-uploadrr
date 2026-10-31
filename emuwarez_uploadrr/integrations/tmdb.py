@@ -70,6 +70,35 @@ def get_movie_title(tmdb_id: int, *, language: str = "es-ES", api_key: str | Non
     return title or (data.get("original_title") or "").strip() or None
 
 
+def get_images(kind: str, tmdb_id: str, *, language: str = "es-ES", api_key: str | None = None,
+               conn=None) -> tuple[str | None, str | None]:
+    """(poster_path, backdrop_path) de /movie/{id} o /tv/{id} (`kind` = "movie" o "tv"); el póster sale en ese
+    idioma si TMDb lo tiene."""
+    _key = api_key or _get_tmdb_api_key(conn)
+    if not _key:
+        raise IntegrationError("TMDb API key no configurada")
+    data = request_json("GET", f"{_TMDB_BASE}/{kind}/{tmdb_id}?api_key={_key}&language={language}")
+    if not isinstance(data, dict):
+        return None, None
+    return data.get("poster_path") or None, data.get("backdrop_path") or None
+
+
+def find_images_by_imdb(imdb_id: str, *, language: str = "es-ES", api_key: str | None = None,
+                        conn=None) -> tuple[str | None, str | None]:
+    """(poster_path, backdrop_path) de lo que TMDb tenga con ese IMDb, película o serie: sirve cuando no se sabe
+    cuál es (los documentales), porque TMDb numera aparte películas y series."""
+    _key = api_key or _get_tmdb_api_key(conn)
+    if not _key:
+        raise IntegrationError("TMDb API key no configurada")
+    data = request_json(
+        "GET", f"{_TMDB_BASE}/find/{imdb_id}?api_key={_key}&external_source=imdb_id&language={language}")
+    for key in ("movie_results", "tv_results"):
+        resultados = data.get(key) if isinstance(data, dict) else None
+        if resultados:
+            return resultados[0].get("poster_path") or None, resultados[0].get("backdrop_path") or None
+    return None, None
+
+
 def map_tmdb_provider_to_emu_provider(provider_name: str) -> str | None:
     """Convenience wrapper — delegates to source_assistant."""
     from ..services.source_assistant import map_tmdb_provider_to_emu_provider as _map

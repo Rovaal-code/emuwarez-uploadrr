@@ -10,3 +10,4 @@ coverage:
 comment:
   layout: "diff, flags, files"
   require_changes: true
+  require_bundle_changes: true

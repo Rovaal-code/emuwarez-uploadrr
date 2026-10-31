@@ -170,8 +170,8 @@ python -m pytest tests -q -p no:cacheprovider
 cd frontend && npm ci && npx tsc --noEmit && npx vitest run && npx vite build
 ```
 
-En cada PR, el CI pasa las reglas graves de `ruff`, los tests del backend con una cobertura mínima del 78 % y `tsc`
-y `vitest` del frontend (`vite build` no). Un PR que solo toca `frontend/`, `docs/` o ficheros `.md` limita los
+En cada PR, el CI pasa las reglas graves de `ruff`, los tests del backend con una cobertura mínima del 78 % y `tsc`,
+`vitest` y `vite build` del frontend. Un PR que solo toca `frontend/`, `docs/` o ficheros `.md` limita los
 tests del backend a los que mencionan el frontend, sin mínimo de cobertura. Si toca `.github/`, [zizmor](https://docs.zizmor.sh) revisa los
 workflows y `dependabot.yml`.
 

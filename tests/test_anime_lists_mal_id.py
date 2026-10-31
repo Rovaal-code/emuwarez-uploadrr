@@ -122,3 +122,18 @@ def test_una_lista_vacia_o_recortada_no_borra_la_tabla(db_conn, monkeypatch):
         monkeypatch.setattr(anime_lists, "request_json", lambda *a, _r=respuesta, **k: _r)
         anime_lists.ensure_anime_id_map(db_conn, force=True)
         assert db_conn.execute("SELECT COUNT(*) FROM anime_id_map").fetchone()[0] == 10
+
+
+def test_tras_un_fallo_no_se_reintenta_en_cada_fila(db_conn, monkeypatch):
+    """La sincronización llama a ensure_anime_id_map por cada fila: un fallo no
+    puede volver a bajar el fichero 55 000 veces."""
+    from emuwarez_uploadrr.services import anime_lists
+    llamadas = []
+
+    def _vacia(*a, **k):
+        llamadas.append(1)
+        return []
+    monkeypatch.setattr(anime_lists, "request_json", _vacia)
+    for _ in range(5):
+        anime_lists.ensure_anime_id_map(db_conn)
+    assert len(llamadas) == 1

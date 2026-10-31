@@ -25,11 +25,23 @@ def test_find_emu_description_file_exact_candidate_match(tmp_path):
 
 def test_find_emu_description_file_falls_back_to_most_recent(tmp_path):
     # Neither candidate name matches any real folder — falls back to
-    # scanning tmp/ for the most recently modified [EMU]DESCRIPTION.txt.
+    # scanning tmp/ for the most recently modified [EMU]DESCRIPTION.txt
+    # written since the job started.
     _make_desc(tmp_path, "SomeOtherFolder", "no trailer here")
-    found = find_emu_description_file(str(tmp_path), ["Nonexistent.Name"])
+    found = find_emu_description_file(str(tmp_path), ["Nonexistent.Name"], desde="2000-01-01T00:00:00+00:00")
     assert found is not None
     assert found.parent.name == "SomeOtherFolder"
+
+
+def test_no_coge_la_descripcion_de_una_subida_anterior(tmp_path):
+    """Sin carpeta con el nombre esperado, la de antes del trabajo no vale:
+    enseñaba el trailer de la subida anterior como si fuera de esta."""
+    import os
+    vieja = _make_desc(tmp_path, "Otra.Peli.2023", "[youtube]viejo[/youtube]")
+    os.utime(vieja, (1_000_000_000, 1_000_000_000))
+    assert check_trailer_for_job(str(tmp_path), ["Esta.Peli"], desde="2026-10-31T10:00:00+00:00") == {
+        "checked": False, "found": False, "url": None}
+    assert find_emu_description_file(str(tmp_path), ["Esta.Peli"]) is None
 
 
 def test_find_emu_description_file_missing_tmp_dir(tmp_path):

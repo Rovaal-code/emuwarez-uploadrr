@@ -19,18 +19,33 @@ from __future__ import annotations
 
 import glob
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
 _YOUTUBE_RE = re.compile(r"\[youtube\]\s*([A-Za-z0-9_-]+)\s*\[/youtube\]", re.I)
 
 
-def find_emu_description_file(uploadrr_path: str, candidate_names: list[str]) -> Optional[Path]:
+def _instante(desde) -> Optional[float]:
+    """`desde` (el started_at ISO del trabajo) como marca de tiempo; None si no hay."""
+    if not desde:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(desde))
+    except ValueError:
+        return None
+    return (dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)).timestamp()
+
+
+def find_emu_description_file(uploadrr_path: str, candidate_names: list[str],
+                              desde=None) -> Optional[Path]:
     """Locate the [EMU]DESCRIPTION.txt Uploadrr-EMU generated for this
     upload. `candidate_names` are the tmp/ subfolder names most likely to
     match (the applied filename for a single file, the season-pack's own
     eMuwarez title for a pack) — checked first since they're exact and free;
-    the mtime-sorted scan of the whole tmp/ tree is the fallback."""
+    the mtime-sorted scan of the whole tmp/ tree is the fallback, and it only
+    accepts a file written after `desde` (when the job started): otherwise it
+    picked up the previous job's description and reported its trailer."""
     if not uploadrr_path:
         return None
     tmp_dir = Path(uploadrr_path) / "tmp"
@@ -56,6 +71,13 @@ def find_emu_description_file(uploadrr_path: str, candidate_names: list[str]) ->
         )
     except OSError:
         return None
+    limite = _instante(desde)
+    if limite is None:
+        return None
+    try:
+        candidates = [c for c in candidates if c.stat().st_mtime >= limite]
+    except OSError:
+        return None
     if not candidates:
         return None
 
@@ -77,12 +99,12 @@ def extract_youtube_trailer_url(description_file: Path) -> Optional[str]:
     return f"https://www.youtube.com/watch?v={m.group(1)}"
 
 
-def check_trailer_for_job(uploadrr_path: str, candidate_names: list[str]) -> dict:
+def check_trailer_for_job(uploadrr_path: str, candidate_names: list[str], desde=None) -> dict:
     """{checked, found, url}. `checked=False` means the description file
     itself couldn't be located at all (inconclusive — say nothing rather
     than falsely claim "no trailer"). `checked=True, found=False` means the
     file WAS read but had no [youtube] tag — a real "not found"."""
-    desc_file = find_emu_description_file(uploadrr_path, candidate_names)
+    desc_file = find_emu_description_file(uploadrr_path, candidate_names, desde=desde)
     if not desc_file:
         return {"checked": False, "found": False, "url": None}
     url = extract_youtube_trailer_url(desc_file)

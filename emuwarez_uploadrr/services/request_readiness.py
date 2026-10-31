@@ -22,6 +22,8 @@ from typing import Any, Optional
 from ..models import LocalStatus
 from .compatibility import (
     TIPO_DE_FILA,
+    compare_resolution,
+    compare_source,
     match_request_to_library,
     classify_request_match,
     normalize_title,
@@ -345,14 +347,18 @@ def score_request_candidate(req: dict, lib: dict) -> dict:
 def select_best_candidate(candidates: list[dict]) -> Optional[dict]:
     """Pick the best candidate from a scored list: the surest match first (an ID
     match before a title one, so a wrong title match that happens to be ready
-    never beats the right item), then real readiness status (most-actionable
-    first, see _STATUS_RANK), then compatibility_score. This is candidate
-    matching, not a "priority" ranking — no numeric priority score/bucket involved."""
+    never beats the right item), then the copy that meets more of what the
+    request asks (resolution and source: with Radarr and Radarr 4K, a ready 1080p
+    copy must not beat the 2160p one a 2160p request asks for), then real
+    readiness status (most-actionable first, see _STATUS_RANK), and only then
+    compatibility_score, whose remaining bonuses (the request's year) say nothing
+    about the copy. This is candidate matching, not a "priority" ranking — no
+    numeric priority score/bucket involved."""
     if not candidates:
         return None
     return sorted(
         candidates,
-        key=lambda c: (-c["match_confidence"], _STATUS_RANK.get(c["readiness_status"], 99),
+        key=lambda c: (-c["match_confidence"], -c["cumple"], _STATUS_RANK.get(c["readiness_status"], 99),
                        -c["compatibility_score"]),
     )[0]
 
@@ -412,6 +418,10 @@ def build_request_candidates(
         scored["candidate_rank"] = rank
         scored["library_item_id"] = lib["id"]
         scored["match_confidence"] = m["confidence"]
+        # Cuántas de las dos cosas que se piden (resolución y fuente) cumple esta copia.
+        scored["cumple"] = sum(r is not False for r in (
+            compare_resolution(req.get("requested_resolution"), lib.get("resolution")),
+            compare_source(req.get("requested_source"), lib.get("source"))))
         candidates.append(scored)
 
     return candidates

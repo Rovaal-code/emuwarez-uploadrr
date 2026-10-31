@@ -159,8 +159,9 @@ def emu_fetch_all_torrents(
     Incremental: when `stop_after_id` is given, the walk stops as soon as a
     torrent already known (id <= stop_after_id) is reached — so only the
     newly-uploaded torrents come back, instead of re-downloading the whole
-    catalog. The catalog's default order is created_at desc, so ids decrease as
-    we page and the first known id means everything after it is known too.
+    catalog. Se pide ordenado por created_at desc (UNIT3D ordena por defecto por bumped_at, y un torrent
+    antiguo resubido saldría el primero y cortaría el recorrido): los ids bajan página a página y el primer
+    id conocido significa que lo que sigue también se conoce.
 
     Requests are paced to `min_interval` seconds apart (rate limit).
 
@@ -175,7 +176,10 @@ def emu_fetch_all_torrents(
     while page <= max_pages and not reached_known:
         if page > 1:
             time.sleep(min_interval)  # rate limit (see EMU_MIN_REQUEST_INTERVAL)
-        url = build_url(base, "/api/torrents/filter", {"api_token": api_key, "perPage": str(per_page), "page": str(page)})
+        url = build_url(base, "/api/torrents/filter", {
+            "api_token": api_key, "perPage": str(per_page), "page": str(page),
+            "sortField": "created_at", "sortDirection": "desc",
+        })
         data = _pedir_pagina(url)
         items = data.get("data") if isinstance(data, dict) else None
         meta = data.get("meta") if isinstance(data, dict) else None

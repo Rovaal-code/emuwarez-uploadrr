@@ -206,3 +206,11 @@ def test_un_fallo_del_progreso_no_corta_la_descarga(pedidas):
         raise RuntimeError("barra rota")
 
     assert [t["id"] for t in emu.emu_fetch_all_torrents("KEY", min_interval=0, progress=roto)] == [1]
+
+
+def test_el_catalogo_se_pide_ordenado_por_fecha_de_creacion(pedidas):
+    """PET-5: sin orden explícito UNIT3D usa bumped_at y un torrent resubido cortaba el recorrido incremental."""
+    pedidas["respuestas"] = [_pagina([3, 2, 1])]
+    emu.emu_fetch_all_torrents("KEY", min_interval=0)
+    consulta = _partes(pedidas["urls"][0])[2]
+    assert (consulta["sortField"], consulta["sortDirection"]) == ("created_at", "desc")

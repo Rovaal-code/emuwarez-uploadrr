@@ -13,6 +13,11 @@ jobs:
   claude:
     if: github.event.comment.user.login == 'Kisnov' && contains(github.event.comment.body, '@claude')
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Una a una por issue o PR: varias menciones seguidas no lanzan agentes en paralelo.
+    concurrency:
+      group: claude-${{ github.event.issue.number || github.event.pull_request.number }}
+      cancel-in-progress: false
     permissions:
       contents: write
       pull-requests: write

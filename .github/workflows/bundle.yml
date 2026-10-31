@@ -4,12 +4,14 @@ name: Bundle
 on:
   push:
     branches: [master]
+    paths: ['frontend/**', '.github/workflows/bundle.yml']
 
 permissions: {}
 
 jobs:
   bundle:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     defaults:

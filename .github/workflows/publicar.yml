@@ -40,6 +40,7 @@ jobs:
   decidir:
     if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     outputs:
@@ -107,6 +108,7 @@ jobs:
       ((needs.decidir.outputs.accion == 'publicar' && needs.tests.result == 'success') ||
        needs.decidir.outputs.accion == 'prueba')
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       contents: write
       packages: write

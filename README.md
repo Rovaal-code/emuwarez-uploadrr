@@ -160,6 +160,12 @@ La imagen se publica con varias etiquetas, y `EMUWAREZ_UPLOADRR_TAG` (en el `.en
 EMUWAREZ_UPLOADRR_TAG=0.11.0 docker compose up -d
 ```
 
+Si la versión nueva cambió el esquema de la base, la versión vieja no arranca y lo dice en el registro: la base ya
+no es la suya. Antes de migrar, la app deja una copia en `/config/backups/pre-migracion-*.db` (las tres últimas).
+Para volver atrás, para el contenedor, copia esa copia sobre `/config/emuwarez_uploadrr.db`, borra los
+`emuwarez_uploadrr.db-wal` y `-shm` que haya al lado y arranca la versión vieja; lo que se hizo desde la
+actualización se pierde.
+
 ### Construir la imagen tú mismo
 
 ```bash

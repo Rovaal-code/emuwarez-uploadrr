@@ -17,7 +17,7 @@
  * el historial del navegador. Así que `fetch` leyendo la respuesta a trozos, y
  * la reconexión —que `EventSource` regala— hay que escribirla: es lo de abajo.
  */
-import { getToken } from './client'
+import { api, esSesionCaducada, getToken } from './client'
 
 export interface Aviso {
   tipo: string
@@ -32,6 +32,10 @@ export const ESPERAS_MS = [1000, 2000, 5000, 10_000, 30_000]
 export function esperaDelIntento(intento: number): number {
   return ESPERAS_MS[Math.min(intento, ESPERAS_MS.length - 1)]
 }
+
+/** Si en este tiempo no llega ni una línea, el canal se da por muerto. El
+ *  servidor manda un latido cada 20 s, así que son dos seguidos sin llegar. */
+export const VIGILANCIA_MS = 45_000
 
 /**
  * Saca los avisos completos de lo que se lleva leído.
@@ -67,9 +71,10 @@ export function extraerAvisos(acumulado: string): { avisos: Aviso[]; resto: stri
  * Se conecta y llama a `alRecibir` con cada aviso. Devuelve la función para
  * cortar, que hay que llamar al desmontar.
  *
- * Se reconecta sola salvo en dos casos: que la corten a propósito, o que el
- * servidor conteste 401 — ahí el token ya no vale y reintentar sería aporrear
- * la puerta.
+ * Se reconecta sola salvo que la corten a propósito o que la sesión haya
+ * caducado de verdad: ante un 401 se pregunta a /auth/me, porque un 401 de
+ * mentira (la base ocupada, un proxy) no puede dejar el canal parado para
+ * siempre.
  *
  * Uso directo solo desde `suscribirse`, que es quien se encarga de que haya UNA
  * conexión para toda la aplicación y no una por pantalla.
@@ -79,6 +84,19 @@ function escucharEventos(alRecibir: (aviso: Aviso) => void): () => void {
   let intento = 0
   let control: AbortController | null = null
   let reintento: ReturnType<typeof setTimeout> | null = null
+  let vigilante: ReturnType<typeof setTimeout> | null = null
+
+  // Un socket que muere sin avisar (suspensión, cambio de wifi, un proxy que
+  // corta lo inactivo) no hace fallar a `read()`: sin esto el canal seguiría
+  // «vivo» y las pantallas, en su sondeo lento, sin enterarse.
+  const vigilar = (): void => {
+    if (vigilante) clearTimeout(vigilante)
+    vigilante = setTimeout(() => control?.abort(), VIGILANCIA_MS)
+  }
+  const dejarDeVigilar = (): void => {
+    if (vigilante) clearTimeout(vigilante)
+    vigilante = null
+  }
 
   const conectar = async (): Promise<void> => {
     if (cortado) return
@@ -86,12 +104,20 @@ function escucharEventos(alRecibir: (aviso: Aviso) => void): () => void {
     if (!token) { programarReintento(); return }
 
     control = new AbortController()
+    vigilar()
     try {
       const respuesta = await fetch('/api/eventos', {
         headers: { Authorization: `Bearer ${token}`, Accept: 'text/event-stream' },
         signal: control.signal,
       })
-      if (respuesta.status === 401) return          // sesión caducada: no insistir
+      if (respuesta.status === 401) {
+        dejarDeVigilar()
+        // Si la sesión caducó de verdad, esto limpia el token y manda al login
+        // (client.ts); si no, el 401 fue de mentira y se reintenta.
+        try { await api.get('/auth/me') } catch (err) { if (esSesionCaducada(err)) return }
+        programarReintento()
+        return
+      }
       if (!respuesta.ok || !respuesta.body) { programarReintento(); return }
 
       // Conectados. Se reinicia la cuenta para que la siguiente caída vuelva a
@@ -104,6 +130,7 @@ function escucharEventos(alRecibir: (aviso: Aviso) => void): () => void {
       for (;;) {
         const { done, value } = await lector.read()
         if (done) break
+        vigilar()
         acumulado += decodificador.decode(value, { stream: true })
         const { avisos, resto } = extraerAvisos(acumulado)
         acumulado = resto
@@ -120,6 +147,7 @@ function escucharEventos(alRecibir: (aviso: Aviso) => void): () => void {
   }
 
   const programarReintento = (): void => {
+    dejarDeVigilar()
     marcarVivo(false)         // las pantallas vuelven al sondeo rápido
     if (cortado) return
     const espera = esperaDelIntento(intento++)
@@ -131,6 +159,7 @@ function escucharEventos(alRecibir: (aviso: Aviso) => void): () => void {
   return () => {
     cortado = true
     if (reintento) clearTimeout(reintento)
+    dejarDeVigilar()
     control?.abort()
   }
 }

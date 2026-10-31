@@ -327,10 +327,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_restore.add_argument("--apply", action="store_true", dest="maint_apply", help="Aplicar restauración real")
     p_restore.add_argument("--confirm", metavar="TOKEN", dest="confirm", help="Token: RESTAURAR_CONFIG")
 
-    p_export = maint_sub.add_parser("export-settings", help="Exportar ajustes (secretos enmascarados por defecto)")
-    p_export.add_argument("--include-secrets", action="store_true", help="Incluir secretos sin enmascarar")
-    p_export.add_argument("--confirm", metavar="TOKEN", dest="confirm", help="Token para secretos: EXPORTAR_SECRETOS")
-
     maint_sub.add_parser("db-integrity", help="PRAGMA integrity_check (solo lectura)")
 
     p_vacuum = maint_sub.add_parser("db-vacuum", help="VACUUM en la BD SQLite")
@@ -1547,8 +1543,7 @@ def cmd_web_info() -> int:
 
 
 def cmd_maintenance(args) -> int:
-    import json as _json
-    from emuwarez_uploadrr.services import backup_service, config_export, maintenance_service
+    from emuwarez_uploadrr.services import backup_service, maintenance_service
 
     cmd = args.maintenance_command
 
@@ -1601,19 +1596,6 @@ def cmd_maintenance(args) -> int:
             print(f"✓ {result.get('message') or result.get('action')}")
             if result.get("dry_run"):
                 print(f"  Archivos en el backup: {result.get('files_in_archive', 0)}")
-        else:
-            print(f"✗ {result.get('error')}")
-        return 0 if result.get("ok") else 1
-
-    if cmd == "export-settings":
-        result = config_export.export_settings(
-            include_secrets=getattr(args, "include_secrets", False),
-            confirmation=getattr(args, "confirm", None),
-        )
-        if result.get("ok"):
-            print(_json.dumps(result.get("settings", {}), indent=2, ensure_ascii=False))
-            if result.get("secrets_masked"):
-                print("\n(Secretos enmascarados — usa --include-secrets --confirm EXPORTAR_SECRETOS para verlos)")
         else:
             print(f"✗ {result.get('error')}")
         return 0 if result.get("ok") else 1

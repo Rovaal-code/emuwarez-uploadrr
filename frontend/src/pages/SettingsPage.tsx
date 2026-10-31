@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef, createContext, useContext } f
 import { setUnsavedGuard, guardedLeave } from '../utils/unsavedGuard'
 import {
   getMaintenanceStatus,
-  exportSettings,
   createBackup,
   listBackups,
   restoreBackup,
@@ -1568,35 +1567,8 @@ function MaintenanceTab() {
     } finally { setBusy(false) }
   }
 
-  async function handleExportSettings() {
-    setBusy(true)
-    try {
-      const r = await exportSettings(false)
-      if (r.ok && r.settings) {
-        const blob = new Blob([JSON.stringify(r.settings, null, 2)], { type: 'application/json' })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = 'emuwarez_settings_export.json'
-        a.click()
-        URL.revokeObjectURL(url)
-        addResult('export', true, `✓ Ajustes exportados (secretos enmascarados)`)
-      } else {
-        addResult('export', false, `✗ ${r.error}`)
-      }
-    } catch (e: unknown) {
-      addResult('export', false, `✗ ${e instanceof Error ? e.message : String(e)}`)
-    } finally { setBusy(false) }
-  }
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div className="placeholder-card">
-        <h3>Ajustes</h3>
-        <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: '0 0 10px' }}>Exporta los ajustes actuales en JSON (secretos enmascarados).</p>
-        <button className="btn btn-secondary" onClick={handleExportSettings} disabled={busy}>Exportar ajustes (JSON)</button>
-      </div>
-
       <div className="placeholder-card">
         <h3>Integridad de la base de datos</h3>
         <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: '0 0 10px' }}>Ejecuta <code>PRAGMA integrity_check</code> (solo lectura).</p>

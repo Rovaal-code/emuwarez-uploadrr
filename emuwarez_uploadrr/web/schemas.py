@@ -1227,13 +1227,6 @@ class RestoreRequest(BaseModel):
     confirmation: Optional[str] = None
 
 
-class ImportSettingsRequest(BaseModel):
-    payload: dict[str, Any]
-    dry_run: bool = True
-    apply: bool = False
-    confirmation: Optional[str] = None
-
-
 class VacuumRequest(BaseModel):
     dry_run: bool = True
     apply: bool = False

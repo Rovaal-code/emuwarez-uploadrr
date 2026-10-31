@@ -22,10 +22,11 @@ from typing import Any, Optional
 from ..models import LocalStatus
 from .compatibility import (
     classify_request_match,
-    emu_override_status,
+    estado_emu_de,
     match_request_to_library,
     parse_resolution,
     parse_source,
+    reclamada_por,
 )
 
 
@@ -107,16 +108,21 @@ _STATUS_RANK: dict[str, int] = {
     "file_missing": 9,
     "import_error": 10,
     "claimed": 11,
-    "filled": 12,
-    "already_exists": 13,
-    "uploaded": 14,
+    "claimed_unknown": 12,
+    "pending_approval": 13,
+    "filled": 14,
+    "already_exists": 15,
+    "uploaded": 16,
 }
 
-# Por qué una petición que ya no está abierta para ti no es «lista para subir».
+# Por qué una petición que no está abierta para ti no es «lista para subir». La reclamada por ti no está aquí:
+# esa sí se puede subir. Si no se sabe quién la reclamó, se trata como de otro.
 _ESTADO_EMU_BLOQUEA = {
-    "Reclamado": ("claimed", "petición reclamada en eMuwarez"),
-    "Pendiente": ("claimed", "petición pendiente de aprobación en eMuwarez"),
-    "Llena": ("filled", "petición ya llena en eMuwarez"),
+    ("Reclamado", "otro"): ("claimed", "petición reclamada por otro usuario en eMuwarez"),
+    ("Reclamado", "desconocido"): (
+        "claimed_unknown", "petición reclamada en eMuwarez; no se sabe por quién y se trata como de otro"),
+    ("Pendiente", None): ("pending_approval", "petición pendiente de aprobación en eMuwarez"),
+    ("Llena", None): ("filled", "petición ya llena en eMuwarez"),
 }
 
 
@@ -127,6 +133,7 @@ def _evaluate_readiness(
     compat_reasons: list[str],
     readiness_reasons: list[str],
     variante_en_emuwarez: bool = True,
+    mi_usuario: Optional[str] = None,
 ) -> dict:
     """Apply readiness rules. Returns status, action, blockers, reasons.
 
@@ -162,9 +169,13 @@ def _evaluate_readiness(
         return {"status": "uploaded", "action": "view_upload", "blockers": [], "reasons": reasons}
 
     # La petición no está abierta para ti: otro la ha reclamado, espera aprobación o ya está llena.
-    estado_emu = _ESTADO_EMU_BLOQUEA.get(emu_override_status(req.get("emu_status")) or "")
-    if estado_emu:
-        return {"status": estado_emu[0], "action": "none", "blockers": [estado_emu[1]], "reasons": reasons}
+    estado = estado_emu_de(req, mi_usuario)
+    if estado:
+        quien = reclamada_por(req, mi_usuario) if estado == "Reclamado" else None
+        status, motivo = _ESTADO_EMU_BLOQUEA[(estado, quien)]
+        return {"status": status, "action": "none", "blockers": [motivo], "reasons": reasons}
+    if reclamada_por(req, mi_usuario) == "ti":
+        reasons.append("petición reclamada por ti")
 
     # Ya está en eMuwarez y tu copia no aporta nada (ni resolución, ni fuente, ni idioma): sería un duplicado.
     # Pero una petición está abierta porque falta SU variante: si eMuwarez no la tiene, no es un duplicado.
@@ -239,14 +250,16 @@ def _evaluate_readiness(
 
 def score_request_candidate(
     req: dict, lib: dict, cls: Optional[dict] = None, variante_en_emuwarez: bool = True,
+    mi_usuario: Optional[str] = None,
 ) -> dict:
     """Score a single (request, library_item) pair. `cls`: su clasificación, si ya se calculó con lo que de verdad
     tiene lo pedido (los capítulos de una temporada); si no, se clasifica `lib` tal cual."""
     if cls is None:
-        cls = classify_request_match(req, lib)
+        cls = classify_request_match(req, lib, mi_usuario=mi_usuario)
     readiness_score, readiness_reasons = _compute_upload_readiness_score(lib)
 
-    readiness_result = _evaluate_readiness(lib, req, cls, cls["reasons"], readiness_reasons, variante_en_emuwarez)
+    readiness_result = _evaluate_readiness(
+        lib, req, cls, cls["reasons"], readiness_reasons, variante_en_emuwarez, mi_usuario)
 
     return {
         "library_item_id": lib.get("id"),
@@ -320,7 +333,9 @@ def build_request_candidates(
         return []
 
     from .emu_catalog import catalogo_cubre
-    from .requests import _scoped_library_id, clasificar_peticion
+    from .requests import _scoped_library_id, clasificar_peticion, mi_usuario_emu
+
+    mi_usuario = mi_usuario_emu(conn) or ""
 
     candidates = []
     for rank, m in enumerate(raw_matches[:10], start=1):
@@ -335,14 +350,14 @@ def build_request_candidates(
         # «Compatible» lo decide la misma función que la lista de peticiones (resolución y fuente pedidas, y la
         # temporada por su peor capítulo); aquí solo se añade lo que hace falta para poder subirlo.
         _, cls = clasificar_peticion(conn, req, lib, id_match=m["id_match"], title_match=m["title_match"],
-                                     base_confidence=m["confidence"])
+                                     base_confidence=m["confidence"], mi_usuario=mi_usuario)
         lib.update(pedida)
         variante = True
         if lib.get("emu_in_catalog") == 1 and not json.loads(lib.get("emu_aportes") or "[]"):
             pide_res = req.get("requested_resolution") if parse_resolution(req.get("requested_resolution")) else None
             pide_tipo = req.get("requested_source") if parse_source(req.get("requested_source")) else None
             variante = not (pide_res or pide_tipo) or catalogo_cubre(conn, destino, pide_res, pide_tipo)
-        scored = score_request_candidate(req, lib, cls, variante)
+        scored = score_request_candidate(req, lib, cls, variante, mi_usuario)
         scored["candidate_rank"] = rank
         scored["library_item_id"] = lib["id"]
         scored["match_confidence"] = m["confidence"]

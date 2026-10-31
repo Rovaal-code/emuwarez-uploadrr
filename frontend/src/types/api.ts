@@ -292,6 +292,8 @@ export interface RequestItemResponse {
   votes: number | null
   author: string | null
   is_mine: boolean
+  // Quién la tiene reclamada en eMuwarez; null si no está reclamada.
+  reclamada_por?: 'ti' | 'otro' | 'desconocido' | null
   req_scope: string | null
   req_season: number | null
   req_episode: number | null

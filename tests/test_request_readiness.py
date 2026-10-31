@@ -403,7 +403,8 @@ def test_una_copia_igual_o_mejor_que_lo_pedido_si_esta_lista(db_conn):
 
 
 @pytest.mark.parametrize("emu_status, esperado", [
-    ("claimed", "claimed"), ("Reclamado", "claimed"), ("pending", "claimed"), ("filled", "filled"),
+    ("claimed", "claimed_unknown"), ("Reclamado", "claimed_unknown"), ("pending", "pending_approval"),
+    ("filled", "filled"),
 ])
 def test_una_peticion_reclamada_pendiente_o_llena_no_esta_lista(db_conn, emu_status, esperado):
     from emuwarez_uploadrr.services.request_readiness import evaluate_request_readiness
@@ -413,6 +414,57 @@ def test_una_peticion_reclamada_pendiente_o_llena_no_esta_lista(db_conn, emu_sta
     result = evaluate_request_readiness(req_id, db_conn)
     assert (result["status"], result["recommended_action"]) == (esperado, "none")
     assert "eMuwarez" in result["blockers"][0]
+
+
+def _reclamada_por(conn, req_id, claimed_by="__sin__", perfil="Gabriel"):
+    """La petición queda `claimed` en eMuwarez; `perfil` es el usuario del perfil guardado (None = sin perfil)."""
+    import json
+    from emuwarez_uploadrr.database import set_json_state
+    raw = {"id": 1, "status": "claimed"}
+    if claimed_by != "__sin__":
+        raw["claimed_by"] = claimed_by
+    conn.execute("UPDATE request_items SET raw_json = ? WHERE id = ?", (json.dumps(raw), req_id))
+    if perfil:
+        set_json_state(conn, "emu.perfil", {"perfil": {"username": perfil}})
+    conn.commit()
+
+
+def _dune_reclamada(db_conn, claimed_by="__sin__", perfil="Gabriel"):
+    from emuwarez_uploadrr.services.request_readiness import evaluate_request_readiness
+    _dune_lista(db_conn, resolution="2160p", source="Remux")
+    req_id = _insert_request(db_conn, emu_id="emu-d", title="Dune", tmdb_id="d1",
+                             requested_resolution="2160p", requested_source="Remux", emu_status="claimed")
+    _reclamada_por(db_conn, req_id, claimed_by, perfil)
+    return evaluate_request_readiness(req_id, db_conn)
+
+
+@pytest.mark.parametrize("claimed_by", ["gabriel", "GABRIEL", {"username": "Gabriel"}])
+def test_una_peticion_reclamada_por_ti_si_esta_lista(db_conn, claimed_by):
+    """Gabriel: la que reclamó él mismo no le impide subirla, aunque la copia cumpla igual que en las de otro."""
+    result = _dune_reclamada(db_conn, claimed_by)
+    assert (result["status"], result["recommended_action"]) == ("ready_to_upload", "upload")
+    assert "petición reclamada por ti" in result["reasons"]
+
+
+def test_una_peticion_reclamada_por_otro_bloquea(db_conn):
+    result = _dune_reclamada(db_conn, "Ana")
+    assert (result["status"], result["recommended_action"]) == ("claimed", "none")
+    assert "otro usuario" in result["blockers"][0]
+
+
+@pytest.mark.parametrize("claimed_by, perfil", [("__sin__", "Gabriel"), (77, "Gabriel"), ("Gabriel", None)])
+def test_una_reclamada_sin_saber_por_quien_se_trata_como_de_otro(db_conn, claimed_by, perfil):
+    """Sin claimed_by, con un id numérico, o sin perfil guardado con el que compararlo."""
+    result = _dune_reclamada(db_conn, claimed_by, perfil)
+    assert result["status"] == "claimed_unknown"
+    assert "no se sabe por quién" in result["blockers"][0]
+
+
+def test_sin_perfil_guardado_vale_el_usuario_de_ajustes(db_conn):
+    from emuwarez_uploadrr.services.settings import set_setting
+    set_setting(db_conn, "emu.username", "gabriel")
+    db_conn.commit()
+    assert _dune_reclamada(db_conn, "Gabriel", perfil=None)["status"] == "ready_to_upload"
 
 
 def test_los_candidatos_guardados_dicen_lo_mismo_que_la_lista(db_conn):

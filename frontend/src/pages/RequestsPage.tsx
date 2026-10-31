@@ -10,7 +10,7 @@ import { ErrorState } from '../components/ErrorState'
 import { EmptyState, FilaVacia } from '../components/EmptyState'
 import { SyncInfo } from '../components/SyncInfo'
 import { StatusBadge } from '../components/StatusBadge'
-import { getReadinessActionLabel, getReadinessLabel, getRequestStatusInfo } from '../utils/status'
+import { getReadinessActionLabel, getReadinessLabel, getReclamadaInfo, getRequestStatusInfo } from '../utils/status'
 import { HoverTitle, useTooltip } from '../components/Tooltip'
 import { useSync } from '../context/SyncContext'
 import { UploadWizardModal } from '../components/UploadWizardModal'
@@ -192,11 +192,27 @@ function cellMark(v: boolean | null) {
 
 const baseName = (path: string | null) => (path ? path.split('/').pop() || null : null)
 
-function CompatibilityBadge({ status }: { status: string | null }) {
+function CompatibilityBadge({ status, reclamada }: { status: string | null; reclamada?: string | null }) {
   // No status at all means nothing in your library matches — the backend now
   // says so explicitly ("Sin coincidencia" → "No importada"), and this only
   // covers rows that predate that.
-  return <StatusBadge status={status || 'Sin coincidencia'} type="request" />
+  const estado = status || 'Sin coincidencia'
+  const quien = getReclamadaInfo(reclamada)
+  const { triggerProps, tooltipNode } = useTooltip(estado === 'Reclamado' ? quien?.hint ?? null : null)
+  if (estado === 'Reclamado' && quien) {
+    // La petición reclamada por otro (o sin saber por quién) dice quién, en vez de un «Reclamado» a secas.
+    return <span className={`badge ${getRequestStatusInfo(estado).cssClass}`} {...triggerProps}>{quien.label}{tooltipNode}</span>
+  }
+  if (reclamada === 'ti') {
+    // La que has reclamado tú se puede subir: se enseña su estado de siempre y que es tuya.
+    return (
+      <span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>
+        <StatusBadge status={estado} type="request" />
+        <span className={`badge ${getRequestStatusInfo('Reclamado').cssClass}`}>{quien?.label}</span>
+      </span>
+    )
+  }
+  return <StatusBadge status={estado} type="request" />
 }
 
 // Origen: la instancia de Radarr/Sonarr donde tienes el contenido. Mismo
@@ -415,7 +431,7 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
         <div style={{ flex: 1, minWidth: 300 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16, minHeight: DETAIL_CARD_HEIGHT }}>
             <Card title="Estado de la petición" icon={<StatusCardIcon />}>
-              <FieldRow label="Estado" help="Aunque salga «Compatible», revisa la petición: el audio y el códec no se pueden comparar del todo (suelen indicarse en la descripción del torrent), y si pide la serie completa puede que no quiera la temporada especial."><CompatibilityBadge status={effectiveStatus} /></FieldRow>
+              <FieldRow label="Estado" help="Aunque salga «Compatible», revisa la petición: el audio y el códec no se pueden comparar del todo (suelen indicarse en la descripción del torrent), y si pide la serie completa puede que no quiera la temporada especial."><CompatibilityBadge status={effectiveStatus} reclamada={item.reclamada_por} /></FieldRow>
               <FieldRow label="Tipo">
                 <ValueChip><ValueIcon><TypeValueIcon /></ValueIcon><span className="txt">{t.label}</span></ValueChip>
               </FieldRow>
@@ -985,7 +1001,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                           <PlainValue icon={<TypeValueIcon />}>{tipoOf(item.category).label}</PlainValue>
                         </td>
                         <td style={{ whiteSpace: 'nowrap' }}><OriginCell item={item} instances={instances} alwaysChip={false} /></td>
-                        <td><CompatibilityBadge status={item.compatibility_status} /></td>
+                        <td><CompatibilityBadge status={item.compatibility_status} reclamada={item.reclamada_por} /></td>
                         <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}><AuthorCell author={item.author} isMine={item.is_mine} /></td>
                         <td style={{ whiteSpace: 'nowrap' }}><SpecPlainValue value={item.requested_resolution} icon={ResolutionValueIcon} /></td>
                         <td style={{ whiteSpace: 'nowrap' }}><SpecPlainValue value={item.requested_source} icon={SourceValueIcon} /></td>

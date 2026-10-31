@@ -45,6 +45,7 @@ def _row_to_item(r: dict, my_username: str | None = None) -> RequestItemResponse
         votes=r.get("votes"),
         author=author,
         is_mine=is_mine,
+        reclamada_por=r.get("reclamada_por"),
         req_scope=r.get("req_scope"),
         req_season=r.get("req_season"),
         req_episode=r.get("req_episode"),

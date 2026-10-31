@@ -11,6 +11,7 @@ Priority order for ranking:
 from __future__ import annotations
 
 import functools
+import json
 import re
 import unicodedata
 from typing import Optional
@@ -299,6 +300,35 @@ def emu_override_status(emu_status: str | None) -> Optional[str]:
     return None
 
 
+def reclamante(req: dict) -> Optional[str]:
+    """Quién tiene reclamada la petición según eMuwarez (`claimed_by` del raw_json), en minúsculas. None si no se
+    sabe: la fila no lo trae (falta cuando es nulo) o es un id numérico, que no se puede comparar con un usuario."""
+    try:
+        raw = json.loads(req.get("raw_json") or "{}")
+    except (TypeError, ValueError):
+        return None
+    quien = raw.get("claimed_by") if isinstance(raw, dict) else None
+    if isinstance(quien, dict):
+        quien = quien.get("username") or quien.get("name")
+    return quien.strip().lower() if isinstance(quien, str) and quien.strip() else None
+
+
+def reclamada_por(req: dict, mi_usuario: str | None) -> Optional[str]:
+    """«ti», «otro» o «desconocido» si la petición está reclamada en eMuwarez; None si no lo está. Sin saber quién la
+    reclamó (o sin saber quién eres) cuenta como desconocida."""
+    if emu_override_status(req.get("emu_status")) != "Reclamado":
+        return None
+    quien = reclamante(req)
+    if quien is None or not (mi_usuario or "").strip():
+        return "desconocido"
+    return "ti" if quien == mi_usuario.strip().lower() else "otro"
+
+
+def estado_emu_de(req: dict, mi_usuario: str | None) -> Optional[str]:
+    """emu_override_status de esta petición para ti: la que has reclamado tú no te impide subirla."""
+    return None if reclamada_por(req, mi_usuario) == "ti" else emu_override_status(req.get("emu_status"))
+
+
 def classify_request_match(
     req: dict,
     item: dict,
@@ -306,6 +336,7 @@ def classify_request_match(
     id_match: bool = False,
     title_match: bool = False,
     base_confidence: float = 0.90,
+    mi_usuario: str | None = None,
 ) -> dict:
     """
     Given a matched (request, library_item) pair, classify compatibility.
@@ -350,7 +381,7 @@ def classify_request_match(
     # eMuwarez request states that override the library-compatibility verdict:
     # if the request is claimed/pending/filled on the tracker, that status wins
     # (you can't act on it regardless of what your library holds).
-    emu_state = emu_override_status(req.get("emu_status"))
+    emu_state = estado_emu_de(req, mi_usuario)
     if emu_state:
         return {
             "status": emu_state,
@@ -425,4 +456,5 @@ __all__ = [
     "compare_resolution", "compare_source",
     "match_request_to_library", "classify_request_match",
     "rank_request_matches", "tipo_de_peticion", "TIPO_DE_FILA", "peor_resolucion", "peor_source",
+    "reclamante", "reclamada_por", "estado_emu_de",
 ]

@@ -10,8 +10,9 @@ import threading
 import unicodedata
 from typing import Optional, Sequence
 
-from ..database import borrar_peticiones, get_setting_canonical, get_state, set_state
+from ..database import borrar_peticiones, get_json_state, get_setting_canonical, get_state, set_state
 from . import cli_config, emu_catalog
+from .emu_perfil import PERFIL_STATE_KEY
 from ..integrations import emu, tmdb
 from ..integrations.base import IntegrationError
 from ..models import RequestItem, RequestStatus, TaskStatus
@@ -25,9 +26,10 @@ from .compatibility import (
     match_request_to_library,
     classify_request_match,
     rank_request_matches,
-    emu_override_status,
+    estado_emu_de,
     peor_resolucion,
     peor_source,
+    reclamada_por,
     tipo_de_peticion,
 )
 
@@ -572,15 +574,24 @@ def _effective_target(conn: sqlite3.Connection, matched_item: dict, req: dict) -
 _ORDEN_DEL_CASAMIENTO = {"Compatible": 0, "No disponible": 1, "Parcial": 2, "No compatible": 3}
 
 
+def mi_usuario_emu(conn: sqlite3.Connection) -> Optional[str]:
+    """Tu usuario de eMuwarez sin llamar a la API: el del perfil guardado (emu_perfil) y, si aún no hay, el de
+    Ajustes. Sirve para saber si una petición reclamada la has reclamado tú."""
+    perfil = (get_json_state(conn, PERFIL_STATE_KEY) or {}).get("perfil") or {}
+    return perfil.get("username") or get_setting_canonical(conn, "emu.username") or None
+
+
 def clasificar_peticion(
     conn: sqlite3.Connection, req: dict, item: dict, *, id_match: bool = False, title_match: bool = False,
-    base_confidence: float = 0.90,
+    base_confidence: float = 0.90, mi_usuario: Optional[str] = None,
 ) -> tuple[dict, dict]:
     """(fila con lo que de verdad tiene lo pedido, clasificación). Es LA definición de «compatible»: la usan el cruce
     guardado, el detalle y «lista para subir», para que la lista, el Panel y los avisos digan lo mismo que la ficha."""
     efectiva = _effective_target(conn, item, req)
+    if mi_usuario is None:
+        mi_usuario = mi_usuario_emu(conn)
     cls = classify_request_match(req, efectiva, id_match=id_match, title_match=title_match,
-                                 base_confidence=base_confidence)
+                                 base_confidence=base_confidence, mi_usuario=mi_usuario)
     # Una petición de temporada o serie completa se cubre con un PACK. Si ese pack no puede armarse (los capítulos no
     # coinciden en resolución o en códec de vídeo), "Compatible" prometería algo que la subida va a rechazar: baja
     # a Parcial y se dice por qué. Los capítulos sueltos sí se pueden subir, y el motivo lo dice.
@@ -592,12 +603,15 @@ def clasificar_peticion(
     return efectiva, cls
 
 
-def _mejor_candidato(conn: sqlite3.Connection, req: dict, candidates: list[dict]) -> tuple[dict, dict]:
+def _mejor_candidato(
+    conn: sqlite3.Connection, req: dict, candidates: list[dict], mi_usuario: Optional[str] = None,
+) -> tuple[dict, dict]:
     """De los candidatos igual de seguros (la misma película en Radarr y en Radarr 4K) el que mejor atiende la
     petición, con su clasificación: el primero de la lista podía ser la copia de 1080p de una petición de 2160p."""
     empatados = [c for c in candidates if c["confidence"] == candidates[0]["confidence"]]
     clasificados = [(c, clasificar_peticion(
         conn, req, c["item"], id_match=c["id_match"], title_match=c["title_match"], base_confidence=c["confidence"],
+        mi_usuario=mi_usuario,
     )[1]) for c in empatados]
     return min(clasificados, key=lambda par: _ORDEN_DEL_CASAMIENTO.get(par[1]["status"], 9))
 
@@ -610,12 +624,14 @@ _INSERTAR_CASAMIENTO = """
 """
 
 
-def _casar(conn: sqlite3.Connection, req: dict, library: list[dict]) -> Optional[tuple]:
+def _casar(
+    conn: sqlite3.Connection, req: dict, library: list[dict], mi_usuario: Optional[str] = None,
+) -> Optional[tuple]:
     """(petición, candidata, clasificación, fila a la que va el estado) o None si no casa con nada. Solo lee."""
     candidates = match_request_to_library(req, library)
     if not candidates:
         return None
-    best, classification = _mejor_candidato(conn, req, candidates)
+    best, classification = _mejor_candidato(conn, req, candidates, mi_usuario)
     # A la fila que la petición pide DE VERDAD, no a la que cruzó el emparejador. Para una petición de temporada
     # eso es la temporada y no la serie entera (todas las temporadas comparten su tmdb_id).
     return req, best, classification, _scoped_library_id(conn, best["item"], req)
@@ -672,7 +688,8 @@ def match_all_requests(conn: sqlite3.Connection) -> int:
 
     requests = [dict(r) for r in conn.execute("SELECT * FROM request_items").fetchall()]
     library = _biblioteca(conn)
-    casamientos = [c for c in (_casar(conn, req, library) for req in requests) if c]
+    usuario = mi_usuario_emu(conn) or ""
+    casamientos = [c for c in (_casar(conn, req, library, usuario) for req in requests) if c]
     _guardar_casamientos(conn, casamientos)
     _notify_new_compatible_matches(conn, before_compatible)
     return len(casamientos)
@@ -828,16 +845,22 @@ def list_request_items(
     if search:
         where_clauses.append("ri.title LIKE ?")
         params.append(f"%{search}%")
+    mi_usuario = mi_usuario_emu(conn) or ""
     if status:
-        # Mirrors compatibility.emu_override_status() — a request with zero
+        # Mirrors compatibility.estado_emu_de() — a request with zero
         # library candidates has no request_matches row at all, but can still
         # be Reclamado/Pendiente/Llena on the tracker itself; keep this SQL
         # fallback in sync with that function if its substring rules change.
+        # Una reclamada por ti no cuenta como Reclamado: el claimed_by sale del raw_json.
         where_clauses.append(f"""
             COALESCE(
                 rm.status,
                 CASE
-                    WHEN LOWER(COALESCE(ri.emu_status,'')) LIKE '%reclam%' OR LOWER(COALESCE(ri.emu_status,'')) LIKE '%claim%' THEN 'Reclamado'
+                    WHEN LOWER(COALESCE(ri.emu_status,'')) LIKE '%reclam%' OR LOWER(COALESCE(ri.emu_status,'')) LIKE '%claim%' THEN
+                        CASE WHEN ? != '' AND LOWER(TRIM(COALESCE(CASE WHEN json_valid(ri.raw_json) THEN
+                                COALESCE(json_extract(ri.raw_json, '$.claimed_by.username'),
+                                         json_extract(ri.raw_json, '$.claimed_by')) END, ''))) = ?
+                             THEN 'Sin coincidencia' ELSE 'Reclamado' END
                     WHEN LOWER(COALESCE(ri.emu_status,'')) LIKE '%pend%' THEN 'Pendiente'
                     -- "Sin llenar" = petición abierta: no es un override, y
                     -- como aquí ya no hay cruce con la biblioteca (rm.status
@@ -854,7 +877,7 @@ def list_request_items(
                 END
             ) IN ({','.join('?' * len(status))})
         """)
-        params.extend(status)
+        params.extend([mi_usuario.strip().lower()] * 2 + list(status))
     en("ri.category", category)
     pedido("ri.requested_resolution", resolution)
     pedido("ri.requested_source", source)
@@ -927,7 +950,7 @@ def list_request_items(
     """
     rows = conn.execute(items_sql, params + [limit, offset]).fetchall()
     return {
-        "items": [_safe_request_dict(dict(r)) for r in rows],
+        "items": [_safe_request_dict(dict(r), mi_usuario) for r in rows],
         "total": total,
         "limit": limit,
         "offset": offset,
@@ -937,7 +960,7 @@ def list_request_items(
 def get_request_item(conn: sqlite3.Connection, request_id: int) -> Optional[dict]:
     """Return a single request_item dict (no match info)."""
     row = conn.execute("SELECT * FROM request_items WHERE id = ?", (request_id,)).fetchone()
-    return _safe_request_dict(dict(row)) if row else None
+    return _safe_request_dict(dict(row), mi_usuario_emu(conn) or "") if row else None
 
 
 def _series_title_year(conn, lib: dict) -> tuple:
@@ -994,7 +1017,8 @@ def get_request_detail(conn: sqlite3.Connection, request_id: int) -> Optional[di
     req_row = conn.execute("SELECT * FROM request_items WHERE id = ?", (request_id,)).fetchone()
     if not req_row:
         return None
-    result = _safe_request_dict(dict(req_row))
+    mi_usuario = mi_usuario_emu(conn) or ""
+    result = _safe_request_dict(dict(req_row), mi_usuario)
     # El de TMDb ('' = no tiene); el de la biblioteca, si hay cruce con póster, va delante.
     result["poster_url"] = result.get("tmdb_poster_url") or None
     result["backdrop_url"] = result.get("tmdb_backdrop_url") or None
@@ -1079,7 +1103,7 @@ def get_request_detail(conn: sqlite3.Connection, request_id: int) -> Optional[di
             )
         if lib_row and dict(lib_row).get("item_type") in ("series", "season"):
             eff, cls = clasificar_peticion(
-                conn, result, dict(lib_row),
+                conn, result, dict(lib_row), mi_usuario=mi_usuario,
                 id_match=bool(md.get("type_match")),
                 base_confidence=float(md["confidence"]),
             )
@@ -1167,7 +1191,7 @@ def normalize_title(value: str | None) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
-def _safe_request_dict(d: dict) -> dict:
+def _safe_request_dict(d: dict, mi_usuario: Optional[str] = None) -> dict:
     """Remove author info if author_visible=0.
 
     Also fills in compatibility_status when there's no request_matches row at
@@ -1181,11 +1205,14 @@ def _safe_request_dict(d: dict) -> dict:
     rather than staying null. The status filter above already resolves this
     same case to that exact string, so leaving it null here made a row the
     UI could paint but not filter: it showed a bare dash and had no entry in
-    the Compatibilidad dropdown."""
+    the Compatibilidad dropdown.
+
+    `reclamada_por` («ti», «otro», «desconocido» o None) dice quién la tiene reclamada; la tuya no es Reclamado."""
     if not d.get("author_visible"):
         d.pop("author", None)
     if not d.get("compatibility_status"):
-        d["compatibility_status"] = emu_override_status(d.get("emu_status")) or "Sin coincidencia"
+        d["compatibility_status"] = estado_emu_de(d, mi_usuario) or "Sin coincidencia"
+    d["reclamada_por"] = reclamada_por(d, mi_usuario)
     return d
 
 

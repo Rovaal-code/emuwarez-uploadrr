@@ -596,6 +596,67 @@ def test_la_biblioteca_para_cruzar_no_trae_el_raw_json(db_conn):
     assert "raw_json" not in _biblioteca(db_conn)[0]
 
 
+def _peticiones_reclamadas(conn):
+    """Una película y tres peticiones suyas, todas «claimed»: por Gabriel, por Ana y sin saber por quién."""
+    import json
+    from emuwarez_uploadrr.database import set_json_state
+    conn.execute("INSERT INTO library_items(item_type,title,local_status,tmdb_id,resolution,source) "
+                 "VALUES ('movie','Peli','Disponible','1','1080p','WEB-DL')")
+    ids = {}
+    for nombre, quien in (("ti", "gabriel"), ("otro", "Ana"), ("desconocido", None)):
+        raw = {"id": nombre, "status": "claimed", **({"claimed_by": quien} if quien else {})}
+        ids[nombre] = conn.execute(
+            "INSERT INTO request_items(emu_id,title,category,tmdb_id,emu_status,raw_json) "
+            "VALUES (?, 'Peli', 'Películas', '1', 'claimed', ?)", (nombre, json.dumps(raw))).lastrowid
+    set_json_state(conn, "emu.perfil", {"perfil": {"username": "Gabriel"}})
+    conn.commit()
+    return ids
+
+
+def test_el_cruce_guardado_no_marca_reclamado_lo_que_reclamaste_tu(db_conn):
+    """Lista, Panel y avisos leen el cruce guardado: la reclamada por ti sale Compatible y cuenta; las demás, Reclamado."""
+    from emuwarez_uploadrr.services.requests import dashboard_request_counters, match_all_requests
+    ids = _peticiones_reclamadas(db_conn)
+    match_all_requests(db_conn)
+    estados = {r["request_item_id"]: r["status"] for r in db_conn.execute("SELECT * FROM request_matches")}
+    assert estados == {ids["ti"]: "Compatible", ids["otro"]: "Reclamado", ids["desconocido"]: "Reclamado"}
+    assert dashboard_request_counters(db_conn)["requests_compatible"] == 1
+    # Y avisa de la que sí se puede subir, no de las otras.
+    assert db_conn.execute("SELECT COUNT(*) FROM notifications").fetchone()[0] == 1
+
+
+def test_la_lista_y_la_ficha_dicen_quien_la_reclamo(db_conn):
+    from emuwarez_uploadrr.services.requests import get_request_detail, list_request_items, match_all_requests
+    ids = _peticiones_reclamadas(db_conn)
+    match_all_requests(db_conn)
+    lista = {i["id"]: i for i in list_request_items(db_conn)["items"]}
+    assert {k: lista[v]["reclamada_por"] for k, v in ids.items()} == {"ti": "ti", "otro": "otro", "desconocido": "desconocido"}
+    assert get_request_detail(db_conn, ids["ti"])["reclamada_por"] == "ti"
+    assert get_request_detail(db_conn, ids["ti"])["match"]["status"] == "Compatible"
+    assert get_request_detail(db_conn, ids["otro"])["match"]["status"] == "Reclamado"
+
+
+def test_una_reclamada_por_ti_sin_cruce_no_sale_como_reclamado_en_el_filtro(db_conn):
+    """Sin ningún cruce el estado sale del emu_status; la tuya cae en «Sin coincidencia», como una abierta."""
+    from emuwarez_uploadrr.services.requests import list_request_items
+    ids = _peticiones_reclamadas(db_conn)
+    db_conn.execute("DELETE FROM library_items")
+    db_conn.commit()
+    titulos = lambda estado: sorted(i["emu_id"] for i in list_request_items(db_conn, status=[estado])["items"])
+    assert titulos("Reclamado") == ["desconocido", "otro"]
+    assert titulos("Sin coincidencia") == ["ti"]
+    lista = {i["emu_id"]: i for i in list_request_items(db_conn)["items"]}
+    assert lista["ti"]["compatibility_status"] == "Sin coincidencia"
+    assert lista["otro"]["compatibility_status"] == lista["desconocido"]["compatibility_status"] == "Reclamado"
+    assert ids  # las tres existen
+
+
+def test_el_endpoint_de_la_lista_trae_reclamada_por(client, auth_headers, db_conn):
+    ids = _peticiones_reclamadas(db_conn)
+    items = {i["id"]: i for i in client.get("/api/requests", headers=auth_headers).json()["items"]}
+    assert {k: items[v]["reclamada_por"] for k, v in ids.items()} == {"ti": "ti", "otro": "otro", "desconocido": "desconocido"}
+
+
 def test_recalcular_borra_el_casamiento_que_ya_no_vale(db_conn):
     """El «Compatible» de antes (Dune de 1984 para la petición de la de 2021) se quedaba en request_matches y la
     lista lo seguía enseñando."""

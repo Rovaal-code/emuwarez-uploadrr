@@ -572,3 +572,52 @@ def test_un_tvdb_distinto_no_descarta_lo_que_confirma_el_tmdb():
     req = _make_req(title="Serie", tmdb_id="55", category="Series")
     req["tvdb_id"] = "1"
     assert len(match_request_to_library(req, [_make_item(item_type="series", title="Serie", tmdb_id="55", tvdb_id="2")])) == 1
+
+
+# ---------------------------------------------------------------------------
+# Reclamadas: por ti, por otro o sin saber por quién
+# ---------------------------------------------------------------------------
+
+def _reclamada(claimed_by="__sin__", **extra):
+    import json as _json
+    raw = {"id": 1, "status": "claimed"}
+    if claimed_by != "__sin__":
+        raw["claimed_by"] = claimed_by
+    return _make_req(emu_status="claimed", raw_json=_json.dumps(raw), **extra)
+
+
+def test_reclamante_lee_el_claimed_by_del_raw_json():
+    from emuwarez_uploadrr.services.compatibility import reclamante
+    assert reclamante(_reclamada("Gabriel")) == "gabriel"
+    assert reclamante(_reclamada({"username": " Gabriel "})) == "gabriel"
+    assert reclamante(_reclamada({"name": "Ana"})) == "ana"
+
+
+@pytest.mark.parametrize("claimed_by", ["__sin__", None, "", 77, {"id": 77}])
+def test_reclamante_desconocido_si_no_viene_o_es_un_id(claimed_by):
+    from emuwarez_uploadrr.services.compatibility import reclamante
+    assert reclamante(_reclamada(claimed_by)) is None
+    assert reclamante(_make_req(raw_json="no es json")) is None
+    assert reclamante(_make_req()) is None
+
+
+def test_reclamada_por_ti_por_otro_o_desconocido():
+    from emuwarez_uploadrr.services.compatibility import reclamada_por
+    assert reclamada_por(_reclamada("GABRIEL"), "gabriel") == "ti"
+    assert reclamada_por(_reclamada("Ana"), "Gabriel") == "otro"
+    assert reclamada_por(_reclamada(), "Gabriel") == "desconocido"
+    assert reclamada_por(_reclamada("Gabriel"), None) == "desconocido"
+    assert reclamada_por(_reclamada("Gabriel"), "  ") == "desconocido"
+    assert reclamada_por(_make_req(emu_status="unfilled"), "Gabriel") is None
+    assert reclamada_por(_make_req(emu_status="filled"), "Gabriel") is None
+
+
+def test_la_reclamada_por_ti_se_clasifica_por_lo_que_trae_y_las_demas_son_reclamado():
+    item = _make_item(resolution="1080p", source="WEB-DL")
+    pide = {"requested_resolution": "1080p", "requested_source": "WEB-DL"}
+    por_ti = classify_request_match(_reclamada("Gabriel", **pide), item, mi_usuario="gabriel")
+    por_otro = classify_request_match(_reclamada("Ana", **pide), item, mi_usuario="gabriel")
+    sin_saber = classify_request_match(_reclamada(**pide), item, mi_usuario="gabriel")
+    sin_perfil = classify_request_match(_reclamada("Gabriel", **pide), item)
+    assert [r["status"] for r in (por_ti, por_otro, sin_saber, sin_perfil)] == [
+        "Compatible", "Reclamado", "Reclamado", "Reclamado"]

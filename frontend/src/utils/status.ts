@@ -42,7 +42,7 @@ const REQUEST_STATUS_MAP: Record<string, StatusInfo> = {
   // one. The backend already speaks this value in its status filter, so it's
   // filterable like the rest instead of being an unfilterable dash.
   'Sin coincidencia': { label: 'No importada', color: '#e5e7eb', cssClass: 'req-not-imported' },
-  'Reclamado':      { label: 'Reclamado',      color: '#a855f7', cssClass: 'req-claimed' },
+  'Reclamado':      { label: 'Reclamada',      color: '#a855f7', cssClass: 'req-claimed' },
   'Pendiente':      { label: 'Pendiente',      color: '#eab308', cssClass: 'req-pending' },
   // Más apagado que 'Sin petición': una petición llena ya está resuelta.
   'Llena':          { label: 'Llena',          color: '#6b7280', cssClass: 'req-filled' },
@@ -108,7 +108,9 @@ const READINESS_STATUS_LABELS: Record<string, string> = {
   no_local_match: 'Sin copia en la biblioteca',
   file_missing: 'Archivo no encontrado',
   import_error: 'Error de importación',
-  claimed: 'Reclamada o pendiente en eMuwarez',
+  claimed: 'Reclamada por otro',
+  claimed_unknown: 'Reclamada',
+  pending_approval: 'Pendiente de aprobación',
   filled: 'Ya llena en eMuwarez',
   already_exists: 'Ya existe en eMuwarez',
   uploaded: 'Subida',
@@ -124,6 +126,16 @@ const READINESS_ACTION_LABELS: Record<string, string> = {
   verify_file: 'Comprobar el archivo',
   ignore_already_exists: 'Ignorar: ya existe',
   none: 'Ninguna',
+}
+
+// Quién tiene reclamada una petición (reclamada_por del backend): el texto y, si hace falta, una aclaración.
+export function getReclamadaInfo(reclamada: string | null | undefined): { label: string; hint: string | null } | null {
+  if (reclamada === 'ti') return { label: 'Reclamada por ti', hint: null }
+  if (reclamada === 'otro') return { label: 'Reclamada por otro', hint: null }
+  if (reclamada === 'desconocido') {
+    return { label: 'Reclamada', hint: 'eMuwarez no dice quién la reclamó: se trata como si fuera de otro.' }
+  }
+  return null
 }
 
 export function getReadinessLabel(status: string): string {

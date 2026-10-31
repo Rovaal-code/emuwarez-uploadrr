@@ -29,8 +29,9 @@ reviews:
           (usar integrations.base.url_sin_claves).
     - path: "emuwarez_uploadrr/services/{library,instances,arr_health}.py"
       instructions: |
-        Gabriel apaga sus instancias de Radarr/Sonarr durante días. Una instancia que no responde, da error, está
-        desactivada o devuelve un listado vacío teniendo filas es un ERROR: nunca se poda, nunca se marca Faltante,
+        Una instancia de Radarr/Sonarr puede estar apagada, reiniciándose o actualizándose (reinicio de la NAS, red,
+        migración de su base). Si no responde, da error, está desactivada o devuelve un listado vacío teniendo filas,
+        es un ERROR: nunca se poda, nunca se marca Faltante,
         no se notifica "falta" y no se pierden cruces de peticiones ni enlaces de subidas. `[]` solo es válido para
         una instancia sin filas. Un fallo de la cola (/queue) no para la sincronización ni cambia estados.
     - path: "emuwarez_uploadrr/integrations/{radarr,sonarr,arr_base,base}.py"

@@ -121,7 +121,7 @@ def _run_library_sync(conn: sqlite3.Connection) -> tuple[str, str]:
     summary = f"{result['imported']} elementos importados, {result['missing']} no disponibles"
     if result.get("errors"):
         summary += f" ({len(result['errors'])} instancia(s) con error)"
-    return "completed", summary
+    return result.get("status", "completed"), summary
 
 
 def _run_emu_sync(conn: sqlite3.Connection) -> tuple[str, str]:

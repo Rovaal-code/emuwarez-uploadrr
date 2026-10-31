@@ -861,6 +861,7 @@ def sync_all(conn: sqlite3.Connection, *, include_episodes: bool = False) -> dic
     grand_total = 0  # total items expected (all instances), for the progress bar
     details: list[str] = []
     errors: list[str] = []
+    sincronizadas = 0  # instancias que se leyeron, aunque alguna serie de ellas fallara
 
     def _report_total(t: int) -> None:
         nonlocal grand_total
@@ -881,10 +882,20 @@ def sync_all(conn: sqlite3.Connection, *, include_episodes: bool = False) -> dic
                 )
                 total += imported
                 missing += miss
+                sincronizadas += 1
                 _set_lib_progress(imported=total, missing=missing)
                 details.append(f"{instance.type}:{instance.name}: {imported} importados, {miss} faltantes")
                 logger.info("Sincronizado %s «%s»: %d importados, %d faltantes",
                             instance.type, instance.name, imported, miss)
+            except SincronizacionParcial as exc:
+                total += exc.imported
+                missing += exc.missing
+                sincronizadas += 1
+                _set_lib_progress(imported=total, missing=missing)
+                err = f"{instance.type}:{instance.name}: {exc}"
+                errors.append(err)
+                details.append(f"ERROR — {err}")
+                logger.warning("Sincronización parcial de %s «%s»: %s", instance.type, instance.name, exc)
             except Exception as exc:
                 err = f"{instance.type}:{instance.name}: {exc}"
                 errors.append(err)
@@ -892,10 +903,16 @@ def sync_all(conn: sqlite3.Connection, *, include_episodes: bool = False) -> dic
                 logger.warning("Error sincronizando %s «%s»: %s", instance.type, instance.name, exc)
         recompute_after_sync(conn)
         summary =f"{total} elementos sincronizados; {missing} no disponibles"
-        finish_task(conn, task_id, "completed", summary, "\n".join(details))
+        # Con todas caídas no se ha leído nada: «completada» diría al Panel que la biblioteca está al día.
+        estado = "failed" if errors and not sincronizadas else "completed"
+        if estado == "failed":
+            summary = f"No se pudo leer ninguna instancia ({len(errors)} con error)"
+            _set_lib_progress(error="; ".join(errors)[:300], phase="Error")
+        finish_task(conn, task_id, estado, summary, "\n".join(details))
         logger.info("Sincronización de biblioteca terminada: %d elementos, %d no disponibles%s",
                     total, missing, f" ({len(errors)} instancias con error)" if errors else "")
-        return {"imported": total, "missing": missing, "instances": len(list_instances(conn)), "errors": errors}
+        return {"imported": total, "missing": missing, "instances": len(list_instances(conn)), "errors": errors,
+                "status": estado}
     except Exception as exc:
         finish_task(conn, task_id, "failed", str(exc), "\n".join(details))
         logger.error("Sincronización de biblioteca fallida: %s", exc)

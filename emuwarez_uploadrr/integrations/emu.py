@@ -64,6 +64,21 @@ def emu_get_request_detail(
     return request_json("GET", url)
 
 
+def emu_get_user(api_key: str, base_url: str | None = None) -> dict[str, Any]:
+    """Tu cuenta (/api/user): usuario, grupo, subido, bajado, ratio, buffer, seeding, leeching, bonus y H&R."""
+    base = (base_url or EMU_BASE_URL).rstrip("/")
+    url = build_url(base, "/api/user", {"api_token": api_key})
+    try:
+        data = request_json("GET", url)
+    except IntegrationError as exc:
+        if exc.status in _MENSAJE_POR_ESTADO:
+            raise IntegrationError(_MENSAJE_POR_ESTADO[exc.status], status=exc.status) from None
+        raise
+    if not isinstance(data, dict) or not data.get("username"):
+        raise IntegrationError("eMuwarez ha devuelto tu perfil en un formato que no se reconoce")
+    return data
+
+
 def emu_fetch_all_pages(
     api_key: str, base_url: str | None = None
 ) -> tuple[list[dict[str, Any]], Optional[int]]:

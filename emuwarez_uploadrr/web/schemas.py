@@ -526,6 +526,23 @@ class DashboardRecommendationsResponse(BaseModel):
     items: list[DashboardRecommendationItem] = []
 
 
+class EmuPerfilResponse(BaseModel):
+    """Tu cuenta de eMuwarez: los campos de /api/user de UNIT3D tal cual (subido, ratio... ya vienen formateados)."""
+    configured: bool = False
+    username: Optional[str] = None
+    group: Optional[str] = None
+    uploaded: Optional[str] = None
+    downloaded: Optional[str] = None
+    ratio: Optional[str] = None
+    buffer: Optional[str] = None
+    seeding: Optional[int] = None
+    leeching: Optional[int] = None
+    seedbonus: Optional[float] = None
+    hit_and_runs: Optional[int] = None
+    updated_at: Optional[str] = None
+    error: Optional[str] = None
+
+
 # ---------------------------------------------------------------------------
 # Library
 # ---------------------------------------------------------------------------

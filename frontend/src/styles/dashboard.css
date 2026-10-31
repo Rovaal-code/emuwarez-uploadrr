@@ -54,6 +54,70 @@
   width: calc((100% - 32px) / 3);
 }
 
+/* «Tu cuenta en eMuwarez»: el hueco entre el título y los botones de
+   sincronizar, sin mover estos de encima de su tarjeta. Si no cabe, baja de línea. */
+.cuenta-emu {
+  flex: 1 1 0;
+  min-width: 0;
+  margin: 0 20px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.cuenta-emu-usuario {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.cuenta-emu-rol {
+  color: var(--text-accent);
+  background: var(--overlay-light);
+  border: 1px solid var(--border-hover);
+}
+.cuenta-emu-cifras {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+}
+.cuenta-emu-cifra {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+.cuenta-emu-cifra dt {
+  color: var(--text-muted);
+}
+.cuenta-emu-cifra dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.cuenta-emu-cifra.es-malo dd {
+  color: var(--color-error);
+}
+.cuenta-emu-cifra.es-aviso dd,
+.cuenta-emu-error {
+  color: var(--color-warning);
+}
+.cuenta-emu-enlaces {
+  display: flex;
+  gap: 12px;
+}
+.cuenta-emu-enlaces a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
 /* Stat card */
 .stat-card {
   background: var(--bg-card);

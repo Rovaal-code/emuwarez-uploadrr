@@ -91,6 +91,15 @@ export function IconoUsuario(props: IconoProps) {
   return <Svg {...props}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></Svg>
 }
 
+/** Tus mensajes y tus notificaciones de eMuwarez. */
+export function IconoCorreo(props: IconoProps) {
+  return <Svg {...props}><rect x="2" y="4" width="20" height="16" rx="2" /><path d="m22 7-10 6L2 7" /></Svg>
+}
+
+export function IconoCampana(props: IconoProps) {
+  return <Svg {...props}><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></Svg>
+}
+
 /** El orden de una columna: un triángulo hacia arriba o hacia abajo, centrado como el ▼ de los filtros, o los dos si no ordena por ella. */
 export function IconoOrden({ sentido, ...props }: IconoProps & { sentido: 'asc' | 'desc' | null }) {
   const forma = sentido === 'asc' ? 'M12 8 19 16H5z' : sentido === 'desc' ? 'M12 16 5 8h14z' : 'M12 3 19 11H5zM12 21 5 13h14z'

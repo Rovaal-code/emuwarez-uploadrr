@@ -26,6 +26,23 @@ export interface CurrentUserResponse {
   last_login_at: string | null
 }
 
+// Tu cuenta de eMuwarez: /api/user de UNIT3D tal cual, guardado una hora en el servidor.
+export interface EmuPerfil {
+  configured: boolean
+  username: string | null
+  group: string | null
+  uploaded: string | null
+  downloaded: string | null
+  ratio: string | null
+  buffer: string | null
+  seeding: number | null
+  leeching: number | null
+  seedbonus: number | null
+  hit_and_runs: number | null
+  updated_at: string | null
+  error: string | null
+}
+
 export interface DashboardSummaryResponse {
   library_total: number
   available: number

@@ -105,7 +105,7 @@ def preparar_carpeta_de_pack(
     try:
         if os.path.isdir(destino):
             # Solo si es nuestra: nunca se borra algo que no hayamos creado.
-            if os.path.realpath(destino).startswith(os.path.realpath(raiz)):
+            if en_carpeta_de_subidas(destino, raiz=raiz):
                 shutil.rmtree(destino)
             else:
                 return {"status": "blocked", "carpeta": None,
@@ -210,7 +210,7 @@ def borrar_carpeta_de_pack(carpeta: Optional[str], *, raiz: Optional[str] = None
     if not carpeta or not os.path.isdir(carpeta):
         return False
     # Nunca fuera de lo nuestro, por si esta ruta llegara de un sitio raro.
-    if not os.path.realpath(carpeta).startswith(os.path.realpath(raiz)):
+    if not en_carpeta_de_subidas(carpeta, raiz=raiz):
         logger.warning("No se borra %s: está fuera de %s", carpeta, raiz)
         return False
     try:

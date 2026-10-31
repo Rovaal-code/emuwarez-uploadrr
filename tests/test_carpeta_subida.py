@@ -328,3 +328,13 @@ def test_borrar_no_quita_el_enlace_de_una_subida_en_marcha(biblioteca, monkeypat
 
     assert delete_upload_job(fallida, confirmation=DELETE_CONFIRMATION_TOKEN, conn=conn)["ok"]
     assert os.path.lexists(enlace)
+
+
+def test_borrar_no_toca_una_carpeta_hermana_con_el_mismo_prefijo(tmp_path):
+    """Con startswith, /x/uploads-old pasaba por /x/uploads (F14)."""
+    hermana = tmp_path / "uploads-old" / "Serie S01"
+    hermana.mkdir(parents=True)
+    (hermana / "cap.mkv").write_bytes(b"x")
+    (tmp_path / "uploads").mkdir()
+    assert borrar_carpeta_de_pack(str(hermana), raiz=str(tmp_path / "uploads")) is False
+    assert (hermana / "cap.mkv").exists()

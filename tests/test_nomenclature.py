@@ -194,6 +194,31 @@ def test_force_refresh_creates_new_proposal(db_conn):
     assert p2.get("id") != p1.get("id")
 
 
+def test_la_propuesta_guardada_caduca_si_radarr_cambia_el_fichero(db_conn):
+    """Radarr sustituye el fichero por uno 2160p/HEVC: la propuesta 1080p
+    guardada no puede seguir usándose para el nombre ni para el pack."""
+    item_id = _insert_item(db_conn, path="/fake/Peli.2020.1080p.WEB-DL.mkv")
+    db_conn.execute("UPDATE library_items SET resolution='1080p', size_bytes=1000 WHERE id=?", (item_id,))
+    p1 = build_nomenclature_proposal(item_id, conn=db_conn)
+    assert build_nomenclature_proposal(item_id, conn=db_conn)["id"] == p1["id"]
+
+    db_conn.execute(
+        "UPDATE library_items SET path='/fake/Peli.2020.2160p.WEB-DL.mkv', resolution='2160p', "
+        "size_bytes=9000 WHERE id=?", (item_id,))
+    p2 = build_nomenclature_proposal(item_id, conn=db_conn)
+    assert p2["id"] != p1["id"]
+    assert "2160p" in p2["proposed_torrent_name"]
+
+
+def test_renombrar_no_caduca_la_propuesta(db_conn):
+    """La app renombra y apunta `path` al nombre nuevo: el fichero es el mismo."""
+    item_id = _insert_item(db_conn, path="/fake/viejo.mkv")
+    db_conn.execute("UPDATE library_items SET size_bytes=1000 WHERE id=?", (item_id,))
+    p1 = build_nomenclature_proposal(item_id, conn=db_conn)
+    db_conn.execute("UPDATE library_items SET path='/fake/nuevo.mkv' WHERE id=?", (item_id,))
+    assert build_nomenclature_proposal(item_id, conn=db_conn)["id"] == p1["id"]
+
+
 def test_mark_nomenclature_status(db_conn):
     item_id = _insert_item(db_conn, local_status="Disponible")
     build_nomenclature_proposal(item_id, conn=db_conn)

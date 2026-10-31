@@ -28,6 +28,24 @@ STATUS_APPLIED = "applied"   # reserved for future phase
 STATUS_EXPIRED = "expired"
 
 
+# Lo que dice si una propuesta guardada sigue valiendo: el tamaño del fichero
+# (cambia cuando Radarr/Sonarr lo sustituye) y los datos de la biblioteca que no
+# salen de leerlo. La ruta no, que cambia al renombrar la propia app.
+_CAMPOS_HUELLA = ("size_bytes", "resolution", "quality", "source", "release_group",
+                  "title", "year", "season_number", "episode_number", "tmdb_id")
+
+
+def _huella(item: dict) -> list:
+    return [item.get(c) for c in _CAMPOS_HUELLA]
+
+
+def _huella_guardada(proposal: dict):
+    try:
+        return json.loads(proposal.get("raw_json") or "{}").get("huella")
+    except (TypeError, ValueError, AttributeError):
+        return None
+
+
 def get_library_item_for_nomenclature(item_id: int, conn=None) -> dict | None:
     own = conn is None
     conn = conn or connect()
@@ -325,12 +343,15 @@ def build_nomenclature_proposal(
         if (source_override is not None or provider_override is not None
                 or tag_override is not None or title_override is not None):
             force_refresh = True
-        if not force_refresh:
+        item = get_library_item_for_nomenclature(item_id, conn=conn)
+        if not force_refresh and item:
             existing = get_latest_nomenclature_proposal(item_id, conn=conn)
-            if existing and existing.get("status") not in (STATUS_EXPIRED,):
+            # La editada a mano se respeta; la automática, solo si el fichero
+            # sigue siendo el mismo (Radarr/Sonarr no lo ha cambiado).
+            if existing and existing.get("status") not in (STATUS_EXPIRED,) and (
+                    existing.get("fields_json") or _huella_guardada(existing) == _huella(item)):
                 return existing
 
-        item = get_library_item_for_nomenclature(item_id, conn=conn)
         if not item:
             return {
                 "library_item_id": item_id,
@@ -518,7 +539,8 @@ def compute_nomenclature_proposal(
         "release_tag": release_tag,
         "warnings_json": json.dumps(warnings, ensure_ascii=False),
         "errors_json": json.dumps(errors, ensure_ascii=False),
-        "raw_json": json.dumps({"item_id": item_id, "title": title}, ensure_ascii=False),
+        "raw_json": json.dumps({"item_id": item_id, "title": title, "huella": _huella(item)},
+                               ensure_ascii=False),
     }
     return proposal
 

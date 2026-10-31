@@ -494,17 +494,18 @@ def test_lo_que_pyyaml_lee_de_una_entrada_existente_es_lo_que_se_reescribe():
     lines = [
         "TORRENT_CLIENTS:",
         '  qbit: {automatic_management_paths: ["\\/data\\/tv", "a\\_b\\Nc", \'/data/it\'\'s\'], '
-        "qbit_port: 8080, ceros: [08, 7, 0, -3], decimal: 1.5, texto: 08}",
+        "qbit_port: 8080, ceros: [08, 7, 0, -3], decimal: 1.5, texto: 08, nulos: [none, None, null, Null, ~], otra: none}",
     ]
     original = yaml.safe_load("\n".join(lines))["TORRENT_CLIENTS"][QBIT_CLIENT_KEY]
 
     staged, _ = stage_qbittorrent_config(lines, url="http://x:8080", username="u", password="p")
 
     cargado = yaml.safe_load("\n".join(staged))["TORRENT_CLIENTS"][QBIT_CLIENT_KEY]
-    for clave in ("automatic_management_paths", "ceros", "decimal", "texto"):
+    for clave in ("automatic_management_paths", "ceros", "decimal", "texto", "nulos", "otra"):
         assert cargado[clave] == original[clave], clave
         assert type(cargado[clave]) is type(original[clave]), clave
     assert cargado["ceros"] == ["08", 7, 0, -3]
+    assert cargado["nulos"] == ["none", "None", None, None, None]  # `none` es una cadena, no null
     assert cargado["automatic_management_paths"][0] == "/data/tv"
 
 

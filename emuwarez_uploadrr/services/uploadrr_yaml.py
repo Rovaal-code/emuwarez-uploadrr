@@ -156,7 +156,8 @@ def _leer_escalar(texto: str) -> Any:
         return True
     if re.fullmatch(r"no|No|NO|false|False|FALSE|off|Off|OFF", texto):
         return False
-    if texto.lower() in {"", "null", "none", "~"}:
+    # `none` no: PyYAML lo lee como cadena, y a null Uploadrr podía fallar (`None.strip()`).
+    if texto in {"", "~", "null", "Null", "NULL"}:
         return None
     # Solo las formas que PyYAML resuelve como entero: `08` es una cadena, y `0` o `5` no.
     if re.fullmatch(r"[-+]?(?:0|[1-9]\d*)", texto):

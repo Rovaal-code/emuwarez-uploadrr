@@ -105,7 +105,7 @@ def run_database_vacuum(
         conn = sqlite3.connect(str(db))
         conn.execute("VACUUM")
         # WAL: sin esto el fichero no encoge mientras el servidor tenga conexiones abiertas
-        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        busy = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()[0]
         conn.close()
     except Exception as exc:
         return {"ok": False, "dry_run": False, "error": str(exc)}
@@ -120,7 +120,10 @@ def run_database_vacuum(
         "size_bytes_before": before,
         "size_bytes_after": after,
         "bytes_saved": saved,
-        "message": f"VACUUM completado. Liberados {saved:,} bytes",
+        "message": (
+            "VACUUM completado. El fichero encogerá cuando terminen las lecturas en curso"
+            if busy else f"VACUUM completado. Liberados {saved:,} bytes"
+        ),
     }
 
 

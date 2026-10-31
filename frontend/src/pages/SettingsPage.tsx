@@ -1374,6 +1374,7 @@ function DatabaseActions({ onRefresh }: { onRefresh: () => void }) {
       <input
         type="text"
         placeholder="Confirmación: MANTENIMIENTO_DB"
+        aria-label="Confirmación de VACUUM"
         value={vacuumConfirm}
         onChange={e => setVacuumConfirm(e.target.value)}
         style={{ width: '100%', padding: '6px 10px', fontSize: 13, boxSizing: 'border-box' }}

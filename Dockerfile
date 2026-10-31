@@ -1,11 +1,11 @@
 # syntax=docker/dockerfile:1
 # ── Stage 1: Build frontend ──────────────────────────────────────────────────
-FROM node:20-alpine AS frontend-builder
+FROM node:22-alpine AS frontend-builder
 
 WORKDIR /build/frontend
 
-COPY frontend/package.json frontend/package-lock.json* ./
-RUN npm ci --prefer-offline 2>/dev/null || npm install
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
 
 COPY frontend/ ./
 RUN npm run build

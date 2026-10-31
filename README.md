@@ -174,7 +174,7 @@ docker compose -f docker-compose.example.yml up -d
 
 ## Uso sin Docker
 
-Necesita Python 3.10+, Node 20, `mediainfo`, `ffmpeg`, `mkvtoolnix` y una copia de Uploadrr-EMU (ruta en el ajuste
+Necesita Python 3.10+, Node 22, `mediainfo`, `ffmpeg`, `mkvtoolnix` y una copia de Uploadrr-EMU (ruta en el ajuste
 `uploadrr.path`, por defecto `/opt/Uploadrr`).
 
 ```bash

@@ -340,3 +340,27 @@ def test_un_mediainfo_colgado_no_bloquea(tmp_path, monkeypatch):
     with patch.object(svc, "mediainfo_available", return_value=True):
         informe = svc.build_mediainfo_report(str(f))
     assert informe["available"] is False and "no respondió" in informe["message"]
+
+
+def test_un_informe_con_la_herramienta_a_medias_no_se_guarda(tmp_path):
+    """La ayuda dice "se repetirá la próxima vez": si el informe entero se
+    quedaba en la caché, la herramienta no volvía a pasar."""
+    f = tmp_path / "peli.mkv"
+    f.write_bytes(b"x" * 100)
+    info = {"media": {"track": [{"@type": "Video", "Format": "AVC", "Width": "1920", "Height": "1080"}]}}
+    llamadas = []
+
+    def _analiza(path, radarr_source=None):
+        llamadas.append(path)
+        return {"prediction": {"label": "WEB-DL"}, "partial": "muestreo al 40 %"}
+    with (
+        patch.object(svc, "mediainfo_available", return_value=True),
+        patch.object(svc, "source_engine_enabled", return_value=True),
+        patch.object(svc.media_probe, "run_mediainfo_json", return_value=info),
+        patch("emuwarez_uploadrr.services.source_engine.analyze_for_app", side_effect=_analiza),
+    ):
+        primero = svc.build_mediainfo_report(str(f))
+        svc.build_mediainfo_report(str(f))
+    assert len(llamadas) == 2
+    fila = next(r for r in primero["rows"] if r["field"] == "Source")
+    assert "análisis parcial" in fila["help"]

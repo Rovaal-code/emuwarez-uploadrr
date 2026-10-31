@@ -363,7 +363,9 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
               "resolution": resolution,
                "audio_by_language": audio_by_language,
                "source_signals": source_signals}
-    if cache_key is not None:
+    # A medias no se guarda: la próxima lectura vuelve a pasar la herramienta.
+    _incompleto = _engine_on and (_engine_result is None or bool(_engine_result.get("partial")))
+    if cache_key is not None and not _incompleto:
         if len(_REPORT_CACHE) >= _REPORT_CACHE_MAX:
             _REPORT_CACHE.clear()
         _REPORT_CACHE[str(p)] = (cache_key, report)

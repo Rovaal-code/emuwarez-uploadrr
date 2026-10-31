@@ -183,8 +183,8 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
     # Resolution
     w = video.get("Width") or video.get("Stored_Width")
     h = video.get("Height") or video.get("Stored_Height")
-    resolution = media_probe.map_resolution(video) if video else None
-    add("Resolución", f"{w}x{h}" if w and h else None, resolution)
+    resolution = media_probe.video_resolution_code(video) if video else None
+    add("Resolución", f"{w}x{h}" if w and h else None, emu_format.format_resolution(resolution))
     # Source: MediaInfo doesn't literally report a "source" field.
     # - "MediaInfo" column: always the bitrate/audio tool's own estimate,
     #   deliberately ignoring the name/Radarr — what the file itself suggests.

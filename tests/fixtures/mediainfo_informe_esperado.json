@@ -15,7 +15,7 @@
   "message": null,
   "rows": [
    {
-    "emu": "480p SD",
+    "emu": "480p",
     "field": "Resolución",
     "help": null,
     "mediainfo": "320x180"
@@ -123,7 +123,7 @@
   "message": null,
   "rows": [
    {
-    "emu": "480p SD",
+    "emu": "480p",
     "field": "Resolución",
     "help": null,
     "mediainfo": "320x180"

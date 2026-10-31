@@ -2,7 +2,7 @@
 
 El monolito del que salió la aplicación (hallazgo 1.1 de la auditoría) se
 desmontó el 2026-08-01 en cinco pasos y se borró: lo que era de todos vive en
-constants.py y en services/ (media_probe, uploadrr_yaml, emu_title,
+constants.py y en services/ (media_probe, uploadrr_yaml,
 cli_config), y lo que quedaba era el motor del CLI interactivo antiguo, que en
 el contenedor ni siquiera podía funcionar.
 
@@ -59,7 +59,7 @@ def test_nadie_llama_a_legacy():
     assert not culpables, (
         "\nCódigo llamando a legacy.py, que ya no existe:\n  " + "\n  ".join(culpables)
         + "\n\nLo que necesites está en constants.py o en services/"
-          " (media_probe, uploadrr_yaml, emu_title, cli_config)."
+          " (media_probe, uploadrr_yaml, cli_config)."
     )
 
 

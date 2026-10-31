@@ -51,6 +51,9 @@ export interface SettingsData {
 }
 
 export interface SettingsUpdatePayload {
+  // Secretos a quitar: un valor vacío deja el que hay. 'qbit_password',
+  // 'notify_discord_webhook_url', 'notify_telegram_bot_token' o 'image_host_key:<id>'.
+  clear?: string[]
   default_release_tag?: string
   upload_tags?: string[]
   provider_priority_order?: string[]

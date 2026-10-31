@@ -540,17 +540,18 @@ def _sync_one_series(
 
 def volver_a_cruzar_peticiones(conn: sqlite3.Connection, peticiones: list[int]) -> None:
     """Las peticiones que casaban con algo que se ha borrado casan ya con la copia que quede (la de 4K) o con
-    nada, sin esperar a la sincronización de peticiones, que es diaria. Nunca lanza: el borrado ya está hecho, y
-    esa sincronización vuelve a cruzarlas todas."""
+    nada, y entonces enseñan el póster de TMDb, sin esperar a la sincronización de peticiones, que es diaria.
+    Nunca lanza: el borrado ya está hecho, y esa sincronización vuelve a cruzarlas todas."""
     if not peticiones:
         return
     from .request_readiness import _biblioteca, evaluate_request_readiness
-    from .requests import match_single_request
+    from .requests import match_single_request, rellenar_posters
     try:
         biblioteca = _biblioteca(conn)
         for rid in peticiones:
             match_single_request(conn, rid)
             evaluate_request_readiness(rid, conn, biblioteca)
+        rellenar_posters(conn)
     except Exception:
         conn.rollback()
         logger.exception("No se pudieron volver a cruzar las peticiones de lo borrado de la biblioteca")

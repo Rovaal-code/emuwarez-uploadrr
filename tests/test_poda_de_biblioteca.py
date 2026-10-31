@@ -187,6 +187,27 @@ def test_la_peticion_pasa_a_casar_con_la_copia_que_queda(conn, arr):
     assert conn.execute("SELECT readiness_best_library_item_id FROM request_items").fetchone()[0] == copia_4k
 
 
+def test_la_peticion_que_se_queda_sin_cruce_trae_el_poster_de_tmdb(conn, arr, monkeypatch):
+    """El póster de la biblioteca se va con la película, y el de TMDb solo lo pedía la sincronización de peticiones."""
+    from emuwarez_uploadrr.integrations import tmdb
+    from emuwarez_uploadrr.services.requests import get_request_detail, match_all_requests
+    from emuwarez_uploadrr.services.settings import set_setting
+    set_setting(conn, "tmdb.api_key", "clave")
+    monkeypatch.setattr(tmdb, "request_json",
+                        lambda _m, url, **kw: {"poster_path": "/matrix.jpg"} if "/movie/603?" in url else {})
+    arr[RADARR] = [_peli(1, "Matrix", 603), _peli(2, "Dune", 438631)]
+    _sincroniza(conn, RADARR)
+    peticion = conn.execute("INSERT INTO request_items (emu_id, title, tmdb_id, category)"
+                            " VALUES ('7', 'Matrix', '603', 'Películas')").lastrowid
+    conn.commit()
+    match_all_requests(conn)
+
+    arr[RADARR] = [_peli(2, "Dune", 438631)]
+    _sincroniza(conn, RADARR)
+
+    assert get_request_detail(conn, peticion)["poster_url"] == "https://image.tmdb.org/t/p/original/matrix.jpg"
+
+
 def test_la_subida_sigue_ensenando_lo_que_tenia_de_la_ficha(conn, arr, client, auth_headers):
     """Subidas sacaba el póster, el año y el Origen de la ficha: al borrarla, la subida se quedaba sin ellos."""
     peli = _peli(1, "Matrix", 603)

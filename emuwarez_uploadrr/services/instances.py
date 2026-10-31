@@ -111,11 +111,13 @@ def update_instance(
 
 
 def remove_instance(conn: sqlite3.Connection, instance_id: int) -> bool:
-    """Borra la instancia con lo que se sincronizó de ella: ninguna sincronización lo iba a quitar después."""
-    from .library import volver_a_cruzar_peticiones
-    _, peticiones = borrar_biblioteca(conn, "instance_id = ?", (instance_id,))
-    cur = conn.execute("DELETE FROM instances WHERE id = ?", (instance_id,))
-    conn.commit()
+    """Borra la instancia con lo que se sincronizó de ella: ninguna sincronización lo iba a quitar después. Nunca a la
+    vez que una sincronización de biblioteca (lanza SyncAlreadyRunning): la que fuera por ella volvería a escribirlo."""
+    from .library import _sin_sincronizar, volver_a_cruzar_peticiones
+    with _sin_sincronizar():
+        _, peticiones = borrar_biblioteca(conn, "instance_id = ?", (instance_id,))
+        cur = conn.execute("DELETE FROM instances WHERE id = ?", (instance_id,))
+        conn.commit()
     volver_a_cruzar_peticiones(conn, peticiones)
     return cur.rowcount > 0
 

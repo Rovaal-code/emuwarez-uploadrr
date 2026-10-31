@@ -720,6 +720,16 @@ def _lib_sync_guard() -> Iterator[None]:
         publicar(EVENTO_SYNC_TERMINADA, {"que": "biblioteca"})
 
 
+@contextmanager
+def _sin_sincronizar() -> Iterator[None]:
+    """Para lo que no puede pasar a la vez que una sincronización de biblioteca: con una en marcha lanza
+    SyncAlreadyRunning, y la que quiera empezar espera a que acabe. Sin la barra ni los avisos de _lib_sync_guard."""
+    with _LIB_SYNC_LOCK:
+        if _LIB_SYNC_PROGRESS.get("active"):
+            raise SyncAlreadyRunning()
+        yield
+
+
 def start_library_sync_background(include_episodes: bool = True) -> dict:
     """Run sync_all in a background thread so the UI can poll the element count."""
     from ..database import connect, db_path

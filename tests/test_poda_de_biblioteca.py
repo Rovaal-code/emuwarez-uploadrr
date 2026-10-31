@@ -281,6 +281,40 @@ def test_borrar_una_instancia_borra_lo_que_se_sincronizo_de_ella(conn, arr):
     assert conn.execute("SELECT library_item_id FROM upload_jobs WHERE id = ?", (subida,)).fetchone()[0] is None
 
 
+def test_no_se_borra_una_instancia_mientras_hay_una_sincronizacion(conn, arr, client, auth_headers, monkeypatch):
+    """La sincronización en marcha (la programada ya tiene su lista de instancias) volvería a escribir lo suyo, y ya
+    nada lo borraría."""
+    arr[RADARR] = [_peli(1, "Matrix", 603)]
+    _sincroniza(conn, RADARR)
+    monkeypatch.setitem(library._LIB_SYNC_PROGRESS, "active", True)
+
+    assert client.delete(f"/api/instances/{RADARR}", headers=auth_headers).status_code == 429
+    assert get_instance(conn, RADARR) is not None and _externos(conn, RADARR) == {"1"}
+
+
+def test_la_instancia_que_se_borra_mientras_su_sincronizacion_espera_no_se_sincroniza(
+        conn, arr, client, auth_headers, monkeypatch, isolated_db):
+    """Se buscaba antes de esperar el candado: si se borraba entretanto, la sincronización volvía a escribir lo suyo."""
+    from contextlib import contextmanager
+    candado = library._lib_sync_guard
+
+    @contextmanager
+    def se_borra_mientras_espera():
+        otra = connect(isolated_db / "emuwarez_uploadrr.db")  # en el hilo del servidor, no en el del test
+        otra.execute("DELETE FROM instances WHERE id = ?", (RADARR,))
+        otra.commit()
+        otra.close()
+        with candado():
+            yield
+
+    monkeypatch.setattr(library, "_LIB_SYNC_PROGRESS", dict(library._LIB_SYNC_PROGRESS))
+    monkeypatch.setattr(library, "_lib_sync_guard", se_borra_mientras_espera)
+    arr[RADARR] = [_peli(1, "Matrix", 603)]
+
+    assert client.post(f"/api/instances/{RADARR}/sync", headers=auth_headers).status_code == 404
+    assert _externos(conn, RADARR) == set()
+
+
 def _migra(conn):
     conn.execute("DELETE FROM app_state WHERE key = 'schema_version'")
     conn.commit()

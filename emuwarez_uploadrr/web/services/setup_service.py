@@ -32,7 +32,6 @@ def get_setup_state(conn: sqlite3.Connection) -> dict:
         "emu_configured": get_configured(conn, "emu.api_key"),
         "radarr_instances": radarr,
         "sonarr_instances": sonarr,
-        "jellyfin_configured": False,  # Jellyfin is explicitly out of scope
     }
 
 

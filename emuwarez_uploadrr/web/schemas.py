@@ -53,7 +53,6 @@ class SetupStatusResponse(BaseModel):
     emu_configured: bool
     radarr_instances: int
     sonarr_instances: int
-    jellyfin_configured: bool
     next_step: Optional[str] = None
 
 

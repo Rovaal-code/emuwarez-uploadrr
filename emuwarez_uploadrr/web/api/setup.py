@@ -51,7 +51,6 @@ def setup_status() -> SetupStatusResponse:
             "initialized": False, "admin_configured": False,
             "tmdb_configured": False, "emu_configured": False,
             "radarr_instances": 0, "sonarr_instances": 0,
-            "jellyfin_configured": False,
         }
     return SetupStatusResponse(**state, next_step=next_step(state))
 

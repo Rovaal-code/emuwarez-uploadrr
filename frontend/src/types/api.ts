@@ -7,7 +7,6 @@ export interface SetupStatusResponse {
   emu_configured: boolean
   radarr_instances: number
   sonarr_instances: number
-  jellyfin_configured: boolean
   next_step: string | null
 }
 

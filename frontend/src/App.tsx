@@ -51,10 +51,12 @@ export function App() {
   // Los intentos seguidos que han fallado: la espera crece igual que la del canal de avisos.
   const intentos = useRef(0)
   const reintento = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const montada = useRef(false)
 
   // El servidor no contesta bien (red, 502, base ocupada): ni login ni asistente, que
   // serían mentira. Se muestra «reconectando» y se vuelve a probar sin tirar el token.
   function reconectar() {
+    if (!montada.current) return   // un arranque que falla tras desmontar no reprograma nada
     setState('reconectando')
     reintento.current = setTimeout(() => bootstrap(true), esperaDelIntento(intentos.current++))
   }
@@ -114,8 +116,12 @@ export function App() {
   }
 
   useEffect(() => {
+    montada.current = true
     bootstrap()
-    return () => { if (reintento.current) clearTimeout(reintento.current) }
+    return () => {
+      montada.current = false
+      if (reintento.current) clearTimeout(reintento.current)
+    }
   }, [])
 
   function handleLoginSuccess() {

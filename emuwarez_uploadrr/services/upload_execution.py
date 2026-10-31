@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from ..database import connect, init_db, row_to_dict, rows_to_dicts, get_setting_canonical
-from .upload_result_parser import classify_upload_result, build_error_summary
+from .upload_result_parser import classify_upload_result
 from .uploadrr_progress import (
     RUNNING_DISPLAY_ORDER,
     RUNNING_SUB_PHASE_ORDER,
@@ -644,6 +644,8 @@ def _notify_upload_completed(job_id: int, result_url: str | None, aviso: str | N
             artifacts = get_upload_job_artifacts(job_id, conn=conn)
             has_trailer = any(a.get("artifact_type") == "trailer_url" for a in artifacts)
             body = "Se ha subido a eMuwarez correctamente."
+            if job and job.get("request_title"):
+                body += f" Petición: «{job['request_title']}»."
             if not has_trailer:
                 body += " Requiere Trailer."
             if aviso:
@@ -667,11 +669,12 @@ def _notify_upload_completed(job_id: int, result_url: str | None, aviso: str | N
         )
 
 
-def _notify_upload_failed(job_id: int, error_message: str | None) -> None:
+def _notify_upload_failed(job_id: int, error_message: str | None, result_url: str | None = None) -> None:
     """Emit a 'subida fallida' notification. Best-effort: never lets a
     notification failure affect the upload result. Called from every
     terminal-failure branch of _run_uploadrr_subprocess (timeout, non-zero
-    exit, executable not found, unexpected exception)."""
+    exit, executable not found, unexpected exception). `result_url`: la ficha
+    del torrent, si llegó a subirse antes de fallar."""
     try:
         from .notification_center import emit
         conn = _get_db_conn()
@@ -679,12 +682,17 @@ def _notify_upload_failed(job_id: int, error_message: str | None) -> None:
             job = get_upload_job(job_id, conn=conn)
             title = (job or {}).get("title") or "Subida"
             body = "Ha fallado al subirse a eMuwarez."
+            if result_url:
+                body += " El torrent sí llegó a subirse."
+            if job and job.get("request_title"):
+                body += f" Petición: «{job['request_title']}»."
             if error_message:
-                body += f" {error_message.strip()[:300]}"
+                body += "\n" + error_message.strip()[:300]
             emit(
                 conn, "upload_failed",
                 "Subida fallida",
                 body,
+                link=result_url,
                 level="error",
                 entity_type="upload_job",
                 entity_id=job_id,
@@ -1277,15 +1285,11 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
         result = classify_upload_result(stdout_text, stderr_text, returncode)
 
         if returncode == 0:
-            # Save URL artifact if found
-            if result["urls"]:
-                first_url = result["urls"][0]
-                create_upload_artifact(job_id, "uploaded_url", name="URL subida", url=first_url)
-
-            # Save torrent ID artifact if found
-            if result["torrent_ids"]:
-                first_id = result["torrent_ids"][0]
-                create_upload_artifact(job_id, "torrent_id", name="torrent_id", value=first_id)
+            # La ficha del torrent: la línea `Torrent URL:` de Uploadrr-EMU, no la primera URL que imprima.
+            if result["result_url"]:
+                create_upload_artifact(job_id, "uploaded_url", name="URL subida", url=result["result_url"])
+            if result["torrent_id"]:
+                create_upload_artifact(job_id, "torrent_id", name="torrent_id", value=result["torrent_id"])
 
             _finalize_job_status(
                 job_id, "completed",
@@ -1293,8 +1297,8 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
                 exit_code=0,
                 finished_at=finished_at,
                 duration_seconds=duration_seconds,
-                result_url=result["urls"][0] if result["urls"] else None,
-                result_torrent_id=result["torrent_ids"][0] if result["torrent_ids"] else None,
+                result_url=result["result_url"],
+                result_torrent_id=result["torrent_id"],
                 last_log_at=_now(),
                 last_success_at=finished_at,
             )
@@ -1318,7 +1322,7 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
                 stream="system",
             )
             logger.info("Subida completada (job %s) en %ss%s", job_id, duration_seconds,
-                        f" → {result['urls'][0]}" if result["urls"] else "")
+                        f" → {result['result_url']}" if result["result_url"] else "")
             _check_trailer_and_log(job_id)
             if result["season_pack_warning"]:
                 # Un aviso que no se puede registrar no cambia una subida ya hecha.
@@ -1326,12 +1330,14 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
                     append_upload_log(job_id, "warning", result["season_pack_warning"], stream="system")
                 except Exception:
                     logger.exception("Subida %s: no se pudo registrar el aviso de pack incompleto", job_id)
-            _notify_upload_completed(
-                job_id, result["urls"][0] if result["urls"] else None, aviso=result["season_pack_warning"]
-            )
+            _notify_upload_completed(job_id, result["result_url"], aviso=result["season_pack_warning"])
         else:
-            err_summary = build_error_summary(stderr_text, stdout_text, returncode)
-            safe_err = redact_secrets(err_summary or f"exit code {returncode}", secrets)
+            safe_err = redact_secrets(result["error_summary"] or f"exit code {returncode}", secrets)
+            # Si el torrent llegó a subirse antes de fallar, su ficha sigue siendo útil.
+            subido = (
+                {"result_url": result["result_url"], "result_torrent_id": result["torrent_id"]}
+                if result["result_url"] else {}
+            )
 
             _finalize_job_status(
                 job_id, "failed",
@@ -1340,6 +1346,7 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
                 finished_at=finished_at,
                 duration_seconds=duration_seconds,
                 error_message=safe_err[:2000],
+                **subido,
                 last_log_at=_now(),
                 last_error_at=finished_at,
             )
@@ -1349,7 +1356,7 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
                 stream="system",
             )
             logger.warning("Subida fallida (job %s, exit %s): %s", job_id, returncode, safe_err[:300])
-            _notify_upload_failed(job_id, safe_err)
+            _notify_upload_failed(job_id, safe_err, result_url=result["result_url"])
 
     except FileNotFoundError as exc:
         finished_at = _now()

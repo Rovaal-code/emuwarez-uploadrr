@@ -9,8 +9,8 @@ from .arr_base import (
     arr_request, join_api_path, safe_api_key,
 )
 from .base import (
-    build_url, extract_backdrop_url, extract_media_info, extract_poster_url, extract_release_group,
-    request_json,
+    IntegrationError, build_url, extract_backdrop_url, extract_media_info, extract_poster_url,
+    extract_release_group, request_json,
 )
 from ..models import LibraryItem, LocalStatus, MediaKind, NomenclatureStatus
 from ..constants import DEFAULT_TAG
@@ -31,7 +31,10 @@ def get_root_folders(url: str, api_key: str) -> list[dict[str, Any]]:
 
 def get_series(url: str, api_key: str) -> list[dict[str, Any]]:
     data = request_json("GET", build_url(url, "/api/v3/series"), api_key=api_key)
-    return data if isinstance(data, list) else []
+    # Tomarlo por una biblioteca vacía haría que la sincronización borrara todas las series de la instancia.
+    if not isinstance(data, list):
+        raise IntegrationError("Sonarr no ha devuelto la lista de series")
+    return data
 
 
 def refresh_series(url: str, api_key: str, series_id: int) -> dict[str, Any]:
@@ -60,7 +63,10 @@ def get_command_status(url: str, api_key: str, command_id: int) -> dict[str, Any
 
 def get_episodes(url: str, api_key: str, series_id: int) -> list[dict[str, Any]]:
     data = request_json("GET", build_url(url, "/api/v3/episode", {"seriesId": series_id}), api_key=api_key)
-    return data if isinstance(data, list) else []
+    # Con [] la sincronización borraría todos los capítulos de la serie.
+    if not isinstance(data, list):
+        raise IntegrationError(f"Sonarr no ha devuelto los capítulos de la serie {series_id}")
+    return data
 
 
 def get_episode_files(url: str, api_key: str, series_id: int) -> list[dict[str, Any]]:

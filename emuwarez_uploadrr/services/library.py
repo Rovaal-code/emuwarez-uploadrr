@@ -12,6 +12,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Callable, Iterator, Optional, Sequence, Union
 
+from ..database import borrar_biblioteca
 from ..integrations import radarr, sonarr
 from ..models import InstanceConfig, LibraryItem, LocalStatus, MediaKind, NomenclatureStatus
 from .source_assistant import EMU_PROVIDERS
@@ -35,12 +36,13 @@ logger = logging.getLogger("emuwarez.library")
 
 def upsert_library_item(
     conn: sqlite3.Connection, item: LibraryItem, *, notify_missing: bool = True,
-    defer_to: Optional[list] = None,
+    defer_to: Optional[list] = None, seen_at: Optional[str] = None,
 ) -> int:
     """`defer_to`: collect the "turned Faltante" notification into this list as
     (item, item_id) instead of emitting it right away. Used by the Sonarr sync
     so a season whose episodes ALL went missing at once can send one season
-    notification instead of one per episode (see _emit_missing_notifications)."""
+    notification instead of one per episode (see _emit_missing_notifications).
+    `seen_at`: la marca del recorrido que lo ve (ver sync_instance)."""
     # Captured BEFORE the upsert overwrites it — this is what lets us fire a
     # notification on the exact sync pass where the item turns Faltante,
     # instead of guessing from a date (see services/notification_center.py's
@@ -78,6 +80,7 @@ def upsert_library_item(
     data["missing_since"] = (
         datetime.now(timezone.utc).isoformat() if item.local_status == LocalStatus.MISSING.value else None
     )
+    data["last_seen_at"] = seen_at
     columns = [
         "item_type", "title", "year", "original_title", "english_title", "instance_id", "instance_type",
         "instance_name", "external_id", "tmdb_id", "imdb_id", "tvdb_id", "tvmaze_id", "title_slug",
@@ -85,7 +88,7 @@ def upsert_library_item(
         "quality", "resolution", "source", "release_group", "video_codec", "audio_codec", "audio_languages",
         "audio_channels", "dynamic_range", "subtitle_languages", "size_bytes", "local_status",
         "request_status", "nomenclature_status", "request_id", "added_at", "raw_json",
-        "poster_url", "backdrop_url", "mal_id", "missing_since",
+        "poster_url", "backdrop_url", "mal_id", "missing_since", "last_seen_at",
     ]
     values = [data.get(col) for col in columns]
     conn.execute(
@@ -148,6 +151,7 @@ def upsert_library_item(
                 WHEN excluded.local_status = 'Faltante' AND library_items.local_status IS NOT 'Faltante'
                 THEN excluded.missing_since
                 ELSE library_items.missing_since END,
+            last_seen_at = COALESCE(excluded.last_seen_at, library_items.last_seen_at),
             updated_at = CURRENT_TIMESTAMP
         """,
         values,
@@ -382,6 +386,7 @@ def _sync_one_series(
     include_episodes: bool = True,
     bump_fn=None,
     notify_missing: bool = True,
+    seen_at: Optional[str] = None,
 ) -> int:
     """Upsert one series row (+ its seasons/episodes if include_episodes) from
     a single Sonarr `series` dict. Extracted from sync_instance's own Sonarr
@@ -418,7 +423,7 @@ def _sync_one_series(
         instance_name=instance.name,
         series_queue_map=series_queue,
     )
-    series_row_id = upsert_library_item(conn, series_item, notify_missing=notify_missing)
+    series_row_id = upsert_library_item(conn, series_item, notify_missing=notify_missing, seen_at=seen_at)
     _bump()
     if series_item.local_status in LocalStatus.not_available():
         missing += 1
@@ -459,7 +464,8 @@ def _sync_one_series(
                 episode_count_override=None if stats_present else len(season_eps),
                 file_count_override=None if stats_present else _file_count(season_eps),
             )
-            season_row_id_by_number[season_num] = upsert_library_item(conn, season_item, notify_missing=notify_missing)
+            season_row_id_by_number[season_num] = upsert_library_item(
+                conn, season_item, notify_missing=notify_missing, seen_at=seen_at)
             _bump()
             if season_item.local_status in LocalStatus.not_available():
                 missing += 1
@@ -476,7 +482,8 @@ def _sync_one_series(
                 episode_count_override=len(season_eps),
                 file_count_override=_file_count(season_eps),
             )
-            season_row_id_by_number[season_num] = upsert_library_item(conn, season_item, notify_missing=notify_missing)
+            season_row_id_by_number[season_num] = upsert_library_item(
+                conn, season_item, notify_missing=notify_missing, seen_at=seen_at)
             _bump()
             if season_item.local_status in LocalStatus.not_available():
                 missing += 1
@@ -506,7 +513,7 @@ def _sync_one_series(
             # or twenty episode ones" can only be made once every episode of
             # the season has been through here.
             upsert_library_item(
-                conn, ep_item, notify_missing=notify_missing, defer_to=pending_missing,
+                conn, ep_item, notify_missing=notify_missing, defer_to=pending_missing, seen_at=seen_at,
             )
             _bump()
             if ep_item.local_status != LocalStatus.AVAILABLE.value:
@@ -531,6 +538,24 @@ def _sync_one_series(
     return missing
 
 
+def volver_a_cruzar_peticiones(conn: sqlite3.Connection, peticiones: list[int]) -> None:
+    """Las peticiones que casaban con algo que se ha borrado casan ya con la copia que quede (la de 4K) o con
+    nada, sin esperar a la sincronización de peticiones, que es diaria. Nunca lanza: el borrado ya está hecho, y
+    esa sincronización vuelve a cruzarlas todas."""
+    if not peticiones:
+        return
+    from .request_readiness import _biblioteca, evaluate_request_readiness
+    from .requests import match_single_request
+    try:
+        biblioteca = _biblioteca(conn)
+        for rid in peticiones:
+            match_single_request(conn, rid)
+            evaluate_request_readiness(rid, conn, biblioteca)
+    except Exception:
+        conn.rollback()
+        logger.exception("No se pudieron volver a cruzar las peticiones de lo borrado de la biblioteca")
+
+
 def sync_instance(
     conn: sqlite3.Connection,
     instance: InstanceConfig,
@@ -541,6 +566,8 @@ def sync_instance(
 ) -> tuple[int, int]:
     imported = 0
     missing = 0
+    # Lo que acabe el recorrido sin esta marca ya no está en Radarr/Sonarr.
+    visto = datetime.now(timezone.utc).isoformat()
 
     # Suppress "content_missing_new" notifications during this instance's very
     # first sync — a fresh Radarr/Sonarr connection can insert hundreds of
@@ -586,7 +613,7 @@ def sync_instance(
                 instance_name=instance.name,
                 queue_map=queue_map,
             )
-            upsert_library_item(conn, item, notify_missing=notify_missing)
+            upsert_library_item(conn, item, notify_missing=notify_missing, seen_at=visto)
             _bump()
             if item.local_status != LocalStatus.AVAILABLE.value:
                 missing += 1
@@ -618,8 +645,19 @@ def sync_instance(
                 conn, instance, series,
                 localize_titles=localize_titles, series_queue=series_queue, ep_queue=ep_queue,
                 include_episodes=include_episodes, bump_fn=_bump,
-                notify_missing=notify_missing,
+                notify_missing=notify_missing, seen_at=visto,
             )
+
+    # Solo se llega aquí tras un recorrido completo: un listado que falla lanza y no se borra nada.
+    donde = "instance_id = ? AND (last_seen_at IS NULL OR last_seen_at != ?)"
+    if not include_episodes:
+        # Sin capítulos no se recorren temporadas ni capítulos: no haberlos visto no dice que ya no estén.
+        donde += " AND item_type IN ('movie', 'series')"
+    borrados, peticiones = borrar_biblioteca(conn, donde, (instance.id, visto))
+    conn.commit()
+    if borrados:
+        logger.info("Borrados %d elementos que %s «%s» ya no tiene", borrados, instance.type, instance.name)
+    volver_a_cruzar_peticiones(conn, peticiones)
     return imported, missing
 
 

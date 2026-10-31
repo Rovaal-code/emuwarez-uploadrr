@@ -9,8 +9,8 @@ from .arr_base import (
     arr_request, join_api_path, safe_api_key,
 )
 from .base import (
-    build_url, extract_backdrop_url, extract_media_info, extract_poster_url, extract_release_group,
-    request_json,
+    IntegrationError, build_url, extract_backdrop_url, extract_media_info, extract_poster_url,
+    extract_release_group, request_json,
 )
 from ..models import LibraryItem, LocalStatus, MediaKind, NomenclatureStatus
 from ..constants import DEFAULT_TAG
@@ -55,7 +55,10 @@ def get_command_status(url: str, api_key: str, command_id: int) -> dict[str, Any
 
 def get_movies(url: str, api_key: str) -> list[dict[str, Any]]:
     data = request_json("GET", build_url(url, "/api/v3/movie"), api_key=api_key)
-    return data if isinstance(data, list) else []
+    # Tomarlo por una biblioteca vacía haría que la sincronización borrara todas las películas de la instancia.
+    if not isinstance(data, list):
+        raise IntegrationError("Radarr no ha devuelto la lista de películas")
+    return data
 
 
 def get_queue(url: str, api_key: str) -> list[dict[str, Any]]:

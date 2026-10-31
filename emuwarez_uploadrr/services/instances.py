@@ -4,6 +4,7 @@ from __future__ import annotations
 import sqlite3
 from typing import Optional
 
+from ..database import borrar_biblioteca
 from ..integrations import radarr, sonarr
 from ..integrations.arr_base import ArrClientError, safe_api_key
 from ..integrations.base import IntegrationError, normalize_base_url
@@ -110,8 +111,12 @@ def update_instance(
 
 
 def remove_instance(conn: sqlite3.Connection, instance_id: int) -> bool:
+    """Borra la instancia con lo que se sincronizó de ella: ninguna sincronización lo iba a quitar después."""
+    from .library import volver_a_cruzar_peticiones
+    _, peticiones = borrar_biblioteca(conn, "instance_id = ?", (instance_id,))
     cur = conn.execute("DELETE FROM instances WHERE id = ?", (instance_id,))
     conn.commit()
+    volver_a_cruzar_peticiones(conn, peticiones)
     return cur.rowcount > 0
 
 

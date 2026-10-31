@@ -1166,6 +1166,9 @@ def _migrate_library_items_last_seen(conn: sqlite3.Connection) -> None:
     if "last_seen_at" not in {fila[1] for fila in conn.execute("PRAGMA table_info(library_items)")}:
         conn.execute("ALTER TABLE library_items ADD COLUMN last_seen_at TEXT")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_upload_jobs_library ON upload_jobs(library_item_id)")
+    # Borrar una instancia dejaba lo suyo en la biblioteca, y ninguna sincronización lo iba a quitar. Sin el
+    # IS NOT NULL, con la tabla de instancias vacía también caerían las filas sin instancia.
+    borrar_biblioteca(conn, "instance_id IS NOT NULL AND instance_id NOT IN (SELECT id FROM instances)")
 
 
 def _migrate_quitar_peticiones_de_ejemplo(conn: sqlite3.Connection) -> None:

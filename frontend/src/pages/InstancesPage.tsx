@@ -155,7 +155,7 @@ export function InstancesPage() {
   }
 
   async function handleDelete(inst: { id: number; name: string }) {
-    if (!window.confirm(`¿Eliminar la instancia «${inst.name}»? Su contenido sincronizado dejará de actualizarse.`)) return
+    if (!window.confirm(`¿Eliminar la instancia «${inst.name}»? Su contenido sincronizado se quitará de la biblioteca; las subidas se quedan en el historial.`)) return
     try {
       await deleteInstance(inst.id)
       await load()

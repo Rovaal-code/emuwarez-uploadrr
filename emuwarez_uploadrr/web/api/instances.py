@@ -102,8 +102,7 @@ def delete_instance_endpoint(
     instance_id: int,
     current_user: dict = Depends(require_auth),
 ) -> OkResponse:
-    """Delete an instance. Its synced library items are left untouched (they
-    just stop being refreshed); the user can clean them via a re-sync."""
+    """Borra la instancia y lo que se sincronizó de ella; sus subidas se quedan en el historial."""
     from emuwarez_uploadrr.services.instances import get_instance, remove_instance
     with _get_conn() as conn:
         inst = get_instance(conn, instance_id)

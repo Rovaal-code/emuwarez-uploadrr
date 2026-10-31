@@ -9,7 +9,7 @@ from emuwarez_uploadrr.database import connect, init_db
 from emuwarez_uploadrr.integrations import radarr, sonarr
 from emuwarez_uploadrr.integrations.base import IntegrationError
 from emuwarez_uploadrr.services import library
-from emuwarez_uploadrr.services.instances import get_instance
+from emuwarez_uploadrr.services.instances import get_instance, remove_instance
 
 RADARR, RADARR_4K, SONARR = 1, 2, 3
 URL = {RADARR: "http://radarr", RADARR_4K: "http://radarr-4k", SONARR: "http://sonarr"}
@@ -197,6 +197,21 @@ def test_lo_que_no_vino_de_la_sincronizacion_tambien_se_borra(conn, arr):
     assert _externos(conn, RADARR) == {"1"}
 
 
+def test_borrar_una_instancia_borra_lo_que_se_sincronizo_de_ella(conn, arr):
+    arr[RADARR] = [_peli(1, "Matrix", 603)]
+    arr[SONARR] = {20: [1, 2]}
+    library.sync_all(conn, include_episodes=True)
+    subida = conn.execute("INSERT INTO upload_jobs (library_item_id, title, path, status)"
+                          " VALUES (?, 'Serie 20', '/tv/Serie 20', 'completed')", (_id(conn, SONARR, "episode:2001"),)).lastrowid
+    conn.commit()
+
+    assert remove_instance(conn, SONARR)
+
+    assert _externos(conn, SONARR) == set()
+    assert _externos(conn, RADARR) == {"1"}
+    assert conn.execute("SELECT library_item_id FROM upload_jobs WHERE id = ?", (subida,)).fetchone()[0] is None
+
+
 def _migra(conn):
     conn.execute("DELETE FROM app_state WHERE key = 'schema_version'")
     conn.commit()
@@ -212,3 +227,16 @@ def test_una_base_de_datos_anterior_recibe_la_marca_y_el_indice(conn):
     assert "last_seen_at" in {fila[1] for fila in conn.execute("PRAGMA table_info(library_items)")}
     assert "idx_upload_jobs_library" in {fila[1] for fila in conn.execute("PRAGMA index_list(upload_jobs)")}
 
+
+def test_al_migrar_se_borra_lo_de_las_instancias_que_ya_no_existen(conn):
+    """Antes, borrar una instancia dejaba lo suyo en la biblioteca para siempre."""
+    for instancia, externo in ((99, "huérfana"), (None, "sin instancia"), (RADARR, "1")):
+        conn.execute("INSERT INTO library_items (item_type, title, instance_id, external_id, local_status)"
+                     " VALUES ('movie', ?, ?, ?, 'Disponible')", (externo, instancia, externo))
+    _migra(conn)
+    assert {r[0] for r in conn.execute("SELECT external_id FROM library_items")} == {"sin instancia", "1"}
+
+    # Sin ninguna instancia, lo que no tiene instancia sigue ahí.
+    conn.execute("DELETE FROM instances")
+    _migra(conn)
+    assert {r[0] for r in conn.execute("SELECT external_id FROM library_items")} == {"sin instancia"}

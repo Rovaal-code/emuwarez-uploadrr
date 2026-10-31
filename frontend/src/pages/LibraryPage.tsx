@@ -277,9 +277,11 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   const ultimaCarga = useRef(0)
   // Un aviso de "recarga" que llegó con una carga en marcha: se atiende al acabar.
   const recargaPendiente = useRef(false)
+  const cargando = useRef(false)
   const load = useCallback(async () => {
     const esta = ++ultimaCarga.current
     recargaPendiente.current = false
+    cargando.current = true
     setLoading(true)
     setError(null)
     try {
@@ -306,6 +308,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
       if (esta === ultimaCarga.current) setError('Error al cargar la biblioteca')
     } finally {
       if (esta === ultimaCarga.current) {
+        cargando.current = false
         setLoading(false)
         if (recargaPendiente.current) load()
       }
@@ -430,7 +433,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // apunta y se repide una vez al acabar, por si fue una sincronización.
   useEffect(() => {
     if (!lastInvalidatedAt) return
-    if (loading) recargaPendiente.current = true
+    if (cargando.current) recargaPendiente.current = true
     else load()
   }, [lastInvalidatedAt])
 

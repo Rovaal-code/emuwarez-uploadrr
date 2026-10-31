@@ -20,6 +20,7 @@ def test_los_logs_de_la_app_salen_por_stdout_sin_duplicar_uvicorn(monkeypatch, t
     logging.getLogger("emuwarez.prueba").info("sincronización terminada")
     logging.getLogger("uvicorn.error").info("Started server process")
 
-    out = capsys.readouterr().out
+    out, err = capsys.readouterr()
     assert "emuwarez.prueba: sincronización terminada" in out
     assert out.count("Started server process") == 1
+    assert "Started server process" not in err

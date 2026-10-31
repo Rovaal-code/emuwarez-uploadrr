@@ -119,6 +119,7 @@ def test_build_editable_nomenclature_fields_not_found(tmp_path):
     assert "error" in result
 
 
+@pytest.mark.usefixtures("ficheros_de_mentira")
 def test_build_editable_nomenclature_fields_basic(tmp_path):
     conn = _make_conn(tmp_path)
     item_id = _accessible_item(conn, tmp_path, title="Dune", tmdb_id="438631")
@@ -139,6 +140,7 @@ def test_build_editable_nomenclature_fields_basic(tmp_path):
     assert "internal_mkv_title" in result
 
 
+@pytest.mark.usefixtures("ficheros_de_mentira")
 def test_build_editable_nomenclature_fields_applies_overrides(tmp_path):
     """Regression: a season pack's Source/Proveedor/Tag overrides (applied
     uniformly to every episode via build_season_pack_plan/apply_season_pack)
@@ -263,6 +265,7 @@ def test_source_agreement(name, radarr, tool, agree, por_que):
     assert source_values_agree(name, radarr, tool) is agree, por_que
 
 
+@pytest.mark.usefixtures("ficheros_de_mentira")
 def test_una_ruta_preparada_muerta_no_bloquea_la_nomenclatura(tmp_path):
     """El caso de The Tudors S03 (2026-08-04).
 
@@ -299,6 +302,7 @@ def test_una_ruta_preparada_muerta_no_bloquea_la_nomenclatura(tmp_path):
     assert "fields" in result
 
 
+@pytest.mark.usefixtures("ficheros_de_mentira")
 def test_con_la_ruta_preparada_viva_se_sigue_leyendo_de_ella(tmp_path):
     """La otra mitad: durante una subida, los enlaces de la carpeta de subidas
     son el fichero bueno y tienen que seguir mandando."""

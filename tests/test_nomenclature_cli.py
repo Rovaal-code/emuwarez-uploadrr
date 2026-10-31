@@ -83,8 +83,10 @@ def test_nomenclature_fields_found(tmp_path, capsys):
             {"field": "Source", "mediainfo": "del nombre del archivo", "emu": "WEB-DL"},
         ],
     }
+    # El fichero es de mentira: mkvmerge tampoco lo reconocería.
     with patch("emuwarez_uploadrr.services.source_assistant._get_tmdb_available_providers_raw", return_value=[]), \
-         patch("emuwarez_uploadrr.services.media_info_service.build_mediainfo_report", return_value=_MI_OK):
+         patch("emuwarez_uploadrr.services.media_info_service.build_mediainfo_report", return_value=_MI_OK), \
+         patch("emuwarez_uploadrr.services.mkv_remux.read_tracks_json", return_value={"ok": True, "data": {}}):
         item_id = _seed_db(tmp_path, title="Dune", path=str(f),
                            torrent_name="Dune 2021 1080p WEB-DL AMZN - EMUWAREZ")
         rc = _run_cli(["nomenclature", "fields", str(item_id)], tmp_path)

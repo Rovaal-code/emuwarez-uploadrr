@@ -586,6 +586,8 @@ def build_editable_nomenclature_fields(
                           "podido leerlo (probable corrupción) — hace falta para reordenar/renombrar las pistas."),
             }
         mi_audio = report.get("audio_summary")
+        # La resolución del fichero, igual que la propuesta (nomenclature.py).
+        resolution = report.get("resolution") or resolution
         emu_by_field = {
             r["field"]: (None if r["emu"] in (None, "—", "") else r["emu"])
             for r in report.get("rows", [])

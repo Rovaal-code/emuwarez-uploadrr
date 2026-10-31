@@ -119,6 +119,12 @@ def test_imghost_connection(host_id: str, api_key: Optional[str] = None, *, conn
     label = meta["label"] if meta else host_id
     key = api_key if api_key is not None else (get_host_key(conn, host_id) if conn is not None else None)
     result = test_image_host(host_id, key)
+    # Responde, pero la clave no se ha podido comprobar: no se da por buena.
+    if result.get("ok") and meta and meta["needs_key"] and not result.get("key_checked"):
+        return _fail("imghost", "key_unchecked",
+                     f"{label} responde, pero no se ha podido comprobar la API key"
+                     + (f": {result['key_error']}" if result.get("key_error") else ""),
+                     details={"host": host_id})
     if result.get("ok"):
         return _ok("imghost", message=f"{label} responde", details={"host": host_id})
     return _fail("imghost", "connection_error", result.get("error") or f"{label} no responde",

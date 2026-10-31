@@ -158,11 +158,23 @@ def analyze(path: str, *, radarr_source: Optional[str] = None,
                          "applicable": is_mkv},
         },
         "engine_version": ENGINE_VERSION,
+        # Qué faltó, si algo faltó. Un análisis a medias (disco despertando,
+        # herramienta que no contestó a tiempo) no se guarda: se repite.
+        "partial": _que_falto(mi_result, ff_result, mkv_result, sample_result),
     }
 
-    if use_cache:
+    if use_cache and not output["partial"]:
         cache.put(path, output, conn=conn)
     return output
+
+
+def _que_falto(mi_result, ff_result, mkv_result, sample_result) -> Optional[str]:
+    faltas = [nombre for nombre, r in (("MediaInfo", mi_result), ("FFprobe", ff_result),
+                                       ("MKVToolNix", mkv_result)) if r is not None and not r.ok]
+    cobertura = sample_result.coverage if sample_result else 0.0
+    if cobertura < 1:
+        faltas.append(f"muestreo al {int(cobertura * 100)} %")
+    return ", ".join(faltas) or None
 
 
 def _format_duration(ffprobe_json: Optional[dict]) -> Optional[float]:

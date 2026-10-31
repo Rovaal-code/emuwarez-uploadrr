@@ -36,6 +36,7 @@ from pathlib import Path
 from typing import Callable
 
 from ..database import connect
+from .emu_format import format_channels, resolve_language
 from .uploadrr_progress import parse_mkvmerge_gui_progress
 
 logger = logging.getLogger("emuwarez.mkv_remux")
@@ -167,9 +168,6 @@ _LANG_DISPLAY: dict[str, str] = {
     "zu": "Zulú", "zul": "Zulú",
 }
 _LATIN_SPANISH_NAME = "Español (Latinoamérica)"
-# El valenciano comparte código ISO con el catalán ("cat"), así que la única
-# forma de distinguirlo es el BCP-47 de la pista ("ca-valencia"). Mismo caso
-# que el castellano y el latino, que también comparten "spa".
 _VALENCIAN_NAME = "Valencià"
 _UNKNOWN_LANG_NAME = "Desconocido"
 
@@ -177,76 +175,36 @@ _UNKNOWN_LANG_NAME = "Desconocido"
 # keeps its original relative order (Python's sort is stable).
 _PRIORITY_CASTILIAN, _PRIORITY_CATALAN, _PRIORITY_ENGLISH, _PRIORITY_OTHER = 0, 1, 2, 3
 
-
-# Real-world audit (2802 files, MAX/HBO Max releases) found `es-x-01`..`es-x-09`
-# — a private-use BCP47 subtag some streaming services attach to disambiguate
-# tracks, NOT a region code. It shows up even on natively Castilian-Spanish
-# content (e.g. "Aquí no hay quien viva", a Spanish-produced sitcom) — so
-# matching on `es-` prefix alone (anything but "es-es") mislabeled ~100 native
-# Castilian tracks as Latin American. Only a real Latin American region code
-# counts now.
-_LATIN_SPANISH_REGIONS = {
-    "419",  # UN M49 region code for Latin America & the Caribbean
-    "mx", "ar", "co", "cl", "pe", "ve", "ec", "gt", "cu", "bo",
-    "do", "hn", "py", "sv", "ni", "cr", "pa", "uy", "pr",
+# El idioma de la pista lo decide emu_format.resolve_language, el mismo que
+# usan el nombre del release y la columna Español: latino y valenciano solo se
+# distinguen por el BCP-47 (`language_ietf`) o por el nombre de la pista.
+_NOMBRE_POR_CODIGO = {
+    "ESP": "Español (Castellano)", "LAT": _LATIN_SPANISH_NAME,
+    "CAT": "Català", "VAL": _VALENCIAN_NAME,
+    "ING": "Inglés", "UND": _UNKNOWN_LANG_NAME,
 }
-
-
-def _is_latin_spanish(lang_ietf: str | None, existing_name: str | None) -> bool:
-    """Castilian vs Latin American Spanish can't be told apart from the plain
-    639-2 'spa' tag (it has no regional variant) — only from the BCP47
-    `language_ietf` tag (e.g. 'es-419', 'es-MX') when the source set a REAL
-    Latin American region, or from the track's own existing name already
-    saying so."""
-    if lang_ietf:
-        parts = lang_ietf.strip().lower().split("-")
-        if parts and parts[0] == "es" and len(parts) > 1 and parts[1] in _LATIN_SPANISH_REGIONS:
-            return True
-    if existing_name:
-        n = existing_name.strip().lower()
-        if "latino" in n or "latin america" in n or "latinoameric" in n:
-            return True
-    return False
 
 
 def _normalize_lang_code(lang: str | None) -> str:
     return (lang or "und").strip().lower()
 
 
-def _is_valencian(lang: str | None, lang_ietf: str | None, existing_name: str | None) -> bool:
-    """Valenciano, que no se puede distinguir del catalán por el código ISO.
-
-    mkvmerge da DOS campos: `language` ("cat", sin variante) y `language_ietf`
-    ("ca-valencia", con ella). La columna Idioma leía el primero y por eso un
-    valenciano salía como catalán, aunque Ver MediaInfo enseñara la variante.
-    """
-    for texto in (lang_ietf, lang):
-        if texto and "valencia" in str(texto).strip().lower():
-            return True
-    if existing_name and "valenci" in existing_name.strip().lower():
-        return True
-    return False
-
-
 def lang_display_name(lang: str | None, lang_ietf: str | None = None, existing_name: str | None = None) -> str:
     """Human-readable, Spanish-audience display name for a track's language."""
+    codigo = resolve_language(lang, lang_ietf, existing_name)
+    if codigo in _NOMBRE_POR_CODIGO:
+        return _NOMBRE_POR_CODIGO[codigo]
     code = _normalize_lang_code(lang)
-    if code in ("es", "spa") and _is_latin_spanish(lang_ietf, existing_name):
-        return _LATIN_SPANISH_NAME
-    if _is_valencian(lang, lang_ietf, existing_name):
-        return _VALENCIAN_NAME
-    if code in ("", "und", "mis"):
-        return _UNKNOWN_LANG_NAME
-    return _LANG_DISPLAY.get(code, code.upper())
+    return _LANG_DISPLAY.get(code) or _LANG_DISPLAY.get(code.split("-")[0], code.upper())
 
 
 def lang_priority(lang: str | None, lang_ietf: str | None = None, existing_name: str | None = None) -> int:
-    code = _normalize_lang_code(lang)
-    if code in ("es", "spa"):
-        return _PRIORITY_OTHER if _is_latin_spanish(lang_ietf, existing_name) else _PRIORITY_CASTILIAN
-    if code in ("ca", "cat"):
+    codigo = resolve_language(lang, lang_ietf, existing_name)
+    if codigo == "ESP":
+        return _PRIORITY_CASTILIAN
+    if codigo in ("CAT", "VAL"):
         return _PRIORITY_CATALAN
-    if code in ("en", "eng"):
+    if codigo == "ING":
         return _PRIORITY_ENGLISH
     return _PRIORITY_OTHER
 
@@ -254,9 +212,6 @@ def lang_priority(lang: str | None, lang_ietf: str | None = None, existing_name:
 # ---------------------------------------------------------------------------
 # Codec / resolution labels for the track name
 # ---------------------------------------------------------------------------
-
-_CHANNELS_LABEL = {1: "Mono", 2: "2.0", 3: "3.0", 4: "3.1", 5: "5.0", 6: "5.1", 7: "6.1", 8: "7.1"}
-
 
 def _audio_codec_label(mkv_codec: str | None) -> str:
     text = (mkv_codec or "").lower()
@@ -320,14 +275,6 @@ def _resolution_label(pixel_dimensions: str | None) -> str | None:
     if height >= 550:
         return "576p"
     return "480p"
-
-
-def _channels_label(n) -> str:
-    try:
-        n = int(n)
-    except (TypeError, ValueError):
-        return "2.0"
-    return _CHANNELS_LABEL.get(n, f"{n}.0")
 
 
 # ---------------------------------------------------------------------------
@@ -446,6 +393,9 @@ def read_tracks_json(path: str) -> dict:
         data = json.loads(result.stdout)
     except (ValueError, TypeError):
         return {"ok": False, "error": (result.stderr or "Salida de mkvmerge -J no es JSON válido.").strip()}
+    # Un fichero vacío o con basura también da JSON (y sale con 0).
+    if (data.get("container") or {}).get("recognized") is False or not data.get("tracks"):
+        return {"ok": False, "error": "mkvmerge no reconoce el archivo o no tiene pistas (¿vacío o dañado?)."}
     return {"ok": True, "data": data}
 
 
@@ -480,6 +430,26 @@ def _is_forced(props: dict) -> bool:
     return bool(_FORCED_NAME_RE.search(name))
 
 
+# Lo que dice una pista además de su idioma, por la bandera de mkvmerge o por
+# su nombre de antes. Renombrar no puede perderlo: dos castellanos (normal y
+# comentarios, completo y SDH) quedaban con el mismo nombre.
+_CUALIFICADORES = (
+    ("flag_commentary", re.compile(r"coment|comment", re.I), "Comentarios"),
+    ("flag_visual_impaired", re.compile(r"(?i:audio\s*descri|descriptive)|\bAD\b"), "Audiodescripción"),
+    ("flag_hearing_impaired", re.compile(r"\bsdh\b|\bcc\b|hearing|sordos", re.I), "SDH"),
+)
+
+
+def _cualificadores(props: dict) -> list[str]:
+    nombre = props.get("track_name") or ""
+    return [etiqueta for bandera, patron, etiqueta in _CUALIFICADORES
+            if props.get(bandera) or patron.search(nombre)]
+
+
+def _secundaria(t: dict) -> bool:
+    """Audio de comentarios o audiodescripción: nunca el principal."""
+    return bool({"Comentarios", "Audiodescripción"} & set(t.get("qualifiers") or ()))
+
 
 def _default_subtitle_id(audio_sorted: list[dict], subs_sorted: list[dict]) -> int | None:
     """Which subtitle track (if any) should come out flagged as default.
@@ -501,14 +471,16 @@ def _default_subtitle_id(audio_sorted: list[dict], subs_sorted: list[dict]) -> i
 
     Returns the track id, or None when nothing should be default.
     """
-    castilian_audio = any(t["_priority"] == _PRIORITY_CASTILIAN for t in audio_sorted)
+    # Un castellano de comentarios o audiodescripción no es "audio en castellano".
+    castilian_audio = any(t["_priority"] == _PRIORITY_CASTILIAN and not _secundaria(t) for t in audio_sorted)
     castilian_subs = [t for t in subs_sorted if t["_priority"] == _PRIORITY_CASTILIAN]
 
     if castilian_audio:
         forced = next((t for t in castilian_subs if t["forced"]), None)
         return forced["id"] if forced else None
 
-    full = next((t for t in castilian_subs if not t["forced"]), None)
+    # Completo: ni forzado ni de comentarios.
+    full = next((t for t in castilian_subs if not t["forced"] and "Comentarios" not in t["qualifiers"]), None)
     if full:
         return full["id"]
     return subs_sorted[0]["id"] if subs_sorted else None
@@ -552,6 +524,9 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None,
             "current_name": props.get("track_name"),
             "default_before": bool(props.get("default_track")),
             "forced": _is_forced(props),
+            # La bandera del contenedor, que es la que obedece el reproductor.
+            "forced_flag": bool(props.get("forced_track")),
+            "qualifiers": _cualificadores(props),
             "audio_channels": props.get("audio_channels"),
             "pixel_dimensions": props.get("pixel_dimensions"),
             # UID de la pista dentro del MKV: es como mkvpropedit la
@@ -566,7 +541,9 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None,
     for t in audio + subs:
         t["_priority"] = lang_priority(t["language"], ietf_by_id.get(t["id"]), t["current_name"])
 
-    audio_sorted = sorted(audio, key=lambda t: t["_priority"])
+    # Dentro de un idioma, los comentarios y la audiodescripción van detrás:
+    # la primera pista es la que queda predeterminada.
+    audio_sorted = sorted(audio, key=lambda t: (t["_priority"], _secundaria(t)))
     # Secondary key `not t["forced"]` (False < True, so forced wins the tie):
     # within a language the forced track goes FIRST, giving
     #   Español Forzado, Español, Català Forzado, Català, Inglés Forzado, Inglés, resto
@@ -590,12 +567,15 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None,
         t["new_name"] = " ".join(x for x in (res, codec) if x) or codec
         t["default_after"] = t["default_before"]  # never touch video default
 
-    for i, t in enumerate(audio_sorted):
+    principal = next((t for t in audio_sorted if not _secundaria(t)), audio_sorted[0] if audio_sorted else None)
+    for t in audio_sorted:
         lang_name = lang_display_name(t["language"], ietf_by_id.get(t["id"]), t["current_name"])
         codec = _audio_codec_label(t["codec"])
-        ch = _channels_label(t["audio_channels"])
-        t["new_name"] = f"{lang_name} - {codec} {ch}"
-        t["default_after"] = (i == 0)  # first in the new order becomes default
+        # Los mismos canales que el nombre del release; ninguno si no se sabe.
+        ch = format_channels(t["audio_channels"])
+        t["new_name"] = " - ".join([lang_name, " ".join(x for x in (codec, ch) if x)] + t["qualifiers"])
+        # La predeterminada es la primera que no es de comentarios ni audiodescripción.
+        t["default_after"] = t is principal
 
     default_sub_id = _default_subtitle_id(audio_sorted, subs_sorted)
     for t in subs_sorted:
@@ -604,7 +584,8 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None,
         # {Canales}" — consistent separator across track types, whatever the
         # qualifier ends up being (Forzado today; Full/SDH etc. would follow
         # the same pattern if ever added).
-        t["new_name"] = f"{lang_name} - Forzado" if t["forced"] else lang_name
+        quals = (["Forzado"] if t["forced"] else []) + [q for q in t["qualifiers"] if q in ("SDH", "Comentarios")]
+        t["new_name"] = " - ".join([lang_name] + quals)
         # Unlike audio, the default subtitle is NOT simply the first one: it
         # depends on what the audio offers (see _default_subtitle_id).
         t["default_after"] = (t["id"] == default_sub_id)
@@ -621,9 +602,13 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None,
     # ("Ninguno"): la columna tiene que enseñar la que ya trae, no la que se
     # elegiría. Marcada la que se elegiría, la tabla prometía un cambio que
     # nadie iba a hacer (visto en el navegador con un MKV real).
+    # Un subtítulo forzado solo por el nombre se marca también en el contenedor.
+    for t in video + audio_sorted + subs_sorted:
+        t["forced_flag_after"] = t["forced_flag"] or (t["type"] == "subtitles" and t["forced"])
     if not mark_default:
         for t in video + audio_sorted + subs_sorted:
             t["default_after"] = t["default_before"]
+            t["forced_flag_after"] = t["forced_flag"]
 
     # La tabla de "Ver Pistas" sigue el orden que va a quedar en el fichero.
     by_id = {t["id"]: t for t in (video + audio_sorted + subs_sorted)}
@@ -634,6 +619,7 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None,
             order_changed
             or t.get("current_name") != t.get("new_name")
             or t.get("default_before") != t.get("default_after")
+            or t.get("forced_flag") != t.get("forced_flag_after")
         )
         t.pop("_priority", None)
 
@@ -678,6 +664,7 @@ def apply_track_overrides(plan: dict, overrides: dict[int, dict] | None) -> dict
             plan["order_changed"]
             or t.get("current_name") != t.get("new_name")
             or t.get("default_before") != t.get("default_after")
+            or t.get("forced_flag") != t.get("forced_flag_after")
         )
         return t
 
@@ -699,9 +686,13 @@ def build_mkvmerge_args(
         args.append("--gui-mode")
     args += ["-o", output_path]
     for t in plan["ordered_tracks"]:
-        args += ["--track-name", f"{t['id']}:{t['new_name']}"]
+        # Sin nombre nuevo (solo reordenar) se queda el que tiene: antes salía "None".
+        if t.get("new_name") is not None and t.get("new_name") != t.get("current_name"):
+            args += ["--track-name", f"{t['id']}:{t['new_name']}"]
         if t["type"] in ("audio", "subtitles"):
             args += ["--default-track-flag", f"{t['id']}:{'1' if t['default_after'] else '0'}"]
+        if t.get("forced_flag_after") and not t.get("forced_flag"):
+            args += ["--forced-display-flag", f"{t['id']}:1"]
     args += ["--track-order", ",".join(f"0:{tid}" for tid in plan["new_order"])]
     args += [source_path]
     return args
@@ -727,11 +718,18 @@ def build_mkvpropedit_args(path: str, plan: dict) -> list[str]:
     """
     args: list[str] = ["mkvpropedit", path]
     for t in plan["ordered_tracks"]:
-        uid = t.get("uid")
-        selector = f"track:={uid}" if uid else f"track:{int(t['id']) + 1}"
-        args += ["--edit", selector, "--set", f"name={t['new_name']}"]
-        if t["type"] in ("audio", "subtitles"):
-            args += ["--set", f"flag-default={'1' if t['default_after'] else '0'}"]
+        # Solo lo que cambia: sin nombre nuevo (solo reordenar) antes salía "None".
+        cambios: list[str] = []
+        if t.get("new_name") is not None and t.get("new_name") != t.get("current_name"):
+            cambios += ["--set", f"name={t['new_name']}"]
+        if t["type"] in ("audio", "subtitles") and t.get("default_after") != t.get("default_before"):
+            cambios += ["--set", f"flag-default={'1' if t['default_after'] else '0'}"]
+        if t.get("forced_flag_after") and not t.get("forced_flag"):
+            cambios += ["--set", "flag-forced=1"]
+        if cambios:
+            uid = t.get("uid")
+            selector = f"track:={uid}" if uid else f"track:{int(t['id']) + 1}"
+            args += ["--edit", selector, *cambios]
     return args
 
 

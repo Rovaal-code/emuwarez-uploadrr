@@ -176,3 +176,24 @@ def test_mkvpropedit_uses_shell_false(tmp_path):
         if mock_run.called:
             _, kwargs = mock_run.call_args
             assert kwargs.get("shell") is False or not mock_run.call_args[1].get("shell", False)
+
+
+@pytest.mark.parametrize("codigo,estado", [(1, "applied"), (2, "error")])
+def test_el_error_de_mkvpropedit_dice_el_motivo(tmp_path, codigo, estado):
+    """mkvpropedit escribe "Error: …" en stdout, no en stderr: antes el motivo
+    se perdía, y un aviso (código 1) contaba como fallo."""
+    mkv_file = tmp_path / "Film.2024.mkv"
+    mkv_file.write_bytes(b"fake mkv")
+    conn = _make_conn(tmp_path)
+    item_id = _insert_library_item(conn, title="Film", prepared_path=str(mkv_file))
+    _insert_proposal(conn, item_id, "Film 2024 1080p BluRay - EMUWAREZ")
+    salida = MagicMock(returncode=codigo, stdout="Error: The file could not be opened for writing.", stderr="")
+    with patch("subprocess.run", return_value=salida), \
+         patch("emuwarez_uploadrr.services.mkv_title.check_mkvpropedit_available",
+               return_value={"available": True, "path": "/usr/bin/mkvpropedit"}):
+        from emuwarez_uploadrr.services.mkv_title import apply_internal_title_update, MKV_CONFIRMATION_TOKEN
+        result = apply_internal_title_update(
+            item_id, dry_run=False, apply=True, confirmation=MKV_CONFIRMATION_TOKEN, conn=conn)
+    assert result["status"] == estado
+    if estado == "error":
+        assert result["errors"] == ["Error: The file could not be opened for writing."]

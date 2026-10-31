@@ -28,6 +28,24 @@ STATUS_APPLIED = "applied"   # reserved for future phase
 STATUS_EXPIRED = "expired"
 
 
+# Lo que dice si una propuesta guardada sigue valiendo: el tamaño del fichero
+# (cambia cuando Radarr/Sonarr lo sustituye) y los datos de la biblioteca que no
+# salen de leerlo. La ruta no, que cambia al renombrar la propia app.
+_CAMPOS_HUELLA = ("size_bytes", "resolution", "quality", "source", "release_group",
+                  "title", "year", "season_number", "episode_number", "tmdb_id")
+
+
+def _huella(item: dict) -> list:
+    return [item.get(c) for c in _CAMPOS_HUELLA]
+
+
+def _huella_guardada(proposal: dict):
+    try:
+        return json.loads(proposal.get("raw_json") or "{}").get("huella")
+    except (TypeError, ValueError, AttributeError):
+        return None
+
+
 def get_library_item_for_nomenclature(item_id: int, conn=None) -> dict | None:
     own = conn is None
     conn = conn or connect()
@@ -39,14 +57,29 @@ def get_library_item_for_nomenclature(item_id: int, conn=None) -> dict | None:
             conn.close()
 
 
+# Lo más largo que admite un nombre de fichero o carpeta (ext4, btrfs).
+_MAX_BYTES_NOMBRE = 255
+
+
+def error_de_longitud(nombre: str) -> str | None:
+    """El error si `nombre` no cabe como nombre de fichero; None si cabe."""
+    n = len((nombre or "").encode("utf-8"))
+    if n <= _MAX_BYTES_NOMBRE:
+        return None
+    return (f"El nombre ocupa {n} bytes y un nombre de archivo admite {_MAX_BYTES_NOMBRE}: "
+            f"acorta el título. ({nombre[:60]}…)")
+
+
 def _normalize_title_for_emu(title: str) -> str:
     if not title:
         return ""
     normalized = unicodedata.normalize("NFC", title)
     # «:» y «?» se quedan: eMuwarez los conserva en el título («Anacleto: Agente secreto»).
     # El nombre de archivo los quita en to_filesystem_name.
-    cleaned = re.sub(r'[<>"/\\|*]', "", normalized)
-    return cleaned.strip()
+    # La barra separa palabras: «Fate/Zero» es «Fate Zero», no «FateZero».
+    cleaned = re.sub(r"[/\\]", " ", normalized)
+    cleaned = re.sub(r'[<>"|*]', "", cleaned)
+    return re.sub(r"\s+", " ", cleaned).strip()
 
 
 def _build_proposed_filename(
@@ -63,7 +96,9 @@ def _build_proposed_filename(
     episode: int | None = None,
     provider: str | None = None,
     dynamic_range: str | None = None,
+    custom: bool = False,
 ) -> str:
+    """El nombre eMuwarez de un fichero, o de un pack (season sin episode)."""
     from .emu_format import format_resolution, format_hdr
     from .source_assistant import _build_source_string
 
@@ -81,6 +116,11 @@ def _build_proposed_filename(
     if resolution:
         # eMuwarez suffixes 4K/8K with UHD/FUHD ("2160p UHD"), not just "2160p".
         parts.append(format_resolution(resolution) or resolution)
+    # CUSTOM va entre la resolución y el proveedor, como en el catálogo de
+    # eMuwarez ("… 2160p 4K UHD CUSTOM AMZN WEB-DL HEVC …"): un pack cuyos
+    # capítulos no traen todos el mismo audio.
+    if custom:
+        parts.append("CUSTOM")
     # Provider (AMZN/NF/DSNP...) attaches to Source, in front of it — "AMZN
     # WEB-DL", never after — matching the eMuwarez nomenclature guide. Reuses
     # source_assistant's own combiner so the two never drift apart again.
@@ -166,16 +206,21 @@ def _proveedor_de(path: str | None, source: str | None, quality: str | None) -> 
     return _infer_provider_from_item(item, _infer_source_from_item(item))
 
 
+_MARCAS_RESOLUCION = ("2160p", "4K", "1080p", "720p", "576p", "540p", "480p")
+
+
 def _infer_resolution_from_item(item: dict) -> str | None:
+    """La etiqueta de Radarr/Sonarr. Solo de reserva: la propuesta usa la del
+    fichero cuando MediaInfo lo puede leer."""
     res = item.get("resolution")
     if res:
         return res
     quality = item.get("quality") or ""
-    for marker in ("2160p", "4K", "1080p", "720p", "480p"):
+    for marker in _MARCAS_RESOLUCION:
         if marker.lower() in quality.lower():
             return marker
     path = item.get("path") or ""
-    for marker in ("2160p", "4K", "1080p", "720p", "480p"):
+    for marker in _MARCAS_RESOLUCION:
         if marker.lower() in path.lower():
             return marker
     return None
@@ -202,17 +247,13 @@ def _infer_source_from_item(item: dict) -> str | None:
     src = item.get("source")
     if src:
         return src
-    quality = item.get("quality") or ""
-    combined = (quality + " " + path).lower()
-    source_map = [
-        ("bluray", "BluRay"), ("blu-ray", "BluRay"), ("blu_ray", "BluRay"),
-        ("bdremux", "BDReMux"), ("webdl", "WEB-DL"), ("web-dl", "WEB-DL"),
-        ("webrip", "WEBRip"), ("web_dl", "WEB-DL"),
-        ("hdtv", "HDTV"), ("dvd", "DVD"),
-    ]
-    for key, canonical in source_map:
-        if key in combined:
-            return canonical
+    # La misma tabla que el nombre (constants.SOURCE_PATTERNS), sobre la
+    # calidad y la ruta: una tercera copia escribía "BDReMux" y "DVD".
+    from ..constants import SOURCE_PATTERNS
+    combined = f"{item.get('quality') or ''} {path}"
+    for pattern, value in SOURCE_PATTERNS:
+        if pattern.search(combined):
+            return value
     return None
 
 
@@ -244,6 +285,9 @@ def tag_por_defecto(grupos, conn=None) -> str:
     if len(distintos) == 1 and "" not in distintos:
         return distintos.pop()
     return _get_release_tag(conn=conn)
+
+
+_AVISO_SIN_RESOLUCION = "Resolución no detectada. Se usará campo vacío."
 
 
 def validate_nomenclature_preconditions(library_item: dict, conn=None) -> dict:
@@ -284,7 +328,7 @@ def validate_nomenclature_preconditions(library_item: dict, conn=None) -> dict:
         errors.append("El ítem no tiene título.")
 
     if not _infer_resolution_from_item(library_item):
-        warnings.append("Resolución no detectada. Se usará campo vacío.")
+        warnings.append(_AVISO_SIN_RESOLUCION)
 
     if not _infer_source_from_item(library_item):
         warnings.append("Source/medio no detectado. Se usará campo vacío.")
@@ -296,9 +340,11 @@ def build_nomenclature_proposal(
     item_id: int, *, force_refresh: bool = False, conn=None,
     source_override: str | None = None, provider_override: str | None = None,
     tag_override: str | None = None, title_override: str | None = None,
+    guardar: bool = True,
 ) -> dict:
     """Generate a nomenclature proposal for a library item. Never modifies the
-    filesystem.
+    filesystem. `guardar=False` la calcula sin guardarla ni reutilizar la
+    guardada: es lo que compara Comprobar nomenclatura.
 
     `source_override`/`provider_override`/`tag_override`/`title_override` let a
     caller that already resolved an ambiguity by hand (the automated-upload
@@ -315,14 +361,17 @@ def build_nomenclature_proposal(
     conn = conn or connect()
     try:
         if (source_override is not None or provider_override is not None
-                or tag_override is not None or title_override is not None):
+                or tag_override is not None or title_override is not None or not guardar):
             force_refresh = True
-        if not force_refresh:
+        item = get_library_item_for_nomenclature(item_id, conn=conn)
+        if not force_refresh and item:
             existing = get_latest_nomenclature_proposal(item_id, conn=conn)
-            if existing and existing.get("status") not in (STATUS_EXPIRED,):
+            # La editada a mano se respeta; la automática, solo si el fichero
+            # sigue siendo el mismo (Radarr/Sonarr no lo ha cambiado).
+            if existing and existing.get("status") not in (STATUS_EXPIRED,) and (
+                    existing.get("fields_json") or _huella_guardada(existing) == _huella(item)):
                 return existing
 
-        item = get_library_item_for_nomenclature(item_id, conn=conn)
         if not item:
             return {
                 "library_item_id": item_id,
@@ -330,7 +379,6 @@ def build_nomenclature_proposal(
                 "errors_json": json.dumps(["Item no encontrado."]),
                 "warnings_json": json.dumps([]),
             }
-
         preconditions = validate_nomenclature_preconditions(item, conn=conn)
         errors = preconditions["errors"]
         warnings = list(preconditions["warnings"])
@@ -394,10 +442,13 @@ def build_nomenclature_proposal(
         if not video_codec:
             warnings.append("Codec de vídeo no detectado. Sincroniza de nuevo la biblioteca o invoca MediaInfo desde 'Adaptar nomenclatura'.")
 
-        audio_codec = item.get("audio_codec")
-        audio_languages = item.get("audio_languages")
-        audio_summary = " ".join(p for p in (audio_codec, audio_languages) if p) or None
-        subtitle_summary = item.get("subtitle_languages")
+        # Lo de Radarr/Sonarr, pero ya con los tokens del tracker: sin MediaInfo
+        # llegaban tal cual ("DD+ spa / eng spa / eng") al nombre.
+        from .emu_format import build_audio_string, format_video_codec
+        video_codec = format_video_codec(video_codec)
+        audio_summary = build_audio_string(item.get("audio_codec"), item.get("audio_languages"),
+                                           item.get("audio_channels"))
+        subtitle_summary = "SUBS" if (item.get("subtitle_languages") or "").strip() else None
         dynamic_range = item.get("dynamic_range")
 
         # Real MediaInfo read of the actual file (cached per file by mtime+
@@ -414,10 +465,21 @@ def build_nomenclature_proposal(
                     r["field"]: (None if r["emu"] in (None, "—", "") else r["emu"])
                     for r in mi_report.get("rows", [])
                 }
+                # La resolución del fichero, no la etiqueta de calidad de Radarr/Sonarr.
+                if mi_report.get("resolution"):
+                    resolution = mi_report["resolution"]
+                    warnings = [w for w in warnings if w != _AVISO_SIN_RESOLUCION]
                 video_codec = emu_by_field.get("Códec de vídeo") or video_codec
                 audio_summary = mi_report.get("audio_summary") or audio_summary
                 subtitle_summary = emu_by_field.get("Subtítulos") or subtitle_summary
                 dynamic_range = emu_by_field.get("HDR/DV") or dynamic_range
+            else:
+                warnings.append("Sin MediaInfo del archivo: el audio y los subtítulos del nombre salen "
+                                "de Radarr/Sonarr y pueden no ser exactos.")
+
+        # UND no es un idioma del tracker: el nombre no puede salir así.
+        if audio_summary and "UND" in re.split(r"[\s-]+", audio_summary):
+            errors.append("Una pista de audio no tiene idioma (UND). Ponle idioma a la pista antes de subir.")
 
         # Phase 6E — provider (AMZN/NF/DSNP...) already present in the
         # current filename, kept in the proposal instead of silently
@@ -450,6 +512,9 @@ def build_nomenclature_proposal(
             parent = os.path.dirname(path)
             ext = os.path.splitext(path)[1] if os.path.isfile(path) else ""
             proposed_path = os.path.join(parent, proposed_filename + ext) if ext else os.path.join(parent, proposed_filename)
+        largo = error_de_longitud(proposed_filename + (os.path.splitext(path)[1] if path else ""))
+        if largo:
+            errors.append(largo)
 
         if errors:
             status = STATUS_BLOCKED
@@ -486,10 +551,11 @@ def build_nomenclature_proposal(
             "release_tag": release_tag,
             "warnings_json": json.dumps(warnings, ensure_ascii=False),
             "errors_json": json.dumps(errors, ensure_ascii=False),
-            "raw_json": json.dumps({"item_id": item_id, "title": title}, ensure_ascii=False),
+            # dynamic_range no tiene columna y el pack lo necesita para su título.
+            "raw_json": json.dumps({"item_id": item_id, "title": title, "huella": _huella(item),
+                                    "dynamic_range": dynamic_range}, ensure_ascii=False),
         }
-
-        return save_nomenclature_proposal(proposal, conn=conn)
+        return save_nomenclature_proposal(proposal, conn=conn) if guardar else proposal
     finally:
         if own:
             conn.close()
@@ -883,8 +949,13 @@ def apply_nomenclature_proposal(
                 ),
             )
             fs_op_id = cursor.lastrowid
+            conn.commit()
+        except Exception:
+            # El historial es opcional; lo de abajo no.
+            logger.warning("No se pudo guardar el historial del renombrado (item %s)", item_id, exc_info=True)
 
-            if result.get("status") == "applied":
+        if result.get("status") == "applied":
+            try:
                 proposal = plan.get("proposal") or {}
                 pid = proposal.get("id")
                 dst = plan.get("destination_path")
@@ -908,9 +979,17 @@ def apply_nomenclature_proposal(
                        WHERE id = ?""",
                     (raw_dst, dst, now, now, item_id),
                 )
-            conn.commit()
-        except Exception:
-            pass
+                conn.commit()
+            except Exception as exc:
+                # El fichero ya se movió: si la biblioteca no lo sigue, los
+                # pasos siguientes lo buscarían en la ruta vieja. Lo escrito a
+                # medias se deshace para que un commit posterior no lo guarde.
+                conn.rollback()
+                logger.exception("Renombrado hecho pero sin anotar en la biblioteca (item %s)", item_id)
+                result["status"] = "failed"
+                result["errors"] = list(result.get("errors") or []) + [
+                    f"El archivo se renombró a {plan.get('destination_path')}, pero no se pudo "
+                    f"anotar en la base de datos: {exc}"]
 
         result["operation_id"] = fs_op_id
         for k, v in base_result.items():

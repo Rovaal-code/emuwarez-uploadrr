@@ -4,6 +4,8 @@ conftest.py provides: client, auth_headers, isolated_db.
 """
 from __future__ import annotations
 
+import pytest
+
 from emuwarez_uploadrr.database import connect
 
 
@@ -99,6 +101,7 @@ def test_pack_preview_progress_reaches_total_after_preview(client, auth_headers,
     assert data["done"] == data["total"] == 1
 
 
+@pytest.mark.usefixtures("ficheros_de_mentira")
 def test_episode_names_endpoint(client, auth_headers, isolated_db, tmp_path):
     season_id = _seed_season_with_episode(isolated_db, tmp_path)
     resp = client.get(f"/api/library/season/{season_id}/episode-names", headers=auth_headers)

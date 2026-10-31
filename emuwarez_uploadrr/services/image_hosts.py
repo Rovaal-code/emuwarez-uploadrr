@@ -150,9 +150,12 @@ def validate_image_host_key(host_id: str, api_key: str, *, timeout: int = 10) ->
     error = (data.get("error") or {}) if isinstance(data, dict) else {}
     if error.get("code") == _INVALID_KEY_CODE:
         return {"ok": False, "error": error.get("message") or "API key no válida", "checked": True}
-    # Cualquier otra queja (falta la imagen, formato...) significa que la clave
-    # pasó la autenticación, que es lo único que se estaba comprobando.
-    return {"ok": True, "error": None, "checked": True}
+    # Un 400 que se queja de otra cosa (falta la imagen) significa que la clave
+    # pasó la autenticación. Cualquier otra respuesta (límite de peticiones,
+    # error del servidor) no dice nada de la clave.
+    if status == 400 and error:
+        return {"ok": True, "error": None, "checked": True}
+    return {"ok": False, "error": f"No se pudo comprobar (HTTP {status})", "checked": False}
 
 
 def test_image_host(host_id: str, api_key: Optional[str] = None, *, timeout: int = 8) -> dict:
@@ -179,11 +182,19 @@ def test_image_host(host_id: str, api_key: Optional[str] = None, *, timeout: int
                           "error": f"API key no válida: {check['error']}"})
         # No se pudo comprobar la clave: se cae al ping de siempre, avisando de
         # que la clave se queda sin verificar en vez de fingir que está bien.
+        motivo = check.get("error")
+    else:
+        motivo = None
     try:
         req = urllib.request.Request(meta["url"], method="GET", headers={"User-Agent": "emuwarez-uploadrr/2"})
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             if 200 <= resp.status < 400:
-                return {"ok": True, "key_checked": not meta["needs_key"]}
+                return {"ok": True, "key_checked": not meta["needs_key"], "key_error": motivo}
             return {"ok": False, "error": f"HTTP {resp.status}"}
+    except urllib.error.HTTPError as exc:
+        # Un 403/429 de Cloudflare a la portada: el servidor está, y subir funciona.
+        if exc.code < 500:
+            return {"ok": True, "key_checked": not meta["needs_key"], "key_error": motivo}
+        return {"ok": False, "error": f"HTTP {exc.code}"}
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": f"No responde: {exc}"}

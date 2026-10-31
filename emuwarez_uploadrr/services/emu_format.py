@@ -16,7 +16,7 @@ from typing import Optional
 # --- Language codes (ISO/name → eMuwarez) ------------------------------------
 LANG_MAP: dict[str, str] = {
     "es": "ESP", "spa": "ESP", "spanish": "ESP", "castellano": "ESP", "castilian": "ESP", "es-es": "ESP",
-    "es-419": "LAT", "latino": "LAT", "latin american spanish": "LAT", "spa-lat": "LAT",
+    "es-419": "LAT", "latino": "LAT", "latam": "LAT", "latin american spanish": "LAT", "spa-lat": "LAT",
     "en": "ING", "eng": "ING", "english": "ING",
     "fr": "FRA", "fra": "FRA", "fre": "FRA", "french": "FRA",
     "de": "ALE", "deu": "ALE", "ger": "ALE", "german": "ALE",
@@ -104,7 +104,11 @@ def format_hdr(dynamic_range: Optional[str]) -> Optional[str]:
     return None
 
 
-def format_audio_codec(codec: Optional[str]) -> Optional[str]:
+def format_audio_codec(codec: Optional[str], fallback: Optional[str] = None) -> Optional[str]:
+    """El token de audio del tracker para un texto de códec, de Radarr/Sonarr
+    ("EAC3") o de MediaInfo (formato + nombre comercial + extras, ver
+    media_probe.audio_codec). `fallback`: lo que se devuelve si no se reconoce
+    (por defecto, el texto tal cual)."""
     if not codec:
         return None
     t = str(codec).lower()
@@ -113,12 +117,14 @@ def format_audio_codec(codec: Optional[str]) -> Optional[str]:
         base = "TrueHD"
     elif "mlp" in t:
         base = "MLP"
+    # DTS:X antes que MA: va sobre un DTS-HD MA y MediaInfo lo dice con los
+    # extras "XLL X" (XLL solo es MA, XBR es HRA y XCH es DTS-ES).
+    elif "dts:x" in t or "dts-x" in t or "xll x" in t:
+        base = "DTS:X"
     elif "dts-hd ma" in t or "dts-hd master" in t:
         base = "DTS-HD MA"
     elif "dts-hd hra" in t or "dts-hd high" in t:
         base = "DTS-HD HRA"
-    elif "dts:x" in t or "dts-x" in t:
-        base = "DTS:X"
     elif "dts" in t:
         base = "DTS"
     elif "eac3" in t or "e-ac-3" in t or "e-ac3" in t or "ddp" in t or "dd+" in t or "digital plus" in t:
@@ -133,28 +139,97 @@ def format_audio_codec(codec: Optional[str]) -> Optional[str]:
         base = "FLAC"
     elif "alac" in t:
         base = "ALAC"
-    elif "mp3" in t:
+    elif "mp3" in t or ("mpeg audio" in t and "layer 3" in t):
         base = "MP3"
+    elif "mp2" in t or ("mpeg audio" in t and "layer 2" in t):
+        base = "MP2"
     elif "pcm" in t:
         base = "PCM"
     else:
-        base = str(codec).strip()
+        base = fallback or str(codec).strip()
     if atmos and "atmos" not in base.lower():
         base = f"{base} Atmos"
     return base
 
 
 def format_channels(channels) -> Optional[str]:
+    """Los canales como los escribe el tracker ("5.1"). None si no se sabe
+    cuántos son: mejor no decirlo que poner un "2.0" inventado. Lo usan el
+    nombre del release y el nombre de las pistas del remux."""
     if channels in (None, ""):
         return None
     s = str(channels).strip()
     # Already a layout like "5.1" / "7.1" (Radarr often reports it this way).
     if re.fullmatch(r"\d+\.\d+", s):
         return s
+    if s.lower() == "mono":
+        return "Mono"
     m = re.search(r"\d+", s)
     if not m:
         return None
-    return _CHANNELS_MAP.get(int(m.group()), s)
+    return _CHANNELS_MAP.get(int(m.group()))
+
+
+# Lo que no es ningún idioma: sin etiquetar, sin contenido o varios a la vez.
+_SIN_IDIOMA = {"", "und", "mis", "zxx", "mul"}
+
+# Palabras del nombre de la pista que dicen el idioma cuando la etiqueta no.
+_IDIOMA_POR_TITULO = (
+    (("latino", "latin america", "latinoameric"), "LAT"),
+    (("valenci",), "VAL"),
+    (("castellano", "español", "espanol", "castilian"), "ESP"),
+    (("catal",), "CAT"),
+    (("english", "inglés", "ingles"), "ING"),
+)
+
+
+def _codigo(texto: str) -> str:
+    """El código de una etiqueta ISO o BCP-47 ("spa", "es-MX", "ca-valencia")."""
+    key = texto.strip().lower().replace("_", "-")
+    if "valencia" in key:
+        return "VAL"
+    if key in LANG_MAP:
+        return LANG_MAP[key]
+    partes = key.split("-")
+    base = LANG_MAP.get(partes[0])
+    if base == "ESP":
+        # El español solo es castellano sin región, con ES, o con una
+        # subetiqueta privada (es-x-01, que pone MAX también al castellano).
+        for sub in partes[1:]:
+            if sub == "x":
+                break
+            if (len(sub) == 2 and sub.isalpha()) or (len(sub) == 3 and sub.isdigit()):
+                return "ESP" if sub == "es" else "LAT"
+        return "ESP"
+    # Un BCP-47 desconocido ("pt-br", "zh-hans"): vale su idioma base, que es
+    # más cierto que inventarse un código con media región dentro.
+    return base or partes[0].upper()[:3] or "UND"
+
+
+def resolve_language(lang: Optional[str], lang_ietf: Optional[str] = None,
+                     title: Optional[str] = None) -> str:
+    """El código de eMuwarez de UNA pista. Lo usan el nombre del release, las
+    columnas Español/Idioma de la biblioteca y los nombres de pista del remux.
+
+    `lang_ietf` es el BCP-47 de mkvmerge ("es-MX") y gana al ISO ("spa"), que
+    no distingue el latino del castellano ni el valenciano del catalán. El
+    nombre de la pista ("Latino") completa lo que la etiqueta no dice.
+    "UND" si nada dice qué idioma es."""
+    codigo = None
+    for texto in (lang_ietf, lang):
+        if texto and str(texto).strip().lower() not in _SIN_IDIOMA:
+            codigo = _codigo(str(texto))
+            break
+    nombre = (title or "").strip().lower()
+    for palabras, por_titulo in _IDIOMA_POR_TITULO:
+        if not any(p in nombre for p in palabras):
+            continue
+        # El título solo matiza la variante (ESP→LAT, CAT→VAL) o pone el idioma
+        # que falta; nunca contradice una etiqueta de otro idioma.
+        if codigo is None or (codigo, por_titulo) in (("ESP", "LAT"), ("CAT", "VAL")):
+            codigo = por_titulo
+        break
+    return codigo or "UND"
 
 
 def format_language(lang: Optional[str]) -> Optional[str]:
@@ -166,17 +241,9 @@ def format_language(lang: Optional[str]) -> Optional[str]:
     "ca-valencia" cortar a ciegas daba "CA-", un token con un guion suelto que
     llegaba tal cual al nombre del torrent (visto en un pack real).
     """
-    if not lang:
+    if not lang or not str(lang).strip():
         return None
-    key = str(lang).strip().lower()
-    if key in LANG_MAP:
-        return LANG_MAP[key]
-    # Un BCP-47 desconocido ("pt-br", "zh-hans"): vale su idioma base, que es
-    # más cierto que inventarse un código con media región dentro.
-    base = key.split("-")[0]
-    if base in LANG_MAP:
-        return LANG_MAP[base]
-    return base.upper()[:3] or None
+    return resolve_language(lang)
 
 
 def _split_languages(raw: Optional[str]) -> list[str]:
@@ -203,11 +270,11 @@ def has_castellano(languages: Optional[str]) -> Optional[int]:
     same question, so the Español column and the season pack's subtitle rule
     can't drift apart.
 
-    Deliberately strict about which Spanish counts: LANG_MAP resolves
-    es/spa/spanish/castellano/es-es to ESP but es-419/latino/spa-lat to LAT, so
-    a Latin-American-only track answers 0, not 1. Note Radarr/Sonarr rarely tag
-    es-419 at all (a Latin-only rip usually arrives as plain "spa"), so this is
-    only as accurate as what the *arr reports.
+    Deliberately strict about which Spanish counts: es/spa/castellano/es-ES
+    are ESP, but any other region (es-419, es-MX, es-US…) or "latino" is LAT,
+    so a Latin-American-only track answers 0, not 1. Radarr/Sonarr rarely tag
+    the region at all (a Latin-only rip usually arrives as plain "spa"); the
+    MediaInfo read (media_info_service) also looks at the track name.
 
     Shares _split_languages with build_audio_string on purpose: the column can
     never disagree with the ESP/DUAL/MULTI token the nomenclature builds.

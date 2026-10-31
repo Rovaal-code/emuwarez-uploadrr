@@ -1680,9 +1680,14 @@ def borrar_biblioteca(conn: sqlite3.Connection, donde: str, params: tuple = ()) 
     ids = ("WITH RECURSIVE rama(id) AS ("
            f"SELECT id FROM library_items WHERE {donde} "
            "UNION SELECT h.id FROM library_items h JOIN rama ON h.parent_id = rama.id) SELECT id FROM rama")
+    # Una petición de temporada casa con la serie pero lleva su estado en la temporada (library_items.request_id).
     peticiones = [r[0] for r in conn.execute(
         f"SELECT request_item_id FROM request_matches WHERE library_item_id IN ({ids}) "
-        f"UNION SELECT request_item_id FROM request_candidates WHERE library_item_id IN ({ids})", params * 2)]
+        f"UNION SELECT request_item_id FROM request_candidates WHERE library_item_id IN ({ids}) "
+        f"UNION SELECT request_id FROM library_items WHERE request_id IS NOT NULL AND id IN ({ids})", params * 3)]
+    # Quien llama vuelve a calcular su preparación; la migración no puede, así que al menos no apuntan a nada borrado.
+    for tabla, col in (("request_readiness", "best_library_item_id"), ("request_items", "readiness_best_library_item_id")):
+        conn.execute(f"UPDATE {tabla} SET {col} = NULL WHERE {col} IN ({ids})", params)
     # Lo que Subidas enseña de la ficha y sigue siendo cierto sin ella: el enlace a Radarr/Sonarr y el estado de la
     # petición ya no lo serían.
     conn.execute(

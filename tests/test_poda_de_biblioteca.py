@@ -233,6 +233,23 @@ def test_la_subida_sigue_ensenando_lo_que_tenia_de_la_ficha(conn, arr, client, a
         assert despues["instance_id"] is None
 
 
+def test_tambien_se_vuelve_a_cruzar_la_peticion_que_llevaba_su_estado_en_lo_borrado(conn):
+    """Una petición de temporada casa con la serie y lleva su estado en la temporada: si solo se va la temporada, ni su
+    cruce ni sus candidatos están en lo borrado, y se quedaba sin volver a cruzar."""
+    from emuwarez_uploadrr.database import borrar_biblioteca
+    peticion = conn.execute("INSERT INTO request_items (emu_id, title) VALUES ('7', 'Serie 20')").lastrowid
+    serie = conn.execute("INSERT INTO library_items (item_type, title, instance_id, external_id, local_status)"
+                         " VALUES ('series', 'Serie 20', ?, '20', 'Disponible')", (SONARR,)).lastrowid
+    temporada = conn.execute(
+        "INSERT INTO library_items (item_type, title, instance_id, external_id, local_status, parent_id, request_id,"
+        " request_status) VALUES ('season', 'Serie 20', ?, 'season:20:1', 'Disponible', ?, ?, 'Compatible')",
+        (SONARR, serie, peticion)).lastrowid
+    conn.execute("INSERT INTO request_matches (library_item_id, request_item_id, status) VALUES (?, ?, 'Compatible')",
+                 (serie, peticion))
+
+    assert borrar_biblioteca(conn, "id = ?", (temporada,)) == (1, [peticion])
+
+
 def test_lo_que_no_vino_de_la_sincronizacion_tambien_se_borra(conn, arr):
     """Una fila sin last_seen_at (de antes de existir la columna) que un recorrido completo no ve ya no está."""
     conn.execute("INSERT INTO library_items (item_type, title, instance_id, external_id, local_status)"
@@ -315,11 +332,19 @@ def test_la_migracion_no_se_traga_una_base_de_datos_bloqueada(conn, isolated_db)
 
 def test_al_migrar_se_borra_lo_de_las_instancias_que_ya_no_existen(conn):
     """Antes, borrar una instancia dejaba lo suyo en la biblioteca para siempre."""
+    ids = {}
     for instancia, externo in ((99, "huérfana"), (None, "sin instancia"), (RADARR, "1")):
-        conn.execute("INSERT INTO library_items (item_type, title, instance_id, external_id, local_status)"
-                     " VALUES ('movie', ?, ?, ?, 'Disponible')", (externo, instancia, externo))
+        ids[externo] = conn.execute("INSERT INTO library_items (item_type, title, instance_id, external_id, local_status)"
+                                    " VALUES ('movie', ?, ?, ?, 'Disponible')", (externo, instancia, externo)).lastrowid
+    peticion = conn.execute("INSERT INTO request_items (emu_id, title, readiness_best_library_item_id)"
+                            " VALUES ('7', 'Huérfana', ?)", (ids["huérfana"],)).lastrowid
+    conn.execute("INSERT INTO request_readiness (request_item_id, best_library_item_id, status) VALUES (?, ?, 'ready')",
+                 (peticion, ids["huérfana"]))
     _migra(conn)
     assert {r[0] for r in conn.execute("SELECT external_id FROM library_items")} == {"sin instancia", "1"}
+    # La migración no recalcula la preparación, pero tampoco la deja apuntando a lo borrado.
+    assert conn.execute("SELECT readiness_best_library_item_id FROM request_items").fetchone()[0] is None
+    assert conn.execute("SELECT best_library_item_id FROM request_readiness").fetchone()[0] is None
 
     # Sin ninguna instancia, lo que no tiene instancia sigue ahí.
     conn.execute("DELETE FROM instances")

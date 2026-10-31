@@ -751,9 +751,11 @@ def build_nomenclature_apply_plan(
                 "warnings": [], "proposal": proposal,
                 "source_path": None, "destination_path": None,
             }
+        from .mkv_title import to_filesystem_name
+        # El título a pelo puede traer "/": pasa por la misma limpieza que el nombre.
         proposed_filename = (
             proposal.get("proposed_filename")
-            or proposal.get("proposed_title")
+            or to_filesystem_name(proposal.get("proposed_title") or "")
             or "archivo"
         )
         nombre = proposed_filename + _os.path.splitext(source_path)[1]

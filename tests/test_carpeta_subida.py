@@ -426,3 +426,23 @@ def test_clonar_no_pisa_lo_que_ya_existe(biblioteca):
         clonar(biblioteca["ficheros"][0], destino)
     with open(destino, "rb") as fh:
         assert fh.read() == b"de otro"
+
+
+@pytest.mark.parametrize("nombre", ["../fuera.mkv", "sub/cap.mkv", ".."])
+def test_un_nombre_con_carpetas_no_sale_de_la_de_subidas(biblioteca, tmp_path, nombre):
+    """Con "/" o "..", el enlace (y el borrado del de un intento anterior) caía fuera."""
+    victima = tmp_path / "fuera.mkv"
+    victima.write_bytes(b"no tocar")
+    r = preparar_fichero_suelto(biblioteca["ficheros"][0], nombre, raiz=biblioteca["uploads"])
+    assert r["status"] == "blocked"
+    r = preparar_carpeta_de_pack("Serie S01", [(biblioteca["ficheros"][0], nombre)], raiz=biblioteca["uploads"])
+    assert r["status"] == "blocked"
+    assert victima.read_bytes() == b"no tocar"
+
+
+def test_un_nombre_absoluto_no_borra_nada_fuera(biblioteca, tmp_path):
+    victima = tmp_path / "victima.mkv"
+    victima.write_bytes(b"no tocar")
+    r = preparar_fichero_suelto(biblioteca["ficheros"][0], str(victima), raiz=biblioteca["uploads"])
+    assert r["status"] == "blocked"
+    assert victima.read_bytes() == b"no tocar"

@@ -368,3 +368,23 @@ def test_an_old_uploads_link_in_prepared_path_is_not_renamed(isolated_db, tmp_pa
     row = conn.execute("SELECT path FROM library_items WHERE id = ?", (item_id,)).fetchone()
     assert row["path"] == str(src)
     conn.close()
+
+
+def test_the_title_fallback_cannot_carry_a_path(isolated_db, tmp_path):
+    """Sin proposed_filename se usa el título, que puede traer "/"."""
+    from datetime import datetime, timezone
+    src = tmp_path / "movie.mkv"
+    src.write_bytes(b"v")
+    conn = _open(isolated_db)
+    item_id = _insert_item(conn, title="Movie", path=str(src))
+    now = datetime.now(timezone.utc).isoformat()
+    pid = conn.execute(
+        """INSERT INTO nomenclature_proposals (library_item_id, status, proposed_title, proposed_filename,
+                                               created_at, updated_at)
+           VALUES (?, 'valid', '/etc/AC/DC', '', ?, ?)""", (item_id, now, now)).lastrowid
+    conn.commit()
+
+    plan = build_nomenclature_apply_plan(item_id, proposal_id=pid, conn=conn)
+
+    assert plan["nombre"] == "etc.AC.DC.mkv"
+    conn.close()

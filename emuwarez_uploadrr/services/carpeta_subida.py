@@ -107,6 +107,12 @@ def enlace_simple(origen: str, destino: str) -> str:
     return f"enlace {_enlazar(origen, destino)}"
 
 
+def _nombre_suelto(nombre: str) -> bool:
+    """Un nombre sin carpetas: con "/" o ".." el enlace (y el borrado previo)
+    caería fuera de la carpeta de subidas."""
+    return bool(nombre) and nombre not in (".", "..") and os.path.basename(nombre) == nombre
+
+
 class NoSePudoPreparar(Exception):
     """Un fichero no se pudo dejar en la carpeta de subidas; el mensaje dice por qué."""
 
@@ -144,6 +150,10 @@ def preparar_carpeta_de_pack(
     if faltan:
         return {"status": "blocked", "carpeta": None,
                 "errors": [f"No existe: {f}" for f in faltan]}
+    malos = [n for _, n in ficheros if not _nombre_suelto(n)]
+    if malos:
+        return {"status": "blocked", "carpeta": None,
+                "errors": [f"Nombre de capítulo no válido: «{n}»" for n in malos]}
 
     try:
         if os.path.isdir(destino):
@@ -192,6 +202,8 @@ def preparar_fichero_suelto(
     if not fichero or not os.path.isfile(fichero):
         return {"status": "blocked", "ruta": None,
                 "errors": [f"No existe: {fichero or '(sin ruta)'}"]}
+    if nombre is not None and not _nombre_suelto(nombre):
+        return {"status": "blocked", "ruta": None, "errors": [f"Nombre no válido: «{nombre}»"]}
     if not asegurar_raiz(raiz):
         return {"status": "blocked", "ruta": None,
                 "errors": [f"No se pudo crear la carpeta de subidas: {raiz}"]}

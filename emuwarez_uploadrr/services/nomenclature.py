@@ -63,8 +63,10 @@ def _normalize_title_for_emu(title: str) -> str:
     normalized = unicodedata.normalize("NFC", title)
     # «:» y «?» se quedan: eMuwarez los conserva en el título («Anacleto: Agente secreto»).
     # El nombre de archivo los quita en to_filesystem_name.
-    cleaned = re.sub(r'[<>"/\\|*]', "", normalized)
-    return cleaned.strip()
+    # La barra separa palabras: «Fate/Zero» es «Fate Zero», no «FateZero».
+    cleaned = re.sub(r"[/\\]", " ", normalized)
+    cleaned = re.sub(r'[<>"|*]', "", cleaned)
+    return re.sub(r"\s+", " ", cleaned).strip()
 
 
 def _build_proposed_filename(
@@ -81,7 +83,9 @@ def _build_proposed_filename(
     episode: int | None = None,
     provider: str | None = None,
     dynamic_range: str | None = None,
+    custom: bool = False,
 ) -> str:
+    """El nombre eMuwarez de un fichero, o de un pack (season sin episode)."""
     from .emu_format import format_resolution, format_hdr
     from .source_assistant import _build_source_string
 
@@ -99,6 +103,11 @@ def _build_proposed_filename(
     if resolution:
         # eMuwarez suffixes 4K/8K with UHD/FUHD ("2160p UHD"), not just "2160p".
         parts.append(format_resolution(resolution) or resolution)
+    # CUSTOM va entre la resolución y el proveedor, como en el catálogo de
+    # eMuwarez ("… 2160p 4K UHD CUSTOM AMZN WEB-DL HEVC …"): un pack cuyos
+    # capítulos no traen todos el mismo audio.
+    if custom:
+        parts.append("CUSTOM")
     # Provider (AMZN/NF/DSNP...) attaches to Source, in front of it — "AMZN
     # WEB-DL", never after — matching the eMuwarez nomenclature guide. Reuses
     # source_assistant's own combiner so the two never drift apart again.
@@ -539,8 +548,9 @@ def compute_nomenclature_proposal(
         "release_tag": release_tag,
         "warnings_json": json.dumps(warnings, ensure_ascii=False),
         "errors_json": json.dumps(errors, ensure_ascii=False),
-        "raw_json": json.dumps({"item_id": item_id, "title": title, "huella": _huella(item)},
-                               ensure_ascii=False),
+        # dynamic_range no tiene columna y el pack lo necesita para su título.
+        "raw_json": json.dumps({"item_id": item_id, "title": title, "huella": _huella(item),
+                                "dynamic_range": dynamic_range}, ensure_ascii=False),
     }
     return proposal
 

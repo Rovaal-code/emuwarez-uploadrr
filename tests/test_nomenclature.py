@@ -296,4 +296,5 @@ def test_titulo_del_aporte_con_espacios_y_archivo_con_puntos(db_conn):
 
 def test_el_titulo_conserva_la_interrogacion():
     assert _normalize_title_for_emu("Ali G: Kién es yo?") == "Ali G: Kién es yo?"
-    assert _normalize_title_for_emu('Uno/Dos "tres"') == "UnoDos tres"
+    # La barra separa palabras («Fate/Zero» → «Fate Zero»), no las pega.
+    assert _normalize_title_for_emu('Uno/Dos "tres"') == "Uno Dos tres"

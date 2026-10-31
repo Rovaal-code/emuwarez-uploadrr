@@ -15,6 +15,7 @@ export interface SeasonPackFieldsPreviewFields {
   source?: string | null
   provider?: string | null
   video_codec?: string | null
+  dynamic_range?: string | null
   audio_summary?: string | null
   subtitle_summary?: string | null
   custom?: boolean

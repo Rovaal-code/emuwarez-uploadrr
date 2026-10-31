@@ -1,6 +1,8 @@
 """SQLite persistence shared by the CLI and the future web backend."""
 from __future__ import annotations
 
+import contextlib
+import datetime
 import functools
 import json
 import logging
@@ -8,7 +10,7 @@ import os
 import re
 import sqlite3
 from pathlib import Path
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable, Iterator, Optional
 
 from .constants import CONFIG_DIR
 
@@ -44,8 +46,23 @@ def db_path() -> Path:
     return base / "emuwarez_uploadrr.db"
 
 
-def connect(path: Optional[Path] = None) -> sqlite3.Connection:
-    conn = sqlite3.connect(str(path or db_path()))
+class BaseMasNuevaError(RuntimeError):
+    """La base la dejó una versión más nueva de la aplicación; este código no puede abrirla."""
+
+
+class _Conexion(sqlite3.Connection):
+    """La conexión recuerda su fichero, para que init_db sepa si ya lo comprobó."""
+    ruta: Optional[str] = None
+
+
+# Ficheros cuyo esquema ya se comprobó (y migró) al arrancar este proceso.
+_esquema_listo: set[str] = set()
+
+
+def connect(path: Optional[Path] = None, *, entre_hilos: bool = False) -> sqlite3.Connection:
+    ruta = str(path or db_path())
+    conn = sqlite3.connect(ruta, factory=_Conexion, check_same_thread=not entre_hilos)
+    conn.ruta = ruta
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
@@ -57,6 +74,46 @@ def connect(path: Optional[Path] = None) -> sqlite3.Connection:
     conn.execute("PRAGMA busy_timeout = 5000")
     conn.create_collation("TITLE_SORT", _title_sort_collation)
     return conn
+
+
+@contextlib.contextmanager
+def db(path: Optional[Path] = None, *, entre_hilos: bool = False) -> Iterator[sqlite3.Connection]:
+    """Una conexión lista: confirma al salir bien, deshace si falla y siempre
+    cierra (el `with connect()` de sqlite3 solo confirma o deshace).
+    `entre_hilos` para la que FastAPI abre en un hilo y cierra en otro."""
+    conn = connect(path, entre_hilos=entre_hilos)
+    try:
+        init_db(conn)
+        yield conn
+        conn.commit()
+    except BaseException:
+        try:
+            conn.rollback()
+        except sqlite3.Error:
+            # Si deshacer también falla, que no tape el error de verdad.
+            logger.warning("No se pudo deshacer la transacción", exc_info=True)
+        raise
+    finally:
+        conn.close()
+
+
+def preparar_base(path: Optional[Path] = None) -> None:
+    """Comprueba y migra la base una sola vez, al arrancar. A partir de ahí
+    init_db no vuelve a mirarla en este proceso (hasta `olvidar_esquema`)."""
+    ruta = str(path or db_path())
+    _esquema_listo.discard(ruta)
+    conn = connect(ruta)
+    try:
+        init_db(conn)
+    finally:
+        conn.close()
+    _esquema_listo.add(ruta)
+
+
+def olvidar_esquema() -> None:
+    """Tras restaurar una copia la base puede ser de otra versión: la próxima
+    init_db vuelve a comprobarla."""
+    _esquema_listo.clear()
 
 
 @functools.lru_cache(maxsize=131072)
@@ -1438,30 +1495,76 @@ def _migrate_scheduled_tasks_table(conn: sqlite3.Connection) -> None:
     """)
 
 
+_COPIAS_ANTES_DE_MIGRAR = 3
+
+
+def _version_guardada(conn: sqlite3.Connection) -> Optional[int]:
+    try:
+        row = conn.execute("SELECT value FROM app_state WHERE key = 'schema_version'").fetchone()
+    except sqlite3.OperationalError:
+        return None  # app_state doesn't exist yet — fresh DB, run the full cascade
+    try:
+        return int(row[0]) if row else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _copia_antes_de_migrar(conn: sqlite3.Connection, version: int) -> None:
+    """Deja en backups/ una copia de la base antes de tocar el esquema, que es
+    lo único con lo que se vuelve atrás tras una migración. Si falla, migra igual."""
+    try:
+        fichero = conn.execute("PRAGMA database_list").fetchone()[2]
+        if not fichero:
+            return  # en memoria
+        carpeta = Path(fichero).parent / "backups"
+        carpeta.mkdir(parents=True, exist_ok=True)
+        ahora = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        destino = carpeta / f"pre-migracion-{ahora}-v{version}.db"
+        if destino.exists():
+            return
+        conn.commit()  # VACUUM INTO no corre dentro de una transacción
+        conn.execute("VACUUM INTO ?", (str(destino),))
+        copias = sorted(carpeta.glob("pre-migracion-*.db"))
+        # La primera de esta versión es la única anterior a un intento fallido de migrar: los
+        # reintentos de un arranque en bucle copian ya una base a medias y no deben llevársela.
+        intocable = next((c for c in copias if c.name.endswith(f"-v{version}.db")), None)
+        for vieja in copias[:-_COPIAS_ANTES_DE_MIGRAR]:
+            if vieja != intocable:
+                vieja.unlink(missing_ok=True)
+    except (sqlite3.Error, OSError):
+        logger.warning("No se pudo copiar la base antes de migrar", exc_info=True)
+
+
 def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
     """Create tables and run the migration cascade — idempotent, but NOT
     cheap: ~35 migration functions, several of which rebuild whole tables.
 
-    Called on every authenticated request (require_auth/get_current_user
-    each open their own connection and call this before touching anything
-    else), so once the schema is already current this MUST short-circuit
-    before doing any writes. Without this check, concurrent requests (e.g.
-    several fired at once when the upload wizard modal opens) each start
-    their own migration pass at the same time — even idempotent migrations
-    take a write lock while checking, and under real concurrency that has
-    caused `database is locked`-type errors that require_auth silently
-    turned into "invalid token", wiping the frontend's session on a request
-    that had nothing to do with auth (see the comment in dependencies.py).
+    The web app and `web serve` call `preparar_base` once at startup; after
+    that this returns at once for that file. Anywhere else it reads the stored
+    schema version first and returns early when it matches, so the cascade
+    never runs twice (concurrent passes took write locks and caused
+    `database is locked` errors).
+
+    A base left by a newer version is refused (BaseMasNuevaError) instead of
+    being stamped with the old number, and an older one is copied to
+    backups/ before it is migrated.
     """
     own = conn is None
     conn = conn or connect()
     try:
-        try:
-            row = conn.execute("SELECT value FROM app_state WHERE key = 'schema_version'").fetchone()
-        except sqlite3.OperationalError:
-            row = None  # app_state doesn't exist yet — fresh DB, run the full cascade below
-        if row is not None and row["value"] == str(SCHEMA_VERSION):
+        if getattr(conn, "ruta", None) in _esquema_listo:
             return
+        version = _version_guardada(conn)
+        if version == SCHEMA_VERSION:
+            return
+        if version is not None and version > SCHEMA_VERSION:
+            raise BaseMasNuevaError(
+                f"La base de datos es de una versión más nueva (esquema {version}) que esta "
+                f"aplicación (esquema {SCHEMA_VERSION}). Usa una imagen igual o más nueva; para "
+                f"volver atrás, restaura la copia backups/pre-migracion-*-v{SCHEMA_VERSION}.db."
+            )
+        if version is not None:
+            _copia_antes_de_migrar(conn, version)
         conn.executescript(
             """
             CREATE TABLE IF NOT EXISTS app_state (
@@ -1790,7 +1893,8 @@ def set_json_state(conn: sqlite3.Connection, key: str, value: Any) -> None:
 
 
 __all__ = [
-    "DB_FILE", "SCHEMA_VERSION", "db_path", "connect", "init_db", "borrar_peticiones", "borrar_biblioteca",
+    "DB_FILE", "SCHEMA_VERSION", "db_path", "connect", "db", "init_db", "preparar_base", "olvidar_esquema",
+    "BaseMasNuevaError", "borrar_peticiones", "borrar_biblioteca",
     "row_to_dict", "rows_to_dicts", "get_state", "set_state",
     "get_json_state", "set_json_state",
     "CANONICAL_SETTING_ALIASES", "get_setting_canonical",

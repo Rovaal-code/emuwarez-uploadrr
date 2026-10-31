@@ -20,7 +20,7 @@ from emuwarez_uploadrr.web.app import create_app
 
 
 # ---------------------------------------------------------------------------
-# Health / Runtime — public, no auth
+# Health — public, no auth
 # ---------------------------------------------------------------------------
 
 def test_health_endpoint(client):
@@ -34,15 +34,10 @@ def test_health_endpoint(client):
     assert "initialized" in data
 
 
-def test_runtime_endpoint(client):
-    response = client.get("/api/runtime")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["app_name"] == "eMuwarez Uploadrr"
-    assert "config_dir" in data
-    assert "database_path" in data
-    assert isinstance(data["cli_available"], bool)
-    assert isinstance(data["uploadrr_runtime_present"], bool)
+def test_api_runtime_ya_no_existe(client, auth_headers):
+    """Era público y enseñaba la ruta de la base y el texto crudo del error."""
+    assert client.get("/api/runtime").status_code == 404
+    assert client.get("/api/runtime", headers=auth_headers).status_code == 404
 
 
 # ---------------------------------------------------------------------------

@@ -108,6 +108,9 @@ class SettingsResponse(BaseModel):
 
 
 class SettingsUpdateRequest(BaseModel):
+    # Secretos que se quitan: un valor vacío deja el que haya, así que borrar uno
+    # se pide aparte. Valores: _CLAVES_BORRABLES, o "image_host_key:<id>".
+    clear: Optional[list[str]] = None
     default_release_tag: Optional[str] = None
     upload_tags: Optional[list[str]] = None
     provider_priority_order: Optional[list[str]] = None
@@ -166,6 +169,27 @@ class SettingsUpdateRequest(BaseModel):
         if v and not re.match(r"^https?://[^\s/]+", v):
             raise ValueError("La URL de qBittorrent debe empezar por http:// o https:// e incluir un host válido")
         return v
+
+
+# Los secretos que un PUT /settings con `clear` puede quitar, y el ajuste de cada uno.
+_CLAVES_BORRABLES = {
+    "qbit_password": "qbit.password",
+    "notify_discord_webhook_url": "notify.discord.webhook_url",
+    "notify_telegram_bot_token": "notify.telegram.bot_token",
+}
+_PREFIJO_CLAVE_IMAGENES = "image_host_key:"
+
+
+def _ajuste_a_borrar(nombre: str) -> Optional[str]:
+    """El ajuste que quita un nombre de `clear`, o None si no es borrable."""
+    if nombre in _CLAVES_BORRABLES:
+        return _CLAVES_BORRABLES[nombre]
+    if nombre.startswith(_PREFIJO_CLAVE_IMAGENES):
+        from emuwarez_uploadrr.services.image_hosts import IMAGE_HOSTS
+        host_id = nombre[len(_PREFIJO_CLAVE_IMAGENES):]
+        if any(h["id"] == host_id for h in IMAGE_HOSTS):
+            return f"imghost.key.{host_id}"
+    return None
 
 
 def _normalize_allowed_roots(value: list[str] | str) -> list[str]:
@@ -383,6 +407,10 @@ def update_settings(
     if body.emu_api_key is not None and not body.emu_api_key.strip():
         errors.append("La API key de eMuwarez es obligatoria: no se puede guardar vacía")
 
+    desconocidos = [n for n in body.clear or [] if _ajuste_a_borrar(n) is None]
+    if desconocidos:
+        errors.append(f"No se puede quitar: {', '.join(desconocidos)}")
+
     if errors:
         raise HTTPException(
             status_code=422,
@@ -413,6 +441,10 @@ def update_settings(
                 status_code=422,
                 detail="; ".join(key_errors),
             )
+
+        # Antes que las escrituras: si llega a la vez un valor nuevo, gana ese.
+        for nombre in body.clear or []:
+            set_setting(conn, _ajuste_a_borrar(nombre), "")
 
         if body.default_release_tag is not None:
             set_setting(conn, "default_release_tag", body.default_release_tag.strip())

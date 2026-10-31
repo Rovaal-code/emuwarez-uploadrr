@@ -21,7 +21,7 @@
 #   scripts/desplegar.sh --solo-prueba                   # sube solo :edge, sin versión ni manifiesto
 #
 # Al publicar sigue el orden del workflow: la imagen como :<sha>, la etiqueta
-# vX.Y.Z, la imagen como :X.Y.Z, :latest y :edge, y el manifiesto. Si algo falla,
+# vX.Y.Z, la imagen como :X.Y.Z, :edge y :latest, y el manifiesto. Si algo falla,
 # relanzar completa la versión. :X.Y.Z es la que se fija en el compose
 # (EMUWAREZ_UPLOADRR_TAG=X.Y.Z) para quedarse en una versión o volver a ella.
 #
@@ -212,9 +212,9 @@ subir "$COMMIT"
 # Como el workflow: la etiqueta de git antes que :X.Y.Z y :latest, y el manifiesto lo último.
 etiquetar
 subir "$VERSION"
-subir latest
-# :edge es lo más nuevo: una versión también lo es.
+# :edge antes que :latest: si algo falla entre medias, :edge nunca queda por detrás.
 subir edge
+subir latest
 DIGEST="$(docker image inspect "$IMAGEN:latest" --format '{{index .RepoDigests 0}}' | cut -d@ -f2)"
 echo "Digest ...... $DIGEST"
 

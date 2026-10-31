@@ -898,3 +898,49 @@ def test_un_enlace_simbolico_en_la_carpeta_de_subidas_vale_para_subir(db_conn, t
     assert os.path.islink(visto["prepared_path"])
     assert Path(visto["prepared_path"]).is_relative_to(visto["uploads"])
     assert visto["errores"] == []
+
+
+# ---------------------------------------------------------------------------
+# La fase de nomenclatura falla con el motivo, sin tocar nada
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("respuesta, esperado", [
+    (RuntimeError("boom"), "Error aplicando la nomenclatura: boom"),
+    ({"status": "blocked", "errors": ["propuesta bloqueada"]}, "No se pudo aplicar la nomenclatura: propuesta bloqueada"),
+])
+def test_un_fallo_al_calcular_el_nombre_para_la_subida(db_conn, tmp_path, monkeypatch, respuesta, esperado):
+    f = tmp_path / "movie.mkv"
+    f.write_bytes(b"x" * 100)
+    iid = _movie_with_path(db_conn, str(f))
+    job_id = _queued_job_row(db_conn, iid, path=str(f))
+    monkeypatch.setattr(uq, "_check_generic_upload_preconditions", lambda *a, **k: True)
+
+    def plan(*a, **k):
+        if isinstance(respuesta, Exception):
+            raise respuesta
+        return respuesta
+    monkeypatch.setattr("emuwarez_uploadrr.services.nomenclature.build_nomenclature_apply_plan", plan)
+
+    uq._run_queued_job(job_id)
+
+    job = db_conn.execute("SELECT status, error_message FROM upload_jobs WHERE id = ?", (job_id,)).fetchone()
+    assert job["status"] == "failed" and esperado in job["error_message"]
+    assert [p.name for p in tmp_path.iterdir() if p.suffix == ".mkv"] == ["movie.mkv"]
+
+
+def test_un_fallo_al_calcular_el_pack(db_conn, monkeypatch):
+    season_id, _ids = _seed_season_with_episodes(db_conn, n=1)
+    job_id = _queued_job_row(db_conn, season_id, path="")
+    monkeypatch.setattr(uq, "_check_season_integrity", lambda *a, **k: True)
+    monkeypatch.setattr(uq, "_check_generic_upload_preconditions", lambda *a, **k: True)
+
+    def plan(*a, **k):
+        raise RuntimeError("boom")
+    import emuwarez_uploadrr.services.season_pack as season_pack_mod
+    monkeypatch.setattr(season_pack_mod, "build_season_pack_plan", plan)
+
+    uq._run_queued_job(job_id)
+
+    job = db_conn.execute("SELECT status, error_message FROM upload_jobs WHERE id = ?", (job_id,)).fetchone()
+    assert job["status"] == "failed"
+    assert "Error aplicando la nomenclatura del pack de temporada: boom" in job["error_message"]

@@ -243,3 +243,10 @@ def test_los_avisos_de_mkvpropedit_no_son_un_fallo(tmp_path, monkeypatch):
     copia.write_bytes(b"fake mkv")
     r, _ = _titulo_en(tmp_path, monkeypatch, copia, rc=1, stdout="Warning: algo", ruta=str(copia))
     assert r["status"] == "applied"
+
+
+def test_titulo_actual_sin_poder_leer_el_mkv_es_none():
+    from emuwarez_uploadrr.services.mkv_title import titulo_actual
+    with patch("emuwarez_uploadrr.services.mkv_remux.read_tracks_json",
+               return_value={"ok": False, "error": "no es Matroska"}):
+        assert titulo_actual("/no/existe.mkv") is None

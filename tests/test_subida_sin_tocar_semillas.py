@@ -1,9 +1,11 @@
 """La subida no puede corromper un torrent que siembra el archivo de la biblioteca.
 
-Con mkvmerge/mkvpropedit de verdad, sobre MKV pequeños hechos con ffmpeg. Lo que
-se comprueba en cada caso es lo que importa en el NAS: los bytes y el nombre del
-original (y de su hardlink de la descarga) no cambian si lo comparte alguien, y
-lo que se sube vive en la carpeta de subidas con el nombre de eMuwarez.
+Cada prueba corre dos veces: con mkvmerge/mkvpropedit de verdad sobre MKV
+pequeños hechos con ffmpeg (si están instalados), y con los de mentira de
+tests/fixtures/mkvtoolnix_falso.py, que es lo que ve el CI. Lo que se comprueba
+es lo que importa en el NAS: los bytes y el nombre del original (y de su
+hardlink de la descarga) no cambian si lo comparte alguien, y lo que se sube
+vive en la carpeta de subidas con el nombre de eMuwarez.
 """
 from __future__ import annotations
 
@@ -13,6 +15,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,19 +25,53 @@ import pytest
 
 from emuwarez_uploadrr.services import upload_queue as uq
 
-pytestmark = pytest.mark.skipif(
-    not all(shutil.which(t) for t in ("ffmpeg", "mediainfo", "mkvmerge", "mkvpropedit")),
-    reason="hacen falta ffmpeg, mediainfo y mkvtoolnix",
-)
-
 TITULO_FUENTE = "Fuente [www.web.com]"
 PROPUESTO = "Peli.2024.1080p.WEB-DL.AVC.ESP-ING-EMU"
+REALES = all(shutil.which(t) for t in ("ffmpeg", "mediainfo", "mkvmerge", "mkvpropedit"))
+
+
+@pytest.fixture(scope="module", params=["reales", "falsos"])
+def herramientas(request, tmp_path_factory):
+    """mkvtoolnix de verdad, o el de mentira delante en el PATH y sin MediaInfo."""
+    if request.param == "reales":
+        if not REALES:
+            pytest.skip("hacen falta ffmpeg, mediainfo y mkvtoolnix")
+        yield request.param
+        return
+    if os.name == "nt":
+        pytest.skip("los binarios de mentira son scripts POSIX")
+    binarios = tmp_path_factory.mktemp("bin")
+    falso = (Path(__file__).parent / "fixtures" / "mkvtoolnix_falso.py").read_text(encoding="utf-8")
+    for nombre, codigo in (("mkvmerge", falso), ("mkvpropedit", falso), ("mediainfo", "import sys; sys.exit(1)\n")):
+        (binarios / nombre).write_text(f"#!{sys.executable}\n{codigo}", encoding="utf-8")
+        (binarios / nombre).chmod(0o755)
+    from emuwarez_uploadrr.services import media_info_service
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("PATH", f"{binarios}{os.pathsep}{os.environ.get('PATH', '')}")
+        mp.setattr(media_info_service, "mediainfo_available", lambda: False)
+        yield request.param
+
+
+_MKV_FALSO = {
+    "container": {"recognized": True, "properties": {"title": TITULO_FUENTE}},
+    "tracks": [
+        {"id": 0, "type": "video", "codec": "AVC/H.264/MPEG-4p10",
+         "properties": {"uid": 11, "pixel_dimensions": "320x180", "default_track": True}},
+        {"id": 1, "type": "audio", "codec": "AAC",
+         "properties": {"uid": 12, "language": "eng", "audio_channels": 1, "default_track": True}},
+        {"id": 2, "type": "audio", "codec": "AC-3",
+         "properties": {"uid": 13, "language": "spa", "audio_channels": 1, "default_track": False}},
+    ],
+}
 
 
 @pytest.fixture(scope="module")
-def mkv_base(tmp_path_factory):
+def mkv_base(herramientas, tmp_path_factory):
     """Vídeo + audio inglés + audio castellano, sin nombres de pista."""
     out = tmp_path_factory.mktemp("mkv") / "base.mkv"
+    if herramientas == "falsos":
+        out.write_text(json.dumps(_MKV_FALSO), encoding="utf-8")
+        return out
     subprocess.run([
         "ffmpeg", "-y", "-loglevel", "error",
         "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24:duration=2",
@@ -317,7 +354,7 @@ def test_sin_espacio_para_reordenar_falla_antes_con_los_numeros(entorno, mkv_bas
     from collections import namedtuple
     from emuwarez_uploadrr.services import mkv_remux
     uso = namedtuple("uso", "total used free")
-    monkeypatch.setattr(mkv_remux.shutil, "disk_usage", lambda p: uso(10**9, 10**9, 1000))
+    monkeypatch.setattr(mkv_remux.shutil, "disk_usage", lambda p: uso(10**9, 10**9, 0))
     _modo(entorno, "reordenar_y_renombrar")
     peli = _pelicula(entorno, mkv_base, carpeta=entorno["tmp"] / "media" / "Peli (2024)", semilla=False)
     antes = _sha(peli["f"])
@@ -512,3 +549,110 @@ def test_no_se_rehace_el_enlace_que_siembra_otra_subida(entorno, mkv_base, monke
     assert f"es de la subida #{primera['id']}" in r["job"]["error_message"]
     assert destino.stat().st_ino == inodo and _sha(destino) == sembrado
     assert _sha(peli["f"]) == sembrado
+
+
+# ---------------------------------------------------------------------------
+# Las demás ramas de _preparar_fichero
+# ---------------------------------------------------------------------------
+
+def test_un_archivo_que_no_es_mkv_se_enlaza_sin_tocar(entorno, mkv_base, monkeypatch):
+    from emuwarez_uploadrr.services import media_info_service
+    monkeypatch.setattr(media_info_service, "mediainfo_available", lambda: False)
+    _modo(entorno, "solo_renombrar")
+    peli = _pelicula(entorno, mkv_base, carpeta=entorno["tmp"] / "media" / "Peli (2024)",
+                     nombre="Peli (2024).mp4", semilla=False)
+
+    r = _subir(entorno, peli["id"], peli["proposal_id"])
+
+    destino = entorno["uploads"] / f"{PROPUESTO}.mp4"
+    assert r["visto"]["prepared_path"] == str(destino), r["logs"]
+    assert destino.stat().st_ino == peli["f"].stat().st_ino
+    assert json.loads(r["job"]["remux_snapshot_json"]) == {"omitida": "no es MKV"}
+
+
+def test_sin_poder_leer_las_pistas_no_se_tocan(entorno, mkv_base, monkeypatch):
+    from emuwarez_uploadrr.services import carpeta_subida, mkv_remux
+    monkeypatch.setattr(carpeta_subida, "clonar", _reflink("no"))
+    monkeypatch.setattr(mkv_remux, "check_mkvmerge_available", lambda: {"available": False, "path": None})
+    _modo(entorno, "solo_renombrar")
+    peli = _pelicula(entorno, mkv_base, carpeta=entorno["tmp"] / "media" / "Peli (2024)", semilla=False)
+    antes = _sha(peli["f"])
+
+    r = _subir(entorno, peli["id"], peli["proposal_id"])
+
+    assert r["visto"]["status"] == "ready", r["logs"]
+    assert _sha(peli["f"]) == antes
+    assert any("no se tocan las pistas" in m for m in r["logs"])
+    assert json.loads(r["job"]["remux_snapshot_json"]) == {"omitida": "no se leyeron las pistas"}
+
+
+def test_si_falla_la_edicion_del_original_la_subida_falla(entorno, mkv_base, monkeypatch):
+    from emuwarez_uploadrr.services import mkv_remux
+    monkeypatch.setattr(mkv_remux, "apply_remux", lambda *a, **k: {"status": "error", "errors": ["disco lleno"]})
+    _modo(entorno, "solo_renombrar")
+    peli = _pelicula(entorno, mkv_base, carpeta=entorno["tmp"] / "media" / "Peli (2024)", semilla=False)
+
+    r = _subir(entorno, peli["id"], peli["proposal_id"])
+
+    assert r["job"]["status"] == "failed"
+    assert "no se pudieron reordenar/renombrar las pistas: disco lleno" in r["job"]["error_message"]
+    assert not entorno["uploads"].exists() or os.listdir(entorno["uploads"]) == []
+
+
+def test_si_fallan_las_pistas_de_la_copia_se_borra_y_se_enlaza(entorno, mkv_base, monkeypatch):
+    from emuwarez_uploadrr.services import carpeta_subida, mkv_remux
+    monkeypatch.setattr(carpeta_subida, "clonar", _reflink("copia"))
+    monkeypatch.setattr(mkv_remux, "apply_remux", lambda *a, **k: {"status": "error", "errors": ["boom"]})
+    _modo(entorno, "solo_renombrar")
+    peli = _pelicula(entorno, mkv_base, carpeta=entorno["tmp"] / "media" / "Peli (2024)")
+    antes = _sha(peli["f"])
+
+    r = _subir(entorno, peli["id"], peli["proposal_id"])
+
+    destino = entorno["uploads"] / f"{PROPUESTO}.mkv"
+    assert r["visto"]["status"] == "ready", r["logs"]
+    assert destino.stat().st_ino == peli["f"].stat().st_ino and _sha(destino) == antes
+    assert any("falló la edición de la copia (boom)" in m for m in r["logs"])
+    assert json.loads(r["job"]["remux_snapshot_json"]) == {"omitida": "falló la edición"}
+
+
+def test_ya_en_su_sitio_y_compartido_no_se_copia_encima(entorno, mkv_base, monkeypatch):
+    """En la raíz de subidas y con su nombre final: no hay dónde poner una copia."""
+    from emuwarez_uploadrr.services import carpeta_subida
+    monkeypatch.setattr(carpeta_subida, "clonar", _reflink("copia"))
+    _modo(entorno, "solo_renombrar")
+    peli = _pelicula(entorno, mkv_base, carpeta=entorno["uploads"], nombre=f"{PROPUESTO}.mkv")
+    antes = _sha(peli["f"])
+
+    r = _subir(entorno, peli["id"], peli["proposal_id"])
+
+    assert r["visto"]["prepared_path"] == str(peli["f"]), r["logs"]
+    assert _sha(peli["f"]) == antes and _sha(peli["seed"]) == antes
+    assert any("no cabe una copia" in m for m in r["logs"])
+    assert any("sin enlace: ya está en la carpeta de subidas" in m for m in r["logs"])
+
+
+def test_si_no_se_puede_renombrar_en_subidas_falla(entorno, mkv_base):
+    _modo(entorno, "ninguno")
+    peli = _pelicula(entorno, mkv_base, carpeta=entorno["uploads"] / "Peli (2024)", semilla=False)
+    ocupado = peli["f"].parent / f"{PROPUESTO}.mkv"
+    ocupado.write_bytes(b"otro")
+
+    r = _subir(entorno, peli["id"], peli["proposal_id"])
+
+    assert r["job"]["status"] == "failed"
+    assert "No se pudo aplicar la nomenclatura" in r["job"]["error_message"]
+    assert peli["f"].exists() and ocupado.read_bytes() == b"otro"
+
+
+def test_si_falla_el_titulo_en_su_sitio_se_avisa_y_se_sigue(entorno, mkv_base, monkeypatch):
+    from emuwarez_uploadrr.services import mkv_title
+    monkeypatch.setattr(mkv_title, "apply_internal_title_update",
+                        lambda *a, **k: {"status": "error", "errors": ["Error: solo lectura"]})
+    _modo(entorno, "solo_renombrar")
+    peli = _pelicula(entorno, mkv_base, carpeta=entorno["uploads"] / "Peli (2024)", semilla=False)
+
+    r = _subir(entorno, peli["id"], peli["proposal_id"])
+
+    assert r["visto"]["status"] == "ready", r["logs"]
+    assert any("no se pudo poner el título interno: Error: solo lectura" in m for m in r["logs"])

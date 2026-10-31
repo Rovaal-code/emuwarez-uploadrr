@@ -240,13 +240,31 @@ def start_requests_sync_background(force: bool = False) -> dict:
     """Arranca la sincronización en un hilo y vuelve al instante; la interfaz sigue el progreso.
 
     Devuelve {"status": "started"}, {"status": "throttled", "wait_seconds"} o {"status": "busy", "message"}.
-    Sin API key lanza IntegrationError, como antes: no hace falta un hilo para saber que no va a salir."""
+    Sin API key lanza IntegrationError, como antes: no hace falta un hilo para saber que no va a salir.
+
+    El candado de sync_emu_requests se toma aquí y pasa al hilo, que lo suelta al terminar: así dos pulsaciones
+    seguidas, o la tarea programada, no pueden arrancar dos a la vez ni pisarse el progreso."""
     from ..database import connect, db_path
+    if not _SYNC_EN_CURSO.acquire(blocking=False):
+        if get_request_sync_progress()["active"]:
+            return {"status": "started"}  # ya hay una: se sigue esa
+        return {"status": "busy", "message": "Ya hay una sincronización de peticiones en marcha."}
+
+    def _run() -> None:
+        c = connect(db_path())
+        try:
+            _sincronizar_peticiones(c)  # el candado ya es nuestro
+        except Exception as exc:  # noqa: BLE001 — _sincronizar_peticiones ya dejó su error; esto es lo que falle antes
+            if not get_request_sync_progress()["error"]:
+                _set_progress(error=str(exc))
+        finally:
+            c.close()
+            _set_progress(active=False, done=True)  # pase lo que pase, la barra no se queda encendida
+            _SYNC_EN_CURSO.release()
+
+    lanzado = False
     conn = connect(db_path())
     try:
-        with _PROGRESO_LOCK:
-            if _PROGRESO["active"]:
-                return {"status": "started"}  # ya hay una: se sigue esa
         allowed, wait = can_sync_requests(conn, force=force)
         if not allowed:
             return {"status": "throttled", "wait_seconds": wait}
@@ -255,28 +273,20 @@ def start_requests_sync_background(force: bool = False) -> dict:
             return {"status": "busy", "message": motivo}
         if not _resolve_emu_api_key(conn):
             raise IntegrationError("No hay API Key de eMuwarez configurada")
+        # Activa antes de que el hilo arranque: la interfaz la sigue desde que esta respuesta llega.
+        _set_progress(active=True, done=False, phase="Iniciando…", page=0, total_pages=None, imported=0, message="",
+                      error=None)
+        try:
+            threading.Thread(target=_run, daemon=True).start()
+        except Exception:
+            _set_progress(active=False, done=True)
+            raise
+        lanzado = True
+        return {"status": "started"}
     finally:
         conn.close()
-    # Ya activa antes de que arranque el hilo: otra pulsación entre medias se encuentra con «ya hay una».
-    _set_progress(active=True, done=False, phase="Iniciando…", page=0, total_pages=None, imported=0, message="",
-                  error=None)
-
-    def _run() -> None:
-        c = connect(db_path())
-        try:
-            result = sync_emu_requests(c, force=True)  # el turno ya se comprobó arriba
-            if result.get("status") != "ok":
-                # Otra sincronización se coló entre la comprobación y aquí.
-                _set_progress(error=str(result.get("message") or ""))
-        except Exception as exc:  # noqa: BLE001 — _sincronizar_peticiones ya dejó su error; esto es lo que falle antes
-            if not get_request_sync_progress()["error"]:
-                _set_progress(error=str(exc))
-        finally:
-            c.close()
-            _set_progress(active=False, done=True)  # pase lo que pase, la barra no se queda encendida
-
-    threading.Thread(target=_run, daemon=True).start()
-    return {"status": "started"}
+        if not lanzado:
+            _SYNC_EN_CURSO.release()
 
 
 def _importar_peticiones(conn: sqlite3.Connection) -> dict[str, int | str]:

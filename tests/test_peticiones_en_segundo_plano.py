@@ -168,8 +168,83 @@ def test_si_el_hilo_falla_antes_de_sincronizar_la_barra_no_se_queda_encendida(db
     def rota(*a, **kw):
         raise RuntimeError("base de datos bloqueada")
 
-    monkeypatch.setattr(reqs, "sync_emu_requests", rota)
+    monkeypatch.setattr(reqs, "_sincronizar_peticiones", rota)
     reqs.start_requests_sync_background(force=True)
     assert _esperar(lambda: reqs.get_request_sync_progress()["done"])
     progreso = reqs.get_request_sync_progress()
     assert (progreso["active"], progreso["error"]) == (False, "base de datos bloqueada")
+
+
+def _candado_libre():
+    libre = reqs._SYNC_EN_CURSO.acquire(blocking=False)
+    if libre:
+        reqs._SYNC_EN_CURSO.release()
+    return libre
+
+
+def test_si_no_arranca_nada_el_candado_queda_libre(db_conn, monkeypatch, avisos):
+    set_state(db_conn, reqs.SYNC_STATE_KEY, dt.datetime.now(dt.timezone.utc).isoformat())
+    db_conn.commit()
+    assert reqs.start_requests_sync_background(force=False)["status"] == "throttled"
+    assert _candado_libre()
+    emu_catalog._set_progress(active=True)
+    try:
+        assert reqs.start_requests_sync_background(force=True)["status"] == "busy"
+    finally:
+        emu_catalog._set_progress(active=False)
+    assert _candado_libre()
+    db_conn.execute("DELETE FROM settings WHERE key = 'emu.api_key'")
+    db_conn.commit()
+    with pytest.raises(IntegrationError):
+        reqs.start_requests_sync_background(force=True)
+    assert _candado_libre()
+
+
+def test_dos_arranques_a_la_vez_lanzan_un_solo_hilo_y_no_se_pisan_el_progreso(db_conn, monkeypatch, avisos):
+    """Dos pestañas a la vez: las dos veían «no hay ninguna» y la que perdía apagaba la barra de la que corría."""
+    estado = _fetch_lento(monkeypatch)
+    salida = []
+    salida_lock = threading.Lock()
+    salida_barrera = threading.Barrier(2)
+
+    def pulsa():
+        salida_barrera.wait(10)
+        r = reqs.start_requests_sync_background(force=True)
+        with salida_lock:
+            salida.append(r["status"])
+
+    hilos = [threading.Thread(target=pulsa) for _ in range(2)]
+    for h in hilos:
+        h.start()
+    try:
+        assert estado["dentro"].wait(10)
+        for h in hilos:
+            h.join(10)
+        # Con la sincronización a medias sigue encendida y sin error, la haya pedido quien la haya pedido.
+        progreso = reqs.get_request_sync_progress()
+        assert (progreso["active"], progreso["done"], progreso["error"]) == (True, False, None)
+    finally:
+        estado["seguir"].set()
+    assert _esperar(lambda: reqs.get_request_sync_progress()["done"])
+    assert estado["veces"] == 1
+    assert salida.count("started") >= 1 and set(salida) <= {"started", "busy"}
+    assert reqs.get_request_sync_progress()["error"] is None
+    assert _candado_libre()
+
+
+def test_con_otra_sincronizacion_en_marcha_no_se_toca_su_progreso(db_conn, monkeypatch, avisos):
+    """La tarea programada ya tiene el candado: su progreso es suyo y el arranque del botón no lo reinicia."""
+    estado = _fetch_lento(monkeypatch)
+    reqs._SYNC_EN_CURSO.acquire()
+    try:
+        reqs._set_progress(active=True, phase="Descargando peticiones…", page=4, total_pages=9)
+        assert reqs.start_requests_sync_background(force=True) == {"status": "started"}
+        progreso = reqs.get_request_sync_progress()
+        assert (progreso["active"], progreso["page"], progreso["phase"]) == (True, 4, "Descargando peticiones…")
+        # Y si todavía no ha escrito su progreso, se dice que hay una en marcha en vez de fingir que arranca.
+        reqs._set_progress(active=False)
+        resultado = reqs.start_requests_sync_background(force=True)
+        assert resultado["status"] == "busy" and "en marcha" in resultado["message"]
+    finally:
+        reqs._SYNC_EN_CURSO.release()
+    assert estado["veces"] == 0

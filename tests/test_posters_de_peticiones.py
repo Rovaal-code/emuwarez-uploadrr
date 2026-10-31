@@ -112,6 +112,24 @@ def test_si_tmdb_falla_no_se_guarda_y_se_para_al_tercer_fallo(db_conn, tmdb_fals
                for i in ids)
 
 
+def test_mientras_espera_a_tmdb_no_bloquea_la_base_de_datos(db_conn, isolated_db, monkeypatch):
+    """La primera vez son unos 300 pósters: con la base de datos bloqueada hasta el final, lo que escribiera a la vez
+    (una subida) fallaría con «database is locked»."""
+    from emuwarez_uploadrr.database import connect
+    ids = [_peticion(db_conn, str(i), tmdb_id=str(100 + i)) for i in range(2)]
+    otra = connect(isolated_db / "emuwarez_uploadrr.db")
+    otra.execute("PRAGMA busy_timeout = 0")
+
+    def escribe_a_la_vez(method, url, **kw):
+        otra.execute("UPDATE request_items SET title = 'cambiado' WHERE id = ?", (ids[0],))
+        otra.commit()
+        return {"poster_path": "/p.jpg"}
+
+    monkeypatch.setattr(tmdb, "request_json", escribe_a_la_vez)
+    assert reqs.rellenar_posters(db_conn) == 2
+    otra.close()
+
+
 def test_sin_clave_de_tmdb_no_se_pide_nada(db_conn, tmdb_falso):
     set_setting(db_conn, "tmdb.api_key", "")
     _peticion(db_conn, "1", tmdb_id="603")

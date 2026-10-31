@@ -295,8 +295,8 @@ def rellenar_posters(conn: sqlite3.Connection) -> int:
         fallos = 0
         conn.execute("UPDATE request_items SET tmdb_poster_url = ?, tmdb_backdrop_url = ? WHERE id = ?",
                      (_TMDB_IMAGEN + poster if poster else "", _TMDB_IMAGEN + fondo if fondo else "", p["id"]))
+        conn.commit()  # una a una: si no, la base de datos queda bloqueada mientras se espera a TMDb
         traidos += bool(poster)
-    conn.commit()
     return traidos
 
 

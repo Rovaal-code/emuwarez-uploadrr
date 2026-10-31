@@ -133,6 +133,9 @@ EMU_PETICIONES_MAX_PAGINAS = 50
 EMU_ESPERA_429 = 60.0
 EMU_REINTENTOS_429 = 3
 
+# Con estos estados, en la primera página, se prueba otra vez sin pedir un orden (puede ser lo que rechaza).
+_RECHAZO_DE_ORDEN = (400, 422, 500)
+
 # Lo que se enseña en vez del texto de request_json, que lleva la URL.
 _MENSAJE_POR_ESTADO = {
     401: "eMuwarez ha rechazado la API key (¿ratio por debajo de 1?)",
@@ -168,7 +171,8 @@ def emu_fetch_all_torrents(
     newly-uploaded torrents come back, instead of re-downloading the whole
     catalog. Se pide ordenado por created_at desc (UNIT3D ordena por defecto por bumped_at, y un torrent
     antiguo resubido saldría el primero y cortaría el recorrido): los ids bajan página a página y el primer
-    id conocido significa que lo que sigue también se conoce.
+    id conocido significa que lo que sigue también se conoce. Si el tracker rechaza el orden en la primera
+    página, se sigue sin él (su orden por defecto) en vez de dejar la sincronización sin funcionar.
 
     Requests are paced to `min_interval` seconds apart (rate limit).
 
@@ -180,14 +184,22 @@ def emu_fetch_all_torrents(
     total_items: int | None = None
     page = 1
     reached_known = False
+    orden = {"sortField": "created_at", "sortDirection": "desc"}
+
+    def pedir(n: int) -> Any:
+        return _pedir_pagina(build_url(base, "/api/torrents/filter", {
+            "api_token": api_key, "perPage": str(per_page), "page": str(n), **orden}))
+
     while page <= max_pages and not reached_known:
         if page > 1:
             time.sleep(min_interval)  # rate limit (see EMU_MIN_REQUEST_INTERVAL)
-        url = build_url(base, "/api/torrents/filter", {
-            "api_token": api_key, "perPage": str(per_page), "page": str(page),
-            "sortField": "created_at", "sortDirection": "desc",
-        })
-        data = _pedir_pagina(url)
+        try:
+            data = pedir(page)
+        except IntegrationError as exc:
+            if page > 1 or not orden or exc.status not in _RECHAZO_DE_ORDEN:
+                raise
+            orden = {}
+            data = pedir(page)
         items = data.get("data") if isinstance(data, dict) else None
         meta = data.get("meta") if isinstance(data, dict) else None
         if isinstance(meta, dict):

@@ -247,17 +247,13 @@ def _infer_source_from_item(item: dict) -> str | None:
     src = item.get("source")
     if src:
         return src
-    quality = item.get("quality") or ""
-    combined = (quality + " " + path).lower()
-    source_map = [
-        ("bluray", "BluRay"), ("blu-ray", "BluRay"), ("blu_ray", "BluRay"),
-        ("bdremux", "BDReMux"), ("webdl", "WEB-DL"), ("web-dl", "WEB-DL"),
-        ("webrip", "WEBRip"), ("web_dl", "WEB-DL"),
-        ("hdtv", "HDTV"), ("dvd", "DVD"),
-    ]
-    for key, canonical in source_map:
-        if key in combined:
-            return canonical
+    # La misma tabla que el nombre (constants.SOURCE_PATTERNS), sobre la
+    # calidad y la ruta: una tercera copia escribía "BDReMux" y "DVD".
+    from ..constants import SOURCE_PATTERNS
+    combined = f"{item.get('quality') or ''} {path}"
+    for pattern, value in SOURCE_PATTERNS:
+        if pattern.search(combined):
+            return value
     return None
 
 

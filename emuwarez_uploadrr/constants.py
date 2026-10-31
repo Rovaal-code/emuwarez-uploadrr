@@ -81,7 +81,8 @@ SOURCE_PATTERNS = [
     # traduce al salir (source_engine/integration.ENGINE_TO_APP_SOURCE); esta
     # detección por nombre no traducía nada, así que un fichero con "bd50" en
     # el nombre acababa con un source que el tracker no acepta.
-    (re.compile(r"\b(?:full[ ._-]?bd|bd50|bd25)\b", re.I), "Full BluRay"),
+    # "Full.BluRay" es como lo escribe la propia app al renombrar.
+    (re.compile(r"\b(?:full[ ._-]?bd|full[ ._-]?blu[ ._-]?ray|bd50|bd25)\b", re.I), "Full BluRay"),
     (re.compile(r"\b(?:full[ ._-]?dvd|dvd9|dvd5)\b", re.I), "FDVD"),
     (re.compile(r"\b(?:web[ ._-]?dl|webdl)\b", re.I), "WEB-DL"),
     (re.compile(r"\b(?:web[ ._-]?rip|webrip)\b", re.I), "WEBRip"),

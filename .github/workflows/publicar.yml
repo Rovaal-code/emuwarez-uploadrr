@@ -3,7 +3,7 @@
 # :latest), publica el manifiesto en Kisnov/uploadrr-version, que es lo que
 # lee el aviso de actualización de la app, y crea el release con sus PR.
 #
-# A mano (Actions → Publicar versión → Run workflow), o solo cada 48 h si desde
+# A mano (Actions → Publicar versión → Run workflow), o solo los días impares del mes si desde
 # la última versión se han fusionado al menos 3 PR de ramas feat/ o fix/ (aquí o en Uploadrr-EMU). Con «solo prueba» construye
 # :edge de la punta de master, sin tests, versión ni manifiesto.
 #

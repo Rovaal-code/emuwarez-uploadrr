@@ -145,16 +145,21 @@ def format_audio_codec(codec: Optional[str]) -> Optional[str]:
 
 
 def format_channels(channels) -> Optional[str]:
+    """Los canales como los escribe el tracker ("5.1"). None si no se sabe
+    cuántos son: mejor no decirlo que poner un "2.0" inventado. Lo usan el
+    nombre del release y el nombre de las pistas del remux."""
     if channels in (None, ""):
         return None
     s = str(channels).strip()
     # Already a layout like "5.1" / "7.1" (Radarr often reports it this way).
     if re.fullmatch(r"\d+\.\d+", s):
         return s
+    if s.lower() == "mono":
+        return "Mono"
     m = re.search(r"\d+", s)
     if not m:
         return None
-    return _CHANNELS_MAP.get(int(m.group()), s)
+    return _CHANNELS_MAP.get(int(m.group()))
 
 
 # Lo que no es ningún idioma: sin etiquetar, sin contenido o varios a la vez.

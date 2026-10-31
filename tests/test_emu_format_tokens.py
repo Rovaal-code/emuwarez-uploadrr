@@ -83,3 +83,21 @@ def test_codec_de_audio(codec, token):
 ])
 def test_canales(canales, token):
     assert format_channels(canales) == token
+
+
+@pytest.mark.parametrize("pista", [{"Channel_s_": "10"}, {"Channel_s_": "Object Based"}, {}])
+def test_unos_canales_desconocidos_no_se_inventan(pista):
+    """Antes salía "2.0" en el nombre (y "10.0" en el menú de pistas)."""
+    from emuwarez_uploadrr.services.media_probe import audio_channels
+    assert audio_channels(pista) is None
+
+
+def test_el_menu_de_pistas_usa_los_mismos_canales():
+    from emuwarez_uploadrr.services.mkv_remux import build_track_plan
+    plan = build_track_plan({"tracks": [
+        {"id": 0, "type": "video", "codec": "AVC", "properties": {}},
+        {"id": 1, "type": "audio", "codec": "TrueHD", "properties": {"language": "eng", "audio_channels": 10}},
+        {"id": 2, "type": "audio", "codec": "AC-3", "properties": {"language": "spa", "audio_channels": 6}},
+    ]})
+    nombres = [t["new_name"] for t in plan["ordered_tracks"] if t["type"] == "audio"]
+    assert nombres == ["Español (Castellano) - DD 5.1", "Inglés - TrueHD"]

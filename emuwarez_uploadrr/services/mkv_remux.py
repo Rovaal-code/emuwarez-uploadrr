@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Callable
 
 from ..database import connect
-from .emu_format import resolve_language
+from .emu_format import format_channels, resolve_language
 from .uploadrr_progress import parse_mkvmerge_gui_progress
 
 logger = logging.getLogger("emuwarez.mkv_remux")
@@ -207,9 +207,6 @@ def lang_priority(lang: str | None, lang_ietf: str | None = None, existing_name:
 # Codec / resolution labels for the track name
 # ---------------------------------------------------------------------------
 
-_CHANNELS_LABEL = {1: "Mono", 2: "2.0", 3: "3.0", 4: "3.1", 5: "5.0", 6: "5.1", 7: "6.1", 8: "7.1"}
-
-
 def _audio_codec_label(mkv_codec: str | None) -> str:
     text = (mkv_codec or "").lower()
     if "truehd" in text:
@@ -272,14 +269,6 @@ def _resolution_label(pixel_dimensions: str | None) -> str | None:
     if height >= 550:
         return "576p"
     return "480p"
-
-
-def _channels_label(n) -> str:
-    try:
-        n = int(n)
-    except (TypeError, ValueError):
-        return "2.0"
-    return _CHANNELS_LABEL.get(n, f"{n}.0")
 
 
 # ---------------------------------------------------------------------------
@@ -545,8 +534,9 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None,
     for i, t in enumerate(audio_sorted):
         lang_name = lang_display_name(t["language"], ietf_by_id.get(t["id"]), t["current_name"])
         codec = _audio_codec_label(t["codec"])
-        ch = _channels_label(t["audio_channels"])
-        t["new_name"] = f"{lang_name} - {codec} {ch}"
+        # Los mismos canales que el nombre del release; ninguno si no se sabe.
+        ch = format_channels(t["audio_channels"])
+        t["new_name"] = f"{lang_name} - " + " ".join(x for x in (codec, ch) if x)
         t["default_after"] = (i == 0)  # first in the new order becomes default
 
     default_sub_id = _default_subtitle_id(audio_sorted, subs_sorted)

@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from ..constants import SOURCE_PATTERNS
+from .emu_format import format_channels
 
 
 def run_mediainfo_json(path: Path) -> dict[str, Any]:
@@ -270,20 +271,9 @@ def audio_codec(audio: dict[str, Any]) -> str:
     return base
 
 
-def audio_channels(audio: dict[str, Any]) -> str:
-    raw = str(audio.get("Channel_s_") or audio.get("Channels") or "").lower()
-    match = re.search(r"\d+", raw)
-    n = int(match.group()) if match else 2
-    return {
-        1: "Mono",
-        2: "2.0",
-        3: "3.0",
-        4: "3.1",
-        5: "5.0",
-        6: "5.1",
-        7: "6.1",
-        8: "7.1",
-    }.get(n, "2.0")
+def audio_channels(audio: dict[str, Any]) -> Optional[str]:
+    """"5.1", "2.0"… o None si MediaInfo no dice un número de canales conocido."""
+    return format_channels(audio.get("Channel_s_") or audio.get("Channels"))
 
 
 def duration_seconds(general: dict[str, Any]) -> Optional[float]:

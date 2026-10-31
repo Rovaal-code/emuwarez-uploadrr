@@ -309,7 +309,7 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
         # La ficha técnica SÍ sigue enseñando todas las pistas, una por fila:
         # ahí lo que interesa es qué hay dentro del archivo de verdad. Lo que
         # se recorta es solo el segmento que va al nombre.
-        add(f"Audio {i}", mi, f"{lang} {codec} {ch}")
+        add(f"Audio {i}", mi, f"{lang} {codec} {ch or '?'}")
 
     groups: dict[tuple[str, str], list[str]] = {}
     for lang in langs:

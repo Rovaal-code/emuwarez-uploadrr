@@ -699,13 +699,21 @@ def _renombrar_si_esta_en_subidas(job_id: int, item_id: int, origen: str | None,
     """Renombra en su sitio un archivo que ya está en la carpeta de subidas (los de
     la biblioteca, nunca). Devuelve la ruta con la que seguir, o None si falló
     (el trabajo ya queda fallido)."""
-    from .carpeta_subida import en_carpeta_de_subidas
+    from .carpeta_subida import ENLACES, en_carpeta_de_subidas
     from .nomenclature import renombrar_en_subidas
     from .upload_execution import append_upload_log
     if not origen or not en_carpeta_de_subidas(origen) or os.path.basename(origen) == nombre:
         return origen
     destino = os.path.join(os.path.dirname(origen), nombre)
-    r = renombrar_en_subidas(item_id, origen, destino, conn=conn, **kw)
+    with ENLACES:
+        # Si otra subida siembra desde ahí, renombrarlo le quita el fichero a qBittorrent.
+        otra = _subida_que_lo_usa(conn, origen, job_id)
+        r = None if otra is not None else renombrar_en_subidas(item_id, origen, destino, conn=conn, **kw)
+    if r is None:
+        append_upload_log(job_id, "info", f"No se renombra «{os.path.basename(origen)}»: la subida #{otra} "
+                                          "siembra desde ahí. Se enlaza con el nombre de eMuwarez.",
+                          stream="system", conn=conn)
+        return origen
     if r.get("status") != "applied":
         _fail(job_id, "No se pudo aplicar la nomenclatura: "
                       + ("; ".join(r.get("errors") or []) or r.get("message") or r.get("status") or ""))
@@ -719,12 +727,10 @@ def _renombrar_si_esta_en_subidas(job_id: int, item_id: int, origen: str | None,
 def _subida_que_lo_usa(conn, ruta: str, job_id: int) -> int | None:
     """La otra subida que siembra (o prepara) desde `ruta`, con el mismo criterio
     que el borrado: quitarle el enlace o reescribirlo rompería su torrent."""
-    from .upload_execution import QBIT_AÑADIDO
     fila = conn.execute(
         "SELECT id FROM upload_jobs WHERE prepared_path = ? AND id != ? "
-        "AND (status NOT IN ('cancelled', 'failed') "
-        "OR id IN (SELECT upload_job_id FROM upload_job_logs WHERE message = ?)) LIMIT 1",
-        (ruta, job_id, QBIT_AÑADIDO)).fetchone()
+        "AND (status NOT IN ('cancelled', 'failed') OR torrent_subido = 1) LIMIT 1",
+        (ruta, job_id)).fetchone()
     return fila["id"] if fila else None
 
 

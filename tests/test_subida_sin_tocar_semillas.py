@@ -656,3 +656,37 @@ def test_si_falla_el_titulo_en_su_sitio_se_avisa_y_se_sigue(entorno, mkv_base, m
 
     assert r["visto"]["status"] == "ready", r["logs"]
     assert any("no se pudo poner el título interno: Error: solo lectura" in m for m in r["logs"])
+
+
+def test_no_se_renombra_en_subidas_lo_que_siembra_otra_subida(entorno, mkv_base):
+    """Renombrarlo dejaría a qBittorrent sin el fichero del que siembra."""
+    _modo(entorno, "ninguno")
+    peli = _pelicula(entorno, mkv_base, carpeta=entorno["uploads"] / "Peli (2024)", semilla=False)
+    conn = entorno["conn"]
+    otra = conn.execute(
+        """INSERT INTO upload_jobs (library_item_id, status, stage, title, path, prepared_path, created_at, updated_at)
+           VALUES (?, 'completed', 'completed', 'X', '', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""",
+        (peli["id"], str(peli["f"]))).lastrowid
+    conn.commit()
+
+    r = _subir(entorno, peli["id"], peli["proposal_id"])
+
+    assert r["visto"]["status"] == "ready", r["logs"]
+    assert peli["f"].exists()                                   # con su nombre de siempre
+    assert (entorno["uploads"] / f"{PROPUESTO}.mkv").stat().st_ino == peli["f"].stat().st_ino
+    assert any(f"la subida #{otra} siembra desde ahí" in m for m in r["logs"])
+
+
+def test_borrar_la_subida_no_se_lleva_el_archivo_que_ya_estaba_en_su_sitio(entorno, mkv_base):
+    """Sin enlace propio, prepared_path es el archivo del elemento: no es nuestro."""
+    from emuwarez_uploadrr.services.upload_execution import DELETE_CONFIRMATION_TOKEN, delete_upload_job
+    _modo(entorno, "ninguno")
+    peli = _pelicula(entorno, mkv_base, carpeta=entorno["uploads"], nombre=f"{PROPUESTO}.mkv", semilla=False)
+    r = _subir(entorno, peli["id"], peli["proposal_id"])
+    assert r["visto"]["prepared_path"] == str(peli["f"]), r["logs"]
+    entorno["conn"].execute("UPDATE upload_jobs SET status = 'failed' WHERE id = ?", (r["id"],))
+    entorno["conn"].commit()
+
+    assert delete_upload_job(r["id"], confirmation=DELETE_CONFIRMATION_TOKEN, conn=entorno["conn"])["ok"]
+
+    assert peli["f"].exists()

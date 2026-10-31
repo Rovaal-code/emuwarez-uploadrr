@@ -2121,8 +2121,12 @@ def delete_upload_job(job_id: int, confirmation: str | None = None, conn=None) -
                 "SELECT prepared_path FROM upload_jobs WHERE prepared_path IS NOT NULL "
                 "AND (status NOT IN ('cancelled', 'failed') OR torrent_subido = 1)")}
             for fila in filas:
-                if fila["prepared_path"] not in en_uso:
-                    borrar_de_subidas(fila["prepared_path"])
+                ruta = fila["prepared_path"]
+                # El archivo de un elemento que vive en la carpeta de subidas (instancias «Up») no es un enlace.
+                propio = ruta and conn.execute(
+                    "SELECT 1 FROM library_items WHERE path = ? OR prepared_path = ? LIMIT 1", (ruta, ruta)).fetchone()
+                if ruta not in en_uso and not propio:
+                    borrar_de_subidas(ruta)
         conn.execute(f"DELETE FROM upload_artifacts WHERE upload_job_id IN ({marcas})", chain)
         conn.execute(f"DELETE FROM upload_job_logs WHERE upload_job_id IN ({marcas})", chain)
         conn.execute(f"UPDATE filesystem_operations SET upload_job_id = NULL WHERE upload_job_id IN ({marcas})", chain)

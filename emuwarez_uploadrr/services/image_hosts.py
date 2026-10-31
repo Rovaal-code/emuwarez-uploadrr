@@ -82,7 +82,8 @@ def set_config(conn: sqlite3.Connection, enabled: list[str], keys: Optional[dict
     clean = [i for i in (enabled or []) if i in _BY_ID]
     set_setting(conn, "imghost.enabled", json.dumps(clean, ensure_ascii=False))
     for host_id, key in (keys or {}).items():
-        if host_id in _BY_ID and key is not None and str(key).strip():
+        # Una cadena vacía borra la clave guardada; None la deja como está.
+        if host_id in _BY_ID and key is not None:
             set_setting(conn, f"imghost.key.{host_id}", str(key).strip())
 
 
@@ -150,9 +151,12 @@ def validate_image_host_key(host_id: str, api_key: str, *, timeout: int = 10) ->
     error = (data.get("error") or {}) if isinstance(data, dict) else {}
     if error.get("code") == _INVALID_KEY_CODE:
         return {"ok": False, "error": error.get("message") or "API key no válida", "checked": True}
-    # Cualquier otra queja (falta la imagen, formato...) significa que la clave
-    # pasó la autenticación, que es lo único que se estaba comprobando.
-    return {"ok": True, "error": None, "checked": True}
+    # Un 400 que se queja de otra cosa (falta la imagen) significa que la clave
+    # pasó la autenticación. Cualquier otra respuesta (límite de peticiones,
+    # error del servidor) no dice nada de la clave.
+    if status == 400 and error:
+        return {"ok": True, "error": None, "checked": True}
+    return {"ok": False, "error": f"No se pudo comprobar (HTTP {status})", "checked": False}
 
 
 def test_image_host(host_id: str, api_key: Optional[str] = None, *, timeout: int = 8) -> dict:
@@ -185,5 +189,10 @@ def test_image_host(host_id: str, api_key: Optional[str] = None, *, timeout: int
             if 200 <= resp.status < 400:
                 return {"ok": True, "key_checked": not meta["needs_key"]}
             return {"ok": False, "error": f"HTTP {resp.status}"}
+    except urllib.error.HTTPError as exc:
+        # Un 403/429 de Cloudflare a la portada: el servidor está, y subir funciona.
+        if exc.code < 500:
+            return {"ok": True, "key_checked": not meta["needs_key"]}
+        return {"ok": False, "error": f"HTTP {exc.code}"}
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": f"No responde: {exc}"}

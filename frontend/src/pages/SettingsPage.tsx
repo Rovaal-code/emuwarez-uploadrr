@@ -868,6 +868,15 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                         comprueba también: si no vale, no se guarda.
                       </p>
                       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+                        {guardada && (
+                          <button className="btn btn-danger" type="button" disabled={keySaving} onClick={async () => {
+                            // Una clave vacía borra la guardada.
+                            try {
+                              setSettings(await updateSettings({ image_host_keys: { [keyModalHost]: '' } }))
+                              setKeyModalHost(null)
+                            } catch { /* el mensaje de error global ya lo cubre */ }
+                          }}>Borrar clave</button>
+                        )}
                         <button className="btn btn-secondary" type="button" onClick={() => setKeyModalHost(null)}>Cancelar</button>
                         <button className="btn btn-primary" type="button" onClick={guardar} disabled={!keyDraft.trim() || keySaving}>
                           {keySaving ? 'Comprobando…' : 'Guardar'}

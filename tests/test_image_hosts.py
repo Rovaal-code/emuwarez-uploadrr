@@ -127,3 +127,27 @@ def test_every_host_that_needs_a_key_can_be_validated():
     su clave se guardaría sin comprobar y la insignia verde mentiría."""
     con_clave = {h["id"] for h in ih.IMAGE_HOSTS if h["needs_key"]}
     assert con_clave == set(ih._KEY_CHECK), con_clave.symmetric_difference(ih._KEY_CHECK)
+
+
+def test_un_limite_de_peticiones_no_es_una_clave_valida(monkeypatch):
+    """Un 429 sin el código 100 no dice nada de la clave: antes salía "válida"."""
+    def _falla(*a, **kw):
+        raise _respuesta({"error": {"message": "Flood detected", "code": 999}}, status=429)
+    monkeypatch.setattr(ih.urllib.request, "urlopen", _falla)
+    r = ih.validate_image_host_key("lensdump", "clave")
+    assert r["checked"] is False and r["ok"] is False
+
+
+def test_un_403_de_cloudflare_en_la_portada_no_es_caido(monkeypatch):
+    """La portada responde 403 (Cloudflare) pero las subidas van: responde."""
+    def _falla(*a, **kw):
+        raise _respuesta({}, status=403)
+    monkeypatch.setattr(ih.urllib.request, "urlopen", _falla)
+    assert ih.test_image_host("imgbox")["ok"] is True
+
+
+def test_una_clave_vacia_borra_la_guardada(db_conn):
+    ih.set_config(db_conn, ["imgbb"], {"imgbb": "clave"})
+    assert ih.get_host_key(db_conn, "imgbb") == "clave"
+    ih.set_config(db_conn, ["imgbb"], {"imgbb": ""})
+    assert not ih.get_host_key(db_conn, "imgbb")

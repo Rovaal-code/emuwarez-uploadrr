@@ -1,9 +1,9 @@
 # Publica una versión: pasa los tests completos sobre la punta de master, sube
 # __version__, la etiqueta vX.Y.Z, construye la imagen (:X.Y.Z, :<sha> y
-# :latest) y publica el manifiesto en Kisnov/uploadrr-version, que es lo que
-# lee el aviso de actualización de la app.
+# :latest), publica el manifiesto en Kisnov/uploadrr-version, que es lo que
+# lee el aviso de actualización de la app, y crea el release con sus PR.
 #
-# A mano (Actions → Publicar versión → Run workflow), o solo cada 12 h si desde
+# A mano (Actions → Publicar versión → Run workflow), o solo los días impares del mes si desde
 # la última versión se han fusionado al menos 3 PR de ramas feat/ o fix/ (aquí o en Uploadrr-EMU). Con «solo prueba» construye
 # :edge de la punta de master, sin tests, versión ni manifiesto.
 #
@@ -28,7 +28,7 @@ on:
         type: boolean
         default: false
   schedule:
-    - cron: "17 */12 * * *"
+    - cron: "17 4 */2 * *"
 
 permissions: {}
 
@@ -215,3 +215,16 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           python3 scripts/publicar_version.py --digest "$DIGEST" --notas "$NOTAS" --repo
+
+      # Release con los PR fusionados desde la versión anterior. También al re-ejecutar una ya publicada.
+      - if: env.ACCION == 'publicar'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          NOTAS: ${{ inputs.notas || 'Correcciones y mejoras' }}
+        shell: bash  # con pipefail: si falla la lista de etiquetas, no se crea con otra anterior
+        run: |
+          gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 && exit 0
+          anterior="$(gh api --paginate "repos/$GITHUB_REPOSITORY/tags" --jq '.[].name' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | grep -vx "v$VERSION" | sort -V | tail -1)"
+          gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" --verify-tag --title "Versión $VERSION" \
+            --notes "$NOTAS" --generate-notes --notes-start-tag "$anterior"

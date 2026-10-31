@@ -145,7 +145,7 @@ Abre `http://localhost:9494`: el asistente de configuración inicial se abre sol
 La imagen se publica con varias etiquetas, y `EMUWAREZ_UPLOADRR_TAG` (en el `.env`) elige cuál usa el compose:
 
 - `latest` (sin la variable): la última versión publicada. La publica el workflow *Publicar versión*, a mano
-  o solo cada 12 h si hay cambios suficientes, siempre después de pasar los tests; o `scripts/desplegar.sh`
+  o solo los días impares del mes si hay cambios suficientes, siempre después de pasar los tests; o `scripts/desplegar.sh`
   desde tu equipo. Se actualiza con `docker compose pull && docker compose up -d`.
 - `0.11.0`: una versión concreta, de las que tienen etiqueta `v0.11.0` en el repo. Sirve para quedarte en ella o
   para volver atrás si la nueva falla.

@@ -71,3 +71,22 @@ def test_vacuum_apply_with_confirmation(db_config):
     assert result["ok"] is True
     assert result["dry_run"] is False
     assert "size_bytes_after" in result
+
+
+def test_vacuum_reports_freed_bytes_while_app_holds_wal_connection(db_config):
+    """La BD va en WAL y el servidor tiene conexiones abiertas: sin checkpoint,
+    el VACUUM compactaba pero el fichero no encogía y decía "Liberados 0 bytes"."""
+    app = sqlite3.connect(str(db_config / "emuwarez_uploadrr.db"))
+    app.execute("PRAGMA journal_mode=WAL")
+    app.execute("CREATE TABLE t (x TEXT)")
+    app.executemany("INSERT INTO t VALUES (?)", [("x" * 500,)] * 2000)
+    app.commit()
+    app.execute("DELETE FROM t")
+    app.commit()
+    app.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    try:
+        result = run_database_vacuum(dry_run=False, apply=True, confirmation=VACUUM_CONFIRMATION)
+    finally:
+        app.close()
+    assert result["ok"] is True
+    assert result["bytes_saved"] > 500_000

@@ -104,6 +104,8 @@ def run_database_vacuum(
     try:
         conn = sqlite3.connect(str(db))
         conn.execute("VACUUM")
+        # WAL: sin esto el fichero no encoge mientras el servidor tenga conexiones abiertas
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         conn.close()
     except Exception as exc:
         return {"ok": False, "dry_run": False, "error": str(exc)}

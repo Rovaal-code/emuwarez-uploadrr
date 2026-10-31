@@ -1206,7 +1206,7 @@ def filtrar_por_lo_que_se_ve(
     que ENSEÑA la columna, que en una serie o temporada es lo que comparten sus
     capítulos: `filas` son las ya montadas para la respuesta, en todos los niveles.
 
-    Quedarse con el nivel más alto que cumple es cosa de quedarse_con_lo_mas_alto.
+    Agrupar lo que cumple bajo su serie es cosa de subir_a_su_serie.
     """
     elegidos = [(k, _valores(v)) for k, v in (
         ("provider_label", provider), ("resolution", resolution),
@@ -1226,27 +1226,23 @@ def filtrar_por_lo_que_se_ve(
     return [it for it in filas if cumple(it)]
 
 
-def quedarse_con_lo_mas_alto(conn: sqlite3.Connection, filas: list[dict]) -> list[dict]:
-    """La biblioteca en plano (con algún filtro puesto) se queda con el nivel
-    más alto que cumple: si cumple la serie sale la serie, y sus temporadas y
-    capítulos se ven desplegándola; si solo cumplen algunas temporadas, esas.
+def subir_a_su_serie(
+    conn: sqlite3.Connection, filas: list[dict], *, sort: Optional[str] = None, ignore_specials: bool = True,
+) -> list[dict]:
+    """La biblioteca filtrada en plano sube cada fila que cumple hasta su
+    película o serie, como ya hacía buscar: lo de dentro se ve desplegándola.
 
-    Sin esto, filtrar por Origen o Español sacaba cada capítulo como una fila
-    suelta al lado de su serie, porque los tres niveles cumplen a la vez.
+    Quedarse con el nivel más alto que cumple no bastaba: con Estado =
+    Disponible una serie Parcial no cumple, con eMuwarez = No una serie a
+    medias tampoco, y sus capítulos salían sueltos, ordenados por número.
     """
-    ids = {it["id"] for it in filas}
-    # De la base y no de `filas`: la temporada puede no cumplir y la serie sí.
     serie_de = dict(conn.execute("SELECT id, parent_id FROM library_items WHERE item_type = 'season'"))
-
-    def lo_tapa_un_ancestro(it: dict) -> bool:
-        p = it["parent_id"]
-        while p is not None:
-            if p in ids:
-                return True
-            p = serie_de.get(p)
-        return False
-
-    return [it for it in filas if not lo_tapa_un_ancestro(it)]
+    # Ignorando especiales, la fila de la serie no los cuenta: no la traen.
+    raices = {it["id"] if it["parent_id"] is None else serie_de.get(it["parent_id"], it["parent_id"])
+              for it in filas if not (ignore_specials and it["season_number"] == 0)}
+    arriba = list_library(conn, parent_id=TOP_LEVEL_PARENT_FILTER, sort=sort, limit=-1,
+                          ignore_specials=ignore_specials)
+    return [it for it in arriba if it["id"] in raices]
 
 
 def count_library(

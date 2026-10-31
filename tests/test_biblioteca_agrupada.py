@@ -1,9 +1,11 @@
-"""Con un filtro puesto, Biblioteca se pide en plano y se queda con el nivel
-más alto que cumple.
+"""Con un filtro puesto, Biblioteca se pide en plano y lo que cumple sale
+agrupado bajo su película o serie.
 
 Filtrando por Origen = Sonarr o Español = Ambos cumplen la serie, sus
 temporadas y sus capítulos a la vez, y la tabla y los pósters sacaban cada
-capítulo como una fila suelta al lado de su serie. Lo de dentro se ve
+capítulo como una fila suelta al lado de su serie. Quedarse con el nivel más
+alto que cumple tampoco bastaba: con Estado = Disponible una serie Parcial no
+cumple y sus capítulos seguían saliendo sueltos. Lo de dentro se ve
 desplegando la serie.
 """
 from __future__ import annotations
@@ -48,9 +50,37 @@ def test_la_serie_sale_sola_y_no_sus_capitulos(biblioteca):
     assert _ids(*biblioteca, origin=["sonarr", "radarr"]) == [1, 2]
 
 
-def test_lo_que_solo_existe_por_debajo_sigue_saliendo(biblioteca):
+def test_un_capitulo_que_cumple_trae_su_serie_aunque_ella_no_cumpla(biblioteca):
+    """El caso real: la serie está Parcial y sus capítulos, Disponibles."""
+    from emuwarez_uploadrr.database import connect, db_path
+
+    conn = connect(db_path())
+    conn.execute("UPDATE library_items SET local_status = 'Parcial' WHERE id IN (2, 11, 12)")
+    conn.execute("UPDATE library_items SET local_status = 'Faltante' WHERE id IN (112, 121, 122)")
+    conn.commit(); conn.close()
+    assert _ids(*biblioteca, status="Disponible") == [1, 2]
+    assert _ids(*biblioteca, status="Faltante") == [2]
+
+
+def test_con_un_tipo_elegido_sale_ese_tipo_tal_cual(biblioteca):
     assert _ids(*biblioteca, type="episode") == [111, 112, 121, 122]
-    assert _ids(*biblioteca, type=["season", "episode"]) == [11, 12]
+    assert _ids(*biblioteca, type=["season", "episode"]) == [11, 111, 112, 12, 121, 122]
+
+
+def test_un_especial_no_trae_la_serie_si_se_ignoran(biblioteca):
+    from emuwarez_uploadrr.database import connect, db_path
+
+    conn = connect(db_path())
+    conn.execute("""INSERT INTO library_items (id, item_type, title, local_status, instance_type)
+                    VALUES (30, 'series', 'Otra', 'Parcial', 'sonarr')""")
+    conn.execute("""INSERT INTO library_items (id, item_type, title, local_status, instance_type,
+                                                parent_id, season_number)
+                    VALUES (31, 'season', 'Otra T0', 'Parcial', 'sonarr', 30, 0)""")
+    conn.execute("""INSERT INTO library_items (id, item_type, title, local_status, instance_type,
+                                                parent_id, season_number, episode_number)
+                    VALUES (32, 'episode', 'Otra S00E01', 'Faltante', 'sonarr', 31, 0, 1)""")
+    conn.commit(); conn.close()
+    assert _ids(*biblioteca, status="Faltante") == []
 
 
 def test_la_temporada_que_no_cumple_no_descuelga_sus_capitulos(biblioteca):

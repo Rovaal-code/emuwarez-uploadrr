@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from ..constants import SOURCE_PATTERNS
-from .emu_format import format_channels
+from .emu_format import format_audio_codec, format_channels
 
 
 def run_mediainfo_json(path: Path) -> dict[str, Any]:
@@ -230,45 +230,13 @@ def detect_hdr(video: dict[str, Any]) -> list[str]:
 
 
 def audio_codec(audio: dict[str, Any]) -> str:
+    """El token de audio de una pista de MediaInfo. Lo decide
+    emu_format.format_audio_codec, el mismo que traduce lo de Radarr/Sonarr."""
     text = " ".join(
         str(audio.get(k) or "")
         for k in ("Format", "Format_Profile", "Format_Commercial_IfAny", "Format_AdditionalFeatures")
-    ).lower()
-
-    if "dts-hd master" in text or "dts-hd ma" in text:
-        base = "DTS-HD MA"
-    elif "dts-hd high" in text or "dts-hd hra" in text:
-        base = "DTS-HD HRA"
-    elif "dts:x" in text:
-        base = "DTS:X"
-    elif "truehd" in text:
-        base = "TrueHD"
-    elif "mlp" in text:
-        base = "MLP"
-    elif "e-ac-3" in text or "eac3" in text:
-        base = "DD+"
-    elif "ac-3" in text or "ac3" in text:
-        base = "DD"
-    elif "dts" in text:
-        base = "DTS"
-    elif "aac" in text:
-        base = "AAC LC" if "lc" in text or "low complexity" in text else "AAC HE" if "he" in text else "AAC"
-    elif "opus" in text:
-        base = "OPUS"
-    elif "flac" in text:
-        base = "FLAC"
-    elif "alac" in text:
-        base = "ALAC"
-    elif "mp3" in text or "mpeg audio" in text:
-        base = "MP3"
-    elif "pcm" in text:
-        base = "PCM"
-    else:
-        base = str(audio.get("Format") or "DD").strip()
-
-    if "atmos" in text and "Atmos" not in base:
-        base += " Atmos"
-    return base
+    )
+    return format_audio_codec(text, fallback=str(audio.get("Format") or "").strip() or "?")
 
 
 def audio_channels(audio: dict[str, Any]) -> Optional[str]:

@@ -101,3 +101,30 @@ def test_el_menu_de_pistas_usa_los_mismos_canales():
     ]})
     nombres = [t["new_name"] for t in plan["ordered_tracks"] if t["type"] == "audio"]
     assert nombres == ["Español (Castellano) - DD 5.1", "Inglés - TrueHD"]
+
+
+_MA = {"Format": "DTS", "Format_Commercial_IfAny": "DTS-HD Master Audio", "Format_AdditionalFeatures": "XLL"}
+
+
+@pytest.mark.parametrize("pista,token", [
+    (_MA, "DTS-HD MA"),
+    ({**_MA, "Format_AdditionalFeatures": "XLL X"}, "DTS:X"),
+    ({"Format": "DTS", "Format_Commercial_IfAny": "DTS-HD High Resolution Audio",
+      "Format_AdditionalFeatures": "XBR"}, "DTS-HD HRA"),
+    ({"Format": "DTS", "Format_AdditionalFeatures": "XCH"}, "DTS"),
+    ({"Format": "MPEG Audio", "Format_Profile": "Layer 3"}, "MP3"),
+    ({"Format": "Vorbis"}, "Vorbis"),
+])
+def test_el_codec_de_mediainfo(pista, token):
+    """El DTS:X salía como DTS-HD MA: los dos llevan "DTS-HD Master Audio" y
+    solo los extras ("XLL X") los distinguen."""
+    from emuwarez_uploadrr.services.media_probe import audio_codec
+    assert audio_codec(pista) == token
+
+
+def test_el_motor_de_source_no_confunde_ma_con_dts_x():
+    from emuwarez_uploadrr.services.source_engine.profile import build_audio_tracks
+    ma = {"@type": "Audio", **_MA, "Compression_Mode": "Lossless / Lossy"}
+    x = {**ma, "Format_AdditionalFeatures": "XLL X"}
+    pistas = build_audio_tracks({"media": {"track": [ma, x]}}, None, None)
+    assert [(p["dts_x"], p["lossless"]) for p in pistas] == [(False, True), (True, True)]

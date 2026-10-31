@@ -139,7 +139,8 @@ def build_video(mediainfo_json: Optional[dict], ffprobe_json: Optional[dict]) ->
 
 
 def _is_lossless_audio(codec: str, compression_mode: Optional[str]) -> bool:
-    if compression_mode and compression_mode.strip().lower() in _LOSSLESS_COMPRESSION_MODES:
+    # MediaInfo da "Lossless / Lossy" a un DTS-HD MA con núcleo: es sin pérdida.
+    if compression_mode and any(m in compression_mode.lower() for m in _LOSSLESS_COMPRESSION_MODES):
         return True
     c = (codec or "").lower()
     return any(k in c for k in _LOSSLESS_AUDIO_FORMATS)
@@ -161,20 +162,24 @@ def build_audio_tracks(mediainfo_json: Optional[dict], ffprobe_json: Optional[di
         ff_disp = ff.get("disposition") or {}
         ff_tags = ff.get("tags") or {}
 
-        codec = mi.get("Format") or mi.get("Format_Commercial") or ff.get("codec_name") or mkv.get("codec")
+        codec = mi.get("Format") or mi.get("Format_Commercial_IfAny") or ff.get("codec_name") or mkv.get("codec")
+        # El nombre comercial es lo que distingue un DTS-HD MA ("DTS") o un TrueHD ("MLP FBA").
+        texto = f"{codec or ''} {mi.get('Format_Commercial_IfAny') or ''}".lower()
+        extras = (mi.get("Format_AdditionalFeatures") or "").upper().split()
         title = mkv_props.get("track_name") or ff_tags.get("title") or mi.get("Title")
         language = mkv_props.get("language") or ff_tags.get("language") or mi.get("Language")
         default = mkv_props.get("default_track") if mkv_props else bool(ff_disp.get("default"))
         forced = mkv_props.get("forced_track") if mkv_props else bool(ff_disp.get("forced"))
 
-        atmos = "atmos" in (codec or "").lower() or "atmos" in (mi.get("Format_AdditionalFeatures") or "").lower()
-        dts_x = "dts:x" in (codec or "").lower() or "x" in (mi.get("Format_AdditionalFeatures") or "").lower() and "dts" in (codec or "").lower()
+        atmos = "atmos" in texto or "ATMOS" in extras
+        # DTS:X son los extras "XLL X"; XLL solo es MA, XBR HRA y XCH DTS-ES.
+        dts_x = "dts:x" in texto or ("dts" in texto and "XLL" in extras and "X" in extras)
 
         out.append({
             "index": i,
             "codec": codec,
             "profile": mi.get("Format_Profile"),
-            "lossless": _is_lossless_audio(codec, mi.get("Compression_Mode")),
+            "lossless": _is_lossless_audio(texto, mi.get("Compression_Mode")),
             "bitrate_bps": _f(mi.get("BitRate")) or _f(ff.get("bit_rate")),
             "sample_rate": _i(mi.get("SamplingRate")) or _i(ff.get("sample_rate")),
             "bit_depth": _i(mi.get("BitDepth")),
@@ -186,7 +191,7 @@ def build_audio_tracks(mediainfo_json: Optional[dict], ffprobe_json: Optional[di
             "forced": bool(forced),
             "atmos": atmos,
             "dts_x": dts_x,
-            "truehd": "truehd" in (codec or "").lower(),
+            "truehd": "truehd" in texto,
         })
     return out
 

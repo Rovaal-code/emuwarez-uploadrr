@@ -104,7 +104,11 @@ def format_hdr(dynamic_range: Optional[str]) -> Optional[str]:
     return None
 
 
-def format_audio_codec(codec: Optional[str]) -> Optional[str]:
+def format_audio_codec(codec: Optional[str], fallback: Optional[str] = None) -> Optional[str]:
+    """El token de audio del tracker para un texto de códec, de Radarr/Sonarr
+    ("EAC3") o de MediaInfo (formato + nombre comercial + extras, ver
+    media_probe.audio_codec). `fallback`: lo que se devuelve si no se reconoce
+    (por defecto, el texto tal cual)."""
     if not codec:
         return None
     t = str(codec).lower()
@@ -113,12 +117,14 @@ def format_audio_codec(codec: Optional[str]) -> Optional[str]:
         base = "TrueHD"
     elif "mlp" in t:
         base = "MLP"
+    # DTS:X antes que MA: va sobre un DTS-HD MA y MediaInfo lo dice con los
+    # extras "XLL X" (XLL solo es MA, XBR es HRA y XCH es DTS-ES).
+    elif "dts:x" in t or "dts-x" in t or "xll x" in t:
+        base = "DTS:X"
     elif "dts-hd ma" in t or "dts-hd master" in t:
         base = "DTS-HD MA"
     elif "dts-hd hra" in t or "dts-hd high" in t:
         base = "DTS-HD HRA"
-    elif "dts:x" in t or "dts-x" in t:
-        base = "DTS:X"
     elif "dts" in t:
         base = "DTS"
     elif "eac3" in t or "e-ac-3" in t or "e-ac3" in t or "ddp" in t or "dd+" in t or "digital plus" in t:
@@ -133,12 +139,12 @@ def format_audio_codec(codec: Optional[str]) -> Optional[str]:
         base = "FLAC"
     elif "alac" in t:
         base = "ALAC"
-    elif "mp3" in t:
+    elif "mp3" in t or "mpeg audio" in t:
         base = "MP3"
     elif "pcm" in t:
         base = "PCM"
     else:
-        base = str(codec).strip()
+        base = fallback or str(codec).strip()
     if atmos and "atmos" not in base.lower():
         base = f"{base} Atmos"
     return base

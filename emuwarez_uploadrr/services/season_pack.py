@@ -28,6 +28,7 @@ SAFETY CONTRACT: this module never writes to the filesystem: it only plans.
 from __future__ import annotations
 
 import os
+import re
 import threading
 from typing import Any, Optional
 
@@ -35,6 +36,7 @@ from ..database import connect, row_to_dict
 from ..models import LocalStatus
 from .mkv_title import to_filesystem_name
 from .nomenclature import (
+    _build_proposed_filename,
     build_nomenclature_proposal,
     tag_por_defecto,
 )
@@ -131,38 +133,17 @@ def _build_season_pack_title(
     release_tag: Optional[str],
     provider: Optional[str] = None,
     custom: bool = False,
+    dynamic_range: Optional[str] = None,
 ) -> str:
-    """Modern equivalent of legacy.py::build_emu_title(..., pack=True) — one
-    representative title for the whole pack (season only, no per-episode
-    numbering)."""
-    from .source_assistant import _build_source_string
-    prefix = f"{title} S{season_number:02d}" if season_number is not None else title
-    parts = [prefix]
-    if year:
-        parts.append(str(year))
-    if resolution:
-        parts.append(resolution)
-    # CUSTOM va entre la resolución y el proveedor, que es donde lo pone el
-    # catálogo de eMuwarez ("… 2160p 4K UHD CUSTOM AMZN WEB-DL HEVC …").
-    # Aquí marca que los capítulos no traen el mismo audio, así que el nombre
-    # lista varias pistas del mismo idioma y ninguna está en todos.
-    if custom:
-        parts.append("CUSTOM")
-    # Provider (AMZN/NF/DSNP...) attaches to Source, in front of it — same
-    # combiner the single-file builder uses (nomenclature.py's
-    # _build_proposed_filename) — without this a season pack's title never
-    # showed the provider even when its source was WEB-DL from a platform.
-    source_str = _build_source_string(source, provider)
-    if source_str:
-        parts.append(source_str)
-    if video_codec:
-        parts.append(video_codec)
-    if audio_summary:
-        parts.append(audio_summary)
-    if subtitle_summary:
-        parts.append(subtitle_summary)
-    text = " ".join(p for p in parts if p)
-    return f"{text}-{release_tag}" if release_tag else text
+    """El título del pack: el mismo constructor que el de cada capítulo
+    (4K UHD, DV/HDR, proveedor), con la temporada y sin número de capítulo."""
+    return _build_proposed_filename(
+        title=title, year=year, resolution=resolution, source=source,
+        video_codec=video_codec, audio_summary=audio_summary,
+        subtitle_summary=subtitle_summary, release_tag=release_tag,
+        media_type="season", season=season_number, provider=provider,
+        dynamic_range=dynamic_range, custom=custom,
+    )
 
 
 def preview_season_pack_title(fields: dict) -> dict:
@@ -187,6 +168,7 @@ def preview_season_pack_title(fields: dict) -> dict:
         subtitle_summary=fields.get("subtitle_summary"),
         release_tag=fields.get("tag"),
         custom=bool(fields.get("custom")),
+        dynamic_range=fields.get("dynamic_range"),
     )
     return {"torrent_name": title}
 
@@ -219,6 +201,14 @@ def preview_season_pack_title(fields: dict) -> dict:
 _CONSISTENCY_FIELDS: list[tuple[str, str, Any]] = [
     ("resolution", "resolución", lambda ep, prop: prop.get("resolution")),
     ("video_codec", "códec de vídeo", lambda ep, prop: prop.get("video_codec")),
+]
+
+# Campos que el NOMBRE del pack dice una sola vez y que por eso también tienen
+# que coincidir: un pack no es BluRay y WEB-DL, ni HDR y SDR, a la vez. No van
+# en la regla del rollup porque la biblioteca no los guarda por temporada.
+_PACK_NAME_FIELDS: list[tuple[str, str, Any, str]] = [
+    ("source", "source", lambda ep, prop: prop.get("source"), "desconocido"),
+    ("dynamic_range", "HDR/DV", lambda ep, prop: _hdr_de(prop), "sin HDR"),
 ]
 
 # Los mismos campos, para quien solo tiene la fila de rollup de la temporada y
@@ -272,7 +262,8 @@ def _consistency_errors(episode_entries: list[dict]) -> list[str]:
         return []
     baseline_ep, baseline_prop = episode_entries[0]["episode"], episode_entries[0]["proposal"]
     errors: list[str] = []
-    for _key, label, getter in _CONSISTENCY_FIELDS:
+    campos = [(*c, "desconocido") for c in _CONSISTENCY_FIELDS] + _PACK_NAME_FIELDS
+    for _key, label, getter, vacio in campos:
         baseline = getter(baseline_ep, baseline_prop)
         for entry in episode_entries[1:]:
             ep, prop = entry["episode"], entry["proposal"]
@@ -280,32 +271,41 @@ def _consistency_errors(episode_entries: list[dict]) -> list[str]:
             if value != baseline:
                 errors.append(
                     f"El capítulo {ep.get('episode_number')} tiene {label} distinto "
-                    f"({value or 'desconocido'}) al del capítulo {baseline_ep.get('episode_number')} "
-                    f"({baseline or 'desconocido'})."
+                    f"({value or vacio}) al del capítulo {baseline_ep.get('episode_number')} "
+                    f"({baseline or vacio})."
                 )
     return errors
+
+
+def _hdr_de(proposal: dict) -> Optional[str]:
+    """El token DV/HDR de un capítulo, sacado de su propuesta."""
+    import json
+    from .emu_format import format_hdr
+    try:
+        crudo = json.loads(proposal.get("raw_json") or "{}").get("dynamic_range")
+    except (TypeError, ValueError, AttributeError):
+        crudo = None
+    return format_hdr(crudo)
 
 
 def _aggregate_pack_fields(episode_entries: list[dict], conn=None) -> dict:
     """Los valores que describen al PACK, sacados de sus capítulos.
 
-    Solo la resolución tiene que coincidir (lo garantiza _consistency_errors).
-    Con el resto:
+    Resolución, códec de vídeo, source y HDR/DV tienen que coincidir (lo
+    garantiza _consistency_errors). Con el resto:
 
     - Los idiomas de audio se SUMAN. El pack CONTIENE todos, así que
       anunciarlos todos es exacto: un capítulo con "ESP" y otro con "ESP-ING"
       dan un pack "ESP-ING".
-    - Códec de vídeo, códec de audio y source se dejan VACÍOS si difieren. Un
-      nombre que dijera "x264 x265" anunciaría dos códecs para un solo release
-      y no describiría nada; mejor no decir nada que decir algo falso.
+    - Lo que aun así difiera se deja VACÍO. Un nombre que dijera "x264 x265"
+      anunciaría dos códecs para un solo release y no describiría nada; mejor
+      no decir nada que decir algo falso.
     - El audio conserva su códec y canales solo si TODOS los capítulos traen
       exactamente el mismo resumen; si no, se queda en los idiomas a secas.
 
     Cada capítulo mantiene aparte su propia nomenclatura completa, con lo que
     de verdad tiene dentro (get_season_episode_names).
     """
-    from .emu_format import build_audio_string, _split_languages
-
     def comun(getter):
         """El valor si TODOS coinciden; None si difieren o falta alguno."""
         valores = {getter(e) for e in episode_entries}
@@ -318,10 +318,9 @@ def _aggregate_pack_fields(episode_entries: list[dict], conn=None) -> dict:
 
     return {
         "resolution": comun(lambda e: e["proposal"].get("resolution")),
-        # El source y el proveedor se vacían si difieren: un release no puede
-        # ser BluRay y WEB-DL a la vez, y no hay nada que sumar.
         "source": comun(lambda e: e["proposal"].get("source")),
         "video_codec": comun(lambda e: e["proposal"].get("video_codec")),
+        "dynamic_range": comun(lambda e: _hdr_de(e["proposal"])),
         "audio_summary": audio,
         "subtitle_summary": comun(lambda e: e["proposal"].get("subtitle_summary")),
         "custom": custom,
@@ -618,6 +617,11 @@ def build_season_pack_plan(
         _set_season_plan_progress(season_id, done=total, total=total, current_title=None)
 
         errors.extend(_consistency_errors(episode_entries))
+        # Un capítulo sin proveedor en el nombre no cuenta; dos distintos sí.
+        proveedores = sorted({e["proposal"].get("provider_final") for e in episode_entries} - {None, ""})
+        if len(proveedores) > 1:
+            errors.append(f"Los capítulos vienen de proveedores distintos ({', '.join(proveedores)}): "
+                          "elige uno en Proveedor.")
         errors.extend(_spanish_errors(episode_entries))
 
         first_proposal = episode_entries[0]["proposal"]
@@ -637,7 +641,8 @@ def build_season_pack_plan(
         # first (nomenclature.py's _infer_provider_from_item); if NONE
         # revealed one and the source is WEB-DL, ONE TMDb lookup for the
         # whole season — not repeated per episode.
-        provider = first_proposal.get("provider_final")
+        provider = next((e["proposal"].get("provider_final") for e in episode_entries
+                         if e["proposal"].get("provider_final")), None)
         if not provider and (first_proposal.get("source") or "").upper() == "WEB-DL":
             from .source_assistant import suggest_provider_for_item
             suggestion = suggest_provider_for_item(available_episodes[0]["id"], conn=conn)
@@ -686,6 +691,15 @@ def build_season_pack_plan(
                 "proposed_filename": proposed_filename,
             })
 
+        # Un nombre de más de 255 bytes no se puede crear: que se vea ahora, no
+        # a mitad de la subida con la mitad de los capítulos renombrados.
+        from .nomenclature import error_de_longitud
+        for nombre in [e["nombre"] for e in episodes_out] + [
+                _sanitize_pack_folder_name(season_pack_title)]:
+            largo = error_de_longitud(nombre)
+            if largo:
+                errors.append(largo)
+
         status = "blocked" if errors else "valid"
 
         return {
@@ -713,6 +727,7 @@ def build_season_pack_plan(
             # snapshot the full nomenclature breakdown for the job detail
             # page, not just the pieces build_season_pack_plan itself needs.
             "video_codec": pack_fields.get("video_codec"),
+            "dynamic_range": pack_fields.get("dynamic_range"),
             "audio_summary": pack_fields.get("audio_summary"),
             "subtitle_summary": pack_fields.get("subtitle_summary"),
             "custom": pack_fields.get("custom", False),
@@ -739,9 +754,11 @@ def build_season_pack_plan(
 def _sanitize_pack_folder_name(name: str) -> str:
     """A season_pack_title is built from free-text metadata (title, tag...)
     and is safe to use as a torrent/release name, but not blindly as a
-    filesystem folder name — strip path separators and trim the whitespace/
-    dots some filesystems reject at the edges of a name."""
-    return name.replace("/", " ").replace("\\", " ").strip(" .")
+    filesystem folder name — strip path separators and the characters a
+    Windows/SMB folder name rejects, and trim the whitespace/dots some
+    filesystems reject at the edges of a name."""
+    limpio = re.sub(r'[/\\<>:"|?*]', " ", name)
+    return re.sub(r"\s+", " ", limpio).strip(" .")
 
 
 def _episode_display_title(conn, ep: dict) -> str:

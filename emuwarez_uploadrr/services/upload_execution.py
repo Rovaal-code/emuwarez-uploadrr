@@ -663,7 +663,7 @@ def _check_trailer_and_log(job_id: int) -> None:
                 pass
             candidate_names = [n for n in (snapshot.get("proposed_torrent_name"), snapshot.get("proposed_filename"), snapshot.get("proposed_title")) if n]
 
-            result = check_trailer_for_job(uploadrr_path, candidate_names)
+            result = check_trailer_for_job(uploadrr_path, candidate_names, desde=job.get("started_at"))
             if result["found"]:
                 create_upload_artifact(job_id, "trailer_url", name="Trailer", url=result["url"], conn=conn)
                 append_upload_log(job_id, "info", f"Trailer incluido en la descripción: {result['url']}", stream="system", conn=conn)

@@ -68,9 +68,10 @@ def test_read_media_info_summary_parses_real_tracks(tmp_path):
 
 
 def test_read_media_info_summary_never_prompts_on_unknown_language(tmp_path):
-    """The legacy CLI's map_audio_language() calls prompt()/input() on an
+    """The legacy CLI's map_audio_language() called prompt()/input() on an
     unmapped language — unacceptable in a web request handler. This must
-    fall back to a 3-letter code instead of blocking."""
+    fall back to the base language's code instead of blocking (and without the
+    dangling hyphen "XX-" the old whole-string truncation gave)."""
     f = tmp_path / "movie.mkv"
     f.write_text("fake")
     info = {"media": {"track": [
@@ -83,7 +84,7 @@ def test_read_media_info_summary_never_prompts_on_unknown_language(tmp_path):
         patch("builtins.input", side_effect=AssertionError("must never prompt")),
     ):
         result = svc.read_media_info_summary(str(f))
-    assert result["audio_languages"] == "XX-"
+    assert result["audio_languages"] == "XX"
 
 
 def test_read_media_info_summary_handles_subprocess_failure(tmp_path):
@@ -323,3 +324,43 @@ def test_multi_shortcut_still_applies(tmp_path):
         for lang in ("es", "en", "fr", "de")
     ])
     assert summary == "MULTI DD 5.1"
+
+
+def test_un_mediainfo_colgado_no_bloquea(tmp_path, monkeypatch):
+    """Sin timeout, un montaje colgado dejaba la petición (o la cola) esperando."""
+    import subprocess
+    from emuwarez_uploadrr.services import media_probe
+
+    def colgado(*a, **k):
+        assert k.get("timeout"), "mediainfo se lanza sin timeout"
+        raise subprocess.TimeoutExpired(a[0], k["timeout"])
+    monkeypatch.setattr(media_probe.subprocess, "run", colgado)
+    f = tmp_path / "peli.mkv"
+    f.write_bytes(b"x")
+    with patch.object(svc, "mediainfo_available", return_value=True):
+        informe = svc.build_mediainfo_report(str(f))
+    assert informe["available"] is False and "no respondió" in informe["message"]
+
+
+def test_un_informe_con_la_herramienta_a_medias_no_se_guarda(tmp_path):
+    """La ayuda dice "se repetirá la próxima vez": si el informe entero se
+    quedaba en la caché, la herramienta no volvía a pasar."""
+    f = tmp_path / "peli.mkv"
+    f.write_bytes(b"x" * 100)
+    info = {"media": {"track": [{"@type": "Video", "Format": "AVC", "Width": "1920", "Height": "1080"}]}}
+    llamadas = []
+
+    def _analiza(path, radarr_source=None):
+        llamadas.append(path)
+        return {"prediction": {"label": "WEB-DL"}, "partial": "muestreo al 40 %"}
+    with (
+        patch.object(svc, "mediainfo_available", return_value=True),
+        patch.object(svc, "source_engine_enabled", return_value=True),
+        patch.object(svc.media_probe, "run_mediainfo_json", return_value=info),
+        patch("emuwarez_uploadrr.services.source_engine.analyze_for_app", side_effect=_analiza),
+    ):
+        primero = svc.build_mediainfo_report(str(f))
+        svc.build_mediainfo_report(str(f))
+    assert len(llamadas) == 2
+    fila = next(r for r in primero["rows"] if r["field"] == "Source")
+    assert "análisis parcial" in fila["help"]

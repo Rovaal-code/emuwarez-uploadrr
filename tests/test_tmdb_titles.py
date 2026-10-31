@@ -58,3 +58,13 @@ def test_tmdb_returning_nothing_is_cached_as_fallback(db_conn, monkeypatch):
     # cached (as NULL) so we don't re-hit TMDb for a series it has no title for
     assert tmdb_titles.resolve_series_title(db_conn, 555, "Keep Me") == "Keep Me"
     assert calls == [555]
+
+
+def test_un_titulo_que_tmdb_no_tenia_se_vuelve_a_preguntar_al_mes(db_conn, monkeypatch):
+    """El NULL se cacheaba para siempre: si TMDb añadía el título después, el
+    nombre se quedaba en el idioma de Sonarr."""
+    monkeypatch.setattr(tmdb_titles.tmdb, "get_tv_title", lambda *a, **k: "Los Serrano")
+    db_conn.execute(
+        "INSERT INTO tmdb_title_cache (tmdb_id, media_type, language, title, fetched_at) "
+        "VALUES ('7283', 'tv', 'es-ES', NULL, datetime('now', '-31 days'))")
+    assert tmdb_titles.resolve_series_title(db_conn, 7283, "The Serrano") == "Los Serrano"

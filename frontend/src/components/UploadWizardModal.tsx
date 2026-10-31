@@ -985,6 +985,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
         source: saved?.source ?? plan.source ?? undefined,
         provider: saved?.provider ?? plan.provider ?? undefined,
         video_codec: plan.video_codec ?? undefined,
+        dynamic_range: plan.dynamic_range ?? undefined,
         audio_summary: plan.audio_summary ?? undefined,
         subs: plan.subtitle_summary ?? undefined,
         tag: saved?.tag ?? plan.release_tag ?? undefined,
@@ -1203,8 +1204,8 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
           // the title look like it was for the whole series).
           season_number: seasonPlan?.season_number ?? null,
           resolution: fields.resolution, source: fields.source, provider: fields.provider,
-          video_codec: fields.video_codec, audio_summary: fields.audio_summary,
-          subtitle_summary: fields.subs, tag: fields.tag,
+          video_codec: fields.video_codec, dynamic_range: fields.dynamic_range,
+          audio_summary: fields.audio_summary, subtitle_summary: fields.subs, tag: fields.tag,
           // El CUSTOM lo decide el plan comparando capítulos; editar
           // Source/Proveedor/Tag no lo cambia, pero hay que reenviarlo o el
           // título recalculado lo perdería.

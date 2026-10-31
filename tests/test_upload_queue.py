@@ -250,6 +250,7 @@ def test_run_queued_job_releases_concurrency_slot_on_early_failure(db_conn):
     assert _upload_concurrency_gate._active == 0
 
 
+@pytest.mark.usefixtures("ficheros_de_mentira")
 def test_run_queued_job_stage_is_nomenclature_before_nomenclature_starts(db_conn, tmp_path):
     """Regression: `upload_jobs.stage` (a separate, older display pipeline
     from progress_json — see upload_execution.compute_progress_phase(), read
@@ -864,6 +865,7 @@ def _correr_cola_hasta_el_inicio(db_conn, tmp_path, monkeypatch, *, enlace_duro=
     return visto
 
 
+@pytest.mark.usefixtures("ficheros_de_mentira")
 def test_uploadrr_recibe_el_enlace_de_la_carpeta_de_subidas(db_conn, tmp_path, monkeypatch):
     """_populate_ready escribía en prepared_path la ruta de la biblioteca justo
     después de que el paso anterior dejara ahí el enlace. El enlace lleva el
@@ -875,6 +877,7 @@ def test_uploadrr_recibe_el_enlace_de_la_carpeta_de_subidas(db_conn, tmp_path, m
     assert [p.name for p in Path(visto["biblioteca"]).parent.iterdir()] == ["Movie.2024.mkv"]
 
 
+@pytest.mark.usefixtures("ficheros_de_mentira")
 def test_no_se_enlaza_un_fichero_fuera_de_allowed_roots(db_conn, tmp_path, monkeypatch):
     """La ruta que se enlaza se vuelve a comprobar: no tiene por qué ser la
     misma que pasó la comprobación de integridad."""
@@ -890,6 +893,7 @@ def test_no_se_enlaza_un_fichero_fuera_de_allowed_roots(db_conn, tmp_path, monke
     assert not (tmp_path / "uploads").exists() or not any((tmp_path / "uploads").iterdir())
 
 
+@pytest.mark.usefixtures("ficheros_de_mentira")
 def test_un_enlace_simbolico_en_la_carpeta_de_subidas_vale_para_subir(db_conn, tmp_path, monkeypatch):
     """Con /config y /data en montajes distintos no cabe un enlace duro."""
     import os
@@ -904,6 +908,7 @@ def test_un_enlace_simbolico_en_la_carpeta_de_subidas_vale_para_subir(db_conn, t
 # La fase de nomenclatura falla con el motivo, sin tocar nada
 # ---------------------------------------------------------------------------
 
+@pytest.mark.usefixtures("ficheros_de_mentira")
 @pytest.mark.parametrize("respuesta, esperado", [
     (RuntimeError("boom"), "Error aplicando la nomenclatura: boom"),
     ({"status": "blocked", "errors": ["propuesta bloqueada"]}, "No se pudo aplicar la nomenclatura: propuesta bloqueada"),

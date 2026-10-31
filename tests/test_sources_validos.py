@@ -59,3 +59,19 @@ def test_la_deteccion_por_nombre_tampoco_inventa():
 
     for _patron, valor in SOURCE_PATTERNS:
         assert valor in VALIDOS, f"SOURCE_PATTERNS produce {valor!r}, que no existe en eMuwarez"
+
+
+@pytest.mark.parametrize("calidad", CALIDADES)
+def test_la_nomenclatura_tampoco_inventa_un_source(calidad):
+    """La reserva de nomenclature.py, cuando el nombre no dice nada: escribía
+    "BDReMux" y "DVD", que no existen."""
+    from emuwarez_uploadrr.services.nomenclature import _infer_source_from_item
+    valor = _infer_source_from_item({"quality": calidad, "path": "/pelis/sin_pistas.mkv"})
+    assert valor is None or valor in VALIDOS, (calidad, valor)
+
+
+def test_el_full_bluray_que_escribe_la_app_se_reconoce():
+    """Si no, al renombrar un Full BluRay el nombre nuevo se leía como BluRay."""
+    from pathlib import Path
+    from emuwarez_uploadrr.services.media_probe import _detect_source_by_name
+    assert _detect_source_by_name(Path("Peli.2020.1080p.Full.BluRay.AVC.ESP.DTS-HD.MA.5.1-EMUWAREZ.mkv")) == "Full BluRay"

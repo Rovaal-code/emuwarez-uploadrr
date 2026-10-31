@@ -980,6 +980,7 @@ class SeasonPackPlanResponse(BaseModel):
     resolution: Optional[str] = None
     source: Optional[str] = None
     video_codec: Optional[str] = None
+    dynamic_range: Optional[str] = None
     audio_summary: Optional[str] = None
     subtitle_summary: Optional[str] = None
     # True cuando los capítulos no traen el mismo audio: el título lleva
@@ -1316,6 +1317,7 @@ class SeasonPackFieldsPreviewBody(BaseModel):
     source: Optional[str] = None
     provider: Optional[str] = None
     video_codec: Optional[str] = None
+    dynamic_range: Optional[str] = None
     audio_summary: Optional[str] = None
     subtitle_summary: Optional[str] = None
     custom: bool = False

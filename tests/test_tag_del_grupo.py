@@ -2,6 +2,8 @@
 columna Grupo de Biblioteca); sin un grupo claro, del tag de Ajustes."""
 from __future__ import annotations
 
+import pytest
+
 from emuwarez_uploadrr.database import connect, init_db
 from emuwarez_uploadrr.services.nomenclature import tag_por_defecto
 from emuwarez_uploadrr.services.season_pack import build_season_pack_plan
@@ -95,6 +97,7 @@ def test_el_tag_elegido_gana_al_grupo(isolated_db, tmp_path):
     assert all(e["proposed_filename"].endswith("-MYTAG") for e in plan["episodes"])
 
 
+@pytest.mark.usefixtures("ficheros_de_mentira")
 def test_el_asistente_propone_el_grupo_de_la_pelicula(client, auth_headers, tmp_path):
     from unittest.mock import patch
     from tests.test_nomenclature_fields_api import _MI_OK, _seed_item

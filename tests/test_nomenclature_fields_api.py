@@ -82,6 +82,7 @@ def test_get_fields_not_found(client, auth_headers):
     assert resp.status_code == 404
 
 
+@pytest.mark.usefixtures("ficheros_de_mentira")
 def test_get_fields_found(client, auth_headers, tmp_path):
     f = tmp_path / "dune.mkv"; f.write_bytes(b"x" * 2048)
     with patch("emuwarez_uploadrr.services.source_assistant._get_tmdb_available_providers_raw", return_value=[]), \

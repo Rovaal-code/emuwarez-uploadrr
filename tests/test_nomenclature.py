@@ -159,9 +159,10 @@ def test_build_proposal_ignores_provider_like_tokens_on_non_streaming_source(db_
 
 def test_build_proposal_uses_real_media_info_columns(db_conn):
     """Phase 6A — video_codec/audio_codec/audio_languages parsed at sync
-    time from Radarr/Sonarr's own mediaInfo must be used verbatim, not
-    re-guessed from the quality profile name, and must silence the
-    'codec not detected' warning."""
+    time from Radarr/Sonarr's own mediaInfo must be used, not re-guessed
+    from the quality profile name, and must silence the 'codec not detected'
+    warning. Sin MediaInfo van con los tokens del tracker: antes llegaban tal
+    cual al nombre ("EAC3 eng / spa eng / spa")."""
     cursor = db_conn.execute(
         """INSERT INTO library_items
            (item_type, title, local_status, request_status, path, quality,
@@ -173,8 +174,9 @@ def test_build_proposal_uses_real_media_info_columns(db_conn):
     item_id = cursor.lastrowid
     result = build_nomenclature_proposal(item_id, conn=db_conn)
     assert result.get("video_codec") == "x265"
-    assert result.get("audio_summary") == "EAC3 eng / spa"
-    assert result.get("subtitle_summary") == "eng / spa"
+    assert result.get("audio_summary") == "DUAL DD+"
+    assert result.get("subtitle_summary") == "SUBS"
+    assert "/" not in result["proposed_torrent_name"]
     warnings = json.loads(result.get("warnings_json", "[]"))
     assert not any("codec" in w.lower() for w in warnings)
 
@@ -192,6 +194,31 @@ def test_force_refresh_creates_new_proposal(db_conn):
     p1 = build_nomenclature_proposal(item_id, conn=db_conn)
     p2 = build_nomenclature_proposal(item_id, force_refresh=True, conn=db_conn)
     assert p2.get("id") != p1.get("id")
+
+
+def test_la_propuesta_guardada_caduca_si_radarr_cambia_el_fichero(db_conn):
+    """Radarr sustituye el fichero por uno 2160p/HEVC: la propuesta 1080p
+    guardada no puede seguir usándose para el nombre ni para el pack."""
+    item_id = _insert_item(db_conn, path="/fake/Peli.2020.1080p.WEB-DL.mkv")
+    db_conn.execute("UPDATE library_items SET resolution='1080p', size_bytes=1000 WHERE id=?", (item_id,))
+    p1 = build_nomenclature_proposal(item_id, conn=db_conn)
+    assert build_nomenclature_proposal(item_id, conn=db_conn)["id"] == p1["id"]
+
+    db_conn.execute(
+        "UPDATE library_items SET path='/fake/Peli.2020.2160p.WEB-DL.mkv', resolution='2160p', "
+        "size_bytes=9000 WHERE id=?", (item_id,))
+    p2 = build_nomenclature_proposal(item_id, conn=db_conn)
+    assert p2["id"] != p1["id"]
+    assert "2160p" in p2["proposed_torrent_name"]
+
+
+def test_renombrar_no_caduca_la_propuesta(db_conn):
+    """La app renombra y apunta `path` al nombre nuevo: el fichero es el mismo."""
+    item_id = _insert_item(db_conn, path="/fake/viejo.mkv")
+    db_conn.execute("UPDATE library_items SET size_bytes=1000 WHERE id=?", (item_id,))
+    p1 = build_nomenclature_proposal(item_id, conn=db_conn)
+    db_conn.execute("UPDATE library_items SET path='/fake/nuevo.mkv' WHERE id=?", (item_id,))
+    assert build_nomenclature_proposal(item_id, conn=db_conn)["id"] == p1["id"]
 
 
 def test_mark_nomenclature_status(db_conn):
@@ -271,4 +298,14 @@ def test_titulo_del_aporte_con_espacios_y_archivo_con_puntos(db_conn):
 
 def test_el_titulo_conserva_la_interrogacion():
     assert _normalize_title_for_emu("Ali G: Kién es yo?") == "Ali G: Kién es yo?"
-    assert _normalize_title_for_emu('Uno/Dos "tres"') == "UnoDos tres"
+    # La barra separa palabras («Fate/Zero» → «Fate Zero»), no las pega.
+    assert _normalize_title_for_emu('Uno/Dos "tres"') == "Uno Dos tres"
+
+
+def test_un_nombre_de_mas_de_255_bytes_bloquea_la_propuesta(db_conn):
+    """Antes el plan salía "listo" y el renombrado fallaba con Errno 36."""
+    titulo = "Una película con un título larguísimo de verdad " * 6
+    item_id = _insert_item(db_conn, title=titulo, path="/fake/peli.mkv")
+    result = build_nomenclature_proposal(item_id, conn=db_conn)
+    assert result["status"] == "blocked"
+    assert any("255" in e for e in json.loads(result["errors_json"]))

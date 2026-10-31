@@ -119,3 +119,32 @@ def test_y_sigue_distinguiendo_el_latino():
     """El mismo mecanismo que ya existía para el castellano: no se rompe."""
     assert lang_display_name("spa", "es-419") == "Español (Latinoamérica)"
     assert lang_display_name("spa", None) == "Español (Castellano)"
+
+
+# --- El latino no es castellano ------------------------------------------------
+
+@pytest.mark.parametrize("lang,ietf,titulo,esperado", [
+    ("spa", "es-MX", None, "LAT"),
+    ("spa", "es-AR", None, "LAT"),
+    ("spa", "es-US", None, "LAT"),
+    ("spa", "es-419", None, "LAT"),
+    ("spa", None, "Latino", "LAT"),
+    ("spa", None, "Español Latinoamérica", "LAT"),
+    ("spa", "es-ES", None, "ESP"),
+    ("spa", "es-x-01", None, "ESP"),     # subetiqueta privada de MAX, no región
+    ("spa", "es", "Castellano", "ESP"),
+    ("und", None, "Castellano", "ESP"),  # el nombre pone el idioma que falta
+    ("eng", None, "Latino", "ING"),      # pero no contradice la etiqueta
+    ("cat", "ca-ES-valencia", None, "VAL"),
+    ("und", None, None, "UND"),
+    (None, None, None, "UND"),
+])
+def test_un_solo_traductor_de_idiomas(lang, ietf, titulo, esperado):
+    from emuwarez_uploadrr.services.emu_format import resolve_language
+    assert resolve_language(lang, ietf, titulo) == esperado
+
+
+@pytest.mark.parametrize("raw", ["es-MX", "es-AR / eng", "es-US", "spa-lat"])
+def test_el_latino_no_da_castellano(raw):
+    from emuwarez_uploadrr.services.emu_format import has_castellano
+    assert has_castellano(raw) == 0

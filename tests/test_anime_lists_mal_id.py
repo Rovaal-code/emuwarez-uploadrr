@@ -111,3 +111,14 @@ def test_upsert_library_item_self_corrects_when_entry_removed(db_conn, monkeypat
     upsert_library_item(db_conn, item, notify_missing=False)
     row = db_conn.execute("SELECT mal_id FROM library_items WHERE id = ?", (item_id,)).fetchone()
     assert row["mal_id"] is None
+
+
+def test_una_lista_vacia_o_recortada_no_borra_la_tabla(db_conn, monkeypatch):
+    """Si GitHub devuelve una lista vacía o a medias, la tabla que había se queda."""
+    from emuwarez_uploadrr.services import anime_lists
+    for i in range(10):
+        _seed(db_conn, tmdb_movie_id=str(i), mal_id=str(100 + i))
+    for respuesta in ([], [{"mal_id": 1, "themoviedb_id": {"movie": [1]}}]):
+        monkeypatch.setattr(anime_lists, "request_json", lambda *a, _r=respuesta, **k: _r)
+        anime_lists.ensure_anime_id_map(db_conn, force=True)
+        assert db_conn.execute("SELECT COUNT(*) FROM anime_id_map").fetchone()[0] == 10

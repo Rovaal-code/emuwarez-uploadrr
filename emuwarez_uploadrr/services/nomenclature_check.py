@@ -4,8 +4,9 @@ Radarr/Sonarr only expose a *summary* mediaInfo (one audio codec/channels, not
 per-track), so the exact eMuwarez name — which needs the per-track audio —
 can only be built by reading MediaInfo from the actual file. This module:
 
-  1. reads MediaInfo (media_probe.read_media_info),
-  2. builds the expected file name (build_emu_title → to_filesystem_name),
+  1. needs a MediaInfo read of the file (or it counts as an error),
+  2. builds the expected file name with the SAME generator the upload uses
+     (nomenclature.build_nomenclature_proposal), so the two can't disagree,
   3. compares it to the real file name, ignoring the group after the last '-',
   4. yields 'Correcta' / 'No adaptada' + a per-token diff for the UI.
 
@@ -16,6 +17,7 @@ sync resets a checked item back to 'No comprobada' when its file changes.
 """
 from __future__ import annotations
 
+import difflib
 import os
 from typing import Optional
 
@@ -45,35 +47,21 @@ def _strip_group(core_dotted: str) -> str:
     return ".".join(parts)
 
 
-_RES_RE = None
-
-
 def _provider_codes() -> set[str]:
     from .source_assistant import EMU_PROVIDERS
     return {p["code"].lower() for p in EMU_PROVIDERS}
 
 
 def _drop_optional_provider(tokens: list[str]) -> list[str]:
-    """Provider is optional and sits right after the resolution (e.g.
-    '1080p AMZN WEB-DL'). Drop it so a name with or without provider both match
-    the expected (which is built without one)."""
-    import re
+    """Provider is optional and sits right before the WEB-DL source (e.g.
+    'AMZN WEB-DL'). Drop it so a name with or without provider both match."""
     codes = _provider_codes()
     out = list(tokens)
-    for i, t in enumerate(out):
-        if re.fullmatch(r"(4320p|2160p|1080p|1080i|720p|576p|540p|480p)", t, re.I):
-            if i + 1 < len(out) and out[i + 1].lower() in codes:
-                del out[i + 1]
+    for i in range(len(out) - 1):
+        if out[i].lower() in codes and out[i + 1].lower() == "web-dl":
+            del out[i]
             break
     return out
-
-
-def expected_core(title: str, year, media, season=None, episode=None) -> str:
-    """Expected file-name core (dotted, accent-free, without the group tag)."""
-    from .emu_title import build_emu_title
-    torrent = build_emu_title(title or "", str(year) if year else "", media,
-                              tag="EMUWAREZ", season=season, episode=episode)
-    return _strip_group(to_filesystem_name(torrent))
 
 
 def compare(actual_filename: str, exp_core: str) -> tuple[bool, list[str]]:
@@ -88,12 +76,22 @@ def compare(actual_filename: str, exp_core: str) -> tuple[bool, list[str]]:
     et = _drop_optional_provider([t for t in exp_core.split(".") if t])
     if [t.lower() for t in at] == [t.lower() for t in et]:
         return True, []
+    # Alineado por tokens: un token de más o de menos no desplaza todo lo demás.
     diff: list[str] = []
-    for i in range(max(len(at), len(et))):
-        av = at[i] if i < len(at) else "—"
-        ev = et[i] if i < len(et) else "—"
-        if av.lower() != ev.lower():
-            diff.append(f"'{av}' ≠ esperado '{ev}'")
+    matcher = difflib.SequenceMatcher(a=[t.lower() for t in at], b=[t.lower() for t in et], autojunk=False)
+    for op, a1, a2, b1, b2 in matcher.get_opcodes():
+        if op == "equal":
+            continue
+        sobran, faltan = at[a1:a2], et[b1:b2]
+        for i in range(max(len(sobran), len(faltan))):
+            av = sobran[i] if i < len(sobran) else None
+            ev = faltan[i] if i < len(faltan) else None
+            if av and ev:
+                diff.append(f"'{av}' ≠ esperado '{ev}'")
+            elif av:
+                diff.append(f"'{av}' sobra")
+            else:
+                diff.append(f"falta '{ev}'")
     return False, diff or ["El nombre no coincide con el esperado"]
 
 
@@ -146,11 +144,7 @@ def check_one(conn, item: dict) -> dict:
     result dict. Skips (returns status) non-available items."""
     if not _is_available(item):
         return {"id": item["id"], "status": item.get("nomenclature_status") or STATUS_NA, "skipped": True}
-    season = item.get("season_number")
-    episode = item.get("episode_number")
-    res = evaluate_file(item["path"], item["title"], item.get("year"),
-                        season=season if item["item_type"] == "episode" else None,
-                        episode=episode if item["item_type"] == "episode" else None)
+    res = evaluate_file(conn, item)
     _store_result(conn, item["id"], res["status"], res.get("expected"))
     res["id"] = item["id"]
     return res
@@ -198,34 +192,27 @@ def check_item(conn, item_id: int, *, force: bool = False) -> dict:
     }
 
 
-def evaluate_file(path: str, title: str, year, *, season=None, episode=None) -> dict:
-    """Read MediaInfo of `path` and return the verdict.
-    {status, expected, actual, diff}. Requires the file + `mediainfo` binary."""
-    from pathlib import Path
-    # media_probe y no legacy: la de legacy PREGUNTA por teclado cuando no
-    # reconoce el idioma de una pista, y esto corre dentro de una petición.
-    from .media_probe import read_media_info
-    from .path_mapping import resolve_local_path
-    path = resolve_local_path(path)
-    if not path or not os.path.exists(path):
-        raise FileNotFoundError(f"El archivo no existe o no es accesible: {path or '(sin ruta)'}")
-    media = read_media_info(Path(path))
-    if media is None:
-        raise RuntimeError("MediaInfo no devolvió datos (¿está instalado el binario 'mediainfo'?)")
-    # If the file name already carries a streaming provider (AMZN/NF/DSNP…) in a
-    # WEB-DL, include it in the expected name (provider goes before the source).
-    # It's optional, so `compare` ignores it on both sides — this just makes the
-    # shown expected match the real name.
-    if (media.source or "").upper().startswith("WEB-DL"):
-        from .nomenclature import infer_provider_from_item
-        prov = infer_provider_from_item({"path": path})
-        if prov:
-            media.source = f"{prov} {media.source}"
-    exp = expected_core(title, year, media, season=season, episode=episode)
-    matches, diff = compare(os.path.basename(path), exp)
+def evaluate_file(conn, item: dict) -> dict:
+    """El veredicto para un elemento: {status, expected, actual, diff}.
+    Necesita el fichero y el binario `mediainfo`; si no, lanza una excepción."""
+    from .media_info_service import build_mediainfo_report
+    from .nomenclature import build_nomenclature_proposal
+    from .path_mapping import resolve_local_path, ruta_de_lectura
+    leida = ruta_de_lectura(item, conn=conn)
+    local = resolve_local_path(leida, conn=conn) or leida
+    if not local or not os.path.exists(local):
+        raise FileNotFoundError(f"El archivo no existe o no es accesible: {local or '(sin ruta)'}")
+    # Sin radarr_source, como la propuesta: así las dos lecturas comparten caché.
+    report = build_mediainfo_report(local)
+    if not report.get("available"):
+        raise RuntimeError(report.get("message") or "MediaInfo no devolvió datos")
+    proposal = build_nomenclature_proposal(item["id"], conn=conn, guardar=False)
+    exp = _strip_group(proposal.get("proposed_filename") or "")
+    actual_name = os.path.basename(item.get("path") or local)
+    matches, diff = compare(actual_name, exp)
     return {
         "status": STATUS_CORRECT if matches else STATUS_NOT_ADAPTED,
         "expected": exp,
-        "actual": to_filesystem_name(os.path.splitext(os.path.basename(path))[0]),
+        "actual": to_filesystem_name(os.path.splitext(actual_name)[0]),
         "diff": diff,
     }

@@ -1,55 +1,38 @@
 """MediaInfo probing: the raw technical read of a file.
 
-Moved out of legacy.py, which was the original monolith. This is the single
-implementation of "what is actually inside this file": resolution, video
-codec, HDR, audio codecs and channels, subtitles, duration, and the source
-detection built on top of them. The CLI and the web app both call it here.
-
-Deliberately free of terminal I/O, so it can run inside an HTTP request. The
-one place that used to prompt (an unknown audio language) is now split in
-two: lookup_audio_language() reports whether it knows, map_audio_language()
-takes the fallback, and only the CLI wraps them to ask a human. That split
-existed already, but as two rival implementations: legacy.map_audio_language
-prompted, and the web layer had to keep its own silent copy alongside it.
+Moved out of legacy.py, which was the original monolith. The pieces of "what
+is actually inside this file" that the report in media_info_service is built
+from: resolution, video codec, HDR, audio codecs and channels, duration, and
+the source estimates. Deliberately free of terminal I/O, so it can run inside
+an HTTP request.
 """
 from __future__ import annotations
 
 import json
 import re
 import subprocess
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
-# LANG_MAP y SOURCE_PATTERNS vivían aquí duplicadas de legacy.py. Desde que
-# constants.py es su dueño (2026-08-01) se importan: dos copias de la tabla de
-# idiomas es exactamente el fallo que la auditoría llama "la misma pregunta
-# contestada en dos sitios".
-from ..constants import LANG_MAP, SOURCE_PATTERNS
+from ..constants import SOURCE_PATTERNS
+from .emu_format import format_audio_codec, format_channels
 
 
-
-
-
-@dataclass
-class MediaInfoData:
-    resolution: str
-    source: str
-    video_codec: str
-    hdr_tokens: list[str]
-    audio: list[dict[str, str]]
-    subtitles: list[dict[str, str]]
-    has_subs: bool
-    internal_title: Optional[str]
+# Un montaje NFS/SSHFS colgado no puede dejar esperando a la petición ni a la cola.
+MEDIAINFO_TIMEOUT_S = 120
 
 
 def run_mediainfo_json(path: Path) -> dict[str, Any]:
-    proc = subprocess.run(
-        ["mediainfo", "--Output=JSON", str(path)],
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    try:
+        proc = subprocess.run(
+            ["mediainfo", "--Output=JSON", str(path)],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=MEDIAINFO_TIMEOUT_S,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"mediainfo no respondió en {MEDIAINFO_TIMEOUT_S} s") from exc
     if proc.returncode != 0:
         raise RuntimeError(proc.stderr.strip() or "mediainfo falló")
     return json.loads(proc.stdout)
@@ -63,20 +46,19 @@ def first_track(info: dict[str, Any], track_type: str) -> dict[str, Any]:
     return next((x for x in media_tracks(info) if x.get("@type") == track_type), {})
 
 
-# Escalones de resolución: (anchura mínima, altura mínima, código, etiqueta).
-# El código es el vocabulario canónico de la aplicación ("1080p", "480p"), el
-# que se guarda en la biblioteca y el que entiende el contrato de subida; la
-# etiqueta es solo adorno para la ficha de MediaInfo.
+# Escalones de resolución: (anchura mínima, altura mínima, código). El código
+# es el vocabulario canónico de la aplicación ("1080p", "480p"), el que se
+# guarda en la biblioteca y el que entiende el contrato de subida.
 #
 # Se mira también la ANCHURA, no solo la altura: en cinemascope un 1080p real
 # puede venir como 1920x800 por recorte vertical.
-_ESCALONES_RESOLUCION: list[tuple[int, int, str, str]] = [
-    (7600, 4000, "4320p", "FUHD"),
-    (3800, 2000, "2160p", "UHD"),
-    (1900, 1000, "1080p", ""),
-    (1200, 700, "720p", ""),
-    (0, 560, "576p", "SD"),
-    (0, 520, "540p", "SD"),
+_ESCALONES_RESOLUCION: list[tuple[int, int, str]] = [
+    (7600, 4000, "4320p"),
+    (3800, 2000, "2160p"),
+    (1900, 1000, "1080p"),
+    (1200, 700, "720p"),
+    (0, 560, "576p"),
+    (0, 520, "540p"),
 ]
 
 
@@ -84,9 +66,8 @@ def resolution_code(width: int, height: int) -> Optional[str]:
     """El código canónico para unas dimensiones: "1080p", "480p"…
 
     None si no hay dimensiones. Es lo que se guarda en la biblioteca y lo que
-    compara la regla del pack de temporada; `map_resolution` añade encima la
-    etiqueta de adorno."""
-    for min_w, min_h, codigo, _etiqueta in _ESCALONES_RESOLUCION:
+    compara la regla del pack de temporada."""
+    for min_w, min_h, codigo in _ESCALONES_RESOLUCION:
         if (min_w and width >= min_w) or (min_h and height >= min_h):
             return codigo
     if width or height:
@@ -94,19 +75,15 @@ def resolution_code(width: int, height: int) -> Optional[str]:
     return None
 
 
-def map_resolution(video: dict[str, Any]) -> str:
-    """La resolución para la ficha de MediaInfo, con su etiqueta ("480p SD")."""
+def video_resolution_code(video: dict[str, Any]) -> Optional[str]:
+    """resolution_code de la pista de vídeo de MediaInfo."""
     def number(value: Any) -> int:
         match = re.search(r"\d+", str(value or "0"))
         return int(match.group()) if match else 0
 
-    width = number(video.get("Width") or video.get("Stored_Width"))
-    height = number(video.get("Height") or video.get("Stored_Height"))
-    codigo = resolution_code(width, height)
-    if codigo is None:
-        return "1080p"
-    etiqueta = next((e for w, h, c, e in _ESCALONES_RESOLUCION if c == codigo), "SD")
-    return f"{codigo} {etiqueta}".strip()
+    return resolution_code(number(video.get("Width") or video.get("Stored_Width")),
+                           number(video.get("Height") or video.get("Stored_Height")))
+
 
 def _detect_source_by_name(path: Path) -> Optional[str]:
     """Source from the file/folder NAME only (most reliable). None if the name
@@ -116,11 +93,6 @@ def _detect_source_by_name(path: Path) -> Optional[str]:
         if pattern.search(text):
             return value
     return None
-
-
-def detect_source(path: Path) -> str:
-    """Name-based source, defaulting to BluRay when the name says nothing."""
-    return _detect_source_by_name(path) or "BluRay"
 
 
 # Lossless audio → the file comes from a disc (streaming services never ship
@@ -217,27 +189,6 @@ def estimate_source_from_bitrate(
     return "WEBRip" if mbps >= webdl_thr else "HDTV"
 
 
-def detect_source_smart(
-    path: Path, audio_codecs: list[str], resolution: Optional[str],
-    duration_s: Optional[float] = None, video: Optional[dict] = None,
-) -> tuple[str, bool]:
-    """(source, is_guess). Name first; if the name says nothing, estimate from the
-    overall bitrate (size/duration) + audio, falling back to the size-only
-    heuristic when duration is unknown; last resort BluRay. is_guess=True when it
-    wasn't resolved from the name."""
-    by_name = _detect_source_by_name(path)
-    if by_name:
-        return by_name, False
-    try:
-        size_bytes = path.stat().st_size
-    except OSError:
-        size_bytes = 0
-    guess = estimate_source_from_bitrate(size_bytes, duration_s, audio_codecs, resolution, video=video)
-    if guess is None:  # no duration → old size-only heuristic
-        guess = heuristic_source(audio_codecs, size_bytes / (1024 ** 3), resolution)
-    return (guess or "BluRay"), True
-
-
 def detect_video_codec(video: dict[str, Any], path: Path) -> str:
     # Real MediaInfo encoder fields ONLY — never the filename. The guide
     # itself draws a hard line between "H264 → AVC" (generic codec) and
@@ -287,92 +238,18 @@ def detect_hdr(video: dict[str, Any]) -> list[str]:
 
 
 def audio_codec(audio: dict[str, Any]) -> str:
+    """El token de audio de una pista de MediaInfo. Lo decide
+    emu_format.format_audio_codec, el mismo que traduce lo de Radarr/Sonarr."""
     text = " ".join(
         str(audio.get(k) or "")
         for k in ("Format", "Format_Profile", "Format_Commercial_IfAny", "Format_AdditionalFeatures")
-    ).lower()
-
-    if "dts-hd master" in text or "dts-hd ma" in text:
-        base = "DTS-HD MA"
-    elif "dts-hd high" in text or "dts-hd hra" in text:
-        base = "DTS-HD HRA"
-    elif "dts:x" in text:
-        base = "DTS:X"
-    elif "truehd" in text:
-        base = "TrueHD"
-    elif "mlp" in text:
-        base = "MLP"
-    elif "e-ac-3" in text or "eac3" in text:
-        base = "DD+"
-    elif "ac-3" in text or "ac3" in text:
-        base = "DD"
-    elif "dts" in text:
-        base = "DTS"
-    elif "aac" in text:
-        base = "AAC LC" if "lc" in text or "low complexity" in text else "AAC HE" if "he" in text else "AAC"
-    elif "opus" in text:
-        base = "OPUS"
-    elif "flac" in text:
-        base = "FLAC"
-    elif "alac" in text:
-        base = "ALAC"
-    elif "mp3" in text or "mpeg audio" in text:
-        base = "MP3"
-    elif "pcm" in text:
-        base = "PCM"
-    else:
-        base = str(audio.get("Format") or "DD").strip()
-
-    if "atmos" in text and "Atmos" not in base:
-        base += " Atmos"
-    return base
+    )
+    return format_audio_codec(text, fallback=str(audio.get("Format") or "").strip() or "?")
 
 
-def audio_channels(audio: dict[str, Any]) -> str:
-    raw = str(audio.get("Channel_s_") or audio.get("Channels") or "").lower()
-    match = re.search(r"\d+", raw)
-    n = int(match.group()) if match else 2
-    return {
-        1: "Mono",
-        2: "2.0",
-        3: "3.0",
-        4: "3.1",
-        5: "5.0",
-        6: "5.1",
-        7: "6.1",
-        8: "7.1",
-    }.get(n, "2.0")
-
-
-def lookup_audio_language(value: str) -> Optional[str]:
-    """The mapped 3-letter code, or None when the input isn't in LANG_MAP.
-    Separated from map_audio_language so a caller that CAN ask a human (the
-    CLI) knows when to ask, while everyone else takes the fallback."""
-    return LANG_MAP.get((value or "").strip().lower())
-
-
-def map_audio_language(value: str) -> str:
-    """Non-interactive: an unmapped language falls back to a 3-letter
-    best-effort code. This is the canonical mapping. The CLI wraps it to
-    prompt instead of guessing (legacy.map_audio_language); nothing else may,
-    because a prompt inside an HTTP request never returns."""
-    return lookup_audio_language(value) or (value or "UND").strip().upper()[:3] or "UND"
-
-
-
-def map_subtitle_language(value: str) -> str:
-    key = (value or "").strip().lower()
-    return LANG_MAP.get(key, (value or "UND").strip().upper()[:3] or "UND")
-
-
-def subtitle_format(track: dict[str, Any]) -> str:
-    fmt = str(track.get("Format") or track.get("CodecID") or "SUB").strip()
-    return fmt or "SUB"
-
-
-def subtitle_forced(track: dict[str, Any]) -> str:
-    text = " ".join(str(track.get(k) or "") for k in ("Forced", "Forced_String", "Title")).lower()
-    return "Sí" if "yes" in text or "sí" in text or "forced" in text or "forzado" in text else "No"
+def audio_channels(audio: dict[str, Any]) -> Optional[str]:
+    """"5.1", "2.0"… o None si MediaInfo no dice un número de canales conocido."""
+    return format_channels(audio.get("Channel_s_") or audio.get("Channels"))
 
 
 def duration_seconds(general: dict[str, Any]) -> Optional[float]:
@@ -381,61 +258,3 @@ def duration_seconds(general: dict[str, Any]) -> Optional[float]:
         return float(general.get("Duration"))
     except (TypeError, ValueError):
         return None
-
-
-def read_media_info(path: Path, *, audio_language: Optional[Callable[[str, Path, int], str]] = None) -> MediaInfoData:
-    """audio_language: optional resolver for a track's language, given
-    (value, path, track_index). Defaults to the non-interactive mapping; the
-    CLI passes its own so it can ask when a code is unknown."""
-    resolve_language = audio_language or (lambda value, _path, _index: map_audio_language(value))
-    info = run_mediainfo_json(path)
-    general = first_track(info, "General")
-    video = first_track(info, "Video")
-
-    audio_items: list[dict[str, str]] = []
-    audio_index = 0
-    for track in media_tracks(info):
-        if track.get("@type") != "Audio":
-            continue
-        audio_index += 1
-        audio_items.append(
-            {
-                "lang": resolve_language(track.get("Language") or track.get("Language_String") or "", path, audio_index),
-                "codec": audio_codec(track),
-                "channels": audio_channels(track),
-            }
-        )
-
-    # ESP siempre primero.
-    audio_items.sort(key=lambda x: (0 if x["lang"] == "ESP" else 1, x["lang"], x["codec"]))
-
-    subtitle_items: list[dict[str, str]] = []
-    subtitle_index = 0
-    for track in media_tracks(info):
-        if track.get("@type") != "Text":
-            continue
-        subtitle_index += 1
-        subtitle_items.append(
-            {
-                "lang": map_subtitle_language(track.get("Language") or track.get("Language_String") or ""),
-                "format": subtitle_format(track),
-                "forced": subtitle_forced(track),
-                "title": str(track.get("Title") or "").strip(),
-            }
-        )
-
-    _resolution = map_resolution(video)
-    _source, _ = detect_source_smart(
-        path, [a.get("codec") or "" for a in audio_items], _resolution,
-        duration_s=duration_seconds(general), video=video,
-    )
-    return MediaInfoData(
-        resolution=_resolution,
-        source=_source,
-        video_codec=detect_video_codec(video, path),
-        hdr_tokens=detect_hdr(video),
-        audio=audio_items,
-        subtitles=subtitle_items,
-        has_subs=bool(subtitle_items),
-        internal_title=general.get("Title") or general.get("Movie"),
-    )

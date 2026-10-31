@@ -12,6 +12,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from emuwarez_uploadrr.database import init_db, connect
 from emuwarez_uploadrr.services import media_info_service
 from emuwarez_uploadrr.services.season_pack import (
@@ -322,6 +324,7 @@ def test_el_plan_lleva_los_ajustes_a_los_nombres(isolated_db, tmp_path):
     conn.close()
 
 
+@pytest.mark.usefixtures("ficheros_de_mentira")
 def test_get_season_episode_names_applies_overrides_to_every_episode(isolated_db, tmp_path):
     """Regression: editing Source/Proveedor/Tag in the season wizard changed
     the season pack's own title but NOT each episode's individual name in
@@ -345,6 +348,7 @@ def test_get_season_episode_names_applies_overrides_to_every_episode(isolated_db
     conn.close()
 
 
+@pytest.mark.usefixtures("ficheros_de_mentira")
 def test_get_season_episode_names_returns_one_entry_per_available_episode(isolated_db, tmp_path):
     conn = _open(isolated_db)
     _series_id, season_id = _seed_series_season(conn)
@@ -538,6 +542,92 @@ def test_episode_names_selector_uses_the_short_canonical_title(isolated_db, tmp_
 # preview_season_pack_title — cheap live-preview while editing Source/
 # Proveedor/Tag in the wizard (no DB/disk I/O at all).
 # ---------------------------------------------------------------------------
+
+def _pack_de_dos(conn, tmp_path, **por_capitulo):
+    """Dos capítulos iguales salvo las columnas de `por_capitulo` (listas)."""
+    _series_id, season_id = _seed_series_season(conn)
+    folder = tmp_path / "One Piece" / "Season 1"
+    folder.mkdir(parents=True)
+    for i in (1, 2):
+        f = folder / f"S01E0{i}.mkv"
+        f.write_bytes(b"video")
+        ep = _seed_episode(conn, season_id, number=i, title=f"One Piece S01E0{i}", path=str(f),
+                           quality="WEBDL-1080p", video_codec="x264", audio_codec="AC3",
+                           audio_languages="spa", source="WEB-DL")
+        for col, valores in por_capitulo.items():
+            conn.execute(f"UPDATE library_items SET {col} = ? WHERE id = ?", (valores[i - 1], ep))
+    conn.commit()
+    return season_id
+
+
+def test_un_pack_con_fuentes_distintas_se_bloquea(isolated_db, tmp_path):
+    """Antes el título se quedaba sin Fuente y el pack salía "válido"."""
+    conn = _open(isolated_db)
+    plan = build_season_pack_plan(_pack_de_dos(conn, tmp_path, source=["WEB-DL", "BluRay"]), conn=conn)
+    assert plan["status"] == "blocked"
+    assert any("source distinto (BluRay)" in e for e in plan["errors"]), plan["errors"]
+    conn.close()
+
+
+def test_un_pack_con_hdr_y_sdr_se_bloquea(isolated_db, tmp_path):
+    conn = _open(isolated_db)
+    plan = build_season_pack_plan(_pack_de_dos(conn, tmp_path, dynamic_range=["HDR10", None]), conn=conn)
+    assert plan["status"] == "blocked"
+    assert any("HDR/DV distinto (sin HDR)" in e for e in plan["errors"]), plan["errors"]
+    conn.close()
+
+
+def test_un_pack_con_proveedores_distintos_se_bloquea(isolated_db, tmp_path):
+    """El título decía el proveedor del primer capítulo aunque otro fuera de NF."""
+    conn = _open(isolated_db)
+    season_id = _pack_de_dos(conn, tmp_path)
+    for i, nombre in ((1, "S01E01.AMZN.WEB-DL.mkv"), (2, "S01E02.NF.WEB-DL.mkv")):
+        viejo = tmp_path / "One Piece" / "Season 1" / f"S01E0{i}.mkv"
+        nuevo = viejo.with_name(nombre)
+        viejo.rename(nuevo)
+        conn.execute("UPDATE library_items SET path = ? WHERE path = ?", (str(nuevo), str(viejo)))
+    conn.commit()
+    plan = build_season_pack_plan(season_id, conn=conn)
+    assert plan["status"] == "blocked"
+    assert any("proveedores distintos (AMZN, NF)" in e for e in plan["errors"]), plan["errors"]
+    conn.close()
+
+
+def test_el_titulo_del_pack_lleva_el_hdr_de_sus_capitulos(isolated_db, tmp_path):
+    conn = _open(isolated_db)
+    plan = build_season_pack_plan(_pack_de_dos(conn, tmp_path, dynamic_range=["HDR10", "HDR10"]), conn=conn)
+    assert plan["status"] == "valid", plan["errors"]
+    assert "WEB-DL HDR x264" in plan["season_pack_title"]
+    assert plan["dynamic_range"] == "HDR"
+    conn.close()
+
+
+def test_el_pack_se_escribe_igual_que_sus_capitulos():
+    """2160p lleva "4K UHD" y el DV/HDR va delante del códec, como en cada
+    capítulo; y «Fate/Zero» se queda en «Fate Zero», no «FateZero»."""
+    result = preview_season_pack_title({
+        "title": "Fate/Zero", "year": 2011, "season_number": 1, "resolution": "2160p",
+        "source": "WEB-DL", "provider": "NF", "dynamic_range": "Dolby Vision / SMPTE ST 2086",
+        "video_codec": "HEVC", "audio_summary": "ESP-JAP DD+ 5.1", "subtitle_summary": "SUBS",
+        "tag": "EMUWAREZ",
+    })
+    assert result["torrent_name"] == (
+        "Fate Zero S01 2011 2160p 4K UHD NF WEB-DL DV HDR HEVC ESP-JAP DD+ 5.1 SUBS-EMUWAREZ")
+
+
+def test_un_pack_con_un_nombre_demasiado_largo_se_bloquea(isolated_db, tmp_path):
+    conn = _open(isolated_db)
+    season_id = _pack_de_dos(conn, tmp_path)
+    plan = build_season_pack_plan(season_id, conn=conn, title_override="Título larguísimo " * 14)
+    assert plan["status"] == "blocked"
+    assert any("255" in e for e in plan["errors"]), plan["errors"]
+    conn.close()
+
+
+def test_la_carpeta_del_pack_no_lleva_caracteres_que_windows_rechaza():
+    assert _sanitize_pack_folder_name(r'Anacleto: ¿Quién? S01 "x" a|b*c<d>e/f\g.') == (
+        "Anacleto ¿Quién S01 x a b c d e f g")
+
 
 def test_preview_season_pack_title_basic():
     result = preview_season_pack_title({
@@ -781,16 +871,16 @@ def test_pack_fields_are_emptied_when_they_differ_and_audios_are_summed(isolated
 
     - los idiomas de audio se SUMAN, porque el pack contiene los dos, y el
       pack se marca CUSTOM cuando no todos los capítulos traen lo mismo;
-    - el códec de vídeo y el source se quedan FUERA cuando difieren, porque
+    - lo que no tiene que coincidir y difiere se queda FUERA, porque
       anunciar uno solo sería mentir y anunciar los dos no describe nada.
     """
     conn = _open(isolated_db)
     _series_id, season_id = _seed_series_season(conn, series_title="One Piece", year=1999)
     folder = tmp_path / "One Piece" / "Season 1"
     folder.mkdir(parents=True)
-    # El códec de vídeo SÍ tiene que coincidir; lo que varía es el source y
-    # los idiomas.
-    datos = [("x264", "WEB-DL", "spa"), ("x264", "BluRay", "spa / eng")]
+    # El códec de vídeo y el source SÍ tienen que coincidir; lo que varía
+    # son los idiomas.
+    datos = [("x264", "WEB-DL", "spa"), ("x264", "WEB-DL", "spa / eng")]
     for i, (codec, source, audio) in enumerate(datos, start=1):
         f = folder / f"S01E0{i}.mkv"
         f.write_bytes(b"video")
@@ -804,9 +894,7 @@ def test_pack_fields_are_emptied_when_they_differ_and_audios_are_summed(isolated
 
     # La resolución sí, que es lo único obligatorio.
     assert "1080p" in titulo, titulo
-    # El códec, que coincide, sí aparece; el source, que difiere, no.
-    assert "x264" in titulo, titulo
-    assert "BluRay" not in titulo and "WEB-DL" not in titulo, titulo
+    assert "WEB-DL x264" in titulo, titulo
     # Y los idiomas sumados, explícitos y con CUSTOM: el inglés solo está en
     # el segundo capítulo, así que DUAL a secas prometería de más.
     assert "ESP-ING" in titulo and "DUAL" not in titulo, titulo

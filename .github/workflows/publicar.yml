@@ -129,10 +129,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch -q origin master
-          # Re-ejecución de un intento que falló después de subir la versión: se completa esa, no otra.
-          if [ "$(git rev-parse -q --verify origin/master^ 2>/dev/null)" = "$GITHUB_SHA" ] &&
-             git log -1 --format=%s origin/master | grep -q '^chore: versión '; then
-            git checkout -q origin/master
+          # Re-ejecución de un intento que falló después de subir la versión: se completa esa, no otra, aunque
+          # master ya haya avanzado. La versión es el primer commit de master sobre el que se lanzó este flujo.
+          subida="$(git log --first-parent --reverse --format='%H %P %s' "$GITHUB_SHA"..origin/master | head -n1 | grep -E "^[0-9a-f]{40} $GITHUB_SHA chore: versión " | cut -d' ' -f1)"
+          if [ -n "$subida" ]; then
+            git checkout -q "$subida"
             echo "subida=true" >> "$GITHUB_OUTPUT"
             # Si el manifiesto ya la anuncia, estaba entera: reconstruir cambiaría el digest de :latest.
             publicado="$(gh api repos/Kisnov/uploadrr-version/contents/latest.json --jq .content | base64 -d | jq -r .commit)"

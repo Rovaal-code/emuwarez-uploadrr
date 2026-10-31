@@ -20,6 +20,20 @@ class SetupError(Exception):
     """Raised when a setup step precondition fails."""
 
 
+# Los pasos opcionales que la interfaz recorre tras TMDb, en orden.
+PASOS_OPCIONALES = ("qbit", "providers", "imagehosts")
+
+
+def _avanzar_paso(conn: sqlite3.Connection, paso: str) -> None:
+    """Apunta hasta qué paso opcional llegó el asistente, para retomarlo ahí
+    tras recargar. Solo avanza: repetir un paso no hace volver atrás."""
+    orden = (*PASOS_OPCIONALES, "complete")
+    actual = get_state(conn, "wizard_step")
+    if actual in orden and orden.index(actual) >= orden.index(paso):
+        return
+    set_state(conn, "wizard_step", paso)
+
+
 def get_setup_state(conn: sqlite3.Connection) -> dict:
     """Read all setup flags and return a unified state dict."""
     instances = list_instances(conn)
@@ -32,18 +46,22 @@ def get_setup_state(conn: sqlite3.Connection) -> dict:
         "emu_configured": get_configured(conn, "emu.api_key"),
         "radarr_instances": radarr,
         "sonarr_instances": sonarr,
+        "wizard_step": get_state(conn, "wizard_step"),
     }
 
 
 def next_step(state: dict) -> Optional[str]:
-    """Resume order: admin -> emu -> instances -> tmdb -> complete.
+    """Resume order: admin -> emu -> instances -> tmdb -> (qbit -> providers ->
+    imagehosts) -> complete.
     'welcome' is frontend-only (shown once before an admin exists).
     eMuwarez and TMDb are mandatory — both setup_emu()/setup_tmdb() and
     setup_complete() require a live-tested, working key, so neither can be
     skipped or bypassed. Instances and Uploadrr (no dedicated wizard step;
     configurable later from Settings) remain optional/skippable. This
     resume order only decides which unconfigured step to land on if the
-    wizard is reopened mid-flow.
+    wizard is reopened mid-flow. The optional steps after TMDb can't be told
+    from the configuration (each one can be skipped), so setup_tmdb/
+    setup_qbit/setup_imghosts record the one reached in `wizard_step`.
 
     `initialized` is checked right after `admin_configured` (not last) —
     once setup has actually been completed, it must never route back into
@@ -61,7 +79,8 @@ def next_step(state: dict) -> Optional[str]:
         return "instances"
     if not state["tmdb_configured"]:
         return "tmdb"
-    return "complete"
+    paso = state.get("wizard_step")
+    return paso if paso in PASOS_OPCIONALES else "complete"
 
 
 def setup_admin(conn: sqlite3.Connection, username: str, password: str) -> int:
@@ -93,6 +112,7 @@ def setup_tmdb(
         set_setting(conn, "tmdb_watch_region", region.strip())
     if localize_series_titles is not None:
         set_setting(conn, "tmdb.localize_series_titles", "true" if localize_series_titles else "false")
+    _avanzar_paso(conn, "qbit")
 
 
 def setup_qbit(
@@ -110,6 +130,7 @@ def setup_qbit(
     "the port in the url doesn't match the WebUI's" a real, invisible failure.
     `tag` is the label qBittorrent puts on the torrent so you can tell your
     uploads apart; empty means don't tag."""
+    _avanzar_paso(conn, "providers")
     if not url or not url.strip():
         return
     set_setting(conn, "qbit.url", url.strip())
@@ -128,6 +149,7 @@ def setup_imghosts(
     fallback, so an empty selection is fine."""
     from ...services.image_hosts import set_config
     set_config(conn, enabled or [], keys or {})
+    _avanzar_paso(conn, "complete")
 
 
 def setup_emu(

@@ -187,6 +187,31 @@ def test_la_peticion_pasa_a_casar_con_la_copia_que_queda(conn, arr):
     assert conn.execute("SELECT readiness_best_library_item_id FROM request_items").fetchone()[0] == copia_4k
 
 
+def test_la_subida_sigue_ensenando_lo_que_tenia_de_la_ficha(conn, arr, client, auth_headers):
+    """Subidas sacaba el póster, el año y el Origen de la ficha: al borrarla, la subida se quedaba sin ellos."""
+    peli = _peli(1, "Matrix", 603)
+    peli["images"] = [{"coverType": "poster", "remoteUrl": "https://image.tmdb.org/t/p/original/matrix.jpg"},
+                      {"coverType": "fanart", "remoteUrl": "https://image.tmdb.org/t/p/original/fondo.jpg"}]
+    arr[RADARR] = [peli]
+    _sincroniza(conn, RADARR)
+    subida = conn.execute("INSERT INTO upload_jobs (library_item_id, title, path, status)"
+                          " VALUES (?, 'Matrix', '/movies/Matrix.mkv', 'completed')", (_id(conn, RADARR, "1"),)).lastrowid
+    conn.commit()
+    antes = client.get(f"/api/uploads/{subida}", headers=auth_headers).json()
+    assert antes["instance_id"] == RADARR
+
+    arr[RADARR] = [_peli(2, "Dune", 438631)]
+    _sincroniza(conn, RADARR)
+
+    for despues in (client.get(f"/api/uploads/{subida}", headers=auth_headers).json(),
+                    client.get("/api/uploads", headers=auth_headers).json()[0]):
+        assert despues["library_item_id"] is None
+        for campo in ("media_type", "poster_url", "backdrop_url", "year", "instance_type", "instance_name"):
+            assert antes[campo] is not None and despues[campo] == antes[campo], campo
+        # El enlace a Radarr llevaría a una ficha que ya no existe.
+        assert despues["instance_id"] is None
+
+
 def test_lo_que_no_vino_de_la_sincronizacion_tambien_se_borra(conn, arr):
     """Una fila sin last_seen_at (de antes de existir la columna) que un recorrido completo no ve ya no está."""
     conn.execute("INSERT INTO library_items (item_type, title, instance_id, external_id, local_status)"

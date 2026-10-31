@@ -275,7 +275,7 @@ def test_no_match():
 
 
 def test_tmdb_beats_title():
-    req = _make_req(tmdb_id="111", title="Generic Title")
+    req = _make_req(tmdb_id="111", title="Generic Title", category="Películas")
     library = [
         _make_item(id=10, tmdb_id="111", title="Different Name"),
         _make_item(id=20, tmdb_id=None, title="Generic Title"),
@@ -513,3 +513,43 @@ def test_peor_valor_sin_datos_o_con_uno_desconocido_es_none():
     assert peor_resolucion([]) is None and peor_source([]) is None
     assert peor_resolucion(["1080p", None]) is None
     assert peor_source(["WEB-DL", "algo raro"]) is None
+
+
+# ---------------------------------------------------------------------------
+# PET-10: documentales (no dicen si son película o serie) y el tvdb
+# ---------------------------------------------------------------------------
+
+def test_un_documental_no_se_casa_solo_por_un_tmdb_que_es_de_otra_cosa():
+    """El id 1399 es una película y una serie distintas: sin saber de cuál habla la petición, el id solo no basta."""
+    req = _make_req(title="Planeta Azul", tmdb_id="1399", category="Documentales")
+    library = [
+        _make_item(id=1, item_type="movie", title="Otra Pelicula", tmdb_id="1399"),
+        _make_item(id=2, item_type="series", title="Otra Serie", tmdb_id="1399"),
+    ]
+    assert match_request_to_library(req, library) == []
+
+
+def test_un_documental_se_casa_por_tmdb_si_el_titulo_o_el_imdb_lo_confirman():
+    req = _make_req(title="Planeta Azul", tmdb_id="1399", category="Documentales")
+    por_titulo = match_request_to_library(req, [_make_item(item_type="series", title="Planeta Azul", tmdb_id="1399")])
+    assert por_titulo[0]["id_match"] is True and por_titulo[0]["confidence"] == 1.0
+    req = _make_req(title="Planeta Azul", tmdb_id="1399", imdb_id="tt0001", category="Documentales")
+    por_imdb = match_request_to_library(req, [_make_item(title="The Blue Planet", tmdb_id="1399", imdb_id="tt0001")])
+    assert por_imdb[0]["id_match"] is True
+
+
+def test_una_pelicula_o_serie_con_categoria_se_casa_por_tmdb_sin_mirar_el_titulo():
+    req = _make_req(title="Dune", tmdb_id="438631", category="Películas")
+    assert len(match_request_to_library(req, [_make_item(item_type="movie", title="Dune: Parte Uno", tmdb_id="438631")])) == 1
+
+
+def test_una_peticion_solo_con_tvdb_se_casa_por_tvdb():
+    req = _make_req(title="Titulo en otro idioma", category="Series")
+    req["tvdb_id"] = "81189"
+    library = [
+        _make_item(id=1, item_type="series", title="Breaking Bad", tvdb_id="81189"),
+        _make_item(id=2, item_type="series", title="Otra", tvdb_id="999"),
+    ]
+    res = match_request_to_library(req, library)
+    assert [r["item"]["id"] for r in res] == [1]
+    assert res[0]["id_match"] is True and res[0]["confidence"] == 0.95

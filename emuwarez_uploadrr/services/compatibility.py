@@ -187,6 +187,12 @@ def tipo_de_peticion(category: str | None) -> Optional[str]:
     return None
 
 
+def _comparar_titulos(req_norm: str, req_compact: str, req_words: frozenset, item: dict) -> tuple[bool, float]:
+    """(¿mismo título?, parecido por palabras) entre el de la petición y el de una fila de la biblioteca."""
+    norm, compact, words = _titulos(item.get("title"))
+    return bool((req_compact and req_compact == compact) or req_norm == norm), _word_overlap(req_words, words)
+
+
 def match_request_to_library(
     req: dict,
     library: list[dict],
@@ -200,6 +206,7 @@ def match_request_to_library(
     results: list[dict] = []
     req_tmdb = str(req.get("tmdb_id") or "").strip()
     req_imdb = str(req.get("imdb_id") or "").strip()
+    req_tvdb = str(req.get("tvdb_id") or "").strip()
     # Una petición de temporada o capítulo es de serie aunque la categoría no lo diga (documentales).
     req_tipo = tipo_de_peticion(req.get("category")) or (
         "series" if req.get("req_scope") in ("season", "episode") else None)
@@ -221,29 +228,34 @@ def match_request_to_library(
 
         itm_tmdb = str(item.get("tmdb_id") or "").strip()
         itm_imdb = str(item.get("imdb_id") or "").strip()
+        itm_tvdb = str(item.get("tvdb_id") or "").strip()
 
         if (req_tmdb and itm_tmdb and req_tmdb != itm_tmdb) or (req_imdb and itm_imdb and req_imdb != itm_imdb):
             # Con un id distinto es otro contenido aunque el otro id o el título coincidan (Dune de 1984 y la de 2021).
             continue
         if req_tmdb and itm_tmdb:
+            # TMDb numera aparte películas y series. Una petición de documental no dice de cuál habla, y su
+            # tmdb solo vale si el IMDb o el título lo confirman: el id 1399 es una película y es una serie.
+            if req_tipo is None and not (req_imdb and itm_imdb):
+                same_title, sim = _comparar_titulos(req_title_norm, req_title_compact, req_words, item)
+                if not (same_title or sim >= 0.75):
+                    continue
             id_match = True
             confidence = 1.0
         elif req_imdb and itm_imdb:
             id_match = True
             confidence = 0.95
+        elif req_tvdb and itm_tvdb and req_tvdb == itm_tvdb:
+            id_match = True
+            confidence = 0.95
         else:
-            itm_title_norm, itm_title_compact, itm_words = _titulos(item.get("title"))
-            if (
-                req_title_compact
-                and req_title_compact == itm_title_compact
-            ) or req_title_norm == itm_title_norm:
+            same_title, sim = _comparar_titulos(req_title_norm, req_title_compact, req_words, item)
+            if same_title:
                 title_match = True
                 confidence = 0.90
-            else:
-                sim = _word_overlap(req_words, itm_words)
-                if sim >= 0.75:
-                    title_match = True
-                    confidence = 0.55 + sim * 0.35
+            elif sim >= 0.75:
+                title_match = True
+                confidence = 0.55 + sim * 0.35
 
         if confidence > 0:
             results.append({

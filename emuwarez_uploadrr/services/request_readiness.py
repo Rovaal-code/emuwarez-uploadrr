@@ -294,7 +294,7 @@ def _biblioteca(conn: sqlite3.Connection) -> list[dict]:
     """Las filas candidatas. Recorre la tabla entera (con su raw_json): un refresco la lee una vez, no por petición."""
     return [dict(r) for r in conn.execute(
         """
-        SELECT id, item_type, title, year, tmdb_id, imdb_id, local_status,
+        SELECT id, item_type, title, year, tmdb_id, imdb_id, tvdb_id, local_status,
                resolution, source, nomenclature_status, prepared_path,
                file_exists, arr_queue_status, arr_history_status,
                arr_history_event_type, arr_history_error, season_number,

@@ -250,6 +250,7 @@ def test_run_queued_job_releases_concurrency_slot_on_early_failure(db_conn):
     assert _upload_concurrency_gate._active == 0
 
 
+@pytest.mark.usefixtures("ficheros_de_mentira")
 def test_run_queued_job_stage_is_nomenclature_before_nomenclature_starts(db_conn, tmp_path):
     """Regression: `upload_jobs.stage` (a separate, older display pipeline
     from progress_json — see upload_execution.compute_progress_phase(), read
@@ -976,6 +977,7 @@ def _correr_cola_hasta_el_inicio(db_conn, tmp_path, monkeypatch, *, enlace_duro=
     return visto
 
 
+@pytest.mark.usefixtures("ficheros_de_mentira")
 def test_uploadrr_recibe_el_enlace_de_la_carpeta_de_subidas(db_conn, tmp_path, monkeypatch):
     """_populate_ready escribía en prepared_path la ruta de la biblioteca justo
     después de que el paso anterior dejara ahí el enlace."""
@@ -985,6 +987,7 @@ def test_uploadrr_recibe_el_enlace_de_la_carpeta_de_subidas(db_conn, tmp_path, m
     assert visto["errores"] == []
 
 
+@pytest.mark.usefixtures("ficheros_de_mentira")
 def test_la_resincronizacion_no_cuela_un_fichero_fuera_de_allowed_roots(db_conn, tmp_path, monkeypatch):
     """La comprobación de integridad es anterior a la resincronización con Arr,
     que puede cambiar la ruta: el enlace se vuelve a comprobar."""
@@ -1004,6 +1007,7 @@ def test_la_resincronizacion_no_cuela_un_fichero_fuera_de_allowed_roots(db_conn,
     assert not (tmp_path / "uploads").exists() or not any((tmp_path / "uploads").iterdir())
 
 
+@pytest.mark.usefixtures("ficheros_de_mentira")
 def test_un_enlace_simbolico_en_la_carpeta_de_subidas_vale_para_subir(db_conn, tmp_path, monkeypatch):
     """Con /config y /data en montajes distintos no cabe un enlace duro."""
     import os

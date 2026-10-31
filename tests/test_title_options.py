@@ -135,6 +135,7 @@ def test_pack_title_and_filenames_agree_on_the_chosen_title(season):
         assert ep["proposed_filename"].startswith("The.Tudors.S02E0"), ep["proposed_filename"]
 
 
+@pytest.mark.usefixtures("ficheros_de_mentira")
 def test_single_item_fields_offer_both_titles(isolated_db, tmp_path, monkeypatch):
     """A movie/episode gets its options from build_editable_nomenclature_fields
     (the season path has its own, cheaper builder)."""

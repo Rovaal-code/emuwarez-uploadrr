@@ -79,6 +79,10 @@ def read_media_info_summary(path: str) -> Optional[dict]:
             return None
         info = media_probe.run_mediainfo_json(file_path)
         video = media_probe.first_track(info, "Video")
+        # Un MKV vacío o roto también da JSON, solo sin pistas: eso no es leerlo.
+        if not video:
+            logger.warning("MediaInfo no encuentra pista de vídeo en %s", path)
+            return None
 
         audio_langs: list[str] = []
         audio_codecs: list[str] = []
@@ -101,7 +105,7 @@ def read_media_info_summary(path: str) -> Optional[dict]:
                 subtitle_langs.append(lang)
 
         return {
-            "video_codec": media_probe.detect_video_codec(video, file_path) if video else None,
+            "video_codec": media_probe.detect_video_codec(video, file_path),
             "audio_codec": " / ".join(audio_codecs) or None,
             "audio_languages": " / ".join(audio_langs) or None,
             "subtitle_languages": " / ".join(subtitle_langs) or None,

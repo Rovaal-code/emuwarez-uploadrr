@@ -152,3 +152,23 @@ def test_la_resolucion_sale_del_fichero_y_no_de_la_etiqueta(conn, tmp_path):
     assert prop["resolution"] == "720p"
     assert " 720p WEB-DL " in prop["proposed_torrent_name"]
     assert not any("Resolución" in w for w in __import__("json").loads(prop["warnings_json"]))
+
+
+# --- Integridad: un MKV vacío o con basura no pasa ---------------------------
+
+@pytest.mark.parametrize("contenido", [b"", b"\x13\x37basura" * 600], ids=["vacio", "basura"])
+def test_un_mkv_roto_no_pasa_la_comprobacion_de_integridad(contenido, tmp_path):
+    from emuwarez_uploadrr.services.media_info_service import read_media_info_summary
+    from emuwarez_uploadrr.services.mkv_remux import read_tracks_json
+    f = tmp_path / "roto.mkv"
+    f.write_bytes(contenido)
+    assert read_media_info_summary(str(f)) is None
+    assert read_tracks_json(str(f))["ok"] is False
+
+
+def test_un_mkv_bueno_si_pasa(tmp_path):
+    from emuwarez_uploadrr.services.media_info_service import read_media_info_summary
+    from emuwarez_uploadrr.services.mkv_remux import read_tracks_json
+    ruta = str(hacer_mkv(tmp_path / "Peli.mkv", audios=({"lang": "es"},)))
+    assert read_media_info_summary(ruta)["audio_languages"] == "ESP"
+    assert read_tracks_json(ruta)["ok"] is True

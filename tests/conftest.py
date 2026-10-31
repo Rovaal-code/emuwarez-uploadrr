@@ -83,6 +83,18 @@ def _sin_manifiesto_de_version(monkeypatch):
     monkeypatch.setattr(version_info, "URL_MANIFIESTO", "http://127.0.0.1:9/latest.json")
 
 
+@pytest.fixture
+def ficheros_de_mentira(monkeypatch):
+    """Para las pruebas que crean un .mkv con bytes cualquiera. Con mkvmerge y
+    mediainfo instalados (la imagen de Docker), un fichero así ya no pasa la
+    comprobación de integridad; aquí se lee como en CI, sin mkvmerge y con un
+    MediaInfo que no encuentra nada."""
+    from emuwarez_uploadrr.services import media_info_service, mkv_remux
+    monkeypatch.setattr(mkv_remux, "check_mkvmerge_available", lambda: {"available": False, "path": None})
+    monkeypatch.setattr(media_info_service, "read_media_info_summary", lambda path: {
+        "video_codec": None, "audio_codec": None, "audio_languages": None, "subtitle_languages": None})
+
+
 @pytest.fixture(autouse=True)
 def isolated_db(tmp_path, monkeypatch):
     """Point CONFIG_DIR to a per-test temp dir so each test starts with a fresh DB."""

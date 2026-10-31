@@ -12,6 +12,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from emuwarez_uploadrr.database import init_db, connect
 from emuwarez_uploadrr.services import media_info_service
 from emuwarez_uploadrr.services.season_pack import (
@@ -412,6 +414,7 @@ def test_apply_pack_forwards_overrides_to_real_files(isolated_db, tmp_path):
     conn.close()
 
 
+@pytest.mark.usefixtures("ficheros_de_mentira")
 def test_get_season_episode_names_applies_overrides_to_every_episode(isolated_db, tmp_path):
     """Regression: editing Source/Proveedor/Tag in the season wizard changed
     the season pack's own title but NOT each episode's individual name in
@@ -435,6 +438,7 @@ def test_get_season_episode_names_applies_overrides_to_every_episode(isolated_db
     conn.close()
 
 
+@pytest.mark.usefixtures("ficheros_de_mentira")
 def test_get_season_episode_names_returns_one_entry_per_available_episode(isolated_db, tmp_path):
     conn = _open(isolated_db)
     _series_id, season_id = _seed_series_season(conn)

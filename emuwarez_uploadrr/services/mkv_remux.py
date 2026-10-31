@@ -387,6 +387,9 @@ def read_tracks_json(path: str) -> dict:
         data = json.loads(result.stdout)
     except (ValueError, TypeError):
         return {"ok": False, "error": (result.stderr or "Salida de mkvmerge -J no es JSON válido.").strip()}
+    # Un fichero vacío o con basura también da JSON (y sale con 0).
+    if (data.get("container") or {}).get("recognized") is False or not data.get("tracks"):
+        return {"ok": False, "error": "mkvmerge no reconoce el archivo o no tiene pistas (¿vacío o dañado?)."}
     return {"ok": True, "data": data}
 
 

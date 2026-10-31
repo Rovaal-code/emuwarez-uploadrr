@@ -1,0 +1,338 @@
+"""Cancelar, el timeout y el arranque de Uploadrr.
+
+Procesos reales contra tests/fixtures/fake_uploadrr_emu.py (nunca un Uploadrr
+de verdad), salvo donde se simula con Popen falso una carrera de milisegundos.
+"""
+from __future__ import annotations
+
+import json
+import os
+import signal
+import threading
+import time
+from unittest.mock import MagicMock, patch
+
+import psutil
+import pytest
+
+from emuwarez_uploadrr.database import connect, db_path, init_db
+from emuwarez_uploadrr.services import upload_execution as ue
+from emuwarez_uploadrr.services.upload_execution import (
+    CONFIRMATION_TOKEN,
+    cancel_upload_job,
+    get_upload_job,
+    start_upload_job,
+)
+
+
+@pytest.fixture
+def db_conn(isolated_db):
+    conn = connect(db_path())
+    init_db(conn)
+    yield conn
+    conn.close()
+
+
+def _settings(conn, uploadrr_dir, python_path, *, timeout=None):
+    ajustes = {
+        "uploadrr.path": str(uploadrr_dir),
+        "uploadrr.python_path": python_path,
+        "tmdb.api_key": "tmdb_secret_abc123",
+        "emu.api_key": "emu_secret_xyz789",
+    }
+    if timeout is not None:
+        ajustes["uploadrr.timeout"] = str(timeout)
+    for k, v in ajustes.items():
+        conn.execute("INSERT OR REPLACE INTO settings (key, value, is_secret) VALUES (?, ?, 0)", (k, v))
+    conn.commit()
+
+
+def _job(conn, prepared_path="/fake/movie.mkv", status="ready"):
+    cmd_json = json.dumps({"category": "movie", "tmdb_id": "1", "resolution": "1080p", "title": "Peli 2024"})
+    cur = conn.execute(
+        """INSERT INTO upload_jobs
+           (library_item_id, title, path, status, stage, source_path, prepared_path,
+            uploadrr_command_json, created_at, updated_at)
+           VALUES (NULL, 'Peli 2024', ?, ?, 'preflight', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""",
+        (prepared_path, status, prepared_path, prepared_path, cmd_json),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def _estado(conn, jid):
+    return conn.execute("SELECT status, stage, exit_code FROM upload_jobs WHERE id = ?", (jid,)).fetchone()
+
+
+def _esperar(condicion, plazo=10.0):
+    limite = time.monotonic() + plazo
+    while time.monotonic() < limite:
+        if condicion():
+            return True
+        time.sleep(0.05)
+    return False
+
+
+def _vivo(pid: int) -> bool:
+    try:
+        return psutil.Process(pid).status() != psutil.STATUS_ZOMBIE
+    except psutil.NoSuchProcess:
+        return False
+
+
+def _terminal(conn, jid, plazo=15.0):
+    assert _esperar(lambda: _estado(conn, jid)["status"] in ("completed", "failed", "cancelled"), plazo)
+    time.sleep(0.3)  # el finally del hilo (restaurar config, logs) va justo detrás
+    return _estado(conn, jid)
+
+
+@pytest.fixture
+def hijo_de_uploadrr(tmp_path, monkeypatch):
+    """El fake arranca un hijo que sigue vivo y con las tuberías abiertas, como mkbrr o ffmpeg."""
+    pidfile = tmp_path / "hijo.pid"
+    monkeypatch.setenv("FAKE_UPLOADRR_GRANDCHILD", str(pidfile))
+
+    def pid() -> int:
+        assert _esperar(pidfile.exists, 5), "el fake no llegó a arrancar su hijo"
+        assert _esperar(lambda: pidfile.read_text().strip() != "", 5)
+        return int(pidfile.read_text())
+
+    yield pid
+    if pidfile.exists() and pidfile.read_text().strip():
+        try:
+            os.kill(int(pidfile.read_text()), signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+
+
+def _lanzar(db_conn, tmp_path, fake_dir, python_path, **kw):
+    prepared = tmp_path / "prepared.mkv"
+    prepared.write_bytes(b"\x00" * 16)
+    _settings(db_conn, fake_dir, python_path, **kw)
+    jid = _job(db_conn, str(prepared))
+    assert start_upload_job(jid, dry_run=False, start=True, confirmation=CONFIRMATION_TOKEN, conn=db_conn)["action"] == "started"
+    return jid
+
+
+# --- F5: Cancelar y el timeout paran a Uploadrr Y a lo que lanzó -----------------------------
+
+def test_cancelar_mata_tambien_a_los_hijos_de_uploadrr(
+        db_conn, tmp_path, fake_uploadrr_emu_dir, fake_uploadrr_python_path, monkeypatch, hijo_de_uploadrr):
+    monkeypatch.setenv("FAKE_UPLOADRR_SLEEP", "30")
+    jid = _lanzar(db_conn, tmp_path, fake_uploadrr_emu_dir, fake_uploadrr_python_path)
+    hijo = hijo_de_uploadrr()
+    assert _esperar(lambda: get_upload_job(jid, conn=db_conn).get("process_id"), 5)
+    assert _vivo(hijo)
+
+    assert cancel_upload_job(jid, conn=db_conn)["ok"] is True
+
+    assert _terminal(db_conn, jid)["status"] == "cancelled"
+    assert _esperar(lambda: not _vivo(hijo), 5), "el hijo de Uploadrr siguió vivo tras Cancelar"
+
+
+def test_el_timeout_mata_el_grupo_y_deja_la_subida_en_timeout(
+        db_conn, tmp_path, fake_uploadrr_emu_dir, fake_uploadrr_python_path, monkeypatch, hijo_de_uploadrr):
+    monkeypatch.setenv("FAKE_UPLOADRR_SLEEP", "30")
+    jid = _lanzar(db_conn, tmp_path, fake_uploadrr_emu_dir, fake_uploadrr_python_path, timeout=2)
+    hijo = hijo_de_uploadrr()
+
+    fila = _terminal(db_conn, jid)
+
+    assert (fila["status"], fila["stage"]) == ("failed", "timeout")
+    assert _esperar(lambda: not _vivo(hijo), 5), "el hijo de Uploadrr siguió vivo tras el timeout"
+
+
+# --- EJEC-10: el resultado lo decide el código de salida, no el fin de las tuberías ----------
+
+def test_una_subida_buena_no_espera_a_las_tuberias_de_un_hijo(
+        db_conn, tmp_path, fake_uploadrr_emu_dir, fake_uploadrr_python_path, monkeypatch, hijo_de_uploadrr):
+    """Uploadrr sale con 0 pero su hijo hereda stdout: esperar a que cierre daba
+    la subida por fallida («timeout») cuando el torrent ya estaba en el tracker."""
+    monkeypatch.setattr(ue, "_GRACIA_LECTORES", 1)
+    jid = _lanzar(db_conn, tmp_path, fake_uploadrr_emu_dir, fake_uploadrr_python_path, timeout=30)
+    hijo = hijo_de_uploadrr()
+
+    fila = _terminal(db_conn, jid, plazo=20)
+
+    assert (fila["status"], fila["exit_code"]) == ("completed", 0)
+    assert _esperar(lambda: not _vivo(hijo), 5), "el hijo que retenía la tubería no se cortó"
+
+
+def test_ctrl_c_en_el_cli_detiene_a_uploadrr(db_conn, tmp_path, fake_uploadrr_emu_dir, fake_uploadrr_python_path):
+    """Uploadrr va en su propia sesión y ya no recibe el Ctrl-C del terminal: el
+    CLI (`start --wait`) tiene que pararlo él al salir."""
+    prepared = tmp_path / "prepared.mkv"
+    prepared.write_bytes(b"\x00" * 16)
+    _settings(db_conn, fake_uploadrr_emu_dir, fake_uploadrr_python_path)
+    jid = _job(db_conn, str(prepared))
+    proc = MagicMock(pid=4242)
+    ue._PROCESOS[jid] = proc
+
+    class HiloInterrumpido:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def start(self):
+            pass
+
+        def join(self):
+            raise KeyboardInterrupt
+
+    try:
+        with patch.object(ue.threading, "Thread", HiloInterrumpido), patch.object(ue, "_detener_proceso") as detener:
+            with pytest.raises(KeyboardInterrupt):
+                start_upload_job(jid, dry_run=False, start=True, confirmation=CONFIRMATION_TOKEN, conn=db_conn, wait=True)
+    finally:
+        ue._PROCESOS.pop(jid, None)
+
+    detener.assert_called_once_with(proc)
+
+
+# --- EJEC-3: Cancelar no se puede pisar ni lanzar la subida después ----------------------------
+
+def _cmd(tmp_path, **extra):
+    return {
+        "executable": "/usr/bin/python3", "args": [], "cwd": str(tmp_path),
+        "command_preview": "python3 upload.py", **extra,
+    }
+
+
+def _cancelar_en_la_base(jid):
+    conn = connect(db_path())
+    try:
+        conn.execute("UPDATE upload_jobs SET status = 'cancelled', stage = 'cancelled' WHERE id = ?", (jid,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_un_job_cancelado_antes_de_arrancar_no_lanza_uploadrr(db_conn, tmp_path):
+    jid = _job(db_conn, status="cancelled")
+
+    with patch("subprocess.Popen") as popen:
+        ue._run_uploadrr_subprocess(jid, _cmd(tmp_path), [])
+
+    popen.assert_not_called()
+    assert _estado(db_conn, jid)["status"] == "cancelled"
+
+
+def test_cancelar_mientras_se_stagea_el_config_no_lanza_uploadrr(db_conn, tmp_path, fake_uploadrr_emu_dir):
+    """Entre marcarlo «en marcha» y el Popen el job no tiene PID: un Cancelar ahí
+    solo escribía «cancelled», y el siguiente paso lo volvía a poner «running»."""
+    jid = _job(db_conn)
+    original = ue._acquire_staged_config
+
+    def cancelar_y_stagear(job_id, cwd):
+        _cancelar_en_la_base(job_id)
+        return original(job_id, cwd)
+
+    with patch.object(ue, "_acquire_staged_config", cancelar_y_stagear), patch("subprocess.Popen") as popen:
+        ue._run_uploadrr_subprocess(jid, _cmd(fake_uploadrr_emu_dir, runtime_type="uploadrr_emu"), [])
+
+    popen.assert_not_called()
+    assert _estado(db_conn, jid)["status"] == "cancelled"
+    assert ue._config_stage_refcount == {}
+    config = fake_uploadrr_emu_dir / "data" / "config.yaml"
+    assert config.read_bytes() == (fake_uploadrr_emu_dir / "data" / "config.yaml.bak").read_bytes()
+
+
+def test_cancelar_justo_despues_del_popen_detiene_el_proceso(db_conn, tmp_path):
+    jid = _job(db_conn)
+    proc = MagicMock(pid=4242, returncode=-15)
+    proc.wait.return_value = -15
+    proc.stdout = iter([])
+    proc.stderr = iter([])
+
+    def lanzar(*a, **k):
+        _cancelar_en_la_base(jid)  # Cancelar no ve ningún PID todavía
+        return proc
+
+    with patch("subprocess.Popen", side_effect=lanzar), patch.object(ue, "_detener_proceso") as detener:
+        ue._run_uploadrr_subprocess(jid, _cmd(tmp_path), [])
+
+    detener.assert_called_once_with(proc)
+    assert _estado(db_conn, jid)["status"] == "cancelled"
+
+
+def test_uploadrr_arranca_en_su_propio_grupo_de_procesos(db_conn, tmp_path):
+    jid = _job(db_conn)
+    proc = MagicMock(pid=4242, returncode=0)
+    proc.wait.return_value = 0
+    proc.stdout = iter([])
+    proc.stderr = iter([])
+
+    with patch("subprocess.Popen", return_value=proc) as popen:
+        ue._run_uploadrr_subprocess(jid, _cmd(tmp_path), [])
+
+    assert popen.call_args.kwargs["start_new_session"] is True
+
+
+# --- EJEC-6: un fallo en un paso previo no deja el job «en marcha» ni el config sin restaurar ---
+
+def test_un_fallo_al_escribir_el_primer_estado_deja_el_job_fallido(db_conn, tmp_path):
+    jid = _job(db_conn)
+
+    with patch.object(ue, "_avanzar_job", side_effect=RuntimeError("database is locked")), \
+            patch("subprocess.Popen") as popen:
+        ue._run_uploadrr_subprocess(jid, _cmd(tmp_path), [])
+
+    popen.assert_not_called()
+    assert _estado(db_conn, jid)["status"] == "failed"
+
+
+def test_si_falla_tras_stagear_el_config_se_restaura(db_conn, tmp_path, fake_uploadrr_emu_dir):
+    """El contador subía en _acquire_staged_config y la escritura de estado de
+    después iba fuera del try: si fallaba, nadie lo soltaba y el config.yaml con
+    las claves reales no se restauraba hasta reiniciar."""
+    jid = _job(db_conn)
+    real = ue._avanzar_job
+    llamadas = []
+
+    def falla_la_tercera(*a, **k):
+        llamadas.append(1)
+        if len(llamadas) == 3:
+            raise RuntimeError("database is locked")
+        return real(*a, **k)
+
+    original = (fake_uploadrr_emu_dir / "data" / "config.yaml").read_bytes()
+    with patch.object(ue, "_avanzar_job", falla_la_tercera), patch("subprocess.Popen") as popen:
+        ue._run_uploadrr_subprocess(jid, _cmd(fake_uploadrr_emu_dir, runtime_type="uploadrr_emu"), [])
+
+    popen.assert_not_called()
+    assert _estado(db_conn, jid)["status"] == "failed"
+    assert ue._config_stage_refcount == {}
+    assert (fake_uploadrr_emu_dir / "data" / "config.yaml").read_bytes() == original
+
+
+def test_el_turno_no_revienta_si_falla_la_base(db_conn):
+    """acquire corre antes del try de _run_queued_job: si lanzaba, el hilo moría
+    en silencio y el job se quedaba en cola."""
+    puerta = ue._UploadConcurrencyGate()
+
+    with patch.object(ue, "get_upload_max_concurrent", side_effect=RuntimeError("database is locked")):
+        puerta.acquire(1)
+
+    assert puerta._active == 1
+    puerta.release()
+
+
+def test_esperar_turno_no_muere_si_falla_el_log(db_conn):
+    puerta = ue._UploadConcurrencyGate()
+    admitido = threading.Event()
+
+    def espera():
+        puerta.acquire(2)
+        admitido.set()
+        puerta.release()
+
+    with patch.object(ue, "get_upload_max_concurrent", return_value=1), \
+            patch.object(ue, "append_upload_log", side_effect=RuntimeError("database is locked")):
+        puerta.acquire(1)
+        hilo = threading.Thread(target=espera, daemon=True)
+        hilo.start()
+        time.sleep(0.3)
+        assert not admitido.is_set()
+        puerta.release()
+        hilo.join(timeout=5)
+
+    assert admitido.is_set()

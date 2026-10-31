@@ -103,18 +103,23 @@ function escucharEventos(alRecibir: (aviso: Aviso) => void): () => void {
     const token = getToken()
     if (!token) { programarReintento(); return }
 
-    control = new AbortController()
+    const miControl = new AbortController()
+    control = miControl
     vigilar()
     try {
       const respuesta = await fetch('/api/eventos', {
         headers: { Authorization: `Bearer ${token}`, Accept: 'text/event-stream' },
-        signal: control.signal,
+        signal: miControl.signal,
       })
       if (respuesta.status === 401) {
-        dejarDeVigilar()
         // Si la sesión caducó de verdad, esto limpia el token y manda al login
-        // (client.ts); si no, el 401 fue de mentira y se reintenta.
-        try { await api.get('/auth/me') } catch (err) { if (esSesionCaducada(err)) return }
+        // (client.ts); si no, el 401 fue de mentira y se reintenta. La vigilancia
+        // sigue armada: si /auth/me se queda colgada, aborta la petición y se reintenta.
+        try {
+          await api.get('/auth/me', { signal: miControl.signal })
+        } catch (err) {
+          if (esSesionCaducada(err)) { dejarDeVigilar(); return }
+        }
         programarReintento()
         return
       }

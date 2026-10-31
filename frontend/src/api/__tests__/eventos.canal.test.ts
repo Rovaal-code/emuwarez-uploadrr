@@ -114,6 +114,25 @@ describe('un 401 en el canal', () => {
     baja()
   })
 
+  it('si /auth/me se queda colgada, la vigilancia la corta y se reintenta', async () => {
+    let n = 0
+    const { f, eventos, baja } = await conectar((url, init) => {
+      if (url === '/api/auth/me') {
+        return new Promise<Response>((_resolver, rechazar) => {
+          init?.signal?.addEventListener('abort', () => rechazar(new DOMException('abort', 'AbortError')))
+        })
+      }
+      return Promise.resolve(++n === 1 ? new Response(null, { status: 401 }) : canalAbierto(init?.signal))
+    })
+    expect(eventosPedidos(f)).toBe(1)
+
+    await vi.advanceTimersByTimeAsync(eventos.VIGILANCIA_MS)
+    await vi.advanceTimersByTimeAsync(eventos.ESPERAS_MS[0])
+    expect(eventosPedidos(f)).toBe(2)
+    expect(quitados).not.toHaveBeenCalled()
+    baja()
+  })
+
   it('si /auth/me tampoco contesta bien, se reintenta', async () => {
     let n = 0
     const { f, eventos, baja } = await conectar(async (url, init) => {

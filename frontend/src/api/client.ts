@@ -80,10 +80,11 @@ interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   body?: unknown
   skipAuth?: boolean
+  signal?: AbortSignal
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, skipAuth = false } = options
+  const { method = 'GET', body, skipAuth = false, signal } = options
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -116,6 +117,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal,
     })
   } catch (err) {
     throw new ApiClientError(

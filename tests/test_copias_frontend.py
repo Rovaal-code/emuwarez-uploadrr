@@ -34,6 +34,20 @@ def _cadenas_del_set(fuente: str, nombre: str) -> set[str]:
     return set(re.findall(r"'([^']+)'", m.group(1)))
 
 
+def test_los_estados_de_preparacion_de_peticiones_tienen_etiqueta_en_castellano():
+    """La ficha de la petición enseña el estado de preparación con la etiqueta de utils/status.ts: un estado nuevo
+    del backend sin etiqueta saldría en inglés y con el nombre interno."""
+    from emuwarez_uploadrr.services import request_readiness as rr
+
+    fuente = _texto("utils/status.ts")
+    bloque = lambda nombre: re.search(rf"{nombre}[^=]*=\s*\{{(.*?)\n\}}", fuente, re.S).group(1)
+    estados = set(re.findall(r"^\s*(\w+):", bloque("READINESS_STATUS_LABELS"), re.M))
+    acciones = set(re.findall(r"^\s*(\w+):", bloque("READINESS_ACTION_LABELS"), re.M))
+    assert estados == set(rr._STATUS_RANK), f"\nfrontend: {sorted(estados)}\nbackend:  {sorted(rr._STATUS_RANK)}"
+    usadas = set(re.findall(r'"action": "(\w+)"', pathlib.Path(rr.__file__).read_text(encoding="utf-8")))
+    assert usadas <= acciones, f"acciones sin etiqueta: {sorted(usadas - acciones)}"
+
+
 def test_la_regla_del_pack_coincide():
     """utils/libraryItem.ts predice lo que hará season_pack. Es la última copia
     viva del hallazgo 2.1: el backend ya genera su SQL y su predicado desde una

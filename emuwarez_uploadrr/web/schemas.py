@@ -711,6 +711,8 @@ class RequestItemResponse(BaseModel):
     votes: Optional[int] = None
     author: Optional[str] = None
     is_mine: bool = False
+    # Quién la tiene reclamada en eMuwarez: "ti", "otro" o "desconocido"; None si no está reclamada.
+    reclamada_por: Optional[str] = None
     req_scope: Optional[str] = None
     req_season: Optional[int] = None
     req_episode: Optional[int] = None

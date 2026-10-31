@@ -11,6 +11,7 @@ Priority order for ranking:
 from __future__ import annotations
 
 import functools
+import json
 import re
 import unicodedata
 from typing import Optional
@@ -140,6 +141,23 @@ def compare_source(requested: str | None, local: str | None) -> Optional[bool]:
     return loc_rank >= req_rank
 
 
+def _peor(valores, rango) -> Optional[str]:
+    valores = list(valores)
+    if not valores or any(rango(v) is None for v in valores):
+        return None
+    return min(valores, key=rango)
+
+
+def peor_resolucion(valores) -> Optional[str]:
+    """La resolución más baja: si esa cumple lo pedido, cumplen todas. None si no hay valores o alguno no se reconoce."""
+    return _peor(valores, parse_resolution)
+
+
+def peor_source(valores) -> Optional[str]:
+    """Lo mismo que peor_resolucion con la fuente (remux > bluray > web-dl > ...)."""
+    return _peor(valores, lambda v: _SOURCE_RANK.get(parse_source(v)))
+
+
 def _word_overlap(w1: frozenset[str], w2: frozenset[str]) -> float:
     if not w1 or not w2:
         return 0.0
@@ -170,6 +188,12 @@ def tipo_de_peticion(category: str | None) -> Optional[str]:
     return None
 
 
+def _comparar_titulos(req_norm: str, req_compact: str, req_words: frozenset, item: dict) -> tuple[bool, float]:
+    """(¿mismo título?, parecido por palabras) entre el de la petición y el de una fila de la biblioteca."""
+    norm, compact, words = _titulos(item.get("title"))
+    return bool((req_compact and req_compact == compact) or req_norm == norm), _word_overlap(req_words, words)
+
+
 def match_request_to_library(
     req: dict,
     library: list[dict],
@@ -183,6 +207,7 @@ def match_request_to_library(
     results: list[dict] = []
     req_tmdb = str(req.get("tmdb_id") or "").strip()
     req_imdb = str(req.get("imdb_id") or "").strip()
+    req_tvdb = str(req.get("tvdb_id") or "").strip()
     # Una petición de temporada o capítulo es de serie aunque la categoría no lo diga (documentales).
     req_tipo = tipo_de_peticion(req.get("category")) or (
         "series" if req.get("req_scope") in ("season", "episode") else None)
@@ -204,29 +229,35 @@ def match_request_to_library(
 
         itm_tmdb = str(item.get("tmdb_id") or "").strip()
         itm_imdb = str(item.get("imdb_id") or "").strip()
+        itm_tvdb = str(item.get("tvdb_id") or "").strip()
 
         if (req_tmdb and itm_tmdb and req_tmdb != itm_tmdb) or (req_imdb and itm_imdb and req_imdb != itm_imdb):
             # Con un id distinto es otro contenido aunque el otro id o el título coincidan (Dune de 1984 y la de 2021).
             continue
         if req_tmdb and itm_tmdb:
+            # TMDb numera aparte películas y series. Una petición de documental no dice de cuál habla, y su
+            # tmdb solo vale si el IMDb o el título lo confirman: el id 1399 es una película y es una serie.
+            if req_tipo is None and not (req_imdb and itm_imdb):
+                same_title, sim = _comparar_titulos(req_title_norm, req_title_compact, req_words, item)
+                if not (same_title or sim >= 0.75):
+                    continue
             id_match = True
             confidence = 1.0
         elif req_imdb and itm_imdb:
             id_match = True
             confidence = 0.95
-        else:
-            itm_title_norm, itm_title_compact, itm_words = _titulos(item.get("title"))
-            if (
-                req_title_compact
-                and req_title_compact == itm_title_compact
-            ) or req_title_norm == itm_title_norm:
+        elif req_tvdb and itm_tvdb and req_tvdb == itm_tvdb:
+            id_match = True
+            confidence = 0.95
+        elif not (req_tvdb and itm_tvdb):
+            # Con dos tvdb distintos son otras series aunque se llamen igual (Shameless UK y US): no hay cruce por título.
+            same_title, sim = _comparar_titulos(req_title_norm, req_title_compact, req_words, item)
+            if same_title:
                 title_match = True
                 confidence = 0.90
-            else:
-                sim = _word_overlap(req_words, itm_words)
-                if sim >= 0.75:
-                    title_match = True
-                    confidence = 0.55 + sim * 0.35
+            elif sim >= 0.75:
+                title_match = True
+                confidence = 0.55 + sim * 0.35
 
         if confidence > 0:
             results.append({
@@ -269,6 +300,35 @@ def emu_override_status(emu_status: str | None) -> Optional[str]:
     return None
 
 
+def reclamante(req: dict) -> Optional[str]:
+    """Quién tiene reclamada la petición según eMuwarez (`claimed_by` del raw_json), en minúsculas. None si no se
+    sabe: la fila no lo trae (falta cuando es nulo) o es un id numérico, que no se puede comparar con un usuario."""
+    try:
+        raw = json.loads(req.get("raw_json") or "{}")
+    except (TypeError, ValueError):
+        return None
+    quien = raw.get("claimed_by") if isinstance(raw, dict) else None
+    if isinstance(quien, dict):
+        quien = quien.get("username") or quien.get("name")
+    return quien.strip().lower() if isinstance(quien, str) and quien.strip() else None
+
+
+def reclamada_por(req: dict, mi_usuario: str | None) -> Optional[str]:
+    """«ti», «otro» o «desconocido» si la petición está reclamada en eMuwarez; None si no lo está. Sin saber quién la
+    reclamó (o sin saber quién eres) cuenta como desconocida."""
+    if emu_override_status(req.get("emu_status")) != "Reclamado":
+        return None
+    quien = reclamante(req)
+    if quien is None or not (mi_usuario or "").strip():
+        return "desconocido"
+    return "ti" if quien == mi_usuario.strip().lower() else "otro"
+
+
+def estado_emu_de(req: dict, mi_usuario: str | None) -> Optional[str]:
+    """emu_override_status de esta petición para ti: la que has reclamado tú no te impide subirla."""
+    return None if reclamada_por(req, mi_usuario) == "ti" else emu_override_status(req.get("emu_status"))
+
+
 def classify_request_match(
     req: dict,
     item: dict,
@@ -276,6 +336,7 @@ def classify_request_match(
     id_match: bool = False,
     title_match: bool = False,
     base_confidence: float = 0.90,
+    mi_usuario: str | None = None,
 ) -> dict:
     """
     Given a matched (request, library_item) pair, classify compatibility.
@@ -320,7 +381,7 @@ def classify_request_match(
     # eMuwarez request states that override the library-compatibility verdict:
     # if the request is claimed/pending/filled on the tracker, that status wins
     # (you can't act on it regardless of what your library holds).
-    emu_state = emu_override_status(req.get("emu_status"))
+    emu_state = estado_emu_de(req, mi_usuario)
     if emu_state:
         return {
             "status": emu_state,
@@ -394,5 +455,6 @@ __all__ = [
     "parse_resolution", "parse_source",
     "compare_resolution", "compare_source",
     "match_request_to_library", "classify_request_match",
-    "rank_request_matches", "tipo_de_peticion", "TIPO_DE_FILA",
+    "rank_request_matches", "tipo_de_peticion", "TIPO_DE_FILA", "peor_resolucion", "peor_source",
+    "reclamante", "reclamada_por", "estado_emu_de",
 ]

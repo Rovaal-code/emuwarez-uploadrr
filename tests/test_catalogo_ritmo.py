@@ -32,7 +32,7 @@ def test_otros_errores_no_se_reintentan(monkeypatch):
 
     def falso(method, url):
         llamadas.append(url)
-        raise IntegrationError("HTTP 500", status=500)
+        raise IntegrationError("HTTP 503", status=503)
 
     monkeypatch.setattr(emu, "request_json", falso)
     monkeypatch.setattr(emu.time, "sleep", lambda s: None)

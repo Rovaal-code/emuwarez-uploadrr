@@ -206,3 +206,34 @@ def test_un_fallo_del_progreso_no_corta_la_descarga(pedidas):
         raise RuntimeError("barra rota")
 
     assert [t["id"] for t in emu.emu_fetch_all_torrents("KEY", min_interval=0, progress=roto)] == [1]
+
+
+def test_el_catalogo_se_pide_ordenado_por_fecha_de_creacion(pedidas):
+    """PET-5: sin orden explícito UNIT3D usa bumped_at y un torrent resubido cortaba el recorrido incremental."""
+    pedidas["respuestas"] = [_pagina([3, 2, 1])]
+    emu.emu_fetch_all_torrents("KEY", min_interval=0)
+    consulta = _partes(pedidas["urls"][0])[2]
+    assert (consulta["sortField"], consulta["sortDirection"]) == ("created_at", "desc")
+
+
+def test_si_el_tracker_rechaza_el_orden_se_sigue_sin_el(pedidas):
+    """El orden no se ha podido probar contra el tracker real: si lo rechaza, la sincronización no puede quedarse sin ir."""
+    pedidas["respuestas"] = [IntegrationError("HTTP 422", status=422), _pagina([3, 2, 1])]
+    assert [t["id"] for t in emu.emu_fetch_all_torrents("KEY", min_interval=0)] == [3, 2, 1]
+    con, sin = (_partes(u)[2] for u in pedidas["urls"])
+    assert "sortField" in con and "sortField" not in sin
+
+
+def test_un_fallo_que_no_es_del_orden_no_se_reintenta_sin_el(pedidas):
+    pedidas["respuestas"] = [IntegrationError("HTTP 401", status=401)]
+    with pytest.raises(IntegrationError):
+        emu.emu_fetch_all_torrents("KEY", min_interval=0)
+    assert len(pedidas["urls"]) == 1
+
+
+def test_el_recorrido_incremental_no_sigue_sin_orden(pedidas):
+    """Sin orden, un torrent antiguo resubido saldría el primero y cortaría el recorrido: el incremental falla."""
+    pedidas["respuestas"] = [IntegrationError("HTTP 422", status=422), _pagina([9, 8, 7])]
+    with pytest.raises(IntegrationError):
+        emu.emu_fetch_all_torrents("KEY", min_interval=0, stop_after_id=5)
+    assert len(pedidas["urls"]) == 1

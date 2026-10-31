@@ -275,7 +275,7 @@ def test_no_match():
 
 
 def test_tmdb_beats_title():
-    req = _make_req(tmdb_id="111", title="Generic Title")
+    req = _make_req(tmdb_id="111", title="Generic Title", category="Películas")
     library = [
         _make_item(id=10, tmdb_id="111", title="Different Name"),
         _make_item(id=20, tmdb_id=None, title="Generic Title"),
@@ -495,3 +495,129 @@ def test_availability_only_downgrades_compatible():
                "local_status": "Faltante"}
     status = classify_request_match(req, missing, id_match=True)["status"]
     assert status != "No disponible" and status != "Compatible"  # a real mismatch
+
+
+# ---------------------------------------------------------------------------
+# peor_resolucion / peor_source: la temporada se juzga por su peor capítulo
+# ---------------------------------------------------------------------------
+
+def test_peor_resolucion_y_fuente():
+    from emuwarez_uploadrr.services.compatibility import peor_resolucion, peor_source
+    assert peor_resolucion(["2160p", "1080p", "1080p"]) == "1080p"
+    assert peor_source(["BluRay", "WEB-DL", "WEB-DL"]) == "WEB-DL"
+    assert peor_source(["Remux", "WEBRip", "BluRay"]) == "WEBRip"
+
+
+def test_peor_valor_sin_datos_o_con_uno_desconocido_es_none():
+    from emuwarez_uploadrr.services.compatibility import peor_resolucion, peor_source
+    assert peor_resolucion([]) is None and peor_source([]) is None
+    assert peor_resolucion(["1080p", None]) is None
+    assert peor_source(["WEB-DL", "algo raro"]) is None
+
+
+# ---------------------------------------------------------------------------
+# PET-10: documentales (no dicen si son película o serie) y el tvdb
+# ---------------------------------------------------------------------------
+
+def test_un_documental_no_se_casa_solo_por_un_tmdb_que_es_de_otra_cosa():
+    """El id 1399 es una película y una serie distintas: sin saber de cuál habla la petición, el id solo no basta."""
+    req = _make_req(title="Planeta Azul", tmdb_id="1399", category="Documentales")
+    library = [
+        _make_item(id=1, item_type="movie", title="Otra Pelicula", tmdb_id="1399"),
+        _make_item(id=2, item_type="series", title="Otra Serie", tmdb_id="1399"),
+    ]
+    assert match_request_to_library(req, library) == []
+
+
+def test_un_documental_se_casa_por_tmdb_si_el_titulo_o_el_imdb_lo_confirman():
+    req = _make_req(title="Planeta Azul", tmdb_id="1399", category="Documentales")
+    por_titulo = match_request_to_library(req, [_make_item(item_type="series", title="Planeta Azul", tmdb_id="1399")])
+    assert por_titulo[0]["id_match"] is True and por_titulo[0]["confidence"] == 1.0
+    req = _make_req(title="Planeta Azul", tmdb_id="1399", imdb_id="tt0001", category="Documentales")
+    por_imdb = match_request_to_library(req, [_make_item(title="The Blue Planet", tmdb_id="1399", imdb_id="tt0001")])
+    assert por_imdb[0]["id_match"] is True
+
+
+def test_una_pelicula_o_serie_con_categoria_se_casa_por_tmdb_sin_mirar_el_titulo():
+    req = _make_req(title="Dune", tmdb_id="438631", category="Películas")
+    assert len(match_request_to_library(req, [_make_item(item_type="movie", title="Dune: Parte Uno", tmdb_id="438631")])) == 1
+
+
+def test_una_peticion_solo_con_tvdb_se_casa_por_tvdb():
+    req = _make_req(title="Titulo en otro idioma", category="Series")
+    req["tvdb_id"] = "81189"
+    library = [
+        _make_item(id=1, item_type="series", title="Breaking Bad", tvdb_id="81189"),
+        _make_item(id=2, item_type="series", title="Otra", tvdb_id="999"),
+    ]
+    res = match_request_to_library(req, library)
+    assert [r["item"]["id"] for r in res] == [1]
+    assert res[0]["id_match"] is True and res[0]["confidence"] == 0.95
+
+
+def test_dos_tvdb_distintos_no_se_casan_por_titulo():
+    """Shameless (UK) y Shameless (US) se llaman igual: con un tvdb distinto son otras series."""
+    req = _make_req(title="Shameless", category="Series")
+    req["tvdb_id"] = "79744"
+    library = [
+        _make_item(id=1, item_type="series", title="Shameless", tvdb_id="161511"),
+        _make_item(id=2, item_type="series", title="Shameless", tvdb_id="79744"),
+        _make_item(id=3, item_type="series", title="Shameless"),
+    ]
+    assert [r["item"]["id"] for r in match_request_to_library(req, library)] == [2, 3]
+
+
+def test_un_tvdb_distinto_no_descarta_lo_que_confirma_el_tmdb():
+    """El tvdb del tracker puede ir por detrás del de Sonarr: si el tmdb coincide, la serie es esa."""
+    req = _make_req(title="Serie", tmdb_id="55", category="Series")
+    req["tvdb_id"] = "1"
+    assert len(match_request_to_library(req, [_make_item(item_type="series", title="Serie", tmdb_id="55", tvdb_id="2")])) == 1
+
+
+# ---------------------------------------------------------------------------
+# Reclamadas: por ti, por otro o sin saber por quién
+# ---------------------------------------------------------------------------
+
+def _reclamada(claimed_by="__sin__", **extra):
+    import json as _json
+    raw = {"id": 1, "status": "claimed"}
+    if claimed_by != "__sin__":
+        raw["claimed_by"] = claimed_by
+    return _make_req(emu_status="claimed", raw_json=_json.dumps(raw), **extra)
+
+
+def test_reclamante_lee_el_claimed_by_del_raw_json():
+    from emuwarez_uploadrr.services.compatibility import reclamante
+    assert reclamante(_reclamada("Gabriel")) == "gabriel"
+    assert reclamante(_reclamada({"username": " Gabriel "})) == "gabriel"
+    assert reclamante(_reclamada({"name": "Ana"})) == "ana"
+
+
+@pytest.mark.parametrize("claimed_by", ["__sin__", None, "", 77, {"id": 77}])
+def test_reclamante_desconocido_si_no_viene_o_es_un_id(claimed_by):
+    from emuwarez_uploadrr.services.compatibility import reclamante
+    assert reclamante(_reclamada(claimed_by)) is None
+    assert reclamante(_make_req(raw_json="no es json")) is None
+    assert reclamante(_make_req()) is None
+
+
+def test_reclamada_por_ti_por_otro_o_desconocido():
+    from emuwarez_uploadrr.services.compatibility import reclamada_por
+    assert reclamada_por(_reclamada("GABRIEL"), "gabriel") == "ti"
+    assert reclamada_por(_reclamada("Ana"), "Gabriel") == "otro"
+    assert reclamada_por(_reclamada(), "Gabriel") == "desconocido"
+    assert reclamada_por(_reclamada("Gabriel"), None) == "desconocido"
+    assert reclamada_por(_reclamada("Gabriel"), "  ") == "desconocido"
+    assert reclamada_por(_make_req(emu_status="unfilled"), "Gabriel") is None
+    assert reclamada_por(_make_req(emu_status="filled"), "Gabriel") is None
+
+
+def test_la_reclamada_por_ti_se_clasifica_por_lo_que_trae_y_las_demas_son_reclamado():
+    item = _make_item(resolution="1080p", source="WEB-DL")
+    pide = {"requested_resolution": "1080p", "requested_source": "WEB-DL"}
+    por_ti = classify_request_match(_reclamada("Gabriel", **pide), item, mi_usuario="gabriel")
+    por_otro = classify_request_match(_reclamada("Ana", **pide), item, mi_usuario="gabriel")
+    sin_saber = classify_request_match(_reclamada(**pide), item, mi_usuario="gabriel")
+    sin_perfil = classify_request_match(_reclamada("Gabriel", **pide), item)
+    assert [r["status"] for r in (por_ti, por_otro, sin_saber, sin_perfil)] == [
+        "Compatible", "Reclamado", "Reclamado", "Reclamado"]

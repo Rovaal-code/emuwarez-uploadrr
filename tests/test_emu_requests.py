@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import sqlite3
+
 import pytest
 
 from emuwarez_uploadrr.integrations import emu
@@ -111,6 +113,25 @@ def test_temporada_y_capitulo_dan_el_alcance():
     assert (item.req_season, item.req_episode) == (2, 5)
     # Un capítulo 0 no es un capítulo: es la temporada entera.
     assert normalize_request({**FILA, "season_number": 2, "episode_number": 0}).req_scope == "season"
+
+
+def test_temporada_0_sin_capitulo_es_la_serie_entera():
+    """UNIT3D guarda 0 para «sin temporada»: leerlo como Especiales mandaba toda petición de serie a la T0."""
+    item = normalize_request({**FILA, "season_number": 0})
+    assert (item.req_scope, item.req_season, item.req_episode) == (None, None, None)
+    item = normalize_request({**FILA, "season_number": 0, "episode_number": 0})
+    assert (item.req_scope, item.req_season) == (None, None)
+
+
+@pytest.mark.parametrize("nombre", ["Los Simpson - Especiales", "Doctor Who Specials", "Sherlock (specials)"])
+def test_temporada_0_con_especiales_en_el_nombre_si_son_los_especiales(nombre):
+    item = normalize_request({**FILA, "name": nombre, "season_number": 0})
+    assert (item.req_scope, item.req_season) == ("season", 0)
+
+
+def test_un_capitulo_de_la_temporada_0_sigue_siendo_un_capitulo():
+    item = normalize_request({**FILA, "season_number": 0, "episode_number": 3})
+    assert (item.req_scope, item.req_season, item.req_episode) == ("episode", 0, 3)
 
 
 def test_una_fila_sin_casi_nada_no_falla():
@@ -392,6 +413,267 @@ def test_una_temporada_que_no_tienes_no_sale_compatible(db_conn):
     assert db_conn.execute("SELECT status FROM request_matches").fetchone()["status"] == "No disponible"
 
 
+def test_una_peticion_de_serie_con_temporada_0_se_cruza_con_la_serie_y_no_con_los_especiales(db_conn):
+    """F3: la serie completa tiene su fila de Especiales y la petición de toda la serie (season_number 0) caía allí."""
+    from emuwarez_uploadrr.services.requests import match_all_requests, upsert_request
+    serie = db_conn.execute("INSERT INTO library_items(item_type,title,year,local_status,tmdb_id) "
+                            "VALUES ('series','Serie',2019,'Disponible','77')").lastrowid
+    ids = {}
+    for n in (0, 1):
+        ids[n] = db_conn.execute(
+            "INSERT INTO library_items(item_type,title,local_status,parent_id,season_number,tmdb_id) "
+            "VALUES ('season','T','Disponible',?,?,'77')", (serie, n)).lastrowid
+        db_conn.execute("INSERT INTO library_items(item_type,title,local_status,parent_id,season_number,"
+                        "episode_number,resolution,source) VALUES ('episode','E','Disponible',?,?,1,'1080p','WEB-DL')",
+                        (ids[n], n))
+    db_conn.commit()
+    upsert_request(db_conn, emu.normalize_request(
+        {**FILA, "id": 77, "name": "Serie", "category_id": 2, "tmdb": 77, "status": "unfilled", "resolution_id": 3,
+         "type_id": 4, "season_number": 0}))
+
+    match_all_requests(db_conn)
+
+    fila = db_conn.execute("SELECT library_item_id, status FROM request_matches").fetchone()
+    assert (fila["library_item_id"], fila["status"]) == (serie, "Compatible")
+    estado = lambda i: db_conn.execute("SELECT request_status FROM library_items WHERE id = ?", (i,)).fetchone()[0]
+    assert (estado(serie), estado(ids[0]), estado(ids[1])) == ("Compatible", "Sin petición", "Sin petición")
+
+
+def _temporada_con_capitulos(conn, capitulos, tmdb="88"):
+    """Serie con su Temporada 1 y un capítulo por cada (local_status, resolución, fuente)."""
+    serie = conn.execute("INSERT INTO library_items(item_type,title,year,local_status,tmdb_id) "
+                         f"VALUES ('series','Serie',2019,'Disponible','{tmdb}')").lastrowid
+    # Como la sincronización de la biblioteca: la fila de la temporada solo lleva lo que comparten los capítulos que hay.
+    res = {r for estado, r, _ in capitulos if estado == "Disponible"}
+    temporada = conn.execute(
+        "INSERT INTO library_items(item_type,title,local_status,parent_id,season_number,tmdb_id,resolution,video_codec,"
+        f"has_spanish_ok) VALUES ('season','Serie - Temporada 1','Disponible',?,1,'{tmdb}',?,'x264',1)",
+        (serie, res.pop() if len(res) == 1 else None)).lastrowid
+    for n, (estado, res, fuente) in enumerate(capitulos, start=1):
+        conn.execute("INSERT INTO library_items(item_type,title,local_status,parent_id,season_number,episode_number,"
+                     "resolution,source) VALUES ('episode','E',?,?,1,?,?,?)", (estado, temporada, n, res, fuente))
+    conn.commit()
+    return serie, temporada
+
+
+def _estado_del_casamiento(conn, **pide):
+    from emuwarez_uploadrr.services.requests import match_all_requests, upsert_request
+    from emuwarez_uploadrr.models import RequestItem
+    conn.execute("DELETE FROM request_items")
+    upsert_request(conn, RequestItem(id=None, emu_id="t1", title="Serie", category="Series", tmdb_id="88",
+                                     req_scope="season", req_season=1, **pide))
+    match_all_requests(conn)
+    return conn.execute("SELECT status FROM request_matches").fetchone()["status"]
+
+
+def test_una_temporada_con_un_capitulo_que_falta_cumple_lo_pedido_con_los_que_hay(db_conn):
+    """PET-3: el capítulo sin archivo (resolución NULL) hacía «No compatible» a toda la temporada."""
+    _temporada_con_capitulos(db_conn, [("Disponible", "1080p", "WEB-DL"), ("Disponible", "1080p", "WEB-DL"),
+                                       ("Faltante", None, None)])
+    assert _estado_del_casamiento(db_conn, requested_resolution="1080p", requested_source="WEB-DL") == "Compatible"
+
+
+def test_una_temporada_con_fuentes_mezcladas_se_juzga_por_la_peor(db_conn):
+    """PET-3: «igual o mejor» con capítulos WEB-DL y BluRay: vale para WEB-DL, no para BluRay."""
+    _temporada_con_capitulos(db_conn, [("Disponible", "1080p", "WEB-DL"), ("Disponible", "1080p", "BluRay")])
+    assert _estado_del_casamiento(db_conn, requested_resolution="1080p", requested_source="WEB-DL") == "Compatible"
+    assert _estado_del_casamiento(db_conn, requested_resolution="1080p", requested_source="Encode") == "Parcial"
+
+
+def test_una_temporada_con_un_capitulo_de_menos_resolucion_no_cumple(db_conn):
+    _temporada_con_capitulos(db_conn, [("Disponible", "2160p", "WEB-DL"), ("Disponible", "1080p", "WEB-DL")])
+    assert _estado_del_casamiento(db_conn, requested_resolution="2160p", requested_source="WEB-DL") == "Parcial"
+
+
+def test_el_casamiento_guardado_baja_a_parcial_si_el_pack_no_se_puede_armar(db_conn):
+    """PET-9: solo el detalle bajaba a Parcial la temporada sin pack posible; la lista, el Panel y los avisos
+    leían el «Compatible» guardado y prometían lo que la ficha desmentía."""
+    from emuwarez_uploadrr.services.requests import dashboard_request_counters, match_all_requests, upsert_request
+    from emuwarez_uploadrr.models import RequestItem
+    serie = db_conn.execute("INSERT INTO library_items(item_type,title,local_status,tmdb_id) "
+                            "VALUES ('series','Serie','Disponible','88')").lastrowid
+    # Sus capítulos no coinciden en resolución: la fila de la temporada no lleva ninguna.
+    temporada = db_conn.execute("INSERT INTO library_items(item_type,title,local_status,parent_id,season_number,tmdb_id) "
+                                "VALUES ('season','T1','Disponible',?,1,'88')", (serie,)).lastrowid
+    for n, res in enumerate(("1080p", "720p"), start=1):
+        db_conn.execute("INSERT INTO library_items(item_type,title,local_status,parent_id,season_number,episode_number,"
+                        "resolution,source) VALUES ('episode','E','Disponible',?,1,?,?,'WEB-DL')", (temporada, n, res))
+    db_conn.commit()
+    upsert_request(db_conn, RequestItem(id=None, emu_id="p1", title="Serie", category="Series", tmdb_id="88",
+                                        req_scope="season", req_season=1))
+
+    match_all_requests(db_conn)
+
+    fila = db_conn.execute("SELECT status, reasons FROM request_matches").fetchone()
+    assert fila["status"] == "Parcial" and "no puede subirse como pack" in fila["reasons"]
+    assert db_conn.execute("SELECT request_status FROM library_items WHERE id = ?", (temporada,)).fetchone()[0] == "Parcial"
+    contadores = dashboard_request_counters(db_conn)
+    assert (contadores["requests_compatible"], contadores["requests_partial"]) == (0, 1)
+    assert db_conn.execute("SELECT COUNT(*) FROM notifications").fetchone()[0] == 0
+
+
+def test_mis_peticiones_no_distinguen_mayusculas_como_la_ficha(db_conn):
+    """PET-9: el Panel comparaba el autor con `=` y la ficha sin mayúsculas: «Gabriel» y «gabriel» eran dos."""
+    from emuwarez_uploadrr.services.requests import dashboard_request_counters
+    from emuwarez_uploadrr.services.settings import set_setting
+    set_setting(db_conn, "emu.username", "Gabriel")
+    db_conn.execute("INSERT INTO request_items(emu_id,title,author,author_visible) VALUES ('m1','A',' gabriel ',1)")
+    db_conn.execute("INSERT INTO request_items(emu_id,title,author,author_visible) VALUES ('m2','B','otro',1)")
+    db_conn.commit()
+    assert dashboard_request_counters(db_conn)["requests_mine"] == 1
+
+
+def _dos_peliculas_y_sus_peticiones(conn):
+    """Dos películas con su petición cada una, ya cruzadas una vez: lo que hay que conservar si un recálculo falla."""
+    from emuwarez_uploadrr.services.requests import match_all_requests, upsert_request
+    from emuwarez_uploadrr.models import RequestItem
+    for n in (1, 2):
+        conn.execute("INSERT INTO library_items(item_type,title,local_status,tmdb_id,resolution,source) "
+                     "VALUES ('movie',?, 'Disponible', ?, '1080p', 'WEB-DL')", (f"Peli {n}", str(n)))
+        upsert_request(conn, RequestItem(id=None, emu_id=f"p{n}", title=f"Peli {n}", category="Películas",
+                                         tmdb_id=str(n)))
+    conn.commit()
+    match_all_requests(conn)
+
+
+def _estado_guardado(conn):
+    return (
+        [tuple(r) for r in conn.execute("SELECT library_item_id, request_item_id, status FROM request_matches ORDER BY 1")],
+        [tuple(r) for r in conn.execute("SELECT id, request_status, request_id FROM library_items ORDER BY id")],
+    )
+
+
+def test_si_el_recalculo_falla_a_mitad_no_se_pierde_lo_que_habia(db_conn, monkeypatch):
+    """PET-12: se borraban los cruces y el estado de la biblioteca antes de recalcular; un fallo a mitad los dejaba vacíos."""
+    from emuwarez_uploadrr.services import requests as reqs
+    _dos_peliculas_y_sus_peticiones(db_conn)
+    antes = _estado_guardado(db_conn)
+    assert len(antes[0]) == 2
+
+    original = reqs._mejor_candidato
+    llamadas = []
+
+    def falla_en_la_segunda(*a, **kw):
+        llamadas.append(1)
+        if len(llamadas) == 2:
+            raise RuntimeError("fallo a mitad")
+        return original(*a, **kw)
+
+    monkeypatch.setattr(reqs, "_mejor_candidato", falla_en_la_segunda)
+    with pytest.raises(RuntimeError):
+        reqs.match_all_requests(db_conn)
+    assert _estado_guardado(db_conn) == antes
+
+
+def test_si_falla_al_escribir_se_deshace_todo(db_conn, monkeypatch):
+    from emuwarez_uploadrr.services import requests as reqs
+    _dos_peliculas_y_sus_peticiones(db_conn)
+    antes = _estado_guardado(db_conn)
+    monkeypatch.setattr(reqs, "_INSERTAR_CASAMIENTO", "INSERT INTO tabla_que_no_existe VALUES (?)")
+    with pytest.raises(sqlite3.OperationalError):
+        reqs.match_all_requests(db_conn)
+    assert _estado_guardado(db_conn) == antes
+    assert not db_conn.in_transaction
+
+
+def test_el_recalculo_confirma_una_sola_vez(db_conn, monkeypatch):
+    """PET-12: había un COMMIT por petición (update_request_status) y otro al limpiar: los demás lectores veían a medias."""
+    from emuwarez_uploadrr.services import requests as reqs
+    _dos_peliculas_y_sus_peticiones(db_conn)
+    monkeypatch.setattr(reqs, "_notify_new_compatible_matches", lambda *a: None)
+    vistas = []
+    db_conn.set_trace_callback(vistas.append)
+    reqs.match_all_requests(db_conn)
+    db_conn.set_trace_callback(None)
+    assert vistas.count("COMMIT") == 1
+
+
+def test_la_biblioteca_para_cruzar_no_trae_el_raw_json(db_conn):
+    """PET-12: SELECT * leía el raw_json de cada fila no capítulo en cada recálculo."""
+    from emuwarez_uploadrr.services.request_readiness import _biblioteca
+    db_conn.execute("INSERT INTO library_items(item_type,title,local_status,raw_json) VALUES ('movie','X','Disponible','{}')")
+    db_conn.commit()
+    assert "raw_json" not in _biblioteca(db_conn)[0]
+
+
+def _peticiones_reclamadas(conn):
+    """Una película y tres peticiones suyas, todas «claimed»: por Gabriel, por Ana y sin saber por quién."""
+    import json
+    from emuwarez_uploadrr.database import set_json_state
+    conn.execute("INSERT INTO library_items(item_type,title,local_status,tmdb_id,resolution,source) "
+                 "VALUES ('movie','Peli','Disponible','1','1080p','WEB-DL')")
+    ids = {}
+    for nombre, quien in (("ti", "gabriel"), ("otro", "Ana"), ("desconocido", None)):
+        raw = {"id": nombre, "status": "claimed", **({"claimed_by": quien} if quien else {})}
+        ids[nombre] = conn.execute(
+            "INSERT INTO request_items(emu_id,title,category,tmdb_id,emu_status,raw_json) "
+            "VALUES (?, 'Peli', 'Películas', '1', 'claimed', ?)", (nombre, json.dumps(raw))).lastrowid
+    set_json_state(conn, "emu.perfil", {"perfil": {"username": "Gabriel"}})
+    conn.commit()
+    return ids
+
+
+def test_el_cruce_guardado_no_marca_reclamado_lo_que_reclamaste_tu(db_conn):
+    """Lista, Panel y avisos leen el cruce guardado: la reclamada por ti sale Compatible y cuenta; las demás, Reclamado."""
+    from emuwarez_uploadrr.services.requests import dashboard_request_counters, match_all_requests
+    ids = _peticiones_reclamadas(db_conn)
+    match_all_requests(db_conn)
+    estados = {r["request_item_id"]: r["status"] for r in db_conn.execute("SELECT * FROM request_matches")}
+    assert estados == {ids["ti"]: "Compatible", ids["otro"]: "Reclamado", ids["desconocido"]: "Reclamado"}
+    assert dashboard_request_counters(db_conn)["requests_compatible"] == 1
+    # Y avisa de la que sí se puede subir, no de las otras.
+    assert db_conn.execute("SELECT COUNT(*) FROM notifications").fetchone()[0] == 1
+
+
+def test_la_lista_y_la_ficha_dicen_quien_la_reclamo(db_conn):
+    from emuwarez_uploadrr.services.requests import get_request_detail, list_request_items, match_all_requests
+    ids = _peticiones_reclamadas(db_conn)
+    match_all_requests(db_conn)
+    lista = {i["id"]: i for i in list_request_items(db_conn)["items"]}
+    assert {k: lista[v]["reclamada_por"] for k, v in ids.items()} == {"ti": "ti", "otro": "otro", "desconocido": "desconocido"}
+    assert get_request_detail(db_conn, ids["ti"])["reclamada_por"] == "ti"
+    assert get_request_detail(db_conn, ids["ti"])["match"]["status"] == "Compatible"
+    assert get_request_detail(db_conn, ids["otro"])["match"]["status"] == "Reclamado"
+
+
+def test_una_reclamada_por_ti_sin_cruce_no_sale_como_reclamado_en_el_filtro(db_conn):
+    """Sin ningún cruce el estado sale del emu_status; la tuya cae en «Sin coincidencia», como una abierta."""
+    from emuwarez_uploadrr.services.requests import list_request_items
+    ids = _peticiones_reclamadas(db_conn)
+    db_conn.execute("DELETE FROM library_items")
+    db_conn.commit()
+    titulos = lambda estado: sorted(i["emu_id"] for i in list_request_items(db_conn, status=[estado])["items"])
+    assert titulos("Reclamado") == ["desconocido", "otro"]
+    assert titulos("Sin coincidencia") == ["ti"]
+    lista = {i["emu_id"]: i for i in list_request_items(db_conn)["items"]}
+    assert lista["ti"]["compatibility_status"] == "Sin coincidencia"
+    assert lista["otro"]["compatibility_status"] == lista["desconocido"]["compatibility_status"] == "Reclamado"
+    assert ids  # las tres existen
+
+
+def test_el_filtro_entiende_el_claimed_by_con_name_igual_que_la_lista(db_conn):
+    """reclamante() acepta {"username"} y {"name"}; el SQL del filtro también, o la fila no salía donde la lista la pinta."""
+    import json
+    from emuwarez_uploadrr.database import set_json_state
+    from emuwarez_uploadrr.services.requests import list_request_items
+    set_json_state(db_conn, "emu.perfil", {"perfil": {"username": "Gabriel"}})
+    for nombre, quien in (("con-name", {"name": "gabriel"}), ("con-username", {"username": "Gabriel"}),
+                          ("de-otro", {"name": "Ana"})):
+        db_conn.execute("INSERT INTO request_items(emu_id,title,category,tmdb_id,emu_status,raw_json) "
+                        "VALUES (?, 'Sin cruce', 'Películas', '1', 'claimed', ?)",
+                        (nombre, json.dumps({"status": "claimed", "claimed_by": quien})))
+    db_conn.commit()
+    titulos = lambda estado: sorted(i["emu_id"] for i in list_request_items(db_conn, status=[estado])["items"])
+    assert titulos("Sin coincidencia") == ["con-name", "con-username"]
+    assert titulos("Reclamado") == ["de-otro"]
+
+
+def test_el_endpoint_de_la_lista_trae_reclamada_por(client, auth_headers, db_conn):
+    ids = _peticiones_reclamadas(db_conn)
+    items = {i["id"]: i for i in client.get("/api/requests", headers=auth_headers).json()["items"]}
+    assert {k: items[v]["reclamada_por"] for k, v in ids.items()} == {"ti": "ti", "otro": "otro", "desconocido": "desconocido"}
+
+
 def test_recalcular_borra_el_casamiento_que_ya_no_vale(db_conn):
     """El «Compatible» de antes (Dune de 1984 para la petición de la de 2021) se quedaba en request_matches y la
     lista lo seguía enseñando."""
@@ -445,8 +727,8 @@ def test_la_temporada_pedida_compite_con_la_serie(db_conn):
     db_conn.execute("INSERT INTO library_items(item_type,title,local_status,tmdb_id) "
                     "VALUES ('series','Serie','Disponible','77')")
     temporada = db_conn.execute(
-        "INSERT INTO library_items(item_type,title,local_status,tmdb_id,season_number,resolution,source) "
-        "VALUES ('season','Serie - Temporada 2','Disponible','77',2,'1080p','WEB-DL')").lastrowid
+        "INSERT INTO library_items(item_type,title,local_status,tmdb_id,season_number,resolution,source,video_codec,"
+        "has_spanish_ok) VALUES ('season','Serie - Temporada 2','Disponible','77',2,'1080p','WEB-DL','x264',1)").lastrowid
     db_conn.commit()
     upsert_request(db_conn, RequestItem(id=None, emu_id="t2", title="Serie", category="Series", tmdb_id="77",
                                         req_scope="season", req_season=2))

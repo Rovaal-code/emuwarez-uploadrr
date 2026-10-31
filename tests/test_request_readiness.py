@@ -88,32 +88,47 @@ def _insert_library(conn, **kwargs) -> int:
 # score_request_candidate
 # ---------------------------------------------------------------------------
 
-def test_score_tmdb_match(db_conn):
-    from emuwarez_uploadrr.services.request_readiness import score_request_candidate
-    req = {"tmdb_id": "12345", "imdb_id": None, "title": "Movie A",
-           "category": "Pelicula", "requested_resolution": None, "requested_source": None}
+def _par(**pide):
+    req = {"tmdb_id": "12345", "imdb_id": None, "title": "Movie A", "category": "Pelicula",
+           "requested_resolution": None, "requested_source": None, "emu_status": "unfilled", **pide}
     lib = {"id": 1, "tmdb_id": "12345", "imdb_id": None, "title": "Movie A",
            "item_type": "movie", "year": 2023, "local_status": "Disponible",
-           "file_exists": 1, "nomenclature_status": "N/A", "prepared_path": None,
-           "resolution": None, "source": None,
+           "file_exists": 1, "nomenclature_status": "Correcta", "prepared_path": "/data/prepared/a.mkv",
+           "resolution": "1080p", "source": "WEB-DL",
            "arr_queue_status": None, "arr_history_status": None,
            "arr_history_event_type": None, "arr_history_error": None}
-    result = score_request_candidate(req, lib)
-    assert result["compatibility_score"] >= 40
-    assert result["compatibility_status"] == "Compatible"
+    return req, lib
 
 
-def test_score_no_match_low(db_conn):
+def test_score_usa_la_clasificacion_de_la_lista_de_peticiones(db_conn):
     from emuwarez_uploadrr.services.request_readiness import score_request_candidate
-    req = {"tmdb_id": "999", "imdb_id": None, "title": "Unrelated Film",
-           "category": None, "requested_resolution": None, "requested_source": None}
-    lib = {"id": 2, "tmdb_id": "888", "imdb_id": None, "title": "Completely Different",
-           "item_type": "series", "year": 2000, "local_status": "Faltante",
-           "file_exists": 0, "nomenclature_status": "N/A", "prepared_path": None,
-           "resolution": None, "source": None,
-           "arr_queue_status": None, "arr_history_status": None,
-           "arr_history_event_type": None, "arr_history_error": None}
+    req, lib = _par(requested_resolution="1080p", requested_source="WEB-DL")
     result = score_request_candidate(req, lib)
+    assert result["compatibility_status"] == "Compatible"
+    assert result["readiness_status"] == "ready_to_upload"
+
+
+def test_una_peticion_abierta_no_se_guarda_como_llena(db_conn):
+    """PET-2: «unfilled» contiene «filled» y toda petición abierta salía «Llena»."""
+    from emuwarez_uploadrr.services.request_readiness import score_request_candidate
+    req, lib = _par(emu_status="unfilled")
+    assert score_request_candidate(req, lib)["compatibility_status"] != "Llena"
+
+
+def test_el_ano_de_la_peticion_no_vuelve_compatible_una_copia_que_no_cumple(db_conn):
+    """PET-2: el año de creación de la petición (2026) se comparaba con el de la película y sumaba 10."""
+    from emuwarez_uploadrr.services.request_readiness import score_request_candidate
+    req, lib = _par(requested_resolution="2160p", created_at="2023-05-01")
+    result = score_request_candidate(req, lib)
+    assert result["compatibility_status"] == "Parcial"
+    assert result["readiness_status"] == "spec_mismatch"
+
+
+def test_score_de_una_copia_que_no_es_nada_de_lo_pedido(db_conn):
+    from emuwarez_uploadrr.services.request_readiness import score_request_candidate
+    req, lib = _par(requested_resolution="2160p", requested_source="Remux")
+    result = score_request_candidate(req, lib)
+    assert result["compatibility_status"] == "No compatible"
     assert result["compatibility_score"] < 40
 
 
@@ -358,6 +373,227 @@ def test_el_id_gana_a_un_titulo_que_esta_listo(db_conn):
                     prepared_path="/data/prepared/otra.mkv")
     req_id = _insert_request(db_conn, emu_id="emu-tc", title="Titulo Comun", tmdb_id="tc1")
     assert evaluate_request_readiness(req_id, db_conn)["best_library_item_id"] == buena
+
+
+# ---------------------------------------------------------------------------
+# PET-1: «lista para subir» exige lo que la petición pide y que siga abierta
+# ---------------------------------------------------------------------------
+
+def _dune_lista(db_conn, **copia):
+    return _insert_library(db_conn, title="Dune", tmdb_id="d1", nomenclature_status="Correcta",
+                           prepared_path="/data/prepared/dune.mkv", **copia)
+
+
+def test_una_copia_de_menos_resolucion_y_fuente_no_esta_lista_para_la_peticion(db_conn):
+    from emuwarez_uploadrr.services.request_readiness import evaluate_request_readiness
+    _dune_lista(db_conn, resolution="1080p", source="WEB-DL")
+    req_id = _insert_request(db_conn, emu_id="emu-d", title="Dune", tmdb_id="d1",
+                             requested_resolution="2160p", requested_source="Remux", emu_status="unfilled")
+    result = evaluate_request_readiness(req_id, db_conn)
+    assert (result["status"], result["recommended_action"]) == ("spec_mismatch", "review_arr")
+    assert "resolución" in result["blockers"][0] and "fuente" in result["blockers"][0]
+
+
+def test_una_copia_igual_o_mejor_que_lo_pedido_si_esta_lista(db_conn):
+    from emuwarez_uploadrr.services.request_readiness import evaluate_request_readiness
+    _dune_lista(db_conn, resolution="2160p", source="Remux")
+    req_id = _insert_request(db_conn, emu_id="emu-d", title="Dune", tmdb_id="d1",
+                             requested_resolution="1080p", requested_source="WEB-DL", emu_status="unfilled")
+    assert evaluate_request_readiness(req_id, db_conn)["status"] == "ready_to_upload"
+
+
+@pytest.mark.parametrize("emu_status, esperado", [
+    ("claimed", "claimed_unknown"), ("Reclamado", "claimed_unknown"), ("pending", "pending_approval"),
+    ("filled", "filled"),
+])
+def test_una_peticion_reclamada_pendiente_o_llena_no_esta_lista(db_conn, emu_status, esperado):
+    from emuwarez_uploadrr.services.request_readiness import evaluate_request_readiness
+    _dune_lista(db_conn, resolution="2160p", source="Remux")
+    req_id = _insert_request(db_conn, emu_id="emu-d", title="Dune", tmdb_id="d1",
+                             requested_resolution="2160p", requested_source="Remux", emu_status=emu_status)
+    result = evaluate_request_readiness(req_id, db_conn)
+    assert (result["status"], result["recommended_action"]) == (esperado, "none")
+    assert "eMuwarez" in result["blockers"][0]
+
+
+def _reclamada_por(conn, req_id, claimed_by="__sin__", perfil="Gabriel"):
+    """La petición queda `claimed` en eMuwarez; `perfil` es el usuario del perfil guardado (None = sin perfil)."""
+    import json
+    from emuwarez_uploadrr.database import set_json_state
+    raw = {"id": 1, "status": "claimed"}
+    if claimed_by != "__sin__":
+        raw["claimed_by"] = claimed_by
+    conn.execute("UPDATE request_items SET raw_json = ? WHERE id = ?", (json.dumps(raw), req_id))
+    if perfil:
+        set_json_state(conn, "emu.perfil", {"perfil": {"username": perfil}})
+    conn.commit()
+
+
+def _dune_reclamada(db_conn, claimed_by="__sin__", perfil="Gabriel"):
+    from emuwarez_uploadrr.services.request_readiness import evaluate_request_readiness
+    _dune_lista(db_conn, resolution="2160p", source="Remux")
+    req_id = _insert_request(db_conn, emu_id="emu-d", title="Dune", tmdb_id="d1",
+                             requested_resolution="2160p", requested_source="Remux", emu_status="claimed")
+    _reclamada_por(db_conn, req_id, claimed_by, perfil)
+    return evaluate_request_readiness(req_id, db_conn)
+
+
+@pytest.mark.parametrize("claimed_by", ["gabriel", "GABRIEL", {"username": "Gabriel"}])
+def test_una_peticion_reclamada_por_ti_si_esta_lista(db_conn, claimed_by):
+    """Gabriel: la que reclamó él mismo no le impide subirla, aunque la copia cumpla igual que en las de otro."""
+    result = _dune_reclamada(db_conn, claimed_by)
+    assert (result["status"], result["recommended_action"]) == ("ready_to_upload", "upload")
+    assert "petición reclamada por ti" in result["reasons"]
+
+
+def test_una_peticion_reclamada_por_otro_bloquea(db_conn):
+    result = _dune_reclamada(db_conn, "Ana")
+    assert (result["status"], result["recommended_action"]) == ("claimed", "none")
+    assert "otro usuario" in result["blockers"][0]
+
+
+@pytest.mark.parametrize("claimed_by, perfil", [("__sin__", "Gabriel"), (77, "Gabriel"), ("Gabriel", None)])
+def test_una_reclamada_sin_saber_por_quien_se_trata_como_de_otro(db_conn, claimed_by, perfil):
+    """Sin claimed_by, con un id numérico, o sin perfil guardado con el que compararlo."""
+    result = _dune_reclamada(db_conn, claimed_by, perfil)
+    assert result["status"] == "claimed_unknown"
+    assert "no se sabe por quién" in result["blockers"][0]
+
+
+def test_sin_perfil_guardado_vale_el_usuario_de_ajustes(db_conn):
+    from emuwarez_uploadrr.services.settings import set_setting
+    set_setting(db_conn, "emu.username", "gabriel")
+    db_conn.commit()
+    assert _dune_reclamada(db_conn, "Gabriel", perfil=None)["status"] == "ready_to_upload"
+
+
+def test_los_candidatos_guardados_dicen_lo_mismo_que_la_lista(db_conn):
+    from emuwarez_uploadrr.services.request_readiness import evaluate_request_readiness, get_candidates_for_request
+    _dune_lista(db_conn, resolution="1080p", source="WEB-DL")
+    req_id = _insert_request(db_conn, emu_id="emu-d", title="Dune", tmdb_id="d1",
+                             requested_resolution="1080p", requested_source="WEB-DL", emu_status="unfilled")
+    evaluate_request_readiness(req_id, db_conn)
+    candidato = get_candidates_for_request(req_id, db_conn)[0]
+    assert (candidato["compatibility_status"], candidato["readiness_status"]) == ("Compatible", "ready_to_upload")
+
+
+def test_una_temporada_con_fuentes_mezcladas_esta_lista_si_la_peor_cumple(db_conn):
+    """PET-3 en la preparación: la fuente pedida se compara con la peor de los capítulos, no con una uniforme."""
+    from emuwarez_uploadrr.services.request_readiness import evaluate_request_readiness
+    serie = _insert_library(db_conn, item_type="series", title="Serie", tmdb_id="s1")
+    temporada = _insert_library(db_conn, item_type="season", title="Serie - T1", tmdb_id="s1",
+                                nomenclature_status="Correcta", prepared_path="/data/prepared/serie_t1",
+                                resolution="1080p")
+    db_conn.execute("UPDATE library_items SET parent_id = ?, season_number = 1 WHERE id = ?", (serie, temporada))
+    for n, fuente in enumerate(("WEB-DL", "BluRay"), start=1):
+        e = _insert_library(db_conn, item_type="episode", title=f"E{n}", tmdb_id="s1", resolution="1080p", source=fuente)
+        db_conn.execute("UPDATE library_items SET parent_id = ?, season_number = 1, episode_number = ? WHERE id = ?",
+                        (temporada, n, e))
+    req_id = _insert_request(db_conn, emu_id="emu-s", title="Serie", category="Series", tmdb_id="s1",
+                             requested_resolution="1080p", requested_source="WEB-DL")
+    db_conn.execute("UPDATE request_items SET req_scope = 'season', req_season = 1 WHERE id = ?", (req_id,))
+    db_conn.commit()
+    assert evaluate_request_readiness(req_id, db_conn)["status"] == "ready_to_upload"
+
+
+# ---------------------------------------------------------------------------
+# PET-8: «ya existe en eMuwarez» según lo que la petición pide
+# ---------------------------------------------------------------------------
+
+def _torrent(conn, tmdb, resolution, source):
+    conn.execute(
+        "INSERT INTO emu_catalog (torrent_id, category, tmdb_id, resolution, source, name) "
+        "VALUES (?, 'Películas', ?, ?, ?, 'Dune 2021')", (f"{resolution}{source}", tmdb, resolution, source))
+    conn.commit()
+
+
+def test_si_eMuwarez_no_tiene_la_variante_pedida_no_es_un_duplicado(db_conn):
+    """PET-8: eMuwarez tiene el 2160p Remux, la petición pide 1080p Remux y la copia es 1080p Remux: sin aportes
+    contra la mejor copia, se ocultaba como «ya existe» justo lo que la petición pide."""
+    from emuwarez_uploadrr.services.request_readiness import evaluate_request_readiness
+    lib_id = _dune_lista(db_conn, resolution="1080p", source="Remux")
+    _en_emuwarez(db_conn, lib_id)
+    _torrent(db_conn, "d1", "2160p", "Remux")
+    req_id = _insert_request(db_conn, emu_id="emu-d", title="Dune", tmdb_id="d1",
+                             requested_resolution="1080p", requested_source="Remux", emu_status="unfilled")
+    assert evaluate_request_readiness(req_id, db_conn)["status"] == "ready_to_upload"
+
+
+def test_si_eMuwarez_ya_tiene_la_variante_pedida_sigue_siendo_un_duplicado(db_conn):
+    from emuwarez_uploadrr.services.request_readiness import evaluate_request_readiness
+    lib_id = _dune_lista(db_conn, resolution="1080p", source="Remux")
+    _en_emuwarez(db_conn, lib_id)
+    _torrent(db_conn, "d1", "1080p", "Remux")
+    req_id = _insert_request(db_conn, emu_id="emu-d", title="Dune", tmdb_id="d1",
+                             requested_resolution="1080p", requested_source="Remux", emu_status="unfilled")
+    assert evaluate_request_readiness(req_id, db_conn)["status"] == "already_exists"
+
+
+def _serie_con_dos_temporadas_en_emuwarez(conn, resolucion_t2):
+    serie = _insert_library(conn, item_type="series", title="Show", tmdb_id="sx")
+    conn.execute("UPDATE library_items SET tvdb_id = '9' WHERE id = ?", (serie,))
+    _en_emuwarez(conn, serie)  # emu_in_catalog = 1: todas sus temporadas están en eMuwarez, en alguna variante
+    for n, res in ((1, "1080p"), (2, resolucion_t2)):
+        t = _insert_library(conn, item_type="season", title=f"Show T{n}", tmdb_id="sx")
+        conn.execute("UPDATE library_items SET parent_id = ?, season_number = ? WHERE id = ?", (serie, n, t))
+        conn.execute(
+            "INSERT INTO emu_catalog (torrent_id, category, tvdb_id, resolution, source, name) "
+            "VALUES (?, 'Series', '9', ?, 'WEB-DL', ?)", (f"s{n}", res, f"Show (2020) S0{n} {res}"))
+    conn.commit()
+    return _insert_request(conn, emu_id="emu-show", title="Show", category="Series", tmdb_id="sx",
+                           requested_resolution="1080p", requested_source="WEB-DL", emu_status="unfilled")
+
+
+def test_una_serie_entera_no_es_un_duplicado_si_a_una_temporada_le_falta_la_variante(db_conn):
+    """PET-8 en series: la T1 está en 1080p WEB-DL pero la T2 solo en 720p: la petición de la serie en 1080p
+    WEB-DL no está cubierta."""
+    from emuwarez_uploadrr.services.request_readiness import evaluate_request_readiness
+    req_id = _serie_con_dos_temporadas_en_emuwarez(db_conn, "720p")
+    assert evaluate_request_readiness(req_id, db_conn)["status"] != "already_exists"
+
+
+def test_una_serie_entera_es_un_duplicado_si_cada_temporada_tiene_la_variante(db_conn):
+    from emuwarez_uploadrr.services.request_readiness import evaluate_request_readiness
+    req_id = _serie_con_dos_temporadas_en_emuwarez(db_conn, "1080p")
+    assert evaluate_request_readiness(req_id, db_conn)["status"] == "already_exists"
+
+
+def test_un_capitulo_suelto_en_emuwarez_no_hace_duplicada_la_temporada_pedida(db_conn):
+    """eMuwarez solo tiene el capítulo 1 en la variante pedida: la petición de la temporada entera sigue abierta."""
+    from emuwarez_uploadrr.services.request_readiness import evaluate_request_readiness
+    serie = _insert_library(db_conn, item_type="series", title="Show", tmdb_id="sx")
+    db_conn.execute("UPDATE library_items SET tvdb_id = '9' WHERE id = ?", (serie,))
+    temporada = _insert_library(db_conn, item_type="season", title="Show T1", tmdb_id="sx", resolution="1080p",
+                                nomenclature_status="Correcta", prepared_path="/data/prepared/show_t1")
+    db_conn.execute("UPDATE library_items SET parent_id = ?, season_number = 1 WHERE id = ?", (serie, temporada))
+    _en_emuwarez(db_conn, temporada)
+    episodio = _insert_library(db_conn, item_type="episode", title="E1", tmdb_id="sx", resolution="1080p",
+                               source="WEB-DL")
+    db_conn.execute("UPDATE library_items SET parent_id = ?, season_number = 1, episode_number = 1 WHERE id = ?",
+                    (temporada, episodio))
+    db_conn.execute(
+        "INSERT INTO emu_catalog (torrent_id, category, tvdb_id, resolution, source, name) "
+        "VALUES ('e1', 'Series', '9', '1080p', 'WEB-DL', 'Show (2020) S01E01 1080p')")
+    req_id = _insert_request(db_conn, emu_id="emu-show", title="Show", category="Series", tmdb_id="sx",
+                             requested_resolution="1080p", requested_source="WEB-DL", emu_status="unfilled")
+    db_conn.execute("UPDATE request_items SET req_scope = 'season', req_season = 1 WHERE id = ?", (req_id,))
+    db_conn.commit()
+    assert evaluate_request_readiness(req_id, db_conn)["status"] == "ready_to_upload"
+
+
+# ---------------------------------------------------------------------------
+# list_request_readiness ordena con el mismo ranking que select_best_candidate
+# ---------------------------------------------------------------------------
+
+def test_la_lista_ordena_con_el_ranking_de_estados(db_conn):
+    from emuwarez_uploadrr.services.request_readiness import _STATUS_RANK, list_request_readiness
+    for i, estado in enumerate(["uploaded", "claimed", "no_local_match", "partially_available", "ready_to_upload"]):
+        rid = _insert_request(db_conn, emu_id=f"emu-o{i}", title=f"Orden {i}")
+        db_conn.execute("INSERT INTO request_readiness (request_item_id, status, last_evaluated_at, created_at, "
+                        "updated_at) VALUES (?, ?, '2026-01-01', '2026-01-01', '2026-01-01')", (rid, estado))
+    db_conn.commit()
+    orden = [r["status"] for r in list_request_readiness(db_conn)]
+    assert orden == sorted(orden, key=_STATUS_RANK.get)
 
 
 # ---------------------------------------------------------------------------

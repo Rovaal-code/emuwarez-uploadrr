@@ -467,3 +467,132 @@ def test_el_config_de_ejemplo_del_fork_se_sigue_leyendo():
         "torrent_client": "qbit", "enable_search": True, "qbit_url": "http://127.0.0.1",
         "qbit_port": "8080", "content_layout": "Original", "VERIFY_WEBUI_CERTIFICATE": False,
     }
+
+
+# --- EJEC-4: el config de verdad es el .bak, no lo que dejó una subida muerta -
+
+def _config_falso(tmp_path):
+    config = tmp_path / "Uploadrr" / "data" / "config.yaml"
+    config.parent.mkdir(parents=True)
+    config.write_text("DEFAULT:\n  tmdb: ''\nSCREENS:\n  per_episode: 3\n", encoding="utf-8")
+    return config
+
+
+def _poner_ajuste(clave, valor):
+    from emuwarez_uploadrr.database import connect, init_db
+    from emuwarez_uploadrr.services.settings import set_setting
+    conn = connect()
+    init_db(conn)
+    set_setting(conn, clave, valor)
+    conn.commit()
+    conn.close()
+
+
+def _per_episode(config):
+    from emuwarez_uploadrr.services.uploadrr_yaml import get_block_key
+    return get_block_key(read_config_lines(config), "SCREENS", "per_episode")
+
+
+def test_tras_un_corte_la_siguiente_subida_parte_del_backup(tmp_path, monkeypatch):
+    """Una subida muerta dejaba el config stageado (per_episode: 0), y la
+    siguiente, que quería todos los capítulos, «dejaba el valor del config»: el suyo."""
+    from emuwarez_uploadrr.services import upload_execution as ue
+    config = _config_falso(tmp_path)
+    monkeypatch.setattr(ue, "append_upload_log", lambda *a, **k: None)
+    cwd = str(tmp_path / "Uploadrr")
+
+    ue._stage_uploadrr_config(1, cwd)
+    assert _per_episode(config) == "0"  # y la subida muere sin restaurar
+
+    _poner_ajuste("emu.per_episode_screens", "true")
+    ue._stage_uploadrr_config(2, cwd)
+
+    assert _per_episode(config) == "3"
+
+
+def test_restore_stale_config_solo_restaura_si_difiere(tmp_path):
+    from emuwarez_uploadrr.services.uploadrr_config_staging import restore_stale_config
+    config = _config_falso(tmp_path)
+    assert restore_stale_config(config) is False  # sin .bak
+
+    backup_config(config)
+    assert restore_stale_config(config) is False  # igual que el .bak
+
+    config.write_text("stageado", encoding="utf-8")
+    assert restore_stale_config(config) is True
+    assert config.read_bytes() == config.with_suffix(".yaml.bak").read_bytes()
+
+
+def test_escribir_y_restaurar_no_dejan_ficheros_temporales(tmp_path):
+    config = _config_falso(tmp_path)
+    write_staged_config(config, ["DEFAULT:", "  tmdb: 'x'"])
+    restore_config_from_backup(config)
+
+    assert sorted(p.name for p in config.parent.iterdir()) == ["config.yaml", "config.yaml.bak"]
+
+
+def test_al_arrancar_se_restaura_el_config_que_dejo_una_subida_muerta(tmp_path):
+    from emuwarez_uploadrr.services import upload_execution as ue
+    config = _config_falso(tmp_path)
+    backup_config(config)
+    original = config.read_bytes()
+    config.write_text("DEFAULT:\n  tmdb: 'CLAVE_REAL'\n", encoding="utf-8")
+    _poner_ajuste("uploadrr.path", str(tmp_path / "Uploadrr"))
+
+    assert ue.restaurar_config_interrumpida() is True
+    assert config.read_bytes() == original
+    assert ue.restaurar_config_interrumpida() is False
+
+
+def test_la_siguiente_subida_restaura_el_config_aunque_no_pueda_stagear(tmp_path, monkeypatch):
+    from emuwarez_uploadrr.services import upload_execution as ue
+    config = _config_falso(tmp_path)
+    backup_config(config)
+    original = config.read_bytes()
+    config.write_text("DEFAULT:\n  tmdb: 'CLAVE_REAL'\n", encoding="utf-8")
+    monkeypatch.setattr(ue, "append_upload_log", lambda *a, **k: None)
+    monkeypatch.setattr(ue, "_stage_uploadrr_config", lambda job_id, cwd: None)
+    ue._config_stage_refcount.clear()
+
+    assert ue._acquire_staged_config(1, str(tmp_path / "Uploadrr")) is None
+    assert config.read_bytes() == original
+
+
+# --- EJEC-5: una subida que se une a otra ya en curso relee Ajustes ------------
+
+def test_una_subida_que_se_une_a_otra_recoge_los_ajustes_nuevos(tmp_path, monkeypatch):
+    from emuwarez_uploadrr.services import upload_execution as ue
+    config = _config_falso(tmp_path)
+    original = config.read_bytes()
+    monkeypatch.setattr(ue, "append_upload_log", lambda *a, **k: None)
+    ue._config_stage_refcount.clear()
+    cwd = str(tmp_path / "Uploadrr")
+
+    primera = ue._acquire_staged_config(1, cwd)
+    assert _per_episode(config) == "0"
+    _poner_ajuste("emu.per_episode_screens", "true")  # Ajustes cambia con una subida en curso
+    segunda = ue._acquire_staged_config(2, cwd)
+
+    assert _per_episode(config) == "3"
+    ue._release_staged_config(1, primera)
+    assert _per_episode(config) == "3"  # sigue stageado para la segunda
+    ue._release_staged_config(2, segunda)
+    assert config.read_bytes() == original
+
+
+def test_una_subida_que_se_une_no_reescribe_si_los_ajustes_no_cambiaron(tmp_path, monkeypatch):
+    from emuwarez_uploadrr.services import upload_execution as ue
+    _config_falso(tmp_path)
+    monkeypatch.setattr(ue, "append_upload_log", lambda *a, **k: None)
+    ue._config_stage_refcount.clear()
+    escrituras = []
+    real = ue.write_staged_config
+    monkeypatch.setattr(ue, "write_staged_config", lambda *a, **k: escrituras.append(1) or real(*a, **k))
+    cwd = str(tmp_path / "Uploadrr")
+
+    primera = ue._acquire_staged_config(1, cwd)
+    segunda = ue._acquire_staged_config(2, cwd)
+
+    assert len(escrituras) == 1
+    ue._release_staged_config(1, primera)
+    ue._release_staged_config(2, segunda)

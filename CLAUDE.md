@@ -52,7 +52,8 @@ the upload with Uploadrr-EMU (`Kisnov/Uploadrr-EMU`, cloned into the image at `/
   folder on the media's filesystem (e.g. under `/data`): a symlink only seeds if qBittorrent resolves its target.
 - Contract with Uploadrr-EMU, change both repos together: argv in `services/uploadrr_contract.py`;
   `config.yaml` keys staged by `uploadrr_config_staging.py` / `uploadrr_yaml.py` and restored from
-  `data/config.yaml.bak` after every job (hand edits to `config.yaml` don't survive, edit the `.bak`);
+  `data/config.yaml.bak` after every job, and also at startup and before the next job if one died mid-run
+  (hand edits to `config.yaml` don't survive, edit the `.bak`);
   progress and result parsing in `uploadrr_progress.py` / `upload_result_parser.py` match its output lines
   verbatim. Uploadrr-EMU exits 0 only if something was uploaded (any other code is a failed job), and after
   a successful upload prints `Torrent URL: …`.

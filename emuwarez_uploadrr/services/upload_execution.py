@@ -43,8 +43,10 @@ from .uploadrr_contract import (
 from .uploadrr_config_staging import (
     SCREENS_API_KEY_HOSTS,
     default_uploadrr_config_path,
-    read_config_lines,
+    backup_config,
+    read_baseline_lines,
     restore_config_from_backup,
+    restore_stale_config,
     stage_emu_config,
     stage_image_hosts,
     stage_add_logo,
@@ -52,6 +54,7 @@ from .uploadrr_config_staging import (
     stage_per_episode_screens,
     stage_qbittorrent_config,
     stage_tmdb_key,
+    staged_config_text,
     write_staged_config,
 )
 from .image_hosts import fallback_order, get_host_key
@@ -739,7 +742,9 @@ def _stage_uploadrr_config(job_id: int, cwd: str) -> Path | None:
         conn.close()
 
     try:
-        lines = read_config_lines(config_path)
+        # Del config de verdad (.bak), no del config.yaml de ahora: puede ser el
+        # que dejó stageado una subida que murió, o el de otra que sigue en curso.
+        lines = read_baseline_lines(config_path)
         changed = False
         if tmdb_key:
             lines, _msg = stage_tmdb_key(lines, tmdb_key)
@@ -775,6 +780,9 @@ def _stage_uploadrr_config(job_id: int, cwd: str) -> Path | None:
                 stream="system",
             )
             return None
+        backup_config(config_path)
+        if config_path.read_text(encoding="utf-8", errors="ignore") == staged_config_text(lines):
+            return config_path  # ya está así: no se reescribe bajo una subida en curso
         write_staged_config(config_path, lines)
         append_upload_log(
             job_id, "info",
@@ -817,15 +825,39 @@ def _acquire_staged_config(job_id: int, cwd: str) -> Path | None:
     key = str(config_path)
     with _config_stage_lock:
         if _config_stage_refcount.get(key, 0) > 0:
-            # Already staged by another in-flight upload — just join the count.
-            _config_stage_refcount[key] += 1
+            # Ya lo stageó otra subida en curso. Se vuelve a calcular por si Ajustes
+            # cambió desde entonces: solo reescribe si el resultado es otro.
+            _stage_uploadrr_config(job_id, cwd)
             append_upload_log(job_id, "info", "config.yaml ya stageado por otra subida en curso; se reutiliza.", stream="system")
+            _config_stage_refcount[key] += 1
             return config_path
+        # Sin subidas en curso config.yaml debería ser el .bak: si no, es el
+        # stageado de una que murió a medias.
+        try:
+            if restore_stale_config(config_path):
+                append_upload_log(
+                    job_id, "warning",
+                    "config.yaml seguía stageado por una subida interrumpida; restaurado desde el backup.",
+                    stream="system",
+                )
+        except OSError as exc:
+            logger.warning("No se pudo restaurar el config.yaml interrumpido (%s): %s", config_path, exc)
         staged = _stage_uploadrr_config(job_id, cwd)
         if staged is None:
             return None
         _config_stage_refcount[key] = 1
         return staged
+
+
+def restaurar_config_interrumpida() -> bool:
+    """Al arrancar no hay ninguna subida viva: si config.yaml sigue stageado es
+    el de una que murió sin restaurarlo, con las claves reales dentro."""
+    conn = _get_db_conn()
+    try:
+        uploadrr_path = get_runtime_settings(conn)["uploadrr_path"]
+    finally:
+        conn.close()
+    return bool(uploadrr_path) and restore_stale_config(default_uploadrr_config_path(uploadrr_path))
 
 
 def _release_staged_config(job_id: int, config_path: Path | None) -> None:

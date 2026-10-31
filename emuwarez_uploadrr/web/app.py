@@ -71,6 +71,19 @@ def _reconcile_interrupted_jobs() -> None:
             "No se pudieron reconciliar las subidas interrumpidas al arrancar", exc_info=True)
 
 
+def _restore_interrupted_config() -> None:
+    """El config.yaml de Uploadrr-EMU que dejó stageado (claves reales dentro)
+    una subida que murió con la aplicación. Best-effort: nunca bloquea el arranque."""
+    try:
+        from emuwarez_uploadrr.services.upload_execution import restaurar_config_interrumpida
+        if restaurar_config_interrumpida():
+            logging.getLogger("emuwarez.web").warning(
+                "config.yaml de Uploadrr-EMU restaurado desde el backup: lo dejó stageado una subida interrumpida")
+    except Exception:
+        logging.getLogger("emuwarez.web").warning(
+            "No se pudo restaurar el config.yaml de Uploadrr-EMU al arrancar", exc_info=True)
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     # La carpeta donde se preparan los packs para subir, creada de entrada:
@@ -84,6 +97,7 @@ async def _lifespan(app: FastAPI):
             "No se pudo preparar la carpeta de subidas", exc_info=True)
     _backfill_spanish_flags()
     _reconcile_interrupted_jobs()
+    _restore_interrupted_config()
     scheduler_task = None
     # EMUWAREZ_DISABLE_SCHEDULER=1 — escape hatch for scripted Docker
     # smoke/E2E runs that don't want a background scheduler tick firing

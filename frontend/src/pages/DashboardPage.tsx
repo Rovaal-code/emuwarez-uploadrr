@@ -719,7 +719,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps = {}) {
             icon={ICON_RECLAIMED}
             label="Peticiones reclamadas"
             value={s.requests_reclaimed ?? 0}
-            info="Peticiones ya Reclamadas en eMuwarez. eMuwarez no permite saber si el reclamo es tuyo, así que es el total de reclamadas, no solo las tuyas."
+            info="Peticiones ya Reclamadas en eMuwarez, tuyas y de otros: es el total. En Peticiones, cada una dice si la reclamaste tú, la reclamó otro usuario o eMuwarez no indica quién."
           />
           <StatCard
             icon={ICON_MINE}

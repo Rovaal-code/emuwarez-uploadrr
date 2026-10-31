@@ -18,13 +18,21 @@ from ..constants import SOURCE_PATTERNS
 from .emu_format import format_audio_codec, format_channels
 
 
+# Un montaje NFS/SSHFS colgado no puede dejar esperando a la petición ni a la cola.
+MEDIAINFO_TIMEOUT_S = 120
+
+
 def run_mediainfo_json(path: Path) -> dict[str, Any]:
-    proc = subprocess.run(
-        ["mediainfo", "--Output=JSON", str(path)],
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    try:
+        proc = subprocess.run(
+            ["mediainfo", "--Output=JSON", str(path)],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=MEDIAINFO_TIMEOUT_S,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"mediainfo no respondió en {MEDIAINFO_TIMEOUT_S} s") from exc
     if proc.returncode != 0:
         raise RuntimeError(proc.stderr.strip() or "mediainfo falló")
     return json.loads(proc.stdout)

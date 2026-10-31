@@ -324,3 +324,19 @@ def test_multi_shortcut_still_applies(tmp_path):
         for lang in ("es", "en", "fr", "de")
     ])
     assert summary == "MULTI DD 5.1"
+
+
+def test_un_mediainfo_colgado_no_bloquea(tmp_path, monkeypatch):
+    """Sin timeout, un montaje colgado dejaba la petición (o la cola) esperando."""
+    import subprocess
+    from emuwarez_uploadrr.services import media_probe
+
+    def colgado(*a, **k):
+        assert k.get("timeout"), "mediainfo se lanza sin timeout"
+        raise subprocess.TimeoutExpired(a[0], k["timeout"])
+    monkeypatch.setattr(media_probe.subprocess, "run", colgado)
+    f = tmp_path / "peli.mkv"
+    f.write_bytes(b"x")
+    with patch.object(svc, "mediainfo_available", return_value=True):
+        informe = svc.build_mediainfo_report(str(f))
+    assert informe["available"] is False and "no respondió" in informe["message"]

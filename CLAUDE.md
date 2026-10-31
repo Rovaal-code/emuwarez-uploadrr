@@ -18,7 +18,7 @@ the upload with Uploadrr-EMU (`Kisnov/Uploadrr-EMU`, cloned into the image at `/
 ## Verify
 
 - Backend: run the tests in Linux (hardlinks, mediainfo, mkvtoolnix), e.g. `python:3.12-slim` with
-  `pip install -e ".[web,dev]"`, then `python -m pytest tests -q -p no:cacheprovider` (~2180 tests, ~7 min).
+  `pip install -c constraints.txt -e ".[web,dev]"`, then `python -m pytest tests -q -p no:cacheprovider` (~2180 tests, ~7 min).
   On Windows, copy the tree into the container (`cp -r /src/. /w/`) rather than running on the bind mount.
 - Frontend: `cd frontend && npm ci && npx tsc --noEmit && npx vitest run && npx vite build`.
 - Architecture guards: `test_una_sola_puerta_a_settings.py` (settings only through `services/settings.py`
@@ -31,7 +31,7 @@ the upload with Uploadrr-EMU (`Kisnov/Uploadrr-EMU`, cloned into the image at `/
 - CI (`.github/workflows/ci.yml`) runs pytest, critical ruff rules and the frontend checks on every PR, and from
   `publicar.yml` before a release; it uploads coverage, test results and the frontend bundle size to Codecov
   (informational only, `codecov.yml`; needs the `CODECOV_TOKEN` secret). Master has no CI of its own: `bundle.yml`
-  only builds the frontend on each push (~40 s) so PRs have a bundle size to compare against.
+  only builds the frontend on each push that touches `frontend/` (~40 s) so PRs have a bundle size to compare against.
 - `zizmor.yml` audits the workflows and `dependabot.yml` when `.github/` changes; run `zizmor --gh-token "$(gh auth token)" .` locally (without a token it skips online audits) before pushing a workflow edit.
 
 ## Not obvious
@@ -64,7 +64,8 @@ the upload with Uploadrr-EMU (`Kisnov/Uploadrr-EMU`, cloned into the image at `/
 - eMuwarez and TMDb keys travel in the URL query. Never log or return a raw URL: use
   `integrations.base.url_sin_claves`.
 - Image: `ghcr.io/kisnov/emuwarez-uploadrr`, built only when a version is published. `publicar.yml` ("Publicar
-  versión": by hand, or on odd days of the month when 3+ PRs from `feat/` or `fix/` branches merged since the last `__version__` change) runs
+  versión": by hand, or on odd days of the month when 3+ PRs from `feat/` or `fix/` branches (merge commits, or `feat:`/`fix:` squash
+  commits) merged since the last `__version__` change) runs
   the full CI on master's tip, bumps `__version__` (`auto`: minor if any `feat/` PR, else patch), pushes that commit
   and `vX.Y.Z`, builds `:X.Y.Z`, `:<sha>`, `:latest` and `:edge`, publishes the manifest (secret
   `UPLOADRR_VERSION_TOKEN`) and creates the GitHub release with the PRs merged since the previous tag. Release when Gabriel asks: `gh workflow run publicar.yml -f notas="…"`, with a
@@ -78,8 +79,16 @@ the upload with Uploadrr-EMU (`Kisnov/Uploadrr-EMU`, cloned into the image at `/
   repo and the image are private, so the app can't ask GHCR or read a private raw URL without a token.
   `desplegar.sh` publishes it after `docker push` via `scripts/publicar_version.py --repo`; don't edit it by
   hand, run that script. The file is public: keep `--notas` neutral.
-- Building on Windows: the checkout is CRLF (autocrlf), and a CRLF `docker-entrypoint.sh` fails with
-  "no such file or directory". Build from `git -c core.autocrlf=false archive HEAD`.
+- Image Python deps: `constraints.txt` pins the `web` extra and what it pulls (Uploadrr-EMU pins its own in its
+  `requirements.txt`); the Dockerfile and CI install with `-c constraints.txt`. Raising a minimum in the `web` extra
+  means updating the pin too (`test_imagen_docker.py` checks they agree); the header of `constraints.txt` says how.
+- Uploadrr-EMU's state in the image: `/opt/Uploadrr/data` is real and refreshes with each image; only `config.yaml`,
+  `config.yaml.bak`, `cookies/` and `tmp` are symlinks, baked at build into `/config/Uploadrr`. The entrypoint just
+  creates the targets, and seeds `config.yaml` from the image's example the first time. Nothing under
+  `/opt/Uploadrr` is writable except `data/` (1777), so don't make the entrypoint create links there.
+- Building on Windows: `.gitattributes` keeps text files LF, so a new checkout builds with `docker build .`. A checkout
+  made before it is still CRLF, and a CRLF `docker-entrypoint.sh` fails with "no such file or directory": build
+  from `git -c core.autocrlf=false archive HEAD`.
 
 ## Plan
 

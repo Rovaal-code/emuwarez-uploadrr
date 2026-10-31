@@ -20,6 +20,7 @@ concurrency:
 jobs:
   python:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -39,7 +40,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - run: pip install -e ".[web,dev]" ruff==0.17.3
+      - run: pip install -c constraints.txt -e ".[web,dev]" ruff==0.17.3
       # Solo errores que rompen en ejecución (sintaxis, nombres sin definir).
       # El estilo lo revisa CodeRabbit sobre las líneas cambiadas.
       - run: ruff check --select E9,F63,F7,F82 --output-format github .
@@ -76,6 +77,7 @@ jobs:
     # En master el bundle ya lo sube Bundle.
     if: github.event_name != 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: frontend
@@ -85,7 +87,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci

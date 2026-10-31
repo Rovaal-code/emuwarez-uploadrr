@@ -3,6 +3,8 @@
 Nada aquí habla con TMDb: `request_json` del cliente se sustituye por lo que respondería."""
 from __future__ import annotations
 
+import sqlite3
+
 import pytest
 
 from emuwarez_uploadrr.integrations import tmdb
@@ -164,3 +166,22 @@ def test_la_sincronizacion_trae_los_posters(db_conn, tmdb_falso, monkeypatch):
 
     assert reqs.sync_emu_requests(db_conn, force=True)["status"] == "ok"
     assert reqs.list_request_items(db_conn)["items"][0]["poster_url"] == IMG + "/matrix.jpg"
+
+
+def test_la_migracion_no_se_traga_una_base_de_datos_bloqueada(db_conn, isolated_db):
+    """Tragándose el «database is locked», el esquema quedaría en 42 sin las columnas y la lista fallaría siempre."""
+    from emuwarez_uploadrr.database import _migrate_request_items_posters, connect
+    for col in ("tmdb_poster_url", "tmdb_backdrop_url"):
+        db_conn.execute(f"ALTER TABLE request_items DROP COLUMN {col}")
+    db_conn.commit()
+    otra = connect(isolated_db / "emuwarez_uploadrr.db")
+    otra.execute("BEGIN IMMEDIATE")
+    db_conn.execute("PRAGMA busy_timeout = 0")
+    with pytest.raises(sqlite3.OperationalError, match="locked"):
+        _migrate_request_items_posters(db_conn)
+    otra.rollback()
+    otra.close()
+
+    _migrate_request_items_posters(db_conn)
+    columnas = {fila[1] for fila in db_conn.execute("PRAGMA table_info(request_items)")}
+    assert {"tmdb_poster_url", "tmdb_backdrop_url"} <= columnas

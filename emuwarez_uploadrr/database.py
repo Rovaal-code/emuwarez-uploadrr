@@ -1152,11 +1152,11 @@ def _migrate_request_items_is_example(conn: sqlite3.Connection) -> None:
 def _migrate_request_items_posters(conn: sqlite3.Connection) -> None:
     """Esquema 42: el póster y el fondo de TMDb de las peticiones que no casan con nada de la biblioteca,
     de donde salía el póster. '' = TMDb no tiene."""
+    # Sin try: tragarse un «database is locked» dejaría el esquema en 42 sin las columnas.
+    columnas = {fila[1] for fila in conn.execute("PRAGMA table_info(request_items)")}
     for col in ("tmdb_poster_url", "tmdb_backdrop_url"):
-        try:
+        if col not in columnas:
             conn.execute(f"ALTER TABLE request_items ADD COLUMN {col} TEXT")
-        except sqlite3.OperationalError:
-            pass
 
 
 def _migrate_request_items_last_seen(conn: sqlite3.Connection) -> None:

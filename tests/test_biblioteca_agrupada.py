@@ -73,9 +73,22 @@ def test_tambien_con_los_filtros_por_lo_que_se_ve(biblioteca):
 
 
 def test_el_tope_y_el_desplazamiento_van_despues_de_agrupar(biblioteca):
+    """Paginando antes de agrupar, la segunda página traería la T1 de Serie."""
+    from emuwarez_uploadrr.database import connect, db_path
+
+    conn = connect(db_path())
+    conn.execute("""INSERT INTO library_items (id, item_type, title, local_status, instance_type)
+                    VALUES (20, 'series', 'Serie Z', 'Disponible', 'sonarr')""")
+    conn.commit(); conn.close()
     cliente, cab = biblioteca
-    r = cliente.get("/api/library", params={"origin": "sonarr", "limit": 1, "offset": 0}, headers=cab).json()
-    assert r["total"] == 1 and [i["id"] for i in r["items"]] == [2]
+    r = cliente.get("/api/library", params={"origin": "sonarr", "limit": 2, "offset": 1}, headers=cab).json()
+    assert r["total"] == 2 and [i["id"] for i in r["items"]] == [20]
+
+
+def test_un_filtro_vacio_no_cuenta(biblioteca):
+    cliente, cab = biblioteca
+    r = cliente.get("/api/library", params={"origin": "", "limit": 20000}, headers=cab).json()
+    assert r["total"] == 8  # todos los niveles, como sin filtro
 
 
 def test_un_nivel_concreto_no_se_toca(biblioteca):

@@ -334,14 +334,15 @@ def library_list(
     offset: int = Query(0, ge=0),
 ) -> LibraryListResponse:
     from emuwarez_uploadrr.services.library import (
-        list_library, count_library, filtrar_por_lo_que_se_ve, quedarse_con_lo_mas_alto)
+        list_library, count_library, filtrar_por_lo_que_se_ve, quedarse_con_lo_mas_alto, _valores)
     por_lo_que_se_ve = dict(provider=provider, resolution=resolution, source=source,
                             release_group=release_group, emu=emu, aporte=aporte)
     filtra_lo_que_se_ve = any(por_lo_que_se_ve.values())
     # Filtrando en plano se esconde lo que cuelga de otra fila que también sale;
     # sin filtros, en plano sigue saliendo todo.
-    en_plano = parent_id is None and (filtra_lo_que_se_ve or any(
-        [item_type, origin, instance_id, status, request_status, nomenclature, search, spanish]))
+    en_plano = parent_id is None and any(_valores(v) for v in (
+        item_type, origin, instance_id, status, request_status, nomenclature, search, spanish,
+        *por_lo_que_se_ve.values()))
     recorta_despues = filtra_lo_que_se_ve or en_plano
     with _get_conn() as conn:
         rows = list_library(

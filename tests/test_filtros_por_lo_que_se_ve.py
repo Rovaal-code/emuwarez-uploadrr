@@ -74,10 +74,10 @@ def test_lo_que_cumple_queda_mas_alla_del_tope(biblioteca_grande):
 def test_resolucion_mira_la_biblioteca_entera_y_sube_al_nivel_mas_alto(biblioteca_grande):
     cliente, cab, ids = biblioteca_grande
     datos = _pedir(cliente, cab, resolution="2160p")
-    # Zyx cumple entera (sale la serie, no sus temporadas); de Zzz solo cumple T1.
-    assert {i["title"] for i in datos["items"]} == {"Zulu", "Zyx", "Zzz T1"}
+    # Zyx cumple entera y de Zzz solo T1: las dos salen como serie.
+    assert {i["title"] for i in datos["items"]} == {"Zulu", "Zyx", "Zzz"}
     assert datos["total"] == 3
-    assert ids["t1"] in {i["id"] for i in datos["items"]}
+    assert ids["mezclada"] in {i["id"] for i in datos["items"]}
 
 
 def test_proveedor_source_y_grupo_tambien(biblioteca_grande):
@@ -88,7 +88,7 @@ def test_proveedor_source_y_grupo_tambien(biblioteca_grande):
     assert {i["title"] for i in _pedir(cliente, cab, source="BluRay")["items"]} == {"Zyx", "Zzz"}
     assert {i["title"] for i in _pedir(cliente, cab, release_group="GRP")["items"]} == {"Zyx", "Zzz"}
     # Entre columnas se cruzan.
-    assert {i["title"] for i in _pedir(cliente, cab, source="BluRay", resolution="2160p")["items"]} == {"Zyx", "Zzz T1"}
+    assert {i["title"] for i in _pedir(cliente, cab, source="BluRay", resolution="2160p")["items"]} == {"Zyx", "Zzz"}
 
 
 def test_el_tope_y_el_desplazamiento_van_despues_de_filtrar(biblioteca_grande):
@@ -119,7 +119,7 @@ def test_el_recorte_en_sql_da_lo_mismo_que_mirarlo_todo(biblioteca_grande, monke
     monkeypatch.setattr(library, "list_library", lambda conn, *, provider=None, resolution=None, source=None,
                         release_group=None, emu=None, **resto: original(conn, **resto))
     assert con_recorte == [_pedir(cliente, cab, **c) for c in casos]
-    assert {i["title"] for i in con_recorte[5]["items"]} == {"Zzz T1"}
+    assert {i["title"] for i in con_recorte[5]["items"]} == {"Zzz"}
 
 
 def _fila(id_, parent_id=None, *, emu=None, aportes=None, estado="Disponible"):

@@ -334,17 +334,25 @@ def library_list(
     offset: int = Query(0, ge=0),
 ) -> LibraryListResponse:
     from emuwarez_uploadrr.services.library import (
-        list_library, count_library, filtrar_por_lo_que_se_ve, quedarse_con_lo_mas_alto, _valores)
+        list_library, count_library, filtrar_por_lo_que_se_ve, subir_a_su_serie, _valores)
     por_lo_que_se_ve = dict(provider=provider, resolution=resolution, source=source,
                             release_group=release_group, emu=emu, aporte=aporte)
     filtra_lo_que_se_ve = any(por_lo_que_se_ve.values())
-    # Filtrando en plano se esconde lo que cuelga de otra fila que también sale;
-    # sin filtros, en plano sigue saliendo todo.
-    en_plano = parent_id is None and any(_valores(v) for v in (
-        item_type, origin, instance_id, status, request_status, nomenclature, search, spanish,
+    # Filtrando en plano, lo que cumple sale agrupado bajo su serie. Con un Tipo
+    # elegido sale ese tipo tal cual, y sin filtros, en plano sigue saliendo todo.
+    agrupa = parent_id is None and not _valores(item_type) and any(_valores(v) for v in (
+        origin, instance_id, status, request_status, nomenclature, search, spanish,
         *por_lo_que_se_ve.values()))
-    recorta_despues = filtra_lo_que_se_ve or en_plano
+    recorta_despues = filtra_lo_que_se_ve or agrupa
     with _get_conn() as conn:
+        ignora_especiales = _ignore_specials(conn)
+
+        def rollups_de(filas: list[dict]) -> dict:
+            series_ids = [r["id"] for r in filas if r["item_type"] == "series"]
+            season_ids = [r["id"] for r in filas if r["item_type"] == "season"]
+            return (_batch_rollups(conn, series_ids, season_ids, ignora_especiales)
+                    if (series_ids or season_ids) else {})
+
         rows = list_library(
             conn,
             status=status,
@@ -360,7 +368,7 @@ def library_list(
             # Sin tope (LIMIT -1): el recorte va después de filtrar.
             limit=-1 if recorta_despues else limit,
             offset=0 if recorta_despues else offset,
-            ignore_specials=_ignore_specials(conn),
+            ignore_specials=ignora_especiales,
             provider=provider, resolution=resolution, source=source, release_group=release_group, emu=emu,
         )
         # Recortando después, el total sale de contar lo que queda.
@@ -376,27 +384,25 @@ def library_list(
             search=search,
             spanish=spanish,
         )
-        if en_plano and not filtra_lo_que_se_ve:
-            # Antes de montar las filas, para montar solo las que salen.
-            rows = quedarse_con_lo_mas_alto(conn, rows)
-            total = len(rows)
-            rows = rows[offset:offset + limit]
-        from ...services.library import contar_archivos
-        archivos = contar_archivos(conn)
-        series_ids = [r["id"] for r in rows if r["item_type"] == "series"]
-        season_ids = [r["id"] for r in rows if r["item_type"] == "season"]
-        rollups = (
-            _batch_rollups(conn, series_ids, season_ids, _ignore_specials(conn))
-            if (series_ids or season_ids) else {}
-        )
         if filtra_lo_que_se_ve:
+            rollups = rollups_de(rows)
             filas = filtrar_por_lo_que_se_ve(
                 [_campos_de_fila(r, conn, rollups) for r in rows], **por_lo_que_se_ve)
-            if en_plano:
-                filas = quedarse_con_lo_mas_alto(conn, filas)
+        from ...services.library import contar_archivos
+        archivos = contar_archivos(conn)
+        if agrupa:
+            # Solo se montan las series y películas que salen en la página.
+            rows = subir_a_su_serie(conn, filas if filtra_lo_que_se_ve else rows,
+                                    sort=sort, ignore_specials=ignora_especiales)
+            total = len(rows)
+            rows = rows[offset:offset + limit]
+            rollups = rollups_de(rows)
+            items = [_to_lib_response(r, conn, rollups) for r in rows]
+        elif filtra_lo_que_se_ve:
             total = len(filas)
             items = [LibraryItemResponse(**f) for f in filas[offset:offset + limit]]
         else:
+            rollups = rollups_de(rows)
             items = [_to_lib_response(r, conn, rollups) for r in rows]
     return LibraryListResponse(
         items=items,

@@ -435,6 +435,10 @@ def compute_nomenclature_proposal(
             subtitle_summary = emu_by_field.get("Subtítulos") or subtitle_summary
             dynamic_range = emu_by_field.get("HDR/DV") or dynamic_range
 
+    # UND no es un idioma del tracker: el nombre no puede salir así.
+    if audio_summary and "UND" in re.split(r"[\s-]+", audio_summary):
+        errors.append("Una pista de audio no tiene idioma (UND). Ponle idioma a la pista antes de subir.")
+
     # Phase 6E — provider (AMZN/NF/DSNP...) already present in the
     # current filename, kept in the proposal instead of silently
     # dropped. Detection only, no TMDb re-recommendation here.

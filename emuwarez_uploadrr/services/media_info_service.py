@@ -1,20 +1,13 @@
-"""Real MediaInfo invocation for the web nomenclature-apply flow (Phase 6B).
+"""Real MediaInfo invocation for the web nomenclature flow (Phase 6B).
 
-`media_probe.py` already has working MediaInfo parsing code
-(`run_mediainfo_json`/`read_media_info`, shell-out to `mediainfo
---Output=JSON`) but it's part of the interactive legacy CLI: on an
-unrecognized audio language, `map_audio_language()` calls `prompt()`,
-which blocks on `input()`. That's fine for a terminal session, fatal for
-a web request handler — a single unmapped language track would hang the
-server process indefinitely.
-
-This module reuses every *pure* piece of that parsing (run_mediainfo_json,
-media_tracks/first_track, detect_video_codec, audio_codec, LANG_MAP) but
-replaces the interactive language lookup with a plain non-interactive
-fallback. It never raises: a missing `mediainfo` binary or any parse
-failure returns None, letting callers fall back to the cheaper
-Radarr/Sonarr-sourced mediaInfo from Phase 6A instead of failing the
-whole "Adaptar nomenclatura" flow.
+Builds on the pure pieces of `media_probe.py` (run_mediainfo_json,
+media_tracks/first_track, detect_video_codec, audio_codec) and resolves each
+track's language with `emu_format.resolve_language`, the one language table
+of the app. Nothing here prompts: a web request must always complete. It
+never raises: a missing `mediainfo` binary or any parse failure returns None
+(or `available: False`), letting callers fall back to the cheaper
+Radarr/Sonarr-sourced mediaInfo from Phase 6A instead of failing the whole
+"Adaptar nomenclatura" flow.
 """
 from __future__ import annotations
 
@@ -23,8 +16,7 @@ import shutil
 from pathlib import Path
 from typing import Optional
 
-from ..constants import LANG_MAP
-from . import media_probe
+from . import emu_format, media_probe
 
 
 logger = logging.getLogger(__name__)
@@ -64,14 +56,11 @@ def mediainfo_available() -> bool:
     return shutil.which("mediainfo") is not None
 
 
-def _map_audio_language_noninteractive(value: str) -> str:
-    key = (value or "").strip().lower()
-    if key in LANG_MAP:
-        return LANG_MAP[key]
-    # No prompt() here (unlike media_probe.map_audio_language) — an unmapped
-    # language just falls back to a 3-letter best-effort code so the web
-    # request always completes.
-    return (value or "UND").strip().upper()[:3] or "UND"
+def track_language(track: dict) -> str:
+    """El código de eMuwarez de una pista de MediaInfo, con su BCP-47
+    ("es-MX") y su nombre ("Latino")."""
+    return emu_format.resolve_language(track.get("Language") or track.get("Language_String"),
+                                       title=track.get("Title"))
 
 
 def read_media_info_summary(path: str) -> Optional[dict]:
@@ -96,9 +85,7 @@ def read_media_info_summary(path: str) -> Optional[dict]:
         for track in media_probe.media_tracks(info):
             if track.get("@type") != "Audio":
                 continue
-            lang = _map_audio_language_noninteractive(
-                track.get("Language") or track.get("Language_String") or ""
-            )
+            lang = track_language(track)
             if lang not in audio_langs:
                 audio_langs.append(lang)
             codec = media_probe.audio_codec(track)
@@ -109,9 +96,7 @@ def read_media_info_summary(path: str) -> Optional[dict]:
         for track in media_probe.media_tracks(info):
             if track.get("@type") != "Text":
                 continue
-            lang = _map_audio_language_noninteractive(
-                track.get("Language") or track.get("Language_String") or ""
-            )
+            lang = track_language(track)
             if lang not in subtitle_langs:
                 subtitle_langs.append(lang)
 
@@ -139,7 +124,6 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
     Shape: {available: bool, message: str|None, rows: [{field, mediainfo, emu}],
             audio_summary: str|None}
     """
-    from . import emu_format
     from .path_mapping import resolve_local_path
 
     if not path:
@@ -310,7 +294,7 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
     best_by_lang: dict[str, tuple[tuple[int, int], str, str]] = {}
     for i, tr in enumerate(audio_tracks, 1):
         raw_lang = tr.get("Language") or tr.get("Language_String") or ""
-        lang = emu_format.format_language(raw_lang) or "UND"
+        lang = track_language(tr)
         codec = media_probe.audio_codec(tr)
         ch = media_probe.audio_channels(tr)
         codecs.append(codec)
@@ -362,10 +346,7 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
 
     # Subtitles
     sub_tracks = [t for t in media_probe.media_tracks(info) if t.get("@type") == "Text"]
-    sub_langs = ", ".join(
-        emu_format.format_language(t.get("Language") or t.get("Language_String") or "") or "UND"
-        for t in sub_tracks
-    )
+    sub_langs = ", ".join(track_language(t) for t in sub_tracks)
     add("Subtítulos", sub_langs or None, "SUBS" if sub_tracks else None)
 
     report = {"available": True, "message": None, "rows": rows, "audio_summary": audio_summary,

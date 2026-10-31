@@ -101,3 +101,43 @@ def test_un_nombre_mal_puesto_dice_que_falta(conn, tmp_path):
     assert r["status"] == nc.STATUS_NOT_ADAPTED
     # Alineado por tokens: lo que falta se nombra, sin desplazar el resto.
     assert r["diff"] == ["'1080p' ≠ esperado '2160p'", "falta '4K'", "falta 'UHD'", "falta 'ESP'"]
+
+
+# --- Idiomas: un solo traductor para el nombre, la biblioteca y las pistas ----
+
+LATINOS = ({"lang": "es-MX"}, {"lang": "es-AR"}, {"lang": "es-US"}, {"lang": "es", "titulo": "Latino"})
+
+
+@pytest.mark.parametrize("pista", LATINOS, ids=lambda p: p.get("titulo") or p["lang"])
+def test_el_latino_sale_LAT_en_todas_partes(pista, tmp_path):
+    from emuwarez_uploadrr.services.emu_format import has_castellano
+    from emuwarez_uploadrr.services.media_info_service import (build_mediainfo_report,
+                                                               read_media_info_summary)
+    from emuwarez_uploadrr.services.mkv_remux import build_track_plan, read_tracks_json
+
+    ruta = str(hacer_mkv(tmp_path / "Peli.mkv", audios=(pista, {"lang": "en"})))
+
+    informe = build_mediainfo_report(ruta)
+    assert informe["audio_summary"] == "LAT-ING DD 5.1"
+    resumen = read_media_info_summary(ruta)
+    assert resumen["audio_languages"] == "LAT / ING"
+    assert has_castellano(resumen["audio_languages"]) == 0
+
+    plan = build_track_plan(read_tracks_json(ruta)["data"])
+    audio = [t for t in plan["ordered_tracks"] if t["type"] == "audio"]
+    assert audio[0]["new_name"] == "Inglés - DD 5.1"     # el latino no pasa delante
+    assert audio[1]["new_name"].startswith("Español (Latinoamérica) - DD 5.1")
+
+
+def test_el_castellano_de_MAX_sigue_siendo_castellano(tmp_path):
+    from emuwarez_uploadrr.services.media_info_service import build_mediainfo_report
+    ruta = str(hacer_mkv(tmp_path / "Peli.mkv", audios=({"lang": "es-x-01"}, {"lang": "en"})))
+    assert build_mediainfo_report(ruta)["audio_summary"] == "DUAL DD 5.1"
+
+
+def test_una_pista_sin_idioma_bloquea_el_nombre(conn, tmp_path):
+    ruta = hacer_mkv(tmp_path / "Peli.WEB-DL.mkv", audios=({"lang": "es"}, {"lang": "und"}))
+    item = _fila(conn, title="Peli", year=2024, path=str(ruta), resolution="1080p")
+    prop = compute_nomenclature_proposal(item, conn=conn)
+    assert "UND" in prop["proposed_torrent_name"]
+    assert prop["status"] == "blocked"

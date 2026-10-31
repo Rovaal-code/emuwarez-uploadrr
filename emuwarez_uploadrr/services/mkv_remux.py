@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import Callable
 
 from ..database import connect
+from .emu_format import resolve_language
 from .uploadrr_progress import parse_mkvmerge_gui_progress
 
 logger = logging.getLogger("emuwarez.mkv_remux")
@@ -161,9 +162,6 @@ _LANG_DISPLAY: dict[str, str] = {
     "zu": "Zulú", "zul": "Zulú",
 }
 _LATIN_SPANISH_NAME = "Español (Latinoamérica)"
-# El valenciano comparte código ISO con el catalán ("cat"), así que la única
-# forma de distinguirlo es el BCP-47 de la pista ("ca-valencia"). Mismo caso
-# que el castellano y el latino, que también comparten "spa".
 _VALENCIAN_NAME = "Valencià"
 _UNKNOWN_LANG_NAME = "Desconocido"
 
@@ -171,76 +169,36 @@ _UNKNOWN_LANG_NAME = "Desconocido"
 # keeps its original relative order (Python's sort is stable).
 _PRIORITY_CASTILIAN, _PRIORITY_CATALAN, _PRIORITY_ENGLISH, _PRIORITY_OTHER = 0, 1, 2, 3
 
-
-# Real-world audit (2802 files, MAX/HBO Max releases) found `es-x-01`..`es-x-09`
-# — a private-use BCP47 subtag some streaming services attach to disambiguate
-# tracks, NOT a region code. It shows up even on natively Castilian-Spanish
-# content (e.g. "Aquí no hay quien viva", a Spanish-produced sitcom) — so
-# matching on `es-` prefix alone (anything but "es-es") mislabeled ~100 native
-# Castilian tracks as Latin American. Only a real Latin American region code
-# counts now.
-_LATIN_SPANISH_REGIONS = {
-    "419",  # UN M49 region code for Latin America & the Caribbean
-    "mx", "ar", "co", "cl", "pe", "ve", "ec", "gt", "cu", "bo",
-    "do", "hn", "py", "sv", "ni", "cr", "pa", "uy", "pr",
+# El idioma de la pista lo decide emu_format.resolve_language, el mismo que
+# usan el nombre del release y la columna Español: latino y valenciano solo se
+# distinguen por el BCP-47 (`language_ietf`) o por el nombre de la pista.
+_NOMBRE_POR_CODIGO = {
+    "ESP": "Español (Castellano)", "LAT": _LATIN_SPANISH_NAME,
+    "CAT": "Català", "VAL": _VALENCIAN_NAME,
+    "ING": "Inglés", "UND": _UNKNOWN_LANG_NAME,
 }
-
-
-def _is_latin_spanish(lang_ietf: str | None, existing_name: str | None) -> bool:
-    """Castilian vs Latin American Spanish can't be told apart from the plain
-    639-2 'spa' tag (it has no regional variant) — only from the BCP47
-    `language_ietf` tag (e.g. 'es-419', 'es-MX') when the source set a REAL
-    Latin American region, or from the track's own existing name already
-    saying so."""
-    if lang_ietf:
-        parts = lang_ietf.strip().lower().split("-")
-        if parts and parts[0] == "es" and len(parts) > 1 and parts[1] in _LATIN_SPANISH_REGIONS:
-            return True
-    if existing_name:
-        n = existing_name.strip().lower()
-        if "latino" in n or "latin america" in n or "latinoameric" in n:
-            return True
-    return False
 
 
 def _normalize_lang_code(lang: str | None) -> str:
     return (lang or "und").strip().lower()
 
 
-def _is_valencian(lang: str | None, lang_ietf: str | None, existing_name: str | None) -> bool:
-    """Valenciano, que no se puede distinguir del catalán por el código ISO.
-
-    mkvmerge da DOS campos: `language` ("cat", sin variante) y `language_ietf`
-    ("ca-valencia", con ella). La columna Idioma leía el primero y por eso un
-    valenciano salía como catalán, aunque Ver MediaInfo enseñara la variante.
-    """
-    for texto in (lang_ietf, lang):
-        if texto and "valencia" in str(texto).strip().lower():
-            return True
-    if existing_name and "valenci" in existing_name.strip().lower():
-        return True
-    return False
-
-
 def lang_display_name(lang: str | None, lang_ietf: str | None = None, existing_name: str | None = None) -> str:
     """Human-readable, Spanish-audience display name for a track's language."""
+    codigo = resolve_language(lang, lang_ietf, existing_name)
+    if codigo in _NOMBRE_POR_CODIGO:
+        return _NOMBRE_POR_CODIGO[codigo]
     code = _normalize_lang_code(lang)
-    if code in ("es", "spa") and _is_latin_spanish(lang_ietf, existing_name):
-        return _LATIN_SPANISH_NAME
-    if _is_valencian(lang, lang_ietf, existing_name):
-        return _VALENCIAN_NAME
-    if code in ("", "und", "mis"):
-        return _UNKNOWN_LANG_NAME
-    return _LANG_DISPLAY.get(code, code.upper())
+    return _LANG_DISPLAY.get(code) or _LANG_DISPLAY.get(code.split("-")[0], code.upper())
 
 
 def lang_priority(lang: str | None, lang_ietf: str | None = None, existing_name: str | None = None) -> int:
-    code = _normalize_lang_code(lang)
-    if code in ("es", "spa"):
-        return _PRIORITY_OTHER if _is_latin_spanish(lang_ietf, existing_name) else _PRIORITY_CASTILIAN
-    if code in ("ca", "cat"):
+    codigo = resolve_language(lang, lang_ietf, existing_name)
+    if codigo == "ESP":
+        return _PRIORITY_CASTILIAN
+    if codigo in ("CAT", "VAL"):
         return _PRIORITY_CATALAN
-    if code in ("en", "eng"):
+    if codigo == "ING":
         return _PRIORITY_ENGLISH
     return _PRIORITY_OTHER
 

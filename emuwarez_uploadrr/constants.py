@@ -72,19 +72,8 @@ IMPORT_TO_PIP = {
     "lxml": "lxml",
 }
 
-LANG_MAP = {
-    "es": "ESP", "spa": "ESP", "spanish": "ESP", "castilian": "ESP", "castellano": "ESP", "es-es": "ESP",
-    "es-419": "LAT", "latino": "LAT", "latam": "LAT", "latin american spanish": "LAT",
-    "en": "ING", "eng": "ING", "english": "ING",
-    "ja": "JAP", "jpn": "JAP", "japanese": "JAP",
-    "ko": "COR", "kor": "COR", "korean": "COR",
-    "fr": "FRA", "fra": "FRA", "fre": "FRA", "french": "FRA",
-    "de": "ALE", "deu": "ALE", "ger": "ALE", "german": "ALE",
-    "it": "ITA", "ita": "ITA", "italian": "ITA",
-    "pt": "POR", "por": "POR", "portuguese": "POR",
-    "ca": "CAT", "cat": "CAT", "catalan": "CAT",
-}
-
+# La tabla de idiomas vive en services/emu_format.py (resolve_language): era
+# la segunda copia, y la que contaba un es-MX como castellano.
 SOURCE_PATTERNS = [
     (re.compile(r"\b(?:bd[ ._-]?remux|bluray[ ._-]?remux)\b", re.I), "BDRemux"),
     # "Full BluRay" y no "FBD": es el código que usa la aplicación

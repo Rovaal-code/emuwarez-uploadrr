@@ -70,6 +70,6 @@ def test_constants_es_dueno_y_no_alias():
     prefijo, directos = _medir(RAIZ / "constants.py")
     assert (prefijo, directos) == (0, 0)
     fuente = (RAIZ / "constants.py").read_text()
-    assert "LANG_MAP" in fuente and "SOURCE_PATTERNS" in fuente, (
+    assert "SOURCE_PATTERNS" in fuente, (
         "constants.py ha dejado de definir las tablas que era su razón de ser"
     )

@@ -68,9 +68,10 @@ def test_read_media_info_summary_parses_real_tracks(tmp_path):
 
 
 def test_read_media_info_summary_never_prompts_on_unknown_language(tmp_path):
-    """The legacy CLI's map_audio_language() calls prompt()/input() on an
+    """The legacy CLI's map_audio_language() called prompt()/input() on an
     unmapped language — unacceptable in a web request handler. This must
-    fall back to a 3-letter code instead of blocking."""
+    fall back to the base language's code instead of blocking (and without the
+    dangling hyphen "XX-" the old whole-string truncation gave)."""
     f = tmp_path / "movie.mkv"
     f.write_text("fake")
     info = {"media": {"track": [
@@ -83,7 +84,7 @@ def test_read_media_info_summary_never_prompts_on_unknown_language(tmp_path):
         patch("builtins.input", side_effect=AssertionError("must never prompt")),
     ):
         result = svc.read_media_info_summary(str(f))
-    assert result["audio_languages"] == "XX-"
+    assert result["audio_languages"] == "XX"
 
 
 def test_read_media_info_summary_handles_subprocess_failure(tmp_path):

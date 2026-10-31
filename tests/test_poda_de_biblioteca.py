@@ -139,15 +139,15 @@ def test_una_instancia_que_falla_no_borra_nada_y_las_demas_si(conn, arr):
     library.sync_all(conn, include_episodes=True)
 
     arr[RADARR] = IntegrationError("Radarr no responde")
-    arr[RADARR_4K] = []
-    # La serie 20 ha perdido un capítulo, pero el recorrido se corta en la 30.
+    arr[RADARR_4K] = [_peli(4, "Dune", 438631, "WEB-DL-2160p")]
+    # La serie 20 ha perdido un capítulo, pero la 30 falla: la que no falla se pone al día, la que falla se queda igual.
     arr[SONARR] = {20: [1], 30: IntegrationError("Sonarr no responde")}
     resultado = library.sync_all(conn, include_episodes=True)
 
     assert len(resultado["errors"]) == 2
     assert _externos(conn, RADARR) == {"1", "2"}
-    assert len(_externos(conn, SONARR)) == 7
-    assert _externos(conn, RADARR_4K) == set()
+    assert _externos(conn, SONARR) == {"20", "season:20:1", "episode:2001", "30", "season:30:1", "episode:3001"}
+    assert _externos(conn, RADARR_4K) == {"4"}
 
 
 @pytest.mark.parametrize("listado", [

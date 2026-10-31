@@ -305,6 +305,7 @@ class InstanceSafeResponse(BaseModel):
     last_test_at: Optional[str] = None
     created_at: str
     updated_at: Optional[str] = None
+    warning: Optional[str] = None  # solo al editar: lo que se ha guardado y conviene mirar
 
 
 class InstanceTestResponse(BaseModel):

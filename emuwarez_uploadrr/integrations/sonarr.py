@@ -6,7 +6,7 @@ from typing import Any, Optional
 
 from .arr_base import (
     ArrClientError, ArrConnectionError, ArrAuthError,
-    arr_request, join_api_path, safe_api_key,
+    arr_request, join_api_path, registros_de, safe_api_key, todas_las_paginas,
 )
 from .base import (
     IntegrationError, build_url, es_lista_de_fichas, extract_backdrop_url, extract_media_info, extract_poster_url,
@@ -51,7 +51,10 @@ def refresh_series(url: str, api_key: str, series_id: int) -> dict[str, Any]:
 
 
 def get_series_by_id(url: str, api_key: str, series_id: int) -> dict[str, Any]:
-    return request_json("GET", build_url(url, f"/api/v3/series/{series_id}"), api_key=api_key)
+    data = request_json("GET", build_url(url, f"/api/v3/series/{series_id}"), api_key=api_key)
+    if not es_lista_de_fichas([data]):
+        raise IntegrationError(f"Sonarr no ha devuelto la serie {series_id}")
+    return data
 
 
 def get_command_status(url: str, api_key: str, command_id: int) -> dict[str, Any]:
@@ -68,23 +71,24 @@ def get_episodes(url: str, api_key: str, series_id: int) -> list[dict[str, Any]]
 
 
 def get_episode_files(url: str, api_key: str, series_id: int) -> list[dict[str, Any]]:
+    """Vacía es válida (una serie sin ningún archivo); lo que no es una lista de ficheros con id, no."""
     data = request_json("GET", build_url(url, "/api/v3/episodefile", {"seriesId": series_id}), api_key=api_key)
-    return data if isinstance(data, list) else []
+    if not es_lista_de_fichas(data):
+        raise IntegrationError(f"Sonarr no ha devuelto los archivos de la serie {series_id}")
+    return data
 
 
 def get_queue(url: str, api_key: str) -> list[dict[str, Any]]:
-    """Return current download queue entries from Sonarr."""
-    try:
-        data = request_json(
+    """La cola de descargas de Sonarr entera. Si falla o llega cortada lanza: una cola vacía por fallo dejaría
+    como Faltante, y avisaría, todo lo que se está descargando."""
+    return todas_las_paginas(
+        lambda pagina, tamano: request_json(
             "GET",
-            build_url(url, "/api/v3/queue", {"pageSize": 500, "includeSeries": "false"}),
+            build_url(url, "/api/v3/queue", {"page": pagina, "pageSize": tamano, "includeSeries": "false"}),
             api_key=api_key,
-        )
-        if isinstance(data, dict):
-            return data.get("records", [])
-        return data if isinstance(data, list) else []
-    except Exception:
-        return []
+        ),
+        "La cola de Sonarr",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -128,23 +132,14 @@ def sonarr_get_episodes(instance: dict, series_id: Optional[int] = None) -> list
 
 
 def sonarr_get_queue(instance: dict) -> list[dict]:
-    try:
-        data = _get(instance, "queue", {"pageSize": 500, "includeSeries": "false"})
-        if isinstance(data, dict):
-            return data.get("records", [])
-        return data if isinstance(data, list) else []
-    except ArrClientError:
-        return []
+    return todas_las_paginas(
+        lambda pagina, tamano: _get(instance, "queue", {"page": pagina, "pageSize": tamano, "includeSeries": "false"}),
+        "La cola de Sonarr",
+    )
 
 
 def sonarr_get_history(instance: dict, page_size: int = 50) -> list[dict]:
-    try:
-        data = _get(instance, "history", {"pageSize": page_size})
-        if isinstance(data, dict):
-            return data.get("records", [])
-        return data if isinstance(data, list) else []
-    except ArrClientError:
-        return []
+    return registros_de(_get(instance, "history", {"pageSize": page_size}), "El historial de Sonarr")
 
 
 def sonarr_get_root_folders(instance: dict) -> list[dict]:

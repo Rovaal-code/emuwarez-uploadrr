@@ -16,7 +16,7 @@ import ssl
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from .base import IntegrationError
 
@@ -106,6 +106,36 @@ def arr_request(
         raise ArrConnectionError(f"Timeout conectando con {url}") from exc
 
 
+def registros_de(data: Any, que: str) -> list[dict]:
+    """Los registros de una página de cola o historial (`{"records": [...]}`, o una lista a secas). Cualquier otra
+    cosa lanza: devolver [] haría pasar un fallo por «no hay nada»."""
+    if isinstance(data, dict):
+        data = data.get("records")
+    if not isinstance(data, list):
+        raise ArrApiError(f"{que} no ha devuelto una lista de registros")
+    return data
+
+
+_TAMANO_PAGINA = 500
+_MAX_PAGINAS = 100
+
+
+def todas_las_paginas(pedir: Callable[[int, int], Any], que: str) -> list[dict]:
+    """Todos los registros de la cola, página a página hasta `totalRecords`. Una cola cortada se leería como que lo
+    que no está ya no se descarga; si no llega entera, lanza."""
+    registros: list[dict] = []
+    total = 0
+    for pagina in range(1, _MAX_PAGINAS + 1):
+        data = pedir(pagina, _TAMANO_PAGINA)
+        registros += registros_de(data, que)
+        total = data.get("totalRecords") if isinstance(data, dict) else None
+        if not isinstance(total, int) or len(registros) >= total:
+            return registros
+        if not data["records"]:
+            break
+    raise ArrApiError(f"{que} ha devuelto {len(registros)} de {total} registros")
+
+
 def safe_api_key(api_key: str) -> str:
     """Return a masked API key — never log the full key."""
     if len(api_key) <= 8:
@@ -115,5 +145,5 @@ def safe_api_key(api_key: str) -> str:
 
 __all__ = [
     "ArrClientError", "ArrConnectionError", "ArrAuthError", "ArrApiError",
-    "normalize_base_url", "join_api_path", "arr_request", "safe_api_key",
+    "normalize_base_url", "join_api_path", "arr_request", "safe_api_key", "registros_de", "todas_las_paginas",
 ]

@@ -6,7 +6,7 @@ from typing import Any, Optional
 
 from .arr_base import (
     ArrClientError, ArrConnectionError, ArrAuthError,
-    arr_request, join_api_path, safe_api_key,
+    arr_request, join_api_path, registros_de, safe_api_key, todas_las_paginas,
 )
 from .base import (
     IntegrationError, build_url, es_lista_de_fichas, extract_backdrop_url, extract_media_info, extract_poster_url,
@@ -44,7 +44,11 @@ def refresh_movie(url: str, api_key: str, movie_id: int) -> dict[str, Any]:
 
 
 def get_movie(url: str, api_key: str, movie_id: int) -> dict[str, Any]:
-    return request_json("GET", build_url(url, f"/api/v3/movie/{movie_id}"), api_key=api_key)
+    data = request_json("GET", build_url(url, f"/api/v3/movie/{movie_id}"), api_key=api_key)
+    # Un cuerpo vacío llega como {}: con él se guardaría una ficha «Sin título» con id None.
+    if not es_lista_de_fichas([data]):
+        raise IntegrationError(f"Radarr no ha devuelto la película {movie_id}")
+    return data
 
 
 def get_command_status(url: str, api_key: str, command_id: int) -> dict[str, Any]:
@@ -61,18 +65,16 @@ def get_movies(url: str, api_key: str) -> list[dict[str, Any]]:
 
 
 def get_queue(url: str, api_key: str) -> list[dict[str, Any]]:
-    """Return current download queue entries from Radarr."""
-    try:
-        data = request_json(
+    """La cola de descargas de Radarr entera. Si falla o llega cortada lanza: una cola vacía por fallo dejaría
+    como Faltante, y avisaría, todo lo que se está descargando."""
+    return todas_las_paginas(
+        lambda pagina, tamano: request_json(
             "GET",
-            build_url(url, "/api/v3/queue", {"pageSize": 500, "includeMovie": "false"}),
+            build_url(url, "/api/v3/queue", {"page": pagina, "pageSize": tamano, "includeMovie": "false"}),
             api_key=api_key,
-        )
-        if isinstance(data, dict):
-            return data.get("records", [])
-        return data if isinstance(data, list) else []
-    except Exception:
-        return []
+        ),
+        "La cola de Radarr",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -110,23 +112,14 @@ def radarr_get_movies(instance: dict) -> list[dict]:
 
 
 def radarr_get_queue(instance: dict) -> list[dict]:
-    try:
-        data = _get(instance, "queue", {"pageSize": 500, "includeMovie": "false"})
-        if isinstance(data, dict):
-            return data.get("records", [])
-        return data if isinstance(data, list) else []
-    except ArrClientError:
-        return []
+    return todas_las_paginas(
+        lambda pagina, tamano: _get(instance, "queue", {"page": pagina, "pageSize": tamano, "includeMovie": "false"}),
+        "La cola de Radarr",
+    )
 
 
 def radarr_get_history(instance: dict, page_size: int = 50) -> list[dict]:
-    try:
-        data = _get(instance, "history", {"pageSize": page_size})
-        if isinstance(data, dict):
-            return data.get("records", [])
-        return data if isinstance(data, list) else []
-    except ArrClientError:
-        return []
+    return registros_de(_get(instance, "history", {"pageSize": page_size}), "El historial de Radarr")
 
 
 def radarr_get_root_folders(instance: dict) -> list[dict]:

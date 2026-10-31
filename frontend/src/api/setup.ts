@@ -36,16 +36,10 @@ export interface SetupInstancePayload {
   is_anime?: boolean
 }
 
-// POST /setup/instances takes ONE flat instance per call (not an array) —
-// this loops so the wizard can still let the user add several before
-// continuing. (Phase 11C fix: this used to POST { instances: [...] } as a
-// single wrapped body, which the endpoint always rejected with 422.)
-export async function setupInstances(instances: SetupInstancePayload[]): Promise<OkResponse[]> {
-  const results: OkResponse[] = []
-  for (const inst of instances) {
-    results.push(await api.post<OkResponse>('/setup/instances', inst))
-  }
-  return results
+// POST /setup/instances takes ONE flat instance per call (not an array); the
+// wizard calls it once per instance so each can leave its draft as it's saved.
+export async function setupInstance(inst: SetupInstancePayload): Promise<OkResponse> {
+  return api.post<OkResponse>('/setup/instances', inst)
 }
 
 export async function setupComplete(): Promise<OkResponse> {

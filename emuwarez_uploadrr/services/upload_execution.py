@@ -43,8 +43,10 @@ from .uploadrr_contract import (
 from .uploadrr_config_staging import (
     SCREENS_API_KEY_HOSTS,
     default_uploadrr_config_path,
-    read_config_lines,
+    backup_config,
+    read_baseline_lines,
     restore_config_from_backup,
+    restore_stale_config,
     stage_emu_config,
     stage_image_hosts,
     stage_add_logo,
@@ -52,6 +54,7 @@ from .uploadrr_config_staging import (
     stage_per_episode_screens,
     stage_qbittorrent_config,
     stage_tmdb_key,
+    staged_config_text,
     write_staged_config,
 )
 from .image_hosts import fallback_order, get_host_key
@@ -532,13 +535,18 @@ def get_upload_job_artifacts(job_id: int, conn=None) -> list[dict]:
 
 
 def _update_job_status(job_id: int, status: str, **kwargs) -> None:
-    """Escribe el estado sin condiciones. Es la única de las cinco que no
-    protege nada, y se conserva así a propósito: la usan los pasos que MUEVEN
-    el trabajo hacia adelante por decisión propia (encolar, arrancar), donde no
-    hay ninguna decisión del usuario que respetar. Para terminar un trabajo hay
-    que usar _finalize_job_status, que sí protege la cancelación."""
+    """Escribe el estado sin condiciones. Solo para Cancelar, que es la
+    decisión del usuario. Para arrancar usa _avanzar_job y para terminar un
+    trabajo _finalize_job_status: los dos protegen la cancelación."""
     from .upload_states import escribir_estado
     escribir_estado(job_id, status=status, **kwargs)
+
+
+def _avanzar_job(job_id: int, status: str, **kwargs) -> bool:
+    """Escribe el estado salvo que el usuario ya haya cancelado el trabajo.
+    False significa cancelado: quien llama no debe seguir."""
+    from .upload_states import escribir_estado
+    return escribir_estado(job_id, salvo=("cancelled",), status=status, **kwargs)
 
 
 def _finalize_job_status(job_id: int, desired_status: str, **kwargs) -> None:
@@ -739,7 +747,9 @@ def _stage_uploadrr_config(job_id: int, cwd: str) -> Path | None:
         conn.close()
 
     try:
-        lines = read_config_lines(config_path)
+        # Del config de verdad (.bak), no del config.yaml de ahora: puede ser el
+        # que dejó stageado una subida que murió, o el de otra que sigue en curso.
+        lines = read_baseline_lines(config_path)
         changed = False
         if tmdb_key:
             lines, _msg = stage_tmdb_key(lines, tmdb_key)
@@ -775,6 +785,9 @@ def _stage_uploadrr_config(job_id: int, cwd: str) -> Path | None:
                 stream="system",
             )
             return None
+        backup_config(config_path)
+        if config_path.read_text(encoding="utf-8", errors="ignore") == staged_config_text(lines):
+            return config_path  # ya está así: no se reescribe bajo una subida en curso
         write_staged_config(config_path, lines)
         append_upload_log(
             job_id, "info",
@@ -817,15 +830,39 @@ def _acquire_staged_config(job_id: int, cwd: str) -> Path | None:
     key = str(config_path)
     with _config_stage_lock:
         if _config_stage_refcount.get(key, 0) > 0:
-            # Already staged by another in-flight upload — just join the count.
-            _config_stage_refcount[key] += 1
+            # Ya lo stageó otra subida en curso. Se vuelve a calcular por si Ajustes
+            # cambió desde entonces: solo reescribe si el resultado es otro.
+            _stage_uploadrr_config(job_id, cwd)
             append_upload_log(job_id, "info", "config.yaml ya stageado por otra subida en curso; se reutiliza.", stream="system")
+            _config_stage_refcount[key] += 1
             return config_path
+        # Sin subidas en curso config.yaml debería ser el .bak: si no, es el
+        # stageado de una que murió a medias.
+        try:
+            if restore_stale_config(config_path):
+                append_upload_log(
+                    job_id, "warning",
+                    "config.yaml seguía stageado por una subida interrumpida; restaurado desde el backup.",
+                    stream="system",
+                )
+        except OSError as exc:
+            logger.warning("No se pudo restaurar el config.yaml interrumpido (%s): %s", config_path, exc)
         staged = _stage_uploadrr_config(job_id, cwd)
         if staged is None:
             return None
         _config_stage_refcount[key] = 1
         return staged
+
+
+def restaurar_config_interrumpida() -> bool:
+    """Al arrancar no hay ninguna subida viva: si config.yaml sigue stageado es
+    el de una que murió sin restaurarlo, con las claves reales dentro."""
+    conn = _get_db_conn()
+    try:
+        uploadrr_path = get_runtime_settings(conn)["uploadrr_path"]
+    finally:
+        conn.close()
+    return bool(uploadrr_path) and restore_stale_config(default_uploadrr_config_path(uploadrr_path))
 
 
 def _release_staged_config(job_id: int, config_path: Path | None) -> None:
@@ -871,6 +908,15 @@ def get_upload_max_concurrent(conn=None) -> int:
     return val if val in UPLOAD_MAX_CONCURRENT_CHOICES else UPLOAD_MAX_CONCURRENT_DEFAULT
 
 
+def _limite_de_subidas() -> int:
+    try:
+        return get_upload_max_concurrent()
+    except Exception:
+        logger.warning("No se pudo leer %s; se usa %s", UPLOAD_MAX_CONCURRENT_SETTING_KEY,
+                       UPLOAD_MAX_CONCURRENT_DEFAULT, exc_info=True)
+        return UPLOAD_MAX_CONCURRENT_DEFAULT
+
+
 class _UploadConcurrencyGate:
     """Re-reads the configured limit on every wait loop instead of capturing
     it once at acquire time — so lowering/raising the setting takes effect
@@ -890,32 +936,45 @@ class _UploadConcurrencyGate:
         self._cond = threading.Condition()
         self._active = 0
         self._waiting: set[int] = set()
+        self._liberaciones = 0
 
     def acquire(self, job_id: int) -> None:
+        """No lanza: corre antes del try de quien llama, y un fallo aquí dejaba
+        el job en cola para siempre. La base se consulta fuera del candado."""
         with self._cond:
             self._waiting.add(job_id)
-            announced = False
-            try:
-                while True:
-                    limit = get_upload_max_concurrent()
+        announced = False
+        try:
+            while True:
+                limit = _limite_de_subidas()
+                with self._cond:
                     is_next = job_id == min(self._waiting)
                     if limit == 0 or (self._active < limit and is_next):
+                        self._waiting.discard(job_id)
                         self._active += 1
                         return
-                    if not announced:
+                    activas, vistas = self._active, self._liberaciones
+                if not announced:
+                    announced = True
+                    try:
                         append_upload_log(
                             job_id, "info",
-                            f"Esperando turno para empezar la subida real: {self._active} en curso, límite {limit}.",
+                            f"Esperando turno para empezar la subida real: {activas} en curso, límite {limit}.",
                             stream="system",
                         )
-                        announced = True
-                    self._cond.wait(timeout=3)
-            finally:
+                    except Exception:
+                        logger.warning("Subida %s: no se pudo registrar la espera de turno", job_id, exc_info=True)
+                with self._cond:
+                    if self._liberaciones == vistas:
+                        self._cond.wait(timeout=3)
+        finally:
+            with self._cond:
                 self._waiting.discard(job_id)
 
     def release(self) -> None:
         with self._cond:
             self._active = max(0, self._active - 1)
+            self._liberaciones += 1
             self._cond.notify_all()
 
 
@@ -1034,6 +1093,74 @@ def advance_running_phase(job_id: int, phase_key: str, pct: int) -> None:
                       cada=0.5)
 
 
+# Los Uploadrr en marcha de ESTE proceso, por trabajo: Cancelar los señala.
+_PROCESOS: dict[int, subprocess.Popen] = {}
+_PROCESOS_LOCK = threading.Lock()
+_apagando = False
+# Segundos entre SIGTERM y SIGKILL, y de margen a las tuberías tras salir Uploadrr.
+_GRACIA_SIGKILL = 10
+_GRACIA_LECTORES = 15
+
+
+def _senalar_grupo(proc: subprocess.Popen, sig: int) -> bool:
+    """Manda la señal al grupo del proceso (start_new_session hace pgid == pid)."""
+    try:
+        os.killpg(proc.pid, sig)
+        return True
+    except (ProcessLookupError, PermissionError):
+        return False
+
+
+def _detener_proceso(proc: subprocess.Popen) -> bool:
+    """SIGTERM al grupo y, si Uploadrr sigue vivo pasado el plazo, SIGKILL.
+    Sin bloquear: lo usa Cancelar, que responde a una petición web."""
+    enviada = _senalar_grupo(proc, signal.SIGTERM)
+    if enviada:
+        def _rematar() -> None:
+            if proc.poll() is None:
+                _senalar_grupo(proc, signal.SIGKILL)
+        timer = threading.Timer(_GRACIA_SIGKILL, _rematar)
+        timer.daemon = True
+        timer.start()
+    return enviada
+
+
+def detener_procesos_en_marcha() -> None:
+    """Al apagar el servidor: Uploadrr va en su propia sesión y ya no cae con él.
+    Desde aquí no se lanza ninguno más."""
+    global _apagando
+    with _PROCESOS_LOCK:
+        _apagando = True
+        procesos = list(_PROCESOS.values())
+    for proc in procesos:
+        _detener_proceso(proc)
+
+
+def _pid_es_de_este_job(pid: int, job: dict) -> bool:
+    """El PID guardado es de otro proceso si Uploadrr ya terminó (los PID se
+    reutilizan): solo se señala si su línea de comandos es la de este job."""
+    try:
+        import psutil
+        cmdline = psutil.Process(pid).cmdline()
+        ruta = json.loads(job.get("safe_command_json") or "{}").get("source_path")
+    except Exception:  # sin psutil (CLI sin extras), proceso ya muerto o JSON ilegible
+        return False
+    return bool(ruta) and ruta in cmdline and any(a.endswith("upload.py") for a in cmdline)
+
+
+def _terminar_y_esperar(proc: subprocess.Popen) -> int:
+    """Lo mismo pero esperando: devuelve el código de salida (-1 si no sale)."""
+    _senalar_grupo(proc, signal.SIGTERM)
+    try:
+        return proc.wait(timeout=_GRACIA_SIGKILL)
+    except subprocess.TimeoutExpired:
+        _senalar_grupo(proc, signal.SIGKILL)
+    try:
+        return proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        return -1
+
+
 def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str], *, pre_gated: bool = False) -> None:
     """Execute Uploadrr in a background thread. Updates job status, logs, and result artifacts.
 
@@ -1071,57 +1198,83 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
 
     started_dt = datetime.now(timezone.utc)
     started_at = started_dt.isoformat()
-
-    _update_job_status(
-        job_id,
-        "running",
-        stage="running",
-        started_at=started_at,
-        safe_command_json=safe_cmd_json,
-        last_log_at=_now(),
-    )
-    append_upload_log(job_id, "info", "Iniciando proceso Uploadrr…", stream="system")
-    append_upload_log(
-        job_id,
-        "info",
-        f"Comando: {safe_preview}",
-        stream="system",
-    )
-
-    # Save prepared file artifact if applicable
-    if cmd.get("using_prepared_path") and cmd.get("source_path"):
-        create_upload_artifact(
-            job_id, "prepared_file",
-            name="archivo preparado",
-            path=cmd["source_path"],
-        )
-
     timeout = cmd.get("timeout") or None
 
-    # Phase 10F: stage DEFAULT.tmdb / TRACKERS.EMU.api_key into Uploadrr-EMU's
-    # own config.yaml before running, and always restore it afterwards
-    # (success, failure, timeout, or cancellation) via the finally block.
+    # Todo dentro del try: un fallo en cualquier paso (la base bloqueada al
+    # escribir el primer estado, p. ej.) termina el job como fallido y suelta
+    # el config stageado, en vez de dejarlo «en marcha» para siempre.
     staged_config_path: Path | None = None
-    if cmd.get("runtime_type") == RUNTIME_EMU and os.path.isdir(cwd):
-        _update_job_status(job_id, "running", stage="config_staging")
-        staged_config_path = _acquire_staged_config(job_id, cwd)
-        _update_job_status(job_id, "running", stage="running")
-
+    proc: subprocess.Popen | None = None
     try:
-        env = {k: v for k, v in os.environ.items()}
+        def _cancelado() -> None:
+            append_upload_log(job_id, "info", "Subida cancelada antes de lanzar Uploadrr; no se lanza.", stream="system")
 
-        proc = subprocess.Popen(
-            [executable] + args,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            stdin=subprocess.DEVNULL,
-            text=True,
-            errors="replace",
-            cwd=cwd if os.path.isdir(cwd) else None,
-            env=env,
+        # Cancelar puede llegar en cualquier momento: cada escritura de estado
+        # lo respeta, y si ya está cancelado no se lanza nada.
+        if not _avanzar_job(
+            job_id,
+            "running",
+            stage="running",
+            started_at=started_at,
+            safe_command_json=safe_cmd_json,
+            last_log_at=_now(),
+        ):
+            _cancelado()
+            return
+        append_upload_log(job_id, "info", "Iniciando proceso Uploadrr…", stream="system")
+        append_upload_log(
+            job_id,
+            "info",
+            f"Comando: {safe_preview}",
+            stream="system",
         )
 
-        _update_job_status(job_id, "running", process_id=proc.pid)
+        # Save prepared file artifact if applicable
+        if cmd.get("using_prepared_path") and cmd.get("source_path"):
+            create_upload_artifact(
+                job_id, "prepared_file",
+                name="archivo preparado",
+                path=cmd["source_path"],
+            )
+
+        # Phase 10F: stage DEFAULT.tmdb / TRACKERS.EMU.api_key into Uploadrr-EMU's
+        # own config.yaml before running, and always restore it afterwards
+        # (success, failure, timeout, or cancellation) via the finally block.
+        if cmd.get("runtime_type") == RUNTIME_EMU and os.path.isdir(cwd):
+            if not _avanzar_job(job_id, "running", stage="config_staging"):
+                _cancelado()
+                return
+            staged_config_path = _acquire_staged_config(job_id, cwd)
+        if not _avanzar_job(job_id, "running", stage="running"):
+            _cancelado()
+            return
+
+        env = {k: v for k, v in os.environ.items()}
+
+        # Sesión propia: Cancelar y el timeout señalan el grupo entero (Uploadrr,
+        # mkbrr, ffmpeg…) y no solo el PID de Python.
+        # Lanzar y apuntar, bajo el candado con que se apaga el servidor: una vez
+        # empezado el apagado no se lanza otro, y ninguno se escapa de la lista.
+        with _PROCESOS_LOCK:
+            if _apagando:
+                raise RuntimeError("El servidor se está apagando; no se lanza Uploadrr.")
+            proc = subprocess.Popen(
+                [executable] + args,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                stdin=subprocess.DEVNULL,
+                text=True,
+                errors="replace",
+                cwd=cwd if os.path.isdir(cwd) else None,
+                env=env,
+                start_new_session=True,
+            )
+            _PROCESOS[job_id] = proc
+
+        if not _avanzar_job(job_id, "running", process_id=proc.pid):
+            # Cancelar llegó entre medias y no vio el proceso: se detiene aquí.
+            append_upload_log(job_id, "info", "Subida cancelada al arrancar; se detiene Uploadrr.", stream="system")
+            _detener_proceso(proc)
         append_upload_log(job_id, "info", f"PID: {proc.pid}", stream="system")
 
         stdout_lines: list[str] = []
@@ -1215,24 +1368,25 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
         )
         t_out.start()
         t_err.start()
-        # Un solo plazo para los dos: esperar `timeout` a cada uno lo doblaba.
-        inicio = time.monotonic()
-        t_out.join(timeout=timeout)
-        t_err.join(timeout=None if timeout is None else max(0, inicio + timeout - time.monotonic()))
+        # El resultado lo decide el código de salida, no el fin de las tuberías:
+        # un hijo de Uploadrr (mkbrr, ffmpeg…) que las herede las mantiene
+        # abiertas aunque Uploadrr ya haya salido, y esperarlas daba por fallida
+        # una subida buena tras el timeout.
+        timed_out = False
+        try:
+            returncode = proc.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            returncode = _terminar_y_esperar(proc)
+        limite = time.monotonic() + _GRACIA_LECTORES
+        for t in (t_out, t_err):
+            t.join(timeout=max(0, limite - time.monotonic()))
+        if t_out.is_alive() or t_err.is_alive():
+            _senalar_grupo(proc, signal.SIGKILL)  # lo que quede vivo en el grupo
+            t_out.join(timeout=5)
+            t_err.join(timeout=5)
 
-        timed_out = t_out.is_alive() or t_err.is_alive()
         if timed_out:
-            try:
-                proc.kill()
-            except (ProcessLookupError, OSError):
-                pass
-            t_out.join()
-            t_err.join()
-            try:
-                returncode = proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                returncode = -1
-
             finished_dt = datetime.now(timezone.utc)
             finished_at = finished_dt.isoformat()
             duration_seconds = int((finished_dt - started_dt).total_seconds())
@@ -1250,8 +1404,6 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
             append_upload_log(job_id, "error", msg, stream="system")
             _notify_upload_failed(job_id, msg)
             return
-
-        returncode = proc.wait()
 
         # Transient progress marker only, applied atomically and only while
         # still "running" — must never clobber a "cancelled" status that
@@ -1378,6 +1530,11 @@ def _run_uploadrr_subprocess_body(job_id: int, cmd: dict, secrets: list[str]) ->
         logger.error("Subida fallida (job %s): excepción inesperada: %s", job_id, msg)
         _notify_upload_failed(job_id, msg)
     finally:
+        with _PROCESOS_LOCK:
+            _PROCESOS.pop(job_id, None)
+        if proc is not None and proc.poll() is None:
+            # Se salió por una excepción con Uploadrr aún vivo: no se deja suelto.
+            _senalar_grupo(proc, signal.SIGKILL)
         _release_staged_config(job_id, staged_config_path)
 
 
@@ -1502,7 +1659,15 @@ def start_upload_job(
 
         final = {"status": "running", "stage": "running"}
         if wait:
-            t.join()
+            try:
+                t.join()
+            except KeyboardInterrupt:
+                # Uploadrr tiene su propia sesión y ya no recibe el Ctrl-C del terminal.
+                with _PROCESOS_LOCK:
+                    proc = _PROCESOS.get(job_id)
+                if proc is not None:
+                    _detener_proceso(proc)
+                raise
             final = get_upload_job(job_id, conn=conn) or final
 
         return {
@@ -1729,13 +1894,32 @@ def cancel_upload_job(job_id: int, conn=None) -> dict:
 
         pid = job.get("process_id")
         cancelled = False
-        if pid:
+        with _PROCESOS_LOCK:
+            proc = _PROCESOS.get(job_id)
+        if proc is not None:
+            cancelled = _detener_proceso(proc)
+            if cancelled:
+                append_upload_log(
+                    job_id, "info",
+                    f"SIGTERM enviado al grupo del proceso {proc.pid}.",
+                    stream="system",
+                    conn=conn,
+                )
+        elif pid and not _pid_es_de_este_job(pid, job):
+            append_upload_log(
+                job_id, "warning",
+                f"No se señala el PID {pid}: no se puede comprobar que siga siendo el Uploadrr de este job.",
+                stream="system",
+                conn=conn,
+            )
+        elif pid:
+            # Lo lanzó otro proceso (el CLI): solo se conoce su PID, que es el de su grupo.
             try:
-                os.kill(pid, signal.SIGTERM)
+                os.killpg(pid, signal.SIGTERM)
                 cancelled = True
                 append_upload_log(
                     job_id, "info",
-                    f"SIGTERM enviado al proceso {pid}.",
+                    f"SIGTERM enviado al grupo del proceso {pid}.",
                     stream="system",
                     conn=conn,
                 )

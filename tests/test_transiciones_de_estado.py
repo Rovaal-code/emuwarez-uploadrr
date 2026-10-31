@@ -106,3 +106,19 @@ def test_update_job_status_escribe_siempre(db_conn, inicial):
     _update_job_status(jid, "running")
     estado, _fase = _estado(db_conn, jid)
     assert estado == "running"
+
+
+@pytest.mark.parametrize("inicial", ESTADOS)
+def test_avanzar_job_al_arrancar_respeta_la_cancelacion(db_conn, inicial):
+    """Arrancar Uploadrr también es un paso que Cancelar puede adelantarse: antes
+    pisaba «cancelled» con «running» y la subida cancelada se lanzaba igual."""
+    from emuwarez_uploadrr.services.upload_execution import _avanzar_job
+
+    jid = _job(db_conn, inicial)
+    avanzo = _avanzar_job(jid, "running", stage="running")
+    estado, _fase = _estado(db_conn, jid)
+
+    if inicial == "cancelled":
+        assert avanzo is False and estado == "cancelled"
+    else:
+        assert avanzo is True and estado == "running"

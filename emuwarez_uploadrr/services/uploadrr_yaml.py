@@ -16,7 +16,7 @@ seguro.
 """
 from __future__ import annotations
 
-import ast
+import json
 import re
 from typing import Any, Optional
 
@@ -77,25 +77,126 @@ def set_block_key(lines: list[str], block: str, key: str, value: str, indent: in
     return f"{block}.{key} creado"
 
 
+# Entre comillas simples YAML pliega los saltos de línea y no admite controles.
+_NO_CABE_EN_COMILLAS_SIMPLES = re.compile("[\x00-\x08\x0a-\x1f\x7f-\x9f\u2028\u2029]")
+
+
 def yaml_scalar(value: Any) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
     if value is None:
         return "null"
+    if isinstance(value, (int, float)):
+        return str(value)  # un número que ya lo era no pasa a cadena al reescribirlo
+    if isinstance(value, (list, tuple)):
+        return "[" + ", ".join(yaml_scalar(v) for v in value) + "]"
     value = str(value)
+    if _NO_CABE_EN_COMILLAS_SIMPLES.search(value):
+        # Entre dobles y con escapes; los controles C1 y los separadores Unicode
+        # (que json deja tal cual) también, o YAML los leería como salto de línea.
+        doble = json.dumps(value, ensure_ascii=False)
+        return re.sub("[\x7f-\x9f\u2028\u2029]", lambda m: f"\\u{ord(m.group()):04x}", doble)
     return "'" + value.replace("'", "''") + "'"
 
 
-def python_literal_scalar(value: Any) -> str:
-    if isinstance(value, bool):
-        return "True" if value else "False"
-    if value is None:
-        return "None"
-    return repr(str(value))
-
-
 def render_inline_mapping(mapping: dict[str, Any]) -> str:
-    return "{" + ", ".join(f"{repr(k)}: {python_literal_scalar(v)}" for k, v in mapping.items()) + "}"
+    # Escalares YAML: repr() de Python escapa con `\`, que en una cadena entre
+    # comillas simples de YAML es literal (una contraseña con `\` se leía mal).
+    return "{" + ", ".join(f"{yaml_scalar(k)}: {yaml_scalar(v)}" for k, v in mapping.items()) + "}"
+
+
+_SIMPLES = r"'(?:[^']|'')*'"
+_DOBLES = r'"(?:[^"\\]|\\.)*"'
+_LISTA = r"\[(?:" + _SIMPLES + "|" + _DOBLES + r"|[^\]'\"])*\]"
+_CLAVE = _SIMPLES + "|" + _DOBLES + r"|[^,{}:'\"]+"
+_VALOR = _SIMPLES + "|" + _DOBLES + "|" + _LISTA + r"|[^,{}]*?"
+_PAR = re.compile(r"\s*(" + _CLAVE + r")\s*:\s*(" + _VALOR + r")\s*(?:,|$)")
+_ITEM = re.compile(r"\s*(" + _SIMPLES + "|" + _DOBLES + r"|[^,'\"]+?)\s*(?:,|$)")
+
+
+# Los escapes de las comillas dobles de YAML, que no son los de Python (`\/`, `\_`, `\N`…).
+_ESCAPES_YAML = {
+    "0": "\0", "a": "\a", "b": "\b", "t": "\t", "\t": "\t", "n": "\n", "v": "\v", "f": "\f", "r": "\r",
+    "e": "\x1b", " ": " ", '"': '"', "/": "/", "\\": "\\", "N": "\x85", "_": "\xa0", "L": "\u2028", "P": "\u2029",
+}
+_ESCAPE = re.compile(r"\\(x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|.)", re.S)
+
+
+def _decodificar_escapes(cuerpo: str) -> str:
+    def uno(m: re.Match) -> str:
+        escape = m.group(1)
+        if len(escape) > 1:
+            try:
+                return chr(int(escape[1:], 16))
+            except ValueError:
+                return m.group(0)
+        return _ESCAPES_YAML.get(escape, m.group(0))
+    return _ESCAPE.sub(uno, cuerpo)
+
+
+def _sin_comillas(texto: str) -> Optional[str]:
+    """El contenido de un escalar entre comillas; None si no lo está."""
+    if len(texto) >= 2 and texto[0] == texto[-1] == "'":
+        return texto[1:-1].replace("''", "'")
+    if len(texto) >= 2 and texto[0] == texto[-1] == '"':
+        return _decodificar_escapes(texto[1:-1])
+    return None
+
+
+def _leer_escalar(texto: str) -> Any:
+    texto = texto.strip()
+    entrecomillado = _sin_comillas(texto)
+    if entrecomillado is not None:
+        return entrecomillado
+    if texto[:1] == "[" and texto[-1:] == "]":
+        lista = _leer_lista(texto[1:-1])
+        return texto if lista is None else lista
+    # Las palabras que PyYAML (YAML 1.1) lee como booleano: solo en valores.
+    if re.fullmatch(r"yes|Yes|YES|true|True|TRUE|on|On|ON", texto):
+        return True
+    if re.fullmatch(r"no|No|NO|false|False|FALSE|off|Off|OFF", texto):
+        return False
+    # `none` no: PyYAML lo lee como cadena, y a null Uploadrr podía fallar (`None.strip()`).
+    if texto in {"", "~", "null", "Null", "NULL"}:
+        return None
+    # Solo las formas que PyYAML resuelve como entero: `08` es una cadena, y `0` o `5` no.
+    if re.fullmatch(r"[-+]?(?:0|[1-9]\d*)", texto):
+        return int(texto)
+    if re.fullmatch(r"-?\d+\.\d+", texto):
+        return float(texto)
+    return texto
+
+
+def _leer_lista(cuerpo: str) -> Optional[list[Any]]:
+    """Los elementos de `[a, b]` (sin anidar), p. ej. automatic_management_paths."""
+    cuerpo = cuerpo.strip()
+    elementos: list[Any] = []
+    pos = 0
+    while pos < len(cuerpo):
+        elemento = _ITEM.match(cuerpo, pos)
+        if not elemento:
+            return None
+        elementos.append(_leer_escalar(elemento.group(1)))
+        pos = elemento.end()
+    return elementos
+
+
+def _leer_mapa_en_linea(cuerpo: str) -> Optional[dict[str, Any]]:
+    """Lee `k: v, k: v` con escalares YAML (comillas simples o dobles, o sin
+    comillas) y listas de ellos, que es lo que escribe render_inline_mapping y
+    lo que trae el config de ejemplo del fork. None si algo no encaja."""
+    cuerpo = cuerpo.strip()
+    resultado: dict[str, Any] = {}
+    pos = 0
+    while pos < len(cuerpo):
+        par = _PAR.match(cuerpo, pos)
+        if not par:
+            return None
+        clave = par.group(1).strip()
+        entrecomillada = _sin_comillas(clave)
+        resultado[clave if entrecomillada is None else entrecomillada] = _leer_escalar(par.group(2))
+        pos = par.end()
+    return resultado
 
 
 def find_child_block(lines: list[str], top_block: str, child: str, indent: int = 2) -> tuple[int, int]:
@@ -120,8 +221,8 @@ def find_child_block(lines: list[str], top_block: str, child: str, indent: int =
 
 
 def get_child_inline_mapping(lines: list[str], top_block: str, child: str, indent: int = 2) -> dict[str, Any]:
-    """Parse an existing `child: {...}` inline mapping (Python-literal dict
-    syntax, as written by render_inline_mapping) back into a dict. Returns {}
+    """Parse an existing `child: {...}` inline mapping (YAML flow mapping, as
+    written by render_inline_mapping) back into a dict. Returns {}
     if the child is absent or its value isn't a parseable inline mapping —
     callers that only want to ADD/OVERRIDE specific keys without wiping out
     unrelated ones (e.g. torrent_storage_dir, content_layout) read this
@@ -134,11 +235,7 @@ def get_child_inline_mapping(lines: list[str], top_block: str, child: str, inden
     m = re.match(rf"^\s*{re.escape(child)}\s*:\s*(\{{.*\}})\s*(?:#.*)?$", text)
     if not m:
         return {}
-    try:
-        value = ast.literal_eval(m.group(1))
-    except (ValueError, SyntaxError):
-        return {}
-    return value if isinstance(value, dict) else {}
+    return _leer_mapa_en_linea(m.group(1)[1:-1]) or {}
 
 
 def set_child_inline_mapping(lines: list[str], top_block: str, child: str, mapping: dict[str, Any], indent: int = 2) -> str:

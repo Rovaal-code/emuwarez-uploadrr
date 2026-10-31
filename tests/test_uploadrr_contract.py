@@ -331,3 +331,19 @@ def test_contract_warns_without_tmdb_id(tmp_path):
 def test_season_zero_is_sent():
     cmd = _build(season=0, episode=1)
     assert cmd[cmd.index("-season") + 1] == "S00"
+
+
+def test_a_season_pack_is_sent_as_a_folder():
+    """Sin -fd, Uploadrr-EMU cambia una carpeta con un solo vídeo por ese
+    fichero y el torrent se llama como él, no como el release."""
+    assert "-fd" in _build(category="tv", season=1)
+    assert "-fd" in _build(category="tv", season=0)  # especiales
+
+
+@pytest.mark.parametrize("kwargs", [
+    {},
+    {"category": "tv", "season": 1, "episode": 5},
+    {"category": "tv", "season": 0, "episode": 1},
+])
+def test_a_movie_or_an_episode_is_not_sent_as_a_folder(kwargs):
+    assert "-fd" not in _build(**kwargs)

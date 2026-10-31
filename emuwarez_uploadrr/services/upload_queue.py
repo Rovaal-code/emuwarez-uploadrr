@@ -43,6 +43,10 @@ from .eventos import EVENTO_SUBIDA_ESTADO, publicar
 # process restart during the grace window and be readable by a later retry.
 _LOCK = threading.Lock()
 _QUEUE_TIMERS: dict[int, threading.Timer] = {}
+# Trabajos cuyo hilo de preparación sigue vivo. Cancelar en 'preparing' solo
+# marca la fila: el hilo termina el paso en curso (renombrar, remuxear) y
+# hasta entonces no se puede lanzar otro sobre el mismo fichero.
+_EN_CURSO: set[int] = set()
 
 
 def _now_iso() -> str:
@@ -77,11 +81,15 @@ def _find_latest_job_for_item(conn, item_id: int) -> dict | None:
 
 
 def trabajo_activo(conn, item_id: int) -> dict | None:
-    """El trabajo en marcha de este elemento, si hay alguno."""
+    """El trabajo en marcha de este elemento, si hay alguno. Cuenta también
+    uno cancelado cuyo hilo aún no ha terminado."""
+    with _LOCK:
+        vivos = sorted(_EN_CURSO)
     return row_to_dict(conn.execute(
-        f"SELECT * FROM upload_jobs WHERE library_item_id = ? AND status IN "
-        f"({','.join('?' * len(ACTIVE_JOB_STATUSES))}) ORDER BY id DESC LIMIT 1",
-        (item_id, *ACTIVE_JOB_STATUSES),
+        f"SELECT * FROM upload_jobs WHERE library_item_id = ? AND (status IN "
+        f"({','.join('?' * len(ACTIVE_JOB_STATUSES))}) OR (status = 'cancelled' AND id IN ({','.join('?' * len(vivos))}))) "
+        f"ORDER BY id DESC LIMIT 1",
+        (item_id, *ACTIVE_JOB_STATUSES, *vivos),
     ).fetchone())
 
 
@@ -145,9 +153,11 @@ def _insert_and_start_queued_job(
         activa = trabajo_activo(conn, item["id"])
         if activa:
             conn.execute("ROLLBACK")
+            cancelada = activa.get("status") == "cancelled"
             return {
                 "status": "blocked",
-                "errors": ["Ya hay una subida en curso para este contenido."],
+                "errors": ["La subida cancelada aún está terminando el paso en curso; reintenta en un momento."
+                           if cancelada else "Ya hay una subida en curso para este contenido."],
                 "job": activa,
             }
         cursor = conn.execute(
@@ -202,11 +212,22 @@ def _arm_queue_timer(job_id: int) -> None:
     """Start the QUEUE_GRACE_SECONDS cancel-if-you-regret-it timer for a job
     already sitting in status='queued', inserted by
     _insert_and_start_queued_job()."""
-    timer = threading.Timer(QUEUE_GRACE_SECONDS, _run_queued_job, args=(job_id,))
+    timer = threading.Timer(QUEUE_GRACE_SECONDS, _correr_trabajo, args=(job_id,))
     timer.daemon = True
     with _LOCK:
         _QUEUE_TIMERS[job_id] = timer
     timer.start()
+
+
+def _correr_trabajo(job_id: int) -> None:
+    """Lo que ejecuta el temporizador: _run_queued_job, contando el hilo como vivo."""
+    with _LOCK:
+        _EN_CURSO.add(job_id)
+    try:
+        _run_queued_job(job_id)
+    finally:
+        with _LOCK:
+            _EN_CURSO.discard(job_id)
 
 
 def _foto_de_la_peticion(conn, request_item_id: int | None) -> tuple[str | None, str | None]:

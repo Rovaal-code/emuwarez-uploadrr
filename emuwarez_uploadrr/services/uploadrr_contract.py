@@ -204,6 +204,10 @@ def build_uploadrr_emu_command(
     release_type = _UPLOADRR_TYPES.get(str(release_format or "").strip())
     if release_type:
         cmd += ["-t", release_type]
+    # Un pack es una carpeta: sin -fd, Uploadrr-EMU cambia una carpeta con un
+    # solo vídeo por ese fichero y el torrent se llama como él, no como el release.
+    if season is not None and season != "" and (episode is None or episode == ""):
+        cmd.append("-fd")
     return cmd
 
 

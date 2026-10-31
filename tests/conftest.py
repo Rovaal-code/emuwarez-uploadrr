@@ -84,6 +84,16 @@ def _sin_manifiesto_de_version(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _procesos_sin_apagado():
+    """Apagar la aplicación (lifespan) deja de admitir procesos nuevos; en el
+    mismo proceso de pytest hay que volver a admitirlos para el test siguiente."""
+    yield
+    from emuwarez_uploadrr.services import mkv_remux, upload_execution
+    mkv_remux._apagando = False
+    upload_execution._apagando = False
+
+
+@pytest.fixture(autouse=True)
 def isolated_db(tmp_path, monkeypatch):
     """Point CONFIG_DIR to a per-test temp dir so each test starts with a fresh DB."""
     monkeypatch.setenv("CONFIG_DIR", str(tmp_path))

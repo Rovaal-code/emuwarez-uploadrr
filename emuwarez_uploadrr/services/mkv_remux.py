@@ -473,7 +473,8 @@ def _default_subtitle_id(audio_sorted: list[dict], subs_sorted: list[dict]) -> i
         forced = next((t for t in castilian_subs if t["forced"]), None)
         return forced["id"] if forced else None
 
-    full = next((t for t in castilian_subs if not t["forced"]), None)
+    # Completo: ni forzado ni de comentarios.
+    full = next((t for t in castilian_subs if not t["forced"] and "Comentarios" not in t["qualifiers"]), None)
     if full:
         return full["id"]
     return subs_sorted[0]["id"] if subs_sorted else None

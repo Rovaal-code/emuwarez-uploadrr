@@ -69,3 +69,14 @@ def test_unos_comentarios_en_castellano_no_cuentan_como_doblaje(tmp_path):
     plan = build_track_plan(read_tracks_json(str(ruta))["data"])
     subs = [(t["new_name"], t["default_after"]) for t in plan["ordered_tracks"] if t["type"] == "subtitles"]
     assert subs == [("Español (Castellano)", True), ("Español (Castellano) - Comentarios", False)]
+
+
+def test_el_subtitulo_completo_no_es_el_de_comentarios_aunque_vaya_primero(tmp_path):
+    ruta = hacer_mkv(
+        tmp_path / "Peli.mkv",
+        audios=({"lang": "en"}, {"lang": "es", "canales": 2, "comentario": True}),
+        subs=({"lang": "es", "titulo": "Comentarios del director"}, {"lang": "es"}),
+    )
+    plan = build_track_plan(read_tracks_json(str(ruta))["data"])
+    activado = [t["new_name"] for t in plan["ordered_tracks"] if t["type"] == "subtitles" and t["default_after"]]
+    assert activado == ["Español (Castellano)"]

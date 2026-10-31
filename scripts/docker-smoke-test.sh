@@ -145,7 +145,6 @@ check_endpoint() {
 echo ""
 echo "Endpoints API:"
 check_endpoint "GET /api/health"        "${BASE_URL}/api/health"
-check_endpoint "GET /api/runtime"       "${BASE_URL}/api/runtime"
 check_endpoint "GET /api/setup/status"  "${BASE_URL}/api/setup/status"
 check_endpoint "GET /api/docs"          "${BASE_URL}/api/docs"
 

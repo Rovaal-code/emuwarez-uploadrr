@@ -2,13 +2,42 @@
 from __future__ import annotations
 
 import logging
-from typing import Annotated, Optional
+import sqlite3
+from contextlib import ExitStack
+from typing import Annotated, Iterator, Optional
 
 from fastapi import Header, HTTPException, status
 
+from emuwarez_uploadrr.database import BaseMasNuevaError, db
 from .runtime import _db_path
 
 logger = logging.getLogger(__name__)
+
+# Lo que significa «la base no responde». Un fallo de código (KeyError, ImportError...) no
+# lo es: tiene que llegar como 500, no disfrazarse de una caída pasajera.
+ERRORES_DE_BASE = (sqlite3.Error, OSError, BaseMasNuevaError)
+
+
+def base_no_disponible(donde: str) -> HTTPException:
+    """503 para un fallo de la base, que no se confunde con una sesión inválida.
+    Se llama dentro del `except`: deja la traza en el registro."""
+    logger.exception("%s: la base de datos falló", donde)
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="La base de datos no responde. Inténtalo de nuevo en unos segundos.",
+        headers={"Retry-After": "5"},
+    )
+
+
+def get_db() -> Iterator[sqlite3.Connection]:
+    """Una conexión por petición: se confirma al terminar bien, se deshace si
+    falla y se cierra siempre. Si no se puede abrir, responde 503."""
+    with ExitStack() as pila:
+        try:
+            conn = pila.enter_context(db(_db_path(), entre_hilos=True))
+        except ERRORES_DE_BASE:
+            raise base_no_disponible("get_db")
+        yield conn
 
 
 def _resolve_token(authorization: Optional[str]) -> Optional[str]:
@@ -28,10 +57,8 @@ def get_current_user(
     if not token:
         return None
     try:
-        from emuwarez_uploadrr.database import connect, init_db
         from .services.auth_service import get_user_by_token
-        with connect(_db_path()) as conn:
-            init_db(conn)
+        with db(_db_path()) as conn:
             return get_user_by_token(conn, token)
     except Exception:
         return None
@@ -40,7 +67,7 @@ def get_current_user(
 def require_auth(
     authorization: Annotated[Optional[str], Header()] = None,
 ) -> dict:
-    """Raise 401 if no valid Bearer token is present."""
+    """401 si no hay un token válido; 503 si la base no deja comprobarlo."""
     token = _resolve_token(authorization)
     if not token:
         raise HTTPException(
@@ -48,21 +75,14 @@ def require_auth(
             detail="Autenticación requerida. Incluye el token en Authorization: Bearer <token>",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    from .services.auth_service import get_user_by_token
     try:
-        from emuwarez_uploadrr.database import connect, init_db
-        from .services.auth_service import get_user_by_token
-        with connect(_db_path()) as conn:
-            init_db(conn)
+        with db(_db_path()) as conn:
             user = get_user_by_token(conn, token)
-    except Exception:
-        # A DB error here (e.g. a locked/corrupt file) must not surface as
-        # a 500 for every endpoint — but silently downgrading it to "no
-        # user found" previously masked a real concurrency bug (concurrent
-        # requests racing a table-rebuild migration), which looked to the
-        # frontend like a spuriously invalid token and wiped the session.
-        # Log it so a genuine DB problem is visible instead of invisible.
-        logger.exception("require_auth: token lookup failed unexpectedly")
-        user = None
+    except ERRORES_DE_BASE:
+        # Un fallo de la base no es un token inválido: con 401 el cliente
+        # borraba la sesión por un bloqueo pasajero.
+        raise base_no_disponible("require_auth")
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

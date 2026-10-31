@@ -143,7 +143,6 @@ URLs disponibles:
 ```
 http://localhost:9494/api/health
 http://localhost:9494/api/setup/status
-http://localhost:9494/api/runtime
 http://localhost:9494/api/contract/json
 http://localhost:9494/api/docs
 ```
@@ -285,7 +284,7 @@ Implementado:
 - Límite de 1 hora para refresco manual de peticiones.
 - Stubs seguros para crear peticiones EMU.
 - Backend FastAPI base (`emuwarez_uploadrr/web/`).
-- Endpoints: `/api/health`, `/api/runtime`, `/api/setup/status`, `/api/contract/json`.
+- Endpoints: `/api/health`, `/api/setup/status`, `/api/contract/json`.
 - Setup wizard completo: `POST /api/setup/admin`, `/base`, `/uploadrr`, `/tmdb`, `/emu`, `/instances`, `/complete`.
 - Autenticación local con tokens opacos: `POST /api/auth/login`, `GET /api/auth/me`, `POST /api/auth/logout`.
 - Todos los endpoints sensibles protegidos con `Authorization: Bearer <token>`.

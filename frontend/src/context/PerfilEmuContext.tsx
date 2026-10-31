@@ -43,19 +43,21 @@ export function PerfilEmuProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(HIDE_NAME_KEY, ocultarNombre ? '1' : '0')
   }, [ocultarNombre])
 
-  // Manda la última petición: una lectura que llega tarde no pisa un «Actualizar» posterior.
+  // «Actualizar» siempre se aplica; de una lectura, solo la última y si no hubo
+  // un «Actualizar» después (la que empezó antes trae lo de antes).
   const ultima = useRef(0)
-  const cargar = useCallback(async (pedir: () => Promise<EmuPerfil>) => {
-    const esta = ++ultima.current
-    const nuevo = await pedir()
-    if (esta === ultima.current) setPerfil(nuevo)
-  }, [])
 
   useEffect(() => {
-    cargar(getEmuPerfil).catch(() => { /* sin perfil: no se enseña */ })
-  }, [lastInvalidatedAt, cargar])
+    const esta = ++ultima.current
+    getEmuPerfil()
+      .then(nuevo => { if (esta === ultima.current) setPerfil(nuevo) })
+      .catch(() => { /* sin perfil: no se enseña */ })
+  }, [lastInvalidatedAt])
 
-  const actualizar = useCallback(() => cargar(actualizarEmuPerfil), [cargar])
+  const actualizar = useCallback(async () => {
+    ultima.current++
+    setPerfil(await actualizarEmuPerfil())
+  }, [])
 
   return (
     <PerfilEmuContext.Provider value={{ perfil, actualizar, ocultarNombre, setOcultarNombre }}>

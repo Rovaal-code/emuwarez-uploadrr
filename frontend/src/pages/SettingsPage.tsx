@@ -17,6 +17,7 @@ import {
 import { fetchSettings, updateSettings, type SettingsData } from '../api/settings'
 import { testTmdbConnection, testEmuwarezConnection, testQbitConnection, testImghostConnection, type IntegrationTestResult } from '../api/integrationTests'
 import { useCooldown } from '../hooks/useCooldown'
+import { usePerfilEmu } from '../context/PerfilEmuContext'
 import { testDiscordNotification, testTelegramNotification } from '../api/notifications'
 import { ProviderPriorityPicker } from '../components/ProviderPriorityPicker'
 import { ServiceIcon } from '../components/ServiceIcon'
@@ -179,6 +180,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const [testingEmu, setTestingEmu] = useState(false)
   const [emuTestResult, setEmuTestResult] = useState<IntegrationTestResult | null>(null)
   const emuCooldown = useCooldown()
+  const { actualizar: actualizarPerfilEmu } = usePerfilEmu()
 
   // Form state
   // Grupos de subida: el primero es el que sale por defecto al subir.
@@ -433,6 +435,8 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
       // Las API keys de imágenes ya NO viajan aquí: cada una se guarda desde
       // su propia tarjeta, en el momento, sin depender del Guardar global.
       const updated = await updateSettings(payload)
+      // Con otra clave, el servidor descarta el perfil guardado y lo pide ya: el Panel no espera a la hora.
+      if (payload.emu_api_key) actualizarPerfilEmu().catch(() => { /* lo intenta la próxima lectura */ })
       setSettings(updated)
       setTags(updated.upload_tags?.length ? updated.upload_tags : [updated.default_release_tag])
       // Solo el borrador que se envió: lo escrito mientras guardaba se queda.

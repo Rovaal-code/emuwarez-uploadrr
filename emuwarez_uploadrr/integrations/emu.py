@@ -6,6 +6,7 @@ UNIT3D API authentication uses ?api_token=<key> as a query parameter.
 from __future__ import annotations
 
 import json
+import re
 import time
 from typing import Any, Iterable, Optional
 
@@ -223,17 +224,24 @@ def _id_externo(value: Any) -> Optional[str]:
     return str(n) if n else None
 
 
+_ESPECIALES = re.compile(r"\b(?:especiales?|specials?)\b", re.I)
+
+
 def normalize_request(raw: dict[str, Any]) -> RequestItem:
     """Una fila plana de /api/requests/filter. Sea cual sea el campo que falte, no falla."""
     emu_id = str(raw.get("id", ""))
     imdb = _entero(raw.get("imdb"))
     usuario = raw.get("user")
     autor = usuario if usuario and str(usuario).lower() != "anonymous" else None
+    titulo = str(raw.get("name") or "Sin título")
     temporada, capitulo = _entero(raw.get("season_number")), _entero(raw.get("episode_number"))
+    # UNIT3D guarda 0 para «sin temporada»: es la serie entera salvo que el nombre diga Especiales.
+    if temporada == 0 and not capitulo and not _ESPECIALES.search(titulo):
+        temporada = None
     return RequestItem(
         id=None,
         emu_id=emu_id,
-        title=str(raw.get("name") or "Sin título"),
+        title=titulo,
         category=EMU_CATEGORIAS.get(_entero(raw.get("category_id"))),
         requested_source=EMU_TIPOS.get(_entero(raw.get("type_id"))),
         requested_resolution=EMU_RESOLUCIONES.get(_entero(raw.get("resolution_id"))),

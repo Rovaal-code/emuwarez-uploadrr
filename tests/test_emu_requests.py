@@ -113,6 +113,25 @@ def test_temporada_y_capitulo_dan_el_alcance():
     assert normalize_request({**FILA, "season_number": 2, "episode_number": 0}).req_scope == "season"
 
 
+def test_temporada_0_sin_capitulo_es_la_serie_entera():
+    """UNIT3D guarda 0 para «sin temporada»: leerlo como Especiales mandaba toda petición de serie a la T0."""
+    item = normalize_request({**FILA, "season_number": 0})
+    assert (item.req_scope, item.req_season, item.req_episode) == (None, None, None)
+    item = normalize_request({**FILA, "season_number": 0, "episode_number": 0})
+    assert (item.req_scope, item.req_season) == (None, None)
+
+
+@pytest.mark.parametrize("nombre", ["Los Simpson - Especiales", "Doctor Who Specials", "Sherlock (specials)"])
+def test_temporada_0_con_especiales_en_el_nombre_si_son_los_especiales(nombre):
+    item = normalize_request({**FILA, "name": nombre, "season_number": 0})
+    assert (item.req_scope, item.req_season) == ("season", 0)
+
+
+def test_un_capitulo_de_la_temporada_0_sigue_siendo_un_capitulo():
+    item = normalize_request({**FILA, "season_number": 0, "episode_number": 3})
+    assert (item.req_scope, item.req_season, item.req_episode) == ("episode", 0, 3)
+
+
 def test_una_fila_sin_casi_nada_no_falla():
     item = normalize_request({"id": 7})
     assert (item.emu_id, item.title, item.url) == ("7", "Sin título", f"{EMU_BASE_URL}/requests/7")
@@ -390,6 +409,32 @@ def test_una_temporada_que_no_tienes_no_sale_compatible(db_conn):
 
     match_all_requests(db_conn)
     assert db_conn.execute("SELECT status FROM request_matches").fetchone()["status"] == "No disponible"
+
+
+def test_una_peticion_de_serie_con_temporada_0_se_cruza_con_la_serie_y_no_con_los_especiales(db_conn):
+    """F3: la serie completa tiene su fila de Especiales y la petición de toda la serie (season_number 0) caía allí."""
+    from emuwarez_uploadrr.services.requests import match_all_requests, upsert_request
+    serie = db_conn.execute("INSERT INTO library_items(item_type,title,year,local_status,tmdb_id) "
+                            "VALUES ('series','Serie',2019,'Disponible','77')").lastrowid
+    ids = {}
+    for n in (0, 1):
+        ids[n] = db_conn.execute(
+            "INSERT INTO library_items(item_type,title,local_status,parent_id,season_number,tmdb_id) "
+            "VALUES ('season','T','Disponible',?,?,'77')", (serie, n)).lastrowid
+        db_conn.execute("INSERT INTO library_items(item_type,title,local_status,parent_id,season_number,"
+                        "episode_number,resolution,source) VALUES ('episode','E','Disponible',?,?,1,'1080p','WEB-DL')",
+                        (ids[n], n))
+    db_conn.commit()
+    upsert_request(db_conn, emu.normalize_request(
+        {**FILA, "id": 77, "name": "Serie", "category_id": 2, "tmdb": 77, "status": "unfilled", "resolution_id": 3,
+         "type_id": 4, "season_number": 0}))
+
+    match_all_requests(db_conn)
+
+    fila = db_conn.execute("SELECT library_item_id, status FROM request_matches").fetchone()
+    assert (fila["library_item_id"], fila["status"]) == (serie, "Compatible")
+    estado = lambda i: db_conn.execute("SELECT request_status FROM library_items WHERE id = ?", (i,)).fetchone()[0]
+    assert (estado(serie), estado(ids[0]), estado(ids[1])) == ("Compatible", "Sin petición", "Sin petición")
 
 
 def test_recalcular_borra_el_casamiento_que_ya_no_vale(db_conn):

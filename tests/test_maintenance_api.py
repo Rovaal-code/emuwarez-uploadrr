@@ -110,17 +110,3 @@ def test_vacuum_apply_requires_confirmation(client, auth_headers):
     data = resp.json()
     assert data["ok"] is False
     assert "MANTENIMIENTO_DB" in data["error"]
-
-
-# ---------- /api/maintenance/logs/cleanup ----------
-
-def test_cleanup_logs_requires_auth(client):
-    resp = client.post("/api/maintenance/logs/cleanup", json={})
-    assert resp.status_code == 401
-
-
-def test_cleanup_logs_dry_run(client, auth_headers):
-    resp = client.post("/api/maintenance/logs/cleanup", json={"dry_run": True, "days": 30}, headers=auth_headers)
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["ok"] is True

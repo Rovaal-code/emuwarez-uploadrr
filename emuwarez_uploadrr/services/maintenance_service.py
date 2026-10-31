@@ -1,25 +1,17 @@
-"""SQLite maintenance and internal log cleanup."""
+"""SQLite maintenance."""
 from __future__ import annotations
 
-import datetime
 import os
 import sqlite3
 from pathlib import Path
 
 VACUUM_CONFIRMATION = "MANTENIMIENTO_DB"
-CLEANUP_CONFIRMATION = "LIMPIAR_LOGS"
 
 
 def _get_db_path() -> Path:
     env = os.environ.get("CONFIG_DIR")
     base = Path(env) if env else Path.home() / ".config" / "emuwarez-renamer"
     return base / "emuwarez_uploadrr.db"
-
-
-def _get_log_dir() -> Path:
-    env = os.environ.get("CONFIG_DIR")
-    base = Path(env) if env else Path.home() / ".config" / "emuwarez-renamer"
-    return base / "logs"
 
 
 def get_database_maintenance_status() -> dict:
@@ -152,74 +144,3 @@ def run_database_analyze(*, dry_run: bool = True, apply: bool = False) -> dict:
         return {"ok": True, "dry_run": False, "action": "analyze", "message": "ANALYZE completado"}
     except Exception as exc:
         return {"ok": False, "dry_run": False, "error": str(exc)}
-
-
-def cleanup_old_logs(
-    *,
-    days: int = 30,
-    dry_run: bool = True,
-    apply: bool = False,
-    confirmation: str | None = None,
-) -> dict:
-    """Deletes log files in CONFIG_DIR/logs/ older than `days` days.
-
-    dry_run=True previews. apply=True requires confirmation=LIMPIAR_LOGS.
-    """
-    do_apply = apply and not dry_run
-    if do_apply and confirmation != CLEANUP_CONFIRMATION:
-        return {
-            "ok": False,
-            "dry_run": dry_run,
-            "error": f"Confirmación requerida: pasa confirmation='{CLEANUP_CONFIRMATION}'",
-        }
-
-    log_dir = _get_log_dir()
-    if not log_dir.exists():
-        return {
-            "ok": True,
-            "dry_run": dry_run,
-            "files_found": 0,
-            "files_deleted": 0,
-            "bytes_freed": 0,
-            "message": "Directorio de logs no existe",
-        }
-
-    cutoff = datetime.datetime.now() - datetime.timedelta(days=days)
-    candidates = []
-    for f in log_dir.rglob("*"):
-        if f.is_file():
-            mtime = datetime.datetime.fromtimestamp(f.stat().st_mtime)
-            if mtime < cutoff:
-                candidates.append(f)
-
-    total_bytes = sum(f.stat().st_size for f in candidates)
-
-    if dry_run or not do_apply:
-        return {
-            "ok": True,
-            "dry_run": True,
-            "action": "preview",
-            "days": days,
-            "files_found": len(candidates),
-            "files": [str(f.relative_to(log_dir)) for f in candidates[:50]],
-            "bytes_to_free": total_bytes,
-            "message": f"Previsualización — {len(candidates)} archivos a eliminar ({total_bytes:,} bytes)",
-        }
-
-    deleted = 0
-    for f in candidates:
-        try:
-            f.unlink()
-            deleted += 1
-        except OSError:
-            pass
-
-    return {
-        "ok": True,
-        "dry_run": False,
-        "action": "cleanup",
-        "days": days,
-        "files_deleted": deleted,
-        "bytes_freed": total_bytes,
-        "message": f"Limpieza completada: {deleted} archivos eliminados ({total_bytes:,} bytes liberados)",
-    }

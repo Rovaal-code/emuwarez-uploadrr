@@ -1233,13 +1233,6 @@ class VacuumRequest(BaseModel):
     confirmation: Optional[str] = None
 
 
-class CleanupLogsRequest(BaseModel):
-    days: int = 30
-    dry_run: bool = True
-    apply: bool = False
-    confirmation: Optional[str] = None
-
-
 # ---------------------------------------------------------------------------
 # Phase 8C — Operational queue
 # ---------------------------------------------------------------------------

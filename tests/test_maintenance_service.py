@@ -2,14 +2,11 @@
 from __future__ import annotations
 
 import sqlite3
-from pathlib import Path
 
 import pytest
 
 from emuwarez_uploadrr.services.maintenance_service import (
-    CLEANUP_CONFIRMATION,
     VACUUM_CONFIRMATION,
-    cleanup_old_logs,
     get_database_maintenance_status,
     run_database_analyze,
     run_database_integrity_check,
@@ -74,16 +71,3 @@ def test_vacuum_apply_with_confirmation(db_config):
     assert result["ok"] is True
     assert result["dry_run"] is False
     assert "size_bytes_after" in result
-
-
-def test_cleanup_logs_dry_run_no_log_dir(db_config):
-    result = cleanup_old_logs(days=30, dry_run=True)
-    assert result["ok"] is True
-
-
-def test_cleanup_logs_requires_confirmation(db_config):
-    log_dir = Path(str(db_config)) / "logs"
-    log_dir.mkdir()
-    result = cleanup_old_logs(days=0, dry_run=False, apply=True, confirmation="BAD")
-    assert result["ok"] is False
-    assert CLEANUP_CONFIRMATION in result["error"]

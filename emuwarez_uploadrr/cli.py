@@ -334,12 +334,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_vacuum.add_argument("--apply", action="store_true", dest="maint_apply", help="Ejecutar VACUUM real")
     p_vacuum.add_argument("--confirm", metavar="TOKEN", dest="confirm", help="Token: MANTENIMIENTO_DB")
 
-    p_cleanup = maint_sub.add_parser("cleanup-logs", help="Eliminar logs internos antiguos")
-    p_cleanup.add_argument("--days", type=int, default=30, help="Eliminar logs más antiguos de N días (default: 30)")
-    p_cleanup.add_argument("--dry-run", action="store_true", default=True, help="Solo previsualización (por defecto)")
-    p_cleanup.add_argument("--apply", action="store_true", dest="maint_apply", help="Ejecutar limpieza real")
-    p_cleanup.add_argument("--confirm", metavar="TOKEN", dest="confirm", help="Token: LIMPIAR_LOGS")
-
     # Phase 9B — Demo / E2E dev commands (clearly marked, require explicit confirmation)
     p_demo = sub.add_parser("demo", help="[DEV] Datos demo para E2E controlado. Requiere confirmación explícita.")
     demo_sub = p_demo.add_subparsers(dest="demo_command", required=True)
@@ -1616,19 +1610,6 @@ def cmd_maintenance(args) -> int:
             print(f"✓ {result.get('message')}")
             if not result.get("dry_run"):
                 print(f"  Antes: {result.get('size_bytes_before', 0):,} bytes  →  Después: {result.get('size_bytes_after', 0):,} bytes")
-        else:
-            print(f"✗ {result.get('error')}")
-        return 0 if result.get("ok") else 1
-
-    if cmd == "cleanup-logs":
-        result = maintenance_service.cleanup_old_logs(
-            days=getattr(args, "days", 30),
-            dry_run=not getattr(args, "maint_apply", False),
-            apply=getattr(args, "maint_apply", False),
-            confirmation=getattr(args, "confirm", None),
-        )
-        if result.get("ok"):
-            print(f"✓ {result.get('message')}")
         else:
             print(f"✗ {result.get('error')}")
         return 0 if result.get("ok") else 1

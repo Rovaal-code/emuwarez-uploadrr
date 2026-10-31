@@ -7,7 +7,6 @@ import {
   restoreBackup,
   runIntegrityCheck,
   runVacuum,
-  cleanupLogs,
   type MaintenanceStatus,
   type BackupInfo,
   getVersionInfo,
@@ -1520,8 +1519,6 @@ function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | null; on
 function MaintenanceTab() {
   const [busy, setBusy] = useState(false)
   const [vacuumConfirm, setVacuumConfirm] = useState('')
-  const [cleanupConfirm, setCleanupConfirm] = useState('')
-  const [cleanupDays, setCleanupDays] = useState(30)
 
   const showMessage = useSettingsMessage()
   // Se apilaban hasta 10 resultados; ahora se enseña el último, como el resto
@@ -1554,19 +1551,6 @@ function MaintenanceTab() {
     } finally { setBusy(false) }
   }
 
-  async function handleCleanup(dry: boolean) {
-    if (!dry && cleanupConfirm !== 'LIMPIAR_LOGS') {
-      addResult('cleanup', false, 'Escribe LIMPIAR_LOGS para confirmar'); return
-    }
-    setBusy(true)
-    try {
-      const r = await cleanupLogs({ days: cleanupDays, dry_run: dry, apply: !dry, confirmation: dry ? undefined : cleanupConfirm })
-      addResult('cleanup', r.ok ?? false, r.ok ? `✓ ${r.message}` : `✗ ${r.error}`)
-    } catch (e: unknown) {
-      addResult('cleanup', false, `✗ ${e instanceof Error ? e.message : String(e)}`)
-    } finally { setBusy(false) }
-  }
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div className="placeholder-card">
@@ -1588,27 +1572,6 @@ function MaintenanceTab() {
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-secondary" onClick={() => handleVacuum(true)} disabled={busy}>Previsualizar</button>
           <button className="btn btn-danger" onClick={() => handleVacuum(false)} disabled={busy}>Ejecutar VACUUM</button>
-        </div>
-      </div>
-
-      <div className="placeholder-card">
-        <h3>Limpiar logs internos</h3>
-        <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: '0 0 10px' }}>Elimina archivos de log más antiguos de N días. Escribe <code>LIMPIAR_LOGS</code> para confirmar.</p>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
-          <label style={{ fontSize: 13 }}>Días:</label>
-          <input type="number" min={1} max={365} value={cleanupDays} onChange={e => setCleanupDays(Number(e.target.value))}
-            style={{ width: 70, padding: '4px 8px', fontSize: 13 }} />
-        </div>
-        <input
-          type="text"
-          placeholder="Confirmación: LIMPIAR_LOGS"
-          value={cleanupConfirm}
-          onChange={e => setCleanupConfirm(e.target.value)}
-          style={{ width: '100%', marginBottom: 8, padding: '6px 10px', fontSize: 13, boxSizing: 'border-box' }}
-        />
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-secondary" onClick={() => handleCleanup(true)} disabled={busy}>Previsualizar</button>
-          <button className="btn btn-danger" onClick={() => handleCleanup(false)} disabled={busy}>Limpiar logs</button>
         </div>
       </div>
     </div>

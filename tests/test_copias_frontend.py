@@ -79,7 +79,7 @@ def test_los_tokens_de_confirmacion_coinciden():
     rompía su botón con un "Confirmación requerida" que no explica nada."""
     from emuwarez_uploadrr.services.backup_service import RESTORE_CONFIRMATION
     from emuwarez_uploadrr.services.maintenance_service import (
-        CLEANUP_CONFIRMATION, VACUUM_CONFIRMATION,
+        VACUUM_CONFIRMATION,
     )
     from emuwarez_uploadrr.services.mkv_title import MKV_CONFIRMATION_TOKEN
     from emuwarez_uploadrr.services.nomenclature import CONFIRMATION_TOKEN as NOM_TOKEN
@@ -94,7 +94,6 @@ def test_los_tokens_de_confirmacion_coinciden():
         NOM_TOKEN: "components/NomenclatureModal.tsx",
         MKV_CONFIRMATION_TOKEN: "components/NomenclatureFieldsModal.tsx",
         VACUUM_CONFIRMATION: "pages/SettingsPage.tsx",
-        CLEANUP_CONFIRMATION: "pages/SettingsPage.tsx",
         RESTORE_CONFIRMATION: "pages/SettingsPage.tsx",
     }
     faltan = [f"{token} (esperado en {rel})" for token, rel in esperados.items()

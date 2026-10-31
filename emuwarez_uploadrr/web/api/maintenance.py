@@ -1,4 +1,4 @@
-"""Maintenance API endpoints — backup, restore, DB and log cleanup."""
+"""Maintenance API endpoints — backup, restore and DB maintenance."""
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends
 from ..dependencies import require_auth
 from ..schemas import (
     BackupRequest,
-    CleanupLogsRequest,
     RestoreRequest,
     VacuumRequest,
 )
@@ -82,21 +81,6 @@ def db_vacuum(
     """Ejecuta VACUUM en la BD. dry_run=True por defecto."""
     from emuwarez_uploadrr.services.maintenance_service import run_database_vacuum
     return run_database_vacuum(
-        dry_run=body.dry_run,
-        apply=body.apply,
-        confirmation=body.confirmation,
-    )
-
-
-@router.post("/logs/cleanup")
-def logs_cleanup(
-    body: CleanupLogsRequest,
-    current_user: dict = Depends(require_auth),
-) -> dict:
-    """Elimina logs más antiguos de N días. dry_run=True por defecto."""
-    from emuwarez_uploadrr.services.maintenance_service import cleanup_old_logs
-    return cleanup_old_logs(
-        days=body.days,
         dry_run=body.dry_run,
         apply=body.apply,
         confirmation=body.confirmation,

@@ -73,20 +73,6 @@ export interface VacuumResult {
   error?: string
 }
 
-export interface CleanupLogsResult {
-  ok: boolean
-  dry_run?: boolean
-  action?: string
-  days?: number
-  files_found?: number
-  files_deleted?: number
-  files?: string[]
-  bytes_to_free?: number
-  bytes_freed?: number
-  message?: string
-  error?: string
-}
-
 export async function getMaintenanceStatus(): Promise<MaintenanceStatus> {
   return api.get<MaintenanceStatus>('/maintenance/status')
 }
@@ -122,17 +108,6 @@ export async function runVacuum(
   opts: { dry_run?: boolean; apply?: boolean; confirmation?: string } = {},
 ): Promise<VacuumResult> {
   return api.post<VacuumResult>('/maintenance/db/vacuum', {
-    dry_run: opts.dry_run ?? true,
-    apply: opts.apply ?? false,
-    confirmation: opts.confirmation ?? null,
-  })
-}
-
-export async function cleanupLogs(
-  opts: { days?: number; dry_run?: boolean; apply?: boolean; confirmation?: string } = {},
-): Promise<CleanupLogsResult> {
-  return api.post<CleanupLogsResult>('/maintenance/logs/cleanup', {
-    days: opts.days ?? 30,
     dry_run: opts.dry_run ?? true,
     apply: opts.apply ?? false,
     confirmation: opts.confirmation ?? null,

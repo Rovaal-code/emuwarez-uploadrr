@@ -1,6 +1,7 @@
 """SQLite persistence shared by the CLI and the future web backend."""
 from __future__ import annotations
 
+import functools
 import json
 import logging
 import os
@@ -58,11 +59,14 @@ def connect(path: Optional[Path] = None) -> sqlite3.Connection:
     return conn
 
 
+@functools.lru_cache(maxsize=131072)
 def _title_sort_key(s: Optional[str]) -> str:
     """Sort key for library titles: símbolos < números < letras, con los
     acentos plegados a su vocal base (Émesis ordena junto a las «E», no al
     final). NOCASE de SQLite solo ignora mayúsculas, no acentos, y deja los
-    caracteres de código alto (á, ¡, ¿) fuera de sitio."""
+    caracteres de código alto (á, ¡, ¿) fuera de sitio. En caché porque la
+    intercalación la pide en cada comparación: ordenar la biblioteca entera
+    eran cientos de miles de llamadas por título."""
     import unicodedata
     s = unicodedata.normalize("NFD", s or "")
     s = "".join(c for c in s if not unicodedata.combining(c)).casefold()

@@ -2212,6 +2212,8 @@ def _aggregate_path(rows: list[dict]) -> Optional[str]:
 
 
 def _aggregate_quality(rows: list[dict]) -> dict:
+    # Solo lo que se tiene: un capítulo faltante lleva todo a NULL y vaciaría la temporada entera.
+    rows = [r for r in rows if r["local_status"] == LocalStatus.AVAILABLE.value]
     if not rows:
         return dict(_ROLLUP_EMPTY)
 
@@ -2421,8 +2423,8 @@ def _child_quality_rollup(conn, item_id: int, item_type: str, ignore_specials: b
         rows = conn.execute(
             "SELECT path, resolution, source, release_group, video_codec, audio_codec, "
             "audio_languages, subtitle_languages FROM library_items "
-            "WHERE parent_id = ? AND item_type = 'episode'",
-            (item_id,),
+            "WHERE parent_id = ? AND item_type = 'episode' AND local_status = ?",
+            (item_id, LocalStatus.AVAILABLE.value),
         ).fetchall()
     elif item_type == "series":
         rows = conn.execute(
@@ -2430,9 +2432,9 @@ def _child_quality_rollup(conn, item_id: int, item_type: str, ignore_specials: b
             "e.release_group AS release_group, e.video_codec AS video_codec, e.audio_codec AS audio_codec, "
             "e.audio_languages AS audio_languages, e.subtitle_languages AS subtitle_languages "
             "FROM library_items e JOIN library_items se ON e.parent_id = se.id "
-            "WHERE se.parent_id = ? AND e.item_type = 'episode'"
+            "WHERE se.parent_id = ? AND e.item_type = 'episode' AND e.local_status = ?"
             + _specials_clause("se", ignore_specials),
-            (item_id,),
+            (item_id, LocalStatus.AVAILABLE.value),
         ).fetchall()
     else:
         return dict(_ROLLUP_EMPTY)

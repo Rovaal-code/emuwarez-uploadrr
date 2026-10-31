@@ -30,6 +30,11 @@ import { ACTIVE_JOB_STATUSES, statusLabel } from '../utils/uploadStatus'
 import { seguirProgreso } from '../api/eventos'
 import { fetchSettings } from '../api/settings'
 import { AVISO_MODO_PISTAS, normalizarModo, renombra, tocaElFichero } from '../utils/modoPistas'
+import {
+  SIN_SELECCION, seleccionUnica, seleccionTemporadas, seleccionCapitulos,
+  colaTemporadas, colaCapitulos, esTanda, mismaSeleccion, conObjetivo,
+  cacheCubre, conAjustes, peticionCubre, type Seleccion, type Ajustes,
+} from '../utils/seleccionSubida'
 import { IconoAviso } from './Iconos'
 import { Modal } from './Modal'
 
@@ -43,7 +48,6 @@ import { Modal } from './Modal'
 // server-side after a grace period) and hands off to Subidas — nothing here
 // applies nomenclature or starts Uploadrr directly anymore.
 const PROVIDER_SOURCES = new Set(['WEB-DL'])
-const WHOLE_SEASON = 'WHOLE_SEASON'
 
 interface Props {
   item: LibraryItemResponse
@@ -453,19 +457,33 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   const allowMultiSeason = isSeries
 
 
-  // Multi-season selection (series' own dedicated page only): a checklist
-  // instead of the single season/episode dropdowns. `seasonQueue` holds every
-  // chosen season id — for Manual, step 1 shows a season-switcher dropdown to
-  // review/edit each one's nomenclature (their Source/Proveedor/Tag edits
-  // kept in seasonOverridesById below, restored when switching back), and
-  // step 2 becomes a single "Subir todas" that checks + queues each one in
-  // turn, skipping a failed check instead of blocking the rest.
+  // Multi-season selection (a series): a checklist of seasons. The seasons
+  // chosen go to the queue in `seleccion` — for Manual, step 1 shows a
+  // season-switcher dropdown to review/edit each one's nomenclature (their
+  // Source/Proveedor/Tag edits kept in ajustesPorId below, restored when
+  // switching back), and step 2 becomes a single "Subir todas" that checks +
+  // queues each one in turn, skipping a failed check instead of blocking the
+  // rest.
   const [multiSelected, setMultiSelected] = useState<Set<number>>(new Set())
-  const [seasonQueue, setSeasonQueue] = useState<number[]>([])
-  // Source/Proveedor/Tag edits per season, keyed by season id — persists
-  // across dropdown switches (loadSeasonPlan would otherwise overwrite them
-  // with the season's own auto-detected values every time you switch back).
-  const [seasonOverridesById, setSeasonOverridesById] = useState<Map<number, { source?: string | null; provider?: string | null; tag?: string | null; title?: string | null }>>(new Map())
+  // Lo que se sube, en un solo valor: un elemento, una cola de temporadas o una
+  // de capítulos. Todo lo que cuelga de ello se descarta junto al cambiarlo
+  // (elegirSeleccion), así dos colas no pueden convivir.
+  const [seleccion, setSeleccion] = useState<Seleccion>(needsSelection ? SIN_SELECCION : seleccionUnica(item.id))
+  const targetId = seleccion.objetivo
+  const targetIsSeason = seleccion.esTemporada
+  const seasonQueue = colaTemporadas(seleccion)
+  const episodeQueue = colaCapitulos(seleccion)
+  // Source/Proveedor/Tag/Título editados por elemento (temporada o capítulo),
+  // por id — persisten al cambiar en el desplegable (loadSeasonPlan los
+  // pisaría con lo autodetectado cada vez que vuelves).
+  const [ajustesPorId, setAjustesPorId] = useState<Map<number, Ajustes>>(new Map())
+  // De quién son los campos que hay ahora en `fields`: no se apuntan como
+  // ajustes de otro elemento mientras este aún carga.
+  const camposDe = useRef<number | null>(null)
+  // El objetivo vigente: la respuesta lenta de otro elemento no pisa lo que
+  // hay en pantalla.
+  const objetivoActual = useRef(targetId)
+  objetivoActual.current = targetId
 
   // Season upload mode. A season that can't ship as a PACK (episodes disagree
   // on codec/audio/resolution, or it's incomplete) can still have its episodes
@@ -474,8 +492,6 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   // its own, which can state its own codec and audio truthfully.
   const [seasonUploadMode, setSeasonUploadMode] = useState<'whole' | 'episodes' | null>(null)
   const [episodeSelected, setEpisodeSelected] = useState<Set<number>>(new Set())
-  const [episodeQueue, setEpisodeQueue] = useState<number[]>([])
-  const [episodeOverridesById, setEpisodeOverridesById] = useState<Map<number, { source?: string | null; provider?: string | null; tag?: string | null; title?: string | null }>>(new Map())
   // Nomenclature is generated for EVERY selected episode up front, not lazily
   // as the user switches between them: it's real work per episode, and doing
   // it on switch made the dropdown feel broken (a spinner every time you moved)
@@ -504,22 +520,15 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   const [batchIndex, setBatchIndex] = useState(0)
   const [batchResults, setBatchResults] = useState<{ seasonId: number; title: string; status: 'queued' | 'failed'; reason?: string }[]>([])
 
-  // The item the nomenclature actually runs on: a movie/episode directly, a
-  // season row for a whole-season pack, or an episode picked from a series.
-  const [targetId, setTargetId] = useState<number | null>(needsSelection ? null : item.id)
-  // Whether targetId resolves to a whole season (pack) rather than one file —
-  // known at selection time (confirmSelection), drives an entirely different
-  // Step 1 (plan preview instead of per-file nomenclature fields), but the
-  // rest of the wizard (checks/queue) needs no branching at all.
-  const [targetIsSeason, setTargetIsSeason] = useState(false)
+  // targetId (el elemento sobre el que corre la nomenclatura: una película o
+  // un capítulo, la fila de una temporada para el pack) y targetIsSeason (si
+  // es un pack y no un fichero: cambia por completo el paso 1) salen de
+  // `seleccion`, arriba.
   const [step, setStep] = useState<0 | 1 | 2>(needsSelection ? 0 : 1)
 
   // Step 0 — series/season selection
   const [seasons, setSeasons] = useState<LibraryItemResponse[]>([])
   const [episodes, setEpisodes] = useState<LibraryItemResponse[]>([])
-  const [selSeasonId, setSelSeasonId] = useState<number | ''>(isSeason ? item.id : '')
-  // A season opened directly defaults to its whole-season pack pre-selected.
-  const [selEpisode, setSelEpisode] = useState<string>(isSeason ? WHOLE_SEASON : '')  // episode id or WHOLE_SEASON
   const [selError, setSelError] = useState<string | null>(null)
 
   // Step 1 — nomenclature fields
@@ -660,17 +669,24 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
         if (isSeries) {
           const r = await getLibrary({ parent_id: item.id, type: 'season', limit: 500 })
           setSeasons(r.items)
-          // Preselect the requested season (its episodes load via the effect below).
+          // La temporada de la petición, ya marcada si se puede subir.
           if (preselect?.season != null) {
             const s = r.items.find(x => x.season_number === preselect.season)
-            if (s) setSelSeasonId(s.id)
+            if (s && isSeasonReady(s)) setMultiSelected(new Set([s.id]))
           }
         } else {
           const r = await getLibrary({ parent_id: item.id, type: 'episode', limit: 500 })
           setEpisodes(r.items)
+          // Lo que pide la petición, ya elegido: el capítulo si es de un
+          // capítulo, y si no el pack de la temporada.
           if (preselect?.episode != null) {
             const e = r.items.find(x => x.episode_number === preselect.episode)
-            if (e) setSelEpisode(String(e.id))
+            if (e && !episodeNotReadyReason(e)) {
+              setSeasonUploadMode('episodes')
+              setEpisodeSelected(new Set([e.id]))
+            }
+          } else if (preselect?.season != null && !seasonNotReadyReason(item)) {
+            setSeasonUploadMode('whole')
           }
         }
       } catch (e: unknown) {
@@ -680,44 +696,6 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.id, isSeries, needsSelection])
-
-  // When a season is picked (series flow), load its episodes.
-  useEffect(() => {
-    if (!isSeries || selSeasonId === '') return
-    getLibrary({ parent_id: Number(selSeasonId), type: 'episode', limit: 500 })
-      .then(r => {
-        setEpisodes(r.items)
-        // Preselect the requested episode, or the whole-season pack when the
-        // request's scope is the season (not a single episode).
-        if (preselect?.episode != null) {
-          const e = r.items.find(x => x.episode_number === preselect.episode)
-          setSelEpisode(e ? String(e.id) : WHOLE_SEASON)
-        } else if (preselect?.season != null) {
-          setSelEpisode(WHOLE_SEASON)
-        } else {
-          setSelEpisode('')
-        }
-      })
-      .catch(() => setEpisodes([]))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSeries, selSeasonId])
-
-  const confirmSelection = () => {
-    setSelError(null)
-    if (selEpisode === WHOLE_SEASON) {
-      const seasonId = isSeason ? item.id : Number(selSeasonId)
-      if (!seasonId) { setSelError('Selecciona una temporada'); return }
-      setTargetId(seasonId)
-      setTargetIsSeason(true)
-    } else if (selEpisode) {
-      setTargetId(Number(selEpisode))
-      setTargetIsSeason(false)
-    } else {
-      setSelError('Selecciona un episodio o "Temporada entera"')
-      return
-    }
-    setStep(1)
-  }
 
   // La tanda activa: capítulos sueltos o temporadas, nunca las dos.
   const batchIsEpisodes = episodeQueue.length > 1
@@ -744,7 +722,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   // pedirlas.
   useEffect(() => {
     if (step !== 2 || batchQueue.length <= 1 || batchPhase !== 'idle') return
-    if (batchEnvChecks || batchChecksLoading) return
+    if (batchChecksLoading || (batchEnvChecks && cacheCubre(batchQueue, batchContentChecks))) return
     let alive = true
     const run = async () => {
       setBatchChecksLoading(true)
@@ -767,7 +745,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
       }
     }
     run()
-    return () => { alive = false }
+    return () => { alive = false; setBatchChecksLoading(false) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, batchQueue.length, batchPhase])
 
@@ -789,37 +767,29 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     setEpisodeSelected(allEligibleSelected ? new Set() : new Set(eligibleEpisodes.map(ep => ep.id)))
   }
 
-  const confirmSeasonWhole = () => {
+  // Un único sitio donde cambia lo que se sube. Si es otra cosa que antes se
+  // descarta todo lo que colgaba de lo anterior (ajustes, caché de
+  // nomenclatura, comprobaciones de la tanda); si es lo mismo (volver al paso 0
+  // y pulsar Continuar) se conserva lo cargado y editado.
+  const elegirSeleccion = (nueva: Seleccion) => {
     setSelError(null)
-    setTargetId(item.id)
-    setTargetIsSeason(true)
+    if (!mismaSeleccion(seleccion, nueva)) {
+      setSeleccion(nueva)
+      setAjustesPorId(new Map())
+      setEpisodeFieldsById(new Map())
+      setBatchEnvChecks(null); setBatchContentChecks(new Map()); setBatchViewId(null)
+      setBatchPhase('idle'); setBatchResults([])
+      camposDe.current = null
+      cargadoPara.current = null
+    }
     setStep(1)
   }
+
+  const confirmSeasonWhole = () => elegirSeleccion(seleccionUnica(item.id, true))
 
   const confirmEpisodeSelection = () => {
-    setSelError(null)
     if (episodeSelected.size === 0) { setSelError('Selecciona al menos un capítulo'); return }
-    const ids = episodes.filter(ep => episodeSelected.has(ep.id)).map(ep => ep.id)
-    setEpisodeQueue(ids)
-    setTargetId(ids[0])
-    setTargetIsSeason(false)
-    setStep(1)
-  }
-
-  // Switching between the selected episodes in step 1: same shape as
-  // switchActiveSeason — bank whatever the user edited for the outgoing one
-  // before moving, since only `fields` holds it until then.
-  const switchActiveEpisode = (newEpisodeId: number) => {
-    if (targetId != null && targetId !== newEpisodeId) {
-      setEpisodeOverridesById(prev => {
-        const next = new Map(prev)
-        next.set(targetId, {
-          source: fields.source, provider: fields.provider, tag: fields.tag, title: fields.title,
-        })
-        return next
-      })
-    }
-    setTargetId(newEpisodeId)
+    elegirSeleccion(seleccionCapitulos(episodes.filter(ep => episodeSelected.has(ep.id)).map(ep => ep.id)))
   }
 
   const toggleMultiSeason = (seasonId: number) => {
@@ -831,13 +801,25 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   }
 
   const confirmMultiSelection = () => {
-    setSelError(null)
     if (multiSelected.size === 0) { setSelError('Selecciona al menos una temporada'); return }
-    const ids = seasons.filter(s => multiSelected.has(s.id)).map(s => s.id)
-    setSeasonQueue(ids)
-    setTargetId(ids[0])
-    setTargetIsSeason(true)
-    setStep(1)
+    elegirSeleccion(seleccionTemporadas(seasons.filter(s => multiSelected.has(s.id)).map(s => s.id)))
+  }
+
+  // Lo editado en `fields` ahora mismo, tal como se guarda por elemento.
+  const ajustesDeFields = (): Ajustes =>
+    ({ source: fields.source, provider: fields.provider, tag: fields.tag, title: fields.title })
+  const bancarAjustes = (id: number | null) => {
+    const dueno = camposDe.current
+    const ajustes = ajustesDeFields()
+    setAjustesPorId(prev => conAjustes(prev, id, dueno, ajustes))
+  }
+
+  // Cambiar de temporada o capítulo en el desplegable del paso 1: antes de
+  // irse se apuntan los ajustes del que sale (solo ocupa `fields` hasta
+  // entonces), si de verdad son suyos.
+  const cambiarElemento = (id: number) => {
+    if (targetId != null && targetId !== id) bancarAjustes(targetId)
+    setSeleccion(prev => conObjetivo(prev, id))
   }
 
   // "Ya existe una subida" precheck (ACTIVE_JOB_STATUSES /
@@ -855,8 +837,10 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   // paths put exactly the same things on screen.
   const applyFieldsResponse = useCallback((
     resp: Awaited<ReturnType<typeof getNomenclatureFields>>,
-    saved?: { source?: string | null; provider?: string | null; tag?: string | null; title?: string | null },
+    saved: Ajustes | undefined,
+    id: number,
   ) => {
+    camposDe.current = id
     if (resp.blocked) {
       setError(resp.error || 'No se puede generar la nomenclatura.')
       setFields({})
@@ -882,22 +866,24 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
 
   // --- Step 1: load nomenclature for the resolved target ---
   const loadFields = useCallback(async () => {
-    if (targetId == null) return
+    const id = targetId
+    if (id == null) return
     setLoading(true); setError(null)
     try {
       const [srcResp, prvResp, fieldsResp] = await Promise.all([
-        getEmuSources(), getEmuProviders(), getNomenclatureFields(targetId),
+        getEmuSources(), getEmuProviders(), getNomenclatureFields(id),
       ])
+      if (objetivoActual.current !== id) return
       setSources(srcResp.sources)
       setProviders(prvResp.providers)
-      applyFieldsResponse(fieldsResp, episodeOverridesById.get(targetId))
+      applyFieldsResponse(fieldsResp, ajustesPorId.get(id), id)
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Error cargando la nomenclatura')
+      if (objetivoActual.current === id) setError(e instanceof Error ? e.message : 'Error cargando la nomenclatura')
     } finally {
-      setLoading(false)
+      if (objetivoActual.current === id) setLoading(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetId])   // NOT episodeOverridesById: it changes on every switch, and
+  }, [targetId])   // NOT ajustesPorId: it changes on every switch, and
                    // depending on it would reload the fields on top of the
                    // edits it was just asked to restore.
 
@@ -912,7 +898,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   // between them afterwards is instant.
   useEffect(() => {
     if (step !== 1 || targetIsSeason || episodeQueue.length <= 1) return
-    if (episodeFieldsById.size >= episodeQueue.length) return
+    if (cacheCubre(episodeQueue, episodeFieldsById)) return
     let alive = true
     const run = async () => {
       setEpisodePrepping(true); setEpisodePrepIndex(0); setError(null)
@@ -940,7 +926,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
         if (!alive) return
         setEpisodeFieldsById(cache)
         const first = cache.get(episodeQueue[0])
-        if (first) applyFieldsResponse(first, episodeOverridesById.get(episodeQueue[0]))
+        if (first) applyFieldsResponse(first, ajustesPorId.get(episodeQueue[0]), episodeQueue[0])
       } finally {
         if (alive) setEpisodePrepping(false)
       }
@@ -955,7 +941,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     if (step !== 1 || targetIsSeason || targetId == null) return
     if (episodeQueue.length <= 1 || episodePrepping) return
     const cached = episodeFieldsById.get(targetId)
-    if (cached) applyFieldsResponse(cached, episodeOverridesById.get(targetId))
+    if (cached) applyFieldsResponse(cached, ajustesPorId.get(targetId), targetId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetId, episodePrepping])
 
@@ -990,7 +976,8 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
       // Proveedor/Tag (if the user already visited it via the dropdown and
       // changed something) instead of always falling back to the plan's own
       // auto-detected values.
-      const saved = seasonOverridesById.get(targetId)
+      const saved = ajustesPorId.get(targetId)
+      camposDe.current = targetId
       setFields({
         title: sharedTitle ?? saved?.title ?? plan.series_title ?? undefined,
         year: plan.year != null ? String(plan.year) : undefined,
@@ -1022,7 +1009,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
         setSeasonPlanLoading(false)
       }
     }
-  }, [targetId, seasonOverridesById])
+  }, [targetId, ajustesPorId])
 
   // Closing the wizard while a season plan is being built has to stop the
   // server too: it runs one real nomenclature proposal per episode, so a 24
@@ -1037,66 +1024,70 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     }
     onCloseProp()
   }, [onCloseProp])
+  // Lo que cierra el Modal (✕, Escape, clic fuera): no mientras se encola, que
+  // el bucle seguiría sin que se viera el resultado ni se fuera a Subidas.
+  const ocupado = uploading || batchPhase === 'processing'
+  const cerrarModal = () => { if (!ocupado) onClose() }
 
   useEffect(() => {
     if (step === 1 && cargadoPara.current !== objetivo && targetIsSeason) loadSeasonPlan()
   }, [step, objetivo, targetIsSeason, loadSeasonPlan])
 
-  // Multi-season dropdown: save the outgoing season's current edits before
-  // switching (loadSeasonPlan, re-triggered by targetId changing, restores
-  // them on the way back in via seasonOverridesById.get(targetId) above).
-  const switchActiveSeason = (newSeasonId: number) => {
-    if (targetId != null && targetId !== newSeasonId) {
-      setSeasonOverridesById(prev => {
-        const next = new Map(prev)
-        next.set(targetId, {
-          source: fields.source, provider: fields.provider, tag: fields.tag, title: fields.title,
-        })
-        return next
-      })
-    }
-    setTargetId(newSeasonId)
-  }
-
+  // Las cargas siguientes no tocan nada si, al llegar la respuesta, el
+  // objetivo ya es otro: era la de un elemento que ya no se está viendo.
   const loadSeasonNames = useCallback(async () => {
-    if (targetId == null) return
+    const id = targetId
+    if (id == null) return
     setSeasonNamesLoading(true)
     try {
       const overrides = { source: fields.source, provider: fields.provider, tag: fields.tag }
-      setSeasonNames((await getSeasonEpisodeNames(targetId, overrides)).episodes)
+      const r = await getSeasonEpisodeNames(id, overrides)
+      if (objetivoActual.current === id) setSeasonNames(r.episodes)
     }
-    catch { setSeasonNames(null) }
-    finally { setSeasonNamesLoading(false) }
+    catch { if (objetivoActual.current === id) setSeasonNames(null) }
+    finally { if (objetivoActual.current === id) setSeasonNamesLoading(false) }
   }, [targetId, fields.source, fields.provider, fields.tag])
 
   const loadSeasonMi = useCallback(async () => {
-    if (targetId == null) return
+    const id = targetId
+    if (id == null) return
     setSeasonMiLoading(true); setSeasonMiError(null)
-    try { setSeasonMi((await getSeasonEpisodeMediaInfo(targetId)).episodes) }
-    catch (e: unknown) { setSeasonMi(null); setSeasonMiError(e instanceof Error ? e.message : 'Error cargando MediaInfo') }
-    finally { setSeasonMiLoading(false) }
+    try {
+      const r = await getSeasonEpisodeMediaInfo(id)
+      if (objetivoActual.current === id) setSeasonMi(r.episodes)
+    }
+    catch (e: unknown) {
+      if (objetivoActual.current === id) { setSeasonMi(null); setSeasonMiError(e instanceof Error ? e.message : 'Error cargando MediaInfo') }
+    }
+    finally { if (objetivoActual.current === id) setSeasonMiLoading(false) }
   }, [targetId])
 
   const loadSeasonRemux = useCallback(async () => {
-    if (targetId == null) return
+    const id = targetId
+    if (id == null) return
     setSeasonRemuxLoading(true); setSeasonRemuxError(null)
-    try { setSeasonRemux((await getSeasonEpisodeRemuxPreview(targetId)).episodes) }
-    catch (e: unknown) { setSeasonRemux(null); setSeasonRemuxError(e instanceof Error ? e.message : 'Error calculando el remux') }
-    finally { setSeasonRemuxLoading(false) }
+    try {
+      const r = await getSeasonEpisodeRemuxPreview(id)
+      if (objetivoActual.current === id) setSeasonRemux(r.episodes)
+    }
+    catch (e: unknown) {
+      if (objetivoActual.current === id) { setSeasonRemux(null); setSeasonRemuxError(e instanceof Error ? e.message : 'Error calculando el remux') }
+    }
+    finally { if (objetivoActual.current === id) setSeasonRemuxLoading(false) }
   }, [targetId])
 
   // Reset all per-target state (both single-file and season) whenever the
   // resolved target changes — a different item means unrelated data.
   useEffect(() => {
-    setMiReport(null); setMiError(null); setShowMiCard(false)
+    setMiReport(null); setMiError(null); setShowMiCard(false); setMiLoading(false)
     // Otro contenido, otras pistas: las ediciones a mano no se arrastran, que
     // haría que un capítulo heredara los nombres que escribiste para el
     // anterior sin decírtelo.
-    setRemuxPreview(null); setRemuxError(null); setRemuxEdits({}); setShowRemuxCard(false)
+    setRemuxPreview(null); setRemuxError(null); setRemuxEdits({}); setShowRemuxCard(false); setRemuxLoading(false)
     setSeasonPlan(null); setSeasonPlanError(null)
-    setSeasonNames(null); setShowSeasonNamesCard(false)
-    setSeasonMi(null); setSeasonMiError(null); setMiEpisodeId(null)
-    setSeasonRemux(null); setSeasonRemuxError(null); setRemuxEpisodeId(null)
+    setSeasonNames(null); setShowSeasonNamesCard(false); setSeasonNamesLoading(false)
+    setSeasonMi(null); setSeasonMiError(null); setMiEpisodeId(null); setSeasonMiLoading(false)
+    setSeasonRemux(null); setSeasonRemuxError(null); setRemuxEpisodeId(null); setSeasonRemuxLoading(false)
   }, [targetId])
 
   // Season target: invalidate the cached per-episode names list whenever
@@ -1130,27 +1121,33 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   }, [targetId, targetIsSeason, loading, fields.source, fields.provider])
 
   const runMediaInfo = async () => {
-    if (targetId == null) return
+    const id = targetId
+    if (id == null) return
     setMiLoading(true); setMiError(null); setMiReport(null)
     try {
-      setMiReport(await getMediaInfoReport(targetId))
+      const r = await getMediaInfoReport(id)
+      if (objetivoActual.current === id) setMiReport(r)
     } catch (e: unknown) {
-      setMiError(e instanceof Error ? e.message : 'Error ejecutando MediaInfo')
+      if (objetivoActual.current === id) setMiError(e instanceof Error ? e.message : 'Error ejecutando MediaInfo')
     } finally {
-      setMiLoading(false)
+      if (objetivoActual.current === id) setMiLoading(false)
     }
   }
 
   const runTrackRemux = useCallback(async () => {
-    if (targetId == null) return
+    const id = targetId
+    if (id == null) return
     setRemuxLoading(true); setRemuxError(null); setRemuxEdits({})
     try {
-      setRemuxPreview(await previewTrackRemux(targetId))
+      const r = await previewTrackRemux(id)
+      if (objetivoActual.current === id) setRemuxPreview(r)
     } catch (e: unknown) {
-      setRemuxPreview(null)
-      setRemuxError(e instanceof Error ? e.message : 'Error calculando el remux de pistas')
+      if (objetivoActual.current === id) {
+        setRemuxPreview(null)
+        setRemuxError(e instanceof Error ? e.message : 'Error calculando el remux de pistas')
+      }
     } finally {
-      setRemuxLoading(false)
+      if (objetivoActual.current === id) setRemuxLoading(false)
     }
   }, [targetId])
 
@@ -1181,7 +1178,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     if (targetIsSeason) return
     if (targetId == null || !Object.keys(fields).length) return
     const t = setTimeout(async () => {
-      try { setPreview(await previewNomenclatureFields(targetId, fields)) } catch { /* non-blocking */ }
+      try { setPreview(await previewNomenclatureFields(targetId, fields, false)) } catch { /* non-blocking */ }
     }, 400)
     return () => clearTimeout(t)
   }, [targetId, targetIsSeason, fields])
@@ -1248,33 +1245,16 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     if (!targetIsSeason) {
       try { await saveNomenclatureFields(targetId, fields) } catch { /* non-blocking */ }
     }
-    // Multi-season: persist whichever season is still active when leaving
-    // step 1 — "Subir todas" reads every OTHER season's edits from this same
-    // cache, but the active one's latest edits only ever live in `fields`.
-    if (!targetIsSeason && episodeQueue.length > 1 && targetId != null) {
-      setEpisodeOverridesById(prev => {
-        const next = new Map(prev)
-        next.set(targetId, {
-          source: fields.source, provider: fields.provider, tag: fields.tag, title: fields.title,
-        })
-        return next
-      })
-    }
-    if (targetIsSeason && seasonQueue.length > 1) {
-      setSeasonOverridesById(prev => {
-        const next = new Map(prev)
-        next.set(targetId, {
-          source: fields.source, provider: fields.provider, tag: fields.tag, title: fields.title,
-        })
-        return next
-      })
-    }
+    // Tanda: persist whichever item is still active when leaving step 1 —
+    // "Subir todas" reads every OTHER item's edits from this same cache, but
+    // the active one's latest edits only ever live in `fields`.
+    if (esTanda(seleccion)) bancarAjustes(targetId)
     setPreparing(false)
     setStep(2)
     setBatchPhase('idle'); setBatchResults([])
     // "Subir todos" runs its own per-item checks — no single-target check to
     // kick off here.
-    if (seasonQueue.length <= 1 && episodeQueue.length <= 1) runChecks()
+    if (!esTanda(seleccion)) runChecks()
   }
 
   const canUpload = !!checks?.ready
@@ -1314,17 +1294,12 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
 
   // Multi-season "Subir todas": checks + queues each chosen season in turn,
   // using whichever season is still active in `fields` for its own edits and
-  // seasonOverridesById for every other one already reviewed via the
+  // ajustesPorId for every other one already reviewed via the
   // dropdown. A season that fails its own check is skipped (not counted,
   // reason recorded) — the rest still go through, per explicit confirmation
   // this shouldn't block on one bad season.
   const uploadAllSeasons = async () => {
-    const overridesMap = new Map(seasonOverridesById)
-    if (targetId != null) {
-      overridesMap.set(targetId, {
-        source: fields.source, provider: fields.provider, tag: fields.tag, title: fields.title,
-      })
-    }
+    const overridesMap = conAjustes(ajustesPorId, targetId, camposDe.current, ajustesDeFields())
     // Título is a property of the SERIES, and every season in this batch
     // belongs to the same one — so the pick applies to all of them, including
     // seasons the user never opened via the dropdown. Without this, choosing
@@ -1354,7 +1329,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
           results.push({ seasonId, title, status: 'failed', reason })
           continue
         }
-        const r = await queueUpload(seasonId, undefined, checksResult, null, overridesMap.get(seasonId), requestId)
+        const r = await queueUpload(seasonId, undefined, checksResult, null, overridesMap.get(seasonId), s && peticionCubre(preselect, s) ? requestId : undefined)
         if (r.status !== 'queued' || !r.job?.id) {
           results.push({ seasonId, title, status: 'failed', reason: (r.errors || []).join(' ') || 'No se pudo encolar' })
         } else {
@@ -1488,12 +1463,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   // back with the title swapped in — sending just the title would blank
   // everything else.
   const uploadAllEpisodes = async () => {
-    const overridesMap = new Map(episodeOverridesById)
-    if (targetId != null) {
-      overridesMap.set(targetId, {
-        source: fields.source, provider: fields.provider, tag: fields.tag, title: fields.title,
-      })
-    }
+    const overridesMap = conAjustes(ajustesPorId, targetId, camposDe.current, ajustesDeFields())
     // Título belongs to the SERIES, so the pick applies to every episode in the
     // batch, including ones the user never opened via the dropdown.
     const batchTitle = sharedTitle ?? fields.title
@@ -1536,7 +1506,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
           results.push({ seasonId: episodeId, title, status: 'failed', reason })
           continue
         }
-        const r = await queueUpload(episodeId, undefined, checksResult, null, undefined, requestId)
+        const r = await queueUpload(episodeId, undefined, checksResult, null, undefined, ep && peticionCubre(preselect, ep) ? requestId : undefined)
         if (r.status !== 'queued' || !r.job?.id) {
           results.push({ seasonId: episodeId, title, status: 'failed', reason: (r.errors || []).join(' ') || 'No se pudo encolar' })
         } else {
@@ -1550,36 +1520,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     setBatchPhase('done')
   }
 
-  // Step 0, single target — the original season/episode dropdowns, used
-  // whenever multi-season selection isn't offered (movie/episode directly,
-  // a season opened on its own, or a series opened from anywhere other than
-  // its own dedicated Biblioteca page).
-  const singleSelectionFields = (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
-      {isSeries && (
-        <label><span style={labelStyle}>Temporada</span>
-          <select className="form-input form-select" value={selSeasonId} onChange={e => setSelSeasonId(e.target.value ? Number(e.target.value) : '')}>
-            <option value="">— Seleccionar —</option>
-            {seasons.map(s => <option key={s.id} value={s.id}>{s.title || `Temporada ${s.season_number}`}</option>)}
-          </select>
-        </label>
-      )}
-      <label><span style={labelStyle}>Episodio</span>
-        <select className="form-input form-select" value={selEpisode} onChange={e => setSelEpisode(e.target.value)} disabled={isSeries && selSeasonId === ''}>
-          <option value="">— Seleccionar —</option>
-          <option value={WHOLE_SEASON}>★ Temporada entera</option>
-          {episodes.map(ep => (
-            <option key={ep.id} value={ep.id}>
-              {ep.episode_number != null ? `E${String(ep.episode_number).padStart(2, '0')}: ` : ''}{ep.title}
-            </option>
-          ))}
-        </select>
-      </label>
-    </div>
-  )
-
-  // Step 0, multi-season — only reachable when the wizard was opened from a
-  // series' own dedicated Biblioteca page (allowMultiSeason).
+  // Step 0 de una serie: la lista de temporadas a marcar.
   // Only a season with EVERY episode Disponible AND every episode agreeing
   // on codec/audio/idiomas/subs/resolución/source can go as a season pack
   // (build_season_pack_plan() blocks otherwise) — incomplete/inconsistent
@@ -1930,7 +1871,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   )
 
   return (
-    <Modal titulo={item.title} onClose={onClose} className="modal-wide" style={{ maxWidth: 900 }}>
+    <Modal titulo={item.title} onClose={cerrarModal} className="modal-wide" style={{ maxWidth: 900 }}>
 
       <div style={{ display: 'flex', gap: 8, padding: '0 20px', marginTop: 8, fontSize: 12, flexWrap: 'wrap' }}>
         {needsSelection && <><span style={{ fontWeight: step === 0 ? 700 : 400, color: step === 0 ? 'var(--text)' : 'var(--text-muted)' }}>0. Selección</span><span style={{ color: 'var(--text-muted)' }}>→</span></>}
@@ -1944,20 +1885,17 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
           <p className="text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
             {allowMultiSeason
               ? <>Elige qué temporada(s) de <strong>{item.title}</strong> subir.</>
-              : isSeason
-              ? <>Elige cómo subir <strong>{item.title}</strong>.</>
-              : <>Elige qué subir de <strong>{item.title}</strong>: un episodio concreto, o la temporada entera.</>}
+              : <>Elige cómo subir <strong>{item.title}</strong>.</>}
           </p>
-          {allowMultiSeason ? multiSeasonChecklist : isSeason ? seasonModeSelection : singleSelectionFields}
+          {allowMultiSeason ? multiSeasonChecklist : seasonModeSelection}
           {selError && <p className="text-error" style={{ marginTop: 10 }}>{selError}</p>}
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
             <button
               className="btn btn-primary"
-              disabled={isSeason && !allowMultiSeason && seasonUploadMode === null}
+              disabled={!allowMultiSeason && seasonUploadMode === null}
               onClick={
                 allowMultiSeason ? confirmMultiSelection
-                : isSeason ? (seasonUploadMode === 'episodes' ? confirmEpisodeSelection : confirmSeasonWhole)
-                : confirmSelection
+                : seasonUploadMode === 'episodes' ? confirmEpisodeSelection : confirmSeasonWhole
               }
               type="button"
             >Continuar</button>
@@ -1971,7 +1909,8 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
               <select
                 className="form-input form-select" style={{ width: 'auto' }}
-                value={targetId ?? ''} onChange={e => switchActiveSeason(Number(e.target.value))}
+                value={targetId ?? ''} onChange={e => cambiarElemento(Number(e.target.value))}
+                disabled={seasonPlanLoading}
               >
                 {seasonQueue.map(id => {
                   const s = seasons.find(x => x.id === id)
@@ -2159,7 +2098,8 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
               <select
                 className="form-input form-select" style={{ width: 'auto' }}
-                value={targetId ?? ''} onChange={e => switchActiveEpisode(Number(e.target.value))}
+                value={targetId ?? ''} onChange={e => cambiarElemento(Number(e.target.value))}
+                disabled={episodePrepping}
               >
                 {/* Canonical "Serie (Año) - SxxExx", same format the rest
                     of the app uses for an episode. */}
@@ -2210,7 +2150,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 600 }}>MediaInfo y pistas del archivo</div>
                     <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>
-                      Ver Pistas: muestra la reordenación y el nombre de las pistas de vídeo/audio/subtítulos del contenido (editable).
+                      Ver Pistas: muestra la reordenación y el nombre de las pistas de vídeo/audio/subtítulos del contenido{esTanda(seleccion) ? '' : ' (editable)'}.
                       <br />
                       Ver MediaInfo: muestra el detalle técnico real del archivo.
                     </div>
@@ -2282,13 +2222,22 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                         película o un capítulo suelto, nunca en una
                         temporada entera. */}
                     {remuxPreview && (
-                      <RemuxTable
-                        plan={remuxPreview}
-                        editable={tocaElFichero(normalizarModo(remuxPreview.track_mode))}
-                        nameEditable={renombra(normalizarModo(remuxPreview.track_mode))}
-                        edits={remuxEdits}
-                        onEdit={setRemuxEdit}
-                      />
+                      <>
+                        {/* En una tanda "Subir todos" no lleva las ediciones: se
+                            enseñan las pistas pero no se pueden tocar. */}
+                        {esTanda(seleccion) && (
+                          <p className="text-muted" style={{ fontSize: 12, marginTop: 0 }}>
+                            Al subir varios capítulos a la vez se aplican los nombres automáticos. Para cambiarlos, sube el capítulo suelto.
+                          </p>
+                        )}
+                        <RemuxTable
+                          plan={remuxPreview}
+                          editable={!esTanda(seleccion) && tocaElFichero(normalizarModo(remuxPreview.track_mode))}
+                          nameEditable={!esTanda(seleccion) && renombra(normalizarModo(remuxPreview.track_mode))}
+                          edits={remuxEdits}
+                          onEdit={setRemuxEdit}
+                        />
+                      </>
                     )}
                   </div>
                 </Modal>

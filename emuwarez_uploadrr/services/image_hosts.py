@@ -82,8 +82,7 @@ def set_config(conn: sqlite3.Connection, enabled: list[str], keys: Optional[dict
     clean = [i for i in (enabled or []) if i in _BY_ID]
     set_setting(conn, "imghost.enabled", json.dumps(clean, ensure_ascii=False))
     for host_id, key in (keys or {}).items():
-        # Una cadena vacía borra la clave guardada; None la deja como está.
-        if host_id in _BY_ID and key is not None:
+        if host_id in _BY_ID and key is not None and str(key).strip():
             set_setting(conn, f"imghost.key.{host_id}", str(key).strip())
 
 

@@ -59,12 +59,12 @@ function configSignature(v: {
   emuUsername: string; ignoreSpecials: boolean; sourceEngine: boolean; addLogo: boolean; capturasPorCapitulo: boolean; modoDePistas: ModoPistas
   recentLimit: number; uploadMaxConcurrent: number; qbitUrl: string; qbitTag: string; qbitUser: string
   imgEnabled: string[]; allowedRoots: string
-  newKey?: string; newEmuKey?: string; qbitPass?: string; qbitQui?: string; quitarQui?: boolean
+  newKey?: string; newEmuKey?: string; qbitPass?: string; qbitQui?: string; quitarQui?: boolean; quitarQbitPass?: boolean
 }): string {
   return JSON.stringify([
     v.tags, v.providerOrder, v.region, v.emuUsername,
     v.ignoreSpecials, v.sourceEngine, v.addLogo, v.capturasPorCapitulo, v.modoDePistas, v.recentLimit, v.uploadMaxConcurrent, v.qbitUrl, v.qbitTag, v.qbitUser, v.imgEnabled, v.allowedRoots,
-    v.newKey ?? '', v.newEmuKey ?? '', v.qbitPass ?? '', v.qbitQui ?? '', v.quitarQui ?? false,
+    v.newKey ?? '', v.newEmuKey ?? '', v.qbitPass ?? '', v.qbitQui ?? '', v.quitarQui ?? false, v.quitarQbitPass ?? false,
   ])
 }
 
@@ -210,6 +210,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const [qbitTag, setQbitTag] = useState('')
   const [qbitUser, setQbitUser] = useState('')
   const [qbitPass, setQbitPass] = useState('')
+  const [quitarQbitPass, setQuitarQbitPass] = useState(false)
   // El proxy de qui es un secreto como la contraseña: no se carga, y quitarlo se pide aparte.
   const [qbitQui, setQbitQui] = useState('')
   const [quitarQui, setQuitarQui] = useState(false)
@@ -225,6 +226,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const [keyModalHost, setKeyModalHost] = useState<string | null>(null)
   const [keyDraft, setKeyDraft] = useState('')
   const [keySaving, setKeySaving] = useState(false)
+  const [keyError, setKeyError] = useState<string | null>(null)
   const [imgTest, setImgTest] = useState<Record<string, IntegrationTestResult>>({})
   const [imgTesting, setImgTesting] = useState<string | null>(null)
   const [showAddImg, setShowAddImg] = useState(false)
@@ -240,7 +242,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const currentSig = configSignature({
     tags: tagsAGuardar, providerOrder, region, emuUsername,
     ignoreSpecials, sourceEngine, addLogo, capturasPorCapitulo, modoDePistas, recentLimit, uploadMaxConcurrent, qbitUrl, qbitTag, qbitUser, imgEnabled, allowedRoots,
-    newKey, newEmuKey, qbitPass, qbitQui, quitarQui,
+    newKey, newEmuKey, qbitPass, qbitQui, quitarQui, quitarQbitPass,
   })
   const dirty = baseline !== '' && currentSig !== baseline
   const dirtyRef = useRef(false)
@@ -428,6 +430,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
       if (newKey.trim()) payload.tmdb_api_key = newKey.trim()
       if (newEmuKey.trim()) payload.emu_api_key = newEmuKey.trim()
       if (qbitPass.trim()) payload.qbit_password = qbitPass.trim()
+      else if (quitarQbitPass) payload.clear = ['qbit_password']
       if (quitarQui) payload.qbit_qui_proxy_clear = true
       else if (qbitQui.trim()) payload.qbit_qui_proxy_url = qbitQui.trim()
       // Las API keys de imágenes ya NO viajan aquí: cada una se guarda desde
@@ -449,6 +452,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
       setQbitTag(updated.qbit_tag ?? '')
       setQbitUser(updated.qbit_username ?? '')
       setQbitPass('')
+      setQuitarQbitPass(false)
       setQbitQui('')
       setQuitarQui(false)
       setImgEnabled(updated.image_hosts_enabled ?? [])
@@ -661,7 +665,12 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         </div>
         <div className="form-group" style={{ marginBottom: 12 }}>
           <label className="form-label">Contraseña <span className="form-hint">(dejar vacío para mantener la actual)</span></label>
-          <input type="password" className="form-input" value={qbitPass} onChange={e => setQbitPass(e.target.value)} placeholder={settings?.qbit_password_configured ? '••••••••' : 'Contraseña del WebUI'} autoComplete="new-password" />
+          <input type="password" className="form-input" value={qbitPass} onChange={e => { setQbitPass(e.target.value); setQuitarQbitPass(false) }} placeholder={quitarQbitPass ? 'Se quitará al guardar' : settings?.qbit_password_configured ? '••••••••' : 'Contraseña del WebUI'} autoComplete="new-password" />
+          {settings?.qbit_password_configured && !qbitPass && (
+            <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: 6, alignSelf: 'flex-start' }} onClick={() => setQuitarQbitPass(q => !q)}>
+              {quitarQbitPass ? 'No quitarla' : 'Quitar la contraseña'}
+            </button>
+          )}
         </div>
         <div className="form-group" style={{ marginBottom: 12 }}>
           <label className="form-label" htmlFor="qbit-qui-proxy">
@@ -775,7 +784,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                           fontSize: 10, cursor: 'pointer', appearance: 'none',
                           fontFamily: 'inherit', lineHeight: 'inherit', margin: 0,
                         }}
-                        onClick={e => { e.stopPropagation(); setKeyModalHost(id); setKeyDraft('') }}
+                        onClick={e => { e.stopPropagation(); setKeyModalHost(id); setKeyDraft(''); setKeyError(null) }}
                         onMouseDown={e => e.stopPropagation()}
                       >API key</button>
                     )
@@ -832,7 +841,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                 // fallaba en cada subida.
                 const guardar = async () => {
                   if (!keyDraft.trim()) return
-                  setKeySaving(true)
+                  setKeySaving(true); setKeyError(null)
                   try {
                     const check = await testImghostConnection(keyModalHost, keyDraft.trim())
                     setImgTest(p => ({ ...p, [keyModalHost]: check }))
@@ -841,11 +850,20 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                     setSettings(updated)
                     setKeyModalHost(null)
                     setKeyDraft('')
-                  } catch { /* el mensaje de error global ya lo cubre */ }
+                  } catch (e: unknown) { setKeyError(e instanceof Error ? e.message : String(e)) }
+                  finally { setKeySaving(false) }
+                }
+                const quitar = async () => {
+                  setKeySaving(true); setKeyError(null)
+                  try {
+                    setSettings(await updateSettings({ clear: [`image_host_key:${keyModalHost}`] }))
+                    setKeyModalHost(null)
+                    setKeyDraft('')
+                  } catch (e: unknown) { setKeyError(e instanceof Error ? e.message : String(e)) }
                   finally { setKeySaving(false) }
                 }
                 return (
-                  <Modal titulo={<>API key de {host?.label ?? keyModalHost}</>} onClose={() => setKeyModalHost(null)} style={{ maxWidth: 480 }}>
+                  <Modal titulo={<>API key de {host?.label ?? keyModalHost}</>} onClose={() => { if (!keySaving) setKeyModalHost(null) }} style={{ maxWidth: 480 }}>
                     <div className="modal-body">
                       <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
                         <input
@@ -863,21 +881,18 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                         </button>
                       </div>
                       {t && <div style={{ fontSize: 12, marginTop: 8, color: testResultColor(t) }}>{testResultLabel(t)}</div>}
+                      {keyError && <div className="text-error" style={{ fontSize: 12, marginTop: 8 }}>✗ {keyError}</div>}
                       <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 10, marginBottom: 0 }}>
                         La clave se comprueba contra el proveedor, sin subir ninguna imagen. Guardar la
                         comprueba también: si no vale, no se guarda.
                       </p>
                       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
                         {guardada && (
-                          <button className="btn btn-danger" type="button" disabled={keySaving} onClick={async () => {
-                            // Una clave vacía borra la guardada.
-                            try {
-                              setSettings(await updateSettings({ image_host_keys: { [keyModalHost]: '' } }))
-                              setKeyModalHost(null)
-                            } catch { /* el mensaje de error global ya lo cubre */ }
-                          }}>Borrar clave</button>
+                          <button className="btn btn-secondary" type="button" style={{ marginRight: 'auto' }} onClick={quitar} disabled={keySaving}>
+                            Quitar la clave
+                          </button>
                         )}
-                        <button className="btn btn-secondary" type="button" onClick={() => setKeyModalHost(null)}>Cancelar</button>
+                        <button className="btn btn-secondary" type="button" onClick={() => setKeyModalHost(null)} disabled={keySaving}>Cancelar</button>
                         <button className="btn btn-primary" type="button" onClick={guardar} disabled={!keyDraft.trim() || keySaving}>
                           {keySaving ? 'Comprobando…' : 'Guardar'}
                         </button>
@@ -1610,11 +1625,13 @@ function notifSignature(v: {
   uiEnabled: boolean; uiEvents: string[]
   discordEnabled: boolean; discordWebhook?: string; telegramEnabled: boolean
   telegramToken?: string; telegramChatId: string; discordEvents: string[]; telegramEvents: string[]
+  quitarDiscord?: boolean; quitarTelegram?: boolean
 }): string {
   return JSON.stringify([
     v.uiEnabled, v.uiEvents,
     v.discordEnabled, v.discordWebhook ?? '', v.telegramEnabled, v.telegramToken ?? '',
     v.telegramChatId, v.discordEvents, v.telegramEvents,
+    v.quitarDiscord ?? false, v.quitarTelegram ?? false,
   ])
 }
 
@@ -1627,10 +1644,12 @@ function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | nul
 
   const [discordEnabled, setDiscordEnabled] = useState(false)
   const [discordWebhook, setDiscordWebhook] = useState('')
+  const [quitarDiscord, setQuitarDiscord] = useState(false)
   const [testingDiscord, setTestingDiscord] = useState(false)
 
   const [telegramEnabled, setTelegramEnabled] = useState(false)
   const [telegramToken, setTelegramToken] = useState('')
+  const [quitarTelegram, setQuitarTelegram] = useState(false)
   const [telegramChatId, setTelegramChatId] = useState('')
   const [testingTelegram, setTestingTelegram] = useState(false)
 
@@ -1647,6 +1666,7 @@ function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | nul
   const currentSig = notifSignature({
     uiEnabled, uiEvents,
     discordEnabled, discordWebhook, telegramEnabled, telegramToken, telegramChatId, discordEvents, telegramEvents,
+    quitarDiscord, quitarTelegram,
   })
   const dirty = baseline !== '' && currentSig !== baseline
   const dirtyRef = useRef(false)
@@ -1705,7 +1725,9 @@ function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | nul
         notify_telegram_events: telegramEvents,
       }
       if (discordWebhook.trim()) payload.notify_discord_webhook_url = discordWebhook.trim()
+      else if (quitarDiscord) payload.clear = ['notify_discord_webhook_url']
       if (telegramToken.trim()) payload.notify_telegram_bot_token = telegramToken.trim()
+      else if (quitarTelegram) payload.clear = [...(payload.clear ?? []), 'notify_telegram_bot_token']
       const updated = await updateSettings(payload)
       setSettings(updated)
       setUiEvents(updated.notify_ui_events ?? [])
@@ -1713,6 +1735,8 @@ function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | nul
       setTelegramEvents(updated.notify_telegram_events ?? [])
       setDiscordWebhook('')
       setTelegramToken('')
+      setQuitarDiscord(false)
+      setQuitarTelegram(false)
       setBaseline(notifSignature({
         uiEnabled: updated.notify_ui_enabled, uiEvents: updated.notify_ui_events ?? [],
         discordEnabled: updated.notify_discord_enabled, telegramEnabled: updated.notify_telegram_enabled,
@@ -1814,10 +1838,15 @@ function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | nul
             type="password"
             className="form-input"
             value={discordWebhook}
-            onChange={e => setDiscordWebhook(e.target.value)}
-            placeholder="https://discord.com/api/webhooks/… (dejar vacío para mantener el actual)"
+            onChange={e => { setDiscordWebhook(e.target.value); setQuitarDiscord(false) }}
+            placeholder={quitarDiscord ? 'Se quitará al guardar' : 'https://discord.com/api/webhooks/… (dejar vacío para mantener el actual)'}
             autoComplete="new-password"
           />
+          {settings?.notify_discord_webhook_configured && !discordWebhook && (
+            <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: 6 }} onClick={() => setQuitarDiscord(q => !q)}>
+              {quitarDiscord ? 'No quitarlo' : 'Quitar el webhook'}
+            </button>
+          )}
         </div>
         <button className="btn btn-secondary btn-sm" onClick={handleTestDiscord} disabled={testingDiscord} type="button">
           {testingDiscord ? 'Enviando…' : 'Probar notificación'}
@@ -1850,10 +1879,15 @@ function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | nul
             type="password"
             className="form-input"
             value={telegramToken}
-            onChange={e => setTelegramToken(e.target.value)}
-            placeholder="123456:ABC-DEF… (dejar vacío para mantener el actual)"
+            onChange={e => { setTelegramToken(e.target.value); setQuitarTelegram(false) }}
+            placeholder={quitarTelegram ? 'Se quitará al guardar' : '123456:ABC-DEF… (dejar vacío para mantener el actual)'}
             autoComplete="new-password"
           />
+          {settings?.notify_telegram_bot_token_configured && !telegramToken && (
+            <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: 6 }} onClick={() => setQuitarTelegram(q => !q)}>
+              {quitarTelegram ? 'No quitarlo' : 'Quitar el token'}
+            </button>
+          )}
         </div>
         <div className="form-group" style={{ marginBottom: 12 }}>
           <label className="form-label">Chat ID</label>

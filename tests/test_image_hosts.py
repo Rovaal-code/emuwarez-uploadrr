@@ -144,10 +144,3 @@ def test_un_403_de_cloudflare_en_la_portada_no_es_caido(monkeypatch):
         raise _respuesta({}, status=403)
     monkeypatch.setattr(ih.urllib.request, "urlopen", _falla)
     assert ih.test_image_host("imgbox")["ok"] is True
-
-
-def test_una_clave_vacia_borra_la_guardada(db_conn):
-    ih.set_config(db_conn, ["imgbb"], {"imgbb": "clave"})
-    assert ih.get_host_key(db_conn, "imgbb") == "clave"
-    ih.set_config(db_conn, ["imgbb"], {"imgbb": ""})
-    assert not ih.get_host_key(db_conn, "imgbb")

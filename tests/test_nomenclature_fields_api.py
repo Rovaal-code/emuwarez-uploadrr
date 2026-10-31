@@ -126,6 +126,39 @@ def test_preview_fields_webdl(client, auth_headers):
     assert "internal_mkv_title" in data
 
 
+def _preview_webdl(client, auth_headers, item_id, query=""):
+    fields = {"title": "Pelicula", "year": "2024", "resolution": "1080p", "source": "WEB-DL",
+              "provider": "NF", "video_codec": "H.265", "audio_summary": "DDP5.1", "subs": "SPA",
+              "tag": "EMUWAREZ"}
+    return client.post(
+        f"/api/library/{item_id}/nomenclature/preview-fields{query}",
+        json={"fields": fields}, headers=auth_headers,
+    )
+
+
+def test_preview_fields_pide_proveedores_a_tmdb_por_defecto(client, auth_headers):
+    item_id = _seed_item(client, auth_headers, title="Pelicula")
+    with patch("emuwarez_uploadrr.web.api.nomenclature.get_tmdb_available_providers",
+               return_value=["NF"]) as tmdb:
+        resp = _preview_webdl(client, auth_headers, item_id)
+    assert resp.status_code == 200
+    assert tmdb.call_count == 1
+    assert resp.json()["provider_options"]
+
+
+def test_preview_fields_sin_proveedores_no_llama_a_tmdb(client, auth_headers):
+    """El asistente de subida llama en cada edición y no usa los proveedores."""
+    item_id = _seed_item(client, auth_headers, title="Pelicula")
+    with patch("emuwarez_uploadrr.web.api.nomenclature.get_tmdb_available_providers",
+               return_value=["NF"]) as tmdb:
+        resp = _preview_webdl(client, auth_headers, item_id, "?provider_options=false")
+    assert resp.status_code == 200
+    tmdb.assert_not_called()
+    data = resp.json()
+    assert data["provider_options"] == []
+    assert data["torrent_name"] and data["internal_mkv_title"]
+
+
 def test_save_fields_requires_auth(client):
     resp = client.post("/api/library/1/nomenclature/save-fields", json={"fields": {}})
     assert resp.status_code == 401

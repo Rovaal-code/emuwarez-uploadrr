@@ -44,7 +44,11 @@ the upload with Uploadrr-EMU (`Kisnov/Uploadrr-EMU`, cloned into the image at `/
   `frontend` (`grep -l frontend tests/test_*.py`). A test that reads frontend files must name `frontend` in its own file.
 
 - Migrations: bump `SCHEMA_VERSION` in `database.py` and add a `_migrate_*` call at the end of the cascade in
-  `init_db`. `init_db` runs on every authenticated request and returns early when the version matches.
+  `init_db`. `preparar_base()` runs it once at startup (lifespan and `web serve`): it copies the DB to
+  `backups/pre-migracion-*.db` first and refuses a DB left by a newer version (`BaseMasNuevaError`); after that
+  `init_db` returns at once for that file, until a restore calls `olvidar_esquema()`. Where nobody called
+  `preparar_base` (tests, scripts) `init_db` still checks the stored version. Open the DB with `db()` (commits,
+  rolls back, closes) or the `get_db` dependency; a DB failure in a request is a 503, never a 401.
 - Upload pipeline: `upload_queue._run_queued_job` → `carpeta_subida` links the files into
   `UPLOADRR_UPLOADS_DIR` (default `/config/Uploadrr/uploads`) → `upload_execution.start_upload_job` →
   Uploadrr-EMU subprocess. Uploadrr hands that same folder to qBittorrent as the save path, so qBittorrent

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import {
-  setupAdmin, setupTmdb, setupEmu, setupInstances,
+  setupAdmin, setupTmdb, setupEmu, setupInstance,
   setupQbit, setupImghosts, setupComplete,
 } from '../api/setup'
 import { login } from '../api/auth'
@@ -262,6 +262,9 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
 
   // Instances step state
   const [instances, setInstances] = useState<InstanceDraft[]>([])
+  // Las ya guardadas salen del borrador, pero siguen contando para la sincronización final
+  // (las de antes de recargar, en setupStatus).
+  const [instancesGuardadas, setInstancesGuardadas] = useState(0)
   const [instDraft, setInstDraft] = useState<Partial<InstanceDraft>>({ type: 'radarr', is_4k: false, is_anime: false })
   const [instError, setInstError] = useState<string | null>(null)
   const [instAckSkip, setInstAckSkip] = useState(false)
@@ -417,10 +420,16 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   }
 
   const handleInstances = wrap(async () => {
-    await setupInstances(instances.map(i => ({
-      type: i.type, name: i.name, url: i.url, api_key: i.api_key,
-      is_4k: i.is_4k, is_anime: i.is_anime,
-    })))
+    // Una a una, y cada una sale del borrador al guardarse: si la segunda
+    // falla, reintentar no vuelve a mandar la primera (ya existe).
+    for (const i of instances) {
+      await setupInstance({
+        type: i.type, name: i.name, url: i.url, api_key: i.api_key,
+        is_4k: i.is_4k, is_anime: i.is_anime,
+      })
+      setInstances(prev => prev.filter(x => x.id !== i.id))
+      setInstancesGuardadas(n => n + 1)
+    }
     setStep('tmdb')
   })
 
@@ -432,13 +441,12 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
   })
 
   const handleQbit = wrap(async () => {
-    // Optional/skippable: an empty URL just moves on without configuring qBit.
-    if (qbitUrl.trim()) {
-      if (!isValidHttpUrl(qbitUrl)) {
-        throw new Error('La URL de qBittorrent debe empezar por http:// o https:// e incluir un host válido')
-      }
-      await setupQbit(qbitUrl.trim(), qbitUser.trim(), qbitPass, qbitTag.trim())
+    // Opcional: sin URL no se configura nada, pero el servidor apunta igual
+    // que el paso está hecho, para retomar después de él al recargar.
+    if (qbitUrl.trim() && !isValidHttpUrl(qbitUrl)) {
+      throw new Error('La URL de qBittorrent debe empezar por http:// o https:// e incluir un host válido')
     }
+    await setupQbit(qbitUrl.trim(), qbitUser.trim(), qbitPass, qbitTag.trim())
     setStep('providers')
   })
 
@@ -455,7 +463,7 @@ export function SetupWizard({ setupStatus, onComplete }: SetupWizardProps) {
 
   const handleComplete = wrap(async () => {
     await setupComplete()
-    if (instances.length > 0) {
+    if (instances.length > 0 || instancesGuardadas > 0 || setupStatus.radarr_instances + setupStatus.sonarr_instances > 0) {
       // Fire-and-forget: a full sync can take a while (or even a few
       // minutes on a real library), and awaiting it here used to leave this
       // screen looking frozen — only the button's own label quietly changed

@@ -150,8 +150,9 @@ La imagen se publica con varias etiquetas, y `EMUWAREZ_UPLOADRR_TAG` (en el `.en
 - `0.11.0`: una versión concreta, de las que tienen etiqueta `v0.11.0` en el repo. Sirve para quedarte en ella o
   para volver atrás si la nueva falla.
 - El sha del commit de una versión: cada versión publicada tiene también esa etiqueta.
-- `edge`: una prueba sin publicar como versión: la punta de `master` con el workflow en *solo prueba*, o tu
-  commit con `scripts/desplegar.sh --solo-prueba`.
+- `edge`: lo más nuevo. Una prueba sin publicar como versión (la punta de `master` con el workflow en *solo
+  prueba*, o tu commit con `scripts/desplegar.sh --solo-prueba`), y también cada versión publicada, así que nunca
+  se queda por detrás de `latest`.
 
 ```bash
 EMUWAREZ_UPLOADRR_TAG=0.11.0 docker compose up -d

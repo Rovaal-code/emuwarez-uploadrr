@@ -1,6 +1,6 @@
 # Publica una versión: pasa los tests completos sobre la punta de master, sube
-# __version__, la etiqueta vX.Y.Z, construye la imagen (:X.Y.Z, :<sha> y
-# :latest), publica el manifiesto en Kisnov/uploadrr-version, que es lo que
+# __version__, la etiqueta vX.Y.Z, construye la imagen (:X.Y.Z, :<sha>, :latest
+# y :edge), publica el manifiesto en Kisnov/uploadrr-version, que es lo que
 # lee el aviso de actualización de la app, y crea el release con sus PR.
 #
 # A mano (Actions → Publicar versión → Run workflow), o solo los días impares del mes si desde
@@ -156,7 +156,7 @@ jobs:
           echo "uploadrr=$uploadrr" >> "$GITHUB_OUTPUT"
           echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "fecha=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
-          # Una versión se construye solo con su sha; :X.Y.Z y :latest llegan cuando master ya la tiene.
+          # Una versión se construye solo con su sha; :X.Y.Z, :latest y :edge llegan cuando master ya la tiene.
           imagen=ghcr.io/kisnov/emuwarez-uploadrr
           if [ "$ACCION" = publicar ]; then
             echo "tags=$imagen:$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
@@ -202,7 +202,7 @@ jobs:
           COMMIT: ${{ steps.sello.outputs.commit }}
         run: |
           imagen=ghcr.io/kisnov/emuwarez-uploadrr
-          docker buildx imagetools create --tag "$imagen:$VERSION" --tag "$imagen:latest" "$imagen:$COMMIT"
+          docker buildx imagetools create --tag "$imagen:$VERSION" --tag "$imagen:latest" --tag "$imagen:edge" "$imagen:$COMMIT"
           echo "digest=$(docker buildx imagetools inspect "$imagen:latest" --format '{{json .Manifest}}' | jq -r .digest)" >> "$GITHUB_OUTPUT"
 
       - if: env.ACCION == 'publicar' && steps.version.outputs.hecha != 'true'

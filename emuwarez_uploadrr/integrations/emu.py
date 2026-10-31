@@ -172,7 +172,8 @@ def emu_fetch_all_torrents(
     catalog. Se pide ordenado por created_at desc (UNIT3D ordena por defecto por bumped_at, y un torrent
     antiguo resubido saldría el primero y cortaría el recorrido): los ids bajan página a página y el primer
     id conocido significa que lo que sigue también se conoce. Si el tracker rechaza el orden en la primera
-    página, se sigue sin él (su orden por defecto) en vez de dejar la sincronización sin funcionar.
+    página, el recorrido completo sigue sin él (su orden por defecto) en vez de dejar la sincronización sin
+    funcionar; el incremental falla, porque sin orden no puede fiarse de dónde parar.
 
     Requests are paced to `min_interval` seconds apart (rate limit).
 
@@ -196,7 +197,9 @@ def emu_fetch_all_torrents(
         try:
             data = pedir(page)
         except IntegrationError as exc:
-            if page > 1 or not orden or exc.status not in _RECHAZO_DE_ORDEN:
+            # Sin orden, un torrent resubido saldría el primero y cortaría el recorrido incremental: solo se prueba
+            # sin él en el completo.
+            if page > 1 or not orden or exc.status not in _RECHAZO_DE_ORDEN or stop_after_id is not None:
                 raise
             orden = {}
             data = pedir(page)

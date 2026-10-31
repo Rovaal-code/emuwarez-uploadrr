@@ -229,3 +229,11 @@ def test_un_fallo_que_no_es_del_orden_no_se_reintenta_sin_el(pedidas):
     with pytest.raises(IntegrationError):
         emu.emu_fetch_all_torrents("KEY", min_interval=0)
     assert len(pedidas["urls"]) == 1
+
+
+def test_el_recorrido_incremental_no_sigue_sin_orden(pedidas):
+    """Sin orden, un torrent antiguo resubido saldría el primero y cortaría el recorrido: el incremental falla."""
+    pedidas["respuestas"] = [IntegrationError("HTTP 422", status=422), _pagina([9, 8, 7])]
+    with pytest.raises(IntegrationError):
+        emu.emu_fetch_all_torrents("KEY", min_interval=0, stop_after_id=5)
+    assert len(pedidas["urls"]) == 1

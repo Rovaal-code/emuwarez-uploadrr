@@ -249,6 +249,27 @@ def test_solo_se_guardan_las_ultimas_copias_antes_de_migrar():
     assert len(nombres) == 3 and nombres[2].endswith(f"-v{SCHEMA_VERSION - 1}.db")
 
 
+def test_un_arranque_en_bucle_no_borra_la_copia_limpia():
+    """Cada reintento tras una migración fallida copia la base a medias: la primera
+    copia de esa versión es la única buena y no puede salir de las últimas 3."""
+    carpeta = db_path().parent / "backups"
+    carpeta.mkdir()
+    limpia = carpeta / f"pre-migracion-20260101_000000-v{SCHEMA_VERSION - 1}.db"
+    limpia.write_bytes(b"limpia")
+    for dia in range(2, 5):
+        (carpeta / f"pre-migracion-2026010{dia}_000000-v{SCHEMA_VERSION - 1}.db").write_bytes(b"a medias")
+    with db() as conn:
+        set_state(conn, "schema_version", str(SCHEMA_VERSION - 1))
+
+    with db():
+        pass
+
+    nombres = sorted(p.name for p in carpeta.glob("pre-migracion-*.db"))
+    assert limpia.name in nombres
+    assert f"pre-migracion-20260102_000000-v{SCHEMA_VERSION - 1}.db" not in nombres
+    assert len(nombres) == 4
+
+
 def test_si_la_copia_falla_la_migracion_sigue(caplog):
     with db() as conn:
         set_state(conn, "schema_version", str(SCHEMA_VERSION - 1))

@@ -1501,8 +1501,13 @@ def _copia_antes_de_migrar(conn: sqlite3.Connection, version: int) -> None:
             return
         conn.commit()  # VACUUM INTO no corre dentro de una transacción
         conn.execute("VACUUM INTO ?", (str(destino),))
-        for vieja in sorted(carpeta.glob("pre-migracion-*.db"))[:-_COPIAS_ANTES_DE_MIGRAR]:
-            vieja.unlink(missing_ok=True)
+        copias = sorted(carpeta.glob("pre-migracion-*.db"))
+        # La primera de esta versión es la única anterior a un intento fallido de migrar: los
+        # reintentos de un arranque en bucle copian ya una base a medias y no deben llevársela.
+        intocable = next((c for c in copias if c.name.endswith(f"-v{version}.db")), None)
+        for vieja in copias[:-_COPIAS_ANTES_DE_MIGRAR]:
+            if vieja != intocable:
+                vieja.unlink(missing_ok=True)
     except (sqlite3.Error, OSError):
         logger.warning("No se pudo copiar la base antes de migrar", exc_info=True)
 

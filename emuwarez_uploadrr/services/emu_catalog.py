@@ -577,7 +577,11 @@ def catalogo_cubre(conn: sqlite3.Connection, item_id: int, resolucion: Optional[
     if not item:
         return False
     item = dict(item)
-    cumplen = [r for r in filas_del_catalogo(conn, item)
+    filas = filas_del_catalogo(conn, item)
+    if item["item_type"] in ("season", "series"):
+        # Un capítulo suelto no cubre una temporada entera.
+        filas = [r for r in filas if _parse_episode_number(r["name"] or "") is None]
+    cumplen = [r for r in filas
                if (not resolucion or r["resolution"] == resolucion)
                and (not tipo or (r["source"] or "").lower() == tipo.lower())]
     if item["item_type"] != "series":

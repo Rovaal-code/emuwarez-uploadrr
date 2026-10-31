@@ -119,7 +119,9 @@ def test_filas_del_catalogo_y_lo_que_cubre(db_conn):
     assert [r["torrent_id"] for r in filas_del_catalogo(db_conn, item(capitulo))] == ["b"]
     assert catalogo_cubre(db_conn, temporada, "1080p", "Encode") is True
     assert catalogo_cubre(db_conn, temporada, "1080p", "Remux") is False  # 1080p y Remux no están juntos
-    assert catalogo_cubre(db_conn, temporada, "2160p", None) is True
+    # El torrent «b» es solo el capítulo 3: cubre al capítulo, no a la temporada entera.
+    assert catalogo_cubre(db_conn, temporada, "2160p", None) is False
+    assert catalogo_cubre(db_conn, capitulo, "2160p", "Remux") is True
     assert catalogo_cubre(db_conn, temporada, "720p", None) is False
 
 

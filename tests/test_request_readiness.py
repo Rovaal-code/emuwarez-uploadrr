@@ -558,6 +558,29 @@ def test_una_serie_entera_es_un_duplicado_si_cada_temporada_tiene_la_variante(db
     assert evaluate_request_readiness(req_id, db_conn)["status"] == "already_exists"
 
 
+def test_un_capitulo_suelto_en_emuwarez_no_hace_duplicada_la_temporada_pedida(db_conn):
+    """eMuwarez solo tiene el capítulo 1 en la variante pedida: la petición de la temporada entera sigue abierta."""
+    from emuwarez_uploadrr.services.request_readiness import evaluate_request_readiness
+    serie = _insert_library(db_conn, item_type="series", title="Show", tmdb_id="sx")
+    db_conn.execute("UPDATE library_items SET tvdb_id = '9' WHERE id = ?", (serie,))
+    temporada = _insert_library(db_conn, item_type="season", title="Show T1", tmdb_id="sx", resolution="1080p",
+                                nomenclature_status="Correcta", prepared_path="/data/prepared/show_t1")
+    db_conn.execute("UPDATE library_items SET parent_id = ?, season_number = 1 WHERE id = ?", (serie, temporada))
+    _en_emuwarez(db_conn, temporada)
+    episodio = _insert_library(db_conn, item_type="episode", title="E1", tmdb_id="sx", resolution="1080p",
+                               source="WEB-DL")
+    db_conn.execute("UPDATE library_items SET parent_id = ?, season_number = 1, episode_number = 1 WHERE id = ?",
+                    (temporada, episodio))
+    db_conn.execute(
+        "INSERT INTO emu_catalog (torrent_id, category, tvdb_id, resolution, source, name) "
+        "VALUES ('e1', 'Series', '9', '1080p', 'WEB-DL', 'Show (2020) S01E01 1080p')")
+    req_id = _insert_request(db_conn, emu_id="emu-show", title="Show", category="Series", tmdb_id="sx",
+                             requested_resolution="1080p", requested_source="WEB-DL", emu_status="unfilled")
+    db_conn.execute("UPDATE request_items SET req_scope = 'season', req_season = 1 WHERE id = ?", (req_id,))
+    db_conn.commit()
+    assert evaluate_request_readiness(req_id, db_conn)["status"] == "ready_to_upload"
+
+
 # ---------------------------------------------------------------------------
 # list_request_readiness ordena con el mismo ranking que select_best_candidate
 # ---------------------------------------------------------------------------

@@ -207,10 +207,16 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
     # reference table (below) to explain why a given bitrate range does or
     # doesn't confirm WEB-DL, and by source_comparison's mediainfo_confirmed.
     _reencoded = media_probe.looks_reencoded(video)
-    add("Source", _bitrate_source, _final_source,
-        help_text="MediaInfo: se calcula a través de una tool interna de la aplicación (analiza audio y "
-                   "bitrate del archivo), sin mirar el nombre del archivo. "
-                   "eMuwarez: nombre del archivo → Radarr/Sonarr → tool interna de la aplicación.")
+    _source_help = ("MediaInfo: se calcula a través de una tool interna de la aplicación (analiza audio y "
+                    "bitrate del archivo), sin mirar el nombre del archivo. "
+                    "eMuwarez: nombre del archivo → Radarr/Sonarr → tool interna de la aplicación.")
+    # Que se vea cuando la herramienta no ha podido hacer su trabajo entero.
+    if _engine_on and _engine_result is None:
+        _source_help += " Herramienta de Source: no ha podido analizar el archivo; se usa la estimación simple por bitrate."
+    elif _engine_result and _engine_result.get("partial"):
+        _source_help += (f" Herramienta de Source: análisis parcial (falta {_engine_result['partial']}); "
+                         "se repetirá la próxima vez.")
+    add("Source", _bitrate_source, _final_source, help_text=_source_help)
 
     # Bitrate reference table (Ver MediaInfo's "MediaInfo (bitrate)" link):
     # every eMuwarez source code and the bitrate range that maps to it at

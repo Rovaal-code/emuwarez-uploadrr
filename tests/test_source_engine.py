@@ -456,3 +456,28 @@ def test_explanation_mentions_winner_and_runner_up():
 def test_evidence_strength_within_bounds():
     result = scoring.score_candidates([_mk_evidence(BluRay=5) for _ in range(20)])
     assert 0.0 <= result.evidence_strength <= 1.0
+
+
+def test_un_analisis_a_medias_no_se_guarda(tmp_path, monkeypatch):
+    """Con el disco despertando, MediaInfo o el muestreo no llegan a tiempo:
+    eso no puede quedarse en la caché para siempre."""
+    from emuwarez_uploadrr import database
+    from emuwarez_uploadrr.services.source_engine import cache, engine
+    from emuwarez_uploadrr.services.source_engine.proc import ToolResult
+
+    f = tmp_path / "peli.mkv"
+    f.write_bytes(b"\0" * 1000)
+    falla = ToolResult(tool="mediainfo", ok=False, returncode=None, duration_s=5.0, error="timeout")
+    bien = ToolResult(tool="x", ok=True, returncode=0, duration_s=0.1)
+    monkeypatch.setattr(engine.tools, "mediainfo_full", lambda *a, **k: (None, falla))
+    monkeypatch.setattr(engine.tools, "ffprobe_format_streams", lambda *a, **k: ({"streams": [], "format": {}}, bien))
+    monkeypatch.setattr(engine.tools, "mkvmerge_identify", lambda *a, **k: ({"tracks": []}, bien))
+    monkeypatch.setattr(engine, "sample_bitstream", lambda *a, **k: None)
+    guardados = []
+    monkeypatch.setattr(cache, "put", lambda *a, **k: guardados.append(a))
+
+    conn = database.connect(tmp_path / "c.db")
+    database.init_db(conn)
+    result = engine.analyze(str(f), conn=conn)
+    assert result["partial"] == "MediaInfo, muestreo al 0 %"
+    assert guardados == []

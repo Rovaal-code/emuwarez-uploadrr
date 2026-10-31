@@ -18,7 +18,7 @@ the upload with Uploadrr-EMU (`Kisnov/Uploadrr-EMU`, cloned into the image at `/
 ## Verify
 
 - Backend: run the tests in Linux (hardlinks, mediainfo, mkvtoolnix), e.g. `python:3.12-slim` with
-  `pip install -e ".[web,dev]"`, then `python -m pytest tests -q -p no:cacheprovider` (~2180 tests, ~7 min).
+  `pip install -c constraints.txt -e ".[web,dev]"`, then `python -m pytest tests -q -p no:cacheprovider` (~2180 tests, ~7 min).
   On Windows, copy the tree into the container (`cp -r /src/. /w/`) rather than running on the bind mount.
 - Frontend: `cd frontend && npm ci && npx tsc --noEmit && npx vitest run && npx vite build`.
 - Architecture guards: `test_una_sola_puerta_a_settings.py` (settings only through `services/settings.py`
@@ -73,6 +73,9 @@ the upload with Uploadrr-EMU (`Kisnov/Uploadrr-EMU`, cloned into the image at `/
   repo and the image are private, so the app can't ask GHCR or read a private raw URL without a token.
   `desplegar.sh` publishes it after `docker push` via `scripts/publicar_version.py --repo`; don't edit it by
   hand, run that script. The file is public: keep `--notas` neutral.
+- Image Python deps: `constraints.txt` pins the `web` extra and what it pulls (Uploadrr-EMU pins its own in its
+  `requirements.txt`); the Dockerfile and CI install with `-c constraints.txt`. Raising a minimum in the `web` extra
+  means updating the pin too (`test_imagen_docker.py` checks they agree); the header of `constraints.txt` says how.
 - Building on Windows: `.gitattributes` keeps text files LF, so a new checkout builds with `docker build .`. A checkout
   made before it is still CRLF, and a CRLF `docker-entrypoint.sh` fails with "no such file or directory": build
   from `git -c core.autocrlf=false archive HEAD`.

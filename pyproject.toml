@@ -5,7 +5,7 @@ name = "emuwarez-uploadrr"
 # /api/health decía 0.1.0 mientras el código decía 0.2.0.
 dynamic = ["version"]
 description = "CLI modular para eMuwarez Uploadrr, preparada para interfaz web"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 
 [project.optional-dependencies]
 web = [

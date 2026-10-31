@@ -49,6 +49,13 @@ RUN set -eu; \
 
 WORKDIR /app
 
+# Dependencias web antes que el código: un cambio en emuwarez_uploadrr/ no las reinstala.
+# Salen del extra `web` de pyproject.toml, con las versiones fijadas en constraints.txt.
+COPY pyproject.toml constraints.txt ./
+RUN python -c "import tomllib; print(*tomllib.load(open('pyproject.toml', 'rb'))['project']['optional-dependencies']['web'], sep='\n')" > /tmp/web.txt \
+    && pip install --no-cache-dir -c constraints.txt -r /tmp/web.txt \
+    && rm /tmp/web.txt
+
 # Bundle Uploadrr-EMU as an internal dependency — like mediainfo/ffmpeg, the
 # user configures nothing, and it is NEVER an external bind mount. Installed
 # under /opt (NOT /app, or setuptools' flat-layout discovery would clash with
@@ -92,12 +99,11 @@ RUN echo "Uploadrr-EMU @ ${UPLOADRR_COMMIT}" \
 # `user:`) isn't known at build time, but docker-entrypoint.sh still needs to
 # replace /opt/Uploadrr/{data,tmp} with symlinks under whatever UID it runs as.
 
-# Install Python dependencies first (better layer caching)
-COPY pyproject.toml ./
+# El código de la app, después de lo que casi no cambia.
 COPY emuwarez_uploader.py ./
 COPY emuwarez_uploadrr/ ./emuwarez_uploadrr/
 
-RUN pip install --no-cache-dir -e ".[web]"
+RUN pip install --no-cache-dir --no-deps -e .
 
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh

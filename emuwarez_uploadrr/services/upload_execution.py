@@ -190,10 +190,11 @@ def _upload_jobs_where(filters: dict) -> tuple[str, list[Any]]:
     conditions = []
     params: list[Any] = []
 
-    status = filters.get("status")
-    if status:
-        conditions.append("status = ?")
-        params.append(status)
+    # Un estado o varios separados por coma («running,preparing»).
+    estados = [e.strip() for e in (filters.get("status") or "").split(",") if e.strip()]
+    if estados:
+        conditions.append(f"status IN ({','.join('?' * len(estados))})")
+        params.extend(estados)
 
     if filters.get("hide_preparatory"):
         # No son subidas, y filtrados después ocuparían sitio en la página.

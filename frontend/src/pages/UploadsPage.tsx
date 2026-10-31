@@ -16,6 +16,7 @@ import { useTooltip } from '../components/Tooltip'
 import { formatDateTimeSeconds } from '../utils/format'
 import { posterUrl, buildDeepLink } from '../utils/libraryItem'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
+import { hayMasPorCargar } from '../utils/paginarSubidas'
 import {
   UPLOAD_TYPE_LABEL, STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo,
   progressCounter, queuedWaitText, useTicker,
@@ -352,17 +353,16 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
     try {
       // The "Subiendo" filter option (value 'running') must also catch
       // 'preparing' jobs — they display identically as "Subiendo" now (see
-      // STATUS_LABEL) — so it can't be a single exact server-side match;
-      // fetch unfiltered and narrow client-side in visibleJobs instead.
-      const filtros = { status: statusFilter && statusFilter !== 'running' ? statusFilter : undefined, hide_preparatory: true }
-      // Si falla solo el recuento, la lista se enseña igual y se queda el total de antes.
+      // STATUS_LABEL) — so the server filters on both, before paginating and counting.
+      const filtros = { status: statusFilter === 'running' ? 'running,preparing' : statusFilter || undefined, hide_preparatory: true }
+      // Si falla solo el recuento, la lista se enseña igual y el total queda sin conocer.
       const [data, cuantas] = await Promise.all([
         getUploads({ ...filtros, limit: limite }),
-        countUploads(filtros).catch(() => undefined),
+        countUploads(filtros).catch(() => null),
       ])
       if (seq === loadSeqRef.current) {
         setJobs(data)
-        if (cuantas !== undefined) setTotal(cuantas)
+        setTotal(cuantas)
         setCargado(true)
       }
     } catch {
@@ -395,8 +395,9 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
     setStatusFilter(''); setTypeFilter('')
   }
   const filtrando = !!(search || statusFilter || typeFilter)
-  // Las que faltan por cargar. La búsqueda por título y el filtro de tipo miran solo las cargadas.
-  const hayMas = total != null && jobs.length < total && limite < MAX_LIMITE
+  // Las que faltan por cargar (sin total conocido, si la lista llena el límite pedido). La búsqueda por título y el
+  // filtro de tipo miran solo las cargadas.
+  const hayMas = hayMasPorCargar(total, jobs.length, limite, MAX_LIMITE)
   const cargarMas = () => setLimite(l => Math.min(l + PAGINA, MAX_LIMITE))
   // Al salir, de vuelta a la tabla sin filtros y con el orden por defecto.
   useAlSalir(() => {
@@ -519,8 +520,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
     })
   }
 
-  // Client-side filter + sort over the loaded jobs (status stays server-side,
-  // except 'running' — see load() — which also has to catch 'preparing').
+  // Client-side filter + sort over the loaded jobs (status stays server-side).
   const visibleJobs = useMemo(() => {
     const q = search.trim().toLowerCase()
     const out = jobs.filter(j => {
@@ -528,8 +528,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
       if (hasNewerRetry.has(j.id!)) return false // shown nested under its retry instead
       const titleOk = !q || (j.title || '').toLowerCase().includes(q)
       const typeOk = !typeFilter || j.media_type === typeFilter
-      const statusOk = statusFilter !== 'running' || j.status === 'running' || j.status === 'preparing'
-      return titleOk && typeOk && statusOk
+      return titleOk && typeOk
     })
     const dt = (s?: string | null) => (s ? new Date(s).getTime() : 0)
     out.sort((a, b) => {
@@ -542,7 +541,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
       }
     })
     return out
-  }, [jobs, search, sortBy, typeFilter, statusFilter, hasNewerRetry])
+  }, [jobs, search, sortBy, typeFilter, hasNewerRetry])
 
   // La de la lista o, si es más antigua que las cargadas (enlace /uploads/123, notificación, Panel), la pedida por su id.
   const [jobSuelto, setJobSuelto] = useState<UploadJob | null>(null)
@@ -738,7 +737,9 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
           </div>
           {hayMas && (
             <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '10px 0' }}>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{jobs.length} de {total} subidas cargadas</span>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                {total != null ? `${jobs.length} de ${total} subidas cargadas` : `${jobs.length} subidas cargadas`}
+              </span>
               <button type="button" className="btn btn-secondary btn-sm" onClick={cargarMas}>Cargar más</button>
             </div>
           )}

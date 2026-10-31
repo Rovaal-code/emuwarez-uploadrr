@@ -268,6 +268,19 @@ def test_el_total_ignora_el_limite_y_respeta_los_filtros(db_conn):
     assert count_upload_jobs(conn=db_conn) == 8
 
 
+def test_el_filtro_subiendo_junta_running_y_preparing_antes_de_paginar_y_contar(db_conn):
+    """«Subiendo» son dos estados: filtrado después de paginar, una más antigua quedaba fuera de la primera página."""
+    viejas = [_job(db_conn, "running", title="Sube 1"), _job(db_conn, "preparing", title="Sube 2")]
+    for i in range(5):
+        _job(db_conn, "queued", title=f"En cola {i}")
+    _job(db_conn, "completed", title="Terminada")
+
+    assert sorted(j["id"] for j in list_upload_jobs({"status": "running,preparing", "limit": 2}, conn=db_conn)) == sorted(viejas)
+    assert count_upload_jobs({"status": "running,preparing"}, conn=db_conn) == 2
+    assert count_upload_jobs({"status": "running"}, conn=db_conn) == 1
+    assert count_upload_jobs({"status": " running , preparing "}, conn=db_conn) == 2
+
+
 def test_la_api_lista_cuenta_y_lee_el_registro_por_partes(client, auth_headers, db_conn):
     for _ in range(3):
         _job(db_conn, "draft")
@@ -279,6 +292,11 @@ def test_la_api_lista_cuenta_y_lee_el_registro_por_partes(client, auth_headers, 
     assert r.status_code == 200
     assert len(r.json()) == 3
     assert {j["status"] for j in r.json()} == {"completed"}
+
+    r = client.get("/api/uploads", params={"status": "completed,failed"}, headers=auth_headers)
+    assert {j["status"] for j in r.json()} == {"completed"} and len(r.json()) == 4
+    r = client.get("/api/uploads/count", params={"status": "completed,failed"}, headers=auth_headers)
+    assert r.json() == {"total": 4}
 
     # «count» no se lee como el id de una subida.
     r = client.get("/api/uploads/count", params={"hide_preparatory": "true"}, headers=auth_headers)

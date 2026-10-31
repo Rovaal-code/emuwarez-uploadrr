@@ -61,6 +61,7 @@ export async function queueUpload(
 }
 
 export interface UploadsQuery {
+  // Uno o varios estados separados por coma («running,preparing»).
   status?: string; limit?: number; offset?: number; search?: string; library_item_id?: number
   // Sin las filas de antes de que un trabajo solo naciera al pulsar Subir: se quitan en el servidor,
   // antes de aplicar el límite, para que no ocupen sitio en la página.

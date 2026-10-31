@@ -1038,8 +1038,12 @@ def apply_remux(
             logger.warning("Reordenar/renombrar pistas falló (item %s): %s", library_item_id, err[:300])
             return {**preview, "status": "error", "dry_run": False, "apply": True, "errors": [err[:2000]]}
 
-        # Si mientras tanto Radarr/Sonarr lo sustituyó, o alguien lo enlazó, no se pisa.
-        if _huella(p) != antes:
+        # Si mientras tanto Radarr/Sonarr lo sustituyó (o lo borró), o alguien lo enlazó, no se pisa.
+        try:
+            cambio = _huella(p) != antes
+        except OSError:
+            cambio = True
+        if cambio:
             _cleanup(tmp_path)
             return {**preview, "status": "error", "dry_run": False, "apply": True,
                     "errors": [f"{p.name} cambió mientras se reordenaba; no se sustituye."]}

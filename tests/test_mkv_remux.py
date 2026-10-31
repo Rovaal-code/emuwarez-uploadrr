@@ -923,3 +923,38 @@ def test_a_file_that_changed_during_the_reorder_is_not_replaced(tmp_path):
     assert mkv_file.read_bytes() == b"lo nuevo de Radarr"
     assert sorted(p.name for p in tmp_path.iterdir() if ".mkv" in p.name) == ["Film.2024.mkv"]
     conn.close()
+
+
+def test_a_source_deleted_during_the_reorder_leaves_no_part_behind(tmp_path):
+    """Una actualización de Radarr borra el viejo mientras mkvmerge trabaja."""
+    from emuwarez_uploadrr.services.mkv_remux import apply_remux, REMUX_CONFIRMATION_TOKEN
+    mkv_file = tmp_path / "Film.2024.mkv"
+    mkv_file.write_bytes(b"fake mkv original")
+    conn = _make_conn(tmp_path)
+    item_id = _insert_library_item(conn, prepared_path=str(mkv_file))
+    _enable_reorder(conn)
+
+    class _FakePopen:
+        def __init__(self, args, **kwargs):
+            with open(args[args.index("-o") + 1], "wb") as fh:
+                fh.write(b"remuxed")
+            mkv_file.unlink()
+            self.stdout = iter(["#GUI#progress 100%\n"])
+
+        def wait(self, timeout=None):
+            return 0
+
+        def kill(self):
+            pass
+
+    with patch("emuwarez_uploadrr.services.mkv_remux.check_mkvmerge_available",
+               return_value={"available": True, "path": "/usr/bin/mkvmerge"}), \
+         patch("emuwarez_uploadrr.services.mkv_remux.read_tracks_json",
+               return_value={"ok": True, "data": _SAMPLE_MKV_JSON}), \
+         patch("emuwarez_uploadrr.services.mkv_remux.subprocess.Popen", side_effect=_FakePopen):
+        result = apply_remux(item_id, conn=conn, dry_run=False, apply=True,
+                             confirmation=REMUX_CONFIRMATION_TOKEN)
+
+    assert result["status"] == "error" and "cambió mientras se reordenaba" in result["errors"][0]
+    assert not [p for p in tmp_path.iterdir() if p.name.endswith(".part")]
+    conn.close()

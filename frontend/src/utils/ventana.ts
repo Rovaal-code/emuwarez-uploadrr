@@ -78,3 +78,25 @@ export function planVentana({ alturas, desde, alto, margen, fijas }: PlanVentana
   if (siguiente < n) tramos.push({ tipo: 'hueco', alto: ini[n] - ini[siguiente], clave: `h${siguiente}` })
   return tramos
 }
+
+/** Las columnas que pone `repeat(auto-fill, minmax(minimo, 1fr))` en `ancho`. */
+export function columnasAutoFill(ancho: number, minimo: number, hueco: number): number {
+  return Math.max(1, Math.floor((ancho + hueco) / (minimo + hueco)))
+}
+
+export interface PlanRejilla {
+  total: number
+  columnas: number
+  /** Alto de una fila más el hueco que la separa de la siguiente. */
+  paso: number
+  desde: number
+  alto: number
+  margen: number
+}
+
+/** Las filas de una rejilla de tarjetas iguales a pintar, de `primera` a `ultima`. */
+export function filasDeRejilla({ total, columnas, paso, desde, alto, margen }: PlanRejilla) {
+  const filas = Math.ceil(total / columnas)
+  const fila = (y: number) => Math.min(filas - 1, Math.max(0, Math.floor(y / paso)))
+  return { filas, primera: fila(desde - margen), ultima: fila(desde + alto + margen) }
+}

@@ -7,7 +7,7 @@
  * la barra de scroll mentiría sobre el largo de la lista.
  */
 import { describe, it, expect } from 'vitest'
-import { inicios, filaEn, planVentana, type Tramo } from '../ventana'
+import { inicios, filaEn, planVentana, columnasAutoFill, filasDeRejilla, type Tramo } from '../ventana'
 
 const filas = (tramos: Tramo[]) => tramos.flatMap(t => (t.tipo === 'fila' ? [t.indice] : []))
 const altoTotal = (tramos: Tramo[], alturas: number[]) =>
@@ -94,5 +94,38 @@ describe('planVentana', () => {
     const plan = planVentana({ alturas: veinteMil, desde: 300000, alto: 800, margen: 0, fijas: new Set([10, 15000]) })
     const claves = plan.flatMap(t => (t.tipo === 'hueco' ? [t.clave] : []))
     expect(new Set(claves).size).toBe(claves.length)
+  })
+})
+
+// Los pósters: 18.358 tarjetas con Estado = Disponible eran 148.000 nodos y
+// casi 3 s de bloqueo al cambiar a esa vista.
+describe('columnasAutoFill', () => {
+  it('cuenta las mismas columnas que auto-fill', () => {
+    // 6 × 140 + 5 × 16 = 920: caben 6 justas, con un píxel menos 5.
+    expect(columnasAutoFill(920, 140, 16)).toBe(6)
+    expect(columnasAutoFill(919, 140, 16)).toBe(5)
+  })
+
+  it('al menos una, aunque no quepa', () => {
+    expect(columnasAutoFill(0, 140, 16)).toBe(1)
+  })
+})
+
+describe('filasDeRejilla', () => {
+  const base = { total: 18358, columnas: 8, paso: 250, alto: 800, margen: 600 }
+
+  it('arriba del todo pinta las que se ven y el margen', () => {
+    // 800 + 600 = 1400 px → filas 0 a 5 de 250.
+    expect(filasDeRejilla({ ...base, desde: 0 })).toEqual({ filas: 2295, primera: 0, ultima: 5 })
+  })
+
+  it('en mitad pinta lo de alrededor', () => {
+    const { primera, ultima } = filasDeRejilla({ ...base, desde: 100000 })
+    expect(primera).toBe(Math.floor((100000 - 600) / 250))
+    expect(ultima).toBe(Math.floor((100000 + 800 + 600) / 250))
+  })
+
+  it('al final no se sale de la última fila, que puede ir a medias', () => {
+    expect(filasDeRejilla({ ...base, desde: 1e9 })).toMatchObject({ primera: 2294, ultima: 2294 })
   })
 })

@@ -19,7 +19,7 @@ import { LargePosterCard } from '../components/LargePosterCard'
 import { LibraryDetailPage } from '../components/LibraryDetailPage'
 import { HeaderFilter } from '../components/HeaderFilter'
 import { HeaderSort } from '../components/HeaderSort'
-import { FilasVirtuales } from '../components/FilasVirtuales'
+import { FilasVirtuales, RejillaVirtual } from '../components/FilasVirtuales'
 import { posterUrl } from '../utils/libraryItem'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
 import { hayAlgunFiltro, necesitaTodosLosNiveles } from '../utils/filtrosBiblioteca'
@@ -442,6 +442,8 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // La lista solo pinta lo que se ve (FilasVirtuales). Las series desplegadas
   // se pintan siempre, para no perder lo que tienen abierto al salir de vista.
   const listaRef = useRef<HTMLDivElement>(null)
+  // Los pósters, igual: solo las filas de tarjetas que se ven (RejillaVirtual).
+  const rejillaRef = useRef<HTMLDivElement>(null)
   const cabeceraRef = useRef<HTMLTableSectionElement>(null)
   const [desplegadas, setDesplegadas] = useState<ReadonlySet<number>>(() => new Set())
   const alDesplegar = useCallback((id: number, abierta: boolean) => {
@@ -678,21 +680,18 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
         />
       ) : items.length === 0 && viewMode !== 'list' ? (
         <EmptyState icon={<IconoLibros />} {...sinResultados} />
-      ) : viewMode === 'grid' ? (
-        <div className="activity-section" style={{ padding: 20, flex: 1, minHeight: 0, overflowY: 'auto', marginBottom: 0, ...refreshingStyle }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 16 }}>
-            {items.map((item, i) => (
-              <PosterCard key={item.id} item={item} onSelect={openDetail} priority={i < GRID_PRIORITY_COUNT} />
-            ))}
-          </div>
-        </div>
-      ) : viewMode === 'grid-lg' ? (
-        <div className="activity-section" style={{ padding: 20, flex: 1, minHeight: 0, overflowY: 'auto', marginBottom: 0, ...refreshingStyle }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 20 }}>
-            {items.map((item, i) => (
-              <LargePosterCard key={item.id} item={item} onSelect={openDetail} priority={i < GRID_PRIORITY_COUNT} />
-            ))}
-          </div>
+      ) : viewMode !== 'list' ? (
+        <div ref={rejillaRef} className="activity-section" style={{ padding: 20, flex: 1, minHeight: 0, overflowY: 'auto', marginBottom: 0, ...refreshingStyle }}>
+          <RejillaVirtual
+            items={items}
+            clave={claveDeItem}
+            minimo={viewMode === 'grid-lg' ? 220 : 140}
+            hueco={viewMode === 'grid-lg' ? 20 : 16}
+            contenedor={rejillaRef}
+            pintar={(item, i) => viewMode === 'grid-lg'
+              ? <LargePosterCard item={item} onSelect={openDetail} priority={i < GRID_PRIORITY_COUNT} />
+              : <PosterCard item={item} onSelect={openDetail} priority={i < GRID_PRIORITY_COUNT} />}
+          />
         </div>
       ) : (
         <div className="activity-section" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', marginBottom: 0, ...refreshingStyle }}>

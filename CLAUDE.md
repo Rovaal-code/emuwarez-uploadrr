@@ -76,6 +76,10 @@ the upload with Uploadrr-EMU (`Kisnov/Uploadrr-EMU`, cloned into the image at `/
 - Image Python deps: `constraints.txt` pins the `web` extra and what it pulls (Uploadrr-EMU pins its own in its
   `requirements.txt`); the Dockerfile and CI install with `-c constraints.txt`. Raising a minimum in the `web` extra
   means updating the pin too (`test_imagen_docker.py` checks they agree); the header of `constraints.txt` says how.
+- Uploadrr-EMU's state in the image: `/opt/Uploadrr/data` is real and refreshes with each image; only `config.yaml`,
+  `config.yaml.bak`, `cookies/` and `tmp` are symlinks, baked at build into `/config/Uploadrr`. The entrypoint just
+  creates the targets, and seeds `config.yaml` from the image's example the first time. Nothing under
+  `/opt/Uploadrr` is writable except `data/` (1777), so don't make the entrypoint create links there.
 - Building on Windows: `.gitattributes` keeps text files LF, so a new checkout builds with `docker build .`. A checkout
   made before it is still CRLF, and a CRLF `docker-entrypoint.sh` fails with "no such file or directory": build
   from `git -c core.autocrlf=false archive HEAD`.

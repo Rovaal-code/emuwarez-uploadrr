@@ -152,10 +152,16 @@ eMuwarez; después genera el nombre y lanza la subida. El progreso y los logs es
 
 ## 6. Uploadrr-EMU
 
-Va dentro de la imagen, en `/opt/Uploadrr`: no hay nada que montar ni configurar. Al arrancar,
-`docker-entrypoint.sh` sustituye `/opt/Uploadrr/data` y `/opt/Uploadrr/tmp` por enlaces a `/config/Uploadrr/data`
-y `/config/Uploadrr/tmp`, así que su `config.yaml` y sus temporales sobreviven a recrear el contenedor. La primera
-vez, `/config/Uploadrr/data` se copia del que trae la imagen.
+Va dentro de la imagen, en `/opt/Uploadrr`: no hay nada que montar ni configurar. Lo que guarda y tiene que
+sobrevivir a recrear el contenedor está en `/config/Uploadrr`: `config.yaml`, `config.yaml.bak` y `cookies/` en
+`data/`, y los temporales de cada subida en `tmp/`. La imagen trae los enlaces de `/opt/Uploadrr/data/config.yaml`,
+`config.yaml.bak`, `cookies` y de `/opt/Uploadrr/tmp` a esos sitios, y `docker-entrypoint.sh` crea los destinos; la
+primera vez, `config.yaml` sale del ejemplo de la imagen. El resto de `data/` (servicios, etiquetas, plantillas...)
+se queda en la imagen, así que una versión nueva lo actualiza.
+
+Si vienes de una versión anterior, las copias de esos ficheros que quedaron en `/config/Uploadrr/data` ya no se
+usan, y no se borran solas. Si alguna vez editaste a mano `services.json`, `tags.json` o una plantilla, ese cambio ya
+no se aplica.
 
 Antes de cada subida, la app escribe en `config.yaml` las claves de TMDb y eMuwarez, los hosts de imágenes y
 qBittorrent, y al terminar lo restaura desde `config.yaml.bak`. Si quieres tocar algo a mano, edita
@@ -256,11 +262,12 @@ Es `/opt/Uploadrr/tmp`, que apunta a `/config/Uploadrr/tmp`. Comprueba que los e
 del `PUID:PGID`:
 
 ```bash
-docker exec emuwarez-uploadrr ls -la /opt/Uploadrr
+docker exec emuwarez-uploadrr ls -la /opt/Uploadrr /opt/Uploadrr/data
 ls -la /srv/emuwarez-uploadrr/config/Uploadrr
 ```
 
-`data` y `tmp` tienen que verse como enlaces a `/config/Uploadrr/data` y `/config/Uploadrr/tmp`.
+`tmp` tiene que verse como enlace a `/config/Uploadrr/tmp`, y `config.yaml`, `config.yaml.bak` y `cookies` de `data`
+como enlaces a `/config/Uploadrr/data/...`.
 
 ### Pantalla en blanco o 404 en la raíz
 

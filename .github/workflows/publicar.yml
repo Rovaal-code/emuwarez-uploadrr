@@ -209,7 +209,12 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
           COMMIT: ${{ steps.sello.outputs.commit }}
+          NOTAS: ${{ inputs.notas || 'Correcciones y mejoras' }}
+          GH_TOKEN: ${{ github.token }}
         run: |
+          # Otra vez justo antes de mover las etiquetas: desde la primera comprobación pasó lo que tarda la imagen,
+          # y pudo salir una versión más nueva (p. ej. con desplegar.sh). Así :latest y :edge no vuelven atrás.
+          python3 scripts/publicar_version.py --solo-comprobar --notas "$NOTAS" --repo
           imagen=ghcr.io/kisnov/emuwarez-uploadrr
           docker buildx imagetools create --tag "$imagen:$VERSION" --tag "$imagen:latest" --tag "$imagen:edge" "$imagen:$COMMIT"
           echo "digest=$(docker buildx imagetools inspect "$imagen:latest" --format '{{json .Manifest}}' | jq -r .digest)" >> "$GITHUB_OUTPUT"

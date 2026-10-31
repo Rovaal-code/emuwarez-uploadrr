@@ -61,6 +61,8 @@ services:
     image: ghcr.io/kisnov/emuwarez-uploadrr:${EMUWAREZ_UPLOADRR_TAG:-latest}
     container_name: emuwarez-uploadrr
     restart: unless-stopped
+    # Un init como proceso 1: recoge los procesos que quedan sueltos al cancelar una subida (ffmpeg, mkbrr...).
+    init: true
 
     ports:
       - "${EMUWAREZ_UPLOADRR_PORT:-9494}:9494"
@@ -180,7 +182,7 @@ docker compose -f docker-compose.example.yml up -d
 
 ## Uso sin Docker
 
-Necesita Python 3.10+, Node 20, `mediainfo`, `ffmpeg`, `mkvtoolnix` y una copia de Uploadrr-EMU (ruta en el ajuste
+Necesita Python 3.12+, Node 22, `mediainfo`, `ffmpeg`, `mkvtoolnix` y una copia de Uploadrr-EMU (ruta en el ajuste
 `uploadrr.path`, por defecto `/opt/Uploadrr`).
 
 ```bash

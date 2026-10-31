@@ -27,13 +27,13 @@ def _patch(monkeypatch):
     return calls
 
 
-def test_two_overlapping_uploads_stage_once_restore_once(monkeypatch):
+def test_two_overlapping_uploads_restore_once(monkeypatch):
     calls = _patch(monkeypatch)
     cwd = "/tmp/fake-uploadrr"
 
     a = ue._acquire_staged_config(1, cwd)   # first: stages
-    b = ue._acquire_staged_config(2, cwd)   # second overlapping: reuses
-    assert calls["stage"] == 1
+    b = ue._acquire_staged_config(2, cwd)   # second overlapping: recalcula (solo escribe si cambió), no restaura
+    assert calls["stage"] == 2
     assert a is not None and b is not None
 
     ue._release_staged_config(1, a)         # first finishes: NOT restored yet

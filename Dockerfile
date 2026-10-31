@@ -1,11 +1,11 @@
 # syntax=docker/dockerfile:1
 # ── Stage 1: Build frontend ──────────────────────────────────────────────────
-FROM node:20-alpine AS frontend-builder
+FROM node:22-alpine AS frontend-builder
 
 WORKDIR /build/frontend
 
-COPY frontend/package.json frontend/package-lock.json* ./
-RUN npm ci --prefer-offline 2>/dev/null || npm install
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
 
 COPY frontend/ ./
 RUN npm run build
@@ -49,14 +49,22 @@ RUN set -eu; \
 
 WORKDIR /app
 
+# Dependencias web antes que el código: un cambio en emuwarez_uploadrr/ no las reinstala.
+# Salen del extra `web` de pyproject.toml, con las versiones fijadas en constraints.txt.
+COPY pyproject.toml constraints.txt ./
+RUN python -c "import tomllib; print(*tomllib.load(open('pyproject.toml', 'rb'))['project']['optional-dependencies']['web'], sep='\n')" > /tmp/web.txt \
+    && pip install --no-cache-dir -c constraints.txt -r /tmp/web.txt \
+    && rm /tmp/web.txt
+
 # Bundle Uploadrr-EMU as an internal dependency — like mediainfo/ffmpeg, the
 # user configures nothing, and it is NEVER an external bind mount. Installed
 # under /opt (NOT /app, or setuptools' flat-layout discovery would clash with
 # our own package). uploadrr.path defaults to /opt/Uploadrr
-# (services/uploadrr_contract.py). Its data/ and tmp/ subdirs are replaced at
-# container start (docker-entrypoint.sh) with symlinks into /config/Uploadrr,
-# so what Uploadrr-EMU writes there survives a rebuild/recreate without the
-# user mounting anything beyond the /config volume they already have.
+# (services/uploadrr_contract.py). What Uploadrr-EMU writes and must survive a
+# rebuild/recreate (config.yaml, its .bak, cookies/ and tmp/) is symlinked into
+# /config/Uploadrr below, so the user mounts nothing beyond the /config volume
+# they already have. The rest of data/ (services.json, tags.json, templates...)
+# stays real in the image: a new image updates it.
 #
 # Cloned from our own fork (Kisnov/Uploadrr-EMU on GitHub, not the public
 # codeberg.org/ccx94/Uploadrr-EMU upstream) so the image ships our local
@@ -77,27 +85,30 @@ WORKDIR /app
 # `--build-arg UPLOADRR_COMMIT=$(git ls-remote https://github.com/Kisnov/Uploadrr-EMU.git main | cut -f1)`
 # at build time. If omitted it stays "unknown", which can reuse a cached
 # clone: pass a current UPLOADRR_COMMIT or build with `--no-cache`.
-# Uploadrr-EMU no versiona data/config.yaml: sale de su ejemplo, y el entrypoint lo copia a /config la primera vez.
-# Solo instalaciones nuevas: un /config/Uploadrr/data que ya existe se queda como está.
+# Uploadrr-EMU no versiona data/config.yaml: el entrypoint lo crea en /config desde su ejemplo la primera vez.
 ARG UPLOADRR_COMMIT=unknown
 RUN echo "Uploadrr-EMU @ ${UPLOADRR_COMMIT}" \
     && git clone --depth 1 https://github.com/Kisnov/Uploadrr-EMU.git /opt/Uploadrr \
     && if [ "${UPLOADRR_COMMIT}" != unknown ]; then \
          git -C /opt/Uploadrr fetch -q --depth 1 origin "${UPLOADRR_COMMIT}" && git -C /opt/Uploadrr checkout -q FETCH_HEAD; fi \
     && pip install --no-cache-dir -r /opt/Uploadrr/requirements.txt \
-    && { [ -e /opt/Uploadrr/data/config.yaml ] || cp /opt/Uploadrr/data/backup/example_config.yaml /opt/Uploadrr/data/config.yaml; } \
-    && rm -rf /opt/Uploadrr/.git \
-    && chmod -R a+rwX /opt/Uploadrr
-# world-writable: the container's runtime UID (PUID/PGID, docker-compose's
-# `user:`) isn't known at build time, but docker-entrypoint.sh still needs to
-# replace /opt/Uploadrr/{data,tmp} with symlinks under whatever UID it runs as.
+    && rm -rf /opt/Uploadrr/.git /opt/Uploadrr/data/cookies /opt/Uploadrr/tmp \
+    && ln -sf /config/Uploadrr/data/config.yaml /opt/Uploadrr/data/config.yaml \
+    && ln -sf /config/Uploadrr/data/config.yaml.bak /opt/Uploadrr/data/config.yaml.bak \
+    && ln -s /config/Uploadrr/data/cookies /opt/Uploadrr/data/cookies \
+    && ln -s /config/Uploadrr/tmp /opt/Uploadrr/tmp \
+    && chmod -R a+rX /opt/Uploadrr \
+    && chmod 1777 /opt/Uploadrr/data
+# Solo data/ admite escritura (el índice de torrents que deja Uploadrr-EMU): el UID
+# del contenedor (PUID/PGID, `user:` del compose) no se conoce al construir, y con
+# el bit sticky no puede borrar ni sustituir lo que trae la imagen. El código es de
+# solo lectura. Los destinos de los enlaces los crea docker-entrypoint.sh.
 
-# Install Python dependencies first (better layer caching)
-COPY pyproject.toml ./
+# El código de la app, después de lo que casi no cambia.
 COPY emuwarez_uploader.py ./
 COPY emuwarez_uploadrr/ ./emuwarez_uploadrr/
 
-RUN pip install --no-cache-dir -e ".[web]"
+RUN pip install --no-cache-dir --no-deps -e .
 
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh

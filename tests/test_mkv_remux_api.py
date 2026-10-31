@@ -170,6 +170,7 @@ def test_apply_track_remux_correct_token_calls_mkvmerge(client, auth_headers, tm
     assert mkv_file.read_bytes() == b"fake mkv remuxed"
     _, kwargs = mock_popen.call_args
     assert not kwargs.get("shell", False)
+    assert kwargs["start_new_session"] is True  # para poder matar el grupo entero
 
 
 def test_apply_track_remux_with_manual_overrides(client, auth_headers, tmp_path):

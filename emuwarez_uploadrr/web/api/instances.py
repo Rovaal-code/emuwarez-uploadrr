@@ -92,9 +92,10 @@ def update_instance_endpoint(
             )
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-        from ...services.instances import get_instance_row
+        from ...services.instances import aviso_si_cambia_el_destino, get_instance_row
         row = get_instance_row(instance_id, conn)
-    return _row_to_safe(row)
+        aviso = aviso_si_cambia_el_destino(inst, url=body.url, api_key=body.api_key)
+    return _row_to_safe(row).model_copy(update={"warning": aviso})
 
 
 @router.delete("/{instance_id}", response_model=OkResponse)
@@ -146,6 +147,7 @@ def sync_instance(
 ) -> SyncResponse:
     from emuwarez_uploadrr.services.instances import get_instance
     from emuwarez_uploadrr.services.library import (
+        SincronizacionParcial,
         SyncAlreadyRunning,
         _lib_sync_guard,
         _set_lib_progress,
@@ -181,6 +183,12 @@ def sync_instance(
             raise HTTPException(status_code=429, detail="Ya hay una sincronización de biblioteca en marcha")
         except HTTPException:
             raise
+        except SincronizacionParcial as exc:
+            # Lo demás sí se sincronizó: se cuenta, con el aviso de lo que no.
+            return SyncResponse(
+                imported=exc.imported, missing=exc.missing, instances=1, errors=[str(exc)],
+                message=f"Instancia '{inst.name}' sincronizada con errores: {exc}",
+            )
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"Error en sync: {exc}")
     return SyncResponse(

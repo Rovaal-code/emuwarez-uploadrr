@@ -76,6 +76,25 @@ def read_config_lines(config_path: Path) -> list[str]:
     return config_path.read_text(encoding="utf-8", errors="ignore").splitlines()
 
 
+def _backup_path(config_path: Path) -> Path:
+    return config_path.with_suffix(config_path.suffix + ".bak")
+
+
+def read_baseline_lines(config_path: Path) -> list[str]:
+    """Las líneas del config de verdad: el .bak si existe. El config.yaml de
+    ahora puede ser el que dejó stageado una subida que murió a medias."""
+    backup_path = _backup_path(config_path)
+    return read_config_lines(backup_path if backup_path.exists() else config_path)
+
+
+def _write_atomic(path: Path, data: bytes) -> None:
+    # Se escribe aparte y se renombra: un lector (Uploadrr arrancando) o un fallo
+    # a medias (disco lleno) nunca ven un fichero cortado.
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    tmp_path.write_bytes(data)
+    os.replace(tmp_path, path)
+
+
 def backup_config(config_path: Path) -> Optional[Path]:
     """Create a .bak copy next to config_path if one doesn't already exist.
 
@@ -83,7 +102,7 @@ def backup_config(config_path: Path) -> Optional[Path]:
     """
     if not config_path.exists():
         return None
-    backup_path = config_path.with_suffix(config_path.suffix + ".bak")
+    backup_path = _backup_path(config_path)
     if not backup_path.exists():
         backup_path.write_bytes(config_path.read_bytes())
     return backup_path
@@ -91,18 +110,33 @@ def backup_config(config_path: Path) -> Optional[Path]:
 
 def restore_config_from_backup(config_path: Path) -> bool:
     """Restore config_path from its .bak file. Returns True if restored."""
-    backup_path = config_path.with_suffix(config_path.suffix + ".bak")
+    backup_path = _backup_path(config_path)
     if not backup_path.exists():
         return False
-    config_path.write_bytes(backup_path.read_bytes())
+    _write_atomic(config_path, backup_path.read_bytes())
     return True
+
+
+def restore_stale_config(config_path: Path) -> bool:
+    """Restaura el .bak solo si config.yaml es otra cosa: el stageado de una
+    subida que murió sin restaurarlo. True si había que restaurar."""
+    backup_path = _backup_path(config_path)
+    if not backup_path.exists():
+        return False
+    if config_path.exists() and config_path.read_bytes() == backup_path.read_bytes():
+        return False
+    return restore_config_from_backup(config_path)
+
+
+def staged_config_text(lines: list[str]) -> str:
+    return "\n".join(lines).rstrip() + "\n"
 
 
 def write_staged_config(config_path: Path, lines: list[str]) -> Path:
     """Write staged lines to config_path, backing up any existing file first."""
     config_path.parent.mkdir(parents=True, exist_ok=True)
     backup_config(config_path)
-    config_path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+    _write_atomic(config_path, staged_config_text(lines).encode("utf-8"))
     return config_path
 
 
@@ -300,8 +334,11 @@ def diff_staged_changes(old_lines: list[str], new_lines: list[str]) -> list[str]
 __all__ = [
     "default_uploadrr_config_path",
     "read_config_lines",
+    "read_baseline_lines",
     "backup_config",
     "restore_config_from_backup",
+    "restore_stale_config",
+    "staged_config_text",
     "write_staged_config",
     "get_tmdb_key",
     "stage_tmdb_key",

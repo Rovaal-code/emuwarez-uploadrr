@@ -148,6 +148,7 @@ def test_season_pack_reaches_the_real_command_without_episode(db_conn, tmp_path)
     assert args[args.index("-season") + 1] == "S02"
     assert "-episode" not in args
     assert args[args.index("-t") + 1] == "remux"
+    assert "-fd" in args
 
 
 def test_movie_gets_no_season_or_episode(db_conn, tmp_path):
@@ -158,6 +159,7 @@ def test_movie_gets_no_season_or_episode(db_conn, tmp_path):
     assert "-season" not in args
     assert "-episode" not in args
     assert args[args.index("-t") + 1] == "encode"
+    assert "-fd" not in args
 
 
 def test_apply_with_fake_runner_succeeds(db_conn, tmp_path, fake_uploadrr_emu_dir, fake_uploadrr_python_path):

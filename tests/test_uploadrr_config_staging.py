@@ -5,6 +5,8 @@ tests) never touch a real Uploadrr/ installation.
 """
 from __future__ import annotations
 
+import pytest
+
 from emuwarez_uploadrr.services.uploadrr_yaml import get_child_inline_mapping
 from emuwarez_uploadrr.services.uploadrr_config_staging import (
     QBIT_CLIENT_KEY,
@@ -421,3 +423,228 @@ def test_stage_qbittorrent_config_without_qui_drops_a_previous_one():
     lines = ["TORRENT_CLIENTS:", "  qbit: {'torrent_client': 'qbit', 'qui_proxy_url': 'http://qui/proxy/vieja'}"]
     staged, _ = stage_qbittorrent_config(lines, url="http://x:8080", username="u", password="p")
     assert "qui_proxy_url" not in get_child_inline_mapping(staged, "TORRENT_CLIENTS", QBIT_CLIENT_KEY)
+
+
+# --- EJEC-1: contraseñas y claves con caracteres que YAML trata aparte --------
+
+_VALORES_DIFICILES = [
+    "a\\b", "\\", "\\\\", "it's \"q\"", "'", "''", "tab\taqui", "con # almohadilla",
+    "con: dos puntos", "llaves } { y , comas [ ]", "ñandú", "  con espacios  ", "true", "123",
+    "dos\nlineas", "retorno\r\ny tab\t", "control\x01", "\x7f", "nel\x85", "separador\u2028", "mezcla \"q\" \n \\ '",
+]
+
+
+@pytest.mark.parametrize("valor", _VALORES_DIFICILES, ids=repr)
+def test_la_contrasena_de_qbittorrent_se_lee_igual_que_se_escribio(valor):
+    """repr() de Python escapaba con la barra invertida (que YAML no entiende
+    entre comillas simples): una contraseña con ella se leía mal, y con las dos
+    comillas el config.yaml no se podía leer."""
+    yaml = pytest.importorskip("yaml")
+    staged, _ = stage_qbittorrent_config([], url="http://x:8080", username=valor, password=valor)
+
+    cargado = yaml.safe_load("\n".join(staged))["TORRENT_CLIENTS"][QBIT_CLIENT_KEY]
+    assert cargado["qbit_pass"] == valor
+    assert cargado["qbit_user"] == valor
+    assert cargado["enable_search"] is False
+    mapa = get_child_inline_mapping(staged, "TORRENT_CLIENTS", QBIT_CLIENT_KEY)
+    assert mapa["qbit_pass"] == valor and mapa["qbit_user"] == valor
+
+
+@pytest.mark.parametrize("valor", _VALORES_DIFICILES, ids=repr)
+def test_la_clave_de_un_host_de_imagenes_se_lee_igual_que_se_escribio(valor):
+    yaml = pytest.importorskip("yaml")
+    staged, _ = stage_image_hosts([], api_keys={"imgbb": valor, "ptpimg": "otra"})
+
+    assert yaml.safe_load("\n".join(staged))["SCREENS"]["API_KEYS"] == {"imgbb": valor, "ptpimg": "otra"}
+
+
+def test_las_listas_de_un_cliente_sobreviven_al_staging():
+    """Uploadrr acepta una lista en automatic_management_paths: perderla (o
+    convertirla en una cadena) se llevaba por delante el resto de la entrada."""
+    yaml = pytest.importorskip("yaml")
+    lines = [
+        "TORRENT_CLIENTS:",
+        "  qbit: {'torrent_client': 'qbit', 'automatic_management_paths': ['/data/tv', '/data/mo vies', 'it''s'], "
+        "'content_layout': 'Original'}",
+    ]
+    staged, _ = stage_qbittorrent_config(lines, url="http://x:8080", username="u", password="p")
+
+    cargado = yaml.safe_load("\n".join(staged))["TORRENT_CLIENTS"][QBIT_CLIENT_KEY]
+    assert cargado["automatic_management_paths"] == ["/data/tv", "/data/mo vies", "it's"]
+    assert cargado["content_layout"] == "Original"
+    assert cargado["qbit_pass"] == "p"
+    assert get_child_inline_mapping(staged, "TORRENT_CLIENTS", QBIT_CLIENT_KEY)["automatic_management_paths"] == [
+        "/data/tv", "/data/mo vies", "it's"]
+
+
+def test_las_palabras_booleanas_de_yaml_11_se_leen_como_booleanos():
+    """PyYAML (el que lee Uploadrr) toma `no` como False: guardarlo como la
+    cadena 'no' dejaba la verificación del certificado activa."""
+    lines = ["TORRENT_CLIENTS:", "  qbit: {VERIFY_WEBUI_CERTIFICATE: no, enable_search: Yes, other: off, on: 'no'}"]
+    mapa = get_child_inline_mapping(lines, "TORRENT_CLIENTS", QBIT_CLIENT_KEY)
+    assert mapa == {"VERIFY_WEBUI_CERTIFICATE": False, "enable_search": True, "other": False, "on": "no"}
+
+
+def test_lo_que_pyyaml_lee_de_una_entrada_existente_es_lo_que_se_reescribe():
+    """Escapes de comillas dobles de YAML que no son los de Python (la barra
+    escapada, el guion bajo) y enteros con ceros delante (`08` es una cadena,
+    `7` un entero): el valor y su tipo tienen que ser los mismos que ve Uploadrr
+    al releer el config."""
+    yaml = pytest.importorskip("yaml")
+    lines = [
+        "TORRENT_CLIENTS:",
+        '  qbit: {automatic_management_paths: ["\\/data\\/tv", "a\\_b\\Nc", \'/data/it\'\'s\'], '
+        "qbit_port: 8080, ceros: [08, 7, 0, -3], decimal: 1.5, texto: 08, nulos: [none, None, null, Null, ~], otra: none}",
+    ]
+    original = yaml.safe_load("\n".join(lines))["TORRENT_CLIENTS"][QBIT_CLIENT_KEY]
+
+    staged, _ = stage_qbittorrent_config(lines, url="http://x:8080", username="u", password="p")
+
+    cargado = yaml.safe_load("\n".join(staged))["TORRENT_CLIENTS"][QBIT_CLIENT_KEY]
+    for clave in ("automatic_management_paths", "ceros", "decimal", "texto", "nulos", "otra"):
+        assert cargado[clave] == original[clave], clave
+        assert type(cargado[clave]) is type(original[clave]), clave
+    assert cargado["ceros"] == ["08", 7, 0, -3]
+    assert cargado["nulos"] == ["none", "None", None, None, None]  # `none` es una cadena, no null
+    assert cargado["automatic_management_paths"][0] == "/data/tv"
+
+
+def test_el_config_de_ejemplo_del_fork_se_sigue_leyendo():
+    lines = [
+        "TORRENT_CLIENTS:",
+        "  qbit: {'torrent_client': 'qbit', 'enable_search': True, 'qbit_url': 'http://127.0.0.1', "
+        "'qbit_port': '8080', 'content_layout': 'Original', 'VERIFY_WEBUI_CERTIFICATE': False} # un comentario",
+    ]
+    assert get_child_inline_mapping(lines, "TORRENT_CLIENTS", "qbit") == {
+        "torrent_client": "qbit", "enable_search": True, "qbit_url": "http://127.0.0.1",
+        "qbit_port": "8080", "content_layout": "Original", "VERIFY_WEBUI_CERTIFICATE": False,
+    }
+
+
+# --- EJEC-4: el config de verdad es el .bak, no lo que dejó una subida muerta -
+
+def _config_falso(tmp_path):
+    config = tmp_path / "Uploadrr" / "data" / "config.yaml"
+    config.parent.mkdir(parents=True)
+    config.write_text("DEFAULT:\n  tmdb: ''\nSCREENS:\n  per_episode: 3\n", encoding="utf-8")
+    return config
+
+
+def _poner_ajuste(clave, valor):
+    from emuwarez_uploadrr.database import connect, init_db
+    from emuwarez_uploadrr.services.settings import set_setting
+    conn = connect()
+    init_db(conn)
+    set_setting(conn, clave, valor)
+    conn.commit()
+    conn.close()
+
+
+def _per_episode(config):
+    from emuwarez_uploadrr.services.uploadrr_yaml import get_block_key
+    return get_block_key(read_config_lines(config), "SCREENS", "per_episode")
+
+
+def test_tras_un_corte_la_siguiente_subida_parte_del_backup(tmp_path, monkeypatch):
+    """Una subida muerta dejaba el config stageado (per_episode: 0), y la
+    siguiente, que quería todos los capítulos, «dejaba el valor del config»: el suyo."""
+    from emuwarez_uploadrr.services import upload_execution as ue
+    config = _config_falso(tmp_path)
+    monkeypatch.setattr(ue, "append_upload_log", lambda *a, **k: None)
+    cwd = str(tmp_path / "Uploadrr")
+
+    ue._stage_uploadrr_config(1, cwd)
+    assert _per_episode(config) == "0"  # y la subida muere sin restaurar
+
+    _poner_ajuste("emu.per_episode_screens", "true")
+    ue._stage_uploadrr_config(2, cwd)
+
+    assert _per_episode(config) == "3"
+
+
+def test_restore_stale_config_solo_restaura_si_difiere(tmp_path):
+    from emuwarez_uploadrr.services.uploadrr_config_staging import restore_stale_config
+    config = _config_falso(tmp_path)
+    assert restore_stale_config(config) is False  # sin .bak
+
+    backup_config(config)
+    assert restore_stale_config(config) is False  # igual que el .bak
+
+    config.write_text("stageado", encoding="utf-8")
+    assert restore_stale_config(config) is True
+    assert config.read_bytes() == config.with_suffix(".yaml.bak").read_bytes()
+
+
+def test_escribir_y_restaurar_no_dejan_ficheros_temporales(tmp_path):
+    config = _config_falso(tmp_path)
+    write_staged_config(config, ["DEFAULT:", "  tmdb: 'x'"])
+    restore_config_from_backup(config)
+
+    assert sorted(p.name for p in config.parent.iterdir()) == ["config.yaml", "config.yaml.bak"]
+
+
+def test_al_arrancar_se_restaura_el_config_que_dejo_una_subida_muerta(tmp_path):
+    from emuwarez_uploadrr.services import upload_execution as ue
+    config = _config_falso(tmp_path)
+    backup_config(config)
+    original = config.read_bytes()
+    config.write_text("DEFAULT:\n  tmdb: 'CLAVE_REAL'\n", encoding="utf-8")
+    _poner_ajuste("uploadrr.path", str(tmp_path / "Uploadrr"))
+
+    assert ue.restaurar_config_interrumpida() is True
+    assert config.read_bytes() == original
+    assert ue.restaurar_config_interrumpida() is False
+
+
+def test_la_siguiente_subida_restaura_el_config_aunque_no_pueda_stagear(tmp_path, monkeypatch):
+    from emuwarez_uploadrr.services import upload_execution as ue
+    config = _config_falso(tmp_path)
+    backup_config(config)
+    original = config.read_bytes()
+    config.write_text("DEFAULT:\n  tmdb: 'CLAVE_REAL'\n", encoding="utf-8")
+    monkeypatch.setattr(ue, "append_upload_log", lambda *a, **k: None)
+    monkeypatch.setattr(ue, "_stage_uploadrr_config", lambda job_id, cwd: None)
+    ue._config_stage_refcount.clear()
+
+    assert ue._acquire_staged_config(1, str(tmp_path / "Uploadrr")) is None
+    assert config.read_bytes() == original
+
+
+# --- EJEC-5: una subida que se une a otra ya en curso relee Ajustes ------------
+
+def test_una_subida_que_se_une_a_otra_recoge_los_ajustes_nuevos(tmp_path, monkeypatch):
+    from emuwarez_uploadrr.services import upload_execution as ue
+    config = _config_falso(tmp_path)
+    original = config.read_bytes()
+    monkeypatch.setattr(ue, "append_upload_log", lambda *a, **k: None)
+    ue._config_stage_refcount.clear()
+    cwd = str(tmp_path / "Uploadrr")
+
+    primera = ue._acquire_staged_config(1, cwd)
+    assert _per_episode(config) == "0"
+    _poner_ajuste("emu.per_episode_screens", "true")  # Ajustes cambia con una subida en curso
+    segunda = ue._acquire_staged_config(2, cwd)
+
+    assert _per_episode(config) == "3"
+    ue._release_staged_config(1, primera)
+    assert _per_episode(config) == "3"  # sigue stageado para la segunda
+    ue._release_staged_config(2, segunda)
+    assert config.read_bytes() == original
+
+
+def test_una_subida_que_se_une_no_reescribe_si_los_ajustes_no_cambiaron(tmp_path, monkeypatch):
+    from emuwarez_uploadrr.services import upload_execution as ue
+    _config_falso(tmp_path)
+    monkeypatch.setattr(ue, "append_upload_log", lambda *a, **k: None)
+    ue._config_stage_refcount.clear()
+    escrituras = []
+    real = ue.write_staged_config
+    monkeypatch.setattr(ue, "write_staged_config", lambda *a, **k: escrituras.append(1) or real(*a, **k))
+    cwd = str(tmp_path / "Uploadrr")
+
+    primera = ue._acquire_staged_config(1, cwd)
+    segunda = ue._acquire_staged_config(2, cwd)
+
+    assert len(escrituras) == 1
+    ue._release_staged_config(1, primera)
+    ue._release_staged_config(2, segunda)

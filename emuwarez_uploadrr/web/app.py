@@ -67,6 +67,32 @@ def _reconcile_interrupted_jobs() -> None:
             "No se pudieron reconciliar las subidas interrumpidas al arrancar", exc_info=True)
 
 
+def _restore_interrupted_config() -> None:
+    """El config.yaml de Uploadrr-EMU que dejó stageado (claves reales dentro)
+    una subida que murió con la aplicación. Best-effort: nunca bloquea el arranque."""
+    try:
+        from emuwarez_uploadrr.services.upload_execution import restaurar_config_interrumpida
+        if restaurar_config_interrumpida():
+            logging.getLogger("emuwarez.web").warning(
+                "config.yaml de Uploadrr-EMU restaurado desde el backup: lo dejó stageado una subida interrumpida")
+    except Exception:
+        logging.getLogger("emuwarez.web").warning(
+            "No se pudo restaurar el config.yaml de Uploadrr-EMU al arrancar", exc_info=True)
+
+
+def _detener_procesos() -> None:
+    """Uploadrr y mkvmerge van en su propia sesión: al apagar el servidor ya no
+    caen con él (antes caían con el Ctrl-C del terminal)."""
+    try:
+        from emuwarez_uploadrr.services.mkv_remux import detener_remuxes
+        from emuwarez_uploadrr.services.upload_execution import detener_procesos_en_marcha
+        detener_procesos_en_marcha()
+        detener_remuxes()
+    except Exception:
+        logging.getLogger("emuwarez.web").warning(
+            "No se pudieron detener los procesos de subida al apagar", exc_info=True)
+
+
 def _preparar_base() -> None:
     """Comprueba y migra la base una sola vez, antes de atender nada. Si es de
     una versión más nueva o la migración falla, la aplicación no arranca."""
@@ -96,6 +122,7 @@ async def _lifespan(app: FastAPI):
             "No se pudo preparar la carpeta de subidas", exc_info=True)
     _backfill_spanish_flags()
     _reconcile_interrupted_jobs()
+    _restore_interrupted_config()
     scheduler_task = None
     # EMUWAREZ_DISABLE_SCHEDULER=1 — escape hatch for scripted Docker
     # smoke/E2E runs that don't want a background scheduler tick firing
@@ -107,6 +134,7 @@ async def _lifespan(app: FastAPI):
     finally:
         if scheduler_task is not None:
             scheduler_task.cancel()
+        _detener_procesos()
 
 _DESCRIPTION = """
 **eMuwarez Uploadrr** — backend web para cruzar biblioteca Radarr/Sonarr con

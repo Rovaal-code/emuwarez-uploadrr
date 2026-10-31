@@ -29,6 +29,7 @@ import logging
 import os
 import re
 import shutil
+import signal
 import subprocess
 import threading
 import time
@@ -40,6 +41,11 @@ from ..database import connect
 from .uploadrr_progress import parse_mkvmerge_gui_progress
 
 logger = logging.getLogger("emuwarez.mkv_remux")
+
+# Los mkvmerge en marcha, para pararlos al apagar el servidor (detener_remuxes).
+_REMUXES: set[subprocess.Popen] = set()
+_REMUXES_LOCK = threading.Lock()
+_apagando = False
 
 REMUX_CONFIRMATION_TOKEN = "REORDENAR_PISTAS"
 
@@ -978,14 +984,21 @@ def apply_remux(
         antes = _huella(p)
 
         args = build_mkvmerge_args(tmp_path, prepared_path, plan, gui_mode=True)
-        try:
-            proc = subprocess.Popen(
-                args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                text=True, bufsize=1,
-            )
-        except FileNotFoundError:
-            return {**preview, "status": "error", "dry_run": False, "apply": True,
-                     "errors": ["mkvmerge no encontrado al ejecutar."]}
+        # Lanzar y apuntar, bajo el candado con que se apaga el servidor: una vez
+        # empezado el apagado no se lanza otro, y ninguno se escapa de la lista.
+        with _REMUXES_LOCK:
+            if _apagando:
+                return {**preview, "status": "error", "dry_run": False, "apply": True,
+                        "errors": ["El servidor se está apagando; no se lanza mkvmerge."]}
+            try:
+                proc = subprocess.Popen(
+                    args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                    text=True, bufsize=1, start_new_session=True,
+                )
+            except FileNotFoundError:
+                return {**preview, "status": "error", "dry_run": False, "apply": True,
+                        "errors": ["mkvmerge no encontrado al ejecutar."]}
+            _REMUXES.add(proc)
 
         output_lines: list[str] = []
 
@@ -1002,13 +1015,20 @@ def apply_remux(
         reader.start()
         reader.join(timeout=1800)
         if reader.is_alive():
-            proc.kill()
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)  # el grupo entero, no solo mkvmerge
+            except (ProcessLookupError, PermissionError):
+                pass
             reader.join(timeout=5)
+            with _REMUXES_LOCK:
+                _REMUXES.discard(proc)
             _cleanup(tmp_path)
             _update_status(conn, library_item_id, "error", "mkvmerge agotó el timeout (30 min).")
             return {**preview, "status": "error", "dry_run": False, "apply": True,
                      "errors": ["mkvmerge agotó el timeout (30 min)."]}
         returncode = proc.wait()
+        with _REMUXES_LOCK:
+            _REMUXES.discard(proc)
 
         # mkvmerge: 0 = OK, 1 = OK with warnings, 2 = failed (no output file).
         if returncode not in (0, 1) or not os.path.isfile(tmp_path):
@@ -1077,6 +1097,20 @@ def _falta_espacio(p: Path) -> str | None:
 def _huella(p: Path) -> tuple:
     st = p.stat()
     return (st.st_ino, st.st_size, st.st_mtime_ns, st.st_nlink)
+
+
+def detener_remuxes() -> None:
+    """Al apagar el servidor: mkvmerge va en su propia sesión y ya no cae con él.
+    Desde aquí no se lanza ningún remux más."""
+    global _apagando
+    with _REMUXES_LOCK:
+        _apagando = True
+        procesos = list(_REMUXES)
+    for proc in procesos:
+        try:
+            os.killpg(proc.pid, signal.SIGTERM)
+        except (ProcessLookupError, PermissionError):
+            pass
 
 
 def _cleanup(tmp_path: str) -> None:

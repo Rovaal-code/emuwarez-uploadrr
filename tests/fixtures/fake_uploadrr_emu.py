@@ -17,11 +17,14 @@ Failure/slowness simulation (for exercising cancel/timeout/failed paths):
   FAKE_UPLOADRR_FAIL=1        same as --fake-fail (env fallback)
   FAKE_UPLOADRR_SLEEP=N       same as --fake-sleep (env fallback)
   FAKE_UPLOADRR_LINES=N       print N more stdout lines (enough to fill the pipe)
+  FAKE_UPLOADRR_GRANDCHILD=F  start a child that keeps stdout/stderr open for 60 s
+                              (like mkbrr/ffmpeg) and write its pid to file F
 """
 from __future__ import annotations
 
 import argparse
 import os
+import subprocess
 import sys
 import time
 
@@ -38,6 +41,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("-season", dest="season", default=None)
     parser.add_argument("-episode", dest="episode", default=None)
     parser.add_argument("-t", dest="release_type", default=None)
+    parser.add_argument("-fd", dest="full_dir", action="store_true")
     parser.add_argument("--fake-fail", dest="fake_fail", action="store_true")
     parser.add_argument("--fake-sleep", dest="fake_sleep", type=float, default=None)
     args, _unknown = parser.parse_known_args(argv)
@@ -49,6 +53,12 @@ def main(argv: list[str] | None = None) -> int:
             sleep_s = float(os.environ.get("FAKE_UPLOADRR_SLEEP", "0") or 0)
         except ValueError:
             sleep_s = 0.0
+
+    pidfile = os.environ.get("FAKE_UPLOADRR_GRANDCHILD")
+    if pidfile:
+        hijo = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+        with open(pidfile, "w", encoding="utf-8") as f:
+            f.write(str(hijo.pid))
 
     def emit(line: str) -> None:
         print(line, flush=True)

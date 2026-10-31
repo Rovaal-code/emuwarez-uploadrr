@@ -12,8 +12,9 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Callable, Iterator, Optional, Sequence, Union
 
-from ..database import borrar_biblioteca
+from ..database import borrar_biblioteca, get_state, set_state
 from ..integrations import radarr, sonarr
+from ..integrations.base import IntegrationError
 from ..models import InstanceConfig, LibraryItem, LocalStatus, MediaKind, NomenclatureStatus
 from .source_assistant import EMU_PROVIDERS
 from .instances import list_instances
@@ -29,6 +30,12 @@ _NOTIFIABLE_ITEM_TYPES = (MediaKind.MOVIE.value, MediaKind.EPISODE.value)
 
 logger = logging.getLogger("emuwarez.library")
 
+# Lo que una ficha sin archivo solo sabe por la cola de descargas (o por no haberla podido leer).
+_ESTADOS_QUE_DA_LA_COLA = (
+    LocalStatus.QUEUED.value, LocalStatus.DOWNLOADING.value, LocalStatus.PENDING_IMPORT.value,
+    LocalStatus.IMPORT_ERROR.value, LocalStatus.ERROR.value, LocalStatus.UNKNOWN.value,
+)
+
 
 # ---------------------------------------------------------------------------
 # Upsert
@@ -36,13 +43,17 @@ logger = logging.getLogger("emuwarez.library")
 
 def upsert_library_item(
     conn: sqlite3.Connection, item: LibraryItem, *, notify_missing: bool = True,
-    defer_to: Optional[list] = None, seen_at: Optional[str] = None,
+    defer_to: Optional[list] = None, seen_at: Optional[str] = None, sin_perder_disponible: bool = False,
+    cola_desconocida: bool = False,
 ) -> int:
     """`defer_to`: collect the "turned Faltante" notification into this list as
     (item, item_id) instead of emitting it right away. Used by the Sonarr sync
     so a season whose episodes ALL went missing at once can send one season
     notification instead of one per episode (see _emit_missing_notifications).
-    `seen_at`: la marca del recorrido que lo ve (ver sync_instance)."""
+    `seen_at`: la marca del recorrido que lo ve (ver sync_instance).
+    `sin_perder_disponible`: una ficha Disponible no pasa a otro estado (la resincronización de una ficha).
+    `cola_desconocida`: no se leyó la cola de descargas; una ficha sin archivo conserva su estado de cola, y una
+    nueva queda en Desconocido, en vez de pasar a Faltante (y avisar)."""
     # Captured BEFORE the upsert overwrites it — this is what lets us fire a
     # notification on the exact sync pass where the item turns Faltante,
     # instead of guessing from a date (see services/notification_center.py's
@@ -51,24 +62,31 @@ def upsert_library_item(
     # its very first sync is exactly the case we want to catch (the user's
     # Monday-request scenario) — not just later status flips.
     check_transition = notify_missing and item.item_type in _NOTIFIABLE_ITEM_TYPES
-    prev_status: Optional[str] = None
-    if check_transition:
+    prev_row = None
+    if check_transition or sin_perder_disponible or cola_desconocida:
         prev_row = conn.execute(
-            "SELECT local_status FROM library_items WHERE instance_id = ? AND item_type = ? AND external_id = ?",
+            "SELECT id, local_status FROM library_items WHERE instance_id = ? AND item_type = ? AND external_id = ?",
             (item.instance_id, item.item_type, item.external_id),
         ).fetchone()
-        prev_status = prev_row["local_status"] if prev_row else None
+    prev_status = prev_row["local_status"] if prev_row else None
+    if sin_perder_disponible and prev_status == LocalStatus.AVAILABLE.value and item.local_status != prev_status:
+        return int(prev_row["id"])
+    if cola_desconocida and item.local_status == LocalStatus.MISSING.value:
+        if prev_status is None:
+            item.local_status = LocalStatus.UNKNOWN.value
+        elif prev_status in _ESTADOS_QUE_DA_LA_COLA:
+            item.local_status = prev_status
 
     data = item.to_dict()
     # mal_id: Radarr/Sonarr never provide this — resolve it against the local
     # Fribb/anime-lists mirror instead (see services/anime_lists.py). Runs on
     # every upsert (not just new rows), so a mal_id that disappears from a
     # later refresh of that table self-corrects back to None on the next
-    # sync instead of staying permanently stale.
+    # sync instead of staying permanently stale. La tabla la deja al día
+    # sync_instance una vez por recorrido, no cada ficha.
     has_relevant_id = item.tmdb_id if item.item_type == MediaKind.MOVIE.value else item.tvdb_id
     if has_relevant_id:
-        from .anime_lists import ensure_anime_id_map, get_mal_id as _get_mal_id
-        ensure_anime_id_map(conn)
+        from .anime_lists import get_mal_id as _get_mal_id
         data["mal_id"] = _get_mal_id(
             conn, item_type=item.item_type, tvdb_id=item.tvdb_id,
             tmdb_id=item.tmdb_id, season_number=item.season_number,
@@ -375,6 +393,25 @@ def _update_season_rollup(conn: sqlite3.Connection, season_row_id: int, episode_
     )
 
 
+def _comprobar_capitulos(
+    conn: sqlite3.Connection, series: dict, series_row_id: int, episodes: list[dict], files_by_id: dict,
+) -> None:
+    """Lanza si los capítulos de Sonarr no cuadran con lo que se sabe de la serie: ninguno cuando tiene o tenía, o
+    capítulos con un archivo que no ha mandado. Guardarlo los borraría o los daría por faltantes, con su aviso."""
+    nombre = series.get("title") or series["id"]
+    if not episodes:
+        estadisticas = [series.get("statistics") or {}] + [t.get("statistics") or {} for t in series.get("seasons") or []]
+        esperados = max(int(e.get("totalEpisodeCount") or e.get("episodeCount") or 0) for e in estadisticas)
+        guardados = conn.execute(
+            "SELECT 1 FROM library_items e JOIN library_items s ON e.parent_id = s.id "
+            "WHERE s.parent_id = ? AND e.item_type = 'episode' LIMIT 1", (series_row_id,),
+        ).fetchone()
+        if esperados or guardados:
+            raise IntegrationError(f"Sonarr no ha devuelto los capítulos de la serie {nombre}")
+    if {e["episodeFileId"] for e in episodes if e.get("episodeFileId")} - files_by_id.keys():
+        raise IntegrationError(f"Sonarr no ha devuelto todos los archivos de la serie {nombre}")
+
+
 def _sync_one_series(
     conn: sqlite3.Connection,
     instance: InstanceConfig,
@@ -387,6 +424,8 @@ def _sync_one_series(
     bump_fn=None,
     notify_missing: bool = True,
     seen_at: Optional[str] = None,
+    sin_perder_disponible: bool = False,
+    cola_desconocida: bool = False,
 ) -> int:
     """Upsert one series row (+ its seasons/episodes if include_episodes) from
     a single Sonarr `series` dict. Extracted from sync_instance's own Sonarr
@@ -423,7 +462,9 @@ def _sync_one_series(
         instance_name=instance.name,
         series_queue_map=series_queue,
     )
-    series_row_id = upsert_library_item(conn, series_item, notify_missing=notify_missing, seen_at=seen_at)
+    series_row_id = upsert_library_item(
+        conn, series_item, notify_missing=notify_missing, seen_at=seen_at, sin_perder_disponible=sin_perder_disponible,
+        cola_desconocida=cola_desconocida)
     _bump()
     if series_item.local_status in LocalStatus.not_available():
         missing += 1
@@ -432,6 +473,7 @@ def _sync_one_series(
         files = sonarr.get_episode_files(instance.url, instance.api_key, int(series["id"]))
         files_by_id = {f.get("id"): f for f in files if f.get("id") is not None}
         episodes = sonarr.get_episodes(instance.url, instance.api_key, int(series["id"]))
+        _comprobar_capitulos(conn, series, series_row_id, episodes, files_by_id)
 
         episodes_by_season: dict[int, list[dict]] = {}
         for ep in episodes:
@@ -465,7 +507,8 @@ def _sync_one_series(
                 file_count_override=None if stats_present else _file_count(season_eps),
             )
             season_row_id_by_number[season_num] = upsert_library_item(
-                conn, season_item, notify_missing=notify_missing, seen_at=seen_at)
+                conn, season_item, notify_missing=notify_missing, seen_at=seen_at,
+                sin_perder_disponible=sin_perder_disponible)
             _bump()
             if season_item.local_status in LocalStatus.not_available():
                 missing += 1
@@ -483,7 +526,8 @@ def _sync_one_series(
                 file_count_override=_file_count(season_eps),
             )
             season_row_id_by_number[season_num] = upsert_library_item(
-                conn, season_item, notify_missing=notify_missing, seen_at=seen_at)
+                conn, season_item, notify_missing=notify_missing, seen_at=seen_at,
+                sin_perder_disponible=sin_perder_disponible)
             _bump()
             if season_item.local_status in LocalStatus.not_available():
                 missing += 1
@@ -514,6 +558,7 @@ def _sync_one_series(
             # the season has been through here.
             upsert_library_item(
                 conn, ep_item, notify_missing=notify_missing, defer_to=pending_missing, seen_at=seen_at,
+                sin_perder_disponible=sin_perder_disponible, cola_desconocida=cola_desconocida,
             )
             _bump()
             if ep_item.local_status != LocalStatus.AVAILABLE.value:
@@ -558,6 +603,39 @@ def volver_a_cruzar_peticiones(conn: sqlite3.Connection, peticiones: list[int]) 
         logger.exception("No se pudieron volver a cruzar las peticiones de lo borrado de la biblioteca")
 
 
+class SincronizacionParcial(IntegrationError):
+    """El recorrido de la instancia terminó pero alguna serie falló: el resto está al día y esas siguen como estaban."""
+
+    def __init__(self, mensaje: str, imported: int, missing: int):
+        super().__init__(mensaje)
+        self.imported = imported
+        self.missing = missing
+
+
+# Marca de la instancia cuyo primer recorrido no ha acabado: sin filas aún, o cortado por un error o una parada.
+_PRIMERA_SYNC_SIN_ACABAR = "biblioteca_primera_sync_sin_acabar_{}"
+
+
+def _marcar_serie_vista(conn: sqlite3.Connection, instance_id: int, series_id, visto: str) -> None:
+    """Que su recorrido fallara no es que ya no estén: la serie y lo que cuelga de ella cuentan como vistos."""
+    conn.execute(
+        "WITH RECURSIVE rama(id) AS ("
+        "SELECT id FROM library_items WHERE instance_id = ? AND item_type = 'series' AND external_id = ? "
+        "UNION SELECT h.id FROM library_items h JOIN rama ON h.parent_id = rama.id) "
+        "UPDATE library_items SET last_seen_at = ? WHERE id IN (SELECT id FROM rama)",
+        (instance_id, str(series_id), visto),
+    )
+
+
+def _prepare_movie(conn: sqlite3.Connection, movie: dict) -> None:
+    """Deja en la ficha de Radarr el título en español y el inglés (TMDb, con caché), para que generar la nomenclatura
+    no salga a la red. `originalTitle` no vale de inglés: en un anime es japonés."""
+    if movie.get("tmdbId") and movie.get("title"):
+        from .tmdb_titles import resolve_english_title, resolve_movie_title
+        movie["title"] = resolve_movie_title(conn, movie.get("tmdbId"), movie["title"])
+        movie["englishTitle"] = resolve_english_title(conn, "movie", movie.get("tmdbId"), movie.get("originalTitle"))
+
+
 def sync_instance(
     conn: sqlite3.Connection,
     instance: InstanceConfig,
@@ -575,47 +653,62 @@ def sync_instance(
     # first sync — a fresh Radarr/Sonarr connection can insert hundreds of
     # already-missing rows in one pass, and none of those were "just
     # requested" the way the feature is meant to catch. Later, incremental
-    # syncs (this instance already has rows) behave normally.
-    is_first_sync = conn.execute(
+    # syncs (this instance already has rows) behave normally. Un primer
+    # recorrido cortado deja filas a medias: la marca hace que el siguiente
+    # siga contando como primero.
+    sin_acabar = _PRIMERA_SYNC_SIN_ACABAR.format(instance.id)
+    tiene_filas = conn.execute(
         "SELECT 1 FROM library_items WHERE instance_id = ? LIMIT 1", (instance.id,)
-    ).fetchone() is None
-    notify_missing = not is_first_sync
+    ).fetchone() is not None
+    if not tiene_filas:
+        set_state(conn, sin_acabar, "1")
+        conn.commit()
+    notify_missing = tiene_filas and get_state(conn, sin_acabar) != "1"
+    fallos: list[str] = []
+    cola_desconocida = False
 
     def _bump() -> None:
         nonlocal imported
         imported = imported + 1
         if on_progress:
             on_progress(imported)
+
+    def _vacio(que: str) -> IntegrationError:
+        return IntegrationError(
+            f"{instance.type.capitalize()} «{instance.name}» ha devuelto 0 {que} y su biblioteca ya tiene elementos: "
+            "no se borra nada. Si la has vaciado a propósito, quita la instancia.")
+
+    def _sin_cola(exc: Exception) -> None:
+        # La cola no es un listado de lo que tienes: sin ella se sigue, y lo que se descarga conserva su estado.
+        nonlocal cola_desconocida
+        cola_desconocida = True
+        logger.warning("No se pudo leer la cola de %s «%s»; lo que se descarga conserva su estado: %s",
+                       instance.type, instance.name, exc)
+
+    from .anime_lists import ensure_anime_id_map
     if instance.type == "radarr":
-        queue_records = radarr.get_queue(instance.url, instance.api_key)
-        queue_map = radarr.build_queue_map(queue_records)
+        queue_map = {}
+        try:
+            queue_map = radarr.build_queue_map(radarr.get_queue(instance.url, instance.api_key))
+        except Exception as exc:
+            _sin_cola(exc)
         movies = list(radarr.get_movies(instance.url, instance.api_key))
+        # [] solo es de fiar si la instancia aún no tiene nada: si no, borraría todo lo suyo.
+        if not movies and tiene_filas:
+            raise _vacio("películas")
+        ensure_anime_id_map(conn)
         if on_total:
             on_total(len(movies))  # total items to import from this instance
-        from .tmdb_titles import resolve_english_title, resolve_movie_title
         for movie in movies:
-            # Los títulos se dejan resueltos aquí, no en el asistente: así al
-            # terminar la sincronización la biblioteca ya tiene los dos y
-            # generar la nomenclatura no sale a la red. Las dos consultas se
-            # cachean por (tmdb_id, idioma) en tmdb_title_cache, así que solo
-            # se pagan la primera vez que aparece cada película.
-            #
-            # `title` de Radarr viene en el idioma configurado en Radarr, que
-            # no tiene por qué ser español; y `originalTitle` es el original de
-            # verdad (japonés en un anime), que no sirve para la opción
-            # "Inglés". Por eso se piden los dos por separado.
-            if movie.get("tmdbId") and movie.get("title"):
-                movie["title"] = resolve_movie_title(conn, movie.get("tmdbId"), movie["title"])
-                movie["englishTitle"] = resolve_english_title(
-                    conn, "movie", movie.get("tmdbId"), movie.get("originalTitle")
-                )
+            _prepare_movie(conn, movie)
             item = radarr.movie_to_library_item(
                 movie,
                 instance_id=int(instance.id),
                 instance_name=instance.name,
                 queue_map=queue_map,
             )
-            upsert_library_item(conn, item, notify_missing=notify_missing, seen_at=visto)
+            upsert_library_item(
+                conn, item, notify_missing=notify_missing, seen_at=visto, cola_desconocida=cola_desconocida)
             _bump()
             if item.local_status != LocalStatus.AVAILABLE.value:
                 missing += 1
@@ -623,10 +716,17 @@ def sync_instance(
     elif instance.type == "sonarr":
         from .tmdb_titles import series_titles_localized
         localize_titles = series_titles_localized(conn)
-        queue_records = sonarr.get_queue(instance.url, instance.api_key)
-        series_queue = sonarr.build_series_queue_map(queue_records)
-        ep_queue = sonarr.build_episode_queue_map(queue_records)
+        series_queue, ep_queue = {}, {}
+        try:
+            queue_records = sonarr.get_queue(instance.url, instance.api_key)
+            series_queue = sonarr.build_series_queue_map(queue_records)
+            ep_queue = sonarr.build_episode_queue_map(queue_records)
+        except Exception as exc:
+            _sin_cola(exc)
         series_list = list(sonarr.get_series(instance.url, instance.api_key))
+        if not series_list and tiene_filas:
+            raise _vacio("series")
+        ensure_anime_id_map(conn)
         if on_total:
             # One row per series + one per season + all their episodes (from
             # Sonarr's own stats) — _bump() below fires once for EACH of
@@ -643,23 +743,37 @@ def sync_instance(
                 total += sum(int((s.get("statistics") or {}).get("totalEpisodeCount") or 0) for s in series_list)
             on_total(total)
         for series in series_list:
-            missing += _sync_one_series(
-                conn, instance, series,
-                localize_titles=localize_titles, series_queue=series_queue, ep_queue=ep_queue,
-                include_episodes=include_episodes, bump_fn=_bump,
-                notify_missing=notify_missing, seen_at=visto,
-            )
+            # Una serie que falla (un error de Sonarr con sus capítulos) no frena a las demás.
+            try:
+                missing += _sync_one_series(
+                    conn, instance, series,
+                    localize_titles=localize_titles, series_queue=series_queue, ep_queue=ep_queue,
+                    include_episodes=include_episodes, bump_fn=_bump,
+                    notify_missing=notify_missing, seen_at=visto, cola_desconocida=cola_desconocida,
+                )
+            except sqlite3.Error:
+                raise
+            except Exception as exc:
+                fallos.append(f"{series.get('title') or series.get('id')}: {exc}")
+                logger.warning("No se pudo sincronizar la serie %s de «%s»: %s", series.get("title"), instance.name, exc)
+                _marcar_serie_vista(conn, instance.id, series.get("id"), visto)
 
-    # Solo se llega aquí tras un recorrido completo: un listado que falla lanza y no se borra nada.
+    # Solo se llega aquí tras recorrer los listados: uno que falla lanza y no se borra nada.
     donde = "instance_id = ? AND (last_seen_at IS NULL OR last_seen_at != ?)"
     if not include_episodes:
         # Sin capítulos no se recorren temporadas ni capítulos: no haberlos visto no dice que ya no estén.
         donde += " AND item_type IN ('movie', 'series')"
     borrados, peticiones = borrar_biblioteca(conn, donde, (instance.id, visto))
+    # Con series sin sincronizar, o sin saber qué se descarga, el primer recorrido sigue sin acabar: lo que falta
+    # saldría como nuevo faltante en el siguiente.
+    set_state(conn, sin_acabar, "1" if (fallos or cola_desconocida) and not notify_missing else "0")
     conn.commit()
     if borrados:
         logger.info("Borrados %d elementos que %s «%s» ya no tiene", borrados, instance.type, instance.name)
     volver_a_cruzar_peticiones(conn, peticiones)
+    if fallos:
+        raise SincronizacionParcial(
+            f"{len(fallos)} serie(s) sin sincronizar, siguen como estaban: " + "; ".join(fallos[:3]), imported, missing)
     return imported, missing
 
 
@@ -781,6 +895,7 @@ def sync_all(conn: sqlite3.Connection, *, include_episodes: bool = False) -> dic
     grand_total = 0  # total items expected (all instances), for the progress bar
     details: list[str] = []
     errors: list[str] = []
+    sincronizadas = 0  # instancias que se leyeron, aunque alguna serie de ellas fallara
 
     def _report_total(t: int) -> None:
         nonlocal grand_total
@@ -801,10 +916,20 @@ def sync_all(conn: sqlite3.Connection, *, include_episodes: bool = False) -> dic
                 )
                 total += imported
                 missing += miss
+                sincronizadas += 1
                 _set_lib_progress(imported=total, missing=missing)
                 details.append(f"{instance.type}:{instance.name}: {imported} importados, {miss} faltantes")
                 logger.info("Sincronizado %s «%s»: %d importados, %d faltantes",
                             instance.type, instance.name, imported, miss)
+            except SincronizacionParcial as exc:
+                total += exc.imported
+                missing += exc.missing
+                sincronizadas += 1
+                _set_lib_progress(imported=total, missing=missing)
+                err = f"{instance.type}:{instance.name}: {exc}"
+                errors.append(err)
+                details.append(f"ERROR — {err}")
+                logger.warning("Sincronización parcial de %s «%s»: %s", instance.type, instance.name, exc)
             except Exception as exc:
                 err = f"{instance.type}:{instance.name}: {exc}"
                 errors.append(err)
@@ -812,10 +937,16 @@ def sync_all(conn: sqlite3.Connection, *, include_episodes: bool = False) -> dic
                 logger.warning("Error sincronizando %s «%s»: %s", instance.type, instance.name, exc)
         recompute_after_sync(conn)
         summary =f"{total} elementos sincronizados; {missing} no disponibles"
-        finish_task(conn, task_id, "completed", summary, "\n".join(details))
+        # Con todas caídas no se ha leído nada: «completada» diría al Panel que la biblioteca está al día.
+        estado = "failed" if errors and not sincronizadas else "completed"
+        if estado == "failed":
+            summary = f"No se pudo leer ninguna instancia ({len(errors)} con error)"
+            _set_lib_progress(error="; ".join(errors)[:300], phase="Error")
+        finish_task(conn, task_id, estado, summary, "\n".join(details))
         logger.info("Sincronización de biblioteca terminada: %d elementos, %d no disponibles%s",
                     total, missing, f" ({len(errors)} instancias con error)" if errors else "")
-        return {"imported": total, "missing": missing, "instances": len(list_instances(conn)), "errors": errors}
+        return {"imported": total, "missing": missing, "instances": len(list_instances(conn)), "errors": errors,
+                "status": estado}
     except Exception as exc:
         finish_task(conn, task_id, "failed", str(exc), "\n".join(details))
         logger.error("Sincronización de biblioteca fallida: %s", exc)
@@ -878,7 +1009,7 @@ def _rollup_spanish(yes: int, no: int, unknown: int) -> Optional[int]:
     return 1 if yes else None  # nothing held → unknown, not a vacuous "Sí"
 
 
-def recompute_spanish_flags(conn: sqlite3.Connection) -> int:
+def recompute_spanish_flags(conn: sqlite3.Connection, ignore_specials: Optional[bool] = None) -> int:
     """Recompute has_spanish_audio/has_spanish_subs/has_spanish_ok for every
     row, and return how many rows ended up with a known (non-NULL) audio value.
 
@@ -887,9 +1018,15 @@ def recompute_spanish_flags(conn: sqlite3.Connection) -> int:
     of all its seasons. Folding the series over episodes rather than over its
     seasons' stored values is deliberate and equivalent: a season with no held
     episodes is unknown, and letting it propagate would turn the whole series
-    unknown instead of just skipping it."""
+    unknown instead of just skipping it.
+
+    La serie no cuenta los especiales (temporada 0) con «ignorar especiales», igual que su estado, tamaño y
+    nomenclatura; sin indicarlo se lee de los ajustes."""
     from .emu_format import has_castellano
 
+    if ignore_specials is None:
+        from ..database import get_setting_canonical
+        ignore_specials = (get_setting_canonical(conn, "series.ignore_specials") or "true") != "false"
     held = ",".join("?" * len(_HELD_STATUSES))
 
     # Read once, reused by all three flags.
@@ -936,6 +1073,7 @@ def recompute_spanish_flags(conn: sqlite3.Connection) -> int:
               FROM library_items e
               JOIN library_items s ON e.parent_id = s.id AND s.item_type = 'season'
              WHERE e.item_type = 'episode' AND s.parent_id IS NOT NULL AND e.local_status IN ({held})
+               {_specials_clause("s", ignore_specials)}
              GROUP BY s.parent_id
             """,
             _HELD_STATUSES,
@@ -1414,7 +1552,10 @@ def resync_single_item(conn: sqlite3.Connection, item_id: int) -> dict:
     seasons/episodes for a series) — the single-item equivalent of
     sync_instance, for a caller that only needs one item refreshed (e.g.
     right after refresh_arr_and_resync's Radarr/Sonarr refresh completes)
-    instead of paying for a full library resync. Best-effort: never raises."""
+    instead of paying for a full library resync. Best-effort: never raises.
+
+    Sin cola de descargas y con Radarr/Sonarr quizá a medio escanear: lo Disponible no pasa a otro estado ni avisa
+    de faltante; eso lo decide la sincronización completa."""
     try:
         resolved = _resolve_arr_top(conn, item_id)
         if not resolved["ok"]:
@@ -1424,15 +1565,20 @@ def resync_single_item(conn: sqlite3.Connection, item_id: int) -> dict:
 
         if top["item_type"] == "movie":
             movie = radarr.get_movie(instance.url, instance.api_key, int(external_id))
+            _prepare_movie(conn, movie)
             movie_item = radarr.movie_to_library_item(
                 movie, instance_id=int(instance.id), instance_name=instance.name,
             )
-            upsert_library_item(conn, movie_item)
+            upsert_library_item(
+                conn, movie_item, notify_missing=False, sin_perder_disponible=True, cola_desconocida=True)
         else:
             from .tmdb_titles import series_titles_localized
             localize_titles = series_titles_localized(conn)
             series = sonarr.get_series_by_id(instance.url, instance.api_key, int(external_id))
-            _sync_one_series(conn, instance, series, localize_titles=localize_titles, include_episodes=True)
+            _sync_one_series(
+                conn, instance, series, localize_titles=localize_titles, include_episodes=True,
+                notify_missing=False, sin_perder_disponible=True, cola_desconocida=True,
+            )
         conn.commit()
         return {"ok": True}
     except Exception as exc:
@@ -2101,6 +2247,8 @@ def _aggregate_path(rows: list[dict]) -> Optional[str]:
 
 
 def _aggregate_quality(rows: list[dict]) -> dict:
+    # Solo lo que se tiene: un capítulo faltante lleva todo a NULL y vaciaría la temporada entera.
+    rows = [r for r in rows if r["local_status"] == LocalStatus.AVAILABLE.value]
     if not rows:
         return dict(_ROLLUP_EMPTY)
 
@@ -2310,8 +2458,8 @@ def _child_quality_rollup(conn, item_id: int, item_type: str, ignore_specials: b
         rows = conn.execute(
             "SELECT path, resolution, source, release_group, video_codec, audio_codec, "
             "audio_languages, subtitle_languages FROM library_items "
-            "WHERE parent_id = ? AND item_type = 'episode'",
-            (item_id,),
+            "WHERE parent_id = ? AND item_type = 'episode' AND local_status = ?",
+            (item_id, LocalStatus.AVAILABLE.value),
         ).fetchall()
     elif item_type == "series":
         rows = conn.execute(
@@ -2319,9 +2467,9 @@ def _child_quality_rollup(conn, item_id: int, item_type: str, ignore_specials: b
             "e.release_group AS release_group, e.video_codec AS video_codec, e.audio_codec AS audio_codec, "
             "e.audio_languages AS audio_languages, e.subtitle_languages AS subtitle_languages "
             "FROM library_items e JOIN library_items se ON e.parent_id = se.id "
-            "WHERE se.parent_id = ? AND e.item_type = 'episode'"
+            "WHERE se.parent_id = ? AND e.item_type = 'episode' AND e.local_status = ?"
             + _specials_clause("se", ignore_specials),
-            (item_id,),
+            (item_id, LocalStatus.AVAILABLE.value),
         ).fetchall()
     else:
         return dict(_ROLLUP_EMPTY)

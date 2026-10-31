@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 42
+SCHEMA_VERSION = 43
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -1170,6 +1170,24 @@ def _migrate_request_items_last_seen(conn: sqlite3.Connection) -> None:
         pass
 
 
+def _migrate_library_items_last_seen(conn: sqlite3.Connection) -> None:
+    """Esquema 43: cuándo vio la sincronización cada elemento; lo que un recorrido completo no ve ya no está en
+    Radarr/Sonarr y se borra, y sus subidas guardan lo que enseñaban de la ficha. El índice evita repasar todas
+    las subidas por cada fila borrada: borrar una instancia de 35.000 capítulos con 2.000 subidas tardaba 3,5 s
+    escribiendo, y 0,4 s con él."""
+    for tabla, col in (("library_items", "last_seen_at"), ("upload_jobs", "library_snapshot_json")):
+        try:
+            conn.execute(f"ALTER TABLE {tabla} ADD COLUMN {col} TEXT")
+        except sqlite3.OperationalError:
+            # Solo se calla si la columna ya está (la añadió otro init_db a la vez), no un «database is locked».
+            if col not in {fila[1] for fila in conn.execute(f"PRAGMA table_info({tabla})")}:
+                raise
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_upload_jobs_library ON upload_jobs(library_item_id)")
+    # Borrar una instancia dejaba lo suyo en la biblioteca, y ninguna sincronización lo iba a quitar. Sin el
+    # IS NOT NULL, con la tabla de instancias vacía también caerían las filas sin instancia.
+    borrar_biblioteca(conn, "instance_id IS NOT NULL AND instance_id NOT IN (SELECT id FROM instances)")
+
+
 def _migrate_quitar_peticiones_de_ejemplo(conn: sqlite3.Connection) -> None:
     """Las peticiones de ejemplo se generaron mientras no había endpoint real;
     ahora que se leen de eMuwarez, se borran con lo que colgaba de ellas."""
@@ -1630,6 +1648,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_request_items_last_seen(conn)
         _migrate_upload_jobs_request_snapshot(conn)
         _migrate_request_items_posters(conn)
+        _migrate_library_items_last_seen(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:
@@ -1650,6 +1669,35 @@ def borrar_peticiones(conn: sqlite3.Connection, donde: str, params: tuple = ()) 
     for tabla in ("request_readiness", "request_candidates", "operational_queue_items"):
         conn.execute(f"DELETE FROM {tabla} WHERE request_item_id IN ({ids})", params)
     return conn.execute(f"DELETE FROM request_items WHERE {donde}", params).rowcount
+
+
+def borrar_biblioteca(conn: sqlite3.Connection, donde: str, params: tuple = ()) -> tuple[int, list[int]]:
+    """Borra los elementos de la biblioteca que cumplan `donde`, con sus temporadas y capítulos, y lo que depende
+    de ellos. Devuelve cuántas filas borró y las peticiones que casaban con alguna, para volver a cruzarlas.
+
+    Los cruces caen por la clave foránea y las subidas se quedan en el historial sin enlace (SET NULL), con su copia
+    de la ficha; el resto guarda el id sin clave. `donde` lo escribe el código, nunca viene de fuera."""
+    ids = ("WITH RECURSIVE rama(id) AS ("
+           f"SELECT id FROM library_items WHERE {donde} "
+           "UNION SELECT h.id FROM library_items h JOIN rama ON h.parent_id = rama.id) SELECT id FROM rama")
+    # Una petición de temporada casa con la serie pero lleva su estado en la temporada (library_items.request_id).
+    peticiones = [r[0] for r in conn.execute(
+        f"SELECT request_item_id FROM request_matches WHERE library_item_id IN ({ids}) "
+        f"UNION SELECT request_item_id FROM request_candidates WHERE library_item_id IN ({ids}) "
+        f"UNION SELECT request_id FROM library_items WHERE request_id IS NOT NULL AND id IN ({ids})", params * 3)]
+    # Quien llama vuelve a calcular su preparación; la migración no puede, así que al menos no apuntan a nada borrado.
+    for tabla, col in (("request_readiness", "best_library_item_id"), ("request_items", "readiness_best_library_item_id")):
+        conn.execute(f"UPDATE {tabla} SET {col} = NULL WHERE {col} IN ({ids})", params)
+    # Lo que Subidas enseña de la ficha y sigue siendo cierto sin ella: el enlace a Radarr/Sonarr y el estado de la
+    # petición ya no lo serían.
+    conn.execute(
+        "UPDATE upload_jobs SET library_snapshot_json = (SELECT json_object('item_type', li.item_type, "
+        "'poster_url', li.poster_url, 'backdrop_url', li.backdrop_url, 'instance_type', li.instance_type, "
+        "'instance_name', li.instance_name, 'year', li.year) FROM library_items li "
+        f"WHERE li.id = upload_jobs.library_item_id) WHERE library_item_id IN ({ids})", params)
+    for tabla in ("request_candidates", "nomenclature_proposals", "filesystem_operations", "operational_queue_items"):
+        conn.execute(f"DELETE FROM {tabla} WHERE library_item_id IN ({ids})", params)
+    return conn.execute(f"DELETE FROM library_items WHERE id IN ({ids})", params).rowcount, peticiones
 
 
 def row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
@@ -1714,7 +1762,7 @@ def set_json_state(conn: sqlite3.Connection, key: str, value: Any) -> None:
 
 
 __all__ = [
-    "DB_FILE", "SCHEMA_VERSION", "db_path", "connect", "init_db", "borrar_peticiones",
+    "DB_FILE", "SCHEMA_VERSION", "db_path", "connect", "init_db", "borrar_peticiones", "borrar_biblioteca",
     "row_to_dict", "rows_to_dicts", "get_state", "set_state",
     "get_json_state", "set_json_state",
     "CANONICAL_SETTING_ALIASES", "get_setting_canonical",

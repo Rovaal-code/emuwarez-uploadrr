@@ -102,14 +102,18 @@ def delete_instance_endpoint(
     instance_id: int,
     current_user: dict = Depends(require_auth),
 ) -> OkResponse:
-    """Delete an instance. Its synced library items are left untouched (they
-    just stop being refreshed); the user can clean them via a re-sync."""
+    """Borra la instancia y lo que se sincronizó de ella; sus subidas se quedan en el historial."""
     from emuwarez_uploadrr.services.instances import get_instance, remove_instance
+    from emuwarez_uploadrr.services.library import SyncAlreadyRunning
     with _get_conn() as conn:
         inst = get_instance(conn, instance_id)
         if not inst:
             raise HTTPException(status_code=404, detail="Instancia no encontrada")
-        remove_instance(conn, instance_id)
+        try:
+            remove_instance(conn, instance_id)
+        except SyncAlreadyRunning:
+            raise HTTPException(status_code=429, detail="Hay una sincronización de biblioteca en marcha; "
+                                                        "borra la instancia cuando termine")
     return OkResponse(message=f"Instancia '{inst.name}' eliminada")
 
 
@@ -160,6 +164,9 @@ def sync_instance(
         try:
             # Mismo candado y barra de progreso que la sincronización global.
             with _lib_sync_guard():
+                # Otra vez ya con el candado: si se borró mientras, sincronizarla volvería a escribir lo suyo.
+                if get_instance(conn, instance_id) is None:
+                    raise HTTPException(status_code=404, detail="Instancia no encontrada")
                 _set_lib_progress(phase=f"Sincronizando {inst.type.capitalize()}: {inst.name}…",
                                   instance=inst.name, instance_type=inst.type)
                 try:
@@ -172,6 +179,8 @@ def sync_instance(
                     recompute_after_sync(conn)
         except SyncAlreadyRunning:
             raise HTTPException(status_code=429, detail="Ya hay una sincronización de biblioteca en marcha")
+        except HTTPException:
+            raise
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"Error en sync: {exc}")
     return SyncResponse(

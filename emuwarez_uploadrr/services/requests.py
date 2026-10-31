@@ -269,16 +269,19 @@ _TMDB_IMAGEN = "https://image.tmdb.org/t/p/original"  # el frontend cambia "orig
 _FALLOS_SEGUIDOS_TMDB = 3
 
 
-def rellenar_posters(conn: sqlite3.Connection) -> int:
+def rellenar_posters(conn: sqlite3.Connection, peticiones: Optional[Sequence[int]] = None) -> int:
     """Póster y fondo de TMDb para las peticiones que no casan con nada de la biblioteca, que es de donde salía el
-    póster. Una vez por petición: '' guarda que TMDb no tiene. Devuelve cuántos pósters ha traído."""
+    póster. Una vez por petición: '' guarda que TMDb no tiene. Con `peticiones`, solo esas. Devuelve cuántos
+    pósters ha traído."""
     if not tmdb_configured(conn):
         return 0
-    pendientes = conn.execute(
-        "SELECT ri.id, ri.category, ri.req_scope, ri.tmdb_id, ri.imdb_id FROM request_items ri "
-        "WHERE ri.tmdb_poster_url IS NULL AND NOT EXISTS (SELECT 1 FROM request_matches rm "
-        "JOIN library_items li ON li.id = rm.library_item_id "
-        "WHERE rm.request_item_id = ri.id AND li.poster_url IS NOT NULL)").fetchall()
+    sql = ("SELECT ri.id, ri.category, ri.req_scope, ri.tmdb_id, ri.imdb_id FROM request_items ri "
+           "WHERE ri.tmdb_poster_url IS NULL AND NOT EXISTS (SELECT 1 FROM request_matches rm "
+           "JOIN library_items li ON li.id = rm.library_item_id "
+           "WHERE rm.request_item_id = ri.id AND li.poster_url IS NOT NULL)")
+    if peticiones is not None:
+        sql += f" AND ri.id IN ({','.join('?' * len(peticiones))})"
+    pendientes = conn.execute(sql, tuple(peticiones or ())).fetchall()
     traidos = fallos = 0
     for p in pendientes:
         tipo = tipo_de_peticion(p["category"]) or ("series" if p["req_scope"] in ("season", "episode") else None)

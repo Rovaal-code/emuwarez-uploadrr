@@ -110,6 +110,18 @@ def _extract_json_dict(j: dict, key: str) -> dict | None:
         return None
 
 
+def _con_ficha(j: dict, ficha: dict | None, **kw) -> UploadJobDetail:
+    """El detalle con los campos de su ficha de la biblioteca o, si ya no está, con los que la subida guardó al
+    borrarse (database.borrar_biblioteca)."""
+    f = ficha or _extract_json_dict(j, "library_snapshot_json") or {}
+    return _job_to_detail(
+        j, f.get("item_type"), f.get("poster_url") or None, f.get("backdrop_url") or None,
+        f.get("instance_type") or None, f.get("instance_name") or None, f.get("request_status") or None,
+        f.get("year") or None, f.get("instance_id") or None, f.get("tmdb_id") or None, f.get("title_slug") or None,
+        **kw,
+    )
+
+
 def _job_to_detail(
     j: dict,
     media_type: str | None = None,
@@ -320,55 +332,12 @@ def get_uploads(
     with _get_conn() as conn:
         jobs = exec_list_jobs(filters=filters, conn=conn)
         queue_positions = get_queue_positions(conn)
-        # Resolve each job's media type (movie/series/…), poster, Origen
-        # (Radarr/Sonarr instance) and Petición status in a single query —
-        # same fields Biblioteca already shows per content.
-        item_ids = {j.get("library_item_id") for j in jobs if j.get("library_item_id")}
-        media_by_item: dict[int, str] = {}
-        poster_by_item: dict[int, str] = {}
-        backdrop_by_item: dict[int, str] = {}
-        instance_type_by_item: dict[int, str] = {}
-        instance_name_by_item: dict[int, str] = {}
-        request_status_by_item: dict[int, str] = {}
-        year_by_item: dict[int, int] = {}
-        instance_id_by_item: dict[int, int] = {}
-        tmdb_id_by_item: dict[int, str] = {}
-        title_slug_by_item: dict[int, str] = {}
-        if item_ids:
-            from ...services.library import library_display_fields
-            for row in library_display_fields(item_ids, conn).values():
-                media_by_item[row["id"]] = row["item_type"]
-                if row["poster_url"]:
-                    poster_by_item[row["id"]] = row["poster_url"]
-                if row["backdrop_url"]:
-                    backdrop_by_item[row["id"]] = row["backdrop_url"]
-                if row["instance_type"]:
-                    instance_type_by_item[row["id"]] = row["instance_type"]
-                if row["instance_name"]:
-                    instance_name_by_item[row["id"]] = row["instance_name"]
-                if row["request_status"]:
-                    request_status_by_item[row["id"]] = row["request_status"]
-                if row["year"]:
-                    year_by_item[row["id"]] = row["year"]
-                if row["instance_id"]:
-                    instance_id_by_item[row["id"]] = row["instance_id"]
-                if row["tmdb_id"]:
-                    tmdb_id_by_item[row["id"]] = row["tmdb_id"]
-                if row["title_slug"]:
-                    title_slug_by_item[row["id"]] = row["title_slug"]
+        # Las fichas de todas las subidas en una sola consulta.
+        from ...services.library import library_display_fields
+        fichas = library_display_fields({j.get("library_item_id") for j in jobs}, conn)
     return [
-        _job_to_detail(
-            j,
-            media_by_item.get(j.get("library_item_id")),
-            poster_by_item.get(j.get("library_item_id")),
-            backdrop_by_item.get(j.get("library_item_id")),
-            instance_type_by_item.get(j.get("library_item_id")),
-            instance_name_by_item.get(j.get("library_item_id")),
-            request_status_by_item.get(j.get("library_item_id")),
-            year_by_item.get(j.get("library_item_id")),
-            instance_id_by_item.get(j.get("library_item_id")),
-            tmdb_id_by_item.get(j.get("library_item_id")),
-            title_slug_by_item.get(j.get("library_item_id")),
+        _con_ficha(
+            j, fichas.get(j.get("library_item_id")),
             queue_position=queue_positions.get(j.get("id"), (None, None))[0],
             queue_total=queue_positions.get(j.get("id"), (None, None))[1],
         )
@@ -383,29 +352,10 @@ def get_upload(job_id: int, current_user: dict = Depends(require_auth)):
         if not job:
             raise HTTPException(status_code=404, detail="Job no encontrado.")
         queue_position, queue_total = get_queue_positions(conn).get(job_id, (None, None))
-        media_type = poster_url = backdrop_url = instance_type = instance_name = request_status = None
-        year = None
-        instance_id = tmdb_id = title_slug = None
-        display_title = None
-        item_id = job.get("library_item_id")
-        if item_id:
-            from ...services.library import library_display_fields_one
-            row = library_display_fields_one(item_id, conn)
-            if row:
-                media_type = row["item_type"]
-                poster_url = row["poster_url"]
-                backdrop_url = row["backdrop_url"]
-                instance_type = row["instance_type"]
-                instance_name = row["instance_name"]
-                request_status = row["request_status"]
-                year = row["year"]
-                instance_id = row["instance_id"]
-                tmdb_id = row["tmdb_id"]
-                title_slug = row["title_slug"]
-                display_title = content_display_title(conn, dict(row))
-    return _job_to_detail(job, media_type, poster_url, backdrop_url, instance_type, instance_name, request_status, year,
-                           instance_id, tmdb_id, title_slug, display_title,
-                           queue_position=queue_position, queue_total=queue_total)
+        from ...services.library import library_display_fields_one
+        row = library_display_fields_one(job["library_item_id"], conn) if job.get("library_item_id") else None
+        display_title = content_display_title(conn, row) if row else None
+    return _con_ficha(job, row, display_title=display_title, queue_position=queue_position, queue_total=queue_total)
 
 
 @router.get("/uploads/{job_id}/logs", response_model=UploadJobLogsResponse)

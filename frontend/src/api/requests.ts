@@ -9,11 +9,13 @@ import type {
 
 export interface RequestsFilter {
   search?: string
-  status?: string
-  category?: string
-  resolution?: string
-  source?: string
-  author?: string
+  // Las columnas admiten varios valores: lista vacía = sin filtro.
+  status?: string[]
+  category?: string[]
+  resolution?: string[]
+  source?: string[]
+  author?: string[]
+  instance_id?: number[]
   emu_status?: string
   sort?: string
   limit?: number
@@ -23,11 +25,12 @@ export interface RequestsFilter {
 export async function getRequests(filter?: RequestsFilter): Promise<RequestListResponse> {
   const q = new URLSearchParams()
   if (filter?.search) q.set('search', filter.search)
-  if (filter?.status) q.set('status', filter.status)
-  if (filter?.category) q.set('category', filter.category)
-  if (filter?.resolution) q.set('resolution', filter.resolution)
-  if (filter?.source) q.set('source', filter.source)
-  if (filter?.author) q.set('author', filter.author)
+  filter?.status?.forEach(v => q.append('status', v))
+  filter?.category?.forEach(v => q.append('category', v))
+  filter?.resolution?.forEach(v => q.append('resolution', v))
+  filter?.source?.forEach(v => q.append('source', v))
+  filter?.author?.forEach(v => q.append('author', v))
+  filter?.instance_id?.forEach(v => q.append('instance_id', String(v)))
   if (filter?.emu_status) q.set('emu_status', filter.emu_status)
   if (filter?.sort) q.set('sort', filter.sort)
   if (filter?.limit !== undefined) q.set('limit', String(filter.limit))

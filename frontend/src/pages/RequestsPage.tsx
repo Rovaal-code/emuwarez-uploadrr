@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { getRequests, getRequestDetail } from '../api/requests'
 import { getCandidates } from '../api/requestReadiness'
 import type {
@@ -31,6 +31,7 @@ import {
   PointsValueIcon, ThumbsUpValueIcon, CommentValueIcon,
 } from '../components/DetailCard'
 import { HeaderFilter } from '../components/HeaderFilter'
+import { HeaderSort } from '../components/HeaderSort'
 import { formatBytes, timeAgo, formatDate, formatNumero } from '../utils/format'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
 import { useAlEntrar, useAlSalir } from '../context/SeccionVisible'
@@ -582,6 +583,7 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
 }
 
 const PAGE_SIZE = 2000  // show everything in one scrollable container (like Biblioteca)
+const NINGUNO: string[] = []
 
 export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => void } = {}) {
   // Open a library item's dedicated detail page from a request (its "Tu
@@ -605,14 +607,19 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
     const t = setTimeout(() => setDebouncedSearch(search), 350)
     return () => clearTimeout(t)
   }, [search])
-  const [statusFilter, setStatusFilter] = useState('')
-  const [categoryFilter, setCategoryFilter] = useState('')
-  const [resolutionFilter, setResolutionFilter] = useState('')
-  const [sourceFilter, setSourceFilter] = useState('')
-  const [authorFilter, setAuthorFilter] = useState('')
+  // Las columnas admiten varios valores, como en Biblioteca: lista vacía = sin filtro.
+  const [statusFilter, setStatusFilter] = useState<string[]>(NINGUNO)
+  const [categoryFilter, setCategoryFilter] = useState<string[]>(NINGUNO)
+  const [resolutionFilter, setResolutionFilter] = useState<string[]>(NINGUNO)
+  const [sourceFilter, setSourceFilter] = useState<string[]>(NINGUNO)
+  const [authorFilter, setAuthorFilter] = useState<string[]>(NINGUNO)
+  const [instanceFilter, setInstanceFilter] = useState<string[]>(NINGUNO)
   const [sortBy, setSortBy] = useState('created_desc')
-  const [facets, setFacets] = useState<{ categories: string[]; resolutions: string[]; sources: string[]; authors: string[]; statuses: string[] }>({
-    categories: [], resolutions: [], sources: [], authors: [], statuses: [],
+  const [facets, setFacets] = useState<{
+    categories: string[]; resolutions: string[]; sources: string[]; authors: string[]; statuses: string[]
+    instances: { value: string; label: string }[]
+  }>({
+    categories: [], resolutions: [], sources: [], authors: [], statuses: [], instances: [],
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -634,7 +641,6 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   const [wizardRequestId, setWizardRequestId] = useState<number | undefined>(undefined)
   const votesHeaderTip = useTooltip('Votos (otros usuarios que la quieren)')
   const commentsHeaderTip = useTooltip('Comentarios')
-  const pointsHeaderTip = useTooltip('Puntos / recompensa')
 
   // "Subir a eMuwarez" — reuse the exact same upload wizard as Biblioteca by
   // loading the matched library item and handing it to UploadWizardModal, with
@@ -653,35 +659,48 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
       Array.from(new Set(vals.filter((v): v is string => !!v && v.trim() !== ''))).sort()
     return {
       categories: uniq(list.map(i => i.category)),
-      resolutions: uniq(list.map(i => i.requested_resolution)),
-      sources: uniq(list.map(i => i.requested_source)),
+      // Sin nada pedido la celda dice «Cualquiera», y por eso se filtra.
+      resolutions: uniq(list.map(i => noReq(i.requested_resolution))),
+      sources: uniq(list.map(i => noReq(i.requested_source))),
       authors: uniq(list.map(i => i.author)),
       // Null reads as "no library match", which the filter knows by name —
       // don't let uniq() drop it or that state stays unfilterable.
       statuses: uniq(list.map(i => i.compatibility_status || 'Sin coincidencia')),
+      // Origen: las instancias que atienden alguna petición, con el nombre que enseña la columna.
+      instances: Array.from(new Map(list.filter(i => i.instance_id != null)
+        .map(i => [String(i.instance_id), i.instance_name ?? i.instance_type ?? String(i.instance_id)])))
+        .map(([value, label]) => ({ value, label }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
     }
   }
 
   // No filter active — loadItems' own response IS the full unfiltered
   // dataset, so it can double as the facets source (see loadItems below)
   // instead of loadFacets firing a second, identical request for it.
-  const isUnfiltered = !debouncedSearch && !statusFilter && !categoryFilter && !resolutionFilter && !sourceFilter && !authorFilter
+  const isUnfiltered = !debouncedSearch && [statusFilter, categoryFilter, resolutionFilter, sourceFilter, authorFilter, instanceFilter]
+    .every(f => f.length === 0)
 
+  // Solo cuenta la última petición: marcar varias casillas seguidas lanza
+  // varias, y una vieja más lenta no pisa la nueva (igual que en Biblioteca).
+  const ultimaCarga = useRef(0)
   const loadItems = useCallback(async (off = 0) => {
+    const esta = ++ultimaCarga.current
     setLoading(true)
     setError(null)
     try {
       const res = await getRequests({
         search: debouncedSearch || undefined,
-        status: statusFilter || undefined,
-        category: categoryFilter || undefined,
-        resolution: resolutionFilter || undefined,
-        source: sourceFilter || undefined,
-        author: authorFilter || undefined,
+        status: statusFilter,
+        category: categoryFilter,
+        resolution: resolutionFilter,
+        source: sourceFilter,
+        author: authorFilter,
+        instance_id: instanceFilter.map(Number),
         sort: sortBy,
         limit: PAGE_SIZE,
         offset: off,
       })
+      if (esta !== ultimaCarga.current) return
       setItems(res.items)
       setTotal(res.total)
       setOffset(off)
@@ -691,11 +710,11 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
         }
       }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Error cargando peticiones')
+      if (esta === ultimaCarga.current) setError(e instanceof Error ? e.message : 'Error cargando peticiones')
     } finally {
-      setLoading(false)
+      if (esta === ultimaCarga.current) setLoading(false)
     }
-  }, [debouncedSearch, statusFilter, categoryFilter, resolutionFilter, sourceFilter, authorFilter, sortBy, isUnfiltered])
+  }, [debouncedSearch, statusFilter, categoryFilter, resolutionFilter, sourceFilter, authorFilter, instanceFilter, sortBy, isUnfiltered])
 
   // Populate filter dropdown options from the full (unfiltered) dataset so they
   // stay stable regardless of the active filters. Only needed when a filter
@@ -715,7 +734,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   useEffect(() => {
     loadItems(0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch, statusFilter, categoryFilter, resolutionFilter, sourceFilter, authorFilter, sortBy])
+  }, [debouncedSearch, statusFilter, categoryFilter, resolutionFilter, sourceFilter, authorFilter, instanceFilter, sortBy])
 
   // Reload table + facets whenever what's loaded stops being valid: a global
   // sync finishing (peticiones u otra), or coming back to the tab.
@@ -773,8 +792,8 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
 
   function quitarFiltros() {
     setSearch(''); setDebouncedSearch('')
-    setStatusFilter(''); setCategoryFilter(''); setResolutionFilter('')
-    setSourceFilter(''); setAuthorFilter('')
+    setStatusFilter(NINGUNO); setCategoryFilter(NINGUNO); setResolutionFilter(NINGUNO)
+    setSourceFilter(NINGUNO); setAuthorFilter(NINGUNO); setInstanceFilter(NINGUNO)
     setOffset(0)
   }
   // Al salir, de vuelta a la tabla sin filtros y con el orden por defecto.
@@ -905,7 +924,9 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                       // offer "TV" for a column that says "Serie".
                       { value: '', label: 'Todos' }, ...facets.categories.map(c => ({ value: c, label: tipoOf(c).label })),
                     ]} /></th>
-                    <th>Origen</th>
+                    <th><HeaderFilter label="Origen" value={instanceFilter} onChange={setInstanceFilter} options={[
+                      { value: '', label: 'Todos' }, ...facets.instances,
+                    ]} /></th>
                     <th><HeaderFilter label="Compatibilidad" value={statusFilter} onChange={setStatusFilter} options={[
                       // Labels, not raw values, or the filter would offer
                       // "No disponible" for a column that says "Faltante".
@@ -922,8 +943,8 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                     ]} /></th>
                     {hayVotos && <th style={{ textAlign: 'center' }} {...votesHeaderTip.triggerProps}><VotesIcon />{votesHeaderTip.tooltipNode}</th>}
                     {hayComentarios && <th style={{ textAlign: 'center' }} {...commentsHeaderTip.triggerProps}><CommentsIcon />{commentsHeaderTip.tooltipNode}</th>}
-                    <th style={{ textAlign: 'center' }} {...pointsHeaderTip.triggerProps}><PointsIcon />{pointsHeaderTip.tooltipNode}</th>
-                    <th>Creada</th>
+                    <HeaderSort label={<PointsIcon />} nombre="Puntos / recompensa" desc="points_desc" asc="points_asc" sortBy={sortBy} onSort={setSortBy} align="center" />
+                    <HeaderSort label="Creada" desc="created_desc" asc="created_asc" sortBy={sortBy} onSort={setSortBy} />
                   </tr>
                 </thead>
                 {displayItems.length === 0 && (

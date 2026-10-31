@@ -9,7 +9,7 @@ import re
 import sqlite3
 import threading
 import unicodedata
-from typing import Optional
+from typing import Optional, Sequence
 
 from ..database import borrar_peticiones, get_setting_canonical, get_state, set_state
 from . import cli_config, emu_catalog
@@ -634,6 +634,8 @@ _REQUEST_SORT = {
     "comments_desc": "COALESCE(ri.comments, 0) DESC, ri.created_at DESC", # más comentarios
 }
 _FILLED_STATUSES = ("filled", "1", "lleno", "llena")
+# Lo que enseña la tabla para una resolución o un source sin pedir; los filtros lo usan como valor.
+CUALQUIERA = "Cualquiera"
 
 
 def list_request_items(
@@ -642,17 +644,36 @@ def list_request_items(
     limit: int = 50,
     offset: int = 0,
     search: Optional[str] = None,
-    status: Optional[str] = None,
-    category: Optional[str] = None,
-    resolution: Optional[str] = None,
-    source: Optional[str] = None,
-    author: Optional[str] = None,
+    status: Sequence[str] = (),
+    category: Sequence[str] = (),
+    resolution: Sequence[str] = (),
+    source: Sequence[str] = (),
+    author: Sequence[str] = (),
+    instance_id: Sequence[int] = (),
     emu_status: Optional[str] = None,
     sort: Optional[str] = None,
 ) -> dict:
-    """Return paginated request items enriched with best match info."""
+    """Return paginated request items enriched with best match info.
+
+    Cada filtro de columna admite varios valores (OR); las columnas entre sí, con AND."""
     where_clauses: list[str] = []
     params: list = []
+
+    def en(columna: str, valores: Sequence) -> None:
+        if valores:
+            where_clauses.append(f"{columna} IN ({','.join('?' * len(valores))})")
+            params.extend(valores)
+
+    def pedido(columna: str, valores: Sequence[str]) -> None:
+        # Sin resolución o source pedidos la columna dice «Cualquiera», y así se filtra.
+        if not valores:
+            return
+        concretos = [v for v in valores if v != CUALQUIERA]
+        partes = [f"{columna} IN ({','.join('?' * len(concretos))})"] if concretos else []
+        if len(concretos) < len(valores):
+            partes.append(f"COALESCE({columna}, '') = ''")
+        where_clauses.append("(" + " OR ".join(partes) + ")")
+        params.extend(concretos)
 
     if search:
         where_clauses.append("ri.title LIKE ?")
@@ -662,7 +683,7 @@ def list_request_items(
         # library candidates has no request_matches row at all, but can still
         # be Reclamado/Pendiente/Llena on the tracker itself; keep this SQL
         # fallback in sync with that function if its substring rules change.
-        where_clauses.append("""
+        where_clauses.append(f"""
             COALESCE(
                 rm.status,
                 CASE
@@ -681,21 +702,16 @@ def list_request_items(
                          OR LOWER(COALESCE(ri.emu_status,'')) LIKE '%filled%' OR ri.emu_status = '1' THEN 'Llena'
                     ELSE 'Sin coincidencia'
                 END
-            ) = ?
+            ) IN ({','.join('?' * len(status))})
         """)
-        params.append(status)
-    if category:
-        where_clauses.append("ri.category = ?")
-        params.append(category)
-    if resolution:
-        where_clauses.append("ri.requested_resolution = ?")
-        params.append(resolution)
-    if source:
-        where_clauses.append("ri.requested_source = ?")
-        params.append(source)
+        params.extend(status)
+    en("ri.category", category)
+    pedido("ri.requested_resolution", resolution)
+    pedido("ri.requested_source", source)
     if author:
-        where_clauses.append("ri.author = ? AND ri.author_visible = 1")
-        params.append(author)
+        en("ri.author", author)
+        where_clauses.append("ri.author_visible = 1")
+    en("li.instance_id", instance_id)
     if emu_status == "filled":
         where_clauses.append(f"LOWER(COALESCE(ri.emu_status,'')) IN ({','.join('?' * len(_FILLED_STATUSES))})")
         params.extend(_FILLED_STATUSES)
@@ -715,6 +731,7 @@ def list_request_items(
             WHERE rm2.request_item_id = ri.id
             ORDER BY rm2.confidence DESC LIMIT 1
           )
+        LEFT JOIN library_items li ON li.id = rm.library_item_id
         {where_sql}
     """
     total_row = conn.execute(count_sql, params).fetchone()

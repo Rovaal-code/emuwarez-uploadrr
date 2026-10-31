@@ -15,6 +15,7 @@ from ...services.upload_preflight import (
 from ...services.upload_execution import (
     get_upload_job as exec_get_job,
     list_upload_jobs as exec_list_jobs,
+    count_upload_jobs,
     get_upload_job_logs,
     get_upload_job_artifacts,
     start_upload_job,
@@ -314,7 +315,8 @@ def queue_upload(
 @router.get("/uploads", response_model=list[UploadJobDetail])
 def get_uploads(
     status: str | None = Query(default=None),
-    limit: int = Query(default=50, ge=1, le=500),
+    hide_preparatory: bool = Query(default=False),
+    limit: int = Query(default=50, ge=1, le=2000),
     offset: int = Query(default=0, ge=0),
     search: str | None = Query(default=None),
     library_item_id: int | None = Query(default=None),
@@ -323,6 +325,7 @@ def get_uploads(
 ):
     filters = {
         "status": status,
+        "hide_preparatory": hide_preparatory,
         "limit": limit,
         "offset": offset,
         "search": search,
@@ -343,6 +346,28 @@ def get_uploads(
         )
         for j in jobs
     ]
+
+
+# Antes de /uploads/{job_id}: si no, "count" se leería como un id.
+@router.get("/uploads/count")
+def count_uploads(
+    status: str | None = Query(default=None),
+    hide_preparatory: bool = Query(default=False),
+    search: str | None = Query(default=None),
+    library_item_id: int | None = Query(default=None),
+    request_item_id: int | None = Query(default=None),
+    current_user: dict = Depends(require_auth),
+) -> dict:
+    """Cuántas subidas hay con esos filtros, sin el límite de la lista: el «M» de «N de M»."""
+    filters = {
+        "status": status,
+        "hide_preparatory": hide_preparatory,
+        "search": search,
+        "library_item_id": library_item_id,
+        "request_item_id": request_item_id,
+    }
+    with _get_conn() as conn:
+        return {"total": count_upload_jobs(filters=filters, conn=conn)}
 
 
 @router.get("/uploads/{job_id}", response_model=UploadJobDetail)
@@ -368,13 +393,17 @@ def get_upload_logs(
     limit: int = Query(default=500, ge=1, le=200000),
     offset: int = Query(default=0, ge=0),
     tail: bool = Query(default=False),
+    # Solo lo posterior a esa línea (su `sequence`): quien sigue la subida en vivo no baja el registro entero.
+    after_sequence: int | None = Query(default=None, ge=0),
     current_user: dict = Depends(require_auth),
 ):
     with _get_conn() as conn:
         job = exec_get_job(job_id, conn=conn)
         if not job:
             raise HTTPException(status_code=404, detail="Job no encontrado.")
-        result = get_upload_job_logs(job_id, limit=limit, offset=offset, tail=tail, conn=conn)
+        result = get_upload_job_logs(
+            job_id, limit=limit, offset=offset, tail=tail, after_sequence=after_sequence, conn=conn,
+        )
 
     logs = [
         UploadJobLog(
@@ -384,6 +413,7 @@ def get_upload_logs(
             message=log["message"],
             stream=log.get("stream"),
             created_at=log["created_at"],
+            sequence=log.get("sequence"),
         )
         for log in result.get("logs", [])
     ]

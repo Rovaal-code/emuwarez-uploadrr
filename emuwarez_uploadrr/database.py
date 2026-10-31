@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 43
+SCHEMA_VERSION = 44
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -1192,6 +1192,29 @@ def _migrate_library_items_last_seen(conn: sqlite3.Connection) -> None:
     borrar_biblioteca(conn, "instance_id IS NOT NULL AND instance_id NOT IN (SELECT id FROM instances)")
 
 
+def _migrate_upload_jobs_torrent_subido(conn: sqlite3.Connection) -> None:
+    """Esquema 44: `torrent_subido` (qBittorrent siembra del enlace de esa subida, antes se buscaba en todo el
+    registro) y el índice del registro, que sirve a MAX(sequence) y a leer el final o lo posterior a una línea."""
+    try:
+        conn.execute("ALTER TABLE upload_jobs ADD COLUMN torrent_subido INTEGER NOT NULL DEFAULT 0")
+        nueva = True
+    except sqlite3.OperationalError:
+        # Solo se calla si la columna ya está (la añadió otro init_db a la vez), no un «database is locked».
+        if "torrent_subido" not in {fila[1] for fila in conn.execute("PRAGMA table_info(upload_jobs)")}:
+            raise
+        nueva = False
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_upload_job_logs_job_sequence ON upload_job_logs(upload_job_id, sequence)"
+    )
+    if nueva:
+        # Las de antes, por lo que dejaron escrito (QBIT_AÑADIDO de upload_execution, y la línea fija de Uploadrr-EMU).
+        conn.execute(
+            "UPDATE upload_jobs SET torrent_subido = 1 WHERE id IN ("
+            "SELECT upload_job_id FROM upload_job_logs "
+            "WHERE message = 'qBittorrent: torrent añadido correctamente.' OR message LIKE 'Torrent URL: %')"
+        )
+
+
 def _migrate_quitar_peticiones_de_ejemplo(conn: sqlite3.Connection) -> None:
     """Las peticiones de ejemplo se generaron mientras no había endpoint real;
     ahora que se leen de eMuwarez, se borran con lo que colgaba de ellas."""
@@ -1653,6 +1676,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_upload_jobs_request_snapshot(conn)
         _migrate_request_items_posters(conn)
         _migrate_library_items_last_seen(conn)
+        _migrate_upload_jobs_torrent_subido(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

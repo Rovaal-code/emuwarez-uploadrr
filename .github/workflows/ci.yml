@@ -1,15 +1,20 @@
 name: CI
 
-# En cada PR, y desde «Publicar versión» antes de publicar: master no tiene CI propio.
+# En cada PR, y desde «Publicar versión» antes de publicar. En master solo el backend, para que
+# Codecov tenga la cobertura de la base con la que compara los PR.
 on:
   pull_request:
+  push:
+    branches: [master]
+    paths-ignore: ["frontend/**", "docs/**", "**.md"]
   workflow_call:
 
 permissions:
   contents: read
 
+# Con el evento, un merge a master no cancela los tests de «Publicar versión».
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -68,6 +73,8 @@ jobs:
           fail_ci_if_error: true
 
   frontend:
+    # En master el bundle ya lo sube Bundle.
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     defaults:
       run:

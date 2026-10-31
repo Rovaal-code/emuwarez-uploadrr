@@ -495,3 +495,21 @@ def test_availability_only_downgrades_compatible():
                "local_status": "Faltante"}
     status = classify_request_match(req, missing, id_match=True)["status"]
     assert status != "No disponible" and status != "Compatible"  # a real mismatch
+
+
+# ---------------------------------------------------------------------------
+# peor_resolucion / peor_source: la temporada se juzga por su peor capítulo
+# ---------------------------------------------------------------------------
+
+def test_peor_resolucion_y_fuente():
+    from emuwarez_uploadrr.services.compatibility import peor_resolucion, peor_source
+    assert peor_resolucion(["2160p", "1080p", "1080p"]) == "1080p"
+    assert peor_source(["BluRay", "WEB-DL", "WEB-DL"]) == "WEB-DL"
+    assert peor_source(["Remux", "WEBRip", "BluRay"]) == "WEBRip"
+
+
+def test_peor_valor_sin_datos_o_con_uno_desconocido_es_none():
+    from emuwarez_uploadrr.services.compatibility import peor_resolucion, peor_source
+    assert peor_resolucion([]) is None and peor_source([]) is None
+    assert peor_resolucion(["1080p", None]) is None
+    assert peor_source(["WEB-DL", "algo raro"]) is None

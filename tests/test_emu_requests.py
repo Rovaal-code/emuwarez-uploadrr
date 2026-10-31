@@ -437,6 +437,48 @@ def test_una_peticion_de_serie_con_temporada_0_se_cruza_con_la_serie_y_no_con_lo
     assert (estado(serie), estado(ids[0]), estado(ids[1])) == ("Compatible", "Sin petición", "Sin petición")
 
 
+def _temporada_con_capitulos(conn, capitulos, tmdb="88"):
+    """Serie con su Temporada 1 y un capítulo por cada (local_status, resolución, fuente)."""
+    serie = conn.execute("INSERT INTO library_items(item_type,title,year,local_status,tmdb_id) "
+                         f"VALUES ('series','Serie',2019,'Disponible','{tmdb}')").lastrowid
+    temporada = conn.execute("INSERT INTO library_items(item_type,title,local_status,parent_id,season_number,tmdb_id) "
+                             f"VALUES ('season','Serie - Temporada 1','Disponible',?,1,'{tmdb}')", (serie,)).lastrowid
+    for n, (estado, res, fuente) in enumerate(capitulos, start=1):
+        conn.execute("INSERT INTO library_items(item_type,title,local_status,parent_id,season_number,episode_number,"
+                     "resolution,source) VALUES ('episode','E',?,?,1,?,?,?)", (estado, temporada, n, res, fuente))
+    conn.commit()
+    return serie, temporada
+
+
+def _estado_del_casamiento(conn, **pide):
+    from emuwarez_uploadrr.services.requests import match_all_requests, upsert_request
+    from emuwarez_uploadrr.models import RequestItem
+    conn.execute("DELETE FROM request_items")
+    upsert_request(conn, RequestItem(id=None, emu_id="t1", title="Serie", category="Series", tmdb_id="88",
+                                     req_scope="season", req_season=1, **pide))
+    match_all_requests(conn)
+    return conn.execute("SELECT status FROM request_matches").fetchone()["status"]
+
+
+def test_una_temporada_con_un_capitulo_que_falta_cumple_lo_pedido_con_los_que_hay(db_conn):
+    """PET-3: el capítulo sin archivo (resolución NULL) hacía «No compatible» a toda la temporada."""
+    _temporada_con_capitulos(db_conn, [("Disponible", "1080p", "WEB-DL"), ("Disponible", "1080p", "WEB-DL"),
+                                       ("Faltante", None, None)])
+    assert _estado_del_casamiento(db_conn, requested_resolution="1080p", requested_source="WEB-DL") == "Compatible"
+
+
+def test_una_temporada_con_fuentes_mezcladas_se_juzga_por_la_peor(db_conn):
+    """PET-3: «igual o mejor» con capítulos WEB-DL y BluRay: vale para WEB-DL, no para BluRay."""
+    _temporada_con_capitulos(db_conn, [("Disponible", "1080p", "WEB-DL"), ("Disponible", "1080p", "BluRay")])
+    assert _estado_del_casamiento(db_conn, requested_resolution="1080p", requested_source="WEB-DL") == "Compatible"
+    assert _estado_del_casamiento(db_conn, requested_resolution="1080p", requested_source="Encode") == "Parcial"
+
+
+def test_una_temporada_con_un_capitulo_de_menos_resolucion_no_cumple(db_conn):
+    _temporada_con_capitulos(db_conn, [("Disponible", "2160p", "WEB-DL"), ("Disponible", "1080p", "WEB-DL")])
+    assert _estado_del_casamiento(db_conn, requested_resolution="2160p", requested_source="WEB-DL") == "Parcial"
+
+
 def test_recalcular_borra_el_casamiento_que_ya_no_vale(db_conn):
     """El «Compatible» de antes (Dune de 1984 para la petición de la de 2021) se quedaba en request_matches y la
     lista lo seguía enseñando."""

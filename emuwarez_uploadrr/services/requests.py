@@ -26,6 +26,8 @@ from .compatibility import (
     classify_request_match,
     rank_request_matches,
     emu_override_status,
+    peor_resolucion,
+    peor_source,
     tipo_de_peticion,
 )
 
@@ -424,8 +426,9 @@ def _effective_target(conn: sqlite3.Connection, matched_item: dict, req: dict) -
     """A copy of the matched library item with resolution/source/codecs/audio/
     subs/size/path/local_status reflecting the request's SCOPE, so a
     series/season rollup (which stores none of its own) is classified and shown
-    against its real episodes: the specific episode, or the uniform value across
-    the relevant episodes (None when they differ)."""
+    against its real episodes: the specific episode, or the WORST of the available
+    episodes (la resolución y la fuente más bajas: si esas cumplen lo pedido,
+    cumplen todas; un capítulo que falta no cuenta)."""
     it = dict(matched_item)
     if it.get("item_type") not in ("series", "season"):
         return it
@@ -439,8 +442,16 @@ def _effective_target(conn: sqlite3.Connection, matched_item: dict, req: dict) -
             it["local_status"] = "Faltante"
         return it
     single = eps[0] if len(eps) == 1 else None
+    disponibles = [e for e in eps if e.get("local_status") in _AVAILABLE]
     for key in ("resolution", "source", "video_codec", "audio_languages", "subtitle_languages"):
-        it[key] = single[key] if single else _uniq(e.get(key) for e in eps)
+        if single:
+            it[key] = single[key]
+        elif key == "resolution":
+            it[key] = peor_resolucion(e.get(key) for e in disponibles)
+        elif key == "source":
+            it[key] = peor_source(e.get(key) for e in disponibles)
+        else:
+            it[key] = _uniq(e.get(key) for e in disponibles) if disponibles else None
     if single:
         it["size_bytes"] = single.get("size_bytes")
         it["path"] = single.get("path")

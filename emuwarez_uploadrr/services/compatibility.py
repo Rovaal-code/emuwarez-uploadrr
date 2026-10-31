@@ -140,6 +140,23 @@ def compare_source(requested: str | None, local: str | None) -> Optional[bool]:
     return loc_rank >= req_rank
 
 
+def _peor(valores, rango) -> Optional[str]:
+    valores = list(valores)
+    if not valores or any(rango(v) is None for v in valores):
+        return None
+    return min(valores, key=rango)
+
+
+def peor_resolucion(valores) -> Optional[str]:
+    """La resolución más baja: si esa cumple lo pedido, cumplen todas. None si no hay valores o alguno no se reconoce."""
+    return _peor(valores, parse_resolution)
+
+
+def peor_source(valores) -> Optional[str]:
+    """Lo mismo que peor_resolucion con la fuente (remux > bluray > web-dl > ...)."""
+    return _peor(valores, lambda v: _SOURCE_RANK.get(parse_source(v)))
+
+
 def _word_overlap(w1: frozenset[str], w2: frozenset[str]) -> float:
     if not w1 or not w2:
         return 0.0
@@ -394,5 +411,5 @@ __all__ = [
     "parse_resolution", "parse_source",
     "compare_resolution", "compare_source",
     "match_request_to_library", "classify_request_match",
-    "rank_request_matches", "tipo_de_peticion", "TIPO_DE_FILA",
+    "rank_request_matches", "tipo_de_peticion", "TIPO_DE_FILA", "peor_resolucion", "peor_source",
 ]

@@ -112,6 +112,13 @@ def upsert_request(
             req_season = excluded.req_season,
             req_episode = excluded.req_episode,
             raw_json = excluded.raw_json,
+            -- Si cambia con qué se busca en TMDb, el póster y el fondo se vuelven a pedir.
+            tmdb_poster_url = CASE WHEN (request_items.tmdb_id, request_items.imdb_id, request_items.category,
+                request_items.req_scope) IS (excluded.tmdb_id, excluded.imdb_id, excluded.category, excluded.req_scope)
+                THEN request_items.tmdb_poster_url END,
+            tmdb_backdrop_url = CASE WHEN (request_items.tmdb_id, request_items.imdb_id, request_items.category,
+                request_items.req_scope) IS (excluded.tmdb_id, excluded.imdb_id, excluded.category, excluded.req_scope)
+                THEN request_items.tmdb_backdrop_url END,
             last_seen_at = COALESCE(excluded.last_seen_at, request_items.last_seen_at),
             updated_at = CURRENT_TIMESTAMP
         """,

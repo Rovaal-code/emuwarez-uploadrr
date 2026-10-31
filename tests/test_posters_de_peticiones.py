@@ -102,6 +102,24 @@ def test_sin_poster_en_tmdb_se_apunta_y_no_se_vuelve_a_pedir(db_conn, tmdb_falso
     assert _poster(db_conn, rid) is None and _poster(db_conn, no_existe) is None
 
 
+def test_si_cambia_con_que_se_busca_se_vuelve_a_pedir(db_conn, tmdb_falso):
+    """Una petición corregida en eMuwarez (otro tmdb, o uno que no tenía) no se queda con el póster de antes."""
+    rid = _peticion(db_conn, "1", tmdb_id="603")
+    sin_id = _peticion(db_conn, "2")
+    tmdb_falso["respuestas"] = {"/movie/603": {"poster_path": "/matrix.jpg"}, "/movie/604": {"poster_path": "/reloaded.jpg"},
+                                "/movie/605": {"poster_path": "/revolutions.jpg"}}
+    reqs.rellenar_posters(db_conn)
+    _peticion(db_conn, "1", tmdb_id="603")
+    reqs.rellenar_posters(db_conn)
+    assert tmdb_falso["pedidas"] == ["/movie/603"]
+
+    _peticion(db_conn, "1", tmdb_id="604")
+    _peticion(db_conn, "2", tmdb_id="605")
+    reqs.rellenar_posters(db_conn)
+    assert _poster(db_conn, rid) == IMG + "/reloaded.jpg"
+    assert _poster(db_conn, sin_id) == IMG + "/revolutions.jpg"
+
+
 def test_si_tmdb_falla_no_se_guarda_y_se_para_al_tercer_fallo(db_conn, tmdb_falso):
     ids = [_peticion(db_conn, str(i), tmdb_id=str(100 + i)) for i in range(5)]
     tmdb_falso["respuestas"] = {f"/movie/{100 + i}": IntegrationError("caído", status=503) for i in range(5)}

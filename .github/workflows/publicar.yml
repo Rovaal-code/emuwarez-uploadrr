@@ -143,6 +143,9 @@ jobs:
             if [ "$publicado" = "$(git rev-parse HEAD)" ]; then
               echo "::notice::Esta versión ya estaba publicada entera; no se toca nada."
               echo "hecha=true" >> "$GITHUB_OUTPUT"
+            else
+              # Si ya hay una más nueva publicada, no se vuelve atrás moviendo :latest y :edge.
+              python3 scripts/publicar_version.py --solo-comprobar --notas "$NOTAS" --repo
             fi
           else
             python3 scripts/subir_version.py "$ESCALA"

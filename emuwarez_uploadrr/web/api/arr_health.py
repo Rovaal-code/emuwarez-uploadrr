@@ -64,8 +64,9 @@ def arr_health_refresh(
         if include_history:
             history_result = refresh_arr_history_diagnostics(conn, page_size=history_page_size)
 
+    errores = (queue_result.get("errors") or []) + (history_result.get("errors") or [])
     return {
-        "ok": True,
+        "ok": not errores,
         "health": health,
         "queue_refresh": queue_result if include_queue else None,
         "history_refresh": history_result if include_history else None,

@@ -84,6 +84,10 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test -- --reporter=default --reporter=junit --outputFile.junit=junit.xml
+      # Con el token, vite build sube el tamaño del bundle a Codecov (vite.config.ts).
+      - run: npx vite build
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
       - if: ${{ !cancelled() }}
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         timeout-minutes: 5

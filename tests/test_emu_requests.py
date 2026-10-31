@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import sqlite3
+
 import pytest
 
 from emuwarez_uploadrr.integrations import emu
@@ -519,6 +521,79 @@ def test_mis_peticiones_no_distinguen_mayusculas_como_la_ficha(db_conn):
     db_conn.execute("INSERT INTO request_items(emu_id,title,author,author_visible) VALUES ('m2','B','otro',1)")
     db_conn.commit()
     assert dashboard_request_counters(db_conn)["requests_mine"] == 1
+
+
+def _dos_peliculas_y_sus_peticiones(conn):
+    """Dos películas con su petición cada una, ya cruzadas una vez: lo que hay que conservar si un recálculo falla."""
+    from emuwarez_uploadrr.services.requests import match_all_requests, upsert_request
+    from emuwarez_uploadrr.models import RequestItem
+    for n in (1, 2):
+        conn.execute("INSERT INTO library_items(item_type,title,local_status,tmdb_id,resolution,source) "
+                     "VALUES ('movie',?, 'Disponible', ?, '1080p', 'WEB-DL')", (f"Peli {n}", str(n)))
+        upsert_request(conn, RequestItem(id=None, emu_id=f"p{n}", title=f"Peli {n}", category="Películas",
+                                         tmdb_id=str(n)))
+    conn.commit()
+    match_all_requests(conn)
+
+
+def _estado_guardado(conn):
+    return (
+        [tuple(r) for r in conn.execute("SELECT library_item_id, request_item_id, status FROM request_matches ORDER BY 1")],
+        [tuple(r) for r in conn.execute("SELECT id, request_status, request_id FROM library_items ORDER BY id")],
+    )
+
+
+def test_si_el_recalculo_falla_a_mitad_no_se_pierde_lo_que_habia(db_conn, monkeypatch):
+    """PET-12: se borraban los cruces y el estado de la biblioteca antes de recalcular; un fallo a mitad los dejaba vacíos."""
+    from emuwarez_uploadrr.services import requests as reqs
+    _dos_peliculas_y_sus_peticiones(db_conn)
+    antes = _estado_guardado(db_conn)
+    assert len(antes[0]) == 2
+
+    original = reqs._mejor_candidato
+    llamadas = []
+
+    def falla_en_la_segunda(*a, **kw):
+        llamadas.append(1)
+        if len(llamadas) == 2:
+            raise RuntimeError("fallo a mitad")
+        return original(*a, **kw)
+
+    monkeypatch.setattr(reqs, "_mejor_candidato", falla_en_la_segunda)
+    with pytest.raises(RuntimeError):
+        reqs.match_all_requests(db_conn)
+    assert _estado_guardado(db_conn) == antes
+
+
+def test_si_falla_al_escribir_se_deshace_todo(db_conn, monkeypatch):
+    from emuwarez_uploadrr.services import requests as reqs
+    _dos_peliculas_y_sus_peticiones(db_conn)
+    antes = _estado_guardado(db_conn)
+    monkeypatch.setattr(reqs, "_INSERTAR_CASAMIENTO", "INSERT INTO tabla_que_no_existe VALUES (?)")
+    with pytest.raises(sqlite3.OperationalError):
+        reqs.match_all_requests(db_conn)
+    assert _estado_guardado(db_conn) == antes
+    assert not db_conn.in_transaction
+
+
+def test_el_recalculo_confirma_una_sola_vez(db_conn, monkeypatch):
+    """PET-12: había un COMMIT por petición (update_request_status) y otro al limpiar: los demás lectores veían a medias."""
+    from emuwarez_uploadrr.services import requests as reqs
+    _dos_peliculas_y_sus_peticiones(db_conn)
+    monkeypatch.setattr(reqs, "_notify_new_compatible_matches", lambda *a: None)
+    vistas = []
+    db_conn.set_trace_callback(vistas.append)
+    reqs.match_all_requests(db_conn)
+    db_conn.set_trace_callback(None)
+    assert vistas.count("COMMIT") == 1
+
+
+def test_la_biblioteca_para_cruzar_no_trae_el_raw_json(db_conn):
+    """PET-12: SELECT * leía el raw_json de cada fila no capítulo en cada recálculo."""
+    from emuwarez_uploadrr.services.request_readiness import _biblioteca
+    db_conn.execute("INSERT INTO library_items(item_type,title,local_status,raw_json) VALUES ('movie','X','Disponible','{}')")
+    db_conn.commit()
+    assert "raw_json" not in _biblioteca(db_conn)[0]
 
 
 def test_recalcular_borra_el_casamiento_que_ya_no_vale(db_conn):

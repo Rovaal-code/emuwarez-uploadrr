@@ -16,8 +16,8 @@ from . import cli_config, emu_catalog
 from ..integrations import emu, tmdb
 from ..integrations.base import IntegrationError
 from ..models import RequestItem, RequestStatus, TaskStatus
-from .library import update_request_status, content_display_title
-from .request_readiness import refresh_request_readiness
+from .library import content_display_title
+from .request_readiness import _biblioteca, refresh_request_readiness
 from .tasks import start_task, finish_task
 from .tmdb_titles import tmdb_configured
 from .upload_states import ACTIVE_JOB_STATUSES
@@ -503,9 +503,63 @@ def _mejor_candidato(conn: sqlite3.Connection, req: dict, candidates: list[dict]
     return min(clasificados, key=lambda par: _ORDEN_DEL_CASAMIENTO.get(par[1]["status"], 9))
 
 
-def _candidatas(conn: sqlite3.Connection) -> list[dict]:
-    """Las filas que pueden atender una petición: sin los capítulos, que son casi todas y se alcanzan desde su serie."""
-    return [dict(r) for r in conn.execute("SELECT * FROM library_items WHERE item_type != 'episode'").fetchall()]
+_INSERTAR_CASAMIENTO = """
+    INSERT INTO request_matches(
+        library_item_id, request_item_id, status, confidence,
+        resolution_match, source_match, type_match, reasons, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+"""
+
+
+def _casar(conn: sqlite3.Connection, req: dict, library: list[dict]) -> Optional[tuple]:
+    """(petición, candidata, clasificación, fila a la que va el estado) o None si no casa con nada. Solo lee."""
+    candidates = match_request_to_library(req, library)
+    if not candidates:
+        return None
+    best, classification = _mejor_candidato(conn, req, candidates)
+    # A la fila que la petición pide DE VERDAD, no a la que cruzó el emparejador. Para una petición de temporada
+    # eso es la temporada y no la serie entera (todas las temporadas comparten su tmdb_id).
+    return req, best, classification, _scoped_library_id(conn, best["item"], req)
+
+
+def _guardar_casamientos(conn: sqlite3.Connection, casamientos: list[tuple], peticion: Optional[int] = None) -> None:
+    """Cambia de una vez lo guardado (de todas las peticiones, o solo de `peticion`) por los casamientos nuevos.
+
+    Se limpia antes de escribir: sin esto, un estado se quedaba pegado en la fila donde se escribió una vez y ya
+    nadie lo movía, y un casamiento que ya no vale se seguía enseñando en la lista. Todo en una transacción:
+    si algo falla a mitad, queda lo de antes en vez de las peticiones sin cruce."""
+    try:
+        if peticion is None:
+            conn.execute(
+                "UPDATE library_items SET request_status = 'Sin petición', request_id = NULL "
+                "WHERE request_status != 'Sin petición' OR request_id IS NOT NULL"
+            )
+            conn.execute("DELETE FROM request_matches")
+        else:
+            conn.execute("DELETE FROM request_matches WHERE request_item_id = ?", (peticion,))
+            conn.execute(
+                "UPDATE library_items SET request_status = 'Sin petición', request_id = NULL WHERE request_id = ?",
+                (peticion,),
+            )
+        for req, best, cls, destino in casamientos:
+            conn.execute(_INSERTAR_CASAMIENTO, (
+                best["item"]["id"],
+                req["id"],
+                cls["status"],
+                cls["confidence"],
+                None if cls["resolution_match"] is None else int(bool(cls["resolution_match"])),
+                None if cls["source_match"] is None else int(bool(cls["source_match"])),
+                1 if best["id_match"] else 0,
+                "\n".join(cls["reasons"]),
+            ))
+            conn.execute(
+                "UPDATE library_items SET request_status = ?, request_id = ?, updated_at = CURRENT_TIMESTAMP "
+                "WHERE id = ?", (cls["status"], int(req["id"]), destino),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
 
 def match_all_requests(conn: sqlite3.Connection) -> int:
@@ -517,67 +571,12 @@ def match_all_requests(conn: sqlite3.Connection) -> int:
     # only notify about the ones that *newly* became satisfiable this run.
     before_compatible = _compatible_request_ids(conn)
 
-    # Se limpia antes de recalcular: sin esto, un estado se quedaba pegado en
-    # la fila donde se escribió una vez y ya nadie lo movía. Con el arreglo de
-    # arriba (escribir en la temporada y no en la serie), las series que ya
-    # llevaban el estado de una petición de temporada se habrían quedado con
-    # él para siempre.
-    conn.execute(
-        "UPDATE library_items SET request_status = 'Sin petición', request_id = NULL "
-        "WHERE request_status != 'Sin petición' OR request_id IS NOT NULL"
-    )
-    # Y los casamientos: uno que ya no vale (o que ahora es con otra fila) se seguía enseñando en la lista.
-    conn.execute("DELETE FROM request_matches")
-    conn.commit()
-
     requests = [dict(r) for r in conn.execute("SELECT * FROM request_items").fetchall()]
-    library = _candidatas(conn)
-    updated = 0
-    for req in requests:
-        candidates = match_request_to_library(req, library)
-        if not candidates:
-            continue
-        best, classification = _mejor_candidato(conn, req, candidates)
-        reasons_str = "\n".join(classification["reasons"])
-        reasons_json = json.dumps(classification["reasons"], ensure_ascii=False)
-        conn.execute(
-            """
-            INSERT INTO request_matches(
-                library_item_id, request_item_id, status, confidence,
-                resolution_match, source_match, type_match, reasons, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            ON CONFLICT(library_item_id, request_item_id) DO UPDATE SET
-                status = excluded.status,
-                confidence = excluded.confidence,
-                resolution_match = excluded.resolution_match,
-                source_match = excluded.source_match,
-                type_match = excluded.type_match,
-                reasons = excluded.reasons,
-                updated_at = CURRENT_TIMESTAMP
-            """,
-            (
-                best["item"]["id"],
-                req["id"],
-                classification["status"],
-                classification["confidence"],
-                None if classification["resolution_match"] is None else int(bool(classification["resolution_match"])),
-                None if classification["source_match"] is None else int(bool(classification["source_match"])),
-                1 if best["id_match"] else 0,
-                reasons_str,
-            ),
-        )
-        # A la fila que la petición pide DE VERDAD, no a la que cruzó el
-        # emparejador. Para una petición de temporada eso es la serie entera
-        # (todas las temporadas comparten su tmdb_id), así que el estado
-        # aterrizaba en la serie y la temporada seguía diciendo "Sin petición".
-        update_request_status(
-            conn, _scoped_library_id(conn, best["item"], req),
-            classification["status"], int(req["id"]),
-        )
-        updated += 1
-    conn.commit()
+    library = _biblioteca(conn)
+    casamientos = [c for c in (_casar(conn, req, library) for req in requests) if c]
+    _guardar_casamientos(conn, casamientos)
     _notify_new_compatible_matches(conn, before_compatible)
-    return updated
+    return len(casamientos)
 
 
 _MAX_AVISOS_SUELTOS = 5
@@ -659,50 +658,12 @@ def match_single_request(conn: sqlite3.Connection, request_id: int) -> Optional[
     req_row = conn.execute("SELECT * FROM request_items WHERE id = ?", (request_id,)).fetchone()
     if not req_row:
         return None
-    req = dict(req_row)
     # Lo de la vez anterior se recalcula entero: si ya no casa, no queda nada viejo enseñándose.
-    conn.execute("DELETE FROM request_matches WHERE request_item_id = ?", (request_id,))
-    conn.execute(
-        "UPDATE library_items SET request_status = 'Sin petición', request_id = NULL WHERE request_id = ?",
-        (request_id,),
-    )
-    candidates = match_request_to_library(req, _candidatas(conn))
-    if not candidates:
-        conn.commit()
+    casamiento = _casar(conn, dict(req_row), _biblioteca(conn))
+    _guardar_casamientos(conn, [casamiento] if casamiento else [], peticion=request_id)
+    if not casamiento:
         return None
-    best, classification = _mejor_candidato(conn, req, candidates)
-    reasons_str = "\n".join(classification["reasons"])
-    conn.execute(
-        """
-        INSERT INTO request_matches(
-            library_item_id, request_item_id, status, confidence,
-            resolution_match, source_match, type_match, reasons, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        ON CONFLICT(library_item_id, request_item_id) DO UPDATE SET
-            status = excluded.status,
-            confidence = excluded.confidence,
-            resolution_match = excluded.resolution_match,
-            source_match = excluded.source_match,
-            type_match = excluded.type_match,
-            reasons = excluded.reasons,
-            updated_at = CURRENT_TIMESTAMP
-        """,
-        (
-            best["item"]["id"],
-            req["id"],
-            classification["status"],
-            classification["confidence"],
-            None if classification["resolution_match"] is None else int(bool(classification["resolution_match"])),
-            None if classification["source_match"] is None else int(bool(classification["source_match"])),
-            1 if best["id_match"] else 0,
-            reasons_str,
-        ),
-    )
-    update_request_status(
-        conn, _scoped_library_id(conn, best["item"], req),
-        classification["status"], int(req["id"]),
-    )
-    conn.commit()
+    _, best, classification, _ = casamiento
     return {
         "library_item_id": best["item"]["id"],
         "library_title": best["item"].get("title"),

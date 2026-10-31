@@ -6,10 +6,11 @@ from __future__ import annotations
 
 import sqlite3
 
+import pytest
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
-from emuwarez_uploadrr.database import get_state, set_state
+from emuwarez_uploadrr.database import BaseMasNuevaError, get_state, set_state
 
 
 def _bloqueada(*_a, **_k):
@@ -26,6 +27,30 @@ def test_un_fallo_de_la_base_al_comprobar_el_token_es_503_no_401(client, auth_he
     resp = client.get("/api/auth/me", headers=auth_headers)
     assert resp.status_code == 503
     assert resp.headers["retry-after"]
+
+
+@pytest.mark.parametrize("error", [
+    sqlite3.DatabaseError("file is not a database"),
+    OSError("disco lleno"),
+    BaseMasNuevaError("base más nueva"),
+])
+def test_todo_lo_que_es_de_la_base_es_503(client, auth_headers, monkeypatch, error):
+    def _falla(*_a, **_k):
+        raise error
+
+    monkeypatch.setattr("emuwarez_uploadrr.web.services.auth_service.get_user_by_token", _falla)
+    assert client.get("/api/auth/me", headers=auth_headers).status_code == 503
+
+
+def test_un_fallo_de_codigo_no_se_disfraza_de_caida_de_la_base(client, auth_headers, monkeypatch):
+    """Un KeyError dentro de la consulta es un bug: 500, no un 503 que el cliente reintenta."""
+    def _bug(*_a, **_k):
+        raise KeyError("columna")
+
+    from emuwarez_uploadrr.web.app import create_app
+    monkeypatch.setattr("emuwarez_uploadrr.web.services.auth_service.get_user_by_token", _bug)
+    sin_relanzar = TestClient(create_app(), raise_server_exceptions=False)
+    assert sin_relanzar.get("/api/auth/me", headers=auth_headers).status_code == 500
 
 
 def test_un_token_que_no_existe_sigue_siendo_401(client, auth_headers):
@@ -52,6 +77,16 @@ def test_setup_status_con_un_error_de_la_base_es_503_no_el_asistente(client, mon
     el asistente de primer arranque a una app ya configurada."""
     monkeypatch.setattr("emuwarez_uploadrr.web.services.setup_service.get_setup_state", _bloqueada)
     assert client.get("/api/setup/status").status_code == 503
+
+
+def test_setup_status_con_un_bug_de_codigo_es_500_no_503(client, monkeypatch):
+    def _bug(*_a, **_k):
+        raise KeyError("campo")
+
+    from emuwarez_uploadrr.web.app import create_app
+    monkeypatch.setattr("emuwarez_uploadrr.web.services.setup_service.get_setup_state", _bug)
+    sin_relanzar = TestClient(create_app(), raise_server_exceptions=False)
+    assert sin_relanzar.get("/api/setup/status").status_code == 500
 
 
 def test_setup_status_con_la_base_sin_abrir_es_503(client, monkeypatch):

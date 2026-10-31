@@ -8,9 +8,14 @@ from typing import Annotated, Iterator, Optional
 
 from fastapi import Header, HTTPException, status
 
+from emuwarez_uploadrr.database import BaseMasNuevaError, db
 from .runtime import _db_path
 
 logger = logging.getLogger(__name__)
+
+# Lo que significa «la base no responde». Un fallo de código (KeyError, ImportError...) no
+# lo es: tiene que llegar como 500, no disfrazarse de una caída pasajera.
+ERRORES_DE_BASE = (sqlite3.Error, OSError, BaseMasNuevaError)
 
 
 def base_no_disponible(donde: str) -> HTTPException:
@@ -27,11 +32,10 @@ def base_no_disponible(donde: str) -> HTTPException:
 def get_db() -> Iterator[sqlite3.Connection]:
     """Una conexión por petición: se confirma al terminar bien, se deshace si
     falla y se cierra siempre. Si no se puede abrir, responde 503."""
-    from emuwarez_uploadrr.database import db
     with ExitStack() as pila:
         try:
             conn = pila.enter_context(db(_db_path(), entre_hilos=True))
-        except Exception:
+        except ERRORES_DE_BASE:
             raise base_no_disponible("get_db")
         yield conn
 
@@ -53,7 +57,6 @@ def get_current_user(
     if not token:
         return None
     try:
-        from emuwarez_uploadrr.database import db
         from .services.auth_service import get_user_by_token
         with db(_db_path()) as conn:
             return get_user_by_token(conn, token)
@@ -72,12 +75,11 @@ def require_auth(
             detail="Autenticación requerida. Incluye el token en Authorization: Bearer <token>",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    from .services.auth_service import get_user_by_token
     try:
-        from emuwarez_uploadrr.database import db
-        from .services.auth_service import get_user_by_token
         with db(_db_path()) as conn:
             user = get_user_by_token(conn, token)
-    except Exception:
+    except ERRORES_DE_BASE:
         # Un fallo de la base no es un token inválido: con 401 el cliente
         # borraba la sesión por un bloqueo pasajero.
         raise base_no_disponible("require_auth")

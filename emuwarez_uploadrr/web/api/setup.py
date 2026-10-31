@@ -13,7 +13,7 @@ import sqlite3
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from ..dependencies import base_no_disponible, get_db, require_auth
+from ..dependencies import ERRORES_DE_BASE, base_no_disponible, get_db, require_auth
 from ..errors import AppError
 from ..runtime import _db_path
 from ..schemas import (
@@ -47,7 +47,7 @@ def setup_status(conn: sqlite3.Connection = Depends(get_db)) -> SetupStatusRespo
     from ..services.setup_service import get_setup_state, next_step
     try:
         state = get_setup_state(conn)
-    except Exception:
+    except ERRORES_DE_BASE:
         # Un error de la base no es «aún no hay admin»: eso mandaría al asistente de primer arranque.
         raise base_no_disponible("setup/status")
     return SetupStatusResponse(**state, next_step=next_step(state))

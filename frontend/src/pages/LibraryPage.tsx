@@ -419,7 +419,9 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // que suben esta marca son raros (una sincronización, una tarea), así que
   // mantenerlas todas al día cuesta poco y a cambio cambiar de pestaña enseña
   // lo actual y no lo actual tras un parpadeo.
-  useEffect(() => { if (lastInvalidatedAt) load() }, [lastInvalidatedAt])
+  // Con una carga en marcha no se relanza: volver a la pestaña del navegador
+  // la tiraba y empezaba otra, y con un filtro lento no acababa nunca.
+  useEffect(() => { if (lastInvalidatedAt && !loading) load() }, [lastInvalidatedAt])
 
   function applyFilters() {
     setOffset(0)
@@ -619,6 +621,12 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
           <option value="size_desc">Orden: Tamaño (Más)</option>
           <option value="size_asc">Orden: Tamaño (Menos)</option>
         </select>
+        {/* La tabla apagada sola no decía que estuviera cargando. */}
+        {tarda && (
+          <span role="status" style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13, color: 'var(--text-secondary)' }}>
+            <span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Cargando…
+          </span>
+        )}
         <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
           <Tooltip content="Vista de pósters">
             <button

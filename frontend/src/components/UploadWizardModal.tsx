@@ -1177,7 +1177,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     if (targetIsSeason) return
     if (targetId == null || !Object.keys(fields).length) return
     const t = setTimeout(async () => {
-      try { setPreview(await previewNomenclatureFields(targetId, fields)) } catch { /* non-blocking */ }
+      try { setPreview(await previewNomenclatureFields(targetId, fields, false)) } catch { /* non-blocking */ }
     }, 400)
     return () => clearTimeout(t)
   }, [targetId, targetIsSeason, fields])

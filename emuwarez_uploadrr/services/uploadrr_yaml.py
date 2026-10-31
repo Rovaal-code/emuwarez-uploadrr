@@ -16,7 +16,6 @@ seguro.
 """
 from __future__ import annotations
 
-import ast
 import json
 import re
 from typing import Any, Optional
@@ -79,7 +78,7 @@ def set_block_key(lines: list[str], block: str, key: str, value: str, indent: in
 
 
 # Entre comillas simples YAML pliega los saltos de línea y no admite controles.
-_NO_CABE_EN_COMILLAS_SIMPLES = re.compile("[\x00-\x08\x0a-\x1f\x7f-\x9f  ]")
+_NO_CABE_EN_COMILLAS_SIMPLES = re.compile("[\x00-\x08\x0a-\x1f\x7f-\x9f\u2028\u2029]")
 
 
 def yaml_scalar(value: Any) -> str:
@@ -87,6 +86,8 @@ def yaml_scalar(value: Any) -> str:
         return "true" if value else "false"
     if value is None:
         return "null"
+    if isinstance(value, (int, float)):
+        return str(value)  # un número que ya lo era no pasa a cadena al reescribirlo
     if isinstance(value, (list, tuple)):
         return "[" + ", ".join(yaml_scalar(v) for v in value) + "]"
     value = str(value)
@@ -94,7 +95,7 @@ def yaml_scalar(value: Any) -> str:
         # Entre dobles y con escapes; los controles C1 y los separadores Unicode
         # (que json deja tal cual) también, o YAML los leería como salto de línea.
         doble = json.dumps(value, ensure_ascii=False)
-        return re.sub("[\x7f-\x9f  ]", lambda m: f"\\u{ord(m.group()):04x}", doble)
+        return re.sub("[\x7f-\x9f\u2028\u2029]", lambda m: f"\\u{ord(m.group()):04x}", doble)
     return "'" + value.replace("'", "''") + "'"
 
 
@@ -113,15 +114,32 @@ _PAR = re.compile(r"\s*(" + _CLAVE + r")\s*:\s*(" + _VALOR + r")\s*(?:,|$)")
 _ITEM = re.compile(r"\s*(" + _SIMPLES + "|" + _DOBLES + r"|[^,'\"]+?)\s*(?:,|$)")
 
 
+# Los escapes de las comillas dobles de YAML, que no son los de Python (`\/`, `\_`, `\N`…).
+_ESCAPES_YAML = {
+    "0": "\0", "a": "\a", "b": "\b", "t": "\t", "\t": "\t", "n": "\n", "v": "\v", "f": "\f", "r": "\r",
+    "e": "\x1b", " ": " ", '"': '"', "/": "/", "\\": "\\", "N": "\x85", "_": "\xa0", "L": "\u2028", "P": "\u2029",
+}
+_ESCAPE = re.compile(r"\\(x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|.)", re.S)
+
+
+def _decodificar_escapes(cuerpo: str) -> str:
+    def uno(m: re.Match) -> str:
+        escape = m.group(1)
+        if len(escape) > 1:
+            try:
+                return chr(int(escape[1:], 16))
+            except ValueError:
+                return m.group(0)
+        return _ESCAPES_YAML.get(escape, m.group(0))
+    return _ESCAPE.sub(uno, cuerpo)
+
+
 def _sin_comillas(texto: str) -> Optional[str]:
     """El contenido de un escalar entre comillas; None si no lo está."""
     if len(texto) >= 2 and texto[0] == texto[-1] == "'":
         return texto[1:-1].replace("''", "'")
     if len(texto) >= 2 and texto[0] == texto[-1] == '"':
-        try:
-            return ast.literal_eval(texto)
-        except (ValueError, SyntaxError):
-            return texto[1:-1]
+        return _decodificar_escapes(texto[1:-1])
     return None
 
 
@@ -140,7 +158,8 @@ def _leer_escalar(texto: str) -> Any:
         return False
     if texto.lower() in {"", "null", "none", "~"}:
         return None
-    if re.fullmatch(r"-?\d+", texto):
+    # Solo las formas que PyYAML resuelve como entero: `08` es una cadena, y `0` o `5` no.
+    if re.fullmatch(r"[-+]?(?:0|[1-9]\d*)", texto):
         return int(texto)
     if re.fullmatch(r"-?\d+\.\d+", texto):
         return float(texto)

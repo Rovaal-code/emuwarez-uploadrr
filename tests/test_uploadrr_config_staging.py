@@ -430,7 +430,7 @@ def test_stage_qbittorrent_config_without_qui_drops_a_previous_one():
 _VALORES_DIFICILES = [
     "a\\b", "\\", "\\\\", "it's \"q\"", "'", "''", "tab\taqui", "con # almohadilla",
     "con: dos puntos", "llaves } { y , comas [ ]", "ñandú", "  con espacios  ", "true", "123",
-    "dos\nlineas", "retorno\r\ny tab\t", "control\x01", "\x7f", "nel\x85", "separador ", "mezcla \"q\" \n \\ '",
+    "dos\nlineas", "retorno\r\ny tab\t", "control\x01", "\x7f", "nel\x85", "separador\u2028", "mezcla \"q\" \n \\ '",
 ]
 
 
@@ -483,6 +483,29 @@ def test_las_palabras_booleanas_de_yaml_11_se_leen_como_booleanos():
     lines = ["TORRENT_CLIENTS:", "  qbit: {VERIFY_WEBUI_CERTIFICATE: no, enable_search: Yes, other: off, on: 'no'}"]
     mapa = get_child_inline_mapping(lines, "TORRENT_CLIENTS", QBIT_CLIENT_KEY)
     assert mapa == {"VERIFY_WEBUI_CERTIFICATE": False, "enable_search": True, "other": False, "on": "no"}
+
+
+def test_lo_que_pyyaml_lee_de_una_entrada_existente_es_lo_que_se_reescribe():
+    """Escapes de comillas dobles de YAML que no son los de Python (la barra
+    escapada, el guion bajo) y enteros con ceros delante (`08` es una cadena,
+    `7` un entero): el valor y su tipo tienen que ser los mismos que ve Uploadrr
+    al releer el config."""
+    yaml = pytest.importorskip("yaml")
+    lines = [
+        "TORRENT_CLIENTS:",
+        '  qbit: {automatic_management_paths: ["\\/data\\/tv", "a\\_b\\Nc", \'/data/it\'\'s\'], '
+        "qbit_port: 8080, ceros: [08, 7, 0, -3], decimal: 1.5, texto: 08}",
+    ]
+    original = yaml.safe_load("\n".join(lines))["TORRENT_CLIENTS"][QBIT_CLIENT_KEY]
+
+    staged, _ = stage_qbittorrent_config(lines, url="http://x:8080", username="u", password="p")
+
+    cargado = yaml.safe_load("\n".join(staged))["TORRENT_CLIENTS"][QBIT_CLIENT_KEY]
+    for clave in ("automatic_management_paths", "ceros", "decimal", "texto"):
+        assert cargado[clave] == original[clave], clave
+        assert type(cargado[clave]) is type(original[clave]), clave
+    assert cargado["ceros"] == ["08", 7, 0, -3]
+    assert cargado["automatic_management_paths"][0] == "/data/tv"
 
 
 def test_el_config_de_ejemplo_del_fork_se_sigue_leyendo():

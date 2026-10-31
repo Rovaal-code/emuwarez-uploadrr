@@ -27,6 +27,7 @@ import logging
 import os
 import re
 import shutil
+import signal
 import subprocess
 import tempfile
 import threading
@@ -954,7 +955,7 @@ def apply_remux(
         try:
             proc = subprocess.Popen(
                 args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                text=True, bufsize=1,
+                text=True, bufsize=1, start_new_session=True,
             )
         except FileNotFoundError:
             return {**preview, "status": "error", "dry_run": False, "apply": True,
@@ -975,7 +976,10 @@ def apply_remux(
         reader.start()
         reader.join(timeout=1800)
         if reader.is_alive():
-            proc.kill()
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)  # el grupo entero, no solo mkvmerge
+            except (ProcessLookupError, PermissionError):
+                pass
             reader.join(timeout=5)
             _cleanup(tmp_path)
             _update_status(conn, library_item_id, "error", "mkvmerge agotó el timeout (30 min).")

@@ -84,3 +84,18 @@ def test_un_acierto_corta_la_racha_de_fallos_de_tmdb(conn, monkeypatch):
         tmdb_titles.resolve_movie_title(conn, i + 1, "x")
 
     assert get_state(conn, "tmdb_titulos_pausa_hasta") is None
+
+
+def test_un_404_tambien_corta_la_racha_de_fallos_de_tmdb(conn, monkeypatch):
+    set_setting(conn, "tmdb.api_key", "clave")
+    respuestas = iter([IntegrationError("caído"), IntegrationError("caído"), IntegrationError("HTTP 404", status=404),
+                       IntegrationError("caído"), IntegrationError("caído")])
+
+    def tmdb_a_ratos(*a, **kw):
+        return _o_falla(next(respuestas))
+
+    monkeypatch.setattr(tmdb, "get_movie_title", tmdb_a_ratos)
+    for i in range(5):
+        tmdb_titles.resolve_movie_title(conn, i + 1, "x")
+
+    assert get_state(conn, "tmdb_titulos_pausa_hasta") is None

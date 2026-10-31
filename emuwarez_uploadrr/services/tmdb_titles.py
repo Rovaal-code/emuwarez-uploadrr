@@ -81,6 +81,7 @@ def _resolve_title(
         if getattr(exc, "status", None) != 404:
             _anotar_respuesta(conn, fallo=tmdb_configured(conn))
             return fallback
+        _anotar_respuesta(conn, fallo=False)  # un 404 es una respuesta: corta la racha de fallos
         title = None
     else:
         _anotar_respuesta(conn, fallo=False)

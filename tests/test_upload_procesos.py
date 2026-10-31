@@ -336,3 +336,52 @@ def test_esperar_turno_no_muere_si_falla_el_log(db_conn):
         hilo.join(timeout=5)
 
     assert admitido.is_set()
+
+
+# --- Cancelar desde otro proceso: el PID guardado puede ser de cualquier otro ------------------
+
+def _proceso_ajeno(*extra):
+    """Un proceso en su propia sesión (como Uploadrr) con esos argumentos de más."""
+    import subprocess
+    import sys
+    return subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)", *extra], start_new_session=True)
+
+
+def _job_con_pid(conn, pid, source_path):
+    jid = _job(conn, source_path, status="running")
+    conn.execute("UPDATE upload_jobs SET process_id = ?, safe_command_json = ? WHERE id = ?",
+                 (pid, json.dumps({"source_path": source_path}), jid))
+    conn.commit()
+    return jid
+
+
+def test_cancelar_no_senala_un_pid_que_ya_no_es_de_uploadrr(db_conn):
+    """Con el job lanzado por otro proceso solo se conoce el PID, y los PID se
+    reutilizan: si ya no es el Uploadrr de este job no se le manda nada."""
+    ajeno = _proceso_ajeno()
+    try:
+        jid = _job_con_pid(db_conn, ajeno.pid, "/data/uploads/Pack")
+
+        assert cancel_upload_job(jid, conn=db_conn)["ok"] is True
+
+        time.sleep(0.5)
+        assert ajeno.poll() is None, "se señaló un proceso que no era de este job"
+        assert _estado(db_conn, jid)["status"] == "cancelled"
+    finally:
+        ajeno.kill()
+        ajeno.wait()
+
+
+def test_cancelar_senala_al_uploadrr_de_otro_proceso(db_conn):
+    ruta = "/data/uploads/Pack"
+    uploadrr = _proceso_ajeno("/opt/Uploadrr/upload.py", ruta, "-tk", "EMU")
+    try:
+        jid = _job_con_pid(db_conn, uploadrr.pid, ruta)
+
+        assert cancel_upload_job(jid, conn=db_conn)["ok"] is True
+
+        assert _esperar(lambda: uploadrr.poll() is not None, 5)
+    finally:
+        if uploadrr.poll() is None:
+            uploadrr.kill()
+        uploadrr.wait()

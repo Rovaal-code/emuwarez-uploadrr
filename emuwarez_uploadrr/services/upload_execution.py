@@ -1124,6 +1124,18 @@ def _detener_proceso(proc: subprocess.Popen) -> bool:
     return enviada
 
 
+def _pid_es_de_este_job(pid: int, job: dict) -> bool:
+    """El PID guardado es de otro proceso si Uploadrr ya terminó (los PID se
+    reutilizan): solo se señala si su línea de comandos es la de este job."""
+    try:
+        import psutil
+        cmdline = psutil.Process(pid).cmdline()
+        ruta = json.loads(job.get("safe_command_json") or "{}").get("source_path")
+    except Exception:  # sin psutil (CLI sin extras), proceso ya muerto o JSON ilegible
+        return False
+    return bool(ruta) and ruta in cmdline and any(a.endswith("upload.py") for a in cmdline)
+
+
 def _terminar_y_esperar(proc: subprocess.Popen) -> int:
     """Lo mismo pero esperando: devuelve el código de salida (-1 si no sale)."""
     _senalar_grupo(proc, signal.SIGTERM)
@@ -1877,6 +1889,13 @@ def cancel_upload_job(job_id: int, conn=None) -> dict:
                     stream="system",
                     conn=conn,
                 )
+        elif pid and not _pid_es_de_este_job(pid, job):
+            append_upload_log(
+                job_id, "warning",
+                f"No se señala el PID {pid}: no se puede comprobar que siga siendo el Uploadrr de este job.",
+                stream="system",
+                conn=conn,
+            )
         elif pid:
             # Lo lanzó otro proceso (el CLI): solo se conoce su PID, que es el de su grupo.
             try:

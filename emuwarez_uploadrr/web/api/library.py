@@ -333,10 +333,17 @@ def library_list(
     limit: int = Query(50, ge=1, le=20000),
     offset: int = Query(0, ge=0),
 ) -> LibraryListResponse:
-    from emuwarez_uploadrr.services.library import list_library, count_library, filtrar_por_lo_que_se_ve
+    from emuwarez_uploadrr.services.library import (
+        list_library, count_library, filtrar_por_lo_que_se_ve, quedarse_con_lo_mas_alto, _valores)
     por_lo_que_se_ve = dict(provider=provider, resolution=resolution, source=source,
                             release_group=release_group, emu=emu, aporte=aporte)
     filtra_lo_que_se_ve = any(por_lo_que_se_ve.values())
+    # Filtrando en plano se esconde lo que cuelga de otra fila que también sale;
+    # sin filtros, en plano sigue saliendo todo.
+    en_plano = parent_id is None and any(_valores(v) for v in (
+        item_type, origin, instance_id, status, request_status, nomenclature, search, spanish,
+        *por_lo_que_se_ve.values()))
+    recorta_despues = filtra_lo_que_se_ve or en_plano
     with _get_conn() as conn:
         rows = list_library(
             conn,
@@ -351,13 +358,13 @@ def library_list(
             spanish=spanish,
             sort=sort,
             # Sin tope (LIMIT -1): el recorte va después de filtrar.
-            limit=-1 if filtra_lo_que_se_ve else limit,
-            offset=0 if filtra_lo_que_se_ve else offset,
+            limit=-1 if recorta_despues else limit,
+            offset=0 if recorta_despues else offset,
             ignore_specials=_ignore_specials(conn),
             provider=provider, resolution=resolution, source=source, release_group=release_group, emu=emu,
         )
-        # Filtrando por lo que se ve, el total sale de contar lo que queda.
-        total = 0 if filtra_lo_que_se_ve else count_library(
+        # Recortando después, el total sale de contar lo que queda.
+        total = 0 if recorta_despues else count_library(
             conn,
             status=status,
             request=request_status,
@@ -369,6 +376,11 @@ def library_list(
             search=search,
             spanish=spanish,
         )
+        if en_plano and not filtra_lo_que_se_ve:
+            # Antes de montar las filas, para montar solo las que salen.
+            rows = quedarse_con_lo_mas_alto(conn, rows)
+            total = len(rows)
+            rows = rows[offset:offset + limit]
         from ...services.library import contar_archivos
         archivos = contar_archivos(conn)
         series_ids = [r["id"] for r in rows if r["item_type"] == "series"]
@@ -380,6 +392,8 @@ def library_list(
         if filtra_lo_que_se_ve:
             filas = filtrar_por_lo_que_se_ve(
                 [_campos_de_fila(r, conn, rollups) for r in rows], **por_lo_que_se_ve)
+            if en_plano:
+                filas = quedarse_con_lo_mas_alto(conn, filas)
             total = len(filas)
             items = [LibraryItemResponse(**f) for f in filas[offset:offset + limit]]
         else:

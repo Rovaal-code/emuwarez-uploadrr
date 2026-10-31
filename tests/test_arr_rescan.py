@@ -152,8 +152,10 @@ def test_resync_series_walks_up_from_episode(mock_get_series, conn):
     mock_get_series.return_value = {
         "id": 99, "title": "Una Serie", "tmdbId": None, "seasons": [],
     }
+    # Sonarr sigue teniendo el capítulo (sin archivo): una lista vacía, con uno guardado, no se tomaría por buena.
+    capitulos = [{"id": 1, "seasonNumber": 1, "episodeNumber": 1, "episodeFileId": 0}]
     with patch("emuwarez_uploadrr.integrations.sonarr.get_episode_files", return_value=[]), \
-         patch("emuwarez_uploadrr.integrations.sonarr.get_episodes", return_value=[]):
+         patch("emuwarez_uploadrr.integrations.sonarr.get_episodes", return_value=capitulos):
         result = resync_single_item(conn, episode_id)
 
     assert result["ok"] is True

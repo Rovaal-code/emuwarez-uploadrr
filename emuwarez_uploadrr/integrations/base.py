@@ -19,8 +19,9 @@ class IntegrationError(RuntimeError):
 
 def es_lista_de_fichas(data: Any) -> bool:
     """Si un listado de Radarr/Sonarr se puede tomar por todo lo que tienen: una lista de fichas con su id, un entero
-    positivo. La sincronización de biblioteca borra lo que no ve, así que una respuesta vacía, de error o con fichas
-    sin un id de verdad (que se guardarían todas como una sola) le haría borrar lo de la instancia entera."""
+    positivo. La sincronización de biblioteca borra lo que no ve, así que una respuesta de error o con fichas sin un
+    id de verdad (que se guardarían todas como una sola) le haría borrar lo de la instancia entera. [] sí pasa: es
+    lo legítimo en una instancia sin nada, y si la instancia ya tiene filas la sincronización la rechaza."""
     return isinstance(data, list) and all(isinstance(f, dict) and type(f.get("id")) is int and f["id"] > 0 for f in data)
 
 

@@ -137,3 +137,19 @@ def test_tras_un_fallo_no_se_reintenta_en_cada_fila(db_conn, monkeypatch):
     for _ in range(5):
         anime_lists.ensure_anime_id_map(db_conn)
     assert len(llamadas) == 1
+
+
+def test_si_falla_un_insert_la_tabla_vieja_vuelve_entera(db_conn, monkeypatch):
+    """Un INSERT que falla después del DELETE no puede dejar la tabla a medias:
+    el fallo se anota con commit y se llevaba el borrado por delante."""
+    from emuwarez_uploadrr.services import anime_lists
+    for i in range(4):
+        _seed(db_conn, tmdb_movie_id=str(i), mal_id=str(100 + i))
+    # season.tvdb fuera del rango de SQLite: pasa int() y revienta al insertar.
+    lista = [{"mal_id": i, "tvdb_id": i, "season": {"tvdb": 1}} for i in range(1, 5)]
+    lista[-1]["season"]["tvdb"] = 2 ** 70
+    monkeypatch.setattr(anime_lists, "request_json", lambda *a, **k: lista)
+    anime_lists.ensure_anime_id_map(db_conn, force=True)
+    db_conn.commit()
+    assert db_conn.execute("SELECT COUNT(*) FROM anime_id_map").fetchone()[0] == 4
+    assert db_conn.execute("SELECT COUNT(*) FROM anime_id_map WHERE tvdb_id IS NOT NULL").fetchone()[0] == 0

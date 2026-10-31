@@ -72,12 +72,21 @@ def _download_and_store(conn: sqlite3.Connection) -> int:
     # Full replace, not incremental — the upstream file is small enough to
     # redownload whole, and a partial diff would need to track deletions too
     # (an anidb entry can get its ids corrected/removed upstream).
-    conn.execute("DELETE FROM anime_id_map")
-    conn.executemany(
-        "INSERT INTO anime_id_map (tvdb_id, season_number, tmdb_movie_id, mal_id) VALUES (?, ?, ?, ?)",
-        rows,
-    )
-    set_state(conn, _SYNC_STATE_KEY, str(int(time.time())))
+    # En un savepoint: si un INSERT falla después del DELETE, la tabla vieja
+    # vuelve entera en vez de quedarse a medias (sin tocar lo del que llama).
+    conn.execute("SAVEPOINT anime_id_map")
+    try:
+        conn.execute("DELETE FROM anime_id_map")
+        conn.executemany(
+            "INSERT INTO anime_id_map (tvdb_id, season_number, tmdb_movie_id, mal_id) VALUES (?, ?, ?, ?)",
+            rows,
+        )
+        set_state(conn, _SYNC_STATE_KEY, str(int(time.time())))
+    except Exception:
+        conn.execute("ROLLBACK TO SAVEPOINT anime_id_map")
+        conn.execute("RELEASE SAVEPOINT anime_id_map")
+        raise
+    conn.execute("RELEASE SAVEPOINT anime_id_map")
     conn.commit()
     logger.info("anime_id_map actualizado: %d filas desde %d entradas de anime-list-full.json", len(rows), len(data))
     return len(rows)

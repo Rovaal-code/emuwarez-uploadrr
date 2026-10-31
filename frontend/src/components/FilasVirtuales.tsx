@@ -1,5 +1,5 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
-import { planVentana } from '../utils/ventana'
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { planVentana, columnasAutoFill, filasDeRejilla } from '../utils/ventana'
 
 // Lo que se pinta de más por arriba y por abajo de lo visible: unas diez filas
 // a cada lado, para que desplazarse deprisa no enseñe huecos en blanco.
@@ -32,7 +32,7 @@ interface Props<T> {
  * escalar que el CSS y el scrollTop (ver utils/uiScale: el zoom del body).
  */
 export function FilasVirtuales<T>({ items, clave, alturaEstimada, columnas, contenedor, cabecera, fijas, pintar }: Props<T>) {
-  const [vista, setVista] = useState({ desde: 0, alto: 0, ancho: 0 })
+  const vista = useVista(contenedor, cabecera)
   const medidas = useRef(new Map<number, number>())
   const estimada = useRef(alturaEstimada)
   const [version, setVersion] = useState(0)
@@ -55,37 +55,6 @@ export function FilasVirtuales<T>({ items, clave, alturaEstimada, columnas, cont
     if (cambia) setVersion(v => v + 1)
   }), [alturaEstimada])
   useEffect(() => () => observador?.disconnect(), [observador])
-
-  // useEffect y no useLayoutEffect: el contenedor es un antepasado, y React
-  // engancha su ref DESPUÉS de los efectos de layout de los hijos.
-  useEffect(() => {
-    const el = contenedor.current
-    if (!el) return
-    // El desplazamiento va a saltos de PASO_PX: con el margen de MARGEN_PX
-    // sobra para que no se vea el borde, y así no se recalcula en cada píxel.
-    // Sin requestAnimationFrame: el navegador ya manda `scroll` como mucho una
-    // vez por fotograma, y rAF se para en una pestaña en segundo plano, que
-    // dejaba la ventana sin actualizar al volver a ella.
-    const leer = () => {
-      const cab = cabecera.current?.offsetHeight ?? 0
-      setVista(v => {
-        const desde = Math.floor(Math.max(0, el.scrollTop - cab) / PASO_PX) * PASO_PX
-        const alto = el.clientHeight
-        const ancho = el.clientWidth
-        return v.desde === desde && v.alto === alto && v.ancho === ancho ? v : { desde, alto, ancho }
-      })
-    }
-    leer()
-    el.addEventListener('scroll', leer, { passive: true })
-    // También al cambiar de tamaño, y al pasar de oculta a visible: la sección
-    // se monta escondida (display: none) y entonces mide 0 de alto.
-    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(leer)
-    ro?.observe(el)
-    return () => {
-      el.removeEventListener('scroll', leer)
-      ro?.disconnect()
-    }
-  }, [contenedor, cabecera])
 
   const tramos = useMemo(() => {
     const alturas = items.map(it => medidas.current.get(clave(it)) ?? estimada.current)
@@ -137,6 +106,93 @@ export function FilasVirtuales<T>({ items, clave, alturaEstimada, columnas, cont
       })}
     </>
   )
+}
+
+interface PropsRejilla<T> {
+  items: readonly T[]
+  clave: (item: T) => number
+  // El ancho mínimo de una tarjeta y el hueco entre ellas, como en minmax(…, 1fr).
+  minimo: number
+  hueco: number
+  contenedor: RefObject<HTMLElement>
+  pintar: (item: T, indice: number) => ReactNode
+}
+
+/**
+ * Una rejilla de tarjetas iguales pintando solo las filas que se ven. Como
+ * miden todas lo mismo basta con medir una, y lo que no se pinta es relleno
+ * arriba y abajo de la rejilla.
+ */
+export function RejillaVirtual<T>({ items, clave, minimo, hueco, contenedor, pintar }: PropsRejilla<T>) {
+  const vista = useVista(contenedor)
+  const rejilla = useRef<HTMLDivElement>(null)
+  const [medida, setMedida] = useState({ columnas: 1, alto: minimo * 1.5 })
+
+  // Las columnas, del ancho (las mismas que pondría auto-fill); el alto de
+  // fila, de la primera tarjeta, que crece o mengua con las columnas.
+  useLayoutEffect(() => {
+    const el = rejilla.current
+    if (!el) return
+    const columnas = columnasAutoFill(el.clientWidth, minimo, hueco)
+    const alto = (el.firstElementChild as HTMLElement | null)?.offsetHeight || medida.alto
+    if (columnas !== medida.columnas || alto !== medida.alto) setMedida({ columnas, alto })
+  })
+
+  const { columnas } = medida
+  const paso = medida.alto + hueco
+  const { filas, primera, ultima } = filasDeRejilla({
+    total: items.length, columnas, paso, desde: vista.desde, alto: vista.alto, margen: MARGEN_PX,
+  })
+  const inicio = primera * columnas
+  return (
+    <div
+      ref={rejilla}
+      style={{
+        display: 'grid', gridTemplateColumns: `repeat(${columnas}, minmax(0, 1fr))`, gap: hueco,
+        paddingTop: primera * paso, paddingBottom: (filas - 1 - ultima) * paso,
+      }}
+    >
+      {items.slice(inicio, (ultima + 1) * columnas).map((item, i) => (
+        <Fragment key={clave(item)}>{pintar(item, inicio + i)}</Fragment>
+      ))}
+    </div>
+  )
+}
+
+// Dónde está el scroll del contenedor, descontada la cabecera fija si la hay.
+function useVista(contenedor: RefObject<HTMLElement>, cabecera?: RefObject<HTMLElement>) {
+  const [vista, setVista] = useState({ desde: 0, alto: 0, ancho: 0 })
+  // useEffect y no useLayoutEffect: el contenedor es un antepasado, y React
+  // engancha su ref DESPUÉS de los efectos de layout de los hijos.
+  useEffect(() => {
+    const el = contenedor.current
+    if (!el) return
+    // El desplazamiento va a saltos de PASO_PX: con el margen de MARGEN_PX
+    // sobra para que no se vea el borde, y así no se recalcula en cada píxel.
+    // Sin requestAnimationFrame: el navegador ya manda `scroll` como mucho una
+    // vez por fotograma, y rAF se para en una pestaña en segundo plano, que
+    // dejaba la ventana sin actualizar al volver a ella.
+    const leer = () => {
+      const cab = cabecera?.current?.offsetHeight ?? 0
+      setVista(v => {
+        const desde = Math.floor(Math.max(0, el.scrollTop - cab) / PASO_PX) * PASO_PX
+        const alto = el.clientHeight
+        const ancho = el.clientWidth
+        return v.desde === desde && v.alto === alto && v.ancho === ancho ? v : { desde, alto, ancho }
+      })
+    }
+    leer()
+    el.addEventListener('scroll', leer, { passive: true })
+    // También al cambiar de tamaño, y al pasar de oculta a visible: la sección
+    // se monta escondida (display: none) y entonces mide 0 de alto.
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(leer)
+    ro?.observe(el)
+    return () => {
+      el.removeEventListener('scroll', leer)
+      ro?.disconnect()
+    }
+  }, [contenedor, cabecera])
+  return vista
 }
 
 function celdasDeCabecera(cabecera: HTMLElement | null): HTMLElement[] {

@@ -14,6 +14,12 @@ def _get_db_path() -> Path:
     return base / "emuwarez_uploadrr.db"
 
 
+def _size_on_disk(db: Path) -> int:
+    """The .db plus its -wal: committed changes may still live in the WAL."""
+    wal = db.with_name(db.name + "-wal")
+    return db.stat().st_size + (wal.stat().st_size if wal.exists() else 0)
+
+
 def get_database_maintenance_status() -> dict:
     """Returns DB size, page count and freelist (read-only)."""
     db = _get_db_path()
@@ -82,7 +88,7 @@ def run_database_vacuum(
     if not db.exists():
         return {"ok": False, "dry_run": dry_run, "error": f"BD no encontrada: {db}"}
 
-    before = db.stat().st_size
+    before = _size_on_disk(db)
 
     if dry_run or not do_apply:
         status = get_database_maintenance_status()
@@ -110,7 +116,7 @@ def run_database_vacuum(
     except Exception as exc:
         return {"ok": False, "dry_run": False, "error": str(exc)}
 
-    after = db.stat().st_size
+    after = _size_on_disk(db)
     saved = before - after
     return {
         "ok": True,
@@ -121,7 +127,7 @@ def run_database_vacuum(
         "size_bytes_after": after,
         "bytes_saved": saved,
         "message": (
-            "VACUUM completado. El fichero encogerá cuando terminen las lecturas en curso"
+            "VACUUM completado, pero una lectura en curso no ha dejado liberar el espacio. Vuelve a ejecutarlo en un momento"
             if busy else f"VACUUM completado. Liberados {saved:,} bytes"
         ),
     }

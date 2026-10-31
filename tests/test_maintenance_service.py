@@ -115,3 +115,20 @@ def test_vacuum_with_a_read_still_open_does_not_claim_freed_bytes(db_config, mon
         app.close()
     assert result["ok"] is True
     assert "Liberados" not in result["message"]
+
+
+def test_vacuum_counts_the_wal_in_freed_bytes(db_config):
+    """Con lo confirmado aún en el -wal, el checkpoint hace crecer el .db:
+    midiendo solo el .db salían bytes liberados negativos."""
+    app = sqlite3.connect(str(db_config / "emuwarez_uploadrr.db"))
+    app.execute("PRAGMA journal_mode=WAL")
+    app.execute("PRAGMA wal_autocheckpoint=0")
+    app.execute("CREATE TABLE t (x TEXT)")
+    app.executemany("INSERT INTO t VALUES (?)", [("x" * 500,)] * 2000)
+    app.commit()
+    try:
+        result = run_database_vacuum(dry_run=False, apply=True, confirmation=VACUUM_CONFIRMATION)
+    finally:
+        app.close()
+    assert result["ok"] is True
+    assert result["bytes_saved"] >= 0

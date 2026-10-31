@@ -354,8 +354,10 @@ def library_list(
             limit=-1 if filtra_lo_que_se_ve else limit,
             offset=0 if filtra_lo_que_se_ve else offset,
             ignore_specials=_ignore_specials(conn),
+            provider=provider, resolution=resolution, source=source, release_group=release_group, emu=emu,
         )
-        total = count_library(
+        # Filtrando por lo que se ve, el total sale de contar lo que queda.
+        total = 0 if filtra_lo_que_se_ve else count_library(
             conn,
             status=status,
             request=request_status,

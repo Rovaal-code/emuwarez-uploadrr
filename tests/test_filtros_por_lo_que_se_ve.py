@@ -97,6 +97,31 @@ def test_el_tope_y_el_desplazamiento_van_despues_de_filtrar(biblioteca_grande):
     assert r["total"] == 3 and [i["title"] for i in r["items"]] == ["Zyx"]
 
 
+def test_el_recorte_en_sql_da_lo_mismo_que_mirarlo_todo(biblioteca_grande, monkeypatch):
+    """list_library descarta en SQL las películas y capítulos que no cumplen.
+    Sin ese recorte tiene que salir exactamente lo mismo."""
+    cliente, cab, ids = biblioteca_grande
+    from emuwarez_uploadrr.database import connect, db_path
+    from emuwarez_uploadrr.services import library
+
+    conn = connect(db_path())
+    conn.execute("UPDATE library_items SET emu_in_catalog = 1 WHERE item_type = 'episode'")
+    conn.execute("UPDATE library_items SET emu_in_catalog = 0 WHERE id = ? OR parent_id = ?",
+                 (ids["t1"], ids["t1"]))
+    conn.execute("UPDATE library_items SET emu_in_catalog = 2 WHERE id = ?", (ids["mezclada"],))
+    conn.commit(); conn.close()
+    casos = [{"resolution": "2160p"}, {"provider": "Amazon (AMZN)"}, {"source": "BluRay"},
+             {"release_group": "GRP"}, {"source": "BluRay", "resolution": "2160p"},
+             {"emu": "candidate"}, {"emu": "present"}, {"provider": "Netflix (NF)"}]
+    con_recorte = [_pedir(cliente, cab, **c) for c in casos]
+
+    original = library.list_library
+    monkeypatch.setattr(library, "list_library", lambda conn, *, provider=None, resolution=None, source=None,
+                        release_group=None, emu=None, **resto: original(conn, **resto))
+    assert con_recorte == [_pedir(cliente, cab, **c) for c in casos]
+    assert {i["title"] for i in con_recorte[5]["items"]} == {"Zzz T1"}
+
+
 def _fila(id_, parent_id=None, *, emu=None, aportes=None, estado="Disponible"):
     return {"id": id_, "parent_id": parent_id, "provider_label": None, "resolution": None,
             "source": None, "release_group": None, "local_status": estado,

@@ -576,10 +576,18 @@ def catalogo_cubre(conn: sqlite3.Connection, item_id: int, resolucion: Optional[
     item = conn.execute("SELECT * FROM library_items WHERE id = ?", (item_id,)).fetchone()
     if not item:
         return False
-    return any(
-        (not resolucion or r["resolution"] == resolucion) and (not tipo or (r["source"] or "").lower() == tipo.lower())
-        for r in filas_del_catalogo(conn, dict(item))
-    )
+    item = dict(item)
+    cumplen = [r for r in filas_del_catalogo(conn, item)
+               if (not resolucion or r["resolution"] == resolucion)
+               and (not tipo or (r["source"] or "").lower() == tipo.lower())]
+    if item["item_type"] != "series":
+        return bool(cumplen)
+    # Una serie entera está cubierta si cada temporada que cuenta (como en el resumen de la serie) tiene la variante.
+    ignorar_especiales = (get_setting_canonical(conn, "series.ignore_specials") or "true") != "false"
+    temporadas = [n for (n,) in conn.execute(
+        "SELECT season_number FROM library_items WHERE parent_id = ? AND item_type = 'season' "
+        "AND season_number IS NOT NULL", (item_id,)) if not (ignorar_especiales and n == 0)]
+    return bool(temporadas) and all(any(n in _row_seasons(r) for r in cumplen) for n in temporadas)
 
 
 # --- Per-item comparison detail (for the detail card) ------------------------

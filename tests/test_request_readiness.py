@@ -477,6 +477,35 @@ def test_si_eMuwarez_ya_tiene_la_variante_pedida_sigue_siendo_un_duplicado(db_co
     assert evaluate_request_readiness(req_id, db_conn)["status"] == "already_exists"
 
 
+def _serie_con_dos_temporadas_en_emuwarez(conn, resolucion_t2):
+    serie = _insert_library(conn, item_type="series", title="Show", tmdb_id="sx")
+    conn.execute("UPDATE library_items SET tvdb_id = '9' WHERE id = ?", (serie,))
+    _en_emuwarez(conn, serie)  # emu_in_catalog = 1: todas sus temporadas están en eMuwarez, en alguna variante
+    for n, res in ((1, "1080p"), (2, resolucion_t2)):
+        t = _insert_library(conn, item_type="season", title=f"Show T{n}", tmdb_id="sx")
+        conn.execute("UPDATE library_items SET parent_id = ?, season_number = ? WHERE id = ?", (serie, n, t))
+        conn.execute(
+            "INSERT INTO emu_catalog (torrent_id, category, tvdb_id, resolution, source, name) "
+            "VALUES (?, 'Series', '9', ?, 'WEB-DL', ?)", (f"s{n}", res, f"Show (2020) S0{n} {res}"))
+    conn.commit()
+    return _insert_request(conn, emu_id="emu-show", title="Show", category="Series", tmdb_id="sx",
+                           requested_resolution="1080p", requested_source="WEB-DL", emu_status="unfilled")
+
+
+def test_una_serie_entera_no_es_un_duplicado_si_a_una_temporada_le_falta_la_variante(db_conn):
+    """PET-8 en series: la T1 está en 1080p WEB-DL pero la T2 solo en 720p: la petición de la serie en 1080p
+    WEB-DL no está cubierta."""
+    from emuwarez_uploadrr.services.request_readiness import evaluate_request_readiness
+    req_id = _serie_con_dos_temporadas_en_emuwarez(db_conn, "720p")
+    assert evaluate_request_readiness(req_id, db_conn)["status"] != "already_exists"
+
+
+def test_una_serie_entera_es_un_duplicado_si_cada_temporada_tiene_la_variante(db_conn):
+    from emuwarez_uploadrr.services.request_readiness import evaluate_request_readiness
+    req_id = _serie_con_dos_temporadas_en_emuwarez(db_conn, "1080p")
+    assert evaluate_request_readiness(req_id, db_conn)["status"] == "already_exists"
+
+
 # ---------------------------------------------------------------------------
 # list_request_readiness ordena con el mismo ranking que select_best_candidate
 # ---------------------------------------------------------------------------

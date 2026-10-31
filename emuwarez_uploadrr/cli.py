@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 from typing import Any, Optional
 
-from .database import connect, init_db, db_path, get_state
+from .database import BaseMasNuevaError, connect, init_db, db_path, get_state, preparar_base
 from .integrations.base import IntegrationError
 from .models import LocalStatus, NomenclatureStatus, RequestStatus
 from .services import instances as instance_service
@@ -1652,6 +1652,8 @@ def cmd_web_serve(args) -> int:
             "  pip install uvicorn fastapi pydantic"
         )
         return 1
+    # Antes de levantar el servidor: una base más nueva se rechaza con un mensaje, no con una traza.
+    preparar_base()
     uvicorn.run(
         "emuwarez_uploadrr.web.app:app",
         host=args.host,
@@ -1750,7 +1752,7 @@ def modern_main(argv: Optional[list[str]] = None) -> int:
             return cmd_mkv_title(args)
         parser.error("Comando no soportado")
         return 2
-    except IntegrationError as exc:
+    except (IntegrationError, BaseMasNuevaError) as exc:
         print(f"✗ {exc}")
         return 1
     except KeyboardInterrupt:

@@ -9,7 +9,7 @@ import tarfile
 import tempfile
 from pathlib import Path
 
-from ..database import CANONICAL_SETTING_ALIASES
+from ..database import CANONICAL_SETTING_ALIASES, olvidar_esquema
 from .settings import all_settings, es_secreto, get_setting_canonical, set_setting
 
 RESTORE_CONFIRMATION = "RESTAURAR_CONFIG"
@@ -387,6 +387,7 @@ def _colocar_base(restaurada: Path, viva: Path) -> list[str]:
         # La de la copia no es una base (_add_db_snapshot la copió en crudo),
         # o la actual no lo es: no hay nada que fusionar, va tal cual.
         shutil.copyfile(restaurada, viva)
+        olvidar_esquema()
         return []
     conservadas = _conservar_claves(restaurada, viva) if viva.exists() else []
     src = sqlite3.connect(str(restaurada))
@@ -396,4 +397,5 @@ def _colocar_base(restaurada: Path, viva: Path) -> list[str]:
     finally:
         dst.close()
         src.close()
+        olvidar_esquema()  # la restaurada puede ser de otra versión de esquema
     return conservadas

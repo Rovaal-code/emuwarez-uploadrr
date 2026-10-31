@@ -455,6 +455,21 @@ def test_la_temporada_pedida_compite_con_la_serie(db_conn):
     assert (fila["library_item_id"], fila["status"]) == (temporada, "Compatible")
 
 
+def test_un_capitulo_que_no_esta_no_sale_compatible_por_su_temporada(db_conn):
+    """Con las temporadas compitiendo, una temporada «Disponible» sin el capítulo pedido salía «Compatible»."""
+    from emuwarez_uploadrr.services.requests import match_all_requests, upsert_request
+    from emuwarez_uploadrr.models import RequestItem
+    db_conn.execute("INSERT INTO library_items(item_type,title,local_status,tmdb_id) "
+                    "VALUES ('series','Serie','Disponible','77')")
+    db_conn.execute("INSERT INTO library_items(item_type,title,local_status,tmdb_id,season_number,resolution,source) "
+                    "VALUES ('season','Serie - Temporada 2','Disponible','77',2,'1080p','WEB-DL')")
+    db_conn.commit()
+    upsert_request(db_conn, RequestItem(id=None, emu_id="s2e5", title="Serie", category="Series", tmdb_id="77",
+                                        req_scope="episode", req_season=2, req_episode=5))
+    match_all_requests(db_conn)
+    assert db_conn.execute("SELECT status FROM request_matches").fetchone()["status"] == "No disponible"
+
+
 def test_rematching_clears_a_status_left_on_the_wrong_row(db_conn):
     """Recalcular limpia antes: si no, un estado escrito una vez se quedaba
     pegado en esa fila para siempre, porque nadie lo volvía a tocar."""

@@ -80,6 +80,19 @@ def _restore_interrupted_config() -> None:
             "No se pudo restaurar el config.yaml de Uploadrr-EMU al arrancar", exc_info=True)
 
 
+def _detener_procesos() -> None:
+    """Uploadrr y mkvmerge van en su propia sesión: al apagar el servidor ya no
+    caen con él (antes caían con el Ctrl-C del terminal)."""
+    try:
+        from emuwarez_uploadrr.services.mkv_remux import detener_remuxes
+        from emuwarez_uploadrr.services.upload_execution import detener_procesos_en_marcha
+        detener_procesos_en_marcha()
+        detener_remuxes()
+    except Exception:
+        logging.getLogger("emuwarez.web").warning(
+            "No se pudieron detener los procesos de subida al apagar", exc_info=True)
+
+
 def _preparar_base() -> None:
     """Comprueba y migra la base una sola vez, antes de atender nada. Si es de
     una versión más nueva o la migración falla, la aplicación no arranca."""
@@ -121,6 +134,7 @@ async def _lifespan(app: FastAPI):
     finally:
         if scheduler_task is not None:
             scheduler_task.cancel()
+        _detener_procesos()
 
 _DESCRIPTION = """
 **eMuwarez Uploadrr** — backend web para cruzar biblioteca Radarr/Sonarr con

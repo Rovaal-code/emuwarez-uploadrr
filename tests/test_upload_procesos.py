@@ -385,3 +385,38 @@ def test_cancelar_senala_al_uploadrr_de_otro_proceso(db_conn):
         if uploadrr.poll() is None:
             uploadrr.kill()
         uploadrr.wait()
+
+
+# --- Apagar el servidor: Uploadrr y mkvmerge ya no caen con el terminal ------------------------
+
+def test_apagar_el_servidor_detiene_a_uploadrr_y_al_remux():
+    from emuwarez_uploadrr.services import mkv_remux
+
+    uploadrr, remux = _proceso_ajeno(), _proceso_ajeno()
+    ue._PROCESOS[987654] = uploadrr
+    mkv_remux._REMUXES.add(remux)
+    try:
+        ue.detener_procesos_en_marcha()
+        mkv_remux.detener_remuxes()
+
+        assert _esperar(lambda: uploadrr.poll() is not None and remux.poll() is not None, 5)
+    finally:
+        ue._PROCESOS.pop(987654, None)
+        mkv_remux._REMUXES.discard(remux)
+        for p in (uploadrr, remux):
+            if p.poll() is None:
+                p.kill()
+            p.wait()
+
+
+def test_el_apagado_de_la_aplicacion_detiene_los_procesos():
+    from fastapi.testclient import TestClient
+
+    from emuwarez_uploadrr.web.app import create_app
+
+    with patch.object(ue, "detener_procesos_en_marcha") as uploadrr, \
+            patch("emuwarez_uploadrr.services.mkv_remux.detener_remuxes") as remux:
+        with TestClient(create_app()):
+            uploadrr.assert_not_called()
+        uploadrr.assert_called_once()
+        remux.assert_called_once()

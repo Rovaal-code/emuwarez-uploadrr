@@ -1124,6 +1124,14 @@ def _detener_proceso(proc: subprocess.Popen) -> bool:
     return enviada
 
 
+def detener_procesos_en_marcha() -> None:
+    """Al apagar el servidor: Uploadrr va en su propia sesión y ya no cae con él."""
+    with _PROCESOS_LOCK:
+        procesos = list(_PROCESOS.values())
+    for proc in procesos:
+        _detener_proceso(proc)
+
+
 def _pid_es_de_este_job(pid: int, job: dict) -> bool:
     """El PID guardado es de otro proceso si Uploadrr ya terminó (los PID se
     reutilizan): solo se señala si su línea de comandos es la de este job."""

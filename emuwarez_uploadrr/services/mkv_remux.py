@@ -40,6 +40,10 @@ from .uploadrr_progress import parse_mkvmerge_gui_progress
 
 logger = logging.getLogger("emuwarez.mkv_remux")
 
+# Los mkvmerge en marcha, para pararlos al apagar el servidor (detener_remuxes).
+_REMUXES: set[subprocess.Popen] = set()
+_REMUXES_LOCK = threading.Lock()
+
 REMUX_CONFIRMATION_TOKEN = "REORDENAR_PISTAS"
 
 
@@ -961,6 +965,8 @@ def apply_remux(
             return {**preview, "status": "error", "dry_run": False, "apply": True,
                      "errors": ["mkvmerge no encontrado al ejecutar."]}
 
+        with _REMUXES_LOCK:
+            _REMUXES.add(proc)
         output_lines: list[str] = []
 
         def _read_output() -> None:
@@ -981,11 +987,15 @@ def apply_remux(
             except (ProcessLookupError, PermissionError):
                 pass
             reader.join(timeout=5)
+            with _REMUXES_LOCK:
+                _REMUXES.discard(proc)
             _cleanup(tmp_path)
             _update_status(conn, library_item_id, "error", "mkvmerge agotó el timeout (30 min).")
             return {**preview, "status": "error", "dry_run": False, "apply": True,
                      "errors": ["mkvmerge agotó el timeout (30 min)."]}
         returncode = proc.wait()
+        with _REMUXES_LOCK:
+            _REMUXES.discard(proc)
 
         # mkvmerge: 0 = OK, 1 = OK with warnings, 2 = failed (no output file).
         if returncode not in (0, 1) or not os.path.isfile(tmp_path):
@@ -1009,6 +1019,17 @@ def apply_remux(
     finally:
         if own:
             conn.close()
+
+
+def detener_remuxes() -> None:
+    """Al apagar el servidor: mkvmerge va en su propia sesión y ya no cae con él."""
+    with _REMUXES_LOCK:
+        procesos = list(_REMUXES)
+    for proc in procesos:
+        try:
+            os.killpg(proc.pid, signal.SIGTERM)
+        except (ProcessLookupError, PermissionError):
+            pass
 
 
 def _cleanup(tmp_path: str) -> None:

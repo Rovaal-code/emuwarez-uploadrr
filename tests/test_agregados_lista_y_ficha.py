@@ -66,3 +66,9 @@ def test_la_lista_agrega_igual_que_la_ficha(conn, ignorar_especiales):
         # Sin capítulos la lista no trae calidad; la fila la pinta vacía igual.
         fila["quality"] = fila["quality"] or dict(_ROLLUP_EMPTY)
         assert fila == ficha, (tipo, i)
+
+
+def test_muchos_ids_no_topan_con_el_tope_de_parametros(conn):
+    """En plano llegan todas las series y temporadas: no pueden ir de una en una como parámetro."""
+    assert _batch_rollups(conn, list(range(10**6, 10**6 + 40000)), list(range(2 * 10**6, 2 * 10**6 + 40000)), True) == {}
+    assert _batch_rollups(conn, [], [], True) == {}

@@ -2354,14 +2354,15 @@ def _batch_rollups(conn, series_ids: list[int], season_ids: list[int], ignore_sp
         return {}
 
     # Una sola lectura de los capítulos: en plano están la serie y sus
-    # temporadas a la vez, y cada capítulo se leía una vez para cada una.
+    # temporadas a la vez, y cada capítulo se leía una vez para cada una. Los
+    # ids van como un JSON por lista, sin el tope de parámetros de SQLite.
     condiciones, params = [], []
     if season_ids:
-        condiciones.append(f"se.id IN ({','.join('?' * len(season_ids))})")
-        params.extend(season_ids)
+        condiciones.append("se.id IN (SELECT value FROM json_each(?))")
+        params.append(json.dumps(season_ids))
     if series_ids:
-        condiciones.append(f"se.parent_id IN ({','.join('?' * len(series_ids))})")
-        params.extend(series_ids)
+        condiciones.append("se.parent_id IN (SELECT value FROM json_each(?))")
+        params.append(json.dumps(series_ids))
     rows = conn.execute(
         "SELECT se.id AS season_id, se.parent_id AS series_id, se.season_number AS season_number, "
         "e.path AS path, e.resolution AS resolution, e.source AS source, "

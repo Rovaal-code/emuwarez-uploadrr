@@ -155,7 +155,9 @@ def test_una_instancia_que_falla_no_borra_nada_y_las_demas_si(conn, arr):
     lambda: sonarr.get_series(URL[SONARR], "clave"),
     lambda: sonarr.get_episodes(URL[SONARR], "clave", 20),
 ], ids=["películas", "series", "capítulos"])
-@pytest.mark.parametrize("respuesta", [{}, {"message": "Unauthorized"}, None, [{"id": 1}, {"title": "Sin id"}]])
+@pytest.mark.parametrize("respuesta", [
+    {}, {"message": "Unauthorized"}, None, [{"id": 1}, {"title": "Sin id"}], [{"id": 0}], [{"id": ""}], [{"id": True}],
+])
 def test_un_listado_raro_es_un_error_y_no_una_biblioteca_vacia(monkeypatch, listado, respuesta):
     """Devolvía [] y la sincronización, al no ver nada, habría borrado todo lo de la instancia. Las fichas sin id se
     guardaban todas en una sola fila («None»), que era lo único visto."""

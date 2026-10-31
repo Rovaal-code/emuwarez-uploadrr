@@ -1174,9 +1174,12 @@ def _migrate_library_items_last_seen(conn: sqlite3.Connection) -> None:
     """Esquema 43: cuándo vio la sincronización cada elemento; lo que un recorrido completo no ve ya no está en
     Radarr/Sonarr y se borra. El índice evita repasar todas las subidas por cada fila borrada: borrar una
     instancia de 35.000 capítulos con 2.000 subidas tardaba 3,5 s escribiendo, y 0,4 s con él."""
-    # Sin try: tragarse un «database is locked» dejaría el esquema en 43 sin la columna.
-    if "last_seen_at" not in {fila[1] for fila in conn.execute("PRAGMA table_info(library_items)")}:
+    try:
         conn.execute("ALTER TABLE library_items ADD COLUMN last_seen_at TEXT")
+    except sqlite3.OperationalError:
+        # Solo se calla si la columna ya está (la añadió otro init_db a la vez), no un «database is locked».
+        if "last_seen_at" not in {fila[1] for fila in conn.execute("PRAGMA table_info(library_items)")}:
+            raise
     conn.execute("CREATE INDEX IF NOT EXISTS idx_upload_jobs_library ON upload_jobs(library_item_id)")
     # Borrar una instancia dejaba lo suyo en la biblioteca, y ninguna sincronización lo iba a quitar. Sin el
     # IS NOT NULL, con la tabla de instancias vacía también caerían las filas sin instancia.

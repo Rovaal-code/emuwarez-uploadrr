@@ -3,6 +3,8 @@
 Nada aquí habla con Radarr ni con Sonarr: sus listados se sustituyen por lo que devolverían."""
 from __future__ import annotations
 
+import sqlite3
+
 import pytest
 
 from emuwarez_uploadrr.database import connect, init_db
@@ -226,6 +228,43 @@ def test_una_base_de_datos_anterior_recibe_la_marca_y_el_indice(conn):
 
     assert "last_seen_at" in {fila[1] for fila in conn.execute("PRAGMA table_info(library_items)")}
     assert "idx_upload_jobs_library" in {fila[1] for fila in conn.execute("PRAGMA index_list(upload_jobs)")}
+
+
+def test_dos_init_db_a_la_vez_no_fallan_por_la_columna_repetida(conn, isolated_db):
+    """La primera carga tras actualizar pasa por init_db varias veces a la vez: si otra conexión añade la columna justo
+    antes, el ALTER de esta da «duplicate column name»."""
+    from emuwarez_uploadrr.database import _migrate_library_items_last_seen
+    conn.execute("ALTER TABLE library_items DROP COLUMN last_seen_at")
+    conn.commit()
+    otra = connect(isolated_db / "emuwarez_uploadrr.db")
+
+    class OtraLaAnadeAntes:
+        primera = True
+
+        def execute(self, sql, *args):
+            if self.primera and sql.startswith("ALTER TABLE"):
+                self.primera = False
+                otra.execute(sql)
+                otra.commit()
+            return conn.execute(sql, *args)
+
+    _migrate_library_items_last_seen(OtraLaAnadeAntes())
+    otra.close()
+    assert "last_seen_at" in {fila[1] for fila in conn.execute("PRAGMA table_info(library_items)")}
+
+
+def test_la_migracion_no_se_traga_una_base_de_datos_bloqueada(conn, isolated_db):
+    """Tragándose el «database is locked», el esquema quedaría en 43 sin la columna y toda sincronización fallaría."""
+    from emuwarez_uploadrr.database import _migrate_library_items_last_seen
+    conn.execute("ALTER TABLE library_items DROP COLUMN last_seen_at")
+    conn.commit()
+    otra = connect(isolated_db / "emuwarez_uploadrr.db")
+    otra.execute("BEGIN IMMEDIATE")
+    conn.execute("PRAGMA busy_timeout = 0")
+    with pytest.raises(sqlite3.OperationalError, match="locked"):
+        _migrate_library_items_last_seen(conn)
+    otra.rollback()
+    otra.close()
 
 
 def test_al_migrar_se_borra_lo_de_las_instancias_que_ya_no_existen(conn):

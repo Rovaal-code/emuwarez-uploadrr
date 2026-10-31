@@ -50,6 +50,12 @@ export class ApiClientError extends Error {
   }
 }
 
+// Un 401 de verdad: la sesión ya no vale. Un fallo de red, un 502 o un 503 no lo son:
+// ahí el token sigue siendo bueno y quien llama no debe tirarlo.
+export function esSesionCaducada(err: unknown): boolean {
+  return err instanceof ApiClientError && err.status === 401
+}
+
 // FastAPI's `detail` is a plain string for hand-raised HTTPExceptions, but a
 // list of Pydantic error objects ({loc, msg, type, ...}) for 422 validation
 // failures — stringifying that list directly renders as "[object Object]".
@@ -74,10 +80,11 @@ interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   body?: unknown
   skipAuth?: boolean
+  signal?: AbortSignal
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, skipAuth = false } = options
+  const { method = 'GET', body, skipAuth = false, signal } = options
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -110,6 +117,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal,
     })
   } catch (err) {
     throw new ApiClientError(

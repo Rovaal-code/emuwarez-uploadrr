@@ -18,16 +18,6 @@ class HealthResponse(BaseModel):
     initialized: bool
 
 
-class RuntimeInfoResponse(BaseModel):
-    app_name: str
-    version: str
-    config_dir: str
-    database_path: str
-    database_status: str
-    cli_available: bool
-    uploadrr_runtime_present: bool
-
-
 class DiagnosticCheck(BaseModel):
     name: str
     status: str

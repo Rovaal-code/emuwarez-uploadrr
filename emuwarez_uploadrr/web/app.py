@@ -31,7 +31,7 @@ async def _scheduler_loop() -> None:
             # A scheduler tick must never crash the app — errors from
             # individual tasks are already captured per-task by
             # run_scheduled_task(); this is a last-resort guard.
-            pass
+            logging.getLogger("emuwarez.web").exception("Falló un ciclo del planificador")
         await asyncio.sleep(_SCHEDULER_TICK_SECONDS)
 
 

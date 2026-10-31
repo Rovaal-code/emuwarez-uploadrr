@@ -863,7 +863,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                   finally { setKeySaving(false) }
                 }
                 return (
-                  <Modal titulo={<>API key de {host?.label ?? keyModalHost}</>} onClose={() => setKeyModalHost(null)} style={{ maxWidth: 480 }}>
+                  <Modal titulo={<>API key de {host?.label ?? keyModalHost}</>} onClose={() => { if (!keySaving) setKeyModalHost(null) }} style={{ maxWidth: 480 }}>
                     <div className="modal-body">
                       <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
                         <input
@@ -892,7 +892,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
                             Quitar la clave
                           </button>
                         )}
-                        <button className="btn btn-secondary" type="button" onClick={() => setKeyModalHost(null)}>Cancelar</button>
+                        <button className="btn btn-secondary" type="button" onClick={() => setKeyModalHost(null)} disabled={keySaving}>Cancelar</button>
                         <button className="btn btn-primary" type="button" onClick={guardar} disabled={!keyDraft.trim() || keySaving}>
                           {keySaving ? 'Comprobando…' : 'Guardar'}
                         </button>

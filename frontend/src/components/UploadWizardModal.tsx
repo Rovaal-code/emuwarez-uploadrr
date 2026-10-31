@@ -2149,7 +2149,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 600 }}>MediaInfo y pistas del archivo</div>
                     <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>
-                      Ver Pistas: muestra la reordenación y el nombre de las pistas de vídeo/audio/subtítulos del contenido (editable).
+                      Ver Pistas: muestra la reordenación y el nombre de las pistas de vídeo/audio/subtítulos del contenido{esTanda(seleccion) ? '' : ' (editable)'}.
                       <br />
                       Ver MediaInfo: muestra el detalle técnico real del archivo.
                     </div>
@@ -2221,13 +2221,22 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                         película o un capítulo suelto, nunca en una
                         temporada entera. */}
                     {remuxPreview && (
-                      <RemuxTable
-                        plan={remuxPreview}
-                        editable={tocaElFichero(normalizarModo(remuxPreview.track_mode))}
-                        nameEditable={renombra(normalizarModo(remuxPreview.track_mode))}
-                        edits={remuxEdits}
-                        onEdit={setRemuxEdit}
-                      />
+                      <>
+                        {/* En una tanda "Subir todos" no lleva las ediciones: se
+                            enseñan las pistas pero no se pueden tocar. */}
+                        {esTanda(seleccion) && (
+                          <p className="text-muted" style={{ fontSize: 12, marginTop: 0 }}>
+                            Al subir varios capítulos a la vez se aplican los nombres automáticos. Para cambiarlos, sube el capítulo suelto.
+                          </p>
+                        )}
+                        <RemuxTable
+                          plan={remuxPreview}
+                          editable={!esTanda(seleccion) && tocaElFichero(normalizarModo(remuxPreview.track_mode))}
+                          nameEditable={!esTanda(seleccion) && renombra(normalizarModo(remuxPreview.track_mode))}
+                          edits={remuxEdits}
+                          onEdit={setRemuxEdit}
+                        />
+                      </>
                     )}
                   </div>
                 </Modal>

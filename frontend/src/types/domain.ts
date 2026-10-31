@@ -23,7 +23,7 @@ export type RequestStatus =
 
 export type NomenclatureStatus = 'Correcta' | 'No adaptada' | 'N/A' | 'Desconocida'
 
-export type InstanceType = 'radarr' | 'sonarr' | 'jellyfin'
+export type InstanceType = 'radarr' | 'sonarr'
 
 export type ItemType = 'movie' | 'series' | 'season' | 'episode'
 

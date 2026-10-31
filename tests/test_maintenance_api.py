@@ -21,63 +21,6 @@ def test_maintenance_status_ok(client, auth_headers):
     assert "backups_count" in data
 
 
-# ---------- /api/maintenance/export-settings ----------
-
-def test_export_settings_requires_auth(client):
-    resp = client.get("/api/maintenance/export-settings")
-    assert resp.status_code == 401
-
-
-def test_export_settings_masks_secrets(client, auth_headers):
-    resp = client.get("/api/maintenance/export-settings", headers=auth_headers)
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["ok"] is True
-    assert data["secrets_masked"] is True
-    settings = data["settings"]
-    assert settings.get("tmdb_api_key") in (None, "***MASKED***")
-    assert settings.get("emu_api_key") in (None, "***MASKED***")
-
-
-def test_export_settings_no_raw_secrets_in_response(client, auth_headers):
-    resp = client.get("/api/maintenance/export-settings", headers=auth_headers)
-    text = resp.text
-    # real secret values must not appear; masked token is OK
-    assert "secret-tmdb" not in text
-    assert "secret-emu" not in text
-
-
-# ---------- /api/maintenance/import-settings ----------
-
-def test_import_settings_requires_auth(client):
-    resp = client.post("/api/maintenance/import-settings", json={"payload": {}})
-    assert resp.status_code == 401
-
-
-def test_import_settings_dry_run_default(client, auth_headers):
-    resp = client.post(
-        "/api/maintenance/import-settings",
-        json={"payload": {"app_name": "Nueva App"}, "dry_run": True},
-        headers=auth_headers,
-    )
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["ok"] is True
-    assert data["dry_run"] is True
-
-
-def test_import_settings_rejects_unknown_keys(client, auth_headers):
-    resp = client.post(
-        "/api/maintenance/import-settings",
-        json={"payload": {"unknown_field": "x"}},
-        headers=auth_headers,
-    )
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["ok"] is False
-    assert "desconocidas" in data["error"].lower()
-
-
 # ---------- /api/maintenance/backup ----------
 
 def test_create_backup_requires_auth(client):
@@ -167,17 +110,3 @@ def test_vacuum_apply_requires_confirmation(client, auth_headers):
     data = resp.json()
     assert data["ok"] is False
     assert "MANTENIMIENTO_DB" in data["error"]
-
-
-# ---------- /api/maintenance/logs/cleanup ----------
-
-def test_cleanup_logs_requires_auth(client):
-    resp = client.post("/api/maintenance/logs/cleanup", json={})
-    assert resp.status_code == 401
-
-
-def test_cleanup_logs_dry_run(client, auth_headers):
-    resp = client.post("/api/maintenance/logs/cleanup", json={"dry_run": True, "days": 30}, headers=auth_headers)
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["ok"] is True

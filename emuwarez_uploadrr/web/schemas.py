@@ -53,7 +53,6 @@ class SetupStatusResponse(BaseModel):
     emu_configured: bool
     radarr_instances: int
     sonarr_instances: int
-    jellyfin_configured: bool
     next_step: Optional[str] = None
 
 
@@ -1227,21 +1226,7 @@ class RestoreRequest(BaseModel):
     confirmation: Optional[str] = None
 
 
-class ImportSettingsRequest(BaseModel):
-    payload: dict[str, Any]
-    dry_run: bool = True
-    apply: bool = False
-    confirmation: Optional[str] = None
-
-
 class VacuumRequest(BaseModel):
-    dry_run: bool = True
-    apply: bool = False
-    confirmation: Optional[str] = None
-
-
-class CleanupLogsRequest(BaseModel):
-    days: int = 30
     dry_run: bool = True
     apply: bool = False
     confirmation: Optional[str] = None

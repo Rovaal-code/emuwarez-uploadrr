@@ -2,14 +2,11 @@
 from __future__ import annotations
 
 import sqlite3
-from pathlib import Path
 
 import pytest
 
 from emuwarez_uploadrr.services.maintenance_service import (
-    CLEANUP_CONFIRMATION,
     VACUUM_CONFIRMATION,
-    cleanup_old_logs,
     get_database_maintenance_status,
     run_database_analyze,
     run_database_integrity_check,
@@ -76,14 +73,62 @@ def test_vacuum_apply_with_confirmation(db_config):
     assert "size_bytes_after" in result
 
 
-def test_cleanup_logs_dry_run_no_log_dir(db_config):
-    result = cleanup_old_logs(days=30, dry_run=True)
+def test_vacuum_reports_freed_bytes_while_app_holds_wal_connection(db_config):
+    """La BD va en WAL y el servidor tiene conexiones abiertas: sin checkpoint,
+    el VACUUM compactaba pero el fichero no encogía y decía "Liberados 0 bytes"."""
+    app = sqlite3.connect(str(db_config / "emuwarez_uploadrr.db"))
+    app.execute("PRAGMA journal_mode=WAL")
+    app.execute("CREATE TABLE t (x TEXT)")
+    app.executemany("INSERT INTO t VALUES (?)", [("x" * 500,)] * 2000)
+    app.commit()
+    app.execute("DELETE FROM t")
+    app.commit()
+    app.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    try:
+        result = run_database_vacuum(dry_run=False, apply=True, confirmation=VACUUM_CONFIRMATION)
+    finally:
+        app.close()
     assert result["ok"] is True
+    assert result["bytes_saved"] > 500_000
 
 
-def test_cleanup_logs_requires_confirmation(db_config):
-    log_dir = Path(str(db_config)) / "logs"
-    log_dir.mkdir()
-    result = cleanup_old_logs(days=0, dry_run=False, apply=True, confirmation="BAD")
-    assert result["ok"] is False
-    assert CLEANUP_CONFIRMATION in result["error"]
+def test_vacuum_with_a_read_still_open_does_not_claim_freed_bytes(db_config, monkeypatch):
+    """Una lectura abierta impide el checkpoint: el VACUUM se hace, pero el
+    fichero aún no ha encogido y el mensaje no puede decir que sí."""
+    real_connect = sqlite3.connect
+    monkeypatch.setattr(sqlite3, "connect", lambda *a, **k: real_connect(*a, **{**k, "timeout": 0.1}))
+    db = str(db_config / "emuwarez_uploadrr.db")
+    app = real_connect(db)
+    app.execute("PRAGMA journal_mode=WAL")
+    app.execute("CREATE TABLE t (x TEXT)")
+    app.executemany("INSERT INTO t VALUES (?)", [("x" * 500,)] * 2000)
+    app.commit()
+    app.execute("DELETE FROM t")
+    app.commit()
+    lector = real_connect(db)
+    lector.execute("BEGIN")
+    lector.execute("SELECT count(*) FROM settings").fetchone()
+    try:
+        result = run_database_vacuum(dry_run=False, apply=True, confirmation=VACUUM_CONFIRMATION)
+    finally:
+        lector.close()
+        app.close()
+    assert result["ok"] is True
+    assert "Liberados" not in result["message"]
+
+
+def test_vacuum_counts_the_wal_in_freed_bytes(db_config):
+    """Con lo confirmado aún en el -wal, el checkpoint hace crecer el .db:
+    midiendo solo el .db salían bytes liberados negativos."""
+    app = sqlite3.connect(str(db_config / "emuwarez_uploadrr.db"))
+    app.execute("PRAGMA journal_mode=WAL")
+    app.execute("PRAGMA wal_autocheckpoint=0")
+    app.execute("CREATE TABLE t (x TEXT)")
+    app.executemany("INSERT INTO t VALUES (?)", [("x" * 500,)] * 2000)
+    app.commit()
+    try:
+        result = run_database_vacuum(dry_run=False, apply=True, confirmation=VACUUM_CONFIRMATION)
+    finally:
+        app.close()
+    assert result["ok"] is True
+    assert result["bytes_saved"] >= 0

@@ -1,4 +1,4 @@
-"""Maintenance API endpoints — backup, restore, settings export/import, DB and log cleanup."""
+"""Maintenance API endpoints — backup, restore and DB maintenance."""
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
@@ -6,8 +6,6 @@ from fastapi import APIRouter, Depends
 from ..dependencies import require_auth
 from ..schemas import (
     BackupRequest,
-    CleanupLogsRequest,
-    ImportSettingsRequest,
     RestoreRequest,
     VacuumRequest,
 )
@@ -30,32 +28,6 @@ def maintenance_status(current_user: dict = Depends(require_auth)) -> dict:
         "backups_count": len(backups),
         "latest_backup": backups[0] if backups else None,
     }
-
-
-@router.get("/export-settings")
-def export_settings(
-    include_secrets: bool = False,
-    confirmation: str | None = None,
-    current_user: dict = Depends(require_auth),
-) -> dict:
-    """Exporta la configuración. Los secretos se enmascaran por defecto."""
-    from emuwarez_uploadrr.services.config_export import export_settings as svc_export
-    return svc_export(include_secrets=include_secrets, confirmation=confirmation)
-
-
-@router.post("/import-settings")
-def import_settings(
-    body: ImportSettingsRequest,
-    current_user: dict = Depends(require_auth),
-) -> dict:
-    """Importa ajustes desde un payload. dry_run=True por defecto."""
-    from emuwarez_uploadrr.services.config_export import import_settings as svc_import
-    return svc_import(
-        body.payload,
-        dry_run=body.dry_run,
-        apply=body.apply,
-        confirmation=body.confirmation,
-    )
 
 
 @router.post("/backup")
@@ -109,21 +81,6 @@ def db_vacuum(
     """Ejecuta VACUUM en la BD. dry_run=True por defecto."""
     from emuwarez_uploadrr.services.maintenance_service import run_database_vacuum
     return run_database_vacuum(
-        dry_run=body.dry_run,
-        apply=body.apply,
-        confirmation=body.confirmation,
-    )
-
-
-@router.post("/logs/cleanup")
-def logs_cleanup(
-    body: CleanupLogsRequest,
-    current_user: dict = Depends(require_auth),
-) -> dict:
-    """Elimina logs más antiguos de N días. dry_run=True por defecto."""
-    from emuwarez_uploadrr.services.maintenance_service import cleanup_old_logs
-    return cleanup_old_logs(
-        days=body.days,
         dry_run=body.dry_run,
         apply=body.apply,
         confirmation=body.confirmation,

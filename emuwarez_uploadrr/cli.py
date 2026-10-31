@@ -327,22 +327,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_restore.add_argument("--apply", action="store_true", dest="maint_apply", help="Aplicar restauración real")
     p_restore.add_argument("--confirm", metavar="TOKEN", dest="confirm", help="Token: RESTAURAR_CONFIG")
 
-    p_export = maint_sub.add_parser("export-settings", help="Exportar ajustes (secretos enmascarados por defecto)")
-    p_export.add_argument("--include-secrets", action="store_true", help="Incluir secretos sin enmascarar")
-    p_export.add_argument("--confirm", metavar="TOKEN", dest="confirm", help="Token para secretos: EXPORTAR_SECRETOS")
-
     maint_sub.add_parser("db-integrity", help="PRAGMA integrity_check (solo lectura)")
 
     p_vacuum = maint_sub.add_parser("db-vacuum", help="VACUUM en la BD SQLite")
     p_vacuum.add_argument("--dry-run", action="store_true", default=True, help="Solo previsualización (por defecto)")
     p_vacuum.add_argument("--apply", action="store_true", dest="maint_apply", help="Ejecutar VACUUM real")
     p_vacuum.add_argument("--confirm", metavar="TOKEN", dest="confirm", help="Token: MANTENIMIENTO_DB")
-
-    p_cleanup = maint_sub.add_parser("cleanup-logs", help="Eliminar logs internos antiguos")
-    p_cleanup.add_argument("--days", type=int, default=30, help="Eliminar logs más antiguos de N días (default: 30)")
-    p_cleanup.add_argument("--dry-run", action="store_true", default=True, help="Solo previsualización (por defecto)")
-    p_cleanup.add_argument("--apply", action="store_true", dest="maint_apply", help="Ejecutar limpieza real")
-    p_cleanup.add_argument("--confirm", metavar="TOKEN", dest="confirm", help="Token: LIMPIAR_LOGS")
 
     # Phase 9B — Demo / E2E dev commands (clearly marked, require explicit confirmation)
     p_demo = sub.add_parser("demo", help="[DEV] Datos demo para E2E controlado. Requiere confirmación explícita.")
@@ -1547,8 +1537,7 @@ def cmd_web_info() -> int:
 
 
 def cmd_maintenance(args) -> int:
-    import json as _json
-    from emuwarez_uploadrr.services import backup_service, config_export, maintenance_service
+    from emuwarez_uploadrr.services import backup_service, maintenance_service
 
     cmd = args.maintenance_command
 
@@ -1605,19 +1594,6 @@ def cmd_maintenance(args) -> int:
             print(f"✗ {result.get('error')}")
         return 0 if result.get("ok") else 1
 
-    if cmd == "export-settings":
-        result = config_export.export_settings(
-            include_secrets=getattr(args, "include_secrets", False),
-            confirmation=getattr(args, "confirm", None),
-        )
-        if result.get("ok"):
-            print(_json.dumps(result.get("settings", {}), indent=2, ensure_ascii=False))
-            if result.get("secrets_masked"):
-                print("\n(Secretos enmascarados — usa --include-secrets --confirm EXPORTAR_SECRETOS para verlos)")
-        else:
-            print(f"✗ {result.get('error')}")
-        return 0 if result.get("ok") else 1
-
     if cmd == "db-integrity":
         result = maintenance_service.run_database_integrity_check()
         icon = "✓" if result.get("ok") else "✗"
@@ -1634,19 +1610,6 @@ def cmd_maintenance(args) -> int:
             print(f"✓ {result.get('message')}")
             if not result.get("dry_run"):
                 print(f"  Antes: {result.get('size_bytes_before', 0):,} bytes  →  Después: {result.get('size_bytes_after', 0):,} bytes")
-        else:
-            print(f"✗ {result.get('error')}")
-        return 0 if result.get("ok") else 1
-
-    if cmd == "cleanup-logs":
-        result = maintenance_service.cleanup_old_logs(
-            days=getattr(args, "days", 30),
-            dry_run=not getattr(args, "maint_apply", False),
-            apply=getattr(args, "maint_apply", False),
-            confirmation=getattr(args, "confirm", None),
-        )
-        if result.get("ok"):
-            print(f"✓ {result.get('message')}")
         else:
             print(f"✗ {result.get('error')}")
         return 0 if result.get("ok") else 1

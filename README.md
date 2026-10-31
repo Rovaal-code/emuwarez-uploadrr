@@ -61,6 +61,8 @@ services:
     image: ghcr.io/kisnov/emuwarez-uploadrr:${EMUWAREZ_UPLOADRR_TAG:-latest}
     container_name: emuwarez-uploadrr
     restart: unless-stopped
+    # Un init como proceso 1: recoge los procesos que quedan sueltos al cancelar una subida (ffmpeg, mkbrr...).
+    init: true
 
     ports:
       - "${EMUWAREZ_UPLOADRR_PORT:-9494}:9494"

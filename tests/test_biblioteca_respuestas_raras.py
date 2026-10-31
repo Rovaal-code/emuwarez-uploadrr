@@ -13,7 +13,9 @@ from emuwarez_uploadrr.services.notification_center import list_notifications
 from emuwarez_uploadrr.services.settings import set_setting
 
 from tests import arr_falso
-from tests.arr_falso import RADARR, SONARR, _capitulo, _con_serie, _estado, _externos, _peli, _serie, _sincroniza
+from tests.arr_falso import (
+    RADARR, SONARR, _archivo, _capitulo, _con_serie, _estado, _externos, _peli, _serie, _sincroniza,
+)
 
 # Las fixtures de arr_falso (la autouse, solo para que actúe) se ven desde este módulo.
 arr, conn, _progreso_aparte = arr_falso.arr, arr_falso.conn, arr_falso._progreso_aparte
@@ -176,6 +178,17 @@ def test_resincronizar_con_radarr_aun_sin_el_archivo_no_pasa_la_pelicula_a_falta
     assert list_notifications(conn) == []
 
 
+def test_resincronizar_sin_cola_no_pasa_a_faltante_lo_que_se_descarga(conn, arr, monkeypatch):
+    arr["peliculas"] = [_peli(1, "M1", con_archivo=False)]
+    arr["cola"] = [{"movieId": 1, "status": "downloading", "statusMessages": []}]
+    _sincroniza(conn, RADARR)
+    monkeypatch.setattr(radarr, "get_movie", lambda *a: _peli(1, "M1", con_archivo=False))
+
+    assert library.resync_single_item(conn, _ficha(conn, "1")["id"]) == {"ok": True}
+
+    assert _estado(conn, "1") == "Descargando"
+
+
 def test_resincronizar_con_una_respuesta_vacia_no_crea_una_ficha_sin_id(conn, arr, monkeypatch):
     arr["peliculas"] = [_peli(1, "M1")]
     _sincroniza(conn, RADARR)
@@ -201,18 +214,64 @@ def test_resincronizar_una_serie_sin_sus_archivos_no_pasa_nada_a_faltante(conn, 
 
 # --- BIB-6: una cola que falla no es una cola vacía -----------------------------------------------------------
 
-def test_si_la_cola_falla_lo_que_se_descarga_no_pasa_a_faltante_ni_avisa(conn, arr):
+def test_si_la_cola_falla_la_sincronizacion_sigue_y_lo_que_se_descarga_conserva_su_estado(conn, arr):
+    """La cola no es un listado de lo que tienes: sin ella no se borra ni se da por faltante nada, pero tampoco se para."""
     arr["peliculas"] = [_peli(1, "Matrix", con_archivo=False), _peli(2, "Dune")]
     arr["cola"] = [{"movieId": 1, "status": "downloading", "statusMessages": []}]
     _sincroniza(conn, RADARR)
     assert _estado(conn, "1") == "Descargando"
 
     arr["cola"] = IntegrationError("Tiempo de espera agotado")
-    with pytest.raises(IntegrationError):
-        _sincroniza(conn, RADARR)
+    arr["peliculas"] = [_peli(1, "Matrix", con_archivo=False), _peli(2, "Dune 2"), _peli(3, "Nueva", con_archivo=False)]
+    for _ in range(2):  # y un segundo recorrido sin cola tampoco cambia nada
+        assert _sincroniza(conn, RADARR) == (3, 2)
 
     assert _estado(conn, "1") == "Descargando"
+    assert _estado(conn, "3") == "Desconocido"  # nueva: no se sabe si se descarga
+    assert conn.execute("SELECT title FROM library_items WHERE external_id = '2'").fetchone()[0] == "Dune 2"
     assert list_notifications(conn) == []
+
+    # Vuelve la cola: la ficha nueva pasa a lo que sea y se avisa de lo que de verdad falta, una vez.
+    arr["cola"] = [{"movieId": 1, "status": "downloading", "statusMessages": []}]
+    _sincroniza(conn, RADARR)
+    assert (_estado(conn, "1"), _estado(conn, "3")) == ("Descargando", "Faltante")
+    assert [n["content_title"] for n in list_notifications(conn)] == ["Nueva (1999)"]
+
+
+def test_si_la_cola_de_sonarr_falla_los_capitulos_sin_archivo_conservan_su_estado(conn, arr):
+    caps = [_capitulo(20, 1), _capitulo(20, 2, con_archivo=False)]
+    arr["series"] = [_serie(20)]
+    arr["capitulos"][20] = caps
+    arr["archivos"][20] = [_archivo(caps[0])]
+    arr["cola"] = [{"seriesId": 20, "episodeIds": [2002], "status": "downloading"}]
+    _sincroniza(conn, SONARR, include_episodes=True)
+    assert _estado(conn, "episode:2002") == "Descargando"
+
+    arr["cola"] = IntegrationError("HTTP 500")
+    arr["capitulos"][20] = caps + [_capitulo(20, 3, con_archivo=False)]
+    _sincroniza(conn, SONARR, include_episodes=True)
+
+    assert _estado(conn, "episode:2001") == "Disponible"
+    assert _estado(conn, "episode:2002") == "Descargando"
+    assert _estado(conn, "episode:2003") == "Desconocido"
+    assert list_notifications(conn) == []
+
+
+def test_un_primer_recorrido_sin_cola_sigue_siendo_el_primero(conn, arr):
+    """Lo que quedó en Desconocido pasa a Faltante al volver la cola: no son «nuevos faltantes»."""
+    arr["peliculas"] = [_peli(1, "Matrix", con_archivo=False), _peli(2, "Dune", con_archivo=False)]
+    arr["cola"] = IntegrationError("Tiempo de espera agotado")
+    _sincroniza(conn, RADARR)
+    assert (_estado(conn, "1"), _estado(conn, "2")) == ("Desconocido", "Desconocido")
+
+    arr["cola"] = [{"movieId": 1, "status": "downloading", "statusMessages": []}]
+    _sincroniza(conn, RADARR)
+    assert (_estado(conn, "1"), _estado(conn, "2")) == ("Descargando", "Faltante")
+    assert list_notifications(conn) == []
+
+    arr["peliculas"].append(_peli(3, "P3", con_archivo=False))
+    _sincroniza(conn, RADARR)
+    assert len(list_notifications(conn)) == 1
 
 
 def test_la_cola_se_lee_entera_aunque_pase_de_una_pagina(monkeypatch):

@@ -30,6 +30,12 @@ _NOTIFIABLE_ITEM_TYPES = (MediaKind.MOVIE.value, MediaKind.EPISODE.value)
 
 logger = logging.getLogger("emuwarez.library")
 
+# Lo que una ficha sin archivo solo sabe por la cola de descargas (o por no haberla podido leer).
+_ESTADOS_QUE_DA_LA_COLA = (
+    LocalStatus.QUEUED.value, LocalStatus.DOWNLOADING.value, LocalStatus.PENDING_IMPORT.value,
+    LocalStatus.IMPORT_ERROR.value, LocalStatus.ERROR.value, LocalStatus.UNKNOWN.value,
+)
+
 
 # ---------------------------------------------------------------------------
 # Upsert
@@ -38,13 +44,16 @@ logger = logging.getLogger("emuwarez.library")
 def upsert_library_item(
     conn: sqlite3.Connection, item: LibraryItem, *, notify_missing: bool = True,
     defer_to: Optional[list] = None, seen_at: Optional[str] = None, sin_perder_disponible: bool = False,
+    cola_desconocida: bool = False,
 ) -> int:
     """`defer_to`: collect the "turned Faltante" notification into this list as
     (item, item_id) instead of emitting it right away. Used by the Sonarr sync
     so a season whose episodes ALL went missing at once can send one season
     notification instead of one per episode (see _emit_missing_notifications).
     `seen_at`: la marca del recorrido que lo ve (ver sync_instance).
-    `sin_perder_disponible`: una ficha Disponible no pasa a otro estado (la resincronización de una ficha)."""
+    `sin_perder_disponible`: una ficha Disponible no pasa a otro estado (la resincronización de una ficha).
+    `cola_desconocida`: no se leyó la cola de descargas; una ficha sin archivo conserva su estado de cola, y una
+    nueva queda en Desconocido, en vez de pasar a Faltante (y avisar)."""
     # Captured BEFORE the upsert overwrites it — this is what lets us fire a
     # notification on the exact sync pass where the item turns Faltante,
     # instead of guessing from a date (see services/notification_center.py's
@@ -54,7 +63,7 @@ def upsert_library_item(
     # Monday-request scenario) — not just later status flips.
     check_transition = notify_missing and item.item_type in _NOTIFIABLE_ITEM_TYPES
     prev_row = None
-    if check_transition or sin_perder_disponible:
+    if check_transition or sin_perder_disponible or cola_desconocida:
         prev_row = conn.execute(
             "SELECT id, local_status FROM library_items WHERE instance_id = ? AND item_type = ? AND external_id = ?",
             (item.instance_id, item.item_type, item.external_id),
@@ -62,6 +71,11 @@ def upsert_library_item(
     prev_status = prev_row["local_status"] if prev_row else None
     if sin_perder_disponible and prev_status == LocalStatus.AVAILABLE.value and item.local_status != prev_status:
         return int(prev_row["id"])
+    if cola_desconocida and item.local_status == LocalStatus.MISSING.value:
+        if prev_status is None:
+            item.local_status = LocalStatus.UNKNOWN.value
+        elif prev_status in _ESTADOS_QUE_DA_LA_COLA:
+            item.local_status = prev_status
 
     data = item.to_dict()
     # mal_id: Radarr/Sonarr never provide this — resolve it against the local
@@ -411,6 +425,7 @@ def _sync_one_series(
     notify_missing: bool = True,
     seen_at: Optional[str] = None,
     sin_perder_disponible: bool = False,
+    cola_desconocida: bool = False,
 ) -> int:
     """Upsert one series row (+ its seasons/episodes if include_episodes) from
     a single Sonarr `series` dict. Extracted from sync_instance's own Sonarr
@@ -448,7 +463,8 @@ def _sync_one_series(
         series_queue_map=series_queue,
     )
     series_row_id = upsert_library_item(
-        conn, series_item, notify_missing=notify_missing, seen_at=seen_at, sin_perder_disponible=sin_perder_disponible)
+        conn, series_item, notify_missing=notify_missing, seen_at=seen_at, sin_perder_disponible=sin_perder_disponible,
+        cola_desconocida=cola_desconocida)
     _bump()
     if series_item.local_status in LocalStatus.not_available():
         missing += 1
@@ -542,7 +558,7 @@ def _sync_one_series(
             # the season has been through here.
             upsert_library_item(
                 conn, ep_item, notify_missing=notify_missing, defer_to=pending_missing, seen_at=seen_at,
-                sin_perder_disponible=sin_perder_disponible,
+                sin_perder_disponible=sin_perder_disponible, cola_desconocida=cola_desconocida,
             )
             _bump()
             if ep_item.local_status != LocalStatus.AVAILABLE.value:
@@ -649,6 +665,7 @@ def sync_instance(
         conn.commit()
     notify_missing = tiene_filas and get_state(conn, sin_acabar) != "1"
     fallos: list[str] = []
+    cola_desconocida = False
 
     def _bump() -> None:
         nonlocal imported
@@ -661,10 +678,20 @@ def sync_instance(
             f"{instance.type.capitalize()} «{instance.name}» ha devuelto 0 {que} y su biblioteca ya tiene elementos: "
             "no se borra nada. Si la has vaciado a propósito, quita la instancia.")
 
+    def _sin_cola(exc: Exception) -> None:
+        # La cola no es un listado de lo que tienes: sin ella se sigue, y lo que se descarga conserva su estado.
+        nonlocal cola_desconocida
+        cola_desconocida = True
+        logger.warning("No se pudo leer la cola de %s «%s»; lo que se descarga conserva su estado: %s",
+                       instance.type, instance.name, exc)
+
     from .anime_lists import ensure_anime_id_map
     if instance.type == "radarr":
-        queue_records = radarr.get_queue(instance.url, instance.api_key)
-        queue_map = radarr.build_queue_map(queue_records)
+        queue_map = {}
+        try:
+            queue_map = radarr.build_queue_map(radarr.get_queue(instance.url, instance.api_key))
+        except Exception as exc:
+            _sin_cola(exc)
         movies = list(radarr.get_movies(instance.url, instance.api_key))
         # [] solo es de fiar si la instancia aún no tiene nada: si no, borraría todo lo suyo.
         if not movies and tiene_filas:
@@ -680,7 +707,8 @@ def sync_instance(
                 instance_name=instance.name,
                 queue_map=queue_map,
             )
-            upsert_library_item(conn, item, notify_missing=notify_missing, seen_at=visto)
+            upsert_library_item(
+                conn, item, notify_missing=notify_missing, seen_at=visto, cola_desconocida=cola_desconocida)
             _bump()
             if item.local_status != LocalStatus.AVAILABLE.value:
                 missing += 1
@@ -688,9 +716,13 @@ def sync_instance(
     elif instance.type == "sonarr":
         from .tmdb_titles import series_titles_localized
         localize_titles = series_titles_localized(conn)
-        queue_records = sonarr.get_queue(instance.url, instance.api_key)
-        series_queue = sonarr.build_series_queue_map(queue_records)
-        ep_queue = sonarr.build_episode_queue_map(queue_records)
+        series_queue, ep_queue = {}, {}
+        try:
+            queue_records = sonarr.get_queue(instance.url, instance.api_key)
+            series_queue = sonarr.build_series_queue_map(queue_records)
+            ep_queue = sonarr.build_episode_queue_map(queue_records)
+        except Exception as exc:
+            _sin_cola(exc)
         series_list = list(sonarr.get_series(instance.url, instance.api_key))
         if not series_list and tiene_filas:
             raise _vacio("series")
@@ -717,7 +749,7 @@ def sync_instance(
                     conn, instance, series,
                     localize_titles=localize_titles, series_queue=series_queue, ep_queue=ep_queue,
                     include_episodes=include_episodes, bump_fn=_bump,
-                    notify_missing=notify_missing, seen_at=visto,
+                    notify_missing=notify_missing, seen_at=visto, cola_desconocida=cola_desconocida,
                 )
             except sqlite3.Error:
                 raise
@@ -732,8 +764,9 @@ def sync_instance(
         # Sin capítulos no se recorren temporadas ni capítulos: no haberlos visto no dice que ya no estén.
         donde += " AND item_type IN ('movie', 'series')"
     borrados, peticiones = borrar_biblioteca(conn, donde, (instance.id, visto))
-    # Con series sin sincronizar el primer recorrido sigue sin acabar: sus capítulos aún no están y saldrían como nuevos.
-    set_state(conn, sin_acabar, "1" if fallos and not notify_missing else "0")
+    # Con series sin sincronizar, o sin saber qué se descarga, el primer recorrido sigue sin acabar: lo que falta
+    # saldría como nuevo faltante en el siguiente.
+    set_state(conn, sin_acabar, "1" if (fallos or cola_desconocida) and not notify_missing else "0")
     conn.commit()
     if borrados:
         logger.info("Borrados %d elementos que %s «%s» ya no tiene", borrados, instance.type, instance.name)
@@ -1536,14 +1569,15 @@ def resync_single_item(conn: sqlite3.Connection, item_id: int) -> dict:
             movie_item = radarr.movie_to_library_item(
                 movie, instance_id=int(instance.id), instance_name=instance.name,
             )
-            upsert_library_item(conn, movie_item, notify_missing=False, sin_perder_disponible=True)
+            upsert_library_item(
+                conn, movie_item, notify_missing=False, sin_perder_disponible=True, cola_desconocida=True)
         else:
             from .tmdb_titles import series_titles_localized
             localize_titles = series_titles_localized(conn)
             series = sonarr.get_series_by_id(instance.url, instance.api_key, int(external_id))
             _sync_one_series(
                 conn, instance, series, localize_titles=localize_titles, include_episodes=True,
-                notify_missing=False, sin_perder_disponible=True,
+                notify_missing=False, sin_perder_disponible=True, cola_desconocida=True,
             )
         conn.commit()
         return {"ok": True}

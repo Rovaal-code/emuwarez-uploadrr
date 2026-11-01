@@ -446,6 +446,23 @@ describe('varias temporadas de una serie', () => {
     expect(m(subidas.queueUpload).mock.calls[0][5]).toBeUndefined()
   })
 
+  it('cambiar el Proveedor en el paso 1 vuelve a comprobar el contenido de esa temporada', async () => {
+    await abrir(SERIE, { preselect: { season: 1 } })
+    await pulsar(await esperar(() => boton('Temporada 2')))
+    await pulsar(boton('Continuar'))
+    await esperar(() => texto().includes('✓ 2 capítulo(s) listos'))
+    await pulsar(boton('Continuar'))
+    await esperar(() => texto().includes('✓ Todo listo: 2 temporadas'))
+    await pulsar(boton('Volver'))
+    await elegir(await esperar(() => campo<HTMLSelectElement>('Proveedor')), 'NF')
+    await pulsar(boton('Continuar'))
+    await esperar(() => m(subidas.runUploadChecks).mock.calls.some(c => c[0] === 31 && c[2] === 'NF'))
+    await esperar(() => texto().includes('✓ Todo listo: 2 temporadas'))
+    expect(m(subidas.runUploadChecks).mock.calls).toEqual([
+      [31, 'environment'], [31, 'content', undefined], [32, 'content', undefined], [31, 'content', 'NF'],
+    ])
+  })
+
   it('sin marcar ninguna no avanza', async () => {
     await abrir(SERIE)
     await esperar(() => boton('Temporada 1'))

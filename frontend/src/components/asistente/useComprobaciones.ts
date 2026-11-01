@@ -89,10 +89,14 @@ export function useComprobacionesTanda({ step, batchQueue, batchPhase, proveedor
   // contenido uno a uno. Se guardan para que "Subir todos" no las repita y
   // para que el desplegable pueda enseñar las de cualquiera sin volver a
   // pedirlas. Solo se pide lo que falta o falló: volver a entrar en el paso 2,
-  // o «Volver a comprobar», repite eso y conserva lo que ya pasó.
+  // o «Volver a comprobar», repite eso y conserva lo que ya pasó, si se
+  // comprobó con el Proveedor que tiene ahora (se puede cambiar en el paso 1).
+  const proveedorComprobado = useRef(new Map<number, string | undefined>())
+  const sigueValiendo = (id: number) => !!batchContentChecks.get(id)?.ready
+    && proveedorComprobado.current.get(id) === proveedorParaServidor(proveedorElegido, id)
   useEffect(() => {
     if (step !== 2 || batchQueue.length <= 1 || batchPhase !== 'idle') return
-    if (batchChecksLoading || (batchEnvChecks?.ready && batchQueue.every(id => batchContentChecks.get(id)?.ready))) return
+    if (batchChecksLoading || (batchEnvChecks?.ready && batchQueue.every(sigueValiendo))) return
     let alive = true
     const run = async () => {
       setBatchChecksLoading(true)
@@ -103,13 +107,14 @@ export function useComprobacionesTanda({ step, batchQueue, batchPhase, proveedor
         const env = batchEnvChecks?.ready ? batchEnvChecks : await runUploadChecks(batchQueue[0], 'environment')
         if (!alive) return
         setBatchEnvChecks(env)
-        const acc = new Map([...batchContentChecks].filter(([, r]) => r.ready))
+        const acc = new Map([...batchContentChecks].filter(([id]) => sigueValiendo(id)))
         for (let i = 0; i < batchQueue.length; i++) {
           if (!alive) return
           if (acc.has(batchQueue[i])) continue
           setBatchChecksIndex(i)
-          acc.set(batchQueue[i], await runUploadChecks(
-            batchQueue[i], 'content', proveedorParaServidor(proveedorElegido, batchQueue[i])))
+          const proveedor = proveedorParaServidor(proveedorElegido, batchQueue[i])
+          acc.set(batchQueue[i], await runUploadChecks(batchQueue[i], 'content', proveedor))
+          proveedorComprobado.current.set(batchQueue[i], proveedor)
           setBatchContentChecks(new Map(acc))
         }
         if (alive) setBatchViewId(prev => prev ?? batchQueue[0])
@@ -127,6 +132,7 @@ export function useComprobacionesTanda({ step, batchQueue, batchPhase, proveedor
   // Otra selección: lo comprobado para la anterior ya no vale.
   const olvidar = () => {
     setBatchEnvChecks(null); setBatchContentChecks(new Map()); setBatchViewId(null); setBatchChecksError(null)
+    proveedorComprobado.current.clear()
   }
 
   return {

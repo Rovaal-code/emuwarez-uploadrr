@@ -5,11 +5,14 @@ describe('estadoDePaso', () => {
   it('cada estado del servidor tiene su texto', () => {
     for (const estado of ['hecho', 'en_curso', 'fallido', 'cancelado', 'pendiente']) {
       expect(estadoDePaso({ estado }).texto).toBeTruthy()
+      // La clase dsub-paso-<clave> fija el color: tiene que existir en styles/detalle-subida.css.
+      expect(estadoDePaso({ estado }).clave).toBe(estado)
     }
   })
 
   it('un estado desconocido cuenta como pendiente', () => {
     expect(estadoDePaso({ estado: 'raro' })).toBe(estadoDePaso({ estado: 'pendiente' }))
+    expect(estadoDePaso({ estado: 'raro' }).clave).toBe('pendiente')
   })
 })
 

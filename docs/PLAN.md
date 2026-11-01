@@ -67,6 +67,13 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   `biblioteca.py` (instancias, sync, biblioteca, peticiones, faltantes, *arr), `nomenclatura.py` (nomenclatura y título
   MKV), `subida.py` (subida, tareas, logs), `web.py` (comandos `web`) y `mantenimiento.py` (mantenimiento y demo).
   `emuwarez_uploadrr.cli:main` sigue siendo el entry point; el código se movió sin cambios (`--help` idéntico).
+- **Oleada 3, Configuración partida:** `pages/SettingsPage.tsx` queda en el marco (pestañas, aviso y botón de
+  guardar) y lo demás vive en `pages/ajustes/`: una pestaña por fichero (`ConfigTab`, `NotificationsTab`,
+  `DiagnosticsTab`, `BackupTab`) y una tarjeta por fichero en `config/` y `diagnostico/`. El formulario de la pestaña
+  Configuración es `config/useConfigForm.ts`, compartido por sus tarjetas; lo que solo toca una (pruebas de
+  conexión, modal de claves de imágenes) está en su tarjeta. Comportamiento igual: lo fija
+  `pages/__tests__/SettingsPage.test.tsx` (jsdom, nueva dependencia de desarrollo). Los estilos en línea siguen
+  sin pasar a clases.
 - **Oleada 3, subida por pasos con reintento (#126):** sobre `PASOS` (#127), cada subida enseña sus cuatro pasos con
   nombre (comprobar y poner el nombre, preparar los ficheros, verificar antes de subir, subir con Uploadrr) y cuál se
   paró (`upload_jobs.etapa_parada`, `services/subida_pasos.py`). Un reintento de una subida que ya había preparado los ficheros reanuda desde la
@@ -98,7 +105,7 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
 
 ## Siguiente (oleada 3)
 
-1. Partir `SettingsPage.tsx`; los estilos en línea, a clases.
+1. Los estilos en línea, a clases.
 2. `httpx` y un solo limitador de eMuwarez compartido (30 peticiones por minuto).
 3. ESLint `react-hooks`.
 

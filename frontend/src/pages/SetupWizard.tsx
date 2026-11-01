@@ -72,7 +72,7 @@ interface InstanceDraft {
 function StepTitleIcon({ step }: { step: string }) {
   if (step === 'admin') {
     // Same person shape (and colour) as the Configuración > Cuenta card's own
-    // icon (SettingsPage.tsx) — this step IS that same card (creating/
+    // icon (pages/ajustes/config/AccountCard.tsx) — this step IS that same card (creating/
     // naming the admin account), so it should read as the same thing, not
     // as the general Configuración gear.
     return <IconoUsuario size={20} style={{ color: 'var(--text-accent)' }} />

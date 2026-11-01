@@ -415,6 +415,8 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
   // Multi-episode: generate the nomenclature for every selected episode in one
   // pass, reporting which one it's on, and cache the results so switching
   // between them afterwards is instant.
+  // Sube con «Reintentar»: vuelve a generar todos, también los que fallaron.
+  const [intentoPrecarga, setIntentoPrecarga] = useState(0)
   useEffect(() => {
     if (step !== 1 || targetIsSeason || episodeQueue.length <= 1) return
     if (cacheCubre(episodeQueue, episodeFieldsById)) return
@@ -446,6 +448,8 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
         setEpisodeFieldsById(cache)
         const first = cache.get(episodeQueue[0])
         if (first) applyFieldsResponse(first, ajustesPorId.get(episodeQueue[0]), episodeQueue[0])
+      } catch (e: unknown) {
+        if (alive) setError(e instanceof Error ? e.message : 'Error cargando la nomenclatura')
       } finally {
         if (alive) setEpisodePrepping(false)
       }
@@ -453,7 +457,15 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
     run()
     return () => { alive = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- se genera al entrar en el paso o cambiar la tanda, no con cada ajuste
-  }, [step, targetIsSeason, episodeQueue])
+  }, [step, targetIsSeason, episodeQueue, intentoPrecarga])
+
+  // «Reintentar» del paso 1. Con varios capítulos, loadFields solo traería el que se ve: se repite la
+  // precarga de todos, sin la caché, para que no quede guardado el capítulo que falló.
+  const reintentarNomenclatura = () => {
+    if (episodeQueue.length <= 1) { void loadFields(); return }
+    setEpisodeFieldsById(new Map())
+    setIntentoPrecarga(n => n + 1)
+  }
 
   // Switching between already-generated episodes reads the cache — no refetch.
   useEffect(() => {
@@ -1007,7 +1019,7 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
     episodeSelected, setEpisodeSelected, confirmMultiSelection, confirmEpisodeSelection, confirmSeasonWhole,
     // Paso 1
     existingJob, existingJobBlocking, cambiarElemento,
-    episodePrepping, episodePrepIndex, loading, error, loadFields,
+    episodePrepping, episodePrepIndex, loading, error, reintentarNomenclatura,
     fields, setField, titleOptions, titleWarning, sources, providers, opcionesTag, detectingProvider,
     sourceRequiresProvider, sourceWarning, avisoSource, audioWarning, preview,
     sourceComparison, setSourceComparison, showSourceCompare, setShowSourceCompare, showEngineDetail, setShowEngineDetail,

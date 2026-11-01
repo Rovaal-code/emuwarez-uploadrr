@@ -142,3 +142,13 @@ export function cuentaTrasMedir(cuenta: CuentaAjustes, clave: string, coincide: 
   if (cuenta.clave !== clave || coincide) return { clave, usados: 0 }
   return cuenta
 }
+
+/**
+ * Si el tope acaba de cortar una oscilación. El tope la para sin que se vea
+ * nada, así que es el único momento de avisar de qué medidas saltaban. Quien
+ * avisa sube `usados` por encima del tope, y esto ya no vuelve a ser cierto
+ * hasta que la cuenta empiece de nuevo: un aviso por oscilación.
+ */
+export function topeRecienAlcanzado(cuenta: CuentaAjustes, coincide: boolean): boolean {
+  return !coincide && cuenta.usados === AJUSTES_SEGUIDOS_MAX
+}

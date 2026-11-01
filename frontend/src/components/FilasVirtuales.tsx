@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
-import { planVentana, columnasAutoFill, filasDeRejilla, medidaCorregida, cuentaTrasMedir } from '../utils/ventana'
+import { planVentana, columnasAutoFill, filasDeRejilla, medidaCorregida, cuentaTrasMedir, topeRecienAlcanzado, AJUSTES_SEGUIDOS_MAX } from '../utils/ventana'
+import { medir } from '../utils/uiScale'
 
 // Lo que se pinta de más por arriba y por abajo de lo visible: unas diez filas
 // a cada lado, para que desplazarse deprisa no enseñe huecos en blanco.
@@ -135,6 +136,8 @@ export function RejillaVirtual<T>({ items, clave, minimo, hueco, contenedor, pin
   // ese tope, dos medidas que se provocan una a la otra repintaban sin fin,
   // React lo cortaba con el error 185 y Biblioteca quedaba en negro.
   const ajustes = useRef({ clave: '', usados: 0 })
+  // Lo medido desde que empezó la cuenta, para el aviso del tope.
+  const medidas = useRef<string[]>([])
   // Qué lista es: cambia con la identidad de `items`, no solo con su largo
   // (otro orden o contenido de la misma longitud también es otra lista). Los
   // repintados de este componente no la tocan: la medida es estado propio.
@@ -150,6 +153,18 @@ export function RejillaVirtual<T>({ items, clave, minimo, hueco, contenedor, pin
     const clave = `${lista.current.version}|${minimo}|${hueco}|${vista.desde}|${vista.ancho}`
     const coincide = columnas === medida.columnas && alto === medida.alto
     ajustes.current = cuentaTrasMedir(ajustes.current, clave, coincide)
+    if (ajustes.current.usados === 0) medidas.current = []
+    if (medidas.current.length <= AJUSTES_SEGUIDOS_MAX) medidas.current.push(`${columnas}×${alto}`)
+    // El tope para la oscilación sin que se vea: esto es lo único que dice qué medida salta y por qué.
+    if (topeRecienAlcanzado(ajustes.current, coincide)) {
+      ajustes.current.usados++
+      const primera = el.firstElementChild
+      console.warn(`RejillaVirtual no se calma: ${medidas.current.join(' → ')}`, {
+        ancho: el.clientWidth, altoReal: primera ? medir(primera).height : null,
+        zoom: getComputedStyle(document.body).zoom, dpr: window.devicePixelRatio,
+        items: items.length, desde: vista.desde,
+      })
+    }
     const nueva = medidaCorregida(medida, { columnas, alto }, ajustes.current.usados)
     if (!nueva) return
     ajustes.current.usados++

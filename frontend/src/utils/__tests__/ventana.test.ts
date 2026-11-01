@@ -7,7 +7,7 @@
  * la barra de scroll mentiría sobre el largo de la lista.
  */
 import { describe, it, expect } from 'vitest'
-import { inicios, filaEn, planVentana, columnasAutoFill, filasDeRejilla, type Tramo, medidaCorregida, cuentaTrasMedir, AJUSTES_SEGUIDOS_MAX } from '../ventana'
+import { inicios, filaEn, planVentana, columnasAutoFill, filasDeRejilla, type Tramo, medidaCorregida, cuentaTrasMedir, topeRecienAlcanzado, AJUSTES_SEGUIDOS_MAX } from '../ventana'
 
 const filas = (tramos: Tramo[]) => tramos.flatMap(t => (t.tipo === 'fila' ? [t.indice] : []))
 const altoTotal = (tramos: Tramo[], alturas: number[]) =>
@@ -181,5 +181,29 @@ describe('cuentaTrasMedir', () => {
   it('con la misma clave y medidas todavía distintas, la cuenta sigue', () => {
     const c = { clave: 'a', usados: 4 }
     expect(cuentaTrasMedir(c, 'a', false)).toBe(c)
+  })
+})
+
+describe('topeRecienAlcanzado', () => {
+  it('una oscilación avisa una sola vez, cuando el tope la corta', () => {
+    // Lo mismo que hace RejillaVirtual tras cada pintado, con dos medidas que se provocan una a la otra.
+    const medirDesde = (m: { alto: number; columnas: number }) => ({ columnas: 3, alto: m.alto === 300 ? 330 : 300 })
+    let medida = { columnas: 3, alto: 300 }
+    let c = { clave: 'a', usados: 0 }
+    let avisos = 0
+    for (let pintado = 0; pintado < 50; pintado++) {
+      const medido = medirDesde(medida)
+      const coincide = medido.alto === medida.alto
+      c = cuentaTrasMedir(c, 'a', coincide)
+      if (topeRecienAlcanzado(c, coincide)) { avisos++; c.usados++ }
+      const nueva = medidaCorregida(medida, medido, c.usados)
+      if (nueva) { medida = nueva; c.usados++ }
+    }
+    expect(avisos).toBe(1)
+  })
+
+  it('una medida que se calma no avisa', () => {
+    expect(topeRecienAlcanzado({ clave: 'a', usados: AJUSTES_SEGUIDOS_MAX }, true)).toBe(false)
+    expect(topeRecienAlcanzado({ clave: 'a', usados: 2 }, false)).toBe(false)
   })
 })

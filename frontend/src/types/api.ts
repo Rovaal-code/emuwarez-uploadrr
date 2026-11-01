@@ -460,6 +460,9 @@ export interface SeasonPackPlanResponse {
   pack_folder?: string | null
   episodes: SeasonPackEpisodePlan[]
   provider?: string | null
+  // De dónde sale el proveedor ("manual", "file" o "tmdb") y el texto que lo explica.
+  provider_source?: 'manual' | 'file' | 'tmdb' | null
+  provider_source_detail?: string | null
   // Field-by-field breakdown — same fields a movie/episode's nomenclature
   // grid shows. Source/Proveedor/Tag are editable here too, same as a
   // movie/episode (applied uniformly across every episode).

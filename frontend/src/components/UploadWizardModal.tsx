@@ -30,6 +30,7 @@ import { ACTIVE_JOB_STATUSES, statusLabel } from '../utils/uploadStatus'
 import { seguirProgreso } from '../api/eventos'
 import { fetchSettings } from '../api/settings'
 import { AVISO_MODO_PISTAS, normalizarModo, renombra, tocaElFichero } from '../utils/modoPistas'
+import { textoOrigenProveedor } from '../utils/origenProveedor'
 import {
   SIN_SELECCION, seleccionUnica, seleccionTemporadas, seleccionCapitulos,
   colaTemporadas, colaCapitulos, esTanda, mismaSeleccion, conObjetivo,
@@ -1747,6 +1748,8 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   // being stuck with whatever the filename/Radarr-Sonarr happened to say —
   // the same kind of misdetection the Internal Source Tool exists to catch.
   const seasonTitleOptions = seasonPlan?.title_options ?? []
+  const origenProveedor = textoOrigenProveedor(
+    seasonPlan?.provider, seasonPlan?.provider_source_detail, fields.provider)
 
   const seasonFieldBox = (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
@@ -1818,6 +1821,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
             <option value="">— Sin proveedor —</option>
             {providers.map(p => <option key={p.code} value={p.code}>{p.name} ({p.code})</option>)}
           </select>
+          {origenProveedor && <span className="form-hint">{origenProveedor}</span>}
         </label>
       )}
       <label><FieldLabel label="Códec de vídeo" info={FIELD_INFO.video_codec} />
@@ -1948,6 +1952,9 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                 a mano si el detectado no es correcto (se aplica a todos los capítulos por igual).
               </p>
               {seasonFieldBox}
+              {seasonPlan.warnings?.map((w, i) => (
+                <p key={i} className="text-warning" style={{ fontSize: 12, marginTop: 10 }}><IconoAviso /> {w}</p>
+              ))}
               {seasonSummaryBox}
 
               <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>

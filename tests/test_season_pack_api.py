@@ -181,3 +181,17 @@ def test_adapt_pack_endpoint_removed(client, auth_headers, isolated_db, tmp_path
         headers=auth_headers,
     )
     assert resp.status_code in (404, 405)
+
+
+def test_pack_preview_dice_de_donde_sale_el_proveedor(client, auth_headers, isolated_db, tmp_path):
+    season_id = _seed_season_with_episode(isolated_db, tmp_path)
+    conn = connect(isolated_db / "emuwarez_uploadrr.db")
+    nuevo = tmp_path / "S01E01.FLMN.WEB-DL.mkv"
+    (tmp_path / "S01E01.mkv").rename(nuevo)
+    conn.execute("UPDATE library_items SET path = ? WHERE item_type = 'episode'", (str(nuevo),))
+    conn.commit()
+    conn.close()
+    data = client.get(f"/api/library/season/{season_id}/pack-preview", headers=auth_headers).json()
+    assert data["provider"] == "FLMN"
+    assert data["provider_source"] == "file"
+    assert data["provider_source_detail"] == "detectado en el nombre del archivo del capítulo 1"

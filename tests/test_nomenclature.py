@@ -309,3 +309,47 @@ def test_un_nombre_de_mas_de_255_bytes_bloquea_la_propuesta(db_conn):
     result = build_nomenclature_proposal(item_id, conn=db_conn)
     assert result["status"] == "blocked"
     assert any("255" in e for e in json.loads(result["errors_json"]))
+
+
+def test_un_proveedor_solo_en_una_carpeta_es_debil_y_no_se_aplica():
+    from emuwarez_uploadrr.services.nomenclature import detectar_proveedor
+    item = {"path": "/series/Serie FLMN/Season 1/Serie.S01E01.1080p.WEB-DL.mkv"}
+    assert detectar_proveedor(item, "WEB-DL") == ("FLMN", "carpeta")
+    assert _infer_provider_from_item(item, "WEB-DL") is None
+
+
+def test_el_proveedor_del_nombre_gana_al_de_la_carpeta():
+    from emuwarez_uploadrr.services.nomenclature import detectar_proveedor
+    item = {"path": "/mnt/NF/Serie/Serie.S01E01.1080p.FLMN.WEB-DL.mkv"}
+    assert detectar_proveedor(item, "WEB-DL") == ("FLMN", "nombre")
+
+
+def test_la_propuesta_avisa_del_proveedor_que_solo_esta_en_la_carpeta(db_conn):
+    cursor = db_conn.execute(
+        """INSERT INTO library_items (item_type, title, local_status, request_status, path, quality)
+           VALUES ('movie', 'Ad Astra', 'Disponible', 'Sin petición',
+                   '/movies/AMZN/Ad Astra.2019.1080p.WEB-DL.mkv', 'WEBDL-1080p')""",
+    )
+    db_conn.commit()
+    result = build_nomenclature_proposal(cursor.lastrowid, conn=db_conn)
+    assert result.get("provider_final") is None
+    assert "AMZN" not in result.get("proposed_filename", "")
+    assert any("AMZN solo aparece en una carpeta" in w for w in json.loads(result["warnings_json"]))
+
+
+def test_una_propuesta_guardada_con_reglas_viejas_se_rehace(db_conn):
+    from emuwarez_uploadrr.services import nomenclature as nom
+    cursor = db_conn.execute(
+        """INSERT INTO library_items (item_type, title, local_status, request_status, path, quality)
+           VALUES ('movie', 'Ad Astra', 'Disponible', 'Sin petición',
+                   '/movies/Ad Astra.2019.1080p.WEB-DL.mkv', 'WEBDL-1080p')""",
+    )
+    db_conn.commit()
+    primera = build_nomenclature_proposal(cursor.lastrowid, conn=db_conn)
+    assert build_nomenclature_proposal(cursor.lastrowid, conn=db_conn)["id"] == primera["id"]
+    original = nom._VERSION_REGLAS
+    try:
+        nom._VERSION_REGLAS = original + 1
+        assert build_nomenclature_proposal(cursor.lastrowid, conn=db_conn)["id"] != primera["id"]
+    finally:
+        nom._VERSION_REGLAS = original

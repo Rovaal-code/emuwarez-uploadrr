@@ -60,14 +60,14 @@ function formatBytes(n: number) {
 // know whether there are unsaved changes. Array order is fixed on purpose.
 function configSignature(v: {
   tags: string[]; providerOrder: string[]; region: string
-  emuUsername: string; ignoreSpecials: boolean; sourceEngine: boolean; addLogo: boolean; capturasPorCapitulo: boolean; modoDePistas: ModoPistas
+  emuUsername: string; ignoreSpecials: boolean; sourceEngine: boolean; addLogo: boolean; capturasPorCapitulo: boolean; modoDePistas: ModoPistas; sinCopiasReflink: boolean
   recentLimit: number; uploadMaxConcurrent: number; qbitUrl: string; qbitTag: string; qbitUser: string
   imgEnabled: string[]; allowedRoots: string
   newKey?: string; newEmuKey?: string; qbitPass?: string; qbitQui?: string; quitarQui?: boolean; quitarQbitPass?: boolean
 }): string {
   return JSON.stringify([
     v.tags, v.providerOrder, v.region, v.emuUsername,
-    v.ignoreSpecials, v.sourceEngine, v.addLogo, v.capturasPorCapitulo, v.modoDePistas, v.recentLimit, v.uploadMaxConcurrent, v.qbitUrl, v.qbitTag, v.qbitUser, v.imgEnabled, v.allowedRoots,
+    v.ignoreSpecials, v.sourceEngine, v.addLogo, v.capturasPorCapitulo, v.modoDePistas, v.sinCopiasReflink, v.recentLimit, v.uploadMaxConcurrent, v.qbitUrl, v.qbitTag, v.qbitUser, v.imgEnabled, v.allowedRoots,
     v.newKey ?? '', v.newEmuKey ?? '', v.qbitPass ?? '', v.qbitQui ?? '', v.quitarQui ?? false, v.quitarQbitPass ?? false,
   ])
 }
@@ -206,6 +206,8 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const [capturasPorCapitulo, setCapturasPorCapitulo] = useState(false)
   // Reordenar pistas: apagado por defecto, reescribe el contenedor entero.
   const [modoDePistas, setModoDePistas] = useState<ModoPistas>(MODO_PISTAS_POR_DEFECTO)
+  // Copias por reflink de un archivo compartido: se hacen por defecto.
+  const [sinCopiasReflink, setSinCopiasReflink] = useState(false)
   const [recentLimit, setRecentLimit] = useState(100)
   const [uploadMaxConcurrent, setUploadMaxConcurrent] = useState(1)
   const [testingConcurrency, setTestingConcurrency] = useState(false)
@@ -245,7 +247,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
   const tagsAGuardar = borrador && !tags.includes(borrador) ? [...tags, borrador] : tags
   const currentSig = configSignature({
     tags: tagsAGuardar, providerOrder, region, emuUsername,
-    ignoreSpecials, sourceEngine, addLogo, capturasPorCapitulo, modoDePistas, recentLimit, uploadMaxConcurrent, qbitUrl, qbitTag, qbitUser, imgEnabled, allowedRoots,
+    ignoreSpecials, sourceEngine, addLogo, capturasPorCapitulo, modoDePistas, sinCopiasReflink, recentLimit, uploadMaxConcurrent, qbitUrl, qbitTag, qbitUser, imgEnabled, allowedRoots,
     newKey, newEmuKey, qbitPass, qbitQui, quitarQui, quitarQbitPass,
   })
   const dirty = baseline !== '' && currentSig !== baseline
@@ -299,6 +301,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         setAddLogo(s.emu_add_logo ?? true)
         setCapturasPorCapitulo(s.emu_per_episode_screens ?? false)
         setModoDePistas(normalizarModo(s.remux_track_mode))
+        setSinCopiasReflink(s.remux_no_reflink_copies ?? false)
         setRecentLimit(s.recent_activity_limit ?? 100)
         setUploadMaxConcurrent(s.upload_max_concurrent ?? 1)
         setQbitUrl(s.qbit_url ?? '')
@@ -310,7 +313,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           tags: s.upload_tags?.length ? s.upload_tags : [s.default_release_tag], providerOrder: s.provider_priority_order,
           region: s.tmdb_watch_region,
           emuUsername: s.emu_username ?? '',
-          ignoreSpecials: s.series_ignore_specials ?? true, sourceEngine: s.source_engine_enabled ?? false, addLogo: s.emu_add_logo ?? true, capturasPorCapitulo: s.emu_per_episode_screens ?? false, modoDePistas: normalizarModo(s.remux_track_mode),
+          ignoreSpecials: s.series_ignore_specials ?? true, sourceEngine: s.source_engine_enabled ?? false, addLogo: s.emu_add_logo ?? true, capturasPorCapitulo: s.emu_per_episode_screens ?? false, modoDePistas: normalizarModo(s.remux_track_mode), sinCopiasReflink: s.remux_no_reflink_copies ?? false,
           recentLimit: s.recent_activity_limit ?? 100,
           uploadMaxConcurrent: s.upload_max_concurrent ?? 1,
           qbitUrl: s.qbit_url ?? '', qbitTag: s.qbit_tag ?? '', qbitUser: s.qbit_username ?? '',
@@ -420,6 +423,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         emu_add_logo: addLogo,
         emu_per_episode_screens: capturasPorCapitulo,
         remux_track_mode: modoDePistas,
+        remux_no_reflink_copies: sinCopiasReflink,
         recent_activity_limit: recentLimit,
         upload_max_concurrent: uploadMaxConcurrent,
         qbit_url: qbitUrl.trim(),
@@ -464,7 +468,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         tags: updated.upload_tags?.length ? updated.upload_tags : [updated.default_release_tag], providerOrder: updated.provider_priority_order,
         region: updated.tmdb_watch_region,
         emuUsername: updated.emu_username ?? '',
-        ignoreSpecials: updated.series_ignore_specials ?? true, sourceEngine: updated.source_engine_enabled ?? false, addLogo: updated.emu_add_logo ?? true, capturasPorCapitulo: updated.emu_per_episode_screens ?? false, modoDePistas: normalizarModo(updated.remux_track_mode),
+        ignoreSpecials: updated.series_ignore_specials ?? true, sourceEngine: updated.source_engine_enabled ?? false, addLogo: updated.emu_add_logo ?? true, capturasPorCapitulo: updated.emu_per_episode_screens ?? false, modoDePistas: normalizarModo(updated.remux_track_mode), sinCopiasReflink: updated.remux_no_reflink_copies ?? false,
         recentLimit: updated.recent_activity_limit ?? 100,
         uploadMaxConcurrent: updated.upload_max_concurrent ?? 1,
         qbitUrl: updated.qbit_url ?? '', qbitTag: updated.qbit_tag ?? '', qbitUser: updated.qbit_username ?? '',
@@ -965,11 +969,21 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
         <div className="form-group">
           <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             Renombrar/Ordenar pistas
-            <InfoIcon text="Qué se le hace a las pistas de audio y subtítulos antes de subir. Renombrar les pone nombre siguiendo las reglas de eMuwarez y cambia solo la cabecera del archivo: es casi instantáneo por grande que sea. Reordenar las coloca en orden (Español, Català, Inglés, resto) y obliga a reescribir el contenedor entero, y tarda en proporción al tamaño. Si el archivo lo comparte un torrent (un hardlink), no se escribe en él: renombrar y el título interno se hacen en una copia por reflink en la carpeta de subidas y reordenar se omite. Con Ninguno el archivo se sube tal cual, sin tocar tampoco el título interno. En los tres primeros se marca la pista predeterminada, que es lo que decide qué audio suena al abrirlo." />
+            <InfoIcon text="Qué se le hace a las pistas de audio y subtítulos antes de subir. Renombrar les pone nombre siguiendo las reglas de eMuwarez y cambia solo la cabecera del archivo: es casi instantáneo por grande que sea. Reordenar las coloca en orden (Español, Català, Inglés, resto) y obliga a reescribir el contenedor entero, y tarda en proporción al tamaño. Si el archivo lo comparte un torrent (un hardlink), no se escribe en él: renombrar y el título interno se hacen en una copia por reflink en la carpeta de subidas (o se omiten, con «No hacer nunca copias reflink») y reordenar se omite. Con Ninguno el archivo se sube tal cual, sin tocar tampoco el título interno. En los tres primeros se marca la pista predeterminada, que es lo que decide qué audio suena al abrirlo." />
           </label>
           <select className="form-input form-select" value={modoDePistas}
                   onChange={e => setModoDePistas(normalizarModo(e.target.value))}>
             {MODOS_PISTAS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+          </select>
+        </div>
+        <div className="form-group">
+          <label className="form-label" htmlFor="sin-copias-reflink" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            No hacer nunca copias reflink
+            <InfoIcon text="Si el archivo lo comparte un torrent o la biblioteca (un hardlink), renombrar las pistas y poner el título interno se hacen en una copia por reflink dentro de la carpeta de subidas, para no tocar el original. Activado, nunca se hace esa copia: esas ediciones se omiten con un aviso en el registro de la subida y se sube el archivo tal cual, con un enlace duro. Un archivo que no comparte nadie se sigue editando en su sitio." />
+          </label>
+          <select id="sin-copias-reflink" className="form-input form-select" value={sinCopiasReflink ? 'true' : 'false'} onChange={e => setSinCopiasReflink(e.target.value === 'true')}>
+            <option value="false">Desactivado</option>
+            <option value="true">Activado</option>
           </select>
         </div>        {/* El único ajuste de esta pestaña que NO se guarda con el botón: es
             de este navegador, no de la instalación, y se aplica y se recuerda

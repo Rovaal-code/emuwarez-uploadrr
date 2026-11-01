@@ -101,6 +101,8 @@ class SettingsResponse(BaseModel):
     # Qué se le hace a las pistas: uno de mkv_remux.MODOS_PISTAS. De fábrica
     # solo se renombran, que es lo barato (ver mkv_remux.MODO_PISTAS_POR_DEFECTO).
     remux_track_mode: str = "solo_renombrar"
+    # Nunca copiar por reflink un fichero compartido: sus ediciones se omiten. Apagado por defecto.
+    remux_no_reflink_copies: bool = False
     recent_activity_limit: int = 100
     upload_max_concurrent: int = 1
     # Remote path mappings: [{"from": "/data/media", "to": "/mnt/emu-media"}]
@@ -154,6 +156,7 @@ class SettingsUpdateRequest(BaseModel):
     emu_add_logo: Optional[bool] = None
     emu_per_episode_screens: Optional[bool] = None
     remux_track_mode: Optional[str] = None
+    remux_no_reflink_copies: Optional[bool] = None
     recent_activity_limit: Optional[int] = None
     upload_max_concurrent: Optional[int] = None
     path_mappings: Optional[list[dict]] = None
@@ -349,6 +352,7 @@ def _build_response(conn) -> SettingsResponse:
         emu_add_logo=get_setting_canonical(conn, "emu.add_logo") != "false",
         emu_per_episode_screens=get_setting_canonical(conn, "emu.per_episode_screens") == "true",
         remux_track_mode=modo_pistas(conn),
+        remux_no_reflink_copies=get_setting_canonical(conn, "remux.no_reflink_copies") == "true",
         recent_activity_limit=_read_recent_activity_limit(conn),
         upload_max_concurrent=get_upload_max_concurrent(conn),
         path_mappings=_read_path_mappings(conn),
@@ -543,6 +547,8 @@ def update_settings(
             set_setting(conn, "emu.add_logo", "true" if body.emu_add_logo else "false")
         if body.emu_per_episode_screens is not None:
             set_setting(conn, "emu.per_episode_screens", "true" if body.emu_per_episode_screens else "false")
+        if body.remux_no_reflink_copies is not None:
+            set_setting(conn, "remux.no_reflink_copies", "true" if body.remux_no_reflink_copies else "false")
         if body.remux_track_mode is not None:
             if body.remux_track_mode not in MODOS_PISTAS:
                 raise HTTPException(

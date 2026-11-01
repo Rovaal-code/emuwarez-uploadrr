@@ -1,0 +1,3 @@
+[console_scripts]
+emuwarez-uploader = emuwarez_uploadrr.cli:main
+emuwarez-uploadrr = emuwarez_uploadrr.cli:main

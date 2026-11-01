@@ -295,7 +295,9 @@ def _fuente_del_pack(episode_entries: list[dict]) -> tuple[Optional[str], Option
     detalle = ", ".join(f"{f} ({', '.join(str(c) for c in caps)})" for f, caps in por_fuente.items())
     empate = sum(1 for caps in conocidas.values() if len(caps) == len(conocidas[elegida])) > 1
     motivo = "la primera de las que empatan" if empate else "la de más capítulos"
-    return elegida, (f"Los capítulos no vienen todos de la misma fuente: {detalle}. El título usa "
+    # El aviso se calcula con la fuente automática y la vista previa del asistente
+    # no lo recalcula al elegir otra en Source: por eso dice «propone», no «usa».
+    return elegida, (f"Los capítulos no vienen todos de la misma fuente: {detalle}. Se propone "
                      f"{elegida}, {motivo}; si no es esa, cámbiala en Source.")
 
 
@@ -483,11 +485,12 @@ def _season_title_options(series: dict | None, season: dict, conn) -> list[dict]
 def _capitulos_con_audio_sin_idioma(episode_entries: list[dict], conn) -> list:
     """Los capítulos con alguna pista de audio sin idioma (el informe ya está en caché)."""
     from .media_info_service import build_mediainfo_report
-    from .path_mapping import resolve_local_path
     salida = []
     for e in episode_entries:
         path = e["episode"].get("path")
-        if path and build_mediainfo_report(resolve_local_path(path, conn=conn) or path).get("pistas_sin_idioma"):
+        # build_mediainfo_report ya aplica los mappings: se le pasa la ruta guardada,
+        # sin mapear, para no aplicarlos dos veces.
+        if path and build_mediainfo_report(path).get("pistas_sin_idioma"):
             salida.append(e["episode"].get("episode_number"))
     return salida
 

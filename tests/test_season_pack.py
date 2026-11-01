@@ -569,7 +569,7 @@ def test_un_pack_con_fuentes_distintas_avisa_y_se_puede_subir(isolated_db, tmp_p
     plan = build_season_pack_plan(season_id, conn=conn)
     assert plan["status"] == "valid", plan["errors"]
     assert plan["warnings"] == [
-        "Los capítulos no vienen todos de la misma fuente: WEB-DL (1), BluRay (2). El título usa "
+        "Los capítulos no vienen todos de la misma fuente: WEB-DL (1), BluRay (2). Se propone "
         "WEB-DL, la primera de las que empatan; si no es esa, cámbiala en Source."]
     assert " WEB-DL " in plan["season_pack_title"]
 
@@ -585,7 +585,7 @@ def test_la_fuente_del_pack_es_la_de_mas_capitulos():
     fuente, aviso = _fuente_del_pack(caps)
     assert fuente == "BluRay"
     assert aviso == ("Los capítulos no vienen todos de la misma fuente: WEB-DL (1), BluRay (2, 3), "
-                     "sin fuente (4). El título usa BluRay, la de más capítulos; si no es esa, cámbiala en Source.")
+                     "sin fuente (4). Se propone BluRay, la de más capítulos; si no es esa, cámbiala en Source.")
 
 
 def test_un_pack_con_hdr_y_sdr_se_bloquea(isolated_db, tmp_path):

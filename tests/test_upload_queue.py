@@ -122,17 +122,89 @@ def test_queue_persists_checks_snapshot(db_conn, tmp_path):
         uq.cancel_queued_timer(job_id)
 
 
-def _insert_proposal(conn, item_id, title="Movie.2024.1080p"):
+def _insert_proposal(conn, item_id, title="Movie.2024.1080p", status="valid", huella=True, fields_json=None):
+    """Una propuesta guardada. Con `huella` lleva la del elemento actual (sigue
+    vigente); sin ella es de reglas viejas y build_nomenclature_proposal la rehace."""
     from datetime import datetime, timezone
+    from emuwarez_uploadrr.services import nomenclature as nom
     now = datetime.now(timezone.utc).isoformat()
+    raw = None
+    if huella:
+        item = nom.get_library_item_for_nomenclature(item_id, conn=conn)
+        raw = json.dumps({"huella": nom._huella(item)})
     cur = conn.execute(
         """INSERT INTO nomenclature_proposals
-           (library_item_id, status, proposed_filename, proposed_title, created_at, updated_at)
-           VALUES (?,?,?,?,?,?)""",
-        (item_id, "valid", title, title, now, now),
+           (library_item_id, status, proposed_filename, proposed_title, raw_json, fields_json,
+            created_at, updated_at)
+           VALUES (?,?,?,?,?,?,?,?)""",
+        (item_id, status, title, title, raw, fields_json, now, now),
     )
     conn.commit()
     return cur.lastrowid
+
+
+def test_queue_rehace_la_propuesta_automatica_de_reglas_viejas(db_conn, tmp_path):
+    """Una automática bloqueada con reglas viejas no se fija: se rehace."""
+    f = tmp_path / "movie.mkv"
+    f.write_bytes(b"x" * 100)
+    iid = _movie_with_path(db_conn, str(f))
+    vieja = _insert_proposal(db_conn, iid, status="blocked", huella=False)
+
+    result = uq.queue_upload_for_item(iid, conn=db_conn)
+    job_id = result["job"]["id"]
+    try:
+        row = db_conn.execute("SELECT nomenclature_proposal_id FROM upload_jobs WHERE id=?",
+                              (job_id,)).fetchone()
+        assert row["nomenclature_proposal_id"] not in (None, vieja)
+        estado = db_conn.execute("SELECT status FROM nomenclature_proposals WHERE id=?", (vieja,)).fetchone()
+        assert estado["status"] == "expired"
+    finally:
+        uq.cancel_queued_timer(job_id)
+
+
+def test_queue_conserva_la_propuesta_editada_a_mano(db_conn, tmp_path):
+    """La editada a mano se respeta aunque no lleve huella."""
+    f = tmp_path / "movie.mkv"
+    f.write_bytes(b"x" * 100)
+    iid = _movie_with_path(db_conn, str(f))
+    manual = _insert_proposal(db_conn, iid, huella=False, fields_json=json.dumps({"title": "X"}))
+
+    result = uq.queue_upload_for_item(iid, conn=db_conn)
+    job_id = result["job"]["id"]
+    try:
+        row = db_conn.execute("SELECT nomenclature_proposal_id FROM upload_jobs WHERE id=?",
+                              (job_id,)).fetchone()
+        assert row["nomenclature_proposal_id"] == manual
+    finally:
+        uq.cancel_queued_timer(job_id)
+
+
+def test_comprobacion_previa_no_falla_por_una_propuesta_bloqueada_de_reglas_viejas(db_conn, tmp_path, monkeypatch):
+    f = tmp_path / "movie.mkv"
+    f.write_bytes(b"x" * 100)
+    iid = _movie_with_path(db_conn, str(f))
+    _insert_proposal(db_conn, iid, status="blocked", huella=False)
+    monkeypatch.setattr(uq, "_season_upload_preconditions", lambda conn: [])
+    fallos = []
+    monkeypatch.setattr(uq, "_fail", lambda job_id, msg: fallos.append(msg))
+    nueva = {"id": 999, "status": "valid"}
+    with patch("emuwarez_uploadrr.services.nomenclature.build_nomenclature_proposal",
+               return_value=nueva) as build:
+        assert uq._check_generic_upload_preconditions(1, iid, False, db_conn) is True
+    build.assert_called_once()
+    assert fallos == []
+
+
+def test_comprobacion_previa_falla_si_la_vigente_esta_bloqueada(db_conn, tmp_path, monkeypatch):
+    f = tmp_path / "movie.mkv"
+    f.write_bytes(b"x" * 100)
+    iid = _movie_with_path(db_conn, str(f))
+    _insert_proposal(db_conn, iid, status="blocked")
+    monkeypatch.setattr(uq, "_season_upload_preconditions", lambda conn: [])
+    fallos = []
+    monkeypatch.setattr(uq, "_fail", lambda job_id, msg: fallos.append(msg))
+    assert uq._check_generic_upload_preconditions(1, iid, False, db_conn) is False
+    assert fallos == ["Hay errores en la propuesta de nomenclatura que bloquean la subida."]
 
 
 def test_queue_pins_and_persists_latest_nomenclature_proposal(db_conn, tmp_path):
@@ -360,6 +432,27 @@ def test_queue_retry_carries_forward_manual_nomenclature_and_remux(db_conn, tmp_
         ).fetchone()
         assert row["nomenclature_proposal_id"] == proposal_id
         assert json.loads(row["remux_overrides_json"]) == {"5": {"new_name": "Custom", "default_after": True}}
+    finally:
+        uq.cancel_queued_timer(result["job"]["id"])
+
+
+def test_queue_retry_fija_la_vigente_si_la_del_original_era_de_reglas_viejas(db_conn, tmp_path):
+    f = tmp_path / "movie.mkv"
+    f.write_bytes(b"x" * 100)
+    iid = _movie_with_path(db_conn, str(f))
+    vieja = _insert_proposal(db_conn, iid, status="blocked", huella=False)
+    original_id = _failed_job_row(db_conn, iid, status="failed")
+    db_conn.execute("UPDATE upload_jobs SET nomenclature_proposal_id = ? WHERE id = ?", (vieja, original_id))
+    db_conn.commit()
+
+    result = uq.queue_retry_for_job(original_id, conn=db_conn)
+    try:
+        row = db_conn.execute(
+            "SELECT nomenclature_proposal_id, nomenclature_snapshot_json FROM upload_jobs WHERE id=?",
+            (result["job"]["id"],),
+        ).fetchone()
+        assert row["nomenclature_proposal_id"] not in (None, vieja)
+        assert json.loads(row["nomenclature_snapshot_json"])["id"] == row["nomenclature_proposal_id"]
     finally:
         uq.cancel_queued_timer(result["job"]["id"])
 

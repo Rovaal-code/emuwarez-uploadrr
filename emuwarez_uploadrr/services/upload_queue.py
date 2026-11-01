@@ -276,8 +276,7 @@ def queue_upload_for_item(
         is_season = item.get("item_type") == "season"
         proposal = None
         if not is_season:
-            from .nomenclature import get_latest_nomenclature_proposal
-            proposal = get_latest_nomenclature_proposal(item_id, conn=conn)
+            proposal = _propuesta_vigente(item_id, conn)
 
         season_overrides = None
         if is_season and (source_override or provider_override or tag_override or title_override):
@@ -343,8 +342,9 @@ def queue_retry_for_job(original_job_id: int, conn=None) -> dict:
             request_url=original.get("request_url"),
             retry_of_job_id=original_job_id,
             retry_count=(original.get("retry_count") or 0) + 1,
-            nomenclature_proposal_id=original.get("nomenclature_proposal_id"),
-            nomenclature_snapshot=_load_json("nomenclature_snapshot_json"),
+            # Si la propuesta fijada era automática y de reglas viejas, ya caducó:
+            # el reintento fija la vigente (la editada a mano se conserva tal cual).
+            **_propuesta_del_reintento(original, item_id, conn, _load_json),
             remux_overrides=_load_json("remux_overrides_json"),
             remux_snapshot=_load_json("remux_snapshot_json"),
             checks=_load_json("checks_snapshot_json"),
@@ -504,6 +504,31 @@ def _fail(job_id: int, message: str) -> None:
     _notify_upload_failed(job_id, message)
 
 
+def _propuesta_vigente(item_id: int, conn) -> dict | None:
+    """La propuesta de nomenclatura que vale ahora para este elemento.
+
+    build_nomenclature_proposal() devuelve la guardada si es editada a mano o si
+    su huella (fichero y versión de las reglas) sigue siendo la actual, y si no
+    la rehace y la guarda. Así una automática de reglas viejas no llega a la subida."""
+    from .nomenclature import build_nomenclature_proposal
+    propuesta = build_nomenclature_proposal(item_id, conn=conn)
+    return propuesta if propuesta and propuesta.get("id") else None
+
+
+def _propuesta_del_reintento(original: dict, item_id: int, conn, cargar) -> dict:
+    """La propuesta que fija un reintento: la del trabajo original si sigue
+    vigente, o la que la sustituye. Un trabajo automático no fijaba ninguna y
+    el reintento tampoco."""
+    if not original.get("nomenclature_proposal_id"):
+        return {"nomenclature_proposal_id": None,
+                "nomenclature_snapshot": cargar("nomenclature_snapshot_json")}
+    propuesta = _propuesta_vigente(item_id, conn)
+    if not propuesta or propuesta["id"] == original["nomenclature_proposal_id"]:
+        return {"nomenclature_proposal_id": original["nomenclature_proposal_id"],
+                "nomenclature_snapshot": cargar("nomenclature_snapshot_json")}
+    return {"nomenclature_proposal_id": propuesta["id"], "nomenclature_snapshot": propuesta}
+
+
 def _season_upload_preconditions(conn) -> list[str]:
     """The generic (not season-specific) preconditions
     upload_preflight.validate_upload_preconditions() checks for a single
@@ -540,12 +565,10 @@ def _check_generic_upload_preconditions(job_id: int, item_id: int, is_season: bo
     command preview) still run later, unchanged, in _populate_ready()."""
     errors = _season_upload_preconditions(conn)
     if not is_season:
-        proposal_row = conn.execute(
-            "SELECT status FROM nomenclature_proposals WHERE library_item_id = ? AND status != 'expired' "
-            "ORDER BY created_at DESC LIMIT 1",
-            (item_id,),
-        ).fetchone()
-        if proposal_row and proposal_row["status"] == "blocked":
+        # La vigente, no la última guardada: una automática bloqueada con reglas
+        # viejas (p. ej. UND, que antes bloqueaba) haría fallar cada intento.
+        proposal = _propuesta_vigente(item_id, conn)
+        if proposal and proposal.get("status") == "blocked":
             errors.append("Hay errores en la propuesta de nomenclatura que bloquean la subida.")
     if errors:
         _fail(job_id, "; ".join(errors))

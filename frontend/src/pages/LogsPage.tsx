@@ -18,16 +18,26 @@ export function LogsPage() {
   const [error, setError] = useState<string | null>(null)
   const searchRef = useRef(search)
   searchRef.current = search
+  // Hay una carga sin acabar: el refresco automático no lanza otra encima (con búsqueda son 1000 líneas con LIKE).
+  const enCurso = useRef(false)
 
+  // Solo cuenta la última petición: cambiar el nivel con una en vuelo no deja las líneas del nivel anterior.
+  const ultimaCarga = useRef(0)
   const load = useCallback(async () => {
+    const esta = ++ultimaCarga.current
+    enCurso.current = true
     try {
       const r = await getLogs({ limit: 1000, level: level || undefined, search: searchRef.current || undefined })
+      if (esta !== ultimaCarga.current) return
       setItems(r.items)
       setError(null)
     } catch {
-      setError('No se pudieron cargar los logs')
+      if (esta === ultimaCarga.current) setError('No se pudieron cargar los logs')
     } finally {
-      setLoading(false)
+      if (esta === ultimaCarga.current) {
+        enCurso.current = false
+        setLoading(false)
+      }
     }
   }, [level])
 
@@ -40,7 +50,7 @@ export function LogsPage() {
   const logsALaVista = useSeccionVisible()
   useEffect(() => {
     if (!auto || !logsALaVista) return
-    const t = setInterval(load, 3000)
+    const t = setInterval(() => { if (!enCurso.current) load() }, 3000)
     return () => clearInterval(t)
   }, [auto, load, logsALaVista])
 

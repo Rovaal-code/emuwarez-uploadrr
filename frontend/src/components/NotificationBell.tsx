@@ -218,11 +218,22 @@ export function NotificationBell() {
   const [unread, setUnread] = useState(0)
   const [loading, setLoading] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
+  const botonRef = useRef<HTMLButtonElement>(null)
   const bellTip = useTooltip('Notificaciones')
 
+  // Solo cuenta la última lista pedida, y un cambio local (marcar, borrar) también tira las que iban en vuelo:
+  // una respuesta anterior al cambio devolvería el aviso que acabas de borrar o el contador que acabas de poner a 0.
+  // Acciones optimistas en marcha. Mientras haya alguna, ninguna consulta pisa la lista (traería de
+  // vuelta lo que otra aún está borrando): se apunta y se consulta una vez cuando terminan todas.
+  const enCurso = useRef(0)
+  const recargarAlAcabar = useRef(false)
+  const ultimoRefresco = useRef(0)
   const refresh = useCallback(async () => {
+    if (enCurso.current > 0) { recargarAlAcabar.current = true; return }
+    const esta = ++ultimoRefresco.current
     try {
       const feed = await getNotifications({ limit: 50 })
+      if (esta !== ultimoRefresco.current) return
       setItems(feed.notifications)
       setUnread(feed.unread_count)
     } catch {
@@ -245,7 +256,12 @@ export function NotificationBell() {
     const onDown = (e: MouseEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
     }
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    // Escape devuelve el foco a la campana: si no, se queda en un aviso que acaba de desaparecer.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      setOpen(false)
+      botonRef.current?.focus()
+    }
     document.addEventListener('mousedown', onDown)
     document.addEventListener('keydown', onKey)
     return () => {
@@ -264,11 +280,26 @@ export function NotificationBell() {
     }
   }
 
+  const accion = async (optimista: () => void, llamada: () => Promise<unknown>) => {
+    ultimoRefresco.current++
+    optimista()
+    enCurso.current++
+    // Si falla, la lista ya no coincide con el servidor: se consulta al terminar.
+    try { await llamada() } catch { recargarAlAcabar.current = true } finally {
+      enCurso.current--
+      if (enCurso.current === 0 && recargarAlAcabar.current) {
+        recargarAlAcabar.current = false
+        refresh()
+      }
+    }
+  }
+
   const handleItemClick = async (n: NotificationItem) => {
     if (!n.read) {
-      setUnread(u => Math.max(0, u - 1))
-      setItems(prev => prev.map(i => (i.id === n.id ? { ...i, read: true } : i)))
-      try { await markNotificationRead(n.id) } catch { /* ignore */ }
+      void accion(() => {
+        setUnread(u => Math.max(0, u - 1))
+        setItems(prev => prev.map(i => (i.id === n.id ? { ...i, read: true } : i)))
+      }, () => markNotificationRead(n.id))
     }
     if (isNotificationClickable(n)) {
       setOpen(false)
@@ -276,27 +307,32 @@ export function NotificationBell() {
     }
   }
 
-  const handleMarkAll = async () => {
+  const handleMarkAll = () => accion(() => {
     setUnread(0)
     setItems(prev => prev.map(i => ({ ...i, read: true })))
-    try { await markAllNotificationsRead() } catch { /* ignore */ }
-  }
+  }, markAllNotificationsRead)
 
-  const handleDelete = async (n: NotificationItem) => {
+  const handleDelete = (n: NotificationItem) => accion(() => {
     setItems(prev => prev.filter(i => i.id !== n.id))
     if (!n.read) setUnread(u => Math.max(0, u - 1))
-    try { await deleteNotification(n.id) } catch { /* ignore */ }
-  }
+  }, () => deleteNotification(n.id))
 
-  const handleDeleteAll = async () => {
+  const handleDeleteAll = () => accion(() => {
     setItems([])
     setUnread(0)
-    try { await deleteAllNotifications() } catch { /* ignore */ }
-  }
+  }, deleteAllNotifications)
 
   return (
     <div className="notif-bell" ref={rootRef}>
-      <button className="topbar-btn" aria-label="Notificaciones" onClick={toggle} {...bellTip.triggerProps}>
+      <button
+        ref={botonRef}
+        className="topbar-btn"
+        aria-label="Notificaciones"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={toggle}
+        {...bellTip.triggerProps}
+      >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
@@ -306,7 +342,7 @@ export function NotificationBell() {
       </button>
 
       {open && (
-        <div className="notif-dropdown" role="menu">
+        <div className="notif-dropdown" role="dialog" aria-label="Notificaciones">
           <div className="notif-dropdown-header">
             <span className="notif-dropdown-title">Notificaciones</span>
             <span style={{ display: 'flex', gap: 10, alignItems: 'center' }}>

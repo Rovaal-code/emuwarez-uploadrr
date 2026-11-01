@@ -4,8 +4,8 @@ import { Tooltip } from '../components/Tooltip'
 import { getLocalStatusInfo } from '../utils/status'
 import { useSync } from '../context/SyncContext'
 import { EmuSyncButton } from '../components/EmuSyncButton'
-import { getInstances } from '../api/instances'
-import type { LibraryItemResponse, LibraryListResponse, InstanceSafeResponse } from '../types/api'
+import { useInstancias } from '../hooks/useInstancias'
+import type { LibraryItemResponse, LibraryListResponse } from '../types/api'
 import { PosterStatusIcon } from '../components/PosterStatusIcon'
 import { ErrorState } from '../components/ErrorState'
 import { EmptyState, FilaVacia } from '../components/EmptyState'
@@ -23,6 +23,7 @@ import { FilasVirtuales, RejillaVirtual } from '../components/FilasVirtuales'
 import { posterUrl } from '../utils/libraryItem'
 import { getDetailIdFromPath, pushDetailPath, closeDetailPath } from '../utils/detailUrl'
 import { hayAlgunFiltro, necesitaTodosLosNiveles } from '../utils/filtrosBiblioteca'
+import { hayMasQueCargar, textoDeResultados, unirPagina } from '../utils/paginacionBiblioteca'
 import { CASTELLANO_OPCIONES, type EstadoCastellano } from '../utils/castellano'
 import { useTardanza } from '../hooks/useTardanza'
 import { useAlEntrar, useAlSalir } from '../context/SeccionVisible'
@@ -205,8 +206,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
 
   useEffect(() => { localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode) }, [viewMode])
 
-  const [instances, setInstances] = useState<InstanceSafeResponse[]>([])
-  useEffect(() => { getInstances().then(setInstances).catch(() => {}) }, [])
+  const instances = useInstancias()
 
   // Excel-style column filters: every option list below reflects values that
   // actually occur somewhere in the library (all levels — a value that only
@@ -278,31 +278,38 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // Un aviso de "recarga" que llegó con una carga en marcha: se atiende al acabar.
   const recargaPendiente = useRef(false)
   const cargando = useRef(false)
+  const consulta = useCallback((desde: number) => getLibrary({
+    search: debouncedSearch || undefined,
+    type: filterType,
+    status: filterStatus,
+    instance_id: filterInstanceId.map(Number),
+    request_status: filterRequest,
+    spanish: filterSpanish as EstadoCastellano[],
+    provider: searchProvider,
+    resolution: searchQuality,
+    source: searchSource,
+    release_group: searchGroup,
+    emu: filterEmu,
+    aporte: filterAporte || undefined,
+    sort: sortBy,
+    parent_id: flatFilter ? undefined : TOP_LEVEL_PARENT_FILTER,
+    limit: LOAD_LIMIT,
+    offset: desde,
+  }), [debouncedSearch, filterType, filterStatus, filterInstanceId, filterRequest, flatFilter, filterSpanish,
+    searchProvider, searchQuality, searchSource, searchGroup, filterEmu, filterAporte, sortBy])
+  const [cargandoMas, setCargandoMas] = useState(false)
+  const [fallaMas, setFallaMas] = useState(false)
   const load = useCallback(async () => {
     const esta = ++ultimaCarga.current
     recargaPendiente.current = false
     cargando.current = true
     setLoading(true)
     setError(null)
+    setFallaMas(false)
+    // Una tanda de "Cargar más" en marcha ya no vale: su respuesta se tira y el botón no espera por ella.
+    setCargandoMas(false)
     try {
-      const result = await getLibrary({
-        search: debouncedSearch || undefined,
-        type: filterType,
-        status: filterStatus,
-        instance_id: filterInstanceId.map(Number),
-        request_status: filterRequest,
-        spanish: filterSpanish as EstadoCastellano[],
-        provider: searchProvider,
-        resolution: searchQuality,
-        source: searchSource,
-        release_group: searchGroup,
-        emu: filterEmu,
-        aporte: filterAporte || undefined,
-        sort: sortBy,
-        parent_id: flatFilter ? undefined : TOP_LEVEL_PARENT_FILTER,
-        limit: LOAD_LIMIT,
-        offset,
-      })
+      const result = await consulta(offset)
       if (esta === ultimaCarga.current) startTransition(() => setData(result))
     } catch {
       if (esta === ultimaCarga.current) setError('Error al cargar la biblioteca')
@@ -313,10 +320,35 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
         if (recargaPendiente.current) load()
       }
     }
-  }, [debouncedSearch, filterType, filterStatus, filterInstanceId, filterRequest, flatFilter, filterSpanish,
-    searchProvider, searchQuality, searchSource, searchGroup, filterEmu, filterAporte, sortBy, offset])
+  }, [consulta, offset])
 
   useEffect(() => { load() }, [load])
+
+  // La siguiente tanda cuando hay más filas que las 20.000 que se piden de una vez. Si mientras llega se
+  // recarga o cambia un filtro (`ultimaCarga` avanza), su respuesta ya no vale y se tira.
+  const cargarMas = useCallback(async () => {
+    // Con la primera página de otro filtro en camino, el desplazamiento saldría de los resultados viejos.
+    if (cargando.current) return
+    const carga = ultimaCarga.current
+    setCargandoMas(true)
+    setFallaMas(false)
+    try {
+      const result = await consulta((data?.items.length ?? 0) + offset)
+      if (carga === ultimaCarga.current) {
+        const antes = data?.items ?? []
+        const unidas = unirPagina(antes, result.items)
+        // Si el orden cambió (una sincronización) la tanda puede traer solo filas ya mostradas: sin crecer,
+        // "Cargar más" pediría lo mismo para siempre. Se rehace la primera página.
+        if (result.items.length > 0 && unidas.length === antes.length) load()
+        else startTransition(() => setData(prev => prev && { ...result, items: unirPagina(prev.items, result.items) }))
+      }
+    } catch {
+      if (carga === ultimaCarga.current) setFallaMas(true)
+    } finally {
+      // Solo la tanda vigente apaga el indicador: una vieja no pisa el de una carga nueva.
+      if (carga === ultimaCarga.current) setCargandoMas(false)
+    }
+  }, [consulta, data, offset, load])
 
   // "Ver en Biblioteca" desde una petición, desde una subida, desde el Panel o
   // desde la campana: el id viene apuntado en sessionStorage y se recoge aquí.
@@ -424,10 +456,9 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // back, which is what made the table flash "cargando" twice in a row. Same
   // shape RequestsPage uses.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  // Recarga en cuanto algo cambia, se esté viendo esta sección o no: los avisos
-  // que suben esta marca son raros (una sincronización, una tarea), así que
-  // mantenerlas todas al día cuesta poco y a cambio cambiar de pestaña enseña
-  // lo actual y no lo actual tras un parpadeo.
+  // Recarga en cuanto algo cambia si esta sección se ve; si está oculta, SeccionVisible
+  // no le pasa la marca hasta que se vuelva a ver (recargar Biblioteca cada vez que
+  // volvías a la pestaña del navegador pedía 20.000 filas para nada).
   // Con una carga en marcha no se relanza: volver a la pestaña del navegador
   // la tiraba y empezaba otra, y con un filtro lento no acababa nunca. Se
   // apunta y se repide una vez al acabar, por si fue una sincronización.
@@ -437,13 +468,17 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     else load()
   }, [lastInvalidatedAt])
 
+  // Enter aplica la búsqueda ya, sin esperar al retardo. El cambio de `debouncedSearch` es lo que recarga: llamar
+  // a load() aquí lo hacía con la búsqueda de antes y luego otra vez con la nueva.
   function applyFilters() {
     setOffset(0)
-    load()
+    setDebouncedSearch(search)
   }
 
   const items = data?.items ?? []
   const archivos = data?.archivos ?? 0
+  const hayMas = hayMasQueCargar(items.length, data?.total ?? 0)
+  const resumenResultados = textoDeResultados(items.length, data?.total ?? 0, filtrando)
 
   // La tabla solo se apaga si la espera se nota. Filtrar u ordenar tarda unos
   // milisegundos, y apagarla en cuanto sale la petición se veía como un
@@ -643,6 +678,13 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
             <span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Cargando…
           </span>
         )}
+        {data && resumenResultados && <span className="text-muted">{resumenResultados}</span>}
+        {data && hayMas && (
+          <button className="btn btn-secondary btn-sm" onClick={cargarMas} disabled={cargandoMas || loading || isPending}>
+            {cargandoMas ? 'Cargando…' : 'Cargar más'}
+          </button>
+        )}
+        {fallaMas && <span className="text-muted">No se pudieron cargar más filas</span>}
         <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
           <Tooltip content="Vista de pósters">
             <button

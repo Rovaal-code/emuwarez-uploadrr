@@ -85,6 +85,11 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
   const [childTotal, setChildTotal] = useState(0)
   const [childOffset, setChildOffset] = useState(0)
   const [loadingChildren, setLoadingChildren] = useState(false)
+  const [errorHijos, setErrorHijos] = useState(false)
+  const hijosVistos = useRef(0)
+  hijosVistos.current = children.length
+  // Solo vale la última petición de hijos: pulsar «Siguiente» varias veces seguidas lanza varias.
+  const ultimaCargaHijos = useRef(0)
   const deepLink = buildDeepLink(item, instances)
   const { triggerProps: titleTip, tooltipNode: titleTooltip } = useTooltip('Abrir ficha')
   const { triggerProps: expandTip, tooltipNode: expandTooltip } = useTooltip(expanded ? 'Ocultar' : 'Desplegar')
@@ -107,8 +112,13 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
   const canExpand = expandable
   const childType = isSeries ? 'season' : 'episode'
 
-  const loadChildren = useCallback(async (off: number) => {
-    setLoadingChildren(true)
+  // `porDetras`: refresca lo que ya se ve sin cambiarlo por «Cargando…»; si falla se queda lo de antes.
+  const loadChildren = useCallback(async (off: number, porDetras = false) => {
+    const esta = ++ultimaCargaHijos.current
+    if (!porDetras) {
+      setLoadingChildren(true)
+      setErrorHijos(false)
+    }
     try {
       const result = await getLibrary({
         parent_id: item.id,
@@ -116,16 +126,31 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
         limit: isSeries ? MAX_SEASONS_PER_SERIES : NESTED_PAGE_SIZE,
         offset: isSeries ? 0 : off,
       })
+      if (esta !== ultimaCargaHijos.current) return
       setChildren(result.items)
       setChildTotal(result.total)
       setChildOffset(off)
+      setErrorHijos(false)
     } catch {
+      if (esta !== ultimaCargaHijos.current) return
+      // Una recarga por detrás que falla deja lo que ya se ve; sin nada que ver, es un error como otro.
+      if (porDetras && hijosVistos.current > 0) return
       setChildren([])
       setChildTotal(0)
+      setErrorHijos(true)
     } finally {
-      setLoadingChildren(false)
+      if (esta === ultimaCargaHijos.current) setLoadingChildren(false)
     }
   }, [item.id, childType, isSeries])
+
+  // La lista se recarga (sincronización, filtro, acción) y trae la fila nueva: lo desplegado se refresca,
+  // porque la fila sigue montada con sus temporadas o capítulos de antes.
+  const paginaDeHijos = useRef(0)
+  paginaDeHijos.current = childOffset
+  useEffect(() => {
+    if (expandedRef.current && expandable) loadChildren(paginaDeHijos.current, true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item])
 
   function toggle() {
     if (expanded) {
@@ -263,7 +288,17 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
           </td>
         </tr>
       )}
-      {expanded && !loadingChildren && children.length === 0 && (
+      {expanded && !loadingChildren && errorHijos && (
+        <tr>
+          <td colSpan={colSpan} style={{ textAlign: 'center', padding: 10, color: 'var(--text-muted)', fontSize: 12, paddingLeft: indent + 20 }}>
+            No se pudo cargar{' '}
+            <button type="button" className="btn btn-secondary btn-sm" onClick={e => { e.stopPropagation(); loadChildren(childOffset) }}>
+              Reintentar
+            </button>
+          </td>
+        </tr>
+      )}
+      {expanded && !loadingChildren && !errorHijos && children.length === 0 && (
         <tr>
           <td colSpan={colSpan} style={{ textAlign: 'center', padding: 10, color: 'var(--text-muted)', fontSize: 12, paddingLeft: indent + 20 }}>
             Sin {childType === 'season' ? 'temporadas' : 'episodios'}

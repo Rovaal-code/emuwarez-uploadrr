@@ -334,7 +334,8 @@ def library_list(
     offset: int = Query(0, ge=0),
 ) -> LibraryListResponse:
     from emuwarez_uploadrr.services.library import (
-        list_library, count_library, filtrar_por_lo_que_se_ve, subir_a_su_serie, _valores)
+        list_library, list_library_agrupada, count_library, contar_archivos,
+        filtrar_por_lo_que_se_ve, subir_a_su_serie, _valores)
     por_lo_que_se_ve = dict(provider=provider, resolution=resolution, source=source,
                             release_group=release_group, emu=emu, aporte=aporte)
     filtra_lo_que_se_ve = any(por_lo_que_se_ve.values())
@@ -347,63 +348,59 @@ def library_list(
     with _get_conn() as conn:
         ignora_especiales = _ignore_specials(conn)
 
-        def rollups_de(filas: list[dict]) -> dict:
-            series_ids = [r["id"] for r in filas if r["item_type"] == "series"]
-            season_ids = [r["id"] for r in filas if r["item_type"] == "season"]
-            return (_batch_rollups(conn, series_ids, season_ids, ignora_especiales)
-                    if (series_ids or season_ids) else {})
+        def rollups_de(filas: list[dict], ya: Optional[dict] = None) -> dict:
+            ya = ya or {}
+            series_ids = [r["id"] for r in filas if r["item_type"] == "series" and r["id"] not in ya]
+            season_ids = [r["id"] for r in filas if r["item_type"] == "season" and r["id"] not in ya]
+            return {**ya, **(_batch_rollups(conn, series_ids, season_ids, ignora_especiales)
+                             if (series_ids or season_ids) else {})}
 
-        rows = list_library(
-            conn,
-            status=status,
-            request=request_status,
-            nomenclature=nomenclature,
-            item_type=item_type,
-            origin=origin,
-            instance_id=instance_id,
-            parent_id=parent_id,
-            search=search,
-            spanish=spanish,
-            sort=sort,
-            # Sin tope (LIMIT -1): el recorte va después de filtrar.
-            limit=-1 if recorta_despues else limit,
-            offset=0 if recorta_despues else offset,
-            ignore_specials=ignora_especiales,
-            provider=provider, resolution=resolution, source=source, release_group=release_group, emu=emu,
-        )
-        # Recortando después, el total sale de contar lo que queda.
-        total = 0 if recorta_despues else count_library(
-            conn,
-            status=status,
-            request=request_status,
-            nomenclature=nomenclature,
-            item_type=item_type,
-            origin=origin,
-            instance_id=instance_id,
-            parent_id=parent_id,
-            search=search,
-            spanish=spanish,
-        )
-        if filtra_lo_que_se_ve:
-            rollups = rollups_de(rows)
-            filas = filtrar_por_lo_que_se_ve(
-                [_campos_de_fila(r, conn, rollups) for r in rows], **por_lo_que_se_ve)
-        from ...services.library import contar_archivos
+        filtros_sql = dict(
+            status=status, nomenclature=nomenclature, origin=origin, instance_id=instance_id, search=search,
+            spanish=spanish)
         archivos = contar_archivos(conn)
-        if agrupa:
-            # Solo se montan las series y películas que salen en la página.
-            rows = subir_a_su_serie(conn, filas if filtra_lo_que_se_ve else rows,
-                                    sort=sort, ignore_specials=ignora_especiales)
-            total = len(rows)
-            rows = rows[offset:offset + limit]
+        if agrupa and not filtra_lo_que_se_ve:
+            # Todo en SQL: solo se leen y se montan las filas de la página.
+            rows, total = list_library_agrupada(
+                conn, request=request_status, sort=sort, limit=limit, offset=offset,
+                ignore_specials=ignora_especiales, **filtros_sql)
             rollups = rollups_de(rows)
             items = [_to_lib_response(r, conn, rollups) for r in rows]
-        elif filtra_lo_que_se_ve:
-            total = len(filas)
-            items = [LibraryItemResponse(**f) for f in filas[offset:offset + limit]]
         else:
-            rollups = rollups_de(rows)
-            items = [_to_lib_response(r, conn, rollups) for r in rows]
+            rows = list_library(
+                conn,
+                request=request_status,
+                item_type=item_type,
+                parent_id=parent_id,
+                sort=sort,
+                # Sin tope (LIMIT -1): el recorte va después de filtrar.
+                limit=-1 if recorta_despues else limit,
+                offset=0 if recorta_despues else offset,
+                ignore_specials=ignora_especiales,
+                provider=provider, resolution=resolution, source=source, release_group=release_group, emu=emu,
+                **filtros_sql,
+            )
+            # Recortando después, el total sale de contar lo que queda.
+            total = 0 if recorta_despues else count_library(
+                conn, request=request_status, item_type=item_type, parent_id=parent_id, **filtros_sql)
+            rollups = {}
+            if filtra_lo_que_se_ve:
+                rollups = rollups_de(rows)
+                filas = filtrar_por_lo_que_se_ve(
+                    [_campos_de_fila(r, conn, rollups) for r in rows], **por_lo_que_se_ve)
+            if agrupa:
+                # Solo se montan las series y películas que salen en la página.
+                rows, total = subir_a_su_serie(
+                    conn, filas if filtra_lo_que_se_ve else rows, sort=sort, ignore_specials=ignora_especiales,
+                    limit=limit, offset=offset)
+                rollups = rollups_de(rows, rollups)
+                items = [_to_lib_response(r, conn, rollups) for r in rows]
+            elif filtra_lo_que_se_ve:
+                total = len(filas)
+                items = [LibraryItemResponse(**f) for f in filas[offset:offset + limit]]
+            else:
+                rollups = rollups_de(rows)
+                items = [_to_lib_response(r, conn, rollups) for r in rows]
     return LibraryListResponse(
         items=items,
         total=total,
@@ -420,9 +417,9 @@ def library_list(
 @router.get("/library/filter-options")
 def library_filter_options(current_user: dict = Depends(require_auth)) -> dict:
     """Valores presentes en la biblioteca para los filtros de columna."""
-    from ...services.library import library_filter_values
+    from ...services.library import valores_de_filtro
     with _get_conn() as conn:
-        return library_filter_values(conn)
+        return valores_de_filtro(conn)
 
 
 @router.get("/library/emu-sync-status")

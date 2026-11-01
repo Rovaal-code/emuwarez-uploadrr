@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react'
 import { getUploads, countUploads, getUploadJob, startUploadJob, retryUploadJobQueued, cancelUploadJob } from '../api/uploads'
-import { getInstances } from '../api/instances'
+import { useInstancias } from '../hooks/useInstancias'
 import { ApiClientError } from '../api/client'
 import type { UploadJob, InstanceSafeResponse } from '../types/api'
 import { EmptyState, FilaVacia } from '../components/EmptyState'
@@ -306,8 +306,7 @@ function JobRow({ job, instances, onOpen, indent, retryToggle, onCancel, onRetry
 export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => void } = {}) {
   const [jobs, setJobs] = useState<UploadJob[]>([])
   // Only needed to build the Origen deep link (same as Biblioteca's own column).
-  const [instances, setInstances] = useState<InstanceSafeResponse[]>([])
-  useEffect(() => { getInstances().then(setInstances).catch(() => {}) }, [])
+  const instances = useInstancias()
   // Volver aquí no vuelve a enseñar "Cargando…" ni reinicia los filtros: la
   // sección no se desmonta al cambiar de pestaña, se queda montada y oculta
   // (ver AppShell). Esto solo corre la PRIMERA vez que se entra.
@@ -364,6 +363,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
         setJobs(data)
         setTotal(cuantas)
         setCargado(true)
+        setError(null)
       }
     } catch {
       if (!opts?.silent) setError('Error al cargar los trabajos de subida.')

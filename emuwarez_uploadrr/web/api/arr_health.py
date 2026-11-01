@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..dependencies import require_auth
 from ..runtime import _db_path
+from ...services.library_verification import MAX_VERIFICACION
 
 router = APIRouter(tags=["arr-health"])
 
@@ -46,7 +47,7 @@ class _ArrHealthRefreshRequest:
 def arr_health_refresh(
     include_queue: bool = True,
     include_history: bool = True,
-    history_page_size: int = 100,
+    history_page_size: int = Query(100, ge=1, le=500),
     current_user: dict = Depends(require_auth),
 ):
     """Refresca queue e historial ARR y actualiza diagnósticos de biblioteca."""
@@ -79,11 +80,12 @@ def arr_health_refresh(
 
 @router.post("/library/verify-files")
 def verify_library_files(
-    limit: Optional[int] = None,
+    limit: int = Query(MAX_VERIFICACION, ge=1, le=MAX_VERIFICACION),
     status: Optional[str] = None,
     current_user: dict = Depends(require_auth),
 ):
-    """Verifica existencia de archivos en disco para items de biblioteca."""
+    """Verifica existencia de archivos en disco para items de biblioteca (los que hace más que no se
+    comprueban, hasta `limit`). Devuelve solo los recuentos."""
     from emuwarez_uploadrr.services.library_verification import verify_library_files as _verify
     filters: dict = {}
     if status:

@@ -887,6 +887,7 @@ def recompute_after_sync(conn: sqlite3.Connection) -> None:
         recompute_spanish_flags(conn)
     except Exception:
         logger.warning("No se pudo recalcular el castellano (audio/subtítulos) tras la sincronización de biblioteca", exc_info=True)
+    olvidar_valores_de_filtro()
 
 
 def sync_all(conn: sqlite3.Connection, *, include_episodes: bool = False) -> dict:
@@ -1271,6 +1272,23 @@ _LIBRARY_SORT = {
 DEFAULT_LIBRARY_SORT = "title_asc"
 
 
+def _columnas_de_lista(conn: sqlite3.Connection) -> str:
+    # Todo menos raw_json: la lista no lo usa y es lo que más pesa de cada fila.
+    return ", ".join(c[1] for c in conn.execute("PRAGMA table_info(library_items)") if c[1] != "raw_json")
+
+
+def _orden_de_lista(sort: Optional[str], ignore_specials: bool) -> str:
+    # Seasons/episodes carry season_number/episode_number and must sort
+    # numerically (Temporada 1, 2, …, 10, not string order). Top-level rows
+    # (movies/series) have both NULL, so they tie there and fall through to the
+    # user-selected sort.
+    sort_sql = _LIBRARY_SORT.get(sort or DEFAULT_LIBRARY_SORT, _LIBRARY_SORT[DEFAULT_LIBRARY_SORT]).format(
+        tamano=_tamano_efectivo(ignore_specials))
+    # El id desempata: con títulos repetidos y el mismo updated_at, cada página (una consulta aparte)
+    # podría ordenarlos distinto y repetir u omitir una fila.
+    return f" ORDER BY season_number IS NOT NULL, season_number, episode_number, {sort_sql}, id"
+
+
 def list_library(
     conn: sqlite3.Connection,
     *,
@@ -1318,23 +1336,69 @@ def list_library(
     if hoja:
         where.append(f"(item_type IN ('series', 'season') OR ({' AND '.join(hoja)}))")
         params.extend(hoja_params)
-    # Todo menos raw_json: la lista no lo usa y es lo que más pesa de cada fila.
-    columnas = ", ".join(c[1] for c in conn.execute("PRAGMA table_info(library_items)") if c[1] != "raw_json")
-    sql = f"SELECT {columnas} FROM library_items"
+    sql = f"SELECT {_columnas_de_lista(conn)} FROM library_items"
     if where:
         sql += " WHERE " + " AND ".join(where)
-    # Seasons/episodes carry season_number/episode_number and must sort
-    # numerically (Temporada 1, 2, …, 10, not string order). Top-level rows
-    # (movies/series) have both NULL, so they tie there and fall through to the
-    # user-selected sort.
-    sort_sql = _LIBRARY_SORT.get(sort or DEFAULT_LIBRARY_SORT, _LIBRARY_SORT[DEFAULT_LIBRARY_SORT]).format(
-        tamano=_tamano_efectivo(ignore_specials))
-    sql += (
-        " ORDER BY season_number IS NOT NULL, season_number, episode_number,"
-        f" {sort_sql} LIMIT ? OFFSET ?"
-    )
+    sql += _orden_de_lista(sort, ignore_specials) + " LIMIT ? OFFSET ?"
     params.extend([limit, offset])
     return [dict(row) for row in conn.execute(sql, params).fetchall()]
+
+
+# Cada fila sube hasta su película o serie: un capítulo, a la serie de su temporada; una temporada, a su serie.
+_RAIZ_SQL = """CASE WHEN parent_id IS NULL THEN id ELSE COALESCE(
+    (SELECT p.parent_id FROM library_items p WHERE p.id = library_items.parent_id AND p.item_type = 'season'),
+    parent_id) END"""
+
+
+def _paginar_raices(
+    conn: sqlite3.Connection, raices_sql: str, params: list, *, sort: Optional[str], ignore_specials: bool,
+    limit: int, offset: int,
+) -> tuple[list[dict], int]:
+    """Las películas y series (nivel raíz) cuyo id sale de `raices_sql`, ya ordenadas y
+    paginadas en SQL, y cuántas son en total."""
+    base = f" FROM library_items WHERE parent_id IS NULL AND id IN ({raices_sql})"
+    # El total sale de la misma consulta que la página (COUNT(*) OVER () se calcula antes del
+    # LIMIT): con dos consultas, una sincronización entre ambas daba un total de otra biblioteca.
+    sql = (f"SELECT {_columnas_de_lista(conn)}, COUNT(*) OVER () AS _total_raices{base}"
+           f"{_orden_de_lista(sort, ignore_specials)} LIMIT ? OFFSET ?")
+    filas = [dict(r) for r in conn.execute(sql, [*params, limit, offset])]
+    if filas:
+        total = filas[0]["_total_raices"]
+        for fila in filas:
+            del fila["_total_raices"]
+        return filas, total
+    # Una página vacía (desplazamiento más allá del final) no trae el total: se cuenta aparte.
+    return [], conn.execute("SELECT COUNT(*)" + base, params).fetchone()[0]
+
+
+def list_library_agrupada(
+    conn: sqlite3.Connection,
+    *,
+    status: Filtro = None,
+    request: Filtro = None,
+    nomenclature: Filtro = None,
+    origin: Filtro = None,
+    instance_id: Filtro = None,
+    search: Optional[str] = None,
+    spanish: Filtro = None,
+    sort: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+    ignore_specials: bool = True,
+) -> tuple[list[dict], int]:
+    """La biblioteca filtrada en plano, con lo que cumple subido hasta su
+    película o serie (ver subir_a_su_serie), pero todo en SQL: solo se leen las
+    filas de la página. Devuelve la página y el total."""
+    where, params = _build_library_filter(
+        status=status, request=request, nomenclature=nomenclature, origin=origin,
+        instance_id=instance_id, search=search, spanish=spanish,
+    )
+    # Ignorando especiales, la fila de la serie no los cuenta: no la traen.
+    if ignore_specials:
+        where.append("(season_number IS NULL OR season_number != 0)")
+    raices = f"SELECT {_RAIZ_SQL} FROM library_items" + (" WHERE " + " AND ".join(where) if where else "")
+    return _paginar_raices(conn, raices, params, sort=sort, ignore_specials=ignore_specials,
+                           limit=limit, offset=offset)
 
 
 # Aportar solo tiene sentido con algo que tienes: una película o un capítulo
@@ -1383,9 +1447,11 @@ def filtrar_por_lo_que_se_ve(
 
 def subir_a_su_serie(
     conn: sqlite3.Connection, filas: list[dict], *, sort: Optional[str] = None, ignore_specials: bool = True,
-) -> list[dict]:
+    limit: int = -1, offset: int = 0,
+) -> tuple[list[dict], int]:
     """La biblioteca filtrada en plano sube cada fila que cumple hasta su
     película o serie, como ya hacía buscar: lo de dentro se ve desplegándola.
+    Devuelve la página pedida (ordenada y recortada en SQL) y el total.
 
     Quedarse con el nivel más alto que cumple no bastaba: con Estado =
     Disponible una serie Parcial no cumple, con eMuwarez = No una serie a
@@ -1395,9 +1461,8 @@ def subir_a_su_serie(
     # Ignorando especiales, la fila de la serie no los cuenta: no la traen.
     raices = {it["id"] if it["parent_id"] is None else serie_de.get(it["parent_id"], it["parent_id"])
               for it in filas if not (ignore_specials and it["season_number"] == 0)}
-    arriba = list_library(conn, parent_id=TOP_LEVEL_PARENT_FILTER, sort=sort, limit=-1,
-                          ignore_specials=ignore_specials)
-    return [it for it in arriba if it["id"] in raices]
+    return _paginar_raices(conn, "SELECT value FROM json_each(?)", [json.dumps(list(raices - {None}))],
+                           sort=sort, ignore_specials=ignore_specials, limit=limit, offset=offset)
 
 
 def count_library(
@@ -2594,9 +2659,9 @@ def library_filter_values(conn) -> dict:
         "SELECT path, source FROM library_items "
         "WHERE item_type IN ('movie', 'episode') AND path IS NOT NULL"
     ).fetchall()
+    from .nomenclature import infer_provider_from_item
     codes = set()
     for r in prows:
-        from .nomenclature import infer_provider_from_item
         c = infer_provider_from_item({"path": r["path"], "source": r["source"]})
         if c:
             codes.add(c)
@@ -2628,21 +2693,18 @@ def library_filter_values(conn) -> dict:
     ]
 
     # emu_in_catalog/emu_aportes only get computed by the (throttled)
-    # eMuwarez catalog sync — read once and derive both which "¿En
-    # eMuwarez?" values and which "Aportes" values actually occur, rather
-    # than always offering both fixed options regardless of whether any
-    # item currently has them.
-    emu_rows = conn.execute("SELECT emu_in_catalog, emu_aportes FROM library_items").fetchall()
-    has_candidate = has_present = has_aporte_yes = has_aporte_no = False
-    for r in emu_rows:
-        ic = r["emu_in_catalog"]
-        if ic == 0:
-            has_candidate = True
-            has_aporte_yes = True
-        elif ic == 1:
-            has_present = True
+    # eMuwarez catalog sync — derive both which "¿En eMuwarez?" values and
+    # which "Aportes" values actually occur, rather than always offering both
+    # fixed options regardless of whether any item currently has them.
+    # Valores distintos, no una lectura de todas las filas.
+    emu_vistos = {r[0] for r in conn.execute(
+        "SELECT DISTINCT emu_in_catalog FROM library_items WHERE emu_in_catalog IN (0, 1)")}
+    has_candidate, has_present = 0 in emu_vistos, 1 in emu_vistos
+    has_aporte_yes, has_aporte_no = has_candidate, False
+    if has_present:
+        for (raw,) in conn.execute("SELECT DISTINCT emu_aportes FROM library_items WHERE emu_in_catalog = 1"):
             try:
-                aportes = _json.loads(r["emu_aportes"]) if r["emu_aportes"] else []
+                aportes = _json.loads(raw) if raw else []
             except (TypeError, ValueError):
                 aportes = []
             if aportes:
@@ -2694,6 +2756,34 @@ def library_filter_values(conn) -> dict:
     "aporte_states": aporte_states,
     "spanish_states": spanish_states,
     }
+
+
+# Calcularlos recorre la biblioteca entera y el desplegable los pide al abrir
+# Biblioteca: se guardan hasta que termine una sincronización, y un minuto como
+# mucho porque un estado nuevo (una subida acabada) también cambia la lista.
+_VALORES_DE_FILTRO_SEGUNDOS = 60
+_valores_de_filtro: dict[str, tuple[float, dict]] = {}
+# Sube con cada olvidar_valores_de_filtro(): un cálculo que empezó antes de una
+# sincronización no guarda lo que leyó, que ya es viejo.
+_generacion_de_filtros = 0
+
+
+def valores_de_filtro(conn) -> dict:
+    ruta = getattr(conn, "ruta", None)
+    guardado = _valores_de_filtro.get(ruta)
+    if guardado and time.monotonic() - guardado[0] < _VALORES_DE_FILTRO_SEGUNDOS:
+        return guardado[1]
+    generacion = _generacion_de_filtros
+    valores = library_filter_values(conn)
+    if ruta and generacion == _generacion_de_filtros:
+        _valores_de_filtro[ruta] = (time.monotonic(), valores)
+    return valores
+
+
+def olvidar_valores_de_filtro() -> None:
+    global _generacion_de_filtros
+    _generacion_de_filtros += 1
+    _valores_de_filtro.clear()
 
 
 # Los campos con los que la lista de Subidas adorna cada trabajo: carátula,

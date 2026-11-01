@@ -1,9 +1,5 @@
 import { api } from './client'
-import type { NomenclatureExistsResponse, NomenclatureProposal, NomenclatureApplyResult } from '../types/api'
-
-export async function getNomenclature(itemId: number): Promise<NomenclatureExistsResponse> {
-  return api.get<NomenclatureExistsResponse>(`/library/${itemId}/nomenclature`)
-}
+import type { NomenclatureProposal, NomenclatureApplyResult } from '../types/api'
 
 // Phase 10A — Sources, Providers, Fields, MKV title
 
@@ -215,25 +211,6 @@ export async function previewTrackRemux(itemId: number): Promise<TrackRemuxPrevi
 export interface TrackRemuxOverride {
   new_name?: string
   default_after?: boolean
-}
-
-export async function applyTrackRemux(
-  itemId: number,
-  options: {
-    dryRun?: boolean
-    apply?: boolean
-    confirmation?: string | null
-    /** Manual edits from the wizard's editable table, keyed by track id. */
-    overrides?: Record<number, TrackRemuxOverride>
-  } = {},
-): Promise<TrackRemuxPreview> {
-  const { dryRun = true, apply = false, confirmation = null, overrides } = options
-  const overridesPayload = overrides && Object.keys(overrides).length > 0
-    ? Object.fromEntries(Object.entries(overrides).map(([id, ov]) => [String(id), ov]))
-    : undefined
-  return api.post(`/library/${itemId}/track-remux/apply`, {
-    dry_run: dryRun, apply, confirmation, overrides: overridesPayload,
-  })
 }
 
 export async function previewNomenclature(itemId: number, forceRefresh = false): Promise<NomenclatureProposal> {

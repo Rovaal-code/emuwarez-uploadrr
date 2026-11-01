@@ -1,32 +1,5 @@
 // Domain types and constants for the UI
 
-export type LocalStatus =
-  | 'Disponible'
-  | 'Faltante'
-  | 'En cola'
-  | 'Descargando'
-  | 'Pendiente de importar'
-  | 'Error de importación'
-  | 'Error de búsqueda'
-  | 'Subiendo'
-  | 'Subido'
-  | 'Error'
-  | 'Desconocido'
-
-export type RequestStatus =
-  | 'Sin petición'
-  | 'Compatible'
-  | 'Parcial'
-  | 'No compatible'
-  | 'Llena'
-  | 'Desconocida'
-
-export type NomenclatureStatus = 'Correcta' | 'No adaptada' | 'N/A' | 'Desconocida'
-
-export type InstanceType = 'radarr' | 'sonarr'
-
-export type ItemType = 'movie' | 'series' | 'season' | 'episode'
-
 // Sidebar navigation items
 export interface NavItem {
   id: string

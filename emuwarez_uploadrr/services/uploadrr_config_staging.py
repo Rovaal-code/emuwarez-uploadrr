@@ -96,8 +96,14 @@ def _write_atomic(path: Path, data: bytes) -> None:
     real = Path(os.path.realpath(path))
     real.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = real.with_suffix(real.suffix + ".tmp")
-    tmp_path.write_bytes(data)
+    # El config lleva claves: el temporal nace privado y, antes de sustituir, toma el
+    # modo del fichero que reemplaza (os.replace no lo conserva y la umask lo ensancharía).
+    modo = stat.S_IMODE(real.stat().st_mode) if real.exists() else 0o600
+    tmp_path.unlink(missing_ok=True)
     try:
+        with os.fdopen(os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "wb") as destino:
+            destino.write(data)
+        os.chmod(tmp_path, modo)
         os.replace(tmp_path, real)
     except OSError:
         tmp_path.unlink(missing_ok=True)

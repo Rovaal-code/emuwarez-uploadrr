@@ -591,6 +591,8 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   const edicionesActuales = useRef(remuxEdits)
   edicionesActuales.current = remuxEdits
   const versionIdioma = useRef(0)
+  // Cambiar de elemento invalida las respuestas pendientes del anterior, aunque se vuelva a él.
+  useEffect(() => { versionIdioma.current++ }, [targetId])
   const [showRemuxCard, setShowRemuxCard] = useState(false)
 
   // Step 1 (season target only) — the pack plan: consistency across
@@ -1205,6 +1207,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   const elegirIdioma = async (trackId: number, code: string) => {
     const id = targetId
     if (id == null) return
+    editado.current = true
     const previas = edicionesActuales.current
     const nuevas = { ...previas, [trackId]: { ...previas[trackId], language: code || undefined } }
     edicionesActuales.current = nuevas
@@ -1223,7 +1226,17 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
       setFields(prev => ({ ...prev, audio_summary: campos.fields?.audio_summary }))
       setAudioWarning(campos.audio_warning ?? null)
       setRemuxPreview(plan)
-    } catch { /* se queda lo de antes: el nombre no lleva esa pista */ }
+    } catch {
+      // Sin recálculo, el nombre sigue sin esa pista: se deshace la elección para que el remux
+      // no aplique un idioma que el nombre no dice. Solo si nadie ha elegido otra cosa después.
+      if (objetivoActual.current !== id || version !== versionIdioma.current) return
+      const revertidas = { ...edicionesActuales.current }
+      if (previas[trackId] === undefined) delete revertidas[trackId]
+      else revertidas[trackId] = previas[trackId]
+      edicionesActuales.current = revertidas
+      setRemuxEdits(revertidas)
+      setAudioWarning('No se pudo recalcular el nombre con ese idioma; la pista sigue sin idioma. Vuelve a elegirlo.')
+    }
   }
 
   // Debounced live preview of the final torrent name + internal title.

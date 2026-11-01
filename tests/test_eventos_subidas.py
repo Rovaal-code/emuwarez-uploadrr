@@ -94,9 +94,10 @@ def test_el_registro_avisa_agrupado(trabajo, monkeypatch):
     """Cientos de líneas por segundo, un aviso por segundo. Y el aviso NO lleva
     las líneas: solo dice que las hay."""
     from emuwarez_uploadrr.services import upload_execution
+    from emuwarez_uploadrr.services.upload_execution import registro
 
     avisos: list = []
-    monkeypatch.setattr(upload_execution, "publicar_agrupado",
+    monkeypatch.setattr(registro, "publicar_agrupado",
                         lambda clave, tipo, datos=None, cada=1.0: avisos.append((clave, tipo, datos)))
 
     for i in range(20):
@@ -172,7 +173,8 @@ def test_cerrar_una_fase_avisa_con_la_fase_ya_escrita(trabajo, monkeypatch):
         vistos.append((tipo, datos["phase"], fases[datos["phase"]]))
         return 0
 
-    monkeypatch.setattr(ue, "publicar", espia)
+    from emuwarez_uploadrr.services.upload_execution import progreso
+    monkeypatch.setattr(progreso, "publicar", espia)
     ue.mark_phase_done(trabajo, "uploading_emu")
     ue.mark_phase_failed(trabajo, "qbittorrent_add")
 

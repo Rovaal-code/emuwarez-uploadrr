@@ -56,6 +56,12 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   nombre, preparar e iniciar, cada uno con su `stage` (que es su punto de cancelación), su fila de Fases y lo que
   deja en `_Trabajo` para el siguiente. Mismo comportamiento que antes; lo fijan
   `test_la_preparacion_recorre_los_pasos_en_orden` y `test_cancelar_para_la_preparacion_en_el_siguiente_punto`.
+- **Oleada 3, partir upload_execution.py:** pasa a ser el paquete `services/upload_execution/`: `comun` (constantes, fases,
+  secretos), `consultas` (leer y validar), `registro` (logs y artefactos), `estado` (transiciones y avisos), `config`
+  (config.yaml compartido), `concurrencia` (puerta de «Subidas en paralelo»), `progreso` (fases), `procesos`
+  (subprocesos en marcha), `ejecucion` (el subproceso y `start_upload_job`) y `ciclo_de_vida` (reintentar, cancelar,
+  borrar). `__init__` re-exporta todo: `from ...services.upload_execution import X` sigue igual, pero un test que
+  parchee un nombre debe hacerlo en el módulo que lo usa.
 - **Oleada 3, partir cli.py:** `cli.py` queda como punto de entrada (`main`, `modern_main` y el despacho); los comandos
   viven en el paquete `comandos/`: `parser.py` (`build_parser`), `comunes.py` (tabla, traducción de filtros, conexión),
   `biblioteca.py` (instancias, sync, biblioteca, peticiones, faltantes, *arr), `nomenclatura.py` (nomenclatura y título
@@ -83,10 +89,9 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
 
 ## Siguiente (oleada 3)
 
-1. Partir `upload_execution.py`.
-2. Partir `SettingsPage.tsx`; los estilos en línea, a clases.
-3. `httpx` y un solo limitador de eMuwarez compartido (30 peticiones por minuto).
-4. ESLint `react-hooks`.
+1. Partir `SettingsPage.tsx`; los estilos en línea, a clases.
+2. `httpx` y un solo limitador de eMuwarez compartido (30 peticiones por minuto).
+3. ESLint `react-hooks`.
 
 ## Oleada 4
 

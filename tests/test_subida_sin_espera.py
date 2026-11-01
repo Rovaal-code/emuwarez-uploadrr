@@ -15,7 +15,9 @@ import pytest
 
 from emuwarez_uploadrr.services import upload_execution as ue
 from emuwarez_uploadrr.services import upload_queue as uq
-from emuwarez_uploadrr.services.upload_execution import cancel_upload_job, get_upload_job
+from emuwarez_uploadrr.services.upload_execution import (
+    ciclo_de_vida, concurrencia, ejecucion, cancel_upload_job, get_upload_job,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -37,8 +39,11 @@ def db_conn(isolated_db):
 def puerta(monkeypatch):
     """Una puerta de "Subidas en paralelo" propia del test, con límite 1."""
     g = ue._UploadConcurrencyGate()
-    monkeypatch.setattr(ue, "_upload_concurrency_gate", g)
-    monkeypatch.setattr(ue, "get_upload_max_concurrent", lambda conn=None: 1)
+    # Quien usa la puerta la importó por nombre: hay que cambiarla en cada módulo
+    # (upload_queue la pide al paquete en cada llamada).
+    for modulo in (ue, ejecucion, ciclo_de_vida):
+        monkeypatch.setattr(modulo, "_upload_concurrency_gate", g)
+    monkeypatch.setattr(concurrencia, "get_upload_max_concurrent", lambda conn=None: 1)
     return g
 
 
@@ -105,7 +110,7 @@ def test_sin_nada_en_marcha_la_subida_sale_de_la_cola_al_momento(
 
 def test_sin_nada_en_marcha_no_hay_puesto_ni_aviso_de_espera(db_conn, puerta, monkeypatch):
     avisos = []
-    monkeypatch.setattr(ue, "publicar", lambda tipo, datos=None: avisos.append(datos) or 0)
+    monkeypatch.setattr(concurrencia, "publicar", lambda tipo, datos=None: avisos.append(datos) or 0)
     jid = _fila_en_cola(db_conn)
 
     inicio = time.monotonic()
@@ -122,7 +127,7 @@ def test_sin_nada_en_marcha_no_hay_puesto_ni_aviso_de_espera(db_conn, puerta, mo
 
 def test_el_puesto_en_la_cola_sigue_el_orden_de_entrada(db_conn, puerta, monkeypatch):
     avisos = []
-    monkeypatch.setattr(ue, "publicar", lambda tipo, datos=None: avisos.append((tipo, datos)) or 0)
+    monkeypatch.setattr(concurrencia, "publicar", lambda tipo, datos=None: avisos.append((tipo, datos)) or 0)
     ocupa, a, b = _fila_en_cola(db_conn), _fila_en_cola(db_conn), _fila_en_cola(db_conn)
     assert puerta.acquire(ocupa)
 
@@ -415,7 +420,8 @@ def test_si_entra_mientras_se_cancela_se_cancela_como_en_marcha(db_conn, tmp_pat
         lecturas.append(job_id)
         return vieja if len(lecturas) == 1 else real(job_id, conn=conn)
 
-    monkeypatch.setattr(ue, "get_upload_job", leer)
+    monkeypatch.setattr(ue, "get_upload_job", leer)  # upload_queue lo pide al paquete
+    monkeypatch.setattr(ciclo_de_vida, "get_upload_job", leer)
     r = cancel_upload_job(jid, conn=db_conn)
 
     assert r["ok"] is True
@@ -442,7 +448,8 @@ def test_si_sale_de_la_cola_mientras_se_cancela_no_se_pisa_el_running(db_conn, t
     retiradas = []
     import emuwarez_uploadrr.services.upload_queue as uq
     monkeypatch.setattr(uq, "retirar_de_la_cola", lambda j: retiradas.append(j))
-    monkeypatch.setattr(ue, "get_upload_job", leer)
+    monkeypatch.setattr(ue, "get_upload_job", leer)  # upload_queue lo pide al paquete
+    monkeypatch.setattr(ciclo_de_vida, "get_upload_job", leer)
     r = cancel_upload_job(jid, conn=db_conn)
 
     assert r["ok"] is True and len(lecturas) >= 2

@@ -90,7 +90,7 @@ def test_los_alias_antiguos_son_de_ajustes_conocidos():
 
 
 def test_la_concurrencia_de_subidas_es_la_del_registro():
-    from emuwarez_uploadrr.services import upload_execution as ue
+    from emuwarez_uploadrr.services.upload_execution import concurrencia as ue
     a = AJUSTES["upload_max_concurrent"]
     assert (ue.UPLOAD_MAX_CONCURRENT_SETTING_KEY, ue.UPLOAD_MAX_CONCURRENT_CHOICES,
             ue.UPLOAD_MAX_CONCURRENT_DEFAULT) == (a.clave, a.opciones, a.defecto)

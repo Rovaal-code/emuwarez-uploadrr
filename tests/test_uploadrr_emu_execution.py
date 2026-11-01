@@ -185,17 +185,17 @@ def test_un_fallo_al_guardar_el_log_no_cuelga_la_subida(db_conn, tmp_path, fake_
     nadie vaciaba la tubería y Uploadrr se quedaba bloqueado hasta el timeout."""
     import sqlite3
 
-    from emuwarez_uploadrr.services import upload_execution
+    from emuwarez_uploadrr.services.upload_execution import ejecucion
 
     monkeypatch.setenv("FAKE_UPLOADRR_LINES", "1000")
-    original = upload_execution.append_upload_log
+    original = ejecucion.append_upload_log
 
     def falla_en_stdout(job_id, level, message, *args, stream="system", **kwargs):
         if stream == "stdout":
             raise sqlite3.OperationalError("database is locked")
         return original(job_id, level, message, *args, stream=stream, **kwargs)
 
-    monkeypatch.setattr(upload_execution, "append_upload_log", falla_en_stdout)
+    monkeypatch.setattr(ejecucion, "append_upload_log", falla_en_stdout)
     prepared = tmp_path / "prepared.mkv"
     prepared.write_bytes(b"\x00" * 16)
     _insert_settings(db_conn, fake_uploadrr_emu_dir, fake_uploadrr_python_path, timeout=30)

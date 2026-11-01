@@ -3,6 +3,7 @@
  * El asistente de subida de punta a punta, con el servidor simulado: lo que pide, lo que enseña y lo que encola
  * en cada camino (película, pack de temporada, varias temporadas, varios capítulos), y cómo se cierra.
  */
+import { act } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../api/nomenclature', () => ({
@@ -445,10 +446,222 @@ describe('varias temporadas de una serie', () => {
     expect(m(subidas.queueUpload).mock.calls[0][5]).toBeUndefined()
   })
 
+  it('cambiar el Proveedor en el paso 1 vuelve a comprobar el contenido de esa temporada', async () => {
+    await abrir(SERIE, { preselect: { season: 1 } })
+    await pulsar(await esperar(() => boton('Temporada 2')))
+    await pulsar(boton('Continuar'))
+    await esperar(() => texto().includes('✓ 2 capítulo(s) listos'))
+    await pulsar(boton('Continuar'))
+    await esperar(() => texto().includes('✓ Todo listo: 2 temporadas'))
+    await pulsar(boton('Volver'))
+    await elegir(await esperar(() => campo<HTMLSelectElement>('Proveedor')), 'NF')
+    await pulsar(boton('Continuar'))
+    await esperar(() => m(subidas.runUploadChecks).mock.calls.some(c => c[0] === 31 && c[2] === 'NF'))
+    await esperar(() => texto().includes('✓ Todo listo: 2 temporadas'))
+    expect(m(subidas.runUploadChecks).mock.calls).toEqual([
+      [31, 'environment'], [31, 'content', undefined], [32, 'content', undefined], [31, 'content', 'NF'],
+    ])
+  })
+
+  it('si falla la comprobación con el Proveedor nuevo, no se sube con la del anterior', async () => {
+    m(subidas.runUploadChecks).mockImplementation(async (id, alcance, proveedor) => {
+      if (alcance === 'environment') return ENTORNO as never
+      if (id === 31 && proveedor === 'NF') throw new Error('Sin conexión')
+      return LISTO as never
+    })
+    await abrir(SERIE, { preselect: { season: 1 } })
+    await pulsar(await esperar(() => boton('Temporada 2')))
+    await pulsar(boton('Continuar'))
+    await esperar(() => texto().includes('✓ 2 capítulo(s) listos'))
+    await pulsar(boton('Continuar'))
+    await esperar(() => texto().includes('✓ Todo listo: 2 temporadas'))
+    await pulsar(boton('Volver'))
+    await elegir(await esperar(() => campo<HTMLSelectElement>('Proveedor')), 'NF')
+    await pulsar(boton('Continuar'))
+    await esperar(() => texto().includes('Sin conexión'))
+    expect(boton('Subir todas')!.disabled).toBe(true)
+  })
+
+  it('una pasada abandonada que responde tarde no pisa la nueva', async () => {
+    const vieja = diferida<unknown>()
+    let veces = 0
+    m(subidas.runUploadChecks).mockImplementation(async (id, alcance) => {
+      if (alcance === 'environment') return ENTORNO as never
+      if (id === 32 && veces++ === 0) return vieja.promesa as never
+      return LISTO as never
+    })
+    await abrir(SERIE, { preselect: { season: 1 } })
+    await pulsar(await esperar(() => boton('Temporada 2')))
+    await pulsar(boton('Continuar'))
+    await esperar(() => texto().includes('✓ 2 capítulo(s) listos'))
+    await pulsar(boton('Continuar'))
+    await esperar(() => veces === 1)
+    await pulsar(boton('Volver'))
+    await pulsar(await esperar(() => boton('Continuar')))
+    await esperar(() => texto().includes('✓ Todo listo: 2 temporadas'))
+    await act(async () => {
+      vieja.resolver({ ready: false, checks: [{ id: 'season_pack', label: 'Pack', status: 'fail', message: 'Respuesta vieja' }] })
+    })
+    expect(texto()).toContain('✓ Todo listo: 2 temporadas')
+    expect(texto()).not.toContain('Respuesta vieja')
+  })
+
   it('sin marcar ninguna no avanza', async () => {
     await abrir(SERIE)
     await esperar(() => boton('Temporada 1'))
     await pulsar(boton('Continuar'))
     expect(texto()).toContain('Selecciona al menos una temporada')
+  })
+})
+
+// Lo que pasa cuando eMuwarez o la red fallan, o una respuesta llega tarde (#139).
+describe('fallos de red y respuestas tardías', () => {
+  const FALLO = { ready: false, checks: [{ id: 'emuwarez', label: 'eMuwarez responde', status: 'fail', message: 'eMuwarez no responde' }] }
+
+  describe('una película', () => {
+    // Dos pasadas de comprobaciones: la primera sigue en vuelo cuando se vuelve al paso 1 y se pide la segunda.
+    async function dosPasadas() {
+      const vieja = diferida<unknown>()
+      const nueva = diferida<unknown>()
+      m(subidas.runUploadChecks).mockReturnValueOnce(vieja.promesa as never).mockReturnValueOnce(nueva.promesa as never)
+      await abrir(PELICULA)
+      await esperar(() => texto().includes('Dune WEB-DL AMZN [GRP]'))
+      await pulsar(boton('Continuar'))
+      await pulsar(await esperar(() => boton('Volver')))
+      await pulsar(await esperar(() => boton('Continuar')))
+      await esperar(() => m(subidas.runUploadChecks).mock.calls.length === 2)
+      return { vieja, nueva }
+    }
+
+    it('la pasada vieja que acaba antes no termina la nueva', async () => {
+      const { vieja, nueva } = await dosPasadas()
+      await act(async () => { vieja.resolver(LISTO) })
+      expect(texto()).not.toContain('Todo listo')
+      expect(boton('Subir a eMuwarez')!.disabled).toBe(true)
+      nueva.resolver(FALLO)
+      await esperar(() => texto().includes('✗ La subida no se puede realizar'))
+    })
+
+    it('la pasada vieja que acaba después no habilita la subida', async () => {
+      const { vieja, nueva } = await dosPasadas()
+      nueva.resolver(FALLO)
+      await esperar(() => texto().includes('✗ La subida no se puede realizar'))
+      await act(async () => { vieja.resolver(LISTO) })
+      expect(texto()).not.toContain('Todo listo')
+      expect(texto()).toContain('✗ La subida no se puede realizar')
+      expect(boton('Subir a eMuwarez')!.disabled).toBe(true)
+    })
+  })
+
+  describe('varios capítulos', () => {
+    beforeEach(() => {
+      m(biblioteca.getLibrary).mockResolvedValue({ items: [E1, E2], total: 2 } as never)
+      m(nom.getNomenclatureFields).mockImplementation(async id => respuestaCampos({ title: 'Serie', tag: `G${id}` }) as never)
+    })
+
+    const selectorCapitulo = () => document.querySelector<HTMLSelectElement>('.modal-body > div > select') ?? undefined
+
+    async function elegirDosCapitulos() {
+      await abrir(TEMPORADA)
+      await pulsar(await esperar(() => tarjeta('Selección de capítulos')))
+      await pulsar(boton('E01'))
+      await pulsar(boton('E02'))
+      await pulsar(boton('Continuar'))
+    }
+
+    it('si no llegan los sources, la precarga avisa y «Reintentar» la repite entera', async () => {
+      m(nom.getEmuSources).mockRejectedValueOnce(new Error('Sin conexión'))
+      await elegirDosCapitulos()
+      await esperar(() => texto().includes('Sin conexión') && boton('↻ Reintentar'))
+      await pulsar(boton('↻ Reintentar'))
+      await esperar(() => texto().includes('Serie WEB-DL AMZN [G21]'))
+      expect(nom.getNomenclatureFields).toHaveBeenCalledWith(22)
+      await elegir(selectorCapitulo(), '22')
+      await esperar(() => texto().includes('Serie WEB-DL AMZN [G22]'))
+    })
+
+    it('si falla un capítulo, «Reintentar» lo vuelve a generar y no queda el fallo guardado', async () => {
+      m(nom.getNomenclatureFields).mockRejectedValueOnce(new Error('Sin conexión'))
+      await elegirDosCapitulos()
+      await pulsar(await esperar(() => texto().includes('Sin conexión') && boton('↻ Reintentar')))
+      await esperar(() => texto().includes('Serie WEB-DL AMZN [G21]'))
+      await elegir(selectorCapitulo(), '22')
+      await esperar(() => texto().includes('Serie WEB-DL AMZN [G22]'))
+      await elegir(selectorCapitulo(), '21')
+      await esperar(() => texto().includes('Serie WEB-DL AMZN [G21]'))
+      expect(texto()).not.toContain('Sin conexión')
+      // El que salió bien no se vuelve a pedir: un fallo nuevo lo dejaría bloqueado.
+      expect(m(nom.getNomenclatureFields).mock.calls.filter(c => c[0] === 22)).toHaveLength(1)
+    })
+
+    // El entorno falla la primera vez y responde bien después.
+    function entornoQueFallaUnaVez(fallo: () => Promise<unknown>) {
+      let veces = 0
+      m(subidas.runUploadChecks).mockImplementation(async (_id, alcance) => {
+        if (alcance !== 'environment') return LISTO as never
+        return (veces++ === 0 ? fallo() : ENTORNO) as never
+      })
+    }
+
+    it('un entorno fallido se puede volver a comprobar sin repetir el contenido', async () => {
+      entornoQueFallaUnaVez(async () => FALLO)
+      await elegirDosCapitulos()
+      await esperar(() => texto().includes('Serie WEB-DL AMZN [G21]'))
+      await pulsar(boton('Continuar'))
+      await esperar(() => texto().includes('✗ La subida no se puede realizar'))
+      expect(boton('Subir todos')!.disabled).toBe(true)
+      await pulsar(await esperar(() => boton('↻ Volver a comprobar')))
+      await esperar(() => texto().includes('✓ Todo listo: 2 capítulos'))
+      expect(m(subidas.runUploadChecks).mock.calls).toEqual([
+        [21, 'environment'], [21, 'content', undefined], [22, 'content', undefined], [21, 'environment'],
+      ])
+    })
+
+    it('volver al paso 1 y entrar otra vez repite el entorno fallido y conserva lo editado', async () => {
+      entornoQueFallaUnaVez(async () => FALLO)
+      await elegirDosCapitulos()
+      await esperar(() => texto().includes('Serie WEB-DL AMZN [G21]'))
+      await elegir(campo('Tag'), 'OTRO')
+      await pulsar(boton('Continuar'))
+      await esperar(() => texto().includes('✗ La subida no se puede realizar'))
+      await pulsar(boton('Volver'))
+      await pulsar(await esperar(() => boton('Continuar')))
+      await esperar(() => texto().includes('✓ Todo listo: 2 capítulos'))
+      await pulsar(boton('Subir todos'))
+      await esperar(() => texto().includes('2 de 2 capítulo(s) encolado(s)'))
+      expect(nom.saveNomenclatureFields).toHaveBeenCalledWith(21, expect.objectContaining({ tag: 'OTRO' }))
+    })
+
+    it('si la petición del entorno no llega, no dice «Todo listo» y deja reintentar', async () => {
+      entornoQueFallaUnaVez(() => Promise.reject(new Error('Sin conexión')))
+      await elegirDosCapitulos()
+      await esperar(() => texto().includes('Serie WEB-DL AMZN [G21]'))
+      await pulsar(boton('Continuar'))
+      await esperar(() => texto().includes('Sin conexión'))
+      expect(texto()).not.toContain('Todo listo')
+      expect(boton('Subir todos')!.disabled).toBe(true)
+      await pulsar(await esperar(() => boton('↻ Volver a comprobar')))
+      await esperar(() => texto().includes('✓ Todo listo: 2 capítulos'))
+    })
+
+    it('si la de un capítulo no llega, no dice «Todo listo» y al reintentar solo pide la que falta', async () => {
+      let veces = 0
+      m(subidas.runUploadChecks).mockImplementation(async (id, alcance) => {
+        if (alcance === 'environment') return ENTORNO as never
+        if (id === 22 && veces++ === 0) throw new Error('Sin conexión')
+        return LISTO as never
+      })
+      await elegirDosCapitulos()
+      await esperar(() => texto().includes('Serie WEB-DL AMZN [G21]'))
+      await pulsar(boton('Continuar'))
+      await esperar(() => texto().includes('Sin conexión'))
+      expect(texto()).not.toContain('Todo listo')
+      expect(boton('Subir todos')!.disabled).toBe(true)
+      await pulsar(await esperar(() => boton('↻ Volver a comprobar')))
+      await esperar(() => texto().includes('✓ Todo listo: 2 capítulos'))
+      expect(m(subidas.runUploadChecks).mock.calls).toEqual([
+        [21, 'environment'], [21, 'content', undefined], [22, 'content', undefined], [22, 'content', undefined],
+      ])
+    })
   })
 })

@@ -16,7 +16,7 @@ import type { Asistente } from './useAsistente'
 export function PasoArchivo({ a }: { a: Asistente }) {
   const {
     seleccion, targetId, episodeQueue, episodes, needsSelection, existingJob, existingJobBlocking,
-    episodePrepping, episodePrepIndex, loading, error, loadFields,
+    episodePrepping, episodePrepIndex, loading, error, reintentarNomenclatura,
     fields, setField, titleOptions, titleWarning, sources, providers, opcionesTag, detectingProvider,
     sourceRequiresProvider, sourceWarning, avisoSource, audioWarning, preview,
     sourceComparison, showSourceCompare, setShowSourceCompare, showEngineDetail, setShowEngineDetail,
@@ -187,7 +187,7 @@ export function PasoArchivo({ a }: { a: Asistente }) {
       {error && !loading && !episodePrepping && (
         <div className="asist-bloque-error">
           <p className="text-error asist-mt-0 asist-mb-10"><IconoAviso /> {error}</p>
-          <button className="btn btn-secondary btn-sm" type="button" onClick={loadFields}>↻ Reintentar</button>
+          <button className="btn btn-secondary btn-sm" type="button" onClick={reintentarNomenclatura}>↻ Reintentar</button>
         </div>
       )}
       {!loading && !error && !episodePrepping && (

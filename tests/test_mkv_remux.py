@@ -888,8 +888,8 @@ def test_una_pista_sin_idioma_se_puede_elegir():
 
 
 def test_un_idioma_que_no_esta_en_la_lista_se_ignora():
-    from emuwarez_uploadrr.services.mkv_remux import _idiomas_de
-    assert _idiomas_de({"1": {"language": "spa"}, "2": {"language": "xx; rm -rf"}, "x": {}}) == {1: "spa"}
+    from emuwarez_uploadrr.services.mkv_remux import idiomas_elegidos
+    assert idiomas_elegidos({"1": {"language": "spa"}, "2": {"language": "xx; rm -rf"}, "x": {}}) == {1: "spa"}
 
 
 def test_las_ediciones_guardadas_en_el_trabajo_se_aplican():

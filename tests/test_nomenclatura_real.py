@@ -152,7 +152,7 @@ def test_el_idioma_elegido_en_el_asistente_llega_al_nombre_y_a_la_pista(conn, tm
     el trabajo guarde los overrides con la clave en texto."""
     import json
     import subprocess
-    from emuwarez_uploadrr.services.mkv_remux import (_idiomas_de, build_mkvpropedit_args,
+    from emuwarez_uploadrr.services.mkv_remux import (idiomas_elegidos, build_mkvpropedit_args,
                                                       build_track_plan, read_tracks_json)
     from emuwarez_uploadrr.services.source_assistant import build_editable_nomenclature_fields
     ruta = hacer_mkv(tmp_path / "Peli.WEB-DL.mkv", audios=({"lang": "und"}, {"lang": "en"}))
@@ -167,7 +167,7 @@ def test_el_idioma_elegido_en_el_asistente_llega_al_nombre_y_a_la_pista(conn, tm
     datos = read_tracks_json(str(ruta))["data"]
     pista = next(t["id"] for t in datos["tracks"] if t["type"] == "audio")
     overrides = json.loads(json.dumps({pista: {"language": "spa"}}))      # como vuelve del trabajo
-    plan = build_track_plan(datos, idiomas=_idiomas_de(overrides))
+    plan = build_track_plan(datos, idiomas=idiomas_elegidos(overrides))
     audio = [t for t in plan["ordered_tracks"] if t["type"] == "audio"]
     assert [(t["new_name"], t["default_after"]) for t in audio] == [
         ("Español (Castellano) - DD 5.1", True), ("Inglés - DD 5.1", False)]

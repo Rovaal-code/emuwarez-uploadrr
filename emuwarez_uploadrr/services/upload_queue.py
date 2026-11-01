@@ -760,7 +760,8 @@ def _preparar_fichero(job_id: int, item_id: int, origen: str, destino: str, modo
     Lanza NoSePudoPreparar si falla la edición de las pistas del original.
     """
     from .carpeta_subida import NoSePudoPreparar, clonar, en_carpeta_de_subidas, enlace_simple
-    from .mkv_remux import apply_remux, build_remux_plan, toca_el_fichero, REMUX_CONFIRMATION_TOKEN
+    from .mkv_remux import (apply_remux, build_remux_plan, idiomas_elegidos, toca_el_fichero,
+                            REMUX_CONFIRMATION_TOKEN)
     from .mkv_title import (apply_internal_title_update, preview_internal_title_update,
                             titulo_actual, MKV_CONFIRMATION_TOKEN)
     from .upload_execution import append_upload_log
@@ -792,7 +793,9 @@ def _preparar_fichero(job_id: int, item_id: int, origen: str, destino: str, modo
         return fin([], False, None, "no es MKV")
 
     motivo = _motivo_para_no_tocar(origen)
-    plan = build_remux_plan(item_id, conn=conn, ruta=origen, reordenar=motivo is None)
+    # Con el idioma elegido para una pista sin idioma: si solo cambia eso, también hay que escribirlo.
+    plan = build_remux_plan(item_id, conn=conn, ruta=origen, reordenar=motivo is None,
+                            idiomas=idiomas_elegidos(overrides))
     omitida = None
     if plan.get("status") == "blocked":
         omitida = "no se leyeron las pistas"

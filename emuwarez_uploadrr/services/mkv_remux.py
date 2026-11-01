@@ -221,7 +221,7 @@ def _por_id(overrides: dict | None) -> dict[int, dict]:
     return salida
 
 
-def _idiomas_de(overrides: dict | None) -> dict[int, str]:
+def idiomas_elegidos(overrides: dict | None) -> dict[int, str]:
     """El idioma elegido para cada pista sin idioma, sacado de los overrides."""
     return {tid: ov["language"] for tid, ov in _por_id(overrides).items()
             if ov.get("language") in IDIOMAS_ELEGIBLES}
@@ -917,7 +917,7 @@ def apply_remux(
     conn = conn or connect()
     try:
         # El idioma elegido para una pista sin idioma viaja en los overrides.
-        idiomas = _idiomas_de(overrides)
+        idiomas = idiomas_elegidos(overrides)
         preview = build_remux_plan(library_item_id, conn=conn, ruta=ruta, reordenar=reordenar, idiomas=idiomas)
 
         if preview["status"] == "blocked":

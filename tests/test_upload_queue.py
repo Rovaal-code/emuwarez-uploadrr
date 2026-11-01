@@ -949,3 +949,22 @@ def test_un_fallo_al_calcular_el_pack(db_conn, monkeypatch):
     job = db_conn.execute("SELECT status, error_message FROM upload_jobs WHERE id = ?", (job_id,)).fetchone()
     assert job["status"] == "failed"
     assert "Error aplicando la nomenclatura del pack de temporada: boom" in job["error_message"]
+
+
+def test_preparar_el_fichero_cuenta_el_idioma_elegido(tmp_path, monkeypatch):
+    """Si lo único que cambia es el idioma de una pista sin idioma, el plan que
+    decide si se editan las pistas tiene que verlo; si no, no se escribe."""
+    from emuwarez_uploadrr.services import mkv_remux
+
+    class _Visto(Exception):
+        pass
+
+    def _plan(*a, **kw):
+        raise _Visto(kw)
+    monkeypatch.setattr(mkv_remux, "build_remux_plan", _plan)
+    origen = tmp_path / "peli.mkv"
+    origen.write_bytes(b"x")
+    with pytest.raises(_Visto) as visto:
+        uq._preparar_fichero(1, 1, str(origen), str(tmp_path / "subida.mkv"), "solo_renombrar", None,
+                             overrides={"5": {"language": "spa"}})
+    assert visto.value.args[0]["idiomas"] == {5: "spa"}

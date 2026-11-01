@@ -327,6 +327,8 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // La siguiente tanda cuando hay más filas que las 20.000 que se piden de una vez. Si mientras llega se
   // recarga o cambia un filtro (`ultimaCarga` avanza), su respuesta ya no vale y se tira.
   const cargarMas = useCallback(async () => {
+    // Con la primera página de otro filtro en camino, el desplazamiento saldría de los resultados viejos.
+    if (cargando.current) return
     const carga = ultimaCarga.current
     setCargandoMas(true)
     setFallaMas(false)
@@ -678,7 +680,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
         )}
         {data && resumenResultados && <span className="text-muted">{resumenResultados}</span>}
         {data && hayMas && (
-          <button className="btn btn-secondary btn-sm" onClick={cargarMas} disabled={cargandoMas}>
+          <button className="btn btn-secondary btn-sm" onClick={cargarMas} disabled={cargandoMas || loading || isPending}>
             {cargandoMas ? 'Cargando…' : 'Cargar más'}
           </button>
         )}

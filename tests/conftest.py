@@ -87,10 +87,17 @@ def _sin_manifiesto_de_version(monkeypatch):
 def ficheros_de_mentira(monkeypatch):
     """Para las pruebas que crean un .mkv con bytes cualquiera. Con mkvmerge y
     mediainfo instalados (la imagen de Docker), un fichero así ya no pasa la
-    comprobación de integridad; aquí se lee como en CI, sin mkvmerge y con un
-    MediaInfo que no encuentra nada."""
-    from emuwarez_uploadrr.services import media_info_service, mkv_remux
+    comprobación de integridad; aquí se lee sin mkvmerge y con un MediaInfo
+    que no encuentra nada (lo que contesta el real a esos bytes), esté o no
+    instalado."""
+    from emuwarez_uploadrr.services import media_info_service, media_probe, mkv_remux
     monkeypatch.setattr(mkv_remux, "check_mkvmerge_available", lambda: {"available": False, "path": None})
+    monkeypatch.setattr(media_info_service, "mediainfo_available", lambda: True)
+
+    def _mediainfo_sin_pistas(path):
+        return {"media": {"@ref": str(path), "track": [{"@type": "General", "FileSize": str(path.stat().st_size)}]}}
+
+    monkeypatch.setattr(media_probe, "run_mediainfo_json", _mediainfo_sin_pistas)
     monkeypatch.setattr(media_info_service, "read_media_info_summary", lambda path: {
         "video_codec": None, "audio_codec": None, "audio_languages": None, "subtitle_languages": None})
 
@@ -103,6 +110,32 @@ def _procesos_sin_apagado():
     from emuwarez_uploadrr.services import mkv_remux, upload_execution
     mkv_remux._apagando = False
     upload_execution._apagando = False
+
+
+@pytest.fixture
+def subidas_reales():
+    """Pídelo para que encolar una subida arranque de verdad su hilo."""
+
+
+@pytest.fixture(autouse=True)
+def _subidas_sin_hilo(request, monkeypatch):
+    """Encolar una subida arranca su hilo al momento. En los tests ese hilo
+    correría solo contra la base del test, así que se queda sin lanzar salvo
+    que el test pida `subidas_reales` (o llame a _run_queued_job él mismo)."""
+    if "subidas_reales" in request.fixturenames:
+        return
+    from emuwarez_uploadrr.services import upload_queue
+    monkeypatch.setattr(upload_queue, "_lanzar_trabajo", lambda job_id: None)
+
+
+@pytest.fixture(autouse=True)
+def _login_sin_memoria():
+    """El bloqueo del login y el apunte de uso de las sesiones viven en memoria: que no pasen de un test a otro."""
+    from emuwarez_uploadrr.web.services import auth_service
+    auth_service._fallos.clear()
+    auth_service._apuntadas.clear()
+    auth_service._ultima_poda = float("-inf")
+    yield
 
 
 @pytest.fixture(autouse=True)

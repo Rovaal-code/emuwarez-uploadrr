@@ -90,11 +90,6 @@ export function tamanoGuardado(): number {
 let tamano = TAMANO_POR_DEFECTO
 let escala = 1
 
-/** El factor que está aplicado ahora mismo (1 = 100%). */
-export function escalaUi(): number {
-  return escala
-}
-
 /** El porcentaje que está aplicado ahora mismo. */
 export function tamanoUi(): number {
   return tamano

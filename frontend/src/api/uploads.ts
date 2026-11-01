@@ -5,8 +5,6 @@ import type {
   UploadJobLogsResponse,
   UploadStartRequest,
   UploadStartResult,
-  UploadArtifactsResponse,
-  UploadRetryRequest,
   OkResponse,
 } from '../types/api'
 import type { TrackRemuxOverride } from './nomenclature'
@@ -118,10 +116,6 @@ export async function getUploadJobLogs(
   return api.get<UploadJobLogsResponse>(`/uploads/${jobId}/logs?limit=${limit}&offset=${offset}&tail=${tail}${after}`)
 }
 
-export async function getUploadJobArtifacts(jobId: number): Promise<UploadArtifactsResponse> {
-  return api.get<UploadArtifactsResponse>(`/uploads/${jobId}/artifacts`)
-}
-
 export async function startUploadJob(
   jobId: number,
   body: UploadStartRequest,
@@ -129,16 +123,8 @@ export async function startUploadJob(
   return api.post<UploadStartResult>(`/uploads/${jobId}/start`, body)
 }
 
-export async function retryUploadJob(
-  jobId: number,
-  body: UploadRetryRequest,
-): Promise<UploadStartResult> {
-  return api.post<UploadStartResult>(`/uploads/${jobId}/retry`, body)
-}
-
-// Retries straight into the same queued/60s-countdown flow queueUpload()
-// uses — no confirmation token, since it only ever creates a brand new job
-// row (the original failed/cancelled job is never touched).
+// Reintenta por el mismo camino en cola que queueUpload(), sin token de
+// confirmación: solo crea un trabajo nuevo y no toca el original (fallido o cancelado).
 export async function retryUploadJobQueued(jobId: number): Promise<UploadQueueResult> {
   return api.post<UploadQueueResult>(`/uploads/${jobId}/retry-queued`, {})
 }

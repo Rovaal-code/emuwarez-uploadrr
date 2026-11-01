@@ -11,8 +11,10 @@ the upload with Uploadrr-EMU (`Kisnov/Uploadrr-EMU`, cloned into the image at `/
   (Rovaal-code) is abandoned.
 - Branch and PR, never commit to `master`. Group related changes: no PR per one-line fix. Open PRs as
   non-draft so CodeRabbit reviews them; its standing rules per path live in `.coderabbit.yaml`.
-- Code comments, commits and UI text are in Spanish. Conventional Commits with a one-line Spanish summary of
-  the user-visible outcome (`fix: la subida usa el enlace de la carpeta de subidas`).
+- UI text is in Spanish (the users are Spanish speakers), and so are the README and docs. Code comments and commits
+  may be in Spanish or English; most of the code is in Spanish, so Spanish keeps it consistent, but don't translate
+  existing comments just to change their language. Conventional Commits with a one-line summary of the user-visible
+  outcome (`fix: la subida usa el enlace de la carpeta de subidas`).
 - Don't bump the version in a PR: `scripts/desplegar.sh --version` does it at release.
 
 ## Verify

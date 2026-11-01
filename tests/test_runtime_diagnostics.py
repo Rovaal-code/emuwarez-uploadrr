@@ -164,3 +164,41 @@ def test_errors_list_populated_on_error(tmp_path, monkeypatch):
     # ok should be False when there's an error
     assert isinstance(result["ok"], bool)
     assert isinstance(result["errors"], list)
+
+
+def _instancia(conn, nombre, enabled):
+    conn.execute(
+        "INSERT INTO instances (type, name, url, api_key, enabled) VALUES ('radarr', ?, 'http://radarr:7878', 'k', ?)",
+        (nombre, enabled),
+    )
+    conn.commit()
+
+
+def test_instancia_habilitada_no_da_aviso(tmp_path, monkeypatch):
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path))
+    from emuwarez_uploadrr.database import connect, init_db
+    conn = connect()
+    init_db(conn)
+    _instancia(conn, "Radarr", 1)
+    conn.close()
+    from emuwarez_uploadrr.services.runtime_diagnostics import get_runtime_diagnostics
+    result = get_runtime_diagnostics()
+    arr = [c for c in result["checks"] if c["name"] == "arr_health_config"]
+    assert [c["status"] for c in arr] == ["ok"]
+    assert arr[0]["details"]["radarr_enabled"] == 1
+    assert not any("instancias" in w.lower() and "no hay" in w.lower() for w in result["warnings"])
+    assert all(c["name"] != "arr_instances" for c in result["checks"])
+
+
+def test_instancias_apagadas_dan_aviso(tmp_path, monkeypatch):
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path))
+    from emuwarez_uploadrr.database import connect, init_db
+    conn = connect()
+    init_db(conn)
+    _instancia(conn, "Radarr", 0)
+    conn.close()
+    from emuwarez_uploadrr.services.runtime_diagnostics import check_arr_health_configuration
+    result = check_arr_health_configuration()
+    assert result["status"] == "warning"
+    assert result["details"]["radarr_total"] == 1
+    assert result["details"]["radarr_enabled"] == 0

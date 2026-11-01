@@ -86,6 +86,8 @@ const TASK_NAME_LABEL: Record<string, string> = {
   'check-version': 'Comprobar versión',
   'sync-emu-requests': 'Sincronizar peticiones eMuwarez',
   'sync-emu-catalog': 'Sincronizar catálogo eMuwarez',
+  'backup-config': 'Copia de seguridad',
+  'mantenimiento': 'Mantenimiento',
 }
 function taskNameLabel(name: string): string {
   return TASK_NAME_LABEL[name] || name

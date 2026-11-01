@@ -30,7 +30,3 @@ export const REGION_OPTIONS: SelectOption[] = [
   { value: 'JP', label: 'Japón' },
   { value: 'KR', label: 'Corea del Sur' },
 ]
-
-export function findRegionLabel(value: string): string {
-  return REGION_OPTIONS.find(o => o.value === value)?.label ?? value
-}

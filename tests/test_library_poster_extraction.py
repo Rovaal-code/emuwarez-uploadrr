@@ -9,7 +9,7 @@ from unittest.mock import patch
 import pytest
 
 from emuwarez_uploadrr.database import connect, init_db
-from emuwarez_uploadrr.integrations.base import extract_poster_url
+from emuwarez_uploadrr.integrations.base import extract_backdrop_url, extract_poster_url
 from emuwarez_uploadrr.integrations.radarr import movie_to_library_item
 from emuwarez_uploadrr.integrations.sonarr import episode_to_library_item, series_to_library_item
 
@@ -24,6 +24,21 @@ def test_extract_poster_url_prefers_remote_url():
         {"coverType": "poster", "url": "/MediaCover/1/poster.jpg", "remoteUrl": "https://example.com/poster.jpg"},
     ]
     assert extract_poster_url(images) == "https://example.com/poster.jpg"
+
+
+def test_una_imagen_http_se_pide_por_https():
+    """La CSP de la interfaz (img-src 'self' https: data:) bloquearía un http:// y el navegador ya no lo mezcla."""
+    images = [
+        {"coverType": "poster", "url": "/MediaCover/1/poster.jpg", "remoteUrl": "http://artworks.thetvdb.com/banners/posters/1.jpg"},
+        {"coverType": "fanart", "remoteUrl": " HTTP://image.tmdb.org/t/p/original/f.jpg "},
+    ]
+    assert extract_poster_url(images) == "https://artworks.thetvdb.com/banners/posters/1.jpg"
+    assert extract_backdrop_url(images) == "https://image.tmdb.org/t/p/original/f.jpg"
+
+
+def test_una_imagen_https_se_deja_como_esta():
+    images = [{"coverType": "poster", "remoteUrl": "https://image.tmdb.org/t/p/original/a.jpg?x=http://y"}]
+    assert extract_poster_url(images) == "https://image.tmdb.org/t/p/original/a.jpg?x=http://y"
 
 
 def test_extract_poster_url_no_poster_entry():

@@ -85,7 +85,7 @@ no compila nada. Lo que hay que mirar:
 
 | Clave | En el repo | Para qué |
 |---|---|---|
-| `image` | `ghcr.io/kisnov/emuwarez-uploadrr:${EMUWAREZ_UPLOADRR_TAG:-latest}` | `latest` es la última imagen publicada. Para quedarte en una versión o volver atrás, `EMUWAREZ_UPLOADRR_TAG` acepta también `X.Y.Z` o el SHA de un commit de `master`: ver [Versiones y volver atrás](../README.md#versiones-y-volver-atrás). |
+| `image` | `ghcr.io/kisnov/emuwarez-uploadrr:${EMUWAREZ_UPLOADRR_TAG:-latest}` | `latest` es la última imagen publicada. Para quedarte en una versión o volver atrás, `EMUWAREZ_UPLOADRR_TAG` acepta también `X.Y.Z` o el SHA del commit de una versión: ver [Versiones y volver atrás](../README.md#versiones-y-volver-atrás). |
 | `init` | `true` | Un init como proceso 1 recoge los procesos que quedan sueltos al cancelar una subida (ffmpeg, mkbrr...). |
 | `ports` | `${EMUWAREZ_UPLOADRR_PORT:-9494}:9494` | Interfaz web y API. |
 | `user` | `${PUID:-1000}:${PGID:-1000}` | El usuario con el que corre todo (sección 3). |
@@ -186,7 +186,19 @@ En Configuración → Backup, «Crear backup ahora» genera un `.tar.gz` de `/co
 carpeta de subidas por defecto (`/config/Uploadrr/uploads`) ni los temporales de Uploadrr-EMU. La de
 `UPLOADRR_UPLOADS_DIR` (`/data/uploads/emu`) está fuera de `/config`, así que tampoco entra: son enlaces, y para
 seguir sembrando tras restaurar en otro disco hay que respaldarla aparte. En la misma pestaña se restaura. Como el
-backup queda dentro de `/config`, cópialo a otro disco.
+backup queda dentro de `/config`, bájalo con «Descargar» y guárdalo en otro disco; para restaurar en otra
+instalación, súbelo con «Subir un backup…» y elígelo al restaurar.
+
+Cada día a las 03:30 (hora de `TZ`, por defecto Europe/Madrid) la tarea «Copia de seguridad», en Tareas, guarda
+una copia automática sin claves (`emuwarez_config_auto_*.tar.gz`) y deja las últimas 7; el número y la hora se
+cambian en la propia tarea. Las manuales, las que subes y las `pre-migracion-*.db` no se borran solas. Todas se
+guardan legibles solo por su dueño. Con «Incluir las claves en las copias automáticas» (apagado por defecto) las
+automáticas llevan también las claves y se llaman `…_with_secrets.tar.gz`; quien pueda leer la carpeta de backups
+las vería.
+
+La tarea «Mantenimiento» (04:00) borra del historial de tareas lo de más de 90 días, deja en las últimas 200 líneas
+el registro de las subidas terminadas sin fallo de hace más de 30 días (el de las fallidas se conserva entero),
+borra los avisos leídos de más de 30 días y optimiza la base. No toca las subidas ni nada que enlacen.
 
 El backup no lleva las claves. En la base de datos van vacías las API keys (TMDb, eMuwarez, Radarr/Sonarr, hosts
 de imágenes), la contraseña de qBittorrent, el webhook de Discord y el token de Telegram, y de
@@ -279,6 +291,21 @@ como enlaces a `/config/Uploadrr/data/...`.
   compilación del frontend falló: reconstruye y mira la salida de `npm run build`.
 - Detrás de un proxy inverso, sírvela en la raíz de un dominio o subdominio. El frontend pide sus ficheros a
   `/assets/…`, así que en una subruta (`https://servidor/emuwarez/`) la página sale en blanco.
+
+### Detrás de un proxy inverso, todos los accesos fallidos cuentan como uno
+
+El bloqueo tras varios intentos de acceso fallidos va por IP. uvicorn solo se fía de la cabecera
+`X-Forwarded-For` si la petición llega de una IP de `FORWARDED_ALLOW_IPS` (por defecto, solo `127.0.0.1`).
+Con el proxy en otro contenedor o en otra máquina, la app ve la IP del proxy para todo el mundo: unos
+cuantos fallos de cualquiera bloquean el acceso a todos durante un rato. Pon la IP del proxy (o su red de
+Docker) en el `docker-compose.yml`:
+
+```yaml
+    environment:
+      - FORWARDED_ALLOW_IPS=172.18.0.0/16   # la red del proxy; o su IP exacta
+```
+
+No pongas `*` si la app también es accesible sin pasar por el proxy: cualquiera podría inventarse la IP.
 
 ### Construida en Windows, el contenedor no arranca con «no such file or directory»
 

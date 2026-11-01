@@ -98,6 +98,24 @@ class LogoutResponse(BaseModel):
     message: str = "Sesión cerrada correctamente"
 
 
+class SessionInfo(BaseModel):
+    id: int
+    current: bool
+    created_at: str
+    last_used_at: str
+    user_agent: Optional[str] = None
+    ip_address: Optional[str] = None
+
+
+class SessionsResponse(BaseModel):
+    sessions: list[SessionInfo]
+    inactive_days: int
+
+
+class CloseOtherSessionsResponse(BaseModel):
+    closed: int
+
+
 class ChangeCredentialsRequest(BaseModel):
     current_password: str
     new_username: Optional[str] = None
@@ -465,11 +483,6 @@ class DashboardSummaryResponse(BaseModel):
     requests_need_nomenclature: int = 0
     requests_waiting_download: int = 0
     requests_blocked: int = 0
-    # Phase 8C — operational queue counts
-    operational_queue_open: int = 0
-    operational_queue_ready: int = 0
-    operational_queue_waiting: int = 0
-    operational_queue_blocked: int = 0
 
 
 class DashboardActivityItem(BaseModel):
@@ -1126,13 +1139,8 @@ class UploadJobDetail(BaseModel):
     # cae al request_status de la ficha de biblioteca.
     request_title: Optional[str] = None
     request_url: Optional[str] = None
-    # Grace-period deadline while status='queued' — lets the UI show a
-    # countdown + Cancel before the server starts renaming/remuxing/uploading.
-    queued_until: Optional[str] = None
-    # This job's 1-based rank among every currently status='queued' job
-    # (ordered by id, i.e. by creation order) and how many are queued in
-    # total — lets the UI show "Esperando (2/4)" instead of leaving several
-    # simultaneously-queued jobs indistinguishable from one another.
+    # Puesto (desde 1) y total mientras espera plaza en "Subidas en paralelo"
+    # (upload_queue.get_queue_positions). None si no está esperando.
     queue_position: Optional[int] = None
     queue_total: Optional[int] = None
     # Read-only snapshots taken at apply time — the nomenclature field
@@ -1226,7 +1234,7 @@ class BackupRequest(BaseModel):
 
 
 class RestoreRequest(BaseModel):
-    backup_path: str
+    backup_name: str
     dry_run: bool = True
     apply: bool = False
     confirmation: Optional[str] = None
@@ -1236,72 +1244,6 @@ class VacuumRequest(BaseModel):
     dry_run: bool = True
     apply: bool = False
     confirmation: Optional[str] = None
-
-
-# ---------------------------------------------------------------------------
-# Phase 8C — Operational queue
-# ---------------------------------------------------------------------------
-
-class OperationalQueueItem(BaseModel):
-    id: int
-    queue_key: str
-    item_type: str
-    entity_type: str
-    entity_id: Optional[int] = None
-    request_item_id: Optional[int] = None
-    library_item_id: Optional[int] = None
-    upload_job_id: Optional[int] = None
-    title: Optional[str] = None
-    subtitle: Optional[str] = None
-    status: str
-    action: str
-    blockers: list[str] = []
-    reasons: list[str] = []
-    context: dict = {}
-    target_url: Optional[str] = None
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
-    last_seen_at: Optional[str] = None
-    resolved_at: Optional[str] = None
-
-
-class OperationalQueueListResponse(BaseModel):
-    items: list[OperationalQueueItem]
-    total: int = 0
-
-
-class OperationalQueueSummary(BaseModel):
-    total: int = 0
-    open: int = 0
-    ready: int = 0
-    waiting: int = 0
-    blocked: int = 0
-    running: int = 0
-
-
-class OperationalQueueRefreshBody(BaseModel):
-    limit: Optional[int] = None
-    include_requests: bool = True
-    include_library: bool = True
-    include_uploads: bool = True
-    include_arr: bool = True
-
-
-class OperationalQueueResolveBody(BaseModel):
-    reason: Optional[str] = None
-
-
-class OperationalQueueRefreshResponse(BaseModel):
-    ok: bool
-    items_built: int = 0
-    summary: OperationalQueueSummary = OperationalQueueSummary()
-
-
-class OperationalQueueActionResponse(BaseModel):
-    ok: bool
-    item_id: int
-    status: str
-    reason: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -1371,7 +1313,7 @@ class UploadQueueBody(BaseModel):
     # cubre, y Subidas lo enseña.
     request_item_id: Optional[int] = None
     # Manual edits the user made in the wizard's "Ver Pistas" card, carried
-    # through to the server-side remux step that runs after the grace period.
+    # through to the server-side remux step of the queued pipeline.
     remux_overrides: Optional[Dict[str, TrackRemuxOverride]] = None
     # The wizard's already-merged (base plan + remux_overrides) track table —
     # persisted verbatim as remux_snapshot_json at job creation so the detail
@@ -1471,22 +1413,40 @@ class TestTelegramRequest(BaseModel):
 # Phase 11D — Automatic tasks scheduler
 # ---------------------------------------------------------------------------
 
+class TaskOptionResponse(BaseModel):
+    clave: str
+    etiqueta: str
+    valor: int
+    minimo: int
+    maximo: int
+    nota: str = ""
+
+
 class ScheduledTaskResponse(BaseModel):
     task_key: str
     name: str
     description: str
     interval_minutes: int
     min_interval_minutes: int
+    run_at: Optional[str] = None
+    timezone: str = ""
     manual_allowed: bool
     enabled: bool
     last_run_at: Optional[str] = None
     last_status: Optional[str] = None
     last_summary: Optional[str] = None
     next_run_at: Optional[str] = None
+    opciones: list[TaskOptionResponse] = []
 
 
 class UpdateScheduledTaskRequest(BaseModel):
-    interval_minutes: int
+    # `run_at` (HH:MM) = cada día a esa hora; sin ella, cada `interval_minutes`.
+    interval_minutes: Optional[int] = None
+    run_at: Optional[str] = None
+
+
+class UpdateTaskOptionsRequest(BaseModel):
+    valores: dict[str, int]
 
 
 class RunScheduledTaskResponse(BaseModel):

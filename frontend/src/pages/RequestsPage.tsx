@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { getRequests, getRequestDetail } from '../api/requests'
-import { getCandidates } from '../api/requestReadiness'
+import { getCandidates, getReadiness } from '../api/requestReadiness'
 import type {
   RequestItemResponse, RequestDetailResponse,
   RequestReadinessResponse, RequestCandidateResponse,
@@ -780,7 +780,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
     try {
       const [d, rr] = await Promise.allSettled([
         getRequestDetail(id),
-        import('../api/requestReadiness').then(m => m.getReadiness(id)).catch(() => null),
+        getReadiness(id).catch(() => null),
       ])
       setDetail(d.status === 'fulfilled' ? d.value : null)
       setReadiness(rr.status === 'fulfilled' && rr.value !== null ? rr.value as RequestReadinessResponse : null)

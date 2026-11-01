@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 44
+SCHEMA_VERSION = 46
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -1270,6 +1270,18 @@ def _migrate_upload_jobs_torrent_subido(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_auth_sessions_last_used(conn: sqlite3.Connection) -> None:
+    """Esquema 45: cuándo se usó por última vez cada sesión, para que caduque por inactividad. Las que ya hay cuentan
+    como usadas ahora: nadie se queda fuera al actualizar solo por no tener el dato."""
+    try:
+        conn.execute("ALTER TABLE auth_sessions ADD COLUMN last_used_at TEXT")
+    except sqlite3.OperationalError:
+        # Solo se calla si la columna ya está (la añadió otro init_db a la vez), no un «database is locked».
+        if "last_used_at" not in {fila[1] for fila in conn.execute("PRAGMA table_info(auth_sessions)")}:
+            raise
+    conn.execute("UPDATE auth_sessions SET last_used_at = CURRENT_TIMESTAMP WHERE last_used_at IS NULL AND revoked_at IS NULL")
+
+
 def _migrate_quitar_peticiones_de_ejemplo(conn: sqlite3.Connection) -> None:
     """Las peticiones de ejemplo se generaron mientras no había endpoint real;
     ahora que se leen de eMuwarez, se borran con lo que colgaba de ellas."""
@@ -1493,6 +1505,12 @@ def _migrate_scheduled_tasks_table(conn: sqlite3.Connection) -> None:
     """)
 
 
+def _migrate_scheduled_tasks_run_at(conn: sqlite3.Connection) -> None:
+    """Esquema 46: `run_at` (HH:MM), la hora fija de una tarea programada. NULL = cada N minutos."""
+    if "run_at" not in {fila[1] for fila in conn.execute("PRAGMA table_info(scheduled_tasks)")}:
+        conn.execute("ALTER TABLE scheduled_tasks ADD COLUMN run_at TEXT")
+
+
 _COPIAS_ANTES_DE_MIGRAR = 3
 
 
@@ -1521,7 +1539,13 @@ def _copia_antes_de_migrar(conn: sqlite3.Connection, version: int) -> None:
         if destino.exists():
             return
         conn.commit()  # VACUUM INTO no corre dentro de una transacción
-        conn.execute("VACUUM INTO ?", (str(destino),))
+        # Creada antes en 0600 (lleva todas las claves): VACUUM INTO la crearía con el umask y quedaría legible.
+        os.close(os.open(destino, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600))
+        try:
+            conn.execute("VACUUM INTO ?", (str(destino),))
+        except Exception:
+            destino.unlink(missing_ok=True)  # una copia vacía no puede contar entre las últimas
+            raise
         copias = sorted(carpeta.glob("pre-migracion-*.db"))
         # La primera de esta versión es la única anterior a un intento fallido de migrar: los
         # reintentos de un arranque en bucle copian ya una base a medias y no deben llevársela.
@@ -1778,6 +1802,8 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_request_items_posters(conn)
         _migrate_library_items_last_seen(conn)
         _migrate_upload_jobs_torrent_subido(conn)
+        _migrate_auth_sessions_last_used(conn)
+        _migrate_scheduled_tasks_run_at(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

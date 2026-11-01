@@ -3,18 +3,28 @@ from __future__ import annotations
 
 import datetime
 import os
+import posixpath
+import re
+import secrets
 import shutil
 import sqlite3
 import tarfile
 import tempfile
+import zlib
 from pathlib import Path
 
-from ..database import CANONICAL_SETTING_ALIASES, olvidar_esquema
+from ..database import CANONICAL_SETTING_ALIASES, SCHEMA_VERSION, _version_guardada, olvidar_esquema
 from .settings import all_settings, es_secreto, get_setting_canonical, set_setting
 
 RESTORE_CONFIRMATION = "RESTAURAR_CONFIG"
 _DB_NAME = "emuwarez_uploadrr.db"
 _CABECERA_SQLITE = b"SQLite format 3\x00"
+# Las copias de la tarea programada y las subidas desde el navegador llevan su marca en el nombre:
+# la retención solo toca las primeras. Las pre-migracion-*.db de database.py no encajan en el patrón.
+PREFIJO_AUTOMATICA = "emuwarez_config_auto_"
+PREFIJO_SUBIDA = "emuwarez_config_subida_"
+_NOMBRE_COPIA = re.compile(r"^emuwarez_config_[A-Za-z0-9_]+\.tar\.gz$")
+LIMITE_SUBIDA_BYTES = 1024 ** 3
 # Lo que no va en la copia: las copias anteriores, los enlaces de subida y los
 # temporales de Uploadrr (capturas, torrents; en una instalación real, 1,7 GB).
 # Una carpeta "backups" a cualquier profundidad tampoco: la copia no se mete a sí misma.
@@ -125,6 +135,13 @@ def get_backup_dir() -> Path:
     return _get_backup_dir()
 
 
+def _abrir_0600(path: Path):
+    """Abre `path` para escribir, creado solo legible por su dueño (la copia puede llevar claves)."""
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    os.chmod(path, 0o600)  # si ya existía con otro modo
+    return os.fdopen(fd, "wb")
+
+
 def get_config_inventory() -> dict:
     """Returns a summary of config files — counts only, no secret values."""
     config_dir = _get_config_dir()
@@ -157,8 +174,11 @@ def create_config_backup(
     output_dir: Path | None = None,
     include_secrets: bool = False,
     confirmation: str | None = None,
+    automatic: bool = False,
 ) -> dict:
     """Creates a .tar.gz backup of CONFIG_DIR in output_dir (or default backups/).
+    automatic=True es la de la tarea programada: lleva su propio nombre, que es lo que la retención reconoce.
+    El archivo nace 0600: puede llevar todas las claves.
 
     By default the keys stay out: the database goes with every secret setting
     and every instance API key empty, and the files that carry keys
@@ -181,7 +201,7 @@ def create_config_backup(
 
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     suffix = "_with_secrets" if include_secrets else ""
-    archive_name = f"emuwarez_config_{ts}{suffix}.tar.gz"
+    archive_name = f"{PREFIJO_AUTOMATICA if automatic else 'emuwarez_config_'}{ts}{suffix}.tar.gz"
     archive_path = backup_dir / archive_name
 
     # "backups": no meter copias dentro de copias.
@@ -193,7 +213,7 @@ def create_config_backup(
     # distingue de un fichero normal y metería CADA PELÍCULA ENTERA en la copia
     # (comprobado: 5 MB de película en una copia que debía pesar 1 KB). Una
     # copia de configuración no puede engordar con el catálogo.
-    with tarfile.open(archive_path, "w:gz") as tar:
+    with _abrir_0600(archive_path) as raw, tarfile.open(fileobj=raw, mode="w:gz") as tar:
         for item in sorted(config_dir.rglob("*")):
             rel = item.relative_to(config_dir)
             if _fuera_de_la_copia(rel.parts, include_secrets):
@@ -235,8 +255,179 @@ def list_config_backups(directory: Path | None = None) -> list[dict]:
             "path": str(f),
             "size_bytes": stat.st_size,
             "created_at": datetime.datetime.fromtimestamp(stat.st_mtime).isoformat(),
+            "tipo": _tipo_de_copia(f.name),
+            # Una subida se guarda con nombre propio sin mirar qué lleva: puede traer claves (None = no se sabe).
+            "con_claves": None if _tipo_de_copia(f.name) == "subida" else f.name.endswith("_with_secrets.tar.gz"),
         })
     return backups
+
+
+def resolver_copia(nombre: str) -> Path | None:
+    """La copia con ese nombre dentro de get_backup_dir(), o None si no es una de las que lista
+    list_config_backups. La API no acepta rutas: el patrón no admite ni `/` ni `.` fuera de la
+    extensión, así que no lee ningún tar de fuera de esa carpeta."""
+    if not _NOMBRE_COPIA.match(nombre):
+        return None
+    ruta = get_backup_dir() / nombre
+    # is_file() sigue los enlaces: un enlace con nombre de copia llevaría a un tar de fuera.
+    return ruta if ruta.is_file() and not ruta.is_symlink() else None
+
+
+def _motivo_de_rechazo(tar: tarfile.TarFile, config_dir: Path) -> str | None:
+    """Por qué no se puede restaurar esta copia, o None si se puede: algún miembro se saldría de
+    config_dir (el filtro "data" de tarfile) o su base es de un esquema más nuevo que este código.
+    Se mira antes de tocar nada: la base se coloca primero y un rechazo a medias dejaría la
+    instalación a medio restaurar."""
+    miembros = tar.getmembers()
+    for miembro in miembros:
+        try:
+            tarfile.data_filter(miembro, str(config_dir))
+        except tarfile.FilterError as exc:
+            return f"La copia no es segura ({miembro.name}): {exc}"
+        # Solo nombres canónicos y relativos: «./emuwarez_uploadrr.db», «x/../emuwarez_uploadrr.db» o
+        # «/emuwarez_uploadrr.db» (el filtro le quita la barra) son la base para la extracción pero no para
+        # las comprobaciones de abajo, que la buscan por su nombre.
+        if miembro.name != posixpath.normpath(miembro.name) or miembro.name.startswith("/"):
+            return f"La copia no es válida: nombre no canónico «{miembro.name}»"
+    # Lo que el filtro no ve porque mira cada miembro por separado: un nombre repetido (la segunda base se
+    # colocaría sin haberse mirado), la base como algo que no es un fichero, o un fichero que es a la vez carpeta
+    # (la extracción fallaría con la base ya cambiada). Las copias de la aplicación nunca lo tienen.
+    nombres = [posixpath.normpath(m.name) for m in miembros]
+    visto: set[str] = set()
+    for nombre in nombres:
+        if nombre in visto:
+            return f"La copia no es válida: repite «{nombre}»"
+        visto.add(nombre)
+    ficheros = {n for m, n in zip(miembros, nombres) if not m.isdir()}
+    for nombre in nombres:
+        padre = posixpath.dirname(nombre)
+        while padre:
+            if padre in ficheros:
+                return f"La copia no es válida: «{padre}» es a la vez un fichero y una carpeta"
+            padre = posixpath.dirname(padre)
+    if any(n == _DB_NAME and not m.isfile() for m, n in zip(miembros, nombres)):
+        return "La copia no es válida: su base de datos no es un fichero normal"
+    base = next((m for m in miembros if m.name == _DB_NAME), None)
+    if base is None:
+        return None
+    with tempfile.TemporaryDirectory() as tmp:
+        ruta = Path(tmp) / _DB_NAME
+        with tar.extractfile(base) as origen, open(ruta, "wb") as destino:
+            shutil.copyfileobj(origen, destino)
+        version = _version_de_base(ruta)
+        base_de_la_copia_es_sqlite = _es_sqlite(ruta)
+        legible = _base_legible(ruta) if base_de_la_copia_es_sqlite else True
+    if not legible:
+        # La cabecera dice SQLite pero no se puede leer (truncada o dañada): pondría una base rota.
+        return "La copia no es válida: su base de datos está dañada o incompleta"
+    viva = config_dir / _DB_NAME
+    if not base_de_la_copia_es_sqlite and viva.exists() and viva.stat().st_size > 0 and _es_sqlite(viva):
+        # _colocar_base la copiaría en crudo encima de una base que sí lo es, sin copia previa.
+        return "La copia no es válida: su base de datos no es una base SQLite y la actual sí"
+    if version is not None and version > SCHEMA_VERSION:
+        return (
+            f"La copia es de una versión más nueva (esquema {version}) que esta aplicación "
+            f"(esquema {SCHEMA_VERSION}): restaurarla dejaría la aplicación sin arrancar. "
+            "Actualiza la imagen y restaura entonces."
+        )
+    return None
+
+
+def _base_legible(ruta: Path) -> bool:
+    """Si SQLite puede leer la base entera (PRAGMA quick_check sin errores)."""
+    conn = sqlite3.connect(str(ruta))
+    try:
+        return conn.execute("PRAGMA quick_check").fetchone()[0] == "ok"
+    except sqlite3.DatabaseError:
+        return False
+    finally:
+        conn.close()
+
+
+def _version_de_base(ruta: Path) -> int | None:
+    """El esquema de una base, o None si no es SQLite o no lo dice."""
+    conn = sqlite3.connect(str(ruta))
+    try:
+        return _version_guardada(conn)
+    except sqlite3.DatabaseError:
+        return None
+    finally:
+        conn.close()
+
+
+def _tipo_de_copia(nombre: str) -> str:
+    if nombre.startswith(PREFIJO_AUTOMATICA):
+        return "automatica"
+    return "subida" if nombre.startswith(PREFIJO_SUBIDA) else "manual"
+
+
+def retirar_copias_automaticas(conservar: int, directorio: Path | None = None) -> list[str]:
+    """Borra las copias automáticas más antiguas y deja las `conservar` últimas (mínimo 1).
+    Las manuales, las subidas y las pre-migracion-*.db no se tocan."""
+    carpeta = directorio if directorio is not None else get_backup_dir()
+    # El nombre lleva la fecha: ordena como el tiempo aunque el fichero se haya copiado o tocado.
+    automaticas = sorted(carpeta.glob(f"{PREFIJO_AUTOMATICA}*.tar.gz"))
+    retiradas = []
+    for vieja in automaticas[:max(0, len(automaticas) - max(1, conservar))]:
+        vieja.unlink(missing_ok=True)
+        retiradas.append(vieja.name)
+    return retiradas
+
+
+def crear_copia_automatica(*, conservar: int, incluir_claves: bool = False, output_dir: Path | None = None) -> dict:
+    """La copia de la tarea programada y, si salió bien, la retención. Sin claves salvo que se pida:
+    con ellas sigue el camino de la copia manual con claves (nombre `_with_secrets`, archivo 0600)."""
+    resultado = create_config_backup(
+        output_dir=output_dir, automatic=True, include_secrets=incluir_claves,
+        confirmation=RESTORE_CONFIRMATION if incluir_claves else None,
+    )
+    if resultado["ok"]:
+        resultado["retiradas"] = retirar_copias_automaticas(conservar, Path(resultado["archive_path"]).parent)
+    return resultado
+
+
+def _motivo_de_copia_invalida(ruta: Path) -> str | None:
+    """Por qué no se queda una copia subida. Pasa las mismas comprobaciones que la restauración
+    (_motivo_de_rechazo: filtro "data", nombres canónicos, base de un esquema que este código abre),
+    para no guardar en backups/ algo que luego no se podría restaurar."""
+    try:
+        with tarfile.open(ruta, "r:gz") as tar:
+            if _DB_NAME not in tar.getnames():
+                return "El archivo no es un backup de esta aplicación: no lleva la base de datos"
+            return _motivo_de_rechazo(tar, _get_config_dir())
+    except (tarfile.TarError, OSError, EOFError, zlib.error):
+        return "El archivo no es un backup (.tar.gz) válido"
+
+
+class CopiaSubida:
+    """Una copia que llega del navegador a trozos. Va a un temporal y solo se queda, con nombre propio
+    en backups/, si es un .tar.gz con la base de datos dentro. Restaurarla es cosa de restore_config_backup."""
+
+    def __init__(self) -> None:
+        self._carpeta = get_backup_dir()
+        self._temporal = self._carpeta / f".subida_{secrets.token_hex(6)}.part"
+        self._fichero = _abrir_0600(self._temporal)
+        self._bytes = 0
+
+    def escribir(self, trozo: bytes) -> None:
+        self._bytes += len(trozo)
+        if self._bytes > LIMITE_SUBIDA_BYTES:
+            raise ValueError(f"El archivo pasa de {LIMITE_SUBIDA_BYTES // 1024 ** 2} MB")
+        self._fichero.write(trozo)
+
+    def terminar(self) -> dict:
+        self._fichero.close()
+        motivo = _motivo_de_copia_invalida(self._temporal)
+        if motivo:
+            raise ValueError(motivo)
+        nombre = f"{PREFIJO_SUBIDA}{datetime.datetime.now():%Y%m%d_%H%M%S}.tar.gz"
+        os.replace(self._temporal, self._carpeta / nombre)
+        return {"ok": True, "name": nombre, "size_bytes": self._bytes}
+
+    def descartar(self) -> None:
+        """Siempre al final: borra el temporal si la copia no llegó a quedarse."""
+        self._fichero.close()
+        self._temporal.unlink(missing_ok=True)
 
 
 def restore_config_backup(
@@ -271,6 +462,9 @@ def restore_config_backup(
 
     with tarfile.open(str(path), "r:gz") as tar:
         members = tar.getnames()
+        motivo = _motivo_de_rechazo(tar, config_dir)
+    if motivo:
+        return {"ok": False, "dry_run": dry_run, "error": motivo}
 
     if dry_run or not do_apply:
         return {
@@ -298,7 +492,7 @@ def restore_config_backup(
                 with tar.extractfile(member) as origen, open(restaurada, "wb") as destino:
                     shutil.copyfileobj(origen, destino)
                 conservadas = _colocar_base(restaurada, config_dir / _DB_NAME)
-        tar.extractall(path=config_dir, members=resto)  # noqa: S202 — trusted local backup
+        tar.extractall(path=config_dir, members=resto, filter="data")
 
     message = f"Restauración completada: {len(members)} archivos"
     if conservadas:

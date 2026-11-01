@@ -42,7 +42,7 @@ def test_los_valores_de_filtro_caducan(conn, monkeypatch):
     lib.olvidar_valores_de_filtro()
     lib.valores_de_filtro(conn)
     _poner(conn, "Dos", "Faltante")
-    monkeypatch.setattr(lib, "_VALORES_DE_FILTRO_SEGUNDOS", 0)
+    monkeypatch.setattr(lib.valores, "_VALORES_DE_FILTRO_SEGUNDOS", 0)
     assert "Faltante" in lib.valores_de_filtro(conn)["statuses"]
 
 
@@ -93,8 +93,8 @@ def test_un_calculo_que_empezo_antes_de_olvidar_no_guarda_lo_viejo(conn, monkeyp
         lib.olvidar_valores_de_filtro()  # la sincronización termina a mitad del cálculo
         return valores
 
-    monkeypatch.setattr(lib, "library_filter_values", calcular_mientras_sincroniza)
+    monkeypatch.setattr(lib.valores, "library_filter_values", calcular_mientras_sincroniza)
     lib.valores_de_filtro(conn)
-    monkeypatch.setattr(lib, "library_filter_values", real)
+    monkeypatch.setattr(lib.valores, "library_filter_values", real)
     _poner(conn, "Dos", "Faltante")
     assert lib.valores_de_filtro(conn)["statuses"] == ["Disponible", "Faltante"]

@@ -16,7 +16,7 @@ RADARR, SONARR = 1, 2
 @pytest.fixture(autouse=True)
 def _progreso_aparte(monkeypatch):
     """sync_all deja su error en el progreso compartido: que no pase a otros tests."""
-    monkeypatch.setattr(library, "_LIB_SYNC_PROGRESS", dict(library._LIB_SYNC_PROGRESS))
+    monkeypatch.setattr(library.sync, "_LIB_SYNC_PROGRESS", dict(library.sync._LIB_SYNC_PROGRESS))
 
 
 @pytest.fixture

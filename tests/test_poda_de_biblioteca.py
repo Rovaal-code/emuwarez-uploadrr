@@ -311,7 +311,7 @@ def test_la_instancia_que_se_borra_mientras_su_sincronizacion_espera_no_se_sincr
         with candado():
             yield
 
-    monkeypatch.setattr(library, "_LIB_SYNC_PROGRESS", dict(library._LIB_SYNC_PROGRESS))
+    monkeypatch.setattr(library.sync, "_LIB_SYNC_PROGRESS", dict(library.sync._LIB_SYNC_PROGRESS))
     monkeypatch.setattr(library, "_lib_sync_guard", se_borra_mientras_espera)
     arr[RADARR] = [_peli(1, "Matrix", 603)]
 

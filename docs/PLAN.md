@@ -73,10 +73,17 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   paró (`upload_jobs.etapa_parada`, `services/subida_pasos.py`). Un reintento de una subida que ya había preparado los ficheros reanuda desde la
   verificación y reutiliza la preparación si sigue valiendo en disco; «Reintentar desde el principio» lo rehace todo.
   El reintento ahora también conserva las elecciones del pack (`season_overrides_json`).
+- **Oleada 3, partir library.py:** `services/library.py` pasa a ser el paquete `services/library/`, sin cambiar lo que
+  hace: `sync` (alta y sincronización con Radarr/Sonarr, avisos de faltantes, progreso y candado), `castellano`
+  (audio y subtítulos en castellano), `listado` (filtros, orden, paginación, recuentos y faltantes), `resync`
+  (releer un elemento tras renombrar), `panel` (datos del Dashboard), `rollups` (agregados de series y temporadas) y
+  `valores` (valores de filtro con su caché). `__init__.py` reexporta todo, así que `from ...library import X` sigue
+  valiendo. Lo que un test parchea ahora se parchea en el módulo que lo usa (`library.sync.publicar`,
+  `library.valores._VALORES_DE_FILTRO_SEGUNDOS`…).
 
 ## Siguiente (oleada 3)
 
-1. Partir `library.py` y `upload_execution.py`.
+1. Partir `upload_execution.py`.
 2. Partir `UploadWizardModal.tsx` y ~~`SettingsPage.tsx`~~; los estilos en línea, a clases.
    Al partir el asistente: recargar «Ver nombre de todos los capítulos» y «Ver pistas» con el idioma confirmado si
    estaban abiertos al cambiar el idioma del pack (hoy se quedan vacíos hasta reabrirlos).

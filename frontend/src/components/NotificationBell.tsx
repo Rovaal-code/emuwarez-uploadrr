@@ -275,13 +275,29 @@ export function NotificationBell() {
     }
   }
 
+  // Acciones optimistas en marcha. Si una falla, se vuelve a lo que dice el servidor, pero solo
+  // cuando han terminado todas: recargar antes traería de vuelta lo que otra aún está borrando.
+  const enCurso = useRef(0)
+  const recargarAlAcabar = useRef(false)
+  const accion = async (optimista: () => void, llamada: () => Promise<unknown>) => {
+    ultimoRefresco.current++
+    optimista()
+    enCurso.current++
+    try { await llamada() } catch { recargarAlAcabar.current = true } finally {
+      enCurso.current--
+      if (enCurso.current === 0 && recargarAlAcabar.current) {
+        recargarAlAcabar.current = false
+        refresh()
+      }
+    }
+  }
+
   const handleItemClick = async (n: NotificationItem) => {
     if (!n.read) {
-      ultimoRefresco.current++
-      setUnread(u => Math.max(0, u - 1))
-      setItems(prev => prev.map(i => (i.id === n.id ? { ...i, read: true } : i)))
-      // Si falla, se vuelve a lo que dice el servidor.
-      try { await markNotificationRead(n.id) } catch { refresh() }
+      void accion(() => {
+        setUnread(u => Math.max(0, u - 1))
+        setItems(prev => prev.map(i => (i.id === n.id ? { ...i, read: true } : i)))
+      }, () => markNotificationRead(n.id))
     }
     if (isNotificationClickable(n)) {
       setOpen(false)
@@ -289,26 +305,20 @@ export function NotificationBell() {
     }
   }
 
-  const handleMarkAll = async () => {
-    ultimoRefresco.current++
+  const handleMarkAll = () => accion(() => {
     setUnread(0)
     setItems(prev => prev.map(i => ({ ...i, read: true })))
-    try { await markAllNotificationsRead() } catch { refresh() }
-  }
+  }, markAllNotificationsRead)
 
-  const handleDelete = async (n: NotificationItem) => {
-    ultimoRefresco.current++
+  const handleDelete = (n: NotificationItem) => accion(() => {
     setItems(prev => prev.filter(i => i.id !== n.id))
     if (!n.read) setUnread(u => Math.max(0, u - 1))
-    try { await deleteNotification(n.id) } catch { refresh() }
-  }
+  }, () => deleteNotification(n.id))
 
-  const handleDeleteAll = async () => {
-    ultimoRefresco.current++
+  const handleDeleteAll = () => accion(() => {
     setItems([])
     setUnread(0)
-    try { await deleteAllNotifications() } catch { refresh() }
-  }
+  }, deleteAllNotifications)
 
   return (
     <div className="notif-bell" ref={rootRef}>

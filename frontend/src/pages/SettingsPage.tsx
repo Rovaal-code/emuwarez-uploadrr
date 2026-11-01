@@ -4,6 +4,8 @@ import {
   getMaintenanceStatus,
   createBackup,
   listBackups,
+  downloadBackup,
+  uploadBackup,
   restoreBackup,
   runIntegrityCheck,
   runVacuum,
@@ -1463,12 +1465,15 @@ function DiagnosticsTab({ status, onRefresh }: { status: MaintenanceStatus | nul
 }
 
 // ---------- Backup tab ----------
+const TIPO_COPIA: Record<BackupInfo['tipo'], string> = { manual: 'Manual', automatica: 'Automática', subida: 'Subida' }
+
 function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | null; onRefresh: () => void }) {
   const [backups, setBackups] = useState<BackupInfo[]>([])
   const [backupDir, setBackupDir] = useState('')
   const [busy, setBusy] = useState(false)
   const [restorePath, setRestorePath] = useState('')
   const [restoreConfirm, setRestoreConfirm] = useState('')
+  const subirRef = useRef<HTMLInputElement>(null)
 
   const showMessage = useSettingsMessage()
 
@@ -1492,6 +1497,30 @@ function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | null; on
       showMessage(false, `✗ ${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function handleDownload(b: BackupInfo) {
+    try {
+      await downloadBackup(b.name)
+    } catch (e: unknown) {
+      showMessage(false, `✗ ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+
+  async function handleUpload(file: File | undefined) {
+    if (!file) return
+    setBusy(true)
+    try {
+      const r = await uploadBackup(file)
+      showMessage(true, `✓ Backup subido: ${r.name} (${formatBytes(r.size_bytes)}). Ya puedes elegirlo para restaurar`)
+      loadBackups()
+      onRefresh()
+    } catch (e: unknown) {
+      showMessage(false, `✗ ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setBusy(false)
+      if (subirRef.current) subirRef.current.value = ''
     }
   }
 
@@ -1536,13 +1565,17 @@ function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | null; on
             Ubicación: <code>{backupDir}</code>
           </p>
         )}
+        <p style={{ color: 'var(--text-secondary)', fontSize: 12, margin: '0 0 10px' }}>
+          Las automáticas las crea la tarea Copia de seguridad (en Tareas) y se guardan las últimas; las manuales y
+          las que subas no se borran solas.
+        </p>
         {backups.length === 0 ? (
           <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>No hay backups.</p>
         ) : (
           <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
             <thead>
               <tr>
-                {['Nombre', 'Tamaño', 'Fecha'].map(h => (
+                {['Nombre', 'Tipo', 'Tamaño', 'Fecha', ''].map(h => (
                   <th key={h} style={{ textAlign: 'left', padding: '4px 8px', borderBottom: '1px solid var(--border)', color: 'var(--text-secondary)' }}>{h}</th>
                 ))}
               </tr>
@@ -1551,13 +1584,29 @@ function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | null; on
               {backups.map(b => (
                 <tr key={b.path} style={{ borderBottom: '1px solid var(--border)' }}>
                   <td style={{ padding: '5px 8px' }}>{b.name}</td>
+                  <td style={{ padding: '5px 8px' }}>{TIPO_COPIA[b.tipo]}{b.con_claves ? ' · con claves' : ''}</td>
                   <td style={{ padding: '5px 8px' }}>{formatBytes(b.size_bytes)}</td>
                   <td style={{ padding: '5px 8px' }}>{b.created_at.slice(0, 16).replace('T', ' ')}</td>
+                  <td style={{ padding: '5px 8px', textAlign: 'right' }}>
+                    <button className="btn btn-secondary btn-sm" onClick={() => handleDownload(b)}>Descargar</button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
+        <div style={{ marginTop: 12 }}>
+          <input
+            ref={subirRef}
+            type="file"
+            accept=".gz,.tgz,application/gzip"
+            hidden
+            onChange={e => handleUpload(e.target.files?.[0])}
+          />
+          <button className="btn btn-secondary" onClick={() => subirRef.current?.click()} disabled={busy}>
+            {busy ? 'Trabajando…' : 'Subir un backup…'}
+          </button>
+        </div>
       </div>
 
       <div className="placeholder-card">

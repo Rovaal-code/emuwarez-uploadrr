@@ -3,10 +3,13 @@ from __future__ import annotations
 
 import datetime
 import os
+import re
+import secrets
 import shutil
 import sqlite3
 import tarfile
 import tempfile
+import zlib
 from pathlib import Path
 
 from ..database import CANONICAL_SETTING_ALIASES, olvidar_esquema
@@ -15,6 +18,12 @@ from .settings import all_settings, es_secreto, get_setting_canonical, set_setti
 RESTORE_CONFIRMATION = "RESTAURAR_CONFIG"
 _DB_NAME = "emuwarez_uploadrr.db"
 _CABECERA_SQLITE = b"SQLite format 3\x00"
+# Las copias de la tarea programada y las subidas desde el navegador llevan su marca en el nombre:
+# la retención solo toca las primeras. Las pre-migracion-*.db de database.py no encajan en el patrón.
+PREFIJO_AUTOMATICA = "emuwarez_config_auto_"
+PREFIJO_SUBIDA = "emuwarez_config_subida_"
+_NOMBRE_COPIA = re.compile(r"^emuwarez_config_[A-Za-z0-9_]+\.tar\.gz$")
+LIMITE_SUBIDA_BYTES = 1024 ** 3
 # Lo que no va en la copia: las copias anteriores, los enlaces de subida y los
 # temporales de Uploadrr (capturas, torrents; en una instalación real, 1,7 GB).
 # Una carpeta "backups" a cualquier profundidad tampoco: la copia no se mete a sí misma.
@@ -164,8 +173,10 @@ def create_config_backup(
     output_dir: Path | None = None,
     include_secrets: bool = False,
     confirmation: str | None = None,
+    automatic: bool = False,
 ) -> dict:
     """Creates a .tar.gz backup of CONFIG_DIR in output_dir (or default backups/).
+    automatic=True es la de la tarea programada: lleva su propio nombre, que es lo que la retención reconoce.
     El archivo nace 0600: puede llevar todas las claves.
 
     By default the keys stay out: the database goes with every secret setting
@@ -189,7 +200,7 @@ def create_config_backup(
 
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     suffix = "_with_secrets" if include_secrets else ""
-    archive_name = f"emuwarez_config_{ts}{suffix}.tar.gz"
+    archive_name = f"{PREFIJO_AUTOMATICA if automatic else 'emuwarez_config_'}{ts}{suffix}.tar.gz"
     archive_path = backup_dir / archive_name
 
     # "backups": no meter copias dentro de copias.
@@ -243,8 +254,90 @@ def list_config_backups(directory: Path | None = None) -> list[dict]:
             "path": str(f),
             "size_bytes": stat.st_size,
             "created_at": datetime.datetime.fromtimestamp(stat.st_mtime).isoformat(),
+            "tipo": _tipo_de_copia(f.name),
+            "con_claves": f.name.endswith("_with_secrets.tar.gz"),
         })
     return backups
+
+
+def _tipo_de_copia(nombre: str) -> str:
+    if nombre.startswith(PREFIJO_AUTOMATICA):
+        return "automatica"
+    return "subida" if nombre.startswith(PREFIJO_SUBIDA) else "manual"
+
+
+def ruta_de_copia(nombre: str) -> Path | None:
+    """La copia con ese nombre en backups/, o None si no es un nombre de copia o no existe.
+    El patrón no admite ni `/` ni `.` fuera de la extensión: no se puede salir de la carpeta."""
+    if not _NOMBRE_COPIA.match(nombre):
+        return None
+    ruta = get_backup_dir() / nombre
+    return ruta if ruta.is_file() else None
+
+
+def retirar_copias_automaticas(conservar: int, directorio: Path | None = None) -> list[str]:
+    """Borra las copias automáticas más antiguas y deja las `conservar` últimas (mínimo 1).
+    Las manuales, las subidas y las pre-migracion-*.db no se tocan."""
+    carpeta = directorio if directorio is not None else get_backup_dir()
+    # El nombre lleva la fecha: ordena como el tiempo aunque el fichero se haya copiado o tocado.
+    automaticas = sorted(carpeta.glob(f"{PREFIJO_AUTOMATICA}*.tar.gz"))
+    retiradas = []
+    for vieja in automaticas[:max(0, len(automaticas) - max(1, conservar))]:
+        vieja.unlink(missing_ok=True)
+        retiradas.append(vieja.name)
+    return retiradas
+
+
+def crear_copia_automatica(*, conservar: int, output_dir: Path | None = None) -> dict:
+    """La copia de la tarea programada (sin claves) y, si salió bien, la retención."""
+    resultado = create_config_backup(output_dir=output_dir, automatic=True)
+    if resultado["ok"]:
+        resultado["retiradas"] = retirar_copias_automaticas(conservar, Path(resultado["archive_path"]).parent)
+    return resultado
+
+
+def _motivo_de_copia_invalida(ruta: Path) -> str | None:
+    try:
+        with tarfile.open(ruta, "r:gz") as tar:
+            nombres = tar.getnames()
+    except (tarfile.TarError, OSError, EOFError, zlib.error):
+        return "El archivo no es un backup (.tar.gz) válido"
+    if _DB_NAME not in nombres:
+        return "El archivo no es un backup de esta aplicación: no lleva la base de datos"
+    if any(n.startswith(("/", "\\")) or ".." in Path(n).parts for n in nombres):
+        return "El backup lleva rutas fuera de la carpeta de configuración"
+    return None
+
+
+class CopiaSubida:
+    """Una copia que llega del navegador a trozos. Va a un temporal y solo se queda, con nombre propio
+    en backups/, si es un .tar.gz con la base de datos dentro. Restaurarla es cosa de restore_config_backup."""
+
+    def __init__(self) -> None:
+        self._carpeta = get_backup_dir()
+        self._temporal = self._carpeta / f".subida_{secrets.token_hex(6)}.part"
+        self._fichero = _abrir_0600(self._temporal)
+        self._bytes = 0
+
+    def escribir(self, trozo: bytes) -> None:
+        self._bytes += len(trozo)
+        if self._bytes > LIMITE_SUBIDA_BYTES:
+            raise ValueError(f"El archivo pasa de {LIMITE_SUBIDA_BYTES // 1024 ** 2} MB")
+        self._fichero.write(trozo)
+
+    def terminar(self) -> dict:
+        self._fichero.close()
+        motivo = _motivo_de_copia_invalida(self._temporal)
+        if motivo:
+            raise ValueError(motivo)
+        nombre = f"{PREFIJO_SUBIDA}{datetime.datetime.now():%Y%m%d_%H%M%S}.tar.gz"
+        os.replace(self._temporal, self._carpeta / nombre)
+        return {"ok": True, "name": nombre, "size_bytes": self._bytes}
+
+    def descartar(self) -> None:
+        """Siempre al final: borra el temporal si la copia no llegó a quedarse."""
+        self._fichero.close()
+        self._temporal.unlink(missing_ok=True)
 
 
 def restore_config_backup(

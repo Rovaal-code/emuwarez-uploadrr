@@ -297,12 +297,15 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     offset: desde,
   }), [debouncedSearch, filterType, filterStatus, filterInstanceId, filterRequest, flatFilter, filterSpanish,
     searchProvider, searchQuality, searchSource, searchGroup, filterEmu, filterAporte, sortBy])
+  const [cargandoMas, setCargandoMas] = useState(false)
+  const [fallaMas, setFallaMas] = useState(false)
   const load = useCallback(async () => {
     const esta = ++ultimaCarga.current
     recargaPendiente.current = false
     cargando.current = true
     setLoading(true)
     setError(null)
+    setFallaMas(false)
     try {
       const result = await consulta(offset)
       if (esta === ultimaCarga.current) startTransition(() => setData(result))
@@ -321,8 +324,6 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
 
   // La siguiente tanda cuando hay más filas que las 20.000 que se piden de una vez. Si mientras llega se
   // recarga o cambia un filtro (`ultimaCarga` avanza), su respuesta ya no vale y se tira.
-  const [cargandoMas, setCargandoMas] = useState(false)
-  const [fallaMas, setFallaMas] = useState(false)
   const cargarMas = useCallback(async () => {
     const carga = ultimaCarga.current
     setCargandoMas(true)

@@ -1,7 +1,6 @@
 """Tests for GET /api/runtime/diagnostics endpoint."""
 from __future__ import annotations
 
-import pytest
 
 
 def test_diagnostics_endpoint_requires_auth(client):

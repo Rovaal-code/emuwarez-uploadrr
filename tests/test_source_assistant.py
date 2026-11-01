@@ -1,9 +1,7 @@
 """Tests for source_assistant service (Phase 10A)."""
 from __future__ import annotations
 
-import json
-import sqlite3
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 

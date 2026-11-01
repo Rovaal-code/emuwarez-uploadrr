@@ -1,7 +1,6 @@
 """Tests for Phase 9B — demo_seed service."""
 from __future__ import annotations
 
-import os
 import pytest
 from pathlib import Path
 
@@ -128,8 +127,6 @@ def test_seed_does_not_touch_uploadrr(db_conn, tmp_path):
 
 def test_seed_no_real_api_calls(db_conn, tmp_path, monkeypatch):
     import urllib.request
-    original_urlopen = urllib.request.urlopen
-
     def no_network(*args, **kwargs):
         raise AssertionError("seed_demo_data must not make network calls")
 

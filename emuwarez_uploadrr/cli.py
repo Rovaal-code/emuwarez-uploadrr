@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 from typing import Any, Optional
 
-from .database import BaseMasNuevaError, connect, init_db, db_path, get_state, preparar_base
+from .database import BaseMasNuevaError, connect, init_db, db_path, preparar_base
 from .integrations.base import IntegrationError
 from .models import LocalStatus, NomenclatureStatus, RequestStatus
 from .services import instances as instance_service
@@ -245,7 +245,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_up_start.add_argument("id", type=int, help="ID del upload job")
     p_up_start.add_argument("--dry-run", action="store_true", default=True, help="Solo previsualización (por defecto)")
     p_up_start.add_argument("--apply", action="store_true", dest="up_apply", help="Iniciar ejecución real")
-    p_up_start.add_argument("--confirm", metavar="TOKEN", dest="up_confirm", help=f"Token de confirmación: INICIAR_UPLOADRR")
+    p_up_start.add_argument("--confirm", metavar="TOKEN", dest="up_confirm", help="Token de confirmación: INICIAR_UPLOADRR")
     p_up_cancel = up_sub.add_parser("cancel", help="Cancelar un upload job en ejecución")
     p_up_cancel.add_argument("id", type=int, help="ID del upload job")
     p_up_artifacts = up_sub.add_parser("artifacts", help="Ver artefactos de un upload job")
@@ -678,13 +678,12 @@ def cmd_arr(args) -> int:
             from .services.arr_health import collect_arr_health
             result = collect_arr_health(conn)
             summary = result.get("summary", {})
-            print(f"\n── Salud Radarr/Sonarr ──────────────────────────────────")
+            print("\n── Salud Radarr/Sonarr ──────────────────────────────────")
             print(f"  Radarr: {summary.get('radarr', 0)} instancias  |  Sonarr: {summary.get('sonarr', 0)} instancias")
             print(f"  OK: {summary.get('ok', 0)}  |  Warning: {summary.get('warning', 0)}  |  Error: {summary.get('error', 0)}")
             print()
             for inst in result.get("instances", []):
                 mark = "✓" if inst.get("ok") else "✗"
-                status = inst.get("health_status", "error")
                 version = inst.get("version") or ""
                 err = inst.get("error") or ""
                 print(f"  {mark} [{inst.get('instance_type', '?')}] {inst.get('instance_name', '?')}  {version}  {err}")
@@ -767,7 +766,7 @@ def cmd_nomenclature(args) -> int:
             _print_nomenclature_proposal(proposal)
             return 0
         if args.nomenclature_command == "apply":
-            from .services.nomenclature import apply_nomenclature_proposal, CONFIRMATION_TOKEN
+            from .services.nomenclature import apply_nomenclature_proposal
             do_apply = getattr(args, "nom_apply", False)
             dry_run = getattr(args, "dry_run", False) or not do_apply
             confirmation = getattr(args, "confirm_token", None)
@@ -856,7 +855,6 @@ def cmd_mkv_title(args) -> int:
     from .services.mkv_title import (
         preview_internal_title_update,
         apply_internal_title_update,
-        MKV_CONFIRMATION_TOKEN,
     )
     with _open_conn(args) as conn:
         if args.mkv_command == "preview":
@@ -894,7 +892,7 @@ def cmd_mkv_title(args) -> int:
             for e in result.get("errors", []):
                 print(f"  ✗ {e}")
             if not do_apply:
-                print(f"  ✓ mkvpropedit no se ha ejecutado (dry-run).")
+                print("  ✓ mkvpropedit no se ha ejecutado (dry-run).")
             return 0 if result.get("status") not in ("blocked", "error") else 1
     return 1
 
@@ -906,7 +904,7 @@ def cmd_upload_modern(args) -> int:
     from .services.upload_execution import (
         get_upload_job, list_upload_jobs, get_upload_job_logs,
         get_upload_job_artifacts, start_upload_job, cancel_upload_job,
-        retry_upload_job, CONFIRMATION_TOKEN,
+        retry_upload_job,
     )
     with _open_conn(args) as conn:
         if args.upload_command == "preflight":
@@ -921,7 +919,7 @@ def cmd_upload_modern(args) -> int:
                 print(f"Resolución: {cmd.get('resolution', '–')}")
                 print(f"Origen:     {cmd.get('source_path', '–')}")
                 if cmd.get("command_preview"):
-                    print(f"\nComando previsto:")
+                    print("\nComando previsto:")
                     print(f"  {cmd['command_preview']}")
             if result.get("warnings"):
                 print("\nAvisos:")
@@ -1026,7 +1024,7 @@ def cmd_upload_modern(args) -> int:
             )
             action = result.get("action", "unknown")
             if dry_run or action == "dry_run":
-                print(f"\n── Uploadrr / Start dry-run ─────────────────────────────")
+                print("\n── Uploadrr / Start dry-run ─────────────────────────────")
                 print(f"\nJob:\n  {args.id}")
                 print(f"\nEstado:\n  {result.get('status', '–')}")
                 print(f"\nComando previsto:\n  {result.get('command_preview', '–')}")
@@ -1041,19 +1039,19 @@ def cmd_upload_modern(args) -> int:
                 print(f"\nAcción:\n  {result.get('message', 'No se ha ejecutado Uploadrr.')}")
                 return 0 if result.get("valid", True) else 1
             if action == "blocked":
-                print(f"\n── Uploadrr / Bloqueado ─────────────────────────────")
+                print("\n── Uploadrr / Bloqueado ─────────────────────────────")
                 for e in result.get("errors", []):
                     print(f"  ✗ {e}")
                 return 1
             if action == "started":
-                print(f"\n── Uploadrr / Ejecución ─────────────────────────────")
+                print("\n── Uploadrr / Ejecución ─────────────────────────────")
                 print(f"\nJob:\n  {args.id}")
                 print(f"\nEstado:\n  {result.get('status', '–')}")
-                print(f"\nSeguridad:")
-                print(f"  ✓ Se usa archivo preparado." if result.get("using_prepared_path") else "  ⚠ Se usa el archivo original.")
-                print(f"  ✓ No se modifica Uploadrr/.")
-                print(f"  ✓ No se ejecuta mkvpropedit.")
-                print(f"  ✓ Secretos ocultos en logs.")
+                print("\nSeguridad:")
+                print("  ✓ Se usa archivo preparado." if result.get("using_prepared_path") else "  ⚠ Se usa el archivo original.")
+                print("  ✓ No se modifica Uploadrr/.")
+                print("  ✓ No se ejecuta mkvpropedit.")
+                print("  ✓ Secretos ocultos en logs.")
                 print(f"\nMensaje:\n  {result.get('message', '–')}")
                 print(f"\nUsa 'upload logs {args.id}' para ver el detalle.")
                 return 0 if result.get("status") == "completed" else 1
@@ -1071,21 +1069,21 @@ def cmd_upload_modern(args) -> int:
                 wait=do_apply,
             )
             if dry_run or result.get("action") == "dry_run":
-                print(f"\n── Retry dry-run ────────────────────")
+                print("\n── Retry dry-run ────────────────────")
                 original = get_upload_job(args.id, conn=conn)
                 orig_status = original.get("status", "–") if original else "–"
                 print(f"Job original: {args.id} ({orig_status})")
-                print(f"Job nuevo (simulado): no creado")
+                print("Job nuevo (simulado): no creado")
                 print(f"Reintentos previstos: {result.get('retry_count_would_be', '–')}")
                 if result.get("command_preview"):
                     print(f"Comando previsto: {result['command_preview']}")
-                print(f"No se ha ejecutado Uploadrr.")
+                print("No se ha ejecutado Uploadrr.")
                 return 0
             if result.get("action") == "blocked":
                 for e in result.get("errors") or [result.get("message") or "Bloqueado."]:
                     print(f"✗ {e}")
                 return 1
-            print(f"\n── Retry iniciado ────────────────────")
+            print("\n── Retry iniciado ────────────────────")
             new_job_id = result.get("new_job_id", "–")
             print(f"Job nuevo: {new_job_id}")
             print(f"Reintento: {result.get('retry_count', '–')}")
@@ -1445,7 +1443,7 @@ def cmd_demo(args) -> int:
             except ValueError as exc:
                 print(f"✗ {exc}")
                 return 1
-            print(f"✓ Datos demo sembrados")
+            print("✓ Datos demo sembrados")
             print(f"  library_item_id : {result['library_item_id']}")
             print(f"  request_item_id : {result['request_item_id']}")
             print(f"  archivo simulado: {result['media_file']}")

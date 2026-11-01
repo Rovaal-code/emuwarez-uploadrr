@@ -5,10 +5,8 @@ All subprocess calls are mocked. No real Uploadrr execution.
 from __future__ import annotations
 
 import time
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from emuwarez_uploadrr.database import connect, init_db
 from emuwarez_uploadrr.services.upload_execution import (

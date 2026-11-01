@@ -1,7 +1,6 @@
 """Tests for secrets redaction in upload execution logs."""
 from __future__ import annotations
 
-import pytest
 from emuwarez_uploadrr.services.upload_execution import redact_secrets
 
 

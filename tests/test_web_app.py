@@ -7,12 +7,10 @@ Run with:
 """
 from __future__ import annotations
 
-import json
 
 import pytest
 from fastapi.testclient import TestClient
 
-from emuwarez_uploadrr.web.app import create_app
 
 
 # conftest.py supplies `client` and `auth_headers` via shared fixtures.
@@ -115,11 +113,9 @@ def test_openapi_schema(client):
 def test_health_works_without_frontend_dist(isolated_db):
     """create_app() must not fail if frontend/dist does not exist."""
     import os
-    import tempfile
     from emuwarez_uploadrr.web.app import create_app as _create_app
     # Create app without touching FRONTEND_DIST — it may or may not exist
     app = _create_app()
-    from fastapi.testclient import TestClient
     os.environ["CONFIG_DIR"] = str(isolated_db)
     c = TestClient(app)
     resp = c.get("/api/health")

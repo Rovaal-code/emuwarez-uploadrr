@@ -103,11 +103,9 @@ def _compute_recommendation(item: dict) -> tuple[str, list[str], str, str]:
 
     is_available = local_status == LocalStatus.AVAILABLE.value
     is_missing = local_status == LocalStatus.MISSING.value
-    in_queue = queue_status in _QUEUE_STATUSES_IN_PROGRESS
     has_queue_error = queue_status in _QUEUE_STATUSES_ERROR
     has_history_error = history_status == "error" or ("Fail" in history_event) or bool(history_error)
     request_compatible = request_status in (RequestStatus.COMPATIBLE.value, RequestStatus.PARTIAL.value)
-    request_filled = request_status == RequestStatus.FILLED.value
 
     # --- Downloading / in progress ---
     if queue_status == "downloading":

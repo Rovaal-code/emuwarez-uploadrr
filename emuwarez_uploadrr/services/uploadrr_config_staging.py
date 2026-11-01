@@ -24,7 +24,7 @@ import os
 import re
 import stat
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 from .uploadrr_yaml import (
     find_child_block,

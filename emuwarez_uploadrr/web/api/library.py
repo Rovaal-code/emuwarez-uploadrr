@@ -10,17 +10,16 @@ from ..dependencies import require_auth
 from ..runtime import _db_path
 from emuwarez_uploadrr.services.nomenclature import infer_provider_from_item
 from emuwarez_uploadrr.services.library import content_display_title, episode_own_name
-from emuwarez_uploadrr.services.source_assistant import EMU_PROVIDERS
 
 
 
 from ..schemas import (
     LibraryItemResponse, LibraryListResponse,
     MissingItemResponse, MissingListResponse,
-    OkResponse, SyncRequest, SyncResponse,
+    SyncRequest, SyncResponse,
 )
 from ...services.library import (  # agregación y filtros, movidos aquí
-    _specials_clause, _nomenclature_rollup, _local_status_rollup, _size_rollup,
+    _nomenclature_rollup, _local_status_rollup, _size_rollup,
     _rollup_path, _child_quality_rollup, _batch_rollups,
     _ROLLUP_EMPTY, _provider_label,
 )
@@ -600,8 +599,7 @@ def missing_list(
     limit: int = Query(50, ge=1, le=20000),
     offset: int = Query(0, ge=0),
 ) -> MissingListResponse:
-    from emuwarez_uploadrr.services.library import list_missing, count_library
-    from emuwarez_uploadrr.models import LocalStatus
+    from emuwarez_uploadrr.services.library import list_missing
     with _get_conn() as conn:
         rows = list_missing(conn, limit=limit, offset=offset)
     return MissingListResponse(

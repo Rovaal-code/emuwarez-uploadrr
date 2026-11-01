@@ -15,7 +15,7 @@ from typing import Callable, Iterator, Optional, Sequence, Union
 from ..database import borrar_biblioteca, get_state, set_state
 from ..integrations import radarr, sonarr
 from ..integrations.base import IntegrationError
-from ..models import InstanceConfig, LibraryItem, LocalStatus, MediaKind, NomenclatureStatus
+from ..models import InstanceConfig, LibraryItem, LocalStatus, MediaKind
 from .source_assistant import EMU_PROVIDERS
 from .instances import list_instances
 from .tasks import start_task, finish_task
@@ -1210,7 +1210,7 @@ def _build_library_filter(
             #
             # De paso, buscar algo que solo existe por debajo ("T2E1") ya no
             # devuelve la fila suelta y descolgada, sino la serie que lo tiene.
-            where.append(f"""(title LIKE ? OR EXISTS (
+            where.append("""(title LIKE ? OR EXISTS (
                 SELECT 1 FROM library_items d
                  WHERE (d.parent_id = library_items.id
                      OR d.parent_id IN (SELECT s.id FROM library_items s

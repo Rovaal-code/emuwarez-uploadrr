@@ -1,7 +1,6 @@
 """API tests for Phase 10A nomenclature fields endpoints."""
 from __future__ import annotations
 
-import json
 from unittest.mock import patch
 
 import pytest

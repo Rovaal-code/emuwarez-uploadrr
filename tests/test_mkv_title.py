@@ -4,7 +4,6 @@ from __future__ import annotations
 import os
 from unittest.mock import patch, MagicMock
 
-import pytest
 
 
 def _make_conn(tmp_path):
@@ -129,7 +128,7 @@ def test_apply_real_requires_token_not_called(tmp_path):
     _insert_proposal(conn, item_id, "Film 2024 1080p BluRay - EMUWAREZ")
 
     with patch("subprocess.run") as mock_run:
-        from emuwarez_uploadrr.services.mkv_title import apply_internal_title_update, MKV_CONFIRMATION_TOKEN
+        from emuwarez_uploadrr.services.mkv_title import apply_internal_title_update
         apply_internal_title_update(
             item_id, dry_run=False, apply=True, confirmation=None, conn=conn
         )

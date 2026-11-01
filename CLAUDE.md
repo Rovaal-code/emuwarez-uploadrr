@@ -41,7 +41,7 @@ the upload with Uploadrr-EMU (`Kisnov/Uploadrr-EMU`, cloned into the image at `/
 - `test_media_info_congelado.py` compares the mediainfo report against
   `tests/fixtures/mediainfo_informe_esperado.json`. For an intended change, regenerate it with
   `python -m tests.test_media_info_congelado --regenerar` and review the JSON diff.
-- CI (`.github/workflows/ci.yml`) runs pytest, critical ruff rules and the frontend checks on every PR, and from
+- CI (`.github/workflows/ci.yml`) runs pytest, ruff (`--select E9,F`: syntax errors and pyflakes, so no unused imports or variables) and the frontend checks on every PR, and from
   `publicar.yml` before a release; it uploads coverage, test results and the frontend bundle size to Codecov
   (`codecov.yml`: the changed `emuwarez_uploadrr/` lines of a PR need 70 % coverage or `codecov/patch` fails; the
   frontend is not measured; the total is informational;

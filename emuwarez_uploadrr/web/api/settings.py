@@ -18,7 +18,7 @@ from pydantic import BaseModel, field_validator
 
 from ..dependencies import require_auth
 from ..runtime import _db_path
-from ...services.settings import get_setting_canonical, mask_secret, set_setting
+from ...services.settings import mask_secret, set_setting
 from ...services.uploadrr_contract import RUNTIME_EMU, RUNTIME_GENERIC, DEFAULT_TIMEOUT_SECONDS, DEFAULT_ALLOWED_ROOTS
 from ...services.source_assistant import EMU_PROVIDERS
 from ...services.notification_center import EVENT_TYPES, channel_events, ui_enabled

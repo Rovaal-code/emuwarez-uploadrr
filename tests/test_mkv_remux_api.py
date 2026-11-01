@@ -1,7 +1,7 @@
 """API tests for Phase 12A track reorder/rename (mkv_remux) endpoints."""
 from __future__ import annotations
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 
 _SAMPLE_MKV_JSON = {

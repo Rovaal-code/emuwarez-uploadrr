@@ -255,9 +255,7 @@ def _run_check_version(conn: sqlite3.Connection) -> tuple[str, str]:
     corriendo cada hora y diciendo que hay novedad en su resumen, pero la
     notificación no se repite. Se vuelve a avisar cuando el manifiesto publica
     un commit distinto del ya avisado."""
-    from ..database import get_state, set_state
     from .tasks import finish_task, start_task
-    from .version_info import estado_de_version
 
     run_id = start_task(conn, TASK_CHECK_VERSION, "Comprobando versión…")
     try:

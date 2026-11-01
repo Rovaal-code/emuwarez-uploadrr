@@ -1,10 +1,8 @@
 """API tests for Phase 10A MKV title endpoints."""
 from __future__ import annotations
 
-import os
 from unittest.mock import patch, MagicMock
 
-import pytest
 
 
 def _seed_item(conn_ctx, title="Film", prepared_path=None, torrent_name=None):
@@ -134,7 +132,7 @@ def test_apply_mkv_title_correct_token_calls_mkvpropedit(client, auth_headers, t
         )
 
     assert resp.status_code == 200
-    data = resp.json()
+    resp.json()
     if mock_run.called:
         _, kwargs = mock_run.call_args
         assert not kwargs.get("shell", False)

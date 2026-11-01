@@ -1,7 +1,5 @@
 """Tests for runtime_diagnostics service — no Docker required."""
 import importlib
-import os
-import pytest
 
 
 def test_get_runtime_diagnostics_returns_checks():

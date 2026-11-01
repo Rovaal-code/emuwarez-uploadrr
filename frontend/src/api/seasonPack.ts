@@ -3,8 +3,11 @@ import type { SeasonPackPlanResponse } from '../types/api'
 import type { MediaInfoReport } from './library'
 import type { TrackRemuxPreview, SourceComparison } from './nomenclature'
 
-export function previewSeasonPack(seasonId: number): Promise<SeasonPackPlanResponse> {
-  return api.get<SeasonPackPlanResponse>(`/library/season/${seasonId}/pack-preview`)
+// `provider`: el Proveedor elegido a mano; con él, capítulos con proveedores
+// distintos en el nombre ya no bloquean el pack.
+export function previewSeasonPack(seasonId: number, provider?: string | null): Promise<SeasonPackPlanResponse> {
+  const qs = provider ? `?provider=${encodeURIComponent(provider)}` : ''
+  return api.get<SeasonPackPlanResponse>(`/library/season/${seasonId}/pack-preview${qs}`)
 }
 
 export interface SeasonPackFieldsPreviewFields {

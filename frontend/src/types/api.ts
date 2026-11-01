@@ -463,6 +463,9 @@ export interface SeasonPackPlanResponse {
   // De dónde sale el proveedor ("manual", "file" o "tmdb") y el texto que lo explica.
   provider_source?: 'manual' | 'file' | 'tmdb' | null
   provider_source_detail?: string | null
+  // Proveedores distintos en los nombres de los capítulos: el plan se bloquea
+  // hasta que se elige uno en Proveedor.
+  provider_conflict?: string[]
   // Field-by-field breakdown — same fields a movie/episode's nomenclature
   // grid shows. Source/Proveedor/Tag are editable here too, same as a
   // movie/episode (applied uniformly across every episode).

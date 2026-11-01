@@ -195,3 +195,12 @@ def test_pack_preview_dice_de_donde_sale_el_proveedor(client, auth_headers, isol
     assert data["provider"] == "FLMN"
     assert data["provider_source"] == "file"
     assert data["provider_source_detail"] == "detectado en el nombre del archivo del capítulo 1"
+
+
+def test_pack_preview_acepta_el_proveedor_elegido(client, auth_headers, isolated_db, tmp_path):
+    season_id = _seed_season_with_episode(isolated_db, tmp_path)
+    resp = client.get(f"/api/library/season/{season_id}/pack-preview?provider=NF", headers=auth_headers)
+    data = resp.json()
+    assert data["provider"] == "NF"
+    assert data["provider_source"] == "manual"
+    assert data["provider_conflict"] == []

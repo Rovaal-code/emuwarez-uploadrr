@@ -948,8 +948,11 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
 
   // --- Step 1 (season target): build the pack plan, polling progress while
   // it's in flight (real work per episode — build_nomenclature_proposal()).
-  const loadSeasonPlan = useCallback(async () => {
+  // `proveedor`: el elegido a mano para salir de un plan bloqueado por
+  // proveedores distintos; si no, el que ya se eligió para esta temporada.
+  const loadSeasonPlan = useCallback(async (proveedor?: string) => {
     if (targetId == null) return
+    const proveedorPedido = proveedor ?? ajustesPorId.get(targetId)?.provider ?? undefined
     const pedido = ++planPedido.current
     setSeasonPlanLoading(true); setSeasonPlanError(null)
     buildingPlanFor.current = targetId
@@ -962,7 +965,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
       'plan-temporada-progreso', a => a.season_id === targetId, pedirPlan, 400)
     try {
       const [plan, srcResp, prvResp] = await Promise.all([
-        previewSeasonPack(targetId), getEmuSources(), getEmuProviders(),
+        previewSeasonPack(targetId, proveedorPedido), getEmuSources(), getEmuProviders(),
       ])
       if (pedido !== planPedido.current) return
       setSeasonPlan(plan)
@@ -984,7 +987,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
         year: plan.year != null ? String(plan.year) : undefined,
         resolution: plan.resolution ?? undefined,
         source: saved?.source ?? plan.source ?? undefined,
-        provider: saved?.provider ?? plan.provider ?? undefined,
+        provider: proveedor ?? saved?.provider ?? plan.provider ?? undefined,
         video_codec: plan.video_codec ?? undefined,
         dynamic_range: plan.dynamic_range ?? undefined,
         audio_summary: plan.audio_summary ?? undefined,
@@ -1940,7 +1943,16 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
           {seasonPlanError && !seasonPlanLoading && (
             <div style={{ padding: '20px 0' }}>
               <p className="text-error" style={{ marginTop: 0, marginBottom: 10 }}><IconoAviso /> {seasonPlanError}</p>
-              <button className="btn btn-secondary btn-sm" type="button" onClick={loadSeasonPlan}>↻ Reintentar</button>
+              {(seasonPlan?.provider_conflict?.length ?? 0) > 0 && (
+                // El error pide elegir un proveedor: el selector tiene que estar aquí.
+                <label style={{ display: 'block', marginBottom: 10 }}><FieldLabel label="Proveedor" info={FIELD_INFO.provider} />
+                  <select className="form-input form-select" value="" onChange={e => { if (e.target.value) loadSeasonPlan(e.target.value) }}>
+                    <option value="">— Elegir proveedor para todo el pack —</option>
+                    {providers.map(p => <option key={p.code} value={p.code}>{p.name} ({p.code})</option>)}
+                  </select>
+                </label>
+              )}
+              <button className="btn btn-secondary btn-sm" type="button" onClick={() => loadSeasonPlan()}>↻ Reintentar</button>
             </div>
           )}
           {!seasonPlanLoading && !seasonPlanError && seasonPlan && (

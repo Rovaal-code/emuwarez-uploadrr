@@ -514,7 +514,7 @@ def _decidir_proveedor_pack(
     no rehacer la propuesta de los que ya lo llevan."""
     from .nomenclature import ORIGEN_CARPETA, ORIGEN_NOMBRE, _infer_source_from_item, detectar_proveedor
 
-    decision: dict[str, Any] = {"provider": None, "source": None, "detail": None,
+    decision: dict[str, Any] = {"provider": None, "source": None, "detail": None, "conflicto": [],
                                 "warnings": [], "errors": [], "por_capitulo": {}}
     if provider_override:
         decision.update(provider=provider_override, source="manual", detail="elegido a mano")
@@ -532,8 +532,18 @@ def _decidir_proveedor_pack(
         elif origen == ORIGEN_CARPETA and codigo not in debiles:
             debiles.append(codigo)
 
+    # Los avisos van antes de cualquier return: una carpeta con "NF" se avisa
+    # aunque otro capítulo traiga "AMZN" en el nombre.
+    for codigo in debiles:
+        decision["warnings"].append(
+            f"El proveedor {codigo} solo aparece en una carpeta de la ruta, no en el nombre de los "
+            "archivos: no se aplica. Elígelo en Proveedor si es correcto.")
+
     distintos = sorted(set(decision["por_capitulo"].values()))
     if len(distintos) > 1:
+        # El asistente enseña el selector de Proveedor con este error; elegir
+        # uno rehace el plan con provider_override, que ya no pasa por aquí.
+        decision["conflicto"] = distintos
         decision["errors"].append(f"Los capítulos vienen de proveedores distintos ({', '.join(distintos)}): "
                                   "elige uno en Proveedor.")
     if primero is not None:
@@ -543,11 +553,6 @@ def _decidir_proveedor_pack(
             detalle += f"; lo traen {con} de {len(episodios)} capítulos y se aplica a todos"
         decision.update(provider=decision["por_capitulo"][primero["id"]], source="file", detail=detalle)
         return decision
-
-    for codigo in debiles:
-        decision["warnings"].append(
-            f"El proveedor {codigo} solo aparece en una carpeta de la ruta, no en el nombre de los "
-            "archivos: no se aplica. Elígelo en Proveedor si es correcto.")
 
     if (sources.get(episodios[0]["id"]) or "").upper() == "WEB-DL":
         from .source_assistant import suggest_provider_for_item
@@ -791,6 +796,8 @@ def build_season_pack_plan(
             # De dónde sale el proveedor, para que el asistente lo diga.
             "provider_source": decision["source"],
             "provider_source_detail": decision["detail"],
+            # Proveedores distintos en los nombres: el asistente deja elegir uno.
+            "provider_conflict": decision["conflicto"],
             # Rest of the field breakdown used to build season_pack_title,
             # kept on the return dict so a caller (upload_queue.py) can
             # snapshot the full nomenclature breakdown for the job detail

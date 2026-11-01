@@ -1231,3 +1231,48 @@ def test_el_proveedor_elegido_a_mano_dice_que_es_manual(isolated_db, tmp_path):
     assert plan["provider_source"] == "manual"
     assert all("NF.WEB-DL" in e["nombre"] for e in plan["episodes"])
     conn.close()
+
+
+def _pack_con_proveedores_distintos(conn, tmp_path):
+    season_id = _pack_de_dos(conn, tmp_path)
+    _renombrar_capitulo(conn, tmp_path, 1, "S01E01.AMZN.WEB-DL.mkv")
+    _renombrar_capitulo(conn, tmp_path, 2, "S01E02.NF.WEB-DL.mkv")
+    return season_id
+
+
+def test_proveedores_distintos_dicen_cuales_para_elegir_uno(isolated_db, tmp_path):
+    conn = _open(isolated_db)
+    plan = build_season_pack_plan(_pack_con_proveedores_distintos(conn, tmp_path), conn=conn)
+    assert plan["status"] == "blocked"
+    assert plan["provider_conflict"] == ["AMZN", "NF"]
+    conn.close()
+
+
+def test_elegir_proveedor_desbloquea_un_pack_con_proveedores_distintos(isolated_db, tmp_path):
+    """El error pide "elige uno en Proveedor": elegirlo tiene que bastar."""
+    conn = _open(isolated_db)
+    plan = build_season_pack_plan(_pack_con_proveedores_distintos(conn, tmp_path), conn=conn,
+                                  provider_override="NF")
+    assert plan["status"] == "valid", plan["errors"]
+    assert plan["provider_conflict"] == []
+    assert "NF WEB-DL" in plan["season_pack_title"]
+    assert all("NF.WEB-DL" in e["nombre"] and "AMZN" not in e["nombre"] for e in plan["episodes"])
+    conn.close()
+
+
+def test_el_aviso_de_la_carpeta_sale_aunque_otro_capitulo_traiga_proveedor(isolated_db, tmp_path):
+    """E01 trae AMZN en el nombre y E02 solo encuentra NF en la carpeta: se avisa de NF."""
+    conn = _open(isolated_db)
+    _series_id, season_id = _seed_series_season(conn)
+    folder = tmp_path / "One Piece NF" / "Season 1"
+    folder.mkdir(parents=True)
+    for i, nombre in ((1, "S01E01.AMZN.WEB-DL.mkv"), (2, "S01E02.WEB-DL.mkv")):
+        f = folder / nombre
+        f.write_bytes(b"video")
+        _seed_episode(conn, season_id, number=i, title=f"One Piece S01E0{i}", path=str(f),
+                      quality="WEBDL-1080p", video_codec="x264", audio_codec="AC3",
+                      audio_languages="spa", source="WEB-DL")
+    plan = build_season_pack_plan(season_id, conn=conn)
+    assert plan["provider"] == "AMZN"
+    assert any("NF solo aparece en una carpeta" in w for w in plan["warnings"]), plan["warnings"]
+    conn.close()

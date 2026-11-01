@@ -33,8 +33,8 @@ export function DatabaseActions({ onRefresh }: { onRefresh: () => void }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}>
-      <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: 0 }}>
+    <div className="aj-col-8 aj-mt-14">
+      <p className="aj-sec-13 aj-m-0">
         <strong>Verificar integridad</strong> ejecuta <code>PRAGMA integrity_check</code> (solo lectura).{' '}
         <strong>VACUUM</strong> compacta la BD y libera las páginas libres; escribe <code>MANTENIMIENTO_DB</code> para ejecutarlo.
       </p>
@@ -44,9 +44,9 @@ export function DatabaseActions({ onRefresh }: { onRefresh: () => void }) {
         aria-label="Confirmación de VACUUM"
         value={vacuumConfirm}
         onChange={e => setVacuumConfirm(e.target.value)}
-        style={{ width: '100%', padding: '6px 10px', fontSize: 13, boxSizing: 'border-box' }}
+        className="aj-campo-ancho"
       />
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      <div className="aj-flex-8 aj-wrap">
         <button className="btn btn-secondary" onClick={handleIntegrity} disabled={busy}>Verificar integridad</button>
         <button className="btn btn-secondary" onClick={() => handleVacuum(true)} disabled={busy}>Previsualizar VACUUM</button>
         <button className="btn btn-danger" onClick={() => handleVacuum(false)} disabled={busy}>Ejecutar VACUUM</button>

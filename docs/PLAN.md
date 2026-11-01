@@ -74,6 +74,9 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   conexión, modal de claves de imágenes) está en su tarjeta. Comportamiento igual: lo fija
   `pages/__tests__/SettingsPage.test.tsx` (jsdom, nueva dependencia de desarrollo). Los estilos en línea siguen
   sin pasar a clases.
+- **Oleada 3, estilos de Configuración a clases:** `SettingsPage` y `pages/ajustes/` ya no llevan estilos en línea,
+  salvo los colores calculados (resultado de una prueba, mensaje de guardado) y el de un icono. Las clases están
+  en `styles/ajustes.css` (prefijo `aj-`). Mismo aspecto.
 - **Oleada 3, subida por pasos con reintento (#126):** sobre `PASOS` (#127), cada subida enseña sus cuatro pasos con
   nombre (comprobar y poner el nombre, preparar los ficheros, verificar antes de subir, subir con Uploadrr) y cuál se
   paró (`upload_jobs.etapa_parada`, `services/subida_pasos.py`). Un reintento de una subida que ya había preparado los ficheros reanuda desde la
@@ -109,7 +112,7 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
 
 ## Siguiente (oleada 3)
 
-1. Los estilos en línea, a clases: faltan el resto de pantallas y componentes (el asistente de subida ya está).
+1. Los estilos en línea, a clases. Hecho en el asistente de subida y en Configuración; faltan el resto de pantallas y componentes.
 2. `httpx` y un solo limitador de eMuwarez compartido (30 peticiones por minuto).
 3. ESLint `react-hooks`.
 

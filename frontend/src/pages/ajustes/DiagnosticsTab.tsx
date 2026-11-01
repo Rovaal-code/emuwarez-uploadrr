@@ -7,16 +7,16 @@ import { PathMappingsCard } from './diagnostico/PathMappingsCard'
 export function DiagnosticsTab({ status, onRefresh }: { status: MaintenanceStatus | null; onRefresh: () => void }) {
   const db = status?.database
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div className="aj-col-16">
       <VersionCard />
       <div className="placeholder-card">
         <h3>Base de datos</h3>
         {!db ? (
-          <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Cargando…</p>
+          <p className="aj-sec-13">Cargando…</p>
         ) : !db.ok ? (
-          <p style={{ color: 'var(--color-error)', fontSize: 13 }}>✗ {db.error}</p>
+          <p className="aj-err-13">✗ {db.error}</p>
         ) : (
-          <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+          <table className="aj-tabla aj-fs-13">
             <tbody>
               {[
                 ['Ruta', db.db_path],
@@ -25,9 +25,9 @@ export function DiagnosticsTab({ status, onRefresh }: { status: MaintenanceStatu
                 ['Páginas libres', db.freelist_count],
                 ['Fragmentación', `${db.fragmentation_pct ?? 0} %`],
               ].map(([k, v]) => (
-                <tr key={String(k)} style={{ borderBottom: '1px solid var(--border)' }}>
-                  <td style={{ padding: '6px 8px', color: 'var(--text-secondary)', width: 130 }}>{k}</td>
-                  <td style={{ padding: '6px 8px' }}>{String(v ?? '—')}</td>
+                <tr key={String(k)} className="aj-fila-borde">
+                  <td className="aj-td-etq-130">{k}</td>
+                  <td className="aj-td-6">{String(v ?? '—')}</td>
                 </tr>
               ))}
             </tbody>
@@ -38,10 +38,10 @@ export function DiagnosticsTab({ status, onRefresh }: { status: MaintenanceStatu
       <div className="placeholder-card">
         <h3>Inventario de configuración</h3>
         {!status ? (
-          <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Cargando…</p>
+          <p className="aj-sec-13">Cargando…</p>
         ) : (
           <>
-            <p style={{ fontSize: 13, margin: '0 0 8px' }}>
+            <p className="aj-fs-13 aj-m-0-8">
               Directorio: <code>{status.config_inventory.config_dir}</code><br />
               Archivos: {status.config_inventory.files.length} &nbsp;·&nbsp;
               Tamaño: {formatBytes(status.config_inventory.total_size_bytes)}

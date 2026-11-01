@@ -33,7 +33,7 @@ export function PathMappingsCard() {
         setMappings(m)
         setBaseline(JSON.stringify(m))
       })
-      .catch((e: unknown) => setErrorCarga(e instanceof Error ? e.message : String(e)))
+      .catch((e: unknown) => setErrorCarga((e instanceof Error ? e.message : String(e)) || 'error desconocido'))
       .finally(() => setLoading(false))
   }, [intento])
 

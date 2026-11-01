@@ -130,7 +130,7 @@ export function useConfigForm(onExposeSave: (a: SaveExpose | null) => void) {
           allowedRoots: (s.uploadrr_allowed_roots ?? []).join(', '),
         }))
       })
-      .catch((e: unknown) => setErrorCarga(e instanceof Error ? e.message : String(e)))
+      .catch((e: unknown) => setErrorCarga((e instanceof Error ? e.message : String(e)) || 'error desconocido'))
       .finally(() => setLoading(false))
   }, [intento])
 

@@ -502,6 +502,13 @@ describe('Configuración: no guardar sin haber cargado ni pisar lo editado duran
     expect(vi.mocked(updateSettings).mock.calls[0][0]).toMatchObject({ upload_tags: ['GRUPO', 'OTRO'], qbit_tag: 'Nuevo' })
   })
 
+  it('un error sin mensaje cuenta igual como fallo de carga', async () => {
+    vi.mocked(fetchSettings).mockRejectedValueOnce(new Error(''))
+    await montar()
+    expect(texto()).toContain('No se pudo cargar la configuración')
+    expect(boton('Guardar configuración').disabled).toBe(true)
+  })
+
   describe('mapeo de rutas', () => {
     const REGLA = { from: '/data/media', to: '/mnt/media' }
 
@@ -531,6 +538,15 @@ describe('Configuración: no guardar sin haber cargado ni pisar lo editado duran
       await pulsar(boton('Guardar cambios'))
       // la regla que ya existía viaja con la nueva: no se sustituye por una lista incompleta
       expect(updateSettings).toHaveBeenCalledWith({ path_mappings: [REGLA, { from: '/data/series', to: '/mnt/series' }] })
+    })
+
+    it('un error sin mensaje tampoco deja el editor vacío', async () => {
+      vi.mocked(fetchSettings).mockResolvedValueOnce(structuredClone(AJUSTES))
+      vi.mocked(fetchSettings).mockRejectedValueOnce(new Error(''))
+      await montar()
+      await pulsar(boton('Diagnóstico'))
+      expect(texto()).toContain('No se pudieron cargar las reglas')
+      expect(() => boton('+ Añadir regla')).toThrow()
     })
 
     it('mientras se guarda no se puede editar, así la respuesta no borra lo escrito entretanto', async () => {

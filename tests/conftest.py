@@ -106,6 +106,15 @@ def _procesos_sin_apagado():
 
 
 @pytest.fixture(autouse=True)
+def _login_sin_memoria():
+    """El bloqueo del login y el apunte de uso de las sesiones viven en memoria: que no pasen de un test a otro."""
+    from emuwarez_uploadrr.web.services import auth_service
+    auth_service._fallos.clear()
+    auth_service._apuntadas.clear()
+    yield
+
+
+@pytest.fixture(autouse=True)
 def isolated_db(tmp_path, monkeypatch):
     """Point CONFIG_DIR to a per-test temp dir so each test starts with a fresh DB."""
     monkeypatch.setenv("CONFIG_DIR", str(tmp_path))

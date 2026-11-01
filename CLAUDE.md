@@ -16,6 +16,17 @@ the upload with Uploadrr-EMU (`Kisnov/Uploadrr-EMU`, cloned into the image at `/
   existing comments just to change their language. Conventional Commits with a one-line summary of the user-visible
   outcome (`fix: la subida usa el enlace de la carpeta de subidas`).
 - Don't bump the version in a PR: `scripts/desplegar.sh --version` does it at release.
+- Commit identity is whatever the environment sets up; AI attribution in commits or comments is fine.
+
+## Saving review and CI budget
+
+- Run the full backend suite locally only when code changed or a merge conflict was resolved. A clean merge of
+  `master` into a PR branch is left to CI.
+- CodeRabbit allows 10 reviews per hour, and every push to an open PR costs one. Fix real Major/Critical findings
+  right away. A Minor, nitpick or trivial finding gets a reply on its thread (fix it or say why not), and its fix
+  rides on the next push that is happening anyway, not on a push of its own.
+- Don't fight CodeRabbit's auto-pause on busy branches: post `@coderabbitai review` (alone in the comment) only
+  once the PR is otherwise ready (CI green, every thread answered).
 
 ## Verify
 

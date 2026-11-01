@@ -109,12 +109,15 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   `style={{` (de 180 a 3): las clases `asist-*` están en `styles/asistente.css`. Siguen en línea los tres
   `width: '100%'` de `<Tooltip style>` en `PasoSeleccion` y los dos `tituloStyle` de los modales de pistas, porque
   `Tooltip` y `Modal` solo admiten objeto de estilo.
+- **Oleada 3, ESLint `react-hooks`:** el frontend tiene `eslint.config.js` con solo `rules-of-hooks` y `exhaustive-deps`
+  (nada más), `npm run lint` (`--max-warnings 0`) y un paso en el job `frontend` de la CI. Todo `eslint-disable` de
+  esas reglas lleva su motivo tras `--`; ESLint avisa de los que sobran. Una dependencia que falta no se añade a
+  ciegas: un efecto que se recrea en cada pintado puede crear un bucle (como el de `RejillaVirtual`).
 
 ## Siguiente (oleada 3)
 
 1. Los estilos en línea, a clases. Hecho en el asistente de subida y en Configuración; faltan el resto de pantallas y componentes.
 2. `httpx` y un solo limitador de eMuwarez compartido (30 peticiones por minuto).
-3. ESLint `react-hooks`.
 
 ## Oleada 4
 

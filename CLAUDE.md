@@ -33,7 +33,7 @@ the upload with Uploadrr-EMU (`Kisnov/Uploadrr-EMU`, cloned into the image at `/
 - Backend: run the tests in Linux (hardlinks, mediainfo, mkvtoolnix), e.g. `python:3.12-slim` with
   `pip install -c constraints.txt -e ".[web,dev]"`, then `python -m pytest tests -q -p no:cacheprovider` (~2180 tests, ~7 min).
   On Windows, copy the tree into the container (`cp -r /src/. /w/`) rather than running on the bind mount.
-- Frontend: `cd frontend && npm ci && npx tsc --noEmit && npx vitest run && npx vite build`.
+- Frontend: `cd frontend && npm ci && npx tsc --noEmit && npm run lint && npx vitest run && npx vite build`.
 - Architecture guards: `test_una_sola_puerta_a_settings.py` (settings only through `services/settings.py`
   or `database.py`; `services/` never imports from `web/`), `test_web_no_habla_sql.py`,
   `test_copias_frontend.py` (frontend copies of backend constants must match), `test_dependencia_legacy.py`

@@ -4,8 +4,8 @@ import { Tooltip } from '../components/Tooltip'
 import { getLocalStatusInfo } from '../utils/status'
 import { useSync } from '../context/SyncContext'
 import { EmuSyncButton } from '../components/EmuSyncButton'
-import { getInstances } from '../api/instances'
-import type { LibraryItemResponse, LibraryListResponse, InstanceSafeResponse } from '../types/api'
+import { useInstancias } from '../hooks/useInstancias'
+import type { LibraryItemResponse, LibraryListResponse } from '../types/api'
 import { PosterStatusIcon } from '../components/PosterStatusIcon'
 import { ErrorState } from '../components/ErrorState'
 import { EmptyState, FilaVacia } from '../components/EmptyState'
@@ -205,8 +205,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
 
   useEffect(() => { localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode) }, [viewMode])
 
-  const [instances, setInstances] = useState<InstanceSafeResponse[]>([])
-  useEffect(() => { getInstances().then(setInstances).catch(() => {}) }, [])
+  const instances = useInstancias()
 
   // Excel-style column filters: every option list below reflects values that
   // actually occur somewhere in the library (all levels — a value that only

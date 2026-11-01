@@ -15,7 +15,7 @@ import { HoverTitle, useTooltip } from '../components/Tooltip'
 import { useSync } from '../context/SyncContext'
 import { UploadWizardModal } from '../components/UploadWizardModal'
 import { getLibraryItem } from '../api/library'
-import { getInstances } from '../api/instances'
+import { useInstancias } from '../hooks/useInstancias'
 import type { LibraryItemResponse, InstanceSafeResponse } from '../types/api'
 import { posterUrl, idVerifyUrl, buildDeepLink } from '../utils/libraryItem'
 import { ServiceLabel } from '../components/ServiceIcon'
@@ -646,8 +646,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
 
   // Solo para el enlace de la columna Origen, igual que en Subidas: el nombre
   // de la instancia ya viene en cada petición, pero su URL no.
-  const [instances, setInstances] = useState<InstanceSafeResponse[]>([])
-  useEffect(() => { getInstances().then(setInstances).catch(() => {}) }, [])
+  const instances = useInstancias()
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [detail, setDetail] = useState<RequestDetailResponse | null>(null)
   const [readiness, setReadiness] = useState<RequestReadinessResponse | null>(null)

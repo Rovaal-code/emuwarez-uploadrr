@@ -707,7 +707,9 @@ def build_season_pack_plan(
                 ep["id"], conn=conn,
                 source_override=source_override, provider_override=impuesto or provider_override,
                 tag_override=tag_override, title_override=title_override,
-                guardar=not (impuesto and not provider_override),
+                # Lo que impone el pack (detectado o elegido a mano) no se guarda como propuesta
+                # del capítulo: no es suya, y la caducaría.
+                guardar=impuesto is None,
             )
             if ((provider or provider_override is not None)
                     and (proposal.get("provider_final") or None) != provider):

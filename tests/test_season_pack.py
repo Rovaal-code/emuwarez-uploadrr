@@ -1201,6 +1201,19 @@ def test_el_proveedor_impuesto_por_el_pack_no_se_guarda_en_el_capitulo(isolated_
     conn.close()
 
 
+def test_el_proveedor_elegido_a_mano_para_el_pack_no_se_guarda_en_los_capitulos(isolated_db, tmp_path):
+    """Con NF elegido a mano para el pack, las propuestas guardadas de los capítulos no lo llevan."""
+    from emuwarez_uploadrr.services.nomenclature import get_latest_nomenclature_proposal
+    conn = _open(isolated_db)
+    season_id = _pack_de_dos(conn, tmp_path)
+    plan = build_season_pack_plan(season_id, conn=conn, provider_override="NF")
+    assert plan["provider"] == "NF"
+    for (ep,) in conn.execute("SELECT id FROM library_items WHERE episode_number IN (1, 2)").fetchall():
+        guardada = get_latest_nomenclature_proposal(ep, conn=conn)
+        assert guardada is None or guardada.get("provider_final") != "NF"
+    conn.close()
+
+
 def test_un_proveedor_solo_en_la_carpeta_no_se_aplica(isolated_db, tmp_path):
     """Coincidencia débil: "FLMN" solo en una carpeta de la ruta, no en el nombre
     de ningún archivo. Ni el pack ni los capítulos lo llevan; se avisa."""

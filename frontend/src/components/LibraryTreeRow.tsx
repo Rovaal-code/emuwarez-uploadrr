@@ -86,6 +86,8 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
   const [childOffset, setChildOffset] = useState(0)
   const [loadingChildren, setLoadingChildren] = useState(false)
   const [errorHijos, setErrorHijos] = useState(false)
+  const hijosVistos = useRef(0)
+  hijosVistos.current = children.length
   // Solo vale la última petición de hijos: pulsar «Siguiente» varias veces seguidas lanza varias.
   const ultimaCargaHijos = useRef(0)
   const deepLink = buildDeepLink(item, instances)
@@ -113,8 +115,10 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
   // `porDetras`: refresca lo que ya se ve sin cambiarlo por «Cargando…»; si falla se queda lo de antes.
   const loadChildren = useCallback(async (off: number, porDetras = false) => {
     const esta = ++ultimaCargaHijos.current
-    if (!porDetras) setLoadingChildren(true)
-    setErrorHijos(false)
+    if (!porDetras) {
+      setLoadingChildren(true)
+      setErrorHijos(false)
+    }
     try {
       const result = await getLibrary({
         parent_id: item.id,
@@ -126,8 +130,11 @@ export const LibraryTreeRow = memo(function LibraryTreeRow({ item, depth, instan
       setChildren(result.items)
       setChildTotal(result.total)
       setChildOffset(off)
+      setErrorHijos(false)
     } catch {
-      if (esta !== ultimaCargaHijos.current || porDetras) return
+      if (esta !== ultimaCargaHijos.current) return
+      // Una recarga por detrás que falla deja lo que ya se ve; sin nada que ver, es un error como otro.
+      if (porDetras && hijosVistos.current > 0) return
       setChildren([])
       setChildTotal(0)
       setErrorHijos(true)

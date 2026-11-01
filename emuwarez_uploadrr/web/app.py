@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .api.router import api_router
+from .cabeceras import CabecerasDeSeguridad
 from .errors import AppError, app_error_handler, generic_error_handler
 from .runtime import get_app_version
 
@@ -179,6 +180,7 @@ def create_app() -> FastAPI:
     # (text/event-stream) queda fuera: Starlette no lo comprime. Nivel 6 y no
     # el 9 por defecto: un 10 % más grande en la mitad de tiempo.
     app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)
+    app.add_middleware(CabecerasDeSeguridad)
 
     # HTTP request logging. To keep the INFO stream meaningful (not drowned in
     # polling), we classify each request:

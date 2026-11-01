@@ -30,7 +30,9 @@ import { ACTIVE_JOB_STATUSES, statusLabel } from '../utils/uploadStatus'
 import { seguirProgreso } from '../api/eventos'
 import { fetchSettings } from '../api/settings'
 import { AVISO_MODO_PISTAS, normalizarModo, renombra, tocaElFichero } from '../utils/modoPistas'
-import { ajustesDeTemporada, textoOrigenProveedor } from '../utils/origenProveedor'
+import {
+  ajustesDeTemporada, proveedorParaServidor, textoOrigenProveedor, type ProveedoresElegidos,
+} from '../utils/origenProveedor'
 import {
   SIN_SELECCION, seleccionUnica, seleccionTemporadas, seleccionCapitulos,
   colaTemporadas, colaCapitulos, esTanda, mismaSeleccion, conObjetivo,
@@ -481,7 +483,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   // Proveedor elegido A MANO por temporada (campo Proveedor o selector del
   // conflicto). Va aparte de ajustesPorId, que guarda también el detectado:
   // solo este viaja como provider_override (ver ajustesDeTemporada).
-  const [proveedorElegido, setProveedorElegido] = useState<Map<number, string | null>>(new Map())
+  const [proveedorElegido, setProveedorElegido] = useState<ProveedoresElegidos>(new Map())
   const elegirProveedor = (id: number, valor: string | null) =>
     setProveedorElegido(prev => new Map(prev).set(id, valor))
   // De quién son los campos que hay ahora en `fields`: no se apuntan como
@@ -659,14 +661,14 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     }
     const dejarDeSeguir = seguirProgreso(
       'comprobaciones-progreso', a => a.item_id === targetId, pedir, 400)
-    try { setChecks(await runUploadChecks(targetId)) }
+    try { setChecks(await runUploadChecks(targetId, undefined, proveedorParaServidor(proveedorElegido, targetId))) }
     catch { setChecks(null) }
     finally {
       dejarDeSeguir()
       setChecksLoading(false)
       setLiveChecks([])
     }
-  }, [targetId])
+  }, [targetId, proveedorElegido])
 
   // --- Step 0: load seasons (series) or episodes (season) ---
   useEffect(() => {
@@ -743,7 +745,8 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
         for (let i = 0; i < batchQueue.length; i++) {
           if (!alive) return
           setBatchChecksIndex(i)
-          acc.set(batchQueue[i], await runUploadChecks(batchQueue[i], 'content'))
+          acc.set(batchQueue[i], await runUploadChecks(
+            batchQueue[i], 'content', proveedorParaServidor(proveedorElegido, batchQueue[i])))
           setBatchContentChecks(new Map(acc))
         }
         if (alive) setBatchViewId(prev => prev ?? batchQueue[0])
@@ -961,7 +964,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     if (targetId == null) return
     if (proveedor) elegirProveedor(targetId, proveedor)
     const yaElegido = proveedorElegido.has(targetId)
-    const proveedorPedido = proveedor ?? proveedorElegido.get(targetId) ?? undefined
+    const proveedorPedido = proveedor ?? proveedorParaServidor(proveedorElegido, targetId)
     const pedido = ++planPedido.current
     setSeasonPlanLoading(true); setSeasonPlanError(null)
     buildingPlanFor.current = targetId
@@ -1055,13 +1058,15 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     if (id == null) return
     setSeasonNamesLoading(true)
     try {
-      const overrides = { source: fields.source, provider: fields.provider, tag: fields.tag }
+      const overrides = {
+        source: fields.source, provider: proveedorParaServidor(proveedorElegido, id) ?? fields.provider, tag: fields.tag,
+      }
       const r = await getSeasonEpisodeNames(id, overrides)
       if (objetivoActual.current === id) setSeasonNames(r.episodes)
     }
     catch { if (objetivoActual.current === id) setSeasonNames(null) }
     finally { if (objetivoActual.current === id) setSeasonNamesLoading(false) }
-  }, [targetId, fields.source, fields.provider, fields.tag])
+  }, [targetId, fields.source, fields.provider, fields.tag, proveedorElegido])
 
   const loadSeasonMi = useCallback(async () => {
     const id = targetId
@@ -1343,7 +1348,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
         // Ya comprobado al entrar en el paso 2: el contenido de cada
         // temporada una vez, y el entorno una sola vez para toda la tanda. Si
         // por lo que sea no está cacheado, se hace la pasada completa.
-        const checksResult = mergedChecksFor(seasonId) ?? await runUploadChecks(seasonId)
+        const checksResult = mergedChecksFor(seasonId) ?? await runUploadChecks(seasonId, undefined, proveedorParaServidor(proveedorElegido, seasonId))
         if (!checksResult.ready) {
           const reason = checksResult.checks.find(c => c.status === 'fail')?.message || 'Alguna comprobación falló'
           results.push({ seasonId, title, status: 'failed', reason })

@@ -516,8 +516,11 @@ def _decidir_proveedor_pack(
 
     decision: dict[str, Any] = {"provider": None, "source": None, "detail": None, "conflicto": [],
                                 "warnings": [], "errors": [], "por_capitulo": {}}
-    if provider_override:
-        decision.update(provider=provider_override, source="manual", detail="elegido a mano")
+    # "" (SIN_PROVEEDOR) es "Sin proveedor" elegido a mano: también es una
+    # decisión manual, no un "detecta tú".
+    if provider_override is not None:
+        decision.update(provider=provider_override or None, source="manual",
+                        detail="elegido a mano" if provider_override else "sin proveedor, elegido a mano")
         return decision
 
     sources: dict[int, Optional[str]] = {}
@@ -544,7 +547,8 @@ def _decidir_proveedor_pack(
                  "el nombre del archivo: esa coincidencia no cuenta.")
         if del_pack is None:
             aviso += " Elígelo en Proveedor si es correcto."
-        elif codigo == del_pack:
+        elif codigo == del_pack and len(set(decision["por_capitulo"].values())) == 1:
+            # Con proveedores distintos el pack no lleva ninguno hasta que se elige.
             aviso += f" El pack lleva {codigo} igualmente porque otro capítulo lo trae en el nombre."
         decision["warnings"].append(aviso)
 
@@ -705,10 +709,12 @@ def build_season_pack_plan(
                 tag_override=tag_override, title_override=title_override,
                 guardar=not (impuesto and not provider_override),
             )
-            if provider and proposal.get("provider_final") != provider:
+            if ((provider or provider_override is not None)
+                    and (proposal.get("provider_final") or None) != provider):
                 # Una propuesta guardada editada a mano con otro proveedor: manda el del pack.
                 proposal = build_nomenclature_proposal(
-                    ep["id"], conn=conn, source_override=source_override, provider_override=provider,
+                    ep["id"], conn=conn, source_override=source_override,
+                    provider_override=provider or "",
                     tag_override=tag_override, title_override=title_override, guardar=False,
                 )
             episode_entries.append({"episode": ep, "proposal": proposal})

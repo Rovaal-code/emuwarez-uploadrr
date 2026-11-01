@@ -17,18 +17,36 @@ export function textoOrigenProveedor(
   return detalle ? `Proveedor: ${actual} (${detalle})` : null
 }
 
+// "Sin proveedor" elegido a mano, tal como lo entiende el servidor
+// (nomenclature.SIN_PROVEEDOR): no es lo mismo que no mandar nada, que deja
+// que el servidor lo detecte.
+export const SIN_PROVEEDOR = ''
+
 /**
- * Los ajustes de una temporada tal como viajan a la subida: el Proveedor solo
- * si se eligió a mano (el campo Proveedor o el selector del conflicto). El
- * detectado no viaja: como provider_override, un pack bloqueado por capítulos
- * con proveedores distintos se validaría sin que nadie eligiera uno.
+ * El Proveedor elegido A MANO por temporada, en tres estados: sin entrada (no
+ * se ha elegido), `null` ("Sin proveedor" elegido) o un código.
  */
+export type ProveedoresElegidos = ReadonlyMap<number, string | null>
+
+/**
+ * Lo que se manda al servidor como `provider` de una temporada; lo leen igual
+ * la vista previa del plan, las comprobaciones y la cola. `undefined`: no se
+ * eligió nada (el servidor decide); `SIN_PROVEEDOR`: "Sin proveedor"; si no,
+ * el código. El detectado nunca viaja como elección: con proveedores distintos
+ * el pack se validaría sin que nadie eligiera uno.
+ */
+export function proveedorParaServidor(elegidos: ProveedoresElegidos, id: number): string | undefined {
+  if (!elegidos.has(id)) return undefined
+  return elegidos.get(id) ?? SIN_PROVEEDOR
+}
+
+/** Los ajustes de una temporada tal como viajan a la cola, con el Proveedor de proveedorParaServidor. */
 export function ajustesDeTemporada(
   ajustes: Ajustes | undefined,
-  elegidos: ReadonlyMap<number, string | null>,
+  elegidos: ProveedoresElegidos,
   id: number,
 ): Ajustes | undefined {
-  const elegido = elegidos.get(id) ?? null
-  if (!ajustes && !elegido) return undefined
-  return { ...(ajustes ?? {}), provider: elegido }
+  const provider = proveedorParaServidor(elegidos, id)
+  if (!ajustes && provider === undefined) return undefined
+  return { ...(ajustes ?? {}), provider }
 }

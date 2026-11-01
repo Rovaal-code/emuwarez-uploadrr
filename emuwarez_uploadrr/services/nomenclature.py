@@ -181,6 +181,10 @@ def _buscar_proveedor(texto: str) -> str | None:
     return None
 
 
+# Un provider_override con este valor es "Sin proveedor" elegido a mano, que
+# no es lo mismo que no elegir nada (None): con None el proveedor se detecta.
+SIN_PROVEEDOR = ""
+
 # Dónde se encontró el proveedor (ver detectar_proveedor).
 ORIGEN_NOMBRE = "nombre"
 ORIGEN_CARPETA = "carpeta"
@@ -513,8 +517,10 @@ def build_nomenclature_proposal(
         # Phase 6E — provider (AMZN/NF/DSNP...) already present in the
         # current filename, kept in the proposal instead of silently
         # dropped. Detection only, no TMDb re-recommendation here.
-        provider = provider_override
-        if not provider:
+        # provider_override: None = sin elegir (se detecta); SIN_PROVEEDOR ("")
+        # = "Sin proveedor" elegido a mano; un código = ese.
+        provider = provider_override or None
+        if provider_override is None:
             provider, origen_proveedor = detectar_proveedor(item, source)
             if origen_proveedor == ORIGEN_CARPETA:
                 warnings.append(f"El proveedor {provider} solo aparece en una carpeta de la ruta, no en el "

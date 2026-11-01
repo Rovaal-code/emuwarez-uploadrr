@@ -174,9 +174,14 @@ export interface UploadChecksResult {
 export async function runUploadChecks(
   itemId: number,
   scope?: 'content' | 'environment',
+  // Temporada: el Proveedor elegido (utils/origenProveedor.ts::proveedorParaServidor), el mismo que la vista previa y la cola.
+  provider?: string,
 ): Promise<UploadChecksResult> {
-  const qs = scope ? `?scope=${scope}` : ''
-  return api.post<UploadChecksResult>(`/library/${itemId}/upload/checks${qs}`, {})
+  const qs = new URLSearchParams()
+  if (scope) qs.set('scope', scope)
+  if (provider !== undefined) qs.set('provider', provider)
+  const query = qs.toString()
+  return api.post<UploadChecksResult>(`/library/${itemId}/upload/checks${query ? `?${query}` : ''}`, {})
 }
 
 export interface UploadChecksProgress {

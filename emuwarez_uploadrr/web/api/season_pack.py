@@ -45,7 +45,9 @@ def preview_season_pack(
     `provider`: el Proveedor elegido en el asistente, sobre todo para salir de
     un plan bloqueado por capítulos con proveedores distintos."""
     with _get_conn() as conn:
-        plan = build_season_pack_plan(season_id, conn=conn, provider_override=(provider or "").strip() or None)
+        # "" (?provider=) es "Sin proveedor" elegido a mano; sin parámetro, se detecta.
+        plan = build_season_pack_plan(season_id, conn=conn,
+                                      provider_override=None if provider is None else provider.strip())
     if plan["status"] == "blocked" and plan["errors"] == ["Temporada no encontrada."]:
         raise HTTPException(status_code=404, detail="Temporada no encontrada.")
     return SeasonPackPlanResponse(**plan)

@@ -1300,3 +1300,68 @@ def test_el_aviso_de_la_carpeta_no_niega_el_proveedor_que_otro_capitulo_trae(iso
     ]
     assert all("AMZN.WEB-DL" in e["nombre"] for e in plan["episodes"])
     conn.close()
+
+
+def test_sin_proveedor_elegido_a_mano_quita_el_del_nombre(isolated_db, tmp_path):
+    """"" es "Sin proveedor" elegido a mano, distinto de no elegir (None): ni el
+    pack ni los capítulos llevan el AMZN que trae el nombre."""
+    conn = _open(isolated_db)
+    season_id = _pack_de_dos(conn, tmp_path)
+    _renombrar_capitulo(conn, tmp_path, 1, "S01E01.AMZN.WEB-DL.mkv")
+    _renombrar_capitulo(conn, tmp_path, 2, "S01E02.AMZN.WEB-DL.mkv")
+    plan = build_season_pack_plan(season_id, conn=conn, provider_override="")
+    assert plan["status"] == "valid", plan["errors"]
+    assert plan["provider"] is None
+    assert plan["provider_source"] == "manual"
+    assert "AMZN" not in plan["season_pack_title"]
+    assert not any("AMZN" in e["nombre"] for e in plan["episodes"]), [e["nombre"] for e in plan["episodes"]]
+    # Sin elegir nada, el del nombre sigue valiendo.
+    assert build_season_pack_plan(season_id, conn=conn)["provider"] == "AMZN"
+    conn.close()
+
+
+def test_sin_proveedor_elegido_a_mano_desbloquea_proveedores_distintos(isolated_db, tmp_path):
+    conn = _open(isolated_db)
+    plan = build_season_pack_plan(_pack_con_proveedores_distintos(conn, tmp_path), conn=conn,
+                                  provider_override="")
+    assert plan["status"] == "valid", plan["errors"]
+    assert not any("AMZN" in e["nombre"] or "NF." in e["nombre"] for e in plan["episodes"])
+    conn.close()
+
+
+def test_las_comprobaciones_usan_el_proveedor_elegido(isolated_db, tmp_path):
+    """Con proveedores distintos, las comprobaciones bloqueaban aunque el
+    usuario ya hubiera elegido uno: no recibían su elección."""
+    from emuwarez_uploadrr.services.upload_checks import run_upload_checks
+    conn = _open(isolated_db)
+    season_id = _pack_con_proveedores_distintos(conn, tmp_path)
+
+    def pack(**kw):
+        checks = run_upload_checks(conn, season_id, scope="content", **kw)["checks"]
+        return next(c for c in checks if c["id"] == "season_pack")
+
+    assert pack()["status"] == "fail"
+    assert pack(provider_override="NF")["status"] == "ok", pack(provider_override="NF")
+    conn.close()
+
+
+def test_con_proveedores_distintos_el_aviso_no_dice_que_el_pack_lo_lleva(isolated_db, tmp_path):
+    """E01 AMZN y E03 NF en el nombre, E02 AMZN solo en la carpeta: el plan se
+    bloquea, así que el aviso no puede decir que el pack lleva AMZN."""
+    conn = _open(isolated_db)
+    _series_id, season_id = _seed_series_season(conn)
+    folder = tmp_path / "One Piece AMZN" / "Season 1"
+    folder.mkdir(parents=True)
+    for i, nombre in ((1, "S01E01.AMZN.WEB-DL.mkv"), (2, "S01E02.WEB-DL.mkv"), (3, "S01E03.NF.WEB-DL.mkv")):
+        f = folder / nombre
+        f.write_bytes(b"video")
+        _seed_episode(conn, season_id, number=i, title=f"One Piece S01E0{i}", path=str(f),
+                      quality="WEBDL-1080p", video_codec="x264", audio_codec="AC3",
+                      audio_languages="spa", source="WEB-DL")
+    plan = build_season_pack_plan(season_id, conn=conn)
+    assert plan["status"] == "blocked"
+    assert plan["warnings"] == [
+        "En el capítulo 2, el proveedor AMZN solo aparece en una carpeta de la ruta, no en el nombre "
+        "del archivo: esa coincidencia no cuenta."
+    ]
+    conn.close()

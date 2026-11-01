@@ -1,6 +1,6 @@
 // Las comprobaciones previas del paso 2: las de un solo elemento, y las de una
 // tanda (varias temporadas o capítulos).
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   runUploadChecks, getUploadChecksProgress, type UploadChecksResult, type UploadCheck,
 } from '../../api/uploads'
@@ -15,25 +15,37 @@ export function useComprobaciones(targetId: number | null, proveedorElegido: Pro
   // calls) is in flight — polled separately so the UI can reveal each one as
   // it actually completes instead of sitting on a static spinner.
   const [liveChecks, setLiveChecks] = useState<UploadCheck[]>([])
+  // La pasada vigente. Una anterior (de este objetivo u otro) que acabe tarde no aplica su resultado ni
+  // apaga la carga de la nueva: su «Todo listo» habilitaría «Subir» con lo comprobado para otra cosa.
+  const pasada = useRef(0)
+  const objetivo = useRef(targetId)
+  objetivo.current = targetId
 
   const runChecks = useCallback(async () => {
     if (targetId == null) return
+    const esta = ++pasada.current
+    setChecks(null)
     setChecksLoading(true)
     setLiveChecks([])
     const pedir = async () => {
       try {
         const p = await getUploadChecksProgress(targetId)
-        setLiveChecks(p.checks)
+        if (esta === pasada.current) setLiveChecks(p.checks)
       } catch { /* fallo pasajero — el siguiente aviso o tic reintenta */ }
     }
     const dejarDeSeguir = seguirProgreso(
       'comprobaciones-progreso', a => a.item_id === targetId, pedir, 400)
-    try { setChecks(await runUploadChecks(targetId, undefined, proveedorParaServidor(proveedorElegido, targetId))) }
-    catch { setChecks(null) }
+    let resultado: UploadChecksResult | null = null
+    try { resultado = await runUploadChecks(targetId, undefined, proveedorParaServidor(proveedorElegido, targetId)) }
+    catch { /* sin resultado: no se puede subir */ }
     finally {
       dejarDeSeguir()
-      setChecksLoading(false)
-      setLiveChecks([])
+      if (esta === pasada.current) {
+        // Si entretanto se eligió otra cosa, lo comprobado no es suyo.
+        setChecks(objetivo.current === targetId ? resultado : null)
+        setChecksLoading(false)
+        setLiveChecks([])
+      }
     }
   }, [targetId, proveedorElegido])
 

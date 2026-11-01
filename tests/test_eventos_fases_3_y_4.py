@@ -149,7 +149,7 @@ def test_empezar_una_sync_avisa(monkeypatch):
     un sondeo cada 8 s por si la había lanzado otra pestaña o una tarea."""
     from emuwarez_uploadrr.services import library
 
-    avisos = _espiar(monkeypatch, library)
+    avisos = _espiar(monkeypatch, library.sync)
     with library._lib_sync_guard():
         pass
 
@@ -162,7 +162,7 @@ def test_si_ya_hay_una_corriendo_no_se_avisa_de_otra(monkeypatch):
     from emuwarez_uploadrr.services import library
 
     with library._lib_sync_guard():
-        avisos = _espiar(monkeypatch, library)
+        avisos = _espiar(monkeypatch, library.sync)
         with pytest.raises(library.SyncAlreadyRunning):
             with library._lib_sync_guard():
                 pass

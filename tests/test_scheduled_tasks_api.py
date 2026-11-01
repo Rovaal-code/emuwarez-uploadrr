@@ -88,7 +88,7 @@ def test_get_logs_for_known_task(client, auth_headers):
     # Patch list_instances (not sync_all itself) so sync_all()'s own
     # internal task_runs logging still runs for real, with zero instances
     # to iterate — no real network call, but a genuine task_runs row.
-    with patch("emuwarez_uploadrr.services.library.list_instances", return_value=[]):
+    with patch("emuwarez_uploadrr.services.library.sync.list_instances", return_value=[]):
         client.post("/api/tasks/scheduled/sync-library/run", headers=auth_headers)
 
     resp = client.get("/api/tasks/scheduled/sync-library/logs", headers=auth_headers)

@@ -206,9 +206,9 @@ function TaskCard({ task, onChanged }: { task: ScheduledTask; onChanged: () => v
     guardarHorario(aHoraFija ? { run_at: hora } : { interval_minutes: interval })
   }
 
-  function handleHoraChange(nueva: string) {
-    setHora(nueva)
-    if (nueva) guardarHorario({ run_at: nueva })  // vacío: el campo está a medias
+  // Se guarda al salir del campo, no a cada cambio: dos PUT seguidos podían llegar en orden inverso.
+  function handleHoraBlur() {
+    if (hora && hora !== task.run_at) guardarHorario({ run_at: hora })
   }
 
   async function handleRunNow() {
@@ -266,7 +266,8 @@ function TaskCard({ task, onChanged }: { task: ScheduledTask; onChanged: () => v
               className="form-input"
               type="time"
               value={hora}
-              onChange={e => handleHoraChange(e.target.value)}
+              onChange={e => setHora(e.target.value)}
+              onBlur={handleHoraBlur}
             />
             <span className="form-hint">Cada día, hora de {task.timezone}</span>
           </div>

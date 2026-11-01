@@ -371,6 +371,7 @@ def run_scheduled_task(conn: sqlite3.Connection, task_key: str, *, manual: bool 
     except Exception as exc:
         status, summary = "failed", str(exc)
 
+    task = get_scheduled_task(conn, task_key) or task  # el horario pudo cambiar mientras corría
     next_run_at = _proxima_ejecucion(task, _now()).isoformat()
     conn.execute(
         """UPDATE scheduled_tasks

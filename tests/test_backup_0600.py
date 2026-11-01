@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import datetime
 import os
+import sqlite3
 import stat
 import tarfile
 from pathlib import Path
@@ -75,3 +76,54 @@ def test_la_copia_antes_de_migrar_tambien_va_en_0600(isolated_db):
     copias = list((db_path().parent / "backups").glob("pre-migracion-*.db"))
     assert len(copias) == 1
     assert stat.S_IMODE(os.stat(copias[0]).st_mode) == 0o600
+
+
+class _ConexionEspia:
+    """Una conexión que avisa justo antes del VACUUM INTO y deja que corra (o falle) a voluntad."""
+
+    def __init__(self, real, antes_del_vacuum):
+        self.real, self.antes_del_vacuum = real, antes_del_vacuum
+
+    def execute(self, sql, *args):
+        if sql.startswith("VACUUM INTO"):
+            self.antes_del_vacuum(args[0][0])
+        return self.real.execute(sql, *args)
+
+    def commit(self):
+        self.real.commit()
+
+
+@solo_posix
+def test_la_copia_previa_ya_es_0600_mientras_se_escribe(isolated_db):
+    """VACUUM INTO crea el fichero con el umask: sin crearlo antes, queda legible hasta el chmod."""
+    from emuwarez_uploadrr.database import _copia_antes_de_migrar
+    c = connect(db_path())
+    init_db(c)
+    modos = []
+    old = os.umask(0)
+    try:
+        _copia_antes_de_migrar(
+            _ConexionEspia(c, lambda ruta: modos.append(stat.S_IMODE(os.stat(ruta).st_mode))), 44)
+    finally:
+        os.umask(old)
+        c.close()
+    copia = next((db_path().parent / "backups").glob("pre-migracion-*.db"))
+    assert modos == [0o600]
+    assert stat.S_IMODE(os.stat(copia).st_mode) == 0o600
+    assert sqlite3.connect(copia).execute("SELECT COUNT(*) FROM app_state").fetchone()[0] > 0
+
+
+def test_si_el_vacuum_falla_no_queda_una_copia_vacia(isolated_db):
+    """Un fichero vacío entre las últimas copias echaría a una buena."""
+    from emuwarez_uploadrr.database import _copia_antes_de_migrar
+
+    def falla(_ruta):
+        raise sqlite3.OperationalError("database or disk is full")
+
+    c = connect(db_path())
+    init_db(c)
+    try:
+        _copia_antes_de_migrar(_ConexionEspia(c, falla), 44)
+    finally:
+        c.close()
+    assert not list((db_path().parent / "backups").glob("pre-migracion-*.db"))

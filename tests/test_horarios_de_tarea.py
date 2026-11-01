@@ -4,6 +4,7 @@ N17 de la revisión de 2026-10-31.
 """
 from __future__ import annotations
 
+import sqlite3
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
@@ -207,6 +208,23 @@ def test_ejecutar_a_mano_antes_de_la_hora_no_quita_la_de_hoy(conn, monkeypatch):
     assert run["next_run_at"] == utc(2026, 7, 15, 2, 0).isoformat()
 
 
+def test_un_horario_cambiado_mientras_corre_la_tarea_no_se_pisa(conn, monkeypatch):
+    """La próxima ejecución se calcula con el horario de ahora, no con el que tenía al empezar."""
+    set_task_schedule(conn, TASK_MAINTENANCE, run_at="04:00")
+    _ahora_falso(monkeypatch, utc(2026, 7, 15, 2, 0, 30))
+
+    def cambia_el_horario(c):
+        set_task_schedule(c, TASK_MAINTENANCE, interval_minutes=120)
+        return "completed", "ok"
+
+    with patch.dict(scheduler._EXECUTORS, {TASK_MAINTENANCE: cambia_el_horario}):
+        run = run_scheduled_task(conn, TASK_MAINTENANCE)
+
+    assert run["next_run_at"] == utc(2026, 7, 15, 4, 0, 30).isoformat()
+    tarea = get_scheduled_task(conn, TASK_MAINTENANCE)
+    assert tarea["run_at"] is None and tarea["next_run_at"] == run["next_run_at"]
+
+
 def test_una_tarea_por_intervalo_sigue_contando_desde_que_termina(conn, monkeypatch):
     _ahora_falso(monkeypatch, utc(2026, 7, 15, 9, 0))
     with patch("emuwarez_uploadrr.services.library.sync_all", return_value={"imported": 0, "missing": 0, "errors": []}):
@@ -255,6 +273,14 @@ def test_una_base_del_esquema_44_gana_la_columna_y_conserva_sus_tareas(isolated_
     finally:
         c.close()
     assert list((db_path().parent / "backups").glob("pre-migracion-*-v44.db"))
+
+
+def test_la_migracion_no_traga_un_fallo_que_no_es_columna_repetida():
+    """Antes un `except OperationalError: pass` dejaba pasar cualquier error y se marcaba el esquema 45 sin la columna."""
+    from emuwarez_uploadrr.database import _migrate_scheduled_tasks_run_at
+    sin_tabla = sqlite3.connect(":memory:")
+    with pytest.raises(sqlite3.OperationalError, match="no such table"):
+        _migrate_scheduled_tasks_run_at(sin_tabla)
 
 
 def test_la_migracion_es_idempotente(conn):

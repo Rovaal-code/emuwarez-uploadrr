@@ -4,6 +4,7 @@ N18 de la revisión de 2026-10-31. Restaurar sigue siendo /restore.
 """
 from __future__ import annotations
 
+import asyncio
 import io
 import tarfile
 
@@ -119,3 +120,22 @@ def test_subir_un_cuerpo_que_se_pasa_del_limite_sin_avisar_se_corta(client, auth
 
     assert r.status_code == 422 and "pasa de" in r.json()["detail"]
     assert not list(bs.get_backup_dir().glob(".subida_*"))
+
+
+def test_la_escritura_de_la_subida_no_corre_en_el_bucle_de_eventos(client, auth_headers, monkeypatch):
+    """En un disco lento de la NAS cada escritura frenaría el servidor entero (avisos incluidos)."""
+    en_el_bucle = []
+    original = bs.CopiaSubida.escribir
+
+    def espia(self, trozo):
+        try:
+            asyncio.get_running_loop()
+            en_el_bucle.append(True)
+        except RuntimeError:  # sin bucle en este hilo: es un hilo de trabajo
+            en_el_bucle.append(False)
+        return original(self, trozo)
+
+    monkeypatch.setattr(bs.CopiaSubida, "escribir", espia)
+
+    assert _subir(client, auth_headers, _tar_gz(BUENA)).status_code == 200
+    assert en_el_bucle and not any(en_el_bucle)

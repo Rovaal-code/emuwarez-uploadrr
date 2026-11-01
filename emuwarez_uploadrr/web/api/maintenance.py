@@ -75,7 +75,7 @@ async def upload_backup(request: Request, current_user: dict = Depends(require_a
     subida = CopiaSubida()
     try:
         async for trozo in request.stream():
-            subida.escribir(trozo)
+            await asyncio.to_thread(subida.escribir, trozo)  # la escritura a disco no frena el bucle
         return await asyncio.to_thread(subida.terminar)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))

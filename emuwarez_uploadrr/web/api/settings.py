@@ -18,7 +18,8 @@ from pydantic import BaseModel, field_validator
 
 from ..dependencies import require_auth
 from ..runtime import _db_path
-from ...services.settings import mask_secret, set_setting
+from ...services.ajustes_registro import texto_de_bool
+from ...services.settings import leer_bool, mask_secret, set_setting
 from ...services.uploadrr_contract import RUNTIME_EMU, RUNTIME_GENERIC, DEFAULT_TIMEOUT_SECONDS, DEFAULT_ALLOWED_ROOTS
 from ...services.source_assistant import EMU_PROVIDERS
 from ...services.notification_center import EVENT_TYPES, channel_events, ui_enabled
@@ -315,7 +316,7 @@ def _build_response(conn) -> SettingsResponse:
         upload_tags=_read_upload_tags(conn),
         provider_priority_order=priority,
         tmdb_watch_region=get_setting_canonical(conn, "tmdb_watch_region") or _DEFAULT_REGION,
-        tmdb_localize_series_titles=(get_setting_canonical(conn, "tmdb.localize_series_titles") or "true") != "false",
+        tmdb_localize_series_titles=leer_bool(conn, "tmdb.localize_series_titles"),
         tmdb_api_key_configured=configured,
         tmdb_api_key_masked=masked,
         uploadrr_path=get_setting_canonical(conn, "uploadrr.path"),
@@ -335,10 +336,10 @@ def _build_response(conn) -> SettingsResponse:
         image_hosts_available=img_available,
         image_hosts_enabled=img_enabled,
         image_host_keys_configured=img_keys_configured,
-        notify_discord_enabled=(get_setting_canonical(conn, "notify.discord.enabled") or "") == "true",
+        notify_discord_enabled=leer_bool(conn, "notify.discord.enabled"),
         notify_discord_webhook_configured=discord_webhook_configured,
         notify_discord_webhook_masked=mask_secret(discord_webhook) if discord_webhook_configured else None,
-        notify_telegram_enabled=(get_setting_canonical(conn, "notify.telegram.enabled") or "") == "true",
+        notify_telegram_enabled=leer_bool(conn, "notify.telegram.enabled"),
         notify_telegram_bot_token_configured=telegram_token_configured,
         notify_telegram_bot_token_masked=mask_secret(telegram_token) if telegram_token_configured else None,
         notify_telegram_chat_id=get_setting_canonical(conn, "notify.telegram.chat_id"),
@@ -347,12 +348,12 @@ def _build_response(conn) -> SettingsResponse:
         notify_ui_events=sorted(channel_events(conn, "ui")),
         notify_discord_events=sorted(channel_events(conn, "discord")),
         notify_telegram_events=sorted(channel_events(conn, "telegram")),
-        series_ignore_specials=(get_setting_canonical(conn, "series.ignore_specials") or "true") != "false",
-        source_engine_enabled=get_setting_canonical(conn, "source_engine.enabled") == "true",
-        emu_add_logo=get_setting_canonical(conn, "emu.add_logo") != "false",
-        emu_per_episode_screens=get_setting_canonical(conn, "emu.per_episode_screens") == "true",
+        series_ignore_specials=leer_bool(conn, "series.ignore_specials"),
+        source_engine_enabled=leer_bool(conn, "source_engine.enabled"),
+        emu_add_logo=leer_bool(conn, "emu.add_logo"),
+        emu_per_episode_screens=leer_bool(conn, "emu.per_episode_screens"),
         remux_track_mode=modo_pistas(conn),
-        remux_no_reflink_copies=get_setting_canonical(conn, "remux.no_reflink_copies") == "true",
+        remux_no_reflink_copies=leer_bool(conn, "remux.no_reflink_copies"),
         recent_activity_limit=_read_recent_activity_limit(conn),
         upload_max_concurrent=get_upload_max_concurrent(conn),
         path_mappings=_read_path_mappings(conn),
@@ -465,8 +466,7 @@ def update_settings(
             set_setting(conn, "tmdb_watch_region", body.tmdb_watch_region.strip())
 
         if body.tmdb_localize_series_titles is not None:
-            set_setting(conn, "tmdb.localize_series_titles",
-                        "true" if body.tmdb_localize_series_titles else "false")
+            set_setting(conn, "tmdb.localize_series_titles", texto_de_bool(body.tmdb_localize_series_titles))
 
         if tmdb_candidate:
             set_setting(conn, "tmdb.api_key", tmdb_candidate)
@@ -513,13 +513,13 @@ def update_settings(
             set_setting(conn, "uploadrr.allowed_roots", json.dumps(normalized, ensure_ascii=False))
 
         if body.notify_discord_enabled is not None:
-            set_setting(conn, "notify.discord.enabled", "true" if body.notify_discord_enabled else "false")
+            set_setting(conn, "notify.discord.enabled", texto_de_bool(body.notify_discord_enabled))
 
         if body.notify_discord_webhook_url is not None and body.notify_discord_webhook_url.strip():
             set_setting(conn, "notify.discord.webhook_url", body.notify_discord_webhook_url.strip())
 
         if body.notify_telegram_enabled is not None:
-            set_setting(conn, "notify.telegram.enabled", "true" if body.notify_telegram_enabled else "false")
+            set_setting(conn, "notify.telegram.enabled", texto_de_bool(body.notify_telegram_enabled))
 
         if body.notify_telegram_bot_token is not None and body.notify_telegram_bot_token.strip():
             set_setting(conn, "notify.telegram.bot_token", body.notify_telegram_bot_token.strip())
@@ -528,7 +528,7 @@ def update_settings(
             set_setting(conn, "notify.telegram.chat_id", body.notify_telegram_chat_id.strip())
 
         if body.notify_ui_enabled is not None:
-            set_setting(conn, "notify.ui.enabled", "true" if body.notify_ui_enabled else "false")
+            set_setting(conn, "notify.ui.enabled", texto_de_bool(body.notify_ui_enabled))
 
         if body.notify_ui_events is not None:
             set_setting(conn, "notify.ui.events", _clean_event_csv(body.notify_ui_events))
@@ -540,15 +540,15 @@ def update_settings(
             set_setting(conn, "notify.telegram.events", _clean_event_csv(body.notify_telegram_events))
 
         if body.series_ignore_specials is not None:
-            set_setting(conn, "series.ignore_specials", "true" if body.series_ignore_specials else "false")
+            set_setting(conn, "series.ignore_specials", texto_de_bool(body.series_ignore_specials))
         if body.source_engine_enabled is not None:
-            set_setting(conn, "source_engine.enabled", "true" if body.source_engine_enabled else "false")
+            set_setting(conn, "source_engine.enabled", texto_de_bool(body.source_engine_enabled))
         if body.emu_add_logo is not None:
-            set_setting(conn, "emu.add_logo", "true" if body.emu_add_logo else "false")
+            set_setting(conn, "emu.add_logo", texto_de_bool(body.emu_add_logo))
         if body.emu_per_episode_screens is not None:
-            set_setting(conn, "emu.per_episode_screens", "true" if body.emu_per_episode_screens else "false")
+            set_setting(conn, "emu.per_episode_screens", texto_de_bool(body.emu_per_episode_screens))
         if body.remux_no_reflink_copies is not None:
-            set_setting(conn, "remux.no_reflink_copies", "true" if body.remux_no_reflink_copies else "false")
+            set_setting(conn, "remux.no_reflink_copies", texto_de_bool(body.remux_no_reflink_copies))
         if body.remux_track_mode is not None:
             if body.remux_track_mode not in MODOS_PISTAS:
                 raise HTTPException(

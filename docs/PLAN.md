@@ -37,13 +37,15 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
     con tope de 15 s.
   - #120: ruff `E9,F` en la CI.
 - **Versión 0.14.0** publicada con todo lo anterior.
+- **Oleada 3, registro de ajustes:** `services/ajustes_registro.py` declara cada ajuste (clave, tipo, defecto,
+  valores permitidos, secreto). De él salen qué claves son secretas y la lectura y escritura de los sí/no de la API.
+  Falta pasar al registro el resto de ajustes (textos, enteros con opciones, JSON) y las lecturas sueltas de sí/no
+  fuera de la API (p. ej. `series.ignore_specials` en `library.py`).
 
 ## En curso (oleada 3)
 
 - `fix/pendientes-asistente-y-faltantes`: nombres del pack desfasados tras cambiar el idioma (`versionDatosPack`),
   avisos del plan repetidos en el paso de temporada y el total de `/missing`, que era el tamaño de la página.
-- `refactor/registro-de-ajustes`: un registro declarativo de ajustes (clave, tipo, valor por defecto, valores
-  permitidos, secreto) del que leen `services/settings.py` y la API; mismo comportamiento.
 
 ## Siguiente (oleada 3)
 

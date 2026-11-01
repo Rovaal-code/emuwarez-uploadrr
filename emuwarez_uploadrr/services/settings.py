@@ -21,27 +21,19 @@ import sqlite3
 from typing import Optional
 
 from ..database import get_setting_canonical as _get_setting_canonical
-
-_SECRET_KEYS: frozenset[str] = frozenset(
-    [
-        "tmdb.api_key", "emu.api_key", "emu.endpoint_url",
-        "notify.discord.webhook_url", "notify.telegram.bot_token",
-    ]
-)
-
-
-# Lo que también es una clave aunque no salga en el estado de la configuración:
-# los alias antiguos de las de arriba, la contraseña de qBittorrent, la URL del
-# proxy de qui (lleva su clave dentro) y las API keys de los hosts de imágenes
-# (una por host, imghost.key.<id>).
-_OTROS_SECRETOS: frozenset[str] = frozenset(["tmdb_api_key", "emu_api_key", "qbit.password", "qbit.qui_proxy_url"])
-_PREFIJOS_SECRETOS: tuple[str, ...] = ("imghost.key.",)
+from .ajustes_registro import bool_de, es_secreto as _es_secreto
 
 
 def es_secreto(key: str) -> bool:
-    """Si el ajuste guarda una clave. Lo usa también la copia de configuración
-    (services/backup_service.py), que las deja vacías si no se piden."""
-    return key in _SECRET_KEYS or key in _OTROS_SECRETOS or key.startswith(_PREFIJOS_SECRETOS)
+    """Si el ajuste guarda una clave (lo dice el registro de ajustes). Lo usa
+    también la copia de configuración (services/backup_service.py), que las
+    deja vacías si no se piden."""
+    return _es_secreto(key)
+
+
+def leer_bool(conn: sqlite3.Connection, key: str) -> bool:
+    """Un ajuste de sí/no, con el valor por defecto que declara el registro."""
+    return bool_de(key, _get_setting_canonical(conn, key))
 
 
 def _is_secret(key: str) -> int:

@@ -226,6 +226,25 @@ export interface TrackRemuxOverride {
   language?: string
 }
 
+export async function applyTrackRemux(
+  itemId: number,
+  options: {
+    dryRun?: boolean
+    apply?: boolean
+    confirmation?: string | null
+    /** Ediciones a mano de la tabla del asistente, por id de pista. */
+    overrides?: Record<number, TrackRemuxOverride>
+  } = {},
+): Promise<TrackRemuxPreview> {
+  const { dryRun = true, apply = false, confirmation = null, overrides } = options
+  const overridesPayload = overrides && Object.keys(overrides).length > 0
+    ? Object.fromEntries(Object.entries(overrides).map(([id, ov]) => [String(id), ov]))
+    : undefined
+  return api.post(`/library/${itemId}/track-remux/apply`, {
+    dry_run: dryRun, apply, confirmation, overrides: overridesPayload,
+  })
+}
+
 export async function previewNomenclature(itemId: number, forceRefresh = false): Promise<NomenclatureProposal> {
   return api.post<NomenclatureProposal>(`/library/${itemId}/nomenclature/preview`, { force_refresh: forceRefresh })
 }

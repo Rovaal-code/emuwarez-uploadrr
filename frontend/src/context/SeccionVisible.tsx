@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useRef } from 'react'
+import { SyncContext, useSync } from './SyncContext'
 
 /**
  * Si la sección que envuelve es la que se está viendo ahora mismo.
@@ -9,7 +10,7 @@ import { createContext, useContext, useEffect, useRef } from 'react'
  * cosas que solo deben pasar cuando de verdad se está mirando:
  *
  *   - repedir datos. Ocho secciones montadas repidiendo a la vez sería peor
- *     que lo que había antes de todo esto.
+ *     que lo que había antes de todo esto (ver `SeccionVisible` más abajo).
  *   - recoger un salto a un contenido concreto (ver `useAlEntrar`).
  *   - reiniciarse al salir (ver `useAlSalir`).
  */
@@ -19,10 +20,23 @@ export function useSeccionVisible(): boolean {
   return useContext(SeccionVisibleContext)
 }
 
+/**
+ * Además, la marca `lastInvalidatedAt` que ve la sección solo avanza mientras se
+ * ve. Cada vez que vuelves a la pestaña del navegador sube la marca, y con las
+ * nueve secciones montadas eso recargaba Biblioteca (20.000 filas), Peticiones
+ * y el Panel aunque estuvieran ocultas. Con la marca congelada, una sección
+ * oculta recarga UNA vez al volver a verse, y solo si algo cambió mientras tanto.
+ */
 export function SeccionVisible({ visible, children }: { visible: boolean; children: React.ReactNode }) {
+  const sync = useSync()
+  const marca = useRef(sync.lastInvalidatedAt)
+  if (visible) marca.current = sync.lastInvalidatedAt
+  const valor = marca.current === sync.lastInvalidatedAt ? sync : { ...sync, lastInvalidatedAt: marca.current }
   return (
     <SeccionVisibleContext.Provider value={visible}>
-      {children}
+      <SyncContext.Provider value={valor}>
+        {children}
+      </SyncContext.Provider>
     </SeccionVisibleContext.Provider>
   )
 }

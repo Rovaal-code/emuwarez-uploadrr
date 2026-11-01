@@ -424,10 +424,9 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // back, which is what made the table flash "cargando" twice in a row. Same
   // shape RequestsPage uses.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  // Recarga en cuanto algo cambia, se esté viendo esta sección o no: los avisos
-  // que suben esta marca son raros (una sincronización, una tarea), así que
-  // mantenerlas todas al día cuesta poco y a cambio cambiar de pestaña enseña
-  // lo actual y no lo actual tras un parpadeo.
+  // Recarga en cuanto algo cambia si esta sección se ve; si está oculta, SeccionVisible
+  // no le pasa la marca hasta que se vuelva a ver (recargar Biblioteca cada vez que
+  // volvías a la pestaña del navegador pedía 20.000 filas para nada).
   // Con una carga en marcha no se relanza: volver a la pestaña del navegador
   // la tiraba y empezaba otra, y con un filtro lento no acababa nunca. Se
   // apunta y se repide una vez al acabar, por si fue una sincronización.

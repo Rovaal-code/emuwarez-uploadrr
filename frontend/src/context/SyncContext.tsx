@@ -51,7 +51,7 @@ interface SyncContextValue {
   messageFadingOut: boolean
   // Marca creciente: "lo que tengas cargado ya no vale, vuelve a pedirlo".
   // La sección que se esté viendo recarga al momento; las demás están
-  // montadas pero ocultas y lo hacen al volver a ellas (useRecargarAlVerse).
+  // montadas pero ocultas y lo hacen al volver a ellas (ver SeccionVisible).
   // Sube por dos hechos, no por el paso del tiempo: termina una
   // sincronización, o vuelves a la pestaña del navegador.
   lastInvalidatedAt: number
@@ -65,7 +65,7 @@ interface SyncContextValue {
 // ventanas, que es para lo que SWR tiene su propio estrangulamiento.
 const AGLUTINAR_MS = 2000
 
-const SyncContext = createContext<SyncContextValue | null>(null)
+export const SyncContext = createContext<SyncContextValue | null>(null)
 
 export function useSync(): SyncContextValue {
   const ctx = useContext(SyncContext)

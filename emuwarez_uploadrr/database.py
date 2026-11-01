@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 47
+SCHEMA_VERSION = 48
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -1266,6 +1266,13 @@ def _migrate_upload_jobs_pasos(conn: sqlite3.Connection) -> None:
                 raise
 
 
+def _migrate_quitar_registro_arr(conn: sqlite3.Connection) -> None:
+    """Esquema 48: el registro entero de la cola y el historial de Radarr/Sonarr ya no se guarda (nadie lo leía, y
+    trae el enlace del indexador con su clave, como el ?apikey= de Prowlarr). Se borra el que había."""
+    conn.execute("UPDATE library_items SET arr_queue_raw_json = NULL, arr_history_raw_json = NULL "
+                 "WHERE arr_queue_raw_json IS NOT NULL OR arr_history_raw_json IS NOT NULL")
+
+
 def _migrate_upload_jobs_torrent_subido(conn: sqlite3.Connection) -> None:
     """Esquema 44: `torrent_subido` (qBittorrent siembra del enlace de esa subida, antes se buscaba en todo el
     registro) y el índice del registro, que sirve a MAX(sequence) y a leer el final o lo posterior a una línea."""
@@ -1822,6 +1829,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_auth_sessions_last_used(conn)
         _migrate_scheduled_tasks_run_at(conn)
         _migrate_upload_jobs_pasos(conn)
+        _migrate_quitar_registro_arr(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

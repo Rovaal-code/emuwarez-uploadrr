@@ -163,7 +163,7 @@ export function currentPhaseInfo(job: UploadJob): CurrentPhaseInfo | null {
 
 // Live "Xs" counter next to the current phase — ticks while the job is
 // actually doing something (preparing/running only — Progreso shows nothing
-// for queued (its own countdown covers that) or terminal states (Estado
+// for queued (queuedWaitText covers that) or terminal states (Estado
 // already says Completado/Fallido/Cancelado, no need to repeat it here)).
 export function progressCounter(job: UploadJob): string | null {
   if (job.started_at) {
@@ -182,32 +182,19 @@ export function formatElapsed(job: UploadJob): string {
   return '—'
 }
 
-// Seconds left in the cancel-if-you-regret-it grace period, or null once it's
-// not applicable (job isn't queued, or has no deadline). Ticks down live via
-// useTicker() below — computed from wall-clock time, not server polling.
-export function queuedSecondsLeft(job: UploadJob): number | null {
-  if (job.status !== 'queued' || !job.queued_until) return null
-  return Math.max(0, Math.round((parseServerDate(job.queued_until).getTime() - Date.now()) / 1000))
-}
-
-// Countdown text for a queued job. Once the grace period timer hits 0, the
-// job doesn't necessarily start right away — it may still be stuck behind
-// another upload already running (upload_execution.py's concurrency gate
-// has no visible countdown of its own). Showing "0s" forever there reads
-// like the job is stuck; "Esperando" makes clear it's just waiting its turn.
-// When several jobs are queued at once, appends its rank — "Esperando
-// (2/4)" — computed server-side (upload_queue.get_queue_positions) in the
-// same id order the concurrency gate actually admits jobs in, so this is
-// never just cosmetic guesswork about which one starts next.
+// Texto de una subida «En cola». Solo lo está mientras espera plaza en
+// "Subidas en paralelo" (sin espera fija: si hay plaza empieza al momento), y
+// el servidor da su puesto (upload_queue.get_queue_positions) en el mismo
+// orden en que entran. Cuando la cola avanza, el servidor avisa (subida-estado)
+// y la pantalla recarga: aquí no hay reloj.
 export function queuedWaitText(job: UploadJob): string {
-  const secs = queuedSecondsLeft(job)
-  const base = secs != null && secs > 0 ? `${secs}s` : 'Esperando'
   const { queue_position: pos, queue_total: total } = job
-  return pos != null && total != null && total > 1 ? `${base} (${pos}/${total})` : base
+  if (pos == null) return 'Esperando turno'
+  return total != null && total > 1 ? `Puesto ${pos} de ${total}` : 'Siguiente en entrar'
 }
 
-// Forces a re-render every `intervalMs` while `active` — used to keep the
-// queued countdown ticking without depending on the next server poll.
+// Forces a re-render every `intervalMs` while `active` — keeps live elapsed
+// times ticking without depending on the next server poll.
 export function useTicker(active: boolean, intervalMs = 1000) {
   const [, setTick] = useState(0)
   useEffect(() => {

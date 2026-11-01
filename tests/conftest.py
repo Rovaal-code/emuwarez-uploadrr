@@ -105,6 +105,22 @@ def _procesos_sin_apagado():
     upload_execution._apagando = False
 
 
+@pytest.fixture
+def subidas_reales():
+    """Pídelo para que encolar una subida arranque de verdad su hilo."""
+
+
+@pytest.fixture(autouse=True)
+def _subidas_sin_hilo(request, monkeypatch):
+    """Encolar una subida arranca su hilo al momento. En los tests ese hilo
+    correría solo contra la base del test, así que se queda sin lanzar salvo
+    que el test pida `subidas_reales` (o llame a _run_queued_job él mismo)."""
+    if "subidas_reales" in request.fixturenames:
+        return
+    from emuwarez_uploadrr.services import upload_queue
+    monkeypatch.setattr(upload_queue, "_lanzar_trabajo", lambda job_id: None)
+
+
 @pytest.fixture(autouse=True)
 def isolated_db(tmp_path, monkeypatch):
     """Point CONFIG_DIR to a per-test temp dir so each test starts with a fresh DB."""

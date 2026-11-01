@@ -45,7 +45,7 @@ import { Modal } from './Modal'
 // the rest from mediainfo — as editable boxes with a live preview of the final
 // torrent name; Step 2 runs the pre-upload checks and, once confirmed, QUEUES
 // the upload (services/upload_queue.py runs integrity/nomenclature/remux/start
-// server-side after a grace period) and hands off to Subidas — nothing here
+// server-side, at once or when a "Subidas en paralelo" slot frees up) and hands off to Subidas — nothing here
 // applies nomenclature or starts Uploadrr directly anymore.
 const PROVIDER_SOURCES = new Set(['WEB-DL'])
 

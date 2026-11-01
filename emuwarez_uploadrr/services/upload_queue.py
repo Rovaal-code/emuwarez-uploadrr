@@ -3,12 +3,12 @@
 Clicking "Subir a eMuwarez" no longer runs rename/remux/preflight/start
 synchronously in the browser request — it creates an upload_jobs row in
 status='queued' and returns immediately, so the UI can jump straight to
-Subidas and watch it. The row sits queued for QUEUE_GRACE_SECONDS (a
-cancel-if-you-regret-it window) before a background timer runs the real
-work — integrity check, nomenclature, tracks + link into the uploads folder,
-then handing off to upload_execution.start_upload_job() — all against that
-SAME job row, so what the user is watching in Subidas is the actual job, not a
-stand-in.
+Subidas and watch it. Un hilo empieza en el acto: espera plaza en la puerta de
+"Subidas en paralelo" (solo ahí se queda «En cola», con su puesto) y luego hace
+el trabajo real — integrity check, nomenclature, tracks + link into the uploads
+folder, then handing off to upload_execution.start_upload_job() — all against
+that SAME job row, so what the user is watching in Subidas is the actual job,
+not a stand-in.
 
 SAFETY CONTRACT: same as nomenclature.py / mkv_remux.py / upload_execution.py
 — every real filesystem/subprocess step still goes through their own
@@ -23,13 +23,11 @@ import json
 import logging
 import os
 import threading
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from ..database import connect, row_to_dict
 
 logger = logging.getLogger("emuwarez.upload")
-
-QUEUE_GRACE_SECONDS = 60
 
 # A job in any of these statuses is still "alive" for its library item — a
 # new "Subir"/automático click must not create an unrelated second job while
@@ -38,14 +36,10 @@ QUEUE_GRACE_SECONDS = 60
 from .upload_states import ACTIVE_JOB_STATUSES, escribir_estado  # noqa: E402
 from .eventos import EVENTO_SUBIDA_ESTADO, publicar
 
-# job_id -> pending threading.Timer, so a cancel during the grace period can
-# stop it before it fires. Single-process app, in-memory is enough (matches
-# upload_checks.py's pattern). Remux overrides the user edited in the
-# wizard's "Ver Pistas" card are persisted on the job row itself
-# (remux_overrides_json) instead of kept here — they need to survive a
-# process restart during the grace window and be readable by a later retry.
+# Remux overrides the user edited in the wizard's "Ver Pistas" card are
+# persisted on the job row itself (remux_overrides_json): a later retry has
+# to be able to read them back.
 _LOCK = threading.Lock()
-_QUEUE_TIMERS: dict[int, threading.Timer] = {}
 # Trabajos cuyo hilo de preparación sigue vivo. Cancelar en 'preparing' solo
 # marca la fila: el hilo termina el paso en curso (renombrar, remuxear) y
 # hasta entonces no se puede lanzar otro sobre el mismo fichero.
@@ -56,17 +50,12 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def get_queue_positions(conn) -> dict[int, tuple[int, int]]:
-    """1-based rank (and total) of every job currently in status='queued',
-    ordered by id — i.e. creation order, which is also the order
-    upload_execution._upload_concurrency_gate hands out slots in. Lets the
-    UI show "Esperando (2/4)" instead of leaving several simultaneously-
-    queued jobs indistinguishable from one another."""
-    rows = conn.execute(
-        "SELECT id FROM upload_jobs WHERE status = 'queued' ORDER BY id ASC"
-    ).fetchall()
-    total = len(rows)
-    return {row["id"]: (i + 1, total) for i, row in enumerate(rows)}
+def get_queue_positions() -> dict[int, tuple[int, int]]:
+    """Puesto (desde 1) y total de cada subida que espera plaza de verdad en la
+    puerta de "Subidas en paralelo", en el orden en que la puerta las admite
+    (por id). Una subida que no espera no sale: empezó en el acto."""
+    from .upload_execution import _upload_concurrency_gate
+    return _upload_concurrency_gate.posiciones()
 
 
 def _find_latest_job_for_item(conn, item_id: int) -> dict | None:
@@ -111,7 +100,7 @@ def _insert_and_start_queued_job(
     season_overrides: dict | None = None,
 ) -> dict:
     """Shared by queue_upload_for_item() and queue_retry_for_job(): insert a
-    fresh 'queued' row for `item` and arm its 60s grace-period timer.
+    fresh 'queued' row for `item` and start its pipeline right away.
 
     `checks` — the pre-upload checks result ({"checks": [...], "ready": bool})
     already computed by the manual wizard before the user confirmed, persisted
@@ -142,9 +131,7 @@ def _insert_and_start_queued_job(
     `request_title`/`request_url` — la petición que cubre la subida, copiada
     tal cual estaba al encolar (ver _foto_de_la_peticion).
     """
-    now = datetime.now(timezone.utc)
-    queued_until = (now + timedelta(seconds=QUEUE_GRACE_SECONDS)).isoformat()
-    now_iso = now.isoformat()
+    now_iso = _now_iso()
 
     # Comprobar y crear en la misma transacción: con dos clics en "Reintentar"
     # o dos pestañas, las dos peticiones pasaban la comprobación antes de que
@@ -168,18 +155,17 @@ def _insert_and_start_queued_job(
             INSERT INTO upload_jobs (
                 library_item_id, request_item_id, request_title, request_url,
                 status, stage, title, path, source_path,
-                queued_until, retry_of_job_id, retry_count, checks_snapshot_json,
+                retry_of_job_id, retry_count, checks_snapshot_json,
                 nomenclature_proposal_id, nomenclature_snapshot_json,
                 remux_overrides_json, remux_snapshot_json, season_overrides_json,
                 created_at, updated_at
-            ) VALUES (?, ?, ?, ?, 'queued', 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, 'queued', 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 item["id"], request_item_id, request_title, request_url,
                 item.get("title") or "Sin título",
                 item.get("path") or "",
                 item.get("path"),
-                queued_until,
                 retry_of_job_id, retry_count,
                 json.dumps(checks, ensure_ascii=False) if checks else None,
                 nomenclature_proposal_id,
@@ -205,32 +191,43 @@ def _insert_and_start_queued_job(
     # hasta recargar la página, porque nadie decía que la subida existía.
     publicar(EVENTO_SUBIDA_ESTADO, {"job_id": job_id, "status": "queued", "stage": "queued"})
 
-    _arm_queue_timer(job_id)
+    _lanzar_trabajo(job_id)
 
     from .upload_execution import get_upload_job
     return {"status": "queued", "job": get_upload_job(job_id, conn=conn)}
 
 
-def _arm_queue_timer(job_id: int) -> None:
-    """Start the QUEUE_GRACE_SECONDS cancel-if-you-regret-it timer for a job
-    already sitting in status='queued', inserted by
-    _insert_and_start_queued_job()."""
-    timer = threading.Timer(QUEUE_GRACE_SECONDS, _correr_trabajo, args=(job_id,))
-    timer.daemon = True
+def _lanzar_trabajo(job_id: int) -> None:
+    """Arranca ya el hilo de una subida recién encolada. Sin espera fija: si
+    hay plaza libre empieza al momento; si no, espera turno en la puerta."""
     with _LOCK:
-        _QUEUE_TIMERS[job_id] = timer
-    timer.start()
+        _EN_CURSO.add(job_id)
+    threading.Thread(target=_correr_trabajo, args=(job_id,), name=f"subida-{job_id}", daemon=True).start()
 
 
 def _correr_trabajo(job_id: int) -> None:
-    """Lo que ejecuta el temporizador: _run_queued_job, contando el hilo como vivo."""
+    """Lo que ejecuta el hilo: _run_queued_job, contando el hilo como vivo."""
+    from .upload_execution import _upload_concurrency_gate
     with _LOCK:
         _EN_CURSO.add(job_id)
     try:
         _run_queued_job(job_id)
     finally:
+        # Bajo el mismo candado que retirar_de_la_cola: una retirada no puede
+        # colarse entre olvidar y dar el hilo por terminado y quedarse apuntada.
         with _LOCK:
+            _upload_concurrency_gate.olvidar(job_id)
             _EN_CURSO.discard(job_id)
+
+
+def retirar_de_la_cola(job_id: int) -> None:
+    """Cancelar en «En cola»: saca la subida de la puerta de "Subidas en
+    paralelo" sin esperar a que se libere plaza. Solo si su hilo está vivo;
+    sin hilo no hay nadie que vaya a recoger la retirada."""
+    from .upload_execution import _upload_concurrency_gate
+    with _LOCK:
+        if job_id in _EN_CURSO:
+            _upload_concurrency_gate.retirar(job_id)
 
 
 def _foto_de_la_peticion(conn, request_item_id: int | None) -> tuple[str | None, str | None]:
@@ -302,9 +299,8 @@ def queue_upload_for_item(
 
 
 def queue_retry_for_job(original_job_id: int, conn=None) -> dict:
-    """Re-queue a failed/cancelled job straight into the same 60s
-    cancel-if-you-regret-it countdown a fresh "Subir a eMuwarez" click uses —
-    no confirmation token, since this only ever creates a brand new job row
+    """Re-queue a failed/cancelled job through the same flow a fresh "Subir a
+    eMuwarez" click uses — no confirmation token, since this only ever creates a brand new job row
     (the original is never touched, same as the old confirmation-gated retry)."""
     own = conn is None
     conn = conn or connect()
@@ -352,18 +348,6 @@ def queue_retry_for_job(original_job_id: int, conn=None) -> dict:
     finally:
         if own:
             conn.close()
-
-
-def cancel_queued_timer(job_id: int) -> bool:
-    """Stop a still-pending grace-period timer. Returns whether one was
-    found (False just means it already fired or never existed — callers
-    still flip the job's status regardless)."""
-    with _LOCK:
-        timer = _QUEUE_TIMERS.pop(job_id, None)
-    if timer:
-        timer.cancel()
-        return True
-    return False
 
 
 def reconcile_interrupted_jobs(conn=None) -> int:
@@ -862,9 +846,6 @@ def _preparar_fichero(job_id: int, item_id: int, origen: str, destino: str, modo
 
 
 def _run_queued_job(job_id: int) -> None:
-    with _LOCK:
-        _QUEUE_TIMERS.pop(job_id, None)
-
     from .upload_execution import (
         get_upload_job, start_upload_job, append_upload_log,
         mark_phase_started, mark_phase_done, update_phase_progress,
@@ -885,14 +866,15 @@ def _run_queued_job(job_id: int) -> None:
     # thread not to double-acquire); every failure path before that point
     # falls through to the `finally` below and releases it immediately, so
     # a job that never gets that far can't deadlock the queue.
-    _upload_concurrency_gate.acquire(job_id)
+    if not _upload_concurrency_gate.acquire(job_id):
+        return  # cancelada mientras esperaba turno: no ocupa plaza
     owns_gate = True
 
     conn = connect()
     try:
         job = get_upload_job(job_id, conn=conn)
         if not job or job.get("status") != "queued":
-            return  # cancelled during the grace period, or the job is gone
+            return  # cancelada justo al tocarle plaza, o el job ya no existe
         item_id = job.get("library_item_id")
         if not item_id:
             _fail(job_id, "El job no tiene un elemento de biblioteca asociado.")

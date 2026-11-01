@@ -16,7 +16,7 @@ import {
 } from './DetailCard'
 import { RemuxTable, EpisodeAccordionRow } from './UploadWizardModal'
 import {
-  UPLOAD_TYPE_LABEL, STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo, progressCounter, formatElapsed, queuedWaitText, useTicker, formatSecondsHM,
+  UPLOAD_TYPE_LABEL, STATUS_CLASS, statusLabel, phaseLabel, currentPhaseInfo, progressCounter, formatElapsed, queuedWaitText, formatSecondsHM,
 } from '../utils/uploadStatus'
 import { useRefrescoPorAvisos, AVISOS_SUBIDA, AVISOS_SUBIDA_PROGRESO } from '../hooks/useRefrescoPorAvisos'
 import { IconoDesplegar, IconoTipo } from './Iconos'
@@ -475,7 +475,6 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
   // covers the panel below it), the plain pulse icon once there's nothing
   // left to show progress of.
   const progressValueLoading = isStaging || isQueued || isPreparing || isRunning
-  useTicker(isQueued)
 
   // The 4 sections that used to be their own collapsible Panel below now
   // live as mini-card fields in "Estado de la subida" (same visual pattern

@@ -140,8 +140,8 @@ def test_crear_un_trabajo_avisa(client, monkeypatch):
     avisos: list = []
     monkeypatch.setattr(upload_queue, "publicar",
                         lambda tipo, datos=None: avisos.append((tipo, datos)) or 0)
-    # El temporizador de gracia arrancaría la subida de verdad.
-    monkeypatch.setattr(upload_queue, "_arm_queue_timer", lambda job_id: None)
+    # El hilo arrancaría la subida de verdad.
+    monkeypatch.setattr(upload_queue, "_lanzar_trabajo", lambda job_id: None)
 
     conn = connect(db_path()); init_db(conn)
     try:

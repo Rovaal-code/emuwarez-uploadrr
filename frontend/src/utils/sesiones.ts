@@ -1,7 +1,7 @@
 // «Chrome en Windows» a partir de un user-agent; si no se reconoce nada, el texto tal cual, recortado.
 export function descripcionDeSesion(ua: string | null | undefined): string {
   if (!ua) return 'Navegador desconocido'
-  const navegador = /Edg\//.test(ua) ? 'Edge'
+  const navegador = /Edg(?:A|iOS)?\//.test(ua) ? 'Edge'
     : /OPR\/|Opera/.test(ua) ? 'Opera'
     : /Firefox\//.test(ua) ? 'Firefox'
     : /Chrome\/|CriOS\//.test(ua) ? 'Chrome'

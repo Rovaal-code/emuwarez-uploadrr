@@ -650,13 +650,32 @@ def _pack_de_dos(conn, tmp_path, **por_capitulo):
     return season_id
 
 
-def test_un_pack_con_fuentes_distintas_se_bloquea(isolated_db, tmp_path):
-    """Antes el título se quedaba sin Fuente y el pack salía "válido"."""
+def test_un_pack_con_fuentes_distintas_avisa_y_se_puede_subir(isolated_db, tmp_path):
+    """Decidido por Gabriel: capítulos BluRay y WEB-DL no bloquean el pack. Se
+    avisa de qué capítulo trae qué, y el título usa la fuente que quede en
+    Source (por defecto, la primera de las que empatan)."""
     conn = _open(isolated_db)
-    plan = build_season_pack_plan(_pack_de_dos(conn, tmp_path, source=["WEB-DL", "BluRay"]), conn=conn)
-    assert plan["status"] == "blocked"
-    assert any("source distinto (BluRay)" in e for e in plan["errors"]), plan["errors"]
+    season_id = _pack_de_dos(conn, tmp_path, source=["WEB-DL", "BluRay"])
+    plan = build_season_pack_plan(season_id, conn=conn)
+    assert plan["status"] == "valid", plan["errors"]
+    assert plan["warnings"] == [
+        "Los capítulos no vienen todos de la misma fuente: WEB-DL (1), BluRay (2). El título usa "
+        "WEB-DL, la primera de las que empatan; si no es esa, cámbiala en Source."]
+    assert " WEB-DL " in plan["season_pack_title"]
+
+    elegida = build_season_pack_plan(season_id, conn=conn, source_override="BluRay")
+    assert elegida["warnings"] == [] and " BluRay " in elegida["season_pack_title"]
     conn.close()
+
+
+def test_la_fuente_del_pack_es_la_de_mas_capitulos():
+    from emuwarez_uploadrr.services.season_pack import _fuente_del_pack
+    caps = [{"episode": {"episode_number": n}, "proposal": {"source": s}}
+            for n, s in ((1, "WEB-DL"), (2, "BluRay"), (3, "BluRay"), (4, None))]
+    fuente, aviso = _fuente_del_pack(caps)
+    assert fuente == "BluRay"
+    assert aviso == ("Los capítulos no vienen todos de la misma fuente: WEB-DL (1), BluRay (2, 3), "
+                     "sin fuente (4). El título usa BluRay, la de más capítulos; si no es esa, cámbiala en Source.")
 
 
 def test_un_pack_con_hdr_y_sdr_se_bloquea(isolated_db, tmp_path):

@@ -17,6 +17,7 @@ import pytest
 
 from emuwarez_uploadrr.database import connect, db_path, init_db
 from emuwarez_uploadrr.services import upload_execution as ue
+from emuwarez_uploadrr.services.upload_execution import concurrencia, config as cfg, ejecucion, estado
 from emuwarez_uploadrr.services.upload_execution import (
     CONFIRMATION_TOKEN,
     cancel_upload_job,
@@ -148,7 +149,7 @@ def test_una_subida_buena_no_espera_a_las_tuberias_de_un_hijo(
         db_conn, tmp_path, fake_uploadrr_emu_dir, fake_uploadrr_python_path, monkeypatch, hijo_de_uploadrr):
     """Uploadrr sale con 0 pero su hijo hereda stdout: esperar a que cierre daba
     la subida por fallida («timeout») cuando el torrent ya estaba en el tracker."""
-    monkeypatch.setattr(ue, "_GRACIA_LECTORES", 1)
+    monkeypatch.setattr(ejecucion, "_GRACIA_LECTORES", 1)
     jid = _lanzar(db_conn, tmp_path, fake_uploadrr_emu_dir, fake_uploadrr_python_path, timeout=30)
     hijo = hijo_de_uploadrr()
 
@@ -179,7 +180,7 @@ def test_ctrl_c_en_el_cli_detiene_a_uploadrr(db_conn, tmp_path, fake_uploadrr_em
             raise KeyboardInterrupt
 
     try:
-        with patch.object(ue.threading, "Thread", HiloInterrumpido), patch.object(ue, "_detener_proceso") as detener:
+        with patch.object(threading, "Thread", HiloInterrumpido), patch.object(ejecucion, "_detener_proceso") as detener:
             with pytest.raises(KeyboardInterrupt):
                 start_upload_job(jid, dry_run=False, start=True, confirmation=CONFIRMATION_TOKEN, conn=db_conn, wait=True)
     finally:
@@ -226,7 +227,7 @@ def test_cancelar_mientras_se_stagea_el_config_no_lanza_uploadrr(db_conn, tmp_pa
         _cancelar_en_la_base(job_id)
         return original(job_id, cwd)
 
-    with patch.object(ue, "_acquire_staged_config", cancelar_y_stagear), patch("subprocess.Popen") as popen:
+    with patch.object(ejecucion, "_acquire_staged_config", cancelar_y_stagear), patch("subprocess.Popen") as popen:
         ue._run_uploadrr_subprocess(jid, _cmd(fake_uploadrr_emu_dir, runtime_type="uploadrr_emu"), [])
 
     popen.assert_not_called()
@@ -247,7 +248,7 @@ def test_cancelar_justo_despues_del_popen_detiene_el_proceso(db_conn, tmp_path):
         _cancelar_en_la_base(jid)  # Cancelar no ve ningún PID todavía
         return proc
 
-    with patch("subprocess.Popen", side_effect=lanzar), patch.object(ue, "_detener_proceso") as detener:
+    with patch("subprocess.Popen", side_effect=lanzar), patch.object(ejecucion, "_detener_proceso") as detener:
         ue._run_uploadrr_subprocess(jid, _cmd(tmp_path), [])
 
     detener.assert_called_once_with(proc)
@@ -272,7 +273,7 @@ def test_uploadrr_arranca_en_su_propio_grupo_de_procesos(db_conn, tmp_path):
 def test_un_fallo_al_escribir_el_primer_estado_deja_el_job_fallido(db_conn, tmp_path):
     jid = _job(db_conn)
 
-    with patch.object(ue, "_avanzar_job", side_effect=RuntimeError("database is locked")), \
+    with patch.object(ejecucion, "_avanzar_job", side_effect=RuntimeError("database is locked")), \
             patch("subprocess.Popen") as popen:
         ue._run_uploadrr_subprocess(jid, _cmd(tmp_path), [])
 
@@ -285,7 +286,7 @@ def test_si_falla_tras_stagear_el_config_se_restaura(db_conn, tmp_path, fake_upl
     después iba fuera del try: si fallaba, nadie lo soltaba y el config.yaml con
     las claves reales no se restauraba hasta reiniciar."""
     jid = _job(db_conn)
-    real = ue._avanzar_job
+    real = estado._avanzar_job
     llamadas = []
 
     def falla_la_tercera(*a, **k):
@@ -295,7 +296,7 @@ def test_si_falla_tras_stagear_el_config_se_restaura(db_conn, tmp_path, fake_upl
         return real(*a, **k)
 
     original = (fake_uploadrr_emu_dir / "data" / "config.yaml").read_bytes()
-    with patch.object(ue, "_avanzar_job", falla_la_tercera), patch("subprocess.Popen") as popen:
+    with patch.object(ejecucion, "_avanzar_job", falla_la_tercera), patch("subprocess.Popen") as popen:
         ue._run_uploadrr_subprocess(jid, _cmd(fake_uploadrr_emu_dir, runtime_type="uploadrr_emu"), [])
 
     popen.assert_not_called()
@@ -309,7 +310,7 @@ def test_el_turno_no_revienta_si_falla_la_base(db_conn):
     en silencio y el job se quedaba en cola."""
     puerta = ue._UploadConcurrencyGate()
 
-    with patch.object(ue, "get_upload_max_concurrent", side_effect=RuntimeError("database is locked")):
+    with patch.object(concurrencia, "get_upload_max_concurrent", side_effect=RuntimeError("database is locked")):
         puerta.acquire(1)
 
     assert puerta._active == 1
@@ -325,8 +326,8 @@ def test_esperar_turno_no_muere_si_falla_el_log(db_conn):
         admitido.set()
         puerta.release()
 
-    with patch.object(ue, "get_upload_max_concurrent", return_value=1), \
-            patch.object(ue, "append_upload_log", side_effect=RuntimeError("database is locked")):
+    with patch.object(concurrencia, "get_upload_max_concurrent", return_value=1), \
+            patch.object(concurrencia, "append_upload_log", side_effect=RuntimeError("database is locked")):
         puerta.acquire(1)
         hilo = threading.Thread(target=espera, daemon=True)
         hilo.start()
@@ -528,7 +529,7 @@ def test_si_no_se_puede_preparar_el_config_el_job_falla_sin_lanzar_uploadrr(db_c
     subida se lanzaba igual, con el config sin las claves: TMDb 401, dupes mal."""
     jid = _job(db_conn)
 
-    with patch.object(ue, "write_staged_config", side_effect=PermissionError(1, "Operation not permitted")), \
+    with patch.object(cfg, "write_staged_config", side_effect=PermissionError(1, "Operation not permitted")), \
             patch("subprocess.Popen") as popen:
         ue._run_uploadrr_subprocess(jid, _cmd(fake_uploadrr_emu_dir, runtime_type="uploadrr_emu"), [])
 

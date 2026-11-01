@@ -139,7 +139,7 @@ def test_start_real_validation_fails_when_no_config(db_conn):
     assert result["error"] == "validation_failed"
 
 
-@patch("emuwarez_uploadrr.services.upload_execution._run_uploadrr_subprocess")
+@patch("emuwarez_uploadrr.services.upload_execution.ejecucion._run_uploadrr_subprocess")
 def test_start_real_with_valid_setup_starts_thread(mock_run, db_conn, tmp_path):
     uploadrr_path = tmp_path / "Uploadrr"
     uploadrr_path.mkdir()
@@ -488,7 +488,7 @@ def test_gate_admits_waiting_jobs_in_id_order(db_conn, tmp_path):
     admitted: list[int] = []
     admitted_lock = threading.Lock()
 
-    with patch("emuwarez_uploadrr.services.upload_execution.get_upload_max_concurrent", return_value=1):
+    with patch("emuwarez_uploadrr.services.upload_execution.concurrencia.get_upload_max_concurrent", return_value=1):
         gate.acquire(j_holder)  # holds the only slot so j_c/j_b/j_a all queue up behind it
 
         def worker(jid):

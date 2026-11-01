@@ -6,7 +6,7 @@ must NOT re-stage or restore it out from under each other.
 """
 from __future__ import annotations
 
-import emuwarez_uploadrr.services.upload_execution as ue
+import emuwarez_uploadrr.services.upload_execution.config as ue
 
 
 def _patch(monkeypatch):

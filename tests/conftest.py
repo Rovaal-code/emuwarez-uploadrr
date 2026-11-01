@@ -106,9 +106,10 @@ def _procesos_sin_apagado():
     """Apagar la aplicación (lifespan) deja de admitir procesos nuevos; en el
     mismo proceso de pytest hay que volver a admitirlos para el test siguiente."""
     yield
-    from emuwarez_uploadrr.services import mkv_remux, upload_execution
+    from emuwarez_uploadrr.services import mkv_remux
+    from emuwarez_uploadrr.services.upload_execution import procesos
     mkv_remux._apagando = False
-    upload_execution._apagando = False
+    procesos._apagando = False
 
 
 @pytest.fixture

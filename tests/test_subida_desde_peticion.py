@@ -98,6 +98,7 @@ def test_el_reintento_conserva_la_peticion_aunque_su_fila_ya_no_exista(db_conn, 
 
 def test_el_reintento_con_confirmacion_tambien_la_conserva(db_conn):
     from emuwarez_uploadrr.services import upload_execution as ex
+    from emuwarez_uploadrr.services.upload_execution import ciclo_de_vida
 
     cur = db_conn.execute(
         """INSERT INTO upload_jobs (title, path, status, stage, request_item_id, request_title, request_url,
@@ -107,7 +108,7 @@ def test_el_reintento_con_confirmacion_tambien_la_conserva(db_conn):
     )
     db_conn.commit()
 
-    with patch.object(ex, "start_upload_job", return_value={"ok": True}):
+    with patch.object(ciclo_de_vida, "start_upload_job", return_value={"ok": True}):
         resultado = ex.retry_upload_job(
             cur.lastrowid, dry_run=False, start=True, confirmation=ex.CONFIRMATION_TOKEN)
 

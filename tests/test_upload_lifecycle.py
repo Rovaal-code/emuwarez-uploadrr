@@ -74,7 +74,7 @@ def test_completed_job_has_duration(db_conn, tmp_path):
     jid = _insert_job(db_conn, source_path=str(src))
 
     mock_proc = _make_mock_proc(returncode=0, stdout_lines=["Done\n"])
-    patcher = patch("emuwarez_uploadrr.services.upload_execution.subprocess.Popen", return_value=mock_proc)
+    patcher = patch("emuwarez_uploadrr.services.upload_execution.ejecucion.subprocess.Popen", return_value=mock_proc)
     patcher.start()
     try:
         result = start_upload_job(jid, dry_run=False, start=True, confirmation=CONFIRMATION_TOKEN, conn=db_conn)
@@ -100,7 +100,7 @@ def test_completed_job_has_last_success_at(db_conn, tmp_path):
     jid = _insert_job(db_conn, source_path=str(src))
 
     mock_proc = _make_mock_proc(returncode=0)
-    patcher = patch("emuwarez_uploadrr.services.upload_execution.subprocess.Popen", return_value=mock_proc)
+    patcher = patch("emuwarez_uploadrr.services.upload_execution.ejecucion.subprocess.Popen", return_value=mock_proc)
     patcher.start()
     try:
         start_upload_job(jid, dry_run=False, start=True, confirmation=CONFIRMATION_TOKEN, conn=db_conn)
@@ -123,7 +123,7 @@ def test_failed_job_has_error_message(db_conn, tmp_path):
     jid = _insert_job(db_conn, source_path=str(src))
 
     mock_proc = _make_mock_proc(returncode=1, stderr_lines=["ERROR: upload failed\n"])
-    patcher = patch("emuwarez_uploadrr.services.upload_execution.subprocess.Popen", return_value=mock_proc)
+    patcher = patch("emuwarez_uploadrr.services.upload_execution.ejecucion.subprocess.Popen", return_value=mock_proc)
     patcher.start()
     try:
         start_upload_job(jid, dry_run=False, start=True, confirmation=CONFIRMATION_TOKEN, conn=db_conn)
@@ -147,7 +147,7 @@ def test_failed_job_has_last_error_at(db_conn, tmp_path):
     jid = _insert_job(db_conn, source_path=str(src))
 
     mock_proc = _make_mock_proc(returncode=2, stderr_lines=["ERR\n"])
-    patcher = patch("emuwarez_uploadrr.services.upload_execution.subprocess.Popen", return_value=mock_proc)
+    patcher = patch("emuwarez_uploadrr.services.upload_execution.ejecucion.subprocess.Popen", return_value=mock_proc)
     patcher.start()
     try:
         start_upload_job(jid, dry_run=False, start=True, confirmation=CONFIRMATION_TOKEN, conn=db_conn)
@@ -172,7 +172,7 @@ def test_safe_command_json_no_secrets(db_conn, tmp_path):
     jid = _insert_job(db_conn, source_path=str(src))
 
     mock_proc = _make_mock_proc(returncode=0)
-    patcher = patch("emuwarez_uploadrr.services.upload_execution.subprocess.Popen", return_value=mock_proc)
+    patcher = patch("emuwarez_uploadrr.services.upload_execution.ejecucion.subprocess.Popen", return_value=mock_proc)
     patcher.start()
     try:
         start_upload_job(jid, dry_run=False, start=True, confirmation=CONFIRMATION_TOKEN, conn=db_conn)
@@ -200,7 +200,7 @@ def test_artifacts_created_on_url_detected(db_conn, tmp_path):
         returncode=0,
         stdout_lines=["Torrent URL: https://emuwarez.me/torrents/99999\n"],
     )
-    patcher = patch("emuwarez_uploadrr.services.upload_execution.subprocess.Popen", return_value=mock_proc)
+    patcher = patch("emuwarez_uploadrr.services.upload_execution.ejecucion.subprocess.Popen", return_value=mock_proc)
     patcher.start()
     try:
         start_upload_job(jid, dry_run=False, start=True, confirmation=CONFIRMATION_TOKEN, conn=db_conn)
@@ -246,7 +246,7 @@ def test_retry_fails_on_completed_job(db_conn):
 
 def test_retry_dry_run_no_subprocess(db_conn):
     jid = _insert_job(db_conn, status="failed")
-    with patch("emuwarez_uploadrr.services.upload_execution.subprocess.Popen") as mock_popen:
+    with patch("emuwarez_uploadrr.services.upload_execution.ejecucion.subprocess.Popen") as mock_popen:
         result = retry_upload_job(jid, dry_run=True)
     mock_popen.assert_not_called()
     assert result.get("action") == "dry_run"
@@ -264,7 +264,7 @@ def test_retry_creates_new_job_not_mutates(db_conn, tmp_path):
     jid = _insert_job(db_conn, status="failed", source_path=str(src))
 
     mock_proc = _make_mock_proc(returncode=0)
-    patcher = patch("emuwarez_uploadrr.services.upload_execution.subprocess.Popen", return_value=mock_proc)
+    patcher = patch("emuwarez_uploadrr.services.upload_execution.ejecucion.subprocess.Popen", return_value=mock_proc)
     patcher.start()
     try:
         result = retry_upload_job(jid, dry_run=False, start=True, confirmation=CONFIRMATION_TOKEN)
@@ -299,7 +299,7 @@ def test_retry_with_confirmation_creates_job_with_metadata(db_conn, tmp_path):
     jid = _insert_job(db_conn, status="cancelled", source_path=str(src))
 
     mock_proc = _make_mock_proc(returncode=0)
-    patcher = patch("emuwarez_uploadrr.services.upload_execution.subprocess.Popen", return_value=mock_proc)
+    patcher = patch("emuwarez_uploadrr.services.upload_execution.ejecucion.subprocess.Popen", return_value=mock_proc)
     patcher.start()
     try:
         result = retry_upload_job(jid, dry_run=False, start=True, confirmation=CONFIRMATION_TOKEN)

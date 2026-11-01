@@ -16,6 +16,7 @@ from emuwarez_uploadrr.web.services import auth_service
 from emuwarez_uploadrr.web.services.auth_service import (
     BLOQUEO_SEGUNDOS,
     MAX_FALLOS,
+    MAX_FALLOS_IP,
     create_session,
     create_user,
     get_user_by_token,
@@ -124,12 +125,74 @@ def test_los_fallos_viejos_no_suman(reloj):
 
 def test_la_tabla_de_fallos_se_limpia_sola(reloj):
     for i in range(auth_service._MAX_CLAVES + 1):
-        registrar_fallo("1.1.1.1", f"u{i}")
+        registrar_fallo(f"10.0.{i // 250}.{i % 250}", "ana")
     reloj[0] += BLOQUEO_SEGUNDOS
     registrar_fallo("1.1.1.1", "nuevo")
-    assert len(auth_service._fallos) == 1
+    assert len(auth_service._fallos) == 2        # la de ese usuario y la de esa IP
     registrar_acierto("1.1.1.1", "nuevo")
-    assert not auth_service._fallos
+    assert list(auth_service._fallos) == [("1.1.1.1", None)]
+
+
+def test_la_limpieza_no_expulsa_a_quien_sigue_bloqueado(reloj):
+    """Al llegar al tope solo caducan las viejas: si no, quien inunda la tabla se borraría su propio bloqueo."""
+    for _ in range(MAX_FALLOS):
+        registrar_fallo("2.2.2.2", "ana")
+    for i in range(auth_service._MAX_CLAVES + 1):
+        registrar_fallo(f"10.0.{i // 250}.{i % 250}", "x")
+    reloj[0] += 61                               # toca podar, y nada ha caducado
+    registrar_fallo("3.3.3.3", "x")
+    assert segundos_de_bloqueo("2.2.2.2", "ana") > 0
+    assert len(auth_service._fallos) > auth_service._MAX_CLAVES
+
+
+def test_la_tabla_no_se_recorre_en_cada_fallo(reloj):
+    def lote(prefijo):
+        for i in range(auth_service._MAX_CLAVES):
+            registrar_fallo(f"{prefijo}.{i // 250}.{i % 250}", "x")
+
+    lote("10.0")                                  # t=1000: tira de aquí a 1900
+    reloj[0] = 1030
+    lote("10.1")                                  # t=1030: caduca a las 1930
+    reloj[0] = 1900
+    registrar_fallo("4.4.4.4", "x")               # poda: caduca el primer lote, no el segundo
+    assert len(auth_service._fallos) == 2 * auth_service._MAX_CLAVES + 2
+    reloj[0] = 1930                               # el segundo lote ya caducó, pero la última poda fue hace 30 s
+    registrar_fallo("5.5.5.5", "x")
+    assert len(auth_service._fallos) == 2 * auth_service._MAX_CLAVES + 4
+    reloj[0] = 1961                               # ya pasó el minuto
+    registrar_fallo("6.6.6.6", "x")
+    assert len(auth_service._fallos) == 6
+
+
+def test_la_clave_del_usuario_se_recorta():
+    registrar_fallo("1.1.1.1", "u" * 100_000)
+    claves = [c for c in auth_service._fallos if c[1] is not None]
+    assert len(claves) == 1 and len(claves[0][1]) == auth_service._LARGO_USUARIO
+
+
+def test_una_ip_que_prueba_muchos_usuarios_se_bloquea(reloj):
+    for i in range(MAX_FALLOS_IP):
+        assert segundos_de_bloqueo("1.1.1.1", f"u{i}") == 0
+        registrar_fallo("1.1.1.1", f"u{i}")
+    assert segundos_de_bloqueo("1.1.1.1", "otro-mas") == BLOQUEO_SEGUNDOS
+    assert segundos_de_bloqueo("9.9.9.9", "u0") == 0
+    assert len(auth_service._fallos) == MAX_FALLOS_IP + 1
+
+
+def test_un_acierto_no_borra_el_contador_de_la_ip(reloj):
+    for i in range(MAX_FALLOS_IP - 1):
+        registrar_fallo("1.1.1.1", f"u{i}")
+    registrar_acierto("1.1.1.1", "u0")
+    registrar_fallo("1.1.1.1", "otro")
+    assert segundos_de_bloqueo("1.1.1.1", "cualquiera") > 0
+
+
+def test_la_api_bloquea_a_la_ip_que_prueba_muchos_usuarios(client, admin_token):
+    for i in range(MAX_FALLOS_IP):
+        assert _login(client, usuario=f"nadie{i}", clave="Incorrecta1!").status_code == 401
+    resp = _login(client)
+    assert resp.status_code == 429
+    assert int(resp.headers["retry-after"]) == BLOQUEO_SEGUNDOS
 
 
 def test_un_fallo_de_la_base_al_entrar_es_503_no_500(client, admin_token, monkeypatch):

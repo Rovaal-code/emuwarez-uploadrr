@@ -25,12 +25,17 @@ _SESION_VIVA = (
 _APUNTAR_CADA_SEGUNDOS = 600
 _apuntadas: dict[str, float] = {}
 
-# Tras 5 contraseñas falsas seguidas de la misma IP con el mismo usuario, 15 minutos sin poder probar.
+# Tras 5 contraseñas falsas seguidas de la misma IP con el mismo usuario, 15 minutos sin poder probar; y tras 30
+# de esa IP con cualquier usuario, también: así una IP solo crea un número acotado de claves en la tabla.
 # En memoria: el servidor es un solo proceso.
 MAX_FALLOS = 5
+MAX_FALLOS_IP = 30
 BLOQUEO_SEGUNDOS = 15 * 60
 _MAX_CLAVES = 1000
-_fallos: dict[tuple[str, str], tuple[int, float]] = {}
+_PODA_CADA_SEGUNDOS = 60
+_LARGO_USUARIO = 128
+_fallos: dict[tuple[str, Optional[str]], tuple[int, float]] = {}
+_ultima_poda = float("-inf")
 _cerrojo = threading.Lock()
 
 
@@ -38,38 +43,45 @@ class AuthError(Exception):
     """Raised when an auth operation fails (wrong creds, inactive user, etc.)."""
 
 
-def _clave(ip: Optional[str], usuario: str) -> tuple[str, str]:
-    return (ip or "", usuario.strip().casefold())
+def _claves(ip: Optional[str], usuario: str) -> list[tuple[tuple[str, Optional[str]], int]]:
+    """Las dos cuentas de un intento, con su máximo: la de esa IP con ese usuario y la de esa IP con cualquiera."""
+    ip = ip or ""
+    return [((ip, usuario.strip().casefold()[:_LARGO_USUARIO]), MAX_FALLOS), ((ip, None), MAX_FALLOS_IP)]
 
 
 def segundos_de_bloqueo(ip: Optional[str], usuario: str) -> int:
     """Lo que falta para que esa IP pueda volver a probar con ese usuario; 0 si puede."""
     with _cerrojo:
-        entrada = _fallos.get(_clave(ip, usuario))
-        if entrada is None:
-            return 0
-        fallos, ultimo = entrada
-        resto = BLOQUEO_SEGUNDOS - (time.monotonic() - ultimo)
-        return math.ceil(resto) if fallos >= MAX_FALLOS and resto > 0 else 0
+        ahora = time.monotonic()
+        esperas = [0]
+        for clave, maximo in _claves(ip, usuario):
+            fallos, ultimo = _fallos.get(clave, (0, ahora))
+            resto = BLOQUEO_SEGUNDOS - (ahora - ultimo)
+            if fallos >= maximo and resto > 0:
+                esperas.append(math.ceil(resto))
+        return max(esperas)
 
 
 def registrar_fallo(ip: Optional[str], usuario: str) -> None:
+    global _ultima_poda
     with _cerrojo:
         ahora = time.monotonic()
-        if len(_fallos) > _MAX_CLAVES:
+        # Solo caducadas, y como mucho una vez por minuto: recorrer la tabla en cada fallo sería cuadrático.
+        if len(_fallos) > _MAX_CLAVES and ahora - _ultima_poda >= _PODA_CADA_SEGUNDOS:
+            _ultima_poda = ahora
             for clave, (_, ultimo) in list(_fallos.items()):
                 if ahora - ultimo >= BLOQUEO_SEGUNDOS:
                     del _fallos[clave]
-        clave = _clave(ip, usuario)
-        fallos, ultimo = _fallos.get(clave, (0, ahora))
-        if ahora - ultimo >= BLOQUEO_SEGUNDOS:
-            fallos = 0  # son 5 seguidos, no 5 en la vida
-        _fallos[clave] = (fallos + 1, ahora)
+        for clave, _ in _claves(ip, usuario):
+            fallos, ultimo = _fallos.get(clave, (0, ahora))
+            if ahora - ultimo >= BLOQUEO_SEGUNDOS:
+                fallos = 0  # son seguidos, no los de toda la vida
+            _fallos[clave] = (fallos + 1, ahora)
 
 
 def registrar_acierto(ip: Optional[str], usuario: str) -> None:
     with _cerrojo:
-        _fallos.pop(_clave(ip, usuario), None)
+        _fallos.pop(_claves(ip, usuario)[0][0], None)
 
 
 def admin_exists(conn: sqlite3.Connection) -> bool:

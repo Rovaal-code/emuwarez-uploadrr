@@ -111,6 +111,7 @@ def _login_sin_memoria():
     from emuwarez_uploadrr.web.services import auth_service
     auth_service._fallos.clear()
     auth_service._apuntadas.clear()
+    auth_service._ultima_poda = float("-inf")
     yield
 
 

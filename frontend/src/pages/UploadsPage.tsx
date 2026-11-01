@@ -465,12 +465,10 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
     try { await cancelUploadJob(jobId); await load() } catch { /* ignore */ }
   }
 
-  // No confirmation — retrying only ever creates a brand new 'queued' job
-  // row (same flow as a fresh "Subir a eMuwarez"); the original
-  // failed/cancelled job is never touched. Jumps straight to the new job's
-  // detail page so its progress is visible immediately. Errors are surfaced
-  // (not swallowed) — a silent failure here looked exactly like the button
-  // "doing nothing".
+  // Sin confirmación: reintentar solo crea un trabajo nuevo en cola (el mismo camino que
+  // «Subir a eMuwarez») y no toca el original, fallido o cancelado. Salta a la ficha del
+  // trabajo nuevo para ver su progreso en el momento. Los errores se enseñan, no se tragan:
+  // un fallo silencioso aquí parecía un botón que no hacía nada.
   const [retryError, setRetryError] = useState<string | null>(null)
   const handleRetryQueued = async (job: UploadJob) => {
     setRetryError(null)

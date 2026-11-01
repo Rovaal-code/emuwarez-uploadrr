@@ -1406,22 +1406,40 @@ class TestTelegramRequest(BaseModel):
 # Phase 11D — Automatic tasks scheduler
 # ---------------------------------------------------------------------------
 
+class TaskOptionResponse(BaseModel):
+    clave: str
+    etiqueta: str
+    valor: int
+    minimo: int
+    maximo: int
+    nota: str = ""
+
+
 class ScheduledTaskResponse(BaseModel):
     task_key: str
     name: str
     description: str
     interval_minutes: int
     min_interval_minutes: int
+    run_at: Optional[str] = None
+    timezone: str = ""
     manual_allowed: bool
     enabled: bool
     last_run_at: Optional[str] = None
     last_status: Optional[str] = None
     last_summary: Optional[str] = None
     next_run_at: Optional[str] = None
+    opciones: list[TaskOptionResponse] = []
 
 
 class UpdateScheduledTaskRequest(BaseModel):
-    interval_minutes: int
+    # `run_at` (HH:MM) = cada día a esa hora; sin ella, cada `interval_minutes`.
+    interval_minutes: Optional[int] = None
+    run_at: Optional[str] = None
+
+
+class UpdateTaskOptionsRequest(BaseModel):
+    valores: dict[str, int]
 
 
 class RunScheduledTaskResponse(BaseModel):

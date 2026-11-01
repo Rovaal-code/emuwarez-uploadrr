@@ -1,7 +1,10 @@
 """Maintenance API endpoints — backup, restore and DB maintenance."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+import asyncio
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import FileResponse
 
 from ..dependencies import require_auth
 from ..schemas import (
@@ -49,6 +52,35 @@ def list_backups(current_user: dict = Depends(require_auth)) -> dict:
     from emuwarez_uploadrr.services.backup_service import get_backup_dir, list_config_backups
     backups = list_config_backups()
     return {"ok": True, "backups": backups, "count": len(backups), "backup_dir": str(get_backup_dir())}
+
+
+@router.get("/backups/{name}/download")
+def download_backup(name: str, current_user: dict = Depends(require_auth)) -> FileResponse:
+    """Descarga un backup de la carpeta de backups, por su nombre."""
+    from emuwarez_uploadrr.services.backup_service import resolver_copia
+    ruta = resolver_copia(name)
+    if ruta is None:
+        raise HTTPException(status_code=404, detail="No hay ningún backup con ese nombre")
+    return FileResponse(ruta, media_type="application/gzip", filename=ruta.name)
+
+
+@router.post("/backups/upload")
+async def upload_backup(request: Request, current_user: dict = Depends(require_auth)) -> dict:
+    """Guarda en la carpeta de backups el .tar.gz que va en el cuerpo de la petición (sin multipart).
+    Restaurarlo es cosa de /restore, que lo toma de ahí."""
+    from emuwarez_uploadrr.services.backup_service import LIMITE_SUBIDA_BYTES, CopiaSubida
+    declarado = request.headers.get("content-length", "")
+    if declarado.isdigit() and int(declarado) > LIMITE_SUBIDA_BYTES:
+        raise HTTPException(status_code=413, detail=f"El archivo pasa de {LIMITE_SUBIDA_BYTES // 1024 ** 2} MB")
+    subida = CopiaSubida()
+    try:
+        async for trozo in request.stream():
+            await asyncio.to_thread(subida.escribir, trozo)  # la escritura a disco no frena el bucle
+        return await asyncio.to_thread(subida.terminar)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    finally:
+        subida.descartar()
 
 
 @router.post("/restore")

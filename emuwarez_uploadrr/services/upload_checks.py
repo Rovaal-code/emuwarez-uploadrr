@@ -240,11 +240,15 @@ def run_upload_checks(conn: sqlite3.Connection, item_id: int, *, scope: str = "a
                     else prueba["error"] or "")):
             return done()
 
-        # 1. Renameable — write permission on the file's directory.
+        # 1. Renameable — write permission on the file's directory. Solo cuenta
+        # en la carpeta de subidas: un archivo de la biblioteca no se renombra.
+        from .carpeta_subida import en_carpeta_de_subidas
         parent = os.path.dirname(local_path) if local_path else ""
-        if not add("renameable", "Se puede renombrar", "No se puede renombrar",
-                   bool(parent) and os.access(parent, os.W_OK),
-                   parent or (path or "El elemento no tiene ruta de archivo")):
+        if not en_carpeta_de_subidas(local_path):
+            add_skip("renameable", "No se renombra",
+                     "El archivo de la biblioteca conserva su nombre: el de eMuwarez lo lleva su enlace.")
+        elif not add("renameable", "Se puede renombrar", "No se puede renombrar",
+                     bool(parent) and os.access(parent, os.W_OK), parent):
             return done()
 
         # 1b. Castilian — eMuwarez wants it present, dubbed or at least

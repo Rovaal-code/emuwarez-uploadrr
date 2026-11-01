@@ -206,6 +206,7 @@ function EmptyRemuxShell() {
 
 function RemuxSection({ snapshot, isStaging }: { snapshot: UploadJob['remux_snapshot']; isStaging?: boolean }) {
   const [expanded, setExpanded] = useState<Record<number, boolean>>({})
+  if (snapshot?.omitida) return <p className="form-hint">No se han tocado las pistas ({snapshot.omitida}).</p>
   if (!snapshot || (!snapshot.ordered_tracks?.length && !snapshot.episodes?.length)) {
     if (isStaging) return <GeneratingSpinner text="Generando reordenación de pistas…" />
     return <EmptyRemuxShell />
@@ -221,7 +222,9 @@ function RemuxSection({ snapshot, isStaging }: { snapshot: UploadJob['remux_snap
             expanded={!!expanded[ep.episode_id]}
             onToggle={() => setExpanded(e => ({ ...e, [ep.episode_id]: !e[ep.episode_id] }))}
           >
-            <RemuxTable plan={{ status: 'applied', ordered_tracks: ep.ordered_tracks ?? [], errors: [], warnings: [] }} editable={false} />
+            {ep.omitida
+              ? <p className="form-hint">No se han tocado las pistas ({ep.omitida}).</p>
+              : <RemuxTable plan={{ status: 'applied', ordered_tracks: ep.ordered_tracks ?? [], errors: [], warnings: [] }} editable={false} />}
           </EpisodeAccordionRow>
         ))}
       </>
@@ -625,7 +628,9 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
                   {stagingLoadingRemux
                     ? <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2, flexShrink: 0 }} />
                     : <ValueIcon><AudioCodecValueIcon /></ValueIcon>}
-                  <span className="txt">{job.remux_snapshot ? 'Ver' : 'Pendiente'}</span>
+                  <span className="txt">
+                    {job.remux_snapshot?.omitida ? `Omitida (${job.remux_snapshot.omitida})` : job.remux_snapshot ? 'Ver' : 'Pendiente'}
+                  </span>
                 </ValueChip>
               </FieldRow>
               <FieldRow label="Verificación pre-subida" help="Las comprobaciones que se hacen antes de subir: que el archivo se pueda renombrar o enlazar, que el directorio de salida sea escribible, y que qBittorrent, el repositorio de imágenes y eMuwarez estén disponibles. Si alguna falla (no las que se omiten), la subida no continúa.">

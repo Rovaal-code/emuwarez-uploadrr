@@ -178,22 +178,75 @@ def test_mkvpropedit_uses_shell_false(tmp_path):
             assert kwargs.get("shell") is False or not mock_run.call_args[1].get("shell", False)
 
 
-@pytest.mark.parametrize("codigo,estado", [(1, "applied"), (2, "error")])
-def test_el_error_de_mkvpropedit_dice_el_motivo(tmp_path, codigo, estado):
-    """mkvpropedit escribe "Error: …" en stdout, no en stderr: antes el motivo
-    se perdía, y un aviso (código 1) contaba como fallo."""
-    mkv_file = tmp_path / "Film.2024.mkv"
-    mkv_file.write_bytes(b"fake mkv")
+# ---------------------------------------------------------------------------
+# El título es parte del nombre: solo en la carpeta de subidas y sin otro enlace
+# ---------------------------------------------------------------------------
+
+def _titulo_en(tmp_path, monkeypatch, fichero, *, rc=0, stdout="", ruta=None):
+    from emuwarez_uploadrr.services import carpeta_subida
+    monkeypatch.setattr(carpeta_subida, "RAIZ_SUBIDAS", str(tmp_path / "uploads"))
     conn = _make_conn(tmp_path)
-    item_id = _insert_library_item(conn, title="Film", prepared_path=str(mkv_file))
+    item_id = _insert_library_item(conn, title="Film", prepared_path=str(fichero))
     _insert_proposal(conn, item_id, "Film 2024 1080p BluRay - EMUWAREZ")
-    salida = MagicMock(returncode=codigo, stdout="Error: The file could not be opened for writing.", stderr="")
-    with patch("subprocess.run", return_value=salida), \
+    resultado = MagicMock(returncode=rc, stdout=stdout, stderr="")
+    with patch("subprocess.run", return_value=resultado) as mock_run, \
          patch("emuwarez_uploadrr.services.mkv_title.check_mkvpropedit_available",
                return_value={"available": True, "path": "/usr/bin/mkvpropedit"}):
         from emuwarez_uploadrr.services.mkv_title import apply_internal_title_update, MKV_CONFIRMATION_TOKEN
-        result = apply_internal_title_update(
-            item_id, dry_run=False, apply=True, confirmation=MKV_CONFIRMATION_TOKEN, conn=conn)
-    assert result["status"] == estado
-    if estado == "error":
-        assert result["errors"] == ["Error: The file could not be opened for writing."]
+        r = apply_internal_title_update(item_id, dry_run=False, apply=True,
+                                        confirmation=MKV_CONFIRMATION_TOKEN, conn=conn, ruta=ruta)
+    return r, mock_run
+
+
+def test_no_retitula_un_archivo_de_la_biblioteca(tmp_path, monkeypatch):
+    from emuwarez_uploadrr.services.mkv_title import TITULO_NO_EN_BIBLIOTECA
+    (tmp_path / "media").mkdir()
+    peli = tmp_path / "media" / "Film (2024).mkv"
+    peli.write_bytes(b"fake mkv")
+    r, mock_run = _titulo_en(tmp_path, monkeypatch, peli)
+    assert r["status"] == "blocked" and TITULO_NO_EN_BIBLIOTECA in r["errors"]
+    mock_run.assert_not_called()
+
+
+def test_no_retitula_uno_de_subidas_que_comparte_un_torrent(tmp_path, monkeypatch):
+    (tmp_path / "uploads").mkdir()
+    peli = tmp_path / "uploads" / "Film.2024.mkv"
+    peli.write_bytes(b"fake mkv")
+    os.link(peli, tmp_path / "seed.mkv")
+    r, mock_run = _titulo_en(tmp_path, monkeypatch, peli, ruta=str(peli))
+    assert r["status"] == "blocked" and "enlaces duros" in r["errors"][0]
+    mock_run.assert_not_called()
+
+
+def test_retitula_uno_de_subidas_que_no_comparte_nadie(tmp_path, monkeypatch):
+    (tmp_path / "uploads").mkdir()
+    copia = tmp_path / "uploads" / "Film.2024.mkv"
+    copia.write_bytes(b"fake mkv")
+    r, mock_run = _titulo_en(tmp_path, monkeypatch, copia, ruta=str(copia))
+    assert r["status"] == "applied"
+    assert mock_run.call_args[0][0][:2] == ["mkvpropedit", str(copia)]
+
+
+def test_el_error_de_mkvpropedit_sale_de_stdout(tmp_path, monkeypatch):
+    """mkvpropedit escribe "Error: …" en stdout; con stderr el motivo se perdía."""
+    (tmp_path / "uploads").mkdir()
+    copia = tmp_path / "uploads" / "Film.2024.mkv"
+    copia.write_bytes(b"fake mkv")
+    r, _ = _titulo_en(tmp_path, monkeypatch, copia, rc=2, stdout="Error: no es un Matroska", ruta=str(copia))
+    assert r["status"] == "error" and r["errors"] == ["Error: no es un Matroska"]
+
+
+def test_los_avisos_de_mkvpropedit_no_son_un_fallo(tmp_path, monkeypatch):
+    """El código 1 son avisos con el cambio ya escrito."""
+    (tmp_path / "uploads").mkdir()
+    copia = tmp_path / "uploads" / "Film.2024.mkv"
+    copia.write_bytes(b"fake mkv")
+    r, _ = _titulo_en(tmp_path, monkeypatch, copia, rc=1, stdout="Warning: algo", ruta=str(copia))
+    assert r["status"] == "applied"
+
+
+def test_titulo_actual_sin_poder_leer_el_mkv_es_none():
+    from emuwarez_uploadrr.services.mkv_title import titulo_actual
+    with patch("emuwarez_uploadrr.services.mkv_remux.read_tracks_json",
+               return_value={"ok": False, "error": "no es Matroska"}):
+        assert titulo_actual("/no/existe.mkv") is None

@@ -11,10 +11,12 @@
  * Lo que cuesta cada una, que es de donde sale el valor de fábrica:
  *
  *   renombrar   se edita la cabecera en el sitio (mkvpropedit). No copia los
- *               datos, conserva los hardlinks con el cliente de torrent y es
- *               casi instantáneo por grande que sea el archivo.
+ *               datos y es casi instantáneo por grande que sea el archivo.
  *   reordenar   obliga a rehacer el contenedor entero (mkvmerge) y a sustituir
- *               el archivo: rompe los hardlinks y tarda según el tamaño.
+ *               el archivo, y tarda según el tamaño.
+ *
+ * Un archivo que comparte un torrent (hardlink) no se escribe: renombrar va a
+ * una copia por reflink y reordenar se omite (services/upload_queue.py).
  *
  * La lista es copia de services/mkv_remux.py::ETIQUETAS_MODO_PISTAS y la
  * vigila tests/test_copias_frontend.py, que es lo que evita que Configuración

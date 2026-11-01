@@ -37,24 +37,27 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
     con tope de 15 s.
   - #120: ruff `E9,F` en la CI.
 - **Versión 0.14.0** publicada con todo lo anterior.
+- **Oleada 3, pendientes del asistente y de faltantes (#122):** nombres del pack que no se desfasan al cambiar el
+  idioma (`versionDatosPack`), avisos del plan sin repetir en el paso de temporada y el total real de `/missing`.
+- **Oleada 3, registro de ajustes:** `services/ajustes_registro.py` declara cada ajuste sencillo de Configuración
+  (campo del API, clave, tipo, defecto, opciones o mínimo, secreto). De él salen los defectos y la conversión del
+  GET, la validación y la escritura del PUT, el enmascarado y `es_secreto`. Lo que no cabe en un tipo sencillo
+  (listas JSON, hosts de imágenes, eventos por canal) está en `FUERA_DEL_REGISTRO` de `web/api/settings.py`, y un
+  test falla si aparece un campo nuevo que no esté en uno de los dos sitios. Faltan las lecturas sueltas de sí/no
+  fuera de la API (p. ej. `series.ignore_specials` en `library.py`).
 - **Biblioteca, vista de pósters en negro al desplazarse deprisa:** `RejillaVirtual` repintaba sin fin si su medida
   oscilaba (error 185 de React) y la pantalla quedaba en negro hasta F5. Las correcciones seguidas ahora tienen
   tope, y cada página va dentro de `LimiteDeErrores`, que enseña un mensaje en vez de dejar la pantalla en negro.
   Reproducido con un arnés de navegador forzando la oscilación; no se ha visto aún qué la provoca en la aplicación
   real (si vuelve a fallar, la consola dirá «Error de render» con la pila de componentes).
 
-## En curso (oleada 3)
-
-- `fix/pendientes-asistente-y-faltantes`: nombres del pack desfasados tras cambiar el idioma (`versionDatosPack`),
-  avisos del plan repetidos en el paso de temporada y el total de `/missing`, que era el tamaño de la página.
-- `refactor/registro-de-ajustes`: un registro declarativo de ajustes (clave, tipo, valor por defecto, valores
-  permitidos, secreto) del que leen `services/settings.py` y la API; mismo comportamiento.
-
 ## Siguiente (oleada 3)
 
 1. Subida por pasos con nombre y reintento desde el paso que falló.
 2. Partir `library.py`, `upload_execution.py` y `cli.py`.
 3. Partir `UploadWizardModal.tsx` y `SettingsPage.tsx`; los estilos en línea, a clases.
+   Al partir el asistente: recargar «Ver nombre de todos los capítulos» y «Ver pistas» con el idioma confirmado si
+   estaban abiertos al cambiar el idioma del pack (hoy se quedan vacíos hasta reabrirlos).
 4. `httpx` y un solo limitador de eMuwarez compartido (30 peticiones por minuto).
 5. ESLint `react-hooks`.
 

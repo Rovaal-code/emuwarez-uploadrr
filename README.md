@@ -222,7 +222,7 @@ los dos lados, cambia el otro a la vez.
 
 - [`docs/DEPLOYMENT_DOCKER.md`](docs/DEPLOYMENT_DOCKER.md): despliegue Docker paso a paso y troubleshooting.
 - [`docs/source_engine.md`](docs/source_engine.md): motor de detección de source y nomenclatura.
-- [`README_CLI_READY.md`](README_CLI_READY.md): referencia de la CLI y del modelo SQLite.
+- [`README_CLI_READY.md`](README_CLI_READY.md): referencia de la CLI, generada con `scripts/referencia_cli.py`.
 
 ## Stack
 

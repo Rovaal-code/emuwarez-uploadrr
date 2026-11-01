@@ -437,7 +437,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
 
   function applyFilters() {
     setOffset(0)
-    load()
+    setDebouncedSearch(search)
   }
 
   const items = data?.items ?? []
@@ -457,6 +457,8 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // se pintan siempre, para no perder lo que tienen abierto al salir de vista.
   const listaRef = useRef<HTMLDivElement>(null)
   // Los pósters, igual: solo las filas de tarjetas que se ven (RejillaVirtual).
+  // Enter aplica la búsqueda ya, sin esperar al retardo. El cambio de `debouncedSearch` es lo que recarga: llamar
+  // a load() aquí lo hacía con la búsqueda de antes y luego otra vez con la nueva.
   const rejillaRef = useRef<HTMLDivElement>(null)
   const cabeceraRef = useRef<HTMLTableSectionElement>(null)
   const [desplegadas, setDesplegadas] = useState<ReadonlySet<number>>(() => new Set())

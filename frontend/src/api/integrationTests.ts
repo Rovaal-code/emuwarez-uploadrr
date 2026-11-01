@@ -31,13 +31,6 @@ export function testArrConnection(params: {
   return api.post<IntegrationTestResult>('/integrations/test/arr', params)
 }
 
-export function testUploadrrConnection(params: {
-  path?: string
-  python_path?: string
-} = {}): Promise<IntegrationTestResult> {
-  return api.post<IntegrationTestResult>('/integrations/test/uploadrr', params)
-}
-
 export function testQbitConnection(params: {
   url?: string
   port?: string

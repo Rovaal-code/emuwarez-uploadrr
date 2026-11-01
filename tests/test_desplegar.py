@@ -23,7 +23,13 @@ RAIZ = pathlib.Path(__file__).resolve().parents[1]
 _DOCKER = r"""#!/bin/sh
 case "$1" in
   build) for a; do case "$a" in APP_COMMIT=*) echo "${a#*=}" > "$FALSO/sello" ;; esac; done
-         cat > /dev/null; echo build >> "$FALSO/docker.log" ;;
+         cat > /dev/null; echo build >> "$FALSO/docker.log"
+         # Una versión más nueva se publica mientras se construye.
+         if [ -f "$FALSO/nueva" ]; then
+           git clone -q "$FALSO/manifiesto.git" "$FALSO/m2"
+           printf '{"version": "99.0.0", "commit": "x"}' > "$FALSO/m2/latest.json"
+           git -C "$FALSO/m2" commit -qam nueva && git -C "$FALSO/m2" push -q
+         fi ;;
   image) case "$*" in *RepoDigests*) echo "x@sha256:abc" ;; *) cat "$FALSO/sello" ;; esac ;;
   push)  [ "${2#*:}" != "$FALLA" ] || exit 1
          echo "push ${2#*:} $(git --git-dir="$FALSO/origen.git" tag)" >> "$FALSO/docker.log" ;;
@@ -141,3 +147,15 @@ def test_una_etiqueta_en_otro_commit_para_antes_de_construir(entorno):
     assert r.returncode == 1
     assert "ya está en GitHub" in r.stderr
     assert _docker(entorno) == []
+
+
+def test_una_version_publicada_mientras_se_construye_no_mueve_las_etiquetas(entorno):
+    (entorno.dir / "nueva").write_text("")
+
+    r = _desplegar(entorno, "--notas", "Mejoras")
+
+    assert r.returncode == 1
+    assert "más nueva" in r.stderr
+    assert _docker(entorno) == [["build"], ["push", entorno.commit]]
+    assert entorno.git("--git-dir=origen.git", "tag") == ""
+    assert _manifiesto(entorno)["version"] == "99.0.0"

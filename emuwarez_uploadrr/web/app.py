@@ -149,8 +149,8 @@ contenido usando Uploadrr.
 ## Notas
 
 - CLI disponible: `python3 emuwarez_uploader.py --help`
-- La creación de peticiones eMuwarez está preparada como stub y bloqueada
-  hasta capturar la request real desde DevTools/Network.
+- UNIT3D no permite crear peticiones por API: «Crear petición» abre el
+  formulario de eMuwarez ya rellenado.
 """
 
 # Path to the built frontend (frontend/dist relative to repo root)

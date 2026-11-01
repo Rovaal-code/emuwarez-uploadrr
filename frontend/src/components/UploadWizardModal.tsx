@@ -2465,7 +2465,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
       )}
 
       {confirmandoCierre && (
-        <Modal titulo="¿Descartar los cambios?" onClose={() => setConfirmandoCierre(false)} style={{ maxWidth: 420 }}>
+        <Modal titulo="¿Descartar los cambios?" onClose={() => setConfirmandoCierre(false)} className="modal-estrecho">
           <div className="modal-body">
             <p className="text-muted">
               Has cambiado datos de la subida y todavía no se ha encolado. Si cierras ahora se perderán.

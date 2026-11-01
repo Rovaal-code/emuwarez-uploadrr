@@ -113,14 +113,11 @@ def test_queue_rehace_la_propuesta_automatica_de_reglas_viejas(db_conn, tmp_path
 
     result = uq.queue_upload_for_item(iid, conn=db_conn)
     job_id = result["job"]["id"]
-    try:
-        row = db_conn.execute("SELECT nomenclature_proposal_id FROM upload_jobs WHERE id=?",
-                              (job_id,)).fetchone()
-        assert row["nomenclature_proposal_id"] not in (None, vieja)
-        estado = db_conn.execute("SELECT status FROM nomenclature_proposals WHERE id=?", (vieja,)).fetchone()
-        assert estado["status"] == "expired"
-    finally:
-        uq.cancel_queued_timer(job_id)
+    row = db_conn.execute("SELECT nomenclature_proposal_id FROM upload_jobs WHERE id=?",
+                          (job_id,)).fetchone()
+    assert row["nomenclature_proposal_id"] not in (None, vieja)
+    estado = db_conn.execute("SELECT status FROM nomenclature_proposals WHERE id=?", (vieja,)).fetchone()
+    assert estado["status"] == "expired"
 
 
 def test_queue_conserva_la_propuesta_editada_a_mano(db_conn, tmp_path):
@@ -132,12 +129,9 @@ def test_queue_conserva_la_propuesta_editada_a_mano(db_conn, tmp_path):
 
     result = uq.queue_upload_for_item(iid, conn=db_conn)
     job_id = result["job"]["id"]
-    try:
-        row = db_conn.execute("SELECT nomenclature_proposal_id FROM upload_jobs WHERE id=?",
-                              (job_id,)).fetchone()
-        assert row["nomenclature_proposal_id"] == manual
-    finally:
-        uq.cancel_queued_timer(job_id)
+    row = db_conn.execute("SELECT nomenclature_proposal_id FROM upload_jobs WHERE id=?",
+                          (job_id,)).fetchone()
+    assert row["nomenclature_proposal_id"] == manual
 
 
 def test_comprobacion_previa_no_falla_por_una_propuesta_bloqueada_de_reglas_viejas(db_conn, tmp_path, monkeypatch):
@@ -391,15 +385,12 @@ def test_queue_retry_fija_la_vigente_si_la_del_original_era_de_reglas_viejas(db_
     db_conn.commit()
 
     result = uq.queue_retry_for_job(original_id, conn=db_conn)
-    try:
-        row = db_conn.execute(
-            "SELECT nomenclature_proposal_id, nomenclature_snapshot_json FROM upload_jobs WHERE id=?",
-            (result["job"]["id"],),
-        ).fetchone()
-        assert row["nomenclature_proposal_id"] not in (None, vieja)
-        assert json.loads(row["nomenclature_snapshot_json"])["id"] == row["nomenclature_proposal_id"]
-    finally:
-        uq.cancel_queued_timer(result["job"]["id"])
+    row = db_conn.execute(
+        "SELECT nomenclature_proposal_id, nomenclature_snapshot_json FROM upload_jobs WHERE id=?",
+        (result["job"]["id"],),
+    ).fetchone()
+    assert row["nomenclature_proposal_id"] not in (None, vieja)
+    assert json.loads(row["nomenclature_snapshot_json"])["id"] == row["nomenclature_proposal_id"]
 
 
 def test_queue_retry_conserva_la_propuesta_editada_a_mano_aunque_haya_otra_posterior(db_conn, tmp_path):
@@ -413,12 +404,9 @@ def test_queue_retry_conserva_la_propuesta_editada_a_mano_aunque_haya_otra_poste
     db_conn.commit()
 
     result = uq.queue_retry_for_job(original_id, conn=db_conn)
-    try:
-        row = db_conn.execute("SELECT nomenclature_proposal_id FROM upload_jobs WHERE id=?",
-                              (result["job"]["id"],)).fetchone()
-        assert row["nomenclature_proposal_id"] == manual
-    finally:
-        uq.cancel_queued_timer(result["job"]["id"])
+    row = db_conn.execute("SELECT nomenclature_proposal_id FROM upload_jobs WHERE id=?",
+                          (result["job"]["id"],)).fetchone()
+    assert row["nomenclature_proposal_id"] == manual
 
 
 def test_comprobacion_previa_de_un_reintento_conserva_la_propuesta_manual(db_conn, tmp_path, monkeypatch):
@@ -432,13 +420,10 @@ def test_comprobacion_previa_de_un_reintento_conserva_la_propuesta_manual(db_con
     db_conn.commit()
     result = uq.queue_retry_for_job(original_id, conn=db_conn)
     job_id = result["job"]["id"]
-    try:
-        monkeypatch.setattr(uq, "_season_upload_preconditions", lambda conn: [])
-        assert uq._check_generic_upload_preconditions(job_id, iid, False, db_conn) is True
-        row = db_conn.execute("SELECT nomenclature_proposal_id FROM upload_jobs WHERE id=?", (job_id,)).fetchone()
-        assert row["nomenclature_proposal_id"] == manual
-    finally:
-        uq.cancel_queued_timer(job_id)
+    monkeypatch.setattr(uq, "_season_upload_preconditions", lambda conn: [])
+    assert uq._check_generic_upload_preconditions(job_id, iid, False, db_conn) is True
+    row = db_conn.execute("SELECT nomenclature_proposal_id FROM upload_jobs WHERE id=?", (job_id,)).fetchone()
+    assert row["nomenclature_proposal_id"] == manual
 
 
 def test_comprobacion_previa_sin_propuesta_guardada_no_crea_ninguna(db_conn, tmp_path, monkeypatch):

@@ -14,8 +14,8 @@ SAFETY CONTRACT: same as nomenclature.py / mkv_remux.py / upload_execution.py
 — every real filesystem/subprocess step still goes through their own
 confirmation-token-gated apply functions; this module only orchestrates them
 in sequence and records progress/failure on the job row. El archivo de la
-biblioteca nunca cambia de nombre ni de título interno, y no se escribe en él
-si lo comparte otro enlace (ver _preparar_fichero).
+biblioteca nunca cambia de nombre, y no se escribe en él si lo comparte otro
+enlace (ver _preparar_fichero).
 """
 from __future__ import annotations
 
@@ -749,17 +749,15 @@ def _preparar_fichero(job_id: int, item_id: int, origen: str, destino: str, modo
     """Pone `origen` en `destino` (carpeta de subidas, ya libre) sin romper nunca
     un torrent que lo siembre.
 
-    - Las pistas se editan en el original solo si no lo comparte nadie
+    - Pistas y título interno se editan en el original si no lo comparte nadie
       (st_nlink == 1). Reordenar uno compartido se omite: sería reescribirlo.
-    - El título interno es parte del nombre: en el original solo si además
-      está en la carpeta de subidas; en la biblioteca, nunca.
-    - Lo demás va a una copia por reflink en `destino`. Sin reflink, o si la
-      edición de la copia falla, se omite con un aviso y se enlaza tal cual.
+    - Si lo comparte, van a una copia por reflink en `destino`. Sin reflink, o
+      si la edición de la copia falla, se omiten con un aviso y se enlaza tal cual.
 
     Devuelve {metodo, original_editado, pistas (ordered_tracks o None), omitida}.
     Lanza NoSePudoPreparar si falla la edición de las pistas del original.
     """
-    from .carpeta_subida import NoSePudoPreparar, clonar, en_carpeta_de_subidas, enlace_simple
+    from .carpeta_subida import NoSePudoPreparar, clonar, enlace_simple
     from .mkv_remux import (apply_remux, build_remux_plan, idiomas_elegidos, toca_el_fichero,
                             REMUX_CONFIRMATION_TOKEN)
     from .mkv_title import (apply_internal_title_update, preview_internal_title_update,
@@ -821,7 +819,7 @@ def _preparar_fichero(job_id: int, item_id: int, origen: str, destino: str, modo
     # Con el nombre de eMuwarez de `destino`, no con el de la biblioteca.
     deseado = preview_internal_title_update(item_id, conn=conn, ruta=destino).get("internal_mkv_title")
     titulo_en_copia = bool(deseado) and titulo_actual(origen) != deseado
-    if titulo_en_copia and motivo is None and en_carpeta_de_subidas(origen):
+    if titulo_en_copia and motivo is None:
         fallo = titulo(origen)
         if fallo:
             log("warning", f"no se pudo poner el título interno: {fallo}")

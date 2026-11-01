@@ -2,7 +2,7 @@
  * El desplegable de filtro de una columna con selección múltiple.
  */
 import { describe, it, expect } from 'vitest'
-import { siguienteSeleccion, resumenFiltro, opcionesQueCoinciden } from '../filtroColumna'
+import { siguienteSeleccion, siguienteExclusion, resumenFiltro, opcionesQueCoinciden } from '../filtroColumna'
 
 describe('siguienteSeleccion', () => {
   it('marcar añade y desmarcar quita, sin tocar lo demás', () => {
@@ -57,5 +57,21 @@ describe('opcionesQueCoinciden', () => {
 
   it('«Desmarcar todo» se queda aunque no coincida nada', () => {
     expect(valores('zzz')).toEqual([''])
+  })
+})
+
+describe('ocultar un valor', () => {
+  it('ocultar pasa de marcado a oculto, y pulsarlo otra vez lo suelta', () => {
+    expect(siguienteExclusion(['B'], 'B')).toEqual(['!B'])
+    expect(siguienteExclusion(['A', '!B'], 'B')).toEqual(['A'])
+  })
+
+  it('marcar un valor oculto lo pasa a marcado', () => {
+    expect(siguienteSeleccion(['!B'], 'B')).toEqual(['B'])
+  })
+
+  it('el resumen dice «sin» y usa el nombre de la columna', () => {
+    const opciones = [{ value: '', label: 'Todos' }, { value: 'A', label: 'A' }, { value: 'B', label: 'Grupo B' }]
+    expect(resumenFiltro(['!B', 'A'], opciones)).toBe('A, sin Grupo B')
   })
 })

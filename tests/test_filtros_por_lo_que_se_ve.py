@@ -148,3 +148,41 @@ def test_aportes_solo_cuenta_lo_que_se_tiene():
 def test_sin_filtros_no_toca_nada():
     filas = [_fila(1), _fila(2, 1)]
     assert filtrar_por_lo_que_se_ve(filas, provider=[], emu=None) is filas
+
+
+# Un valor con «!» delante oculta en vez de elegir.
+FILAS = [
+    {"id": 1, "release_group": "A", "resolution": "1080p", "source": None, "provider_label": "Netflix"},
+    {"id": 2, "release_group": "B", "resolution": "1080p", "source": None, "provider_label": None},
+    {"id": 3, "release_group": None, "resolution": "720p", "source": None, "provider_label": None},
+]
+
+
+def _ids(**filtros):
+    return [f["id"] for f in filtrar_por_lo_que_se_ve(FILAS, **filtros)]
+
+
+def test_un_grupo_oculto_no_sale_y_los_que_no_tienen_grupo_si():
+    assert _ids(release_group=["!B"]) == [1, 3]
+
+
+def test_ocultar_se_combina_con_elegir_y_con_otras_columnas():
+    assert _ids(release_group=["!B"], resolution=["1080p"]) == [1]
+    assert _ids(release_group=["A", "!B"]) == [1]
+
+
+def test_ocultar_un_proveedor():
+    assert _ids(provider=["!Netflix"]) == [2, 3]
+
+
+def test_list_library_oculta_en_sql(isolated_db):
+    from emuwarez_uploadrr.database import connect, db_path, init_db
+    from emuwarez_uploadrr.services.library import list_library
+
+    conn = connect(db_path()); init_db(conn)
+    for titulo, grupo in (("uno", "A"), ("dos", "B"), ("tres", None)):
+        conn.execute(
+            "INSERT INTO library_items (item_type, title, local_status, release_group) "
+            "VALUES ('movie', ?, 'Disponible', ?)", (titulo, grupo))
+    conn.commit()
+    assert sorted(r["title"] for r in list_library(conn, release_group=["!B"])) == ["tres", "uno"]

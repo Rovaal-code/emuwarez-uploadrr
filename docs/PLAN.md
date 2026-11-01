@@ -49,8 +49,9 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   oscilaba (error 185 de React) y la pantalla quedaba en negro hasta F5. Las correcciones seguidas ahora tienen
   tope, y cada página va dentro de `LimiteDeErrores`, que enseña un mensaje en vez de dejar la pantalla en negro.
   Reproducido con un arnés de navegador forzando la oscilación; no se ha visto aún qué la provoca en la aplicación
-  real (si vuelve a fallar, la consola dirá «RejillaVirtual no se calma» con las medidas que saltaban, o
-  «Error de render» con la pila de componentes si es otra cosa).
+  real. Cuando el tope corta una oscilación, la consola avisa una vez con «RejillaVirtual no se calma: 3×300 →
+  3×330 → …» y el ancho, el alto real, el zoom y el scroll; si el fallo es de otro componente, dirá «Error de render»
+  con la pila de componentes. Pendiente: mirar ese aviso en la aplicación real.
 - **Oleada 3, subida por pasos (#127):** `_run_queued_job` es un bucle sobre `PASOS` (`upload_queue.py`): comprobar,
   nombre, preparar e iniciar, cada uno con su `stage` (que es su punto de cancelación), su fila de Fases y lo que
   deja en `_Trabajo` para el siguiente. Mismo comportamiento que antes; lo fijan
@@ -60,19 +61,20 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   `biblioteca.py` (instancias, sync, biblioteca, peticiones, faltantes, *arr), `nomenclatura.py` (nomenclatura y título
   MKV), `subida.py` (subida, tareas, logs), `web.py` (comandos `web`) y `mantenimiento.py` (mantenimiento y demo).
   `emuwarez_uploadrr.cli:main` sigue siendo el entry point; el código se movió sin cambios (`--help` idéntico).
+- **Oleada 3, subida por pasos con reintento (#126):** sobre `PASOS` (#127), cada subida enseña sus cuatro pasos con
+  nombre (comprobar y poner el nombre, preparar los ficheros, verificar antes de subir, subir con Uploadrr) y cuál se
+  paró (`upload_jobs.etapa_parada`, `services/subida_pasos.py`). Un reintento de una subida que ya había preparado los ficheros reanuda desde la
+  verificación y reutiliza la preparación si sigue valiendo en disco; «Reintentar desde el principio» lo rehace todo.
+  El reintento ahora también conserva las elecciones del pack (`season_overrides_json`).
 
 ## Siguiente (oleada 3)
 
-1. Reintento desde el paso que falló, sobre `PASOS`. Hoy un reintento lo rehace todo, también la carpeta de
-   subidas (`carpeta_subida` la rehace si existe). Lo caro es «preparar» (pistas y copias reflink), así que lo que
-   vale es saltárselo cuando falló «iniciar» y lo preparado sigue valiendo: mismos nombres, mismos cambios de
-   pistas y el original sin tocar desde entonces.
-2. Partir `library.py` y `upload_execution.py`.
-3. Partir `UploadWizardModal.tsx` y `SettingsPage.tsx`; los estilos en línea, a clases.
+1. Partir `library.py` y `upload_execution.py`.
+2. Partir `UploadWizardModal.tsx` y `SettingsPage.tsx`; los estilos en línea, a clases.
    Al partir el asistente: recargar «Ver nombre de todos los capítulos» y «Ver pistas» con el idioma confirmado si
    estaban abiertos al cambiar el idioma del pack (hoy se quedan vacíos hasta reabrirlos).
-4. `httpx` y un solo limitador de eMuwarez compartido (30 peticiones por minuto).
-5. ESLint `react-hooks`.
+3. `httpx` y un solo limitador de eMuwarez compartido (30 peticiones por minuto).
+4. ESLint `react-hooks`.
 
 ## Oleada 4
 
@@ -94,6 +96,8 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
 
 ## Aplazado / ideas
 
+- Reanudar a mitad de Uploadrr-EMU (capturas, torrent, subida al tracker): hace falta que el subproceso diga qué
+  pasos terminó y cambiar el contrato en los dos repositorios a la vez. Hoy un reintento reanuda solo en la verificación.
 - Límite de concurrencia compartido entre el CLI y el servidor (hoy cada proceso tiene el suyo, en memoria). Hace
   falta un cerrojo en fichero o en la base.
 - Sugerencia de proveedor por TMDb con el `tmdb_id` de la serie para episodios antiguos sin el suyo.

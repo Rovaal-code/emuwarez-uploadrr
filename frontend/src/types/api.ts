@@ -537,12 +537,24 @@ export interface UploadProgressState {
 
 // Phase 6A — Upload preflight
 
+// Un paso con nombre de una subida (services/subida_pasos.py).
+export interface PasoSubida {
+  clave: string
+  nombre: string
+  // hecho | en_curso | fallido | cancelado | pendiente
+  estado: string
+}
+
 export interface UploadJob {
   id?: number
   library_item_id?: number
   request_item_id?: number
   status: string
   stage?: string
+  // Los pasos con nombre, y desde cuál reanudaría un reintento (null: desde el principio).
+  pasos?: PasoSubida[]
+  reintento_desde?: string | null
+  reintento_desde_nombre?: string | null
   title?: string
   source_path?: string
   prepared_path?: string

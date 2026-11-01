@@ -62,6 +62,21 @@ DELETABLE_STATUSES: frozenset[str] = TERMINAL_STATUSES
 
 
 
+# Las fases en que puede pararse una subida y que cuentan como «el paso que falló»
+# (ver subida_pasos.py). Una subida que se cancela o falla estando en otra (en
+# cola, ya terminada) no tiene paso al que volver.
+ETAPAS_DE_PARADA: tuple[str, ...] = (
+    "nomenclature", "remux", "verificacion_presubida", "preflight", "config_staging", "running", "finalizing")
+
+
+def asignacion_etapa_parada() -> tuple[str, list[str]]:
+    """El trozo de UPDATE que apunta dónde se paró una subida: la fase que tenía antes del UPDATE
+    (en SQLite la parte derecha lee la fila antigua), sin pisar la ya apuntada. Con sus parámetros."""
+    marcas = ",".join("?" * len(ETAPAS_DE_PARADA))
+    return (f"etapa_parada = COALESCE(etapa_parada, CASE WHEN stage IN ({marcas}) THEN stage END)",
+            list(ETAPAS_DE_PARADA))
+
+
 def _ahora() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -108,6 +123,12 @@ def escribir_estado(
     conn = conn or connect()
     try:
         asignaciones = ", ".join(f"{k} = ?" for k in campos)
+        if status in ("failed", "cancelled"):
+            # Dónde se paró (sin pisar la ya apuntada si falla dos veces seguidas).
+            trozo, parametros_parada = asignacion_etapa_parada()
+            asignaciones += ", " + trozo
+        else:
+            parametros_parada = []
         if desde is not None:
             estados = sorted(set(desde))
             condicion = f" AND status IN ({','.join('?' * len(estados))})"
@@ -117,7 +138,7 @@ def escribir_estado(
                          if estados else "")
         cur = conn.execute(
             f"UPDATE upload_jobs SET {asignaciones} WHERE id = ?{condicion}",
-            [*campos.values(), job_id, *estados],
+            [*campos.values(), *parametros_parada, job_id, *estados],
         )
         conn.commit()
         escribio = cur.rowcount > 0
@@ -137,5 +158,5 @@ def escribir_estado(
 __all__ = [
     "ALL_STATUSES", "VISIBLE_STATUSES", "PREPARATORY_STATUSES", "TERMINAL_STATUSES",
     "ACTIVE_JOB_STATUSES", "CANCELLABLE_STATUSES", "RETRYABLE_STATUSES",
-    "DELETABLE_STATUSES", "escribir_estado",
+    "DELETABLE_STATUSES", "ETAPAS_DE_PARADA", "asignacion_etapa_parada", "escribir_estado",
 ]

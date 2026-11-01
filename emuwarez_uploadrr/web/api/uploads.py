@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -22,6 +23,7 @@ from ...services.upload_execution import (
     retry_upload_job,
     compute_progress_phase,
 )
+from ...services.subida_pasos import NOMBRES, pasos_de_subida, reanudar_desde
 from ...services.upload_queue import get_queue_positions
 from ..dependencies import require_auth
 from ..runtime import _db_path
@@ -185,6 +187,9 @@ def _job_to_detail(
         runtime_type=_extract_runtime_type(j),
         command_preview=_extract_command_preview(j),
         progress_phase=compute_progress_phase(j.get("status", ""), j.get("stage")),
+        pasos=pasos_de_subida(j.get("status"), j.get("stage"), j.get("etapa_parada")),
+        reintento_desde=_reintento_desde(j),
+        reintento_desde_nombre=NOMBRES.get(_reintento_desde(j) or ""),
         queue_position=queue_position,
         queue_total=queue_total,
         nomenclature_snapshot=_extract_json_dict(j, "nomenclature_snapshot_json"),
@@ -192,6 +197,10 @@ def _job_to_detail(
         checks_snapshot=_extract_json_dict(j, "checks_snapshot_json"),
         progress=_extract_json_dict(j, "progress_json"),
     )
+
+
+def _reintento_desde(j: dict) -> Optional[str]:
+    return reanudar_desde(j.get("status"), j.get("etapa_parada"))
 
 
 @router.post("/library/{item_id}/upload/preflight", response_model=UploadPreflightResponse)
@@ -528,12 +537,12 @@ def retry_upload(
 
 
 @router.post("/uploads/{job_id}/retry-queued", response_model=UploadQueueResponse)
-def retry_upload_queued(job_id: int, current_user: dict = Depends(require_auth)):
+def retry_upload_queued(job_id: int, desde_el_principio: bool = False, current_user: dict = Depends(require_auth)):
     """Retry straight into the same queued flow "Subir a eMuwarez" uses — no confirmation token, since it only ever creates a
     brand new job row (the original failed/cancelled job is never touched)."""
     from ...services.upload_queue import queue_retry_for_job
     with _get_conn() as conn:
-        result = queue_retry_for_job(job_id, conn=conn)
+        result = queue_retry_for_job(job_id, conn=conn, desde_el_principio=desde_el_principio)
 
     job = result.get("job")
     if result.get("status") != "queued":

@@ -60,6 +60,13 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   `biblioteca.py` (instancias, sync, biblioteca, peticiones, faltantes, *arr), `nomenclatura.py` (nomenclatura y título
   MKV), `subida.py` (subida, tareas, logs), `web.py` (comandos `web`) y `mantenimiento.py` (mantenimiento y demo).
   `emuwarez_uploadrr.cli:main` sigue siendo el entry point; el código se movió sin cambios (`--help` idéntico).
+- **Oleada 3, asistente de subida partido (#132):** `UploadWizardModal.tsx` queda en el marco (pasos y cierre) y lo
+  demás vive en `components/asistente/`: el estado y la lógica en `useAsistente.ts` (con `useComprobaciones.ts` y
+  `useDetallesTemporada.ts`), un componente por paso (`PasoSeleccion`, `PasoArchivo`, `PasoTemporada`, `PasoSubida`,
+  `PasoSubidaTanda`) y las piezas compartidas (`RemuxTable`, `MediaInfoTable`, `Capitulos`, `piezas`,
+  `constantes`). Comportamiento igual: lo fija `components/__tests__/UploadWizardModal.test.tsx` (jsdom). Arreglado
+  de paso: «Ver nombre de todos los capítulos» y «Ver Pistas», si estaban abiertos al cambiar el idioma del pack, se
+  recargan con el idioma confirmado en vez de quedarse vacíos.
 
 ## Siguiente (oleada 3)
 
@@ -68,9 +75,7 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
    vale es saltárselo cuando falló «iniciar» y lo preparado sigue valiendo: mismos nombres, mismos cambios de
    pistas y el original sin tocar desde entonces.
 2. Partir `library.py` y `upload_execution.py`.
-3. Partir `UploadWizardModal.tsx` y `SettingsPage.tsx`; los estilos en línea, a clases.
-   Al partir el asistente: recargar «Ver nombre de todos los capítulos» y «Ver pistas» con el idioma confirmado si
-   estaban abiertos al cambiar el idioma del pack (hoy se quedan vacíos hasta reabrirlos).
+3. Partir `SettingsPage.tsx`; los estilos en línea, a clases.
 4. `httpx` y un solo limitador de eMuwarez compartido (30 peticiones por minuto).
 5. ESLint `react-hooks`.
 

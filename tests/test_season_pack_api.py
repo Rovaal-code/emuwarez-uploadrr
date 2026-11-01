@@ -150,8 +150,6 @@ def test_upload_queue_endpoint_persists_season_overrides(client, auth_headers, i
     """Confirms UploadQueueBody's new source/provider/tag fields actually
     reach the DB for a season target, end to end through the real endpoint —
     the service layer already covers queue_upload_for_item() directly."""
-    from emuwarez_uploadrr.services import upload_queue as uq
-
     season_id = _seed_season_with_episode(isolated_db, tmp_path)
     resp = client.post(
         f"/api/library/{season_id}/upload/queue",
@@ -160,15 +158,12 @@ def test_upload_queue_endpoint_persists_season_overrides(client, auth_headers, i
     )
     assert resp.status_code == 200
     job_id = resp.json()["job"]["id"]
-    try:
-        conn = connect(isolated_db / "emuwarez_uploadrr.db")
-        row = conn.execute("SELECT season_overrides_json FROM upload_jobs WHERE id=?", (job_id,)).fetchone()
-        conn.close()
-        import json as _json
-        assert _json.loads(row["season_overrides_json"]) == {
-            "source": "BluRay", "provider": None, "tag": "MYTAG", "title": None}
-    finally:
-        uq.cancel_queued_timer(job_id)
+    conn = connect(isolated_db / "emuwarez_uploadrr.db")
+    row = conn.execute("SELECT season_overrides_json FROM upload_jobs WHERE id=?", (job_id,)).fetchone()
+    conn.close()
+    import json as _json
+    assert _json.loads(row["season_overrides_json"]) == {
+        "source": "BluRay", "provider": None, "tag": "MYTAG", "title": None}
 
 
 def test_adapt_pack_endpoint_removed(client, auth_headers, isolated_db, tmp_path):

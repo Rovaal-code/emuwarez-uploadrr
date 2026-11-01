@@ -22,7 +22,7 @@ import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from ..database import connect, init_db, row_to_dict, rows_to_dicts, get_setting_canonical
 from .upload_result_parser import classify_upload_result, extract_torrent_url, torrent_id_from_url
@@ -59,7 +59,7 @@ from .uploadrr_config_staging import (
     write_staged_config,
 )
 from .image_hosts import fallback_order, get_host_key
-from .eventos import EVENTO_SUBIDA_LOG, EVENTO_SUBIDA_PROGRESO, publicar, publicar_agrupado
+from .eventos import EVENTO_SUBIDA_ESTADO, EVENTO_SUBIDA_LOG, EVENTO_SUBIDA_PROGRESO, publicar, publicar_agrupado
 
 logger = logging.getLogger("emuwarez.upload")
 
@@ -77,6 +77,11 @@ PROGRESS_PHASES = (
     "config_staging", "running", "finalizing", "succeeded", "failed",
     "cancelled", "timeout",
 )
+
+
+# Fase de un trabajo 'ready' lanzado directamente (CLI, reintento con
+# confirmación) mientras espera plaza en "Subidas en paralelo".
+ETAPA_ESPERANDO_TURNO = "queued"
 
 
 def compute_progress_phase(status: str, stage: str | None) -> str:
@@ -107,7 +112,7 @@ def compute_progress_phase(status: str, stage: str | None) -> str:
             return "finalizing"
         return "running"
     if status == "ready":
-        return "verificacion_presubida"
+        return "queued" if stage == ETAPA_ESPERANDO_TURNO else "verificacion_presubida"
     if status in ("draft", "preflight"):
         return "verificacion_presubida"
     return "queued"
@@ -955,9 +960,9 @@ def _release_staged_config(job_id: int, config_path: Path | None) -> None:
 # actual Uploadrr-EMU subprocess at once — hashing the torrent, generating
 # and uploading screenshots, transferring to eMuwarez, the genuinely CPU/
 # network-heavy tail — regardless of which entry point queued them (the
-# normal 60s-countdown flow, a retry, or the legacy direct-start endpoints).
-# The earlier local pipeline (integrity/nomenclature/remux) is comparatively
-# light and stays ungated. 0 = sin límite.
+# normal "Subir a eMuwarez" flow, a retry, or the legacy direct-start
+# endpoints). El trabajo encolado toma la plaza antes de preparar los ficheros
+# (upload_queue._run_queued_job) y la pasa al subproceso. 0 = sin límite.
 UPLOAD_MAX_CONCURRENT_SETTING_KEY = "uploads.max_concurrent"
 UPLOAD_MAX_CONCURRENT_CHOICES = tuple(range(0, 11))  # 0, 1, 2, … 10
 UPLOAD_MAX_CONCURRENT_DEFAULT = 1
@@ -998,34 +1003,50 @@ class _UploadConcurrencyGate:
     Admission order is by job_id ascending (== creation order), never by
     whichever waiting thread happens to wake up first from notify_all() —
     threading.Condition doesn't guarantee FIFO wakeup order, and the UI's
-    "Esperando (2/4)" position (upload_queue.get_queue_positions, also
-    ordered by id) would otherwise sometimes lie about which job starts
-    next."""
+    puesto en la cola (posiciones(), also ordered by id) would otherwise
+    sometimes lie about which job starts next.
+
+    Una subida en espera se puede retirar (Cancelar en «En cola»): deja la cola
+    al momento y acquire() devuelve False, sin ocupar plaza."""
 
     def __init__(self) -> None:
         self._cond = threading.Condition()
         self._active = 0
         self._waiting: set[int] = set()
+        self._retirados: set[int] = set()
         self._liberaciones = 0
 
-    def acquire(self, job_id: int) -> None:
-        """No lanza: corre antes del try de quien llama, y un fallo aquí dejaba
+    def acquire(self, job_id: int, *, cancelada: Callable[[], bool] | None = None) -> bool:
+        """True con la plaza tomada; False si se retiró mientras esperaba.
+        `cancelada` se consulta en cada vuelta de la espera: así una
+        cancelación escrita desde otro proceso (el CLI) también la saca.
+        No lanza: corre antes del try de quien llama, y un fallo aquí dejaba
         el job en cola para siempre. La base se consulta fuera del candado."""
         with self._cond:
+            if job_id in self._retirados:
+                self._retirados.discard(job_id)
+                return False
             self._waiting.add(job_id)
         announced = False
         try:
             while True:
+                if cancelada is not None and _sin_fallos(cancelada):
+                    return False
                 limit = _limite_de_subidas()
                 with self._cond:
-                    is_next = job_id == min(self._waiting)
+                    if job_id in self._retirados:
+                        self._retirados.discard(job_id)
+                        return False
+                    is_next = job_id == min(self._waiting - self._retirados)
                     if limit == 0 or (self._active < limit and is_next):
                         self._waiting.discard(job_id)
                         self._active += 1
-                        return
+                        return True
                     activas, vistas = self._active, self._liberaciones
                 if not announced:
                     announced = True
+                    # Ahora sí espera de verdad: la interfaz pasa a enseñar su puesto.
+                    publicar(EVENTO_SUBIDA_ESTADO, {"job_id": job_id, "status": "queued", "stage": "queued"})
                     try:
                         append_upload_log(
                             job_id, "info",
@@ -1040,6 +1061,14 @@ class _UploadConcurrencyGate:
         finally:
             with self._cond:
                 self._waiting.discard(job_id)
+                # Una retirada que llegó mientras esperaba ya no hace falta,
+                # salga como salga (con plaza, retirada o por `cancelada`).
+                self._retirados.discard(job_id)
+                # Los de detrás suben un puesto: que lo vean ya, sin esperar al siguiente ciclo.
+                self._liberaciones += 1
+                self._cond.notify_all()
+            if announced:
+                publicar(EVENTO_SUBIDA_ESTADO, {"job_id": job_id})
 
     def release(self) -> None:
         with self._cond:
@@ -1047,8 +1076,55 @@ class _UploadConcurrencyGate:
             self._liberaciones += 1
             self._cond.notify_all()
 
+    def retirar_si_espera(self, job_id: int) -> None:
+        """Como retirar(), pero solo si ya está esperando: quien aún no ha
+        llegado a la puerta lo para su `cancelada` al llegar, y así no queda
+        una retirada apuntada que nadie recoja."""
+        with self._cond:
+            if job_id in self._waiting:
+                self._retirados.add(job_id)
+                self._liberaciones += 1
+                self._cond.notify_all()
+
+    def retirar(self, job_id: int) -> None:
+        """Saca de la cola una subida cancelada. Si su hilo aún no ha llegado
+        a la puerta, al llegar se va sin esperar."""
+        with self._cond:
+            self._retirados.add(job_id)
+            self._liberaciones += 1
+            self._cond.notify_all()
+
+    def olvidar(self, job_id: int) -> None:
+        """Lo llama el hilo de la subida al terminar: una retirada que llegó
+        cuando ya tenía plaza no se queda apuntada para siempre."""
+        with self._cond:
+            self._retirados.discard(job_id)
+
+    def posiciones(self) -> dict[int, tuple[int, int]]:
+        """Puesto (desde 1) y total de cada subida que espera plaza, por id."""
+        with self._cond:
+            en_cola = sorted(self._waiting - self._retirados)
+        return {jid: (i + 1, len(en_cola)) for i, jid in enumerate(en_cola)}
+
 
 _upload_concurrency_gate = _UploadConcurrencyGate()
+
+
+def _sin_fallos(pregunta: Callable[[], bool]) -> bool:
+    try:
+        return bool(pregunta())
+    except Exception:
+        logger.warning("No se pudo comprobar si la subida se canceló", exc_info=True)
+        return False
+
+
+def _esta_cancelado(job_id: int) -> bool:
+    conn = _get_db_conn()
+    try:
+        row = conn.execute("SELECT status FROM upload_jobs WHERE id = ?", (job_id,)).fetchone()
+    finally:
+        conn.close()
+    return bool(row) and row["status"] == "cancelled"
 
 
 def _read_progress_state(job_id: int) -> dict:
@@ -1243,8 +1319,10 @@ def _run_uploadrr_subprocess(job_id: int, cmd: dict, secrets: list[str], *, pre_
     calls this on an already-"ready" job with no preprocessing to gate, so it
     still acquires here itself, right at the actual heavy work, same as before.
     """
-    if not pre_gated:
-        _upload_concurrency_gate.acquire(job_id)
+    if not pre_gated and not _upload_concurrency_gate.acquire(
+            job_id, cancelada=lambda: _esta_cancelado(job_id)):
+        append_upload_log(job_id, "info", "Subida cancelada mientras esperaba turno; no se lanza.", stream="system")
+        return
     try:
         _run_uploadrr_subprocess_body(job_id, cmd, secrets)
     finally:
@@ -1716,6 +1794,12 @@ def start_upload_job(
         cmd = build_uploadrr_execution_command(job, conn=conn)
         secrets = _collect_secrets(conn)
 
+        if not pre_gated:
+            # Va a esperar plaza siguiendo en 'ready': la fase lo dice en la base
+            # antes de lanzar el hilo, para que Cancelar (también desde otro
+            # proceso) la encuentre desde el primer momento.
+            from .upload_states import escribir_estado
+            escribir_estado(job_id, desde={"ready"}, stage=ETAPA_ESPERANDO_TURNO, conn=conn)
         t = threading.Thread(
             target=_run_uploadrr_subprocess,
             args=(job_id, cmd, secrets),
@@ -1912,13 +1996,31 @@ def cancel_upload_job(job_id: int, conn=None) -> dict:
         status = job.get("status", "")
 
         if status == "queued":
-            # Grace-period cancel: stop the deferred timer before it fires
-            # (services/upload_queue.py) — nothing has touched the filesystem
-            # yet, so this is a plain status flip, no subprocess to signal.
-            from .upload_queue import cancel_queued_timer
-            cancel_queued_timer(job_id)
-            _update_job_status(job_id, "cancelled", stage="cancelled", finished_at=_now())
-            append_upload_log(job_id, "info", "Subida cancelada durante la cola de espera.", stream="system")
+            # En cola: aún no se ha tocado ningún fichero. Primero la fila, y
+            # luego se saca de la cola; si justo le tocaba plaza, su hilo ve
+            # el 'cancelled' al empezar y la suelta sin hacer nada. La escritura
+            # solo cae si sigue en 'queued': si avanzó entre la lectura y aquí,
+            # se cancela como lo que es ahora (un 'running' necesita matar el proceso).
+            from .upload_states import escribir_estado
+            if not escribir_estado(job_id, desde={"queued"}, status="cancelled", stage="cancelled",
+                                   finished_at=_now(), conn=conn):
+                return cancel_upload_job(job_id, conn=conn)
+            from .upload_queue import retirar_de_la_cola
+            retirar_de_la_cola(job_id)
+            append_upload_log(job_id, "info", "Subida cancelada mientras esperaba turno en la cola.", stream="system")
+            return {"ok": True, "message": "Subida cancelada.", "job_id": job_id}
+
+        if status == "ready" and job.get("stage") == ETAPA_ESPERANDO_TURNO:
+            # Arranque directo esperando plaza: aún no hay proceso. La escritura
+            # solo cae si sigue en 'ready'; si justo entró y ya está en marcha,
+            # se cancela como lo que es ahora.
+            from .upload_states import escribir_estado
+            if not escribir_estado(job_id, desde={"ready"}, status="cancelled", stage="cancelled",
+                                   finished_at=_now(), conn=conn):
+                return cancel_upload_job(job_id, conn=conn)
+            _upload_concurrency_gate.retirar_si_espera(job_id)
+            append_upload_log(job_id, "info", "Subida cancelada mientras esperaba turno; no se lanza.",
+                              stream="system", conn=conn)
             return {"ok": True, "message": "Subida cancelada.", "job_id": job_id}
 
         if status == "staging":

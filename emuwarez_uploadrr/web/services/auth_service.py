@@ -1,14 +1,87 @@
 """User and session management for local authentication."""
 from __future__ import annotations
 
+import logging
+import math
 import sqlite3
+import threading
+import time
 from typing import Optional
 
 from ..security import hash_password, verify_password, create_token, hash_token
 
+logger = logging.getLogger(__name__)
+
+# Una sesión caduca a los 30 días sin usarse y, usándose, a los 90 de abrirse.
+SESION_INACTIVA_DIAS = 30
+SESION_MAXIMA_DIAS = 90
+_SESION_VIVA = (
+    "s.revoked_at IS NULL"
+    f" AND s.created_at > datetime('now', '-{SESION_MAXIMA_DIAS} days')"
+    f" AND COALESCE(s.last_used_at, s.created_at) > datetime('now', '-{SESION_INACTIVA_DIAS} days')"
+)
+# El uso se apunta como mucho cada 10 minutos: escribir en cada petición haría esperar a todas
+# mientras una sincronización tiene la base ocupada.
+_APUNTAR_CADA_SEGUNDOS = 600
+_apuntadas: dict[str, float] = {}
+
+# Tras 5 contraseñas falsas seguidas de la misma IP con el mismo usuario, 15 minutos sin poder probar; y tras 30
+# de esa IP con cualquier usuario, también: así una IP solo crea un número acotado de claves en la tabla.
+# En memoria: el servidor es un solo proceso.
+MAX_FALLOS = 5
+MAX_FALLOS_IP = 30
+BLOQUEO_SEGUNDOS = 15 * 60
+_MAX_CLAVES = 1000
+_PODA_CADA_SEGUNDOS = 60
+_LARGO_USUARIO = 128
+_fallos: dict[tuple[str, Optional[str]], tuple[int, float]] = {}
+_ultima_poda = float("-inf")
+_cerrojo = threading.Lock()
+
 
 class AuthError(Exception):
     """Raised when an auth operation fails (wrong creds, inactive user, etc.)."""
+
+
+def _claves(ip: Optional[str], usuario: str) -> list[tuple[tuple[str, Optional[str]], int]]:
+    """Las dos cuentas de un intento, con su máximo: la de esa IP con ese usuario y la de esa IP con cualquiera."""
+    ip = ip or ""
+    return [((ip, usuario.strip().casefold()[:_LARGO_USUARIO]), MAX_FALLOS), ((ip, None), MAX_FALLOS_IP)]
+
+
+def segundos_de_bloqueo(ip: Optional[str], usuario: str) -> int:
+    """Lo que falta para que esa IP pueda volver a probar con ese usuario; 0 si puede."""
+    with _cerrojo:
+        ahora = time.monotonic()
+        esperas = [0]
+        for clave, maximo in _claves(ip, usuario):
+            fallos, ultimo = _fallos.get(clave, (0, ahora))
+            resto = BLOQUEO_SEGUNDOS - (ahora - ultimo)
+            if fallos >= maximo and resto > 0:
+                esperas.append(math.ceil(resto))
+        return max(esperas)
+
+
+def registrar_fallo(ip: Optional[str], usuario: str) -> None:
+    global _ultima_poda
+    with _cerrojo:
+        ahora = time.monotonic()
+        # Solo caducadas, y como mucho una vez por minuto: recorrer la tabla en cada fallo sería cuadrático.
+        if len(_fallos) > _MAX_CLAVES and ahora - _ultima_poda >= _PODA_CADA_SEGUNDOS:
+            _ultima_poda = ahora
+            for clave, (_, ultimo) in list(_fallos.items()):
+                if ahora - ultimo >= BLOQUEO_SEGUNDOS:
+                    del _fallos[clave]
+        for clave, _ in _claves(ip, usuario):
+            fallos, ultimo = _fallos.get(clave, (0, ahora))
+            if ahora - ultimo >= BLOQUEO_SEGUNDOS:
+                fallos = 0  # son seguidos, no los de toda la vida
+            _fallos[clave] = (fallos + 1, ahora)
+
+
+def registrar_acierto(ip: Optional[str], usuario: str) -> None:
+    with _cerrojo:
+        _fallos.pop(_claves(ip, usuario)[0][0], None)
 
 
 def admin_exists(conn: sqlite3.Connection) -> bool:
@@ -70,10 +143,10 @@ def create_session(
     th = hash_token(token)
     conn.execute(
         """
-        INSERT INTO auth_sessions (user_id, token_hash, user_agent, ip_address)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO auth_sessions (user_id, token_hash, user_agent, ip_address, last_used_at)
+        VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
         """,
-        (user_id, th, user_agent, ip_address),
+        (user_id, th, user_agent[:300] if user_agent else None, ip_address),
     )
     return token
 
@@ -82,17 +155,70 @@ def get_user_by_token(conn: sqlite3.Connection, token: str) -> Optional[dict]:
     """Resolve a clear token to the active user, or return None."""
     th = hash_token(token)
     row = conn.execute(
-        """
-        SELECT u.*
+        f"""
+        SELECT u.*,
+               (s.last_used_at IS NULL OR s.last_used_at < datetime('now', '-10 minutes')) AS por_apuntar
         FROM auth_sessions s
         JOIN users u ON u.id = s.user_id
         WHERE s.token_hash = ?
-          AND s.revoked_at IS NULL
+          AND {_SESION_VIVA}
           AND u.is_active = 1
         """,
         (th,),
     ).fetchone()
-    return dict(row) if row else None
+    if not row:
+        return None
+    user = dict(row)
+    if user.pop("por_apuntar"):
+        _apuntar_uso(conn, th)
+    return user
+
+
+def _apuntar_uso(conn: sqlite3.Connection, token_hash: str) -> None:
+    """Apunta que la sesión se ha usado. Con la base ocupada se deja para la próxima: la petición no espera."""
+    ahora = time.monotonic()
+    if ahora - _apuntadas.get(token_hash, -_APUNTAR_CADA_SEGUNDOS) < _APUNTAR_CADA_SEGUNDOS:
+        return
+    _apuntadas[token_hash] = ahora
+    try:
+        conn.execute("UPDATE auth_sessions SET last_used_at = CURRENT_TIMESTAMP WHERE token_hash = ?", (token_hash,))
+    except sqlite3.OperationalError:
+        logger.debug("No se pudo apuntar el uso de la sesión (base ocupada)", exc_info=True)
+
+
+def list_sessions(conn: sqlite3.Connection, user_id: int, token: str) -> list[dict]:
+    """Las sesiones abiertas del usuario, la más reciente primero; `current` marca la de *token*."""
+    th = hash_token(token)
+    rows = conn.execute(
+        f"""
+        SELECT s.id, s.token_hash, s.created_at, COALESCE(s.last_used_at, s.created_at) AS last_used_at,
+               s.user_agent, s.ip_address
+        FROM auth_sessions s
+        WHERE s.user_id = ? AND {_SESION_VIVA}
+        ORDER BY last_used_at DESC, s.id DESC
+        """,
+        (user_id,),
+    ).fetchall()
+    return [
+        {
+            "id": r["id"], "current": r["token_hash"] == th, "created_at": r["created_at"],
+            "last_used_at": r["last_used_at"], "user_agent": r["user_agent"], "ip_address": r["ip_address"],
+        }
+        for r in rows
+    ]
+
+
+def revoke_other_sessions(conn: sqlite3.Connection, user_id: int, token: str) -> int:
+    """Cierra las demás sesiones abiertas del usuario, todas menos la de *token*. Devuelve cuántas."""
+    cur = conn.execute(
+        f"""
+        UPDATE auth_sessions AS s
+        SET revoked_at = CURRENT_TIMESTAMP
+        WHERE s.user_id = ? AND s.token_hash != ? AND {_SESION_VIVA}
+        """,
+        (user_id, hash_token(token)),
+    )
+    return cur.rowcount
 
 
 def update_username(conn: sqlite3.Connection, user_id: int, new_username: str) -> None:

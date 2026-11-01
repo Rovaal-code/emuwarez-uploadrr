@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, createContext, useContext } from 'react'
-import { setUnsavedGuard, guardedLeave } from '../utils/unsavedGuard'
+import { useUnsavedGuard, guardedLeave } from '../utils/unsavedGuard'
 import {
   getMaintenanceStatus,
   createBackup,
@@ -25,13 +25,15 @@ import { SortableList, DragHandleIcon, type DragHandleProps } from '../component
 import { REGION_OPTIONS } from '../constants/regionLanguage'
 import { CheckStatusIcon } from '../components/DetailCard'
 import { testResultLabel, testResultColor, emuTestCooldownSeconds } from '../utils/integrationResult'
-import { getMe, changeCredentials } from '../api/auth'
+import { getMe, changeCredentials, getSessions, closeOtherSessions, type SesionAbierta } from '../api/auth'
 import { useTooltip, HoverTitle } from '../components/Tooltip'
 import { TAMANOS, TAMANO_POR_DEFECTO, tamanoUi, guardarTamano } from '../utils/uiScale'
 import { isValidHttpUrl } from '../utils/validation'
 import { getUploadConcurrencyEstimate, type UploadConcurrencyEstimate } from '../api/system'
 import { MODOS_PISTAS, MODO_PISTAS_POR_DEFECTO, normalizarModo, type ModoPistas } from '../utils/modoPistas'
-import { formatNumero } from '../utils/format'
+import { formatNumero, timeAgo, formatDate } from '../utils/format'
+import { descripcionDeSesion } from '../utils/sesiones'
+import { useAlEntrar, useAlSalir } from '../context/SeccionVisible'
 import { Modal } from '../components/Modal'
 import { IconoUsuario } from '../components/Iconos'
 
@@ -245,12 +247,9 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
     newKey, newEmuKey, qbitPass, qbitQui, quitarQui, quitarQbitPass,
   })
   const dirty = baseline !== '' && currentSig !== baseline
-  const dirtyRef = useRef(false)
-  dirtyRef.current = dirty
-  useEffect(() => {
-    setUnsavedGuard(() => dirtyRef.current)
-    return () => setUnsavedGuard(null)
-  }, [])
+  useUnsavedGuard('config', dirty)
+  // La clave de un proveedor de imágenes escrita en su modal y sin guardar.
+  useUnsavedGuard('config-clave-imagenes', keyModalHost !== null && keyDraft.trim() !== '')
 
   // Expose the save action to the page-header (top-right button). onSave goes
   // through a ref so it always runs with the latest form values.
@@ -488,6 +487,7 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
           separado. */}
       <div className="settings-config-grid">
       <AccountCard />
+      <SessionsCard />
 
       <div className="placeholder-card">
         <h3 style={{ marginTop: 0, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1130,6 +1130,7 @@ function AccountCard() {
   useEffect(() => { getMe().then(u => setUsername(u.username)).catch(() => {}) }, [])
 
   const dirty = newUsername.trim() !== '' || newPassword !== ''
+  useUnsavedGuard('cuenta', dirty)
 
   async function handleSave() {
     setMsg(null)
@@ -1187,6 +1188,64 @@ function AccountCard() {
   )
 }
 
+// ---------- Sesiones abiertas ----------
+// Caducan a los 30 días sin usarse. «Cerrar las demás» deja solo esta: sirve tras un
+// dispositivo perdido o una contraseña que se ha visto de más.
+function SessionsCard() {
+  const [datos, setDatos] = useState<{ sessions: SesionAbierta[]; inactive_days: number } | null>(null)
+  const [cerrando, setCerrando] = useState(false)
+  const setMsg = useSettingsMessageAdapter()
+
+  const cargar = useCallback(async () => {
+    try { setDatos(await getSessions()) } catch { /* sin lista: la tarjeta queda cargando */ }
+  }, [])
+  useAlEntrar(() => { void cargar() })
+
+  async function handleCerrarLasDemas() {
+    setCerrando(true)
+    try {
+      const { closed } = await closeOtherSessions()
+      setMsg({ ok: true, text: closed === 1 ? '✓ Se ha cerrado 1 sesión.' : `✓ Se han cerrado ${closed} sesiones.` })
+      await cargar()
+    } catch (e: unknown) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : String(e) })
+    } finally {
+      setCerrando(false)
+    }
+  }
+
+  return (
+    <div className="placeholder-card">
+      <h3>Sesiones abiertas</h3>
+      {datos === null ? (
+        <p className="form-hint">Cargando…</p>
+      ) : (
+        <>
+          <p className="form-hint sesiones-nota">
+            Los navegadores donde has iniciado sesión. Una sesión se cierra sola a los {datos.inactive_days} días sin usarse.
+          </p>
+          <div className="sesiones-lista">
+            {datos.sessions.map(s => (
+              <div key={s.id}>
+                <div className="sesiones-lista__nombre">
+                  <span title={s.user_agent ?? undefined}>{descripcionDeSesion(s.user_agent)}</span>
+                  {s.current && <span className="badge status-available">Esta sesión</span>}
+                </div>
+                <div className="form-hint">
+                  {s.ip_address ?? 'IP desconocida'} · {s.current ? 'activa ahora' : `última actividad ${timeAgo(s.last_used_at)}`} · abierta el {formatDate(s.created_at)}
+                </div>
+              </div>
+            ))}
+          </div>
+          <button className="btn btn-secondary btn-sm" type="button" onClick={handleCerrarLasDemas} disabled={cerrando || datos.sessions.length < 2}>
+            {cerrando ? 'Cerrando…' : 'Cerrar las demás'}
+          </button>
+        </>
+      )}
+    </div>
+  )
+}
+
 // ---------- Path mappings card (library.path_mappings only) ----------
 // Self-contained like AccountCard: its own load/save, untouched by
 // ConfigTab's dirty-tracking or "Guardar configuración" button. PUT /settings
@@ -1209,6 +1268,7 @@ function PathMappingsCard() {
   }, [])
 
   const dirty = JSON.stringify(mappings) !== baseline
+  useUnsavedGuard('rutas', dirty)
 
   async function handleSave() {
     setSaving(true)
@@ -1467,7 +1527,7 @@ function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | null; on
   const [backups, setBackups] = useState<BackupInfo[]>([])
   const [backupDir, setBackupDir] = useState('')
   const [busy, setBusy] = useState(false)
-  const [restorePath, setRestorePath] = useState('')
+  const [restoreName, setRestoreName] = useState('')
   const [restoreConfirm, setRestoreConfirm] = useState('')
 
   const showMessage = useSettingsMessage()
@@ -1496,13 +1556,13 @@ function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | null; on
   }
 
   async function handleRestore(dry: boolean) {
-    if (!restorePath) { showMessage(false, 'Introduce la ruta del backup'); return }
+    if (!restoreName) { showMessage(false, 'Elige un backup'); return }
     if (!dry && restoreConfirm !== 'RESTAURAR_CONFIG') {
       showMessage(false, 'Escribe RESTAURAR_CONFIG para confirmar'); return
     }
     setBusy(true)
     try {
-      const r = await restoreBackup(restorePath, {
+      const r = await restoreBackup(restoreName, {
         dry_run: dry,
         apply: !dry,
         confirmation: dry ? undefined : restoreConfirm,
@@ -1568,13 +1628,13 @@ function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | null; on
         </p>
         <select
           className="form-input form-select"
-          value={restorePath}
-          onChange={e => setRestorePath(e.target.value)}
+          value={restoreName}
+          onChange={e => setRestoreName(e.target.value)}
           style={{ width: '100%', marginBottom: 8 }}
         >
           <option value="">Selecciona un backup…</option>
           {backups.map(b => (
-            <option key={b.path} value={b.path}>{b.name} ({formatBytes(b.size_bytes)})</option>
+            <option key={b.path} value={b.name}>{b.name} ({formatBytes(b.size_bytes)})</option>
           ))}
         </select>
         <input
@@ -1669,12 +1729,7 @@ function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | nul
     quitarDiscord, quitarTelegram,
   })
   const dirty = baseline !== '' && currentSig !== baseline
-  const dirtyRef = useRef(false)
-  dirtyRef.current = dirty
-  useEffect(() => {
-    setUnsavedGuard(() => dirtyRef.current)
-    return () => setUnsavedGuard(null)
-  }, [])
+  useUnsavedGuard('notificaciones', dirty)
 
   const saveRef = useRef<() => void>(() => {})
   saveRef.current = () => { void handleSave() }
@@ -1916,6 +1971,10 @@ export function SettingsPage() {
   const [status, setStatus] = useState<MaintenanceStatus | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [saveAction, setSaveAction] = useState<SaveExpose | null>(null)
+  // Al salir de la sección se descartan los formularios: ya se ha confirmado, y la página sigue montada,
+  // así que sin esto seguirían con cambios y preguntarían al navegar desde cualquier otra sección.
+  const [reinicio, setReinicio] = useState(0)
+  useAlSalir(() => setReinicio(n => n + 1))
 
   const loadStatus = useCallback(async () => {
     try {
@@ -2004,7 +2063,7 @@ export function SettingsPage() {
       {/* overflowY auto y no hidden: todas las pestañas pueden crecer más
           que la pantalla y necesitan poder desplazarse por dentro. */}
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-        <SettingsMessageContext.Provider value={showMessage}>
+        <SettingsMessageContext.Provider key={reinicio} value={showMessage}>
           {tab === 'config' && <ConfigTab onExposeSave={setSaveAction} />}
           {tab === 'notifications' && <NotificationsTab onExposeSave={setSaveAction} />}
           {tab === 'diagnostics' && <DiagnosticsTab status={status} onRefresh={loadStatus} />}

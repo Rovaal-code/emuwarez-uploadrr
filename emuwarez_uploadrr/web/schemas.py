@@ -98,6 +98,24 @@ class LogoutResponse(BaseModel):
     message: str = "Sesión cerrada correctamente"
 
 
+class SessionInfo(BaseModel):
+    id: int
+    current: bool
+    created_at: str
+    last_used_at: str
+    user_agent: Optional[str] = None
+    ip_address: Optional[str] = None
+
+
+class SessionsResponse(BaseModel):
+    sessions: list[SessionInfo]
+    inactive_days: int
+
+
+class CloseOtherSessionsResponse(BaseModel):
+    closed: int
+
+
 class ChangeCredentialsRequest(BaseModel):
     current_password: str
     new_username: Optional[str] = None
@@ -1114,13 +1132,8 @@ class UploadJobDetail(BaseModel):
     # cae al request_status de la ficha de biblioteca.
     request_title: Optional[str] = None
     request_url: Optional[str] = None
-    # Grace-period deadline while status='queued' — lets the UI show a
-    # countdown + Cancel before the server starts renaming/remuxing/uploading.
-    queued_until: Optional[str] = None
-    # This job's 1-based rank among every currently status='queued' job
-    # (ordered by id, i.e. by creation order) and how many are queued in
-    # total — lets the UI show "Esperando (2/4)" instead of leaving several
-    # simultaneously-queued jobs indistinguishable from one another.
+    # Puesto (desde 1) y total mientras espera plaza en "Subidas en paralelo"
+    # (upload_queue.get_queue_positions). None si no está esperando.
     queue_position: Optional[int] = None
     queue_total: Optional[int] = None
     # Read-only snapshots taken at apply time — the nomenclature field
@@ -1214,7 +1227,7 @@ class BackupRequest(BaseModel):
 
 
 class RestoreRequest(BaseModel):
-    backup_path: str
+    backup_name: str
     dry_run: bool = True
     apply: bool = False
     confirmation: Optional[str] = None
@@ -1293,7 +1306,7 @@ class UploadQueueBody(BaseModel):
     # cubre, y Subidas lo enseña.
     request_item_id: Optional[int] = None
     # Manual edits the user made in the wizard's "Ver Pistas" card, carried
-    # through to the server-side remux step that runs after the grace period.
+    # through to the server-side remux step of the queued pipeline.
     remux_overrides: Optional[Dict[str, TrackRemuxOverride]] = None
     # The wizard's already-merged (base plan + remux_overrides) track table —
     # persisted verbatim as remux_snapshot_json at job creation so the detail

@@ -12,6 +12,7 @@ import { UploadButtonIcon, CancelButtonIcon, RequestCardIcon } from './DetailCar
 import { useTooltip } from './Tooltip'
 import { useRefrescoPorAvisos } from '../hooks/useRefrescoPorAvisos'
 import { IconoPelicula } from './Iconos'
+import { guardedLeave } from '../utils/unsavedGuard'
 
 const POLL_MS = 30000
 
@@ -129,14 +130,19 @@ function relativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
-function navigateTo(link: string) {
+// `alLlegar` corre solo si se sale de verdad: con cambios sin guardar en Configuración se pregunta antes,
+// y si el usuario se queda no debe quedar apuntado ningún salto.
+function navigateTo(link: string, alLlegar?: () => void) {
   if (/^https?:\/\//i.test(link)) {
     window.open(link, '_blank', 'noopener,noreferrer')
     return
   }
-  // Internal SPA path — push and let AppShell's popstate listener react.
-  window.history.pushState({}, '', link)
-  window.dispatchEvent(new PopStateEvent('popstate'))
+  guardedLeave(() => {
+    alLlegar?.()
+    // Internal SPA path — push and let AppShell's popstate listener react.
+    window.history.pushState({}, '', link)
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  })
 }
 
 // Where a notification click should actually go: the specific item's own
@@ -152,29 +158,33 @@ function navigateTo(link: string) {
 // sessionStorage or DOM events, so the backend keeps sending them a plain URL.
 function goToNotification(n: NotificationItem) {
   if (n.entity_type === 'library_item' && n.entity_id != null) {
-    try { sessionStorage.setItem('emuwarez_open_library_item', String(n.entity_id)) } catch { /* ignore */ }
-    window.dispatchEvent(new CustomEvent('emuwarez:open-library-item', { detail: n.entity_id }))
-    navigateTo('/library')
+    navigateTo('/library', () => {
+      try { sessionStorage.setItem('emuwarez_open_library_item', String(n.entity_id)) } catch { /* ignore */ }
+      window.dispatchEvent(new CustomEvent('emuwarez:open-library-item', { detail: n.entity_id }))
+    })
     return
   }
   if (n.entity_type === 'upload_job' && n.entity_id != null) {
-    try { sessionStorage.setItem('emuwarez_open_upload', String(n.entity_id)) } catch { /* ignore */ }
-    window.dispatchEvent(new CustomEvent('emuwarez:open-upload', { detail: n.entity_id }))
-    navigateTo('/uploads')
+    navigateTo('/uploads', () => {
+      try { sessionStorage.setItem('emuwarez_open_upload', String(n.entity_id)) } catch { /* ignore */ }
+      window.dispatchEvent(new CustomEvent('emuwarez:open-upload', { detail: n.entity_id }))
+    })
     return
   }
   if (n.entity_type === 'request_item' && n.entity_id != null) {
-    try { sessionStorage.setItem('emuwarez_open_request', String(n.entity_id)) } catch { /* ignore */ }
-    window.dispatchEvent(new CustomEvent('emuwarez:open-request', { detail: n.entity_id }))
-    navigateTo('/requests')
+    navigateTo('/requests', () => {
+      try { sessionStorage.setItem('emuwarez_open_request', String(n.entity_id)) } catch { /* ignore */ }
+      window.dispatchEvent(new CustomEvent('emuwarez:open-request', { detail: n.entity_id }))
+    })
     return
   }
   if (n.event_type === 'content_unique_changed') {
     // Aportes = Aporta — same "¿nuevo contenido único?" set this
     // notification's counts describe, via the Aportes column's own filter.
-    try { sessionStorage.setItem('emuwarez_library_filter_aporte', 'yes') } catch { /* ignore */ }
-    window.dispatchEvent(new CustomEvent('emuwarez:library-filter-aporte', { detail: 'yes' }))
-    navigateTo('/library')
+    navigateTo('/library', () => {
+      try { sessionStorage.setItem('emuwarez_library_filter_aporte', 'yes') } catch { /* ignore */ }
+      window.dispatchEvent(new CustomEvent('emuwarez:library-filter-aporte', { detail: 'yes' }))
+    })
     return
   }
   if (n.link) navigateTo(n.link)

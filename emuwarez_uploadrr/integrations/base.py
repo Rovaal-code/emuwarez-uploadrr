@@ -40,7 +40,8 @@ def _extract_cover_url(images: Any, cover_type: str) -> Optional[str]:
         if isinstance(image, dict) and image.get("coverType") == cover_type:
             remote_url = image.get("remoteUrl")
             if isinstance(remote_url, str) and remote_url.strip():
-                return remote_url.strip()
+                # La CSP de la interfaz solo deja cargar imágenes por https, y TMDb y TheTVDB también las sirven así.
+                return re.sub(r"^http://", "https://", remote_url.strip(), flags=re.I)
     return None
 
 

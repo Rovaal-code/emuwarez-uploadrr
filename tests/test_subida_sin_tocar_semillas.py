@@ -165,9 +165,9 @@ def _subir(entorno, item_id: int, proposal_id: int | None = None) -> dict:
     from emuwarez_uploadrr.services.upload_execution import _upload_concurrency_gate, get_upload_job_logs
     conn = entorno["conn"]
     jid = conn.execute(
-        """INSERT INTO upload_jobs (library_item_id, status, stage, title, path, source_path, queued_until,
+        """INSERT INTO upload_jobs (library_item_id, status, stage, title, path, source_path,
                                     nomenclature_proposal_id, created_at, updated_at)
-           VALUES (?, 'queued', 'queued', 'X', '', '', '2099-01-01T00:00:00+00:00', ?,
+           VALUES (?, 'queued', 'queued', 'X', '', '', ?,
                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""", (item_id, proposal_id)).lastrowid
     conn.commit()
     visto, refrescos = {}, []

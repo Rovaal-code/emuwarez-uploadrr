@@ -100,17 +100,17 @@ function RequestPoster({ url, category, size = 'sm' }: { url: string | null; cat
     : { width: 30, height: 45, radius: 4, font: 15 }
   const t = tipoOf(category)
   return (
-    <div className="poster-thumb" style={{ flexShrink: 0, width: dims.width, height: dims.height, borderRadius: dims.radius, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div className="poster-thumb pet-poster" style={{ width: dims.width, height: dims.height, borderRadius: dims.radius }}>
       {url ? (
         <img
           src={posterUrl(url, size === 'lg' ? 'w342' : 'w154')}
           alt=""
           loading="lazy"
-          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          className="pet-poster-img"
           onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
         />
       ) : (
-        <span style={{ fontSize: dims.font, opacity: 0.35 }}>{t.icon}</span>
+        <span className="pet-poster-icono" style={{ fontSize: dims.font }}>{t.icon}</span>
       )}
     </div>
   )
@@ -130,7 +130,7 @@ const fmtNum = (n: number | null | undefined) => formatNumero(n)
 // render as bare white outlines on some systems, so use real vector icons.
 function Svg({ children, color }: { children: React.ReactNode; color: string }) {
   return (
-    <svg viewBox="0 0 24 24" width={15} height={15} fill={color} style={{ verticalAlign: 'middle' }} aria-hidden="true">
+    <svg viewBox="0 0 24 24" width={15} height={15} fill={color} className="pet-svg-medio" aria-hidden="true">
       {children}
     </svg>
   )
@@ -147,8 +147,8 @@ const PointsIcon = () => (
 
 // Author cell — your own requests (author === emu.username) show in green + "(Yo)".
 function AuthorCell({ author, isMine }: { author: string | null; isMine: boolean }) {
-  if (!author) return <span style={{ color: 'var(--text-muted)' }}>—</span>
-  if (isMine) return <span style={{ color: 'var(--color-available)', fontWeight: 600 }}>{author} (Yo)</span>
+  if (!author) return <span className="pet-muted">—</span>
+  if (isMine) return <span className="pet-mio">{author} (Yo)</span>
   return <span>{author}</span>
 }
 
@@ -187,7 +187,7 @@ function satisfies(requested: string | null, local: string | null, specMatch: bo
 // Small ✓/✗ shown inside a comparison cell.
 function cellMark(v: boolean | null) {
   if (v === null) return null
-  return <span style={{ display: 'inline-flex', marginLeft: 5, verticalAlign: 'middle' }}><CheckStatusIcon status={v ? 'ok' : 'fail'} /></span>
+  return <span className="pet-marca"><CheckStatusIcon status={v ? 'ok' : 'fail'} /></span>
 }
 
 const baseName = (path: string | null) => (path ? path.split('/').pop() || null : null)
@@ -206,7 +206,7 @@ function CompatibilityBadge({ status, reclamada }: { status: string | null; recl
   if (reclamada === 'ti') {
     // La que has reclamado tú se puede subir: se enseña su estado de siempre y que es tuya.
     return (
-      <span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>
+      <span className="pet-badges">
         <StatusBadge status={estado} type="request" />
         <span className={`badge ${getRequestStatusInfo('Reclamado').cssClass}`}>{quien?.label}</span>
       </span>
@@ -239,7 +239,7 @@ function OriginCell({ item, instances, size = 13, alwaysChip = true }: {
   }, instances)
   const label = item.instance_name ?? item.instance_type ?? ''
   const { triggerProps, tooltipNode } = useTooltip(deepLink ? `Abrir en ${label}` : null)
-  if (!item.instance_type) return <span style={{ color: 'var(--text-muted)' }}>—</span>
+  if (!item.instance_type) return <span className="pet-muted">—</span>
   const inner = deepLink
     ? <a className="hover-link" href={deepLink} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} {...triggerProps}><ServiceLabel type={item.instance_type} label={label} size={size} />{tooltipNode}</a>
     : <ServiceLabel type={item.instance_type} label={label} size={size} />
@@ -248,7 +248,7 @@ function OriginCell({ item, instances, size = 13, alwaysChip = true }: {
 }
 
 function ReadinessBadge({ status }: { status: string | null | undefined }) {
-  if (!status) return <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>—</span>
+  if (!status) return <span className="pet-muted-11">—</span>
   const color =
     status === 'ready_to_upload' ? 'var(--color-available-soft)' :
     status === 'needs_nomenclature' ? 'var(--color-warning)' :
@@ -259,7 +259,7 @@ function ReadinessBadge({ status }: { status: string | null | undefined }) {
     status === 'spec_mismatch' ? 'var(--color-warning)' :
     status.includes('error') || status.includes('missing') || status === 'blocked' ? 'var(--color-missing)' :
     'var(--text-secondary)'
-  return <span style={{ fontSize: 11, color, fontWeight: 500 }}>{getReadinessLabel(status)}</span>
+  return <span className="pet-estado-11" style={{ color }}>{getReadinessLabel(status)}</span>
 }
 
 function CandidatesPanel({ requestId }: { requestId: number }) {
@@ -278,18 +278,18 @@ function CandidatesPanel({ requestId }: { requestId: number }) {
       {loading ? <LoadingState label="Cargando candidatos…" /> : candidates.length === 0 ? (
         <div className="empty-inline">Sin candidatos en biblioteca. Ejecuta “Recalcular readiness”.</div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 0' }}>
+        <div className="pet-cand-lista">
           {candidates.map(c => (
-            <div key={c.id} className="detail-card" style={{ padding: '10px 14px', borderRadius: 6, fontSize: 12 }}>
-              <div style={{ fontWeight: 600, marginBottom: 4 }}>#{c.candidate_rank}: {c.lib_title || `Lib #${c.library_item_id}`}</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 12px', color: 'var(--text-secondary)' }}>
+            <div key={c.id} className="detail-card pet-cand">
+              <div className="pet-cand-titulo">#{c.candidate_rank}: {c.lib_title || `Lib #${c.library_item_id}`}</div>
+              <div className="pet-cand-datos">
                 <span>Compat: <strong>{c.compatibility_score?.toFixed(0) ?? '—'}</strong></span>
                 <span>Readiness: <strong>{c.readiness_score?.toFixed(0) ?? '—'}</strong></span>
                 <span>Estado: {c.local_status || '—'}</span>
                 <span>Resolución: {c.resolution || '—'}</span>
               </div>
               {c.blockers.length > 0 && (
-                <div style={{ marginTop: 4, color: 'var(--color-missing)', fontSize: 11 }}>
+                <div className="pet-cand-bloq">
                   <IconoBloqueado /> {c.blockers.join(', ')}
                 </div>
               )}
@@ -315,7 +315,7 @@ function IdField({ label, id, href }: { label: string; id: string | null; href: 
 function CreatedAtCell({ createdAt }: { createdAt: string | null | undefined }) {
   const { triggerProps, tooltipNode } = useTooltip(createdAt ? formatDate(createdAt) : null)
   return (
-    <td style={{ fontSize: 12, whiteSpace: 'nowrap', color: 'var(--text-secondary)' }} {...triggerProps}>
+    <td className="pet-creada" {...triggerProps}>
       {timeAgo(createdAt)}
       {tooltipNode}
     </td>
@@ -363,19 +363,18 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
   const reqNameTip = useTooltip(m?.content_name || null)
   const libNameTip = useTooltip(m?.content_name || baseName(m?.local_path ?? null) || m?.library_title || null)
   return (
-    <div style={{ width: '100%', flex: 1, minHeight: 0, overflowY: 'auto' }}>
+    <div className="pet-detalle">
       <DetailHero backdropUrl={item.backdrop_url}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 16 }}>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      <div className="pet-barra">
+        <div className="pet-grupo">
           <button className="btn btn-ghost btn-sm" onClick={onBack}>Volver a peticiones</button>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
+        <div className="pet-grupo pet-no-encoge">
           <a
-            className="btn btn-primary btn-sm"
+            className="btn btn-primary btn-sm pet-sin-subrayado"
             href={item.url || EMU_REQUESTS_FALLBACK_URL}
             target="_blank"
             rel="noreferrer"
-            style={{ textDecoration: 'none' }}
             {...consultarTip.triggerProps}
           >
             <ExternalLinkButtonIcon /> Consultar en eMuwarez
@@ -403,7 +402,7 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
         </div>
       </div>
 
-      <div style={{ marginBottom: 20 }}>
+      <div className="pet-mb-20">
         {/* Follows library_target_id, not the match's library_item_id: for a
             season request the matcher lands on the SERIES row (every season
             shares the series' tmdb_id), so linking that opened the whole
@@ -412,7 +411,6 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
           {libraryTargetId ? (
             <span
               className="lib-title-link"
-              style={{ cursor: 'pointer' }}
               onClick={() => onOpenLibraryItem?.(libraryTargetId)}
               {...titleLinkTip.triggerProps}
             >
@@ -425,11 +423,11 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
         </DetailTitle>
       </div>
 
-      <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+      <div className="pet-ficha">
         <DetailPoster url={item.poster_url ? posterUrl(item.poster_url, 'w500') : null} alt={item.title} fallbackIcon={t.icon} />
 
-        <div style={{ flex: 1, minWidth: 300 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16, minHeight: DETAIL_CARD_HEIGHT }}>
+        <div className="pet-ficha-col">
+          <div className="pet-ficha-grid" style={{ minHeight: DETAIL_CARD_HEIGHT }}>
             <Card title="Estado de la petición" icon={<StatusCardIcon />}>
               <FieldRow label="Estado" help="Aunque salga «Compatible», revisa la petición: el audio y el códec no se pueden comparar del todo (suelen indicarse en la descripción del torrent), y si pide la serie completa puede que no quiera la temporada especial."><CompatibilityBadge status={effectiveStatus} reclamada={item.reclamada_por} /></FieldRow>
               <FieldRow label="Tipo">
@@ -497,64 +495,64 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
       </div>
       </DetailHero>
 
-      <div style={{ marginTop: 17 }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 15 }}>
+      <div className="pet-comparar">
+        <div className="pet-comparar-titulo">
           Petición vs. tu biblioteca
         </div>
-        <div className="detail-card" style={{ borderRadius: 10, padding: '21px 19px' }}>
+        <div className="detail-card pet-comparar-card">
           {!m ? (
-            <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Sin coincidencia en tu biblioteca local, no tienes este contenido importado en tus instancias de Radarr o Sonarr.</span>
+            <span className="pet-sin-coincidencia">Sin coincidencia en tu biblioteca local, no tienes este contenido importado en tus instancias de Radarr o Sonarr.</span>
           ) : (
             <>
-              <div style={{ overflowX: 'auto' }}>
-                <table className="data-table" style={{ fontSize: 12.5 }}>
+              <div className="pet-scroll-x">
+                <table className="data-table pet-tabla-comparar">
                   <thead>
                     <tr>
                       <th>Contenido</th><th>Título</th><th>Resolución</th><th>Source</th>
-                      <th><span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>Códec <InfoIcon text="El códec no se puede comparar de forma fiable: en eMuwarez suele indicarse en la descripción del torrent, no en los campos." /></span></th>
-                      <th><span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>Idiomas <InfoIcon text="El audio/idiomas no se pueden comparar de forma fiable: suelen indicarse en la descripción del torrent." /></span></th>
+                      <th><span className="pet-th-flex">Códec <InfoIcon text="El códec no se puede comparar de forma fiable: en eMuwarez suele indicarse en la descripción del torrent, no en los campos." /></span></th>
+                      <th><span className="pet-th-flex">Idiomas <InfoIcon text="El audio/idiomas no se pueden comparar de forma fiable: suelen indicarse en la descripción del torrent." /></span></th>
                       <th>Tamaño</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr>
-                      <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>Petición</td>
-                      <td style={{ maxWidth: 320 }} {...reqNameTip.triggerProps}>
+                      <td className="pet-negrita pet-nowrap">Petición</td>
+                      <td className="pet-nombre" {...reqNameTip.triggerProps}>
                         <ValueChip>
                           <ValueIcon><LibraryButtonIcon /></ValueIcon>
-                          <span className="txt" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.content_name || '—'}</span>
+                          <span className="txt">{m.content_name || '—'}</span>
                         </ValueChip>
                         {reqNameTip.tooltipNode}
                       </td>
-                      <td style={{ whiteSpace: 'nowrap' }}><SpecValueChip value={item.requested_resolution} icon={ResolutionValueIcon} /></td>
-                      <td style={{ whiteSpace: 'nowrap' }}><SpecValueChip value={item.requested_source} icon={SourceValueIcon} /></td>
-                      <td style={{ color: 'var(--text-muted)' }}>—</td>
-                      <td style={{ color: 'var(--text-muted)' }}>—</td>
-                      <td style={{ color: 'var(--text-muted)' }}>—</td>
+                      <td className="pet-nowrap"><SpecValueChip value={item.requested_resolution} icon={ResolutionValueIcon} /></td>
+                      <td className="pet-nowrap"><SpecValueChip value={item.requested_source} icon={SourceValueIcon} /></td>
+                      <td className="pet-muted">—</td>
+                      <td className="pet-muted">—</td>
+                      <td className="pet-muted">—</td>
                     </tr>
-                    <tr style={{ background: 'color-mix(in srgb, var(--color-available) 6%, transparent)' }}>
-                      <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>Tu biblioteca</td>
-                      <td style={{ maxWidth: 320 }} {...libNameTip.triggerProps}>
+                    <tr className="pet-fila-lib">
+                      <td className="pet-negrita pet-nowrap">Tu biblioteca</td>
+                      <td className="pet-nombre" {...libNameTip.triggerProps}>
                         {libId
                           ? (
                             <ValueChip as="button" linkable onClick={() => libraryTargetId && onOpenLibraryItem?.(libraryTargetId)} title="Ver ficha del contenido">
                               <ValueIcon><LibraryButtonIcon /></ValueIcon>
-                              <span className="txt" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.content_name || baseName(m.local_path) || m.library_title || '—'}</span>
+                              <span className="txt">{m.content_name || baseName(m.local_path) || m.library_title || '—'}</span>
                             </ValueChip>
                           )
                           : (
                             <ValueChip>
                               <ValueIcon><LibraryButtonIcon /></ValueIcon>
-                              <span className="txt" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.content_name || baseName(m.local_path) || m.library_title || '—'}</span>
+                              <span className="txt">{m.content_name || baseName(m.local_path) || m.library_title || '—'}</span>
                             </ValueChip>
                           )}
                         {libNameTip.tooltipNode}
                       </td>
-                      <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={ResolutionValueIcon} value={m.local_resolution} />{cellMark(satisfies(item.requested_resolution, m.local_resolution, m.resolution_match))}</td>
-                      <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={SourceValueIcon} value={m.local_source} />{cellMark(satisfies(item.requested_source, m.local_source, m.source_match))}</td>
-                      <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={VideoCodecValueIcon} value={m.local_video_codec} /></td>
-                      <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={LanguageValueIcon} value={m.local_audio_languages} /></td>
-                      <td style={{ whiteSpace: 'nowrap' }}><TechChip icon={SizeValueIcon} value={m.local_size ? formatBytes(m.local_size) : null} /></td>
+                      <td className="pet-nowrap"><TechChip icon={ResolutionValueIcon} value={m.local_resolution} />{cellMark(satisfies(item.requested_resolution, m.local_resolution, m.resolution_match))}</td>
+                      <td className="pet-nowrap"><TechChip icon={SourceValueIcon} value={m.local_source} />{cellMark(satisfies(item.requested_source, m.local_source, m.source_match))}</td>
+                      <td className="pet-nowrap"><TechChip icon={VideoCodecValueIcon} value={m.local_video_codec} /></td>
+                      <td className="pet-nowrap"><TechChip icon={LanguageValueIcon} value={m.local_audio_languages} /></td>
+                      <td className="pet-nowrap"><TechChip icon={SizeValueIcon} value={m.local_size ? formatBytes(m.local_size) : null} /></td>
                     </tr>
                   </tbody>
                 </table>
@@ -562,7 +560,7 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
                     disk, so there is nothing real to compare against. Without
                     saying so, the table reads as a contradiction. */}
                 {m.local_status === 'Faltante' && (
-                  <p style={{ fontSize: 12.5, margin: '10px 0 0', color: 'var(--color-warning)' }}>
+                  <p className="pet-aviso">
                     Este contenido está con el estado de Faltante en tu biblioteca local, así que
                     no es posible hacer la comparación.
                   </p>
@@ -574,22 +572,22 @@ function RequestDetailPage({ item, readiness, instances, onBack, onShowCandidate
       </div>
 
       {readiness && (
-        <details className="cmp-readiness" style={{ marginTop: 20, maxWidth: 640 }}>
+        <details className="cmp-readiness pet-preparacion">
           <summary>Preparación de subida (avanzado)</summary>
-          <div style={{ marginTop: 8 }}>
+          <div className="pet-mt-8">
             <div className="detail-row"><span>Estado</span><ReadinessBadge status={readiness.status} /></div>
-            <div className="detail-row"><span>Acción</span><span style={{ fontSize: 12, color: 'var(--color-uploading)' }}>{readiness.recommended_action ? getReadinessActionLabel(readiness.recommended_action) : '—'}</span></div>
+            <div className="detail-row"><span>Acción</span><span className="pet-accion">{readiness.recommended_action ? getReadinessActionLabel(readiness.recommended_action) : '—'}</span></div>
             <div className="detail-row"><span>Compat. score</span><span>{readiness.compatibility_score?.toFixed(0) ?? '—'}/100</span></div>
             <div className="detail-row"><span>Readiness score</span><span>{readiness.upload_readiness_score?.toFixed(0) ?? '—'}/100</span></div>
             {readiness.blockers.length > 0 && (
-              <div style={{ marginTop: 8 }}>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>BLOQUEADORES</div>
+              <div className="pet-mt-8">
+                <div className="pet-bloq-titulo">BLOQUEADORES</div>
                 {readiness.blockers.map((b, i) => (
-                  <div key={i} style={{ fontSize: 11, color: 'var(--color-missing)' }}><IconoBloqueado /> {b}</div>
+                  <div key={i} className="pet-bloq"><IconoBloqueado /> {b}</div>
                 ))}
               </div>
             )}
-            <div style={{ marginTop: 8 }}>
+            <div className="pet-mt-8">
               <button className="btn btn-ghost btn-sm" onClick={onShowCandidates}>Ver candidatos</button>
             </div>
           </div>
@@ -869,10 +867,10 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1
 
   return (
-    <div data-tour="requests-content" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div data-tour="requests-content" className="pet-pagina">
       {selectedId !== null ? (
         (detailLoading || !detail) ? (
-          <div style={{ padding: 24 }}><LoadingState label="Cargando petición…" /></div>
+          <div className="pet-cargando"><LoadingState label="Cargando petición…" /></div>
         ) : (
           <RequestDetailPage
             instances={instances}
@@ -893,7 +891,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
               {total > 0 ? `${total} peticiones` : 'Peticiones activas cruzadas con tu biblioteca local'}
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div className="pet-fila">
             <SyncInfo
               syncStatus={requestsStatus}
               onSync={startRequestsSync}
@@ -907,13 +905,12 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
 
         <div className="filters-bar">
           <input
-            className="form-input"
+            className="form-input pet-buscar"
             type="search"
             placeholder="Buscar por título…"
             value={search}
             onChange={e => setSearch(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && loadItems(0)}
-            style={{ minWidth: 220 }}
           />
           <select className="form-input form-select" value={sortBy} onChange={e => setSortBy(e.target.value)}>
             {SORT_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
@@ -935,8 +932,8 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
             action={<button className="btn btn-primary btn-sm" onClick={() => startRequestsSync(false)} disabled={isAnySyncing}>Sincronizar peticiones</button>}
           />
         ) : (
-          <div className="activity-section" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', marginBottom: 0 }}>
-            <div style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
+          <div className="activity-section pet-seccion">
+            <div className="pet-scroll">
               <table className="data-table">
                 <thead>
                   <tr>
@@ -963,8 +960,8 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                     <th><HeaderFilter label="Source" value={sourceFilter} onChange={setSourceFilter} options={[
                       { value: '', label: 'Todos' }, ...facets.sources.map(s => ({ value: s, label: s })),
                     ]} /></th>
-                    {hayVotos && <th style={{ textAlign: 'center' }} {...votesHeaderTip.triggerProps}><VotesIcon />{votesHeaderTip.tooltipNode}</th>}
-                    {hayComentarios && <th style={{ textAlign: 'center' }} {...commentsHeaderTip.triggerProps}><CommentsIcon />{commentsHeaderTip.tooltipNode}</th>}
+                    {hayVotos && <th className="pet-centro" {...votesHeaderTip.triggerProps}><VotesIcon />{votesHeaderTip.tooltipNode}</th>}
+                    {hayComentarios && <th className="pet-centro" {...commentsHeaderTip.triggerProps}><CommentsIcon />{commentsHeaderTip.tooltipNode}</th>}
                     <HeaderSort label={<PointsIcon />} nombre="Puntos / recompensa" desc="points_desc" asc="points_asc" sortBy={sortBy} onSort={setSortBy} align="center" />
                     <HeaderSort label="Creada" desc="created_desc" asc="created_asc" sortBy={sortBy} onSort={setSortBy} />
                   </tr>
@@ -984,35 +981,33 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
                       <tr
                         key={item.id}
                         onClick={() => handleRowClick(item.id)}
-                        className={selectedId === item.id ? 'row-selected' : ''}
-                        style={{ cursor: 'pointer' }}
+                        className={selectedId === item.id ? 'clickable row-selected' : 'clickable'}
                       >
                         <td>
-                          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                          <div className="pet-titulo-fila">
                             <RequestPoster url={item.poster_url} category={item.category} />
-                            <div style={{ minWidth: 0 }}>
+                            <div className="pet-min-0">
                               <HoverTitle
                                 className="lib-title-link"
                                 onClick={e => { e.stopPropagation(); handleRowClick(item.id) }}
                                 tip="Abrir ficha"
-                                style={{ fontWeight: 500 }}
                               >
                                 <DetailTitleText title={requestDisplayTitle(item)} />
                               </HoverTitle>
                             </div>
                           </div>
                         </td>
-                        <td style={{ whiteSpace: 'nowrap' }}>
+                        <td className="pet-nowrap">
                           <PlainValue icon={<TypeValueIcon />}>{tipoOf(item.category).label}</PlainValue>
                         </td>
-                        <td style={{ whiteSpace: 'nowrap' }}><OriginCell item={item} instances={instances} alwaysChip={false} /></td>
+                        <td className="pet-nowrap"><OriginCell item={item} instances={instances} alwaysChip={false} /></td>
                         <td><CompatibilityBadge status={item.compatibility_status} reclamada={item.reclamada_por} /></td>
-                        <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}><AuthorCell author={item.author} isMine={item.is_mine} /></td>
-                        <td style={{ whiteSpace: 'nowrap' }}><SpecPlainValue value={item.requested_resolution} icon={ResolutionValueIcon} /></td>
-                        <td style={{ whiteSpace: 'nowrap' }}><SpecPlainValue value={item.requested_source} icon={SourceValueIcon} /></td>
-                        {hayVotos && <td style={{ textAlign: 'center', fontSize: 12 }}>{item.votes ?? '—'}</td>}
-                        {hayComentarios && <td style={{ textAlign: 'center', fontSize: 12 }}>{item.comments ?? '—'}</td>}
-                        <td style={{ textAlign: 'center', fontSize: 12, whiteSpace: 'nowrap' }}>{fmtNum(item.points)}</td>
+                        <td className="pet-t12 pet-nowrap"><AuthorCell author={item.author} isMine={item.is_mine} /></td>
+                        <td className="pet-nowrap"><SpecPlainValue value={item.requested_resolution} icon={ResolutionValueIcon} /></td>
+                        <td className="pet-nowrap"><SpecPlainValue value={item.requested_source} icon={SourceValueIcon} /></td>
+                        {hayVotos && <td className="pet-centro pet-t12">{item.votes ?? '—'}</td>}
+                        {hayComentarios && <td className="pet-centro pet-t12">{item.comments ?? '—'}</td>}
+                        <td className="pet-centro pet-t12 pet-nowrap">{fmtNum(item.points)}</td>
                         <CreatedAtCell createdAt={item.created_at} />
                       </tr>
                     )
@@ -1022,9 +1017,9 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
             </div>
 
             {totalPages > 1 && (
-              <div className="pagination" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+              <div className="pagination pet-paginacion">
                 <button className="btn btn-secondary btn-sm" disabled={offset === 0} onClick={() => loadItems(offset - PAGE_SIZE)}>Anterior</button>
-                <span style={{ fontSize: 13, color: 'var(--text-secondary)', alignSelf: 'center' }}>{currentPage} / {totalPages}</span>
+                <span className="pet-paginacion-n">{currentPage} / {totalPages}</span>
                 <button className="btn btn-secondary btn-sm" disabled={offset + PAGE_SIZE >= total} onClick={() => loadItems(offset + PAGE_SIZE)}>Siguiente</button>
               </div>
             )}
@@ -1034,7 +1029,7 @@ export function RequestsPage({ onNavigate }: { onNavigate?: (page: string) => vo
       )}
 
       {showCandidates && selectedId !== null && (
-        <Modal titulo="Candidatos locales" onClose={() => setShowCandidates(false)} style={{ maxWidth: 520 }}>
+        <Modal titulo="Candidatos locales" onClose={() => setShowCandidates(false)} className="pet-modal-candidatos">
           <CandidatesPanel requestId={selectedId} />
         </Modal>
       )}

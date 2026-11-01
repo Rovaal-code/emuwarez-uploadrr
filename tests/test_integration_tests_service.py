@@ -222,6 +222,43 @@ class TestEmuwarezConnection:
         assert mock_open.call_count == 1
 
     @patch("urllib.request.urlopen")
+    def test_no_mantiene_la_base_bloqueada_durante_la_peticion(self, mock_open, tmp_path):
+        """La marca de «una prueba por minuto» se confirma antes de ir a la red: si no, el bloqueo de escritura
+        dura lo que tarde eMuwarez (hasta el timeout) y el resto de la aplicación falla con «database is locked»."""
+        from emuwarez_uploadrr.database import connect, init_db
+        conn = connect(tmp_path / "test.db")
+        init_db(conn)
+        otra = connect(tmp_path / "test.db")
+        en_transaccion = []
+
+        def urlopen(req, timeout=None):
+            en_transaccion.append(conn.in_transaction)
+            otra.execute("PRAGMA busy_timeout = 0")
+            otra.execute("INSERT INTO app_state(key, value) VALUES ('x', '1')")  # fallaría con la base bloqueada
+            otra.commit()
+            return _mock_response(200)
+
+        mock_open.side_effect = urlopen
+        result = svc_test_emu(api_key="key123", base_url="https://emu-warez.com", conn=conn)
+        assert result["ok"] is True
+        assert en_transaccion == [False]
+
+    @patch("urllib.request.urlopen")
+    def test_con_clave_nueva_usa_la_url_guardada(self, mock_open, tmp_path):
+        """Probar una clave nueva (Ajustes, Setup) sin url explícita lee la url de la base, sin UnboundLocalError."""
+        from emuwarez_uploadrr.database import connect, init_db
+        from emuwarez_uploadrr.services.settings import set_setting
+        conn = connect(tmp_path / "test.db")
+        init_db(conn)
+        set_setting(conn, "emu.endpoint_url", "https://otra.example")
+        conn.commit()
+        mock_open.return_value = _mock_response(200)
+
+        result = svc_test_emu(api_key="clave-nueva", conn=conn, enforce_rate_limit=False)
+        assert result["ok"] is True
+        assert "otra.example" in mock_open.call_args[0][0].full_url
+
+    @patch("urllib.request.urlopen")
     def test_not_configured_is_not_throttled(self, mock_open, tmp_path):
         """Pre-network failures (no key) must never consume/trigger the rate limit."""
         from emuwarez_uploadrr.database import connect, init_db, get_state

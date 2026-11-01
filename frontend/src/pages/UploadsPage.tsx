@@ -363,6 +363,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
         setJobs(data)
         setTotal(cuantas)
         setCargado(true)
+        setError(null)
       }
     } catch {
       if (!opts?.silent) setError('Error al cargar los trabajos de subida.')

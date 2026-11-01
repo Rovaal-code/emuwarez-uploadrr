@@ -48,11 +48,6 @@ export async function esperar<T>(fn: () => T | null | undefined | false, ms = 30
   }
 }
 
-/** Deja correr lo pendiente (promesas resueltas, efectos, temporizadores cortos). */
-export async function dejarCorrer(ms = 30) {
-  await act(async () => { await new Promise(res => setTimeout(res, ms)) })
-}
-
 /** El botón cuyo texto es exactamente `nombre`, si lo hay. */
 export function boton(nombre: string): HTMLButtonElement | undefined {
   return [...document.querySelectorAll('button')].find(b => b.textContent?.trim() === nombre)

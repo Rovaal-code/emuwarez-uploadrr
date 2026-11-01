@@ -510,7 +510,10 @@ def _propuesta_vigente(item_id: int, conn) -> dict | None:
     build_nomenclature_proposal() devuelve la guardada si es editada a mano o si
     su huella (fichero y versión de las reglas) sigue siendo la actual, y si no
     la rehace y la guarda. Así una automática de reglas viejas no llega a la subida."""
-    from .nomenclature import build_nomenclature_proposal
+    from .nomenclature import build_nomenclature_proposal, get_latest_nomenclature_proposal
+    # Sin ninguna guardada no se crea aquí: la hace el paso de nomenclatura del trabajo.
+    if not get_latest_nomenclature_proposal(item_id, conn=conn):
+        return None
     propuesta = build_nomenclature_proposal(item_id, conn=conn)
     return propuesta if propuesta and propuesta.get("id") else None
 
@@ -573,8 +576,17 @@ def _check_generic_upload_preconditions(job_id: int, item_id: int, is_season: bo
     if not is_season:
         # La vigente, no la última guardada: una automática bloqueada con reglas
         # viejas (p. ej. UND, que antes bloqueaba) haría fallar cada intento.
-        proposal = _propuesta_vigente(item_id, conn)
-        if proposal:
+        fijada = conn.execute(
+            "SELECT p.* FROM upload_jobs j JOIN nomenclature_proposals p ON p.id = j.nomenclature_proposal_id "
+            "WHERE j.id = ?", (job_id,)).fetchone()
+        manual_fijada = bool(fijada and fijada["fields_json"])
+        if manual_fijada:
+            # Editada a mano y fijada por el trabajo (p. ej. un reintento): es la que se aplicará,
+            # así que es la que se comprueba, aunque haya otra posterior.
+            proposal = dict(fijada)
+        else:
+            proposal = _propuesta_vigente(item_id, conn)
+        if proposal and not manual_fijada:
             # Si el trabajo fijaba una propuesta y se ha rehecho, fija la nueva: la vieja ya está
             # caducada y aplicarla pondría el nombre de antes.
             conn.execute(

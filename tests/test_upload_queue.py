@@ -476,6 +476,36 @@ def test_queue_retry_conserva_la_propuesta_editada_a_mano_aunque_haya_otra_poste
         uq.cancel_queued_timer(result["job"]["id"])
 
 
+def test_comprobacion_previa_de_un_reintento_conserva_la_propuesta_manual(db_conn, tmp_path, monkeypatch):
+    f = tmp_path / "movie.mkv"
+    f.write_bytes(b"x" * 100)
+    iid = _movie_with_path(db_conn, str(f))
+    manual = _insert_proposal(db_conn, iid, fields_json=json.dumps({"title": "Mio"}))
+    original_id = _failed_job_row(db_conn, iid, status="failed")
+    db_conn.execute("UPDATE upload_jobs SET nomenclature_proposal_id = ? WHERE id = ?", (manual, original_id))
+    _insert_proposal(db_conn, iid, title="Otra", status="blocked")  # posterior, bloqueada
+    db_conn.commit()
+    result = uq.queue_retry_for_job(original_id, conn=db_conn)
+    job_id = result["job"]["id"]
+    try:
+        monkeypatch.setattr(uq, "_season_upload_preconditions", lambda conn: [])
+        assert uq._check_generic_upload_preconditions(job_id, iid, False, db_conn) is True
+        row = db_conn.execute("SELECT nomenclature_proposal_id FROM upload_jobs WHERE id=?", (job_id,)).fetchone()
+        assert row["nomenclature_proposal_id"] == manual
+    finally:
+        uq.cancel_queued_timer(job_id)
+
+
+def test_comprobacion_previa_sin_propuesta_guardada_no_crea_ninguna(db_conn, tmp_path, monkeypatch):
+    f = tmp_path / "movie.mkv"
+    f.write_bytes(b"x" * 100)
+    iid = _movie_with_path(db_conn, str(f))
+    monkeypatch.setattr(uq, "_season_upload_preconditions", lambda conn: [])
+    with patch("emuwarez_uploadrr.services.nomenclature.build_nomenclature_proposal") as build:
+        assert uq._check_generic_upload_preconditions(1, iid, False, db_conn) is True
+    build.assert_not_called()
+
+
 def test_comprobacion_previa_fija_la_propuesta_rehecha_en_el_trabajo(db_conn, tmp_path, monkeypatch):
     f = tmp_path / "movie.mkv"
     f.write_bytes(b"x" * 100)

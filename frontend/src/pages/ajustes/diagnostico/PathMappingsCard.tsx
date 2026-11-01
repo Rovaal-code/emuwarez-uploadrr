@@ -5,10 +5,10 @@ import { useTooltip } from '../../../components/Tooltip'
 import { useSettingsMessageAdapter } from '../mensajes'
 import { ErrorDeCarga } from '../ErrorDeCarga'
 
-function RemoveMappingRuleButton({ onClick }: { onClick: () => void }) {
+function RemoveMappingRuleButton({ onClick, disabled }: { onClick: () => void; disabled: boolean }) {
   const { triggerProps, tooltipNode } = useTooltip('Quitar regla')
   return (
-    <button className="btn btn-ghost btn-sm" type="button" onClick={onClick} {...triggerProps}>✕{tooltipNode}</button>
+    <button className="btn btn-ghost btn-sm" type="button" onClick={onClick} disabled={disabled} {...triggerProps}>✕{tooltipNode}</button>
   )
 }
 
@@ -85,21 +85,21 @@ export function PathMappingsCard() {
               <div key={i} className="aj-flex-c-8 aj-wrap">
                 <input
                   className="form-input aj-campo-ruta"
-                  value={m.from} placeholder="Ruta de Radarr/Sonarr: /data/media"
+                  value={m.from} disabled={saving} placeholder="Ruta de Radarr/Sonarr: /data/media"
                   onChange={e => setMappings(p => p.map((x, j) => j === i ? { ...x, from: e.target.value } : x))}
                 />
                 <span className="aj-muted">→</span>
                 <input
                   className="form-input aj-campo-ruta"
-                  value={m.to} placeholder="Ruta local: /home/alvaro/mnt/emu-media"
+                  value={m.to} disabled={saving} placeholder="Ruta local: /home/alvaro/mnt/emu-media"
                   onChange={e => setMappings(p => p.map((x, j) => j === i ? { ...x, to: e.target.value } : x))}
                 />
-                <RemoveMappingRuleButton onClick={() => setMappings(p => p.filter((_, j) => j !== i))} />
+                <RemoveMappingRuleButton disabled={saving} onClick={() => setMappings(p => p.filter((_, j) => j !== i))} />
               </div>
             ))}
           </div>
           <div className="aj-flex-c-12 aj-mt-10">
-            <button className="btn btn-secondary btn-sm" type="button"
+            <button className="btn btn-secondary btn-sm" type="button" disabled={saving}
               onClick={() => setMappings(p => [...p, { from: '', to: '' }])}>+ Añadir regla</button>
             <button className="btn btn-primary btn-sm" type="button" onClick={handleSave} disabled={saving || !dirty}>
               {saving ? 'Guardando…' : 'Guardar cambios'}

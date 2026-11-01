@@ -3,6 +3,7 @@ import { useUnsavedGuard } from '../../../utils/unsavedGuard'
 import { fetchSettings, updateSettings } from '../../../api/settings'
 import { useTooltip } from '../../../components/Tooltip'
 import { useSettingsMessageAdapter } from '../mensajes'
+import { ErrorDeCarga } from '../ErrorDeCarga'
 
 function RemoveMappingRuleButton({ onClick }: { onClick: () => void }) {
   const { triggerProps, tooltipNode } = useTooltip('Quitar regla')
@@ -18,6 +19,9 @@ function RemoveMappingRuleButton({ onClick }: { onClick: () => void }) {
 export function PathMappingsCard() {
   const [mappings, setMappings] = useState<{ from: string; to: string }[]>([])
   const [loading, setLoading] = useState(true)
+  // Si la carga falla no se enseña el editor: con una lista vacía, guardar borraría las reglas que sí existen.
+  const [errorCarga, setErrorCarga] = useState<string | null>(null)
+  const [intento, setIntento] = useState(0)
   const [saving, setSaving] = useState(false)
   const setMsg = useSettingsMessageAdapter()
   const [baseline, setBaseline] = useState('[]')
@@ -29,8 +33,15 @@ export function PathMappingsCard() {
         setMappings(m)
         setBaseline(JSON.stringify(m))
       })
+      .catch((e: unknown) => setErrorCarga(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false))
-  }, [])
+  }, [intento])
+
+  function reintentar() {
+    setErrorCarga(null)
+    setLoading(true)
+    setIntento(n => n + 1)
+  }
 
   const dirty = JSON.stringify(mappings) !== baseline
   useUnsavedGuard('rutas', dirty)
@@ -62,6 +73,8 @@ export function PathMappingsCard() {
       </p>
       {loading ? (
         <p className="aj-muted-13">Cargando…</p>
+      ) : errorCarga ? (
+        <ErrorDeCarga mensaje={`No se pudieron cargar las reglas: ${errorCarga}`} onReintentar={reintentar} />
       ) : (
         <>
           <div className="aj-col-8">

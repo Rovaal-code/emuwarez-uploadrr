@@ -1085,6 +1085,13 @@ class UploadStartRequest(BaseModel):
     confirmation: Optional[str] = None
 
 
+class PasoSubida(BaseModel):
+    clave: str
+    nombre: str
+    # hecho | en_curso | fallido | cancelado | pendiente
+    estado: str
+
+
 class UploadJobDetail(BaseModel):
     id: Optional[int] = None
     library_item_id: Optional[int] = None
@@ -1118,6 +1125,11 @@ class UploadJobDetail(BaseModel):
     runtime_type: Optional[str] = None
     command_preview: Optional[str] = None
     progress_phase: Optional[str] = None
+    # Los pasos con nombre de la subida y cuál de ellos se paró (services/subida_pasos.py).
+    pasos: list[PasoSubida] = []
+    # Desde qué paso reanudaría un reintento (None: empezaría por el principio) y su nombre.
+    reintento_desde: Optional[str] = None
+    reintento_desde_nombre: Optional[str] = None
     # Media type (movie/series/…) from the linked library item, for filtering.
     media_type: Optional[str] = None
     # Poster thumbnail from the linked library item, for the Subidas row.

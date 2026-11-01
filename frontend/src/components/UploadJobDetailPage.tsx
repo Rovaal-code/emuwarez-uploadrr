@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
-import type { UploadJob, UploadJobLog, UploadProgressPhase } from '../types/api'
+import type { PasoSubida, UploadJob, UploadJobLog, UploadProgressPhase } from '../types/api'
 import { getUploadJobLogs } from '../api/uploads'
 import { aplicarLineas, ultimaSecuenciaDe } from '../utils/registroSubida'
+import { estadoDePaso, opcionesDeReintento } from '../utils/pasosSubida'
 import { posterUrl } from '../utils/libraryItem'
 import { formatDate, formatDateTimeSeconds, parseServerDate } from '../utils/format'
 import { InfoIcon } from './InfoIcon'
@@ -373,6 +374,24 @@ function ProgressCell({ pct, bold }: { pct: number; bold?: boolean }) {
   )
 }
 
+// Los pasos con nombre de la subida y cuál se paró (los manda el servidor: services/subida_pasos.py).
+function PasosDeSubida({ pasos }: { pasos: PasoSubida[] }) {
+  return (
+    <ol aria-label="Pasos de la subida" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', listStyle: 'none', margin: '0 0 12px', padding: 0 }}>
+      {pasos.map((p, i) => {
+        const e = estadoDePaso(p)
+        return (
+          <li key={p.clave} title={e.texto} aria-label={`${p.nombre}: ${e.texto}`}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 999, fontSize: 12, border: `1px solid ${e.color}`, color: e.color }}>
+            <span aria-hidden="true">{e.simbolo}</span>
+            <span>{i + 1}. {p.nombre}</span>
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
 function PhasesSection({ phases, globalPct, job }: { phases: UploadProgressPhase[]; globalPct: number; job: UploadJob }) {
   // If the job itself has stopped (failed/cancelled) but a phase snapshot was
   // never updated past "running" (e.g. mkvmerge's timeout kills the job
@@ -447,7 +466,7 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
   job: UploadJob
   onBack: () => void
   onStart: (job: UploadJob) => void
-  onRetry: (job: UploadJob) => void
+  onRetry: (job: UploadJob, desdeElPrincipio?: boolean) => void
   onCancel: (jobId: number) => void
   onDelete: (job: UploadJob) => void
   onOpenLibraryItem?: (id: number) => void
@@ -572,7 +591,13 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
             <button className="btn btn-primary btn-sm" onClick={() => onOpenLibraryItem?.(job.library_item_id!)}><LibraryButtonIcon /> Ver en Biblioteca</button>
           )}
           {job.status === 'ready' && <button className="btn btn-primary btn-sm" onClick={() => onStart(job)}><UploadButtonIcon /> Iniciar subida</button>}
-          {['failed', 'cancelled'].includes(job.status) && <button className="btn btn-primary btn-sm" onClick={() => onRetry(job)}><RetryButtonIcon /> Reintentar</button>}
+          {['failed', 'cancelled'].includes(job.status) && opcionesDeReintento(job).map((o, i) => (
+            <button key={o.etiqueta} className={`btn ${i === 0 ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+              onClick={() => onRetry(job, o.desdeElPrincipio)}
+              title={o.desdeElPrincipio && i > 0 ? 'Vuelve a preparar los ficheros en vez de reutilizar los que ya estaban listos' : undefined}>
+              <RetryButtonIcon /> {o.etiqueta}
+            </button>
+          ))}
           {canCancel && <button className="btn btn-danger btn-sm" onClick={() => onCancel(jobId)}><CancelButtonIcon /> Cancelar</button>}
           {canDelete && <button className="btn btn-danger btn-sm" onClick={() => onDelete(job)}><DeleteButtonIcon /> Borrar</button>}
         </div>
@@ -703,7 +728,10 @@ export function UploadJobDetailPage({ job, onBack, onStart, onRetry, onCancel, o
         {isStaging ? (
           <GeneratingSpinner text="Esperando a que termine la verificación previa…" />
         ) : (
-          <PhasesSection phases={progress?.phases?.length ? progress.phases : DEFAULT_PHASES} globalPct={progress?.global_pct ?? 0} job={job} />
+          <>
+            {job.pasos && job.pasos.length > 0 && <PasosDeSubida pasos={job.pasos} />}
+            <PhasesSection phases={progress?.phases?.length ? progress.phases : DEFAULT_PHASES} globalPct={progress?.global_pct ?? 0} job={job} />
+          </>
         )}
       </Panel>
 

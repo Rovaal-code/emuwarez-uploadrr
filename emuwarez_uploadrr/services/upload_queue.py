@@ -36,7 +36,8 @@ logger = logging.getLogger("emuwarez.upload")
 # new "Subir"/automático click must not create an unrelated second job while
 # one of these is in flight, it has to wait or be told to view the existing
 # one instead.
-from .upload_states import ACTIVE_JOB_STATUSES, escribir_estado  # noqa: E402
+from .subida_pasos import reanudar_desde
+from .upload_states import ACTIVE_JOB_STATUSES, asignacion_etapa_parada, escribir_estado  # noqa: E402
 from .eventos import EVENTO_SUBIDA_ESTADO, publicar
 
 # Remux overrides the user edited in the wizard's "Ver Pistas" card are
@@ -101,6 +102,7 @@ def _insert_and_start_queued_job(
     nomenclature_proposal_id: int | None = None,
     nomenclature_snapshot: dict | None = None,
     season_overrides: dict | None = None,
+    reutiliza_preparacion: bool = False,
 ) -> dict:
     """Shared by queue_upload_for_item() and queue_retry_for_job(): insert a
     fresh 'queued' row for `item` and start its pipeline right away.
@@ -130,6 +132,10 @@ def _insert_and_start_queued_job(
     (None for a single movie/episode). _run_queued_job() reads this back and
     forwards it to season_pack.apply_season_pack() so the choice actually
     reaches the real renamed files, not just the staging preview.
+
+    `reutiliza_preparacion` — un reintento que reanuda: _run_queued_job() reutiliza los
+    ficheros que dejó preparados la subida anterior si siguen valiendo (ver
+    _motivo_no_reutilizable).
 
     `request_title`/`request_url` — la petición que cubre la subida, copiada
     tal cual estaba al encolar (ver _foto_de_la_peticion).
@@ -161,8 +167,8 @@ def _insert_and_start_queued_job(
                 retry_of_job_id, retry_count, checks_snapshot_json,
                 nomenclature_proposal_id, nomenclature_snapshot_json,
                 remux_overrides_json, remux_snapshot_json, season_overrides_json,
-                created_at, updated_at
-            ) VALUES (?, ?, ?, ?, 'queued', 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                reutiliza_preparacion, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, 'queued', 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 item["id"], request_item_id, request_title, request_url,
@@ -176,6 +182,7 @@ def _insert_and_start_queued_job(
                 json.dumps(remux_overrides, ensure_ascii=False) if remux_overrides else None,
                 json.dumps(remux_snapshot, ensure_ascii=False) if remux_snapshot else None,
                 json.dumps(season_overrides, ensure_ascii=False) if season_overrides else None,
+                1 if reutiliza_preparacion else 0,
                 now_iso, now_iso,
             ),
         )
@@ -308,10 +315,14 @@ def queue_upload_for_item(
             conn.close()
 
 
-def queue_retry_for_job(original_job_id: int, conn=None) -> dict:
+def queue_retry_for_job(original_job_id: int, conn=None, *, desde_el_principio: bool = False) -> dict:
     """Re-queue a failed/cancelled job through the same flow a fresh "Subir a
     eMuwarez" click uses — no confirmation token, since this only ever creates a brand new job row
-    (the original is never touched, same as the old confirmation-gated retry)."""
+    (the original is never touched, same as the old confirmation-gated retry).
+
+    Si la subida original se paró con los ficheros ya preparados (subida_pasos.reanudar_desde),
+    el reintento reanuda desde ahí y reutiliza la preparación; con `desde_el_principio` lo
+    rehace todo."""
     own = conn is None
     conn = conn or connect()
     try:
@@ -355,6 +366,9 @@ def queue_retry_for_job(original_job_id: int, conn=None) -> dict:
             remux_overrides=_load_json("remux_overrides_json"),
             remux_snapshot=_load_json("remux_snapshot_json"),
             checks=_load_json("checks_snapshot_json"),
+            season_overrides=_load_json("season_overrides_json"),
+            reutiliza_preparacion=(not desde_el_principio
+                                   and reanudar_desde(original.get("status"), original.get("etapa_parada")) is not None),
         )
     finally:
         if own:
@@ -385,13 +399,14 @@ def reconcile_interrupted_jobs(conn=None) -> int:
                 ",".join("?" * len(ACTIVE_JOB_STATUSES))),
             tuple(ACTIVE_JOB_STATUSES),
         ).fetchall()
+        parada, parametros_parada = asignacion_etapa_parada()
         for row in rows:
             conn.execute(
                 "UPDATE upload_jobs SET status = 'failed', stage = 'failed', "
-                "finished_at = ?, updated_at = ?, error_message = ? WHERE id = ?",
+                f"finished_at = ?, updated_at = ?, error_message = ?, {parada} WHERE id = ?",
                 (_now_iso(), _now_iso(),
                  "Interrumpido al pararse la aplicación. Puedes reintentar la subida.",
-                 row["id"]),
+                 *parametros_parada, row["id"]),
             )
             conn.commit()
             try:
@@ -931,6 +946,54 @@ def _preparar_fichero(job_id: int, item_id: int, origen: str, destino: str, modo
                metodo="reflink")
 
 
+def _huella_de(ruta: str) -> dict | None:
+    """Lo que identifica el contenido de un fichero sin leerlo: tamaño, fecha de modificación e inodo.
+    None si no se puede leer. Si el original lo sustituye otro fichero con el mismo nombre (una mejora de
+    Radarr/Sonarr, por ejemplo), alguno de los tres cambia."""
+    try:
+        st = os.stat(ruta)
+    except (OSError, TypeError):
+        return None
+    return {"tamano": st.st_size, "mtime_ns": st.st_mtime_ns, "inodo": st.st_ino}
+
+
+def _motivo_no_reutilizable(job: dict, destino: str, ficheros: list, is_season: bool, conn) -> tuple[dict | None, str | None]:
+    """(subida anterior, None) si la preparación de los ficheros que dejó la subida de la que
+    este trabajo es reintento sigue valiendo; (None, motivo) si no.
+
+    Vale si: la anterior se paró con la preparación hecha (subida_pasos.reanudar_desde), la
+    preparó en este mismo sitio de la carpeta de subidas, y lo que debía haber en él sigue
+    ahí. Cualquier duda es un «no»: rehacer es lo de siempre, reutilizar mal es subir otra cosa."""
+    from .upload_execution import get_upload_job
+    anterior_id = job.get("retry_of_job_id")
+    anterior = get_upload_job(anterior_id, conn=conn) if anterior_id else None
+    if not anterior:
+        return None, "la subida anterior ya no existe"
+    if reanudar_desde(anterior.get("status"), anterior.get("etapa_parada")) is None:
+        return None, "la subida anterior no llegó a terminar la preparación de los ficheros"
+    if anterior.get("prepared_path") != destino:
+        return None, "el nombre o el sitio en la carpeta de subidas ha cambiado"
+    if not anterior.get("remux_snapshot_json"):
+        return None, "no quedó apuntado qué pistas se prepararon"
+    # El nombre no basta: si la biblioteca sustituyó el original, lo preparado es del anterior.
+    try:
+        huellas = json.loads(anterior.get("huellas_preparacion_json") or "null")
+    except ValueError:
+        huellas = None
+    if not isinstance(huellas, dict):
+        return None, "no quedó apuntada la huella de los originales con que se preparó"
+    for _i, origen, nombre in ficheros:
+        if huellas.get(nombre) is None or huellas.get(nombre) != _huella_de(origen):
+            return None, f"el original de «{nombre}» ha cambiado desde que se preparó"
+    if is_season:
+        faltan = [n for _i, _f, n in ficheros if not os.path.isfile(os.path.join(destino, n))]
+        if not os.path.isdir(destino) or faltan:
+            return None, "faltan ficheros en la carpeta del pack"
+    elif not os.path.isfile(destino):
+        return None, "el fichero ya no está en la carpeta de subidas"
+    return anterior, None
+
+
 @dataclass
 class _Trabajo:
     """Lo que los pasos de la preparación se pasan de uno a otro."""
@@ -1133,6 +1196,28 @@ def _paso_preparar(t: _Trabajo) -> bool:
                       "Bórrala antes si quieres volver a subirlo.")
         return False
 
+    # Un reintento que reanuda reutiliza los ficheros que dejó preparados la subida anterior (lo caro:
+    # pistas, título interno y enlaces) si siguen valiendo; si no, lo rehace como siempre.
+    if t.job.get("reutiliza_preparacion"):
+        anterior, motivo_no = _motivo_no_reutilizable(t.job, t.destino_uploadrr, ficheros, is_season, conn)
+        if anterior is None:
+            append_upload_log(job_id, "info", f"No se reutiliza la preparación anterior: {motivo_no}. Se prepara de nuevo.",
+                              stream="system", conn=conn)
+        else:
+            conn.execute("UPDATE upload_jobs SET remux_snapshot_json = ?, huellas_preparacion_json = ? WHERE id = ?",
+                         (anterior["remux_snapshot_json"], anterior["huellas_preparacion_json"], job_id))
+            conn.commit()
+            update_phase_progress(job_id, "remux", 100)
+            append_upload_log(
+                job_id, "info",
+                f"Se reutiliza la preparación de la subida #{anterior['id']}: «{os.path.basename(t.destino_uploadrr)}» "
+                "ya está lista en la carpeta de subidas.",
+                stream="system", conn=conn,
+            )
+            t.preparada = {"status": "ready", "metodos": ["reutilizada"]}
+            t.que = f"{len(ficheros)} capítulo(s)" if is_season else "el archivo"
+            return True
+
     por_nombre = {n: i for i, _f, n in ficheros}
     resultados = t.resultados
     total = len(ficheros)
@@ -1182,6 +1267,11 @@ def _paso_preparar(t: _Trabajo) -> bool:
             for r in resultados]}, conn=conn)
     else:
         _write_snapshot(job_id, "remux_snapshot_json", foto(resultados[0]), conn=conn)
+    # La huella de los originales YA preparados (la preparación puede haber editado alguno): un reintento
+    # solo reutiliza lo preparado si siguen igual.
+    conn.execute("UPDATE upload_jobs SET huellas_preparacion_json = ? WHERE id = ?",
+                 (json.dumps({n: _huella_de(f) for _i, f, n in ficheros}), job_id))
+    conn.commit()
     update_phase_progress(job_id, "remux", 100)
     return True
 

@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 46
+SCHEMA_VERSION = 47
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -1249,6 +1249,23 @@ def _migrate_library_items_last_seen(conn: sqlite3.Connection) -> None:
     borrar_biblioteca(conn, "instance_id IS NOT NULL AND instance_id NOT IN (SELECT id FROM instances)")
 
 
+def _migrate_upload_jobs_pasos(conn: sqlite3.Connection) -> None:
+    """Esquema 47: dónde se paró una subida (`etapa_parada`, la fase en que estaba al fallar o cancelarse), si su
+    reintento reutiliza los ficheros ya preparados (`reutiliza_preparacion`) y la huella de los originales con que
+    se prepararon (`huellas_preparacion_json`), para no reutilizar lo preparado de un original que ha cambiado."""
+    columnas = {fila[1] for fila in conn.execute("PRAGMA table_info(upload_jobs)")}
+    for nombre, definicion in (("etapa_parada", "TEXT"), ("reutiliza_preparacion", "INTEGER NOT NULL DEFAULT 0"),
+                               ("huellas_preparacion_json", "TEXT")):
+        if nombre in columnas:
+            continue
+        try:
+            conn.execute(f"ALTER TABLE upload_jobs ADD COLUMN {nombre} {definicion}")
+        except sqlite3.OperationalError:
+            # Solo se calla si la columna ya está (la añadió otro init_db a la vez), no un «database is locked».
+            if nombre not in {fila[1] for fila in conn.execute("PRAGMA table_info(upload_jobs)")}:
+                raise
+
+
 def _migrate_upload_jobs_torrent_subido(conn: sqlite3.Connection) -> None:
     """Esquema 44: `torrent_subido` (qBittorrent siembra del enlace de esa subida, antes se buscaba en todo el
     registro) y el índice del registro, que sirve a MAX(sequence) y a leer el final o lo posterior a una línea."""
@@ -1804,6 +1821,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_upload_jobs_torrent_subido(conn)
         _migrate_auth_sessions_last_used(conn)
         _migrate_scheduled_tasks_run_at(conn)
+        _migrate_upload_jobs_pasos(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

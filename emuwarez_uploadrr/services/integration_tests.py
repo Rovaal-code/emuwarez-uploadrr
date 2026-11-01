@@ -232,12 +232,22 @@ def test_emuwarez_connection(
         from emuwarez_uploadrr.database import set_state
         set_state(conn, EMU_TEST_STATE_KEY, dt.datetime.now(dt.timezone.utc).isoformat())
 
+    # Va por el mismo limitador que el resto de peticiones a eMuwarez, como consulta interactiva.
+    from ..integrations import emu_limitador
+    from ..integrations.base import IntegrationError
+    try:
+        emu_limitador.esperar_turno(_key, interactiva=True)
+    except IntegrationError as exc:
+        return _fail("emuwarez", "rate_limited", str(exc))
+
     url = f"{_base}/api/torrents/filter?api_token={urllib.parse.quote(_key)}&perPage=1"
     req = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": "emuwarez-uploadrr/3"})
     try:
         with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
             return _ok("emuwarez", details={"base_url": _base, "http_status": resp.status})
     except urllib.error.HTTPError as exc:
+        if exc.code == 429:
+            emu_limitador.penalizar(_key)
         if exc.code in (401, 403):
             return _fail("emuwarez", "invalid_key", "API key de eMuwarez inválida o no autorizada")
         return _fail("emuwarez", "connection_error", f"Error HTTP {exc.code} al conectar con eMuwarez")

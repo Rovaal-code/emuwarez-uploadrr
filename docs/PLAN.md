@@ -86,6 +86,15 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   `constantes`). Comportamiento igual: lo fija `components/__tests__/UploadWizardModal.test.tsx` (jsdom). Arreglado
   de paso: «Ver nombre de todos los capítulos» y «Ver Pistas», si estaban abiertos al cambiar el idioma del pack, se
   recargan con el idioma confirmado en vez de quedarse vacíos.
+- **Oleada 3, un solo limitador para eMuwarez:** toda petición a la API de eMuwarez pasa por
+  `integrations/emu_limitador.py` (los conectores de `emu.py` y la prueba de conexión de `integration_tests.py`):
+  ventana deslizante de 60 s por API key, planificada para 28 de las 30 que deja eMuwarez. Los recorridos largos
+  (catálogo y peticiones) se quedan en 20 por minuto entre todos; los 8 huecos restantes son para las consultas
+  sueltas (perfil, probar conexión, detalle, comprobación de antes de subir), que no se ponen a la cola de un
+  catálogo y, si tendrían que esperar más de 15 s, fallan con un mensaje claro. Un 429 pausa 60 s a todos los que
+  usan esa clave, no solo al que lo recibió. Se van las pausas sueltas (`EMU_MIN_REQUEST_INTERVAL`,
+  `EMU_PETICIONES_INTERVALO`, `min_interval`). En los tests, un fixture de `conftest.py` le da a cada test su
+  limitador con un reloj falso: nada duerme de verdad.
 
 ## Siguiente (oleada 3)
 

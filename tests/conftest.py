@@ -82,6 +82,42 @@ def _sin_manifiesto_de_version(monkeypatch):
     monkeypatch.setattr(version_info, "URL_MANIFIESTO", "http://127.0.0.1:9/latest.json")
 
 
+class RelojFalso:
+    """Reloj para el limitador de eMuwarez: dormir no espera, adelanta el reloj y lo apunta en `dormidas`."""
+
+    def __init__(self, ahora: float = 1000.0):
+        import threading
+        self.ahora = ahora
+        self.dormidas: list[float] = []
+        self._cerrojo = threading.Lock()
+
+    def __call__(self) -> float:
+        with self._cerrojo:
+            return self.ahora
+
+    def dormir(self, segundos: float) -> None:
+        with self._cerrojo:
+            self.dormidas.append(segundos)
+            self.ahora += segundos
+
+    def avanzar(self, segundos: float) -> None:
+        with self._cerrojo:
+            self.ahora += segundos
+
+
+@pytest.fixture(autouse=True)
+def limitador_emuwarez(monkeypatch):
+    """Cada test tiene su propio limitador de eMuwarez con un reloj falso: nada duerme de verdad, no se arrastra
+    lo pedido por otro test y se puede comprobar lo que habría esperado (`limitador_emuwarez.reloj.dormidas`)."""
+    from emuwarez_uploadrr.integrations import emu_limitador
+
+    reloj = RelojFalso()
+    limitador = emu_limitador.Limitador(reloj=reloj, dormir=reloj.dormir)
+    limitador.reloj = reloj
+    monkeypatch.setattr(emu_limitador, "LIMITADOR", limitador)
+    return limitador
+
+
 @pytest.fixture
 def ficheros_de_mentira(monkeypatch):
     """Para las pruebas que crean un .mkv con bytes cualquiera. Con mkvmerge y

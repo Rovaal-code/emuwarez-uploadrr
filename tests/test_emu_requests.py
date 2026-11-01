@@ -797,7 +797,6 @@ def test_cruzar_peticiones_no_llama_a_emuwarez(db_conn, monkeypatch):
 
 def test_una_sync_entera_solo_pide_las_paginas_de_peticiones(db_conn, monkeypatch):
     """Con peticiones que no cruzan con nada, lo único que sale a la red son las páginas del listado."""
-    import types
     from emuwarez_uploadrr.services import requests as reqs
     _con_clave(db_conn)
     paginas = [
@@ -808,7 +807,6 @@ def test_una_sync_entera_solo_pide_las_paginas_de_peticiones(db_conn, monkeypatc
     ]
     pedidas = []
     monkeypatch.setattr(emu, "request_json", lambda method, url, **kw: pedidas.append(url) or paginas.pop(0))
-    monkeypatch.setattr(emu, "time", types.SimpleNamespace(sleep=lambda s: None))
 
     result = reqs.sync_emu_requests(db_conn, force=True)
 

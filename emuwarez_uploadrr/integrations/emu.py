@@ -7,10 +7,11 @@ from __future__ import annotations
 
 import json
 import re
-import time
 from typing import Any, Iterable, Optional
 
+from . import emu_limitador
 from .base import IntegrationError, build_url, request_json
+from .emu_limitador import EMU_ESPERA_429
 from ..constants import EMU_BASE_URL
 from ..models import RequestItem
 
@@ -26,11 +27,13 @@ EMU_RESOLUCIONES = {
 # UNIT3D-pattern functions (primary, api_token query param)
 # ---------------------------------------------------------------------------
 
-def emu_test_connection(api_key: str, base_url: str | None = None) -> dict[str, Any]:
-    """Test connectivity to eMuwarez using UNIT3D ?api_token= auth."""
+def emu_test_connection(api_key: str, base_url: str | None = None, *, interactiva: bool = True) -> dict[str, Any]:
+    """Test connectivity to eMuwarez using UNIT3D ?api_token= auth.
+
+    `interactiva=False` cuando es el primer paso de un recorrido largo: espera su turno en vez de fallar."""
     base = (base_url or EMU_BASE_URL).rstrip("/")
     url = build_url(base, "/api/torrents/filter", {"api_token": api_key, "perPage": "1"})
-    return request_json("GET", url)
+    return _pedir(url, api_key, interactiva=interactiva)
 
 
 def emu_get_requests(
@@ -51,7 +54,7 @@ def emu_get_requests(
         {"api_token": api_key, "page": page, "perPage": per_page, "filled": 0,
          "category_id[]": list(EMU_CATEGORIAS)},
     )
-    return _pedir_pagina(url)
+    return _pedir_pagina(url, api_key)
 
 
 def emu_get_request_detail(
@@ -62,7 +65,7 @@ def emu_get_request_detail(
     """Fetch detail for a single EMU request by ID."""
     base = (base_url or EMU_BASE_URL).rstrip("/")
     url = build_url(base, f"/api/requests/{request_id}", {"api_token": api_key})
-    return request_json("GET", url)
+    return _pedir(url, api_key, interactiva=True)
 
 
 def emu_get_user(api_key: str, base_url: str | None = None) -> dict[str, Any]:
@@ -70,7 +73,7 @@ def emu_get_user(api_key: str, base_url: str | None = None) -> dict[str, Any]:
     base = (base_url or EMU_BASE_URL).rstrip("/")
     url = build_url(base, "/api/user", {"api_token": api_key})
     try:
-        data = request_json("GET", url)
+        data = _pedir(url, api_key, interactiva=True)
     except IntegrationError as exc:
         if exc.status in _MENSAJE_POR_ESTADO:
             raise IntegrationError(_MENSAJE_POR_ESTADO[exc.status], status=exc.status) from None
@@ -83,7 +86,7 @@ def emu_get_user(api_key: str, base_url: str | None = None) -> dict[str, Any]:
 def emu_fetch_all_pages(
     api_key: str, base_url: str | None = None, progress=None
 ) -> tuple[list[dict[str, Any]], Optional[int]]:
-    """Recorre las peticiones abiertas página a página, con una pausa entre una y otra.
+    """Recorre las peticiones abiertas página a página, al ritmo del limitador compartido (emu_limitador).
 
     Devuelve (filas, total). `total` es el meta.total de eMuwarez, o None si no
     vino o cambió durante el recorrido: entonces no se puede dar por completo.
@@ -95,8 +98,6 @@ def emu_fetch_all_pages(
     totales: set[Optional[int]] = set()
     pagina = ultima = 1
     while pagina <= ultima:
-        if pagina > 1:
-            time.sleep(EMU_PETICIONES_INTERVALO)
         try:
             data = emu_get_requests(api_key, base_url=base_url, page=pagina)
         except IntegrationError as exc:
@@ -121,16 +122,11 @@ def emu_fetch_all_pages(
     return filas, (totales.pop() if len(totales) == 1 else None)
 
 
-# eMuwarez rate-limits the API to 30 requests/minute (x-ratelimit-limit: 30)
-# and caps perPage at 100 server-side, so a full ~13k-torrent catalog is ~130
-# sequential requests. 2,2 s entre peticiones queda por debajo del límite (cada
-# petición tarda además ~3 s); antes eran 6 s y la completa tardaba 17 min.
-EMU_MIN_REQUEST_INTERVAL = 2.2  # seconds between torrent-catalog requests
-# Pocas páginas, y la clave la comparten Sonarr, Radarr, qui, autobrr y las subidas: se va despacio.
-EMU_PETICIONES_INTERVALO = 6.0  # seconds between request pages
+# eMuwarez limita la API a 30 peticiones por minuto por clave (x-ratelimit-limit: 30) y perPage a 100, así que el
+# catálogo entero (~13k torrents) son ~130 páginas seguidas. El ritmo lo pone emu_limitador, compartido por todas
+# las peticiones del proceso: cada recorrido ya no se pausa por su cuenta.
 EMU_PETICIONES_MAX_PAGINAS = 50
-# Si aun así llega un 429, se espera a que se vacíe la ventana del minuto y se repite la página.
-EMU_ESPERA_429 = 60.0
+# Si aun así llega un 429, el limitador pausa a todos EMU_ESPERA_429 s y la página se repite.
 EMU_REINTENTOS_429 = 3
 
 # Con estos estados, en la primera página, se prueba otra vez sin pedir un orden (puede ser lo que rechaza).
@@ -144,14 +140,25 @@ _MENSAJE_POR_ESTADO = {
 }
 
 
-def _pedir_pagina(url: str) -> Any:
+def _pedir(url: str, api_key: str, *, interactiva: bool) -> Any:
+    """Toda petición a eMuwarez pasa por aquí: espera su turno en el limitador y, si llega un 429, pausa a todos."""
+    emu_limitador.esperar_turno(api_key, interactiva=interactiva)
+    try:
+        return request_json("GET", url)
+    except IntegrationError as e:
+        if e.status == 429:
+            emu_limitador.penalizar(api_key, EMU_ESPERA_429)
+        raise
+
+
+def _pedir_pagina(url: str, api_key: str) -> Any:
+    """Una página de un recorrido largo: un 429 se repite, tras la pausa que ya ha puesto `_pedir`."""
     for intento in range(EMU_REINTENTOS_429 + 1):
         try:
-            return request_json("GET", url)
+            return _pedir(url, api_key, interactiva=False)
         except IntegrationError as e:
             if e.status != 429 or intento == EMU_REINTENTOS_429:
                 raise
-            time.sleep(EMU_ESPERA_429)
 
 
 def emu_fetch_all_torrents(
@@ -161,7 +168,6 @@ def emu_fetch_all_torrents(
     max_pages: int = 500,
     progress=None,
     stop_after_id: int | None = None,
-    min_interval: float = EMU_MIN_REQUEST_INTERVAL,
 ) -> list[dict[str, Any]]:
     """Fetch eMuwarez torrents (paginated /api/torrents/filter), newest first.
     Returns the flat list of raw torrent objects ({type, id, attributes}).
@@ -175,7 +181,7 @@ def emu_fetch_all_torrents(
     página, el recorrido completo sigue sin él (su orden por defecto) en vez de dejar la sincronización sin
     funcionar; el incremental falla, porque sin orden no puede fiarse de dónde parar.
 
-    Requests are paced to `min_interval` seconds apart (rate limit).
+    El ritmo lo pone el limitador compartido (emu_limitador).
 
     `progress(page, total_pages, items_so_far, total_items)` is called after each
     page (total_pages/total_items from the API `meta`, or None if absent)."""
@@ -189,11 +195,9 @@ def emu_fetch_all_torrents(
 
     def pedir(n: int) -> Any:
         return _pedir_pagina(build_url(base, "/api/torrents/filter", {
-            "api_token": api_key, "perPage": str(per_page), "page": str(n), **orden}))
+            "api_token": api_key, "perPage": str(per_page), "page": str(n), **orden}), api_key)
 
     while page <= max_pages and not reached_known:
-        if page > 1:
-            time.sleep(min_interval)  # rate limit (see EMU_MIN_REQUEST_INTERVAL)
         try:
             data = pedir(page)
         except IntegrationError as exc:

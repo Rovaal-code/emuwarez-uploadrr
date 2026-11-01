@@ -11,9 +11,8 @@ def _pagina(ids):
     return {"data": [{"id": i} for i in ids], "meta": {"last_page": 1, "total": len(ids)}}
 
 
-def test_un_429_repite_la_pagina(monkeypatch):
+def test_un_429_repite_la_pagina(monkeypatch, limitador_emuwarez):
     respuestas = [IntegrationError("HTTP 429", status=429), _pagina([3, 2, 1])]
-    esperas = []
 
     def falso(method, url):
         r = respuestas.pop(0)
@@ -22,9 +21,8 @@ def test_un_429_repite_la_pagina(monkeypatch):
         return r
 
     monkeypatch.setattr(emu, "request_json", falso)
-    monkeypatch.setattr(emu.time, "sleep", esperas.append)
     assert [t["id"] for t in emu.emu_fetch_all_torrents("k", per_page=100)] == [3, 2, 1]
-    assert esperas == [emu.EMU_ESPERA_429]
+    assert sum(limitador_emuwarez.reloj.dormidas) == pytest.approx(emu.EMU_ESPERA_429)
 
 
 def test_otros_errores_no_se_reintentan(monkeypatch):
@@ -35,7 +33,6 @@ def test_otros_errores_no_se_reintentan(monkeypatch):
         raise IntegrationError("HTTP 503", status=503)
 
     monkeypatch.setattr(emu, "request_json", falso)
-    monkeypatch.setattr(emu.time, "sleep", lambda s: None)
     with pytest.raises(IntegrationError):
         emu.emu_fetch_all_torrents("k")
     assert len(llamadas) == 1
@@ -64,6 +61,5 @@ def test_un_429_real_de_urlopen_llega_como_status_y_se_reintenta(monkeypatch):
         return Respuesta(json.dumps({"data": [{"id": 5}], "meta": {"last_page": 1}}).encode())
 
     monkeypatch.setattr(base.urllib.request, "urlopen", urlopen)
-    monkeypatch.setattr(emu.time, "sleep", lambda s: None)
     assert [t["id"] for t in emu.emu_fetch_all_torrents("k")] == [5]
     assert len(llamadas) == 2

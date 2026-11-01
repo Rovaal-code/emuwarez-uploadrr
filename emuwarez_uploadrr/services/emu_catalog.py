@@ -815,7 +815,7 @@ def sync_emu_catalog(conn: sqlite3.Connection, *, force: bool = False, mode: str
         # as an error within seconds rather than the sync silently hanging.
         _set_progress(phase="Comprobando conexión con eMuwarez…", page=0, total_pages=None, eta_seconds=None)
         try:
-            emu.emu_test_connection(api_key)
+            emu.emu_test_connection(api_key, interactiva=False)  # primer paso del recorrido: espera su turno
         except IntegrationError as exc:
             raise IntegrationError(f"No se pudo conectar con eMuwarez: {exc}") from exc
 

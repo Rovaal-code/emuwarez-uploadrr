@@ -26,7 +26,7 @@ def db_conn(isolated_db):
 def test_unreachable_emu_fails_fast_without_fetching_catalog(db_conn, monkeypatch):
     calls = {"test_connection": 0, "fetch_all": 0}
 
-    def fake_test_connection(api_key, base_url=None):
+    def fake_test_connection(api_key, base_url=None, **kw):
         calls["test_connection"] += 1
         raise IntegrationError("Connection refused")
 
@@ -48,7 +48,7 @@ def test_unreachable_emu_fails_fast_without_fetching_catalog(db_conn, monkeypatc
 def test_reachable_emu_proceeds_to_fetch_catalog(db_conn, monkeypatch):
     calls = {"test_connection": 0, "fetch_all": 0}
 
-    def fake_test_connection(api_key, base_url=None):
+    def fake_test_connection(api_key, base_url=None, **kw):
         calls["test_connection"] += 1
         return {"data": []}
 

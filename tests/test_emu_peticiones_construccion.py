@@ -4,7 +4,6 @@ Todo con `request_json` falso: ningún test habla con el tracker."""
 from __future__ import annotations
 
 import io
-import types
 import urllib.error
 import urllib.parse
 from unittest.mock import patch
@@ -16,10 +15,10 @@ from emuwarez_uploadrr.integrations.base import IntegrationError
 
 
 @pytest.fixture
-def pedidas(monkeypatch):
+def pedidas(monkeypatch, limitador_emuwarez):
     """Guarda cada URL pedida y responde con lo que haya en `respuestas` (o {}); si es una
-    excepción, la lanza. Las esperas no duermen: se anotan en `dormidas`."""
-    registro = {"urls": [], "respuestas": [], "dormidas": []}
+    excepción, la lanza. Las esperas del limitador no duermen: se anotan en `dormidas`."""
+    registro = {"urls": [], "respuestas": [], "dormidas": limitador_emuwarez.reloj.dormidas}
 
     def falso(method, url, **kw):
         registro["urls"].append(url)
@@ -29,7 +28,6 @@ def pedidas(monkeypatch):
         return respuesta
 
     monkeypatch.setattr(emu, "request_json", falso)
-    monkeypatch.setattr(emu, "time", types.SimpleNamespace(sleep=registro["dormidas"].append))
     return registro
 
 
@@ -81,7 +79,8 @@ def _pagina_peticiones(ids, pagina=1, ultima=1, total=None):
     }
 
 
-def test_recorre_todas_las_paginas_con_seis_segundos_entre_cada_una(pedidas):
+def test_recorre_todas_las_paginas_sin_pausas_propias(pedidas):
+    """El ritmo lo pone el limitador compartido: tres páginas caben de sobra en su minuto."""
     pedidas["respuestas"] = [
         _pagina_peticiones([1, 2], 1, 3, total=5),
         _pagina_peticiones([3, 4], 2, 3, total=5),
@@ -91,7 +90,7 @@ def test_recorre_todas_las_paginas_con_seis_segundos_entre_cada_una(pedidas):
     assert [f["id"] for f in filas] == [1, 2, 3, 4, 5]
     assert total == 5
     assert [_pagina_de(u) for u in pedidas["urls"]] == ["1", "2", "3"]
-    assert pedidas["dormidas"] == [6.0, 6.0]
+    assert pedidas["dormidas"] == []
 
 
 def test_una_sola_pagina_no_espera(pedidas):
@@ -109,7 +108,7 @@ def test_un_429_espera_un_minuto_y_repite_la_misma_pagina(pedidas):
     pedidas["respuestas"] = [IntegrationError("HTTP 429", status=429), _pagina_peticiones([1])]
     filas, _ = emu.emu_fetch_all_pages("KEY")
     assert filas == [{"id": 1}]
-    assert pedidas["dormidas"] == [60.0]
+    assert sum(pedidas["dormidas"]) == pytest.approx(60.0)
     assert [_pagina_de(u) for u in pedidas["urls"]] == ["1", "1"]
 
 
@@ -119,7 +118,7 @@ def test_un_429_que_no_se_va_acaba_en_un_error_claro(pedidas):
         emu.emu_fetch_all_pages("KEY")
     assert str(e.value) == "eMuwarez ha limitado las peticiones; prueba en unos minutos"
     assert e.value.status == 429
-    assert pedidas["dormidas"] == [60.0, 60.0, 60.0]
+    assert sum(pedidas["dormidas"]) == pytest.approx(180.0)
     assert len(pedidas["urls"]) == 4
 
 
@@ -139,7 +138,6 @@ def test_una_clave_rechazada_para_enseguida(pedidas, estado):
 ])
 def test_ningun_error_lleva_la_clave(monkeypatch, estado, texto):
     """Con request_json de verdad: ni el mensaje claro ni el que pasa tal cual enseñan la clave."""
-    monkeypatch.setattr(emu, "time", types.SimpleNamespace(sleep=lambda s: None))
     clave = "CLAVESECRETA123"
 
     def responde(req, **kw):
@@ -186,7 +184,7 @@ def _pagina(ids, last_page=1, total=None):
 def test_catalogo_completo_hasta_una_pagina_corta(pedidas):
     pedidas["respuestas"] = [_pagina([5, 4], last_page=2, total=3), _pagina([3], last_page=2, total=3)]
     progreso = []
-    out = emu.emu_fetch_all_torrents("KEY", per_page=2, min_interval=0, progress=lambda *a: progreso.append(a))
+    out = emu.emu_fetch_all_torrents("KEY", per_page=2, progress=lambda *a: progreso.append(a))
     assert [t["id"] for t in out] == [5, 4, 3]
     assert progreso == [(1, 2, 2, 3), (2, 2, 3, 3)]
     assert [_partes(u)[2]["page"] for u in pedidas["urls"]] == ["1", "2"]
@@ -194,7 +192,7 @@ def test_catalogo_completo_hasta_una_pagina_corta(pedidas):
 
 def test_catalogo_incremental_para_en_el_primer_torrent_conocido(pedidas):
     pedidas["respuestas"] = [_pagina([9, 8], last_page=5), _pagina([7, 6], last_page=5)]
-    out = emu.emu_fetch_all_torrents("KEY", per_page=2, min_interval=0, stop_after_id=7)
+    out = emu.emu_fetch_all_torrents("KEY", per_page=2, stop_after_id=7)
     assert [t["id"] for t in out] == [9, 8]
     assert len(pedidas["urls"]) == 2
 
@@ -205,13 +203,13 @@ def test_un_fallo_del_progreso_no_corta_la_descarga(pedidas):
     def roto(*a):
         raise RuntimeError("barra rota")
 
-    assert [t["id"] for t in emu.emu_fetch_all_torrents("KEY", min_interval=0, progress=roto)] == [1]
+    assert [t["id"] for t in emu.emu_fetch_all_torrents("KEY", progress=roto)] == [1]
 
 
 def test_el_catalogo_se_pide_ordenado_por_fecha_de_creacion(pedidas):
     """PET-5: sin orden explícito UNIT3D usa bumped_at y un torrent resubido cortaba el recorrido incremental."""
     pedidas["respuestas"] = [_pagina([3, 2, 1])]
-    emu.emu_fetch_all_torrents("KEY", min_interval=0)
+    emu.emu_fetch_all_torrents("KEY")
     consulta = _partes(pedidas["urls"][0])[2]
     assert (consulta["sortField"], consulta["sortDirection"]) == ("created_at", "desc")
 
@@ -219,7 +217,7 @@ def test_el_catalogo_se_pide_ordenado_por_fecha_de_creacion(pedidas):
 def test_si_el_tracker_rechaza_el_orden_se_sigue_sin_el(pedidas):
     """El orden no se ha podido probar contra el tracker real: si lo rechaza, la sincronización no puede quedarse sin ir."""
     pedidas["respuestas"] = [IntegrationError("HTTP 422", status=422), _pagina([3, 2, 1])]
-    assert [t["id"] for t in emu.emu_fetch_all_torrents("KEY", min_interval=0)] == [3, 2, 1]
+    assert [t["id"] for t in emu.emu_fetch_all_torrents("KEY")] == [3, 2, 1]
     con, sin = (_partes(u)[2] for u in pedidas["urls"])
     assert "sortField" in con and "sortField" not in sin
 
@@ -227,7 +225,7 @@ def test_si_el_tracker_rechaza_el_orden_se_sigue_sin_el(pedidas):
 def test_un_fallo_que_no_es_del_orden_no_se_reintenta_sin_el(pedidas):
     pedidas["respuestas"] = [IntegrationError("HTTP 401", status=401)]
     with pytest.raises(IntegrationError):
-        emu.emu_fetch_all_torrents("KEY", min_interval=0)
+        emu.emu_fetch_all_torrents("KEY")
     assert len(pedidas["urls"]) == 1
 
 
@@ -235,5 +233,5 @@ def test_el_recorrido_incremental_no_sigue_sin_orden(pedidas):
     """Sin orden, un torrent antiguo resubido saldría el primero y cortaría el recorrido: el incremental falla."""
     pedidas["respuestas"] = [IntegrationError("HTTP 422", status=422), _pagina([9, 8, 7])]
     with pytest.raises(IntegrationError):
-        emu.emu_fetch_all_torrents("KEY", min_interval=0, stop_after_id=5)
+        emu.emu_fetch_all_torrents("KEY", stop_after_id=5)
     assert len(pedidas["urls"]) == 1

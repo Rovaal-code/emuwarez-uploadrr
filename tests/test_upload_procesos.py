@@ -519,3 +519,22 @@ def test_no_se_lanza_uploadrr_una_vez_empezado_el_apagado(db_conn, tmp_path):
 
     popen.assert_not_called()
     assert _estado(db_conn, jid)["status"] == "failed"
+
+
+# --- Sin config.yaml preparado no se lanza Uploadrr --------------------------------------------
+
+def test_si_no_se_puede_preparar_el_config_el_job_falla_sin_lanzar_uploadrr(db_conn, fake_uploadrr_emu_dir):
+    """Preparar el config falló (en la imagen: EPERM al sustituir el enlace) y la
+    subida se lanzaba igual, con el config sin las claves: TMDb 401, dupes mal."""
+    jid = _job(db_conn)
+
+    with patch.object(ue, "write_staged_config", side_effect=PermissionError(1, "Operation not permitted")), \
+            patch("subprocess.Popen") as popen:
+        ue._run_uploadrr_subprocess(jid, _cmd(fake_uploadrr_emu_dir, runtime_type="uploadrr_emu"), [])
+
+    popen.assert_not_called()
+    fila = db_conn.execute("SELECT status, error_message FROM upload_jobs WHERE id = ?", (jid,)).fetchone()
+    assert fila["status"] == "failed"
+    assert "No se pudo preparar el config.yaml de Uploadrr" in fila["error_message"]
+    assert "No se lanza la subida" in fila["error_message"]
+    assert ue._config_stage_refcount == {}

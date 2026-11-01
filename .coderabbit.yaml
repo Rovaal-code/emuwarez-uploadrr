@@ -44,7 +44,7 @@ reviews:
           Sonarr/Radarr). El nombre de eMuwarez va en el enlace o el clon dentro de la carpeta de subidas.
         - Nunca se escriben bytes en un fichero con st_nlink > 1: las ediciones van a un clon reflink dentro de
           uploads o se omiten con aviso; reordenar un fichero compartido se omite. Nombre y orden de pistas en el
-          original solo con st_nlink == 1. El título interno del MKV nunca en la biblioteca.
+          original solo con st_nlink == 1, y el título interno del MKV igual (nunca con las pistas en «Ninguno»).
         - Nunca se borra nada fuera de la carpeta de subidas, ni un enlace que otra subida está sembrando.
         - Rutas comparadas por componentes (commonpath / en_carpeta_de_subidas), nunca con startswith.
     - path: "emuwarez_uploadrr/services/{uploadrr_contract,uploadrr_progress,upload_result_parser,uploadrr_config_staging,uploadrr_yaml,upload_execution}.py"

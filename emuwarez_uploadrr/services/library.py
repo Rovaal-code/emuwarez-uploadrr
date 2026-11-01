@@ -1283,7 +1283,9 @@ def _orden_de_lista(sort: Optional[str], ignore_specials: bool) -> str:
     # user-selected sort.
     sort_sql = _LIBRARY_SORT.get(sort or DEFAULT_LIBRARY_SORT, _LIBRARY_SORT[DEFAULT_LIBRARY_SORT]).format(
         tamano=_tamano_efectivo(ignore_specials))
-    return f" ORDER BY season_number IS NOT NULL, season_number, episode_number, {sort_sql}"
+    # El id desempata: con títulos repetidos y el mismo updated_at, cada página (una consulta aparte)
+    # podría ordenarlos distinto y repetir u omitir una fila.
+    return f" ORDER BY season_number IS NOT NULL, season_number, episode_number, {sort_sql}, id"
 
 
 def list_library(

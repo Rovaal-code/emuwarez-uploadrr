@@ -281,3 +281,29 @@ def test_ocultar_se_combina_con_elegir_otro_valor_de_la_misma_columna(api_con_gr
 def test_ocultar_y_ordenar_por_tamano_no_cambia_el_total(api_con_grupos, auth_headers):
     _, total = _titulos(api_con_grupos, auth_headers, "release_group=!G2&sort=size_desc&limit=1&offset=3")
     assert total == 4
+
+
+# --- Orden total: el id desempata ----------------------------------------------------------------
+
+@pytest.mark.parametrize("sort", ORDENES)
+def test_cada_orden_termina_en_el_id(sort):
+    assert lib._orden_de_lista(sort, True).rstrip().endswith(", id")
+
+
+@pytest.mark.parametrize("sort", ORDENES)
+def test_con_titulos_repetidos_las_paginas_no_repiten_ni_omiten(conn, sort):
+    # Dos «Dune» (1984 y 2021) y un montón de ficheros con el mismo título y la misma marca de tiempo.
+    ids = []
+    for i in range(30):
+        cur = conn.execute(
+            "INSERT INTO library_items (item_type, title, local_status, year, updated_at) "
+            "VALUES ('movie', ?, 'Faltante', ?, '2026-01-01 00:00:00')", ("Dune" if i % 3 else "Otra", 2000 + i % 2))
+        ids.append(cur.lastrowid)
+    conn.commit()
+    por_paginas = []
+    for desde in range(0, 30, 7):
+        filas, total = list_library_agrupada(conn, status=["Faltante"], sort=sort, limit=7, offset=desde)
+        por_paginas += [f["id"] for f in filas]
+        assert total == 30
+    completo = [f["id"] for f in list_library_agrupada(conn, status=["Faltante"], sort=sort, limit=-1)[0]]
+    assert por_paginas == completo and sorted(completo) == ids

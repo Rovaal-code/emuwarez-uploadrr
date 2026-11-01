@@ -128,8 +128,10 @@ export async function startUploadJob(
 
 // Reintenta por el mismo camino en cola que queueUpload(), sin token de
 // confirmación: solo crea un trabajo nuevo y no toca el original (fallido o cancelado).
-export async function retryUploadJobQueued(jobId: number): Promise<UploadQueueResult> {
-  return api.post<UploadQueueResult>(`/uploads/${jobId}/retry-queued`, {})
+// Por defecto reanuda desde el paso que falló si se puede; `desdeElPrincipio` lo rehace todo.
+export async function retryUploadJobQueued(jobId: number, desdeElPrincipio = false): Promise<UploadQueueResult> {
+  const consulta = desdeElPrincipio ? '?desde_el_principio=true' : ''
+  return api.post<UploadQueueResult>(`/uploads/${jobId}/retry-queued${consulta}`, {})
 }
 
 export async function cancelUploadJob(jobId: number): Promise<unknown> {

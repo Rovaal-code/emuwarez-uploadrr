@@ -470,10 +470,10 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // trabajo nuevo para ver su progreso en el momento. Los errores se enseñan, no se tragan:
   // un fallo silencioso aquí parecía un botón que no hacía nada.
   const [retryError, setRetryError] = useState<string | null>(null)
-  const handleRetryQueued = async (job: UploadJob) => {
+  const handleRetryQueued = async (job: UploadJob, desdeElPrincipio = false) => {
     setRetryError(null)
     try {
-      const r = await retryUploadJobQueued(job.id!)
+      const r = await retryUploadJobQueued(job.id!, desdeElPrincipio)
       await load()
       if (r.job?.id != null) openUpload(r.job.id)
     } catch (e: unknown) {
@@ -624,7 +624,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
           job={selectedJobWithTitle}
           onBack={closeUpload}
           onStart={j => setStartJob(j)}
-          onRetry={j => handleRetryQueued(j)}
+          onRetry={(j, desdeElPrincipio) => handleRetryQueued(j, desdeElPrincipio)}
           onCancel={id => handleCancel(id)}
           onDelete={j => setDeleteJob(j)}
           onOpenLibraryItem={goToLibraryItem}

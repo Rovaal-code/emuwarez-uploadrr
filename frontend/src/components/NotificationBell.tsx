@@ -223,8 +223,13 @@ export function NotificationBell() {
 
   // Solo cuenta la última lista pedida, y un cambio local (marcar, borrar) también tira las que iban en vuelo:
   // una respuesta anterior al cambio devolvería el aviso que acabas de borrar o el contador que acabas de poner a 0.
+  // Acciones optimistas en marcha. Mientras haya alguna, ninguna consulta pisa la lista (traería de
+  // vuelta lo que otra aún está borrando): se apunta y se consulta una vez cuando terminan todas.
+  const enCurso = useRef(0)
+  const recargarAlAcabar = useRef(false)
   const ultimoRefresco = useRef(0)
   const refresh = useCallback(async () => {
+    if (enCurso.current > 0) { recargarAlAcabar.current = true; return }
     const esta = ++ultimoRefresco.current
     try {
       const feed = await getNotifications({ limit: 50 })
@@ -275,14 +280,11 @@ export function NotificationBell() {
     }
   }
 
-  // Acciones optimistas en marcha. Si una falla, se vuelve a lo que dice el servidor, pero solo
-  // cuando han terminado todas: recargar antes traería de vuelta lo que otra aún está borrando.
-  const enCurso = useRef(0)
-  const recargarAlAcabar = useRef(false)
   const accion = async (optimista: () => void, llamada: () => Promise<unknown>) => {
     ultimoRefresco.current++
     optimista()
     enCurso.current++
+    // Si falla, la lista ya no coincide con el servidor: se consulta al terminar.
     try { await llamada() } catch { recargarAlAcabar.current = true } finally {
       enCurso.current--
       if (enCurso.current === 0 && recargarAlAcabar.current) {

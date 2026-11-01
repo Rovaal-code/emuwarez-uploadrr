@@ -12,7 +12,23 @@ import pytest
 
 from emuwarez_uploadrr.services import backup_service as bs
 
-BUENA = {"emuwarez_uploadrr.db": b"base", "settings.json": b"{}"}
+
+
+def _base_sqlite() -> bytes:
+    """Una base SQLite de verdad: con la base viva en SQLite, una copia cuya base no lo es se rechaza."""
+    import sqlite3
+    import tempfile
+    from pathlib import Path
+    with tempfile.TemporaryDirectory() as tmp:
+        ruta = Path(tmp) / "b.db"
+        conn = sqlite3.connect(ruta)
+        conn.execute("CREATE TABLE t (x)")
+        conn.commit()
+        conn.close()
+        return ruta.read_bytes()
+
+
+BUENA = {"emuwarez_uploadrr.db": _base_sqlite(), "settings.json": b"{}"}
 
 
 def _tar_gz(miembros: dict[str, bytes]) -> bytes:

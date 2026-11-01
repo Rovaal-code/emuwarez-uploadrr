@@ -179,7 +179,7 @@ def test_mkvpropedit_uses_shell_false(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# El título es parte del nombre: solo en la carpeta de subidas y sin otro enlace
+# El título, como los nombres de pista: solo sin otro enlace y fuera de "Ninguno"
 # ---------------------------------------------------------------------------
 
 def _titulo_en(tmp_path, monkeypatch, fichero, *, rc=0, stdout="", ruta=None):
@@ -198,23 +198,33 @@ def _titulo_en(tmp_path, monkeypatch, fichero, *, rc=0, stdout="", ruta=None):
     return r, mock_run
 
 
-def test_no_retitula_un_archivo_de_la_biblioteca(tmp_path, monkeypatch):
-    from emuwarez_uploadrr.services.mkv_title import TITULO_NO_EN_BIBLIOTECA
+def test_retitula_un_archivo_de_la_biblioteca_que_no_comparte_nadie(tmp_path, monkeypatch):
+    """Jellyfin no lo lee (usa TMDb): con un solo enlace no rompe nada."""
     (tmp_path / "media").mkdir()
     peli = tmp_path / "media" / "Film (2024).mkv"
     peli.write_bytes(b"fake mkv")
     r, mock_run = _titulo_en(tmp_path, monkeypatch, peli)
-    assert r["status"] == "blocked" and TITULO_NO_EN_BIBLIOTECA in r["errors"]
+    assert r["status"] == "applied"
+    assert mock_run.call_args[0][0][:2] == ["mkvpropedit", str(peli)]
+
+
+def test_no_retitula_uno_de_la_biblioteca_que_comparte_un_torrent(tmp_path, monkeypatch):
+    (tmp_path / "media").mkdir()
+    peli = tmp_path / "media" / "Film (2024).mkv"
+    peli.write_bytes(b"fake mkv")
+    os.link(peli, tmp_path / "seed.mkv")
+    r, mock_run = _titulo_en(tmp_path, monkeypatch, peli)
+    assert r["status"] == "blocked" and "enlaces duros" in r["errors"][0]
     mock_run.assert_not_called()
 
 
-def test_no_retitula_uno_de_subidas_que_comparte_un_torrent(tmp_path, monkeypatch):
-    (tmp_path / "uploads").mkdir()
-    peli = tmp_path / "uploads" / "Film.2024.mkv"
+def test_no_retitula_con_las_pistas_en_ninguno(tmp_path, monkeypatch):
+    from emuwarez_uploadrr.services.mkv_title import TITULO_CON_NINGUNO
+    monkeypatch.setattr("emuwarez_uploadrr.services.mkv_remux.modo_pistas", lambda conn=None: "ninguno")
+    peli = tmp_path / "Film (2024).mkv"
     peli.write_bytes(b"fake mkv")
-    os.link(peli, tmp_path / "seed.mkv")
-    r, mock_run = _titulo_en(tmp_path, monkeypatch, peli, ruta=str(peli))
-    assert r["status"] == "blocked" and "enlaces duros" in r["errors"][0]
+    r, mock_run = _titulo_en(tmp_path, monkeypatch, peli)
+    assert r["status"] == "blocked" and TITULO_CON_NINGUNO in r["errors"]
     mock_run.assert_not_called()
 
 

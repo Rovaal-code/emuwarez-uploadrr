@@ -1120,6 +1120,21 @@ def _en(columna: str, valores: list, where: list[str], params: list) -> None:
         params.extend(valores)
 
 
+# Los filtros de columna (Proveedor, Resolución, Source, Grupo) también ocultan:
+# un valor con «!» delante es «todo menos este».
+def _incluir_excluir(valores: Filtro) -> tuple[list, list]:
+    vs = _valores(valores)
+    return ([v for v in vs if not v.startswith("!")], [v[1:] for v in vs if v.startswith("!")])
+
+
+def _en_columna(columna: str, valores: Filtro, where: list[str], params: list) -> None:
+    incluir, excluir = _incluir_excluir(valores)
+    _en(columna, incluir, where, params)
+    if excluir:
+        where.append(f"COALESCE({columna}, '') NOT IN ({','.join('?' * len(excluir))})")
+        params.extend(excluir)
+
+
 # Los casos de la columna Español. Tienen que cuadrar EXACTAMENTE con lo que
 # enseña la celda (frontend utils/castellano.ts::estadoCastellano) o filtrarías
 # por "Audio" y te saldrían filas que dicen otra cosa. Lo vigila
@@ -1287,16 +1302,17 @@ def list_library(
     # y temporadas se quedan: lo suyo sale de sus capítulos.
     hoja: list[str] = []
     hoja_params: list = []
-    proveedores = set(_valores(provider))
+    # Excluir proveedores no recorta aquí: lo hace filtrar_por_lo_que_se_ve.
+    proveedores = set(_incluir_excluir(provider)[0])
     if proveedores:
         # El proveedor sale de la ruta: basta con que lleve alguno de sus nombres.
         from .nomenclature import _PROVIDER_TOKEN_MAP
         tokens = [t for t, c in _PROVIDER_TOKEN_MAP.items() if _provider_label(c) in proveedores]
         hoja.append(f"({' OR '.join(['path LIKE ?'] * len(tokens))})" if tokens else "0")
         hoja_params.extend(f"%{t}%" for t in tokens)
-    _en("resolution", _valores(resolution), hoja, hoja_params)
-    _en("source", _valores(source), hoja, hoja_params)
-    _en("release_group", _valores(release_group), hoja, hoja_params)
+    _en_columna("resolution", resolution, hoja, hoja_params)
+    _en_columna("source", source, hoja, hoja_params)
+    _en_columna("release_group", release_group, hoja, hoja_params)
     _en("emu_in_catalog", [{"candidate": 0, "present": 1}[v] for v in _valores(emu)], hoja, hoja_params)
     if hoja:
         where.append(f"(item_type IN ('series', 'season') OR ({' AND '.join(hoja)}))")
@@ -1346,7 +1362,7 @@ def filtrar_por_lo_que_se_ve(
 
     Agrupar lo que cumple bajo su serie es cosa de subir_a_su_serie.
     """
-    elegidos = [(k, _valores(v)) for k, v in (
+    elegidos = [(k, *_incluir_excluir(v)) for k, v in (
         ("provider_label", provider), ("resolution", resolution),
         ("source", source), ("release_group", release_group)) if _valores(v)]
     emus = _valores(emu)
@@ -1355,7 +1371,7 @@ def filtrar_por_lo_que_se_ve(
 
     def cumple(it: dict) -> bool:
         # Una serie a medias (emu_in_catalog 2) no es ni Sí ni No: lo son sus temporadas.
-        return (all(it[k] in vs for k, vs in elegidos)
+        return (all((not si or it[k] in si) and it[k] not in no for k, si, no in elegidos)
                 and (not emus or ("candidate" in emus and it["emu_in_catalog"] == 0)
                      or ("present" in emus and it["emu_in_catalog"] == 1))
                 and (not aporte or (_es_aporte(it) if aporte == "yes"

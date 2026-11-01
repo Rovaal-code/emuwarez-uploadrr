@@ -247,7 +247,8 @@ def resolver_copia(nombre: str) -> Path | None:
     if not fnmatch.fnmatchcase(nombre, "emuwarez_config_*.tar.gz") or any(c in nombre for c in ("/", "\\", "\x00")):
         return None
     ruta = get_backup_dir() / nombre
-    return ruta if ruta.is_file() else None
+    # is_file() sigue los enlaces: un enlace con nombre de copia llevaría a un tar de fuera.
+    return ruta if ruta.is_file() and not ruta.is_symlink() else None
 
 
 def _motivo_de_rechazo(tar: tarfile.TarFile, config_dir: Path) -> str | None:
@@ -261,6 +262,10 @@ def _motivo_de_rechazo(tar: tarfile.TarFile, config_dir: Path) -> str | None:
             tarfile.data_filter(miembro, str(config_dir))
         except tarfile.FilterError as exc:
             return f"La copia no es segura ({miembro.name}): {exc}"
+        # Solo nombres canónicos: «./emuwarez_uploadrr.db» o «x/../emuwarez_uploadrr.db» son la base
+        # para la extracción pero no para las comprobaciones de abajo, que la buscan por su nombre.
+        if miembro.name != posixpath.normpath(miembro.name):
+            return f"La copia no es válida: nombre no canónico «{miembro.name}»"
     # Lo que el filtro no ve porque mira cada miembro por separado: un nombre repetido (la segunda base se
     # colocaría sin haberse mirado), la base como algo que no es un fichero, o un fichero que es a la vez carpeta
     # (la extracción fallaría con la base ya cambiada). Las copias de la aplicación nunca lo tienen.

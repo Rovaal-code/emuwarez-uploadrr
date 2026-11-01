@@ -312,3 +312,26 @@ def test_resolver_copia_solo_devuelve_las_de_la_carpeta(cfg, tmp_path):
     assert resolver_copia("../" + nombre) is None
     assert resolver_copia(nombre + "\x00") is None
     assert resolver_copia("pre-migracion-1-v1.db") is None
+
+
+@pytest.mark.parametrize("nombre", ["./emuwarez_uploadrr.db", "x/../emuwarez_uploadrr.db", "a//b.txt"])
+def test_un_nombre_no_canonico_se_rechaza_sin_tocar_la_base(cfg, tmp_path, nombre):
+    """«./emuwarez_uploadrr.db» se saltaba la comprobación del esquema y caía encima de la base."""
+    info = tarfile.TarInfo(nombre)
+    info.size = 1
+    archivo = _tar_malo(tmp_path / "malo.tar.gz", info)
+
+    r = _aplicar(archivo)
+
+    assert r["ok"] is False and "canónico" in r["error"]
+    assert _marca(cfg) == "antes"
+
+
+def test_resolver_copia_no_sigue_un_enlace(cfg, tmp_path):
+    from emuwarez_uploadrr.services.backup_service import resolver_copia
+
+    fuera = tmp_path / "fuera.tar.gz"
+    fuera.write_bytes(b"x")
+    (cfg / "backups").mkdir(exist_ok=True)
+    (cfg / "backups" / "emuwarez_config_enlace.tar.gz").symlink_to(fuera)
+    assert resolver_copia("emuwarez_config_enlace.tar.gz") is None

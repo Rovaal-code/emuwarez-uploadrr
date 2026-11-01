@@ -2468,7 +2468,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
         <Modal titulo="¿Descartar los cambios?" onClose={() => setConfirmandoCierre(false)} className="modal-estrecho">
           <div className="modal-body">
             <p className="text-muted">
-              Has cambiado datos de la subida y todavía no se ha encolado. Si cierras ahora se perderán.
+              Has cambiado datos de la subida y todavía no se ha encolado. Si cierras ahora se perderán los cambios sin guardar; la nomenclatura que ya guardaste al pasar de paso se queda como está.
             </p>
             <div className="modal-actions">
               <button className="btn btn-secondary" type="button" onClick={() => setConfirmandoCierre(false)}>Seguir editando</button>

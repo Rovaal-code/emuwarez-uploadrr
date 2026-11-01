@@ -695,3 +695,17 @@ def test_restaurar_lo_que_dejo_una_subida_muerta_tambien_respeta_el_enlace(tmp_p
 
     assert config.is_symlink()
     assert (estado / "config.yaml").read_bytes() == original
+
+
+def test_si_no_se_puede_sustituir_el_config_no_queda_el_temporal(tmp_path, monkeypatch):
+    import os
+    config, estado = _config_con_enlaces(tmp_path)
+
+    def sin_permiso(origen, destino):
+        raise PermissionError(1, "Operation not permitted")
+
+    monkeypatch.setattr(os, "replace", sin_permiso)
+    with pytest.raises(PermissionError):
+        write_staged_config(config, ["DEFAULT:", "  tmdb: 'x'"])
+
+    assert not any(p.name.endswith(".tmp") for p in estado.iterdir())

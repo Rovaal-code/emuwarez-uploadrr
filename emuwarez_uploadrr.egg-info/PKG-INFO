@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: emuwarez-uploadrr
-Version: 0.14.0
+Version: 0.13.3
 Summary: CLI modular para eMuwarez Uploadrr, preparada para interfaz web
 Requires-Python: >=3.12
 Provides-Extra: web

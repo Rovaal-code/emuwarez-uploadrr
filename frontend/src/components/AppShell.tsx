@@ -175,8 +175,24 @@ export function AppShell({ user, onLogout }: AppShellProps) {
   }, [])
 
   // Keep the tab in sync with browser back/forward.
+  const paginaVigente = useRef(activePage)
+  paginaVigente.current = activePage
   useEffect(() => {
-    const onPop = () => setActivePage(pageFromPath())
+    const onPop = (e: PopStateEvent) => {
+      const destino = pageFromPath()
+      // Un popstate lanzado por código (la campana) ya ha preguntado antes de mover la URL.
+      if (!e.isTrusted || destino === paginaVigente.current || !hasUnsavedChanges()) {
+        setActivePage(destino)
+        return
+      }
+      // Atrás/Adelante ya ha cambiado la URL: se pone la de antes y se pregunta.
+      const ruta = window.location.pathname + window.location.search
+      window.history.pushState({}, '', `/${paginaVigente.current}`)
+      guardedLeave(() => {
+        setActivePage(destino)
+        window.history.pushState({}, '', ruta)
+      })
+    }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
   }, [])

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, createContext, useContext } from 'react'
-import { setUnsavedGuard, guardedLeave } from '../utils/unsavedGuard'
+import { useUnsavedGuard, guardedLeave } from '../utils/unsavedGuard'
 import {
   getMaintenanceStatus,
   createBackup,
@@ -33,7 +33,7 @@ import { getUploadConcurrencyEstimate, type UploadConcurrencyEstimate } from '..
 import { MODOS_PISTAS, MODO_PISTAS_POR_DEFECTO, normalizarModo, type ModoPistas } from '../utils/modoPistas'
 import { formatNumero, timeAgo, formatDate } from '../utils/format'
 import { descripcionDeSesion } from '../utils/sesiones'
-import { useAlEntrar } from '../context/SeccionVisible'
+import { useAlEntrar, useAlSalir } from '../context/SeccionVisible'
 import { Modal } from '../components/Modal'
 import { IconoUsuario } from '../components/Iconos'
 
@@ -247,12 +247,9 @@ function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => v
     newKey, newEmuKey, qbitPass, qbitQui, quitarQui, quitarQbitPass,
   })
   const dirty = baseline !== '' && currentSig !== baseline
-  const dirtyRef = useRef(false)
-  dirtyRef.current = dirty
-  useEffect(() => {
-    setUnsavedGuard(() => dirtyRef.current)
-    return () => setUnsavedGuard(null)
-  }, [])
+  useUnsavedGuard('config', dirty)
+  // La clave de un proveedor de imágenes escrita en su modal y sin guardar.
+  useUnsavedGuard('config-clave-imagenes', keyModalHost !== null && keyDraft.trim() !== '')
 
   // Expose the save action to the page-header (top-right button). onSave goes
   // through a ref so it always runs with the latest form values.
@@ -1133,6 +1130,7 @@ function AccountCard() {
   useEffect(() => { getMe().then(u => setUsername(u.username)).catch(() => {}) }, [])
 
   const dirty = newUsername.trim() !== '' || newPassword !== ''
+  useUnsavedGuard('cuenta', dirty)
 
   async function handleSave() {
     setMsg(null)
@@ -1270,6 +1268,7 @@ function PathMappingsCard() {
   }, [])
 
   const dirty = JSON.stringify(mappings) !== baseline
+  useUnsavedGuard('rutas', dirty)
 
   async function handleSave() {
     setSaving(true)
@@ -1730,12 +1729,7 @@ function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | nul
     quitarDiscord, quitarTelegram,
   })
   const dirty = baseline !== '' && currentSig !== baseline
-  const dirtyRef = useRef(false)
-  dirtyRef.current = dirty
-  useEffect(() => {
-    setUnsavedGuard(() => dirtyRef.current)
-    return () => setUnsavedGuard(null)
-  }, [])
+  useUnsavedGuard('notificaciones', dirty)
 
   const saveRef = useRef<() => void>(() => {})
   saveRef.current = () => { void handleSave() }
@@ -1977,6 +1971,10 @@ export function SettingsPage() {
   const [status, setStatus] = useState<MaintenanceStatus | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [saveAction, setSaveAction] = useState<SaveExpose | null>(null)
+  // Al salir de la sección se descartan los formularios: ya se ha confirmado, y la página sigue montada,
+  // así que sin esto seguirían con cambios y preguntarían al navegar desde cualquier otra sección.
+  const [reinicio, setReinicio] = useState(0)
+  useAlSalir(() => setReinicio(n => n + 1))
 
   const loadStatus = useCallback(async () => {
     try {
@@ -2065,7 +2063,7 @@ export function SettingsPage() {
       {/* overflowY auto y no hidden: todas las pestañas pueden crecer más
           que la pantalla y necesitan poder desplazarse por dentro. */}
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-        <SettingsMessageContext.Provider value={showMessage}>
+        <SettingsMessageContext.Provider key={reinicio} value={showMessage}>
           {tab === 'config' && <ConfigTab onExposeSave={setSaveAction} />}
           {tab === 'notifications' && <NotificationsTab onExposeSave={setSaveAction} />}
           {tab === 'diagnostics' && <DiagnosticsTab status={status} onRefresh={loadStatus} />}

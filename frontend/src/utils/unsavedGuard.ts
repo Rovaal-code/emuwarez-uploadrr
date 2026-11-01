@@ -1,29 +1,36 @@
-// Cross-component "unsaved changes" guard. A form (e.g. the Settings tabs)
-// registers a getter reporting whether it has unsaved changes; navigation
-// (sidebar pages, Settings tabs, browser unload) checks it before leaving.
+// Registro de «cambios sin guardar»: cada formulario registra una función que dice si tiene cambios, y la
+// navegación (barra lateral, pestañas de Configuración, Atrás/Adelante, campana, cerrar la pestaña) pregunta
+// antes de salir si alguna dice que sí.
 //
-// The in-app confirmation is a styled card modal: the modal host registers a
-// `prompt` opener, and callers use `guardedLeave(proceed)` which runs `proceed`
-// immediately when clean or opens the modal (and runs `proceed` on confirm).
+// La confirmación es un modal: el anfitrión (AppShell) registra con `setLeavePrompt` quien lo abre, y
+// `guardedLeave(proceed)` ejecuta `proceed` al momento si no hay cambios, o abre el modal y lo ejecuta al confirmar.
+import { useEffect, useRef } from 'react'
 
-let dirtyCheck: (() => boolean) | null = null
 let opener: ((proceed: () => void) => void) | null = null
+const registro = new Map<string, () => boolean>()
 
-export function setUnsavedGuard(fn: (() => boolean) | null): void {
-  dirtyCheck = fn
+// Devuelve la función que lo quita. Con el mismo id gana el último registro, y quitar uno viejo no quita el nuevo.
+export function registerDirty(id: string, fn: () => boolean): () => void {
+  registro.set(id, fn)
+  return () => { if (registro.get(id) === fn) registro.delete(id) }
 }
 
 export function hasUnsavedChanges(): boolean {
-  return dirtyCheck ? dirtyCheck() : false
+  for (const fn of registro.values()) if (fn()) return true
+  return false
 }
 
-// Registered by the modal host (AppShell) so guardedLeave can show a styled
-// confirmation instead of window.confirm.
+// Registra mientras el componente está montado; `dirty` se lee en el momento de preguntar.
+export function useUnsavedGuard(id: string, dirty: boolean): void {
+  const actual = useRef(dirty)
+  actual.current = dirty
+  useEffect(() => registerDirty(id, () => actual.current), [id])
+}
+
 export function setLeavePrompt(fn: ((proceed: () => void) => void) | null): void {
   opener = fn
 }
 
-// Run `proceed` if there are no unsaved changes; otherwise ask the user first.
 export function guardedLeave(proceed: () => void): void {
   if (!hasUnsavedChanges()) {
     proceed()

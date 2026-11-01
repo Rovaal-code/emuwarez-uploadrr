@@ -1,0 +1,162 @@
+/* Detalle de una subida (UploadJobDetailPage): estilos que antes iban en línea.
+   Prefijo dsub-. Se importa el último en main.tsx: las reglas que retocan un
+   `.btn`, un `.badge`, un `.spinner` o una celda de `.data-table` se apoyan en
+   ir después y en llevar el selector tan específico como la regla base (la de
+   `td` y `th` de `.data-table` y la de `a:hover` ganarían a una clase suelta). */
+
+/* Página */
+.dsub-pagina {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.dsub-cabecera { flex-shrink: 0; }
+.dsub-barra-sup {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.dsub-botones { display: flex; gap: 8px; flex-wrap: wrap; }
+.dsub-botones-fijos { flex-shrink: 0; }
+a.btn.dsub-sin-subrayado { text-decoration: none; }
+.dsub-titulo-caja { margin-bottom: 20px; }
+.dsub-en-vivo { font-size: 11px; color: var(--color-available); }
+.dsub-cuerpo { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+.dsub-columna { flex: 1; min-width: 300px; }
+.dsub-tarjetas {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.dsub-error-reintento {
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--color-error-soft) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-error-soft) 30%, transparent);
+  border-radius: 6px;
+  font-size: 12.5px;
+  color: var(--color-error-pale);
+  margin-bottom: 16px;
+}
+
+/* Esperas */
+.spinner.dsub-spinner-12 { width: 12px; height: 12px; border-width: 2px; }
+.spinner.dsub-spinner-13 { width: 13px; height: 13px; border-width: 2px; }
+.spinner.dsub-spinner-14 { width: 14px; height: 14px; border-width: 2px; flex-shrink: 0; }
+.dsub-generando {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 2px 0;
+}
+
+/* Sección «Progreso de la subida» */
+.dsub-panel { margin-top: 28px; }
+.dsub-panel-llena {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* Mismo tamaño que los títulos de Temporadas/Capítulos de Biblioteca. */
+.dsub-panel-titulo {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.dsub-panel-clic { cursor: pointer; user-select: none; }
+.dsub-en-directo { color: var(--color-available); font-weight: 400; }
+.detail-card.dsub-caja { padding: 16px 18px; border-radius: 10px; }
+
+/* Tablas (las reglas de `td`/`th` de .data-table pesan (0,1,1): por eso `.data-table td.dsub-…`) */
+.dsub-scroll-x { overflow-x: auto; }
+.data-table.dsub-tabla { font-size: 12.5px; }
+.data-table.dsub-tabla-fija { table-layout: fixed; }
+.dsub-fases-scroll { overflow: auto; flex: 1; min-height: 0; }
+.dsub-col-34 { width: 34px; }
+.dsub-col-90 { width: 90px; }
+.dsub-col-143 { width: 143px; }
+.dsub-col-75 { width: 75px; }
+.dsub-col-200 { width: 200px; }
+.dsub-col-360 { width: 360px; }
+.data-table td.dsub-b600 { font-weight: 600; }
+.data-table td.dsub-b700 { font-weight: 700; }
+.data-table td.dsub-mono { font-family: var(--font-mono); }
+.data-table td.dsub-muted { color: var(--text-muted); }
+.data-table td.dsub-centro { text-align: center; }
+.data-table td.dsub-num { font-variant-numeric: tabular-nums; }
+.data-table td.dsub-fecha {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.data-table tr.dsub-fila-plantilla { opacity: 0.5; font-style: italic; }
+.data-table tr.sticky-footer-row.dsub-total { border-top: 2px solid var(--border); }
+.badge.dsub-badge-chico { font-size: 0.72rem; }
+
+/* Barra de progreso de cada fase */
+.dsub-progreso { display: flex; align-items: center; gap: 10px; }
+.dsub-progreso-pct { font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.dsub-progreso-pct-negrita { font-weight: 700; }
+.sync-chip-bar.dsub-barra { width: auto; flex: 1; }
+
+/* Nomenclatura */
+.dsub-bloques { margin-top: 14px; display: grid; gap: 10px; }
+.dsub-etiqueta { font-size: 12px; color: var(--text-muted); margin-bottom: 3px; }
+.dsub-etiqueta-info { display: flex; align-items: center; gap: 5px; }
+.dsub-valor-mono {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  word-break: break-all;
+}
+
+/* Pasos con nombre de la subida */
+.dsub-pasos {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+}
+.dsub-paso {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  border: 1px solid var(--color-paso);
+  color: var(--color-paso);
+}
+.dsub-paso-hecho,
+.dsub-paso-en_curso { --color-paso: var(--color-available); }
+.dsub-paso-fallido { --color-paso: var(--color-error-pale); }
+.dsub-paso-cancelado,
+.dsub-paso-pendiente { --color-paso: var(--text-muted); }
+
+/* Modales y registro de actividad */
+.modal-wide.dsub-modal-680 { max-width: 680px; }
+.modal-wide.dsub-modal-720 { max-width: 720px; }
+.modal-wide.dsub-modal-780 { max-width: 780px; }
+.dsub-log-resumen { margin: 0 0 6px; font-size: 11.5px; color: var(--text-muted); }
+pre.dsub-log {
+  margin: 0;
+  max-height: 420px;
+  overflow-y: auto;
+  font-size: 0.76rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+}

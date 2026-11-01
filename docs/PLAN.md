@@ -55,6 +55,13 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   nombre, preparar e iniciar, cada uno con su `stage` (que es su punto de cancelación), su fila de Fases y lo que
   deja en `_Trabajo` para el siguiente. Mismo comportamiento que antes; lo fijan
   `test_la_preparacion_recorre_los_pasos_en_orden` y `test_cancelar_para_la_preparacion_en_el_siguiente_punto`.
+- **Oleada 3, Configuración partida:** `pages/SettingsPage.tsx` queda en el marco (pestañas, aviso y botón de
+  guardar) y lo demás vive en `pages/ajustes/`: una pestaña por fichero (`ConfigTab`, `NotificationsTab`,
+  `DiagnosticsTab`, `BackupTab`) y una tarjeta por fichero en `config/` y `diagnostico/`. El formulario de la pestaña
+  Configuración es `config/useConfigForm.ts`, compartido por sus tarjetas; lo que solo toca una (pruebas de
+  conexión, modal de claves de imágenes) está en su tarjeta. Comportamiento igual: lo fija
+  `pages/__tests__/SettingsPage.test.tsx` (jsdom, nueva dependencia de desarrollo). Los estilos en línea siguen
+  sin pasar a clases.
 
 ## Siguiente (oleada 3)
 
@@ -63,7 +70,7 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
    vale es saltárselo cuando falló «iniciar» y lo preparado sigue valiendo: mismos nombres, mismos cambios de
    pistas y el original sin tocar desde entonces.
 2. Partir `library.py`, `upload_execution.py` y `cli.py`.
-3. Partir `UploadWizardModal.tsx` y `SettingsPage.tsx`; los estilos en línea, a clases.
+3. Partir `UploadWizardModal.tsx` y ~~`SettingsPage.tsx`~~; los estilos en línea, a clases.
    Al partir el asistente: recargar «Ver nombre de todos los capítulos» y «Ver pistas» con el idioma confirmado si
    estaban abiertos al cambiar el idioma del pack (hoy se quedan vacíos hasta reabrirlos).
 4. `httpx` y un solo limitador de eMuwarez compartido (30 peticiones por minuto).

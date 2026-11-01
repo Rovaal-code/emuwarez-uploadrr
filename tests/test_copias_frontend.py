@@ -107,8 +107,8 @@ def test_los_tokens_de_confirmacion_coinciden():
         DELETE_CONFIRMATION_TOKEN: "api/uploads.ts",
         NOM_TOKEN: "components/NomenclatureModal.tsx",
         MKV_CONFIRMATION_TOKEN: "components/NomenclatureFieldsModal.tsx",
-        VACUUM_CONFIRMATION: "pages/SettingsPage.tsx",
-        RESTORE_CONFIRMATION: "pages/SettingsPage.tsx",
+        VACUUM_CONFIRMATION: "pages/ajustes/diagnostico/DatabaseActions.tsx",
+        RESTORE_CONFIRMATION: "pages/ajustes/BackupTab.tsx",
     }
     faltan = [f"{token} (esperado en {rel})" for token, rel in esperados.items()
               if token not in _texto(rel)]

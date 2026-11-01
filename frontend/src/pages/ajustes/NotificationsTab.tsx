@@ -1,0 +1,321 @@
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { useUnsavedGuard } from '../../utils/unsavedGuard'
+import { fetchSettings, updateSettings, type SettingsData } from '../../api/settings'
+import { type IntegrationTestResult } from '../../api/integrationTests'
+import { testDiscordNotification, testTelegramNotification } from '../../api/notifications'
+import { ServiceIcon } from '../../components/ServiceIcon'
+import { CheckStatusIcon } from '../../components/DetailCard'
+import { useSettingsMessageAdapter } from './mensajes'
+import type { SaveExpose } from './tipos'
+
+// Per-channel checkbox list: which event types this channel forwards.
+function EventPicker({ title, eventTypes, selected, disabled, onToggle }: {
+  title: string
+  eventTypes: { code: string; label: string }[]
+  selected: string[]
+  disabled: boolean
+  onToggle: (code: string, checked: boolean) => void
+}) {
+  if (eventTypes.length === 0) return null
+  return (
+    <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border)', opacity: disabled ? 0.5 : 1 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{title}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {eventTypes.map(ev => (
+          <label key={ev.code} className="checkbox-label" style={{ fontSize: 13 }}>
+            <input
+              type="checkbox"
+              checked={selected.includes(ev.code)}
+              disabled={disabled}
+              onChange={e => onToggle(ev.code, e.target.checked)}
+            /> {ev.label}
+          </label>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function notifSignature(v: {
+  uiEnabled: boolean; uiEvents: string[]
+  discordEnabled: boolean; discordWebhook?: string; telegramEnabled: boolean
+  telegramToken?: string; telegramChatId: string; discordEvents: string[]; telegramEvents: string[]
+  quitarDiscord?: boolean; quitarTelegram?: boolean
+}): string {
+  return JSON.stringify([
+    v.uiEnabled, v.uiEvents,
+    v.discordEnabled, v.discordWebhook ?? '', v.telegramEnabled, v.telegramToken ?? '',
+    v.telegramChatId, v.discordEvents, v.telegramEvents,
+    v.quitarDiscord ?? false, v.quitarTelegram ?? false,
+  ])
+}
+
+// ---------- Notifications tab ----------
+export function NotificationsTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | null) => void }) {
+  const [settings, setSettings] = useState<SettingsData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const setMsg = useSettingsMessageAdapter()
+
+  const [discordEnabled, setDiscordEnabled] = useState(false)
+  const [discordWebhook, setDiscordWebhook] = useState('')
+  const [quitarDiscord, setQuitarDiscord] = useState(false)
+  const [testingDiscord, setTestingDiscord] = useState(false)
+
+  const [telegramEnabled, setTelegramEnabled] = useState(false)
+  const [telegramToken, setTelegramToken] = useState('')
+  const [quitarTelegram, setQuitarTelegram] = useState(false)
+  const [telegramChatId, setTelegramChatId] = useState('')
+  const [testingTelegram, setTestingTelegram] = useState(false)
+
+  // In-app bell ("UI" card): a configurable channel like Discord/Telegram, but
+  // on by default and without credentials.
+  const [uiEnabled, setUiEnabled] = useState(true)
+  const [uiEvents, setUiEvents] = useState<string[]>([])
+
+  const [eventTypes, setEventTypes] = useState<{ code: string; label: string }[]>([])
+  const [discordEvents, setDiscordEvents] = useState<string[]>([])
+  const [telegramEvents, setTelegramEvents] = useState<string[]>([])
+
+  const [baseline, setBaseline] = useState('')
+  const currentSig = notifSignature({
+    uiEnabled, uiEvents,
+    discordEnabled, discordWebhook, telegramEnabled, telegramToken, telegramChatId, discordEvents, telegramEvents,
+    quitarDiscord, quitarTelegram,
+  })
+  const dirty = baseline !== '' && currentSig !== baseline
+  useUnsavedGuard('notificaciones', dirty)
+
+  const saveRef = useRef<() => void>(() => {})
+  saveRef.current = () => { void handleSave() }
+  const stableSave = useRef(() => saveRef.current()).current
+  useEffect(() => {
+    onExposeSave({ dirty, saving, onSave: stableSave, label: 'Guardar notificaciones' })
+  }, [dirty, saving, onExposeSave, stableSave])
+  useEffect(() => () => onExposeSave(null), [onExposeSave])
+
+  useEffect(() => {
+    fetchSettings()
+      .then(s => {
+        setSettings(s)
+        setUiEnabled(s.notify_ui_enabled)
+        setUiEvents(s.notify_ui_events ?? [])
+        setDiscordEnabled(s.notify_discord_enabled)
+        setTelegramEnabled(s.notify_telegram_enabled)
+        setTelegramChatId(s.notify_telegram_chat_id ?? '')
+        setEventTypes(s.notify_event_types ?? [])
+        setDiscordEvents(s.notify_discord_events ?? [])
+        setTelegramEvents(s.notify_telegram_events ?? [])
+        setBaseline(notifSignature({
+          uiEnabled: s.notify_ui_enabled, uiEvents: s.notify_ui_events ?? [],
+          discordEnabled: s.notify_discord_enabled, telegramEnabled: s.notify_telegram_enabled,
+          telegramChatId: s.notify_telegram_chat_id ?? '', discordEvents: s.notify_discord_events ?? [],
+          telegramEvents: s.notify_telegram_events ?? [],
+        }))
+      })
+      .catch(() => setMsg({ ok: false, text: 'Error cargando configuración' }))
+      .finally(() => setLoading(false))
+  }, [])
+
+  function toggleEvent(setter: React.Dispatch<React.SetStateAction<string[]>>, code: string, checked: boolean) {
+    setter(prev => (checked ? [...new Set([...prev, code])] : prev.filter(c => c !== code)))
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    setMsg(null)
+    try {
+      const payload: Parameters<typeof updateSettings>[0] = {
+        notify_ui_enabled: uiEnabled,
+        notify_ui_events: uiEvents,
+        notify_discord_enabled: discordEnabled,
+        notify_telegram_enabled: telegramEnabled,
+        notify_telegram_chat_id: telegramChatId.trim(),
+        notify_discord_events: discordEvents,
+        notify_telegram_events: telegramEvents,
+      }
+      if (discordWebhook.trim()) payload.notify_discord_webhook_url = discordWebhook.trim()
+      else if (quitarDiscord) payload.clear = ['notify_discord_webhook_url']
+      if (telegramToken.trim()) payload.notify_telegram_bot_token = telegramToken.trim()
+      else if (quitarTelegram) payload.clear = [...(payload.clear ?? []), 'notify_telegram_bot_token']
+      const updated = await updateSettings(payload)
+      setSettings(updated)
+      setUiEvents(updated.notify_ui_events ?? [])
+      setDiscordEvents(updated.notify_discord_events ?? [])
+      setTelegramEvents(updated.notify_telegram_events ?? [])
+      setDiscordWebhook('')
+      setTelegramToken('')
+      setQuitarDiscord(false)
+      setQuitarTelegram(false)
+      setBaseline(notifSignature({
+        uiEnabled: updated.notify_ui_enabled, uiEvents: updated.notify_ui_events ?? [],
+        discordEnabled: updated.notify_discord_enabled, telegramEnabled: updated.notify_telegram_enabled,
+        telegramChatId: updated.notify_telegram_chat_id ?? '', discordEvents: updated.notify_discord_events ?? [],
+        telegramEvents: updated.notify_telegram_events ?? [],
+      }))
+      setMsg({ ok: true, text: '✓ Notificaciones guardadas' })
+    } catch (e: unknown) {
+      setMsg({ ok: false, text: `✗ ${e instanceof Error ? e.message : String(e)}` })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleTestDiscord() {
+    setTestingDiscord(true)
+    try {
+      const params: { webhook_url?: string } = {}
+      if (discordWebhook.trim()) params.webhook_url = discordWebhook.trim()
+      anunciarResultado(await testDiscordNotification(params))
+    } catch {
+      anunciarResultado({ ok: false, service: 'discord', status: 'connection_error', message: 'Error al contactar con el servidor' })
+    } finally {
+      setTestingDiscord(false)
+    }
+  }
+
+  async function handleTestTelegram() {
+    setTestingTelegram(true)
+    try {
+      const params: { bot_token?: string; chat_id?: string } = {}
+      if (telegramToken.trim()) params.bot_token = telegramToken.trim()
+      if (telegramChatId.trim()) params.chat_id = telegramChatId.trim()
+      anunciarResultado(await testTelegramNotification(params))
+    } catch {
+      anunciarResultado({ ok: false, service: 'telegram', status: 'connection_error', message: 'Error al contactar con el servidor' })
+    } finally {
+      setTestingTelegram(false)
+    }
+  }
+
+  // El resultado de la prueba va al hueco de la fila de pestañas, como el
+  // resto de mensajes de esta pantalla, en vez de aparecer junto al botón.
+  const textoResultado = (result: IntegrationTestResult): string =>
+    result.ok ? 'Notificación de prueba enviada'
+      : result.status === 'not_configured' ? 'Sin configurar'
+      : result.status === 'invalid_key' ? 'Credenciales inválidas'
+      : result.status === 'invalid_chat_id' ? 'Chat ID inválido'
+      : result.status === 'timeout' ? 'Se agotó el tiempo de espera'
+      : result.message
+
+  const anunciarResultado = useCallback((result: IntegrationTestResult | null) => {
+    if (!result) return
+    setMsg({
+      ok: result.ok,
+      text: `${result.service === 'telegram' ? 'Telegram' : 'Discord'}: ${textoResultado(result)}`,
+    })
+  }, [setMsg])
+
+  if (loading) return <p style={{ padding: 20, color: 'var(--text-muted)', fontSize: 13 }}>Cargando…</p>
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16, alignItems: 'stretch' }}>
+      <div className="placeholder-card">
+        <h3 style={{ marginTop: 0, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <ServiceIcon type="emu" size={20} /> Notificaciones UI
+        </h3>
+        <label className="checkbox-label" style={{ marginBottom: 12 }}>
+          <input type="checkbox" checked={uiEnabled} onChange={e => setUiEnabled(e.target.checked)} /> Mostrar avisos en la campana
+        </label>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 0 }}>
+          Avisos dentro de la propia app (icono de la campana en la barra superior).
+        </p>
+        <EventPicker
+          title="Qué mostrar en la campana"
+          eventTypes={eventTypes}
+          selected={uiEvents}
+          disabled={!uiEnabled}
+          onToggle={(code, checked) => toggleEvent(setUiEvents, code, checked)}
+        />
+      </div>
+
+      <div className="placeholder-card">
+        <h3 style={{ marginTop: 0, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <ServiceIcon type="discord" size={20} /> Discord
+        </h3>
+        <label className="checkbox-label" style={{ marginBottom: 12, display: 'block' }}>
+          <input type="checkbox" checked={discordEnabled} onChange={e => setDiscordEnabled(e.target.checked)} /> Activar notificaciones por Discord
+        </label>
+        <div className="form-group" style={{ marginBottom: 12 }}>
+          <label className="form-label">Webhook URL</label>
+          <div style={{ fontSize: 13, marginBottom: 6 }}>
+            {settings?.notify_discord_webhook_configured
+              ? <><span style={{ color: 'var(--color-available)', display: 'inline-flex', alignItems: 'center', gap: 5 }}><CheckStatusIcon status="ok" /> Configurado</span>{settings.notify_discord_webhook_masked && <code style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>{settings.notify_discord_webhook_masked}</code>}</>
+              : <span style={{ color: 'var(--color-error)' }}>✗ No configurado</span>}
+          </div>
+          <input
+            type="password"
+            className="form-input"
+            value={discordWebhook}
+            onChange={e => { setDiscordWebhook(e.target.value); setQuitarDiscord(false) }}
+            placeholder={quitarDiscord ? 'Se quitará al guardar' : 'https://discord.com/api/webhooks/… (dejar vacío para mantener el actual)'}
+            autoComplete="new-password"
+          />
+          {settings?.notify_discord_webhook_configured && !discordWebhook && (
+            <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: 6 }} onClick={() => setQuitarDiscord(q => !q)}>
+              {quitarDiscord ? 'No quitarlo' : 'Quitar el webhook'}
+            </button>
+          )}
+        </div>
+        <button className="btn btn-secondary btn-sm" onClick={handleTestDiscord} disabled={testingDiscord} type="button">
+          {testingDiscord ? 'Enviando…' : 'Probar notificación'}
+        </button>
+        
+        <EventPicker
+          title="Qué notificar por Discord"
+          eventTypes={eventTypes}
+          selected={discordEvents}
+          disabled={!discordEnabled}
+          onToggle={(code, checked) => toggleEvent(setDiscordEvents, code, checked)}
+        />
+      </div>
+
+      <div className="placeholder-card">
+        <h3 style={{ marginTop: 0, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <ServiceIcon type="telegram" size={20} /> Telegram
+        </h3>
+        <label className="checkbox-label" style={{ marginBottom: 12, display: 'block' }}>
+          <input type="checkbox" checked={telegramEnabled} onChange={e => setTelegramEnabled(e.target.checked)} /> Activar notificaciones por Telegram
+        </label>
+        <div className="form-group" style={{ marginBottom: 12 }}>
+          <label className="form-label">Bot token</label>
+          <div style={{ fontSize: 13, marginBottom: 6 }}>
+            {settings?.notify_telegram_bot_token_configured
+              ? <><span style={{ color: 'var(--color-available)', display: 'inline-flex', alignItems: 'center', gap: 5 }}><CheckStatusIcon status="ok" /> Configurado</span>{settings.notify_telegram_bot_token_masked && <code style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>{settings.notify_telegram_bot_token_masked}</code>}</>
+              : <span style={{ color: 'var(--color-error)' }}>✗ No configurado</span>}
+          </div>
+          <input
+            type="password"
+            className="form-input"
+            value={telegramToken}
+            onChange={e => { setTelegramToken(e.target.value); setQuitarTelegram(false) }}
+            placeholder={quitarTelegram ? 'Se quitará al guardar' : '123456:ABC-DEF… (dejar vacío para mantener el actual)'}
+            autoComplete="new-password"
+          />
+          {settings?.notify_telegram_bot_token_configured && !telegramToken && (
+            <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: 6 }} onClick={() => setQuitarTelegram(q => !q)}>
+              {quitarTelegram ? 'No quitarlo' : 'Quitar el token'}
+            </button>
+          )}
+        </div>
+        <div className="form-group" style={{ marginBottom: 12 }}>
+          <label className="form-label">Chat ID</label>
+          <input className="form-input" value={telegramChatId} onChange={e => setTelegramChatId(e.target.value)} placeholder="-100123456789" />
+        </div>
+        <button className="btn btn-secondary btn-sm" onClick={handleTestTelegram} disabled={testingTelegram} type="button">
+          {testingTelegram ? 'Enviando…' : 'Probar notificación'}
+        </button>
+        
+        <EventPicker
+          title="Qué notificar por Telegram"
+          eventTypes={eventTypes}
+          selected={telegramEvents}
+          disabled={!telegramEnabled}
+          onToggle={(code, checked) => toggleEvent(setTelegramEvents, code, checked)}
+        />
+      </div>
+      </div>
+    </div>
+  )
+}

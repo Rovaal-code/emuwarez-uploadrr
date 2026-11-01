@@ -1,11 +1,25 @@
 import { api } from './client'
 
+export interface TaskOption {
+  clave: string
+  etiqueta: string
+  valor: number
+  minimo: number
+  maximo: number
+  // Una línea de aviso bajo el campo; "" si no hace falta. Con rango 0-1 la opción es un interruptor.
+  nota: string
+}
+
 export interface ScheduledTask {
   task_key: string
   name: string
   description: string
   interval_minutes: number
   min_interval_minutes: number
+  // "HH:MM": corre cada día a esa hora (la del servidor, `timezone`). null: cada `interval_minutes`.
+  run_at: string | null
+  timezone: string
+  opciones: TaskOption[]
   manual_allowed: boolean
   enabled: boolean
   last_run_at: string | null
@@ -40,8 +54,15 @@ export function getScheduledTasks(): Promise<ScheduledTask[]> {
   return api.get<ScheduledTask[]>('/tasks/scheduled')
 }
 
-export function updateScheduledTaskInterval(taskKey: string, intervalMinutes: number): Promise<ScheduledTask> {
-  return api.put<ScheduledTask>(`/tasks/scheduled/${taskKey}`, { interval_minutes: intervalMinutes })
+export function updateScheduledTaskSchedule(
+  taskKey: string,
+  horario: { interval_minutes: number } | { run_at: string },
+): Promise<ScheduledTask> {
+  return api.put<ScheduledTask>(`/tasks/scheduled/${taskKey}`, horario)
+}
+
+export function updateScheduledTaskOptions(taskKey: string, valores: Record<string, number>): Promise<ScheduledTask> {
+  return api.put<ScheduledTask>(`/tasks/scheduled/${taskKey}/opciones`, { valores })
 }
 
 export function runScheduledTaskNow(taskKey: string): Promise<RunScheduledTaskResult> {

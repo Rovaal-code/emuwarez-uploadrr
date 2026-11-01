@@ -20,36 +20,65 @@ Reuses existing sync functions/logging wherever they already exist:
 """
 from __future__ import annotations
 
+import os
+import re
 import sqlite3
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import datetime, time, timedelta, timezone, tzinfo
+from typing import Callable, Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
 from .eventos import EVENTO_TAREA, publicar
 
 TASK_LIBRARY_SYNC = "sync-library"
 TASK_EMU_SYNC = "sync-emu-requests"
 TASK_CHECK_VERSION = "check-version"
+TASK_BACKUP = "backup-config"
+TASK_MAINTENANCE = "mantenimiento"
 
-# task_key, name, description, default_interval_minutes, min_interval_minutes, manual_allowed
-DEFAULT_TASKS: list[tuple[str, str, str, int, int, int]] = [
+# task_key, name, description, default_interval_minutes, min_interval_minutes, manual_allowed, run_at (HH:MM o None)
+DEFAULT_TASKS: list[tuple[str, str, str, int, int, int, Optional[str]]] = [
     (
         TASK_LIBRARY_SYNC,
         "Sincronizar bibliotecas",
         "Sincroniza las bibliotecas desde las instancias Radarr/Sonarr configuradas.",
-        30, 15, 1,
+        30, 15, 1, None,
     ),
     (
         TASK_EMU_SYNC,
         "Sincronizar peticiones eMuwarez",
         "Descarga las peticiones abiertas de eMuwarez y las cruza con tu biblioteca. Una vez al día, para gastar pocas llamadas de la API.",
-        1440, 60, 1,
+        1440, 60, 1, None,
     ),
     (
         TASK_CHECK_VERSION,
         "Comprobar versión",
         "Consulta si hay una imagen más nueva publicada y avisa una sola vez por versión.",
-        60, 60, 1,
+        60, 60, 1, None,
+    ),
+    (
+        TASK_BACKUP,
+        "Copia de seguridad",
+        "Guarda una copia de la configuración y la base de datos (sin claves, salvo que lo actives aquí) y retira las automáticas más antiguas. Las manuales y las subidas no se tocan.",
+        1440, 60, 1, "03:30",
+    ),
+    (
+        TASK_MAINTENANCE,
+        "Mantenimiento",
+        "Limpia lo antiguo (historial de tareas, registro de subidas ya terminadas, avisos leídos) y optimiza la base de datos. No toca las subidas ni lo que enlazan.",
+        1440, 60, 1, "04:00",
     ),
 ]
+
+# Las opciones (ajustes numéricos) que cada tarea enseña en Tareas; las define maintenance_service.
+OPCIONES_DE_TAREA: dict[str, tuple[str, ...]] = {
+    TASK_BACKUP: ("copias.conservar", "copias.incluir_claves"),
+    TASK_MAINTENANCE: (
+        "mantenimiento.dias_tareas", "mantenimiento.dias_registros",
+        "mantenimiento.lineas_registro", "mantenimiento.dias_avisos",
+    ),
+}
+
+_HORA_FIJA = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
 
 # Task keys that used to be scheduled but were removed — pruned on seed so they
 # stop appearing in the Tareas page.
@@ -64,14 +93,49 @@ def _now_iso() -> str:
     return _now().isoformat()
 
 
+def zona_horaria() -> tzinfo:
+    """La del servidor: TZ, o Europe/Madrid si no está o no existe en este sistema."""
+    for nombre in (os.environ.get("TZ"), "Europe/Madrid"):
+        if nombre:
+            try:
+                return ZoneInfo(nombre)
+            except (ZoneInfoNotFoundError, ValueError, OSError):
+                continue
+    return datetime.now().astimezone().tzinfo or timezone.utc
+
+
+def nombre_zona_horaria() -> str:
+    zona = zona_horaria()
+    return getattr(zona, "key", None) or str(zona)
+
+
+def siguiente_a_hora_fija(run_at: str, desde: datetime, zona: Optional[tzinfo] = None) -> datetime:
+    """La primera vez, estrictamente posterior a `desde`, que el reloj de `zona` marca HH:MM (en UTC)."""
+    zona = zona or zona_horaria()
+    desde = desde.astimezone(timezone.utc)
+    hh, mm = (int(x) for x in run_at.split(":"))
+    hoy = desde.astimezone(zona).date()
+    for dia in (hoy, hoy + timedelta(days=1)):
+        candidata = datetime.combine(dia, time(hh, mm), tzinfo=zona).astimezone(timezone.utc)
+        if candidata > desde:
+            break
+    return candidata
+
+
+def _proxima_ejecucion(task: dict, desde: datetime) -> datetime:
+    if task.get("run_at"):
+        return siguiente_a_hora_fija(task["run_at"], desde)
+    return desde + timedelta(minutes=task["interval_minutes"])
+
+
 def ensure_default_tasks(conn: sqlite3.Connection) -> None:
     """Idempotent seed — safe to call on every request."""
-    for task_key, name, description, interval, min_interval, manual_allowed in DEFAULT_TASKS:
+    for task_key, name, description, interval, min_interval, manual_allowed, run_at in DEFAULT_TASKS:
         conn.execute(
             """INSERT OR IGNORE INTO scheduled_tasks
-               (task_key, name, description, interval_minutes, min_interval_minutes, manual_allowed)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (task_key, name, description, interval, min_interval, manual_allowed),
+               (task_key, name, description, interval_minutes, min_interval_minutes, manual_allowed, run_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (task_key, name, description, interval, min_interval, manual_allowed, run_at),
         )
     # Prune tasks that used to be scheduled but no longer are.
     for task_key in OBSOLETE_TASKS:
@@ -91,20 +155,60 @@ def get_scheduled_task(conn: sqlite3.Connection, task_key: str) -> Optional[dict
     return dict(row) if row else None
 
 
-def set_task_interval(conn: sqlite3.Connection, task_key: str, interval_minutes: int) -> dict:
+def set_task_schedule(
+    conn: sqlite3.Connection, task_key: str, *, interval_minutes: Optional[int] = None, run_at: Optional[str] = None,
+) -> dict:
+    """Con `run_at` (HH:MM) la tarea corre cada día a esa hora; sin ella, cada `interval_minutes`."""
     task = get_scheduled_task(conn, task_key)
     if not task:
         raise ValueError(f"Tarea desconocida: {task_key}")
-    if interval_minutes < task["min_interval_minutes"]:
-        raise ValueError(
-            f"El intervalo mínimo para esta tarea es {task['min_interval_minutes']} minutos"
+    ahora = _now()
+    if run_at:
+        if not _HORA_FIJA.match(run_at):
+            raise ValueError("La hora debe tener el formato HH:MM (de 00:00 a 23:59)")
+        conn.execute(
+            "UPDATE scheduled_tasks SET run_at = ?, next_run_at = ?, updated_at = CURRENT_TIMESTAMP WHERE task_key = ?",
+            (run_at, siguiente_a_hora_fija(run_at, ahora).isoformat(), task_key),
         )
-    conn.execute(
-        "UPDATE scheduled_tasks SET interval_minutes = ?, updated_at = CURRENT_TIMESTAMP WHERE task_key = ?",
-        (interval_minutes, task_key),
-    )
+    else:
+        if interval_minutes is None:
+            raise ValueError("Indica un intervalo o una hora fija")
+        if interval_minutes < task["min_interval_minutes"]:
+            raise ValueError(
+                f"El intervalo mínimo para esta tarea es {task['min_interval_minutes']} minutos"
+            )
+        proxima = task["next_run_at"]
+        if task["run_at"]:
+            # Venía de hora fija: su próxima ejecución era la de la hora, y ya no vale.
+            desde = datetime.fromisoformat(task["last_run_at"]) if task["last_run_at"] else ahora
+            proxima = (desde + timedelta(minutes=interval_minutes)).isoformat()
+        conn.execute(
+            """UPDATE scheduled_tasks SET interval_minutes = ?, run_at = NULL, next_run_at = ?,
+               updated_at = CURRENT_TIMESTAMP WHERE task_key = ?""",
+            (interval_minutes, proxima, task_key),
+        )
     conn.commit()
     return get_scheduled_task(conn, task_key)
+
+
+def set_task_interval(conn: sqlite3.Connection, task_key: str, interval_minutes: int) -> dict:
+    return set_task_schedule(conn, task_key, interval_minutes=interval_minutes)
+
+
+def opciones_de_tarea(conn: sqlite3.Connection, task_key: str) -> list[dict]:
+    from .maintenance_service import leer_opciones
+    return leer_opciones(conn, OPCIONES_DE_TAREA.get(task_key, ()))
+
+
+def set_task_options(conn: sqlite3.Connection, task_key: str, valores: dict[str, int]) -> list[dict]:
+    from .maintenance_service import guardar_opciones
+    if not get_scheduled_task(conn, task_key):
+        raise ValueError(f"Tarea desconocida: {task_key}")
+    ajenas = [k for k in valores if k not in OPCIONES_DE_TAREA.get(task_key, ())]
+    if ajenas:
+        raise ValueError(f"Esta tarea no tiene la opción: {ajenas[0]}")
+    guardar_opciones(conn, valores)
+    return opciones_de_tarea(conn, task_key)
 
 
 def _run_library_sync(conn: sqlite3.Connection) -> tuple[str, str]:
@@ -196,10 +300,53 @@ def _comprobar_version(conn: sqlite3.Connection) -> tuple[str, str]:
     return "completed", "Hay una versión más nueva: avisado"
 
 
+def _con_registro(conn: sqlite3.Connection, task_key: str, trabajo: Callable[[], tuple[str, str]]) -> tuple[str, str]:
+    """Deja constancia en `task_runs` (lo que enseña «Ver logs»), como la comprobación de versión."""
+    from .tasks import finish_task, start_task
+
+    run_id = start_task(conn, task_key, "En marcha…")
+    try:
+        estado, resumen = trabajo()
+    except Exception as exc:
+        finish_task(conn, run_id, "failed", str(exc))
+        raise
+    finish_task(conn, run_id, estado, resumen)
+    return estado, resumen
+
+
+def _run_backup(conn: sqlite3.Connection) -> tuple[str, str]:
+    from .backup_service import crear_copia_automatica
+    from .maintenance_service import valor_opcion
+
+    def trabajo() -> tuple[str, str]:
+        r = crear_copia_automatica(
+            conservar=valor_opcion(conn, "copias.conservar"),
+            incluir_claves=bool(valor_opcion(conn, "copias.incluir_claves")),
+        )
+        if not r["ok"]:
+            return "failed", r["error"]
+        resumen = f"Copia {r['archive_name']} ({r['size_bytes'] / 1_048_576:.1f} MB)"
+        if r["include_secrets"]:
+            resumen += " con claves"
+        if r["retiradas"]:
+            resumen += f"; {len(r['retiradas'])} automática(s) antigua(s) retirada(s)"
+        return "completed", resumen
+
+    return _con_registro(conn, TASK_BACKUP, trabajo)
+
+
+def _run_maintenance(conn: sqlite3.Connection) -> tuple[str, str]:
+    from .maintenance_service import ejecutar_mantenimiento
+
+    return _con_registro(conn, TASK_MAINTENANCE, lambda: ejecutar_mantenimiento(conn))
+
+
 _EXECUTORS = {
     TASK_LIBRARY_SYNC: _run_library_sync,
     TASK_EMU_SYNC: _run_emu_sync,
     TASK_CHECK_VERSION: _run_check_version,
+    TASK_BACKUP: _run_backup,
+    TASK_MAINTENANCE: _run_maintenance,
 }
 
 
@@ -224,7 +371,8 @@ def run_scheduled_task(conn: sqlite3.Connection, task_key: str, *, manual: bool 
     except Exception as exc:
         status, summary = "failed", str(exc)
 
-    next_run_at = (_now() + timedelta(minutes=task["interval_minutes"])).isoformat()
+    task = get_scheduled_task(conn, task_key) or task  # el horario pudo cambiar mientras corría
+    next_run_at = _proxima_ejecucion(task, _now()).isoformat()
     conn.execute(
         """UPDATE scheduled_tasks
            SET last_run_at = ?, last_status = ?, last_summary = ?, next_run_at = ?, updated_at = CURRENT_TIMESTAMP
@@ -286,7 +434,9 @@ def tick_due_tasks() -> list[dict]:
 
 
 __all__ = [
-    "TASK_LIBRARY_SYNC", "TASK_EMU_SYNC", "TASK_CHECK_VERSION", "DEFAULT_TASKS",
+    "TASK_LIBRARY_SYNC", "TASK_EMU_SYNC", "TASK_CHECK_VERSION", "TASK_BACKUP", "TASK_MAINTENANCE", "DEFAULT_TASKS",
     "ensure_default_tasks", "list_scheduled_tasks", "get_scheduled_task",
-    "set_task_interval", "run_scheduled_task", "claim_due_tasks", "tick_due_tasks",
+    "set_task_interval", "set_task_schedule", "opciones_de_tarea", "set_task_options",
+    "zona_horaria", "nombre_zona_horaria", "siguiente_a_hora_fija",
+    "run_scheduled_task", "claim_due_tasks", "tick_due_tasks",
 ]

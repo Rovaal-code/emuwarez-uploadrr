@@ -1467,7 +1467,7 @@ function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | null; on
   const [backups, setBackups] = useState<BackupInfo[]>([])
   const [backupDir, setBackupDir] = useState('')
   const [busy, setBusy] = useState(false)
-  const [restorePath, setRestorePath] = useState('')
+  const [restoreName, setRestoreName] = useState('')
   const [restoreConfirm, setRestoreConfirm] = useState('')
 
   const showMessage = useSettingsMessage()
@@ -1496,13 +1496,13 @@ function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | null; on
   }
 
   async function handleRestore(dry: boolean) {
-    if (!restorePath) { showMessage(false, 'Introduce la ruta del backup'); return }
+    if (!restoreName) { showMessage(false, 'Elige un backup'); return }
     if (!dry && restoreConfirm !== 'RESTAURAR_CONFIG') {
       showMessage(false, 'Escribe RESTAURAR_CONFIG para confirmar'); return
     }
     setBusy(true)
     try {
-      const r = await restoreBackup(restorePath, {
+      const r = await restoreBackup(restoreName, {
         dry_run: dry,
         apply: !dry,
         confirmation: dry ? undefined : restoreConfirm,
@@ -1568,13 +1568,13 @@ function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | null; on
         </p>
         <select
           className="form-input form-select"
-          value={restorePath}
-          onChange={e => setRestorePath(e.target.value)}
+          value={restoreName}
+          onChange={e => setRestoreName(e.target.value)}
           style={{ width: '100%', marginBottom: 8 }}
         >
           <option value="">Selecciona un backup…</option>
           {backups.map(b => (
-            <option key={b.path} value={b.path}>{b.name} ({formatBytes(b.size_bytes)})</option>
+            <option key={b.path} value={b.name}>{b.name} ({formatBytes(b.size_bytes)})</option>
           ))}
         </select>
         <input

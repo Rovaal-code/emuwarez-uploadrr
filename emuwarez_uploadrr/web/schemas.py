@@ -1219,7 +1219,7 @@ class BackupRequest(BaseModel):
 
 
 class RestoreRequest(BaseModel):
-    backup_path: str
+    backup_name: str
     dry_run: bool = True
     apply: bool = False
     confirmation: Optional[str] = None

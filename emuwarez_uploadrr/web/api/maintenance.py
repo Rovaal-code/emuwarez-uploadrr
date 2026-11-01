@@ -56,10 +56,13 @@ def restore_backup(
     body: RestoreRequest,
     current_user: dict = Depends(require_auth),
 ) -> dict:
-    """Restaura un backup. dry_run=True por defecto; apply=True + confirmation para ejecutar."""
-    from emuwarez_uploadrr.services.backup_service import restore_config_backup
+    """Restaura un backup por su nombre (el de /backups). dry_run=True por defecto; apply=True + confirmation para ejecutar."""
+    from emuwarez_uploadrr.services.backup_service import resolver_copia, restore_config_backup
+    ruta = resolver_copia(body.backup_name)
+    if ruta is None:
+        return {"ok": False, "dry_run": body.dry_run, "error": f"Backup no encontrado: {body.backup_name}"}
     return restore_config_backup(
-        body.backup_path,
+        str(ruta),
         dry_run=body.dry_run,
         apply=body.apply,
         confirmation=body.confirmation,

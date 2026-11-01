@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime
+import fnmatch
 import os
 import shutil
 import sqlite3
@@ -9,7 +10,7 @@ import tarfile
 import tempfile
 from pathlib import Path
 
-from ..database import CANONICAL_SETTING_ALIASES, olvidar_esquema
+from ..database import CANONICAL_SETTING_ALIASES, SCHEMA_VERSION, _version_guardada, olvidar_esquema
 from .settings import all_settings, es_secreto, get_setting_canonical, set_setting
 
 RESTORE_CONFIRMATION = "RESTAURAR_CONFIG"
@@ -239,6 +240,54 @@ def list_config_backups(directory: Path | None = None) -> list[dict]:
     return backups
 
 
+def resolver_copia(nombre: str) -> Path | None:
+    """La copia con ese nombre dentro de get_backup_dir(), o None si no es una de las que lista
+    list_config_backups. La API no acepta rutas: así no lee ningún tar de fuera de esa carpeta."""
+    if not fnmatch.fnmatchcase(nombre, "emuwarez_config_*.tar.gz") or any(c in nombre for c in ("/", "\\", "\x00")):
+        return None
+    ruta = get_backup_dir() / nombre
+    return ruta if ruta.is_file() else None
+
+
+def _motivo_de_rechazo(tar: tarfile.TarFile, config_dir: Path) -> str | None:
+    """Por qué no se puede restaurar esta copia, o None si se puede: algún miembro se saldría de
+    config_dir (el filtro "data" de tarfile) o su base es de un esquema más nuevo que este código.
+    Se mira antes de tocar nada: la base se coloca primero y un rechazo a medias dejaría la
+    instalación a medio restaurar."""
+    miembros = tar.getmembers()
+    for miembro in miembros:
+        try:
+            tarfile.data_filter(miembro, str(config_dir))
+        except tarfile.FilterError as exc:
+            return f"La copia no es segura ({miembro.name}): {exc}"
+    base = next((m for m in miembros if m.name == _DB_NAME and m.isfile()), None)
+    if base is None:
+        return None
+    with tempfile.TemporaryDirectory() as tmp:
+        ruta = Path(tmp) / _DB_NAME
+        with tar.extractfile(base) as origen, open(ruta, "wb") as destino:
+            shutil.copyfileobj(origen, destino)
+        version = _version_de_base(ruta)
+    if version is not None and version > SCHEMA_VERSION:
+        return (
+            f"La copia es de una versión más nueva (esquema {version}) que esta aplicación "
+            f"(esquema {SCHEMA_VERSION}): restaurarla dejaría la aplicación sin arrancar. "
+            "Actualiza la imagen y restaura entonces."
+        )
+    return None
+
+
+def _version_de_base(ruta: Path) -> int | None:
+    """El esquema de una base, o None si no es SQLite o no lo dice."""
+    conn = sqlite3.connect(str(ruta))
+    try:
+        return _version_guardada(conn)
+    except sqlite3.DatabaseError:
+        return None
+    finally:
+        conn.close()
+
+
 def restore_config_backup(
     backup_path: str,
     *,
@@ -271,6 +320,9 @@ def restore_config_backup(
 
     with tarfile.open(str(path), "r:gz") as tar:
         members = tar.getnames()
+        motivo = _motivo_de_rechazo(tar, config_dir)
+    if motivo:
+        return {"ok": False, "dry_run": dry_run, "error": motivo}
 
     if dry_run or not do_apply:
         return {
@@ -298,7 +350,7 @@ def restore_config_backup(
                 with tar.extractfile(member) as origen, open(restaurada, "wb") as destino:
                     shutil.copyfileobj(origen, destino)
                 conservadas = _colocar_base(restaurada, config_dir / _DB_NAME)
-        tar.extractall(path=config_dir, members=resto)  # noqa: S202 — trusted local backup
+        tar.extractall(path=config_dir, members=resto, filter="data")
 
     message = f"Restauración completada: {len(members)} archivos"
     if conservadas:

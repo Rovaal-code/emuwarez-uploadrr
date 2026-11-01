@@ -105,6 +105,16 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   usan esa clave, no solo al que lo recibió. Se van las pausas sueltas (`EMU_MIN_REQUEST_INTERVAL`,
   `EMU_PETICIONES_INTERVALO`, `min_interval`). En los tests, un fixture de `conftest.py` le da a cada test su
   limitador con un reloj falso: nada duerme de verdad.
+- **Oleada 3, httpx:** las peticiones salientes (Radarr, Sonarr, eMuwarez, TMDb, qBittorrent, proveedores de imágenes,
+  Discord, Telegram, manifiesto de versiones) dejan urllib y salen todas por `integrations/http_cliente.py` (`pedir`),
+  con dos clientes httpx compartidos (con y sin verificar el certificado) que reaprovechan conexiones. Hereda lo de
+  urllib: certificados del sistema, redirecciones seguidas (hasta 10), sin cookies salvo la sesión propia del inicio
+  de sesión de qBittorrent, proxies del entorno, `timeout` por fase y el Content-Type de formulario por defecto.
+  `request_json` mantiene el plazo de reloj (`con_plazo`, `timeout` + 5 s, DNS incluido), `IntegrationError` con su
+  `.status` y los mismos mensajes sin la URL; httpx y httpcore no apuntan sus peticiones (llevarían la clave). httpx
+  pasa al extra `web` con su pin. En los tests, un solo servidor falso (`tests/http_falso.py`, fixture `http_falso`,
+  `httpx.MockTransport`) sustituye a los parches de `urlopen`, y `test_ninguna_peticion_sale_por_otro_lado` vigila
+  que nadie más importe urllib.request, http.client ni httpx.
 - **Oleada 3, estilos del asistente a clases:** `UploadWizardModal.tsx` y `components/asistente/` ya no llevan
   `style={{` (de 180 a 3): las clases `asist-*` están en `styles/asistente.css`. Siguen en línea los tres
   `width: '100%'` de `<Tooltip style>` en `PasoSeleccion` y los dos `tituloStyle` de los modales de pistas, porque
@@ -117,7 +127,6 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
 ## Siguiente (oleada 3)
 
 1. Los estilos en línea, a clases. Hecho en el asistente de subida y en Configuración; faltan el resto de pantallas y componentes.
-2. `httpx` y un solo limitador de eMuwarez compartido (30 peticiones por minuto).
 
 ## Oleada 4
 

@@ -4,11 +4,9 @@ All HTTP calls are mocked — no real internet traffic.
 """
 from __future__ import annotations
 
-import socket
-import urllib.error
-import urllib.request
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
+from tests.http_falso import falla_conexion, respuesta, tiempo_agotado
 
 from emuwarez_uploadrr.services.integration_tests import (
     test_arr_connection as svc_test_arr,
@@ -21,25 +19,20 @@ from emuwarez_uploadrr.services.integration_tests import (
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _mock_response(status: int = 200) -> MagicMock:
-    m = MagicMock()
-    m.status = status
-    m.__enter__ = lambda s: s
-    m.__exit__ = MagicMock(return_value=False)
-    return m
+def _mock_response(status: int = 200):
+    return respuesta(status)
 
 
-def _http_error(code: int) -> urllib.error.HTTPError:
-    return urllib.error.HTTPError(url="http://x", code=code, msg="err", hdrs=None, fp=None)  # type: ignore[arg-type]
+def _http_error(code: int):
+    return respuesta(code)
 
 
-def _url_error(reason: str) -> urllib.error.URLError:
-    return urllib.error.URLError(reason=reason)
+def _url_error(reason: str):
+    return falla_conexion(reason)
 
 
-def _timeout_url_error() -> urllib.error.URLError:
-    exc = urllib.error.URLError(reason=socket.timeout("timed out"))
-    return exc
+def _timeout_url_error():
+    return tiempo_agotado()
 
 
 # ---------------------------------------------------------------------------
@@ -58,45 +51,39 @@ class TestTmdbConnection:
         assert result["ok"] is False
         assert result["status"] == "not_configured"
 
-    @patch("urllib.request.urlopen")
-    def test_success(self, mock_open):
-        mock_open.return_value = _mock_response(200)
+    def test_success(self, http_falso):
+        http_falso.responde(_mock_response(200))
         result = svc_test_tmdb(api_key="validkey123")
         assert result["ok"] is True
         assert result["status"] == "connected"
         assert result["service"] == "tmdb"
 
-    @patch("urllib.request.urlopen")
-    def test_invalid_key_401(self, mock_open):
-        mock_open.side_effect = _http_error(401)
+    def test_invalid_key_401(self, http_falso):
+        http_falso.responde(_http_error(401))
         result = svc_test_tmdb(api_key="badkey")
         assert result["ok"] is False
         assert result["status"] == "invalid_key"
 
-    @patch("urllib.request.urlopen")
-    def test_invalid_key_403(self, mock_open):
-        mock_open.side_effect = _http_error(403)
+    def test_invalid_key_403(self, http_falso):
+        http_falso.responde(_http_error(403))
         result = svc_test_tmdb(api_key="badkey")
         assert result["ok"] is False
         assert result["status"] == "invalid_key"
 
-    @patch("urllib.request.urlopen")
-    def test_connection_error_other_http(self, mock_open):
-        mock_open.side_effect = _http_error(500)
+    def test_connection_error_other_http(self, http_falso):
+        http_falso.responde(_http_error(500))
         result = svc_test_tmdb(api_key="anykey")
         assert result["ok"] is False
         assert result["status"] == "connection_error"
 
-    @patch("urllib.request.urlopen")
-    def test_timeout(self, mock_open):
-        mock_open.side_effect = _timeout_url_error()
+    def test_timeout(self, http_falso):
+        http_falso.responde(_timeout_url_error())
         result = svc_test_tmdb(api_key="anykey")
         assert result["ok"] is False
         assert result["status"] == "timeout"
 
-    @patch("urllib.request.urlopen")
-    def test_url_error_network(self, mock_open):
-        mock_open.side_effect = _url_error("Name or service not known")
+    def test_url_error_network(self, http_falso):
+        http_falso.responde(_url_error("Name or service not known"))
         result = svc_test_tmdb(api_key="anykey")
         assert result["ok"] is False
         assert result["status"] == "connection_error"
@@ -111,12 +98,11 @@ class TestTmdbConnection:
         result = svc_test_tmdb(api_key=None, conn=conn)
         assert result["status"] == "not_configured"
 
-    @patch("urllib.request.urlopen")
-    def test_full_key_never_in_response(self, mock_open):
+    def test_full_key_never_in_response(self, http_falso):
         """Full API key must not appear in the result dict."""
         import json
         secret = "supersecret_tmdb_key_99999"
-        mock_open.side_effect = _url_error("Name or service not known")
+        http_falso.responde(_url_error("Name or service not known"))
         result = svc_test_tmdb(api_key=secret)
         serialised = json.dumps(result)
         assert secret not in serialised
@@ -138,42 +124,37 @@ class TestEmuwarezConnection:
         assert result["ok"] is False
         assert result["status"] == "invalid_url"
 
-    @patch("urllib.request.urlopen")
-    def test_success(self, mock_open):
-        mock_open.return_value = _mock_response(200)
+    def test_success(self, http_falso):
+        http_falso.responde(_mock_response(200))
         result = svc_test_emu(api_key="key123", base_url="https://emu-warez.com")
         assert result["ok"] is True
         assert result["status"] == "connected"
 
-    @patch("urllib.request.urlopen")
-    def test_invalid_key_401(self, mock_open):
-        mock_open.side_effect = _http_error(401)
+    def test_invalid_key_401(self, http_falso):
+        http_falso.responde(_http_error(401))
         result = svc_test_emu(api_key="badkey", base_url="https://emu-warez.com")
         assert result["ok"] is False
         assert result["status"] == "invalid_key"
 
-    @patch("urllib.request.urlopen")
-    def test_timeout(self, mock_open):
-        mock_open.side_effect = _timeout_url_error()
+    def test_timeout(self, http_falso):
+        http_falso.responde(_timeout_url_error())
         result = svc_test_emu(api_key="key", base_url="https://emu-warez.com")
         assert result["ok"] is False
         assert result["status"] == "timeout"
 
-    @patch("urllib.request.urlopen")
-    def test_connection_error(self, mock_open):
-        mock_open.side_effect = _url_error("Connection refused")
+    def test_connection_error(self, http_falso):
+        http_falso.responde(_url_error("Connection refused"))
         result = svc_test_emu(api_key="key", base_url="https://emu-warez.com")
         assert result["ok"] is False
         assert result["status"] == "connection_error"
 
-    def test_defaults_to_emuwarez_base_url(self):
+    def test_defaults_to_emuwarez_base_url(self, http_falso):
         """base_url defaults to https://emu-warez.com when not provided."""
-        with patch("urllib.request.urlopen") as mock_open:
-            mock_open.return_value = _mock_response(200)
-            result = svc_test_emu(api_key="key123")
-            assert result["ok"] is True
-            called_url = mock_open.call_args[0][0].full_url
-            assert "emu-warez.com" in called_url
+        http_falso.responde(_mock_response(200))
+        result = svc_test_emu(api_key="key123")
+        assert result["ok"] is True
+        called_url = str(http_falso.ultima.url)
+        assert "emu-warez.com" in called_url
 
     def test_full_key_never_in_response(self):
         import json
@@ -182,27 +163,25 @@ class TestEmuwarezConnection:
         serialised = json.dumps(result)
         assert secret not in serialised
 
-    @patch("urllib.request.urlopen")
-    def test_rate_limited_second_call_within_a_minute(self, mock_open, tmp_path):
+    def test_rate_limited_second_call_within_a_minute(self, http_falso, tmp_path):
         """A second live probe within 60s is throttled without hitting the network."""
         from emuwarez_uploadrr.database import connect, init_db
         conn = connect(tmp_path / "test.db")
         init_db(conn)
-        mock_open.return_value = _mock_response(200)
+        http_falso.responde(_mock_response(200))
 
         first = svc_test_emu(api_key="key123", base_url="https://emu-warez.com", conn=conn)
         assert first["ok"] is True
-        assert mock_open.call_count == 1
+        assert len(http_falso.peticiones) == 1
 
         second = svc_test_emu(api_key="key123", base_url="https://emu-warez.com", conn=conn)
         assert second["ok"] is False
         assert second["status"] == "rate_limited"
         assert second["details"]["wait_seconds"] > 0
         # crucially, the throttled call never reached the network
-        assert mock_open.call_count == 1
+        assert len(http_falso.peticiones) == 1
 
-    @patch("urllib.request.urlopen")
-    def test_rate_limit_allows_again_after_interval(self, mock_open, tmp_path):
+    def test_rate_limit_allows_again_after_interval(self, http_falso, tmp_path):
         """Once the interval has elapsed, a new probe is allowed again."""
         import datetime as dt
         from emuwarez_uploadrr.database import connect, init_db, set_state
@@ -212,17 +191,16 @@ class TestEmuwarezConnection:
         )
         conn = connect(tmp_path / "test.db")
         init_db(conn)
-        mock_open.return_value = _mock_response(200)
+        http_falso.responde(_mock_response(200))
 
         stale = dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=MIN_EMU_TEST_SECONDS + 1)
         set_state(conn, EMU_TEST_STATE_KEY, stale.isoformat())
 
         result = svc_test_emu(api_key="key123", base_url="https://emu-warez.com", conn=conn)
         assert result["ok"] is True
-        assert mock_open.call_count == 1
+        assert len(http_falso.peticiones) == 1
 
-    @patch("urllib.request.urlopen")
-    def test_no_mantiene_la_base_bloqueada_durante_la_peticion(self, mock_open, tmp_path):
+    def test_no_mantiene_la_base_bloqueada_durante_la_peticion(self, http_falso, tmp_path):
         """La marca de «una prueba por minuto» se confirma antes de ir a la red: si no, el bloqueo de escritura
         dura lo que tarde eMuwarez (hasta el timeout) y el resto de la aplicación falla con «database is locked»."""
         from emuwarez_uploadrr.database import connect, init_db
@@ -231,20 +209,19 @@ class TestEmuwarezConnection:
         otra = connect(tmp_path / "test.db")
         en_transaccion = []
 
-        def urlopen(req, timeout=None):
+        def al_pedir(request):
             en_transaccion.append(conn.in_transaction)
             otra.execute("PRAGMA busy_timeout = 0")
             otra.execute("INSERT INTO app_state(key, value) VALUES ('x', '1')")  # fallaría con la base bloqueada
             otra.commit()
-            return _mock_response(200)
+            return respuesta(200)(request)
 
-        mock_open.side_effect = urlopen
+        http_falso.responde(al_pedir)
         result = svc_test_emu(api_key="key123", base_url="https://emu-warez.com", conn=conn)
         assert result["ok"] is True
         assert en_transaccion == [False]
 
-    @patch("urllib.request.urlopen")
-    def test_con_clave_nueva_usa_la_url_guardada(self, mock_open, tmp_path):
+    def test_con_clave_nueva_usa_la_url_guardada(self, http_falso, tmp_path):
         """Probar una clave nueva (Ajustes, Setup) sin url explícita lee la url de la base, sin UnboundLocalError."""
         from emuwarez_uploadrr.database import connect, init_db
         from emuwarez_uploadrr.services.settings import set_setting
@@ -252,14 +229,13 @@ class TestEmuwarezConnection:
         init_db(conn)
         set_setting(conn, "emu.endpoint_url", "https://otra.example")
         conn.commit()
-        mock_open.return_value = _mock_response(200)
+        http_falso.responde(_mock_response(200))
 
         result = svc_test_emu(api_key="clave-nueva", conn=conn, enforce_rate_limit=False)
         assert result["ok"] is True
-        assert "otra.example" in mock_open.call_args[0][0].full_url
+        assert "otra.example" in str(http_falso.ultima.url)
 
-    @patch("urllib.request.urlopen")
-    def test_not_configured_is_not_throttled(self, mock_open, tmp_path):
+    def test_not_configured_is_not_throttled(self, http_falso, tmp_path):
         """Pre-network failures (no key) must never consume/trigger the rate limit."""
         from emuwarez_uploadrr.database import connect, init_db, get_state
         from emuwarez_uploadrr.services.integration_tests import EMU_TEST_STATE_KEY
@@ -270,7 +246,7 @@ class TestEmuwarezConnection:
         assert result["status"] == "not_configured"
         # no timestamp recorded, no network call
         assert get_state(conn, EMU_TEST_STATE_KEY) is None
-        assert mock_open.call_count == 0
+        assert len(http_falso.peticiones) == 0
 
 
 # ---------------------------------------------------------------------------

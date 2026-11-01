@@ -12,11 +12,10 @@ by the CLI layer; new web-layer code should raise ``ArrClientError`` subclasses.
 from __future__ import annotations
 
 import json
-import urllib.error
 import urllib.parse
-import urllib.request
 from typing import Any, Callable, Optional
 
+from . import http_cliente
 from .base import IntegrationError
 
 _DEFAULT_TIMEOUT = 15
@@ -79,30 +78,29 @@ def arr_request(
     if data is not None:
         body = json.dumps(data).encode("utf-8")
         headers["Content-Type"] = "application/json"
-    req = urllib.request.Request(url, data=body, headers=headers, method=method.upper())
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            raw = resp.read().decode("utf-8", errors="replace")
-            return json.loads(raw) if raw else {}
-    except urllib.error.HTTPError as exc:
-        raw = exc.read().decode("utf-8", errors="replace")
-        if exc.code in (401, 403):
+        resp = http_cliente.pedir(method, url, cabeceras=headers, contenido=body, timeout=timeout)
+        raw = http_cliente.texto(resp.content)
+        return json.loads(raw) if raw else {}
+    except http_cliente.ErrorHTTP as exc:
+        raw = exc.texto()
+        if exc.status in (401, 403):
             raise ArrAuthError(
-                f"Autenticación fallida en {url} (HTTP {exc.code}). Comprueba la API key."
+                f"Autenticación fallida en {url} (HTTP {exc.status}). Comprueba la API key."
             ) from exc
         raise ArrApiError(
-            f"HTTP {exc.code} desde {url}: {raw[:300]}",
-            status_code=exc.code,
+            f"HTTP {exc.status} desde {url}: {raw[:300]}",
+            status_code=exc.status,
             body=raw,
         ) from exc
-    except urllib.error.URLError as exc:
+    except http_cliente.ErrorConexion as exc:
+        if exc.tiempo_agotado:
+            raise ArrConnectionError(f"Timeout conectando con {url}") from exc
         raise ArrConnectionError(
-            f"No se pudo conectar con {url}: {exc.reason}"
+            f"No se pudo conectar con {url}: {exc.motivo}"
         ) from exc
     except json.JSONDecodeError as exc:
         raise ArrApiError(f"Respuesta no-JSON desde {url}") from exc
-    except TimeoutError as exc:
-        raise ArrConnectionError(f"Timeout conectando con {url}") from exc
 
 
 def registros_de(data: Any, que: str) -> list[dict]:

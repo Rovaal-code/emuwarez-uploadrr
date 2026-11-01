@@ -1,77 +1,111 @@
 """Tests for the qBittorrent WebUI connection test (integration + endpoint)."""
 from __future__ import annotations
 
-import urllib.error
-
 import pytest
 
 from emuwarez_uploadrr.integrations import qbittorrent as qb
+from tests.http_falso import falla_conexion, respuesta
 
 
-class _FakeResponse:
-    """Minimal stand-in for the object urlopen returns."""
-
-    def __init__(self, body: str, cookie: str = "", status: int = 200):
-        self._body = body.encode()
-        self.status = status
-        self.headers = {"Set-Cookie": cookie} if cookie else {}
-
-    def read(self):
-        return self._body
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *exc):
-        return False
+def _login(body: str, cookie: str = "", status: int = 200):
+    """What the WebUI answers to /auth/login."""
+    return respuesta(status, cuerpo=body, headers={"Set-Cookie": cookie} if cookie else None)
 
 
-def _fake_urlopen(monkeypatch, login_response, version: str = "5.2.3"):
+def _fake_qbit(http_falso, login_response, version: str = "5.2.3"):
     """Route /auth/login to login_response and /app/version to a fixed version."""
-    def opener(req, *a, **k):
-        if isinstance(login_response, Exception) and req.full_url.endswith("/auth/login"):
-            raise login_response
-        if req.full_url.endswith("/app/version"):
-            return _FakeResponse(version)
+    def atiende(request):
+        if request.url.path.endswith("/app/version"):
+            return respuesta(200, cuerpo=version)
         return login_response
-    monkeypatch.setattr("urllib.request.urlopen", opener)
+    http_falso.responde(atiende)
 
 
-def test_login_ok_qbittorrent_5x(monkeypatch):
+def test_login_ok_qbittorrent_5x(http_falso):
     """5.x answers 204 with an empty body and a port-scoped QBT_SID cookie."""
-    _fake_urlopen(monkeypatch, _FakeResponse(
+    _fake_qbit(http_falso, _login(
         "", cookie="QBT_SID_8085=Br4UJJJC06jn; HttpOnly; SameSite=Lax; path=/", status=204))
     r = qb.qbit_test_connection("http://qbit", "8085", "admin", "adminadmin")
     assert r["ok"] is True
     assert r["version"] == "5.2.3"
 
 
-def test_login_ok_qbittorrent_4x(monkeypatch):
+def test_login_ok_qbittorrent_4x(http_falso):
     """4.x answers 200 with the body "Ok." and a plain SID cookie."""
-    _fake_urlopen(monkeypatch, _FakeResponse("Ok.", cookie="SID=abc123; path=/"), version="4.6.0")
+    _fake_qbit(http_falso, _login("Ok.", cookie="SID=abc123; path=/"), version="4.6.0")
     r = qb.qbit_test_connection("http://qbit", "8080", "admin", "x")
     assert r["ok"] is True
     assert r["version"] == "4.6.0"
 
 
-def test_login_bad_credentials_qbittorrent_5x(monkeypatch):
+@pytest.mark.parametrize("url,cookie,esperada", [
+    ("http://qbit", "QBT_SID_8085=Br4UJJJC06jn; HttpOnly; SameSite=Lax; path=/", "QBT_SID_8085=Br4UJJJC06jn"),
+    ("http://192.168.1.10", "SID=abc123; path=/", "SID=abc123"),
+    ("http://qbittorrent.lan", "SID=abc123; HttpOnly; path=/", "SID=abc123"),
+])
+def test_la_cookie_del_login_viaja_en_la_peticion_de_la_version(http_falso, url, cookie, esperada):
+    """La sesión del inicio de sesión se guarda y la versión se pide con ella, con el Referer que exige la WebUI."""
+    _fake_qbit(http_falso, _login("Ok.", cookie=cookie))
+    r = qb.qbit_test_connection(url, "8085", "admin", "x")
+    assert r == {"ok": True, "version": "5.2.3"}
+    login, version = http_falso.peticiones
+    assert login.method == "POST" and login.url.path == "/api/v2/auth/login"
+    assert login.content == b"username=admin&password=x"
+    assert login.headers["Content-Type"] == "application/x-www-form-urlencoded"
+    assert login.headers["Referer"] == f"{url}:8085"
+    assert "Cookie" not in login.headers
+    assert version.headers["Cookie"] == esperada
+    assert version.headers["Referer"] == f"{url}:8085"
+
+
+def test_la_sesion_no_pasa_de_una_prueba_a_otra(http_falso):
+    _fake_qbit(http_falso, _login("Ok.", cookie="SID=primera; path=/"))
+    qb.qbit_test_connection("http://qbit", "8080", "admin", "x")
+    _fake_qbit(http_falso, _login("Ok."))
+    qb.qbit_test_connection("http://qbit", "8080", "admin", "x")
+    assert "Cookie" not in http_falso.peticiones[-2].headers
+    assert "Cookie" not in http_falso.peticiones[-1].headers
+
+
+def test_login_bad_credentials_qbittorrent_5x(http_falso):
     """5.x answers 401 instead of the old "Fails." body."""
-    _fake_urlopen(monkeypatch, urllib.error.HTTPError(
-        "http://qbit/api/v2/auth/login", 401, "Unauthorized", {}, None))
+    _fake_qbit(http_falso, respuesta(401))
     r = qb.qbit_test_connection("http://qbit", "8085", "admin", "mala")
     assert r["ok"] is False
     assert r["error"] == qb.BAD_LOGIN_ERROR
 
 
-def test_login_bad_credentials_qbittorrent_4x(monkeypatch):
-    _fake_urlopen(monkeypatch, _FakeResponse("Fails."))
+def test_login_403_and_other_http_errors(http_falso):
+    _fake_qbit(http_falso, respuesta(403))
+    assert "403" in qb.qbit_test_connection("http://qbit", "8080", "admin", "x")["error"]
+    _fake_qbit(http_falso, respuesta(502))
+    assert qb.qbit_test_connection("http://qbit", "8080", "admin", "x")["error"] == "HTTP 502 desde qBittorrent"
+
+
+def test_login_connection_error_is_reported(http_falso):
+    _fake_qbit(http_falso, falla_conexion("[Errno 111] Connection refused"))
+    r = qb.qbit_test_connection("http://qbit", "8080", "admin", "x")
+    assert r == {"ok": False, "error": "No se pudo conectar con qBittorrent: [Errno 111] Connection refused"}
+
+
+def test_a_failed_version_request_still_logs_in(http_falso):
+    def atiende(request):
+        if request.url.path.endswith("/app/version"):
+            return respuesta(403)
+        return _login("Ok.")
+    http_falso.responde(atiende)
+    assert qb.qbit_test_connection("http://qbit", "8080", "admin", "x") == {"ok": True, "version": None}
+
+
+def test_login_bad_credentials_qbittorrent_4x(http_falso):
+    _fake_qbit(http_falso, _login("Fails."))
     r = qb.qbit_test_connection("http://qbit", "8080", "admin", "mala")
     assert r["ok"] is False
     assert r["error"] == qb.BAD_LOGIN_ERROR
 
 
-def test_login_unexpected_body_is_reported(monkeypatch):
-    _fake_urlopen(monkeypatch, _FakeResponse("<html>nginx</html>"))
+def test_login_unexpected_body_is_reported(http_falso):
+    _fake_qbit(http_falso, _login("<html>nginx</html>"))
     r = qb.qbit_test_connection("http://qbit", "8080", "admin", "x")
     assert r["ok"] is False
     assert "Respuesta inesperada" in r["error"]

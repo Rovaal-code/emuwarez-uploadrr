@@ -12,12 +12,12 @@ from __future__ import annotations
 
 import json
 import re
-import socket
-import urllib.error
-import urllib.request
 from typing import Optional
 
+from ..integrations import http_cliente
+
 _TIMEOUT = 10  # seconds — short timeout, matches services/integration_tests.py
+_CABECERAS_JSON = {"Content-Type": "application/json", "User-Agent": "emuwarez-uploadrr/3"}
 
 _TEST_MESSAGE = "eMuwarez Uploadrr — notificación de prueba. Si ves esto, la configuración es correcta."
 
@@ -58,24 +58,19 @@ def send_discord(webhook_url: Optional[str], message: str, *, poster_url: Option
     if large_poster:
         body["embeds"] = [{"image": {"url": large_poster}}]
     payload = json.dumps(body).encode("utf-8")
-    req = urllib.request.Request(
-        url, data=payload, method="POST",
-        headers={"Content-Type": "application/json", "User-Agent": "emuwarez-uploadrr/3"},
-    )
     try:
-        with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
-            if resp.status in (200, 204):
-                return _ok("discord")
-            return _fail("discord", "connection_error", f"Discord respondió HTTP {resp.status}")
-    except urllib.error.HTTPError as exc:
-        if exc.code in (401, 403, 404):
+        resp = http_cliente.pedir("POST", url, cabeceras=_CABECERAS_JSON, contenido=payload, timeout=_TIMEOUT)
+        if resp.status_code in (200, 204):
+            return _ok("discord")
+        return _fail("discord", "connection_error", f"Discord respondió HTTP {resp.status_code}")
+    except http_cliente.ErrorHTTP as exc:
+        if exc.status in (401, 403, 404):
             return _fail("discord", "invalid_key", "Webhook de Discord inválido o eliminado")
-        return _fail("discord", "connection_error", f"Error HTTP {exc.code} al enviar a Discord")
-    except urllib.error.URLError as exc:
-        reason = str(exc.reason)
-        if "timed out" in reason.lower() or isinstance(exc.reason, socket.timeout):
+        return _fail("discord", "connection_error", f"Error HTTP {exc.status} al enviar a Discord")
+    except http_cliente.ErrorConexion as exc:
+        if exc.tiempo_agotado:
             return _fail("discord", "timeout", "Timeout al conectar con Discord")
-        return _fail("discord", "connection_error", f"No se pudo conectar con Discord: {reason}")
+        return _fail("discord", "connection_error", f"No se pudo conectar con Discord: {exc.motivo}")
     except Exception as exc:
         return _fail("discord", "unexpected_error", f"Error inesperado: {type(exc).__name__}")
 
@@ -97,27 +92,22 @@ def send_telegram(bot_token: Optional[str], chat_id: Optional[str], message: str
     else:
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         payload = json.dumps({"chat_id": chat_id.strip(), "text": message}).encode("utf-8")
-    req = urllib.request.Request(
-        url, data=payload, method="POST",
-        headers={"Content-Type": "application/json", "User-Agent": "emuwarez-uploadrr/3"},
-    )
     try:
-        with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
-            if body.get("ok"):
-                return _ok("telegram")
-            return _fail("telegram", "connection_error", body.get("description", "Error desconocido de Telegram"))
-    except urllib.error.HTTPError as exc:
-        if exc.code in (401, 403):
+        resp = http_cliente.pedir("POST", url, cabeceras=_CABECERAS_JSON, contenido=payload, timeout=_TIMEOUT)
+        body = json.loads(resp.content.decode("utf-8"))
+        if body.get("ok"):
+            return _ok("telegram")
+        return _fail("telegram", "connection_error", body.get("description", "Error desconocido de Telegram"))
+    except http_cliente.ErrorHTTP as exc:
+        if exc.status in (401, 403):
             return _fail("telegram", "invalid_key", "Bot token de Telegram inválido")
-        if exc.code == 400:
+        if exc.status == 400:
             return _fail("telegram", "invalid_chat_id", "Chat ID de Telegram inválido o el bot no tiene acceso")
-        return _fail("telegram", "connection_error", f"Error HTTP {exc.code} al conectar con Telegram")
-    except urllib.error.URLError as exc:
-        reason = str(exc.reason)
-        if "timed out" in reason.lower() or isinstance(exc.reason, socket.timeout):
+        return _fail("telegram", "connection_error", f"Error HTTP {exc.status} al conectar con Telegram")
+    except http_cliente.ErrorConexion as exc:
+        if exc.tiempo_agotado:
             return _fail("telegram", "timeout", "Timeout al conectar con Telegram")
-        return _fail("telegram", "connection_error", f"No se pudo conectar con Telegram: {reason}")
+        return _fail("telegram", "connection_error", f"No se pudo conectar con Telegram: {exc.motivo}")
     except Exception as exc:
         return _fail("telegram", "unexpected_error", f"Error inesperado: {type(exc).__name__}")
 

@@ -1,14 +1,12 @@
-"""Small urllib based HTTP helpers to avoid new dependencies."""
+"""HTTP helpers for the integrations (the requests themselves go out through `http_cliente`)."""
 from __future__ import annotations
 
 import json
 import re
-import ssl
-import threading
-import urllib.error
 import urllib.parse
-import urllib.request
 from typing import Any, Optional
+
+from . import http_cliente
 
 
 class IntegrationError(RuntimeError):
@@ -159,75 +157,73 @@ def request_json(
     timeout: int = 20,
     verify_ssl: bool = True,
 ) -> Any:
+    req_headers = {"Accept": "application/json", "User-Agent": "emuwarez-uploadrr-cli/2"}
+    if headers:
+        req_headers.update(headers)
+    if api_key:
+        req_headers["X-Api-Key"] = api_key
+    body: bytes | None = None
+    if data is not None:
+        body = json.dumps(data).encode("utf-8")
+        req_headers["Content-Type"] = "application/json"
+
     def _do_request() -> Any:
-        body: bytes | None = None
-        req_headers = {"Accept": "application/json", "User-Agent": "emuwarez-uploadrr-cli/2"}
-        if headers:
-            req_headers.update(headers)
-        if api_key:
-            req_headers["X-Api-Key"] = api_key
-        if data is not None:
-            body = json.dumps(data).encode("utf-8")
-            req_headers["Content-Type"] = "application/json"
-        req = urllib.request.Request(url, data=body, headers=req_headers, method=method.upper())
-        context = None if verify_ssl else ssl._create_unverified_context()
-        with urllib.request.urlopen(req, timeout=timeout, context=context) as resp:
-            raw = resp.read().decode("utf-8", errors="replace")
-            if not raw:
-                return {}
-            return json.loads(raw)
+        respuesta = http_cliente.pedir(
+            method, url, cabeceras=req_headers, contenido=body, timeout=timeout, verify=verify_ssl,
+        )
+        raw = http_cliente.texto(respuesta.content)
+        if not raw:
+            return {}
+        return json.loads(raw)
 
-    # `timeout` above only bounds the connect/read phases once a socket
-    # exists (it's threaded through to socket.create_connection); DNS
-    # resolution (getaddrinfo, called first) runs before that and is NOT
-    # covered by it — a stuck/misconfigured resolver (common in Docker) can
-    # hang past `timeout` indefinitely with no exception ever raised. Running
-    # the call on a *daemon* thread and joining it with a hard deadline bounds
-    # the whole call — DNS included — no matter what's actually stuck, while
-    # still letting the process exit cleanly if the call never returns (a
-    # non-daemon executor would otherwise block shutdown forever joining it).
-    result: dict[str, Any] = {}
-
-    def _worker() -> None:
-        try:
-            result["value"] = _do_request()
-        except BaseException as exc:  # noqa: BLE001 — forwarded to the caller below
-            result["error"] = exc
-
-    thread = threading.Thread(target=_worker, daemon=True)
-    thread.start()
-    thread.join(timeout=timeout + 5)
+    # `timeout` only bounds each phase once a socket exists; DNS resolution
+    # (getaddrinfo, called first) runs before that and is NOT covered by it —
+    # a stuck/misconfigured resolver (common in Docker) can hang past
+    # `timeout` indefinitely with no exception ever raised. con_plazo runs the
+    # call on a *daemon* thread joined with a hard deadline, which bounds the
+    # whole call — DNS included — no matter what's actually stuck, while still
+    # letting the process exit cleanly if the call never returns.
     # Estos mensajes acaban en app.log, en task_runs y en la respuesta HTTP:
     # eMuwarez y TMDb llevan la clave en la URL, así que nunca va entera.
     safe_url = url_sin_claves(url)
-    if thread.is_alive():
-        raise IntegrationError(f"Tiempo de espera agotado conectando con {safe_url}")
-
-    exc = result.get("error")
-    if exc is not None:
-        if isinstance(exc, urllib.error.HTTPError):
-            raw = exc.read().decode("utf-8", errors="replace")
-            # El cuerpo de error puede repetir la URL pedida, clave incluida.
-            for clave in _claves_de(url):
-                raw = raw.replace(clave, "***")
-            raise IntegrationError(f"HTTP {exc.code} en {safe_url}: {raw[:500]}", status=exc.code) from None
-        if isinstance(exc, urllib.error.URLError):
-            raise IntegrationError(f"No se pudo conectar con {safe_url}: {exc.reason}") from None
-        if isinstance(exc, json.JSONDecodeError):
-            raise IntegrationError(f"Respuesta no JSON desde {safe_url}") from None
-        if isinstance(exc, Exception):
-            # Su mensaje puede llevar la URL con la clave: solo el tipo.
-            raise IntegrationError(f"Error con {safe_url}: {type(exc).__name__}") from None
-        raise exc
-    return result["value"]
+    try:
+        return http_cliente.con_plazo(_do_request, timeout + 5)
+    except http_cliente.PlazoAgotado:
+        raise IntegrationError(f"Tiempo de espera agotado conectando con {safe_url}") from None
+    except http_cliente.ErrorHTTP as exc:
+        # El cuerpo de error puede repetir la URL pedida, clave incluida.
+        raw = _tapar_claves(exc.texto(), url)
+        raise IntegrationError(f"HTTP {exc.status} en {safe_url}: {raw[:500]}", status=exc.status) from None
+    except http_cliente.ErrorConexion as exc:
+        raise IntegrationError(f"No se pudo conectar con {safe_url}: {_tapar_claves(exc.motivo, url)}") from None
+    except json.JSONDecodeError:
+        raise IntegrationError(f"Respuesta no JSON desde {safe_url}") from None
+    except Exception as exc:
+        # Su mensaje puede llevar la URL con la clave: solo el tipo.
+        raise IntegrationError(f"Error con {safe_url}: {type(exc).__name__}") from None
 
 
 _PARAMETROS_CLAVE = {"api_token", "api_key", "apikey"}
 
 
 def _claves_de(url: str) -> list[str]:
+    """Cada clave de la URL tal como puede reaparecer en un texto: la que viaja (con %2B, %2F...), la decodificada y
+    sus formas citadas. Las más largas primero, para que una no se coma a otra."""
     query = urllib.parse.urlsplit(url).query
-    return [v for k, v in urllib.parse.parse_qsl(query) if k.lower() in _PARAMETROS_CLAVE and v]
+    variantes: set[str] = set()
+    for par in query.split("&"):
+        nombre, _, crudo = par.partition("=")
+        if urllib.parse.unquote_plus(nombre).lower() not in _PARAMETROS_CLAVE or not crudo:
+            continue
+        valor = urllib.parse.unquote_plus(crudo)
+        variantes.update({crudo, valor, urllib.parse.quote(valor, safe=""), urllib.parse.quote_plus(valor)})
+    return sorted((v for v in variantes if v), key=len, reverse=True)
+
+
+def _tapar_claves(texto: str, url: str) -> str:
+    for clave in _claves_de(url):
+        texto = texto.replace(clave, "***")
+    return texto
 
 
 def url_sin_claves(url: str) -> str:

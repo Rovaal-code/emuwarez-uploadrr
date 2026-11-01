@@ -282,16 +282,10 @@ def test_esperar_no_lanza_ni_enseña_la_clave_en_el_registro(caplog):
     assert CLAVE not in caplog.text and "api_token" not in caplog.text and "http" not in caplog.text
 
 
-def test_un_429_real_por_emu_no_enseña_la_url_ni_la_clave(monkeypatch, caplog):
-    import io
-    import urllib.error
+def test_un_429_real_por_emu_no_enseña_la_url_ni_la_clave(http_falso, caplog):
+    from tests.http_falso import respuesta
 
-    from emuwarez_uploadrr.integrations import base
-
-    def urlopen(req, timeout=None, context=None):
-        raise urllib.error.HTTPError(req.full_url, 429, "x", {}, io.BytesIO(f"lento: {req.full_url}".encode()))
-
-    monkeypatch.setattr(base.urllib.request, "urlopen", urlopen)
+    http_falso.responde(lambda req: respuesta(429, cuerpo=f"lento: {req.url}")(req))
     caplog.set_level(logging.DEBUG, logger="emuwarez.emu")
     with pytest.raises(IntegrationError) as e:
         emu.emu_get_user(CLAVE)
@@ -328,24 +322,16 @@ def test_probar_conexion_y_detalle_son_consultas_y_el_catalogo_espera(monkeypatc
     assert sum(lim.reloj.dormidas) == pytest.approx(60.0)
 
 
-def test_la_prueba_de_conexion_de_ajustes_pasa_por_el_limitador(monkeypatch, limitador_emuwarez):
-    import io
-    import urllib.error
-
+def test_la_prueba_de_conexion_de_ajustes_pasa_por_el_limitador(http_falso, limitador_emuwarez):
     from emuwarez_uploadrr.services.integration_tests import test_emuwarez_connection
+    from tests.http_falso import respuesta
 
-    llamadas = []
-
-    def urlopen(req, timeout=None):
-        llamadas.append(req)
-        raise urllib.error.HTTPError(req.full_url, 429, "x", {}, io.BytesIO(b""))
-
-    monkeypatch.setattr("urllib.request.urlopen", urlopen)
+    http_falso.responde(respuesta(429))
     primero = test_emuwarez_connection(api_key=CLAVE, base_url="https://t.x")
     assert primero["ok"] is False
     segundo = test_emuwarez_connection(api_key=CLAVE, base_url="https://t.x")
     assert segundo["ok"] is False and segundo["status"] == "rate_limited"
-    assert len(llamadas) == 1  # el 429 pausa: la segunda no sale
+    assert len(http_falso.peticiones) == 1  # el 429 pausa: la segunda no sale
     assert CLAVE not in str(segundo)
 
 

@@ -3,15 +3,13 @@
 Todo con `request_json` falso: ningún test habla con el tracker."""
 from __future__ import annotations
 
-import io
-import urllib.error
 import urllib.parse
-from unittest.mock import patch
 
 import pytest
 
 from emuwarez_uploadrr.integrations import emu
 from emuwarez_uploadrr.integrations.base import IntegrationError
+from tests.http_falso import respuesta as respuesta_falsa
 
 
 @pytest.fixture
@@ -136,16 +134,12 @@ def test_una_clave_rechazada_para_enseguida(pedidas, estado):
     (429, "eMuwarez ha limitado las peticiones; prueba en unos minutos"),
     (500, None),
 ])
-def test_ningun_error_lleva_la_clave(monkeypatch, estado, texto):
+def test_ningun_error_lleva_la_clave(monkeypatch, http_falso, estado, texto):
     """Con request_json de verdad: ni el mensaje claro ni el que pasa tal cual enseñan la clave."""
     clave = "CLAVESECRETA123"
-
-    def responde(req, **kw):
-        raise urllib.error.HTTPError(req.full_url, estado, "x", {}, io.BytesIO(f"error con {req.full_url}".encode()))
-
-    with patch("urllib.request.urlopen", side_effect=responde):
-        with pytest.raises(IntegrationError) as e:
-            emu.emu_fetch_all_pages(clave)
+    http_falso.responde(lambda req: respuesta_falsa(estado, cuerpo=f"error con {req.url}"))
+    with pytest.raises(IntegrationError) as e:
+        emu.emu_fetch_all_pages(clave)
     assert clave not in str(e.value)
     assert texto is None or str(e.value) == texto
 

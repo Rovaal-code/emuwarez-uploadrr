@@ -14,16 +14,15 @@ from __future__ import annotations
 
 import datetime as dt
 import os
-import socket
-import urllib.error
 import urllib.parse
-import urllib.request
 from pathlib import Path
 from typing import Any, Optional
 
 from ..constants import EMU_BASE_URL
+from ..integrations import http_cliente
 
 _TIMEOUT = 10  # seconds — short timeout for connection probes
+_CABECERAS_PRUEBA = {"Accept": "application/json", "User-Agent": "emuwarez-uploadrr/3"}
 
 # Rate-limit the live eMuwarez connection probe so the "Probar conexión" button
 # cannot hammer the real server. Mirrors the sync throttle pattern in
@@ -157,19 +156,17 @@ def test_tmdb_connection(
 
     _key = _key.strip()
     url = f"https://api.themoviedb.org/3/configuration?api_key={urllib.parse.quote(_key)}&language={urllib.parse.quote(language)}"
-    req = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": "emuwarez-uploadrr/3"})
     try:
-        with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
-            return _ok("tmdb", details={"http_status": resp.status})
-    except urllib.error.HTTPError as exc:
-        if exc.code in (401, 403):
+        resp = http_cliente.pedir("GET", url, cabeceras=_CABECERAS_PRUEBA, timeout=_TIMEOUT)
+        return _ok("tmdb", details={"http_status": resp.status_code})
+    except http_cliente.ErrorHTTP as exc:
+        if exc.status in (401, 403):
             return _fail("tmdb", "invalid_key", "API key de TMDb inválida o no autorizada")
-        return _fail("tmdb", "connection_error", f"Error HTTP {exc.code} al conectar con TMDb")
-    except urllib.error.URLError as exc:
-        reason = str(exc.reason)
-        if "timed out" in reason.lower() or isinstance(exc.reason, socket.timeout):
+        return _fail("tmdb", "connection_error", f"Error HTTP {exc.status} al conectar con TMDb")
+    except http_cliente.ErrorConexion as exc:
+        if exc.tiempo_agotado:
             return _fail("tmdb", "timeout", "Timeout al conectar con TMDb")
-        return _fail("tmdb", "connection_error", f"No se pudo conectar con TMDb: {reason}")
+        return _fail("tmdb", "connection_error", f"No se pudo conectar con TMDb: {exc.motivo}")
     except Exception as exc:
         return _fail("tmdb", "unexpected_error", f"Error inesperado: {type(exc).__name__}")
 
@@ -242,21 +239,19 @@ def test_emuwarez_connection(
         return _fail("emuwarez", "rate_limited", str(exc))
 
     url = f"{_base}/api/torrents/filter?api_token={urllib.parse.quote(_key)}&perPage=1"
-    req = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": "emuwarez-uploadrr/3"})
     try:
-        with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
-            return _ok("emuwarez", details={"base_url": _base, "http_status": resp.status})
-    except urllib.error.HTTPError as exc:
-        if exc.code == 429:
+        resp = http_cliente.pedir("GET", url, cabeceras=_CABECERAS_PRUEBA, timeout=_TIMEOUT)
+        return _ok("emuwarez", details={"base_url": _base, "http_status": resp.status_code})
+    except http_cliente.ErrorHTTP as exc:
+        if exc.status == 429:
             emu_limitador.penalizar(_key)
-        if exc.code in (401, 403):
+        if exc.status in (401, 403):
             return _fail("emuwarez", "invalid_key", "API key de eMuwarez inválida o no autorizada")
-        return _fail("emuwarez", "connection_error", f"Error HTTP {exc.code} al conectar con eMuwarez")
-    except urllib.error.URLError as exc:
-        reason = str(exc.reason)
-        if "timed out" in reason.lower() or isinstance(exc.reason, socket.timeout):
+        return _fail("emuwarez", "connection_error", f"Error HTTP {exc.status} al conectar con eMuwarez")
+    except http_cliente.ErrorConexion as exc:
+        if exc.tiempo_agotado:
             return _fail("emuwarez", "timeout", "Timeout al conectar con eMuwarez")
-        return _fail("emuwarez", "connection_error", f"No se pudo conectar con eMuwarez ({_base}): {reason}")
+        return _fail("emuwarez", "connection_error", f"No se pudo conectar con eMuwarez ({_base}): {exc.motivo}")
     except Exception as exc:
         return _fail("emuwarez", "unexpected_error", f"Error inesperado: {type(exc).__name__}")
 

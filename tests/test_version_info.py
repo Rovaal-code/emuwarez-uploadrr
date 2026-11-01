@@ -11,6 +11,7 @@ from __future__ import annotations
 import pytest
 
 from emuwarez_uploadrr.services import version_info as vi
+from tests.http_falso import falla_conexion, respuesta
 
 
 @pytest.fixture(autouse=True)
@@ -99,12 +100,25 @@ def test_la_cache_evita_consultar_en_cada_carga(monkeypatch):
     assert len(llamadas) == 2
 
 
-def test_un_json_roto_se_trata_como_error(monkeypatch):
-    class _R:
-        def read(self): return b"{ esto no es json"
-        def __enter__(self): return self
-        def __exit__(self, *a): return False
-
-    monkeypatch.setattr(vi.urllib.request, "urlopen", lambda *a, **kw: _R())
+def test_un_json_roto_se_trata_como_error(http_falso):
+    http_falso.responde(respuesta(200, cuerpo=b"{ esto no es json"))
     datos, error = vi._descargar_manifiesto()
     assert datos is None and "No se pudo leer" in error
+
+
+@pytest.mark.parametrize("fallo, esperado", [
+    (respuesta(404), "El manifiesto de versiones no existe todavía."),
+    (respuesta(503), "El manifiesto respondió 503."),
+    (falla_conexion("[Errno 111] Connection refused"),
+     "No se pudo consultar el manifiesto: [Errno 111] Connection refused"),
+])
+def test_los_fallos_del_manifiesto_se_cuentan(http_falso, fallo, esperado):
+    http_falso.responde(fallo)
+    assert vi._descargar_manifiesto() == (None, esperado)
+
+
+def test_el_manifiesto_se_lee(http_falso):
+    http_falso.responde(respuesta(200, json={"commit": "abc"}))
+    assert vi._descargar_manifiesto() == ({"commit": "abc"}, None)
+    assert http_falso.ultima.headers["User-Agent"] == "emuwarez-uploadrr"
+    assert http_falso.ultima.extensions["timeout"]["read"] == vi._TIEMPO_ESPERA

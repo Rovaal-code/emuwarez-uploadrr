@@ -125,15 +125,15 @@ def test_seed_does_not_touch_uploadrr(db_conn, tmp_path):
     assert uploadrr_marker.read_text() == "should not be touched"
 
 
-def test_seed_no_real_api_calls(db_conn, tmp_path, monkeypatch):
-    import urllib.request
-    def no_network(*args, **kwargs):
+def test_seed_no_real_api_calls(db_conn, tmp_path, http_falso):
+    def no_network(request):
         raise AssertionError("seed_demo_data must not make network calls")
 
-    monkeypatch.setattr(urllib.request, "urlopen", no_network)
+    http_falso.responde(no_network)
     from emuwarez_uploadrr.services.demo_seed import seed_demo_data
     result = seed_demo_data(db_conn, str(tmp_path / "media"), str(tmp_path / "uploads"), "DEMO_SEED")
     assert result["ok"] is True
+    assert http_falso.peticiones == []
 
 
 # ---------------------------------------------------------------------------

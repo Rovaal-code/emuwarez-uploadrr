@@ -61,6 +61,15 @@ def sin_red(monkeypatch):
         pytest.fail(f"el test intentó salir a la red: {sorted(set(intentos))}")
 
 
+@pytest.fixture
+def http_falso():
+    """Las peticiones HTTP salientes (http_cliente.pedir) van a un servidor de mentira: ver tests/http_falso.py."""
+    from tests.http_falso import servidor_falso
+
+    with servidor_falso() as servidor:
+        yield servidor
+
+
 @pytest.fixture(autouse=True)
 def _sin_listas_de_anime(monkeypatch):
     """Cada sincronización de biblioteca intenta bajar anime-list-full.json de

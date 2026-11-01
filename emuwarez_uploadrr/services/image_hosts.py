@@ -13,10 +13,10 @@ from __future__ import annotations
 
 import json
 import sqlite3
-import urllib.error
 import urllib.parse
-import urllib.request
 from typing import Any, Optional
+
+from ..integrations import http_cliente
 
 # id, label, homepage (for the reachability check), needs_key, favicon (the
 # real <link rel="icon"> the site itself declares — resolved by hand once,
@@ -132,13 +132,12 @@ def validate_image_host_key(host_id: str, api_key: str, *, timeout: int = 10) ->
         headers["X-API-Key"] = api_key.strip()
 
     try:
-        req = urllib.request.Request(url, data=b"", method="POST", headers=headers)
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            body = resp.read(4096).decode("utf-8", "replace")
-            status = resp.status
-    except urllib.error.HTTPError as exc:          # 400 es lo NORMAL aquí
-        body = exc.read(4096).decode("utf-8", "replace")
-        status = exc.code
+        resp = http_cliente.pedir("POST", url, cabeceras=headers, contenido=b"", timeout=timeout, limite=4096)
+        body = http_cliente.texto(resp.content, 4096)
+        status = resp.status_code
+    except http_cliente.ErrorHTTP as exc:          # 400 es lo NORMAL aquí
+        body = exc.texto(4096)
+        status = exc.status
     except Exception as exc:                        # noqa: BLE001 — red, DNS, timeout
         return {"ok": False, "error": f"No se pudo comprobar: {exc}", "checked": False}
 
@@ -186,15 +185,15 @@ def test_image_host(host_id: str, api_key: Optional[str] = None, *, timeout: int
     else:
         motivo = None
     try:
-        req = urllib.request.Request(meta["url"], method="GET", headers={"User-Agent": "emuwarez-uploadrr/2"})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            if 200 <= resp.status < 400:
-                return {"ok": True, "key_checked": not meta["needs_key"], "key_error": motivo}
-            return {"ok": False, "error": f"HTTP {resp.status}"}
-    except urllib.error.HTTPError as exc:
-        # Un 403/429 de Cloudflare a la portada: el servidor está, y subir funciona.
-        if exc.code < 500:
+        resp = http_cliente.pedir("GET", meta["url"], cabeceras={"User-Agent": "emuwarez-uploadrr/2"},
+                                  timeout=timeout)
+        if 200 <= resp.status_code < 400:
             return {"ok": True, "key_checked": not meta["needs_key"], "key_error": motivo}
-        return {"ok": False, "error": f"HTTP {exc.code}"}
+        return {"ok": False, "error": f"HTTP {resp.status_code}"}
+    except http_cliente.ErrorHTTP as exc:
+        # Un 403/429 de Cloudflare a la portada: el servidor está, y subir funciona.
+        if exc.status < 500:
+            return {"ok": True, "key_checked": not meta["needs_key"], "key_error": motivo}
+        return {"ok": False, "error": f"HTTP {exc.status}"}
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": f"No responde: {exc}"}

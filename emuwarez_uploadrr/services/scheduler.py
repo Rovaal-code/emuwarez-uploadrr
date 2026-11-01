@@ -414,7 +414,7 @@ def tick_due_tasks() -> list[dict]:
     """Open its own connection, claim + run whatever is due, close.
     Designed to be called from a worker thread (e.g. via
     `asyncio.to_thread(tick_due_tasks)`), never on the event loop thread —
-    the sync functions it calls use blocking urllib/sqlite3 I/O."""
+    the sync functions it calls use blocking HTTP (httpx) and sqlite3 I/O."""
     from ..database import connect, db_path, init_db
 
     conn = connect(db_path())

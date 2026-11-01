@@ -1,6 +1,6 @@
 """TMDb integration — watch providers and metadata helpers (Phase 10A).
 
-Uses the urllib-based HTTP helper from base.py to avoid new dependencies.
+Uses the HTTP helper from base.py (request_json, over httpx).
 """
 from __future__ import annotations
 

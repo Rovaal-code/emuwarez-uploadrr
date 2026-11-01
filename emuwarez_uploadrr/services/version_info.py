@@ -20,11 +20,10 @@ import json
 import os
 import threading
 import time
-import urllib.error
-import urllib.request
 from typing import Any, Optional
 
 from .. import __version__
+from ..integrations import http_cliente
 
 # Dónde vive el manifiesto. Se puede apuntar a otro sitio con una variable de
 # entorno, para probar sin tocar el publicado.
@@ -59,16 +58,15 @@ def version_local() -> dict[str, Optional[str]]:
 
 def _descargar_manifiesto() -> tuple[Optional[dict], Optional[str]]:
     try:
-        peticion = urllib.request.Request(
-            URL_MANIFIESTO, headers={"User-Agent": "emuwarez-uploadrr"})
-        with urllib.request.urlopen(peticion, timeout=_TIEMPO_ESPERA) as r:
-            return json.loads(r.read().decode("utf-8")), None
-    except urllib.error.HTTPError as e:
-        if e.code == 404:
+        r = http_cliente.pedir("GET", URL_MANIFIESTO, cabeceras={"User-Agent": "emuwarez-uploadrr"},
+                               timeout=_TIEMPO_ESPERA)
+        return json.loads(r.content.decode("utf-8")), None
+    except http_cliente.ErrorHTTP as e:
+        if e.status == 404:
             return None, "El manifiesto de versiones no existe todavía."
-        return None, f"El manifiesto respondió {e.code}."
-    except urllib.error.URLError as e:
-        return None, f"No se pudo consultar el manifiesto: {e.reason}"
+        return None, f"El manifiesto respondió {e.status}."
+    except http_cliente.ErrorConexion as e:
+        return None, f"No se pudo consultar el manifiesto: {e.motivo}"
     except Exception as e:                      # JSON roto, timeout, lo que sea
         return None, f"No se pudo leer el manifiesto: {e}"
 

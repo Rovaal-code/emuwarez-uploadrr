@@ -288,7 +288,7 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
   }
   const {
     batchEnvChecks, batchContentChecks, batchChecksLoading, batchChecksIndex, batchViewId, setBatchViewId,
-    mergedChecksFor, olvidar: olvidarComprobacionesTanda,
+    batchChecksError, repetir: repetirComprobacionesTanda, mergedChecksFor, olvidar: olvidarComprobacionesTanda,
   } = useComprobacionesTanda({ step, batchQueue, batchPhase, proveedorElegido })
 
   // Un único sitio donde cambia lo que se sube. Si es otra cosa que antes se
@@ -1033,7 +1033,7 @@ export function useAsistente({ item, onClose: onCloseProp, onDone, onNavigate, p
     checks, checksLoading, liveChecks, runChecks, canUpload, uploading, uploadMsg, doUpload,
     batchQueue, batchIsEpisodes, batchItemTitle, batchPhase, batchIndex, batchResults,
     batchViewId, setBatchViewId, batchEnvChecks, batchContentChecks, batchChecksLoading, batchChecksIndex,
-    uploadAllSeasons, uploadAllEpisodes,
+    batchChecksError, repetirComprobacionesTanda, uploadAllSeasons, uploadAllEpisodes,
     // Cerrar
     cerrarModal, confirmandoCierre, setConfirmandoCierre,
   }

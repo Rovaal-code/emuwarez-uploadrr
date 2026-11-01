@@ -6,7 +6,6 @@ import {
 } from '../../api/uploads'
 import { seguirProgreso } from '../../api/eventos'
 import { proveedorParaServidor, type ProveedoresElegidos } from '../../utils/origenProveedor'
-import { cacheCubre } from '../../utils/seleccionSubida'
 
 export function useComprobaciones(targetId: number | null, proveedorElegido: ProveedoresElegidos) {
   const [checks, setChecks] = useState<UploadChecksResult | null>(null)
@@ -69,6 +68,10 @@ export function useComprobacionesTanda({ step, batchQueue, batchPhase, proveedor
   const [batchChecksIndex, setBatchChecksIndex] = useState(0)
   // Cuál se está mirando en el desplegable de arriba a la derecha.
   const [batchViewId, setBatchViewId] = useState<number | null>(null)
+  // Una petición que no llegó (red, eMuwarez caído): sin su resultado no se puede subir.
+  const [batchChecksError, setBatchChecksError] = useState<string | null>(null)
+  // Sube con «Volver a comprobar».
+  const [intento, setIntento] = useState(0)
 
   // Contenido + entorno reconstruye exactamente la pasada completa de siempre
   // (fijado por tests/test_upload_checks.py), así que el snapshot que se
@@ -85,28 +88,33 @@ export function useComprobacionesTanda({ step, batchQueue, batchPhase, proveedor
   // Al entrar en el paso 2 con varios elegidos: el entorno una vez, el
   // contenido uno a uno. Se guardan para que "Subir todos" no las repita y
   // para que el desplegable pueda enseñar las de cualquiera sin volver a
-  // pedirlas.
+  // pedirlas. Solo se pide lo que falta o falló: volver a entrar en el paso 2,
+  // o «Volver a comprobar», repite eso y conserva lo que ya pasó.
   useEffect(() => {
     if (step !== 2 || batchQueue.length <= 1 || batchPhase !== 'idle') return
-    if (batchChecksLoading || (batchEnvChecks && cacheCubre(batchQueue, batchContentChecks))) return
+    if (batchChecksLoading || (batchEnvChecks?.ready && batchQueue.every(id => batchContentChecks.get(id)?.ready))) return
     let alive = true
     const run = async () => {
       setBatchChecksLoading(true)
       setBatchChecksIndex(0)
+      setBatchChecksError(null)
       try {
         // El item_id da igual para las de entorno, pero el endpoint lo pide.
-        const env = await runUploadChecks(batchQueue[0], 'environment')
+        const env = batchEnvChecks?.ready ? batchEnvChecks : await runUploadChecks(batchQueue[0], 'environment')
         if (!alive) return
         setBatchEnvChecks(env)
-        const acc = new Map<number, UploadChecksResult>()
+        const acc = new Map([...batchContentChecks].filter(([, r]) => r.ready))
         for (let i = 0; i < batchQueue.length; i++) {
           if (!alive) return
+          if (acc.has(batchQueue[i])) continue
           setBatchChecksIndex(i)
           acc.set(batchQueue[i], await runUploadChecks(
             batchQueue[i], 'content', proveedorParaServidor(proveedorElegido, batchQueue[i])))
           setBatchContentChecks(new Map(acc))
         }
         if (alive) setBatchViewId(prev => prev ?? batchQueue[0])
+      } catch (e: unknown) {
+        if (alive) setBatchChecksError(e instanceof Error ? e.message : 'Error comprobando')
       } finally {
         if (alive) setBatchChecksLoading(false)
       }
@@ -114,13 +122,16 @@ export function useComprobacionesTanda({ step, batchQueue, batchPhase, proveedor
     run()
     return () => { alive = false; setBatchChecksLoading(false) }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- se relanza al cambiar la tanda o su fase, no con cada elección
-  }, [step, batchQueue.length, batchPhase])
+  }, [step, batchQueue.length, batchPhase, intento])
 
   // Otra selección: lo comprobado para la anterior ya no vale.
-  const olvidar = () => { setBatchEnvChecks(null); setBatchContentChecks(new Map()); setBatchViewId(null) }
+  const olvidar = () => {
+    setBatchEnvChecks(null); setBatchContentChecks(new Map()); setBatchViewId(null); setBatchChecksError(null)
+  }
 
   return {
     batchEnvChecks, batchContentChecks, batchChecksLoading, batchChecksIndex, batchViewId, setBatchViewId,
+    batchChecksError, repetir: () => setIntento(n => n + 1),
     mergedChecksFor, olvidar,
   }
 }

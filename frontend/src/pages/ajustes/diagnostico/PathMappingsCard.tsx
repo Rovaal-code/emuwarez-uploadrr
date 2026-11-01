@@ -3,11 +3,12 @@ import { useUnsavedGuard } from '../../../utils/unsavedGuard'
 import { fetchSettings, updateSettings } from '../../../api/settings'
 import { useTooltip } from '../../../components/Tooltip'
 import { useSettingsMessageAdapter } from '../mensajes'
+import { ErrorDeCarga } from '../ErrorDeCarga'
 
-function RemoveMappingRuleButton({ onClick }: { onClick: () => void }) {
+function RemoveMappingRuleButton({ onClick, disabled }: { onClick: () => void; disabled: boolean }) {
   const { triggerProps, tooltipNode } = useTooltip('Quitar regla')
   return (
-    <button className="btn btn-ghost btn-sm" type="button" onClick={onClick} {...triggerProps}>✕{tooltipNode}</button>
+    <button className="btn btn-ghost btn-sm" type="button" onClick={onClick} disabled={disabled} {...triggerProps}>✕{tooltipNode}</button>
   )
 }
 
@@ -18,6 +19,9 @@ function RemoveMappingRuleButton({ onClick }: { onClick: () => void }) {
 export function PathMappingsCard() {
   const [mappings, setMappings] = useState<{ from: string; to: string }[]>([])
   const [loading, setLoading] = useState(true)
+  // Si la carga falla no se enseña el editor: con una lista vacía, guardar borraría las reglas que sí existen.
+  const [errorCarga, setErrorCarga] = useState<string | null>(null)
+  const [intento, setIntento] = useState(0)
   const [saving, setSaving] = useState(false)
   const setMsg = useSettingsMessageAdapter()
   const [baseline, setBaseline] = useState('[]')
@@ -29,8 +33,15 @@ export function PathMappingsCard() {
         setMappings(m)
         setBaseline(JSON.stringify(m))
       })
+      .catch((e: unknown) => setErrorCarga((e instanceof Error ? e.message : String(e)) || 'error desconocido'))
       .finally(() => setLoading(false))
-  }, [])
+  }, [intento])
+
+  function reintentar() {
+    setErrorCarga(null)
+    setLoading(true)
+    setIntento(n => n + 1)
+  }
 
   const dirty = JSON.stringify(mappings) !== baseline
   useUnsavedGuard('rutas', dirty)
@@ -62,6 +73,8 @@ export function PathMappingsCard() {
       </p>
       {loading ? (
         <p className="aj-muted-13">Cargando…</p>
+      ) : errorCarga ? (
+        <ErrorDeCarga mensaje={`No se pudieron cargar las reglas: ${errorCarga}`} onReintentar={reintentar} />
       ) : (
         <>
           <div className="aj-col-8">
@@ -72,21 +85,21 @@ export function PathMappingsCard() {
               <div key={i} className="aj-flex-c-8 aj-wrap">
                 <input
                   className="form-input aj-campo-ruta"
-                  value={m.from} placeholder="Ruta de Radarr/Sonarr: /data/media"
+                  value={m.from} disabled={saving} placeholder="Ruta de Radarr/Sonarr: /data/media"
                   onChange={e => setMappings(p => p.map((x, j) => j === i ? { ...x, from: e.target.value } : x))}
                 />
                 <span className="aj-muted">→</span>
                 <input
                   className="form-input aj-campo-ruta"
-                  value={m.to} placeholder="Ruta local: /home/alvaro/mnt/emu-media"
+                  value={m.to} disabled={saving} placeholder="Ruta local: /home/alvaro/mnt/emu-media"
                   onChange={e => setMappings(p => p.map((x, j) => j === i ? { ...x, to: e.target.value } : x))}
                 />
-                <RemoveMappingRuleButton onClick={() => setMappings(p => p.filter((_, j) => j !== i))} />
+                <RemoveMappingRuleButton disabled={saving} onClick={() => setMappings(p => p.filter((_, j) => j !== i))} />
               </div>
             ))}
           </div>
           <div className="aj-flex-c-12 aj-mt-10">
-            <button className="btn btn-secondary btn-sm" type="button"
+            <button className="btn btn-secondary btn-sm" type="button" disabled={saving}
               onClick={() => setMappings(p => [...p, { from: '', to: '' }])}>+ Añadir regla</button>
             <button className="btn btn-primary btn-sm" type="button" onClick={handleSave} disabled={saving || !dirty}>
               {saving ? 'Guardando…' : 'Guardar cambios'}

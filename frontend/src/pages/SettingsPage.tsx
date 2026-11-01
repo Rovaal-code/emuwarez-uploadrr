@@ -84,7 +84,7 @@ export function SettingsPage() {
             <button
               className={`btn btn-primary btn-sm${saveAction.dirty ? ' btn-unsaved' : ''}`}
               onClick={saveAction.onSave}
-              disabled={saveAction.saving}
+              disabled={saveAction.saving || saveAction.deshabilitado}
             >
               {saveAction.saving ? 'Guardando…' : saveAction.label}
             </button>

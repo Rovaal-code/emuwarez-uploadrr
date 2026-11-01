@@ -969,6 +969,75 @@ def test_no_se_enlaza_un_fichero_fuera_de_allowed_roots(db_conn, tmp_path, monke
     assert not (tmp_path / "uploads").exists() or not any((tmp_path / "uploads").iterdir())
 
 
+def _anotar_los_pasos(monkeypatch, *, cancelar_en: int | None = None) -> list:
+    """Apunta cada frontera de la preparación: el `stage` que escribe cada punto
+    de cancelación, las filas de Fases que empiezan y terminan, y el arranque de
+    Uploadrr. Con `cancelar_en`, ese punto de cancelación (desde 0) se encuentra
+    la subida ya cancelada."""
+    from emuwarez_uploadrr.services import upload_execution as ue
+    pasos: list = []
+    marcar, empezar, terminar = uq._mark, ue.mark_phase_started, ue.mark_phase_done
+
+    def mark(job_id, *, stage, **kw):
+        if cancelar_en is not None and sum(p[0] == "stage" for p in pasos) == cancelar_en:
+            from emuwarez_uploadrr.services.upload_execution import cancel_upload_job
+            cancel_upload_job(job_id)
+        pasos.append(("stage", stage))
+        return marcar(job_id, stage=stage, **kw)
+
+    monkeypatch.setattr(uq, "_mark", mark)
+    monkeypatch.setattr(ue, "mark_phase_started", lambda j, f: (pasos.append(("empieza", f)), empezar(j, f)))
+    monkeypatch.setattr(ue, "mark_phase_done", lambda j, f: (pasos.append(("termina", f)), terminar(j, f)))
+    return pasos
+
+
+# Lo que hace la preparación de una película de principio a fin, en orden. La
+# primera comprobación escribe ya `nomenclature` sin empezar ninguna fila de
+# Fases (ver el comentario del paso de comprobación), y «Inicio de Uploadrr» no
+# se cierra aquí: lo cierra la salida real de Uploadrr.
+PASOS_DE_UNA_PELICULA = [
+    ("stage", "nomenclature"),
+    ("stage", "nomenclature"), ("empieza", "nomenclature"), ("termina", "nomenclature"),
+    ("stage", "remux"), ("empieza", "remux"), ("termina", "remux"),
+    ("stage", "verificacion_presubida"), ("empieza", "verificacion_presubida"),
+    ("arranca", None),
+]
+
+
+@pytest.mark.usefixtures("ficheros_de_mentira")
+def test_la_preparacion_recorre_los_pasos_en_orden(db_conn, tmp_path, monkeypatch):
+    pasos = _anotar_los_pasos(monkeypatch)
+    visto = _correr_cola_hasta_el_inicio(db_conn, tmp_path, monkeypatch)
+    if "status" in visto:  # el start_upload_job simulado llegó a llamarse
+        pasos.append(("arranca", None))
+    assert pasos == PASOS_DE_UNA_PELICULA
+
+
+@pytest.mark.usefixtures("ficheros_de_mentira")
+@pytest.mark.parametrize("punto", range(4))
+def test_cancelar_para_la_preparacion_en_el_siguiente_punto(db_conn, tmp_path, monkeypatch, punto):
+    """Cancelar en mitad de la preparación solo deja la marca: el trabajo se
+    rinde en el siguiente punto de cancelación, sin empezar la fase que venía,
+    sin arrancar Uploadrr y soltando su plaza de "Subidas en paralelo"."""
+    from emuwarez_uploadrr.services.upload_execution import _upload_concurrency_gate
+    pasos = _anotar_los_pasos(monkeypatch, cancelar_en=punto)
+    sueltas = []
+    soltar = _upload_concurrency_gate.release
+    monkeypatch.setattr(_upload_concurrency_gate, "release", lambda: (sueltas.append(1), soltar()))
+    visto = _correr_cola_hasta_el_inicio(db_conn, tmp_path, monkeypatch)
+
+    assert "status" not in visto
+    hasta = [i for i, p in enumerate(PASOS_DE_UNA_PELICULA) if p[0] == "stage"][punto]
+    assert pasos == PASOS_DE_UNA_PELICULA[:hasta + 1]
+    job = db_conn.execute("SELECT id, status FROM upload_jobs").fetchone()
+    assert job["status"] == "cancelled"
+    ultimo = db_conn.execute("SELECT message FROM upload_job_logs WHERE upload_job_id = ? ORDER BY sequence DESC LIMIT 1",
+                             (job["id"],)).fetchone()
+    assert ultimo["message"] == "Subida cancelada; se detiene la preparación."
+    # Una la suelta el trabajo; la otra, _correr_cola_hasta_el_inicio, por el hilo de Uploadrr que no llegó a existir.
+    assert len(sueltas) == 2 and _upload_concurrency_gate._active == 0
+
+
 @pytest.mark.usefixtures("ficheros_de_mentira")
 def test_un_enlace_simbolico_en_la_carpeta_de_subidas_vale_para_subir(db_conn, tmp_path, monkeypatch):
     """Con /config y /data en montajes distintos no cabe un enlace duro."""

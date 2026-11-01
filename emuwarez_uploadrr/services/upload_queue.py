@@ -23,7 +23,10 @@ import json
 import logging
 import os
 import threading
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from typing import Any
 
 from ..database import connect, row_to_dict
 
@@ -928,320 +931,381 @@ def _preparar_fichero(job_id: int, item_id: int, origen: str, destino: str, modo
                metodo="reflink")
 
 
-def _run_queued_job(job_id: int) -> None:
-    from .upload_execution import (
-        get_upload_job, start_upload_job, append_upload_log,
-        mark_phase_started, mark_phase_done, update_phase_progress,
-        _upload_concurrency_gate,
+@dataclass
+class _Trabajo:
+    """Lo que los pasos de la preparación se pasan de uno a otro."""
+    job_id: int
+    conn: Any
+    job: dict
+    item: dict
+    item_id: int
+    is_season: bool
+    overrides: dict | None
+    season_overrides: dict
+    # Lo deja el paso de nomenclatura: (id del elemento, ruta de origen, nombre de eMuwarez) por fichero.
+    ficheros: list[tuple[int, str, str]] = field(default_factory=list)
+    renombrados: list[str] = field(default_factory=list)
+    plan_pack: dict | None = None
+    plan_nombre: dict | None = None
+    # Lo deja el paso de preparación, para el resumen y la relectura en Radarr/Sonarr.
+    resultados: list[dict] = field(default_factory=list)
+    preparada: dict | None = None
+    que: str = ""
+    destino_uploadrr: str = ""
+    # La plaza de "Subidas en paralelo" pasa al hilo de Uploadrr en cuanto arranca.
+    puerta_traspasada: bool = False
+
+
+def _cargar_trabajo(job_id: int, conn) -> _Trabajo | None:
+    """El trabajo y su elemento, o None si no hay nada que preparar (ya
+    apuntado como fallo si hacía falta)."""
+    from .upload_execution import get_upload_job
+    job = get_upload_job(job_id, conn=conn)
+    if not job or job.get("status") != "queued":
+        return None  # cancelada justo al tocarle plaza, o el job ya no existe
+    item_id = job.get("library_item_id")
+    if not item_id:
+        _fail(job_id, "El job no tiene un elemento de biblioteca asociado.")
+        return None
+    item = row_to_dict(conn.execute("SELECT * FROM library_items WHERE id = ?", (item_id,)).fetchone())
+    if not item:
+        _fail(job_id, "El elemento ya no existe en la biblioteca.")
+        return None
+    return _Trabajo(
+        job_id=job_id, conn=conn, job=job, item=item, item_id=item_id,
+        is_season=item.get("item_type") == "season",
+        overrides=json.loads(job["remux_overrides_json"]) if job.get("remux_overrides_json") else None,
+        season_overrides=json.loads(job["season_overrides_json"]) if job.get("season_overrides_json") else {},
     )
-    from .upload_execution import CONFIRMATION_TOKEN as START_TOKEN
-    from .nomenclature import build_nomenclature_apply_plan
-    from .mkv_remux import check_mkvmerge_available, read_tracks_json, modo_pistas, toca_el_fichero
+
+
+def _paso_comprobar(t: _Trabajo) -> bool:
+    """Verificación presubida: que el fichero se lee (accesible, MediaInfo,
+    mkvtoolnix) y los requisitos que no dependen de que ya esté renombrado
+    (ruta y config de Uploadrr, claves de eMuwarez/TMDb, nomenclatura
+    bloqueada). Va primero para que una config mala falle antes de gastar
+    tiempo en nomenclatura y pistas."""
+    from .upload_execution import append_upload_log
+    from .mkv_remux import check_mkvmerge_available, read_tracks_json
     from .media_info_service import mediainfo_available, read_media_info_summary
     from .path_mapping import resolve_local_path, ruta_de_lectura
+
+    job_id, conn = t.job_id, t.conn
+    append_upload_log(job_id, "info", "Comprobando integridad del archivo…", stream="system", conn=conn)
+    if t.is_season:
+        if not _check_season_integrity(job_id, t.item_id, conn=conn):
+            return False
+    else:
+        # Cuál de las dos rutas se lee: path_mapping.py::ruta_de_lectura.
+        candidate_path = ruta_de_lectura(t.item)
+        local_path = resolve_local_path(candidate_path) or candidate_path
+        if not local_path or not os.path.isfile(local_path):
+            _fail(job_id, f"El archivo no es accesible: {local_path or candidate_path or '(sin ruta)'}")
+            return False
+        if _fuera_de_raices(local_path, conn):
+            _fail(job_id, f"El archivo está fuera de los allowed_roots configurados: {local_path}")
+            return False
+        if mediainfo_available():
+            info = read_media_info_summary(local_path)
+            if not info:
+                _fail(job_id, "MediaInfo no pudo leer el fichero (posible corrupción).")
+                return False
+        if local_path.lower().endswith(".mkv") and check_mkvmerge_available().get("available"):
+            tracks = read_tracks_json(local_path)
+            if not tracks.get("ok"):
+                _fail(job_id, f"mkvtoolnix no pudo leer el fichero: {tracks.get('error') or 'error desconocido'}")
+                return False
+
+    append_upload_log(job_id, "info", "Comprobando configuración y requisitos previos…", stream="system", conn=conn)
+    return _check_generic_upload_preconditions(job_id, t.item_id, t.is_season, conn=conn)
+
+
+def _paso_nombre(t: _Trabajo) -> bool:
+    """Nomenclatura: el nombre de eMuwarez de cada fichero. Uno de la
+    biblioteca no se renombra (lo lleva su enlace en la carpeta de subidas);
+    uno que ya está en ella, sí, en su sitio."""
+    from .upload_execution import append_upload_log
+    from .nomenclature import build_nomenclature_apply_plan
+
+    job_id, conn = t.job_id, t.conn
+    append_upload_log(job_id, "info", "Aplicando nomenclatura…", stream="system", conn=conn)
+    if t.is_season:
+        from .season_pack import build_season_pack_plan
+        try:
+            plan_pack = build_season_pack_plan(t.item_id, conn=conn, **_ajustes_de_pack(t.season_overrides))
+        except Exception as exc:
+            _fail(job_id, f"Error aplicando la nomenclatura del pack de temporada: {exc}")
+            return False
+        if plan_pack.get("status") != "valid":
+            reason = "; ".join(plan_pack.get("errors") or []) or "estado desconocido"
+            _fail(job_id, f"No se pudo aplicar la nomenclatura del pack de temporada: {reason}")
+            return False
+        t.plan_pack = plan_pack
+        _write_snapshot(job_id, "nomenclature_snapshot_json", {
+            "media_type": "season",
+            "proposed_title": plan_pack.get("season_pack_title"),
+            "proposed_torrent_name": plan_pack.get("season_pack_title"),
+            "proposed_filename": plan_pack.get("season_pack_title"),
+            "series_title": plan_pack.get("series_title"),
+            "year": plan_pack.get("year"),
+            "season_number": plan_pack.get("season_number"),
+            "tmdb_id": plan_pack.get("tmdb_id"),
+            "resolution": plan_pack.get("resolution"),
+            "source": plan_pack.get("source"),
+            "provider_final": plan_pack.get("provider"),
+            "video_codec": plan_pack.get("video_codec"),
+            "audio_summary": plan_pack.get("audio_summary"),
+            "subtitle_summary": plan_pack.get("subtitle_summary"),
+            "release_tag": plan_pack.get("release_tag"),
+        }, conn=conn)
+        for ep in plan_pack.get("episodes", []):
+            origen, nombre = ep.get("source_path"), ep.get("nombre")
+            raw = ep.get("raw_source_path")
+            origen = _renombrar_si_esta_en_subidas(
+                job_id, ep["episode_id"], origen, nombre, conn, t.renombrados,
+                raw_destino=os.path.join(os.path.dirname(raw), nombre) if raw else None)
+            if origen is None:
+                return False
+            t.ficheros.append((ep["episode_id"], origen, nombre))
+        return True
+
+    try:
+        plan_nombre = build_nomenclature_apply_plan(
+            t.item_id, proposal_id=t.job.get("nomenclature_proposal_id"), conn=conn)
+    except Exception as exc:
+        _fail(job_id, f"Error aplicando la nomenclatura: {exc}")
+        return False
+    if plan_nombre.get("status") != "ready":
+        reason = "; ".join(plan_nombre.get("errors") or []) or "estado desconocido"
+        _fail(job_id, f"No se pudo aplicar la nomenclatura: {reason}")
+        return False
+    t.plan_nombre = plan_nombre
+    if plan_nombre.get("proposal"):
+        _write_snapshot(job_id, "nomenclature_snapshot_json", plan_nombre["proposal"], conn=conn)
+    origen = _renombrar_si_esta_en_subidas(
+        job_id, t.item_id, plan_nombre["source_path"], plan_nombre["nombre"], conn, t.renombrados,
+        raw_destino=plan_nombre.get("raw_destination_path"),
+        proposal_id=(plan_nombre.get("proposal") or {}).get("id"))
+    if origen is None:
+        return False
+    t.ficheros = [(t.item_id, origen, plan_nombre["nombre"])]
+    return True
+
+
+def _paso_preparar(t: _Trabajo) -> bool:
+    """Pistas, título interno y enlace en la carpeta de subidas, fichero a
+    fichero (_preparar_fichero). Lo que Uploadrr recibe vive siempre ahí; para
+    un pack, además, torf nombra el torrent con la carpeta."""
+    from .upload_execution import append_upload_log, update_phase_progress
+    from .mkv_remux import modo_pistas, toca_el_fichero
+    from .carpeta_subida import ENLACES, RAIZ_SUBIDAS, preparar_carpeta_de_pack, preparar_fichero_suelto
+    from .nomenclature import marcar_nombre_aplicado
+
+    job_id, conn, ficheros, is_season = t.job_id, t.conn, t.ficheros, t.is_season
+    modo_de_pistas = modo_pistas(conn)
+    if not toca_el_fichero(modo_de_pistas):
+        append_upload_log(
+            job_id, "info",
+            "Renombrar/Ordenar pistas está en Ninguno: no se tocan las pistas ni el título interno.",
+            stream="system", conn=conn,
+        )
+    fuera = next((f for _i, f, _n in ficheros if f and _fuera_de_raices(f, conn)), None)
+    if fuera:
+        _fail(job_id, f"El archivo está fuera de los allowed_roots configurados: {fuera}")
+        return False
+
+    if is_season:
+        from .season_pack import _sanitize_pack_folder_name
+        carpeta_pack = _sanitize_pack_folder_name(t.plan_pack.get("season_pack_title") or "")
+        t.destino_uploadrr = os.path.join(RAIZ_SUBIDAS, carpeta_pack)
+    else:
+        t.destino_uploadrr = os.path.join(RAIZ_SUBIDAS, ficheros[0][2])
+    # La ruta se apunta ANTES de crearla: así un borrado de otra subida la ve en uso.
+    with ENLACES:
+        otra = _subida_que_lo_usa(conn, t.destino_uploadrr, job_id)
+        if otra is None:
+            conn.execute("UPDATE upload_jobs SET prepared_path = ?, updated_at = ? WHERE id = ?",
+                         (t.destino_uploadrr, _now_iso(), job_id))
+            conn.commit()
+    if otra is not None:
+        _fail(job_id, f"«{os.path.basename(t.destino_uploadrr)}» es de la subida #{otra}, que lo siembra "
+                      "o lo tiene en qBittorrent: no se rehace para no romper ese torrent. "
+                      "Bórrala antes si quieres volver a subirlo.")
+        return False
+
+    por_nombre = {n: i for i, _f, n in ficheros}
+    resultados = t.resultados
+    total = len(ficheros)
+
+    def preparar(origen: str, destino: str) -> str:
+        idx = len(resultados)
+        fid = por_nombre[os.path.basename(destino)]
+
+        def progreso(pct: int) -> None:
+            update_phase_progress(job_id, "remux", int((idx * 100 + pct) / total))
+
+        # En un pack, solo los idiomas elegidos para las pistas sin idioma, por capítulo.
+        r = _preparar_fichero(job_id, fid, origen, destino, modo_de_pistas, conn,
+                              overrides=_overrides_de_pack(origen, t.season_overrides) if is_season
+                              else t.overrides, on_progress=progreso)
+        resultados.append({**r, "item_id": fid})
+        update_phase_progress(job_id, "remux", int((idx + 1) * 100 / total))
+        return r["metodo"]
+
+    if is_season:
+        preparada = preparar_carpeta_de_pack(carpeta_pack, [(f, n) for _i, f, n in ficheros],
+                                             preparar=preparar)
+        t.que = f"{preparada.get('cuantos', 0)} capítulo(s)"
+    else:
+        preparada = preparar_fichero_suelto(ficheros[0][1], ficheros[0][2], preparar=preparar)
+        t.que = "el archivo"
+    if preparada["status"] != "ready":
+        _fail(job_id, "No se pudo preparar la subida en la carpeta de subidas: "
+                      + "; ".join(preparada["errors"]))
+        return False
+    t.preparada = preparada
+
+    for r, (_i, _f, n) in zip(resultados, ficheros):
+        ruta = os.path.join(t.destino_uploadrr, n) if is_season else t.destino_uploadrr
+        marcar_nombre_aplicado(r["item_id"], ruta, conn=conn,
+                               proposal_id=None if is_season else (t.plan_nombre.get("proposal") or {}).get("id"))
+
+    def foto(r: dict) -> dict:
+        return {"omitida": r["omitida"]} if r["omitida"] else {"ordered_tracks": r["pistas"] or []}
+    if not toca_el_fichero(modo_de_pistas):
+        _write_snapshot(job_id, "remux_snapshot_json", {"omitida": "Ninguno"}, conn=conn)
+    elif is_season:
+        episodios = {ep["episode_id"]: ep for ep in t.plan_pack.get("episodes", [])}
+        _write_snapshot(job_id, "remux_snapshot_json", {"episodes": [
+            {"episode_id": r["item_id"], "title": episodios[r["item_id"]].get("title"),
+             "episode_number": episodios[r["item_id"]].get("episode_number"), **foto(r)}
+            for r in resultados]}, conn=conn)
+    else:
+        _write_snapshot(job_id, "remux_snapshot_json", foto(resultados[0]), conn=conn)
+    update_phase_progress(job_id, "remux", 100)
+    return True
+
+
+def _tras_preparar(t: _Trabajo) -> None:
+    """El resumen de lo preparado y, si hace falta, la relectura en
+    Radarr/Sonarr. Va con la fase ya cerrada, y aunque hayan cancelado: lo que
+    se renombró o se escribió en el original ya está hecho, y Radarr/Sonarr
+    tiene que enterarse igual."""
+    from .upload_execution import append_upload_log
+    editados = sum(1 for r in t.resultados if r["original_editado"])
+    append_upload_log(
+        t.job_id, "info",
+        f"Preparado para subir: {t.que} en «{os.path.basename(t.destino_uploadrr)}» "
+        f"({', '.join(t.preparada['metodos'])}). "
+        + (f"Se editaron {editados} original(es) que no compartía nadie."
+           if editados else "Los originales no se han tocado."),
+        stream="system", conn=t.conn,
+    )
+    # Radarr/Sonarr solo tiene algo que releer si se renombró o se escribió en el original.
+    if editados or t.renombrados:
+        from .library import refresh_arr_and_resync
+        refresh_arr_and_resync(
+            t.conn, t.item_id,
+            on_log=lambda level, message: append_upload_log(t.job_id, level, message, stream="system", conn=t.conn),
+        )
+
+
+def _paso_iniciar(t: _Trabajo) -> bool:
+    """Comprobación final (requisitos y vista previa del comando, ya contra el
+    fichero definitivo) y arranque de Uploadrr."""
+    from .upload_execution import append_upload_log, start_upload_job
+    from .upload_execution import CONFIRMATION_TOKEN as START_TOKEN
+
+    append_upload_log(t.job_id, "info", "Preparando la subida…", stream="system", conn=t.conn)
+    if not _populate_ready(t.job_id, t.item_id, conn=t.conn, season_overrides=t.season_overrides):
+        return False  # _populate_ready ya apuntó el motivo
+    result = start_upload_job(t.job_id, dry_run=False, start=True, confirmation=START_TOKEN, conn=t.conn,
+                              pre_gated=True)
+    if result.get("error"):
+        _fail(t.job_id, result.get("message") or "; ".join(result.get("errors") or [])
+              or "No se pudo iniciar la subida.")
+        return False
+    t.puerta_traspasada = True
+    return True
+
+
+@dataclass(frozen=True)
+class Paso:
+    """Un paso de la preparación de una subida.
+
+    Antes de cada uno, la preparación escribe `stage` en la fila, y ese es su
+    punto de cancelación: si el usuario canceló mientras corría el anterior,
+    se para ahí (ver job_was_cancelled). `fase` es la fila de Fases que pasa a
+    «en curso»; `cierra_fase`, si la cierra el propio paso al terminar.
+    `despues` corre con la fase ya cerrada y no tiene punto de cancelación."""
+    clave: str
+    stage: str
+    correr: Callable[[_Trabajo], bool]  # False: el paso ya ha apuntado el fallo
+    fase: str | None = None
+    cierra_fase: bool = True
+    despues: Callable[[_Trabajo], None] | None = None
+
+
+PASOS: tuple[Paso, ...] = (
+    # Sin fila de Fases propia: «Inicio de Uploadrr» solo empieza cuando de
+    # verdad es el paso en curso (abajo). Un trabajo solo tiene una fase en
+    # curso a la vez (build_phase_state), así que empezarla aquí la dejaba en
+    # «Pendiente» en cuanto empezaba la nomenclatura, con un started_at y una
+    # Duración de este rato (pasó el 2026-07-28). Y `stage` es `nomenclature`
+    # y no `verificacion_presubida` por lo mismo en la otra vía de pintado
+    # (compute_progress_phase en upload_execution.py, la que leen las
+    # etiquetas de "actividad actual" mientras progress_json no tiene fase en
+    # curso): con la otra, un trabajo recién salido de la cola enseñaba
+    # «Iniciando Uploadrr» antes que la nomenclatura.
+    Paso("comprobar", stage="nomenclature", correr=_paso_comprobar),
+    Paso("nombre", stage="nomenclature", fase="nomenclature", correr=_paso_nombre),
+    Paso("preparar", stage="remux", fase="remux", correr=_paso_preparar, despues=_tras_preparar),
+    # «Inicio de Uploadrr» no se cierra aquí: abarca también el procesado de
+    # metadatos del propio Uploadrr-EMU (uploadrr_progress.PHASE_KEY_ALIASES),
+    # y advance_running_phase() la cierra cuando llega su siguiente salida real
+    # (screenshots_generate), como cualquier otra fase agrupada.
+    Paso("iniciar", stage="verificacion_presubida", fase="verificacion_presubida",
+         correr=_paso_iniciar, cierra_fase=False),
+)
+
+
+def _run_queued_job(job_id: int) -> None:
+    from .upload_execution import (
+        append_upload_log, mark_phase_started, mark_phase_done, _upload_concurrency_gate,
+    )
 
     # Full serialization of "Subidas en paralelo": a queued job takes its
     # concurrency slot HERE, before any preprocessing (verificación
     # pre-subida/nomenclatura/remux) — not just around the heavy Uploadrr-EMU
     # subprocess like before. Ownership transfers to that subprocess's own
-    # thread once it's actually spawned (owns_gate flips to False right
-    # after start_upload_job succeeds, and pre_gated=True below tells that
-    # thread not to double-acquire); every failure path before that point
-    # falls through to the `finally` below and releases it immediately, so
-    # a job that never gets that far can't deadlock the queue.
+    # thread once it's actually spawned (_paso_iniciar sets
+    # puerta_traspasada right after start_upload_job succeeds, and
+    # pre_gated=True tells that thread not to double-acquire); every failure
+    # path before that point falls through to the `finally` below and
+    # releases it immediately, so a job that never gets that far can't
+    # deadlock the queue.
     if not _upload_concurrency_gate.acquire(job_id):
         return  # cancelada mientras esperaba turno: no ocupa plaza
-    owns_gate = True
 
     conn = connect()
+    trabajo = None
     try:
-        job = get_upload_job(job_id, conn=conn)
-        if not job or job.get("status") != "queued":
-            return  # cancelada justo al tocarle plaza, o el job ya no existe
-        item_id = job.get("library_item_id")
-        if not item_id:
-            _fail(job_id, "El job no tiene un elemento de biblioteca asociado.")
+        trabajo = _cargar_trabajo(job_id, conn)
+        if trabajo is None:
             return
-
-        row = conn.execute("SELECT * FROM library_items WHERE id = ?", (item_id,)).fetchone()
-        item = row_to_dict(row)
-        if not item:
-            _fail(job_id, "El elemento ya no existe en la biblioteca.")
-            return
-        is_season = item.get("item_type") == "season"
-        overrides = json.loads(job["remux_overrides_json"]) if job.get("remux_overrides_json") else None
-        season_overrides = json.loads(job["season_overrides_json"]) if job.get("season_overrides_json") else {}
-
-        # --- 1. Verificación presubida: integrity (accessible, MediaInfo reads
-        # it, mkvtoolnix reads it) + generic preconditions (Uploadrr path/
-        # config, eMuwarez/TMDb keys, blocked nomenclature) — everything that
-        # does NOT depend on the file already being renamed/remuxed. Runs
-        # first for a fail-fast benefit (bad config fails before spending time
-        # on nomenclature/remux), but is NOT displayed as "running" yet: the
-        # Fases table's "Inicio de Uploadrr" row is only marked started later,
-        # right before it actually becomes the current step (see below) — a
-        # single job can only have one "current" phase at a time
-        # (build_phase_state), so marking this one started here would just
-        # get silently un-currented the moment nomenclature's own
-        # mark_phase_started() fires next, leaving it stuck on "Pendiente"
-        # with a stale started_at/Duración from this early, brief moment
-        # (the exact contradiction reported 2026-07-28: shown as Pendiente
-        # while still carrying a real Creado timestamp and a growing
-        # Duración).
-        #
-        # The job's `stage` column below feeds a SEPARATE, older display
-        # pipeline (compute_progress_phase() in upload_execution.py, read by
-        # every "current activity" label in the frontend as a fallback
-        # whenever progress_json has no phase in "running" state yet — see
-        # uploadStatus.ts's PHASE_LABEL/PROGRESS_ACTION_LABEL). Setting it to
-        # "verificacion_presubida" here reintroduced the exact same bug this
-        # comment describes above, just in that other pipeline: a queued job
-        # would flash "Iniciando Uploadrr" the instant it left the queue,
-        # before nomenclature had even started (reported 2026-07-28, right
-        # after the progress_json fix above shipped). Set it to
-        # "nomenclature" instead — nomenclature is genuinely the next real
-        # named step once this brief pre-check window ends.
-        if not _mark(job_id, stage="nomenclature", started_at=_now_iso()):
-            append_upload_log(job_id, "info", "Subida cancelada; se detiene la preparación.",
-                              stream="system", conn=conn)
-            return
-        append_upload_log(job_id, "info", "Comprobando integridad del archivo…", stream="system", conn=conn)
-        if is_season:
-            if not _check_season_integrity(job_id, item_id, conn=conn):
+        for i, paso in enumerate(PASOS):
+            if not _mark(job_id, stage=paso.stage, **({"started_at": _now_iso()} if i == 0 else {})):
+                append_upload_log(job_id, "info", "Subida cancelada; se detiene la preparación.",
+                                  stream="system", conn=conn)
                 return
-        else:
-            # Cuál de las dos rutas se lee: path_mapping.py::ruta_de_lectura.
-            candidate_path = ruta_de_lectura(item)
-            local_path = resolve_local_path(candidate_path) or candidate_path
-            if not local_path or not os.path.isfile(local_path):
-                _fail(job_id, f"El archivo no es accesible: {local_path or candidate_path or '(sin ruta)'}")
+            if paso.fase:
+                mark_phase_started(job_id, paso.fase)
+            if not paso.correr(trabajo):
                 return
-            if _fuera_de_raices(local_path, conn):
-                _fail(job_id, f"El archivo está fuera de los allowed_roots configurados: {local_path}")
-                return
-            if mediainfo_available():
-                info = read_media_info_summary(local_path)
-                if not info:
-                    _fail(job_id, "MediaInfo no pudo leer el fichero (posible corrupción).")
-                    return
-            if local_path.lower().endswith(".mkv") and check_mkvmerge_available().get("available"):
-                tracks = read_tracks_json(local_path)
-                if not tracks.get("ok"):
-                    _fail(job_id, f"mkvtoolnix no pudo leer el fichero: {tracks.get('error') or 'error desconocido'}")
-                    return
-
-        append_upload_log(job_id, "info", "Comprobando configuración y requisitos previos…", stream="system", conn=conn)
-        if not _check_generic_upload_preconditions(job_id, item_id, is_season, conn=conn):
-            return
-
-        # --- 2. Nomenclatura: el nombre de eMuwarez de cada fichero. Uno de la
-        # biblioteca no se renombra (lo lleva su enlace en la carpeta de
-        # subidas); uno que ya está en ella, sí, en su sitio.
-        if not _mark(job_id, stage="nomenclature"):
-            append_upload_log(job_id, "info", "Subida cancelada; se detiene la preparación.",
-                              stream="system", conn=conn)
-            return
-        mark_phase_started(job_id, "nomenclature")
-        append_upload_log(job_id, "info", "Aplicando nomenclatura…", stream="system", conn=conn)
-        renombrados: list[str] = []
-        if is_season:
-            from .season_pack import build_season_pack_plan
-            try:
-                plan_pack = build_season_pack_plan(item_id, conn=conn, **_ajustes_de_pack(season_overrides))
-            except Exception as exc:
-                _fail(job_id, f"Error aplicando la nomenclatura del pack de temporada: {exc}")
-                return
-            if plan_pack.get("status") != "valid":
-                reason = "; ".join(plan_pack.get("errors") or []) or "estado desconocido"
-                _fail(job_id, f"No se pudo aplicar la nomenclatura del pack de temporada: {reason}")
-                return
-            _write_snapshot(job_id, "nomenclature_snapshot_json", {
-                "media_type": "season",
-                "proposed_title": plan_pack.get("season_pack_title"),
-                "proposed_torrent_name": plan_pack.get("season_pack_title"),
-                "proposed_filename": plan_pack.get("season_pack_title"),
-                "series_title": plan_pack.get("series_title"),
-                "year": plan_pack.get("year"),
-                "season_number": plan_pack.get("season_number"),
-                "tmdb_id": plan_pack.get("tmdb_id"),
-                "resolution": plan_pack.get("resolution"),
-                "source": plan_pack.get("source"),
-                "provider_final": plan_pack.get("provider"),
-                "video_codec": plan_pack.get("video_codec"),
-                "audio_summary": plan_pack.get("audio_summary"),
-                "subtitle_summary": plan_pack.get("subtitle_summary"),
-                "release_tag": plan_pack.get("release_tag"),
-            }, conn=conn)
-            ficheros = []
-            for ep in plan_pack.get("episodes", []):
-                origen, nombre = ep.get("source_path"), ep.get("nombre")
-                raw = ep.get("raw_source_path")
-                origen = _renombrar_si_esta_en_subidas(
-                    job_id, ep["episode_id"], origen, nombre, conn, renombrados,
-                    raw_destino=os.path.join(os.path.dirname(raw), nombre) if raw else None)
-                if origen is None:
-                    return
-                ficheros.append((ep["episode_id"], origen, nombre))
-        else:
-            try:
-                plan_nombre = build_nomenclature_apply_plan(
-                    item_id, proposal_id=job.get("nomenclature_proposal_id"), conn=conn)
-            except Exception as exc:
-                _fail(job_id, f"Error aplicando la nomenclatura: {exc}")
-                return
-            if plan_nombre.get("status") != "ready":
-                reason = "; ".join(plan_nombre.get("errors") or []) or "estado desconocido"
-                _fail(job_id, f"No se pudo aplicar la nomenclatura: {reason}")
-                return
-            if plan_nombre.get("proposal"):
-                _write_snapshot(job_id, "nomenclature_snapshot_json", plan_nombre["proposal"], conn=conn)
-            origen = _renombrar_si_esta_en_subidas(
-                job_id, item_id, plan_nombre["source_path"], plan_nombre["nombre"], conn, renombrados,
-                raw_destino=plan_nombre.get("raw_destination_path"),
-                proposal_id=(plan_nombre.get("proposal") or {}).get("id"))
-            if origen is None:
-                return
-            ficheros = [(item_id, origen, plan_nombre["nombre"])]
-        mark_phase_done(job_id, "nomenclature")
-
-        # --- 3. Pistas, título interno y enlace en la carpeta de subidas, fichero
-        # a fichero (_preparar_fichero). Lo que Uploadrr recibe vive siempre ahí;
-        # para un pack, además, torf nombra el torrent con la carpeta.
-        if not _mark(job_id, stage="remux"):
-            append_upload_log(job_id, "info", "Subida cancelada; se detiene la preparación.",
-                              stream="system", conn=conn)
-            return
-        mark_phase_started(job_id, "remux")
-        modo_de_pistas = modo_pistas(conn)
-        if not toca_el_fichero(modo_de_pistas):
-            append_upload_log(
-                job_id, "info",
-                "Renombrar/Ordenar pistas está en Ninguno: no se tocan las pistas ni el título interno.",
-                stream="system", conn=conn,
-            )
-        fuera = next((f for _i, f, _n in ficheros if f and _fuera_de_raices(f, conn)), None)
-        if fuera:
-            _fail(job_id, f"El archivo está fuera de los allowed_roots configurados: {fuera}")
-            return
-
-        from .carpeta_subida import (ENLACES, RAIZ_SUBIDAS, preparar_carpeta_de_pack,
-                                     preparar_fichero_suelto)
-        if is_season:
-            from .season_pack import _sanitize_pack_folder_name
-            carpeta_pack = _sanitize_pack_folder_name(plan_pack.get("season_pack_title") or "")
-            destino_uploadrr = os.path.join(RAIZ_SUBIDAS, carpeta_pack)
-        else:
-            destino_uploadrr = os.path.join(RAIZ_SUBIDAS, ficheros[0][2])
-        # La ruta se apunta ANTES de crearla: así un borrado de otra subida la ve en uso.
-        with ENLACES:
-            otra = _subida_que_lo_usa(conn, destino_uploadrr, job_id)
-            if otra is None:
-                conn.execute("UPDATE upload_jobs SET prepared_path = ?, updated_at = ? WHERE id = ?",
-                             (destino_uploadrr, _now_iso(), job_id))
-                conn.commit()
-        if otra is not None:
-            _fail(job_id, f"«{os.path.basename(destino_uploadrr)}» es de la subida #{otra}, que lo siembra "
-                          "o lo tiene en qBittorrent: no se rehace para no romper ese torrent. "
-                          "Bórrala antes si quieres volver a subirlo.")
-            return
-
-        por_nombre = {n: i for i, _f, n in ficheros}
-        resultados: list[dict] = []
-        total = len(ficheros)
-
-        def preparar(origen: str, destino: str) -> str:
-            idx = len(resultados)
-            fid = por_nombre[os.path.basename(destino)]
-
-            def progreso(pct: int) -> None:
-                update_phase_progress(job_id, "remux", int((idx * 100 + pct) / total))
-
-            # En un pack, solo los idiomas elegidos para las pistas sin idioma, por capítulo.
-            r = _preparar_fichero(job_id, fid, origen, destino, modo_de_pistas, conn,
-                                  overrides=_overrides_de_pack(origen, season_overrides) if is_season
-                                  else overrides, on_progress=progreso)
-            resultados.append({**r, "item_id": fid})
-            update_phase_progress(job_id, "remux", int((idx + 1) * 100 / total))
-            return r["metodo"]
-
-        if is_season:
-            preparada = preparar_carpeta_de_pack(carpeta_pack, [(f, n) for _i, f, n in ficheros],
-                                                 preparar=preparar)
-            que = f"{preparada.get('cuantos', 0)} capítulo(s)"
-        else:
-            preparada = preparar_fichero_suelto(ficheros[0][1], ficheros[0][2], preparar=preparar)
-            que = "el archivo"
-        if preparada["status"] != "ready":
-            _fail(job_id, "No se pudo preparar la subida en la carpeta de subidas: "
-                          + "; ".join(preparada["errors"]))
-            return
-
-        from .nomenclature import marcar_nombre_aplicado
-        for r, (_i, _f, n) in zip(resultados, ficheros):
-            ruta = os.path.join(destino_uploadrr, n) if is_season else destino_uploadrr
-            marcar_nombre_aplicado(r["item_id"], ruta, conn=conn,
-                                   proposal_id=None if is_season else (plan_nombre.get("proposal") or {}).get("id"))
-
-        def foto(r: dict) -> dict:
-            return {"omitida": r["omitida"]} if r["omitida"] else {"ordered_tracks": r["pistas"] or []}
-        if not toca_el_fichero(modo_de_pistas):
-            _write_snapshot(job_id, "remux_snapshot_json", {"omitida": "Ninguno"}, conn=conn)
-        elif is_season:
-            episodios = {ep["episode_id"]: ep for ep in plan_pack.get("episodes", [])}
-            _write_snapshot(job_id, "remux_snapshot_json", {"episodes": [
-                {"episode_id": r["item_id"], "title": episodios[r["item_id"]].get("title"),
-                 "episode_number": episodios[r["item_id"]].get("episode_number"), **foto(r)}
-                for r in resultados]}, conn=conn)
-        else:
-            _write_snapshot(job_id, "remux_snapshot_json", foto(resultados[0]), conn=conn)
-        update_phase_progress(job_id, "remux", 100)
-        mark_phase_done(job_id, "remux")
-
-        editados = sum(1 for r in resultados if r["original_editado"])
-        append_upload_log(
-            job_id, "info",
-            f"Preparado para subir: {que} en «{os.path.basename(destino_uploadrr)}» "
-            f"({', '.join(preparada['metodos'])}). "
-            + (f"Se editaron {editados} original(es) que no compartía nadie."
-               if editados else "Los originales no se han tocado."),
-            stream="system", conn=conn,
-        )
-
-        # Radarr/Sonarr solo tiene algo que releer si se renombró o se escribió en el original.
-        if editados or renombrados:
-            from .library import refresh_arr_and_resync
-            refresh_arr_and_resync(
-                conn, item_id,
-                on_log=lambda level, message: append_upload_log(job_id, level, message, stream="system", conn=conn),
-            )
-
-        # --- 4. Final preflight (fresh preconditions + command preview,
-        # against the now-final renamed/remuxed file) then start. This is
-        # where "Inicio de Uploadrr" actually becomes the current step (see
-        # the note on the early integrity/preconditions check above for why
-        # it isn't marked started any earlier) — no mark_phase_done here:
-        # since queue_processing/video_processing/mediainfo_export/
-        # video_metadata/duplicates (Uploadrr-EMU's own real output through
-        # its metadata-processing step) are all folded into this same
-        # displayed phase (uploadrr_progress.PHASE_KEY_ALIASES), it only
-        # actually closes once that real subprocess output is seen —
-        # advance_running_phase() marks it done retroactively when the NEXT
-        # raw trigger (screenshots_generate) fires, same as every other
-        # merged phase.
-        if not _mark(job_id, stage="verificacion_presubida"):
-            append_upload_log(job_id, "info", "Subida cancelada; se detiene la preparación.",
-                              stream="system", conn=conn)
-            return
-        mark_phase_started(job_id, "verificacion_presubida")
-        append_upload_log(job_id, "info", "Preparando la subida…", stream="system", conn=conn)
-        if not _populate_ready(job_id, item_id, conn=conn, season_overrides=season_overrides):
-            return  # _populate_ready already recorded the failure reason
-
-        result = start_upload_job(job_id, dry_run=False, start=True, confirmation=START_TOKEN, conn=conn, pre_gated=True)
-        if result.get("error"):
-            _fail(job_id, result.get("message") or "; ".join(result.get("errors") or []) or "No se pudo iniciar la subida.")
-        else:
-            owns_gate = False  # transferred to the spawned Uploadrr-EMU subprocess thread
+            if paso.fase and paso.cierra_fase:
+                mark_phase_done(job_id, paso.fase)
+            if paso.despues:
+                paso.despues(trabajo)
     except Exception as exc:
         # Last-resort net: every step above already has its own try/except
         # that fails the job with a specific reason, but anything genuinely
@@ -1256,7 +1320,7 @@ def _run_queued_job(job_id: int) -> None:
         _fail(job_id, f"Error inesperado: {exc}")
     finally:
         conn.close()
-        if owns_gate:
+        if not (trabajo and trabajo.puerta_traspasada):
             _upload_concurrency_gate.release()
 
 

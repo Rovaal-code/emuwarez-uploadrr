@@ -12,7 +12,6 @@ import os
 import re
 import unicodedata
 from datetime import datetime, timezone
-from typing import Any
 
 from ..database import connect, row_to_dict, get_state
 from .filesystem_safety import safe_stat

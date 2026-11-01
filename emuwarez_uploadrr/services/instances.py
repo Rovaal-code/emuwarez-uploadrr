@@ -6,7 +6,7 @@ from typing import Optional
 
 from ..database import borrar_biblioteca
 from ..integrations import radarr, sonarr
-from ..integrations.arr_base import ArrClientError, safe_api_key
+from ..integrations.arr_base import safe_api_key
 from ..integrations.base import IntegrationError, normalize_base_url
 from ..models import InstanceConfig, InstanceType
 

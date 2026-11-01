@@ -311,7 +311,7 @@ def test_requests_sync_no_api_key_returns_502(client, auth_headers):
 def test_requests_sync_throttled(client, auth_headers, isolated_db, monkeypatch):
     """After a successful sync, a second sync without force should be throttled."""
     import os, datetime as dt
-    from emuwarez_uploadrr.database import connect, init_db, set_state, get_state
+    from emuwarez_uploadrr.database import connect, init_db, set_state
     os.environ["CONFIG_DIR"] = str(isolated_db)
     conn = connect()
     init_db(conn)

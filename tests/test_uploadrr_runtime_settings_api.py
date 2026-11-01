@@ -1,7 +1,6 @@
 """Tests for Uploadrr runtime settings API and connection test — Phase 10F."""
 from __future__ import annotations
 
-import json
 
 
 def test_get_settings_returns_uploadrr_defaults(client, auth_headers):

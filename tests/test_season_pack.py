@@ -9,7 +9,6 @@ conftest.py provides isolated_db (autouse) pointing CONFIG_DIR to a tmp dir.
 """
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest

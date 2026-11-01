@@ -7,7 +7,6 @@ casos raros: sin sellar, sin manifiesto, con la red caída o con un JSON roto.
 """
 from __future__ import annotations
 
-import json
 
 import pytest
 

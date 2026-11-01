@@ -2,10 +2,8 @@
 from __future__ import annotations
 
 import json
-import os
 from unittest.mock import patch
 
-import pytest
 
 
 def _db_for(tmp_path):
@@ -123,7 +121,7 @@ def test_mkv_title_preview_with_mkv(tmp_path, capsys):
     )
     with patch("emuwarez_uploadrr.services.mkv_title.check_mkvpropedit_available",
                return_value={"available": False, "path": None}):
-        rc = _run_cli(["mkv-title", "preview", str(item_id)], tmp_path)
+        _run_cli(["mkv-title", "preview", str(item_id)], tmp_path)
     out = capsys.readouterr().out
     assert "Film" in out
 

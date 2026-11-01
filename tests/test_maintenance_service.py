@@ -8,7 +8,6 @@ import pytest
 from emuwarez_uploadrr.services.maintenance_service import (
     VACUUM_CONFIRMATION,
     get_database_maintenance_status,
-    run_database_analyze,
     run_database_integrity_check,
     run_database_vacuum,
 )

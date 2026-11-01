@@ -17,7 +17,7 @@ import logging
 import re
 import sqlite3
 import threading
-from typing import Any, Optional
+from typing import Optional
 
 from ..database import get_setting_canonical, get_state, set_state, get_json_state, set_json_state
 from ..integrations import emu

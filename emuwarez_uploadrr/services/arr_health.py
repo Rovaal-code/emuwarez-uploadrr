@@ -22,7 +22,6 @@ from ..integrations.sonarr import (
     sonarr_get_system_status,
     sonarr_test_connection,
 )
-from ..integrations.arr_base import ArrClientError
 from .instances import list_instances
 
 

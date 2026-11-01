@@ -1,8 +1,6 @@
 """Tests for ARR diagnostics and verification API endpoints (Phase 8A)."""
 from __future__ import annotations
 
-import pytest
-from unittest.mock import patch
 
 
 # ---------------------------------------------------------------------------

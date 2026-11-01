@@ -1,7 +1,6 @@
 """Tests for maintenance API endpoints."""
 from __future__ import annotations
 
-import pytest
 
 
 # ---------- /api/maintenance/status ----------

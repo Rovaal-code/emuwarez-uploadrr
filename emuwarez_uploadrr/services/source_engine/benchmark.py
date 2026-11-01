@@ -11,7 +11,6 @@ timing too.
 from __future__ import annotations
 
 import json
-import statistics
 import sys
 import time
 from pathlib import Path

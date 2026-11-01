@@ -14,11 +14,9 @@ import sqlite3
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from ..dependencies import ERRORES_DE_BASE, base_no_disponible, get_db, require_auth
-from ..errors import AppError
 from ..runtime import _db_path
 from ..schemas import (
     CreateAdminRequest,
-    InstanceResponse,
     OkResponse,
     SetupEmuRequest,
     SetupInstanceRequest,

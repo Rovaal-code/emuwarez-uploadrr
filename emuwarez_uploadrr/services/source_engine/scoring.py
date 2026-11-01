@@ -8,7 +8,7 @@ wins regardless of how close the race is — closeness is communicated via
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from .constants import CANDIDATES, certainty_label
 from .evidence import Evidence

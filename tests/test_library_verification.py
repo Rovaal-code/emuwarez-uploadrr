@@ -1,7 +1,6 @@
 """Tests for library filesystem verification (Phase 8A)."""
 from __future__ import annotations
 
-import os
 import pytest
 
 

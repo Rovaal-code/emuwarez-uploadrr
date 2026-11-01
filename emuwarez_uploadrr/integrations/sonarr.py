@@ -6,14 +6,13 @@ from typing import Any, Optional
 
 from .arr_base import (
     ArrClientError, ArrConnectionError, ArrAuthError,
-    arr_request, join_api_path, registros_de, safe_api_key, todas_las_paginas,
+    arr_request, join_api_path, registros_de, todas_las_paginas,
 )
 from .base import (
     IntegrationError, build_url, es_lista_de_fichas, extract_backdrop_url, extract_media_info, extract_poster_url,
     extract_release_group, request_json,
 )
 from ..models import LibraryItem, LocalStatus, MediaKind, NomenclatureStatus
-from ..constants import DEFAULT_TAG
 
 
 # ---------------------------------------------------------------------------

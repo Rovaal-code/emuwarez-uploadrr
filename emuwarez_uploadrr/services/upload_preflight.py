@@ -10,7 +10,6 @@ import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
 from ..database import connect, row_to_dict, rows_to_dicts, get_setting_canonical
 from .filesystem_safety import safe_stat

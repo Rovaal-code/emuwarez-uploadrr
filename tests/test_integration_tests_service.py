@@ -9,7 +9,6 @@ import urllib.error
 import urllib.request
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from emuwarez_uploadrr.services.integration_tests import (
     test_arr_connection as svc_test_arr,

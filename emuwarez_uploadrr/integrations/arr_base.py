@@ -12,7 +12,6 @@ by the CLI layer; new web-layer code should raise ``ArrClientError`` subclasses.
 from __future__ import annotations
 
 import json
-import ssl
 import urllib.error
 import urllib.parse
 import urllib.request

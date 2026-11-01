@@ -4,7 +4,6 @@ coverage lives in test_source_engine_realfiles.py.
 """
 from __future__ import annotations
 
-import math
 
 from emuwarez_uploadrr.services.source_engine import profile
 from emuwarez_uploadrr.services.source_engine.constants import CANDIDATES, certainty_label

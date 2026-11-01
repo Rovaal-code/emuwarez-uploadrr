@@ -12,7 +12,6 @@ Esto lo impide.
 """
 from __future__ import annotations
 
-import ast
 import io
 import pathlib
 import re

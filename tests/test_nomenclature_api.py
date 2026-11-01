@@ -4,7 +4,6 @@ conftest.py provides: client, auth_headers, isolated_db.
 """
 from __future__ import annotations
 
-import pytest
 
 
 def _insert_item(isolated_db, local_status="Disponible", path="/fake/movie.mkv", title="Test Movie"):

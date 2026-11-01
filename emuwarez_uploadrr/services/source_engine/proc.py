@@ -13,7 +13,7 @@ import logging
 import shutil
 import subprocess
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Optional
 
 from .constants import TOOL_TIMEOUT_S

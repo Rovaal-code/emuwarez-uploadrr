@@ -15,7 +15,7 @@ from . import cli_config, emu_catalog
 from .emu_perfil import PERFIL_STATE_KEY
 from ..integrations import emu, tmdb
 from ..integrations.base import IntegrationError
-from ..models import RequestItem, RequestStatus, TaskStatus
+from ..models import RequestItem, TaskStatus
 from .library import content_display_title
 from .request_readiness import _biblioteca, refresh_request_readiness
 from .eventos import EVENTO_SYNC_EMPEZADA, EVENTO_SYNC_TERMINADA, publicar
@@ -25,7 +25,6 @@ from .upload_states import ACTIVE_JOB_STATUSES
 from .compatibility import (
     match_request_to_library,
     classify_request_match,
-    rank_request_matches,
     estado_emu_de,
     peor_resolucion,
     peor_source,

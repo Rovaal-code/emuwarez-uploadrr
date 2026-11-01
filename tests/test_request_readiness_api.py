@@ -1,7 +1,6 @@
 """Tests for Phase 8B request readiness API endpoints."""
 from __future__ import annotations
 
-import pytest
 
 
 def _create_request(client, auth_headers, emu_id="test-api-1", title="Test API Movie"):

@@ -2,7 +2,6 @@ import type { MediaInfoReport } from '../../api/library'
 import { IconoAviso } from '../Iconos'
 import { InfoIcon } from '../InfoIcon'
 import { Tooltip } from '../Tooltip'
-import { thStyle } from './constantes'
 
 // MediaInfo field/value table — shared by the single-file "Ver MediaInfo"
 // card and the season target's per-episode accordion. `onSourceToolClick`
@@ -17,35 +16,35 @@ export function MediaInfoTable({ report, onSourceToolClick }: {
   onSourceToolClick?: () => void
 }) {
   if (!report.available) {
-    return <p className="text-warning" style={{ fontSize: 12, margin: 0 }}><IconoAviso /> {report.message}</p>
+    return <p className="text-warning asist-t12 asist-m0"><IconoAviso /> {report.message}</p>
   }
   return (
-    <div className="detail-card" style={{ maxHeight: 420, overflow: 'auto', borderRadius: 8 }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, tableLayout: 'fixed' }}>
+    <div className="detail-card asist-tabla-caja asist-tabla-caja-mediainfo">
+      <table className="asist-tabla asist-tabla-mediainfo">
         <colgroup>
-          <col style={{ width: '22%' }} />
-          <col style={{ width: '39%' }} />
-          <col style={{ width: '39%' }} />
+          <col />
+          <col />
+          <col />
         </colgroup>
         <thead>
           <tr>
-            <th style={thStyle}>Campo</th>
-            <th style={thStyle}>MediaInfo</th>
-            <th style={thStyle}>eMuwarez</th>
+            <th className="asist-th">Campo</th>
+            <th className="asist-th">MediaInfo</th>
+            <th className="asist-th">eMuwarez</th>
           </tr>
         </thead>
         <tbody>
           {report.rows.map((r, i) => {
             const isSourceRow = r.field === 'Source'
             return (
-              <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
-                <td style={{ padding: '7px 12px', fontWeight: 600 }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <tr key={i} className="asist-fila">
+                <td className="asist-celda-mi asist-negrita">
+                  <span className="asist-fila-info">
                     {r.field}
                     {r.help && <InfoIcon text={r.help} />}
                   </span>
                 </td>
-                <td style={{ padding: '7px 12px', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', wordBreak: 'break-word' }}>
+                <td className="asist-celda-mi asist-mono text-muted asist-romper">
                   {isSourceRow && onSourceToolClick ? (
                     <Tooltip content="Ver comparación del source">
                       <button type="button" className="source-bitrate-link" onClick={onSourceToolClick}>
@@ -54,7 +53,7 @@ export function MediaInfoTable({ report, onSourceToolClick }: {
                     </Tooltip>
                   ) : r.mediainfo}
                 </td>
-                <td style={{ padding: '7px 12px', fontFamily: 'var(--font-mono)', wordBreak: 'break-word' }}>{r.emu}</td>
+                <td className="asist-celda-mi asist-mono asist-romper">{r.emu}</td>
               </tr>
             )
           })}

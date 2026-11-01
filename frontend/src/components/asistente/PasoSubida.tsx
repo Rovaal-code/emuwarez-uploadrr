@@ -14,10 +14,10 @@ export function PasoSubida({ a }: { a: Asistente }) {
   const uploadBtnTip = useTooltip(canUpload ? null : 'Alguna comprobación ha fallado o aún está en curso')
   return (
     <div className="modal-body">
-      <div className="detail-card" style={{ marginBottom: 14, padding: '12px 14px', borderRadius: 8 }}>
+      <div className="detail-card asist-tarjeta asist-mb-14">
         {targetIsSeason ? (
           <>
-            <div style={labelStyle}>Nombre final del torrent (pack de temporada)</div>
+            <div className="asist-etiqueta">Nombre final del torrent (pack de temporada)</div>
             <FitText min={9} text={seasonDisplayTitle || '—'} />
           </>
         ) : (
@@ -32,10 +32,10 @@ export function PasoSubida({ a }: { a: Asistente }) {
       </div>
 
       {/* Pre-upload checks card */}
-      <div className="detail-card" style={{ padding: '12px 14px', borderRadius: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-          <div style={labelStyle}>Comprobaciones previas</div>
-          {checksLoading && <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />}
+      <div className="detail-card asist-tarjeta">
+        <div className="asist-fila-titulo">
+          <div className="asist-etiqueta">Comprobaciones previas</div>
+          {checksLoading && <span className="spinner asist-spinner-14" />}
         </div>
         {checksLoading ? (
           // Progressive reveal: one line naming whichever check is
@@ -44,39 +44,34 @@ export function PasoSubida({ a }: { a: Asistente }) {
           // instead of a silent wait (the full run is real network
           // calls, ~30s). liveChecks only holds COMPLETED checks, so
           // its length is the index of the one in flight right now.
-          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+          <div className="asist-t12 text-muted">
             {CHECK_STEP_PENDING_LABEL[(targetIsSeason ? CHECK_STEP_ORDER_SEASON : CHECK_STEP_ORDER)[liveChecks.length]] ?? 'Finalizando comprobaciones…'}
           </div>
         ) : (
           checks?.checks.map(c => <CheckRow key={c.id} c={c} />)
         )}
         {!checksLoading && checks && (
-          <div style={{ marginTop: 14, fontWeight: 600, color: checks.ready ? 'var(--color-available)' : 'var(--color-error)' }}>
+          <div className={checks.ready ? 'asist-mt-14 asist-negrita asist-ok' : 'asist-mt-14 asist-negrita asist-error'}>
             {checks.ready ? '✓ Todo listo para subir' : '✗ La subida no se puede realizar'}
           </div>
         )}
         {!checksLoading && (
-          <button className="btn btn-secondary btn-sm" style={{ marginTop: 12, fontSize: 12 }} onClick={runChecks} type="button">
+          <button className="btn btn-secondary btn-sm asist-mt-12 asist-t12" onClick={runChecks} type="button">
             ↻ Volver a comprobar
           </button>
         )}
       </div>
 
       {checks?.ready && (
-        <p style={{ marginTop: 12, fontSize: 13 }}>
+        <p className="asist-mt-12 asist-t13">
           ¿Seguro que quieres subir <strong>«{item.title}»</strong> a eMuwarez? Se iniciará la subida real.
         </p>
       )}
       {uploadMsg && (
-        <p style={{
-          fontSize: 13, marginTop: 8, padding: '8px 12px', borderRadius: 6, fontWeight: 500,
-          background: uploadMsg.startsWith('✗') ? 'color-mix(in srgb, var(--color-error) 12%, transparent)' : 'color-mix(in srgb, var(--color-available) 12%, transparent)',
-          border: `1px solid ${uploadMsg.startsWith('✗') ? 'color-mix(in srgb, var(--color-error) 35%, transparent)' : 'color-mix(in srgb, var(--color-available) 35%, transparent)'}`,
-          color: uploadMsg.startsWith('✗') ? 'var(--color-error-pale)' : 'var(--color-available-pale)',
-        }}>{uploadMsg}</p>
+        <p className={uploadMsg.startsWith('✗') ? 'asist-msg-subida asist-msg-fallo' : 'asist-msg-subida'}>{uploadMsg}</p>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
+      <div className="asist-pie">
         <button className="btn btn-secondary" onClick={() => setStep(1)} disabled={uploading}>Volver</button>
         <button
           className="btn btn-primary"

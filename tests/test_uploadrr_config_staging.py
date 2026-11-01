@@ -709,3 +709,24 @@ def test_si_no_se_puede_sustituir_el_config_no_queda_el_temporal(tmp_path, monke
         write_staged_config(config, ["DEFAULT:", "  tmdb: 'x'"])
 
     assert not any(p.name.endswith(".tmp") for p in estado.iterdir())
+
+
+def test_escribir_el_config_conserva_su_modo_y_lo_crea_privado(tmp_path):
+    """os.replace no conserva el modo: un config.yaml con 0600 acababa con el
+    que dejara la umask, legible por otros usuarios del volumen."""
+    import os
+    config, estado = _config_con_enlaces(tmp_path)
+    anterior = os.umask(0o022)
+    try:
+        (estado / "config.yaml").chmod(0o600)
+        write_staged_config(config, ["DEFAULT:", "  tmdb: 'x'"])
+        restore_config_from_backup(config)
+
+        assert (estado / "config.yaml").stat().st_mode & 0o777 == 0o600
+        assert (estado / "config.yaml.bak").stat().st_mode & 0o777 == 0o600  # nuevo: privado
+
+        (estado / "config.yaml").chmod(0o640)
+        write_staged_config(config, ["DEFAULT:", "  tmdb: 'y'"])
+        assert (estado / "config.yaml").stat().st_mode & 0o777 == 0o640
+    finally:
+        os.umask(anterior)

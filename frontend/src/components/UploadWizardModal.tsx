@@ -22,14 +22,15 @@ export function UploadWizardModal(props: PropsAsistente) {
   const a = useAsistente(props)
   const { item, step, needsSelection, targetIsSeason, batchQueue, seasonQueue, episodeQueue } = a
   const { cerrarModal, confirmandoCierre, setConfirmandoCierre, onClose } = a
+  const clasePaso = (n: number) => (step === n ? 'asist-paso asist-paso-actual' : 'asist-paso')
   return (
-    <Modal titulo={item.title} onClose={cerrarModal} className="modal-wide" style={{ maxWidth: 900 }}>
+    <Modal titulo={item.title} onClose={cerrarModal} className="modal-wide asist-modal-ancho">
 
-      <div style={{ display: 'flex', gap: 8, padding: '0 20px', marginTop: 8, fontSize: 12, flexWrap: 'wrap' }}>
-        {needsSelection && <><span style={{ fontWeight: step === 0 ? 700 : 400, color: step === 0 ? 'var(--text)' : 'var(--text-muted)' }}>0. Selección</span><span style={{ color: 'var(--text-muted)' }}>→</span></>}
-        <span style={{ fontWeight: step === 1 ? 700 : 400, color: step === 1 ? 'var(--text)' : 'var(--text-muted)' }}>1. Nomenclatura</span>
-        <span style={{ color: 'var(--text-muted)' }}>→</span>
-        <span style={{ fontWeight: step === 2 ? 700 : 400, color: step === 2 ? 'var(--text)' : 'var(--text-muted)' }}>2. Subida a eMuwarez</span>
+      <div className="asist-pasos">
+        {needsSelection && <><span className={clasePaso(0)}>0. Selección</span><span className="asist-paso-flecha">→</span></>}
+        <span className={clasePaso(1)}>1. Nomenclatura</span>
+        <span className="asist-paso-flecha">→</span>
+        <span className={clasePaso(2)}>2. Subida a eMuwarez</span>
       </div>
 
       {step === 0 && <PasoSeleccion a={a} />}

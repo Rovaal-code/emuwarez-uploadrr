@@ -3,13 +3,9 @@ import { InfoIcon } from '../InfoIcon'
 // Los sources que llevan proveedor (el campo Proveedor solo sale con ellos).
 export const PROVIDER_SOURCES = new Set(['WEB-DL'])
 
+// Solo para FitTextPair, que pide el estilo como objeto: igual que .asist-etiqueta (asistente.css).
 export const labelStyle: React.CSSProperties = {
   fontSize: 12, color: 'var(--text-muted)', marginBottom: 4, display: 'block',
-}
-
-export const thStyle: React.CSSProperties = {
-  textAlign: 'left', padding: '8px 10px', fontWeight: 600, color: 'var(--text-muted)',
-  position: 'sticky', top: 0, background: 'var(--bg-surface)',
 }
 
 // Same order run_upload_checks() runs them in (services/upload_checks.py) —
@@ -53,7 +49,7 @@ export const FIELD_INFO = {
 // title tag — one label reused everywhere this pairing shows up (single-file
 // preview, season episode accordion, step 2 confirmation).
 export const INTERNAL_TITLE_LABEL = (
-  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+  <span className="asist-fila-info">
     Título del archivo
     <InfoIcon text="Es el nombre del torrent sin acentos y con puntos: también es el título interno, el que se graba dentro del propio contenedor .mkv." />
   </span>

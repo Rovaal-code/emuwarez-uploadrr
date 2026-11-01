@@ -102,10 +102,14 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   usan esa clave, no solo al que lo recibió. Se van las pausas sueltas (`EMU_MIN_REQUEST_INTERVAL`,
   `EMU_PETICIONES_INTERVALO`, `min_interval`). En los tests, un fixture de `conftest.py` le da a cada test su
   limitador con un reloj falso: nada duerme de verdad.
+- **Oleada 3, estilos del asistente a clases:** `UploadWizardModal.tsx` y `components/asistente/` ya no llevan
+  `style={{` (de 180 a 3): las clases `asist-*` están en `styles/asistente.css`. Siguen en línea los tres
+  `width: '100%'` de `<Tooltip style>` en `PasoSeleccion` y los dos `tituloStyle` de los modales de pistas, porque
+  `Tooltip` y `Modal` solo admiten objeto de estilo.
 
 ## Siguiente (oleada 3)
 
-1. Los estilos en línea, a clases.
+1. Los estilos en línea, a clases: faltan el resto de pantallas y componentes (el asistente de subida ya está).
 2. `httpx` y un solo limitador de eMuwarez compartido (30 peticiones por minuto).
 3. ESLint `react-hooks`.
 

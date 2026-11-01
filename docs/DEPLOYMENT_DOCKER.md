@@ -186,7 +186,17 @@ En Configuración → Backup, «Crear backup ahora» genera un `.tar.gz` de `/co
 carpeta de subidas por defecto (`/config/Uploadrr/uploads`) ni los temporales de Uploadrr-EMU. La de
 `UPLOADRR_UPLOADS_DIR` (`/data/uploads/emu`) está fuera de `/config`, así que tampoco entra: son enlaces, y para
 seguir sembrando tras restaurar en otro disco hay que respaldarla aparte. En la misma pestaña se restaura. Como el
-backup queda dentro de `/config`, cópialo a otro disco.
+backup queda dentro de `/config`, bájalo con «Descargar» y guárdalo en otro disco; para restaurar en otra
+instalación, súbelo con «Subir un backup…» y elígelo al restaurar.
+
+Cada día a las 03:30 (hora de `TZ`, por defecto Europe/Madrid) la tarea «Copia de seguridad», en Tareas, guarda
+una copia automática sin claves (`emuwarez_config_auto_*.tar.gz`) y deja las últimas 7; el número y la hora se
+cambian en la propia tarea. Las manuales, las que subes y las `pre-migracion-*.db` no se borran solas. Todas se
+guardan legibles solo por su dueño.
+
+La tarea «Mantenimiento» (04:00) borra del historial de tareas lo de más de 90 días, deja en las últimas 200 líneas
+el registro de las subidas terminadas sin fallo de hace más de 30 días (el de las fallidas se conserva entero),
+borra los avisos leídos de más de 30 días y optimiza la base. No toca las subidas ni nada que enlacen.
 
 El backup no lleva las claves. En la base de datos van vacías las API keys (TMDb, eMuwarez, Radarr/Sonarr, hosts
 de imágenes), la contraseña de qBittorrent, el webhook de Discord y el token de Telegram, y de

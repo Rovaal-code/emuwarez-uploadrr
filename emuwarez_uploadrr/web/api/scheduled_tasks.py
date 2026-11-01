@@ -1,7 +1,8 @@
 """Automatic tasks scheduler endpoints — Phase 11D.
 
 GET  /api/tasks/scheduled                 — list all scheduled tasks + bookkeeping
-PUT  /api/tasks/scheduled/{task_key}      — update interval (enforces per-task minimum)
+PUT  /api/tasks/scheduled/{task_key}      — cambia el horario: cada N minutos (con mínimo por tarea) o cada día a las HH:MM
+PUT  /api/tasks/scheduled/{task_key}/opciones — ajustes numéricos de la tarea (retención, copias que se guardan)
 POST /api/tasks/scheduled/{task_key}/run  — run now (blocked for tasks with manual_allowed=False)
 GET  /api/tasks/scheduled/{task_key}/logs — recent run history (reuses task_runs)
 
@@ -21,6 +22,7 @@ from ..schemas import (
     ScheduledTaskResponse,
     TaskRunLogsResponse,
     UpdateScheduledTaskRequest,
+    UpdateTaskOptionsRequest,
 )
 
 router = APIRouter(prefix="/tasks/scheduled", tags=["tasks"])
@@ -33,28 +35,31 @@ def _get_conn():
     return conn
 
 
-def _to_response(task: dict) -> ScheduledTaskResponse:
+def _to_response(task: dict, opciones: list[dict]) -> ScheduledTaskResponse:
+    from emuwarez_uploadrr.services.scheduler import nombre_zona_horaria
     return ScheduledTaskResponse(
         task_key=task["task_key"],
         name=task["name"],
         description=task["description"],
         interval_minutes=task["interval_minutes"],
         min_interval_minutes=task["min_interval_minutes"],
+        run_at=task.get("run_at"),
+        timezone=nombre_zona_horaria(),
         manual_allowed=bool(task["manual_allowed"]),
         enabled=bool(task["enabled"]),
         last_run_at=task.get("last_run_at"),
         last_status=task.get("last_status"),
         last_summary=task.get("last_summary"),
         next_run_at=task.get("next_run_at"),
+        opciones=opciones,
     )
 
 
 @router.get("", response_model=list[ScheduledTaskResponse])
 def list_scheduled_tasks(current_user: dict = Depends(require_auth)) -> list[ScheduledTaskResponse]:
-    from emuwarez_uploadrr.services.scheduler import list_scheduled_tasks as _list
+    from emuwarez_uploadrr.services.scheduler import list_scheduled_tasks as _list, opciones_de_tarea
     with _get_conn() as conn:
-        tasks = _list(conn)
-    return [_to_response(t) for t in tasks]
+        return [_to_response(t, opciones_de_tarea(conn, t["task_key"])) for t in _list(conn)]
 
 
 @router.put("/{task_key}", response_model=ScheduledTaskResponse)
@@ -63,14 +68,30 @@ def update_scheduled_task(
     body: UpdateScheduledTaskRequest,
     current_user: dict = Depends(require_auth),
 ) -> ScheduledTaskResponse:
-    from emuwarez_uploadrr.services.scheduler import set_task_interval
+    from emuwarez_uploadrr.services.scheduler import opciones_de_tarea, set_task_schedule
     with _get_conn() as conn:
         try:
-            task = set_task_interval(conn, task_key, body.interval_minutes)
+            task = set_task_schedule(conn, task_key, interval_minutes=body.interval_minutes, run_at=body.run_at)
         except ValueError as exc:
             code = 404 if "desconocida" in str(exc).lower() else 422
             raise HTTPException(status_code=code, detail=str(exc))
-    return _to_response(task)
+        return _to_response(task, opciones_de_tarea(conn, task_key))
+
+
+@router.put("/{task_key}/opciones", response_model=ScheduledTaskResponse)
+def update_scheduled_task_options(
+    task_key: str,
+    body: UpdateTaskOptionsRequest,
+    current_user: dict = Depends(require_auth),
+) -> ScheduledTaskResponse:
+    from emuwarez_uploadrr.services.scheduler import get_scheduled_task, set_task_options
+    with _get_conn() as conn:
+        try:
+            opciones = set_task_options(conn, task_key, body.valores)
+        except ValueError as exc:
+            code = 404 if "desconocida" in str(exc).lower() else 422
+            raise HTTPException(status_code=code, detail=str(exc))
+        return _to_response(get_scheduled_task(conn, task_key), opciones)
 
 
 @router.post("/{task_key}/run", response_model=RunScheduledTaskResponse)

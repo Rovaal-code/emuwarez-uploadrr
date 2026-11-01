@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 DB_FILE = CONFIG_DIR / "emuwarez_uploadrr.db"
 
-SCHEMA_VERSION = 44
+SCHEMA_VERSION = 45
 
 # Phase 10E: canonical settings namespace fix.
 #
@@ -1493,6 +1493,14 @@ def _migrate_scheduled_tasks_table(conn: sqlite3.Connection) -> None:
     """)
 
 
+def _migrate_scheduled_tasks_run_at(conn: sqlite3.Connection) -> None:
+    """Esquema 45: `run_at` (HH:MM), la hora fija de una tarea programada. NULL = cada N minutos."""
+    try:
+        conn.execute("ALTER TABLE scheduled_tasks ADD COLUMN run_at TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+
 _COPIAS_ANTES_DE_MIGRAR = 3
 
 
@@ -1779,6 +1787,7 @@ def init_db(conn: Optional[sqlite3.Connection] = None) -> None:
         _migrate_request_items_posters(conn)
         _migrate_library_items_last_seen(conn)
         _migrate_upload_jobs_torrent_subido(conn)
+        _migrate_scheduled_tasks_run_at(conn)
         set_state(conn, "schema_version", str(SCHEMA_VERSION))
         conn.commit()
     finally:

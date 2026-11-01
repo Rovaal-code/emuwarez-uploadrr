@@ -5,7 +5,6 @@ initiates searches, never triggers imports or metadata refreshes.
 """
 from __future__ import annotations
 
-import json
 import sqlite3
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -63,7 +62,7 @@ def _limpiar_cola(conn: sqlite3.Connection, instance_id: int) -> None:
     """La cola de la instancia es lo que Radarr/Sonarr dicen ahora: lo que ya no está en ella deja de figurar."""
     conn.execute(
         "UPDATE library_items SET arr_queue_status = NULL, arr_queue_title = NULL, arr_queue_progress = NULL, "
-        "arr_queue_timeleft = NULL, arr_queue_error = NULL, arr_queue_raw_json = NULL "
+        "arr_queue_timeleft = NULL, arr_queue_error = NULL "
         "WHERE instance_id = ? AND arr_queue_status IS NOT NULL",
         (instance_id,),
     )
@@ -277,7 +276,6 @@ def _map_radarr_queue(queue: list[dict], instance_id: int, conn: sqlite3.Connect
                 arr_queue_progress = ?,
                 arr_queue_timeleft = ?,
                 arr_queue_error = ?,
-                arr_queue_raw_json = ?,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
             """,
@@ -287,7 +285,6 @@ def _map_radarr_queue(queue: list[dict], instance_id: int, conn: sqlite3.Connect
                 progress,
                 timeleft,
                 error_msg,
-                json.dumps(rec, ensure_ascii=False)[:2000],
                 row["id"],
             ),
         )
@@ -317,7 +314,6 @@ def _map_sonarr_queue(queue: list[dict], instance_id: int, conn: sqlite3.Connect
                     arr_queue_title = ?,
                     arr_queue_progress = ?,
                     arr_queue_timeleft = ?,
-                    arr_queue_raw_json = ?,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
                 """,
@@ -326,7 +322,6 @@ def _map_sonarr_queue(queue: list[dict], instance_id: int, conn: sqlite3.Connect
                     rec.get("title"),
                     None,
                     rec.get("timeleft"),
-                    json.dumps(rec, ensure_ascii=False)[:2000],
                     row["id"],
                 ),
             )
@@ -359,7 +354,6 @@ def _map_radarr_history(history: list[dict], instance_id: int, conn: sqlite3.Con
                 arr_history_event_type = ?,
                 arr_history_error = ?,
                 arr_history_source_title = ?,
-                arr_history_raw_json = ?,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
             """,
@@ -368,7 +362,6 @@ def _map_radarr_history(history: list[dict], instance_id: int, conn: sqlite3.Con
                 event_type,
                 error_msg,
                 rec.get("sourceTitle"),
-                json.dumps(rec, ensure_ascii=False)[:2000],
                 row["id"],
             ),
         )
@@ -400,7 +393,6 @@ def _map_sonarr_history(history: list[dict], instance_id: int, conn: sqlite3.Con
                     arr_history_event_type = ?,
                     arr_history_error = ?,
                     arr_history_source_title = ?,
-                    arr_history_raw_json = ?,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
                 """,
@@ -409,7 +401,6 @@ def _map_sonarr_history(history: list[dict], instance_id: int, conn: sqlite3.Con
                     event_type,
                     error_msg,
                     rec.get("sourceTitle"),
-                    json.dumps(rec, ensure_ascii=False)[:2000],
                     row["id"],
                 ),
             )

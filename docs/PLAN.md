@@ -45,7 +45,13 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   (listas JSON, hosts de imágenes, eventos por canal) está en `FUERA_DEL_REGISTRO` de `web/api/settings.py`, y un
   test falla si aparece un campo nuevo que no esté en uno de los dos sitios. Faltan las lecturas sueltas de sí/no
   fuera de la API (p. ej. `series.ignore_specials` en `library.py`).
-- **Oleada 3, subida por pasos (#126):** `_run_queued_job` es un bucle sobre `PASOS` (`upload_queue.py`): comprobar,
+- **Biblioteca, vista de pósters en negro al desplazarse deprisa:** `RejillaVirtual` repintaba sin fin si su medida
+  oscilaba (error 185 de React) y la pantalla quedaba en negro hasta F5. Las correcciones seguidas ahora tienen
+  tope, y cada página va dentro de `LimiteDeErrores`, que enseña un mensaje en vez de dejar la pantalla en negro.
+  Reproducido con un arnés de navegador forzando la oscilación; no se ha visto aún qué la provoca en la aplicación
+  real (si vuelve a fallar, la consola dirá «RejillaVirtual no se calma» con las medidas que saltaban, o
+  «Error de render» con la pila de componentes si es otra cosa).
+- **Oleada 3, subida por pasos (#127):** `_run_queued_job` es un bucle sobre `PASOS` (`upload_queue.py`): comprobar,
   nombre, preparar e iniciar, cada uno con su `stage` (que es su punto de cancelación), su fila de Fases y lo que
   deja en `_Trabajo` para el siguiente. Mismo comportamiento que antes; lo fijan
   `test_la_preparacion_recorre_los_pasos_en_orden` y `test_cancelar_para_la_preparacion_en_el_siguiente_punto`.

@@ -7,7 +7,7 @@
  * la barra de scroll mentiría sobre el largo de la lista.
  */
 import { describe, it, expect } from 'vitest'
-import { inicios, filaEn, planVentana, columnasAutoFill, filasDeRejilla, type Tramo } from '../ventana'
+import { inicios, filaEn, planVentana, columnasAutoFill, filasDeRejilla, type Tramo, medidaCorregida, cuentaTrasMedir, topeRecienAlcanzado, AJUSTES_SEGUIDOS_MAX } from '../ventana'
 
 const filas = (tramos: Tramo[]) => tramos.flatMap(t => (t.tipo === 'fila' ? [t.indice] : []))
 const altoTotal = (tramos: Tramo[], alturas: number[]) =>
@@ -127,5 +127,83 @@ describe('filasDeRejilla', () => {
 
   it('al final no se sale de la última fila, que puede ir a medias', () => {
     expect(filasDeRejilla({ ...base, desde: 1e9 })).toMatchObject({ primera: 2294, ultima: 2294 })
+  })
+})
+
+describe('medidaCorregida', () => {
+  const a = { columnas: 3, alto: 300 }
+
+  it('deja la medida como está si lo medido es lo mismo', () => {
+    expect(medidaCorregida(a, { columnas: 3, alto: 300 }, 0)).toBeNull()
+  })
+
+  it('corrige si cambió el alto o las columnas', () => {
+    expect(medidaCorregida(a, { columnas: 3, alto: 330 }, 0)).toEqual({ columnas: 3, alto: 330 })
+    expect(medidaCorregida(a, { columnas: 4, alto: 300 }, 2)).toEqual({ columnas: 4, alto: 300 })
+  })
+
+  it('una oscilación entre dos medidas se corta en el tope, en vez de repintar sin fin', () => {
+    // Cada medida provoca la otra: A mide B, y B mide A.
+    const medirDesde = (m: { alto: number; columnas: number }) => ({ columnas: 3, alto: m.alto === 300 ? 330 : 300 })
+    let medida = a
+    let usados = 0
+    let vueltas = 0
+    for (;;) {
+      const nueva = medidaCorregida(medida, medirDesde(medida), usados)
+      if (!nueva) break
+      medida = nueva
+      usados++
+      if (++vueltas > 1000) throw new Error('no termina')
+    }
+    expect(vueltas).toBe(AJUSTES_SEGUIDOS_MAX)
+  })
+
+  it('una corrección normal (columnas y luego alto) cabe de sobra en el tope', () => {
+    expect(AJUSTES_SEGUIDOS_MAX).toBeGreaterThanOrEqual(3)
+  })
+})
+
+describe('cuentaTrasMedir', () => {
+  it('otra clave (scroll, lista, ancho) empieza la cuenta de nuevo', () => {
+    expect(cuentaTrasMedir({ clave: 'a', usados: 5 }, 'b', false)).toEqual({ clave: 'b', usados: 0 })
+  })
+
+  it('una medida que ya coincide también: seis correcciones separadas no agotan el tope', () => {
+    let c = { clave: 'a', usados: 0 }
+    for (let i = 0; i < AJUSTES_SEGUIDOS_MAX * 2; i++) {
+      c = cuentaTrasMedir(c, 'a', false)
+      c.usados++                       // una corrección
+      c = cuentaTrasMedir(c, 'a', true) // y la rejilla se calma
+      expect(c.usados).toBe(0)
+    }
+  })
+
+  it('con la misma clave y medidas todavía distintas, la cuenta sigue', () => {
+    const c = { clave: 'a', usados: 4 }
+    expect(cuentaTrasMedir(c, 'a', false)).toBe(c)
+  })
+})
+
+describe('topeRecienAlcanzado', () => {
+  it('una oscilación avisa una sola vez, cuando el tope la corta', () => {
+    // Lo mismo que hace RejillaVirtual tras cada pintado, con dos medidas que se provocan una a la otra.
+    const medirDesde = (m: { alto: number; columnas: number }) => ({ columnas: 3, alto: m.alto === 300 ? 330 : 300 })
+    let medida = { columnas: 3, alto: 300 }
+    let c = { clave: 'a', usados: 0 }
+    let avisos = 0
+    for (let pintado = 0; pintado < 50; pintado++) {
+      const medido = medirDesde(medida)
+      const coincide = medido.alto === medida.alto
+      c = cuentaTrasMedir(c, 'a', coincide)
+      if (topeRecienAlcanzado(c, coincide)) { avisos++; c.usados++ }
+      const nueva = medidaCorregida(medida, medido, c.usados)
+      if (nueva) { medida = nueva; c.usados++ }
+    }
+    expect(avisos).toBe(1)
+  })
+
+  it('una medida que se calma no avisa', () => {
+    expect(topeRecienAlcanzado({ clave: 'a', usados: AJUSTES_SEGUIDOS_MAX }, true)).toBe(false)
+    expect(topeRecienAlcanzado({ clave: 'a', usados: 2 }, false)).toBe(false)
   })
 })

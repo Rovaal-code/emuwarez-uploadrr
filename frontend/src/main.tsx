@@ -7,6 +7,7 @@ import './styles/dashboard.css'
 import './styles/hud-theme.css'
 import './styles/tour.css'
 import { App } from './App'
+import { LimiteDeErrores } from './components/LimiteDeErrores'
 import { iniciarEscaladoUi } from './utils/uiScale'
 
 // Antes del primer render: así el primer pintado ya sale al tamaño bueno, sin
@@ -15,6 +16,8 @@ iniciarEscaladoUi()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <LimiteDeErrores donde="la aplicación">
+      <App />
+    </LimiteDeErrores>
   </StrictMode>,
 )

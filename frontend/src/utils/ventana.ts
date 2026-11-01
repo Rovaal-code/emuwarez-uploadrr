@@ -100,3 +100,55 @@ export function filasDeRejilla({ total, columnas, paso, desde, alto, margen }: P
   const fila = (y: number) => Math.min(filas - 1, Math.max(0, Math.floor(y / paso)))
   return { filas, primera: fila(desde - margen), ultima: fila(desde + alto + margen) }
 }
+
+export interface MedidaRejilla {
+  columnas: number
+  alto: number
+}
+
+/** Cuántas veces seguidas, sin que cambie el scroll ni la lista, puede
+ *  corregirse la medida de la rejilla. Una corrección normal necesita dos o
+ *  tres (columnas y luego alto); si no se calma antes, algo oscila. */
+export const AJUSTES_SEGUIDOS_MAX = 6
+
+/**
+ * Qué medida poner a la rejilla tras medirla, o null si se queda como está.
+ *
+ * El efecto de layout que mide corre tras cada pintado y vuelve a pintar si la
+ * medida cambió. Si dos medidas se provocan una a la otra (el alto de la
+ * primera tarjeta depende de cuál sea la primera, y cuál sea depende del alto),
+ * eso nunca termina: React lo corta con el error 185 y la pantalla queda en
+ * negro. `usados` cuenta las correcciones seguidas, y pasado el máximo la
+ * medida se queda como está.
+ */
+export function medidaCorregida(actual: MedidaRejilla, medido: MedidaRejilla, usados: number): MedidaRejilla | null {
+  if (medido.columnas === actual.columnas && medido.alto === actual.alto) return null
+  if (usados >= AJUSTES_SEGUIDOS_MAX) return null
+  return medido
+}
+
+export interface CuentaAjustes {
+  clave: string
+  usados: number
+}
+
+/**
+ * La cuenta de correcciones seguidas tras medir. Empieza de nuevo cuando cambia
+ * la `clave` (scroll, lista, ancho) y cuando la medida ya coincide con lo
+ * medido: la rejilla se ha calmado y la siguiente corrección es otra. Si se
+ * alcanza el tope con medidas todavía distintas, la cuenta se queda como está.
+ */
+export function cuentaTrasMedir(cuenta: CuentaAjustes, clave: string, coincide: boolean): CuentaAjustes {
+  if (cuenta.clave !== clave || coincide) return { clave, usados: 0 }
+  return cuenta
+}
+
+/**
+ * Si el tope acaba de cortar una oscilación. El tope la para sin que se vea
+ * nada, así que es el único momento de avisar de qué medidas saltaban. Quien
+ * avisa sube `usados` por encima del tope, y esto ya no vuelve a ser cierto
+ * hasta que la cuenta empiece de nuevo: un aviso por oscilación.
+ */
+export function topeRecienAlcanzado(cuenta: CuentaAjustes, coincide: boolean): boolean {
+  return !coincide && cuenta.usados === AJUSTES_SEGUIDOS_MAX
+}

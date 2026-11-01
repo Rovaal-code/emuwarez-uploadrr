@@ -521,7 +521,8 @@ def _decidir_proveedor_pack(
         return decision
 
     sources: dict[int, Optional[str]] = {}
-    debiles: list[str] = []
+    # Código visto solo en una carpeta -> capítulos donde pasa.
+    debiles: dict[str, list] = {}
     primero: Optional[dict] = None
     for ep in episodios:
         sources[ep["id"]] = source_override or _infer_source_from_item(ep)
@@ -529,15 +530,23 @@ def _decidir_proveedor_pack(
         if origen == ORIGEN_NOMBRE:
             decision["por_capitulo"][ep["id"]] = codigo
             primero = primero or ep
-        elif origen == ORIGEN_CARPETA and codigo not in debiles:
-            debiles.append(codigo)
+        elif origen == ORIGEN_CARPETA:
+            debiles.setdefault(codigo, []).append(ep.get("episode_number"))
 
-    # Los avisos van antes de cualquier return: una carpeta con "NF" se avisa
-    # aunque otro capítulo traiga "AMZN" en el nombre.
-    for codigo in debiles:
-        decision["warnings"].append(
-            f"El proveedor {codigo} solo aparece en una carpeta de la ruta, no en el nombre de los "
-            "archivos: no se aplica. Elígelo en Proveedor si es correcto.")
+    # Los avisos van antes de cualquier return y dicen QUÉ capítulos solo lo
+    # encuentran en una carpeta: esa coincidencia no cuenta, pero no niega la
+    # que otro capítulo trae en el nombre.
+    del_pack = decision["por_capitulo"][primero["id"]] if primero is not None else None
+    for codigo, numeros in debiles.items():
+        capitulos = (f"el capítulo {numeros[0]}" if len(numeros) == 1
+                     else f"los capítulos {', '.join(str(n) for n in numeros)}")
+        aviso = (f"En {capitulos}, el proveedor {codigo} solo aparece en una carpeta de la ruta, no en "
+                 "el nombre del archivo: esa coincidencia no cuenta.")
+        if del_pack is None:
+            aviso += " Elígelo en Proveedor si es correcto."
+        elif codigo == del_pack:
+            aviso += f" El pack lleva {codigo} igualmente porque otro capítulo lo trae en el nombre."
+        decision["warnings"].append(aviso)
 
     distintos = sorted(set(decision["por_capitulo"].values()))
     if len(distintos) > 1:

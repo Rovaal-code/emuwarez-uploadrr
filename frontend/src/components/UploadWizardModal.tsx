@@ -30,7 +30,7 @@ import { ACTIVE_JOB_STATUSES, statusLabel } from '../utils/uploadStatus'
 import { seguirProgreso } from '../api/eventos'
 import { fetchSettings } from '../api/settings'
 import { AVISO_MODO_PISTAS, normalizarModo, renombra, tocaElFichero } from '../utils/modoPistas'
-import { textoOrigenProveedor } from '../utils/origenProveedor'
+import { ajustesDeTemporada, textoOrigenProveedor } from '../utils/origenProveedor'
 import {
   SIN_SELECCION, seleccionUnica, seleccionTemporadas, seleccionCapitulos,
   colaTemporadas, colaCapitulos, esTanda, mismaSeleccion, conObjetivo,
@@ -478,6 +478,12 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   // por id — persisten al cambiar en el desplegable (loadSeasonPlan los
   // pisaría con lo autodetectado cada vez que vuelves).
   const [ajustesPorId, setAjustesPorId] = useState<Map<number, Ajustes>>(new Map())
+  // Proveedor elegido A MANO por temporada (campo Proveedor o selector del
+  // conflicto). Va aparte de ajustesPorId, que guarda también el detectado:
+  // solo este viaja como provider_override (ver ajustesDeTemporada).
+  const [proveedorElegido, setProveedorElegido] = useState<Map<number, string | null>>(new Map())
+  const elegirProveedor = (id: number, valor: string | null) =>
+    setProveedorElegido(prev => new Map(prev).set(id, valor))
   // De quién son los campos que hay ahora en `fields`: no se apuntan como
   // ajustes de otro elemento mientras este aún carga.
   const camposDe = useRef<number | null>(null)
@@ -777,6 +783,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     if (!mismaSeleccion(seleccion, nueva)) {
       setSeleccion(nueva)
       setAjustesPorId(new Map())
+      setProveedorElegido(new Map())
       setEpisodeFieldsById(new Map())
       setBatchEnvChecks(null); setBatchContentChecks(new Map()); setBatchViewId(null)
       setBatchPhase('idle'); setBatchResults([])
@@ -952,7 +959,9 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   // proveedores distintos; si no, el que ya se eligió para esta temporada.
   const loadSeasonPlan = useCallback(async (proveedor?: string) => {
     if (targetId == null) return
-    const proveedorPedido = proveedor ?? ajustesPorId.get(targetId)?.provider ?? undefined
+    if (proveedor) elegirProveedor(targetId, proveedor)
+    const yaElegido = proveedorElegido.has(targetId)
+    const proveedorPedido = proveedor ?? proveedorElegido.get(targetId) ?? undefined
     const pedido = ++planPedido.current
     setSeasonPlanLoading(true); setSeasonPlanError(null)
     buildingPlanFor.current = targetId
@@ -987,7 +996,9 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
         year: plan.year != null ? String(plan.year) : undefined,
         resolution: plan.resolution ?? undefined,
         source: saved?.source ?? plan.source ?? undefined,
-        provider: proveedor ?? saved?.provider ?? plan.provider ?? undefined,
+        // El elegido a mano; si no, el que decide el servidor (nunca el
+        // detectado de una visita anterior, que ya no tiene por qué valer).
+        provider: proveedor ?? (yaElegido ? proveedorElegido.get(targetId) : plan.provider) ?? undefined,
         video_codec: plan.video_codec ?? undefined,
         dynamic_range: plan.dynamic_range ?? undefined,
         audio_summary: plan.audio_summary ?? undefined,
@@ -1013,7 +1024,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
         setSeasonPlanLoading(false)
       }
     }
-  }, [targetId, ajustesPorId])
+  }, [targetId, ajustesPorId, proveedorElegido])
 
   // Closing the wizard while a season plan is being built has to stop the
   // server too: it runs one real nomenclature proposal per episode, so a 24
@@ -1227,6 +1238,10 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     // up on episode 1 too, and go up with all of them. Everything else
     // (Source, Proveedor, Tag) belongs to the individual file.
     if (key === 'title') setSharedTitle(value)
+    if (targetIsSeason && targetId != null) {
+      if (key === 'provider') elegirProveedor(targetId, value)
+      if (key === 'source' && !PROVIDER_SOURCES.has(value || '')) elegirProveedor(targetId, null)
+    }
     setFields(prev => {
       const updated = { ...prev, [key]: value }
       if (key === 'source' && !PROVIDER_SOURCES.has(value || '')) updated.provider = null
@@ -1278,7 +1293,8 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
       const r = await queueUpload(
         targetId, edicionesFinales(), checks, remuxSnapshot,
         targetIsSeason
-          ? { source: fields.source, provider: fields.provider, tag: fields.tag, title: fields.title }
+          ? ajustesDeTemporada(
+              { source: fields.source, tag: fields.tag, title: fields.title }, proveedorElegido, targetId)
           : undefined,
         requestId,
       )
@@ -1333,7 +1349,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
           results.push({ seasonId, title, status: 'failed', reason })
           continue
         }
-        const r = await queueUpload(seasonId, undefined, checksResult, null, overridesMap.get(seasonId), s && peticionCubre(preselect, s) ? requestId : undefined)
+        const r = await queueUpload(seasonId, undefined, checksResult, null, ajustesDeTemporada(overridesMap.get(seasonId), proveedorElegido, seasonId), s && peticionCubre(preselect, s) ? requestId : undefined)
         if (r.status !== 'queued' || !r.job?.id) {
           results.push({ seasonId, title, status: 'failed', reason: (r.errors || []).join(' ') || 'No se pudo encolar' })
         } else {
@@ -1751,6 +1767,10 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   // being stuck with whatever the filename/Radarr-Sonarr happened to say —
   // the same kind of misdetection the Internal Source Tool exists to catch.
   const seasonTitleOptions = seasonPlan?.title_options ?? []
+  // Los avisos del plan, tanto si el pack es válido como si está bloqueado.
+  const avisosDelPlan = seasonPlan?.warnings?.map((w, i) => (
+    <p key={i} className="text-warning" style={{ fontSize: 12, marginTop: 10 }}><IconoAviso /> {w}</p>
+  ))
   const origenProveedor = textoOrigenProveedor(
     seasonPlan?.provider, seasonPlan?.provider_source_detail, fields.provider)
 
@@ -1943,6 +1963,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
           {seasonPlanError && !seasonPlanLoading && (
             <div style={{ padding: '20px 0' }}>
               <p className="text-error" style={{ marginTop: 0, marginBottom: 10 }}><IconoAviso /> {seasonPlanError}</p>
+              {avisosDelPlan}
               {(seasonPlan?.provider_conflict?.length ?? 0) > 0 && (
                 // El error pide elegir un proveedor: el selector tiene que estar aquí.
                 <label style={{ display: 'block', marginBottom: 10 }}><FieldLabel label="Proveedor" info={FIELD_INFO.provider} />
@@ -1964,9 +1985,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                 a mano si el detectado no es correcto (se aplica a todos los capítulos por igual).
               </p>
               {seasonFieldBox}
-              {seasonPlan.warnings?.map((w, i) => (
-                <p key={i} className="text-warning" style={{ fontSize: 12, marginTop: 10 }}><IconoAviso /> {w}</p>
-              ))}
+              {avisosDelPlan}
               {seasonSummaryBox}
 
               <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>

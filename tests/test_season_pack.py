@@ -1276,3 +1276,27 @@ def test_el_aviso_de_la_carpeta_sale_aunque_otro_capitulo_traiga_proveedor(isola
     assert plan["provider"] == "AMZN"
     assert any("NF solo aparece en una carpeta" in w for w in plan["warnings"]), plan["warnings"]
     conn.close()
+
+
+def test_el_aviso_de_la_carpeta_no_niega_el_proveedor_que_otro_capitulo_trae(isolated_db, tmp_path):
+    """E01 trae AMZN en el nombre y E02 solo lo encuentra en la carpeta: el pack
+    lleva AMZN y el aviso habla del capítulo 2 sin decir que no se aplica."""
+    conn = _open(isolated_db)
+    _series_id, season_id = _seed_series_season(conn)
+    folder = tmp_path / "One Piece AMZN" / "Season 1"
+    folder.mkdir(parents=True)
+    for i, nombre in ((1, "S01E01.AMZN.WEB-DL.mkv"), (2, "S01E02.WEB-DL.mkv")):
+        f = folder / nombre
+        f.write_bytes(b"video")
+        _seed_episode(conn, season_id, number=i, title=f"One Piece S01E0{i}", path=str(f),
+                      quality="WEBDL-1080p", video_codec="x264", audio_codec="AC3",
+                      audio_languages="spa", source="WEB-DL")
+    plan = build_season_pack_plan(season_id, conn=conn)
+    assert plan["provider"] == "AMZN"
+    assert plan["warnings"] == [
+        "En el capítulo 2, el proveedor AMZN solo aparece en una carpeta de la ruta, no en el nombre "
+        "del archivo: esa coincidencia no cuenta. El pack lleva AMZN igualmente porque otro capítulo "
+        "lo trae en el nombre."
+    ]
+    assert all("AMZN.WEB-DL" in e["nombre"] for e in plan["episodes"])
+    conn.close()

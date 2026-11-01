@@ -364,3 +364,21 @@ def test_un_informe_con_la_herramienta_a_medias_no_se_guarda(tmp_path):
     assert len(llamadas) == 2
     fila = next(r for r in primero["rows"] if r["field"] == "Source")
     assert "análisis parcial" in fila["help"]
+
+
+def test_una_pista_sin_idioma_no_entra_en_el_nombre_hasta_elegirlo(tmp_path):
+    f = tmp_path / "peli.mkv"
+    f.write_bytes(b"x" * 100)
+    info = {"media": {"track": [
+        {"@type": "Video", "Format": "AVC", "Width": "1920", "Height": "1080"},
+        {"@type": "Audio", "Format": "AC-3", "Channels": "6"},
+        {"@type": "Audio", "Format": "AC-3", "Channels": "6", "Language": "en"},
+    ]}}
+    with (
+        patch.object(svc, "mediainfo_available", return_value=True),
+        patch.object(svc.media_probe, "run_mediainfo_json", return_value=info),
+    ):
+        sin = svc.build_mediainfo_report(str(f))
+        con = svc.build_mediainfo_report(str(f), idiomas_audio={1: "spa"})
+    assert (sin["audio_summary"], sin["pistas_sin_idioma"]) == ("ING DD 5.1", [1])
+    assert (con["audio_summary"], con["pistas_sin_idioma"]) == ("DUAL DD 5.1", [])

@@ -858,3 +858,42 @@ def test_sin_renombrar_el_plan_repite_los_nombres_actuales(tmp_path, modo):
     cuatro modos: enseña lo que va a quedar, no lo que se propondría."""
     for t in _plan_en_modo(tmp_path, modo)["ordered_tracks"]:
         assert t["new_name"] == t["current_name"]
+
+
+# ---------------------------------------------------------------------------
+# Audio sin idioma: lo elegido en Ver Pistas
+# ---------------------------------------------------------------------------
+
+_SIN_IDIOMA = {"tracks": [
+    {"id": 0, "type": "video", "codec": "AVC", "properties": {"uid": 10}},
+    {"id": 1, "type": "audio", "codec": "AC-3", "properties": {"language": "und", "audio_channels": 6, "uid": 11}},
+    {"id": 2, "type": "audio", "codec": "AC-3", "properties": {"language": "eng", "audio_channels": 6, "uid": 12}},
+]}
+
+
+def test_una_pista_sin_idioma_se_puede_elegir():
+    from emuwarez_uploadrr.services.mkv_remux import (build_mkvmerge_args, build_mkvpropedit_args,
+                                                      build_track_plan)
+    sin = build_track_plan(_SIN_IDIOMA)
+    audio = [t for t in sin["tracks"] if t["type"] == "audio"]
+    assert [t["sin_idioma"] for t in audio] == [True, False]
+
+    plan = build_track_plan(_SIN_IDIOMA, idiomas={1: "es-419", 2: "spa"})   # la 2 ya trae idioma
+    nombres = {t["id"]: (t["new_name"], t["language_after"]) for t in plan["ordered_tracks"]}
+    assert nombres[1] == ("Español (Latinoamérica) - DD 5.1", "es-419")
+    assert nombres[2] == ("Inglés - DD 5.1", None)
+    assert "language=es-419" in build_mkvpropedit_args("/x.mkv", plan)
+    args = build_mkvmerge_args("/o.mkv", "/x.mkv", plan)
+    assert args[args.index("--language") + 1] == "1:es-419"
+
+
+def test_un_idioma_que_no_esta_en_la_lista_se_ignora():
+    from emuwarez_uploadrr.services.mkv_remux import _idiomas_de
+    assert _idiomas_de({"1": {"language": "spa"}, "2": {"language": "xx; rm -rf"}, "x": {}}) == {1: "spa"}
+
+
+def test_las_ediciones_guardadas_en_el_trabajo_se_aplican():
+    """Del JSON del trabajo vuelven con la clave en texto y no casaban con ninguna pista."""
+    from emuwarez_uploadrr.services.mkv_remux import apply_track_overrides, build_track_plan
+    plan = apply_track_overrides(build_track_plan(_SIN_IDIOMA), {"2": {"new_name": "A mano"}})
+    assert next(t for t in plan["ordered_tracks"] if t["id"] == 2)["new_name"] == "A mano"

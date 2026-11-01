@@ -407,7 +407,7 @@ def _resolve_series_title(item: dict, conn) -> str | None:
 def build_editable_nomenclature_fields(
     library_item_id: int, conn=None,
     source_override: str | None = None, provider_override: str | None = None,
-    tag_override: str | None = None,
+    tag_override: str | None = None, idiomas_audio: dict[int, str] | None = None,
 ) -> dict:
     """Build the editable field set for the nomenclature modal.
 
@@ -428,6 +428,7 @@ def build_editable_nomenclature_fields(
             get_latest_nomenclature_proposal,
             infer_provider_from_item,
             tag_por_defecto,
+            aviso_pistas_sin_idioma,
         )
 
         item = get_library_item_for_nomenclature(library_item_id, conn=conn)
@@ -549,7 +550,9 @@ def build_editable_nomenclature_fields(
         mi_audio = mi_video = mi_hdr = mi_source = None
         mi_source_estimated = False
         from .media_info_service import build_mediainfo_report
-        report = build_mediainfo_report(candidate_path or "", radarr_source=item.get("source"))
+        # idiomas_audio: lo elegido en Ver Pistas para las pistas sin idioma.
+        report = build_mediainfo_report(candidate_path or "", radarr_source=item.get("source"),
+                                        idiomas_audio=idiomas_audio)
         mediainfo_ok = bool(report.get("available"))
 
         # Distinct from MediaInfo: mkvtoolnix (mkvmerge -J) is what the track
@@ -678,6 +681,8 @@ def build_editable_nomenclature_fields(
             "title_options": title_options,
             # Set when the source had to be estimated from MediaInfo.
             "source_warning": source_warning,
+            "audio_warning": (aviso_pistas_sin_idioma(report["pistas_sin_idioma"])
+                              if report.get("pistas_sin_idioma") else None),
             # Name vs Radarr/Sonarr vs MediaInfo-bitrate cross-check for the
             # Source field's alert icon.
             "source_comparison": source_comparison,

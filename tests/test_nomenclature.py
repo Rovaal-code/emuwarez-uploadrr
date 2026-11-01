@@ -309,3 +309,16 @@ def test_un_nombre_de_mas_de_255_bytes_bloquea_la_propuesta(db_conn):
     result = build_nomenclature_proposal(item_id, conn=db_conn)
     assert result["status"] == "blocked"
     assert any("255" in e for e in json.loads(result["errors_json"]))
+
+
+def test_una_pista_sin_idioma_avisa_y_no_bloquea(db_conn, tmp_path):
+    from unittest.mock import patch
+    f = tmp_path / "peli.mkv"
+    f.write_bytes(b"x")
+    item_id = _insert_item(db_conn, path=str(f))
+    informe = {"available": True, "rows": [], "audio_summary": "ESP DD 5.1", "pistas_sin_idioma": [2, 3]}
+    with patch("emuwarez_uploadrr.services.media_info_service.build_mediainfo_report", return_value=informe):
+        prop = build_nomenclature_proposal(item_id, conn=db_conn, guardar=False)
+    assert prop["status"] != "blocked"
+    assert "Las pistas de audio 2, 3 no tienen idioma" in prop["warnings_json"]
+    assert "UND" not in prop["proposed_torrent_name"]

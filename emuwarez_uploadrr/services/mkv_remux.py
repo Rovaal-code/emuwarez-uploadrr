@@ -198,6 +198,33 @@ def lang_display_name(lang: str | None, lang_ietf: str | None = None, existing_n
     return _LANG_DISPLAY.get(code) or _LANG_DISPLAY.get(code.split("-")[0], code.upper())
 
 
+# Lo que se puede elegir en Ver Pistas para una pista de audio sin idioma. El
+# código va tal cual a mkvpropedit/mkvmerge; el nombre, de lang_display_name.
+IDIOMAS_ELEGIBLES = ("spa", "es-419", "cat", "ca-valencia", "eng", "fra", "ger", "ita", "por", "jpn", "kor")
+
+
+def opciones_de_idioma() -> list[dict]:
+    return [{"code": c, "label": lang_display_name(c)} for c in IDIOMAS_ELEGIBLES]
+
+
+def _por_id(overrides: dict | None) -> dict[int, dict]:
+    """Los overrides por id de pista. Guardados en el trabajo vuelven del JSON
+    con la clave en texto ("5"), y así no casaban con ninguna pista."""
+    salida: dict[int, dict] = {}
+    for clave, ov in (overrides or {}).items():
+        try:
+            salida[int(clave)] = ov or {}
+        except (TypeError, ValueError):
+            continue
+    return salida
+
+
+def _idiomas_de(overrides: dict | None) -> dict[int, str]:
+    """El idioma elegido para cada pista sin idioma, sacado de los overrides."""
+    return {tid: ov["language"] for tid, ov in _por_id(overrides).items()
+            if ov.get("language") in IDIOMAS_ELEGIBLES}
+
+
 def lang_priority(lang: str | None, lang_ietf: str | None = None, existing_name: str | None = None) -> int:
     codigo = resolve_language(lang, lang_ietf, existing_name)
     if codigo == "ESP":
@@ -487,7 +514,7 @@ def _default_subtitle_id(audio_sorted: list[dict], subs_sorted: list[dict]) -> i
 
 def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None,
                      reorder: bool = True, rename: bool = True,
-                     mark_default: bool = True) -> dict:
+                     mark_default: bool = True, idiomas: dict[int, str] | None = None) -> dict:
     """Turn a parsed `mkvmerge -J` structure into a reorder+rename plan: which
     track ids go where, and what name each gets. Pure function — no I/O.
 
@@ -502,7 +529,11 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None,
     the raw pixel height — a cropped/letterboxed encode (common for 2.35:1/
     2.40:1 sources) can store fewer pixel rows than its nominal resolution
     (e.g. 1920x800 for an actual 1080p master), which would otherwise mislabel
-    the video track."""
+    the video track.
+
+    `idiomas` ({id de pista: código}): el idioma elegido para una pista de
+    audio que no trae ninguno. Cuenta para su nombre, su orden y la bandera, y
+    se escribe en el fichero (`language_after`)."""
     raw_tracks = mkv_json.get("tracks") or []
     tracks: list[dict] = []
     ietf_by_id: dict[int, str | None] = {}
@@ -510,6 +541,13 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None,
         props = t.get("properties") or {}
         tid = t.get("id")
         ietf_by_id[tid] = props.get("language_ietf")
+        sin_idioma = t.get("type") == "audio" and resolve_language(
+            props.get("language"), props.get("language_ietf"), props.get("track_name")) == "UND"
+        elegido = (idiomas or {}).get(tid) if sin_idioma else None
+        if elegido in IDIOMAS_ELEGIBLES:
+            ietf_by_id[tid] = None
+        else:
+            elegido = None
         tracks.append({
             "id": tid,
             "type": t.get("type"),
@@ -521,6 +559,9 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None,
             # columna Idioma de "Ver Pistas" enseñaba solo `language`, así que
             # un valenciano salía como "cat" aunque Ver MediaInfo lo dijera.
             "language_ietf": props.get("language_ietf"),
+            # Audio sin idioma: Ver Pistas ofrece elegirlo (IDIOMAS_ELEGIBLES).
+            "sin_idioma": sin_idioma,
+            "language_after": elegido,
             "current_name": props.get("track_name"),
             "default_before": bool(props.get("default_track")),
             "forced": _is_forced(props),
@@ -539,7 +580,8 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None,
     subs = [t for t in tracks if t["type"] == "subtitles"]
 
     for t in audio + subs:
-        t["_priority"] = lang_priority(t["language"], ietf_by_id.get(t["id"]), t["current_name"])
+        t["_priority"] = lang_priority(t.get("language_after") or t["language"], ietf_by_id.get(t["id"]),
+                                       t["current_name"])
 
     # Dentro de un idioma, los comentarios y la audiodescripción van detrás:
     # la primera pista es la que queda predeterminada.
@@ -569,7 +611,8 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None,
 
     principal = next((t for t in audio_sorted if not _secundaria(t)), audio_sorted[0] if audio_sorted else None)
     for t in audio_sorted:
-        lang_name = lang_display_name(t["language"], ietf_by_id.get(t["id"]), t["current_name"])
+        lang_name = lang_display_name(t.get("language_after") or t["language"], ietf_by_id.get(t["id"]),
+                                      t["current_name"])
         codec = _audio_codec_label(t["codec"])
         # Los mismos canales que el nombre del release; ninguno si no se sabe.
         ch = format_channels(t["audio_channels"])
@@ -620,6 +663,7 @@ def build_track_plan(mkv_json: dict, *, known_resolution: str | None = None,
             or t.get("current_name") != t.get("new_name")
             or t.get("default_before") != t.get("default_after")
             or t.get("forced_flag") != t.get("forced_flag_after")
+            or bool(t.get("language_after"))
         )
         t.pop("_priority", None)
 
@@ -650,6 +694,7 @@ def apply_track_overrides(plan: dict, overrides: dict[int, dict] | None) -> dict
     priority) is never overridable — only the name and the default flag."""
     if not overrides:
         return plan
+    overrides = _por_id(overrides)
 
     def _apply(t: dict) -> dict:
         ov = overrides.get(t["id"])
@@ -665,6 +710,7 @@ def apply_track_overrides(plan: dict, overrides: dict[int, dict] | None) -> dict
             or t.get("current_name") != t.get("new_name")
             or t.get("default_before") != t.get("default_after")
             or t.get("forced_flag") != t.get("forced_flag_after")
+            or bool(t.get("language_after"))
         )
         return t
 
@@ -693,6 +739,8 @@ def build_mkvmerge_args(
             args += ["--default-track-flag", f"{t['id']}:{'1' if t['default_after'] else '0'}"]
         if t.get("forced_flag_after") and not t.get("forced_flag"):
             args += ["--forced-display-flag", f"{t['id']}:1"]
+        if t.get("language_after"):
+            args += ["--language", f"{t['id']}:{t['language_after']}"]
     args += ["--track-order", ",".join(f"0:{tid}" for tid in plan["new_order"])]
     args += [source_path]
     return args
@@ -726,6 +774,8 @@ def build_mkvpropedit_args(path: str, plan: dict) -> list[str]:
             cambios += ["--set", f"flag-default={'1' if t['default_after'] else '0'}"]
         if t.get("forced_flag_after") and not t.get("forced_flag"):
             cambios += ["--set", "flag-forced=1"]
+        if t.get("language_after"):
+            cambios += ["--set", f"language={t['language_after']}"]
         if cambios:
             uid = t.get("uid")
             selector = f"track:={uid}" if uid else f"track:{int(t['id']) + 1}"
@@ -751,7 +801,7 @@ def _get_known_resolution(library_item_id: int, conn) -> str | None:
     return (row["resolution"] or None) if row else None
 
 
-def build_remux_plan(library_item_id: int, conn=None) -> dict:
+def build_remux_plan(library_item_id: int, conn=None, idiomas: dict[int, str] | None = None) -> dict:
     own = conn is None
     conn = conn or connect()
     try:
@@ -764,6 +814,7 @@ def build_remux_plan(library_item_id: int, conn=None) -> dict:
             "mkvmerge_available": mkvmerge_check.get("available", False),
             "mkvmerge_path": mkvmerge_check.get("path"),
             "tracks": [], "ordered_tracks": [], "warnings": [],
+            "idiomas_elegibles": opciones_de_idioma(),
         }
         if not prepared_path:
             return {**base, "status": "blocked",
@@ -785,7 +836,7 @@ def build_remux_plan(library_item_id: int, conn=None) -> dict:
         modo = modo_pistas(conn)
         plan = build_track_plan(read["data"], known_resolution=_get_known_resolution(library_item_id, conn),
                                 reorder=reordena(modo), rename=renombra(modo),
-                                mark_default=toca_el_fichero(modo))
+                                mark_default=toca_el_fichero(modo), idiomas=idiomas)
         if not plan["tracks"]:
             return {**base, "status": "blocked", "errors": ["mkvmerge no encontró pistas en el archivo."]}
 
@@ -848,7 +899,9 @@ def apply_remux(
     own = conn is None
     conn = conn or connect()
     try:
-        preview = build_remux_plan(library_item_id, conn=conn)
+        # El idioma elegido para una pista sin idioma viaja en los overrides.
+        idiomas = _idiomas_de(overrides)
+        preview = build_remux_plan(library_item_id, conn=conn, idiomas=idiomas)
 
         if preview["status"] == "blocked":
             return {**preview, "dry_run": True, "apply": False}
@@ -888,7 +941,7 @@ def apply_remux(
         modo = modo_pistas(conn)
         plan = build_track_plan(read["data"], known_resolution=_get_known_resolution(library_item_id, conn),
                                 reorder=reordena(modo), rename=renombra(modo),
-                                mark_default=toca_el_fichero(modo))
+                                mark_default=toca_el_fichero(modo), idiomas=idiomas)
         # Sin renombrar, la columna del nombre sale bloqueada en la tarjeta y
         # aquí se descarta lo que traiga: un nombre escrito ANTES de cambiar el
         # ajuste sigue guardado en el trabajo y se colaría por detrás.

@@ -134,3 +134,9 @@ def test_el_mp2_no_es_mp3():
     """MPEG Audio Layer 2 (DVD, HDTV) salía MP3 en el nombre."""
     from emuwarez_uploadrr.services.media_probe import audio_codec
     assert audio_codec({"Format": "MPEG Audio", "Format_Profile": "Layer 2"}) == "MP2"
+
+
+def test_und_de_radarr_no_entra_en_el_nombre():
+    """Sin MediaInfo, un "und" de Radarr/Sonarr tampoco se escribe en el nombre."""
+    from emuwarez_uploadrr.services.emu_format import build_audio_string
+    assert build_audio_string("AC3", "spa / und", 6) == "ESP DD 5.1"

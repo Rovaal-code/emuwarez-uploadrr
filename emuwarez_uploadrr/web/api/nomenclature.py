@@ -203,12 +203,27 @@ def get_providers(current_user: dict = Depends(require_auth)):
 
 
 @router.get("/library/{item_id}/nomenclature/fields")
-def get_nomenclature_fields(item_id: int, current_user: dict = Depends(require_auth)):
+def get_nomenclature_fields(
+    item_id: int,
+    # {"2": "spa"}: el idioma elegido en Ver Pistas para la pista de audio 2.
+    idiomas: str | None = Query(None),
+    current_user: dict = Depends(require_auth),
+):
     with _get_conn() as conn:
-        result = build_editable_nomenclature_fields(item_id, conn=conn)
+        result = build_editable_nomenclature_fields(item_id, conn=conn, idiomas_audio=_idiomas_audio(idiomas))
     if "error" in result:
         raise HTTPException(status_code=404, detail=result["error"])
     return result
+
+
+def _idiomas_audio(crudo: str | None) -> dict[int, str] | None:
+    """{posición: código} del parámetro `idiomas`; lo que no sea una opción se ignora."""
+    from ...services.mkv_remux import IDIOMAS_ELEGIBLES
+    try:
+        datos = json.loads(crudo) if crudo else {}
+        return {int(k): v for k, v in datos.items() if v in IDIOMAS_ELEGIBLES} or None
+    except (ValueError, TypeError, AttributeError):
+        return None
 
 
 @router.post("/library/{item_id}/nomenclature/preview-fields")
@@ -319,7 +334,8 @@ def apply_track_remux(
         overrides = {}
         for raw_id, ov in body.overrides.items():
             try:
-                overrides[int(raw_id)] = {"new_name": ov.new_name, "default_after": ov.default_after}
+                overrides[int(raw_id)] = {"new_name": ov.new_name, "default_after": ov.default_after,
+                                          "language": ov.language}
             except (TypeError, ValueError):
                 continue
     with _get_conn() as conn:

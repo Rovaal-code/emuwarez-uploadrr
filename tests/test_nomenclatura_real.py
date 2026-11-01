@@ -135,12 +135,46 @@ def test_el_castellano_de_MAX_sigue_siendo_castellano(tmp_path):
     assert build_mediainfo_report(ruta)["audio_summary"] == "DUAL DD 5.1"
 
 
-def test_una_pista_sin_idioma_bloquea_el_nombre(conn, tmp_path):
-    ruta = hacer_mkv(tmp_path / "Peli.WEB-DL.mkv", audios=({"lang": "es"}, {"lang": "und"}))
+def test_una_pista_sin_idioma_avisa_y_el_nombre_sale_sin_ella(conn, tmp_path):
+    """Decidido por Gabriel: avisa, no bloquea, y nunca se escribe "UND"."""
+    import json
+    ruta = hacer_mkv(tmp_path / "Peli.WEB-DL.mkv", audios=({"lang": "es"}, {"lang": "und", "codec": "aac", "canales": 2}))
     item = _fila(conn, title="Peli", year=2024, path=str(ruta), resolution="1080p")
     prop = build_nomenclature_proposal(item["id"], conn=conn, guardar=False)
-    assert "UND" in prop["proposed_torrent_name"]
-    assert prop["status"] == "blocked"
+    assert prop["status"] == "warning"
+    assert prop["proposed_torrent_name"] == "Peli 2024 1080p WEB-DL x264 ESP DD 5.1-EMUWAREZ"
+    assert any("pista de audio 2 no tiene idioma" in w for w in json.loads(prop["warnings_json"]))
+
+
+def test_el_idioma_elegido_en_el_asistente_llega_al_nombre_y_a_la_pista(conn, tmp_path):
+    """Lo elegido en Ver Pistas para la pista sin idioma: entra en el nombre del
+    release, en el nombre de la pista y en la etiqueta de idioma del MKV, aunque
+    el trabajo guarde los overrides con la clave en texto."""
+    import json
+    import subprocess
+    from emuwarez_uploadrr.services.mkv_remux import (_idiomas_de, build_mkvpropedit_args,
+                                                      build_track_plan, read_tracks_json)
+    from emuwarez_uploadrr.services.source_assistant import build_editable_nomenclature_fields
+    ruta = hacer_mkv(tmp_path / "Peli.WEB-DL.mkv", audios=({"lang": "und"}, {"lang": "en"}))
+    item = _fila(conn, title="Peli", year=2024, path=str(ruta), resolution="1080p")
+
+    sin_elegir = build_editable_nomenclature_fields(item["id"], conn=conn)
+    assert sin_elegir["fields"]["audio_summary"] == "ING DD 5.1"
+    assert "pista de audio 1" in sin_elegir["audio_warning"]
+    elegido = build_editable_nomenclature_fields(item["id"], conn=conn, idiomas_audio={1: "spa"})
+    assert elegido["fields"]["audio_summary"] == "DUAL DD 5.1" and elegido["audio_warning"] is None
+
+    datos = read_tracks_json(str(ruta))["data"]
+    pista = next(t["id"] for t in datos["tracks"] if t["type"] == "audio")
+    overrides = json.loads(json.dumps({pista: {"language": "spa"}}))      # como vuelve del trabajo
+    plan = build_track_plan(datos, idiomas=_idiomas_de(overrides))
+    audio = [t for t in plan["ordered_tracks"] if t["type"] == "audio"]
+    assert [(t["new_name"], t["default_after"]) for t in audio] == [
+        ("Español (Castellano) - DD 5.1", True), ("Inglés - DD 5.1", False)]
+    subprocess.run(build_mkvpropedit_args(str(ruta), plan), check=True, capture_output=True)
+    idiomas = [t["properties"]["language"] for t in read_tracks_json(str(ruta))["data"]["tracks"]
+               if t["type"] == "audio"]
+    assert idiomas == ["spa", "eng"]
 
 
 def test_la_resolucion_sale_del_fichero_y_no_de_la_etiqueta(conn, tmp_path):

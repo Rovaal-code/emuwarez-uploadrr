@@ -1333,6 +1333,8 @@ class MkvTitleApplyBody(BaseModel):
 class TrackRemuxOverride(BaseModel):
     new_name: Optional[str] = None
     default_after: Optional[bool] = None
+    # Idioma elegido para una pista de audio sin idioma (mkv_remux.IDIOMAS_ELEGIBLES).
+    language: Optional[str] = None
 
 
 class TrackRemuxApplyBody(BaseModel):

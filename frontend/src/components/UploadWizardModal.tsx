@@ -7,6 +7,7 @@ import {
   previewNomenclatureFields,
   saveNomenclatureFields,
   previewTrackRemux,
+  applyTrackRemux,
 } from '../api/nomenclature'
 import {
   queueUpload, getExistingJobForItem,
@@ -221,7 +222,7 @@ function AvisoModoPistas({ plan }: { plan?: { track_mode?: string } | null }) {
 // Track reorder/rename table — the single-file "Ver Pistas" card renders it
 // editable (inputs); the season target's per-episode accordion renders it
 // read-only (editable=false — no manual per-track overrides for seasons).
-export function RemuxTable({ plan, editable, nameEditable, edits, onEdit }: {
+export function RemuxTable({ plan, editable, nameEditable, edits, onEdit, onIdioma }: {
   plan: TrackRemuxPreview
   /** Si se puede tocar la casilla "Predet.". */
   editable: boolean
@@ -233,6 +234,8 @@ export function RemuxTable({ plan, editable, nameEditable, edits, onEdit }: {
   nameEditable?: boolean
   edits?: Record<number, TrackRemuxOverride>
   onEdit?: (trackId: number, patch: TrackRemuxOverride) => void
+  /** Elegir el idioma de una pista de audio que no trae ninguno. */
+  onIdioma?: (trackId: number, code: string) => void
 }) {
   return (
     <>
@@ -273,7 +276,17 @@ export function RemuxTable({ plan, editable, nameEditable, edits, onEdit }: {
                         latino del castellano. Enseñando solo `language`, esta
                         columna decía "cat" para una pista en valenciano. */}
                     <td style={{ padding: '6px 10px', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>
-                      {t.language_ietf || t.language || '—'}
+                      {t.sin_idioma && onIdioma && plan.idiomas_elegibles?.length ? (
+                        <select
+                          className="form-input form-select"
+                          style={{ fontSize: 12, padding: '4px 6px' }}
+                          value={edits?.[t.id]?.language ?? t.language_after ?? ''}
+                          onChange={e => onIdioma(t.id, e.target.value)}
+                        >
+                          <option value="">— Sin idioma —</option>
+                          {plan.idiomas_elegibles.map(o => <option key={o.code} value={o.code}>{o.label}</option>)}
+                        </select>
+                      ) : (t.language_ietf || t.language || '—')}
                     </td>
                     <td style={{ padding: '6px 10px', color: 'var(--text-muted)', wordBreak: 'break-word' }}>{t.current_name || '—'}</td>
                     <td style={{ padding: '5px 8px' }}>
@@ -549,6 +562,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   const [titleWarning, setTitleWarning] = useState<string | null>(null)
   const [titleOptions, setTitleOptions] = useState<{ value: string; kind: string; label: string }[]>([])
   const [sourceWarning, setSourceWarning] = useState<string | null>(null)
+  const [audioWarning, setAudioWarning] = useState<string | null>(null)
   const [sourceComparison, setSourceComparison] = useState<SourceComparison | null>(null)
   const [showSourceCompare, setShowSourceCompare] = useState(false)
   // The detailed 9-candidate engine breakdown (SourceEngineDetail) only
@@ -861,6 +875,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
     setTitleWarning(resp.title_warning ?? null)
     setTitleOptions(resp.title_options ?? [])
     setSourceWarning(resp.source_warning ?? null)
+    setAudioWarning(resp.audio_warning ?? null)
     setSourceComparison(resp.source_comparison ?? null)
   }, [sharedTitle])
 
@@ -1171,6 +1186,28 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
 
   const setRemuxEdit = (trackId: number, patch: TrackRemuxOverride) => {
     setRemuxEdits(prev => ({ ...prev, [trackId]: { ...prev[trackId], ...patch } }))
+  }
+
+  // Idioma de una pista de audio sin idioma: cuenta para el nombre del release
+  // (se pide el audio de nuevo) y para el nombre y la etiqueta de la pista.
+  const elegirIdioma = async (trackId: number, code: string) => {
+    const id = targetId
+    if (id == null) return
+    const nuevas = { ...remuxEdits, [trackId]: { ...remuxEdits[trackId], language: code || undefined } }
+    setRemuxEdits(nuevas)
+    const audio = (remuxPreview?.tracks ?? []).filter(t => t.type === 'audio')
+    const idiomas: Record<number, string> = {}
+    audio.forEach((t, i) => { const c = nuevas[t.id]?.language; if (c) idiomas[i + 1] = c })
+    try {
+      const [campos, plan] = await Promise.all([
+        getNomenclatureFields(id, idiomas),
+        applyTrackRemux(id, { dryRun: true, overrides: nuevas }),
+      ])
+      if (objetivoActual.current !== id) return
+      setFields(prev => ({ ...prev, audio_summary: campos.fields?.audio_summary }))
+      setAudioWarning(campos.audio_warning ?? null)
+      setRemuxPreview(plan)
+    } catch { /* se queda lo de antes: el nombre no lleva esa pista */ }
   }
 
   // Debounced live preview of the final torrent name + internal title.
@@ -1705,6 +1742,9 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
         </label>
         <label><FieldLabel label="Audio" info={FIELD_INFO.audio} />
           <input className="form-input" value={fields.audio_summary || ''} disabled />
+          {audioWarning && (
+            <span style={{ display: 'block', marginTop: 4, fontSize: 11, color: 'var(--color-warning)' }}><IconoAviso /> {audioWarning}</span>
+          )}
         </label>
         <label><FieldLabel label="Subtítulos" info={FIELD_INFO.subs} />
           <input className="form-input" value={fields.subs || ''} disabled />
@@ -1947,6 +1987,9 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                 estos campos confirman que todos coinciden. Source, Proveedor y Tag se pueden corregir
                 a mano si el detectado no es correcto (se aplica a todos los capítulos por igual).
               </p>
+              {seasonPlan.warnings?.map((w, i) => (
+                <p key={i} className="text-warning" style={{ fontSize: 12, marginTop: 0, marginBottom: 10 }}><IconoAviso /> {w}</p>
+              ))}
               {seasonFieldBox}
               {seasonSummaryBox}
 
@@ -2236,6 +2279,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
                           nameEditable={!esTanda(seleccion) && renombra(normalizarModo(remuxPreview.track_mode))}
                           edits={remuxEdits}
                           onEdit={setRemuxEdit}
+                          onIdioma={esTanda(seleccion) ? undefined : elegirIdioma}
                         />
                       </>
                     )}

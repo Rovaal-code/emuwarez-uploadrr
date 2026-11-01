@@ -33,10 +33,21 @@ STATUS_EXPIRED = "expired"
 # salen de leerlo. La ruta no, que cambia al renombrar la propia app.
 _CAMPOS_HUELLA = ("size_bytes", "resolution", "quality", "source", "release_group",
                   "title", "year", "season_number", "episode_number", "tmdb_id")
+# Sube cuando cambian las reglas del nombre, para rehacer las guardadas.
+_VERSION_REGLAS = 2
 
 
 def _huella(item: dict) -> list:
-    return [item.get(c) for c in _CAMPOS_HUELLA]
+    return [_VERSION_REGLAS] + [item.get(c) for c in _CAMPOS_HUELLA]
+
+
+def aviso_pistas_sin_idioma(posiciones: list[int]) -> str:
+    """El aviso de una o varias pistas de audio sin idioma."""
+    cuales = ", ".join(str(p) for p in posiciones)
+    return (f"La pista de audio {cuales} no tiene idioma y el nombre no la incluye: "
+            "elige su idioma en Ver Pistas.") if len(posiciones) == 1 else (
+            f"Las pistas de audio {cuales} no tienen idioma y el nombre no las incluye: "
+            "elige su idioma en Ver Pistas.")
 
 
 def _huella_guardada(proposal: dict):
@@ -473,13 +484,12 @@ def build_nomenclature_proposal(
                 audio_summary = mi_report.get("audio_summary") or audio_summary
                 subtitle_summary = emu_by_field.get("Subtítulos") or subtitle_summary
                 dynamic_range = emu_by_field.get("HDR/DV") or dynamic_range
+                # Sin idioma no bloquea: avisa y el nombre sale sin esa pista.
+                if mi_report.get("pistas_sin_idioma"):
+                    warnings.append(aviso_pistas_sin_idioma(mi_report["pistas_sin_idioma"]))
             else:
                 warnings.append("Sin MediaInfo del archivo: el audio y los subtítulos del nombre salen "
                                 "de Radarr/Sonarr y pueden no ser exactos.")
-
-        # UND no es un idioma del tracker: el nombre no puede salir así.
-        if audio_summary and "UND" in re.split(r"[\s-]+", audio_summary):
-            errors.append("Una pista de audio no tiene idioma (UND). Ponle idioma a la pista antes de subir.")
 
         # Phase 6E — provider (AMZN/NF/DSNP...) already present in the
         # current filename, kept in the proposal instead of silently

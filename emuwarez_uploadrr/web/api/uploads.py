@@ -292,7 +292,8 @@ def queue_upload(
         overrides = {}
         for raw_id, ov in body.remux_overrides.items():
             try:
-                overrides[int(raw_id)] = {"new_name": ov.new_name, "default_after": ov.default_after}
+                overrides[int(raw_id)] = {"new_name": ov.new_name, "default_after": ov.default_after,
+                                          "language": ov.language}
             except (TypeError, ValueError):
                 continue
     checks = body.checks.model_dump() if body.checks else None

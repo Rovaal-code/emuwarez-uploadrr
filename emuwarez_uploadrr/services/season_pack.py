@@ -467,6 +467,18 @@ def _season_title_options(series: dict | None, season: dict, conn) -> list[dict]
     return build_title_options(spanish, original)
 
 
+def _capitulos_con_audio_sin_idioma(episode_entries: list[dict], conn) -> list:
+    """Los capítulos con alguna pista de audio sin idioma (el informe ya está en caché)."""
+    from .media_info_service import build_mediainfo_report
+    from .path_mapping import resolve_local_path
+    salida = []
+    for e in episode_entries:
+        path = e["episode"].get("path")
+        if path and build_mediainfo_report(resolve_local_path(path, conn=conn) or path).get("pistas_sin_idioma"):
+            salida.append(e["episode"].get("episode_number"))
+    return salida
+
+
 def _spanish_errors(episode_entries: list[dict]) -> list[str]:
     """Every episode has to carry Castilian one way or the other: dubbed
     (audio) or at least subtitled. Reports the episodes that carry neither,
@@ -639,6 +651,11 @@ def build_season_pack_plan(
             errors.append(f"Los capítulos vienen de proveedores distintos ({', '.join(proveedores)}): "
                           "elige uno en Proveedor.")
         errors.extend(_spanish_errors(episode_entries))
+        warnings: list[str] = []
+        sin_idioma = _capitulos_con_audio_sin_idioma(episode_entries, conn)
+        if sin_idioma:
+            warnings.append(f"Capítulo(s) {', '.join(str(n) for n in sin_idioma)}: una pista de audio no "
+                            "tiene idioma y el nombre del pack no la incluye.")
 
         first_proposal = episode_entries[0]["proposal"]
 
@@ -732,7 +749,7 @@ def build_season_pack_plan(
         return {
             "status": status,
             "errors": errors,
-            "warnings": [],
+            "warnings": warnings,
             "season_pack_title": season_pack_title,
             "pack_folder": pack_folder,
             "episodes": episodes_out,

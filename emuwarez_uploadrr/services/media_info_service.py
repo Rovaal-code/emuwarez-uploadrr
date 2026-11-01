@@ -115,7 +115,8 @@ def read_media_info_summary(path: str) -> Optional[dict]:
         return None
 
 
-def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
+def build_mediainfo_report(path: str, radarr_source: str | None = None,
+                           idiomas_audio: dict[int, str] | None = None) -> dict:
     """Run MediaInfo on the actual file and return, for each field, the raw
     MediaInfo value alongside the value that goes to eMuwarez. Never raises;
     returns {available: False, message} when the binary/file isn't there.
@@ -125,8 +126,13 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
     the same name → Radarr/Sonarr → MediaInfo-bitrate priority used for the
     actually-applied nomenclature (see nomenclature.py::_infer_source_from_item).
 
+    `idiomas_audio` ({posición de la pista de audio, desde 1: idioma}) es el
+    idioma que el usuario eligió en el asistente para una pista que no lo trae.
+    Una pista que sigue sin idioma no entra en el nombre y sale en
+    `pistas_sin_idioma`.
+
     Shape: {available: bool, message: str|None, rows: [{field, mediainfo, emu}],
-            audio_summary: str|None}
+            audio_summary: str|None, pistas_sin_idioma: [int]}
     """
     from .path_mapping import resolve_local_path
 
@@ -149,7 +155,8 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
         st = p.stat()
         # `_engine_on` entra en la clave: sin él, apagar la herramienta no se
         # notaría hasta que el fichero cambiase de tamaño o de fecha.
-        cache_key = (str(p), int(st.st_mtime), int(st.st_size), radarr_source, _engine_on)
+        cache_key = (str(p), int(st.st_mtime), int(st.st_size), radarr_source, _engine_on,
+                     tuple(sorted((idiomas_audio or {}).items())))
         cached = _REPORT_CACHE.get(str(p))
         if cached and cached[0] == cache_key:
             return cached[1]
@@ -302,18 +309,23 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
     # calidad ofrece, no cuántas pistas trae, así que "JAP TrueHD 5.1 JAP DD
     # 5.1" es "JAP TrueHD 5.1": quien lo lea busca lo mejor que va a oír.
     best_by_lang: dict[str, tuple[tuple[int, int], str, str]] = {}
+    sin_idioma: list[int] = []
     for i, tr in enumerate(audio_tracks, 1):
         raw_lang = tr.get("Language") or tr.get("Language_String") or ""
-        lang = track_language(tr)
+        elegido = (idiomas_audio or {}).get(i)
+        lang = emu_format.resolve_language(elegido) if elegido else track_language(tr)
         codec = media_probe.audio_codec(tr)
         ch = media_probe.audio_channels(tr)
         codecs.append(codec)
         channels.append(ch)
-        if lang not in langs:
+        if lang == "UND":
+            # Sin idioma no se escribe "UND" en el nombre: la pista se queda fuera.
+            sin_idioma.append(i)
+        elif lang not in langs:
             langs.append(lang)
         quality = emu_format.audio_track_quality(codec, ch)
         previous = best_by_lang.get(lang)
-        if previous is None or quality < previous[0]:
+        if lang != "UND" and (previous is None or quality < previous[0]):
             best_by_lang[lang] = (quality, codec, ch)
         mi = " ".join(x for x in (tr.get("Format"), raw_lang or "?", tr.get("Channel_s_") or tr.get("Channels")) if x)
         # La ficha técnica SÍ sigue enseñando todas las pistas, una por fila:
@@ -351,7 +363,7 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
             else:
                 token = "-".join(ordered)
             entries.append(" ".join(x for x in (token, codec, ch) if x))
-        audio_summary = " ".join(entries)
+        audio_summary = " ".join(entries) or None
         add("Audio (eMuwarez)", f"{len(audio_tracks)} pista(s)", audio_summary)
 
     # Subtitles
@@ -360,7 +372,7 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None) -> dict:
     add("Subtítulos", sub_langs or None, "SUBS" if sub_tracks else None)
 
     report = {"available": True, "message": None, "rows": rows, "audio_summary": audio_summary,
-              "resolution": resolution,
+              "resolution": resolution, "pistas_sin_idioma": sin_idioma,
                "audio_by_language": audio_by_language,
                "source_signals": source_signals}
     # A medias no se guarda: la próxima lectura vuelve a pasar la herramienta.

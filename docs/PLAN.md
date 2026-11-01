@@ -79,12 +79,17 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
   `valores` (valores de filtro con su caché). `__init__.py` reexporta todo, así que `from ...library import X` sigue
   valiendo. Lo que un test parchea ahora se parchea en el módulo que lo usa (`library.sync.publicar`,
   `library.valores._VALORES_DE_FILTRO_SEGUNDOS`…).
+- **Oleada 3, asistente de subida partido (#132):** `UploadWizardModal.tsx` queda en el marco (pasos y cierre) y lo
+  demás vive en `components/asistente/`: el estado y la lógica en `useAsistente.ts` (con `useComprobaciones.ts` y
+  `useDetallesTemporada.ts`), un componente por paso (`PasoSeleccion`, `PasoArchivo`, `PasoTemporada`, `PasoSubida`,
+  `PasoSubidaTanda`) y las piezas compartidas (`RemuxTable`, `MediaInfoTable`, `Capitulos`, `piezas`,
+  `constantes`). Comportamiento igual: lo fija `components/__tests__/UploadWizardModal.test.tsx` (jsdom). Arreglado
+  de paso: «Ver nombre de todos los capítulos» y «Ver Pistas», si estaban abiertos al cambiar el idioma del pack, se
+  recargan con el idioma confirmado en vez de quedarse vacíos.
 
 ## Siguiente (oleada 3)
 
-1. Partir `UploadWizardModal.tsx` y `SettingsPage.tsx`; los estilos en línea, a clases.
-   Al partir el asistente: recargar «Ver nombre de todos los capítulos» y «Ver pistas» con el idioma confirmado si
-   estaban abiertos al cambiar el idioma del pack (hoy se quedan vacíos hasta reabrirlos).
+1. Partir `SettingsPage.tsx`; los estilos en línea, a clases.
 2. `httpx` y un solo limitador de eMuwarez compartido (30 peticiones por minuto).
 3. ESLint `react-hooks`.
 

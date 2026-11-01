@@ -9,6 +9,8 @@ services/upload_queue.py's season branch drives services/season_pack.py's
 apply_season_pack() internally once the job gets its turn."""
 from __future__ import annotations
 
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ...database import connect, init_db
@@ -19,6 +21,7 @@ from ...services.season_pack import (
     get_season_episode_remux_previews,
     get_season_plan_progress,
     preview_season_pack_title,
+    recalcular_audio_del_pack,
 )
 from ..dependencies import require_auth
 from ..runtime import _db_path
@@ -33,10 +36,22 @@ def _get_conn():
     return conn
 
 
+def _idiomas(crudo: str | None) -> dict | None:
+    """{"2": "spa"} del parámetro `idiomas`; un JSON roto cuenta como nada elegido.
+    Lo que no sea una opción válida lo descarta el servicio (idiomas_por_posicion)."""
+    try:
+        datos = json.loads(crudo) if crudo else None
+    except ValueError:
+        return None
+    return datos if isinstance(datos, dict) else None
+
+
 @router.get("/library/season/{season_id}/pack-preview", response_model=SeasonPackPlanResponse)
 def preview_season_pack(
     season_id: int,
     provider: str | None = Query(None),
+    # {"2": "spa"}: el idioma elegido para la pista de audio 2 de todos los capítulos.
+    idiomas: str | None = Query(None),
     current_user: dict = Depends(require_auth),
 ):
     """Can take a while for a big season (real work per episode) — poll
@@ -47,10 +62,23 @@ def preview_season_pack(
     with _get_conn() as conn:
         # "" (?provider=) es "Sin proveedor" elegido a mano; sin parámetro, se detecta.
         plan = build_season_pack_plan(season_id, conn=conn,
-                                      provider_override=None if provider is None else provider.strip())
+                                      provider_override=None if provider is None else provider.strip(),
+                                      idiomas_audio=_idiomas(idiomas))
     if plan["status"] == "blocked" and plan["errors"] == ["Temporada no encontrada."]:
         raise HTTPException(status_code=404, detail="Temporada no encontrada.")
     return SeasonPackPlanResponse(**plan)
+
+
+@router.get("/library/season/{season_id}/pack-audio")
+def season_pack_audio(
+    season_id: int,
+    idiomas: str | None = Query(None),
+    current_user: dict = Depends(require_auth),
+) -> dict:
+    """El audio del pack con los idiomas elegidos para las pistas sin idioma,
+    sin rehacer el plan entero: respalda el selector de idioma del asistente."""
+    with _get_conn() as conn:
+        return recalcular_audio_del_pack(season_id, _idiomas(idiomas), conn=conn)
 
 
 @router.post("/library/season/{season_id}/pack-preview-fields")
@@ -91,6 +119,7 @@ def season_episode_names(
     source: str | None = Query(default=None),
     provider: str | None = Query(default=None),
     tag: str | None = Query(default=None),
+    idiomas: str | None = Query(default=None),
     current_user: dict = Depends(require_auth),
 ) -> dict:
     """Per-episode final torrent name + internal MKV title — backs "Ver
@@ -105,6 +134,7 @@ def season_episode_names(
         return get_season_episode_names(
             season_id, conn=conn,
             source_override=source, provider_override=provider, tag_override=tag,
+            idiomas_audio=_idiomas(idiomas),
         )
 
 
@@ -116,8 +146,13 @@ def season_episode_mediainfo(season_id: int, current_user: dict = Depends(requir
 
 
 @router.get("/library/season/{season_id}/episode-remux-preview")
-def season_episode_remux_preview(season_id: int, current_user: dict = Depends(require_auth)) -> dict:
+def season_episode_remux_preview(
+    season_id: int,
+    idiomas: str | None = Query(default=None),
+    current_user: dict = Depends(require_auth),
+) -> dict:
     """Per-episode track remux plan — backs "Ver Pistas" for a season target
-    (read-only preview; no manual per-track overrides for season packs)."""
+    (read-only preview; no manual per-track overrides for season packs, salvo
+    el idioma de las pistas sin idioma, elegido una vez para todo el pack)."""
     with _get_conn() as conn:
-        return get_season_episode_remux_previews(season_id, conn=conn)
+        return get_season_episode_remux_previews(season_id, conn=conn, idiomas_audio=_idiomas(idiomas))

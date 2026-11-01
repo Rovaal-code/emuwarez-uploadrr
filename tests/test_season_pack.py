@@ -1056,7 +1056,7 @@ def test_rollup_all_returns_provider_codes_not_a_joined_string(isolated_db, tmp_
 
 def _audios(monkeypatch, capitulos: list[dict]):
     from emuwarez_uploadrr.services import season_pack as sp
-    monkeypatch.setattr(sp, "_episode_audio_by_language", lambda ep, conn: ep)
+    monkeypatch.setattr(sp, "_episode_audio_by_language", lambda ep, conn, idiomas=None: ep)
     return sp._aggregate_pack_audio([{"episode": c} for c in capitulos])
 
 

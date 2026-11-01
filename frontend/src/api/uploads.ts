@@ -41,6 +41,8 @@ export async function queueUpload(
   // persists through saveNomenclatureFields instead.
   seasonOverrides?: {
     source?: string | null; provider?: string | null; tag?: string | null; title?: string | null
+    // El idioma elegido para cada pista de audio sin idioma, por posición.
+    idiomas?: Record<number, string>
   },
   // La petición desde la que se abrió el asistente: la subida la cubre y
   // Subidas la enseña.
@@ -55,6 +57,7 @@ export async function queueUpload(
     provider: seasonOverrides?.provider ?? null,
     tag: seasonOverrides?.tag ?? null,
     title: seasonOverrides?.title ?? null,
+    idiomas: seasonOverrides?.idiomas ?? null,
   })
 }
 

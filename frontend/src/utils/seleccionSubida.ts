@@ -51,7 +51,11 @@ export function cacheCubre(ids: readonly number[], cache: ReadonlyMap<number, un
   return ids.every(id => cache.has(id))
 }
 
-export interface Ajustes { source?: string | null; provider?: string | null; tag?: string | null; title?: string | null }
+export interface Ajustes {
+  source?: string | null; provider?: string | null; tag?: string | null; title?: string | null
+  // Solo pack: el idioma elegido para cada pista de audio sin idioma, por posición.
+  idiomas?: Record<number, string>
+}
 
 // Copia de `mapa` con los ajustes de `id`, pero solo si los campos que se
 // guardan son de ese elemento: mientras carga otra temporada siguen siendo los

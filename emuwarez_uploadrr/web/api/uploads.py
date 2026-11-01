@@ -305,7 +305,7 @@ def queue_upload(
             item_id, request_item_id=body.request_item_id,
             remux_overrides=overrides, remux_snapshot=body.remux_snapshot, checks=checks, conn=conn,
             source_override=body.source, provider_override=body.provider, tag_override=body.tag,
-            title_override=body.title,
+            title_override=body.title, idiomas_audio=body.idiomas,
         )
 
     job = result.get("job")

@@ -21,10 +21,12 @@ from . import emu_format, media_probe
 
 logger = logging.getLogger(__name__)
 
-# Cache of build_mediainfo_report() results, keyed by resolved path →
-# ((path, mtime, size), report). Avoids re-reading MediaInfo of the same file
+# Cache of build_mediainfo_report() results, keyed by (resolved path, idiomas
+# elegidos) → ((path, mtime, size), report). Los idiomas van en la clave: el
+# pack pide el mismo fichero con y sin ellos, y con una entrada por ruta cada
+# petición echaba a la otra y volvía a leer el fichero. Avoids re-reading MediaInfo of the same file
 # (slow over remote mounts) within the upload wizard / nomenclature flow.
-_REPORT_CACHE: dict[str, tuple[tuple, dict]] = {}
+_REPORT_CACHE: dict[tuple, tuple[tuple, dict]] = {}
 _REPORT_CACHE_MAX = 256
 
 
@@ -128,7 +130,8 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None,
 
     `idiomas_audio` ({posición de la pista de audio, desde 1: idioma}) es el
     idioma que el usuario eligió en el asistente para una pista que no lo trae.
-    Una pista que sigue sin idioma no entra en el nombre y sale en
+    Solo cuenta para una pista sin idioma (igual que mkv_remux.build_track_plan):
+    así el nombre y el remux nunca dicen cosas distintas. Una pista que sigue sin idioma no entra en el nombre y sale en
     `pistas_sin_idioma`.
 
     Shape: {available: bool, message: str|None, rows: [{field, mediainfo, emu}],
@@ -157,7 +160,7 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None,
         # notaría hasta que el fichero cambiase de tamaño o de fecha.
         cache_key = (str(p), int(st.st_mtime), int(st.st_size), radarr_source, _engine_on,
                      tuple(sorted((idiomas_audio or {}).items())))
-        cached = _REPORT_CACHE.get(str(p))
+        cached = _REPORT_CACHE.get((str(p), cache_key[-1]))
         if cached and cached[0] == cache_key:
             return cached[1]
     except OSError:
@@ -312,8 +315,10 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None,
     sin_idioma: list[int] = []
     for i, tr in enumerate(audio_tracks, 1):
         raw_lang = tr.get("Language") or tr.get("Language_String") or ""
+        lang = track_language(tr)
         elegido = (idiomas_audio or {}).get(i)
-        lang = emu_format.resolve_language(elegido) if elegido else track_language(tr)
+        if elegido and lang == "UND":
+            lang = emu_format.resolve_language(elegido)
         codec = media_probe.audio_codec(tr)
         ch = media_probe.audio_channels(tr)
         codecs.append(codec)
@@ -380,5 +385,5 @@ def build_mediainfo_report(path: str, radarr_source: str | None = None,
     if cache_key is not None and not _incompleto:
         if len(_REPORT_CACHE) >= _REPORT_CACHE_MAX:
             _REPORT_CACHE.clear()
-        _REPORT_CACHE[str(p)] = (cache_key, report)
+        _REPORT_CACHE[(str(p), cache_key[-1])] = (cache_key, report)
     return report

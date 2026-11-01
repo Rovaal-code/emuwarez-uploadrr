@@ -98,6 +98,24 @@ class LogoutResponse(BaseModel):
     message: str = "Sesión cerrada correctamente"
 
 
+class SessionInfo(BaseModel):
+    id: int
+    current: bool
+    created_at: str
+    last_used_at: str
+    user_agent: Optional[str] = None
+    ip_address: Optional[str] = None
+
+
+class SessionsResponse(BaseModel):
+    sessions: list[SessionInfo]
+    inactive_days: int
+
+
+class CloseOtherSessionsResponse(BaseModel):
+    closed: int
+
+
 class ChangeCredentialsRequest(BaseModel):
     current_password: str
     new_username: Optional[str] = None
@@ -1214,7 +1232,7 @@ class BackupRequest(BaseModel):
 
 
 class RestoreRequest(BaseModel):
-    backup_path: str
+    backup_name: str
     dry_run: bool = True
     apply: bool = False
     confirmation: Optional[str] = None

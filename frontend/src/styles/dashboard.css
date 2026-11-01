@@ -555,6 +555,23 @@
   margin-bottom: 16px;
 }
 
+/* Tarjeta «Sesiones abiertas» de Configuración. */
+.sesiones-nota {
+  margin: 0 0 12px;
+}
+.sesiones-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+.sesiones-lista__nombre {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* Proveedores de vídeo / de imágenes: con la tarjeta creciendo con el
    contenido (arriba), ya no hace falta anclar "Añadir" abajo ni capar la
    lista a unas pocas filas con su propio scroll — eso era lo que escondía la

@@ -1160,6 +1160,36 @@ optgroup {
   align-items: center;
   gap: 8px;
 }
+.hf-fila {
+  display: flex;
+  align-items: center;
+}
+.hf-fila .hf-option {
+  flex: 1;
+  min-width: 0;
+}
+.hf-ocultar {
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+}
+.hf-ocultar:hover,
+.hf-ocultar:focus-visible {
+  color: var(--text-primary);
+  background: var(--bg-card-hover);
+}
+.hf-ocultar.on {
+  color: var(--color-error);
+}
+.hf-option.hf-oculta span {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
 .hf-option.hf-check input {
   flex-shrink: 0;
   width: 14px;

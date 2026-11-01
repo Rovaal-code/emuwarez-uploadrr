@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useLayoutEffect, useId } from 'react'
 import { createPortal } from 'react-dom'
 import { useTooltip } from './Tooltip'
 import { medir, anchoVentana, altoVentana } from '../utils/uiScale'
-import { resumenFiltro, siguienteSeleccion, opcionesQueCoinciden } from '../utils/filtroColumna'
+import { resumenFiltro, siguienteSeleccion, siguienteExclusion, opcionesQueCoinciden, EXCLUIDO } from '../utils/filtroColumna'
 
 export interface FilterOption { value: string; label: string }
 
@@ -16,15 +16,32 @@ export interface FilterOption { value: string; label: string }
 // la barra espaciadora y el lector de pantalla lo anuncia como casilla.
 // «Desmarcar todo» (la opción de valor '') se queda como botón: quita el
 // filtro, no es un valor más.
-function FilterOptionButton({ option, selected, multiple, onClick }: { option: FilterOption; selected: boolean; multiple: boolean; onClick: () => void }) {
+//
+// Con `onOcultar` la casilla lleva al lado un botón que oculta ese valor: la
+// fila queda tachada y todo lo que lo tenga desaparece de la tabla.
+function FilterOptionButton({ option, selected, oculta, multiple, onClick, onOcultar }: {
+  option: FilterOption; selected: boolean; oculta: boolean; multiple: boolean; onClick: () => void; onOcultar?: () => void
+}) {
   const { triggerProps, tooltipNode } = useTooltip(option.label)
   if (multiple) {
     return (
-      <label className={`hf-option hf-check${selected ? ' selected' : ''}`} {...triggerProps}>
-        <input type="checkbox" checked={selected} onChange={onClick} />
-        <span>{option.label}</span>
-        {tooltipNode}
-      </label>
+      <div className="hf-fila">
+        <label className={`hf-option hf-check${selected ? ' selected' : ''}${oculta ? ' hf-oculta' : ''}`} {...triggerProps}>
+          <input type="checkbox" checked={selected} onChange={onClick} />
+          <span>{option.label}</span>
+          {tooltipNode}
+        </label>
+        {onOcultar && (
+          <button
+            type="button"
+            className={`hf-ocultar${oculta ? ' on' : ''}`}
+            onClick={onOcultar}
+            aria-pressed={oculta}
+            aria-label={`Ocultar ${option.label}`}
+            title={oculta ? 'Dejar de ocultar' : 'Ocultar'}
+          >⊘</button>
+        )}
+      </div>
     )
   }
   return (
@@ -51,11 +68,13 @@ function FilterOptionButton({ option, selected, multiple, onClick }: { option: F
 //
 // Con `value` como lista es de selección múltiple: cada opción se marca o
 // desmarca sin cerrar el menú, y la de valor '' («Desmarcar todo») las quita.
-export function HeaderFilter<T extends string | string[]>({ label, value, options, onChange }: {
+export function HeaderFilter<T extends string | string[]>({ label, value, options, onChange, ocultable }: {
   label: string
   value: T
   options: FilterOption[]
   onChange: (v: T) => void
+  // Cada opción puede ocultarse, además de marcarse (solo con selección múltiple).
+  ocultable?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState({ top: 0, left: 0 })
@@ -87,6 +106,7 @@ export function HeaderFilter<T extends string | string[]>({ label, value, option
     const sig = siguienteSeleccion(elegidos, v)
     if (sig !== elegidos) onChange(sig as T)
   }
+  const ocultar = (v: string) => onChange(siguienteExclusion(elegidos, v) as T)
 
   useEffect(() => {
     if (!open) return
@@ -187,7 +207,7 @@ export function HeaderFilter<T extends string | string[]>({ label, value, option
               onChange={e => setTexto(e.target.value)}
             />
           )}
-          {multiple && <div className="hf-hint">Marca uno o varios</div>}
+          {multiple && <div className="hf-hint">{ocultable ? 'Marca uno o varios · ⊘ oculta' : 'Marca uno o varios'}</div>}
           {visibles.map(o => (
             <FilterOptionButton
               key={o.value || '__all__'}
@@ -195,6 +215,8 @@ export function HeaderFilter<T extends string | string[]>({ label, value, option
               // lo marcado. Llamarla «Todos» al lado de casillas confundía.
               option={multiple && o.value === '' ? { ...o, label: 'Desmarcar todo' } : o}
               selected={o.value === '' ? !active : elegidos.includes(o.value)}
+              oculta={elegidos.includes(EXCLUIDO + o.value)}
+              onOcultar={ocultable && multiple && o.value !== '' ? () => ocultar(o.value) : undefined}
               // «Desmarcar todo» no es una casilla sino el botón que lo quita: con
               // nada elegido saldría marcada y desmarcarla no haría nada.
               multiple={multiple && o.value !== ''}

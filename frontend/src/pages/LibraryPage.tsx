@@ -575,16 +575,16 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
       <th><HeaderFilter label="Petición" value={filterRequest} onChange={v => { setFilterRequest(v); setOffset(0) }} options={[
         { value: '', label: 'Todas' }, ...(filterOptions?.request_statuses ?? []).map(s => ({ value: s, label: s })),
       ]} /></th>
-      <th><HeaderFilter label="Resolución" value={searchQuality} onChange={setSearchQuality} options={[
+      <th><HeaderFilter label="Resolución" value={searchQuality} onChange={setSearchQuality} ocultable options={[
         { value: '', label: 'Todas' }, ...qualityOptions.map(q => ({ value: q, label: q })),
       ]} /></th>
-      <th><HeaderFilter label="Proveedor" value={searchProvider} onChange={setSearchProvider} options={[
+      <th><HeaderFilter label="Proveedor" value={searchProvider} onChange={setSearchProvider} ocultable options={[
         { value: '', label: 'Todos' }, ...providerOptions.map(p => ({ value: p, label: p })),
       ]} /></th>
-      <th><HeaderFilter label="Source" value={searchSource} onChange={setSearchSource} options={[
+      <th><HeaderFilter label="Source" value={searchSource} onChange={setSearchSource} ocultable options={[
         { value: '', label: 'Todos' }, ...sourceOptions.map(s => ({ value: s, label: s })),
       ]} /></th>
-      <th><HeaderFilter label="Grupo" value={searchGroup} onChange={setSearchGroup} options={[
+      <th><HeaderFilter label="Grupo" value={searchGroup} onChange={setSearchGroup} ocultable options={[
         { value: '', label: 'Todos' }, ...groupOptions.map(g => ({ value: g, label: g })),
       ]} /></th>
       <th><HeaderFilter label="Español" value={filterSpanish} onChange={v => { setFilterSpanish(v); setOffset(0) }} options={[

@@ -587,6 +587,10 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   const [remuxLoading, setRemuxLoading] = useState(false)
   const [remuxError, setRemuxError] = useState<string | null>(null)
   const [remuxEdits, setRemuxEdits] = useState<Record<number, TrackRemuxOverride>>({})
+  // Para elegirIdioma: lo último elegido, y qué respuesta es la de la última elección.
+  const edicionesActuales = useRef(remuxEdits)
+  edicionesActuales.current = remuxEdits
+  const versionIdioma = useRef(0)
   const [showRemuxCard, setShowRemuxCard] = useState(false)
 
   // Step 1 (season target only) — the pack plan: consistency across
@@ -1193,8 +1197,12 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   const elegirIdioma = async (trackId: number, code: string) => {
     const id = targetId
     if (id == null) return
-    const nuevas = { ...remuxEdits, [trackId]: { ...remuxEdits[trackId], language: code || undefined } }
+    const previas = edicionesActuales.current
+    const nuevas = { ...previas, [trackId]: { ...previas[trackId], language: code || undefined } }
+    edicionesActuales.current = nuevas
     setRemuxEdits(nuevas)
+    // Solo vale la respuesta de la última elección: una anterior que llegue tarde no la pisa.
+    const version = ++versionIdioma.current
     const audio = (remuxPreview?.tracks ?? []).filter(t => t.type === 'audio')
     const idiomas: Record<number, string> = {}
     audio.forEach((t, i) => { const c = nuevas[t.id]?.language; if (c) idiomas[i + 1] = c })
@@ -1203,7 +1211,7 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
         getNomenclatureFields(id, idiomas),
         applyTrackRemux(id, { dryRun: true, overrides: nuevas }),
       ])
-      if (objetivoActual.current !== id) return
+      if (objetivoActual.current !== id || version !== versionIdioma.current) return
       setFields(prev => ({ ...prev, audio_summary: campos.fields?.audio_summary }))
       setAudioWarning(campos.audio_warning ?? null)
       setRemuxPreview(plan)

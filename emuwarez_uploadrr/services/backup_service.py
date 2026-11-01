@@ -125,6 +125,13 @@ def get_backup_dir() -> Path:
     return _get_backup_dir()
 
 
+def _abrir_0600(path: Path):
+    """Abre `path` para escribir, creado solo legible por su dueño (la copia puede llevar claves)."""
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    os.chmod(path, 0o600)  # si ya existía con otro modo
+    return os.fdopen(fd, "wb")
+
+
 def get_config_inventory() -> dict:
     """Returns a summary of config files — counts only, no secret values."""
     config_dir = _get_config_dir()
@@ -159,6 +166,7 @@ def create_config_backup(
     confirmation: str | None = None,
 ) -> dict:
     """Creates a .tar.gz backup of CONFIG_DIR in output_dir (or default backups/).
+    El archivo nace 0600: puede llevar todas las claves.
 
     By default the keys stay out: the database goes with every secret setting
     and every instance API key empty, and the files that carry keys
@@ -193,7 +201,7 @@ def create_config_backup(
     # distingue de un fichero normal y metería CADA PELÍCULA ENTERA en la copia
     # (comprobado: 5 MB de película en una copia que debía pesar 1 KB). Una
     # copia de configuración no puede engordar con el catálogo.
-    with tarfile.open(archive_path, "w:gz") as tar:
+    with _abrir_0600(archive_path) as raw, tarfile.open(fileobj=raw, mode="w:gz") as tar:
         for item in sorted(config_dir.rglob("*")):
             rel = item.relative_to(config_dir)
             if _fuera_de_la_copia(rel.parts, include_secrets):

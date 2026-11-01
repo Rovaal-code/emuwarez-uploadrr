@@ -1522,6 +1522,7 @@ def _copia_antes_de_migrar(conn: sqlite3.Connection, version: int) -> None:
             return
         conn.commit()  # VACUUM INTO no corre dentro de una transacción
         conn.execute("VACUUM INTO ?", (str(destino),))
+        os.chmod(destino, 0o600)  # lleva todas las claves
         copias = sorted(carpeta.glob("pre-migracion-*.db"))
         # La primera de esta versión es la única anterior a un intento fallido de migrar: los
         # reintentos de un arranque en bucle copian ya una base a medias y no deben llevársela.

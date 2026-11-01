@@ -798,6 +798,10 @@ optgroup {
   max-width: 780px;
 }
 
+.modal-estrecho {
+  max-width: 420px;
+}
+
 .modal-close {
   background: transparent;
   border: none;

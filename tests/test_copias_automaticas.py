@@ -126,15 +126,15 @@ def test_la_copia_automatica_no_se_mete_en_la_siguiente(config_dir):
     "pre-migracion-20260101_000000-v40.db", "otro.tar.gz", "emuwarez_config_x.tar", "emuwarez_config_.tar.gz",
     "emuwarez_config_a/b.tar.gz", "emuwarez_config_a\\b.tar.gz", "",
 ])
-def test_ruta_de_copia_rechaza_lo_que_no_es_el_nombre_de_una_copia(config_dir, nombre):
+def test_resolver_copia_rechaza_lo_que_no_es_el_nombre_de_una_copia(config_dir, nombre):
     (config_dir.parent / "emuwarez_config_x.tar.gz").write_bytes(b"fuera")
-    assert bs.ruta_de_copia(nombre) is None
+    assert bs.resolver_copia(nombre) is None
 
 
-def test_ruta_de_copia_devuelve_la_copia_que_existe_y_none_si_no(config_dir):
+def test_resolver_copia_devuelve_la_copia_que_existe_y_none_si_no(config_dir):
     ruta = _copia("emuwarez_config_20260101_000000.tar.gz", bs._get_backup_dir())
-    assert bs.ruta_de_copia(ruta.name) == ruta
-    assert bs.ruta_de_copia("emuwarez_config_20260102_000000.tar.gz") is None
+    assert bs.resolver_copia(ruta.name) == ruta
+    assert bs.resolver_copia("emuwarez_config_20260102_000000.tar.gz") is None
 
 
 def test_la_lista_dice_de_que_tipo_es_cada_copia(config_dir):
@@ -187,14 +187,31 @@ def test_una_copia_valida_se_guarda_con_su_nombre_y_en_0600(config_dir):
     (b"esto no es un tar.gz", "no es un backup"),
     (_tar_gz(BUENA)[:60], "no es un backup"),
     (_tar_gz({"settings.json": b"{}"}), "no lleva la base de datos"),
-    (_tar_gz({**BUENA, "../fuera.txt": b"x"}), "fuera de la carpeta"),
-    (_tar_gz({**BUENA, "/etc/passwd": b"x"}), "fuera de la carpeta"),
+    (_tar_gz({**BUENA, "../fuera.txt": b"x"}), "no es segura"),
+    (_tar_gz({**BUENA, "/etc/passwd": b"x"}), "no canónico"),
+    (_tar_gz({**BUENA, "./emuwarez_uploadrr.db": b"x"}), "no canónico"),
 ])
 def test_lo_que_no_es_un_backup_se_rechaza_y_no_deja_nada(config_dir, datos, motivo):
     with pytest.raises(ValueError, match=motivo):
         _subir(datos)
     carpeta = bs._get_backup_dir()
     assert _sin_restos(carpeta) and not list(carpeta.glob("emuwarez_config_*"))
+
+
+def test_una_copia_subida_con_un_enlace_hacia_fuera_se_rechaza(config_dir):
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        for nombre, datos in BUENA.items():
+            info = tarfile.TarInfo(nombre)
+            info.size = len(datos)
+            tar.addfile(info, io.BytesIO(datos))
+        enlace = tarfile.TarInfo("enlace")
+        enlace.type = tarfile.SYMTYPE
+        enlace.linkname = "../../fuera"
+        tar.addfile(enlace)
+    with pytest.raises(ValueError, match="no es segura"):
+        _subir(buf.getvalue())
+    assert not list(bs._get_backup_dir().glob("emuwarez_config_*"))
 
 
 def test_un_archivo_demasiado_grande_se_corta_y_no_deja_nada(config_dir, monkeypatch):
@@ -206,5 +223,5 @@ def test_un_archivo_demasiado_grande_se_corta_y_no_deja_nada(config_dir, monkeyp
 
 def test_el_nombre_no_depende_de_nada_que_mande_el_cliente(config_dir):
     r = _subir(_tar_gz(BUENA))
-    assert bs.ruta_de_copia(r["name"]) is not None
+    assert bs.resolver_copia(r["name"]) is not None
     assert list(bs._get_backup_dir().iterdir()) == [bs._get_backup_dir() / r["name"]]

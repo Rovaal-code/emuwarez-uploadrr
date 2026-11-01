@@ -57,8 +57,8 @@ def list_backups(current_user: dict = Depends(require_auth)) -> dict:
 @router.get("/backups/{name}/download")
 def download_backup(name: str, current_user: dict = Depends(require_auth)) -> FileResponse:
     """Descarga un backup de la carpeta de backups, por su nombre."""
-    from emuwarez_uploadrr.services.backup_service import ruta_de_copia
-    ruta = ruta_de_copia(name)
+    from emuwarez_uploadrr.services.backup_service import resolver_copia
+    ruta = resolver_copia(name)
     if ruta is None:
         raise HTTPException(status_code=404, detail="No hay ningún backup con ese nombre")
     return FileResponse(ruta, media_type="application/gzip", filename=ruta.name)
@@ -88,10 +88,13 @@ def restore_backup(
     body: RestoreRequest,
     current_user: dict = Depends(require_auth),
 ) -> dict:
-    """Restaura un backup. dry_run=True por defecto; apply=True + confirmation para ejecutar."""
-    from emuwarez_uploadrr.services.backup_service import restore_config_backup
+    """Restaura un backup por su nombre (el de /backups). dry_run=True por defecto; apply=True + confirmation para ejecutar."""
+    from emuwarez_uploadrr.services.backup_service import resolver_copia, restore_config_backup
+    ruta = resolver_copia(body.backup_name)
+    if ruta is None:
+        return {"ok": False, "dry_run": body.dry_run, "error": f"Backup no encontrado: {body.backup_name}"}
     return restore_config_backup(
-        body.backup_path,
+        str(ruta),
         dry_run=body.dry_run,
         apply=body.apply,
         confirmation=body.confirmation,

@@ -137,11 +137,11 @@ export async function uploadBackup(file: File): Promise<{ ok: boolean; name: str
 }
 
 export async function restoreBackup(
-  backup_path: string,
+  backup_name: string,
   opts: { dry_run?: boolean; apply?: boolean; confirmation?: string } = {},
 ): Promise<RestoreResult> {
   return api.post<RestoreResult>('/maintenance/restore', {
-    backup_path,
+    backup_name,
     dry_run: opts.dry_run ?? true,
     apply: opts.apply ?? false,
     confirmation: opts.confirmation ?? null,

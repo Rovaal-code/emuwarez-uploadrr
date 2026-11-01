@@ -30,6 +30,8 @@ export function LoginPage({ onSuccess }: LoginPageProps) {
       if (err instanceof ApiClientError) {
         if (err.status === 401) {
           setError('Credenciales incorrectas. Revisa usuario y contraseña.')
+        } else if (err.status === 429) {
+          setError(err.message)
         } else if (err.status === 0) {
           // status 0 = the request never reached the server (see client.ts).
           setError(

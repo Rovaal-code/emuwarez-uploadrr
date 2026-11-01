@@ -52,6 +52,8 @@ Hallazgos y maquetas: https://claude.ai/artifact/PjPRTxSfEs3Y8aVtXzN32i
 1. Subida por pasos con nombre y reintento desde el paso que falló.
 2. Partir `library.py`, `upload_execution.py` y `cli.py`.
 3. Partir `UploadWizardModal.tsx` y `SettingsPage.tsx`; los estilos en línea, a clases.
+   Al partir el asistente: recargar «Ver nombre de todos los capítulos» y «Ver pistas» con el idioma confirmado si
+   estaban abiertos al cambiar el idioma del pack (hoy se quedan vacíos hasta reabrirlos).
 4. `httpx` y un solo limitador de eMuwarez compartido (30 peticiones por minuto).
 5. ESLint `react-hooks`.
 

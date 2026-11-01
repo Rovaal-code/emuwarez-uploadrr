@@ -305,8 +305,9 @@ def test_si_falla_la_edicion_de_la_copia_se_borra_y_se_enlaza(entorno, mkv_base,
 # Fichero que no comparte nadie (st_nlink == 1)
 # ---------------------------------------------------------------------------
 
-def test_sin_compartir_las_pistas_se_editan_en_el_original_pero_no_el_titulo(entorno, mkv_base, monkeypatch):
-    """El nombre y el título interno no se tocan nunca en la biblioteca."""
+def test_sin_compartir_pistas_y_titulo_en_el_original_y_un_enlace_duro(entorno, mkv_base, monkeypatch):
+    """Con un solo enlace todo se edita en el sitio (Jellyfin no lee el título) y
+    a subidas va un enlace duro: no hace falta copia. El nombre no cambia."""
     from emuwarez_uploadrr.services import carpeta_subida
     monkeypatch.setattr(carpeta_subida, "clonar", _reflink("no"))
     _modo(entorno, "solo_renombrar")
@@ -318,12 +319,14 @@ def test_sin_compartir_las_pistas_se_editan_en_el_original_pero_no_el_titulo(ent
     destino = entorno["uploads"] / f"{PROPUESTO}.mkv"
     assert r["visto"]["status"] == "ready", r["logs"]
     info = _mkv_info(peli["f"])
-    assert peli["f"].stat().st_ino == inodo and peli["f"].exists()
+    assert [p.name for p in peli["f"].parent.iterdir()] == ["Peli (2024) WEBDL-1080p.mkv"]
+    assert peli["f"].stat().st_ino == inodo
     assert all(nombre for _t, _l, nombre in info["pistas"])      # renombradas en el sitio
-    assert info["titulo"] == TITULO_FUENTE                          # el título, no
-    assert destino.stat().st_ino == inodo
-    assert any("pistas editadas en el original" in m for m in r["logs"])
-    assert any("sin reflink" in m and "el título interno" in m for m in r["logs"])
+    assert info["titulo"] == PROPUESTO                              # y el título también
+    assert destino.stat().st_ino == inodo                           # enlace duro
+    assert any("pistas editadas en el original" in m and "título interno puesto en el archivo" in m
+               and "enlace duro" in m for m in r["logs"])
+    assert not any("sin reflink" in m for m in r["logs"])
     assert r["refrescos"] == [peli["id"]]                           # Radarr relee el archivo
 
 
@@ -344,10 +347,10 @@ def test_sin_compartir_se_reordena_y_se_barren_los_restos(entorno, mkv_base, mon
 
     assert r["visto"]["status"] == "ready", r["logs"]
     assert [lang for t, lang, _n in _mkv_info(peli["f"])["pistas"] if t == "audio"] == ["spa", "eng"]
-    assert _mkv_info(peli["f"])["titulo"] == TITULO_FUENTE
+    assert _mkv_info(peli["f"])["titulo"] == PROPUESTO
     # El de un intento matado y el propio, fuera; el de otro remux en marcha, no.
     assert sorted(p.name for p in carpeta.iterdir()) == ["Peli (2024) WEBDL-1080p.mkv", "tmpzzzzzzzz.mkv.part"]
-    assert _mkv_info(entorno["uploads"] / f"{PROPUESTO}.mkv")["titulo"] == PROPUESTO
+    assert (entorno["uploads"] / f"{PROPUESTO}.mkv").stat().st_ino == peli["f"].stat().st_ino
 
 
 def test_sin_espacio_para_reordenar_falla_antes_con_los_numeros(entorno, mkv_base, monkeypatch):
@@ -575,7 +578,7 @@ def test_sin_poder_leer_las_pistas_no_se_tocan(entorno, mkv_base, monkeypatch):
     monkeypatch.setattr(carpeta_subida, "clonar", _reflink("no"))
     monkeypatch.setattr(mkv_remux, "check_mkvmerge_available", lambda: {"available": False, "path": None})
     _modo(entorno, "solo_renombrar")
-    peli = _pelicula(entorno, mkv_base, carpeta=entorno["tmp"] / "media" / "Peli (2024)", semilla=False)
+    peli = _pelicula(entorno, mkv_base, carpeta=entorno["tmp"] / "media" / "Peli (2024)")
     antes = _sha(peli["f"])
 
     r = _subir(entorno, peli["id"], peli["proposal_id"])

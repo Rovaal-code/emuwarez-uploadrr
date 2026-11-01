@@ -148,6 +148,8 @@ export function FitTextPair({
   const refB = useRef<HTMLDivElement>(null)
   const autoSizeRef = useRef(max)
   const [manualSize, setManualSize] = useState<number | null>(null)
+  const textoA = items[0].text
+  const textoB = items[1].text
 
   useLayoutEffect(() => {
     const elA = refA.current
@@ -192,7 +194,7 @@ export function FitTextPair({
       timers.forEach(clearTimeout)
       ro.disconnect()
     }
-  }, [items[0].text, items[1].text, max, min, manualSize])
+  }, [textoA, textoB, max, min, manualSize])
 
   return (
     <div style={{ width: '100%', minWidth: 0 }}>

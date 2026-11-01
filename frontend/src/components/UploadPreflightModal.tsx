@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import type { UploadPreflightResponse, UploadStartResult } from '../types/api'
 import { uploadPreflight, startUploadJob } from '../api/uploads'
 import { useTooltip } from './Tooltip'
@@ -22,7 +22,7 @@ export function UploadPreflightModal({ itemId, itemTitle, requestId, onClose }: 
   const [startLoading, setStartLoading] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     setStartResult(null)
@@ -36,9 +36,9 @@ export function UploadPreflightModal({ itemId, itemTitle, requestId, onClose }: 
     } finally {
       setLoading(false)
     }
-  }
+  }, [itemId, requestId])
 
-  useEffect(() => { load() }, [itemId])
+  useEffect(() => { load() }, [load])
 
   const jobId = result?.job?.id
 

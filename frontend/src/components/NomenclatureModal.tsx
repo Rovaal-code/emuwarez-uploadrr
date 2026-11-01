@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import type { NomenclatureProposal, NomenclatureApplyResult } from '../types/api'
 import { previewNomenclature, adaptNomenclature } from '../api/nomenclature'
 import { Modal } from './Modal'
@@ -40,7 +40,7 @@ export function NomenclatureModal({ itemId, itemTitle, onClose }: Props) {
   const [confirmInput, setConfirmInput] = useState('')
   const [showApplySection, setShowApplySection] = useState(false)
 
-  const load = async (force = false) => {
+  const load = useCallback(async (force = false) => {
     setLoading(true)
     setError(null)
     setApplyResult(null)
@@ -53,9 +53,9 @@ export function NomenclatureModal({ itemId, itemTitle, onClose }: Props) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [itemId])
 
-  useEffect(() => { load(false) }, [itemId])
+  useEffect(() => { load(false) }, [load])
 
   const handleDryRun = async () => {
     setApplyLoading(true)

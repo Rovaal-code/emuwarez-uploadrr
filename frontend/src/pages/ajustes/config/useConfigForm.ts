@@ -129,7 +129,7 @@ export function useConfigForm(onExposeSave: (a: SaveExpose | null) => void) {
       })
       .catch(() => setMsg({ ok: false, text: 'Error cargando configuración' }))
       .finally(() => setLoading(false))
-  }, [])
+  }, [setMsg])
 
   async function handleSave() {
     if (qbitUrl.trim() && !isValidHttpUrl(qbitUrl)) {

@@ -447,7 +447,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
       window.removeEventListener('emuwarez:open-library-item', onOpenItem)
       window.removeEventListener('emuwarez:library-filter-aporte', onFilterAporte)
     }
-  }, [])
+  }, [openDetail])
 
   // Refresh the list whenever any global sync finishes (library or eMuwarez).
   // Deliberately NOT depending on `load`: it's a useCallback keyed on every
@@ -455,7 +455,6 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // the one the [load] effect above already does — two full fetches back to
   // back, which is what made the table flash "cargando" twice in a row. Same
   // shape RequestsPage uses.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   // Recarga en cuanto algo cambia si esta sección se ve; si está oculta, SeccionVisible
   // no le pasa la marca hasta que se vuelva a ver (recargar Biblioteca cada vez que
   // volvías a la pestaña del navegador pedía 20.000 filas para nada).
@@ -466,6 +465,7 @@ export function LibraryPage({ onNavigate }: { onNavigate?: (page: string) => voi
     if (!lastInvalidatedAt) return
     if (cargando.current) recargaPendiente.current = true
     else load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `load` cambia con cada filtro y recargaría dos veces (ver arriba)
   }, [lastInvalidatedAt])
 
   // Enter aplica la búsqueda ya, sin esperar al retardo. El cambio de `debouncedSearch` es lo que recarga: llamar

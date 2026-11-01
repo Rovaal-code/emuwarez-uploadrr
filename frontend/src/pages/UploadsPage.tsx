@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, Fragment } from 'react'
+import { useState, useEffect, useMemo, useRef, Fragment, useCallback } from 'react'
 import { getUploads, countUploads, getUploadJob, startUploadJob, retryUploadJobQueued, cancelUploadJob } from '../api/uploads'
 import { useInstancias } from '../hooks/useInstancias'
 import { ApiClientError } from '../api/client'
@@ -346,7 +346,7 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
   // stale pre-delete data — the deleted job "comes back" until the next
   // refresh. Only ever apply the response from the most recently ISSUED call.
   const loadSeqRef = useRef(0)
-  const load = async (opts?: { silent?: boolean }) => {
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) { setLoading(true); setError(null) }
     const seq = ++loadSeqRef.current
     try {
@@ -369,9 +369,9 @@ export function UploadsPage({ onNavigate }: { onNavigate?: (page: string) => voi
       if (!opts?.silent) setError('Error al cargar los trabajos de subida.')
     }
     finally { if (!opts?.silent) setLoading(false) }
-  }
+  }, [statusFilter, limite])
 
-  useEffect(() => { load() }, [statusFilter, limite])
+  useEffect(() => { load() }, [load])
 
   // Opened from the dashboard "Actividad de subida" (clicking a title): pick
   // up the stashed job id once the list has loaded and show its detail page.

@@ -27,7 +27,7 @@ export function PasoArchivo({ a }: { a: Asistente }) {
 
   const fieldBox = (
     <>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
+      <div className="asist-rejilla-campos">
         <label><FieldLabel label="Título" info={FIELD_INFO.title} />
           {/* Spanish by default (it leads title_options), original as the
               alternative. Falls back to the old read-only input when the
@@ -48,7 +48,7 @@ export function PasoArchivo({ a }: { a: Asistente }) {
             <input className="form-input" value={fields.title || ''} disabled />
           )}
           {titleWarning && (
-            <span style={{ display: 'block', marginTop: 4, fontSize: 11, color: 'var(--color-warning)' }}><IconoAviso /> {titleWarning}</span>
+            <span className="asist-aviso-campo"><IconoAviso /> {titleWarning}</span>
           )}
         </label>
         <label><FieldLabel label="Año" info={FIELD_INFO.year} />
@@ -70,8 +70,8 @@ export function PasoArchivo({ a }: { a: Asistente }) {
           <input className="form-input" value={fields.resolution || ''} disabled />
         </label>
         <label><FieldLabel label="Source" info={FIELD_INFO.source} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <select className="form-input form-select" style={{ flex: 1 }} value={fields.source || ''} onChange={e => setField('source', e.target.value)}>
+          <div className="asist-fila-source">
+            <select className="form-input form-select asist-crece" value={fields.source || ''} onChange={e => setField('source', e.target.value)}>
               <option value="">— Seleccionar —</option>
               {sources.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}
             </select>
@@ -83,10 +83,10 @@ export function PasoArchivo({ a }: { a: Asistente }) {
             )}
           </div>
           {sourceWarning && (
-            <span style={{ display: 'block', marginTop: 4, fontSize: 11, color: 'var(--color-warning)' }}><IconoAviso /> {sourceWarning}</span>
+            <span className="asist-aviso-campo"><IconoAviso /> {sourceWarning}</span>
           )}
           {avisoSource && (
-            <span style={{ display: 'block', marginTop: 4, fontSize: 11, color: 'var(--color-warning)' }}><IconoAviso /> {avisoSource}</span>
+            <span className="asist-aviso-campo"><IconoAviso /> {avisoSource}</span>
           )}
         </label>
         {showSourceCompare && sourceComparison && (
@@ -99,8 +99,8 @@ export function PasoArchivo({ a }: { a: Asistente }) {
         {sourceRequiresProvider && (
           <label><FieldLabel label="Proveedor" info={FIELD_INFO.provider} />
             {detectingProvider ? (
-              <div className="form-input" style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-muted)' }}>
-                <span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} /> Detectando…
+              <div className="form-input asist-detectando">
+                <span className="spinner asist-spinner-12" /> Detectando…
               </div>
             ) : (
               <select className="form-input form-select" value={fields.provider || ''} onChange={e => setField('provider', e.target.value || null)}>
@@ -116,7 +116,7 @@ export function PasoArchivo({ a }: { a: Asistente }) {
         <label><FieldLabel label="Audio" info={FIELD_INFO.audio} />
           <input className="form-input" value={fields.audio_summary || ''} disabled />
           {audioWarning && (
-            <span style={{ display: 'block', marginTop: 4, fontSize: 11, color: 'var(--color-warning)' }}><IconoAviso /> {audioWarning}</span>
+            <span className="asist-aviso-campo"><IconoAviso /> {audioWarning}</span>
           )}
         </label>
         <label><FieldLabel label="Subtítulos" info={FIELD_INFO.subs} />
@@ -124,7 +124,7 @@ export function PasoArchivo({ a }: { a: Asistente }) {
         </label>
         <CampoTag value={fields.tag} opciones={opcionesTag} onChange={t => setField('tag', t)} />
       </div>
-      <div className="detail-card" style={{ marginTop: 16, padding: '12px 14px', borderRadius: 8 }}>
+      <div className="detail-card asist-tarjeta asist-mt-16">
         {preview?.torrent_name && preview?.internal_mkv_title ? (
           <FitTextPair
             min={9}
@@ -135,9 +135,9 @@ export function PasoArchivo({ a }: { a: Asistente }) {
           />
         ) : (
           <>
-            <div style={labelStyle}>Nombre final del torrent (eMuwarez)</div>
+            <div className="asist-etiqueta">Nombre final del torrent (eMuwarez)</div>
             <GeneratingHint />
-            <div style={{ ...labelStyle, marginTop: 10 }}>{INTERNAL_TITLE_LABEL}</div>
+            <div className="asist-etiqueta asist-mt-10">{INTERNAL_TITLE_LABEL}</div>
             <GeneratingHint />
           </>
         )}
@@ -149,9 +149,9 @@ export function PasoArchivo({ a }: { a: Asistente }) {
   return (
     <div className="modal-body">
       {episodeQueue.length > 1 && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+        <div className="asist-selector-fila">
           <select
-            className="form-input form-select" style={{ width: 'auto' }}
+            className="form-input form-select asist-select-auto"
             value={targetId ?? ''} onChange={e => cambiarElemento(Number(e.target.value))}
             disabled={episodePrepping}
           >
@@ -166,10 +166,10 @@ export function PasoArchivo({ a }: { a: Asistente }) {
       )}
       <AvisoSubidaExistente job={existingJob} bloquea={existingJobBlocking} />
       {episodePrepping && (
-        <div style={{ padding: '36px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-          <span className="spinner" style={{ width: 28, height: 28, borderWidth: 3 }} />
-          <div style={{ fontSize: 15, fontWeight: 600 }}>Generando Nomenclatura para eMuwarez…</div>
-          <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
+        <div className="asist-espera">
+          <span className="spinner asist-spinner-28" />
+          <div className="asist-espera-titulo">Generando Nomenclatura para eMuwarez…</div>
+          <div className="asist-t125 text-muted">
             Capítulo {Math.min(episodePrepIndex + 1, episodeQueue.length)} de {episodeQueue.length}
             {(() => {
               const ep = episodes.find(x => x.id === episodeQueue[episodePrepIndex])
@@ -179,37 +179,37 @@ export function PasoArchivo({ a }: { a: Asistente }) {
         </div>
       )}
       {loading && !episodePrepping && (
-        <div style={{ padding: '36px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-          <span className="spinner" style={{ width: 28, height: 28, borderWidth: 3 }} />
-          <div style={{ fontSize: 15, fontWeight: 600 }}>Generando Nomenclatura para eMuwarez…</div>
+        <div className="asist-espera">
+          <span className="spinner asist-spinner-28" />
+          <div className="asist-espera-titulo">Generando Nomenclatura para eMuwarez…</div>
         </div>
       )}
       {error && !loading && !episodePrepping && (
-        <div style={{ padding: '20px 0' }}>
-          <p className="text-error" style={{ marginTop: 0, marginBottom: 10 }}><IconoAviso /> {error}</p>
+        <div className="asist-bloque-error">
+          <p className="text-error asist-mt-0 asist-mb-10"><IconoAviso /> {error}</p>
           <button className="btn btn-secondary btn-sm" type="button" onClick={loadFields}>↻ Reintentar</button>
         </div>
       )}
       {!loading && !error && !episodePrepping && (
         <>
-          <p className="text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
+          <p className="text-muted asist-t12 asist-mb-12">
             Los campos técnicos (audio por pista, códec, HDR/DV) se leen con MediaInfo del archivo
             real; el título/año vienen de Radarr/Sonarr y el Source/Provider del nombre del archivo.
             Puedes ajustar cualquier campo, o ver el detalle de MediaInfo abajo.
           </p>
           {fieldBox}
 
-          <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div className="asist-bloque-mediainfo">
+            <div className="asist-fila-entre">
               <div>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>MediaInfo y pistas del archivo</div>
-                <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>
+                <div className="asist-bloque-titulo">MediaInfo y pistas del archivo</div>
+                <div className="text-muted asist-t11 asist-mt-2">
                   Ver Pistas: muestra la reordenación y el nombre de las pistas de vídeo/audio/subtítulos del contenido{esTanda(seleccion) ? '' : ' (editable)'}.
                   <br />
                   Ver MediaInfo: muestra el detalle técnico real del archivo.
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+              <div className="asist-botones">
                 <button className="btn btn-primary" onClick={() => { runMediaInfo(); setShowMiCard(true) }} disabled={targetId == null}>
                   Ver MediaInfo
                 </button>
@@ -228,12 +228,12 @@ export function PasoArchivo({ a }: { a: Asistente }) {
           </div>
 
           {showMiCard && (
-            <Modal titulo="MediaInfo del archivo" onClose={() => setShowMiCard(false)} className="modal-wide" style={{ maxWidth: 900 }}>
+            <Modal titulo="MediaInfo del archivo" onClose={() => setShowMiCard(false)} className="modal-wide asist-modal-ancho">
               <div className="modal-body">
                 {miLoading && !miReport && <TableLoadingSpinner label="Cargando MediaInfo…" />}
                 {miError && !miLoading && (
                   <>
-                    <p className="text-error" style={{ fontSize: 12, marginTop: 0, marginBottom: 10 }}>✗ {miError}</p>
+                    <p className="text-error asist-t12 asist-mt-0 asist-mb-10">✗ {miError}</p>
                     <button className="btn btn-secondary btn-sm" type="button" onClick={runMediaInfo}>↻ Reintentar</button>
                   </>
                 )}
@@ -258,14 +258,13 @@ export function PasoArchivo({ a }: { a: Asistente }) {
               </>}
               onClose={() => setShowRemuxCard(false)}
               className="modal-wide"
-              style={{ maxWidth: 780 }}
               tituloStyle={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}
             >
               <div className="modal-body">
                 {remuxLoading && !remuxPreview && <TableLoadingSpinner label="Cargando pistas del archivo…" />}
                 {remuxError && !remuxLoading && (
                   <>
-                    <p className="text-error" style={{ fontSize: 12, marginTop: 0, marginBottom: 10 }}>✗ {remuxError}</p>
+                    <p className="text-error asist-t12 asist-mt-0 asist-mb-10">✗ {remuxError}</p>
                     <button className="btn btn-secondary btn-sm" type="button" onClick={runTrackRemux}>↻ Reintentar</button>
                   </>
                 )}
@@ -280,7 +279,7 @@ export function PasoArchivo({ a }: { a: Asistente }) {
                     {/* En una tanda "Subir todos" no lleva las ediciones: se
                         enseñan las pistas pero no se pueden tocar. */}
                     {esTanda(seleccion) && (
-                      <p className="text-muted" style={{ fontSize: 12, marginTop: 0 }}>
+                      <p className="text-muted asist-t12 asist-mt-0">
                         Al subir varios capítulos a la vez se aplican los nombres automáticos. Para cambiarlos, sube el capítulo suelto.
                       </p>
                     )}
@@ -298,7 +297,7 @@ export function PasoArchivo({ a }: { a: Asistente }) {
             </Modal>
           )}
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
+          <div className="asist-pie">
             {needsSelection
               ? <button className="btn btn-secondary" onClick={() => setStep(0)}>Volver a la selección</button>
               : <span />}

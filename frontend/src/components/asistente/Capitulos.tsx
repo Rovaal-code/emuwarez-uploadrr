@@ -24,9 +24,9 @@ export function EpisodePicker<T extends { episode_id: number; display_title?: st
 ) {
   if (episodes.length <= 1) return null
   return (
-    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+    <div className="asist-selector-fila">
       <select
-        className="form-input form-select" style={{ width: 'auto' }}
+        className="form-input form-select asist-select-auto"
         value={currentId} onChange={e => onChange(Number(e.target.value))}
       >
         {episodes.map(ep => (
@@ -48,24 +48,20 @@ export function EpisodeAccordionRow({ episodeNumber, title, expanded, onToggle, 
 }) {
   const { triggerProps, tooltipNode } = useTooltip(title ?? null)
   return (
-    <div style={{ border: '1px solid var(--border)', borderRadius: 8, marginBottom: 8, overflow: 'hidden' }}>
+    <div className="asist-acordeon">
       <button
         type="button"
         onClick={onToggle}
-        style={{
-          width: '100%', textAlign: 'left', padding: '8px 12px', background: 'color-mix(in srgb, var(--overlay-light) 3%, transparent)',
-          border: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between',
-          alignItems: 'center', gap: 8, color: 'inherit', fontSize: 13,
-        }}
+        className="asist-acordeon-cabecera"
         {...triggerProps}
       >
-        <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span className="asist-truncar">
           {episodeNumber != null ? `E${String(episodeNumber).padStart(2, '0')}: ` : ''}{title}
         </span>
-        <span style={{ color: 'var(--text-muted)', fontSize: 11, flexShrink: 0 }}>{expanded ? '▲' : '▼'}</span>
+        <span className="asist-acordeon-flecha">{expanded ? '▲' : '▼'}</span>
         {tooltipNode}
       </button>
-      {expanded && <div style={{ padding: 10 }}>{children}</div>}
+      {expanded && <div className="asist-acordeon-cuerpo">{children}</div>}
     </div>
   )
 }

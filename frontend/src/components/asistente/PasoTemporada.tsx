@@ -42,7 +42,7 @@ export function PasoTemporada({ a }: { a: Asistente }) {
   const seasonTitleOptions = seasonPlan?.title_options ?? []
   // Los avisos del plan, tanto si el pack es válido como si está bloqueado.
   const avisosDelPlan = seasonPlan?.warnings?.map((w, i) => (
-    <p key={i} className="text-warning" style={{ fontSize: 12, marginTop: 10 }}><IconoAviso /> {w}</p>
+    <p key={i} className="text-warning asist-aviso-linea"><IconoAviso /> {w}</p>
   ))
   const idiomasPackActuales: IdiomasPorPosicion =
     idiomasPackEnVuelo ?? (targetId != null ? idiomasPorTemporada.get(targetId) : undefined) ?? SIN_IDIOMAS
@@ -50,7 +50,7 @@ export function PasoTemporada({ a }: { a: Asistente }) {
     seasonPlan?.provider, seasonPlan?.provider_source_detail, fields.provider)
 
   const seasonFieldBox = (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
+    <div className="asist-rejilla-campos">
       <label><FieldLabel label="Título" info={FIELD_INFO.title} />
         {seasonTitleOptions.length > 0 ? (
           <select
@@ -74,8 +74,8 @@ export function PasoTemporada({ a }: { a: Asistente }) {
         <input className="form-input" value={seasonPlan?.resolution || ''} disabled />
       </label>
       <label><FieldLabel label="Source" info={FIELD_INFO.source} />
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <select className="form-input form-select" style={{ flex: 1 }} value={fields.source || ''} onChange={e => setField('source', e.target.value)}>
+        <div className="asist-fila-source">
+          <select className="form-input form-select asist-crece" value={fields.source || ''} onChange={e => setField('source', e.target.value)}>
             <option value="">— Seleccionar —</option>
             {sources.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}
           </select>
@@ -96,7 +96,7 @@ export function PasoTemporada({ a }: { a: Asistente }) {
         />
       )}
       {avisoSource && (
-        <p className="text-warning" style={{ gridColumn: '1 / -1', fontSize: 12, margin: 0 }}><IconoAviso /> {avisoSource}</p>
+        <p className="text-warning asist-col-completa asist-t12 asist-m0"><IconoAviso /> {avisoSource}</p>
       )}
       {sourceRequiresProvider && (
         <label><FieldLabel label="Proveedor" info={FIELD_INFO.provider} />
@@ -113,14 +113,14 @@ export function PasoTemporada({ a }: { a: Asistente }) {
       <label><FieldLabel label="Audio" info={FIELD_INFO.audio} />
         <input className="form-input" value={fields.audio_summary ?? seasonPlan?.audio_summary ?? ''} disabled />
         {seasonPlan?.audio_warning && (
-          <span style={{ display: 'block', marginTop: 4, fontSize: 11, color: 'var(--color-warning)' }}><IconoAviso /> {seasonPlan.audio_warning}</span>
+          <span className="asist-aviso-campo"><IconoAviso /> {seasonPlan.audio_warning}</span>
         )}
         {audioWarning && (
-          <span style={{ display: 'block', marginTop: 4, fontSize: 11, color: 'var(--color-warning)' }}><IconoAviso /> {audioWarning}</span>
+          <span className="asist-aviso-campo"><IconoAviso /> {audioWarning}</span>
         )}
       </label>
       {(seasonPlan?.pistas_sin_idioma?.length ?? 0) > 0 && (
-        <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className="asist-col-completa asist-pila">
           {(seasonPlan?.pistas_sin_idioma ?? []).map(p => (
             <label key={p.posicion}>
               <FieldLabel label={etiquetaPistaSinIdioma(p.posicion, p.pista, p.capitulos)} info={FIELD_INFO.idioma_pista_pack} />
@@ -134,7 +134,7 @@ export function PasoTemporada({ a }: { a: Asistente }) {
               </select>
             </label>
           ))}
-          {recalculandoIdioma && <span className="form-hint"><span className="spinner" style={{ width: 10, height: 10, borderWidth: 2 }} /> Recalculando el nombre del pack…</span>}
+          {recalculandoIdioma && <span className="form-hint"><span className="spinner asist-spinner-10" /> Recalculando el nombre del pack…</span>}
         </div>
       )}
       <label><FieldLabel label="Subtítulos" info={FIELD_INFO.subs} />
@@ -149,18 +149,18 @@ export function PasoTemporada({ a }: { a: Asistente }) {
   // summary of the episodes included.
   const seasonSummaryBox = (
     <>
-      <div className="detail-card" style={{ marginTop: 16, padding: '12px 14px', borderRadius: 8 }}>
+      <div className="detail-card asist-tarjeta asist-mt-16">
         {seasonDisplayTitle ? (
           <FitText min={9} text={seasonDisplayTitle} />
         ) : (
           <>
-            <div style={labelStyle}>Nombre final del torrent (eMuwarez)</div>
+            <div className="asist-etiqueta">Nombre final del torrent (eMuwarez)</div>
             <GeneratingHint />
           </>
         )}
       </div>
       {seasonPlan?.status === 'valid' && (
-        <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <div className="asist-resumen-temporada">
           <span>✓ {seasonPlan.episodes.length} capítulo(s) listos, coherentes entre sí</span>
           <button
             className="btn btn-secondary btn-sm"
@@ -177,9 +177,9 @@ export function PasoTemporada({ a }: { a: Asistente }) {
   return (
     <div className="modal-body">
       {seasonQueue.length > 1 && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+        <div className="asist-selector-fila">
           <select
-            className="form-input form-select" style={{ width: 'auto' }}
+            className="form-input form-select asist-select-auto"
             value={targetId ?? ''} onChange={e => cambiarElemento(Number(e.target.value))}
             disabled={seasonPlanLoading}
           >
@@ -192,25 +192,25 @@ export function PasoTemporada({ a }: { a: Asistente }) {
       )}
       <AvisoSubidaExistente job={existingJob} bloquea={existingJobBlocking} />
       {seasonPlanLoading && (
-        <div style={{ padding: '36px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-          <span className="spinner" style={{ width: 28, height: 28, borderWidth: 3 }} />
-          <div style={{ fontSize: 15, fontWeight: 600 }}>
+        <div className="asist-espera">
+          <span className="spinner asist-spinner-28" />
+          <div className="asist-espera-titulo">
             {seasonProgress.total > 0
               ? `Generando Nomenclatura para eMuwarez… (${seasonProgress.done} de ${seasonProgress.total} capítulos)`
               : 'Generando Nomenclatura para eMuwarez…'}
           </div>
           {seasonProgress.current_title && (
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{seasonProgress.current_title}</div>
+            <div className="asist-t12 text-muted">{seasonProgress.current_title}</div>
           )}
         </div>
       )}
       {seasonPlanError && !seasonPlanLoading && (
-        <div style={{ padding: '20px 0' }}>
-          <p className="text-error" style={{ marginTop: 0, marginBottom: 10 }}><IconoAviso /> {seasonPlanError}</p>
+        <div className="asist-bloque-error">
+          <p className="text-error asist-mt-0 asist-mb-10"><IconoAviso /> {seasonPlanError}</p>
           {avisosDelPlan}
           {(seasonPlan?.provider_conflict?.length ?? 0) > 0 && (
             // El error pide elegir un proveedor: el selector tiene que estar aquí.
-            <label style={{ display: 'block', marginBottom: 10 }}><FieldLabel label="Proveedor" info={FIELD_INFO.provider} />
+            <label className="asist-bloque asist-mb-10"><FieldLabel label="Proveedor" info={FIELD_INFO.provider} />
               <select className="form-input form-select" value="" onChange={e => { if (e.target.value) loadSeasonPlan(e.target.value) }}>
                 <option value="">— Elegir proveedor para todo el pack —</option>
                 {providers.map(p => <option key={p.code} value={p.code}>{p.name} ({p.code})</option>)}
@@ -222,7 +222,7 @@ export function PasoTemporada({ a }: { a: Asistente }) {
       )}
       {!seasonPlanLoading && !seasonPlanError && seasonPlan && (
         <>
-          <p className="text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
+          <p className="text-muted asist-t12 asist-mb-12">
             Se sube como un único pack de temporada. Todos los capítulos deben tener el mismo códec
             de audio/vídeo, los mismos idiomas de audio/subtítulos, la misma resolución y source —
             estos campos confirman que todos coinciden. Source, Proveedor y Tag se pueden corregir
@@ -232,16 +232,16 @@ export function PasoTemporada({ a }: { a: Asistente }) {
           {avisosDelPlan}
           {seasonSummaryBox}
 
-          <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div className="asist-bloque-mediainfo">
+            <div className="asist-fila-entre">
               <div>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>MediaInfo y pistas de los capítulos</div>
-                <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>
+                <div className="asist-bloque-titulo">MediaInfo y pistas de los capítulos</div>
+                <div className="text-muted asist-t11 asist-mt-2">
                   Se elige capítulo con un desplegable, cada uno con su propio detalle de MediaInfo y
                   su propio plan de reordenación/renombrado de pistas (sin edición manual para temporadas).
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+              <div className="asist-botones">
                 <button className="btn btn-primary" onClick={() => { setShowMiCard(true); if (!seasonMi && !seasonMiLoading) loadSeasonMi() }} disabled={targetId == null}>
                   Ver MediaInfo
                 </button>
@@ -253,12 +253,12 @@ export function PasoTemporada({ a }: { a: Asistente }) {
           </div>
 
           {showMiCard && (
-            <Modal titulo="MediaInfo de los capítulos" onClose={() => setShowMiCard(false)} className="modal-wide" style={{ maxWidth: 900 }}>
+            <Modal titulo="MediaInfo de los capítulos" onClose={() => setShowMiCard(false)} className="modal-wide asist-modal-ancho">
               <div className="modal-body">
                 {seasonMiLoading && !seasonMi && <TableLoadingSpinner label="Leyendo MediaInfo de cada capítulo…" />}
                 {seasonMiError && !seasonMiLoading && (
                   <>
-                    <p className="text-error" style={{ fontSize: 12, marginTop: 0, marginBottom: 10 }}>✗ {seasonMiError}</p>
+                    <p className="text-error asist-t12 asist-mt-0 asist-mb-10">✗ {seasonMiError}</p>
                     <button className="btn btn-secondary btn-sm" type="button" onClick={loadSeasonMi}>↻ Reintentar</button>
                   </>
                 )}
@@ -291,14 +291,13 @@ export function PasoTemporada({ a }: { a: Asistente }) {
               </>}
               onClose={() => setShowRemuxCard(false)}
               className="modal-wide"
-              style={{ maxWidth: 780 }}
               tituloStyle={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}
             >
               <div className="modal-body">
                 {seasonRemuxLoading && !seasonRemux && <TableLoadingSpinner label="Calculando las pistas de cada capítulo…" />}
                 {seasonRemuxError && !seasonRemuxLoading && (
                   <>
-                    <p className="text-error" style={{ fontSize: 12, marginTop: 0, marginBottom: 10 }}>✗ {seasonRemuxError}</p>
+                    <p className="text-error asist-t12 asist-mt-0 asist-mb-10">✗ {seasonRemuxError}</p>
                     <button className="btn btn-secondary btn-sm" type="button" onClick={loadSeasonRemux}>↻ Reintentar</button>
                   </>
                 )}
@@ -316,7 +315,7 @@ export function PasoTemporada({ a }: { a: Asistente }) {
           )}
 
           {showSeasonNamesCard && (
-            <Modal titulo="Nombre de todos los capítulos" onClose={() => setShowSeasonNamesCard(false)} className="modal-wide" style={{ maxWidth: 900 }}>
+            <Modal titulo="Nombre de todos los capítulos" onClose={() => setShowSeasonNamesCard(false)} className="modal-wide asist-modal-ancho">
               <div className="modal-body">
                 {seasonNamesLoading && !seasonNames && <TableLoadingSpinner label="Generando el nombre de cada capítulo…" />}
                 {seasonNames && seasonNames.length > 0 && (() => {
@@ -324,9 +323,9 @@ export function PasoTemporada({ a }: { a: Asistente }) {
                   return (
                     <>
                       {seasonNames.length > 1 && (
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+                        <div className="asist-selector-fila">
                           <select
-                            className="form-input form-select" style={{ width: 'auto' }}
+                            className="form-input form-select asist-select-auto"
                             value={current.episode_id}
                             onChange={e => setSeasonNamesEpisodeId(Number(e.target.value))}
                           >
@@ -337,7 +336,7 @@ export function PasoTemporada({ a }: { a: Asistente }) {
                         </div>
                       )}
                       {current.error ? (
-                        <p className="text-error" style={{ fontSize: 12, margin: 0 }}>✗ {current.error}</p>
+                        <p className="text-error asist-t12 asist-m0">✗ {current.error}</p>
                       ) : (
                         <FitTextPair
                           min={9}
@@ -354,7 +353,7 @@ export function PasoTemporada({ a }: { a: Asistente }) {
             </Modal>
           )}
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
+          <div className="asist-pie">
             {needsSelection
               ? <button className="btn btn-secondary" onClick={() => setStep(0)}>Volver a la selección</button>
               : <span />}

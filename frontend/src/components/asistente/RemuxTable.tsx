@@ -1,7 +1,6 @@
 import type { TrackRemuxOverride, TrackRemuxPreview, TrackRemuxTrack } from '../../api/nomenclature'
 import { AVISO_MODO_PISTAS, normalizarModo } from '../../utils/modoPistas'
 import { IconoAviso } from '../Iconos'
-import { thStyle } from './constantes'
 
 const TRACK_TYPE_LABEL: Record<string, string> = { video: 'Vídeo', audio: 'Audio', subtitles: 'Subs' }
 
@@ -40,13 +39,9 @@ export function mergeRemuxTracks(
 export function AvisoModoPistas({ plan }: { plan?: { track_mode?: string } | null }) {
   if (!plan?.track_mode) return null
   const aviso = AVISO_MODO_PISTAS[normalizarModo(plan.track_mode)]
-  const color = aviso.tono === 'info' ? 'var(--color-info)' : aviso.tono === 'aviso' ? 'var(--color-warning)' : 'var(--color-error)'
+  const tono = aviso.tono === 'info' ? 'asist-tono-info' : aviso.tono === 'aviso' ? 'asist-tono-aviso' : 'asist-tono-error'
   return (
-    <span style={{
-      fontSize: 11, fontWeight: 500, color,
-      background: `color-mix(in srgb, ${color} 14%, transparent)`, border: `1px solid color-mix(in srgb, ${color} 35%, transparent)`,
-      borderRadius: 4, padding: '2px 8px',
-    }}>
+    <span className={`asist-modo-pistas ${tono}`}>
       {aviso.texto}
     </span>
   )
@@ -73,28 +68,28 @@ export function RemuxTable({ plan, editable, nameEditable, edits, onEdit, onIdio
   return (
     <>
       {plan.errors?.map((e, i) => (
-        <p key={i} className="text-error" style={{ fontSize: 12, marginTop: 10 }}>✗ {e}</p>
+        <p key={i} className="text-error asist-aviso-linea">✗ {e}</p>
       ))}
       {plan.warnings?.map((w, i) => (
-        <p key={i} className="text-warning" style={{ fontSize: 12, marginTop: 10 }}><IconoAviso /> {w}</p>
+        <p key={i} className="text-warning asist-aviso-linea"><IconoAviso /> {w}</p>
       ))}
       {plan.ordered_tracks && plan.ordered_tracks.length > 0 && (
-        <div className="detail-card" style={{ marginTop: 12, maxHeight: 260, overflow: 'auto', borderRadius: 8 }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, tableLayout: 'fixed' }}>
+        <div className="detail-card asist-tabla-caja asist-tabla-caja-pistas">
+          <table className="asist-tabla asist-tabla-pistas">
             <colgroup>
-              <col style={{ width: '10%' }} />
-              <col style={{ width: '10%' }} />
-              <col style={{ width: '25%' }} />
-              <col style={{ width: '38%' }} />
-              <col style={{ width: '17%' }} />
+              <col />
+              <col />
+              <col />
+              <col />
+              <col />
             </colgroup>
             <thead>
               <tr>
-                <th style={thStyle}>Tipo</th>
-                <th style={thStyle}>Idioma</th>
-                <th style={thStyle}>Nombre actual</th>
-                <th style={thStyle}>Nombre nuevo</th>
-                <th style={thStyle}>Predet.</th>
+                <th className="asist-th">Tipo</th>
+                <th className="asist-th">Idioma</th>
+                <th className="asist-th">Nombre actual</th>
+                <th className="asist-th">Nombre nuevo</th>
+                <th className="asist-th">Predet.</th>
               </tr>
             </thead>
             <tbody>
@@ -102,17 +97,16 @@ export function RemuxTable({ plan, editable, nameEditable, edits, onEdit, onIdio
                 const effectiveName = t.new_name
                 const effectiveDefault = t.default_after
                 return (
-                  <tr key={t.id} style={{ borderTop: '1px solid var(--border)' }}>
-                    <td style={{ padding: '6px 10px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{TRACK_TYPE_LABEL[t.type] ?? t.type}</td>
+                  <tr key={t.id} className="asist-fila">
+                    <td className="asist-celda-pista text-muted asist-sin-salto">{TRACK_TYPE_LABEL[t.type] ?? t.type}</td>
                     {/* El BCP-47 cuando lo hay: es lo único que distingue el
                         valenciano del catalán ("cat" vs "ca-valencia") y el
                         latino del castellano. Enseñando solo `language`, esta
                         columna decía "cat" para una pista en valenciano. */}
-                    <td style={{ padding: '6px 10px', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>
+                    <td className="asist-celda-pista asist-mono asist-color-secundario">
                       {t.sin_idioma && onIdioma && plan.idiomas_elegibles?.length ? (
                         <select
-                          className="form-input form-select"
-                          style={{ fontSize: 12, padding: '4px 6px' }}
+                          className="form-input form-select asist-input-chico"
                           value={edits?.[t.id]?.language ?? t.language_after ?? ''}
                           onChange={e => onIdioma(t.id, e.target.value)}
                         >
@@ -121,22 +115,21 @@ export function RemuxTable({ plan, editable, nameEditable, edits, onEdit, onIdio
                         </select>
                       ) : (t.language_ietf || t.language || '—')}
                     </td>
-                    <td style={{ padding: '6px 10px', color: 'var(--text-muted)', wordBreak: 'break-word' }}>{t.current_name || '—'}</td>
-                    <td style={{ padding: '5px 8px' }}>
+                    <td className="asist-celda-pista text-muted asist-romper">{t.current_name || '—'}</td>
+                    <td className="asist-celda-pista-campo">
                       {(nameEditable ?? editable) ? (
                         <input
-                          className="form-input"
-                          style={{ fontSize: 12, padding: '4px 6px' }}
+                          className="form-input asist-input-chico"
                           value={effectiveName}
                           onChange={e => onEdit?.(t.id, { new_name: e.target.value })}
                         />
                       ) : (
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{effectiveName}</span>
+                        <span className="asist-mono-12">{effectiveName}</span>
                       )}
                     </td>
-                    <td style={{ padding: '6px 10px', textAlign: 'center' }}>
+                    <td className="asist-celda-pista asist-centrado">
                       {t.type === 'video' ? (
-                        <span style={{ color: 'var(--text-muted)' }}>—</span>
+                        <span className="text-muted">—</span>
                       ) : editable ? (
                         <input
                           type="checkbox"

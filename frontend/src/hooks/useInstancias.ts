@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { getInstances } from '../api/instances'
 import type { InstanceSafeResponse } from '../types/api'
 import { useAlEntrar } from '../context/SeccionVisible'
@@ -12,6 +12,11 @@ import { useAlEntrar } from '../context/SeccionVisible'
  */
 export function useInstancias(): InstanceSafeResponse[] {
   const [instancias, setInstancias] = useState<InstanceSafeResponse[]>([])
-  useAlEntrar(() => { getInstances().then(setInstancias).catch(() => {}) })
+  // Solo vale la última petición: salir y volver con una pendiente no deja que la vieja pise a la nueva.
+  const ultima = useRef(0)
+  useAlEntrar(() => {
+    const esta = ++ultima.current
+    getInstances().then(lista => { if (esta === ultima.current) setInstancias(lista) }).catch(() => {})
+  })
   return instancias
 }

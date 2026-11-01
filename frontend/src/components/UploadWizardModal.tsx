@@ -45,9 +45,9 @@ import { Modal } from './Modal'
 // Spanish title + year from Radarr/Sonarr, Source/Provider from the filename,
 // the rest from mediainfo — as editable boxes with a live preview of the final
 // torrent name; Step 2 runs the pre-upload checks and, once confirmed, QUEUES
-// the upload (services/upload_queue.py runs integrity/nomenclature/remux/start
-// server-side after a grace period) and hands off to Subidas — nothing here
-// applies nomenclature or starts Uploadrr directly anymore.
+// the upload (services/upload_queue.py hace integridad/nomenclatura/remux/arranque
+// en el servidor, en el momento o cuando queda libre una plaza de «Subidas en paralelo») y pasa a
+// Subidas: aquí ya no se aplica la nomenclatura ni se arranca Uploadrr.
 const PROVIDER_SOURCES = new Set(['WEB-DL'])
 
 interface Props {

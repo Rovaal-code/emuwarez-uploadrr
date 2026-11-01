@@ -58,36 +58,27 @@ def test_al_encolar_desde_una_peticion_se_guardan_su_titulo_y_su_enlace(db_conn,
     item, peticion = _peli(db_conn, tmp_path), _peticion(db_conn)
 
     job = uq.queue_upload_for_item(item, request_item_id=peticion, conn=db_conn)["job"]
-    try:
-        assert (job["request_title"], job["request_url"]) == (TITULO, ENLACE)
-        assert _fila(db_conn, job["id"]) == (peticion, TITULO, ENLACE)
+    assert (job["request_title"], job["request_url"]) == (TITULO, ENLACE)
+    assert _fila(db_conn, job["id"]) == (peticion, TITULO, ENLACE)
 
-        # La petición se cierra en eMuwarez y la sincronización borra su fila.
-        db_conn.execute("DELETE FROM request_items WHERE id = ?", (peticion,))
-        db_conn.commit()
-        assert _fila(db_conn, job["id"]) == (peticion, TITULO, ENLACE)
-    finally:
-        uq.cancel_queued_timer(job["id"])
+    # La petición se cierra en eMuwarez y la sincronización borra su fila.
+    db_conn.execute("DELETE FROM request_items WHERE id = ?", (peticion,))
+    db_conn.commit()
+    assert _fila(db_conn, job["id"]) == (peticion, TITULO, ENLACE)
 
 
 def test_sin_peticion_las_columnas_quedan_vacias(db_conn, tmp_path):
     job = uq.queue_upload_for_item(_peli(db_conn, tmp_path), conn=db_conn)["job"]
-    try:
-        assert _fila(db_conn, job["id"]) == (None, None, None)
-    finally:
-        uq.cancel_queued_timer(job["id"])
+    assert _fila(db_conn, job["id"]) == (None, None, None)
 
 
 def test_una_peticion_que_ya_no_existe_no_impide_encolar(db_conn, tmp_path):
     """Entre abrir el asistente y confirmar pasan minutos, y una sincronización
     puede haber borrado la petición. La subida sale igual, sin foto."""
     resultado = uq.queue_upload_for_item(_peli(db_conn, tmp_path), request_item_id=9999, conn=db_conn)
-    try:
-        assert resultado["status"] == "queued"
-        _, titulo, enlace = _fila(db_conn, resultado["job"]["id"])
-        assert (titulo, enlace) == (None, None)
-    finally:
-        uq.cancel_queued_timer(resultado["job"]["id"])
+    assert resultado["status"] == "queued"
+    _, titulo, enlace = _fila(db_conn, resultado["job"]["id"])
+    assert (titulo, enlace) == (None, None)
 
 
 # ---------------------------------------------------------------------------
@@ -97,16 +88,12 @@ def test_una_peticion_que_ya_no_existe_no_impide_encolar(db_conn, tmp_path):
 def test_el_reintento_conserva_la_peticion_aunque_su_fila_ya_no_exista(db_conn, tmp_path):
     item, peticion = _peli(db_conn, tmp_path), _peticion(db_conn)
     primero = uq.queue_upload_for_item(item, request_item_id=peticion, conn=db_conn)["job"]["id"]
-    uq.cancel_queued_timer(primero)
     db_conn.execute("UPDATE upload_jobs SET status = 'failed', stage = 'failed' WHERE id = ?", (primero,))
     db_conn.execute("DELETE FROM request_items WHERE id = ?", (peticion,))
     db_conn.commit()
 
     segundo = uq.queue_retry_for_job(primero, conn=db_conn)["job"]["id"]
-    try:
-        assert _fila(db_conn, segundo) == (peticion, TITULO, ENLACE)
-    finally:
-        uq.cancel_queued_timer(segundo)
+    assert _fila(db_conn, segundo) == (peticion, TITULO, ENLACE)
 
 
 def test_el_reintento_con_confirmacion_tambien_la_conserva(db_conn):
@@ -142,17 +129,14 @@ def test_la_api_encola_desde_una_peticion_y_la_devuelve_en_la_lista_y_en_el_deta
         f"/api/library/{item}/upload/queue", json={"request_item_id": peticion}, headers=auth_headers)
     assert resp.status_code == 200, resp.text
     job = resp.json()["job"]
-    try:
-        esperado = (peticion, TITULO, ENLACE)
-        assert tuple(job[c] for c in CAMPOS) == esperado
+    esperado = (peticion, TITULO, ENLACE)
+    assert tuple(job[c] for c in CAMPOS) == esperado
 
-        lista = client.get("/api/uploads", headers=auth_headers).json()
-        assert tuple(lista[0][c] for c in CAMPOS) == esperado
+    lista = client.get("/api/uploads", headers=auth_headers).json()
+    assert tuple(lista[0][c] for c in CAMPOS) == esperado
 
-        detalle = client.get(f"/api/uploads/{job['id']}", headers=auth_headers).json()
-        assert tuple(detalle[c] for c in CAMPOS) == esperado
-    finally:
-        uq.cancel_queued_timer(job["id"])
+    detalle = client.get(f"/api/uploads/{job['id']}", headers=auth_headers).json()
+    assert tuple(detalle[c] for c in CAMPOS) == esperado
 
 
 def test_la_api_sin_peticion_devuelve_los_campos_vacios(client, auth_headers, db_conn, tmp_path):
@@ -161,12 +145,9 @@ def test_la_api_sin_peticion_devuelve_los_campos_vacios(client, auth_headers, db
     resp = client.post(f"/api/library/{item}/upload/queue", json={}, headers=auth_headers)
     assert resp.status_code == 200, resp.text
     job = resp.json()["job"]
-    try:
-        assert tuple(job[c] for c in CAMPOS) == (None, None, None)
-        detalle = client.get(f"/api/uploads/{job['id']}", headers=auth_headers).json()
-        assert tuple(detalle[c] for c in CAMPOS) == (None, None, None)
-    finally:
-        uq.cancel_queued_timer(job["id"])
+    assert tuple(job[c] for c in CAMPOS) == (None, None, None)
+    detalle = client.get(f"/api/uploads/{job['id']}", headers=auth_headers).json()
+    assert tuple(detalle[c] for c in CAMPOS) == (None, None, None)
 
 
 # ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 """Tests for services/upload_queue.py — the queued-upload orchestration
-("Subir a eMuwarez" -> queued job -> grace period -> server-side
-integrity/nomenclature/remux/start)."""
+("Subir a eMuwarez" -> queued job -> turno en "Subidas en paralelo" ->
+server-side integrity/nomenclature/remux/start)."""
 from __future__ import annotations
 
 import json
@@ -38,21 +38,19 @@ def _movie_with_path(conn, path: str, title: str = "X") -> int:
 
 
 def _queued_job_row(conn, item_id: int, path: str = "") -> int:
-    """Insert a 'queued' job row directly, bypassing the real timer — lets
-    tests drive _run_queued_job() deterministically instead of racing a
-    real threading.Timer."""
+    """Insert a 'queued' job row directly, without its thread — lets tests
+    drive _run_queued_job() deterministically."""
     cur = conn.execute(
         """INSERT INTO upload_jobs (library_item_id, status, stage, title, path, source_path,
-                                     queued_until, created_at, updated_at)
-           VALUES (?, 'queued', 'queued', 'X', ?, ?, '2099-01-01T00:00:00+00:00',
-                   CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""",
+                                     created_at, updated_at)
+           VALUES (?, 'queued', 'queued', 'X', ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""",
         (item_id, path, path),
     )
     conn.commit()
     return cur.lastrowid
 
 
-def test_queue_creates_queued_job_and_registers_timer(db_conn, tmp_path):
+def test_queue_creates_queued_job_without_a_fixed_wait(db_conn, tmp_path):
     f = tmp_path / "movie.mkv"
     f.write_bytes(b"x" * 100)
     iid = _movie_with_path(db_conn, str(f))
@@ -61,43 +59,9 @@ def test_queue_creates_queued_job_and_registers_timer(db_conn, tmp_path):
     assert result["status"] == "queued"
     job = result["job"]
     assert job["status"] == "queued"
-    assert job["queued_until"]
-
-    job_id = job["id"]
-    assert job_id in uq._QUEUE_TIMERS
-    try:
-        assert uq.cancel_queued_timer(job_id) is True
-        assert job_id not in uq._QUEUE_TIMERS
-    finally:
-        uq.cancel_queued_timer(job_id)  # no-op safety net if the assert above failed
-
-
-def test_get_queue_positions_orders_by_id(db_conn, tmp_path):
-    f = tmp_path / "movie.mkv"
-    f.write_bytes(b"x" * 10)
-    iid = _movie_with_path(db_conn, str(f))
-    j1 = _queued_job_row(db_conn, iid)
-    j2 = _queued_job_row(db_conn, iid)
-    j3 = _queued_job_row(db_conn, iid)
-
-    positions = uq.get_queue_positions(db_conn)
-    assert positions[j1] == (1, 3)
-    assert positions[j2] == (2, 3)
-    assert positions[j3] == (3, 3)
-
-
-def test_get_queue_positions_ignores_non_queued_jobs(db_conn, tmp_path):
-    f = tmp_path / "movie.mkv"
-    f.write_bytes(b"x" * 10)
-    iid = _movie_with_path(db_conn, str(f))
-    j1 = _queued_job_row(db_conn, iid)
-    j2 = _queued_job_row(db_conn, iid)
-    db_conn.execute("UPDATE upload_jobs SET status = 'running' WHERE id = ?", (j1,))
-    db_conn.commit()
-
-    positions = uq.get_queue_positions(db_conn)
-    assert j1 not in positions
-    assert positions[j2] == (1, 1)
+    # Ya no hay plazo de 60 s: nada que contar hacia atrás.
+    assert job.get("queued_until") is None
+    assert not hasattr(uq, "QUEUE_GRACE_SECONDS")
 
 
 def test_queue_persists_checks_snapshot(db_conn, tmp_path):
@@ -114,12 +78,9 @@ def test_queue_persists_checks_snapshot(db_conn, tmp_path):
 
     result = uq.queue_upload_for_item(iid, checks=checks, conn=db_conn)
     job_id = result["job"]["id"]
-    try:
-        row = db_conn.execute("SELECT checks_snapshot_json FROM upload_jobs WHERE id=?", (job_id,)).fetchone()
-        stored = json.loads(row["checks_snapshot_json"])
-        assert stored == checks
-    finally:
-        uq.cancel_queued_timer(job_id)
+    row = db_conn.execute("SELECT checks_snapshot_json FROM upload_jobs WHERE id=?", (job_id,)).fetchone()
+    stored = json.loads(row["checks_snapshot_json"])
+    assert stored == checks
 
 
 def _insert_proposal(conn, item_id, title="Movie.2024.1080p", status="valid", huella=True, fields_json=None):
@@ -215,15 +176,12 @@ def test_queue_pins_and_persists_latest_nomenclature_proposal(db_conn, tmp_path)
 
     result = uq.queue_upload_for_item(iid, conn=db_conn)
     job_id = result["job"]["id"]
-    try:
-        row = db_conn.execute(
-            "SELECT nomenclature_proposal_id, nomenclature_snapshot_json FROM upload_jobs WHERE id=?",
-            (job_id,),
-        ).fetchone()
-        assert row["nomenclature_proposal_id"] == proposal_id
-        assert json.loads(row["nomenclature_snapshot_json"])["id"] == proposal_id
-    finally:
-        uq.cancel_queued_timer(job_id)
+    row = db_conn.execute(
+        "SELECT nomenclature_proposal_id, nomenclature_snapshot_json FROM upload_jobs WHERE id=?",
+        (job_id,),
+    ).fetchone()
+    assert row["nomenclature_proposal_id"] == proposal_id
+    assert json.loads(row["nomenclature_snapshot_json"])["id"] == proposal_id
 
 
 def test_queue_persists_remux_overrides_and_snapshot(db_conn, tmp_path):
@@ -235,15 +193,12 @@ def test_queue_persists_remux_overrides_and_snapshot(db_conn, tmp_path):
 
     result = uq.queue_upload_for_item(iid, remux_overrides=overrides, remux_snapshot=snapshot, conn=db_conn)
     job_id = result["job"]["id"]
-    try:
-        row = db_conn.execute(
-            "SELECT remux_overrides_json, remux_snapshot_json FROM upload_jobs WHERE id=?",
-            (job_id,),
-        ).fetchone()
-        assert json.loads(row["remux_overrides_json"]) == {"5": {"new_name": "Custom.Track.Name", "default_after": True}}
-        assert json.loads(row["remux_snapshot_json"]) == snapshot
-    finally:
-        uq.cancel_queued_timer(job_id)
+    row = db_conn.execute(
+        "SELECT remux_overrides_json, remux_snapshot_json FROM upload_jobs WHERE id=?",
+        (job_id,),
+    ).fetchone()
+    assert json.loads(row["remux_overrides_json"]) == {"5": {"new_name": "Custom.Track.Name", "default_after": True}}
+    assert json.loads(row["remux_snapshot_json"]) == snapshot
 
 
 def test_queue_blocked_when_item_missing(db_conn):
@@ -252,7 +207,7 @@ def test_queue_blocked_when_item_missing(db_conn):
     assert result["job"] is None
 
 
-def test_cancel_upload_job_stops_queued_timer(db_conn, tmp_path):
+def test_cancel_upload_job_cancels_a_queued_job(db_conn, tmp_path):
     from emuwarez_uploadrr.services.upload_execution import cancel_upload_job, get_upload_job
 
     f = tmp_path / "movie.mkv"
@@ -261,14 +216,10 @@ def test_cancel_upload_job_stops_queued_timer(db_conn, tmp_path):
     result = uq.queue_upload_for_item(iid, conn=db_conn)
     job_id = result["job"]["id"]
 
-    try:
-        r = cancel_upload_job(job_id, conn=db_conn)
-        assert r["ok"] is True
-        job = get_upload_job(job_id, conn=db_conn)
-        assert job["status"] == "cancelled"
-        assert job_id not in uq._QUEUE_TIMERS
-    finally:
-        uq.cancel_queued_timer(job_id)
+    r = cancel_upload_job(job_id, conn=db_conn)
+    assert r["ok"] is True
+    job = get_upload_job(job_id, conn=db_conn)
+    assert job["status"] == "cancelled"
 
 
 def test_run_queued_job_fails_fast_when_file_inaccessible(db_conn):
@@ -396,20 +347,17 @@ def test_queue_retry_for_job_creates_new_queued_row(db_conn, tmp_path):
     original_id = _failed_job_row(db_conn, iid, status="failed", retry_count=1)
 
     result = uq.queue_retry_for_job(original_id, conn=db_conn)
-    try:
-        assert result["status"] == "queued"
-        new_job = result["job"]
-        assert new_job["id"] != original_id
-        assert new_job["status"] == "queued"
-        assert new_job["queued_until"]
-        assert new_job["retry_of_job_id"] == original_id
-        assert new_job["retry_count"] == 2
+    assert result["status"] == "queued"
+    new_job = result["job"]
+    assert new_job["id"] != original_id
+    assert new_job["status"] == "queued"
+    assert new_job.get("queued_until") is None
+    assert new_job["retry_of_job_id"] == original_id
+    assert new_job["retry_count"] == 2
 
-        # Original job untouched.
-        original = db_conn.execute("SELECT status FROM upload_jobs WHERE id=?", (original_id,)).fetchone()
-        assert original["status"] == "failed"
-    finally:
-        uq.cancel_queued_timer(result["job"]["id"])
+    # Original job untouched.
+    original = db_conn.execute("SELECT status FROM upload_jobs WHERE id=?", (original_id,)).fetchone()
+    assert original["status"] == "failed"
 
 
 def test_queue_retry_carries_forward_manual_nomenclature_and_remux(db_conn, tmp_path):
@@ -425,15 +373,12 @@ def test_queue_retry_carries_forward_manual_nomenclature_and_remux(db_conn, tmp_
     db_conn.commit()
 
     result = uq.queue_retry_for_job(original_id, conn=db_conn)
-    try:
-        row = db_conn.execute(
-            "SELECT nomenclature_proposal_id, remux_overrides_json FROM upload_jobs WHERE id=?",
-            (result["job"]["id"],),
-        ).fetchone()
-        assert row["nomenclature_proposal_id"] == proposal_id
-        assert json.loads(row["remux_overrides_json"]) == {"5": {"new_name": "Custom", "default_after": True}}
-    finally:
-        uq.cancel_queued_timer(result["job"]["id"])
+    row = db_conn.execute(
+        "SELECT nomenclature_proposal_id, remux_overrides_json FROM upload_jobs WHERE id=?",
+        (result["job"]["id"],),
+    ).fetchone()
+    assert row["nomenclature_proposal_id"] == proposal_id
+    assert json.loads(row["remux_overrides_json"]) == {"5": {"new_name": "Custom", "default_after": True}}
 
 
 def test_queue_retry_fija_la_vigente_si_la_del_original_era_de_reglas_viejas(db_conn, tmp_path):
@@ -535,13 +480,10 @@ def test_queue_retry_does_not_backfill_nomenclature_for_automatic_job(db_conn, t
     original_id = _failed_job_row(db_conn, iid, status="failed")
 
     result = uq.queue_retry_for_job(original_id, conn=db_conn)
-    try:
-        row = db_conn.execute(
-            "SELECT nomenclature_proposal_id FROM upload_jobs WHERE id=?", (result["job"]["id"],),
-        ).fetchone()
-        assert row["nomenclature_proposal_id"] is None
-    finally:
-        uq.cancel_queued_timer(result["job"]["id"])
+    row = db_conn.execute(
+        "SELECT nomenclature_proposal_id FROM upload_jobs WHERE id=?", (result["job"]["id"],),
+    ).fetchone()
+    assert row["nomenclature_proposal_id"] is None
 
 
 def test_queue_retry_for_job_blocked_when_not_failed_or_cancelled(db_conn, tmp_path):
@@ -578,8 +520,8 @@ def test_write_snapshot_persists_json(db_conn):
 
 # ---------------------------------------------------------------------------
 # Season Source/Proveedor/Tag overrides (manual wizard's now-editable season
-# fields, no longer read-only) — get_queue_positions comes first alphabetically
-# but these fit better next to the other season-only tests below.
+# fields, no longer read-only) — these fit better next to the other
+# season-only tests below.
 # ---------------------------------------------------------------------------
 
 def test_queue_upload_for_item_persists_season_overrides(db_conn, tmp_path):
@@ -588,13 +530,10 @@ def test_queue_upload_for_item_persists_season_overrides(db_conn, tmp_path):
     iid = _movie_with_path(db_conn, str(f))
     result = uq.queue_upload_for_item(iid, source_override="BluRay", conn=db_conn)
     job_id = result["job"]["id"]
-    try:
-        row = db_conn.execute("SELECT season_overrides_json FROM upload_jobs WHERE id=?", (job_id,)).fetchone()
-        # Not a season — the override is simply ignored (a movie/episode's
-        # edits already flow through nomenclature_proposals instead).
-        assert row["season_overrides_json"] is None
-    finally:
-        uq.cancel_queued_timer(job_id)
+    row = db_conn.execute("SELECT season_overrides_json FROM upload_jobs WHERE id=?", (job_id,)).fetchone()
+    # Not a season — the override is simply ignored (a movie/episode's
+    # edits already flow through nomenclature_proposals instead).
+    assert row["season_overrides_json"] is None
 
 
 def test_queue_upload_for_item_persists_season_overrides_for_season(db_conn):
@@ -603,13 +542,10 @@ def test_queue_upload_for_item_persists_season_overrides_for_season(db_conn):
         season_id, source_override="BluRay", tag_override="MYTAG", conn=db_conn,
     )
     job_id = result["job"]["id"]
-    try:
-        row = db_conn.execute("SELECT season_overrides_json FROM upload_jobs WHERE id=?", (job_id,)).fetchone()
-        assert json.loads(row["season_overrides_json"]) == {
-            "source": "BluRay", "provider": None, "tag": "MYTAG", "title": None,
-        }
-    finally:
-        uq.cancel_queued_timer(job_id)
+    row = db_conn.execute("SELECT season_overrides_json FROM upload_jobs WHERE id=?", (job_id,)).fetchone()
+    assert json.loads(row["season_overrides_json"]) == {
+        "source": "BluRay", "provider": None, "tag": "MYTAG", "title": None,
+    }
 
 
 def test_season_overrides_column_survives_schema_version_short_circuit(db_conn):
@@ -639,7 +575,6 @@ def test_season_overrides_column_survives_schema_version_short_circuit(db_conn):
     iid = _movie_with_path(db_conn, "/x/movie.mkv")
     result = uq.queue_upload_for_item(iid, conn=db_conn)
     assert result["status"] == "queued"
-    uq.cancel_queued_timer(result["job"]["id"])
 
 
 def test_run_queued_job_season_forwards_stored_overrides_to_the_plan(db_conn, tmp_path, monkeypatch):
@@ -745,16 +680,13 @@ def test_queue_upload_chains_onto_terminal_job_including_completed(db_conn, tmp_
     original_id = _failed_job_row(db_conn, iid, status="completed", retry_count=0)
 
     result = uq.queue_upload_for_item(iid, conn=db_conn)
-    try:
-        assert result["status"] == "queued"
-        job = result["job"]
-        assert job["retry_of_job_id"] == original_id
-        assert job["retry_count"] == 1
+    assert result["status"] == "queued"
+    job = result["job"]
+    assert job["retry_of_job_id"] == original_id
+    assert job["retry_count"] == 1
 
-        original = db_conn.execute("SELECT status FROM upload_jobs WHERE id=?", (original_id,)).fetchone()
-        assert original["status"] == "completed"  # untouched
-    finally:
-        uq.cancel_queued_timer(result["job"]["id"])
+    original = db_conn.execute("SELECT status FROM upload_jobs WHERE id=?", (original_id,)).fetchone()
+    assert original["status"] == "completed"  # untouched
 
 
 def test_queue_upload_blocked_when_latest_job_is_active(db_conn, tmp_path):
@@ -777,17 +709,14 @@ def test_reintentar_dos_veces_no_crea_dos_subidas(db_conn, tmp_path):
     original_id = _failed_job_row(db_conn, iid, status="failed")
 
     primero = uq.queue_retry_for_job(original_id, conn=db_conn)
-    try:
-        segundo = uq.queue_retry_for_job(original_id, conn=db_conn)
-        assert primero["status"] == "queued"
-        assert segundo["status"] == "blocked"
-        assert segundo["job"]["id"] == primero["job"]["id"]
-        activos = db_conn.execute(
-            "SELECT COUNT(*) FROM upload_jobs WHERE library_item_id = ? AND status = 'queued'", (iid,)
-        ).fetchone()[0]
-        assert activos == 1
-    finally:
-        uq.cancel_queued_timer(primero["job"]["id"])
+    segundo = uq.queue_retry_for_job(original_id, conn=db_conn)
+    assert primero["status"] == "queued"
+    assert segundo["status"] == "blocked"
+    assert segundo["job"]["id"] == primero["job"]["id"]
+    activos = db_conn.execute(
+        "SELECT COUNT(*) FROM upload_jobs WHERE library_item_id = ? AND status = 'queued'", (iid,)
+    ).fetchone()[0]
+    assert activos == 1
 
 
 def test_dos_peticiones_a_la_vez_dejan_una_sola_subida(db_conn, tmp_path, monkeypatch):
@@ -798,7 +727,6 @@ def test_dos_peticiones_a_la_vez_dejan_una_sola_subida(db_conn, tmp_path, monkey
     f = tmp_path / "movie.mkv"
     f.write_bytes(b"x" * 100)
     iid = _movie_with_path(db_conn, str(f))
-    monkeypatch.setattr(uq, "_arm_queue_timer", lambda job_id: None)
 
     barrera = threading.Barrier(2)
     original = uq._find_latest_job_for_item
@@ -827,7 +755,7 @@ def test_dos_peticiones_a_la_vez_dejan_una_sola_subida(db_conn, tmp_path, monkey
 # ---------------------------------------------------------------------------
 # staging ("Automático") — the job appears immediately as 'staging', gets
 # its nomenclature/remux/checks previews computed in the background, then is
-# promoted into the normal 'queued' 60s countdown.
+# promoted into the normal 'queued' flow.
 # ---------------------------------------------------------------------------
 
 

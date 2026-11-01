@@ -6,7 +6,7 @@ Applying/uploading a season is NOT triggered here — that's the same
 POST /library/{item_id}/upload/queue endpoint a single file uses
 (web/api/uploads.py), pointed at the season's own library_items id;
 services/upload_queue.py's season branch drives services/season_pack.py's
-apply_season_pack() internally after the grace period."""
+apply_season_pack() internally once the job gets its turn."""
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query

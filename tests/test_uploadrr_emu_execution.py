@@ -275,6 +275,8 @@ def test_cancel_running_job_marks_cancelled(db_conn, tmp_path, fake_uploadrr_emu
     prepared.write_bytes(b"\x00")
     _insert_settings(db_conn, fake_uploadrr_emu_dir, fake_uploadrr_python_path)
     jid = _insert_job(db_conn, prepared_path=str(prepared))
+    config = fake_uploadrr_emu_dir / "data" / "config.yaml"
+    config_original = config.read_bytes()
 
     result = start_upload_job(jid, dry_run=False, start=True, confirmation=CONFIRMATION_TOKEN, conn=db_conn)
     assert result["action"] == "started"
@@ -301,3 +303,9 @@ def test_cancel_running_job_marks_cancelled(db_conn, tmp_path, fake_uploadrr_emu
     # tmp_path is torn down — otherwise it can leak a stray write into the
     # *next* test's fresh database once CONFIG_DIR is repointed.
     time.sleep(1.0)
+
+    # Cancelar con Uploadrr en marcha no deja estado colgado: el config.yaml
+    # vuelve a ser el de antes y nadie lo da por stageado.
+    from emuwarez_uploadrr.services import upload_execution as ue
+    assert config.read_bytes() == config_original
+    assert ue._config_stage_refcount == {}

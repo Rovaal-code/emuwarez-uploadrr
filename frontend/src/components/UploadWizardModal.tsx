@@ -604,7 +604,14 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
   // guardaría el nombre con el audio de antes y el remux aplicaría el idioma nuevo.
   const [recalculandoIdioma, setRecalculandoIdioma] = useState(false)
   // Cambiar de elemento invalida las respuestas pendientes del anterior, aunque se vuelva a él.
-  useEffect(() => { versionIdioma.current++; setRecalculandoIdioma(false) }, [targetId])
+  // Los idiomas con los que el nombre se recalculó bien por última vez, por pista. Si un recálculo
+  // falla, TODAS las pistas vuelven a esto: no solo la última elegida.
+  const idiomasConfirmados = useRef<Record<number, string | undefined>>({})
+  useEffect(() => {
+    versionIdioma.current++
+    setRecalculandoIdioma(false)
+    idiomasConfirmados.current = {}
+  }, [targetId])
   const [showRemuxCard, setShowRemuxCard] = useState(false)
 
   // Step 1 (season target only) — the pack plan: consistency across
@@ -1253,13 +1260,20 @@ export function UploadWizardModal({ item, onClose: onCloseProp, onDone, onNaviga
       setFields(prev => ({ ...prev, audio_summary: campos.fields?.audio_summary }))
       setAudioWarning(campos.audio_warning ?? null)
       setRemuxPreview(plan)
+      idiomasConfirmados.current = Object.fromEntries(
+        Object.entries(nuevas).map(([pista, ed]) => [Number(pista), ed?.language]))
     } catch {
-      // Sin recálculo, el nombre sigue sin esa pista: se deshace la elección para que el remux
-      // no aplique un idioma que el nombre no dice. Solo si nadie ha elegido otra cosa después.
+      // Sin recálculo, el nombre no lleva esos idiomas: todas las pistas vuelven a los del último
+      // recálculo bueno (las demás ediciones de la tabla se quedan), para que el remux no aplique
+      // un idioma que el nombre no dice. Solo si nadie ha elegido otra cosa después.
       if (objetivoActual.current !== id || version !== versionIdioma.current) return
       const revertidas = { ...edicionesActuales.current }
-      if (previas[trackId] === undefined) delete revertidas[trackId]
-      else revertidas[trackId] = previas[trackId]
+      for (const pista of Object.keys(revertidas).map(Number)) {
+        const ed = { ...revertidas[pista], language: idiomasConfirmados.current[pista] }
+        if (ed.language === undefined) delete ed.language
+        if (Object.keys(ed).length) revertidas[pista] = ed
+        else delete revertidas[pista]
+      }
       edicionesActuales.current = revertidas
       setRemuxEdits(revertidas)
       setAudioWarning('No se pudo recalcular el nombre con ese idioma; la pista sigue sin idioma. Vuelve a elegirlo.')

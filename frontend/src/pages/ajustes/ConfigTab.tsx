@@ -1,4 +1,5 @@
 import type { SaveExpose } from './tipos'
+import { ErrorDeCarga } from './ErrorDeCarga'
 import { useConfigForm } from './config/useConfigForm'
 import { AccountCard } from './config/AccountCard'
 import { SessionsCard } from './config/SessionsCard'
@@ -14,6 +15,13 @@ export function ConfigTab({ onExposeSave }: { onExposeSave: (a: SaveExpose | nul
   const form = useConfigForm(onExposeSave)
 
   if (form.loading) return <p className="aj-cargando">Cargando…</p>
+  if (form.errorCarga) {
+    return (
+      <div className="aj-cargando">
+        <ErrorDeCarga mensaje={`No se pudo cargar la configuración: ${form.errorCarga}`} onReintentar={form.reintentar} />
+      </div>
+    )
+  }
 
   return (
     <div data-tour="settings-content" className="aj-col-16">

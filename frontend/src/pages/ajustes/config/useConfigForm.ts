@@ -30,6 +30,9 @@ function configSignature(v: {
 export function useConfigForm(onExposeSave: (a: SaveExpose | null) => void) {
   const [settings, setSettings] = useState<SettingsData | null>(null)
   const [loading, setLoading] = useState(true)
+  // Si la carga falla no se guarda: el formulario tiene valores por defecto, no los ajustes reales.
+  const [errorCarga, setErrorCarga] = useState<string | null>(null)
+  const [intento, setIntento] = useState(0)
   const [saving, setSaving] = useState(false)
   const setMsg = useSettingsMessageAdapter()
   const { actualizar: actualizarPerfilEmu } = usePerfilEmu()
@@ -90,8 +93,8 @@ export function useConfigForm(onExposeSave: (a: SaveExpose | null) => void) {
   saveRef.current = () => { void handleSave() }
   const stableSave = useRef(() => saveRef.current()).current
   useEffect(() => {
-    onExposeSave({ dirty, saving, onSave: stableSave, label: 'Guardar configuración' })
-  }, [dirty, saving, onExposeSave, stableSave])
+    onExposeSave({ dirty, saving, deshabilitado: settings === null, onSave: stableSave, label: 'Guardar configuración' })
+  }, [dirty, saving, settings, onExposeSave, stableSave])
   useEffect(() => () => onExposeSave(null), [onExposeSave])
 
   useEffect(() => {
@@ -127,11 +130,18 @@ export function useConfigForm(onExposeSave: (a: SaveExpose | null) => void) {
           allowedRoots: (s.uploadrr_allowed_roots ?? []).join(', '),
         }))
       })
-      .catch(() => setMsg({ ok: false, text: 'Error cargando configuración' }))
+      .catch((e: unknown) => setErrorCarga(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false))
-  }, [setMsg])
+  }, [intento])
+
+  function reintentar() {
+    setErrorCarga(null)
+    setLoading(true)
+    setIntento(n => n + 1)
+  }
 
   async function handleSave() {
+    if (!settings) return
     if (qbitUrl.trim() && !isValidHttpUrl(qbitUrl)) {
       setMsg({ ok: false, text: 'La URL de qBittorrent debe empezar por http:// o https:// e incluir un host válido' })
       return
@@ -217,7 +227,7 @@ export function useConfigForm(onExposeSave: (a: SaveExpose | null) => void) {
     }
   }
   return {
-    settings, setSettings, loading, saving, handleSave,
+    settings, setSettings, loading, errorCarga, reintentar, saving, handleSave,
     tags, setTags, nuevoTag, setNuevoTag, borrador,
     providerOrder, setProviderOrder, region, setRegion,
     newKey, setNewKey, newEmuKey, setNewEmuKey, emuUsername, setEmuUsername,

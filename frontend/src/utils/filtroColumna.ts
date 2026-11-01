@@ -12,15 +12,31 @@ export interface OpcionFiltro { value: string; label: string }
  */
 export function siguienteSeleccion(elegidos: readonly string[], valor: string): readonly string[] {
   if (valor === '') return elegidos.length ? [] : elegidos
-  return elegidos.includes(valor) ? elegidos.filter(x => x !== valor) : [...elegidos, valor]
+  if (elegidos.includes(valor)) return elegidos.filter(x => x !== valor)
+  return [...elegidos.filter(x => x !== EXCLUIDO + valor), valor]
+}
+
+/** Un valor con «!» delante es «todo menos este»: así viaja en la misma lista. */
+export const EXCLUIDO = '!'
+
+/** Lo que queda tras pulsar «ocultar» en `valor`: pasa de marcado a oculto, y pulsarlo otra vez lo suelta. */
+export function siguienteExclusion(elegidos: readonly string[], valor: string): readonly string[] {
+  const oculto = EXCLUIDO + valor
+  return elegidos.includes(oculto)
+    ? elegidos.filter(x => x !== oculto)
+    : [...elegidos.filter(x => x !== valor), oculto]
 }
 
 /** Lo elegido, con los nombres que enseña la columna y en el orden del menú. */
 export function resumenFiltro(elegidos: readonly string[], opciones: readonly OpcionFiltro[]): string {
   const orden = new Map(opciones.map((o, i) => [o.value, i]))
+  const sinMarca = (v: string) => (v.startsWith(EXCLUIDO) && !orden.has(v) ? v.slice(1) : v)
   return [...elegidos]
-    .sort((a, b) => (orden.get(a) ?? Infinity) - (orden.get(b) ?? Infinity))
-    .map(v => opciones.find(o => o.value === v)?.label ?? v)
+    .sort((a, b) => (orden.get(sinMarca(a)) ?? Infinity) - (orden.get(sinMarca(b)) ?? Infinity))
+    .map(v => {
+      const nombre = opciones.find(o => o.value === sinMarca(v))?.label ?? sinMarca(v)
+      return sinMarca(v) === v ? nombre : `sin ${nombre}`
+    })
     .join(', ')
 }
 

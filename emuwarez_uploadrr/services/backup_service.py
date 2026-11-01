@@ -262,9 +262,10 @@ def _motivo_de_rechazo(tar: tarfile.TarFile, config_dir: Path) -> str | None:
             tarfile.data_filter(miembro, str(config_dir))
         except tarfile.FilterError as exc:
             return f"La copia no es segura ({miembro.name}): {exc}"
-        # Solo nombres canónicos: «./emuwarez_uploadrr.db» o «x/../emuwarez_uploadrr.db» son la base
-        # para la extracción pero no para las comprobaciones de abajo, que la buscan por su nombre.
-        if miembro.name != posixpath.normpath(miembro.name):
+        # Solo nombres canónicos y relativos: «./emuwarez_uploadrr.db», «x/../emuwarez_uploadrr.db» o
+        # «/emuwarez_uploadrr.db» (el filtro le quita la barra) son la base para la extracción pero no para
+        # las comprobaciones de abajo, que la buscan por su nombre.
+        if miembro.name != posixpath.normpath(miembro.name) or miembro.name.startswith("/"):
             return f"La copia no es válida: nombre no canónico «{miembro.name}»"
     # Lo que el filtro no ve porque mira cada miembro por separado: un nombre repetido (la segunda base se
     # colocaría sin haberse mirado), la base como algo que no es un fichero, o un fichero que es a la vez carpeta

@@ -546,3 +546,21 @@ def test_dashboard_library_activity_excludes_episodes_and_seasons(client, auth_h
     assert len(items) == 1
     assert items[0]["title"] == "A Show"
     assert items[0]["item_type"] == "series"
+
+
+def test_missing_total_es_el_de_todos_no_el_de_la_pagina(client, auth_headers):
+    client.post(
+        "/api/instances",
+        json={"type": "radarr", "name": "R", "url": "http://r:7878", "api_key": "k"},
+        headers=auth_headers,
+    )
+    movies = [{"id": 40 + i, "title": f"Falta {i}", "year": 2020, "tmdbId": 40 + i} for i in range(3)]
+    with (
+        patch("emuwarez_uploadrr.integrations.radarr.get_movies", return_value=movies),
+        patch("emuwarez_uploadrr.integrations.radarr.get_queue", return_value=[]),
+    ):
+        client.post("/api/sync", json={}, headers=auth_headers)
+
+    data = client.get("/api/missing?limit=1", headers=auth_headers).json()
+    assert len(data["items"]) == 1
+    assert data["total"] == 3

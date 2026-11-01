@@ -599,12 +599,13 @@ def missing_list(
     limit: int = Query(50, ge=1, le=20000),
     offset: int = Query(0, ge=0),
 ) -> MissingListResponse:
-    from emuwarez_uploadrr.services.library import list_missing
+    from emuwarez_uploadrr.services.library import count_missing, list_missing
     with _get_conn() as conn:
         rows = list_missing(conn, limit=limit, offset=offset)
+        total = count_missing(conn)
     return MissingListResponse(
         items=[_to_missing_response(r) for r in rows],
-        total=len(rows),
+        total=total,
         limit=limit,
         offset=offset,
     )

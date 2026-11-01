@@ -1757,6 +1757,16 @@ def list_missing(conn: sqlite3.Connection, *, limit: int = 50, offset: int = 0) 
     return [dict(row) for row in rows]
 
 
+def count_missing(conn: sqlite3.Connection) -> int:
+    """Cuántos elementos cuentan como faltantes, sin paginar."""
+    placeholders = ", ".join(["?"] * len(_MISSING_STATUSES))
+    row = conn.execute(
+        f"SELECT COUNT(*) AS cnt FROM library_items WHERE local_status IN ({placeholders})",
+        list(_MISSING_STATUSES),
+    ).fetchone()
+    return int(row["cnt"] or 0) if row else 0
+
+
 def get_dashboard_summary(conn: sqlite3.Connection) -> dict:
     """Return aggregated counts from library_items.
 

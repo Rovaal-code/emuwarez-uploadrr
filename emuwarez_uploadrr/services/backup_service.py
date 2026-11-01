@@ -256,7 +256,8 @@ def list_config_backups(directory: Path | None = None) -> list[dict]:
             "size_bytes": stat.st_size,
             "created_at": datetime.datetime.fromtimestamp(stat.st_mtime).isoformat(),
             "tipo": _tipo_de_copia(f.name),
-            "con_claves": f.name.endswith("_with_secrets.tar.gz"),
+            # Una subida se guarda con nombre propio sin mirar qué lleva: puede traer claves (None = no se sabe).
+            "con_claves": None if _tipo_de_copia(f.name) == "subida" else f.name.endswith("_with_secrets.tar.gz"),
         })
     return backups
 
@@ -315,6 +316,10 @@ def _motivo_de_rechazo(tar: tarfile.TarFile, config_dir: Path) -> str | None:
             shutil.copyfileobj(origen, destino)
         version = _version_de_base(ruta)
         base_de_la_copia_es_sqlite = _es_sqlite(ruta)
+        legible = _base_legible(ruta) if base_de_la_copia_es_sqlite else True
+    if not legible:
+        # La cabecera dice SQLite pero no se puede leer (truncada o dañada): pondría una base rota.
+        return "La copia no es válida: su base de datos está dañada o incompleta"
     viva = config_dir / _DB_NAME
     if not base_de_la_copia_es_sqlite and viva.exists() and viva.stat().st_size > 0 and _es_sqlite(viva):
         # _colocar_base la copiaría en crudo encima de una base que sí lo es, sin copia previa.
@@ -326,6 +331,17 @@ def _motivo_de_rechazo(tar: tarfile.TarFile, config_dir: Path) -> str | None:
             "Actualiza la imagen y restaura entonces."
         )
     return None
+
+
+def _base_legible(ruta: Path) -> bool:
+    """Si SQLite puede leer la base entera (PRAGMA quick_check sin errores)."""
+    conn = sqlite3.connect(str(ruta))
+    try:
+        return conn.execute("PRAGMA quick_check").fetchone()[0] == "ok"
+    except sqlite3.DatabaseError:
+        return False
+    finally:
+        conn.close()
 
 
 def _version_de_base(ruta: Path) -> int | None:

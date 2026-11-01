@@ -147,7 +147,7 @@ def test_la_lista_dice_de_que_tipo_es_cada_copia(config_dir):
         "emuwarez_config_20260101_000000.tar.gz": ("manual", False),
         "emuwarez_config_20260101_000001_with_secrets.tar.gz": ("manual", True),
         "emuwarez_config_auto_20260101_000002.tar.gz": ("automatica", False),
-        "emuwarez_config_subida_20260101_000003.tar.gz": ("subida", False),
+        "emuwarez_config_subida_20260101_000003.tar.gz": ("subida", None),
     }
 
 

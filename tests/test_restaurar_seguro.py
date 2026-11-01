@@ -349,3 +349,17 @@ def test_una_base_que_no_es_sqlite_no_pisa_una_que_si_lo_es(cfg, tmp_path):
 
     assert r["ok"] is False and "no es una base SQLite" in r["error"]
     assert _marca(cfg) == "antes"
+
+
+def test_una_base_sqlite_truncada_se_rechaza(cfg, tmp_path):
+    from emuwarez_uploadrr.database import db_path
+    entera = open(db_path(), "rb").read()
+    info = tarfile.TarInfo("emuwarez_uploadrr.db")
+    datos = entera[: len(entera) // 2]
+    info.size = len(datos)
+    archivo = _tar_malo(tmp_path / "malo.tar.gz", info, datos)
+
+    r = _aplicar(archivo)
+
+    assert r["ok"] is False and "dañada" in r["error"]
+    assert _marca(cfg) == "antes"

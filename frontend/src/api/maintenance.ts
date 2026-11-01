@@ -28,7 +28,8 @@ export interface BackupInfo {
   size_bytes: number
   created_at: string
   tipo: 'manual' | 'automatica' | 'subida'
-  con_claves: boolean
+  /** null: copia subida, no se sabe si lleva claves. */
+  con_claves: boolean | null
 }
 
 export interface BackupResult {

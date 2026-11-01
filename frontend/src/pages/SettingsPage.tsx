@@ -1644,7 +1644,7 @@ function BackupTab({ status, onRefresh }: { status: MaintenanceStatus | null; on
               {backups.map(b => (
                 <tr key={b.path} style={{ borderBottom: '1px solid var(--border)' }}>
                   <td style={{ padding: '5px 8px' }}>{b.name}</td>
-                  <td style={{ padding: '5px 8px' }}>{TIPO_COPIA[b.tipo]}{b.con_claves ? ' · con claves' : ''}</td>
+                  <td style={{ padding: '5px 8px' }}>{TIPO_COPIA[b.tipo]}{b.con_claves ? ' · con claves' : b.con_claves === null ? ' · puede llevar claves' : ''}</td>
                   <td style={{ padding: '5px 8px' }}>{formatBytes(b.size_bytes)}</td>
                   <td style={{ padding: '5px 8px' }}>{b.created_at.slice(0, 16).replace('T', ' ')}</td>
                   <td style={{ padding: '5px 8px', textAlign: 'right' }}>

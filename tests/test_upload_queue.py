@@ -457,6 +457,43 @@ def test_queue_retry_fija_la_vigente_si_la_del_original_era_de_reglas_viejas(db_
         uq.cancel_queued_timer(result["job"]["id"])
 
 
+def test_queue_retry_conserva_la_propuesta_editada_a_mano_aunque_haya_otra_posterior(db_conn, tmp_path):
+    f = tmp_path / "movie.mkv"
+    f.write_bytes(b"x" * 100)
+    iid = _movie_with_path(db_conn, str(f))
+    manual = _insert_proposal(db_conn, iid, fields_json=json.dumps({"title": "Mio"}))
+    original_id = _failed_job_row(db_conn, iid, status="failed")
+    db_conn.execute("UPDATE upload_jobs SET nomenclature_proposal_id = ? WHERE id = ?", (manual, original_id))
+    _insert_proposal(db_conn, iid, title="Otra")  # posterior y vigente
+    db_conn.commit()
+
+    result = uq.queue_retry_for_job(original_id, conn=db_conn)
+    try:
+        row = db_conn.execute("SELECT nomenclature_proposal_id FROM upload_jobs WHERE id=?",
+                              (result["job"]["id"],)).fetchone()
+        assert row["nomenclature_proposal_id"] == manual
+    finally:
+        uq.cancel_queued_timer(result["job"]["id"])
+
+
+def test_comprobacion_previa_fija_la_propuesta_rehecha_en_el_trabajo(db_conn, tmp_path, monkeypatch):
+    f = tmp_path / "movie.mkv"
+    f.write_bytes(b"x" * 100)
+    iid = _movie_with_path(db_conn, str(f))
+    vieja = _insert_proposal(db_conn, iid, huella=False)
+    job_id = _failed_job_row(db_conn, iid, status="queued")
+    db_conn.execute("UPDATE upload_jobs SET nomenclature_proposal_id = ? WHERE id = ?", (vieja, job_id))
+    db_conn.commit()
+    monkeypatch.setattr(uq, "_season_upload_preconditions", lambda conn: [])
+    nueva = {"id": vieja + 100, "status": "valid", "proposed_filename": "Nuevo"}
+    with patch("emuwarez_uploadrr.services.nomenclature.build_nomenclature_proposal", return_value=nueva):
+        assert uq._check_generic_upload_preconditions(job_id, iid, False, db_conn) is True
+    row = db_conn.execute("SELECT nomenclature_proposal_id, nomenclature_snapshot_json FROM upload_jobs WHERE id=?",
+                          (job_id,)).fetchone()
+    assert row["nomenclature_proposal_id"] == vieja + 100
+    assert json.loads(row["nomenclature_snapshot_json"])["proposed_filename"] == "Nuevo"
+
+
 def test_queue_retry_does_not_backfill_nomenclature_for_automatic_job(db_conn, tmp_path):
     """An automatic (staging-pipeline) job never sets nomenclature_proposal_id
     — its absence is the signal a retry uses to keep auto-detecting from

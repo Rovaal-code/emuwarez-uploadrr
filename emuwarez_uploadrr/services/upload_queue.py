@@ -522,6 +522,12 @@ def _propuesta_del_reintento(original: dict, item_id: int, conn, cargar) -> dict
     if not original.get("nomenclature_proposal_id"):
         return {"nomenclature_proposal_id": None,
                 "nomenclature_snapshot": cargar("nomenclature_snapshot_json")}
+    fijada = conn.execute("SELECT fields_json FROM nomenclature_proposals WHERE id = ?",
+                          (original["nomenclature_proposal_id"],)).fetchone()
+    if fijada and fijada["fields_json"]:
+        # Editada a mano: lo que el usuario escribió no lo sustituye otra propuesta posterior.
+        return {"nomenclature_proposal_id": original["nomenclature_proposal_id"],
+                "nomenclature_snapshot": cargar("nomenclature_snapshot_json")}
     propuesta = _propuesta_vigente(item_id, conn)
     if not propuesta or propuesta["id"] == original["nomenclature_proposal_id"]:
         return {"nomenclature_proposal_id": original["nomenclature_proposal_id"],
@@ -568,6 +574,15 @@ def _check_generic_upload_preconditions(job_id: int, item_id: int, is_season: bo
         # La vigente, no la última guardada: una automática bloqueada con reglas
         # viejas (p. ej. UND, que antes bloqueaba) haría fallar cada intento.
         proposal = _propuesta_vigente(item_id, conn)
+        if proposal:
+            # Si el trabajo fijaba una propuesta y se ha rehecho, fija la nueva: la vieja ya está
+            # caducada y aplicarla pondría el nombre de antes.
+            conn.execute(
+                "UPDATE upload_jobs SET nomenclature_proposal_id = ?, nomenclature_snapshot_json = ? "
+                "WHERE id = ? AND nomenclature_proposal_id IS NOT NULL AND nomenclature_proposal_id != ?",
+                (proposal["id"], json.dumps(proposal, ensure_ascii=False, default=str), job_id, proposal["id"]),
+            )
+            conn.commit()
         if proposal and proposal.get("status") == "blocked":
             errors.append("Hay errores en la propuesta de nomenclatura que bloquean la subida.")
     if errors:

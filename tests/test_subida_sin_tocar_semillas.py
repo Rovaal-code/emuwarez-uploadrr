@@ -151,11 +151,15 @@ def _pelicula(entorno, mkv_base, *, carpeta: Path, nombre="Peli (2024) WEBDL-108
            VALUES ('movie', 'Peli', 2024, 'Disponible', 'Sin petición', 'No adaptada', ?, ?, '1', '1080p',
                    CURRENT_TIMESTAMP)""", (str(f), f.stat().st_size)).lastrowid
     now = datetime.now(timezone.utc).isoformat()
+    # Con la huella del elemento, como la que guarda el asistente: sin ella sería de reglas
+    # viejas y la cola la rehará en vez de usar PROPUESTO.
+    from emuwarez_uploadrr.services import nomenclature as nom
+    huella = json.dumps({"huella": nom._huella(nom.get_library_item_for_nomenclature(iid, conn=conn))})
     pid = conn.execute(
         """INSERT INTO nomenclature_proposals (library_item_id, status, proposed_title, proposed_torrent_name,
-                                               proposed_filename, created_at, updated_at)
-           VALUES (?, 'valid', 'Peli', ?, ?, ?, ?)""",
-        (iid, PROPUESTO.replace(".", " "), PROPUESTO, now, now)).lastrowid
+                                               proposed_filename, raw_json, created_at, updated_at)
+           VALUES (?, 'valid', 'Peli', ?, ?, ?, ?, ?)""",
+        (iid, PROPUESTO.replace(".", " "), PROPUESTO, huella, now, now)).lastrowid
     conn.commit()
     return {"id": iid, "proposal_id": pid, "f": f, "seed": seed}
 
